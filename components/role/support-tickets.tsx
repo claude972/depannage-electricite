@@ -19,6 +19,7 @@ import type {
 import { Icon } from "../app/icons";
 import { Empty, Field, Loader, PageTitle, Tag, Unavailable } from "../app/ui";
 import { category, date, dateTime, shortId, uid } from "../app/format";
+import { authorLabel, QUEUE_READ_ONLY, supportListView, type SupportQueue } from "./support-lists";
 import styles from "./support-tickets.module.css";
 
 type Tone = "neutral" | "blue" | "green" | "amber" | "red" | "violet";
@@ -60,13 +61,16 @@ export function SupportCenter({
   session,
   interventions,
   backView,
+  queue = "mine",
 }: {
   session: Session;
   interventions: Intervention[];
   backView: View;
+  /** "mine" = the requester's own tickets; "all" = the operator queue (server capability `support`). */
+  queue?: SupportQueue;
 }) {
   const param = session.param;
-  if (param === "new" || param.startsWith(NEW_PREFIX))
+  if (queue === "mine" && (param === "new" || param.startsWith(NEW_PREFIX)))
     return (
       <NewTicket
         key={param}
@@ -76,8 +80,8 @@ export function SupportCenter({
       />
     );
   if (param)
-    return <TicketDetail key={param} session={session} interventions={interventions} id={param} backView={backView} />;
-  return <TicketList session={session} />;
+    return <TicketDetail key={param} session={session} interventions={interventions} id={param} backView={backView} queue={queue} />;
+  return <TicketList session={session} queue={queue} />;
 }
 
 /** Lien discret depuis la fiche d'un dossier : ouvre une nouvelle demande déjà liée à ce dossier. */
@@ -98,7 +102,8 @@ export function DossierHelpLink({ session, interventionId }: { session: Session;
 }
 
 // ---- Liste ------------------------------------------------------------------------------
-function TicketList({ session }: { session: Session }) {
+function TicketList({ session, queue }: { session: Session; queue: SupportQueue }) {
+  const listView = supportListView(queue);
   const [status, setStatus] = useState<"" | SupportStatus>("");
   const [search, setSearch] = useState("");
   const [searchError, setSearchError] = useState("");
@@ -117,7 +122,7 @@ function TicketList({ session }: { session: Session }) {
     setRefreshing(true);
     void session
       .loadSupportTickets({
-        scope: "mine",
+        scope: queue,
         status: status || undefined,
         q: applied || undefined,
         limit,
@@ -169,7 +174,7 @@ function TicketList({ session }: { session: Session }) {
     resetPaging();
   }
 
-  const newButton = (
+  const newButton = queue === "all" ? null : (
     <button type="button" className="button primary" onClick={() => session.go("support", "new")}>
       <Icon name="plus" size={17} />
       Nouvelle demande
@@ -297,7 +302,7 @@ function TicketList({ session }: { session: Session }) {
           <ul className={styles.list} aria-label="Demandes d’assistance">
             {page.tickets.map((t) => (
               <li key={t.id}>
-                <TicketRow ticket={t} onOpen={() => session.go("support", t.id)} />
+                <TicketRow ticket={t} queue={queue} onOpen={() => session.go(listView, t.id)} />
               </li>
             ))}
           </ul>
@@ -333,7 +338,7 @@ function TicketList({ session }: { session: Session }) {
   );
 }
 
-function TicketRow({ ticket: t, onOpen }: { ticket: SupportTicket; onOpen: () => void }) {
+function TicketRow({ ticket: t, queue, onOpen }: { ticket: SupportTicket; queue: SupportQueue; onOpen: () => void }) {
   const meta = STATUS_META[t.status];
   return (
     <button type="button" className={styles.row} onClick={onOpen}>
@@ -343,6 +348,7 @@ function TicketRow({ ticket: t, onOpen }: { ticket: SupportTicket; onOpen: () =>
       </span>
       <span className={styles.rowMeta}>
         <Tag tone={meta.tone}>{meta.label}</Tag>
+        {queue === "all" && <span>Demandeur {shortId(t.creator_id)}</span>}
         {t.intervention_id && <span>Dossier {shortId(t.intervention_id)}</span>}
         <span>Dernière activité : {dateTime(t.last_message_at)}</span>
       </span>
@@ -522,12 +528,15 @@ function TicketDetail({
   interventions,
   id,
   backView,
+  queue,
 }: {
   session: Session;
   interventions: Intervention[];
   id: string;
   backView: View;
+  queue: SupportQueue;
 }) {
+  const listView = supportListView(queue);
   const [detail, setDetail] = useState<SupportDetail | null | undefined>(undefined);
   const [events, setEvents] = useState<SupportEvent[]>([]);
   const [messages, setMessages] = useState<SupportMessage[]>([]);
@@ -630,7 +639,7 @@ function TicketDetail({
     const state = session.capabilities.support;
     return (
       <>
-        <PageTitle back={{ label: "Assistance", onClick: () => session.go("support") }} title="Demande d’assistance" />
+        <PageTitle back={{ label: "Assistance", onClick: () => session.go(listView) }} title="Demande d’assistance" />
         {state === "available" ? (
           <Empty
             icon="search"
@@ -675,7 +684,7 @@ function TicketDetail({
   return (
     <>
       <PageTitle
-        back={{ label: "Assistance", onClick: () => session.go("support") }}
+        back={{ label: "Assistance", onClick: () => session.go(listView) }}
         title={ticket.subject}
         subtitle={`Créée le ${dateTime(ticket.created_at)} · dernière activité le ${dateTime(ticket.last_message_at)}`}
         action={
@@ -718,6 +727,8 @@ function TicketDetail({
               key={ev.id}
               event={ev}
               message={(ev.message_id && byId.get(ev.message_id)) || byVersion.get(ev.version) || null}
+              viewerId={session.profileId}
+              queue={queue}
             />
           ))}
         </ol>
@@ -787,8 +798,9 @@ function TicketDetail({
           </form>
         ) : (
           <p className={styles.closedNote}>
-            Vous ne pouvez plus répondre à cette demande depuis votre compte. Son historique reste
-            consultable ci-dessus.
+            {queue === "all" && !permissions.can_set_status
+              ? QUEUE_READ_ONLY
+              : "Vous ne pouvez plus répondre à cette demande depuis votre compte. Son historique reste consultable ci-dessus."}
           </p>
         )}
       </section>
@@ -796,8 +808,18 @@ function TicketDetail({
   );
 }
 
-function EventItem({ event: ev, message }: { event: SupportEvent; message: SupportMessage | null }) {
-  const author = message ? (message.author_kind === "admin" ? "Assistance" : "Vous") : "Assistance";
+function EventItem({
+  event: ev,
+  message,
+  viewerId,
+  queue,
+}: {
+  event: SupportEvent;
+  message: SupportMessage | null;
+  viewerId: string;
+  queue: SupportQueue;
+}) {
+  const author = authorLabel(message, { viewerId, queue });
   const reopened = ev.kind === "replied" && ev.from_status !== null && ev.from_status !== ev.to_status;
   if (ev.kind === "status_changed") {
     return (

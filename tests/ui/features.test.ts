@@ -205,7 +205,7 @@ test("platform views are fail-closed on the server reply: no reply, no capabilit
     super_admin: false,
     scopes: ["finance_read"],
     super_admin_count: 2,
-    capabilities: { operators: false, audit: false, finance: true, reviews_moderation: false, refund_execution: false, invoice_rendering: false },
+    capabilities: { support: false, support_reply: false, support_status: false, operators: false, audit: false, finance: true, reviews_moderation: false, refund_execution: false, invoice_rendering: false },
     config: {} as PlatformAccess["config"],
   };
   assert.equal(platformViewAllowed(null, "platform-finance"), false);
