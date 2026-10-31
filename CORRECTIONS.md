@@ -2268,3 +2268,15 @@ Codex et revue indépendante ont inspecté M13/M4/M66 réels et les captures exi
 - Autorité org/site inconnue failclosed, support personnel préservé ; noms accessibles distincts site/dossier et aucun menu ⋯ vide.44px/focus conservés malgré densité.
 - Réduire l’empilement de bandeaux avant tableau sans masquer démo/contexte/erreurPWA. Comparer à1280/360 avec mêmes états/données ; l’ancien rendu gras/espacé n’est pas une référence esthétique validée.
 Ces notes sont une revue de contrat, pas un passe esthétique ni un déploiement. Le champ de saisie Desktop contenait un brouillon du propriétaire ; il n’a pas été remplacé pour transmettre ces notes, publiées ici pour la prochaine lecture de coordination.
+
+
+### VISUAL-FIDELITY-001 — claude — checkpoint 1 (2026-10-31, AST)
+- branche : claude/web-pwa-design ; base 9b3dae0 ; contrat docs/CLAUDE_VISUAL_FIDELITY_CONTRACT.md poussé AVANT code à ca7bda6 ; implémentation **e7aaef7bddb8559a8442ecd918c3f6d160b8520c**.
+- fichiers : components/role/enterprise-space.tsx, enterprise.module.css, nouveau enterprise-lists.ts (logique pure), tests/ui/enterprise-lists.test.ts, docs/visual-fidelity/*.jpg. Aucun backend, migration, package, secret, session/auth, globals.css ni composant partagé modifié.
+- références lues : v1-p13 (M13), v1-p4 (M4), v4-p19 (M66).
+- changements : barre haute bleu roi + barre latérale 232 px + carte « Besoin d’aide ? » (M4/M66) ; Interventions : carte de filtres séparée, Exporter en tête, compteur + tri réel, date 2 lignes, pagination numérotée (aussi sur le tableau de bord) ; Sites : grille de grandes cartes remplacée par le tableau M13 (en cours, budget engagé teinté par état, alertes réelles approbations/conformité, actions selon droits) + tableau Interventions récentes ; mobile 360 en rangées compactes, tableau Rapports conservé.
+- preuves : planches référence|avant|après docs/visual-fidelity/sites-1280-M13.jpg, interventions-1280-M4-M66.jpg, sites-360.jpg, interventions-360.jpg — rendus de la démo locale next dev (avant capturé depuis un checkout propre 9b3dae0), PAS une preview en ligne.
+- contrôles : npm run check exit 0 (typecheck, 93 tests, 49 tests UI dont 6 nouveaux, next build).
+- écarts restants assumés : nom d’artisan absent des données (« Artisan attribué ») ; pas de colonne Statut site (absente du modèle) ; pas de filtre Période ; marque sur une ligne ; couleurs d’icônes multi-accents de M13 non reprises (DESIGN.md).
+- non vérifié : preview Vercel (différée), compte réel/RLS en ligne, rôle lecture seule rendu en démo (logique de droits inchangée, non recapturée).
+- à vérifier par Codex : comparaison des planches, absence de régression lecture seule/devis/support/photos, navigation clavier sur les nouveaux boutons de ligne.

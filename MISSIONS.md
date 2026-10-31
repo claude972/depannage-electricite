@@ -245,7 +245,7 @@ Entreprise cliente et Super Admin restent actuellement livrés/recettés Web ; l
 
 ## Mission VISUAL-FIDELITY-001 — reprise fidèle aux maquettes, accès Claude reconnecté
 - agent: claude
-- status: in_progress
+- status: ready_for_review (checkpoint 1 entreprise shell/sites/interventions, implementation e7aaef7bddb8559a8442ecd918c3f6d160b8520c ; contrat ca7bda6 ; rapport CORRECTIONS.md § VISUAL-FIDELITY-001 — claude checkpoint 1 ; preview en ligne non réalisée, Vercel différé)
 - desktop session: local_f1ccd82d-80d6-45b6-b176-ea12b56f0317, titre Visual fidelity web PWA design, worktree/branche design confirmés dans l’interface.
 - lead: Codex pilote cette mission ; propriétaire de code Claude Desktop (nouvelle session dédiée sur le worktree design), à confirmer par réponse utile. Le CLI b4b555f0 et un processus neuf renvoient toujours weekly limit malgré auth connectée ; ils ne possèdent pas une exécution concurrente de cette mission. Aucun doublon design ne doit être lancé. Tout code demeure Claude.
 - branch: claude/web-pwa-design
