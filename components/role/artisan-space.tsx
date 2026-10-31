@@ -86,14 +86,18 @@ import { anchorEntryVisible, leafScope, platformEntries } from "./anchors";
 import { PlatformPage } from "./platform-anchor";
 import { FeatureUnavailable } from "./feature-unavailable";
 import {
+  applicationSteps,
   appointmentSlotState,
   credentialDateLabel,
+  credentialState,
+  type CredentialState,
   credentialSummary,
   demoPlanningRange,
   fmtRating,
   missionSegmentOptions,
   perfTiles,
   planningAuthority,
+  stepsSummary,
   type AppointmentEntry,
   type MissionSegment,
 } from "./artisan-lists";
@@ -232,29 +236,6 @@ function seniority(createdAt: string | undefined, now: Date): string | null {
   const years = Math.floor(months / 12);
   const rest = months % 12;
   return `${years} an${years > 1 ? "s" : ""}${rest ? ` et ${rest} mois` : ""}`;
-}
-type CredentialState = {
-  key: "missing" | "expired" | "pending" | "valid";
-  label: string;
-  tone: Tone;
-  credential?: ArtisanCredential;
-};
-// "Validé" only when the operator approved the application and the piece is not expired.
-function credentialState(
-  credentials: ArtisanCredential[],
-  kind: CredentialKind,
-  applicationStatus: ArtisanApplicationStatus | undefined,
-  today: string,
-): CredentialState {
-  const credential = credentials
-    .filter((c) => c.kind === kind)
-    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
-  if (!credential) return { key: "missing", label: "Manquant", tone: "red" };
-  if (credential.expires_on && credential.expires_on < today)
-    return { key: "expired", label: "À renouveler", tone: "amber", credential };
-  if (applicationStatus === "approved")
-    return { key: "valid", label: "Validé", tone: "green", credential };
-  return { key: "pending", label: "Transmis, en attente d’examen", tone: "blue", credential };
 }
 function paymentFor(quotes: Quote[], payments: Payment[], interventionId: string) {
   const accepted = quotes.find(
@@ -2332,7 +2313,7 @@ function Documents({
   const status = dossier?.artisan_profile?.application_status;
   const states = CREDENTIAL_KINDS.map((k) => ({
     ...k,
-    state: credentialState(dossier?.credentials ?? [], k.kind, status, today),
+    state: credentialState(dossier?.credentials ?? [], k.kind, today),
   }));
   const summary = credentialSummary(states.map((s) => s.state));
   return (
@@ -2343,15 +2324,24 @@ function Documents({
           <div>
             <h2 id="documents-required">Documents obligatoires</h2>
             <p className={styles.sectionNote} style={{ margin: "4px 0 0" }}>
-              Nécessaires pour exercer sur la plateforme. L’examen des pièces est réalisé par
-              l’opérateur : un justificatif transmis n’est pas validé automatiquement.
+              Nécessaires pour exercer sur la plateforme. L’opérateur examine le dossier dans son
+              ensemble : une pièce transmise reste « transmise », aucune validation individuelle
+              n’est enregistrée.
             </p>
           </div>
           {!pending && dossier && (
-            <span className={`${styles.credCount} ${summary.complete ? styles.credCountComplete : ""}`}>
-              <Icon name="shield" size={20} />
-              {summary.label}
-            </span>
+            <div className={styles.credHeadStatus}>
+              <span className={`${styles.credCount} ${summary.complete ? styles.credCountComplete : ""}`}>
+                <Icon name="shield" size={20} />
+                {summary.label}
+              </span>
+              {/* L’approbation porte sur le dossier ; aucune pièce n’est validée individuellement (non modélisé). */}
+              {status && (
+                <Tag tone={APPLICATION_STATUS[status].tone}>
+                  Candidature : {APPLICATION_STATUS[status].label.toLowerCase()}
+                </Tag>
+              )}
+            </div>
           )}
         </div>
         {pending ? (
@@ -2425,22 +2415,8 @@ function CredentialCard({
   busy: boolean;
   onLink: () => void;
 }) {
-  const iconClass =
-    state.key === "valid"
-      ? styles.credGreen
-      : state.key === "pending"
-        ? styles.credBlue
-        : state.key === "expired"
-          ? styles.credAmber
-          : styles.credRed;
-  const icon =
-    state.key === "valid"
-      ? "shield"
-      : state.key === "pending"
-        ? "clock"
-        : state.key === "expired"
-          ? "refresh"
-          : "warning";
+  const iconClass = state.key === "pending" ? styles.credBlue : state.key === "expired" ? styles.credAmber : styles.credRed;
+  const icon = state.key === "pending" ? "clock" : state.key === "expired" ? "refresh" : "warning";
   return (
     <section className={`panel ${styles.credCard}`} aria-label={title}>
       <span className={`${styles.credIcon} ${iconClass}`}>
@@ -2604,7 +2580,7 @@ function Application({
   const today = localDate(new Date());
   const credentialStates = CREDENTIAL_KINDS.map((k) => ({
     ...k,
-    state: credentialState(dossier?.credentials ?? [], k.kind, profile?.application_status, today),
+    state: credentialState(dossier?.credentials ?? [], k.kind, today),
   }));
   return (
     <>
@@ -2694,21 +2670,17 @@ function ApplicationForm({
     if (dirty || !profile) ok = await onCommand(saveBody());
     if (ok) await onCommand({ action: "submit_application" });
   }
-  const sections = [
-    { n: 1, label: "Informations personnelles", done: Boolean(session.profile?.full_name) || session.mode === "demo" },
-    {
-      n: 2,
-      label: "Société",
-      done:
-        values.company_name.trim().length >= 2 &&
-        /^\d{14}$/.test(values.siret) &&
-        Boolean(values.legal_status) &&
-        values.address.trim().length >= 5,
-    },
-    { n: 3, label: "Pièces justificatives", done: credentialStates.every((c) => c.state.key !== "missing") },
-    { n: 4, label: "Zones et compétences", done: values.postal_codes.length > 0 && values.categories.length > 0 },
-    { n: 5, label: "Disponibilité", done: Boolean(profile) },
-  ];
+  const sections = applicationSteps({
+    personalDone: Boolean(session.profile?.full_name) || session.mode === "demo",
+    companyName: values.company_name,
+    siret: values.siret,
+    legalStatus: values.legal_status,
+    address: values.address,
+    postalCodes: values.postal_codes,
+    categories: values.categories,
+    credentialsComplete: credentialStates.every((c) => c.state.key !== "missing"),
+    hasProfile: Boolean(profile),
+  });
   return (
     <form
       onSubmit={(e) => {
@@ -2736,18 +2708,22 @@ function ApplicationForm({
           </span>
         </div>
       )}
+      {/* M65 : barre d’étapes avec connecteurs ; sous 760 px les libellés passent en lecteur d’écran et le résumé reste visible. */}
       <ol className={styles.appSteps} aria-label="Sections du dossier">
         {sections.map((s) => (
           <li key={s.n} className={s.done ? styles.stepDone : undefined}>
             <span aria-hidden="true">{s.done ? <Icon name="check" size={14} /> : s.n}</span>
-            <span>
+            <span className={styles.stepLabel}>
               {s.label}
               <small>{s.done ? "Renseignée" : "À compléter"}</small>
             </span>
           </li>
         ))}
       </ol>
+      <p className={styles.stepsSummary} role="status">{stepsSummary(sections)}</p>
 
+      <div className={styles.appColumns}>
+      <div className={styles.appColumn}>
       <section className={`panel ${styles.sectionCard}`} aria-labelledby="app-s1">
         <div className={styles.sectionTitle}>
           <span className={styles.sectionNum} aria-hidden="true">1</span>
@@ -2774,7 +2750,7 @@ function ApplicationForm({
         </div>
         <div className="form-columns">
           <Field
-            label="Nom de la société"
+            label="Nom de la société (obligatoire)"
             error={touched && values.company_name.trim().length < 2 ? "Indiquez le nom de votre société." : undefined}
           >
             <input
@@ -2787,7 +2763,7 @@ function ApplicationForm({
             />
           </Field>
           <Field
-            label="SIRET"
+            label="SIRET (obligatoire)"
             hint="14 chiffres, sans espace."
             error={touched && !/^\d{14}$/.test(values.siret) ? "Le SIRET doit comporter exactement 14 chiffres." : undefined}
           >
@@ -2803,7 +2779,7 @@ function ApplicationForm({
         </div>
         <div className="form-columns">
           <Field
-            label="Statut juridique"
+            label="Statut juridique (obligatoire)"
             error={touched && !values.legal_status ? "Choisissez un statut juridique." : undefined}
           >
             <select required value={values.legal_status} onChange={(e) => set("legal_status", e.target.value)}>
@@ -2828,7 +2804,7 @@ function ApplicationForm({
           </Field>
         </div>
         <Field
-          label="Adresse du siège"
+          label="Adresse du siège (obligatoire)"
           error={touched && values.address.trim().length < 5 ? "Indiquez l’adresse complète du siège." : undefined}
         >
           <input
@@ -2840,27 +2816,6 @@ function ApplicationForm({
             onChange={(e) => set("address", e.target.value)}
           />
         </Field>
-      </section>
-
-      <section className={`panel ${styles.sectionCard}`} aria-labelledby="app-s3">
-        <div className={styles.sectionTitle}>
-          <span className={styles.sectionNum} aria-hidden="true">3</span>
-          <h2 id="app-s3">Pièces justificatives</h2>
-        </div>
-        {credentialStates.map((c) => (
-          <div key={c.kind} className={styles.readonlyRow}>
-            <span>{c.title}</span>
-            <Tag tone={c.state.tone}>{c.state.label}</Tag>
-          </div>
-        ))}
-        <p className={styles.sectionNote} style={{ marginTop: 10 }}>
-          Les pièces se déposent et se relient depuis vos documents. Elles peuvent être transmises
-          avant ou après la soumission ; l’opérateur les examine.
-        </p>
-        <button type="button" className={styles.inlineLink} onClick={() => session.go("documents")}>
-          Gérer mes documents
-          <Icon name="arrow" size={15} />
-        </button>
       </section>
 
       <section className={`panel ${styles.sectionCard}`} aria-labelledby="app-s4">
@@ -2939,6 +2894,29 @@ function ApplicationForm({
             </p>
           )}
         </fieldset>
+      </section>
+
+      </div>
+      <div className={styles.appColumn}>
+      <section className={`panel ${styles.sectionCard}`} aria-labelledby="app-s3">
+        <div className={styles.sectionTitle}>
+          <span className={styles.sectionNum} aria-hidden="true">3</span>
+          <h2 id="app-s3">Pièces justificatives</h2>
+        </div>
+        {credentialStates.map((c) => (
+          <div key={c.kind} className={styles.readonlyRow}>
+            <span>{c.title}</span>
+            <Tag tone={c.state.tone}>{c.state.label}</Tag>
+          </div>
+        ))}
+        <p className={styles.sectionNote} style={{ marginTop: 10 }}>
+          Les pièces se déposent et se relient depuis vos documents. Elles peuvent être transmises
+          avant ou après la soumission ; l’opérateur les examine.
+        </p>
+        <button type="button" className={styles.inlineLink} onClick={() => session.go("documents")}>
+          Gérer mes documents
+          <Icon name="arrow" size={15} />
+        </button>
       </section>
 
       <section className={`panel ${styles.sectionCard}`} aria-labelledby="app-s5">
@@ -3021,6 +2999,8 @@ function ApplicationForm({
           <DemoNote>Dossier de démonstration : aucune vérification réelle n’est effectuée.</DemoNote>
         )}
       </section>
+      </div>
+      </div>
     </form>
   );
 }
@@ -3115,7 +3095,7 @@ function Profile({
   const verified = session.profile?.artisan_approved === true;
   const today = localDate(now);
   const transmitted = CREDENTIAL_KINDS.filter(
-    (k) => credentialState(dossier?.credentials ?? [], k.kind, artisan?.application_status, today).key !== "missing",
+    (k) => credentialState(dossier?.credentials ?? [], k.kind, today).key !== "missing",
   ).length;
   const since = seniority(session.profile?.created_at, now);
   return (
