@@ -65,3 +65,12 @@ Après le Web/PWA vérifié, Claude réalise les lots iOS/Android avec backend p
 Le déploiement unique0017b48 a passé41 contrôles de navigation/rendu sur les quatre rôles démo à360/1280 et13 contrôles PWA. Aucun appel API/Supabase en démonstration et aucune erreur console/page pendant ces parcours. Rapport et captures : [revue en ligne](verification/online-0017/UI_ONLINE_REVIEW.md). Cela ne vérifie pas les mutations métier ni le login réel ; les findings Auth/cache restent ouverts, ainsi que VIS-001 sur la densité artisan. Les mentions « QA en attente » de la matrice concernent la recette métier complète, pas ce smoke borné.
 
 Les contrôles GitHub du combiné8cdf5af (typecheck, tests dont UI, build et SQL isolé) ont réussi. Le commitc583f3c versionne la configuration Auth preview : site URL corrigée et templates SSR token_hash de confirmation/récupération appliqués au projet dédié ; confirmation requise et autres réglages conservés. Livraison réelle des e-mails non vérifiée.
+
+
+## Complément : connexion réelle et dossiers admin hors fenêtre
+
+Surfe4c9c9,19 contrôles navigateur/API réels ont réussi : connexion formulaire clientA → déconnexion → clientB sans cacheA, refus client/anonyme admin, pagination117 dossiers filtrés au-delà de100, recherches/curseurs/filtres cohérents et détail ancien. Dix contrôles de suppression/readback ont confirmé le nettoyage des seules ressources QA. [Rapport](verification/online-fe4/AUTH_ADMIN_ONLINE_REVIEW.md). Cela ne prouve pas encore le branchement de la pagination dans l’interface Super Admin.
+
+Le correctif Auth823b021 a fermé les défauts de réponses tardives signalés en revue déterministe (34 contrôles). Un P2 supplémentaire après logout était présent au2e3 utilisé parfe4 ; il a été corrigé au823 puis intégré5cfad13. Les liens SSR de confirmation/récupération ont passé12 contrôles réels, sans envoi d’e-mail, sur0017 et après configuration du projet. [Rapport](verification/online-0017/AUTH_SSR_ONLINE_REVIEW.md).
+
+Les photos6962/766 sont intégrées pour recette corrective mais ne sont pas acceptées : résultat réseau incertain, remplacement d’une file précédente et effet storage tardif restent assignés Claude. La révocation entreprise et les limites d’invitation ont été corrigées dans la source ; recette navigateur en cours.
