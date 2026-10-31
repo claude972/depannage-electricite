@@ -11,10 +11,11 @@ import net from "node:net";
 import path from "node:path";
 import assert from "node:assert/strict";
 import { pathToFileURL } from "node:url";
-import { parseArgs, HELP, extractSwVersion, scanEnvKeyNames, classifyCacheEntries, compareStageEvidence, childEnv, buildServerArgs, readinessUrls, exitCodeFor, splitConsoleRecords, SW_PATH, OFFLINE_PATH, DEMO_HASH } from "./qa-pwa-lifecycle/lib.mjs";
+import { parseArgs, HELP, extractSwVersion, scanEnvKeyNames, classifyCacheEntries, compareStageEvidence, childEnv, buildServerArgs, readinessUrls, exitCodeFor, splitConsoleRecords, servedBuildIdMarkers, SW_PATH, OFFLINE_PATH, DEMO_HASH } from "./qa-pwa-lifecycle/lib.mjs";
+import { createServerController } from "./qa-pwa-lifecycle/servers.mjs";
 import { createRedactor } from "./qa/lib/redact.mjs";
 import { assertOutOutsideRepo, PreflightError } from "./qa/lib/config.mjs";
-import { createLifecycle, createStopGate } from "./qa/lib/lifecycle.mjs";
+import { createLifecycle, createStopGate, StopRequestedError } from "./qa/lib/lifecycle.mjs";
 import { loadPlaywright, launchBrowser, configureBrowser, noHorizontalOverflow } from "./qa/lib/browser.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -144,16 +145,42 @@ async function main(argv) {
   await chmod(outDir, 0o700);
   configureBrowser({ timeoutMs: options.timeoutMs });
   const result = { context, steps: [], versions: { old: null, new: null }, servers: [], console: { a: [], b: [] }, fatal: null };
+  // One stop gate shared by the lifecycle (signals, crashes), every step() and the server controller.
+  const gate = createStopGate();
+  const realSpawn = (build, { port }) => {
+    const logFile = path.join(outDir, `server-${build.label}.log`);
+    writeFile(logFile, "", { mode: 0o600 }).catch(() => {});
+    const child = spawn(process.execPath, buildServerArgs(build.dir, port), { cwd: build.dir, env: childEnv(process.env, { port }), stdio: ["ignore", "pipe", "pipe"] });
+    const tee = (stream, tag) => stream.on("data", (chunk) => appendFile(logFile, `${new Date().toISOString()} ${tag} ${redactor.redactString(chunk.toString("utf8"))}`).catch(() => {}));
+    tee(child.stdout, "out");
+    tee(child.stderr, "err");
+    return child;
+  };
+  const probeReady = async () => {
+    for (const url of readinessUrls(origin)) {
+      const ok = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(5000) }).then((r) => r.status === 200).catch(() => false);
+      if (!ok) return false;
+    }
+    return true;
+  };
+  const controller = createServerController({ spawn: realSpawn, probe: probeReady, portListening: () => portListening(options.port), gate, port: options.port, timeoutMs: options.timeoutMs, log: (m) => log(m) });
   const persist = async () => {
+    result.servers = controller.snapshot();
     const data = redactor.redact(result);
     await writeFile(path.join(outDir, "result.json"), JSON.stringify(data, null, 2) + "\n", { mode: 0o600 });
     await writeFile(path.join(outDir, "summary.md"), renderSummary(data), { mode: 0o600 });
   };
-  const servers = [];
   let browser = null;
   let blocked = null;
   const step = async (name, fn, { critical = true } = {}) => {
     const started = Date.now();
+    if (gate.stopping) {
+      // A signal or crash is being finalised: no step may start, drive the browser or spawn anything.
+      result.steps.push({ name, status: "ABORTED", detail: `run stopping (${gate.reason})`, duration_ms: 0 });
+      log(`ABORTED ${name} (${gate.reason})`);
+      await persist();
+      return;
+    }
     if (blocked) {
       result.steps.push({ name, status: "SKIPPED", detail: `blocked by failed step: ${blocked}`, duration_ms: 0 });
       log(`SKIPPED ${name} (blocked by: ${blocked})`);
@@ -166,73 +193,19 @@ async function main(argv) {
       log(`PASS    ${name}`);
     } catch (error) {
       const info = redactor.redactError(error);
-      result.steps.push({ name, status: "FAIL", detail: { error: info.message, stack: info.stack?.split("\n").slice(0, 6).join("\n") }, duration_ms: Date.now() - started });
-      log(`FAIL    ${name}: ${info.message}`);
+      if (error instanceof StopRequestedError) {
+        result.steps.push({ name, status: "ABORTED", detail: info.message, duration_ms: Date.now() - started });
+        log(`ABORTED ${name}: ${info.message}`);
+      } else {
+        result.steps.push({ name, status: "FAIL", detail: { error: info.message, stack: info.stack?.split("\n").slice(0, 6).join("\n") }, duration_ms: Date.now() - started });
+        log(`FAIL    ${name}: ${info.message}`);
+      }
       if (critical) blocked = name;
     }
     await persist();
   };
 
-  // ---- Child servers --------------------------------------------------------------------
-  async function startServer(label, build) {
-    const logFile = path.join(outDir, `server-${label}.log`);
-    await writeFile(logFile, "", { mode: 0o600 });
-    const args = buildServerArgs(build.dir, options.port);
-    const child = spawn(process.execPath, args, { cwd: build.dir, env: childEnv(process.env, { port: options.port }), stdio: ["ignore", "pipe", "pipe"] });
-    const entry = { label, pid: child.pid, dir: build.dir, started_at: new Date().toISOString(), ready_at: null, stopped_at: null, exit: null, stopped: false, child };
-    servers.push(entry);
-    result.servers.push({ label, pid: child.pid, started_at: entry.started_at, ready_at: null, stopped_at: null, exit: null, stopped: false });
-    const tee = (stream, tag) => stream.on("data", (chunk) => appendFile(logFile, `${new Date().toISOString()} ${tag} ${redactor.redactString(chunk.toString("utf8"))}`).catch(() => {}));
-    tee(child.stdout, "out");
-    tee(child.stderr, "err");
-    child.once("exit", (code, signal) => {
-      entry.exit = { code, signal };
-      entry.stopped = true;
-      entry.stopped_at = new Date().toISOString();
-      Object.assign(result.servers.find((s) => s.pid === child.pid), { exit: entry.exit, stopped: true, stopped_at: entry.stopped_at });
-    });
-    const deadline = Date.now() + options.timeoutMs;
-    const urls = readinessUrls(origin);
-    while (Date.now() < deadline) {
-      if (entry.stopped) throw new Error(`${label} server exited before becoming ready (${JSON.stringify(entry.exit)}); see server-${label}.log`);
-      let ready = true;
-      for (const url of urls) {
-        const ok = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(5000) }).then((r) => r.status === 200).catch(() => false);
-        if (!ok) ready = false;
-      }
-      if (ready) {
-        entry.ready_at = new Date().toISOString();
-        result.servers.find((s) => s.pid === child.pid).ready_at = entry.ready_at;
-        return entry;
-      }
-      await sleep(300);
-    }
-    throw new Error(`${label} server not ready within ${options.timeoutMs} ms on ${origin}`);
-  }
-  async function stopServer(entry) {
-    if (!entry || entry.stopped) return entry?.stopped ?? true;
-    const exited = new Promise((resolve) => entry.child.once("exit", () => resolve(true)));
-    entry.child.kill("SIGTERM");
-    const graceful = await Promise.race([exited, sleep(Math.min(15000, options.timeoutMs)).then(() => false)]);
-    if (!graceful) {
-      log(`${entry.label} server pid ${entry.pid} ignored SIGTERM: SIGKILL`);
-      entry.child.kill("SIGKILL");
-      await Promise.race([exited, sleep(5000).then(() => false)]);
-    }
-    for (let i = 0; i < 20 && (await portListening(options.port)); i++) await sleep(250);
-    const stillListening = await portListening(options.port);
-    const stopped = entry.stopped && !stillListening;
-    Object.assign(result.servers.find((s) => s.pid === entry.pid), { stopped, port_released: !stillListening });
-    return stopped;
-  }
-  async function stopAllServers() {
-    const states = [];
-    for (const entry of servers) states.push({ label: entry.label, pid: entry.pid, stopped: await stopServer(entry) });
-    return { ok: states.every((s) => s.stopped), steps: states };
-  }
-
-  // ---- Lifecycle (signals, crashes, single finalisation) ----------------------------------
-  const gate = createStopGate();
+  // ---- Lifecycle (signals, crashes, single finalisation draining the process registry) ------
   let cleanupState = null;
   const lifecycle = createLifecycle({
     gate,
@@ -243,7 +216,7 @@ async function main(argv) {
         await browser.close().catch(() => {});
         browser = null;
       }
-      cleanupState = await stopAllServers();
+      cleanupState = await controller.stopAll();
       return cleanupState;
     },
     writeResults: async ({ fatal, reason }) => {
@@ -375,14 +348,31 @@ async function main(argv) {
   let oldServer = null;
   let newServer = null;
   try {
-    await step("1 old server ready: /, /sw.js (v2, hash = disk), /offline.html marker, manifest", async () => {
-      oldServer = await startServer("old", pre.old);
+    const servedFacts = async (build, other) => {
+      // (b) facts observed on the running server, to be matched against (a) disk metadata of `build`.
       const sw = await headersOf(`${origin}${SW_PATH}`);
-      assert.equal(sw.status, 200);
+      const home = await headersOf(`${origin}/`);
+      const markers = servedBuildIdMarkers(home.body, { [build.label]: build.buildId, [other.label]: other.buildId });
+      return { sw, home_status: home.status, served: { sw_sha256_http: sha256(Buffer.from(sw.body, "utf8")), sw_version: extractSwVersion(sw.body)?.version ?? null, html_build_id_markers: markers } };
+    };
+    const assertServedMatchesDisk = (build, other, facts) => {
+      assert.equal(facts.sw.status, 200);
+      assert.equal(facts.served.sw_sha256_http, build.swSha256, `served /sw.js hash ≠ ${build.label} build on disk`);
+      assert.equal(facts.served.sw_version, build.swVersion, `served worker version ≠ ${build.label} build on disk`);
+      assert.equal(facts.home_status, 200);
+      assert.equal(facts.served.html_build_id_markers[build.label], true, `served HTML does not name the ${build.label} BUILD_ID ${build.buildId}`);
+      assert.equal(facts.served.html_build_id_markers[other.label], false, `served HTML names the ${other.label} BUILD_ID while ${build.label} is served`);
+    };
+    const diskFacts = (build) => ({ build_id: build.buildId, sw_sha256: build.swSha256, sw_version: build.swVersion, sw_cache: build.swCacheName, dir: build.dir, sha: build.sha });
+
+    await step("1 old server ready: served facts (sw.js hash/version, HTML build marker) match the old disk metadata; offline marker; manifest", async () => {
+      oldServer = await controller.start("old", pre.old);
+      const facts = await servedFacts(pre.old, pre.next);
+      const sw = facts.sw;
       assert.match(sw.contentType || "", /javascript/, "sw.js content-type");
       assert.match(sw.cacheControl || "", /no-store|no-cache/, "sw.js cache-control");
-      assert.equal(sha256(Buffer.from(sw.body, "utf8")), pre.old.swSha256, "served sw.js differs from the old build on disk");
-      assert.equal(extractSwVersion(sw.body)?.version, pre.old.swVersion);
+      assertServedMatchesDisk(pre.old, pre.next, facts);
+      result.versions.old = { disk: diskFacts(pre.old), served: { ...facts.served, pid: oldServer.pid } };
       const offline = await headersOf(`${origin}${OFFLINE_PATH}`);
       assert.equal(offline.status, 200);
       assert.equal(offline.offlineMarker, "1", "X-Courant-Public-Offline header on /offline.html");
@@ -392,8 +382,7 @@ async function main(argv) {
       const parsed = JSON.parse(manifest.body);
       assert.equal(parsed.display, "standalone");
       assert.equal(parsed.scope, "/");
-      result.versions.old = { served_sw_sha256: pre.old.swSha256, sw_version: pre.old.swVersion, build_id: pre.old.buildId, pid: oldServer.pid };
-      return { pid: oldServer.pid, sw: { contentType: sw.contentType, cacheControl: sw.cacheControl, swAllowed: sw.swAllowed }, offline: { marker: offline.offlineMarker, cacheControl: offline.cacheControl }, manifest: { name: parsed.name, display: parsed.display } };
+      return { pid: oldServer.pid, disk: result.versions.old.disk, served: result.versions.old.served, sw: { contentType: sw.contentType, cacheControl: sw.cacheControl, swAllowed: sw.swAllowed }, offline: { marker: offline.offlineMarker, cacheControl: offline.cacheControl }, manifest: { name: parsed.name, display: parsed.display } };
     });
 
     await step("2 worker v2 really installed and activated in two tabs (controller without reload, cache = /offline.html only)", async () => {
@@ -422,8 +411,9 @@ async function main(argv) {
       assert.ok(snapshot.keys.includes(pre.old.swCacheName), `cache ${pre.old.swCacheName} absent: ${JSON.stringify(snapshot.keys)}`);
       const own = snapshot.entries.filter((e) => e.cache === pre.old.swCacheName).map((e) => e.path);
       assert.deepEqual(own, [OFFLINE_PATH], `own cache entries: ${JSON.stringify(own)}`);
-      result.versions.old.cache_keys = snapshot.keys;
-      result.versions.old.cache_entries = snapshot.entries;
+      result.versions.old.served.sw_sha256_page = served.sha256;
+      result.versions.old.served.cache_keys = snapshot.keys;
+      result.versions.old.served.cache_entries = snapshot.entries;
       return { states, served, cache: snapshot };
     });
 
@@ -444,19 +434,18 @@ async function main(argv) {
       return { probes, keys: snapshot.keys, entries: snapshot.entries };
     }, { critical: false });
 
-    await step("5 switch on the same origin: old server stopped (pid exited, port released), new server ready, /sw.js = v3", async () => {
-      const stopped = await stopServer(oldServer);
-      assert.ok(stopped, `old server pid ${oldServer.pid} not proven stopped`);
-      newServer = await startServer("new", pre.next);
-      const sw = await headersOf(`${origin}${SW_PATH}`);
-      assert.equal(sw.status, 200);
-      assert.equal(sha256(Buffer.from(sw.body, "utf8")), pre.next.swSha256, "served sw.js differs from the new build on disk");
-      assert.equal(extractSwVersion(sw.body)?.version, pre.next.swVersion);
-      assert.notEqual(pre.next.buildId, pre.old.buildId);
+    await step("5 switch on the same origin: old server stopped (pid exited, port released), new server ready, SERVED sw.js/HTML = new disk metadata and ≠ old served", async () => {
+      const stopped = await controller.stop(oldServer);
+      assert.ok(stopped.stopped, `old server pid ${oldServer.pid} not proven stopped (exit ${JSON.stringify(oldServer.exit)}, port released ${stopped.portReleased})`);
+      newServer = await controller.start("new", pre.next);
+      const facts = await servedFacts(pre.next, pre.old);
+      assertServedMatchesDisk(pre.next, pre.old, facts);
+      // The v2 → v3 transition is proven by SERVED hashes differing between the two successive servers.
+      assert.notEqual(facts.served.sw_sha256_http, result.versions.old.served.sw_sha256_http, "served /sw.js hash did not change between the two servers");
       const states = { a: await swState(tabs.a), b: await swState(tabs.b) };
       for (const [k, s] of Object.entries(states)) assert.equal(s.controllerSameAsInitial, true, `tab ${k} controller changed by the server switch alone`);
-      result.versions.new = { served_sw_sha256: pre.next.swSha256, sw_version: pre.next.swVersion, build_id: pre.next.buildId, pid: newServer.pid };
-      return { oldPid: oldServer.pid, oldExit: oldServer.exit, newPid: newServer.pid, states };
+      result.versions.new = { disk: diskFacts(pre.next), served: { ...facts.served, pid: newServer.pid } };
+      return { oldPid: oldServer.pid, oldExit: oldServer.exit, newPid: newServer.pid, disk: result.versions.new.disk, served: result.versions.new.served, states };
     });
 
     await step("6 new worker WAITING in both tabs without consent: notice + button, no reload, inputs intact", async () => {
@@ -493,6 +482,8 @@ async function main(argv) {
       assert.equal(a.controllerSameAsInitial, false, "tab A still controlled by the old worker");
       const servedA = await servedWorker(tabs.a);
       assert.equal(servedA.version, String(pre.next.swVersion));
+      assert.equal(servedA.sha256, pre.next.swSha256, "worker served to tab A after consent is not the new build's");
+      result.versions.new.served.sw_sha256_page = servedA.sha256;
       const b = await swState(tabs.b);
       assert.equal(b.marker, "initial-v2-document-B", "tab B was reloaded without consent");
       assert.equal(await fieldValue(tabs.b), QA_TEXTS[1], "tab B input lost");
@@ -515,7 +506,7 @@ async function main(argv) {
       const own = snapshot.entries.filter((e) => e.cache === pre.next.swCacheName).map((e) => e.path);
       assert.deepEqual(own, [OFFLINE_PATH]);
       await tabs.b.evaluate(() => caches.delete("qa-other-cache-preserve"));
-      result.versions.new.cache_keys = (await cacheSnapshot(tabs.b)).keys;
+      result.versions.new.served.cache_keys = (await cacheSnapshot(tabs.b)).keys;
       return { keys: snapshot.keys, entries: snapshot.entries };
     });
 
@@ -537,17 +528,20 @@ async function main(argv) {
       const ctx = tabs.a.context();
       phase = "offline";
       await ctx.setOffline(true);
-      await tabs.a.goto(demoUrl, { waitUntil: "domcontentloaded", timeout: options.timeoutMs });
+      // A real navigation request: `goto` to the same URL (fragment only) would be a same-document
+      // navigation without any request, so nothing would reach the worker.
+      await tabs.a.reload({ waitUntil: "domcontentloaded", timeout: options.timeoutMs });
       await tabs.a.getByRole("heading", { name: OFFLINE_TITLE, exact: true }).waitFor({ state: "visible", timeout: options.timeoutMs });
       await tabs.a.getByText(OFFLINE_TEXT, { exact: false }).first().waitFor({ state: "visible" });
       await tabs.a.getByRole("link", { name: "Réessayer", exact: true }).waitFor({ state: "visible" });
+      const offlineCaches = await cacheSnapshot(tabs.a);
       await screenshot(tabs.a, "offline-v3");
       await ctx.setOffline(false);
       phase = "online";
-      await tabs.a.goto(demoUrl, { waitUntil: "domcontentloaded", timeout: options.timeoutMs });
+      await tabs.a.reload({ waitUntil: "domcontentloaded", timeout: options.timeoutMs });
       await tabs.a.getByRole("textbox", { name: FORM_LABEL }).first().waitFor({ state: "visible", timeout: options.timeoutMs });
       await screenshot(tabs.a, "online-again-v3");
-      return { offlineTitle: OFFLINE_TITLE, recovered: true };
+      return { offlineTitle: OFFLINE_TITLE, offlineCaches, recovered: true };
     });
 
     await step("11 nothing private cached on v3 after the single anonymous /api/workspace probe (401)", async () => {
@@ -556,7 +550,7 @@ async function main(argv) {
       const verdict = classifyCacheEntries(snapshot.entries, pre.next.swPrefix);
       assert.ok(verdict.ok, `private or unexpected cache entries: ${JSON.stringify({ privateEntries: verdict.privateEntries, unexpected: verdict.unexpected })}`);
       assert.deepEqual(snapshot.keys, [pre.next.swCacheName], `unexpected cache keys ${JSON.stringify(snapshot.keys)}`);
-      result.versions.new.cache_entries = snapshot.entries;
+      result.versions.new.served.cache_entries = snapshot.entries;
       return { probes, keys: snapshot.keys, entries: snapshot.entries };
     }, { critical: false });
 
@@ -587,7 +581,7 @@ async function main(argv) {
     const code = codeFor();
     context.exit_code = code;
     await persist();
-    const summary = { total: result.steps.length, pass: result.steps.filter((s) => s.status === "PASS").length, fail: result.steps.filter((s) => s.status === "FAIL").length, skipped: result.steps.filter((s) => s.status === "SKIPPED").length };
+    const summary = { total: result.steps.length, pass: result.steps.filter((s) => s.status === "PASS").length, fail: result.steps.filter((s) => s.status === "FAIL").length, skipped: result.steps.filter((s) => s.status === "SKIPPED").length, aborted: result.steps.filter((s) => s.status === "ABORTED").length };
     log(`done: ${JSON.stringify(summary)}; servers ${stoppedAll ? "stopped" : "NOT proven stopped"}; exit ${code}; evidence ${outDir}`);
     if (options.json) process.stdout.write(JSON.stringify({ ...summary, exit: code, out: outDir }) + "\n");
     process.exitCode = code;
@@ -596,7 +590,8 @@ async function main(argv) {
 }
 
 function renderSummary(r) {
-  const lines = [`# QA-PWA-LIFECYCLE-002 — ${r.context.origin}`, "", `- old build ${r.context.old.sha} (BUILD_ID ${r.context.old.build_id}, worker ${r.context.old.sw_cache}, sw.js sha256 ${r.context.old.sw_sha256})`, `- new build ${r.context.new.sha} (BUILD_ID ${r.context.new.build_id}, worker ${r.context.new.sw_cache}, sw.js sha256 ${r.context.new.sw_sha256})`, `- started ${r.context.started_at}; finished ${r.context.finished_at || "(in progress)"}; exit ${r.context.exit_code ?? "(pending)"}`, `- servers: ${r.servers.map((s) => `${s.label} pid ${s.pid} ${s.stopped ? "stopped" : "RUNNING"}`).join(", ") || "none"}`];
+  const served = (v) => (v?.served ? `served: sw.js sha256 ${v.served.sw_sha256_http} (v${v.served.sw_version}), HTML build markers ${JSON.stringify(v.served.html_build_id_markers)}` : "served: (not observed)");
+  const lines = [`# QA-PWA-LIFECYCLE-002 — ${r.context.origin}`, "", `- old build ${r.context.old.sha} — disk: BUILD_ID ${r.context.old.build_id}, worker ${r.context.old.sw_cache}, sw.js sha256 ${r.context.old.sw_sha256} — ${served(r.versions?.old)}`, `- new build ${r.context.new.sha} — disk: BUILD_ID ${r.context.new.build_id}, worker ${r.context.new.sw_cache}, sw.js sha256 ${r.context.new.sw_sha256} — ${served(r.versions?.new)}`, `- started ${r.context.started_at}; finished ${r.context.finished_at || "(in progress)"}; exit ${r.context.exit_code ?? "(pending)"}`, `- servers: ${r.servers.map((s) => `${s.label} pid ${s.pid} ${s.proven_stopped ? "stopped, port released" : s.stopped ? "exited (port release unverified)" : "RUNNING"}`).join(", ") || "none"}`];
   if (r.fatal) lines.push(`- FATAL: ${r.fatal.origin} — ${r.fatal.error?.message}`);
   lines.push("", "| # | Step | Status |", "| --- | --- | --- |");
   for (const s of r.steps) lines.push(`| ${s.name.split(" ")[0]} | ${s.name.replace(/^\S+\s/, "")} | ${s.status}${s.status === "FAIL" ? ` — ${s.detail?.error || ""}` : ""} |`);

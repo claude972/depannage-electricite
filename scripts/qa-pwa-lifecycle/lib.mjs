@@ -140,6 +140,18 @@ export function exitCodeFor({ steps = [], fatal = null, serversStopped = true })
   return steps.every((s) => s.status === "PASS") ? 0 : 1;
 }
 
+/**
+ * Served facts vs disk metadata (contract §4, pilot precision): which candidate BUILD_IDs literally
+ * appear in the HTML actually served by the running server. Next embeds the build id in the
+ * App Router flight payload of the served document.
+ */
+export function servedBuildIdMarkers(html, candidates) {
+  const text = String(html);
+  const found = {};
+  for (const [label, id] of Object.entries(candidates)) found[label] = typeof id === "string" && id.length >= 8 && text.includes(id);
+  return found;
+}
+
 /** The only console line a private-cache probe may legitimately produce (contract §4, steps 4/11). */
 export const EXPECTED_PROBE = { path: "/api/workspace", status: 401, phases: ["probe-v2", "probe-v3"], maxPerPhase: 1 };
 

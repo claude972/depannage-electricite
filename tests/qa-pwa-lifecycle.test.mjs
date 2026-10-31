@@ -6,7 +6,130 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseArgs, extractSwVersion, scanEnvKeyNames, classifyCacheEntries, compareStageEvidence, childEnv, buildServerArgs, readinessUrls, exitCodeFor, splitConsoleRecords, isExpectedProbeRecord, EXPECTED_PROBE, DEFAULT_PORT } from "../scripts/qa-pwa-lifecycle/lib.mjs";
+import { EventEmitter } from "node:events";
+import { parseArgs, extractSwVersion, scanEnvKeyNames, classifyCacheEntries, compareStageEvidence, childEnv, buildServerArgs, readinessUrls, exitCodeFor, splitConsoleRecords, isExpectedProbeRecord, servedBuildIdMarkers, EXPECTED_PROBE, DEFAULT_PORT } from "../scripts/qa-pwa-lifecycle/lib.mjs";
+import { createServerController } from "../scripts/qa-pwa-lifecycle/servers.mjs";
+import { createStopGate, createLifecycle, StopRequestedError } from "../scripts/qa/lib/lifecycle.mjs";
+
+/** Fake spawner: children exit asynchronously on SIGTERM (or never, when `ignoreSigterm`). */
+function fakeSpawner({ ignoreSigterm = false, exitDelayMs = 10 } = {}) {
+  const spawned = [];
+  const listening = new Set();
+  let nextPid = 1000;
+  const spawn = (build) => {
+    const child = new EventEmitter();
+    child.pid = ++nextPid;
+    child.alive = true;
+    listening.add(child.pid);
+    child.kill = (signal) => {
+      if (!child.alive) return;
+      if (signal === "SIGTERM" && ignoreSigterm) return;
+      setTimeout(() => {
+        child.alive = false;
+        listening.delete(child.pid);
+        child.emit("exit", signal === "SIGKILL" ? null : 143, signal === "SIGKILL" ? "SIGKILL" : null);
+      }, exitDelayMs);
+    };
+    spawned.push({ pid: child.pid, dir: build.dir, child });
+    return child;
+  };
+  return { spawn, spawned, portListening: async () => listening.size > 0, alive: () => spawned.filter((s) => s.child.alive).map((s) => s.pid) };
+}
+
+test("server controller: start registers the pid before readiness, stop waits for exit and port release, SIGKILL after a bounded grace", async () => {
+  const gate = createStopGate();
+  const fake = fakeSpawner({ ignoreSigterm: true, exitDelayMs: 5 });
+  const logs = [];
+  const controller = createServerController({ spawn: fake.spawn, probe: async () => true, portListening: fake.portListening, gate, port: 3020, timeoutMs: 2000, graceMs: 30, killMs: 200, sleep: (ms) => new Promise((r) => setTimeout(r, Math.min(ms, 5))), log: (m) => logs.push(m) });
+  const old = await controller.start("old", { dir: "/tmp/old" });
+  assert.equal(controller.entries.length, 1);
+  assert.equal(old.pid, fake.spawned[0].pid);
+  assert.ok(old.ready_at);
+  const outcome = await controller.stop(old);
+  assert.deepEqual(outcome, { stopped: true, portReleased: true });
+  assert.ok(logs.some((l) => /ignored SIGTERM: SIGKILL/.test(l)));
+  assert.deepEqual(fake.alive(), []);
+  const all = await controller.stopAll();
+  assert.equal(all.ok, true);
+  assert.equal(all.steps.length, 1);
+});
+
+test("server controller: start refuses to spawn once the gate is stopping; a foreign listener on the port refuses too", async () => {
+  const gate = createStopGate();
+  const fake = fakeSpawner();
+  const controller = createServerController({ spawn: fake.spawn, probe: async () => true, portListening: fake.portListening, gate, port: 3020, timeoutMs: 500, sleep: () => Promise.resolve() });
+  gate.stop("signal:SIGINT");
+  await assert.rejects(controller.start("new", { dir: "/tmp/new" }), StopRequestedError);
+  assert.equal(fake.spawned.length, 0, "nothing spawned after the stop signal");
+  const gate2 = createStopGate();
+  const controller2 = createServerController({ spawn: fake.spawn, probe: async () => true, portListening: async () => true, gate: gate2, port: 3020, timeoutMs: 500, sleep: () => Promise.resolve() });
+  await assert.rejects(controller2.start("old", { dir: "/tmp/old" }), /bound by a process the runner does not own/);
+  assert.equal(fake.spawned.length, 0);
+});
+
+test("server controller: a stop signal during the readiness wait stops the just-spawned child (no orphan) and aborts the start", async () => {
+  const gate = createStopGate();
+  const fake = fakeSpawner({ exitDelayMs: 2 });
+  let probes = 0;
+  const controller = createServerController({ spawn: fake.spawn, probe: async () => { probes++; if (probes === 2) gate.stop("signal:SIGINT"); return false; }, portListening: fake.portListening, gate, port: 3020, timeoutMs: 5000, graceMs: 50, killMs: 50, sleep: (ms) => new Promise((r) => setTimeout(r, Math.min(ms, 5))) });
+  await assert.rejects(controller.start("new", { dir: "/tmp/new" }), StopRequestedError);
+  assert.equal(fake.spawned.length, 1, "the child had been spawned before the signal");
+  assert.deepEqual(fake.alive(), [], "the pending start left no orphan");
+  assert.equal(controller.entries[0].proven_stopped, true);
+});
+
+test("SIGINT while the OLD server is being stopped: no NEW spawn, no orphan, one finalize, exit 130 (fake process + fake spawner)", async () => {
+  const proc = new EventEmitter();
+  const gate = createStopGate();
+  const fake = fakeSpawner({ exitDelayMs: 20 });
+  const controller = createServerController({ spawn: fake.spawn, probe: async () => true, portListening: fake.portListening, gate, port: 3020, timeoutMs: 2000, graceMs: 500, sleep: (ms) => new Promise((r) => setTimeout(r, Math.min(ms, 5))) });
+  let cleanups = 0;
+  let cleanupResult = null;
+  const lc = createLifecycle({
+    gate,
+    drainTimeoutMs: 1000,
+    cleanup: async () => {
+      cleanups++;
+      cleanupResult = await controller.stopAll();
+      return cleanupResult;
+    },
+    writeResults: async () => {},
+  });
+  const exits = [];
+  const exited = new Promise((resolve) => {
+    lc.installSignalHandlers(proc, { exit: (code) => { exits.push(code); resolve(code); } });
+  });
+  const old = await controller.start("old", { dir: "/tmp/old" });
+  // The switch: stop old … SIGINT lands while the old child has not exited yet … then try to start new.
+  const stopping = controller.stop(old);
+  proc.emit("SIGINT");
+  assert.equal(gate.stopping, true, "the signal raised the gate synchronously");
+  await stopping;
+  let newStart = null;
+  try {
+    await controller.start("new", { dir: "/tmp/new" });
+  } catch (error) {
+    newStart = error;
+  }
+  assert.ok(newStart instanceof StopRequestedError, `start(new) must be refused, got ${newStart}`);
+  assert.equal(fake.spawned.length, 1, "no NEW server spawned after the signal");
+  assert.equal(await exited, 130);
+  assert.deepEqual(exits, [130], "exactly one exit");
+  assert.equal(cleanups, 1, "finalize ran once");
+  assert.equal(cleanupResult.ok, true, "registry drained: every child exited and the port is released");
+  assert.deepEqual(fake.alive(), [], "no orphan child");
+  assert.equal(await fake.portListening(), false);
+  // A second finalize (the main flow's `finally`) joins the same one: still one cleanup.
+  await lc.finalize("completed");
+  assert.equal(cleanups, 1);
+});
+
+test("servedBuildIdMarkers: the served HTML names exactly the build it comes from", () => {
+  const html = '<html><script>self.__next_f.push([1,"{\\"b\\":\\"gxwpcv_wvIETqdrwBlpr0\\"}"])</script></html>';
+  assert.deepEqual(servedBuildIdMarkers(html, { old: "buQI9W-2n13MJ-V5lpOSI", new: "gxwpcv_wvIETqdrwBlpr0" }), { old: false, new: true });
+  assert.deepEqual(servedBuildIdMarkers("", { old: "buQI9W-2n13MJ-V5lpOSI" }), { old: false });
+  assert.deepEqual(servedBuildIdMarkers("short", { x: "short" }), { x: false }, "ids shorter than 8 chars are never accepted as markers");
+});
 
 const execFileAsync = promisify(execFile);
 const SHA_A = "a".repeat(40);
