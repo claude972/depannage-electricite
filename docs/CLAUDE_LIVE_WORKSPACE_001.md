@@ -36,3 +36,18 @@ A client session opened BEFORE an intervention was created for it (external crea
 - **C. Channel/table consistency:** subscribe only to tables actually published, or have Codex add `payments` (and any table that makes a dossier visible) to the publication by a reviewed migration — owner of migrations decides; the lead does not edit SQL.
 - **D. If cause 2 or 3 is confirmed:** a targeted fix by the owner of that layer (token attachment in the shell, or policy/function grants by Codex), with a test that a second session receives an INSERT for a row it can see.
 - QA: a dedicated scenario « session opened before an external creation receives the dossier without reload » stays as the acceptance proof for this finding (separate from T6's normal precondition).
+
+## Update — source-only narrowing (lead)
+
+- **Cause 4 excluded (source):** the QA fixture (`scripts/qa/lib/fixtures.mjs` `createIntervention`, ~l.219–241) creates the dossier with ONE insert into `public.interventions` with `client_id` already set — a single INSERT event on a published table, visible to the client by `can_access_intervention` (`i.client_id = auth.uid()`).
+- **Cause 3, grant part excluded (source):** `can_access_intervention(uuid)` is `security definer`, `search_path=''`, granted to `authenticated` (`202610310001_initial.sql:317`); later `create or replace` (0003, 0009) keep privileges; no later blanket revoke. Remaining part of cause 3 (Realtime's own RLS evaluation of that function) can only be observed live.
+- **Remaining live candidates:** (1) `public.interventions` absent from the live `supabase_realtime` publication; (2) the realtime join evaluated without the user's JWT (role anon) — then every row is filtered although the channel is `SUBSCRIBED`; (3b) Realtime RLS evaluation error for that policy.
+- Also noted: the channel listens to `payments`, which no migration adds to the publication (harmless or not depending on the Realtime version — to be observed).
+
+## Precise bounded reads requested from root (read-only, no mutation, no cohort)
+
+1. `select tablename from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' order by 1;` — expected to contain `interventions`, `quotes`, `messages`.
+2. Realtime logs (dashboard log explorer, realtime source) for ONE channel join of a QA client during the next normal run: the join's role/claims (`authenticated` vs `anon`) and any `apply_rls` / policy error; no message payloads needed.
+3. Optional, only if 1 and 2 are clean: the Realtime project setting « Postgres changes » / RLS enforcement status as shown in the dashboard.
+
+The defensive deep-link refresh (contract `cd2b8d3`) is independent of the result and stays proposed.
