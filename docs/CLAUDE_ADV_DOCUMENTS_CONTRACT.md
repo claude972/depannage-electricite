@@ -170,3 +170,34 @@ documentHref(documentId: string, inline?: boolean): string   // URL de la route 
 - Tests du lot (`tests/documents/*.test.ts`) : un test par état indisponible / lecture seule / refus serveur / résultat `null`, en plus des tests de routes et de PDF.
 
 Historique : 0a01147 contrat initial ; cet amendement est publié avant tout composant.
+
+## Livraison — checkpoints et interface de raccordement
+
+Historique des SHA (origin claude/web-documents) : 0a01147 contrat ; 0e31711 amendement 1 (WEB-SHARED-001) ; 61becd9 migration 015 + revue SQL ; add90c9 correction P2 (accès courant sous verrou), renderer PDF, routes, composant feuille, tests.
+
+### Correction P2 (revue pilote de 61becd9)
+`generate_quote_document` acceptait l’auteur historique d’un devis après réaffectation. Depuis add90c9 : vérification de l’accès **courant** sous le verrou du dossier (`can_access_intervention`) et, pour un document émis par l’artisan, exigence que l’auteur soit encore l’artisan attribué ; `withdraw_quote_amendment` exige attribution courante + accès ; `decide_quote_amendment` revérifie l’accès ; la permission `can_generate` de l’aperçu suit la même règle. Revue SQL : refus de l’ancien artisan après `reassign_intervention` (le nouvel artisan n’est pas l’émetteur ; le propriétaire conserve l’accès), retrait d’attribution simulé sur un devis accepté avec avenant (génération devis/avenant, retrait et téléchargement refusés à l’ancien auteur), gestionnaire avec grant d’écriture puis retrait du grant par l’owner (lecture/génération/décision refusées).
+
+### Fichiers livrés
+- `supabase/migrations/202610310015_quote_documents.sql` — tables `quote_terms`, `quote_amendments`, `quote_documents`, `quote_document_events`, RLS lecture par accès au dossier, trigger `quote_validity_guard`, commandes `set_quote_terms`, `propose_quote_amendment`, `withdraw_quote_amendment`, `decide_quote_amendment`, `generate_quote_document`, `record_quote_document_download`, `quote_documents_overview` ; helpers privés `quote_validity_state`, `quote_document_reference`, `quote_document_issuer`, `quote_document_snapshot`, `quote_document_json`, `quote_amendment_json`. Dépend seulement de 001–013 (vérifié : la revue charge 001–013 puis 015 sans 014/016/017).
+- `lib/features/quote-documents/` — `types.ts` (contrat du lot, `QuoteDocumentsClient`, `QuoteDocumentsScope`), `format.ts`, `validity.ts`, `snapshot.ts` (schéma strict + recalcul des montants), `pdf-writer.ts` (PDF 1.4, Helvetica/Helvetica-Bold WinAnsi, xref exacte, métadonnées UTF-16), `pdf.ts` (`renderQuoteDocumentPdf(snapshot, meta)` — interface de rendu réutilisable par le lot plateforme pour factures/avoirs), `panel-model.ts` (réducteur et validation de formulaire purs), `demo.ts` (`quoteDocumentsDemo(role)`), `server.ts` (en-têtes privés, erreur `issuer_incomplete`).
+- `app/api/quote-documents/route.ts` (GET aperçu `?intervention_id=` ou `?quote_id=`, POST `set_terms`/`generate`), `app/api/quote-documents/[id]/route.ts` (GET flux PDF privé, `?inline=1`), `app/api/quote-amendments/route.ts` (POST `propose`/`withdraw`/`accept`/`reject`).
+- `components/features/quote-documents/` — `quote-documents-panel.tsx` (`QuoteDocumentsPanel`), `validity-form.tsx`, `amendment-form.tsx`, `quote-documents.module.css`, `index.ts`.
+- Tests : `tests/documents/{pdf,snapshot,panel-model,quote-documents-route,quote-amendments-route,panel}.test.ts` + `tests/documents/harness.ts` (33 tests) ; `tests/sql-quote-documents-review.mjs` (12 sections PASS).
+
+### Contrôles exécutés (add90c9)
+`npx tsc --noEmit` : aucune erreur. `npx tsx --test tests/documents/*.test.ts` : 33/33. `npx tsx --test tests/*.test.ts` : 93/93. `PGLITE_MODULE=… node tests/sql-quote-documents-review.mjs` : 12/12 PASS. Les sept scripts `tests/sql-*-review.mjs` existants passent avec 015 présente. PDF exemples (devis 30 lignes sur 2 pages, avenant) analysés en mode strict par un lecteur PDF indépendant (pypdf) et inspectés visuellement après rastérisation. Pas de `next build`/`next dev` lancé par ce lot.
+
+### Ce que le lead raccorde
+- Clé `Capabilities.quoteDocuments` ; sonde `GET /api/quote-documents?quote_id=<id>` ou `?intervention_id=<id>` (404/405 → `missing`, 503/réseau → `unavailable`). Vue `quote-documents` (param = id de devis).
+- `client` : `{ load(target) → api<QuoteDocumentsOverview>(GET …), command(body) → POST /api/quote-documents (set_terms, generate) ou /api/quote-amendments (propose, withdraw, accept, reject), documentHref(id, inline?) → "/api/quote-documents/<id>[?inline=1]" }`, chaque appel borné par `runForResult` (null = chaîne périmée). Les erreurs doivent conserver `{ status, message, code?, missing? }` (`ApiRequestError` convient ; pour `issuer_incomplete`, transmettre `code` et `missing` du corps JSON).
+- Props : `state`, `unavailableMessage?`, `scope` (`authority.canWrite` = autorité entreprise fail-closed ou vrai pour client/artisan), `client`, `demo?` (`{ overview: quoteDocumentsDemo(role) }` en démonstration seulement), `onNavigate?` (vue `artisan-profile` proposée pour compléter le dossier), `target`, `variant`.
+- Ancrages (via l’agent design) : panneau devis artisan sous le devis courant (`variant="artisan"`, `target={{ interventionId }}`), vue devis client sous le tableau (`variant="client"`, `target={{ quoteId }}`), détail approbation entreprise (`variant="enterprise"`, `target={{ quoteId }}`).
+
+### Ce que Codex vérifie
+- Revue SQL sur la base dédiée : `tests/sql-quote-documents-review.mjs` puis les sept scripts existants ; application séquentielle de 015 seulement après revue.
+- PDF ouvert à l’œil (devis et avenant) : montant/TVA/version/validité/émetteur relus contre la base ; tentative de téléchargement par un tiers (404) et par un membre retiré ; double acceptation d’avenant (409) ; émetteur incomplet (409 `issuer_incomplete`, aucun PDF).
+- Après raccordement : captures 360/1280, console propre, test de refus `canWrite=false`.
+
+### Explicitement non livré
+Factures/avoirs et numérotation comptable ; règlement en ligne des avenants (montant Stripe = devis accepté, dit dans l’API, l’UI et le PDF) ; circuit d’approbation B2B des avenants (bloqué explicitement au-delà du seuil, pas livré) ; signature électronique ; envoi e-mail ; stockage objet des PDF ; menus, coques de rôle et fichiers globaux ; toute modification des routes/contrats devis existants (seul le trigger de garde sur validité explicite touche `public.quotes`, en refus uniquement).
