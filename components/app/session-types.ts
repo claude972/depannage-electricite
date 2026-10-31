@@ -2,6 +2,8 @@
 // (components/role/*). Spaces are presentational: every mutation, demo counterpart and
 // live/unavailable decision goes through this object so that identity resets and role
 // guards are enforced in one place.
+import type { FeatureClients } from "./features";
+import type { PlatformAccess } from "../../lib/features/platform-operations/types";
 import type {
   AdminInterventionDetail,
   AdminInterventionsPage,
@@ -201,4 +203,14 @@ export interface Session {
   resetDemo(): void;
   saveDemo(next: Workspace): void;
   setProfessional(next: ProfessionalData): void;
+
+  /**
+   * Advanced lots (WEB-SHARED-001): clients injected into the leaf components. Built once per
+   * identity; in demonstration they operate on seeds only (`features.demo`).
+   */
+  features: FeatureClients;
+  /** Server reply to the back-office probe (/me); the only truth for platform-* views. null = unknown. */
+  platformAccess: PlatformAccess | null;
+  /** Unread notifications from the server summary; null when unknown or unavailable. */
+  unreadNotifications: number | null;
 }

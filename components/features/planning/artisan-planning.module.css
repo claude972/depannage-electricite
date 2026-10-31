@@ -74,16 +74,31 @@
   border-color: #1457d9;
 }
 .dayHead {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px;
+  display: grid;
+  gap: 4px;
+  justify-items: start;
   font-size: 13px;
   color: #526178;
+  min-width: 0;
 }
 .dayHead strong {
   color: #102a43;
   font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+/* Current-day marker on its own line: never wraps the date inside a narrow column. */
+.today {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px solid #1457d9;
+  border-radius: 4px;
+  color: #1457d9;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
 }
 .dayEmpty {
   margin: 0;

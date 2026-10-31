@@ -66,9 +66,9 @@ import {
   time,
 } from "../app/format";
 import {
+  canAccess,
   artisanMissions,
   artisanPerformance,
-  isSameDay,
   pickQuote,
   quoteVersions,
   type Performance,
@@ -76,25 +76,57 @@ import {
 import styles from "./artisan.module.css";
 import { QuoteDraftEditor } from "./artisan-quote-draft";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
+import { HeaderBell, NotificationsPage } from "./notifications-anchor";
+import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
+import { ArtisanPlanning } from "../features/planning/artisan-planning";
+import { CONTRACT_MESSAGES } from "../app/api";
+import { demoPlanning } from "../../lib/features/planning/demo";
+import { PLANNING_TIME_ZONE } from "../../lib/features/planning/types";
+import { anchorEntryVisible, leafScope, platformEntries } from "./anchors";
+import { PlatformPage } from "./platform-anchor";
+import {
+  appointmentSlotState,
+  demoPlanningRange,
+  fmtRating,
+  missionSegmentOptions,
+  perfTiles,
+  planningAuthority,
+  type AppointmentEntry,
+  type MissionSegment,
+} from "./artisan-lists";
 
 // ---- Static definitions ---------------------------------------------------------------
 type Tone = "neutral" | "blue" | "green" | "amber" | "red" | "violet";
-type NavItem = { view: View; label: string; icon: string };
+/** `short` : libellé de l’onglet bas (une ligne à 360 px, M36 « Accueil ») ; le menu garde `label`. */
+type NavItem = { view: View; label: string; icon: string; short?: string };
 
 const PRIMARY_NAV: NavItem[] = [
-  { view: "overview", label: "Tableau de bord", icon: "grid" },
+  { view: "overview", label: "Tableau de bord", icon: "grid", short: "Accueil" },
   { view: "missions", label: "Missions", icon: "briefcase" },
   { view: "quotes", label: "Devis", icon: "receipt" },
   { view: "messages", label: "Messages", icon: "message" },
   { view: "profile", label: "Profil", icon: "person" },
 ];
 const SECONDARY_NAV: NavItem[] = [
+  { view: "planning", label: "Planning", icon: "calendar" },
   { view: "documents", label: "Documents", icon: "document" },
   { view: "application", label: "Dossier de candidature", icon: "badge" },
   { view: "performance", label: "Performance", icon: "chart" },
   { view: "help", label: "Aide", icon: "help" },
   { view: "support", label: "Assistance", icon: "shield" },
 ];
+/**
+ * Entrées secondaires réellement proposées : le planning dépend de la capacité serveur (jamais un
+ * menu sans action) ; les sections du back-office n’apparaissent que si la plateforme a ouvert un
+ * droit d’opérateur à ce compte (`platformEntries`, fail-closed), sans promotion de rôle.
+ */
+function secondaryNav(session: Session): NavItem[] {
+  const base = SECONDARY_NAV.filter((item) =>
+    item.view === "planning" ? anchorEntryVisible(canAccess("planning", session.role, session.mode), session.capabilities.planning) : true,
+  );
+  const platform = platformEntries(session.platformAccess, (v) => canAccess(v, session.role, session.mode));
+  return [...base, ...platform];
+}
 const DRAWER_ID = "artisan-drawer";
 
 const APPLICATION_STATUS: Record<
@@ -173,8 +205,6 @@ const QUOTE_STATUS: Record<string, { label: string; tone: Tone }> = {
 const maskPostal = (code: string) =>
   code.length >= 2 ? `${code.slice(0, 2)}•••` : "•••••";
 const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
-const fmtRating = (value: number) =>
-  value.toLocaleString("fr-FR", { maximumFractionDigits: 1 });
 const activeNav = (view: View): View =>
   view === "mission" || view === "detail" || view === "quote" ? "missions" : view;
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -338,7 +368,6 @@ function useOperations(session: Session, id: string, version: number) {
   }, [id, version, mode, profileId]);
   return state;
 }
-type AppointmentEntry = { appointment: Appointment | null } | null;
 function useAppointments(session: Session, ids: string[]) {
   const key = ids.join("|");
   const [map, setMap] = useState<Record<string, AppointmentEntry>>({});
@@ -438,6 +467,17 @@ export function ArtisanSpace({ session }: { session: Session }) {
       case "messages":
         content = <Messages session={session} />;
         break;
+      case "notifications":
+        content = <NotificationsPage session={session} />;
+        break;
+      case "planning":
+        content = <PlanningView session={session} dossier={dossier} />;
+        break;
+      case "platform-operators":
+      case "platform-finance":
+      case "platform-moderation":
+        content = <PlatformPage session={session} view={session.view} />;
+        break;
       case "documents":
         content = (
           <Documents
@@ -509,14 +549,7 @@ export function ArtisanSpace({ session }: { session: Session }) {
             <span>Bonjour,</span>
             <strong>{firstName(session.displayName)}</strong>
           </div>
-          <button
-            type="button"
-            className={styles.iconButton}
-            aria-label="Messages"
-            onClick={() => navigate("messages")}
-          >
-            <Icon name="bell" />
-          </button>
+          <HeaderBell session={session} />
         </header>
         <main id="main" className={styles.main} tabIndex={-1}>
           <Alerts
@@ -537,7 +570,7 @@ export function ArtisanSpace({ session }: { session: Session }) {
               onClick={() => navigate(item.view)}
             >
               <Icon name={item.icon} size={22} />
-              {item.label}
+              {item.short ?? item.label}
             </button>
           ))}
         </nav>
@@ -618,7 +651,7 @@ function Sidebar({
       </nav>
       <span className={styles.sideCaption}>Dossier et aide</span>
       <nav className={styles.sideNav} aria-label="Navigation secondaire">
-        <NavButtons items={SECONDARY_NAV} current={current} onNavigate={onNavigate} />
+        <NavButtons items={secondaryNav(session)} current={current} onNavigate={onNavigate} />
       </nav>
       <div className={styles.sideFoot}>
         <div className={styles.sideUser}>
@@ -697,7 +730,7 @@ function Drawer({
         </nav>
         <span className={styles.sideCaption}>Dossier et aide</span>
         <nav className={styles.sideNav} aria-label="Menu secondaire">
-          <NavButtons items={SECONDARY_NAV} current={current} onNavigate={onNavigate} />
+          <NavButtons items={secondaryNav(session)} current={current} onNavigate={onNavigate} />
         </nav>
         <div className={styles.sideFoot}>
           <button
@@ -768,20 +801,20 @@ function PanelArt() {
   );
 }
 function appointmentSlot(entry: AppointmentEntry | undefined, now: Date): ReactNode {
-  if (entry === undefined)
+  const slot = appointmentSlotState(entry, now);
+  if (slot.kind === "loading")
     return (
       <span role="status" className={styles.rowHint}>
         Horaire en cours de lecture…
       </span>
     );
-  if (entry === null) return <span className={styles.rowHint}>Horaire indisponible</span>;
-  if (!entry.appointment) return <span className={styles.rowHint}>Horaire à fixer</span>;
-  const start = new Date(entry.appointment.starts_at);
+  if (slot.kind === "unavailable") return <span className={styles.rowHint}>Horaire indisponible</span>;
+  if (slot.kind === "unscheduled") return <span className={styles.rowHint}>Horaire à fixer</span>;
   return (
     <>
-      <strong>{isSameDay(start, now) ? "Aujourd’hui" : date(entry.appointment.starts_at)}</strong>
+      <strong>{slot.today ? "Aujourd’hui" : date(slot.startsAt)}</strong>
       <span>
-        {time(entry.appointment.starts_at)} – {time(entry.appointment.ends_at)}
+        {time(slot.startsAt)} – {time(slot.endsAt)}
       </span>
     </>
   );
@@ -1015,6 +1048,7 @@ function Overview({
       >
         Voir missions disponibles
         {offers.length ? <span className={styles.ctaCount}>{offers.length}</span> : null}
+        <Icon name="arrow" size={18} />
       </button>
       {session.mode === "demo" && (
         <DemoNote>
@@ -1026,7 +1060,6 @@ function Overview({
 }
 
 // ---- Missions list -------------------------------------------------------------------------
-type MissionSegment = "available" | "active" | "done";
 function Missions({ session, declinedIds }: { session: Session; declinedIds: string[] }) {
   const [segment, setSegment] = useState<MissionSegment>("available");
   const m = artisanMissions(session.data.interventions, session.profileId);
@@ -1035,11 +1068,7 @@ function Missions({ session, declinedIds }: { session: Session; declinedIds: str
   const done = [...m.awaitingPayment, ...m.done].sort(
     (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
   );
-  const options = [
-    ["available", `Disponibles (${offers.length})`],
-    ["active", `En cours (${m.active.length})`],
-    ["done", `Terminées (${done.length})`],
-  ] as const;
+  const options = missionSegmentOptions({ offers: offers.length, active: m.active.length, done: done.length });
   const open = (id: string) => session.go("mission", id);
   return (
     <>
@@ -1790,6 +1819,14 @@ function QuotePanel({
           </>
         )}
       </section>
+      {current && (
+        <QuoteDocumentsAnchor
+          session={session}
+          variant="artisan"
+          target={{ interventionId: i.id }}
+          authority={{ canWrite: true }}
+        />
+      )}
       {i.status === "quoted" && (
         <QuoteDraftEditor
           session={session}
@@ -3018,52 +3055,28 @@ function PerfTile({
     </div>
   );
 }
+const PERF_TONE = { amber: "amberIcon", green: "greenIcon", blue: "blueIcon" } as const;
 function PerfGrid({ perf, since }: { perf: Performance; since: string | null }) {
+  // Six tuiles M36 ; les indicateurs sans source restent explicitement indisponibles.
   return (
     <>
       <div className={styles.perfGrid}>
-        <div className={styles.perfTile}>
-          <Unavailable
-            title="Taux de satisfaction"
-            reason="Aucun questionnaire de satisfaction n’est collecté."
-            blocker="enquête de satisfaction non prévue"
-          />
-        </div>
-        <PerfTile
-          icon="star"
-          tone={styles.amberIcon}
-          label="Note moyenne"
-          value={perf.rating ? `${fmtRating(perf.rating.average)} / 5` : "—"}
-          note={perf.rating ? `${perf.rating.count} avis client${perf.rating.count > 1 ? "s" : ""}` : "Aucun avis encore"}
-        />
-        <PerfTile
-          icon="check"
-          tone={styles.greenIcon}
-          label="Interventions réalisées"
-          value={perf.completedCount}
-          note="Dossiers réglés"
-        />
-        <PerfTile
-          icon="calendar"
-          tone={styles.blueIcon}
-          label="Ancienneté"
-          value={since ?? "—"}
-          note={since ? "Depuis l’inscription" : "Date d’inscription non transmise"}
-        />
-        <div className={styles.perfTile}>
-          <Unavailable
-            title="Ponctualité"
-            reason="Les rendez-vous ne sont pas comparés aux arrivées."
-            blocker="mesure de ponctualité non prévue"
-          />
-        </div>
-        <PerfTile
-          icon="euro"
-          tone={styles.greenIcon}
-          label="CA du mois"
-          value={money(perf.monthRevenueCents)}
-          note={`${perf.monthPaidCount} règlement${perf.monthPaidCount > 1 ? "s" : ""} — ${perf.period}`}
-        />
+        {perfTiles(perf, since).map((t) =>
+          t.kind === "unavailable" ? (
+            <div key={t.id} className={styles.perfTile}>
+              <Unavailable title={t.label} reason={t.reason} blocker={t.blocker} />
+            </div>
+          ) : (
+            <PerfTile
+              key={t.id}
+              icon={t.icon}
+              tone={styles[PERF_TONE[t.tone]]}
+              label={t.label}
+              value={t.value}
+              note={t.note}
+            />
+          ),
+        )}
       </div>
       <details className={styles.basis}>
         <summary>Base de calcul</summary>
@@ -3158,9 +3171,6 @@ function Profile({
       </section>
       <div className={styles.sectionHead} style={{ marginTop: 8 }}>
         <h2>Performance</h2>
-        <button type="button" className="text-button" onClick={() => session.go("performance")}>
-          Voir le détail
-        </button>
       </div>
       <PerfGrid perf={perf} since={since} />
       <div className={styles.profileActions}>
@@ -3173,6 +3183,10 @@ function Profile({
         >
           <Icon name="edit" size={18} />
           {editing ? "Fermer le formulaire" : "Modifier le profil"}
+        </button>
+        <button type="button" className={`button outline ${styles.block}`} onClick={() => session.go("performance")}>
+          <Icon name="chart" size={18} />
+          Voir les statistiques détaillées
         </button>
         {editing && (
           <div id="profile-form">
@@ -3223,7 +3237,7 @@ function Profile({
         )}
       </section>
       <section className={`panel ${styles.accountLinks}`} aria-label="Mon compte">
-        {SECONDARY_NAV.map((item) => (
+        {secondaryNav(session).map((item) => (
           <button key={item.view} type="button" className={styles.accountLink} onClick={() => session.go(item.view)}>
             <Icon name={item.icon} size={18} />
             {item.label}
@@ -3305,6 +3319,35 @@ function PerformanceView({ session }: { session: Session }) {
       {session.mode === "demo" && (
         <DemoNote>Indicateurs calculés sur les données de démonstration.</DemoNote>
       )}
+    </>
+  );
+}
+
+// ---- Planning (ADV-PLANNING-NOTIFICATIONS-001) --------------------------------------------------
+function PlanningView({ session, dossier }: { session: Session; dossier: ArtisanDossier | null }) {
+  const state = session.capabilities.planning;
+  const authority = planningAuthority(
+    session.mode,
+    session.profile?.artisan_approved,
+    dossier?.artisan_profile?.application_status,
+  );
+  return (
+    <>
+      <PageTitle
+        title="Planning"
+        subtitle="Vos disponibilités hebdomadaires et vos rendez-vous, heure de Martinique."
+      />
+      <ArtisanPlanning
+        state={state}
+        unavailableMessage={state === "available" ? "" : CONTRACT_MESSAGES[state]}
+        scope={leafScope(session.profileId, session.role, authority)}
+        client={session.features.planning}
+        demo={session.mode === "demo" ? demoPlanning(demoPlanningRange(new Date(), PLANNING_TIME_ZONE)) : undefined}
+        timeZone={PLANNING_TIME_ZONE}
+        onNavigate={(view, param) => {
+          if (view === "intervention" && param) session.go("mission", param);
+        }}
+      />
     </>
   );
 }

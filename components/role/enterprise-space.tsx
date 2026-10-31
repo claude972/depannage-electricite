@@ -4,6 +4,7 @@
 // (approbation), V5-C01 / M50 (fiche de site), M13 / M56 / V5-C05 (tableaux de bord).
 // Tout indicateur est calculé depuis session.data et annonce sa base ("dossiers chargés").
 import {
+  Fragment,
   useEffect,
   useId,
   useMemo,
@@ -58,6 +59,7 @@ import {
   shortId,
 } from "../app/format";
 import {
+  canAccess,
   enterpriseAuthority,
   enterpriseContext,
   pickQuote,
@@ -82,6 +84,13 @@ import {
   type ListContext,
 } from "./enterprise-lists";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
+import { HeaderBell, NotificationsPage } from "./notifications-anchor";
+import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
+import { SiteOperationsView } from "../features/site-operations/site-operations-view";
+import { CONTRACT_MESSAGES } from "../app/api";
+import { demoReport } from "../../lib/features/site-operations/demo";
+import { leafScope, platformEntries } from "./anchors";
+import { PlatformPage } from "./platform-anchor";
 import type {
   Approval,
   ApprovalRule,
@@ -452,6 +461,18 @@ export function EnterpriseSpace({ session }: { session: Session }) {
           return <MembersView c={c} />;
         case "messages":
           return <MessagesView c={c} />;
+        case "notifications":
+          return (
+            <NotificationsPage
+              session={session}
+              organizationId={c.organization?.id}
+              siteId={c.activeSite?.id}
+            />
+          );
+        case "platform-operators":
+        case "platform-finance":
+        case "platform-moderation":
+          return <PlatformPage session={session} view={view} />;
         case "documents":
           return <DocumentsView c={c} />;
         case "profile":
@@ -496,6 +517,9 @@ export function EnterpriseSpace({ session }: { session: Session }) {
           <span className={styles.brandSub}>Portail entreprise</span>
         </button>
         <div className={styles.topbarActions}>
+          <span className={styles.topbarBell}>
+            <HeaderBell session={session} />
+          </span>
           <button
             type="button"
             className={styles.iconButton}
@@ -507,7 +531,7 @@ export function EnterpriseSpace({ session }: { session: Session }) {
             title="Messages"
             onClick={() => go("messages")}
           >
-            <Icon name="bell" />
+            <Icon name="message" />
             {receivedMessages > 0 && (
               <span className={styles.iconCount} aria-hidden="true">
                 {receivedMessages}
@@ -602,6 +626,12 @@ export function EnterpriseSpace({ session }: { session: Session }) {
             <span className={styles.navDivider} role="separator" />
             {NAV.filter((n) => n.section === "more").map((n) => (
               <NavButton key={n.view} item={n} active={activeNav === n.view} onClick={() => go(n.view)} />
+            ))}
+            {platformEntries(session.platformAccess, (v) => canAccess(v, session.role, session.mode)).map((n, k) => (
+              <Fragment key={n.view}>
+                {k === 0 && <span className={styles.navDivider} role="separator" />}
+                <NavButton item={{ ...n, section: "more" }} active={activeNav === n.view} onClick={() => go(n.view)} />
+              </Fragment>
             ))}
           </nav>
           <div className={styles.sidebarBottom}>
@@ -2246,6 +2276,9 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
   const audits = compliance.filter((r) => ["audit", "safety"].includes(r.kind));
   // Écriture opérationnelle sur CE site : rôle de membre et portée (jamais le rôle seul).
   const canWrite = c.authority.canWriteSite(site.id);
+  // Opérations du site (lot B2B) : état réel du contrat, libellé commun quand il n’est pas disponible.
+  const opsState = session.capabilities.siteOperations;
+  const opsMessage = opsState === "available" ? "" : CONTRACT_MESSAGES[opsState];
 
   return (
     <>
@@ -2482,10 +2515,34 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
           )}
         </section>
 
+        <section className={cx("panel", styles.operationsPanel)} aria-labelledby="site-operations">
+          <h2 id="site-operations">Opérations du site</h2>
+          <p className={styles.muted}>
+            Équipements, maintenance, budget, grilles, délais et contrôles enregistrés pour ce site.
+          </p>
+          <SiteOperationsView
+            state={opsState}
+            unavailableMessage={opsMessage}
+            scope={leafScope(
+              session.profileId,
+              session.role,
+              canWrite
+                ? { canWrite: true }
+                : { canWrite: false, reason: c.authority.readOnlyReason || "Lecture seule sur ce site." },
+              { organizationId: c.organization?.id, siteId: site.id },
+            )}
+            client={session.features.siteOperations}
+            demo={session.mode === "demo" ? demoReport() : undefined}
+            onNavigate={(view, param) => {
+              if (view === "intervention" && param) session.openIntervention(param);
+            }}
+          />
+        </section>
+
         {vertical === "restaurant" && (
           <Unavailable
             title="Équipements critiques (cuisine, froid, éclairage)"
-            reason="Aucun équipement de site n’est modélisé ; l’état des systèmes ne peut pas être affiché."
+            reason="Les équipements, leur criticité et leur état se gèrent dans « Opérations du site » ci-dessus. Aucune télémesure ni alerte automatique n’est raccordée : l’état affiché est celui déclaré."
             blocker="ENT-07"
           />
         )}
@@ -2520,9 +2577,6 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
         )}
 
         <Unavailable title="Contacts du site" reason="Aucun contact de site n’est modélisé." blocker="ENT-04" />
-        {vertical !== "restaurant" && (
-          <Unavailable title="Équipements" reason="Aucun équipement de site n’est modélisé." blocker="ENT-07" />
-        )}
 
         <section className="panel" aria-labelledby="site-docs">
           <h2 id="site-docs">Documents</h2>
@@ -2741,9 +2795,6 @@ function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
               )}
             </div>
             <div className={styles.quoteFactsWide}>
-              <Unavailable title="Validité du devis" reason="Validité du devis non définie (règle à fixer)." />
-            </div>
-            <div className={styles.quoteFactsWide}>
               <small>Pièces jointes</small>
               {documents.length ? (
                 documents.map((d) => (
@@ -2768,6 +2819,19 @@ function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
             )}
           </div>
         </section>
+
+        <QuoteDocumentsAnchor
+          session={session}
+          variant="enterprise"
+          target={{ quoteId: approval.quote_id }}
+          authority={
+            c.authority.canWriteSite(decisionSiteId)
+              ? { canWrite: true }
+              : { canWrite: false, reason: c.authority.readOnlyReason || "Vos droits d’écriture ne couvrent pas le site de ce devis." }
+          }
+          organizationId={c.organization?.id}
+          siteId={decisionSiteId || undefined}
+        />
 
         <section className="panel" aria-labelledby="approval-decision">
           <h2 id="approval-decision">Votre décision</h2>
@@ -2979,7 +3043,11 @@ function ReportsView({ c }: { c: Ctx }) {
       <div className={styles.threeCol}>
         <Unavailable title="Consommation d’énergie" reason="Aucune source énergétique n’est raccordée." blocker="ENT-09" />
         <Unavailable title="Assemblées générales & appels de fonds" reason="Non modélisés pour les copropriétés." blocker="ENT-05" />
-        <Unavailable title="Respect des SLA" reason="Aucun SLA contractuel ni mesure de délai n’existe côté serveur." blocker="ENT-11" />
+        <Unavailable
+          title="Respect des SLA (consolidé)"
+          reason="Les délais et calendriers se suivent site par site dans la fiche de site (« Opérations du site »). Le consolidé multi-sites n’est pas livré ; aucune conformité contractuelle ou réglementaire n’est attestée ici."
+          blocker="ENT-11"
+        />
       </div>
     </>
   );

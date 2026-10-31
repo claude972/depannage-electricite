@@ -68,6 +68,17 @@ const ACCESS: Record<View, readonly Role[] | "public"> = {
   "admin-messages": ["admin"],
   "admin-settings": ["admin"],
   "admin-warranty": ["admin"],
+  // Advanced lots: role gate only; the server re-checks every right (visibility grants nothing).
+  "quote-documents": ["client", "artisan", "manager", "admin"],
+  planning: ["artisan"],
+  notifications: ["client", "artisan", "manager", "admin"],
+  "site-operations": ["manager"],
+  // Back-office views: a limited operator keeps a client/manager profile role, so the role gate
+  // admits every signed-in role and the server reply to /me decides, fail-closed (see
+  // platformViewAllowed in features.ts). Visibility never grants anything.
+  "platform-operators": ["client", "artisan", "manager", "admin"],
+  "platform-finance": ["client", "artisan", "manager", "admin"],
+  "platform-moderation": ["client", "artisan", "manager", "admin"],
 };
 export const ALL_VIEWS = Object.keys(ACCESS) as View[];
 export function isView(value: string): value is View {

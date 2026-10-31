@@ -9,7 +9,7 @@ export type PlatformDemo = {
 export const PLATFORM_DEMO: PlatformDemo = {
   access: {
     super_admin: true, scopes: [], super_admin_count: 2,
-    capabilities: { operators: true, audit: true, finance: true, reviews_moderation: true, refund_execution: false, invoice_rendering: false },
+    capabilities: { operators: true, audit: true, finance: true, reviews_moderation: true, refund_execution: false, invoice_rendering: true },
     config: { commission: { setting_bps: null, setting_version: null, checkout_bps: null, aligned: null }, payment_provider: { configured: false, mode: null, live_enabled: false }, invoice_issuer: { configured: false } },
   },
   grants: [
@@ -26,7 +26,7 @@ export const PLATFORM_DEMO: PlatformDemo = {
     refund_requests: { requested: { count: 1, cents: 5000 } }, disputes: { open: 1 }, invoices: { invoice_count: 0, credit_note_count: 0 }, commission_setting: null, currency: "eur", generated_at: t,
   },
   ledger: [{ id: id(21), request_id: id(22), entry_kind: "payment_settled", direction: "credit", amount_cents: 30000, currency: "eur", payment_id: id(31), external_event_id: "cs_demo_1", basis: { source: "payments" }, recorded_by: id(99), created_at: t }],
-  invoices: [],
+  invoices: [{ id: id(81), request_id: id(82), kind: "invoice", basis: "service", number: "F2026-000001", issuer_key: `artisan:${id(15, "de0000aa")}`, issuer: { legal_name: "Électricité démo", siret: "00000000000000", address: "1 rue de la Démonstration", vat_number: null, legal_status: "EI" }, recipient: { name: "Client démo", address: "2 rue de la Démonstration" }, payment_id: id(31), quote_id: id(83), intervention_id: id(61), related_invoice_id: null, lines: [{ label: "Prestation de démonstration", quantity: 1, unit_price_cents: 25000 }], subtotal_cents: 25000, tax_rate: 20, tax_cents: 5000, total_cents: 30000, currency: "eur", reason: "", issued_by: id(99), issued_at: t }],
   refundRequests: [{ id: id(41), request_id: id(42), payment_id: id(31), amount_cents: 5000, currency: "eur", reason: "Prestation partiellement non réalisée (démo).", status: "requested", version: 1, requested_by: id(99), created_at: t, updated_at: t, decided_by: null, decided_at: null, decision_note: "", provider_reference: null, settled_event_id: null, settled_at: null }],
   disputes: [{ id: id(51), request_id: id(52), payment_id: id(31), intervention_id: id(61), origin: "client", subject: "Contestation (démo)", description: "Le client conteste une partie de la prestation (démonstration).", status: "open", outcome: "none", refund_request_id: null, version: 1, opened_by: id(99), created_at: t, updated_at: t, resolved_by: null, resolved_at: null, resolution_note: "" }],
   reviews: [{ id: id(71), intervention_id: id(61), author_id: id(13, "de0000aa"), rating: 2, body: "Avis de démonstration en attente de modération.", created_at: t, moderation: null, contestations: [{ id: id(72), request_id: id(73), review_id: id(71), contested_by: id(14, "de0000aa"), reason: "Contestation de démonstration.", status: "open", version: 1, created_at: t, decided_by: null, decided_at: null, decision_note: "" }] }],

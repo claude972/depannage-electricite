@@ -7,7 +7,7 @@ export type PlatformAccess = {
   super_admin: boolean;
   scopes: PlatformScopeKey[];
   super_admin_count: number | null;
-  capabilities: { operators: boolean; audit: boolean; finance: boolean; reviews_moderation: boolean; refund_execution: false; invoice_rendering: false };
+  capabilities: { operators: boolean; audit: boolean; finance: boolean; reviews_moderation: boolean; refund_execution: false; invoice_rendering: boolean };
   config: FinanceConfig;
 };
 export type FinanceConfig = {
