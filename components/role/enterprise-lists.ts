@@ -1,6 +1,6 @@
 // Logique pure des listes de l’espace entreprise (tableau interventions M4/M66, tableau sites M13).
 // Sans React ni CSS : testée par tests/ui/enterprise-lists.test.ts.
-import type { Approval, ComplianceRecord, ContractState, Intervention, Quote } from "../app/types";
+import type { Approval, ComplianceRecord, ContractState, Intervention, Quote, Site } from "../app/types";
 
 export type InterventionFilters = {
   site: string;
@@ -148,4 +148,52 @@ export function siteAlertSummary(state: ContractState, alerts: SiteAlertCounts):
     pending > 0 && plural(pending, "contrôle à traiter", "contrôles à traiter"),
   ].filter((x): x is string => typeof x === "string");
   return parts.length ? { kind: "alerts", parts, overdue: alerts.overdue > 0 } : { kind: "none" };
+}
+
+/** Date ISO (AAAA-MM-JJ) décalée de `days` jours, en UTC. */
+const shiftDate = (iso: string, days: number) => {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+
+/**
+ * Chiffres du tableau de bord V5-C05, uniquement à partir des dossiers chargés : interventions
+ * ouvertes (selon `isOpen`), dont celles marquées urgentes, et échéances non terminées dues dans
+ * les 30 jours (bornes incluses, dépassées exclues). Aucune consommation, projection ni tendance.
+ */
+export function overviewFigures(
+  scope: { interventions: Pick<Intervention, "status" | "urgency">[]; compliance: Pick<ComplianceRecord, "status" | "due_on">[] },
+  today: string,
+  isOpen: (status: Intervention["status"]) => boolean,
+) {
+  const open = scope.interventions.filter((i) => isOpen(i.status));
+  const horizon = shiftDate(today, 30);
+  const deadlines30 = scope.compliance.filter((r) => r.status !== "completed" && r.due_on >= today && r.due_on <= horizon).length;
+  return { open: open.length, urgent: open.filter((i) => i.urgency === "urgent").length, deadlines30 };
+}
+
+export type SiteBudgetBar = {
+  id: string;
+  name: string;
+  committed: number;
+  budget: number;
+  ratio: number | null;
+  width: number;
+  over: boolean;
+};
+/** « Budget par site » (V5-C05) : engagé = devis acceptés des dossiers du site ; taux réel via `budgetFigures`. */
+export function siteBudgetBars(
+  sites: Pick<Site, "id" | "name" | "budget_cents">[],
+  interventions: Pick<Intervention, "id" | "site_id">[],
+  quotes: Pick<Quote, "intervention_id" | "status" | "total_cents">[],
+): SiteBudgetBar[] {
+  return sites.map((site) => {
+    const ids = new Set(interventions.filter((i) => i.site_id === site.id).map((i) => i.id));
+    const committed = quotes
+      .filter((q) => q.status === "accepted" && ids.has(q.intervention_id))
+      .reduce((sum, q) => sum + q.total_cents, 0);
+    const budget = site.budget_cents || 0;
+    return { id: site.id, name: site.name, committed, budget, ...budgetFigures(committed, budget) };
+  });
 }
