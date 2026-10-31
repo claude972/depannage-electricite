@@ -40,9 +40,9 @@ test('provider network rejects SSRF, 429, nonJSON and oversized streams, with fi
  const fast=compile('../lib/features/tracking/provider.ts',{}, {setTimeout:(fn:()=>void)=>setTimeout(fn,0)});
  await assert.rejects(()=>fast.providerJson(provider.routeUrl(sample()),async(_u:unknown,o:RequestInit)=>new Promise((_r,reject)=>o.signal!.addEventListener('abort',()=>reject(Error('aborted'))))),e=>(e as any).reason==='provider_timeout');
 });
-function httpHarness(getSnapshot:()=>unknown,requestProvider:(url:URL)=>unknown){
+function httpHarness(getSnapshot:()=>unknown,requestProvider:(url:URL)=>unknown,onClaim?:()=>Promise<void>){
  const calls:{rpc:string;args:unknown}[]=[];class ApiError extends Error{constructor(public status:number,message:string){super(message);}}
- const admin={rpc:async(rpc:string,args:unknown)=>{calls.push({rpc,args});return {data:{allowed:true,retry_after_s:0},error:null};}};
+ const admin={rpc:async(rpc:string,args:unknown)=>{calls.push({rpc,args});if(rpc==='claim_tracking_provider'&&onClaim)await onClaim();return {data:{allowed:true,retry_after_s:0},error:null};}};
  const db={rpc:async()=>{const v=getSnapshot();return v==='revoked'?{data:null,error:{code:'42501'}}:{data:v,error:null};}};
  const helpers={ApiError,dbError:(e:unknown)=>{if(e)throw new ApiError(503,'DB unavailable');},adminClient:()=>admin,apiError:(e:any)=>Response.json({error:e.message},{status:e.status||500})};
  const module=compile('../lib/features/tracking/http.ts',{'@/lib/supabase/server':helpers,'./state':state,'./provider':{...provider,providerJson:async(url:URL)=>requestProvider(url)}});
@@ -69,4 +69,25 @@ test('geocoding works before GPS starts but rechecks destination write permissio
 });
 test('missing or malformed tracking RPC never becomes a successful snapshot',async()=>{
  for(const value of [null,{},[],{...sample(),tracking:{...sample().tracking,intervention_id:id(99)}}]){const h=httpHarness(()=>value,()=>route());await assert.rejects(()=>h.module.snapshot(h.db,id(1)),e=>(e as any).status===503);}
+});
+
+function deferred(){let release!:()=>void;const promise=new Promise<void>(resolve=>{release=resolve;});return {promise,release};}
+test('quota-wait route revocation, stop or newer point prevents every external provider call',async()=>{
+ for(const [index,change] of ['revoked','stop','point'].entries()){
+  const original=sample(id(401+index));let current:any=original;let providerCalls=0;const entered=deferred(),finish=deferred();
+  const h=httpHarness(()=>current,()=>{providerCalls++;return route(original);},async()=>{entered.release();await finish.promise;});
+  const pending=h.module.loadRoute(h.db,id(30),original.tracking.intervention_id);
+  await entered.promise;
+  current=change==='revoked'?'revoked':change==='point'?{...original,tracking:{...original.tracking,last_seq:2}}:{...original,tracking:{...original.tracking,control_version:3,shared:false,session_id:null,consent_at:null,position:null,position_state:'stopped'}};
+  finish.release();await assert.rejects(pending,e=>(e as any).status===(change==='revoked'?404:409));assert.equal(providerCalls,0,change+' must not emit coordinates');
+ }
+});
+test('quota-wait geocode rechecks write right and context before emission without requiring an active GPS point',async()=>{
+ for(const [index,change] of ['revoked','permission','version'].entries()){
+  const original=sample(id(501+index));Object.assign(original.tracking,{shared:false,session_id:null,consent_at:null,last_seq:0,position:null,position_state:'stopped'});let current:any=original;let providerCalls=0;const entered=deferred(),finish=deferred();
+  const h=httpHarness(()=>current,()=>{providerCalls++;return {type:'FeatureCollection',features:[]};},async()=>{entered.release();await finish.promise;});
+  const pending=h.module.loadGeocode(h.db,id(30),original.tracking.intervention_id,'Lieu public QA');await entered.promise;
+  current=change==='revoked'?'revoked':change==='permission'?{...original,permissions:{...original.permissions,can_confirm_destination:false}}:{...original,tracking:{...original.tracking,control_version:3}};
+  finish.release();await assert.rejects(pending,e=>(e as any).status===(change==='revoked'?404:change==='permission'?403:409));assert.equal(providerCalls,0,change+' must not emit the search');
+ }
 });
