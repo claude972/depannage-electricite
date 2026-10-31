@@ -1004,3 +1004,7 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 
 - Root reviewed web 004 desktop 1440 PNG: polish before FINAL (web.html/web.css only) — nav labels nowrap + spacing so « Comment ça marche » / « Espace pro » / « Mes demandes » fit on one line at 1440/1280 (mobile breakpoint kept); remove `backdrop-filter` blur (opaque #000 top bar, glass effect banned); remove the ALL-CAPS eyebrow « DÉPANNAGE ÉLECTRIQUE » above the H1; ad label « PUBLICITÉ » ⇒ « Publicité ». Dispatched to a2ddf36; frozen SHA then root recapture + public `web.html`.
 - Root merged deep-link 47423b7 into the app integration: combined 672 tests + tsc PASS; push and a separate new app preview in preparation (not announced yet). No global app/table change from the prototypes; older prototypes unchanged.
+
+## 2026-10-31 — web 004 polish frozen: 9430bf7
+
+- `claude/design-delivo-test` **`9430bf7e2efe86b747e96a07d24287bc79288795`** (on dc8a00b): only `web.html`, `web.css` and the 4 web captures. Nav labels on one line at 1440/1280 (44 px items; font 14 px at 1280); top bar opaque #000, no blur; eyebrow removed; ad label « Publicité ». Side fix: at 390 the wordmark wraps on two lines at 15 px (removed a horizontal overflow); 1100 px breakpoint unchanged. Worker checks 1440/1280/390: no overflow, ≥ 44 px, lowest contrast 5.41:1, focus visible, ad dialog + Escape, CTA → demande.html, no external request, no console errors. Lead verified: no `backdrop-filter`, no « PUBLICITÉ », no eyebrow left. For root: recapture and public `web.html`.
