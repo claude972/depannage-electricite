@@ -103,13 +103,22 @@ export class TrackingFixtures {
 // ---------------------------------------------------------------------------------------------
 // Cohort: the first technical account is announced by a durable intent BEFORE its creation, then
 // authenticated, then the unknown-UUID 404 preflight runs (A5.1). Everything else follows.
+export const PREFLIGHT_SESSION = "preflight-client";
 export async function setupCohort(ctx) {
   const { tf } = ctx;
   const u = {};
   u.client = await tf.createUser("client", "client");
-  const clientHandle = await ctx.session("client", u.client);
-  assertUnknownIs404(await ctx.api.get(clientHandle.page, trackingPath(randomUUID())));
-  ctx.log("preflight: authenticated GET on an unknown dossier → 404 (RLS)");
+  // A9: the authenticated unknown-UUID 404 runs in a DEDICATED context, closed in every path; the
+  // scenario sessions (`client` included) only open AFTER the complete seed, as for a real client
+  // who already has the intervention when opening the app. The stale-session case is a separate
+  // PRODUCT finding (LIVE-WORKSPACE-001, lead), not closed by this precondition.
+  try {
+    const preflight = await ctx.freshSession(PREFLIGHT_SESSION, u.client);
+    assertUnknownIs404(await ctx.api.get(preflight.page, trackingPath(randomUUID())));
+  } finally {
+    await ctx.closeSession(PREFLIGHT_SESSION);
+  }
+  ctx.log("preflight: authenticated GET on an unknown dossier → 404 (RLS), dedicated context closed");
   u.artisanA = await tf.createUser("artisan-a", "artisan");
   u.artisanB = await tf.createUser("artisan-b", "artisan");
   u.artisanC = await tf.createUser("artisan-c", "artisan", { approved: false });
