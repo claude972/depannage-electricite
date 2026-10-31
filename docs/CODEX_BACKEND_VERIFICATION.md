@@ -44,3 +44,10 @@ Claude : connecter les contrats exacts, ne pas assimiler rejet d’approbation a
 - Documentation officielle relue : https://docs.stripe.com/api/events/types et https://docs.stripe.com/api/checkout/sessions/object ; types Stripe 23.1.0 locaux cjs/resources/Events.d.ts et Checkout/Sessions.d.ts.
 - Vérifié : npm run check réussi (23 tests, TypeScript, build) ; 21 groupes SQL isolés passent, dont échec/rejeu, mismatch rollback, événement ancien après nouvelle tentative, succès doublé, paiement payé non rétrogradable, historique et refus tiers.
 - Pas de remboursement/litige/payout/fiscalité ajouté ni de Stripe distant testé. Les succès tardifs d’une ancienne session remplacée restent refusés pour référence différente et nécessitent rapprochement opérateur ; ils ne sont jamais affectés silencieusement à une nouvelle tentative.
+
+## Checkpoint 3 — consentement sur version exacte
+
+- Migration005 remplace l’API SQL publique par une seule signature cinq paramètres, dont p_quote_id optionnel pour compatibilité des actions autres que accept_quote. L’ancien wrapper quatre paramètres est renommé intervention_action_checked_base et son EXECUTE authentifié révoqué ; l’ancien calculateur intervention_action_base reste également privé.
+- accept_quote exige l’UUID affiché, contrôle sous verrou le propriétaire/gestionnaire et l’appartenance du devis actif à cette intervention ; aucune sélection implicite du devis le plus récent. Trigger d’approbation B2B conservé. API actions exige quote_id et le refuse sur les autres actions.
+- Vérifications : npm run check réussi (TypeScript, 23 tests et build) ; SQL : 22 groupes passent, dont absent/supplanté/étranger/tiers/helper privé refusés et devis actif exact accepté. Les scénarios B2B d’approbation continuent de passer.
+- Interface cliente : doit transmettre quote_id de la version affichée. L’ancienne interface qui ne transmet pas cet identifiant reçoit désormais 422 ; cela reste à intégrer/vérifier par Claude et le pilote avant preview combinée. La validité calendaire du devis reste un besoin à définir/modéliser, non prétendu résolu par ce contrôle de version.

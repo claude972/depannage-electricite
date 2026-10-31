@@ -18,6 +18,7 @@ const schema = z
       "complete",
       "cancel",
     ]),
+    quote_id: uuid.optional(),
     lines: z.array(quoteLine).min(1).max(30).optional(),
     tax_rate: z
       .union([z.literal(0), z.literal(5.5), z.literal(10), z.literal(20)])
@@ -35,6 +36,10 @@ export async function POST(
     if (!uuid.safeParse(id).success)
       throw new ApiError(422, "Identifiant de dossier invalide.");
     const data = await validated(request, schema);
+    if (data.action === "accept_quote" && !data.quote_id)
+      throw new ApiError(422, "Ouvrez la version exacte du devis avant de l’accepter.");
+    if (data.action !== "accept_quote" && data.quote_id)
+      throw new ApiError(422, "La référence du devis ne concerne que son acceptation.");
     if (data.action === "send_quote") {
       if (!data.lines || data.tax_rate === undefined)
         throw new ApiError(
@@ -52,6 +57,7 @@ export async function POST(
       p_action: data.action,
       p_lines: data.lines ?? null,
       p_tax_rate: data.tax_rate ?? 20,
+      p_quote_id: data.quote_id ?? null,
     });
     dbError(error);
     return Response.json({ intervention: result });
