@@ -210,3 +210,27 @@ segments) ; suite UI 61/61 ; `tsc` au vert ; console sans erreur à 360 / 760 / 
 Captures : `artisan-profile-360-after.jpg`, `artisan-profile-1280-after.jpg` (avant : `artisan-profile-360-before.jpg`).
 Tests : `perfTiles` (valeurs formatées par les mêmes formateurs que l’affichage, tuiles indisponibles sans valeur) ;
 suite UI 63/63 ; `tsc` au vert ; console sans erreur.
+
+### Résultat du checkpoint 3 — devis M34
+
+| Ligne de l’addendum | Fait | Reste / écart |
+| --- | --- | --- |
+| Carte « Lignes du devis / Prix HT » | Carte avec en-tête (décoratif, `aria-hidden`), une rangée par ligne : libellé, quantité, prix unitaire HT, **total HT de la ligne** (affichage, `quoteLineTotalCents`, « — » tant que la saisie est invalide), suppression 44 px. À ≤ 640 px : libellé pleine largeur, puis quantité | prix, puis total | supprimer. Champs, validation, erreurs près du champ, brouillon, conflit, rechargement et envoi inchangés. | Lignes éditables en place, sans icône par type (assumé). |
+| Ajouter une ligne | Inchangé, sous la carte. | — |
+| Totaux | Carte « Sous-total HT / TVA (taux choisi ou « taux à choisir ») / Total TTC » avec TTC sur fond bleu pâle ; calcul par `quoteTotals` (même formule qu’avant, TVA inconnue sans taux) ; mention d’estimation sous la carte. | Pas de fond orange (assumé). |
+| Photos / documents | Rien d’ajouté. | Assumé : aucune pièce jointe dans le contrat de brouillon. |
+| CTA | « Envoyer le devis au client » pleine largeur et 52 px à ≤ 640 px (286 px = largeur utile du panneau à 360) ; « Enregistrer le brouillon » / « Abandonner » conservés au-dessus. | Bleu action (assumé). |
+| Cibles | 0 élément interactif < 44 px dans l’éditeur à 360 et 1280 ; aucun débordement horizontal ; saisie d’un prix recalculée en direct (vérifié par script : 80 € → « 80,00 € »). | — |
+
+Captures (section de l’éditeur, dossier démo « devis envoyé » → « Réviser le devis ») : `artisan-quote-360-after.jpg`,
+`artisan-quote-1280-after.jpg` (avant : `artisan-quote-360-before.jpg`, page entière). Tests : `quoteLineTotalCents`,
+`quoteTotals` (20 %, 5,5 %, 0 %, sans taux, sans ligne) ; suite UI 65/65 ; `tsc` au vert ; console sans erreur.
+
+### Bilan artisan (checkpoints 1–3)
+
+Présentation seulement : aucune commande artisan, aucun contrat (QUOTE-DRAFT-001, opérations, candidature,
+téléversements) ni primitive partagée modifiés ; `app/globals.css` intact. Logique pure dans
+`components/role/artisan-lists.ts` (horaires, segments, tuiles de performance, note, totaux de devis), 9 tests.
+Écarts assumés consolidés : onglet bas « Accueil » (libellé court), pas de tendance mensuelle ni d’indicateur sans
+source, pas d’étoiles décoratives, pas de statut « validé » par document, pas de pièce jointe au devis, bleu action
+pour les CTA, grille performance 2 colonnes sur téléphone. M14 (documents) et M65 (candidature) restent à auditer.

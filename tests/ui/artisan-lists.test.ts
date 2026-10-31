@@ -88,3 +88,24 @@ test("tuiles de performance : sans source, état indisponible explicite ; sans a
     assert.equal(seniority.note, "Date d’inscription non transmise");
   }
 });
+
+// ---- Devis M34 : totaux d’affichage -----------------------------------------------------------
+import { quoteLineTotalCents, quoteTotals } from "../../components/role/artisan-lists";
+
+test("devis : total de ligne et totaux HT / TVA / TTC", () => {
+  assert.equal(quoteLineTotalCents(2, 6000), 12000);
+  assert.equal(quoteLineTotalCents(3, 3333), 9999);
+  const lines = [
+    { quantity: 1, unit_price_cents: 8000 },
+    { quantity: 2, unit_price_cents: 12000 },
+    { quantity: 1, unit_price_cents: 12000 },
+  ];
+  assert.deepEqual(quoteTotals(lines, 20), { subtotal: 44000, tax: 8800, total: 52800 });
+  assert.deepEqual(quoteTotals(lines, 5.5), { subtotal: 44000, tax: 2420, total: 46420 });
+  assert.deepEqual(quoteTotals(lines, 0), { subtotal: 44000, tax: 0, total: 44000 });
+});
+
+test("devis : sans taux de TVA, TVA et TTC restent inconnus ; sans ligne, zéro", () => {
+  assert.deepEqual(quoteTotals([{ quantity: 1, unit_price_cents: 8000 }], null), { subtotal: 8000, tax: null, total: null });
+  assert.deepEqual(quoteTotals([], 20), { subtotal: 0, tax: 0, total: 0 });
+});

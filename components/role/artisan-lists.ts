@@ -117,3 +117,22 @@ export function perfTiles(perf: Performance, since: string | null): PerfTileSpec
     },
   ];
 }
+
+// ---- Devis (M34) : totaux d’affichage, même formule que la plateforme ------------------------
+/** Total HT d’une ligne en centimes (quantité × prix unitaire HT), arrondi au centime. */
+export const quoteLineTotalCents = (quantity: number, unitPriceCents: number) =>
+  Math.round(quantity * unitPriceCents);
+
+/**
+ * Sous-total HT, TVA et TTC d’un brouillon. `tax` et `total` sont null tant qu’aucun taux de
+ * TVA n’est choisi : rien n’est supposé à la place de l’artisan.
+ */
+export function quoteTotals(
+  lines: readonly { quantity: number; unit_price_cents: number }[],
+  taxRate: number | null,
+): { subtotal: number; tax: number | null; total: number | null } {
+  const subtotal = lines.reduce((n, l) => n + quoteLineTotalCents(l.quantity, l.unit_price_cents), 0);
+  if (taxRate === null) return { subtotal, tax: null, total: null };
+  const tax = Math.round((subtotal * taxRate) / 100);
+  return { subtotal, tax, total: subtotal + tax };
+}
