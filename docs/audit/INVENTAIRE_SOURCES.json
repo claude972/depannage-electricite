@@ -977,5 +977,6 @@
       "V8-C08",
       "M14"
     ]
-  ]
+  ],
+  "image_hash_method": "SHA-256 des octets décodés du flux XObject /Image PDF (get_data), non des PNG réencodés par pypdf page.images ; 93 empreintes recontrôlées lors du réaudit."
 }

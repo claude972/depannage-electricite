@@ -1,184 +1,180 @@
-# Plan de codage — reprise conforme aux documents
+# Plan de réalisation révisé après audit consolidé
 
 ## Primary goal
-Livrer une application fidèle aux maquettes fournies, avec des espaces client, artisan, entreprise cliente et super-administration réellement distincts, des données enregistrées dans la base dédiée et un cycle demande → devis → intervention → paiement Stripe vérifié en ligne.
+Livrer une plateforme de dépannage électrique où client, artisan, entreprise cliente et exploitant accomplissent leurs tâches dans des espaces distincts et fidèles aux références, avec données privées persistantes et cycle demande → devis → intervention → paiement Stripe démontré en ligne.
 
-Statut : plan seulement, enrichi par l’audit complet et les volumes complémentaires 5 à 9. La demande actuelle n'autorise ni reprise du codage, ni migration, ni déploiement. Le code applicatif n'est pas modifié pendant cette préparation.
+**Statut : préparation uniquement.** Ce plan remplace l’ordre précédent ; aucune application, migration, configuration distante ou livraison n’est exécutée par sa rédaction. Lire [l’audit consolidé](audit/REAUDIT_CONSOLIDE.md), la [matrice des 76 capacités](AUDIT_COMPLET_SPECIFICATIONS.md) et le [registre des décisions](SPECIFICATIONS_A_COMPLETER.md).
 
-## Audit préalable et nouveau document
+## Périmètre, ordre et méthode
 
-Lire d’abord [l’audit complet](AUDIT_COMPLET_SPECIFICATIONS.md), [le catalogue](audit/CATALOGUE_MAQUETTES.md) et [les spécifications à compléter](SPECIFICATIONS_A_COMPLETER.md). Les neuf PDF comportent 102 pages, 93 occurrences de maquettes et 63 images distinctes. Les références bureaux existent désormais : V5-C01 et V5-C05. V5-C08 précise le dossier d’approbation syndic. Sept autres images du volume 5 reprennent des écrans déjà fournis. Les volumes 6/7/9 ne fournissent aucune image nouvelle ; V8 ajoute À propos, confidentialité, devis client et détail d’intervention (V8-C03/C05/C06/C07). Les numéros 19 à 32 ne sont toujours pas établis.
+- Sources : 9 PDF / 102 pages / 93 occurrences / 63 images distinctes ; 5 archives / 61 membres / 17 chemins / 19 contenus distincts. Les 12 JSX de base ne remplacent pas les maquettes métier ; les numéros initiaux 19–32 restent non identifiés.
+- Stack conservée : Next.js/React/TypeScript, Supabase Auth/Postgres/Storage/RLS, Stripe Checkout/Connect, Vercel. Versions dans package-lock.json. Web responsive actuel ; une distribution native reste un lot explicite après décision, avec expo-overview si Expo est retenu.
+- Distinguer entreprise cliente, société prestataire employant des techniciens et Super Admin de la plateforme. Le rôle d’owner B2B n’accorde aucun droit plateforme.
+- Commencer par les droits et les contrats de données, puis le serveur et les interfaces. Un back-office opérateur minimal arrive avant le cycle terrain ; son extension complète reste obligatoire dans le plan, pas repoussée hors périmètre.
+- Découper chaque phase en lots livrables : migration additive revue, commande serveur validée, écran de référence, erreurs/vide/chargement, refus d’accès, preuve en ligne. Aucune phase n’est close par une démonstration localStorage.
+- MVP/V2/V3 restent les priorités de la spécification. Le plan couvre l’ensemble demandé ; un lot avancé reporté demeure ouvert. Aucune fonction n’est supprimée pour réduire la difficulté.
+- Un environnement de test isolé peut être provisionné pendant les lots préparatoires quand l’accès est disponible ; aucune ouverture réelle avant les contrôles de sécurité. L’ancien refus Supabase pour facturation n’est pas réputé encore actuel sans nouveau contrôle.
+- Skills d’exécution : do pour les lots lorsqu’ils seront demandés ; frontend-design et vercel-react-best-practices pour les interfaces ; autres skills uniquement selon besoins réels. Les règles AGENTS.md et DESIGN.md s’appliquent à chaque lot.
 
-La phase 0 a désormais une collecte complète sur les documents disponibles. Il reste à décider les références maîtresses et les règles métier avant implémentation ; les 76 lignes de couverture ne signifient pas que les fonctions sont terminées.
+## Phase 0 — Sources, décisions et contrats d’écran
 
-## État de départ et méthode
+**How this serves the primary goal:** chaque tâche future possède une référence, des règles et une preuve de fin identifiables.
 
-- Une première interface, des API Next.js et deux migrations Supabase existent. La démonstration fonctionne dans le navigateur ; elle ne prouve pas le fonctionnement des comptes et paiements réels.
-- Les blocages Supabase et Stripe sont ceux consignés dans SETUP et PROGRESS ; leur état fournisseur devra être recontrôlé au démarrage, sans considérer l'ancien constat comme une vérification actuelle.
-- La reprise conserve Next.js, React, TypeScript, Supabase et Stripe. Aucun changement de stack ni recréation complète du serveur n'est prévu.
-- La direction visuelle actuelle est trop éloignée des références. Les ajustements d'accessibilité et de responsive doivent respecter la composition métier, sans nouveau style générique ni nouvelle marque imposée.
-- Le choix web responsive / application native artisan doit être explicité avant de promettre une distribution mobile. Le code existant est une application web ; si une application native est retenue, lire d'abord le skill `expo-overview` et créer un lot distinct. Une page web mobile ne sera pas présentée comme une application native.
-- Skills : `make-plan` pour ce document et la découverte déléguée ; `frontend-design` pour appliquer les références, `vercel-react-best-practices` pour les composants React, `do` pour l'exécution lorsque le codage sera demandé. Utiliser les autres skills seulement selon les besoins réels.
-- Chaque lot est présenté avec son périmètre, ses preuves et ses limites. Une fonctionnalité n'est pas terminée parce qu'un écran existe.
+**À produire.** Reprendre le catalogue et les manifestes vérifiés ; choisir une maquette maîtresse par écran. Écrire la matrice rôle/action/objet/étape, le graphe des états, les règles de visibilité des contacts et le propriétaire des dossiers B2B. Établir les contrats de commande manquants avant d’écrire leurs interfaces. Le registre de décisions distingue ce que le développeur peut choisir de ce qui demande une donnée commerciale réelle.
 
-## Phase 0 — Inventaire et correspondance documentaire
+**Décisions par dépendance.** Avant droits : responsabilités des acteurs et départ des membres. Avant onboarding : pièces et validité. Avant devis : émetteur, version, refus/avenants, taxes et prix. Avant Stripe : commission, pays, responsabilité financière, bénéficiaire/payeur, remboursement. Avant publication : exploitant, territoire, horaires et conditions. Une inconnue n’empêche pas les lots indépendants ; elle bloque seulement les fonctions qui en dépendent.
 
-**How this serves the primary goal:** chaque écran à coder possède une référence vérifiable et un résultat attendu.
+**Références à lire.** AGENTS.md, DESIGN.md, SPECIFICATIONS_A_COMPLETER.md, CATALOGUE_MAQUETTES.md, ARCHIVES_CODE.md, la spécification finale sections 1–7 ; documentation technique listée plus bas. La collecte déléguée de cette révision figure dans les trois rapports REAUDIT_*.
 
-Travail : établir une matrice écran / rôle / PDF et page / maquette / route actuelle / API / données réelles ou démo / écarts / critères de fin. Comparer les captures de l'interface existante aux pages sources. Recenser les écrans absents ; ne pas attribuer de contenu aux maquettes 19 à 32, non fournies.
+**Preuves de fin.** Chaque ID des 76 capacités est affecté au tableau de couverture ci-dessous ; chaque écran indique source, acteur, données, commandes et états. Chaque décision ouverte indique lot bloqué et responsable ; les trois back-offices ont leurs menus et fiches inventoriés.
 
-Références : les neuf PDF d'AGENTS.md ; DESIGN.md ; docs/QA.md ; components/courant-app.tsx ; app/api ; supabase/migrations.
+**Garde-fous.** Ne pas faire des exemples des tarifs réels, de la marque d’un comparateur l’identité finale, ou des animations jointes une dérogation au design.
 
-Découverte déjà effectuée pour ce plan :
+## Phase 1 — Isolation des comptes et fondations de droits
 
-| Écran / acteur | Référence vérifiée |
-| --- | --- |
-| Devis détaillé | Volume 3, page 3, maquette 34 |
-| Tableau de bord mobile | Volume 3, page 4, maquette 35 |
-| Profil, assurances et documents | Volume 3, page 5, maquette 36 |
-| Nouvelle mission | Volume 3, page 13, maquette 44 |
-| Recrutement | Volume 4, page 13, maquette 60 |
-| Confirmation de candidature | Volume 4, page 17, maquette 64 |
-| Candidature et justificatifs | Volume 4, page 18, maquette 65 |
-| Tableau de bord entreprise cliente / partenaire B2B desktop | Volume 4, page 19, maquette 66 |
-| Mission mobile : accepter/refuser/contact | Volume 4, page 20, maquette 67 |
+**How this serves the primary goal:** changer de compte ou d’organisation ne révèle pas les données d’un autre utilisateur.
 
-API autorisées à préserver : GET /api/workspace ; POST /api/interventions ; POST /api/interventions/[id]/actions avec les actions existantes ; routes Stripe /api/payments/checkout, /connect et /webhook. Les signatures exactes et les SDK épinglés sont lus avant toute modification. Les fonctions métier SQL sont des fonctions du projet, pas des méthodes supposées de Supabase.
+**À réaliser.** Reprendre le pattern authenticatedClient + validation + RPC existant ; reproduire puis corriger le cache professionnel conservé à la déconnexion, les vues hash sans garde et les réponses réseau tardives lors d’un changement de session. Gérer expiration/renouvellement et changement d’utilisateur. Définir puis appliquer propriété organisationnelle, droits par site, révocation, séparation admin/support/finance et projection minimale des coordonnées après attribution. Renforcer les tests de refus côté API et SQL avant d’ajouter les invitations.
 
-Vérification : toute ligne du périmètre MVP est reliée à un écran, une commande serveur et une preuve attendue ; inconnues et documents manquants explicités.
+**Références.** components/courant-app.tsx (logout, refreshProfessional, onHash et rendu) ; lib/supabase/server.ts ; RLS can_access_intervention/owns_intervention/profiles_read et is_org_member dans 202610310001_initial.sql ; tests d’accès existants ; rapports frontend/backend révisés.
 
-Garde-fous : ne pas confondre backend technique (API, base, traitements) et interface administrateur ; ne pas remplacer les références par une simple palette de couleurs.
+**Preuves de fin.** A → déconnexion → B, session expirée, retour arrière, hash saisi directement et réponse A arrivant après connexion B ne montrent aucune donnée A. Un membre retiré perd les lectures/écritures B2B définies ; un compte non habilité ne s’attribue aucun rôle. Tests serveur conservés même si les boutons sont cachés.
 
-## Phase 1 — Structure et fidélité des interfaces
+**Garde-fous.** Aucun élargissement global de profiles pour obtenir un téléphone ; aucune correction limitée au menu ; ne pas annoncer une fuite distante prouvée sur le seul constat statique.
 
-**How this serves the primary goal:** les utilisateurs retrouvent les écrans et la navigation représentés dans les documents.
+## Phase 2 — Base dédiée et intégration authentifiée
 
-Travail : définir les structures propres aux espaces public, client, artisan, professionnel et administration. Ajouter À propos et confidentialité selon V8-C03/C05, avec contenus réels et sans copier le gabarit anglais générique ou ses traceurs d’exemple. Reprendre disposition, hiérarchie, navigation, actions et informations des maquettes ; justifier les seules adaptations nécessaires à l'accessibilité ou à la taille d'écran. Donner à l'artisan une navigation mobile dédiée, puis sa version desktop. Extraire progressivement les vues de components/courant-app.tsx en composants par rôle, en conservant les composants partagés utiles et les règles métier.
+**How this serves the primary goal:** les comptes, demandes et pièces existent réellement après reconnexion et restent privés.
 
-Références : DESIGN.md ; maquettes artisan ci-dessus ; fonctions Overview, Requests, Detail, ProfileView et QuoteEditor du composant existant ; skill frontend-design.
+**À réaliser.** Vérifier en lecture seule l’accès fournisseur et les environnements. Créer seulement la base dédiée déjà demandée ; revoir les deux migrations et les compléments de phase 1 en base de test. Configurer Auth, emails, URLs autorisées, Storage privé, variables Vercel par environnement et comptes de recette. Réutiliser serverClient/browserClient, auth/confirm et reset-password. Préparer journaux, sauvegarde/restauration, procédure de retour arrière et données de test identifiées. Traiter le retour Auth principal avec restauration du seul contexte autorisé, en conservant la récupération de mot de passe existante.
 
-Vérification : capture source et capture implémentée comparées écran par écran ; contrôle 360 px et desktop ; libellés lisibles et actions pertinentes pour le rôle. Le tableau artisan ne doit plus être le tableau client renommé, ni afficher systématiquement « Nouvelle demande » à la place d'une action de mission.
+**Références.** SETUP.md, lib/supabase/client.ts/server.ts, app/auth, supabase/migrations, supabase/tests/001_rls_test.sql ; documentation officielle Supabase SSR/RLS/Storage.
 
-Garde-fous : pas de style IA générique, de nouvelle identité imposée, de suppression d'informations des maquettes pour simplifier le développement ou de promesses de certification/performance inventées.
+**Preuves de fin.** Confirmation et récupération depuis une URL de preview autorisée ; session persistante sur deux navigateurs ; création puis relecture du dossier ; document privé inaccessible à un tiers ; migrations appliquées dans l’environnement dédié ; test de restauration documenté avant production.
 
-## Phase 2 — Backend réellement connecté
+**Garde-fous.** Ne jamais utiliser « site électricité » comme solution de repli. Pas de secret dans Git/client/logs. Accès indisponible = phase bloquée explicitement, poursuite des seuls lots indépendants.
 
-**How this serves the primary goal:** comptes, demandes et documents sont persistants et protégés entre vrais utilisateurs.
+## Phase 3 — Structures visuelles et premier back-office opérateur
 
-Travail : recontrôler le blocage fournisseur ; créer uniquement la base dédiée autorisée lorsque Supabase le permet. Appliquer les migrations après revue et dry-run. Configurer Auth, confirmation/récupération email, stockage privé et variables serveur Vercel. Préparer les comptes de test client A/B, artisan approuvé/non approuvé, gestionnaire et administrateur. Mettre en place l'accès administrateur sans auto-attribution publique.
+**How this serves the primary goal:** chaque acteur reconnaît son espace et l’exploitant peut préparer les artisans et les interventions nécessaires à la recette.
 
-Références : docs/SETUP.md ; lib/supabase/client.ts et server.ts ; app/auth ; les deux migrations ; supabase/tests/001_rls_test.sql ; documentation officielle Supabase Auth/SSR/RLS/Storage, à relire avec les versions installées.
+**À réaliser.** Extraire progressivement les vues du composant monolithique, avec modèles partagés utiles et gardes par rôle. Reprendre composition/navigation par acteur ; artisan mobile M35, entreprise M4/M66, Super Admin M43. Créer d’abord le dossier de candidature opérateur, sa décision motivée et le tableau des interventions. Préparer les autres menus admin avec leur lot de réalisation explicite ; un menu vide ne vaut pas une fonction livrée. Centraliser tokens et états.
 
-Vérification : une demande créée par un compte est retrouvée après reconnexion depuis une autre session autorisée ; un compte tiers ne la lit pas. Vérifier aussi les refus d'écriture, les documents privés, les sessions expirées et les rôles.
+**Sources à reprendre.** DESIGN.md ; M43 V3 p12 ; M35 V3 p4 ; M66 V4 p19 ; éléments pertinents des 12 JSX. Choisir une seule version styles.css ; le projet n’a pas Tailwind installé. Adapter dans la stratégie CSS existante ou justifier une introduction contrôlée, jamais copier @apply dans le CSS actuel comme s’il était compilé. Réduction du mouvement, absence de boucle décorative, délais de fade corrigés.
 
-Garde-fous : aucun projet existant réutilisé pour contourner la facturation ; aucun secret dans le client ou Git ; aucun faux succès si un service n'est pas disponible. Si l'accès reste bloqué, poursuivre seulement les lots indépendants et conserver cette phase ouverte.
+**Preuves de fin.** Comparaisons source/capture sur preview à 360 px et desktop, navigation clavier, focus et états ARIA ; aucun accès inter-rôle via URL ; dossier de candidature lisible et décision persistante. Chaque action déclarée livrée a un effet serveur vérifié.
 
-## Phase 3 — Espace artisan complet et distinct
+**Garde-fous.** Pas de style IA générique ; pas de même tableau renommé pour les trois métiers ; pas de nouvelle marque imposée. Conserver la structure métier, pas seulement la couleur.
 
-**How this serves the primary goal:** un artisan peut accomplir son travail avec son propre compte et les écrans attendus.
+## Phase 4 — Candidature et travail artisan
 
-Travail : réaliser candidature et justificatifs, attente de vérification, connexion dédiée, tableau de bord, disponibilité, offres éligibles, acceptation/refus, devis détaillé, progression de mission, profil/assurances et suivi des règlements. Créer les capacités manquantes repérées dans la matrice plutôt que des boutons décoratifs. Clarifier la règle métier de refus d'offre avant son implémentation : masquage individuel ne vaut pas annulation de la demande client. Distinguer les statistiques mesurées des exemples.
+**How this serves the primary goal:** un artisan autorisé reçoit et gère les missions adaptées à son activité.
 
-Références : maquettes 34, 35, 36, 44, 60, 64, 65 et 67 ; QuoteEditor ; lib/domain.ts ; available_missions(), intervention_action() et approve_artisan() dans la migration initiale ; routes documents, profil, administration et paiements existantes.
+**À réaliser.** Identité/société, justificatifs typés, validité/remplacement, examen/correction/suspension, profil, zone/compétences et disponibilité. Offres éligibles, absence d’offre, acceptation concurrente, refus individuel, expiration et réattribution opérateur selon règles de phase 0. Vue mission, contact après attribution, planning et actions métier propres. Préparer le suivi des règlements sans fausse promesse de virement. Sous-lot performance : réputation/avis, ponctualité et chiffre d’affaires avec formule, période et source ; dépendances aux phases 5/6/8.
 
-Vérification : un artisan non approuvé ne prend pas de mission ; une offre non attribuée ne dévoile pas les informations privées ; deux artisans tentant la même acceptation ne deviennent pas tous deux attributaires. Vérifier devis et pièces depuis les comptes réels et les écrans fidèles aux références.
+**Sources à reprendre.** M14 ; M34–36 ; M44 ; M60/64/65/67 ; ArtisanMission/ArtisanDashboard en références simplifiées ; approve_artisan(), available_missions(), intervention_action(), routes profil/documents/admin existantes. Ajouter des commandes documentées pour les capacités absentes.
 
-Garde-fous : pas de sélecteur de rôle pour accéder à un vrai compte ; le sélecteur reste exclusivement en démo. Pas de distance, note ou revenu fictif présenté comme réel. Les documents métier du profil nécessitent des règles d'accès explicites.
+**Preuves de fin.** Dossier incomplet/non approuvé/suspendu ne prend pas une mission ; deux sessions concurrentes n’obtiennent jamais la même attribution ; refus d’une offre n’annule pas la demande du client ; disponibilités et zone changent réellement l’éligibilité ; aucun téléphone complet avant l’étape autorisée. Chaque indicateur de performance est recalculé sur un jeu connu, avec bonne période et distinction CA/net/encaissé.
 
-## Phase 4 — Parcours client connecté de bout en bout
+**Garde-fous.** Pas de distance inventée ni de statut disponible purement décoratif ; le sélecteur de rôle de démo n’authentifie personne. Le statut de vérification doit décrire les pièces réellement examinées.
 
-**How this serves the primary goal:** le particulier suit une demande réelle jusqu'à l'intervention et garde la maîtrise de son devis.
+## Phase 5 — Parcours client, devis et preuves terrain
 
-Travail : reprendre les écrans client selon la matrice, notamment V8-C06/C07 ; connecter demande/photos/galerie, estimation, attribution, contact artisan, rendez-vous et replanification, suivi horodaté, devis PDF et version exacte, acceptation/refus, historique, messages, documents et avis. Définir les effets du refus et les conditions d’annulation avant d’ajouter les commandes. Conserver les brouillons et afficher les chargements, erreurs et états vides. Séparer estimation indicative, devis accepté et règlement.
+**How this serves the primary goal:** le client et l’artisan peuvent terminer une intervention réelle avec un devis et des preuves cohérents.
 
-Références : PDF grand format et écrans client inventoriés en phase 0 ; RequestForm, Detail, MessageCenter, DocumentManager et ReviewForm ; routes interventions/messages/documents/reviews ; calculateQuote et canTransition.
+**À réaliser.** Demande/photos, estimation configurable, prise en charge ou absence d’artisan, rendez-vous/replanification, en route/sur place, coordonnées autorisées, messages et historique. Sous-lot localisation : fournisseur et droits choisis, carte/itinéraire, position et ETA avec source/fréquence/horodatage et état indisponible ; distinguer estimation et mesure. Devis avec unités, validité, brouillon, versions, pièces, PDF de la version sélectionnée, accord/refus et avenant. Compte rendu : tests, mesures, pièces/temps, photos avant/après, signature/preuve d’accord et validation de fin selon les règles fixées. Avis éligible et profil client.
 
-Vérification : réaliser le cycle avec deux sessions distinctes client/artisan, sans localStorage comme source des données réelles. Vérifier refus du devis ou annulation selon les règles définies, réseau interrompu, session expirée et absence de doublons.
+**Sources à reprendre.** M5/7/15/18/34/47/62, V8-C06/C07 ; blueprints M6/M52/M69 ; RequestForm, Detail, QuoteEditor, MessageCenter, DocumentManager, ReviewForm ; calculateQuote/canTransition ; routes interventions/actions/messages/documents/reviews. Les commandes refus/replanification/rapport sont à spécifier puis ajouter : elles n’existent pas dans l’enum actuel.
 
-Garde-fous : ne pas annoncer un délai d'attribution, une couverture géographique ou un tarif contractuel non configuré ; ne pas présenter la démonstration comme preuve de persistance réelle.
+**Preuves de fin.** Cycle client A/artisan approuvé avec persistance réelle ; fichier conservé après échec de soumission ou reprise explicite ; ancien devis ouvre sa version exacte ; accord périmé/version remplacée refusé ; rapport lié à la bonne intervention ; annulation/refus respectent les règles. Carte et ETA vérifiés avec positions/créneaux connus, donnée périmée ou refus de localisation visibles sans délai inventé. Reprise réseau et session expirée testées.
 
-## Phase 5 — Stripe en environnement de test
+**Garde-fous.** `scheduled` n’est pas un rendez-vous, un TXT n’est pas une facture, un clic accepter n’est pas automatiquement une signature avancée. Ne pas élargir à plomberie/peinture à partir des exemples V8.
 
-**How this serves the primary goal:** le client peut régler le devis accepté et le serveur confirme correctement le paiement.
+## Phase 6 — Stripe test, factures et règlements
 
-Travail : configurer Stripe test, Connect et le webhook via les canaux de secrets ; vérifier pays juridique et compte artisan ; renseigner la commission après décision commerciale. Réutiliser les routes existantes et leur modèle de transaction. Intégrer reprise, annulation, paiement refusé et confirmation différée dans les écrans.
+**How this serves the primary goal:** le règlement correspond au devis et les deux parties comprennent ce qui est payé, remboursé ou versé.
 
-Références : app/api/payments ; lib/supabase/stripe.ts ; confirm_stripe_payment() ; docs/SETUP.md ; documentation officielle Stripe correspondant au SDK installé, à revérifier avant exécution.
+**À réaliser.** Configurer Stripe test et Connect selon pays/responsabilités retenus. Préserver montant serveur, idempotence et corps brut signé du webhook. Traiter retours Checkout/Connect/Auth par relecture des données, échec/annulation, événements différés/doublons/désordonnés, remboursement et litige selon règles. Modéliser factures/avoirs, émetteur/numérotation, commissions historisées, frais, transferts et versements avec états distincts. Écrans client, artisan et opérateur finance.
 
-Vérification : Checkout réellement ouvert avec un compte de test ; transaction test liée au devis ; webhook signé reçu ; montant, devise et destinataire contrôlés ; même événement rejoué sans double effet ; aucune validation depuis la seule URL de retour.
+**Sources à reprendre.** app/api/payments/{checkout,connect,webhook}/route.ts ; lib/supabase/stripe.ts ; confirm_stripe_payment() ; SETUP.md ; docs officielles Accounts v2/Checkout/webhooks/destination charges. Le code utilise stripe.v2.core.accounts et accountLinks : ne pas substituer un exemple ancien sans revue de compatibilité.
 
-Garde-fous : aucun encaissement réel à cette phase ; aucun tarif ou montant fourni par le navigateur ne fait autorité. Une clé absente doit bloquer explicitement le service, pas déclencher une simulation silencieuse.
+**Preuves de fin.** Paiement test complet sur preview ; montant/devise/destinataire exacts ; webhook sans signature rejeté, événement répété sans double effet ; retour URL ne marque jamais payé ; confirmation asynchrone visible ; remboursement et litige traçables ; facture/avoir exacts ; statut payé distingué du virement bancaire. Les tests réels restent hors de ce lot.
 
-## Phase 6A — Back-office entreprise cliente / syndic / B2B
+**Garde-fous.** Clés live bloquées ; aucun taux commercial inventé ; pas d’acceptation d’un montant client ; aucun succès de paiement simulé en mode réel. Ne pas se limiter aux deux événements de succès actuels.
 
-**How this serves the primary goal:** chaque organisation cliente dispose d’un suivi réel multisites adapté à ses responsabilités et à sa verticale.
+## Phase 7 — Back-office entreprise cliente complet
 
-Travail : créer un espace métier distinct à partir de M4/M66 et des tableaux/fiches par verticale ; pour les bureaux, reprendre V5-C01/C05. Connecter organisation active, équipes/délégations et droits par site, demandes, contacts/documents, budgets, SLA, approbations (dont V5-C08), contrats/grilles, reporting et facturation. Définir le payeur B2B et le départ d’un membre. Un simple filtre de type sur des cartes ne constitue pas ce back-office.
+**How this serves the primary goal:** les organisations clientes gèrent leurs équipes, sites, validations et finances sans mélanger leurs données.
 
-Références : tableaux de bord et fiches de site inventoriés dans les PDF ; ProfessionalOperations, Sites et ArtisanAdministration ; routes professional/reports/sites/admin ; migration professionnelle.
+**À réaliser.** Onboarding organisation, sélecteur actif, invitations/acceptation/retrait/délégations, rôles et droits par site ; identité/facturation/payeur. Portefeuille et fiches avec contacts, accès, documents, équipements, budgets par exercice et alertes. Demande préremplie par site, approbations avec historique/complément/refus, contrats et grilles versionnées, reporting consolidé paginé et exports correctement filtrés. Relier aux factures et au cycle Stripe avec payeur autorisé.
 
-Vérification : deux organisations réellement séparées ; propriétaire, gestionnaire et lecteur testés ; approbation obligatoire non contournable ; totaux calculés sur les devis/paiements et rapport non tronqué ; justificatifs accessibles aux seuls rôles permis.
+**Sources à reprendre.** M4/M66 ; M13/16/55 ; V5-C08 ; ProfessionalOperations, Sites ; create_site(), is_org_member(), fonctions professionnelles et professional_report() ; routes sites/professional/reports. Le modèle de membres existe mais aucune API d’invitation/retrait n’est livrée.
 
-Garde-fous : un registre de documents ne constitue pas une certification ERP ; un contrat archivé ne constitue pas une signature électronique ; pas de permissions déduites du seul affichage d'un bouton.
+**Preuves de fin.** Deux organisations, deux sites chacune ; owner/manager/lecteur/payeur testés ; un lecteur n’écrit pas ; membre retiré perd l’accès selon politique ; aucune sélection implicite organizations[0] ; approbation obligatoire non contournable ; export et totaux identiques aux données de référence au-delà des fenêtres de chargement actuelles.
 
-## Phase 6B — Super-administration de la plateforme
+**Garde-fous.** Ne pas considérer un filtre type comme une verticale complète ; aucun droit plateforme hérité d’un owner B2B ; modification d’un contrat ne réécrit pas rétroactivement un devis accepté.
 
-**How this serves the primary goal:** l’exploitant dispose du pilotage et des commandes transverses représentés dans la maquette 43.
+## Phase 8 — Super back-office plateforme complet
 
-Travail : dashboard global avec KPI définis ; annuaire et dossier de candidature artisan avec pièces/validité ; interventions, dispatch/réaffectation/escalades ; clients et entreprises ; devis/factures/commissions/rapprochement ; avis/notes ; support/messages ; paramètres de la plateforme et journal d’audit. Définir les droits support/finance/admin/super-admin avant les actions sensibles. Ne pas assimiler cette administration à l’owner d’une entreprise cliente.
+**How this serves the primary goal:** l’exploitant pilote tous les dossiers et les opérateurs disposent des commandes de leur responsabilité.
 
-Références : M43 (V3 page 12), blueprints M6/M52/M69 ; ADM-01 à ADM-10 de l’audit ; routes et commandes existantes à conserver/compléter.
+**À réaliser.** Compléter tous les menus M43 : dashboard/KPI, artisans/candidatures, interventions/dispatch/réaffectation/escalade, clients/entreprises, devis/factures/finance, avis/modération, messages/support, paramètres. Dossiers de garantie et mission corrective ; recherche, pagination, filtres cohérents, historique avant/après et motifs. Administration des permissions séparée du support et de la finance ; actions financières raccordées au lot Stripe.
 
-Vérification : chaque menu mène à une liste et une fiche utiles, avec recherche/pagination, permissions serveur, motifs et traces des actions sensibles. Les indicateurs proviennent de données réelles et de formules validées. Un opérateur non habilité ne peut pas déclencher une action financière ni modifier des permissions.
+**Sources à reprendre.** M43 V3 p12 ; blueprints M6/M52/M69 ; ADM-01–10 et annexe BACKEND ; patterns authenticatedClient/validation/RPC ; approve_artisan/resolve_warranty et journal existant comme bases seulement. Les nouvelles commandes admin seront spécifiées, pas supposées présentes.
 
-Garde-fous : ne pas présenter la seule approbation artisan et la gestion de garantie comme une super-administration complète ; pas d’accès global attribué depuis un sélecteur de rôle.
+**Preuves de fin.** Chaque menu mène à liste, fiche et actions persistantes attendues ; opérateur support interdit de modifier finance/droits ; réaffectation empêche l’ancien artisan de poursuivre ; action sensible tracée avec auteur/objet/motif ; KPI définis et calculés sur tout le périmètre autorisé, pas les seules lignes chargées.
 
-## Phase 6C — Entreprise prestataire et équipes artisanales, si retenue
+**Garde-fous.** Deux panneaux d’approbation et garantie ne suffisent pas ; pas de lecture globale de messages personnels sans règle support explicite ; pas de statut conforme/certifié calculé à partir d’une simple note.
 
-**How this serves the primary goal:** éviter de confondre une société employant des artisans avec un client professionnel ou l’exploitant.
+## Phase 9 — Verticales et automatisations prévues
 
-Travail : préciser le périmètre suggéré par M65 et les blueprints, puis, s’il est retenu, définir dirigeant, planificateur et techniciens, disponibilités, affectation interne, matériel/pièces, rapports et règlements au nom de la société. Aucune équipe ou matrice de droits n’est inventée à partir du seul champ effectif.
+**How this serves the primary goal:** syndic, restauration, bureaux et ERP disposent des fonctions qui justifient leur espace métier.
 
-Références : M65, M6/M52/M69 ; Q-PDF-03/04/32 du registre.
+**À réaliser par sous-lots.** Syndic : parties communes, priorités et rapports AG dans le périmètre retenu. Restauration : équipements électriques critiques, tickets et engagements de délai. Bureaux : bâtiments/étages/zones/plans, maintenance, énergie/occupation avec source de mesure. ERP : audits, réserves, suivi sécurité et preuves. Ajouter règles SLA, notifications/préférences et reprises, temps réel cohérent, archivage/expiration et garantie selon conditions réelles.
 
-Vérification : décisions documentées ; règles de propriété, accès techniciens et responsabilité financière explicites avant développement. Si cet espace n’entre pas dans le périmètre retenu, le marquer comme tel sans le déclarer livré.
+**Sources à reprendre.** M13/16/37/50/55/56/57 ; V5-C01/C05/C08 ; F sections 3–4/7 ; routes professional/reports/warranty et publication Realtime existante. Lister les fournisseurs de carte/notifications/mesures retenus avant appel réseau.
 
-Garde-fous : ne pas réutiliser le rôle manager B2B comme réponse automatique à une entreprise prestataire ; ne pas imposer un module de stocks complet sans décision.
+**Preuves de fin.** Un scénario complet par verticale, sources/unités/périodes des KPI identifiées ; alertes franchissant réellement leur seuil ; un événement ne produit pas de doublons de notification ; panne fournisseur visible et reprise ; pièces expirées et garantie reliées au bon dossier ; lecture autorisée uniquement.
 
-## Phase 7 — Fonctions avancées restantes, après le socle réel
+**Garde-fous.** Aucun MWh inventé, aucune conformité réglementaire auto-attribuée. Un rapport administratif ou immobilier global n’est pas implicitement un module électrique ; décision de périmètre explicite pour chaque extension.
 
-**How this serves the primary goal:** compléter progressivement la spécification sans masquer des fonctions absentes sous des écrans de démonstration.
+## Phase 10 — Extensions conditionnelles sans oubli de périmètre
 
-Travail par sous-lots indépendants : matching géographique et distances ; notifications email/SMS/push avec préférences ; alertes SLA et archivage ; abonnements Stripe et services premium ; grilles contractuelles calculables ; rapports d'AG et suivi de consommation ; diagnostic photo IA si fournisseur et protocole d'évaluation définis. Définir pour chacun données, fournisseur éventuel, coût, droits, critères métier et test avant codage. Respecter les priorités MVP/V2/V3 de la spécification.
+**How this serves the primary goal:** les extensions prévues sont suivies sans compromettre le cycle opérationnel déjà validé.
 
-Références : spécification finale, sections 3 à 7 ; liste des limites dans QA et SETUP ; skills/documents pertinents à sélectionner seulement après définition du sous-lot.
+**À réaliser après décision, en lots distincts.** Entreprise prestataire : dirigeant/planificateur/techniciens, attribution interne et propriété des règlements, si ce modèle est retenu. Abonnements/premium, moyens de paiement supplémentaires, intégrations CRM/ERP/comptabilité/BI, diagnostic photo IA évalué et éventuelle application native. Chaque sous-lot possède fournisseur, coût, données, responsabilité, critères de succès et refus d’accès.
 
-Vérification : preuves spécifiques par fonction, données sources identifiées, autorisations et échecs de fournisseur testés. Aucun diagnostic ou engagement réglementaire ne doit être inventé.
+**Sources.** ART-12, FIN-07/08, SYS-10 ; Q-PDF-02/32–35 ; spécification finale sections 4–5/7 ; M65 et blueprints. Les API externes exactes seront relues dans la documentation du fournisseur retenu et dans les types épinglés avant toute implémentation.
 
-Garde-fous : ne pas supposer un abonnement, un prestataire de notifications, une règle fiscale, une zone commerciale ou un modèle IA sans décision documentée. Ne pas lancer ces extensions à la place de terminer le parcours client/artisan connecté.
+**Preuves de fin.** Décision de chaque sous-lot : retenu/reporté/exclu avec motif. Un sous-lot retenu démontre son cycle complet, erreur et retour arrière ; aucune fonction reportée n’est marquée terminée. Le diagnostic IA distingue suggestion et décision humaine ; l’application native fait l’objet d’une vraie distribution de test.
 
-## Phase 8 — Vérification finale et livraison
+**Garde-fous.** Ne pas confondre société prestataire et client B2B ; aucune obligation d’abonnement ou fournisseur IA déduite d’un exemple ; ne pas appeler native la version web mobile.
 
-**How this serves the primary goal:** livrer une application dont l'apparence et le fonctionnement sont démontrés avec leurs limites exactes.
+## Phase 11 — Vérification et livraison par périmètre
 
-Travail : comparer les écrans aux références de la matrice ; exécuter npm run check, tests d'accès distants et parcours client/artisan/Stripe test sur Vercel. Vérifier mobile, clavier, erreurs, vides, documents et reprises. Corriger les défauts avant de déclarer le lot terminé. Mettre à jour PROGRESS et QA avec une distinction explicite : maquetté, codé, connecté, vérifié, bloqué.
+**How this serves the primary goal:** la livraison est vérifiable et décrit exactement les fonctions utilisables et les limites restantes.
 
-Références : matrice phase 0 ; AGENTS.md ; DESIGN.md ; tests métier/SQL ; plan des phases ci-dessus.
+**À exécuter.** Relire les API officielles et les contrats utilisés ; vérifier les anti-patterns (rôle démo en mode réel, secret client, montant navigateur, succès depuis URL, fausses métriques, liens inertes). Exécuter npm run check, tests SQL en environnement dédié, concurrence réelle à deux sessions, tests Auth/Storage/Stripe et isolation des organisations ; comparer toutes les captures aux références maîtresses. Vérifier restauration, supervision, erreurs réseau et accessibilité.
 
-Vérification : un commit poussé et une preview vérifiée après chaque lot important ; captures comparatives et preuves de bout en bout ; aucun secret exposé ; pas de régression des règles serveur conservées.
+**Références.** Matrice des 76 capacités, tests métier/SQL, AGENTS.md, DESIGN.md, QA.md, preuves de chaque phase et documentation fournisseur. Les anciens 11 tests et 13 groupes SQL ne constituent pas une recette de toutes les fonctions.
 
-Garde-fous : ne pas annoncer « application terminée » si la base, les comptes ou Stripe ne sont pas vérifiés. La mise en exploitation commerciale exige aussi identité de l'exploitant, zone de service, tarifs/taxes, conditions, garantie et données de production prêtes.
+**Preuves de fin.** Commit poussé, contrôles CI et preview Vercel vérifiés à chaque lot important ; captures et parcours datés, comptes de test identifiés sans secret, résultats et limites consignés. Pour chaque capacité : absent/partiel/codé/connecté/vérifié, jamais un pourcentage déduit du nombre de fichiers. Ouverture commerciale uniquement après fermeture des contrôles bloquants et données commerciales réelles disponibles.
 
-## Condition de fin d'un lot
+**Garde-fous.** Aucun lancement commercial ou débit réel impliqué par ce plan. Si un service reste inaccessible, indiquer les lots vérifiés et le blocage ; ne pas annoncer l’application entière terminée.
 
-Un lot se termine lorsque son écran correspond à la référence retenue, ses actions fonctionnent avec les bonnes permissions, ses états de chargement/erreur/vide sont traités et son résultat est vérifié sur la preview. Les blocages externes sont indiqués comme tels ; ils ne sont pas transformés en succès de démonstration.
+## Documentation technique et patterns autorisés
 
-## Préparation actuelle
+Pages officielles relues pour cette révision ; relire la section correspondant au SDK installé au début de chaque lot :
 
-Cette préparation et cet audit ne modifient que la documentation et ajoutent la copie du nouveau PDF source. Aucun code applicatif, aucune base et aucun déploiement ne sont modifiés. Le plan initial reste conservé dans BLUEPRINT.md pour la traçabilité ; ce plan de reprise répond aux écarts visuels et fonctionnels signalés par le propriétaire.
+| Besoin | Pattern existant à préserver | Documentation |
+| --- | --- | --- |
+| Auth serveur | createServerClient, cookies getAll/setAll, authenticatedClient et auth.getUser ; ne pas autoriser via le seul user de getSession | [Supabase SSR](https://supabase.com/docs/guides/auth/server-side/creating-a-client?queryGroups=framework&framework=nextjs) |
+| Isolation | auth.uid(), politiques USING/WITH CHECK, fonctions métier contrôlées ; droits et signatures relus dans les migrations | [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security) |
+| Paiement | stripe.checkout.sessions.create, clé d’idempotence ; montants issus du devis serveur | [Destination charges / Checkout](https://docs.stripe.com/connect/destination-charges?platform=web&ui=stripe-hosted) |
+| Événement | request.text(), stripe.webhooks.constructEvent, RPC transactionnelle et identifiant d’événement | [Stripe webhooks](https://docs.stripe.com/webhooks) |
 
-## Sources JSX/CSS complémentaires
+APIs projet déjà disponibles : GET /api/workspace ; POST /api/interventions ; POST /api/interventions/[id]/actions avec accept_mission/send_quote/accept_quote/start/complete/cancel ; routes profile/sites/messages/documents/reviews/admin/artisans/professional/reports/warranty ; paiements checkout/connect/webhook. Lire verbes et schémas exacts dans chaque fichier avant copie. Les signatures détaillées et emplacements sont dans REAUDIT_BACKEND et REAUDIT_FRONTEND. Refus de devis, RDV, équipe, dispatch et facturation ne sont pas des commandes actuelles : elles sont proposées dans les phases, à spécifier et tester.
 
-Lire [l’audit des archives](audit/ARCHIVES_CODE.md) en phase 0 puis en phase 1. Les 12 composants donnent des bases de composition ; choisir leur correspondance PDF et conserver les besoins détaillés des back-offices. Vérifier la frontière client et la stratégie CSS lors d’une future intégration. Aucun backend ou Stripe n’est livré par ces fichiers ; aucune phase métier n’est accomplie par leur réception.
+## Couverture et reprise d’une session
 
-La cinquième archive `CODES_CSS_ANIMATIONS` fournit une variante HomePage/styles et un animations.css, sans nouvelle page métier. En phase 1, sélectionner une version CSS, traiter les délais de fade, réduire le mouvement et exclure les boucles décoratives ; aucune intégration lancée pendant l’audit. Détails dans la même annexe.
+Le tableau [COUVERTURE_PLAN.csv](audit/COUVERTURE_PLAN.csv) affecte les 76 capacités aux phases principales et complémentaires ; l’appartenance à une phase ne signifie pas livraison. Une session d’exécution lit ce plan, les décisions du lot, sa source PDF, le code concerné et les docs officielles ; réalise un seul lot cohérent ; consigne commit, preview, contrôles et blocages. La phase dépendante ne démarre qu’après ses prérequis.

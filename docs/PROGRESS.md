@@ -63,3 +63,11 @@
 ## Archive CSS et animations
 
 Lecture intégrale et comparaison SHA-256 de la cinquième archive : 17 membres, 14 identiques, deux variantes et un fichier nouveau. Originaux et manifeste conservés ; cumul de 61 occurrences et 19 contenus distincts. Audit et plan enrichis sur les animations permanentes, réduction du mouvement, délais de fade et collisions CSS. Aucun code fourni exécuté ni code applicatif, service ou déploiement modifié.
+
+## Réaudit demandé et plan réécrit
+
+- Trois collectes indépendantes backend/frontend/sources, consolidées dans docs/audit/REAUDIT_CONSOLIDE.md ; intégrité des 9 PDF et 5 archives recontrôlée.
+- Corrections documentaires : références bureaux effectivement fournies, tri des offres plus anciennes d’abord, contrôles fournisseur qualifiés historiques, méthode hash image explicitée. Nouvelles précisions suspension artisan et rejet d’approbation B2B.
+- Plan réécrit en phases 0–11 ; sécurité avant parcours réels, poste opérateur tôt, matching minimal dans le socle, trois back-offices suivis séparément. Tableau CSV : les 76 capacités ont une affectation et une cible de vérification.
+- Vérifications fraîches : npm run typecheck réussi ; npm test 11 réussis. Aucun build, test cloud, SQL distant, navigateur ou paiement exécuté dans cette révision.
+- Aucun code applicatif modifié, aucune infrastructure/secret/donnée distante modifié ; pas de push ni déploiement pendant cette préparation.

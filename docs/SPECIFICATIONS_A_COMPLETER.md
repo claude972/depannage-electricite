@@ -145,3 +145,12 @@ Les autres détails et correspondances sont consignés dans les annexes des volu
 ## Précisions issues des archives JSX/CSS
 
 Les quatre archives ne résolvent pas les règles manquantes : estimation fixe, disponibilité fictive, gains et budgets figés, absence de soumission ou Stripe. La promesse sans majoration 24/7 et les montants sont des exemples à arbitrer avec les contradictions déjà recensées. Le fichier B2BDashboard ne définit pas les droits d’organisation ; ArtisanDashboard ne définit pas les comptes d’une entreprise prestataire. Voir [l’annexe](audit/ARCHIVES_CODE.md).
+
+## Décisions affinées par le réaudit consolidé
+
+- **Q-PDF-05 / suspension** : bloquer seulement les nouvelles missions ou également les travaux déjà affectés ? Définir accès aux preuves, réaffectation, information client et règlement des travaux déjà accomplis. Actuellement acceptation/Checkout bloqués, mais devis/début/fin encore permis sur les missions affectées.
+- **Q-PDF-12/23 / refus distincts** : séparer refus d’offre artisan, rejet d’approbation B2B, refus de devis client, annulation de dossier et réaffectation. Le rejet d’approbation actuel ne modifie ni devis ni intervention.
+- **Q-PDF-08 / matching** : éligibilité minimale par territoire, compétence et disponibilité dès le socle ; scoring/GPS avancés dans un sous-lot distinct. Les offres actuelles sont triées plus anciennes d’abord, pas par pertinence.
+- **Q-PDF-30 / rapports** : tester les exports frontend et serveur séparément ; le test csvCell serveur ne valide pas la copie frontend ni ses espaces/onglets initiaux.
+
+Ces points précisent des domaines existants ; aucune donnée commerciale ou autorisation de codage nouvelle n’est déduite. Voir [réaudit](audit/REAUDIT_CONSOLIDE.md) et [couverture du plan](audit/COUVERTURE_PLAN.csv).

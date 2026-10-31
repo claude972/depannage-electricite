@@ -2,6 +2,10 @@
 
 **Date : 30 octobre 2026. Code inspecté : `46aac2a`. Statut : audit documentaire et technique, sans modification applicative.**
 
+## Révision consolidée
+
+Le [réaudit courant](audit/REAUDIT_CONSOLIDE.md) consolide les neuf PDF et cinq archives, la nouvelle lecture ciblée du code et les preuves fraîches. Cette matrice conserve ses 76 IDs ; leur affectation au plan figure dans [COUVERTURE_PLAN.csv](audit/COUVERTURE_PLAN.csv). Les contrôles fournisseur mentionnés plus bas sont ceux de la première passe, pas de nouveaux contrôles distants.
+
 ## Conclusion
 
 Les documents décrivent une plateforme de dépannage électrique beaucoup plus large que la démonstration livrée. Le code possède un socle serveur et plusieurs parcours, mais les espaces client, artisan, entreprise et administration partagent essentiellement une coque commune. Les back-offices complets visibles dans les maquettes ne sont pas réalisés.
@@ -43,7 +47,7 @@ Les sources sont hiérarchisées : le propriétaire et les règles du projet pr�
 
 ## État réel des services et preuves
 
-Contrôles **en lecture seule pendant cet audit** :
+Contrôles historiques **en lecture seule pendant la première passe** :
 
 - `vercel env ls` : aucune variable applicative dans le projet Vercel courant.
 - `supabase projects list` : aucun projet dédié de dépannage identifié dans la liste. La base existante « site électricité » n’a pas été utilisée, conformément au choix explicite d’une base séparée.
@@ -96,7 +100,7 @@ L’expression « super back-office entreprise » doit donc être reliée au bon
 | --- | --- | --- | --- | --- | --- | --- |
 | CLI-01 | Demande structurée | Partiel | F §2/7 ; M5/15/55 | RequestForm ; BE-04 | Catégorie/description/adresse/urgence présents ; disponibilité, contact sur place et niveau d’impact non structurés. | P1 |
 | CLI-02 | Photos dans la demande | Absent dans ce parcours | M5/15 | FE-C ; BE-15 | Dépôt générique possible après coup dans Documents ; aucun ajout de photos au formulaire de demande. | P1 |
-| CLI-03 | Matching et absence d’artisan | Partiel | F §4 ; M9/7 | BE-06 ; available_missions | Liste des 100 offres récentes, sans classement compétences/zone/disponibilité ni solution de repli définie. | P1 |
+| CLI-03 | Matching et absence d’artisan | Partiel | F §4 ; M9/7 | BE-06 ; available_missions | Liste limitée à 100 offres, plus anciennes d’abord, sans classement compétences/zone/disponibilité ni solution de repli définie. | P1 |
 | CLI-04 | Rendez-vous et changements | Absent | M1/3/9/40/48 ; V8-C07 | BE-09/13 | Pas créneau confirmé, replanification, no-show ou calendrier ; scheduled ne représente pas un rendez-vous. | P1 |
 | CLI-05 | Suivi, déplacement, carte et ETA | Partiel | F §2/7 ; M7 ; V8-C07 | BE-13/18 ; Detail | États élémentaires présents ; pas en route/sur place, carte, itinéraire, position ou heure d’arrivée estimée. | P1 |
 | CLI-06 | Identité et contact artisan | Absent comme projection autorisée | M7/62 ; V8-C06/C07 ; F §2 | BE-10 ; profiles_read ; workspace | Pas de nom/téléphone de la contrepartie fourni après attribution ; prévoir une projection minimale, pas ouvrir tous les profils. | P1 |
@@ -175,7 +179,7 @@ L’expression « super back-office entreprise » doit donc être reliée au bon
 
 | ID | Besoin | Couverture actuelle | Source | Preuve | Manque à traiter | Priorité |
 | --- | --- | --- | --- | --- | --- | --- |
-| SYS-01 | Base et services réels | Bloqué / non configuré | U base dédiée ; F §1 | Contrôles Vercel/Supabase actuels | Aucune variable applicative ni base dédiée identifiée ; pas preuve de fonctionnement réel d’Auth/Storage/Realtime. | P0 |
+| SYS-01 | Base et services réels | Bloqué / non configuré | U base dédiée ; F §1 | Contrôles Vercel/Supabase de la première passe | Aucune variable applicative ni base dédiée identifiée ; pas preuve de fonctionnement réel d’Auth/Storage/Realtime. | P0 |
 | SYS-02 | Isolation du cache et des vues | Risque statique à reproduire | Contrôle de sécurité avant activation | FE-X01 ; logout/onHash/Sites | professional non effacé à la déconnexion et vues hash sans garde de rôle ; risque d’affichage de données précédentes dans la même SPA. RLS serveur reste en place. | P0 |
 | SYS-03 | Propriété des dossiers d’entreprise | À cadrer avant gestion des membres | M4/66 ; modèle d’organisation | BE constat offboarding | client_id conserve des droits même après un futur retrait de membre ; définir propriété organisationnelle et révocation effective. | P0 |
 | SYS-04 | Chat et notifications | Partiel / notifications absentes | F §4 ; M39/62 | BE-17/19 ; FE-X05/06 | Texte seulement, sans participants nommés, pièces jointes, lu/non-lu ni centre de notifications ; aucune livraison email/SMS/push. | P2 |

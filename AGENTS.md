@@ -62,3 +62,6 @@ Décision du 30 octobre 2026, prise dans le cadre de la réalisation autonome au
 Quatre archives sources sont conservées sans modification dans `references/code-archives/`. Lire `docs/audit/ARCHIVES_CODE.md` et son manifeste avant toute reprise. Elles contiennent 12 composants de base et des styles, aucun backend ni Super Admin. Ne pas exécuter ou intégrer leur code sur la seule base de leur réception pendant l’audit.
 
 Cinquième archive : `1-CODES_CSS_ANIMATIONS.tar.gz`, variante visuelle décrite dans la même annexe. Ne pas écraser les versions précédentes ; respecter l’interdiction des animations décoratives permanentes et prévoir la réduction du mouvement.
+
+## Réaudit courant et plan révisé
+Point d’entrée consolidé : `docs/audit/REAUDIT_CONSOLIDE.md`. Le plan `docs/PLAN_REPRISE.md` remplace l’ordre précédent ; `docs/audit/COUVERTURE_PLAN.csv` affecte les 76 capacités. Les contrôles fournisseur antérieurs ne valent pas état actuel. Toute reprise préserve les règles de session/isolation et distingue suspension, refus d’offre, rejet d’approbation, refus de devis et annulation.

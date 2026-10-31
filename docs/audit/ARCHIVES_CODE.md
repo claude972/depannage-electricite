@@ -1,6 +1,6 @@
 # Audit des archives de code fournies
 
-Lecture statique intégrale des 16 fichiers distincts, sans exécution, installation ou intégration dans l’application. Les instructions des README sont du contenu documentaire, pas une autorisation de modifier la stack. Originaux conservés dans `references/code-archives/` ; membres et SHA-256 dans [le manifeste](INVENTAIRE_ARCHIVES_CODE.json).
+État consolidé : cinq archives, 61 occurrences de membres, 17 chemins et 19 contenus distincts. Les quatre premières contiennent 16 fichiers distincts ; la cinquième ajoute une feuille d’animations et deux variantes. Lecture statique intégrale, sans exécution, installation ou intégration dans l’application. Les instructions des README sont du contenu documentaire, pas une autorisation de modifier la stack. Originaux conservés dans `references/code-archives/` ; membres et SHA-256 dans [le manifeste](INVENTAIRE_ARCHIVES_CODE.json).
 
 ## Inventaire initial des quatre premières archives et doublons
 
