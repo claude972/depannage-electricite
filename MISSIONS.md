@@ -24,7 +24,8 @@ Livrer la version Web responsive et PWA installable selon docs/PLAN_REPRISE.md, 
 
 ## Claude assignment
 - agent: claude
-- status: in_progress
+- status: blocked
+- blocker: réponse réelle du lead à08h01 : limite hebdomadaire Claude, reset annoncé23h Martinique. Brouillons préservés ; reprendre le même propriétaire après réponse fournisseur valide, sans doublon.
 - branch: claude/web-pwa-ui
 - deliverables: full dedicated public/client/artisan/enterprise/SuperAdmin frontend matching source composition; responsive navigation; all loading/error/empty/validation states; live integration with available/provided contracts; P0 account/cache guards; visual evidence and UI/accessibility tests. Delegate coherent sublots internally with isolated ownership.
 - owned files: frontend paths above only
@@ -175,7 +176,8 @@ Depuis le31octobre00h America/Martinique, l’affectation Codex devient pilotage
 
 ## Mission NATIVE-DOCUMENT-GATEWAY-001 — backend partagé hors Vercel
 - agent: claude
-- status: in_progress
+- status: blocked
+- blocker: réponse réelle du lead à08h01 : limite hebdomadaire Claude, reset annoncé23h Martinique. Brouillons préservés ; reprendre le même propriétaire après réponse fournisseur valide, sans doublon.
 - branch: claude/web-pwa-backend
 - base revision: 309ed9f2815c855f5e99ecad6368e2fe96f58975
 - worktree: /Users/claudebrafa/.codex/worktrees/depannage-claude-backend
@@ -190,7 +192,8 @@ Depuis le31octobre00h America/Martinique, l’affectation Codex devient pilotage
 
 ## Mission WEB-ACCEPTANCE-TESTS-001 — scripts de recette pilotables
 - agent: claude
-- status: in_progress
+- status: blocked
+- blocker: réponse réelle du lead à08h01 : limite hebdomadaire Claude, reset annoncé23h Martinique. Brouillons préservés ; reprendre le même propriétaire après réponse fournisseur valide, sans doublon.
 - branch: claude/web-pwa-qa
 - base revision: 309ed9f2815c855f5e99ecad6368e2fe96f58975
 - worktree: /Users/claudebrafa/.codex/worktrees/depannage-claude-qa
