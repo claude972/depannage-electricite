@@ -436,3 +436,126 @@ Présentation seulement : aucune route, commande ni donnée nouvelle ; totaux se
 entrées du back-office toujours gardées par `platformEntries` (présentes en démo Super Admin, absentes sinon).
 Écarts assumés consolidés : pas de sélecteur de période, de tendance, de CA HT, d’e-mail, de catégorie, de compteur de
 documents ni d’échéance ; entrées Garantie et back-office en plus de M43 (fonctions réelles).
+
+## Addendum — artisan M14 (documents) et M65 (candidature) (VISUAL-FIDELITY-001, base `a131ccd`, branche `claude/web-design-artisan-2`)
+
+Publié **avant** toute modification de code. Références (inventaire `docs/audit/INVENTAIRE_SOURCES.json`) : **M14** =
+`TOUT_EN_UN_MAQUETTES_GRANDES.pdf` p14 (`/tmp/courant-audit/pdf-images/v1-p14.jpeg`, mobile « Mes documents ») ;
+**M65** = `MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf` p18 (`v4-p18.jpeg`, formulaire web « Rejoindre … en tant
+qu’électricien partenaire », 5 étapes). Captures « avant » (démo) : `artisan-documents-{360,1280}-before.jpg`,
+`artisan-application-{360,1280}-before.jpg`. Fichiers : `components/role/artisan-space.tsx`, `artisan.module.css`,
+`artisan-lists.ts` (logique pure), `tests/ui/**`, cette page, `docs/visual-fidelity/**`.
+
+### Règle sur les données
+
+États réels d’un justificatif (`credentialState`) : **Manquant**, **Transmis, en attente d’examen**, **À renouveler**
+(date d’expiration dépassée), **Validé** (candidature approuvée par l’opérateur). **Jamais fabriqué** : « validé » par
+document hors approbation, « Profil complet à 100 % » (remplacé par le compte réel de pièces transmises), délai d’examen,
+score, dates d’exemple ; « 100 % sécurisé » et promesses marketing de M65 ; régions, site web, certification/label,
+capacité d’intervention et jours habituels (non présents dans le dossier — les disponibilités hebdomadaires relèvent du
+lot Planning), étape « Continuer vers l’étape 2 » (le dossier est une page unique, enregistrée puis soumise ; le serveur
+valide).
+
+### M14 — « Mes documents » (`#demo/artisan-documents`)
+
+| Élément de la référence | Composant existant | Écart constaté (a131ccd) | Correction prévue |
+| --- | --- | --- | --- |
+| En-tête « Mes documents / Gérez vos documents obligatoires » + info | `PageTitle` | Conforme. | — |
+| « Documents obligatoires » + texte + badge « Profil complet à 100 % » | `.credHead` + `.credCount` « 0/3 transmis » | Conforme en structure ; libellé honnête déjà en place. | Badge « N/3 pièces transmises » teinté selon l’état (vert si 3/3, sinon neutre) ; aucun pourcentage de validation. |
+| Carte : rond teinté (vert validé / orange à renouveler / rouge manquant), titre, description, **pastille d’état à droite**, date « Valide jusqu’au » / « Expire le », bouton « Remplacer / Ajouter le document » | `CredentialCard` (tuile 56 px, titre, description, pastille sous la description, actions) | Pastille et date sous la description au lieu de la colonne droite ; pas de date d’expiration affichée. | Grille icône / corps / colonne d’état (pastille + « Expire le … » ou « Valide jusqu’au … » quand `expires_on` existe, sinon « Sans date d’expiration ») ; actions en bas ; teintes portées par l’état réel (manquant rouge, à renouveler ambre, transmis bleu, validé vert). |
+| Encart « Pourquoi ces documents ? » | `.note` | Conforme. | — |
+| Onglets bas Accueil / Chantiers / Documents / Profil | `PRIMARY_NAV` M35 | Jeu M35 conservé (Documents dans le menu secondaire). | **Écart assumé.** |
+| Hors référence : « Pièces et justificatifs » (gestionnaire de documents) | `DocumentManager` | Conservé (fonction réelle, dépôt désactivé en démo). | — |
+
+### M65 — dossier de candidature (`#demo/artisan-application`)
+
+| Élément de la référence | Composant existant | Écart constaté | Correction prévue |
+| --- | --- | --- | --- |
+| Titre + sous-titre, bandeau « 100 % sécurisé » | `PageTitle` + `.appStatus` (état réel de la candidature) | Bandeau marketing absent (volontaire) ; état réel affiché. | **Écart assumé** : état de candidature à la place de la promesse. |
+| Stepper 5 étapes avec connecteurs, étape active bleue | `.appSteps` (5 tuiles, 1 colonne ≤ 760 px) | Tuiles sans connecteur ; une colonne très haute à 360. | Barre d’étapes avec connecteurs, numéro / coche « fait », libellé + sous-état ; à ≤ 760 px, 5 pastilles numérotées sur une ligne avec libellé de l’étape courante. Décision pure `applicationSteps(values, credentials)` testée (sections remplies ↔ états réels). |
+| Deux colonnes : 1 Informations personnelles, 2 Société, 4 Zones (gauche) ; 3 Pièces, 5 Disponibilités (droite) | 5 `.sectionCard` empilées | Une colonne à 1280. | Grille deux colonnes ≥ 1024 px (gauche : 1, 2, 4 ; droite : 3, 5, puis enregistrement / soumission) ; une colonne en dessous. |
+| Champs obligatoires marqués « * » | `Field` (libellés sans marque) | Pas de marque ; liste « il manque … » sous le bouton. | Marque « obligatoire » sur les libellés concernés via l’existant (`Field`), liste des manques conservée. |
+| Zones : régions à cocher | Codes postaux (puces) + compétences (cases) | Modèle différent (codes postaux). Puces « Retirer » 32 px ; cases natives 16 px. | **Écart assumé** (codes postaux). Cibles : bouton « Retirer » 44 × 44, lignes de cases ≥ 44 px (label `checkbox-field` étendu). |
+| Pied collant « Étape 1 sur 5 / Continuer » | Carte « Enregistrer le brouillon / Soumettre ma candidature » | Pas de pied collant. | **Écart assumé** : enregistrement et soumission explicites, en fin de colonne droite ; messages de manque et verrouillage réels conservés. |
+
+### Règles responsive et accessibilité (A)
+
+- 360 : cartes de documents en pile (colonne d’état passe sous le titre), stepper compact sur une ligne, sections en une
+  colonne ; 760 : idem ; 1280 : deux colonnes pour la candidature, cartes de documents pleine largeur.
+- Cibles ≥ 44 px (boutons de carte, « Retirer », lignes de cases, switch) ; état jamais porté par la couleur seule
+  (libellés de pastille) ; focus visible global.
+
+### Vérification (A)
+
+| Par test (`tests/ui/artisan-lists.test.ts`) | Par capture |
+| --- | --- |
+| `credentialSummary(states)` : compte transmis / 3, teinte (vert seulement à 3/3), libellé de date (« Expire le », « Valide jusqu’au », « Sans date d’expiration ») sans inventer de date ; `applicationSteps` : états « fait / à compléter » déduits des valeurs et pièces réelles, jamais d’un délai. | M14 / avant / après à 360 ; M65 / avant / après à 1280 ; 0 élément interactif < 44 px ; aucun débordement ; console sans erreur. |
+
+## Addendum — entreprise V5-C01, V5-C05, V5-C08 (VISUAL-FIDELITY-001, base `a131ccd`, branche `claude/web-design-artisan-2`)
+
+Références (inventaire) : **V5-C01** = `MAQUETTES_UNE_PAR_PAGE_VOLUME_5_MANQUANTES.pdf` **p2** (fiche de site bureaux
+« Tour Horizon », `v5-p2.jpeg`) ; **V5-C05** = même volume **p6** (dashboard bureaux « BUREAUX360 », `v5-p6.jpeg`) ;
+**V5-C08** = même volume **p9** (détail d’approbation d’un devis syndic, `v5-p9.jpeg`) ; V6-C01/V6-C05/V7-C01 sont des
+doublons catalogués. Captures « avant » (démo) : `enterprise-site-office-{360,1280}-before.jpg` (`#demo/manager-site.site-3`),
+`enterprise-overview-1280-before.jpg`, `enterprise-approval-1280-before.jpg`. Fichiers : `components/role/enterprise-space.tsx`,
+`enterprise.module.css`, `enterprise-lists.ts`, `tests/ui/**` ; `client-space`, `public-site` et les helpers d’ancrage ne
+sont pas touchés.
+
+### Règle sur les données
+
+Le modèle `Site` ne porte que nom, type, adresse et budget de référence ; les opérations (équipements, maintenance,
+grilles, délais, contrôles) viennent du lot B2B dans « Opérations du site ». **Jamais fabriqué** : surface, année,
+nombre d’étages, occupant, photo, conformité / certification (jamais attestée), consommation (MWh, %), taux
+d’occupation, « projection fin d’année », impact par étage, ETA, « équipe sur place », rôle d’acteur dans l’historique,
+compteur 500 caractères (limite serveur 2 000 conservée). Les montants restent TTC « calculés sur les dossiers chargés ».
+
+### V5-C01 — fiche de site bureaux (`#demo/manager-site.site-3`)
+
+| Élément de la référence | Composant existant | Écart constaté | Correction prévue |
+| --- | --- | --- | --- |
+| En-tête « FICHE DE SITE / Tour Horizon / adresse », date de mise à jour | `.sheetHeader` (nom, tags, adresse, Nouvelle demande) | Pas de surtitre. | Surtitre « Fiche de site » ; « Site actif » retiré (aucun statut d’activité dans le modèle) ; adresse et type conservés. **Écart assumé** : pas de date de mise à jour (non transmise). |
+| « Présentation du bâtiment » : photo + faits + conformité | — | Absent. | Bloc « Identité du site » avec les seuls faits réels (type, adresse, budget de référence) ; aucune photo, surface, année, occupant ; aucune conformité. **Écart assumé.** |
+| Étages & zones | `Unavailable` « Étages & zones » | Honnête. | Conservé. |
+| Historique des interventions électriques (liste datée, statut) | Panneau Interventions (segments En cours / Passées) | Proche ; segments 40 px. | Liste datée (date, catégorie, statut) pour l’historique, segments 44 px. |
+| Maintenance planifiée + prochaine intervention | Échéances & conformité + onglet Maintenance du lot | Conforme ; « Marquer terminé » 40 px. | 44 px ; libellés inchangés. |
+| Budget : annuel, consommé, engagé, restant, projection, anneau % | Tuiles + panneau Budget (barre, % engagé) | Pas de projection ni de consommé (assumé). | Panneau Budget avec taux réel (déjà non plafonné) ; **assumé** : pas de projection. |
+| Contacts clés, Documents récents | `Unavailable` Contacts ; panneau Documents | Honnête. | Conservés. |
+| Sélecteur de site de la barre de contexte | `.contextControls select` 40 px | < 44 px. | 44 px. |
+
+### V5-C05 — tableau de bord bureaux (`#demo/manager`)
+
+| Élément de la référence | Composant existant | Écart constaté | Correction prévue |
+| --- | --- | --- | --- |
+| 5 KPI (sites, MWh, interventions en cours dont urgentes, maintenances 30 jours, budget engagé % annuel) | 4 `Stat` (en cours, devis à approuver, budget engagé, sites suivis) | Pas d’urgences ni de maintenances à 30 jours. | « Interventions en cours » avec note « dont N urgentes » (champ `urgency` réel) ; « Échéances à 30 jours » (compliance `due_on` réelles) ajoutée ; **assumé** : aucune consommation. Logique pure `overviewFigures(scope, today)` testée. |
+| Tableau Sites & bâtiments (ville, surface, occupation, état) | Tableau « Mes sites » (vue Sites) | Non repris ici : M66 reste maître du tableau de bord (interventions). | **Écart assumé** ; lien « Sites & contrats ». |
+| Budget par bâtiment (barres engagé / restant par site) | — | Absent. | Panneau « Budget par site » : barre par site (engagé / budget, taux réel via `budgetFigures`, « pas de budget de référence » sinon) — données réelles. |
+| Interventions en cours (liste), Maintenances planifiées, Alertes | Tableau d’interventions (M66) + Approbations en attente + Échéances | Conforme en substance. | Conservé ; la cloche du lot porte les alertes. |
+
+### V5-C08 — détail d’approbation (`#demo/manager-approval.approval-demo`)
+
+| Élément de la référence | Composant existant | Écart constaté | Correction prévue |
+| --- | --- | --- | --- |
+| Fil d’Ariane Devis › Approbations, titre, « Retour à la liste » | `ApprovalDetail` en-tête | Conforme ; lien « Devis » 32 px. | 44 px. |
+| Détails du devis (référence, propriété, fournisseur + fiche, réception, description, validité, pièces, montant TTC + TVA) \| **Votre décision** à droite (Approuver vert / Refuser rouge, commentaire 0/500, Enregistrer) | Détails \| documents du lot ; décision en seconde rangée | Décision reléguée sous la grille depuis l’ancrage documents. | Grille : Détails \| Votre décision (haut), puis « Documents, validité et avenants » pleine largeur, puis historique. Boutons Approuver (teinte succès) / Refuser (teinte erreur) en contour, 44 px ; compteur 0 / 2000 (limite serveur). **Assumé** : pas de « fiche fournisseur » (identité dans le dossier). |
+| Historique des statuts : Date, Statut, Acteur, **Rôle**, Commentaire ; note de traçabilité | `.historyTable` (Date, Statut, Acteur, Commentaire) + note | Pas de colonne Rôle. | **Écart assumé** (rôle de l’acteur non transmis). |
+
+### Règles responsive et accessibilité (B)
+
+- 360 : tuiles en pile, grille d’approbation en une colonne (décision après les détails), tableaux en pile ou défilement
+  identifié ; 760 : deux colonnes quand la place existe ; 1280 : grilles existantes.
+- Cibles ≥ 44 px (sélecteur de contexte, segments, « Marquer terminé », liens de fil d’Ariane, boutons de décision) ;
+  statut textuel ; focus visible.
+
+### Vérification (B)
+
+| Par test (`tests/ui/enterprise-lists.test.ts`) | Par capture |
+| --- | --- |
+| `overviewFigures` : urgences = dossiers ouverts `urgency === "urgent"`, échéances à 30 jours = `due_on` dans la fenêtre et non terminées, rien d’autre ; `siteBudgetBars` : un élément par site avec `budgetFigures` (taux réel, null sans budget). | V5-C01 / avant / après (site-3) 360 et 1280 ; V5-C05 / avant / après (tableau de bord) 1280 ; V5-C08 / avant / après (approbation) 1280 ; 0 élément interactif < 44 px ; aucun débordement ; console sans erreur. |
+
+### Checkpoints prévus
+
+1. M14 documents — `artisan-documents-{360,1280}-after.jpg`.
+2. M65 candidature — `artisan-application-{360,1280}-after.jpg`.
+3. V5-C01 fiche de site — `enterprise-site-office-{360,1280}-after.jpg`.
+4. V5-C05 tableau de bord — `enterprise-overview-{360,1280}-after.jpg`.
+5. V5-C08 approbation — `enterprise-approval-{360,1280}-after.jpg`.
