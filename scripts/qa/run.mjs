@@ -117,7 +117,7 @@ async function main(argv) {
         fixtures: suites.map((s) => ({ suite: s.name, creates: s.plan })),
         cleanup_order: CLEANUP_STEPS.map((s) => (s.kind === "table" ? `${s.table} by ${s.column}` : s.kind === "storage" ? `storage ${s.bucket}` : "auth users")),
         outputs: ["run.log (0600, redacted tee of stdout/stderr)", "events.ndjson (per step)", "result.json + summary.md (rewritten after each scenario)", "manifest.json", "cleanup.json", "*.png"],
-        exit_codes: { 0: "no FAIL", 1: "at least one FAIL or a FATAL crash", 2: "preflight refusal", 3: "cleanup incomplete" },
+        exit_codes: { 0: "no FAIL", 1: "at least one FAIL or a FATAL crash", 2: "preflight refusal", 3: "cleanup incomplete", 130: "interrupted by SIGINT/SIGTERM after the cleanup (a second signal aborts the cleanup and keeps the manifest)" },
       };
       process.stdout.write(JSON.stringify(plan, null, 2) + "\n");
       return 0;
@@ -210,6 +210,26 @@ async function main(argv) {
       },
       exit: (code) => process.exit(code),
     });
+    // SIGINT/SIGTERM: same stop gate → drain → cleanup → results, exactly once (shared with the
+    // crash path); a second signal aborts the wait and keeps the manifest for --cleanup-manifest.
+    const uninstallSignals = lifecycle.installSignalHandlers(process, {
+      onSignal: (signal) => {
+        process.stderr.write(`[qa] ${signal} received: stopping fixtures, draining, cleaning up the cohort (send ${signal} again to abort the cleanup and keep the manifest)\n`);
+        appendEvent({ at: new Date().toISOString(), type: "signal", signal });
+      },
+      onSecondSignal: (signal) => {
+        process.stderr.write(`[qa] second ${signal}: cleanup aborted; manifest kept${fixtures ? ` at ${fixtures.manifestPath}` : ""} — recover with --cleanup-manifest\n`);
+        appendEvent({ at: new Date().toISOString(), type: "signal", signal, aborted_cleanup: true });
+        restoreTee();
+      },
+      codeFor: (signal, cleanup) => {
+        const code = cleanup && cleanup.ok === false ? 3 : 130;
+        log(`aborted by ${signal}: ${JSON.stringify(report.summary())}; cleanup ${cleanup ? (cleanup.ok ? "complete" : "INCOMPLETE") : "skipped"}; exit ${code}`);
+        restoreTee();
+        return code;
+      },
+      exit: (code) => process.exit(code),
+    });
 
     try {
       browser = await launchBrowser(playwright, { headless: options.headless, chromiumPath: options.chromiumPath });
@@ -242,6 +262,7 @@ async function main(argv) {
       browser = null;
       const { cleanup } = await lifecycle.finalize("completed");
       uninstall();
+      uninstallSignals();
       const summary = report.summary();
       const code = exitCode(summary, cleanup ? cleanup.ok : true, lifecycle.fatal);
       log(`done: ${JSON.stringify(summary)}; cleanup ${cleanup ? (cleanup.ok ? "complete" : "INCOMPLETE") : "skipped"}; exit ${code}`);

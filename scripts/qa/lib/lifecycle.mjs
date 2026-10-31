@@ -78,6 +78,14 @@ export function createLifecycle({ cleanup, writeResults, keepFixtures = false, l
   let cleanupResult = null;
   let drainResult = null;
   let fatal = null;
+  let exited = null;
+  /** The process exits once: whichever path (crash, signal) finishes first decides the code. */
+  const exitOnce = (exit, code, origin) => {
+    if (exited) return false;
+    exited = { code, origin };
+    exit(code);
+    return true;
+  };
 
   async function finalize(reason = "completed") {
     if (finalizing) return finalizing;
@@ -145,7 +153,7 @@ export function createLifecycle({ cleanup, writeResults, keepFixtures = false, l
         try {
           code = codeFor(result?.fatal ?? fatal, result?.cleanup ?? cleanupResult);
         } catch {}
-        exit(code);
+        exitOnce(exit, code, origin);
       })();
     };
     const onRejection = handler("unhandledRejection");
@@ -158,11 +166,62 @@ export function createLifecycle({ cleanup, writeResults, keepFixtures = false, l
     };
   }
 
+  /**
+   * Installs SIGINT/SIGTERM handlers. The FIRST signal raises the stop gate, then finalises
+   * exactly once through the same idempotent `finalize` as the crash path (drain → cleanup →
+   * results; a crash handler firing meanwhile joins the same finalisation, never a second
+   * cleanup) and exits via `exit(codeFor(signal, cleanupResult))` — default 130, or 3 when the
+   * cleanup is incomplete. A SECOND signal aborts the wait: `onSecondSignal` runs (the manifest
+   * on disk is kept for `--cleanup-manifest`) and the process exits 130 immediately.
+   */
+  function installSignalHandlers(proc, { onSignal, onSecondSignal, codeFor, exit, signals = ["SIGINT", "SIGTERM"] }) {
+    let first = null;
+    const decide = codeFor || ((signal, cleanupResult) => (cleanupResult && cleanupResult.ok === false ? 3 : 130));
+    const handler = (signal) => () => {
+      if (first) {
+        log(`second signal ${signal}: cleanup aborted, manifest kept on disk for --cleanup-manifest`);
+        try {
+          onSecondSignal?.(signal, first);
+        } catch {}
+        exitOnce(exit, 130, `signal:${signal}:second`);
+        return;
+      }
+      first = signal;
+      gate.stop(`signal:${signal}`); // raised synchronously: no new fixture insert can start
+      (async () => {
+        let result = null;
+        try {
+          try {
+            await onSignal?.(signal); // reporting may fail…
+          } finally {
+            result = await finalize(`signal:${signal}`); // …cleanup still runs, exactly once
+          }
+        } catch (finalError) {
+          log(`finalisation after ${signal} failed: ${String(finalError?.message || finalError)}`);
+        }
+        let code = 130;
+        try {
+          code = decide(signal, result?.cleanup ?? cleanupResult);
+        } catch {}
+        exitOnce(exit, code, `signal:${signal}`);
+      })();
+    };
+    const handlers = signals.map((signal) => [signal, handler(signal)]);
+    for (const [signal, fn] of handlers) proc.on(signal, fn);
+    return () => {
+      for (const [signal, fn] of handlers) proc.off(signal, fn);
+    };
+  }
+
   return {
     finalize,
     recordFatal,
     installCrashHandlers,
+    installSignalHandlers,
     gate,
+    get exited() {
+      return exited;
+    },
     get stopping() {
       return gate.stopping;
     },

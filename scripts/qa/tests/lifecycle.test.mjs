@@ -230,6 +230,129 @@ test("a crash handler raises the stop signal immediately: a helper looping on fi
   assert.equal(exitCode, 1);
 });
 
+/** Lifecycle on a fake process with a deferred cleanup; returns the pieces the signal tests inspect. */
+function signalRig({ cleanupOk = true, holdCleanup = false, drainTimeoutMs = 1000 } = {}) {
+  const proc = new EventEmitter();
+  const gate = createStopGate();
+  const order = [];
+  const exits = [];
+  const cleanupGate = deferred();
+  let cleanups = 0;
+  const written = [];
+  const lc = createLifecycle({
+    gate,
+    drainTimeoutMs,
+    cleanup: async () => {
+      cleanups++;
+      order.push("cleanup");
+      if (holdCleanup) await cleanupGate.promise;
+      return { ok: cleanupOk, steps: [] };
+    },
+    writeResults: async (payload) => {
+      written.push(payload);
+      order.push(`results:${payload.reason}`);
+    },
+    log: (m) => order.push(`log:${m}`),
+  });
+  const exited = new Promise((resolve) => {
+    lc.installSignalHandlers(proc, {
+      onSignal: (signal) => order.push(`signal ${signal}`),
+      onSecondSignal: (signal) => order.push(`second ${signal}`),
+      exit: (code) => {
+        exits.push(code);
+        resolve(code);
+      },
+    });
+  });
+  return { proc, gate, lc, order, exits, exited, cleanupGate, counts: () => ({ cleanups, written: written.length }), written };
+}
+
+test("SIGINT: stop gate raised synchronously, in-flight creation drained, cleanup once, results written, exit 130", async () => {
+  const rig = signalRig();
+  const creation = deferred();
+  rig.gate.register(creation.promise.then(() => rig.order.push("creation settled")));
+  rig.proc.emit("SIGINT");
+  assert.equal(rig.gate.stopping, true);
+  assert.equal(rig.gate.reason, "signal:SIGINT");
+  assert.throws(() => rig.gate.check(), StopRequestedError);
+  setTimeout(() => creation.resolve(), 10);
+  assert.equal(await rig.exited, 130);
+  assert.deepEqual(rig.order.filter((e) => !e.startsWith("log:")), ["signal SIGINT", "creation settled", "cleanup", "results:signal:SIGINT"]);
+  assert.deepEqual(rig.counts(), { cleanups: 1, written: 1 });
+  assert.equal(rig.written[0].reason, "signal:SIGINT");
+  assert.equal(rig.written[0].fatal, null, "a signal is not a FATAL");
+});
+
+test("SIGTERM follows the same path; an incomplete cleanup exits 3 instead of 130", async () => {
+  const rig = signalRig({ cleanupOk: false });
+  rig.proc.emit("SIGTERM");
+  assert.equal(await rig.exited, 3);
+  assert.equal(rig.gate.reason, "signal:SIGTERM");
+  assert.deepEqual(rig.counts(), { cleanups: 1, written: 1 });
+});
+
+test("a second SIGINT during the cleanup aborts the wait: exit 130 immediately, cleanup not re-run, manifest kept (logged)", async () => {
+  const rig = signalRig({ holdCleanup: true });
+  rig.proc.emit("SIGINT");
+  await new Promise((r) => setTimeout(r, 5)); // first finalisation is now waiting inside cleanup()
+  assert.equal(rig.counts().cleanups, 1);
+  rig.proc.emit("SIGINT");
+  assert.equal(await rig.exited, 130);
+  assert.deepEqual(rig.exits, [130]);
+  assert.ok(rig.order.includes("second SIGINT"));
+  assert.ok(rig.order.some((e) => /second signal SIGINT: cleanup aborted, manifest kept/.test(e)));
+  assert.equal(rig.counts().cleanups, 1, "no new cleanup started by the second signal");
+  assert.equal(rig.counts().written, 0, "results not written: the finalisation was abandoned by the second signal");
+  // Releasing the held cleanup afterwards must not trigger a second exit.
+  rig.cleanupGate.resolve();
+  await new Promise((r) => setTimeout(r, 5));
+  assert.deepEqual(rig.exits, [130], "the process exits once");
+  assert.equal(rig.lc.exited.origin, "signal:SIGINT:second");
+});
+
+test("SIGINT then a crash during the finalisation: one cleanup, one exit (the signal path decides, 130)", async () => {
+  const proc = new EventEmitter();
+  const gate = createStopGate();
+  const cleanupGate = deferred();
+  let cleanups = 0;
+  const exits = [];
+  const lc = createLifecycle({
+    gate,
+    cleanup: async () => {
+      cleanups++;
+      await cleanupGate.promise;
+      return { ok: true, steps: [] };
+    },
+    writeResults: async () => {},
+  });
+  const exited = new Promise((resolve) => {
+    const exit = (code) => {
+      exits.push(code);
+      resolve();
+    };
+    lc.installCrashHandlers(proc, { onFatal: () => {}, codeFor: fatalExitCode, exit });
+    lc.installSignalHandlers(proc, { exit });
+  });
+  proc.emit("SIGINT");
+  await new Promise((r) => setTimeout(r, 5));
+  proc.emit("unhandledRejection", new Error("Target page, context or browser has been closed")); // late Playwright rejection while cleaning up
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(cleanups, 1, "the crash handler joined the running finalisation");
+  cleanupGate.resolve();
+  await exited;
+  await new Promise((r) => setTimeout(r, 5));
+  assert.deepEqual(exits, [130], "exactly one exit, decided by the first path (the signal)");
+  assert.equal(lc.fatal.origin, "unhandledRejection", "the late crash is still recorded in the results");
+});
+
+test("a signal after the normal finalisation does not clean up twice", async () => {
+  const rig = signalRig();
+  await rig.lc.finalize("completed");
+  rig.proc.emit("SIGINT");
+  assert.equal(await rig.exited, 130);
+  assert.deepEqual(rig.counts(), { cleanups: 1, written: 1 });
+});
+
 test("fatalExitCode", () => {
   assert.equal(fatalExitCode({ origin: "x" }, { ok: true }), 1);
   assert.equal(fatalExitCode({ origin: "x" }, { ok: false }), 3);

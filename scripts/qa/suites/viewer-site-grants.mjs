@@ -3,6 +3,8 @@
 // issues a POST the server would refuse (403 never requested); the owner sees the controls.
 // Server probes from the restricted user's own session confirm the 403 fail-closed: application
 // routes always, direct Supabase RPC when a publishable key is configured (QA-002).
+// Markup reference: components/role/enterprise-space.tsx on claude/web-pwa-design (M13 sites
+// table, M4/M66 interventions table); the sites view has no card and no per-site heading.
 import assert from "node:assert/strict";
 import { newPage, login, openHash, goHash, api, capture, bodyText, expectVisible, expectAbsentOrDisabled, postsTo, sessionAccessToken, sleep } from "../lib/browser.mjs";
 import { userRpc } from "../lib/supabase.mjs";
@@ -50,6 +52,22 @@ export const suite = {
 
     const budgetSection = (page) => page.locator('section[aria-labelledby="site-budget"]');
     const ruleSection = (page) => page.locator('section[aria-labelledby="site-rule"]');
+    // M13 « Mes sites » is a TABLE (enterprise-space.tsx, section `sites-table-title`): one row per
+    // site, whose first cell is a `rowOpen` button named "<site name> <type> · <address>" (icons are
+    // aria-hidden). A site is located by its row / open button, never by a heading or a card.
+    const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const sitesTable = (page) => page.locator('section[aria-labelledby="sites-table-title"]');
+    const siteRow = (page, site) => sitesTable(page).getByRole("row", { name: new RegExp(escapeRe(site.name)) });
+    const siteOpen = (page, site) => sitesTable(page).getByRole("button", { name: new RegExp(`^${escapeRe(site.name)}\\b`) });
+    const siteSheetHeading = (page, site) => page.getByRole("heading", { level: 1, name: new RegExp(escapeRe(site.name)) });
+    const expectSiteListed = async (page, site, label) => {
+      await expectVisible(siteRow(page, site), `${label} row in the sites table`);
+      await expectVisible(siteOpen(page, site), `${label} open button in its row`);
+    };
+    const expectSiteAbsent = async (page, site, who) => {
+      assert.equal(await siteRow(page, site).count(), 0, `${site.name} row rendered for ${who}`);
+      assert.equal(await siteOpen(page, site).count(), 0, `${site.name} open button rendered for ${who}`);
+    };
     const enabledControls = async (locator) => {
       const controls = locator.locator("button, input, select, textarea");
       let enabled = 0;
@@ -126,6 +144,7 @@ export const suite = {
         });
         await s.step("site A: no request creation, budget editor and rule configuration unavailable, viewer reason shown", async () => {
           await goHash(h.page, `site/${siteA.id}`);
+          await expectVisible(siteSheetHeading(h.page, siteA), "site A sheet heading");
           await expectVisible(h.page.getByRole("heading", { name: "Budget", exact: true }), "site budget section");
           await sleep(800);
           await expectAbsentOrDisabled(h.page.getByRole("button", { name: "Nouvelle demande", exact: true }), "'Nouvelle demande' for a viewer");
@@ -141,9 +160,10 @@ export const suite = {
           await expectAbsentOrDisabled(h.page.getByRole("button", { name: "Refuser", exact: true }), "'Refuser' for a viewer");
           await capture(h, out, "viewer-approval", s);
         });
-        await s.step("sites and dossier A readable, still no write control", async () => {
+        await s.step("sites table (A and B listed) and dossier A readable, still no write control", async () => {
           await goHash(h.page, "sites");
-          await expectVisible(h.page.getByRole("heading", { name: siteA.name, exact: true }), "site A card");
+          await expectSiteListed(h.page, siteA, "site A");
+          await expectSiteListed(h.page, siteB, "site B");
           await sleep(800);
           await expectAbsentOrDisabled(h.page.getByRole("button", { name: "Nouvelle demande", exact: true }), "'Nouvelle demande' on sites for a viewer");
           await goHash(h.page, `detail/${jobA.id}`);
@@ -163,16 +183,18 @@ export const suite = {
       const h = await newPage(browser, { baseUrl: base, redactor });
       try {
         await s.step("login read-grant manager", () => login(h, base, reader, projectRef));
-        await s.step("sites: A visible and read-only, B absent", async () => {
+        await s.step("sites table: A listed and read-only, B absent", async () => {
           await goHash(h.page, "sites");
-          await expectVisible(h.page.getByRole("heading", { name: siteA.name, exact: true }), "site A card");
+          await expectSiteListed(h.page, siteA, "site A");
           await sleep(800);
-          assert.equal(await h.page.getByRole("heading", { name: siteB.name, exact: true }).count(), 0, "site B card rendered for a manager scoped to A");
+          await expectSiteAbsent(h.page, siteB, "a manager scoped to A");
+          assert.ok(!(await bodyText(h.page)).includes(siteB.name), "site B named somewhere on the sites view for a manager scoped to A");
           await expectAbsentOrDisabled(h.page.getByRole("button", { name: "Nouvelle demande", exact: true }), "'Nouvelle demande' for a read-grant manager");
           await capture(h, out, "reader-sites", s);
         });
         await s.step("site A: new request, budget editor and rule configuration hidden with the scoped read-only reason", async () => {
           await goHash(h.page, `site/${siteA.id}`);
+          await expectVisible(siteSheetHeading(h.page, siteA), "site A sheet heading");
           await expectVisible(h.page.getByRole("heading", { name: "Budget", exact: true }), "site budget section");
           await sleep(800);
           await expectAbsentOrDisabled(h.page.getByRole("button", { name: "Nouvelle demande", exact: true }), "'Nouvelle demande' for a read-grant manager");
@@ -219,17 +241,18 @@ export const suite = {
       const h = await newPage(browser, { baseUrl: base, redactor });
       try {
         await s.step("login write-grant manager", () => login(h, base, writer, projectRef));
-        await s.step("sites: only A listed, creation offered on A", async () => {
+        await s.step("sites table: only A listed, creation offered on A", async () => {
           await goHash(h.page, "sites");
-          await expectVisible(h.page.getByRole("heading", { name: siteA.name, exact: true }), "site A");
+          await expectSiteListed(h.page, siteA, "site A");
           await sleep(800);
           assert.ok(!(await bodyText(h.page)).includes(siteB.name), "site B visible to a manager scoped to A");
-          assert.equal(await h.page.getByRole("heading", { name: siteB.name, exact: true }).count(), 0, "site B card rendered for a manager scoped to A");
+          await expectSiteAbsent(h.page, siteB, "a manager scoped to A");
           await expectVisible(h.page.getByRole("button", { name: "Nouvelle demande", exact: true }), "'Nouvelle demande' on site A for a writing manager");
           await capture(h, out, "writer-sites", s);
         });
         await s.step("site A: budget editor and rule configuration available", async () => {
           await goHash(h.page, `site/${siteA.id}`);
+          await expectVisible(siteSheetHeading(h.page, siteA), "site A sheet heading");
           await expectVisible(h.page.getByRole("heading", { name: "Budget", exact: true }), "budget section");
           await sleep(800);
           const enabled = await enabledControls(budgetSection(h.page));
@@ -281,8 +304,16 @@ export const suite = {
           await capture(h, out, "owner-members", s);
           return { accessControls: await h.page.getByRole("button", { name: "Accès aux sites", exact: true }).count() };
         });
+        await s.step("sites table: A and B listed for the owner, B opens from its row", async () => {
+          await goHash(h.page, "sites");
+          await expectSiteListed(h.page, siteA, "site A");
+          await expectSiteListed(h.page, siteB, "site B");
+          await siteOpen(h.page, siteB).click();
+          await expectVisible(siteSheetHeading(h.page, siteB), "site B sheet heading after opening its row");
+        });
         await s.step("site B: budget editor and request creation available", async () => {
           await goHash(h.page, `site/${siteB.id}`);
+          await expectVisible(siteSheetHeading(h.page, siteB), "site B sheet heading");
           await expectVisible(h.page.getByRole("heading", { name: "Budget", exact: true }), "budget section");
           await sleep(800);
           const enabled = await enabledControls(budgetSection(h.page));
