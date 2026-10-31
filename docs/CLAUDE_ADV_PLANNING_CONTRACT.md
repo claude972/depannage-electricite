@@ -218,3 +218,51 @@ Toute fonction de `client` peut résoudre `null` lorsque la chaîne d’identit�
 ### Tests ajoutés par cet amendement
 
 Dans `tests/planning/*.test.ts` et `tests/notifications/*.test.ts` : un test par état indisponible (`state` ≠ available → aucun appel `client`), lecture seule (`canWrite=false` → aucun contrôle d’écriture rendu), refus serveur rendu tel quel, résultat `null` → aucun message de succès ni état mis à jour, changement de scope → données et brouillons effacés. Les tests de rendu utilisent `react-dom/server` déjà présent (aucune dépendance nouvelle).
+
+## Livraison (checkpoints poussés sur `claude/web-planning`)
+
+| SHA | Contenu |
+| --- | --- |
+| 2035abe | contrat initial |
+| 8574b78 | amendement A1 (contrat partagé WEB-SHARED-001) |
+| 17e5785 | migration 016, `lib/features/{planning,notifications}`, routes `/api/planning`, `/api/planning/slots`, `/api/notifications`, `/api/notifications/summary`, `/api/notifications/preferences`, `tests/sql-planning-review.mjs` |
+| f37b475 | harnais de routes (`tests/planning/harness.ts`), `tests/planning/{time,api}.test.ts`, `tests/notifications/{api,channels}.test.ts` |
+| 542cbc4 | composants feuilles `components/features/planning/artisan-planning.tsx`, `components/features/notifications/{notification-bell,notification-center}.tsx` + CSS modules, contrats feuilles `lib/features/*/leaf.ts`, graines `lib/features/*/demo.ts`, `tests/{planning,notifications}/leaf.test.ts` |
+
+Contrôles au dernier checkpoint : `npx tsc --noEmit` propre ; `npx tsx --test tests/planning/*.test.ts tests/notifications/*.test.ts` 27/27 ; `npx tsx --test tests/*.test.ts` 93/93 ; `npx tsx --test tests/ui/*.test.ts` 43/43 ; les huit scripts `tests/sql-*.mjs` (PGlite 0.5.13 hors application) passent avec 016 chargée, dont `sql-planning-review` (11 groupes). Aucun `next build`/`next dev`, aucune migration appliquée, aucun fournisseur configuré.
+
+### Écarts et précisions par rapport au contrat
+
+- **Garde anti-double-réservation sur `intervention_appointments`** : active pour toute écriture faite sous le rôle API `authenticated` (`auth.uid()` non nul et `current_setting('role')='authenticated'`, valeur posée par PostgREST et conservée dans les fonctions SECURITY DEFINER). Les écritures service_role/superuser (maintenance, fixtures QA existantes de `tests/sql-site-access-review.mjs`) ne sont pas re-validées : elles contournent déjà RLS par conception. Codex doit confirmer sur base dédiée que `current_setting('role')` vaut bien `authenticated` dans le trigger lors d’un appel RPC utilisateur (le harnais le prouve sous `set role authenticated`).
+- `mission_received` (nouvel artisan) et `mission_assigned` (client) sont émis à chaque changement d’`artisan_id` ; l’acteur n’est jamais destinataire (un artisan qui accepte lui-même n’est pas notifié).
+- `quote_rejected` n’est émis que si l’artisan reste le même (une réaffectation `quoted→assigned` n’envoie pas de faux refus).
+- `membership_removed` et `mission_reassigned` portent `intervention_id`/`organization_id` nuls (sinon la RLS les masquerait immédiatement) ; la référence est dans `payload`.
+- Le composant planning ancre la semaine affichée sur `demo.range` en démonstration, sur la semaine courante en direct.
+- Ajout d’un bandeau permanent dans le centre de notifications : « Aucun e-mail, SMS ni notification push n’est envoyé ».
+
+### Ce que le lead raccorde (WEB-SHARED-001)
+
+- `Capabilities.planning` (sonde `GET /api/planning`, 403 pour un non-artisan = contrat présent) et `Capabilities.notifications` (sonde `GET /api/notifications/summary` ou `GET /api/notifications`).
+- Vues `planning` (espace artisan, navigation secondaire « Planning », icône `calendar`) et `notifications` (tous rôles connectés). La cloche de l’en-tête artisan (actuellement vers `messages`) devient `NotificationBell` ; prévoir la même cloche dans les en-têtes client/entreprise/admin.
+- `client` planning : `load(range)` → `GET /api/planning?from&to` ; `command(body)` → `POST /api/planning` ; un 409 devient `{ ok:false, conflict:true, message }`, un autre refus `{ ok:false, conflict:false, message }`, un succès `{ ok:true, data }`, chaîne périmée → `null`.
+- `client` notifications : `list` → `GET /api/notifications?limit&cursor&unread=1` ; `summary` → `GET /api/notifications/summary` ; `mark` → `POST /api/notifications` ; `loadPreferences`/`savePreferences` → `/api/notifications/preferences` ; mêmes conventions de résultat.
+- `onNavigate("intervention", id)` émis par les deux feuilles : à mapper vers la vue dossier du rôle (`detail`, `mission`, `admin-interventions`…).
+- `unavailableMessage` = `CONTRACT_MESSAGES[state]` existant ; `scope.authority.canWrite=false` avec `reason` pour un artisan suspendu/non approuvé (le serveur le confirme via `permissions.can_edit`).
+- Démo : `demoPlanning(range)` et `demoNotificationPage`/`demoPreferences` fournis ; les feuilles rendent la démo en lecture seule avec mention explicite.
+- Sélecteur de créneaux côté client/site (`GET /api/planning/slots`) : non raccordé, formulaire de rendez-vous existant inchangé.
+
+### Ce que Codex doit vérifier
+
+- Revue de 016 puis application séquentielle sur la base dédiée uniquement, après 014/015 si leur ordre l’exige (016 ne dépend que de 001–013).
+- Preuve de concurrence réelle (hors PGlite) : deux connexions, même artisan, `save_intervention_appointment` et `save_planning_entry(busy)` chevauchants lancés simultanément → exactement une réussite, l’autre `P0001`, aucun interblocage ; idem deux `save_intervention_appointment` sur deux dossiers du même artisan.
+- Sur base dédiée : `current_setting('role')` dans le trigger lors d’un appel RPC utilisateur ; `pg_timezone_names` contient `America/Martinique` ; sérialisation `to_jsonb(timestamptz)` en ISO avec décalage (TimeZone de session UTC).
+- Recette HTTP : rôles non artisan sur `/api/planning` (403), tiers sur `/api/planning/slots` (403), curseur d’un autre filtre (422), marquage d’un identifiant d’autrui (`updated:0`), préférences avec version périmée (409).
+- Captures 360/1280 des trois composants une fois raccordés (états chargement/vide/erreur/lecture seule/indisponible).
+
+### Non fait
+
+- Aucun fournisseur e-mail/SMS/push, aucune file de sortie, aucun temps réel (la cloche relit `summary` au rafraîchissement).
+- Pas de sélecteur de créneaux dans le formulaire de rendez-vous client/site ; pas de règle serveur interdisant un rendez-vous hors disponibilité (signalé `outside_availability` seulement).
+- Pas de modèle employeur/techniciens ni d’équipe prestataire.
+- Les membres d’organisation autres que le créateur du dossier et le propriétaire (approbations) ne sont pas notifiés.
+- Pas de preuve d’entrelacement multi-sessions (harnais mono-connexion) ; pas de captures d’écran (composants non raccordés, pas de `next dev`).
