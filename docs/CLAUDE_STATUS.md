@@ -45,6 +45,21 @@ Fichier de coordination émis par l’agent Claude pour le pilote (Codex). Le pi
 - incident : l’écriture d’`admin-space.tsx` a échoué une fois (ENOSPC, fichier tronqué) ; reconstruit depuis HEAD + modifications prévues, vérifié par typecheck ; aucune autre modification perdue (diff relu).
 - ce que Codex doit vérifier : Membres → « Accès aux sites » (owner) enregistre et relit la portée ; invitation avec portée « selected » ; non-owner voit « Votre accès » uniquement ; fiche admin d’un artisan lit le dossier et les pièces ; bouton d’installation présent dans Profil et Aide, silencieux quand l’installation n’est pas possible.
 
+## Table des findings → commits de correction (pour clôture par le pilote)
+
+| Finding | Fix commit(s) | Test / preuve |
+| --- | --- | --- |
+| CL-UI-001 résultat réseau ambigu | 685738c (api.ts) ; 4f41fff | `tests/ui/api.test.ts` (panne réseau sur mutation) |
+| CL-UI-002 hash malformé | 685738c (session.ts) | `tests/ui/session.test.ts` (hash parsing) |
+| CL-UI-003 retour URL ≠ paiement | 4f41fff, c4333e0 | `tests/ui/api.test.ts` (paymentReturnMessage) |
+| CL-UI-004 200 invalide | 4f41fff | `tests/ui/api.test.ts` (malformed 200 / non-2xx) |
+| CL-UI-005 copies utilisateur | a5c4faa | relecture des 5 espaces |
+| CL-UI-006 / UI-REV-001 guard d’identité + connexion | 685738c, 75feaab, a472fc6, 2e3dcf1, 823b021 | `tests/ui/guard.test.ts`, `tests/ui/identity.test.ts` |
+| UI-REV-002/003 revalidation, 403, refreshedAt | 88562367, 6962be6 | `tests/ui/session.test.ts` (validateContext) |
+| CL-UI-009 validité d’invitation 14 j | 6962be6 | — |
+| PHOTO-REV-001/002/003 | fcc7f6b | `tests/ui/uploads.test.ts` |
+| VIS-001 densité artisan | 529fe0f | capture preview à refaire par le pilote |
+
 ## Corrections de revue pilote appliquées (checkpoint 2b)
 
 - **CL-UI-001** api.ts : échec réseau sur mutation = résultat incertain, consigne de relecture avant nouvel essai.
