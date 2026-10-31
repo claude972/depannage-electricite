@@ -182,6 +182,10 @@ export default function CourantApp() {
     setUploads([]);
     try {
       sessionStorage.removeItem(DRAFT_KEY);
+      // Pending private content (unsent assistance request) of the outgoing user never survives
+      // a logout or an identity change; a same-user reload keeps it (no reset happens then).
+      for (const key of Object.keys(sessionStorage))
+        if (key.startsWith("courant-support-pending-")) sessionStorage.removeItem(key);
     } catch {}
     setSessionKey((k) => k + 1);
   }, []);
@@ -1612,8 +1616,8 @@ export default function CourantApp() {
         outcome = { ok: false, conflict: false, message: (e as Error).message };
       }
     });
-    // A chain that ended stale (identity changed) never reports success or a conflict.
-    if (!completed && outcome.ok) return { ok: false, conflict: false, message: "Action interrompue." };
+    // A chain that did not complete as the current identity reports neither success nor conflict.
+    if (!completed) return { ok: false, conflict: false, message: "Action interrompue." };
     return outcome;
   }
   // ---- Assistance tickets (contract SUPPORT-001). Demo: browser-only tickets; live: dedicated
@@ -1796,7 +1800,7 @@ export default function CourantApp() {
         outcome = { ok: false, conflict: false, message: (e as Error).message };
       }
     });
-    if (!completed && outcome.ok) return { ok: false, conflict: false, message: "Action interrompue." };
+    if (!completed) return { ok: false, conflict: false, message: "Action interrompue." };
     return outcome;
   }
   // Membership lost or never held: drop every cached view of the organisation.

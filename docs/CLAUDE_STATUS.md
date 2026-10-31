@@ -136,6 +136,13 @@ Reste à faire côté UI (par ordre) :
 5. Différés par le propriétaire : Stripe (retours réels, factures), déploiements Vercel.
 6. Mobile iOS/Android : à démarrer seulement après le checkpoint Web/PWA vérifié (expo-overview d’abord, backend partagé) ; aucun scaffold avant.
 
+## Missions déléguées revendiquées (après minuit)
+
+- **NATIVE-DOCUMENT-GATEWAY-001** — claim : agent Claude backend, worktree interne `/Users/claudebrafa/.codex/worktrees/depannage-claude-backend`, branche `claude/web-pwa-backend`, base 309ed9f ; fichiers : `supabase/functions/native-document-upload/**`, `lib/shared/document-policy.ts`, migration 013 (finalisation documents), refactor coordonné `app/api/documents/route.ts`, tests ciblés, `docs/CLAUDE_NATIVE_DOCUMENT_CONTRACT.md`. Contrat publié avant code ; statut : in_progress.
+- **WEB-ACCEPTANCE-TESTS-001** — claim : agent Claude test, worktree interne `/Users/claudebrafa/.codex/worktrees/depannage-claude-qa`, branche `claude/web-pwa-qa`, base 309ed9f ; fichiers : `scripts/qa/**`, `docs/CLAUDE_WEB_ACCEPTANCE_CONTRACT.md` et rapport ; aucun fichier applicatif, package, migration ou secret. Statut : in_progress.
+- Suivis pilote appliqués dans ce checkpoint : contenu privé d’assistance en attente effacé à la déconnexion/changement d’identité (rechargement même utilisateur conservé) ; toute chaîne non terminée sous l’identité courante neutralise aussi les issues « conflit » des commandes brouillon/assistance.
+- Scan d’erreurs d’exécution (CDP, navigateur headless, serveur de développement) : 17 vues particulier/artisan en démo sans exception, erreur console ni réponse 4xx/5xx même origine ; vues publiques/entreprise/admin en cours de scan.
+
 ## Relais de minuit (effectif, missions/web-pwa 3e24796)
 
 - Tout le code applicatif et de tests est désormais produit par Claude ; Codex pilote, revoit, exécute, intègre. Session lead unique inchangée (b4b555f0).
