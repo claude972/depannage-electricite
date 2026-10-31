@@ -48,3 +48,18 @@
   « Demander un dépannage » restent visibles sous l’emplacement.
 - Demande, Suivi, Devis, Galerie : en-têtes verts, navigation normale, aucune publicité.
 - Vérification : 390/360/1280 sans débordement, cibles ≥ 44 px, focus, Échap, aucune requête externe, console propre.
+
+## DESIGN-DELIVO-WEB-TEST-004 — accueil WEB bureau (plan compact, base 30a70a9)
+
+- Fichiers : `prototypes/delivo-test/web.html`, `web.css` (+ lien depuis `galerie.html`). Réutilise `assets/fonts` (Plus Jakarta
+  Sans) et `assets/electricite.jpg` (image héros M41), `dialog.js` (dialogue local, Échap). Écrans mobiles inchangés.
+- Mise en page bureau pensée pour 1440×1000 (conteneur 1200 px), adaptée 1280 et 390 (une colonne) — pas l’écran mobile
+  agrandi : barre de navigation horizontale (mot-symbole « courant » + « Dépannage électrique », liens Services /
+  Comment ça marche / Espace pro → dialogue, « Mes demandes » → `suivi.html`, bouton « Décrire ma panne » → `demande.html`),
+  bandeau large « PUBLICITÉ » / « Votre publicité ici » (statique, neutre), héros deux colonnes (titre, texte, champ
+  adresse + « Décrire ma panne », image M41), 4 services (cartes → dialogue), parcours en 3 étapes (estimation indicative →
+  devis avant toute intervention → paiement, étape distincte ; aucun délai), bandeau final, pied de page sobre.
+- Thème : noir, `#18794E` (fonds/boutons, texte blanc 5,41:1), `#5BD49A` (texte/actifs sur sombre ≥ 6,77:1), cartes
+  `#141414`/`#1A1A1A`, texte atténué `#B5B5B5` ; `#18794E` jamais en texte courant sur fond sombre.
+- Aucun avis, prix, délai, certification, statistique, nom de société ; aucune requête externe.
+- Vérif : 1440/1280/390 sans débordement, cibles ≥ 44 px, focus visible, Échap, console propre.
