@@ -1072,3 +1072,10 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - Deep-link QA A3 in counter-review in parallel; **B2 not GO** (pending: page WS event/close wording without impossible condition, wss origin normalisation, 16 s focus gate, D2 non-empty witness or BLOCKED).
 - **Prototype 007** delivered by root: 8 cases public PASS (coordination 0bf7), corrected e2226d0 photos. No new visual mission; no extra redesign.
 - Root counter-review of deep-link QA A3 f4021ac: B1 scope conforms (B1 GO maintained); focus 16 s/drain counter-example closed. Before B2, docs amendment A3b requested from a84ded5: (1) remove every page-WebSocket close-code assertion (impossible via the API); code 4000 only from the native local control; page event optional (frames/close without code); (2) D2: non-empty own-job witness created before the session, real GET showing it present before the stub and after 503/invalid, else BLOCKED. Root confirmed app 28b build id `mYTq7jnyFyd_WanJwnbB3` (API Ready, Git 28b, strict Flight, 22:29 UTC); fresh receipt before any future fixture.
+
+## 2026-10-31 18:31 AST — gateway merged 9a1a187; GW-EXPIRY-COPY-P3 dispatched
+
+- Gateway work from 5b5288f (9 files, independent review 76 PASS, 0 P1/P2) merged by root at integration **`9a1a187`**: 717 tests, 0 skip, strict tsc PASS. No Edge/app deploy, no SQL executed, no cohort.
+- B1 base 7b… kept (no path conflicts); B1 SHA awaited; UI reviewer ready.
+- P3 correction c86b7a6 **GW-EXPIRY-COPY-P3** dispatched to the existing backend worker a3ad58f: `lib.ts` ~855 Markdown summary wording neutral (no invitation to bind the generic 401 into EXPIRED); `EXPIRED_PLATFORM_CODES` empty and OBSERVED/FAIL/INCOMPLETE unchanged; no cloud probe; 76 targeted tests + SHA. Does not block B1.
+- Latest app 28b Flight `mYTq7jnyFyd_WanJwnbB3`. A3b (2 precisions) still required before B2; no global GO.
