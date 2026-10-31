@@ -57,3 +57,33 @@ Source fact: `refresh()` (`components/courant-app.tsx` ~220) is `Promise<void>`;
 - No SQL, no migration, no RLS change from the lead for LIVE-WORKSPACE-001 without a confirmed cause.
 
 Code only after root's GO on this amendment. Owner of the code: lead (shells/session/shared); no worker.
+
+## Amendment A3 (root review of 8a21544) — single-flight with freshness barrier; exact files
+
+### Freshness rule
+`refresh()` is also called AFTER mutations. A caller that JOINS a read started BEFORE its write (or before a deep link arrived) cannot use that read as proof: an old workspace without the id proves nothing about the state after the write/navigation.
+
+- The coordinator keeps a monotone **checkpoint** counter. A **barrier** (post-write refresh, deep-link arrival for an absent id, explicit user retry) takes `need = ++checkpoint`. Every read records `startedAt = checkpoint value when the request was sent` and its `contextKey` (identity generation + role + active org + site).
+- A caller waiting with barrier `need` and context `C` is satisfied only by a read with `startedAt ≥ need` AND `contextKey === C`.
+- **At most one read in flight + at most ONE trailing read**, coalesced: if the current flight started before `need` (or for another context), one trailing read is scheduled to start right after the current flight settles; any number of later barriers/contexts join that same trailing read (it takes the latest checkpoint and the CURRENT context when it starts). Never two concurrent `/api/workspace` calls, never an unbounded queue.
+- Callers without a barrier (focus scheduler, realtime debounce, manual « Actualiser » that does not need proof) may join the current flight.
+- A result whose `contextKey` differs from the waiter's current context ⇒ `superseded` for that waiter: it consumes no attempt, yields no « introuvable », and the waiter progresses to the trailing read for its new context (no livelock waiting on a superseded flight).
+- A trailing read failing ⇒ `failed` (error state + explicit bounded retry), never `not_found`.
+
+### Deferred-promise tests (required)
+1. read A started; a mutation (or a deep link for a new id) arrives during A; A resolves with the OLD workspace ⇒ waiter not satisfied; exactly ONE trailing read B launched; B returns the new data ⇒ `show`.
+2. focus + realtime + deep link at the same checkpoint ⇒ exactly ONE read.
+3. context changes during A ⇒ A's data never applied to the new context's waiter (`superseded`); B for the new context ⇒ correct decision.
+4. B fails (503 / transport) ⇒ `failed` with retry, never `not_found`.
+5. many barriers during A ⇒ still one trailing read (coalesced), no third concurrent call.
+6. identity change ⇒ waiters resolved `superseded`, per-id memory reset.
+
+### Exact files (lead ownership; no worker; no prototype worker)
+- NEW `components/app/workspace-refresh.ts` — pure coordinator (checkpoint, single flight + one trailing, context keys, outcomes `loaded|superseded|failed|signed_out`), no React.
+- NEW `components/app/detail-resolution.ts` — pure decision `show|refresh|loading|not_found|error` + bounded LRU per-id attempt memory keyed by context.
+- NEW `components/role/use-detail-presence.ts` — thin hook used by the three detail views (calls the session method, renders states).
+- EDIT `components/courant-app.tsx` — wire the coordinator under the existing `refresh()` (signature unchanged), post-mutation refreshes take a barrier, expose `session.ensureFresh(...)`/outcome; keep `seq`/401/identity behaviour.
+- EDIT `components/app/session-types.ts` — the new Session method type.
+- EDIT `components/role/client-space.tsx` (DetailView + badge « Connecté »/« Actualiser »), `components/role/artisan-space.tsx` (mission detail), `components/role/enterprise-space.tsx` (DossierView) — use the hook before rendering « introuvable »; badge string in any other shell where « En direct » appears.
+- NEW tests `tests/ui/workspace-refresh.test.ts` (scenarios 1–6) and `tests/ui/detail-resolution.test.ts` (decision branches, LRU bound, context reset).
+No API, backend, SQL, dependency or tracking-leaf change.
