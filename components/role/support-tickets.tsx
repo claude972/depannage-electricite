@@ -19,7 +19,7 @@ import type {
 import { Icon } from "../app/icons";
 import { ConfirmAction, Empty, Field, Loader, PageTitle, Tag, Unavailable } from "../app/ui";
 import { category, date, dateTime, shortId, uid } from "../app/format";
-import { authorLabel, QUEUE_READ_ONLY, runStatusCommand, statusTargets, supportListView, type SupportQueue } from "./support-lists";
+import { authorLabel, QUEUE_READ_ONLY, runStatusCommand, statusTargets, supportListView, ticketAuthorityKey, type SupportQueue } from "./support-lists";
 import styles from "./support-tickets.module.css";
 
 type Tone = "neutral" | "blue" | "green" | "amber" | "red" | "violet";
@@ -80,7 +80,16 @@ export function SupportCenter({
       />
     );
   if (param)
-    return <TicketDetail key={param} session={session} interventions={interventions} id={param} backView={backView} queue={queue} />;
+    return (
+      <TicketDetail
+        key={ticketAuthorityKey(param, queue, session.platformAccess?.capabilities)}
+        session={session}
+        interventions={interventions}
+        id={param}
+        backView={backView}
+        queue={queue}
+      />
+    );
   return <TicketList session={session} queue={queue} />;
 }
 

@@ -67,3 +67,19 @@ export async function runStatusCommand(
   if (result.ok) return { kind: "ok", ticket: result.ticket, event: result.event };
   return result.conflict ? { kind: "conflict", message: result.message } : { kind: "refused", message: result.message };
 }
+
+/**
+ * Mount key of a ticket view: the ticket id AND the viewer's current assistance authority as last
+ * reported by /me. Any change (revocation of support_reply, grant of support_status, loss of
+ * support_read, no reply at all) remounts the view: local state, forms and in-flight callbacks are
+ * dropped and the per-ticket permissions are re-read from the server — never kept from before.
+ */
+export function ticketAuthorityKey(
+  ticketId: string,
+  queue: SupportQueue,
+  caps: { support?: boolean; support_reply?: boolean; support_status?: boolean } | null | undefined,
+): string {
+  if (queue === "mine") return `${ticketId}|mine`;
+  if (!caps) return `${ticketId}|all|unverified`;
+  return `${ticketId}|all|${caps.support ? 1 : 0}${caps.support_reply ? 1 : 0}${caps.support_status ? 1 : 0}`;
+}
