@@ -3,6 +3,7 @@
 // live/unavailable decision goes through this object so that identity resets and role
 // guards are enforced in one place.
 import type { FeatureClients, FeatureKey, ReprobeHint } from "./features";
+import type { RefreshOutcome } from "./workspace-refresh";
 import type { PlatformAccess } from "../../lib/features/platform-operations/types";
 import type {
   AdminInterventionDetail,
@@ -116,6 +117,10 @@ export interface Session {
   /** Wraps a task with busy/error handling. Resolves true when the task completed. */
   run(task: () => Promise<void>): Promise<boolean>;
   refresh(): Promise<void>;
+  /** Workspace read with causal freshness (barrier by default); explicit outcome (WEB-DEEPLINK-REFRESH-001). */
+  ensureFresh(options?: { barrier?: boolean }): Promise<RefreshOutcome>;
+  /** Identity generation + role + active organisation + site: keys per-context memories. */
+  refreshContext: string;
   loadProfessional(): Promise<void>;
 
   /** Existing contract POST /api/interventions/[id]/actions. accept_quote must carry the displayed quote id (API-QUOTE-001). */

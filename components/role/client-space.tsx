@@ -58,6 +58,7 @@ import { CLIENT_STEPS, currentStepIndex, detailHistory, quoteDecisionState, quot
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
 import { TrackingAnchor } from "./tracking-anchor";
+import { useDetailPresence } from "./use-detail-presence";
 import { PlatformPage } from "./platform-anchor";
 import { platformEntries } from "./anchors";
 import { UploadQueuePanel } from "../app/upload-queue";
@@ -382,7 +383,7 @@ export function ClientSpace({ session }: { session: Session }) {
               >
                 <span />
                 Connexion temps réel :{" "}
-                {session.connection === "SUBSCRIBED" ? "En direct" : "Actualiser"}
+                {session.connection === "SUBSCRIBED" ? "Connecté" : "Actualiser"}
               </button>
             )}
             <HeaderBell session={session} />
@@ -907,6 +908,20 @@ function DetailView({
     i?.id || "",
     `${i?.status || ""}|${i?.updated_at || ""}|${i?.travel_stage || ""}|${session.mode}`,
   );
+  // Deep link to a dossier absent from the cached workspace: one causal refresh before « introuvable ».
+  const presence = useDetailPresence(session, "client-detail", id, Boolean(i));
+  if (!i) {
+    if (presence.decision === "loading") return <Loader label="Recherche du dossier…" />;
+    if (presence.decision === "error")
+      return (
+        <Unavailable
+          title="Dossier momentanément indisponible"
+          reason="Ce dossier n’a pas pu être vérifié. Vos données n’ont pas été modifiées : réessayez."
+          blocker="deeplink:error"
+          onRetry={presence.retry}
+        />
+      );
+  }
   if (!i)
     return (
       <Empty

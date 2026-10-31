@@ -13,6 +13,7 @@ import type { PlatformAccess } from "../lib/features/platform-operations/types";
 import { PLATFORM_DEMO } from "../lib/features/platform-operations/demo";
 import { demoNotificationPage } from "../lib/features/notifications/demo";
 import { createRevalidationScheduler } from "./app/revalidate";
+import { createRefreshCoordinator, refreshContextKey, type ReadResult, type RefreshCoordinator } from "./app/workspace-refresh";
 import {
   acknowledgeUpload,
   allUploaded,
@@ -217,19 +218,22 @@ export default function CourantApp() {
   }, []);
 
   // Apply a workspace response only if it belongs to the request and user still current.
-  const refresh = useCallback(async () => {
+  // One workspace read, applied in place; the outcome is explicit so a caller can tell « loaded
+  // and still absent » from « failed » (WEB-DEEPLINK-REFRESH-001). Only the refresh coordinator
+  // calls it, so two reads are never in flight at once.
+  const readWorkspace = useCallback(async (): Promise<ReadResult> => {
     const my = ++seq.current;
     const expectedUser = userId.current;
     setError("");
     try {
       const ws = await api<Workspace>("/api/workspace");
-      if (my !== seq.current) return;
+      if (my !== seq.current) return { kind: "superseded" };
       if (!ws.profile) throw new ApiRequestError(401, "Session invalide.");
       if (expectedUser && ws.profile.id !== expectedUser) {
         // Identity changed under us: discard and reset instead of mixing accounts.
         clearSessionState();
         setMode("public");
-        return;
+        return { kind: "signed_out" };
       }
       userId.current = ws.profile.id;
       setData({ ...EMPTY_WORKSPACE, ...ws });
@@ -250,17 +254,33 @@ export default function CourantApp() {
         setProfessional(EMPTY_PROFESSIONAL);
         setNotice("L’organisation active n’est plus accessible depuis votre compte. Le périmètre a été réinitialisé.");
       } else if (kept.siteId !== activeSiteRef.current) setActiveSiteId("");
+      return { kind: "loaded" };
     } catch (e) {
-      if (my !== seq.current) return;
+      if (my !== seq.current) return { kind: "superseded" };
       if (e instanceof ApiRequestError && e.status === 401) {
         clearSessionState();
         setMode("public");
         setError("Votre session a expiré. Reconnectez-vous pour retrouver vos dossiers.");
-        return;
+        return { kind: "signed_out" };
       }
       setError((e as Error).message);
+      return { kind: "failed", status: e instanceof ApiRequestError ? e.status : 0 };
     }
   }, [clearSessionState]);
+  const readWorkspaceRef = useRef(readWorkspace);
+  readWorkspaceRef.current = readWorkspace;
+  // Single flight with causal freshness for every refresh cause (contract A3/A4).
+  const coordinator = useRef<RefreshCoordinator | null>(null);
+  if (!coordinator.current)
+    coordinator.current = createRefreshCoordinator({
+      read: () => readWorkspaceRef.current(),
+      contextKey: () => refreshContextKey(guard.generation(), roleRef.current, activeOrgRef.current, activeSiteRef.current),
+    });
+  /** Every cause (post-write, « Actualiser », realtime event, focus, deep link) takes a barrier. */
+  const ensureFresh = useCallback((options?: { barrier?: boolean }) => (coordinator.current as RefreshCoordinator).request(options), []);
+  const refresh = useCallback(async () => {
+    await ensureFresh();
+  }, [ensureFresh]);
 
   const loadProfessional = useCallback(async () => {
     if (modeRef.current !== "live" || roleRef.current !== "manager") return;
@@ -2400,6 +2420,8 @@ export default function CourantApp() {
     setActiveSite: setActiveSiteId,
     run,
     refresh,
+    ensureFresh,
+    refreshContext: refreshContextKey(guard.generation(), role, activeOrganizationId, activeSiteId),
     loadProfessional,
     action,
     operate,
