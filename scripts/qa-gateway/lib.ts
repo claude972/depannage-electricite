@@ -1372,7 +1372,7 @@ export function parseBatchResult(raw: unknown, expected: { runId: string; projec
   if (rb.scope !== "selected" || grants !== 0) throw new UsageError(`résultat du lot : relecture post-commit non révoquée (scope ${String(rb.scope)}, grants ${String(rb.grants)}).`);
   return { run, project, batchPid: r.batch_pid, tBegin, tLock, tBeforeRevoke, tRevoked, tAfterCommit, rpcOk: true, actorRole: "authenticated", actorUid: expected.ownerId, readback: { scope: "selected", grants: 0 }, ids };
 }
-export type Observation = { tObserved: number; finalizePid: number; waitEventType: string; blockedBy: number[]; objects: string[] };
+export type Observation = { tObserved: number; finalizePid: number; waitEventType: string; blockedBy: number[]; objectCount: number; objectName: string | null };
 export function parseObservation(raw: unknown): Observation {
   const r = singleRow(raw, "observation", "row");
   const tObserved = ts(r.t_observed, "t_observed");
@@ -1380,9 +1380,13 @@ export function parseObservation(raw: unknown): Observation {
   if (typeof r.wait_event_type !== "string") throw new UsageError("observation : wait_event_type manquant.");
   const blocked = Array.isArray(r.blocked_by) ? r.blocked_by : typeof r.blocked_by === "string" ? r.blocked_by.replace(/[{}\s]/g, "").split(",").filter(Boolean).map(Number) : null;
   if (!blocked || blocked.some((x) => typeof x !== "number" || !Number.isInteger(x))) throw new UsageError("observation : blocked_by manquant ou illisible.");
-  const objects = Array.isArray(r.objects) ? r.objects : null;
-  if (!objects || objects.some((o) => typeof o !== "string")) throw new UsageError("observation : objects manquant ou illisible.");
-  return { tObserved, finalizePid: r.finalize_pid, waitEventType: r.wait_event_type, blockedBy: blocked as number[], objects: objects as string[] };
+  const count = typeof r.object_count === "number" ? r.object_count : typeof r.object_count === "string" && /^\d+$/.test(r.object_count) ? Number(r.object_count) : NaN;
+  if (!Number.isInteger(count) || count < 0) throw new UsageError("observation : object_count manquant ou illisible.");
+  if (!("object_name" in r)) throw new UsageError("observation : object_name manquant.");
+  if (r.object_name !== null && typeof r.object_name !== "string") throw new UsageError("observation : object_name illisible.");
+  if (count === 1 && (typeof r.object_name !== "string" || !r.object_name)) throw new UsageError("observation : object_count 1 sans object_name.");
+  if (count !== 1 && r.object_name !== null) throw new UsageError("observation : object_name renseigné alors que object_count ≠ 1.");
+  return { tObserved, finalizePid: r.finalize_pid, waitEventType: r.wait_event_type, blockedBy: blocked as number[], objectCount: count, objectName: (r.object_name as string | null) ?? null };
 }
 // ---- Verdict over the full condition set (a)–(g) ------------------------------------------------
 export type RevokeInput = {
@@ -1396,6 +1400,8 @@ export type RevokeInput = {
   readbacks: { documentRows: number | null; objectPresent: boolean | null };
   forbidden: string[];
   managerId: string;
+  // Object paths the harness itself discovered AND recorded in its manifest (mapping proof).
+  manifestObjectPaths: string[];
 };
 export type RevokeVerdict = { outcome: "pass" | "fail" | "unknown"; conditions: Record<string, boolean | null>; reasons: string[] };
 export function revokeVerdict(i: RevokeInput): RevokeVerdict {
@@ -1422,11 +1428,16 @@ export function revokeVerdict(i: RevokeInput): RevokeVerdict {
     const o = i.observation;
     const inWindow = i.batch.tLock <= o.tObserved && o.tObserved <= i.batch.tBeforeRevoke;
     const blocked = o.waitEventType === "Lock" && o.blockedBy.includes(i.batch.batchPid);
-    const exact = i.objectPath !== null && o.objects.length === 1 && o.objects[0] === i.objectPath;
+    // Exact object proof: one object under the cohort prefix, its exact name equal to the path the harness
+    // discovered, that path under the manager uid and recorded in the manifest. The prefix alone never proves.
+    const mapped = i.objectPath !== null && i.objectPath.startsWith(`${i.managerId}/`) && UUID.test(i.objectPath.slice(i.managerId.length + 1)) && i.manifestObjectPaths.includes(i.objectPath);
+    const exact = o.objectCount === 1 && o.objectName !== null && o.objectName === i.objectPath && mapped;
     c[A] = inWindow && blocked && exact;
     if (!inWindow) reasons.push(`observation hors fenêtre : t_observed ${new Date(o.tObserved * 1000).toISOString()} ∉ [t_lock, t_before_revoke]`);
     if (!blocked) reasons.push(`finalisation non bloquée par le lot (wait ${o.waitEventType}, blocked_by ${o.blockedBy.join(",") || "∅"}, batch_pid ${i.batch.batchPid}) : fenêtre non exercée`);
-    if (!exact) reasons.push(`objet observé ${JSON.stringify(o.objects)} ≠ objet découvert ${i.objectPath ?? "∅"}`);
+    if (o.objectCount !== 1) reasons.push(`observation : ${o.objectCount} objet(s) sous le préfixe de la cohorte au lieu d’exactement 1 : non-preuve`);
+    else if (o.objectName !== i.objectPath) reasons.push(`objet observé ${o.objectName ?? "∅"} ≠ objet découvert ${i.objectPath ?? "∅"} : non-preuve`);
+    if (o.objectCount === 1 && o.objectName === i.objectPath && !mapped) reasons.push("objet découvert non rattaché au manifeste (chemin hors uid du gestionnaire ou non enregistré) : non-preuve");
   }
   c[D] = i.objectPath !== null && i.discoveredAtMs !== null && i.responseAtMs !== null && i.discoveredAtMs < i.responseAtMs;
   if (i.objectPath === null) reasons.push("objet jamais observé pendant la fenêtre : fenêtre non exercée");
@@ -1632,6 +1643,7 @@ export async function revokeLive(state: RevokeState, deps: RevokeDeps, files: { 
   const responsePromise = deps.upload(state.managerToken, state.dossierId).then((r) => ({ ok: true as const, r, at: deps.nowMs() }), (error) => ({ ok: false as const, error, at: deps.nowMs() }));
   let objectPath: string | null = null;
   let discoveredAtMs: number | null = null;
+  const manifestObjectPaths: string[] = [];
   while (deps.nowMs() - started <= REVOKE_DISCOVERY_MS && objectPath === null) {
     const listing = await deps.client.listObjects(state.managerId, { limit: 1000, offset: 0 });
     if (listing.ok) {
@@ -1640,6 +1652,7 @@ export async function revokeLive(state: RevokeState, deps: RevokeDeps, files: { 
         objectPath = `${state.managerId}/${name}`;
         discoveredAtMs = deps.nowMs();
         await deps.record("objectPaths", objectPath);
+        manifestObjectPaths.push(objectPath);
         await deps.log("pass", "objet Storage découvert pendant la fenêtre (préfixe du gestionnaire QA)", `${discoveredAtMs - started} ms après l’envoi`);
         break;
       }
@@ -1692,7 +1705,7 @@ export async function revokeLive(state: RevokeState, deps: RevokeDeps, files: { 
       parseErrors.push(error instanceof Error ? error.message : String(error));
     }
   }
-  const verdict = revokeVerdict({ batch, observation, parseErrors, objectPath, discoveredAtMs, responseAtMs, response, readbacks: { documentRows, objectPresent }, forbidden: deps.forbidden(), managerId: state.managerId });
+  const verdict = revokeVerdict({ batch, observation, parseErrors, objectPath, discoveredAtMs, responseAtMs, response, readbacks: { documentRows, objectPresent }, forbidden: deps.forbidden(), managerId: state.managerId, manifestObjectPaths });
   await deps.log(verdict.outcome === "pass" ? "pass" : verdict.outcome === "unknown" ? "fail" : "fail", `verdict révocation pendant upload : ${verdict.outcome}`, verdict.reasons.join(" ; ") || "toutes les conditions (a)–(g) satisfaites");
   await deps.writeState({ ...state, consumedAt: deps.now() }, "original");
   return { outcome: verdict.outcome, cleanup: true, verdict, objectPath, responseStatus: response?.status ?? null };

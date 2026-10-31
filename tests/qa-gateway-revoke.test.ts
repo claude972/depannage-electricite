@@ -53,7 +53,7 @@ const goodBatch = (over: Record<string, unknown> = {}) => ({
   t_begin: iso(T0), t_lock: iso(T0 + 0.1), t_before_revoke: iso(T0 + 3.1), t_revoked: iso(T0 + 3.2), t_after_commit: iso(T0 + 3.3),
   rpc_ok: true, actor_role: "authenticated", actor_uid: OWNER, readback: { scope: "selected", grants: 0 }, ...over,
 });
-const goodObservation = (over: Record<string, unknown> = {}) => ({ t_observed: iso(T0 + 1.5), finalize_pid: 5151, wait_event_type: "Lock", wait_event: "transactionid", blocked_by: [4242], objects: [`${MANAGER}/${OBJ}`], ...over });
+const goodObservation = (over: Record<string, unknown> = {}) => ({ t_observed: iso(T0 + 1.5), finalize_pid: 5151, wait_event_type: "Lock", wait_event: "transactionid", blocked_by: [4242], object_count: 1, object_name: `${MANAGER}/${OBJ}`, ...over });
 
 test("arguments: revoke suites require --no-other-writer; live requires --lease, --batch-result and --observation", () => {
   assert.equal(parseArgs([...base, "--suite", "revoke-prepare", "--no-other-writer"]).suite, "revoke-prepare");
@@ -89,6 +89,9 @@ test("SQL templates render with validated ids only; the batch keeps the v4 struc
   assert.doesNotMatch(between, /insert into qa_rv/);
   const observed = renderSqlTemplate(observe, ids);
   assert.ok(observed.includes(`o.name like '${MANAGER}/%'`) && observed.includes("bucket_id = 'intervention-documents'"));
+  assert.match(observed, /as object_count/);
+  assert.match(observed, /case when count\(\*\) = 1 then min\(o\.name\) end/);
+  assert.doesNotMatch(observed, /jsonb_agg/);
   assert.match(observed, /pg_blocking_pids\(a\.pid\)/);
   assert.doesNotMatch(observed, /insert|update|delete|grant/i);
   assert.throws(() => renderSqlTemplate(batch, { ...ids, ORG: "not-a-uuid" }), /ORG invalide/);
@@ -139,18 +142,25 @@ test("batch result parser: accepted shapes, and every rejection of the contract"
   for (const [label, raw] of rejects) assert.throws(() => parseBatchResult(raw, expected), UsageError, label);
 });
 
-test("observation parser: one row with Lock/blocked_by/objects; zero or multiple rows and missing fields are rejected", () => {
+test("observation parser: one row with Lock/blocked_by/object_count/object_name; zero or multiple rows and missing or inconsistent fields are rejected", () => {
   const o = parseObservation(goodObservation());
   assert.deepEqual(o.blockedBy, [4242]);
-  assert.deepEqual(o.objects, [`${MANAGER}/${OBJ}`]);
+  assert.equal(o.objectCount, 1);
+  assert.equal(o.objectName, `${MANAGER}/${OBJ}`);
+  assert.equal(parseObservation(goodObservation({ object_count: 0, object_name: null })).objectCount, 0);
+  assert.equal(parseObservation(goodObservation({ object_count: "2", object_name: null })).objectCount, 2);
   assert.deepEqual(parseObservation(goodObservation({ blocked_by: "{4242,77}" })).blockedBy, [4242, 77]);
-  assert.deepEqual(parseObservation([{ row: goodObservation() }]).objects, [`${MANAGER}/${OBJ}`]);
+  assert.equal(parseObservation([{ row: goodObservation() }]).objectName, `${MANAGER}/${OBJ}`);
   for (const [label, raw] of [
     ["zero rows", []],
     ["two rows", [goodObservation(), goodObservation()]],
     ["missing pid", goodObservation({ finalize_pid: undefined })],
     ["missing blocked_by", goodObservation({ blocked_by: undefined })],
-    ["missing objects", goodObservation({ objects: undefined })],
+    ["missing object_count", goodObservation({ object_count: undefined })],
+    ["missing object_name", (() => { const o: Record<string, unknown> = goodObservation(); delete o.object_name; return o; })()],
+    ["count 1 without name", goodObservation({ object_name: null })],
+    ["name with count 2", goodObservation({ object_count: 2 })],
+    ["negative count", goodObservation({ object_count: -1, object_name: null })],
     ["bad timestamp", goodObservation({ t_observed: "soon" })],
     ["sql error", { code: "42501", message: "permission denied for pg_stat_activity" }],
   ] as [string, unknown][]) assert.throws(() => parseObservation(raw), UsageError, label);
@@ -162,6 +172,7 @@ test("verdict matrix: PASS only on the full condition set (a)–(g); every devia
   const nominal: RevokeInput = {
     batch, observation, parseErrors: [], objectPath: `${MANAGER}/${OBJ}`, discoveredAtMs: 1000, responseAtMs: 3500,
     response: { status: 403, bodyText: '{"error":"Accès refusé."}' }, readbacks: { documentRows: 0, objectPresent: false }, forbidden: [], managerId: MANAGER,
+    manifestObjectPaths: [`${MANAGER}/${OBJ}`],
   };
   const ok = revokeVerdict(nominal);
   assert.equal(ok.outcome, "pass", ok.reasons.join(" | "));
@@ -183,8 +194,13 @@ test("verdict matrix: PASS only on the full condition set (a)–(g); every devia
   fail({ observation: parseObservation(goodObservation({ blocked_by: [9999] })) }, /non bloquée par le lot/);
   fail({ observation: parseObservation(goodObservation({ t_observed: iso(T0 + 3.15) })) }, /hors fenêtre/);
   fail({ observation: parseObservation(goodObservation({ t_observed: iso(T0 - 1) })) }, /hors fenêtre/);
-  fail({ observation: parseObservation(goodObservation({ objects: [] })) }, /objet observé \[\] ≠/);
-  fail({ observation: parseObservation(goodObservation({ objects: [`${MANAGER}/${OBJ}`, `${MANAGER}/${DOSSIER}`] })) }, /objet observé/);
+  // Exact-object proof (root decision on 13b68c3): count 0, count 2, wrong name, mapping mismatch → non-proof.
+  fail({ observation: parseObservation(goodObservation({ object_count: 0, object_name: null })) }, /0 objet\(s\) sous le préfixe de la cohorte au lieu d’exactement 1/);
+  fail({ observation: parseObservation(goodObservation({ object_count: 2, object_name: null })) }, /2 objet\(s\) sous le préfixe/);
+  fail({ observation: parseObservation(goodObservation({ object_name: `${MANAGER}/${DOSSIER}` })) }, /objet observé .* ≠ objet découvert/);
+  fail({ manifestObjectPaths: [] }, /non rattaché au manifeste/);
+  fail({ manifestObjectPaths: [`${MANAGER}/${DOSSIER}`] }, /non rattaché au manifeste/);
+  fail({ objectPath: `${OWNER}/${OBJ}`, manifestObjectPaths: [`${OWNER}/${OBJ}`], observation: parseObservation(goodObservation({ object_name: `${OWNER}/${OBJ}` })) }, /non rattaché au manifeste/);
   fail({ batch: null, parseErrors: ["résultat du lot non fourni dans le délai"] }, /parseur : résultat du lot non fourni/);
   fail({ observation: null, parseErrors: ["observation non fournie dans le délai"] }, /parseur : observation/);
   const unproven: BatchResult = { ...batch, actorRole: "none" };
