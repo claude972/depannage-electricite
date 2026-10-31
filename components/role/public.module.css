@@ -333,6 +333,26 @@
   gap: 6px;
   font-size: 15px;
 }
+/* PUBLIC-HERO-001: M11 balance — copy left, illustration right; stacked under the copy below 950 px. */
+.heroFigure {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  align-self: center;
+}
+.heroFigure img {
+  display: block;
+  width: min(100%, 400px);
+  max-height: 360px;
+  height: auto;
+  border-radius: 12px;
+}
+.heroFigure figcaption {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
 .rule {
   display: block;
   width: 48px;
@@ -1149,6 +1169,10 @@
   }
   .heroInner {
     grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .heroFigure img {
+    width: min(100%, 280px);
   }
   .stepsRow,
   .stepsRow4 {
@@ -1270,6 +1294,9 @@
   .heroCta {
     width: 100%;
     justify-content: center;
+  }
+  .heroFigure img {
+    width: min(100%, 220px);
   }
   .stepsCard {
     margin-top: -40px;

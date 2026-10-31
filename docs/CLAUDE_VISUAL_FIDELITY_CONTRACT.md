@@ -744,3 +744,58 @@ Correction : `isSettled` (statut `paid` **et** `paid_at` enregistré) termine to
 `currentStepIndex(status, paid_at)` renvoie `CLIENT_STEPS.length` (stepper entièrement coché). Sans confirmation
 serveur (`completed`, ou `paid` sans horodatage), rien n’est présenté comme réglé : l’étape reste courante / à venir.
 Tests ajoutés (`tests/ui/client-lists.test.ts`) ; captures `client-detail-{360,1280}-after.jpg` remplacées.
+
+### Addendum PUBLIC-HERO-001 — visuel principal de l’accueil (M11), branche `claude/web-design-public` sur shared 18fbfce (merge b594e8e)
+
+Constat pilote (CORRECTIONS « PUBLIC-HERO001 P2 fidélité ») : à 1280, la bande hero livrée en d2e906e garde une large zone bleue vide
+à droite alors que M11 (vol. 1 p11) place le visuel principal de l’électricien à cet endroit et que DESIGN.md demande une photographie
+pertinente sur les pages publiques. Publié **avant** le code. Propriété : `components/role/public-site.tsx`, `components/role/public.module.css`,
+un seul asset dérivé sous `public/images/`, cette section, `docs/visual-fidelity/public-home-*`. Aucun fichier global, aucune refonte du
+formulaire de demande, PDF sources intacts.
+
+**Asset retenu et traçabilité.** `public/images/public-hero-m41.jpg` — recadrage sans retouche de l’illustration du hero de la maquette
+**M41** « Accueil Électricien Urgence » (`MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf`, page 10 ; image extraite `v3-p10.jpeg` 1168 × 784,
+SHA-256 `3aa31ac93b886aecd9055985e5732e1fe316a2a7cfe43b080af9d129498ade31`) : zone (772, 100) → (1118, 406), 346 × 306 px, ré-encodée
+JPEG qualité 86, 13 369 octets, SHA-256 `b079b89009f925e6f05994ebe45632074d48f13bab897eedb76e725f84617eff`. Il s’agit d’une silhouette
+d’électricien devant un tableau électrique, sans visage, sans marque, sans badge, sans texte. Pourquoi M41 plutôt que la photographie de
+M11 : le visuel M11 est une photographie d’une personne (visage) accompagnée du badge « Artisans qualifiés et assurés » ; la consigne
+interdit de présenter une personne comme artisan de la plateforme et de cloner ce badge. M41 est une variante cataloguée du même
+écran d’accueil (même composition titre à gauche / visuel à droite) et fournit un visuel illustratif issu des sources, sans génération ni
+recréation. Aucune image IA, aucune banque d’images, aucune équipe, qualification ou témoignage.
+
+**Libellé / alternative textuelle (sans fait inventé).** `alt` : « Illustration : un électricien devant un tableau électrique. » ;
+légende visible sous l’image, discrète : « Illustration issue des maquettes de référence — pas un artisan de la plateforme. »
+Aucun chiffre, aucune promesse, aucun nom.
+
+**Règles d’équilibre M11.** À ≥ 950 px : grille hero 7/5 conservée, colonne gauche titre + sous-titre + CTA, colonne droite = figure
+(image centrée verticalement, largeur ≤ 400 px, hauteur ≤ 360 px, fond de la bande inchangé `#eaf0fb`, sans cadre lourd ni ombre) ;
+la carte des trois étapes continue de chevaucher le bas de la bande comme M11. Titre 56 px et accent bleu conservés ; la zone vide
+disparaît. À 760 px : grille une colonne, figure sous le texte, largeur ≤ 280 px, centrée. À 360 px : figure sous le CTA, largeur
+≤ 220 px, pour que le titre, le sous-titre et le CTA (52 px) restent au-dessus du pli ; aucun débordement horizontal.
+
+**Clavier / accessibilité.** La figure n’est pas interactive : l’ordre de tabulation reste marque → navigation → « Se connecter » →
+menu (mobile) → CTA « Demander une intervention » → « Explorer la démonstration » → catégories. `loading="eager"`, `decoding="async"`,
+dimensions intrinsèques déclarées (pas de décalage de mise en page). Contraste et cibles inchangés (0 élément < 44 px attendu).
+
+**Vérification.** Captures après hydratation complète (script corrigé) `public-home-{360,1280}-after.jpg` (remplacent celles de
+69556aa) comparées à M11 ; console propre ; `npx tsc --noEmit` ; `npx tsx --test tests/ui/*.test.ts` (test de garde public toujours vert).
+
+#### Résultat PUBLIC-HERO-001
+
+- Asset livré : `public/images/public-hero-m41.jpg` (346 × 306, 13 369 octets, SHA-256 `b079b89009f925e6f05994ebe45632074d48f13bab897eedb76e725f84617eff`),
+  conforme à la traçabilité ci-dessus ; servi tel quel (`<img>` avec dimensions intrinsèques, `loading="eager"`, `decoding="async"`), aucun
+  composant global ni formulaire modifié.
+- 1280 : colonne gauche titre / sous-titre / CTA, colonne droite figure 400 × 354 centrée verticalement avec sa légende ; la zone vide a
+  disparu ; la carte des trois étapes chevauche toujours le bas de la bande (M11). 760 : figure 280 px sous le texte. 360 : figure 220 px sous
+  le CTA ; titre, sous-titre et CTA (52 px) restent au-dessus du pli.
+- Clavier (mesuré) : lien d’évitement → marque → Comment ça marche → Tarifs → Vous êtes artisan ? → Se connecter → Demander une
+  intervention → Explorer la démonstration → catégories (1280) ; marque → Se connecter → menu → CTA → démo → catégories (360). La figure
+  n’entre pas dans l’ordre de tabulation.
+- Mesures après hydratation complète (8 routes × 360/760/1280) : 0 élément interactif < 44 px, aucun débordement horizontal, console sans
+  erreur. `npx tsc --noEmit` au vert ; `npx tsx --test tests/ui/*.test.ts` 106/106 (test de garde public inclus). Captures remplacées :
+  `public-home-360-after.jpg`, `public-home-1280-after.jpg`.
+- Écart assumé : silhouette illustrative (M41) au lieu de la photographie de M11 (visage et badge « qualifiés et assurés » exclus par la
+  consigne) ; la légende dit explicitement qu’il ne s’agit pas d’un artisan de la plateforme.
+- Revue pilote (P3) : la légende visible est réduite à « Illustration » et l’alternative textuelle à « Illustration : électricien devant un
+  tableau électrique » ; la provenance complète (M41 vol. 3 p10, SHA-256, « pas un artisan de la plateforme ») reste documentée ici
+  uniquement. Captures `public-home-{360,1280}-after.jpg` régénérées après hydratation ; `tsc` au vert, suite UI 106/106.
