@@ -736,3 +736,11 @@ Captures : `docs/visual-fidelity/public-{home,help,pricing,join,about,privacy,le
 Tests : `tests/ui/public-lists.test.ts` (4 tests : aucune expression bannie dans les textes publics et détection des exemples des
 références ; unicité/tailles des listes ; lignes de tarifs issues des catégories du domaine ; numérotation et champs légaux) ; suite UI
 93/93 ; `npx tsc --noEmit` au vert. Aucun fichier hors périmètre modifié (`app/globals.css`, `components/app/**`, autres coques intacts).
+
+### Correction CLIENT-HISTORY-001 (revue pilote de 4a2ab70)
+
+`detailHistory` laissait « Règlement » en état courant (« En cours ») pour un dossier `paid` avec `paid_at` serveur.
+Correction : `isSettled` (statut `paid` **et** `paid_at` enregistré) termine toutes les entrées de la chronologie et
+`currentStepIndex(status, paid_at)` renvoie `CLIENT_STEPS.length` (stepper entièrement coché). Sans confirmation
+serveur (`completed`, ou `paid` sans horodatage), rien n’est présenté comme réglé : l’étape reste courante / à venir.
+Tests ajoutés (`tests/ui/client-lists.test.ts`) ; captures `client-detail-{360,1280}-after.jpg` remplacées.

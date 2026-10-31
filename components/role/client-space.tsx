@@ -928,7 +928,7 @@ function DetailView({
   const photos = session.data.documents.filter(
     (d) => d.intervention_id === i.id && d.mime_type.startsWith("image/"),
   );
-  const stepIndex = currentStepIndex(i.status);
+  const stepIndex = currentStepIndex(i.status, i.paid_at);
   const canSchedule = ["assigned", "quoted", "accepted"].includes(i.status);
   const travelStage = ops?.travel_stage || i.travel_stage || "planned";
   const opsState = session.capabilities.operations;
