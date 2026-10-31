@@ -545,9 +545,10 @@
 }
 .cardHead {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 4px 12px;
   margin: 18px 0 8px;
 }
 .cardHead h2 {
@@ -555,6 +556,7 @@
   align-items: center;
   gap: 8px;
   font-size: 16px;
+  white-space: nowrap;
 }
 .cardHead h2 > svg {
   color: var(--blue);
@@ -660,8 +662,13 @@
 }
 .artisanRow {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
+  gap: 12px 14px;
+}
+.artisanRow > div {
+  flex: 1 1 160px;
+  min-width: 0;
 }
 .artisanRow > span:first-child {
   display: flex;
@@ -1292,8 +1299,16 @@
     align-items: center;
   }
 }
-@media (max-width: 1023px) {
-  .quoteTable td:nth-child(2) {
-    white-space: normal;
-  }
+/* V8-C06 à 360 : seul le libellé se replie ; quantité × PU et prix restent sur une ligne. */
+.quoteTable td:first-child {
+  overflow-wrap: anywhere;
+}
+.documentsSection {
+  margin-top: 24px;
+  scroll-margin-top: 72px;
+}
+.space .linkTarget {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
 }

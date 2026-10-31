@@ -449,3 +449,14 @@ tableau de bord desktop portés à 44 px via des classes du module (`globals.css
 `components/role/client-lists.ts` (`recentRowDescriptor`, `quoteLineCells`, `quoteDecisionState`, `CLIENT_STEPS`,
 `currentStepIndex`, `detailHistory`) couverte par `tests/ui/client-lists.test.ts`. Mesures automatisées à 360 et
 1280 : 0 cible interactive visible < 44 px, aucun débordement horizontal, console vide. Desktop inchangé hors cibles.
+
+### Résultat du checkpoint 2 — devis V8-C06 (client)
+
+Captures `docs/visual-fidelity/client-quote-{360,1280}-after.jpg`. Ordre de la référence rétabli : note → en-tête
+« Détail du devis » avec lien « Télécharger le devis (PDF) » (défilement vers la section Documents du devis, sans
+changement de hash) → tableau (libellé repliable, quantité × PU et prix sur une ligne à 360) → carte « Artisan » →
+décision Accepter / Refuser (empilée à 360, côte à côte à 1280) → section `#quote-documents` (ancrage
+`QuoteDocumentsAnchor` inchangé, mêmes props) → récapitulatif texte. Bloc `Unavailable` CLI-07 « Télécharger le devis
+(PDF) » retiré (le lot documents fournit le PDF ; en démonstration, le panneau indique lui-même l’indisponibilité).
+État de décision calculé par `quoteDecisionState` (testé). Mesures 360 / 1280 : 0 cible < 44 px, aucun débordement,
+console vide. Acceptation, refus (motif), téléchargement du récapitulatif : commandes `session` inchangées.

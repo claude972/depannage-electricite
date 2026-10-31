@@ -54,7 +54,7 @@ import type {
   View,
 } from "../app/types";
 import styles from "./client.module.css";
-import { recentRowDescriptor } from "./client-lists";
+import { quoteDecisionState, quoteLineCells, recentRowDescriptor } from "./client-lists";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
 import { PlatformPage } from "./platform-anchor";
@@ -1564,10 +1564,9 @@ function QuoteView({
       </Empty>
     );
   const current = pickQuote(session.data.quotes, i.id);
-  const isActive = quote.status === "sent" && i.status === "quoted";
-  const superseded =
-    quote.status === "rejected" ||
-    (quote.status === "sent" && current && current.id !== quote.id);
+  const decision = quoteDecisionState(quote, current, i.status);
+  const isActive = decision === "active";
+  const superseded = decision === "superseded";
   const artisan = ops?.participants.find((p) => p.role === "artisan");
 
   return (
@@ -1608,6 +1607,22 @@ function QuoteView({
         </div>
       )}
 
+      <div className={styles.cardHead}>
+        <h2>
+          <Icon name="document" size={20} />
+          Détail du devis
+        </h2>
+        <button
+          type="button"
+          className={`text-button ${styles.linkTarget}`}
+          onClick={() =>
+            document.getElementById("quote-documents")?.scrollIntoView({ behavior: "smooth", block: "start" })
+          }
+        >
+          <Icon name="download" size={16} />
+          Télécharger le devis (PDF)
+        </button>
+      </div>
       <table className={styles.quoteTable}>
         <caption className="sr-only">Détail du devis {quoteRef(quote.id)}</caption>
         <thead>
@@ -1618,15 +1633,16 @@ function QuoteView({
           </tr>
         </thead>
         <tbody>
-          {quote.lines.map((l, index) => (
-            <tr key={index}>
-              <td>{l.label}</td>
-              <td>
-                {l.quantity} × {money(l.unit_price_cents)}
-              </td>
-              <td>{money(Math.round(l.quantity * l.unit_price_cents))}</td>
-            </tr>
-          ))}
+          {quote.lines.map((l, index) => {
+            const cells = quoteLineCells(l, money);
+            return (
+              <tr key={index}>
+                <td>{l.label}</td>
+                <td>{cells.unit}</td>
+                <td>{money(cells.total_cents)}</td>
+              </tr>
+            );
+          })}
         </tbody>
         <tfoot>
           <tr>
@@ -1645,14 +1661,13 @@ function QuoteView({
       </table>
       {demo && <DemoNote>Montants et taux de TVA de démonstration, sans valeur contractuelle.</DemoNote>}
 
-      <QuoteDocumentsAnchor
-        session={session}
-        variant="client"
-        target={{ quoteId: quote.id }}
-        authority={{ canWrite: true }}
-      />
-
-      <section className={styles.card} style={{ marginTop: 14 }}>
+      <div className={styles.cardHead}>
+        <h2>
+          <Icon name="person" size={20} />
+          Artisan
+        </h2>
+      </div>
+      <section className={styles.card}>
         <div className={styles.artisanRow}>
           <span aria-hidden="true">{artisan ? initials(artisan.full_name) || "A" : "A"}</span>
           <div>
@@ -1763,6 +1778,15 @@ function QuoteView({
         </form>
       )}
 
+      <section id="quote-documents" className={styles.documentsSection} aria-label="Documents du devis et avenants">
+        <QuoteDocumentsAnchor
+          session={session}
+          variant="client"
+          target={{ quoteId: quote.id }}
+          authority={{ canWrite: true }}
+        />
+      </section>
+
       <div className={styles.docActions}>
         <button
           type="button"
@@ -1774,14 +1798,10 @@ function QuoteView({
           <Icon name="download" />
           Télécharger le récapitulatif (texte)
         </button>
-        <Unavailable
-          title="Télécharger le devis (PDF)"
-          reason="Pas encore activé sur ce service. Utilisez le récapitulatif texte ci-dessus ; le devis détaillé reste consultable dans ce dossier."
-          blocker="CLI-07"
-        />
       </div>
       <p className="form-note">
-        Le récapitulatif texte n’est pas une facture et n’a pas de valeur comptable.
+        Le PDF du devis est proposé dans la section « Documents du devis » ci-dessus ; le récapitulatif
+        texte n’est pas une facture et n’a pas de valeur comptable.
       </p>
     </>
   );
