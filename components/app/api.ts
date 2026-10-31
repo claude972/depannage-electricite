@@ -4,14 +4,23 @@ export class ApiRequestError extends Error {
   /** Optional machine code and field list carried by the server body (e.g. issuer_incomplete). */
   code?: string;
   missing?: string[];
+  /** Machine reason of a refusal or unavailability (e.g. provider_quota), as sent by the server. */
+  reason?: string;
+  /** Server-suggested wait before a new attempt, in seconds (bounded 0..3600). */
+  retry_after_s?: number;
+  /** True when the error body was a JSON object: the route exists (a framework 404 page is not JSON). */
+  json?: boolean;
   constructor(
     public status: number,
     message: string,
-    details?: { code?: string; missing?: string[] },
+    details?: { code?: string; missing?: string[]; reason?: string; retry_after_s?: number; json?: boolean },
   ) {
     super(message);
     if (details?.code) this.code = details.code;
     if (details?.missing) this.missing = details.missing;
+    if (details?.reason) this.reason = details.reason;
+    if (details?.retry_after_s !== undefined) this.retry_after_s = details.retry_after_s;
+    if (details?.json) this.json = true;
   }
 }
 type Fetcher = (input: string, init: RequestInit) => Promise<Response>;
@@ -41,8 +50,12 @@ export function parseApiBody(
           : status === 401
             ? "Connectez-vous pour accéder à cet espace."
             : "L’action n’a pas pu être réalisée. Réessayez.";
-    const body = valid ? (parsed as { code?: unknown; missing?: unknown }) : {};
+    const body = valid ? (parsed as { code?: unknown; missing?: unknown; reason?: unknown; retry_after_s?: unknown }) : {};
+    const retry = typeof body.retry_after_s === "number" && Number.isFinite(body.retry_after_s) ? Math.max(0, Math.min(3600, body.retry_after_s)) : undefined;
     throw new ApiRequestError(status, message, {
+      json: valid,
+      reason: typeof body.reason === "string" && body.reason ? body.reason : undefined,
+      retry_after_s: retry,
       code: typeof body.code === "string" ? body.code : undefined,
       missing: Array.isArray(body.missing) && body.missing.every((m) => typeof m === "string") ? (body.missing as string[]) : undefined,
     });

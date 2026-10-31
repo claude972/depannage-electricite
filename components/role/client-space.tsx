@@ -57,6 +57,7 @@ import styles from "./client.module.css";
 import { CLIENT_STEPS, currentStepIndex, detailHistory, quoteDecisionState, quoteLineCells, recentRowDescriptor } from "./client-lists";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
+import { TrackingAnchor } from "./tracking-anchor";
 import { PlatformPage } from "./platform-anchor";
 import { platformEntries } from "./anchors";
 import { UploadQueuePanel } from "../app/upload-queue";
@@ -1292,10 +1293,12 @@ function DetailView({
               {TRAVEL_STAGE[travelStage]}
             </p>
             <p className="form-note">
-              Étape déclarée par l’artisan. Aucune géolocalisation ni heure d’arrivée estimée
-              n’est disponible.
+              {session.capabilities.tracking === "available"
+                ? "Étape déclarée par l’artisan. La position n’apparaît que s’il la partage ; l’heure d’arrivée reste indicative."
+                : "Étape déclarée par l’artisan. Aucune géolocalisation ni heure d’arrivée estimée n’est disponible."}
             </p>
           </section>
+          <TrackingAnchor session={session} variant="viewer" interventionId={i.id} authority={{ canWrite: true }} />
         </>
       )}
 

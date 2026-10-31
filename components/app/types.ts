@@ -507,6 +507,7 @@ export type Capabilities = {
   notifications: ContractState;
   siteOperations: ContractState;
   platformOperations: ContractState;
+  tracking: ContractState;
 };
 export const UNKNOWN_CAPABILITIES: Capabilities = {
   operations: "unknown",
@@ -526,6 +527,7 @@ export const UNKNOWN_CAPABILITIES: Capabilities = {
   notifications: "unknown",
   siteOperations: "unknown",
   platformOperations: "unknown",
+  tracking: "unknown",
 };
 export type ReturnContext =
   | { kind: "payment"; state: "pending" | "cancelled"; interventionId: string }
