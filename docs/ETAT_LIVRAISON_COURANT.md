@@ -1,15 +1,15 @@
 # État courant de livraison
 
-Mis à jour le 2026-10-31T15:33:00-04:00 (America/Martinique). Les preuves ci-dessous sont bornées à leur SHA et à leur environnement. L'application complète des 76 capacités n'est pas déclarée terminée.
+Mis à jour le 2026-10-31T16:02:00-04:00 (America/Martinique). Les preuves ci-dessous sont bornées à leur SHA et à leur environnement. L'application complète des 76 capacités n'est pas déclarée terminée.
 
 ## Version et environnements
 
 | Élément | État vérifié |
 | --- | --- |
-| Source intégrée | `integration/web-pwa`, `9ae1f5ed8ff57febbd22a5a48951949fd6b8cfb0` poussée,569testsPASS ; inclut harnais PWA671. App557/GPS44e4 etA5support intégrés. CI f8 deuxjobsPASS41233943801 ; nouvelleCI9ae à vérifier. |
-| Recette locale | App557d599, build UN3j_PEcrQn-l9kzidHfx webpackPASS, port3017 session68346 HTTP200 ; nouveau build réellement testé PWAOS. |
+| Source intégrée | `integration/web-pwa`, `4c398e8393026598c5b629d3912cf80285acc2f5` poussée,573tests etTypeScriptPASS ; Budgetpremierexercice etharnaisBusinessamendésintégrés. CI4c41235060343 deuxjobsPASS ; précédente9ae41234479085verte. |
+| Recette locale | App4c398e8, build JXWL0UmsmMF2lhKHJ3Cxd webpackPASS, port3017 session10401 HTTP200. Aucunerecetteavecfixturesactiveàcecheckpoint. |
 | Backend | Supabase dédié actif,001–020 appliquées ; vraie purgecron et concurrence SKIPLOCKEDPASS, cohortes nettoyées et relues. |
-| Preview connectée | Git lié **f8**, READY `https://depannage-electricite-aw01mx58a-brafas-projects.vercel.app` ; loginVercel par défaut, lien temporaire sanscompteVercel livré privément au propriétaire. Hydratation mobile390 et anonyme401/no-store vérifiés. |
+| Preview connectée | Gitlié **4c**, READY **https://depannage-electricite-rb28derhl-brafas-projects.vercel.app** ; URLnuepubliquepar exception deCEdéploiement, sanscookie/token/compteVercel. Mobile390/hydratation/aucundébordement/anon401no-storevérifiés. |
 | Anciennes URLs | seven.vercel.app ancienmain inchangé ; mh0ttyp8u premierf8 CLI ne recevait pas envbranche (Auth503), remplacé paraw01. |
 | Différés | Stripe et premier vrai SuperAdmin ; ni débit réel ni main/production/store. Vercel a de nouveau accepté les previews, ce blocage n'est plus actuel. |
 
@@ -33,10 +33,10 @@ Entreprise V5 : C01 est revu sans nouveau P1/P2 ; C08 conserve les permissions e
 2. **Rétention020** : appliquée, vrai cron et contraste expiré/fraisPASS ; deux sessions distinctes/NOWAIT/pointverrouillé conservé puis purge après libérationPASS. Cleanup10portées0 et indépendant Auth/profiles/jobs/tracking0, jobpréservé1. Voir GPS_RETENTION_020_REAL.md.
 3. **PWA OS** : harnais671 surapp557 PASSinstallation/fenêtrenativeCUA/fermeture/relance/uninstall et cleanup indépendant, profiltest/PIDs/bundle/dossier généré absents. PreuveMacdesktop locale, pasOSiOS/Android. Ancienf5 INCOMPLETE conservé.
 4. **Documents/B2B** : recette4bd sur557 =8PASS6FAIL1ANOMALY, cleanup complet/root48checks0 +7Auth404/14Storage0. Corrections harnais documentées21f0249 ; **vrai défautproduit BudgetPanel après premierexercice** en correction. Parent/feuille503 et vrai retry à recetter. Ne pas convertir les échecs historiques enPASS.
-5. **Gatewayrévocation** : deux essais réels83fd FAIL/nonpreuve, l'un403 mais observation0ligne, l'autre201 courseperdue ; nettoyages35/37PASS et readbacks indépendants0. Vraie finalisation bloquée dans la fenêtre3s pas acquise.
+5. **Gatewayrévocation** : quatrièmeessai83fd **PASSréel** (PIDfinalize79371bloquéparbatch79362+objetexactunique+mêmeinstantDB+vraiRPCauthenticatedcommit+403+cleanup35PASS). ROOT12checksindép0/2Auth404/2Storage0. Troiséchecsantérieursconservés ; voirrapportLIVE4_PASS.
 6. **JWTexpiry** : jetonoriginal réellement expiré refusé401, Authactif avantappel, signatureJWKSactuel prouvée ; OBSERVEDcodegénérique, bail consommé/nettoyé, pasPASSexpirationstrict. Qualification685 documente ce résultat sanspin arbitraire.
 7. **SupportA5/Admin** :018source etSQLréel acquis ; opérateurpositifHTTP/UI et certaines courses non acquis. Inscription du propriétaire explicitementdifférée, aucun admin/permanentremplaçant ;95e préflightBLOCKED/PASS0avantseed. Pas redemande maintenant.
-8. **Preview téléphone** : lien partageable privément livré, expire7novembre ; accèsmobile sanscompteVercel et anonyme401 vérifiés. Le token ne doit jamais entrer Git/app/manifeste/binaire. Correctifsbudget/QA suivants demanderont revue, recette et actualisation depreview.
+8. **Preview téléphone** : URLpubliqueNUE4c ci-dessus, testée sanscookies niheaders ; nelaisseni token ni compteVercel requis. Ancienpartagef8privéexpirant7nov n'estpluslelienderéférence. **QAcore** prépare durabilitéinitiale/atomicitémanifeste souscontrat2ec7 (propriétéexclusiveFixtures/tests, paslifecycle). Adaptateurcookieannulédevenu inutile, contrats/WIPconservés.
 
 ## Limites du périmètre global
 

@@ -1,0 +1,7 @@
+# Gateway83fd : course réelle validée au quatrième essai
+
+ROOT,31octobre2026. Sourceharnasis83fdad9 épinglée, EdgeTESTd7abd8c/v1 inchangée. Run20261031t1939a873c2, dossierprivé /tmp/depannage-gateway-revoke-83fd-live-4. DriverprivéfigéAVANTcréationcohorte (SHA693de43a4e7d7e84de911659f0b0ce06c9e83e0f4f31bcffaaed192f44906c82), trois processus CLI ; délai d'observation ajusté après traces du troisième essai, aucune pause augmentée : SQL3s/statement8s.
+
+**PASS réel des conditions(a)–(g)** : batchPID79362 tient l'organisationQA de19:41:19.985322 à19:41:22.988686UTC avant révocation ; objetexact inscritau manifeste découvert19:41:21.742. Une UNIQUE observationSQL à19:41:22.509576 voit finalizePID79371 directement bloqué par[79362], wait_event_typeLock/transactionid, exactement1objet dontnom=cheminexactdu manifeste. Preuve d'acteur authenticated et auth.uid propriétaireQA, vrai RPC set_organization_member_site_access retirelegrant ; t_revoked19:41:22.993476 < borneaprèscommit19:41:22.994964, relectureselected/0grants. Edge403 à19:41:23.333 ; objetexactabsent/documents0, découverteavant réponse.
+
+Nettoyage35étapesPASS etaucunreliquat. ROOTindépendant19:41:53.975 :12checksPASS, deuxAuth404/deuxStorage0, profils/org/sites/interventions/documents/membres/scopes/grants0. Aucun compte de ce run maintenu. Ce PASS repose sur les mesures DB et l'objet, jamais sur les délais du driver. Les trois premiers essais FAIL/nonpreuve ou201courseperdue restent conservés etnettoyés. Pasd'Edgehook, pasdejetonforgé, pasderôleadmin ni de changementprotectionproduit.
