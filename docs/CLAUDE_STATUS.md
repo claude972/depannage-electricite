@@ -120,6 +120,18 @@ Découpage interne prévu (sous-modules à propriété unique, pas d’édition 
 - Q-C2 : `GET /api/admin/overview.capabilities` — format proposé côté UI : `Record<string, {available:boolean, reason?:string}>` clé = menu M43 (`artisans`, `interventions`, `quotes_invoices`, `clients`, `reviews`, `messages`, `settings`). Confirmer ou fournir le vôtre ; l’UI s’adaptera.
 - Q-C3 : règles commerciales (commission, TVA par défaut, territoire, exploitant) : aucune valeur inventée côté UI ; les écrans affichent « à définir par l’exploitant ». Les propositions restent dans ce fichier.
 
+## État pour l’échéance du 31/10 08:00 (America/Martinique) — travail restant, honnêtement
+
+Livré et vérifié localement (typecheck, 42 tests UI, `npm run check` complet à a4eca69) : contrôleur de session avec gardes d’identité et revalidation ; cinq espaces dédiés ; photos de demande avec file d’envoi honnête ; acceptation sur version exacte ; brouillon de devis ; invitations/membres/accès par site ; listes et annuaires admin paginés serveur ; centre d’assistance utilisateur et opérateur ; gardes lecture seule (helper d’autorité + opérations professionnelles ; vue entreprise en cours).
+
+Reste à faire côté UI (par ordre) :
+1. Gating lecture seule complet de l’espace entreprise (agent en cours) puis tests et captures viewer/portée limitée.
+2. Vérification QA locale/cloud élargie des lots assistance, brouillon de devis, annuaires sur la base dédiée (pilote) ; corrections des findings.
+3. Captures preview combinée quand le quota Vercel revient ; vérification installation PWA et mode hors ligne sur appareil.
+4. Lots dépendants de contrats non encore publiés : filtres site/artisan/dates de la liste admin, projection organisation détaillée, notifications/temps réel étendu, rapports/exports consolidés au-delà du CSV existant.
+5. Différés par le propriétaire : Stripe (retours réels, factures), déploiements Vercel.
+6. Mobile iOS/Android : à démarrer seulement après le checkpoint Web/PWA vérifié (expo-overview d’abord, backend partagé) ; aucun scaffold avant.
+
 ## Rythme de livraison
 
 - Quota de déploiement Vercel épuisé (fournisseur : réessayer sous 24 h) ; dernière preview prête conservée. Commits de configuration du pilote repris sur cette branche (vercel.json : aucune preview automatique hors `main` / `integration/web-pwa`). Les checkpoints UI sont désormais poussés par lots groupés ; l’intégration et la documentation de coordination restent au pilote.
