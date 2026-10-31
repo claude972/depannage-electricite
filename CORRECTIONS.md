@@ -2370,3 +2370,9 @@ Revue Codex :18 tests ciblésPASS +12 sectionsSQLisoléesPASS (001–014). UI Is
 
 ### ADV-FIN-REV-004 — P2 OPEN, assigné Claude plateforme,0b92a7a
 platform_issue_credit_note arrondit TVA de chaque avoir indépendamment : facture total100centimes/TVA17, trois avoirs33 produisent6+6+6=18>17. Calculer delta de TVA cumulée sous verrou et plafonner résiduel ; tester fractionnement et avoir final. Contrôles idempotence/grants/audit/modération/rate trusted et refus bornés passent le harnais, mais concurrence réseau/UX assemblée/PDFfacture non vérifiés. Aucun feu migration014 tant que corrections ouvertes.
+
+
+### Suite opérationnelle — 2026-10-31T11:44:05-04:00 — Codex
+Gatewayd7abd8c revu puis intégré/poussé par c92f4de (inclut réponse de finalisation stricte7fa4e95 et harnais corrigé), aucun déploiement Edge effectué. Les tests de timeout restent bornés à une fenêtre de réconciliation, pas garantie de travail distant terminé.
+Build local57c244f terminé sans erreur ; propre serveur de recette sur3017 relancé (journal privé /tmp/depannage-local-57c244f-server-private.log). Harnais091fff0 lancé sur les SEPT suites, app57c244f +Supabase réel, rapport /tmp/depannage-combined-1145 ; en cours, aucun résultat final ni nettoyage annoncé avant lecture du rapport. Serveur HTTP200 vérifié. Ne pas avancer ce checkout pendant ce run. Il n’inclut pas encore la nouvelle source Edgec92f4de ni les quatre lots avancés.
+Lead a confirmé réception des findings et travaille sur shared15cbf88 puis clients bornés. Prochains contrôles : corrections des deux findings planning, du staleUI documents, deux B2B et deux finance ; relire SHA exacts avant appliquer014–017. Agent artisan poursuitprofilM36 sur sa seulebranche ; aucun code Codex.
