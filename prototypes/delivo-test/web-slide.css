@@ -1,0 +1,63 @@
+/* Maquette test 005 — ajouts seulement au thème de web.css (mêmes boutons, cartes, rayons, vert/noir, Plus Jakarta Sans) :
+   grande photo, carrousel manuel à deux diapositives, FAQ. Aucun fond blanc, aucun effet de verre. */
+.photo-hero { position: relative; margin-top: 24px; }
+.slides { position: relative; overflow: hidden; border-radius: 28px; border: 1px solid var(--line); background: var(--surface); }
+.slide { position: relative; min-height: 560px; display: flex; align-items: flex-end; }
+.slide[hidden] { display: none; }
+.slide img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 35%; }
+/* Dégradé noir sous le texte : le texte blanc reste ≥ 4,5:1 sur la zone de lecture. */
+.slide::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.86) 45%, rgba(0, 0, 0, 0.3) 75%, rgba(0, 0, 0, 0.05) 100%); }
+.slide-text { position: relative; z-index: 1; max-width: 620px; padding: 56px 56px 96px; }
+.slide-text h1, .slide-title { margin: 0 0 16px; font-size: 52px; line-height: 1.08; font-weight: 700; letter-spacing: -1.2px; color: var(--white); }
+.slide-title { font-size: 44px; }
+.slide-text p { margin: 0 0 26px; font-size: 18px; color: #e6e6e6; max-width: 540px; }
+.slide-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.btn-big { min-height: 52px; padding: 0 24px; font-size: 16px; }
+.slide.is-active .slide-text { animation: slide-in 260ms ease-out; }
+@keyframes slide-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .slide.is-active .slide-text { animation: none; }
+}
+
+/* Commandes : flèches et indicateurs ≥ 44 px, posés sur la photo en bas à gauche */
+.slide-controls { position: absolute; left: 56px; bottom: 56px; z-index: 2; display: flex; align-items: center; gap: 10px; }
+.slide-arrow { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 50%; border: 1.5px solid rgba(255, 255, 255, 0.85); background: #000; color: var(--white); cursor: pointer; }
+.slide-arrow:hover { background: var(--dark-green); }
+.slide-dots { display: flex; gap: 2px; }
+.slide-dot { position: relative; width: 44px; height: 44px; border: 0; background: transparent; cursor: pointer; }
+.slide-dot::before { content: ""; position: absolute; left: 50%; top: 50%; width: 28px; height: 6px; border-radius: 3px; transform: translate(-50%, -50%); background: rgba(255, 255, 255, 0.55); }
+.slide-dot[aria-current="true"]::before { background: var(--accent); }
+.credit { margin: 10px 4px 0; font-size: 12px; color: var(--muted); }
+
+/* FAQ */
+.faq { display: grid; gap: 12px; }
+.faq details { border-radius: 18px; background: var(--card); border: 1px solid var(--line); }
+.faq summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 60px; padding: 0 22px; font-size: 17px; font-weight: 600; cursor: pointer; list-style: none; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; background: var(--dark-green); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 500; }
+.faq details[open] summary::after { content: "−"; }
+.faq details p { margin: 0; padding: 0 22px 20px; font-size: 15px; color: var(--muted); }
+
+@media (max-width: 1320px) {
+  .slide-text h1 { font-size: 46px; }
+  .slide-title { font-size: 40px; }
+}
+@media (max-width: 900px) {
+  .slide { min-height: 520px; }
+  .slide::after { background: linear-gradient(180deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.86) 25%, rgba(0, 0, 0, 0.92) 100%); }
+  .slide-text { padding: 32px 28px 96px; }
+  .slide-controls { left: 28px; bottom: 28px; }
+}
+@media (max-width: 640px) {
+  .photo-hero { padding: 0 18px; }
+  .slides { border-radius: 22px; }
+  .slide { min-height: 560px; }
+  .slide-text { padding: 24px 20px 92px; }
+  .slide-text h1 { font-size: 30px; letter-spacing: -0.6px; }
+  .slide-title { font-size: 26px; }
+  .slide-text p { font-size: 15px; }
+  .slide-actions .btn { flex: 1 1 100%; }
+  .slide-controls { left: 20px; bottom: 20px; }
+  .faq summary { font-size: 16px; padding: 10px 16px; }
+  .faq details p { padding: 0 16px 16px; }
+}

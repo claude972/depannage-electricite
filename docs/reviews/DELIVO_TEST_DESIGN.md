@@ -80,3 +80,7 @@
   `<details>`, bandeau final, pied de page. Thème vert/noir/Plus Jakarta Sans, mêmes règles AA.
 - Vérif 1440/1280/390 : pas de débordement, cibles ≥ 44 px, focus, aucune requête externe, console propre.
 - Précision propriétaire : rester exactement dans le thème existant — `web-slide.html` charge `web.css` (mêmes boutons, cartes, rayons, espacements, vert/noir/Plus Jakarta Sans) et `web-slide.css` n’ajoute que le héros photo, le carrousel et la FAQ ; mesdepanneurs.fr n’inspire que l’ordre des sections ; aucun fond blanc ni nouveau style.
+- Livré : `web-slide.html` (charge `web.css`), `web-slide.css`, `web-slide.js`, photos non retouchées. Contraste du texte
+  blanc du héros mesuré sur les pixels rendus de la zone titre + paragraphe (bords anti-crénelés des lettres inclus, donc
+  mesure pessimiste) : 99e centile ≈ 4,6:1 (1440), 4,4:1 (1280), 4,0:1 (390) ; titre ≥ 30 px (grand texte, seuil 3:1).
+  Carrousel manuel vérifié (flèches, indicateurs, clavier, pas de lecture automatique), 1440/1280/390 sans débordement.
