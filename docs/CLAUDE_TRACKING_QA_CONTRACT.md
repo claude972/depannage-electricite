@@ -342,3 +342,19 @@ récente : l'arrivée ne peut pas être estimée. » ; « Position trop impréci
 Validé tel quel par ROOT : `T12-sim`, preuve 429 sans rafale. Merge de travail de `codex/gps-eta` autorisé pour les types ; aucune
 modification des fichiers backend, 019 ou 020. Nettoyage : lignes tracking avant interventions/profils ; leases relus = 0 après
 cascade ; budget jamais modifié. Exécution cloud par ROOT uniquement ; aucune géolocalisation présentée comme GPS physique.
+
+## Livraison du harnais (après GO ROOT sur A5)
+
+- Merge de travail `codex/gps-eta` 8366c05 (commit ad53cc7) : types, adaptateur et migration 019 importés **sans aucune modification**
+  des fichiers backend ; aucune acceptation de 8366c05 n'en découle.
+- `scripts/qa-tracking/run.mjs` (CLI, préflight A5.1, cycle de vie, signaux, preuve de propriété, nettoyage, codes 0/1/2/3/130),
+  `scenarios.mjs` (cohorte, T1–T8, T8-fail, T9–T11, T12-sim, T13–T16, T18, T19, preuves fournisseur optionnelles),
+  `lib/` (constants, args, intents, position-redact, requests, provider-proof, preflight, ownership, auth-admin, cleanup, guard),
+  `sql-backoff-review.mjs` (PGlite **local** : backoff partagé prouvé sans 429 IGN réel).
+- Tests hors ligne : `tests/qa-tracking.test.ts` (12 tests : arguments, intentions durables, redaction des positions, résumé des
+  requêtes et séquence de reprise, classification fournisseur, préflight, preuve de propriété, ordre de nettoyage, récupération
+  d'intention ⇒ INCOMPLETE, porte d'arrêt, BLOCKED/FAIL, analyse de source) ; `tests/qa-tracking-provider.test.ts` (3 tests : 429
+  injecté dans l'adaptateur, défauts et hôte fixe). Le premier fichier est en `@ts-nocheck` car le harnais est du JavaScript ESM non
+  typé (même convention que `scripts/qa`) ; il est exécuté par `tsx`.
+- Écart signalé : T17 (géocodage) est couvert par la preuve fournisseur optionnelle `provider-geocode`, pas par un scénario T17 séparé.
+- Aucune exécution cloud, aucun fichier d'identifiants lu par Claude ; l'exécution réelle est réservée à ROOT.
