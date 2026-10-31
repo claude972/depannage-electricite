@@ -91,7 +91,9 @@ The preflight (authenticated 404 on an unknown UUID) runs in a dedicated context
 
 ### D2 — 503, then malformed 200, then recovery on retry
 
-1. clientA session (another context, Realtime blocked as in D1); seed `jobLate2` and read it back.
+1. BEFORE the clientA session opens (A3b): seed a NON-EMPTY witness `jobWitnessD2` (own dossier of clientA) and read it back. Then open the clientA session (another context, Realtime blocked as in D1) and seed `jobLate2` with its readback.
+   - **Witness before the stub:** a real UI `GET /api/workspace` (bootstrap, drained) is observed with `jobWitnessD2` present (boolean id check on the page's own reply, body not kept), and the witness is VISIBLE in the requests list.
+   - Without that proof ⇒ **BLOCKED** (an empty workspace proves nothing about « nothing cleared »).
 2. Browser route stub on `GET /api/workspace` ONLY, for exactly the next two requests:
    - #1 ⇒ `503` `{error}`;
    - #2 ⇒ `200` `{profile:{id:clientA, role:"client"}}` with no collections (A5 « profile only »).
@@ -100,8 +102,8 @@ The preflight (authenticated 404 on an unknown UUID) runs in a dedicated context
    - title « Dossier momentanément indisponible », `data-blocker="deeplink:error"`, button « Réessayer »;
    - « Intervention introuvable » never rendered;
    - no sign-out (§2);
-   - data not cleared: the dossiers already seen before navigation stay listed after the window.
-4. Click « Réessayer » ⇒ refresh #2 (malformed 200) ⇒ same error state. Nothing is applied: the earlier list stays. No « introuvable », no sign-out.
+   - data not cleared: `jobWitnessD2` is still present after the 503 (list or DOM check; no extra request inside the window).
+4. Click « Réessayer » ⇒ refresh #2 (malformed 200) ⇒ same error state. Nothing is applied: `jobWitnessD2` is still present after the invalid reply. No « introuvable », no sign-out. Witness missing after #1 or #2 ⇒ **FAIL** (data cleared); witness never proven before the stub ⇒ **BLOCKED**.
 5. Click « Réessayer » ⇒ refresh #3 (real) ⇒ dossier shown, marker unchanged, same identity.
 6. Count: exactly one `GET /api/workspace` per click and per cause (1 + 1 + 1). The button is disabled while in flight: a double click during the flight adds no request.
 7. If the real reply #3 is itself 5xx or transport ⇒ environment unavailable ⇒ BLOCKED (not FAIL, not PASS).
@@ -179,10 +181,10 @@ Zero frames plus a « non connectée » badge do not prove that the route blocks
    - the close code and reason it applied: `ws.close({ code: 4000, reason: "qa-realtime-blocked" })`, a constant chosen by the harness.
 
    Never a message payload, token or header. The handler never calls `ws.connectToServer()`, so nothing reaches the server.
-2. **Zero frames forwarded.** No `connectToServer` happens, so no frame is relayed to the server. The passive observer (`page.on("websocket")`) records zero `framesent` / `framereceived` events delivered by the server for that URL; the count only, never the content. The close that the page observes carries the applied code (4000).
+2. **Zero frames forwarded.** No `connectToServer` happens, so no frame is relayed to the server. The passive observer (`page.on("websocket")`) records zero `framesent` / `framereceived` events delivered by the server for that URL; the count only, never the content. No close code is ever asserted on the page side (A3b): the code 4000 is proven only by the native local client of the control test.
 3. **Verdict.** All of these must hold in each scenario that claims « Realtime blocked »:
    - handler call count ≥ 1 for that page, before the measured hash navigation;
-   - close code 4000 applied;
+   - `await ws.close(...)` resolved by the handler (A3b: no page-side code);
    - zero frames forwarded;
    - badge « non connectée · Actualiser ».
 
@@ -190,7 +192,7 @@ Zero frames plus a « non connectée » badge do not prove that the route blocks
 4. **Local control test in real Chromium** (`tests/qa-deeplink-realtime-route.test.ts`, offline):
    - a local WebSocket server (Node `http` upgrade, minimal frames) and a local page that opens `ws://127.0.0.1:<port>/realtime/v1/websocket?apikey=SECRET&vsn=1.0.0`;
    - **(a) without the handler**: the socket connects (server upgrade count = 1, at least one frame received by the page);
-   - **(b) with the same `routeWebSocket(REALTIME_PATTERN, handler)` as the harness**: handler call count = 1, server upgrade count = 0, page-side close with code 4000, zero frames;
+   - **(b) with the same `routeWebSocket(REALTIME_PATTERN, handler)` as the harness**: handler call count = 1, server upgrade count = 0, the NATIVE local client receives close 4000, zero frames;
    - **(c)** the recorded summary contains neither `SECRET` nor `apikey=` nor any query value.
    - It is the same pattern object, imported from `scripts/qa-deeplink/lib/realtime-block.mjs`, so the test checks exactly what the harness installs.
 5. **Distinct and OPEN.** This proves only that the deep-link fallback is tested WITHOUT Realtime. **Realtime effectiveness (LIVE-WORKSPACE-001)** stays OPEN and separate (§6). No scenario in this contract may conclude anything about it, either way.
@@ -206,16 +208,14 @@ A10 is settled (ROOT run 6a6: setup + T9 + T14 PASS, cleanup 29, drain 0, open i
   - The block counts one hit (`realtime_hits`) and stores scalars only: ISO time, origin, path (no query, so never `apikey` or `vsn`).
   - Any other socket ⇒ `ws.connectToServer()` (left alone) and counted as `other_sockets`. Only the path is noted.
 - **Close resolved.** The handler `await`s `ws.close({ code: 4000, reason: "qa-realtime-blocked" })`.
-  - On the page side, a passive `page.on("websocket")` observer waits for the `close` event of that socket.
-  - It records the observed close code (4000) and the count of server frames (0).
-  - The hit counts only once the close has been observed.
+  - The hit counts only once that `close()` promise has RESOLVED (A3b; no page-side close is required or asserted).
 - `connectToServer()` is NEVER called for the Realtime path.
 - **BLOCKED (never PASS, never FAIL)** in any of these cases:
   - 0 hits before the measured navigation;
   - a hit on another path or origin (wrong pattern);
   - a handler error;
-  - close not observed or with another code;
-  - ≥ 1 server frame.
+  - `close()` not resolved;
+  - ≥ 1 server frame (if a page event exists).
 - « 0 frames + non connectée badge » alone is NEVER enough. The badge stays a secondary check.
 - The local control test of A1 §4 adds:
   - a socket opened BEFORE the handler is installed (negative check: not intercepted ⇒ the scenario would be BLOCKED);
@@ -287,7 +287,7 @@ ROOT's local fact (Playwright 1.64): for a routed socket that never reaches the 
   2. `await ws.close({ code: 4000, reason: "qa-realtime-blocked" })` RESOLVED (`close_resolved` count = hits);
   3. `connectToServer()` NEVER called for that path (`connect_calls_realtime = 0`, counted by the handler itself);
   4. no handler error.
-- **Page-side observation is OPTIONAL.** If the API emits a page `websocket` event for that URL, its close and frames are recorded and must agree (code 4000, 0 frames). Its absence is NOT a failure and is never required. No close code is asserted on the page side when no event exists.
+- **Page-side observation is OPTIONAL.** If the API emits a page `websocket` event for that URL, only its frame count (must be 0) and the fact that it closed are recorded; no close code is asserted (A3b). Its absence is NOT a failure and is never required. No close code is asserted on the page side when no event exists.
 - **Native proof of code 4000 and 0 upgrades:** only by the LOCAL control test against a real local WS server.
   - Without the handler: 1 upgrade, frames received.
   - With the same `REALTIME_PATTERN` and handler: 1 hit, close resolved, 0 upgrades, the client receives close 4000, 0 frames.
@@ -325,3 +325,20 @@ Rules:
 - **B2**, on `claude/web-qa-deeplink` after review of B1, imports `cleanupWithProof` and `TrackingFixtures` READ-ONLY, as in A2 §P2-4.
 
 Still no global code GO: B1 waits for ROOT's mission entry, and the deep-link code waits for the GO on A3 and the review of B1.
+
+## Amendment A3b (ROOT counter-review of f4021ac) — page close code removed, D2 witness, wss origin
+
+B1 is maintained and separate. This amendment applies the two precisions in place in §4/D2, A1 and A2, and records them here.
+
+1. **No page-side close-code assertion, anywhere.** Even when Playwright emits a page `websocket` event, the page does not receive the code applied by the handler. Every page-side code assertion has therefore been removed: A1 §2–4, A2 §P2-1 and A3 « page-side observation » were edited in place.
+   - The page event stays optional. If it exists, only « closed » and its frame count (0) are recorded.
+   - Code 4000 is asserted ONLY by the native local client of the control test, against a real local WS server.
+   - The harness proof stays: hit on the exact path and origin, `await ws.close(...)` resolved, `connectToServer` never called on the Realtime path, no handler error.
+2. **Origin normalisation in the handler proof.** The handler compares `new URL(ws.url())` after normalising the scheme: `wss:` ⇔ `https:`, `ws:` ⇔ `http:`, hostname in lowercase, default port removed. It compares against the Supabase origin `https://<ref>.supabase.co` of the run's credentials, or the explicit local origin in tests. Another host, or the same host on another path ⇒ not a Realtime hit (`other_sockets`). If the Realtime socket was not hit ⇒ BLOCKED.
+3. **16 s gate (A3).** Unchanged: `REVALIDATE_GUARD_MS = 16 000` since the last focus/blur/visibility event (or page creation), plus no workspace GET in flight, plus 1 s of quiet. The gate's timeout is 45 s ⇒ BLOCKED.
+4. **D2 non-empty witness.** `jobWitnessD2` is created and read back BEFORE the clientA session of D2, so it is in the bootstrap.
+   - Its presence is proven by a real GET observed BEFORE the stub is installed. It is proven again AFTER the 503 and AFTER the invalid 200, by the DOM or the list, with no extra request in the window.
+   - Witness not proven before the stub ⇒ **BLOCKED**. Witness gone after #1 or #2 ⇒ **FAIL** (data cleared).
+   - `--only D2` creates its witness itself; it never depends on another scenario.
+
+No B2 or deep-link code before the ROOT GO.
