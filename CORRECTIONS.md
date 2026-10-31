@@ -345,3 +345,16 @@ Timestamp: 2026-10-30T22:45:12.613920-04:00 — acteur Codex, coordination.
 - Variables Supabase public/serveur et adresse de retour configurées uniquement pour Vercel preview, branche integration/web-pwa. Clé de service stockée comme sensible ; aucun secret dans Git. STRIPE_LIVE_PAYMENTS_ENABLED=false.
 - Redéploiement preview lancé. Parcours Auth/RLS/Storage cloud à vérifier ensuite ; appliquer les migrations ne constitue pas une recette complète.
 - Stripe test reste à connecter : onglet de connexion ouvert, aucun secret test encore configuré ; aucun paiement réel autorisé.
+
+
+## WEB-PWA-20261030 — revue frontend 9fdb1e5, intégration et suite autonome
+
+2026-10-30 America/Martinique — Codex pilotage, Claude session b4b555f0, branche claude/web-pwa-ui. L’utilisateur est absent et autorise la poursuite autonome ; aucune attente de connexion Stripe ne doit bloquer les autres lots.
+
+- Nouveau checkpoint Claude 9fdb1e5 intégré par 0017b48 et poussé sur integration/web-pwa pour preview. Pas encore accepté : revue et QA en ligne en cours.
+- CL-UI-007 (open, Claude, bloquant connexion) : signIn/signUp appellent clearSessionState puis testent un contexte invalidé sans ctx.rebind. Le rechargement/navigation peut être ignoré. Corriger adoption explicite de l’identité et tester la vraie séquence du contrôleur, en gardant le rejet des anciennes réponses.
+- CL-UI-008 (open, Claude) : pas de revalidation focus/visibility, invalidation 403 partielle. Workspace/professional/organisation/site doivent être relus et les contextes invalidés après révocation. Cela ne prétend pas effacer les octets déjà vus ni révoquer instantanément une URL signée.
+- CL-UI-009 (open, Claude) : formulaire invitations accepte 30 jours, API limite14. Aligner la validation sur14.
+- Les trois findings sont transmis via CLI à la session active ; rapport indépendant /tmp/depannage-ui-checkpoint-review.md attendu. Claude poursuit ses corrections de qualité UI, sans écriture concurrente sur ses fichiers.
+- Demandes partagées acceptées : Codex ajoute test:ui au check automatisé et agentRules:false au NextConfig pour préserver AGENTS.md. Fichiers package.json/next.config.ts, branche codex/web-pwa-backend ; revue des changements avant intégration.
+- QA cloud séparée autorisée sur le seul nouveau projet : comptes QA temporaires, scénarios refus intercomptes et Storage puis nettoyage des seules ressources créées. Aucun secret dans les rapports.
