@@ -63,7 +63,11 @@ Fichier de coordination émis par l’agent Claude pour le pilote (Codex). Le pi
 | Contexte organisation unique (badge/accès nuls) | 6667ffd (`membershipRole` sur le même contexte que l’espace : organisation unique implicite, plusieurs = choix explicite) | `tests/ui/invitations.test.ts` |
 | PHOTO-REV-004 fausse confirmation par nom/date | dbd500c (candidats à vérifier par l’utilisateur, confirmation explicite) | `tests/ui/uploads.test.ts` |
 | ADMIN-LISTS-001 | c2796f2 | revue source ; recette preview pilote |
-| ADMIN-DIRECTORIES-001 | a43e1a0 (session) + lot admin en cours | — |
+| ADMIN-DIRECTORIES-001 | a43e1a0 (session), 9b9f293 (annuaires admin) | relecture source ; recette pilote |
+| CL-UI-008 bis — callsites entreprise et autorité fail-closed | e5e7750 (helper + ProfessionalOperations), c899e4e (fail-closed), 71f7fc9 (tous les callsites : nouvelle demande, ajout de site, budget, échéances, règle et décision d’approbation, accord/refus de devis, rendez-vous, annulation) | `tests/ui/invitations.test.ts` (enterpriseAuthority, portée inconnue = lecture seule) ; capture `docs/verification/ui/manager-site-gated-1280.png` ; QA viewer/portée limitée à rejouer par le pilote |
+| SUPPORT-REV-001 résultat périmé | c899e4e, 71f7fc9 (`runForResult` : aucune valeur rendue à l’appelant si la chaîne s’est terminée sous une autre identité ; idem commandes brouillon/assistance/organisation) | `tests/ui/guard.test.ts` (runForResult) |
+| SUPPORT-REV-002 clé d’idempotence et remontage | 71f7fc9 (clé + contenu conservés dans sessionStorage par utilisateur jusqu’au succès ; rejeu identique) | relecture ; QA pilote (résultat incertain puis nouvel essai) |
+| CL-BE-001 / 012 garde d’édition (UI) | a4eca69 | capture `artisan-application2-360.png` |
 
 ## Corrections de revue pilote appliquées (checkpoint 2b)
 
@@ -125,7 +129,7 @@ Découpage interne prévu (sous-modules à propriété unique, pas d’édition 
 Livré et vérifié localement (typecheck, 42 tests UI, `npm run check` complet à a4eca69) : contrôleur de session avec gardes d’identité et revalidation ; cinq espaces dédiés ; photos de demande avec file d’envoi honnête ; acceptation sur version exacte ; brouillon de devis ; invitations/membres/accès par site ; listes et annuaires admin paginés serveur ; centre d’assistance utilisateur et opérateur ; gardes lecture seule (helper d’autorité + opérations professionnelles ; vue entreprise en cours).
 
 Reste à faire côté UI (par ordre) :
-1. Gating lecture seule complet de l’espace entreprise (agent en cours) puis tests et captures viewer/portée limitée.
+1. Rejouer en QA locale (base dédiée) : viewer et gestionnaire à portée limitée sur la fiche de site et les dossiers (contrôles masqués, serveur 403 jamais sollicité) ; création d’assistance avec perte de réponse puis nouvel essai (rejeu, pas de doublon) ; connexion A → B pendant une création.
 2. Vérification QA locale/cloud élargie des lots assistance, brouillon de devis, annuaires sur la base dédiée (pilote) ; corrections des findings.
 3. Captures preview combinée quand le quota Vercel revient ; vérification installation PWA et mode hors ligne sur appareil.
 4. Lots dépendants de contrats non encore publiés : filtres site/artisan/dates de la liste admin, projection organisation détaillée, notifications/temps réel étendu, rapports/exports consolidés au-delà du CSV existant.
