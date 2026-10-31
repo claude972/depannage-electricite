@@ -574,3 +574,15 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
   5. Tip **`4c398e8393026598c5b629d3912cf80285acc2f5`** = merge of integration `9ae1f5e` (a force-push rebase was refused by the guard; merge used instead, as per the no-force rule).
 - Checks at tip: node --check 12/12, tsc clean, `tests/**/*.test.ts` 573/573 (harness 41/41, site-operations view-model 7/7), dry-run 0. No cloud, no credentials. Not covered by unit test: browser-only 503 boundary detection (Playwright).
 - For root: review 4c398e8 (product change limited to `budget-panel.tsx` + `view-model.ts`), then rerun after the tracking QA verdict sequencing.
+
+## 2026-10-31 — tracking QA 5 P2 fixed: 4b57800
+
+- `claude/web-qa-tracking` **`4b57800c2dd0a47758860e849a169cd4b7a202ff`** on 8a8441d; only `scripts/qa-tracking/**`, `tests/qa-tracking*.test.ts`, `docs/CLAUDE_TRACKING_QA_CONTRACT.md` (lead verified the path list); shared `scripts/qa` untouched; backend identical to 8366c05; no cloud, no credentials.
+- Defects first reproduced on 8a8441d (old code extracted, no network): 200 non-JSON accepted as owned; lookup null after lost create closed the intent; `provider-geocode` 503 ⇒ `{pass:1, blocked:0}`.
+- P2-1/P2-c: Auth get-by-id exact shape (UUID id equal to the requested one, string email); non-JSON/partial/mismatched 200 ⇒ unknown, never absent/owned; only a real 404 proves absence; ownership needs the canonical run email from a valid body; else no deletion, exit 3.
+- P2-2/P2-d: manifest on disk before any creation or lookup; atomic writes (temp, fsync, rename, dir fsync, 0600; `lib/durable.mjs`), manifest-save replaced on the tracking instance only; email search over every Auth page, complete only with proven end (short page or `x-total-count` reached), page error/malformed ⇒ unknown; spaced retries to a declared deadline; not found after complete search ⇒ `not-found-exhaustive`, intent kept, exit 3; absence never closes any intent.
+- P2-3: provider 503 (any reason), 429, 502/504/408, timeout, unknown transport ⇒ BLOCKED, never PASS, for `provider-route` (stops the sharing session first) and `provider-geocode`; 503 carrying ETA figures or a 500 ⇒ FAIL.
+- Extra bug fixed: missing `x-total-count` was read as total 0 (page 1 looked like the end).
+- Checks: tsc 0; `tests/qa-tracking*` 30/30 (unit 14, Auth/P2 8, browser barrier 5, adapter 3); `tests/*.test.ts` 191/191; `tests/ui` 115/115; shared QA 65/65; node --check; dry-run 0; PGlite backoff pass.
+- **Shared-library defect for root/owner (not changed):** `scripts/qa/lib/fixtures.mjs` writes its manifest with a non-atomic `writeFile`, and only after the first creation — the same lost-create gap affects every harness using it (business included). Tracking works around it locally; a shared fix needs the owner and a review because the business harness depends on it.
+- For root: review 4b57800; real run alone on the integrated UI with the tracking server env.
