@@ -1,5 +1,6 @@
 // Remote-only QA attestation. No network, credentials, fixtures or LOCAL-mode changes.
 import { constants } from "node:fs";
+import { devNull } from "node:os";
 import { open, realpath } from "node:fs/promises";
 import path from "node:path";
 import { execFile } from "node:child_process";
@@ -64,9 +65,13 @@ export async function loadDeploymentProof({ receiptPath, expected, nowMs = Date.
   let handle;
   try {
     const parent = await realpath(path.dirname(receiptPath));
+    // Discovery must not inherit a ceiling, alternate root, namespace or config injection.
+    const gitEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")));
+    Object.assign(gitEnv, { LC_ALL: "C", GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_SYSTEM: devNull,
+      GIT_CONFIG_GLOBAL: devNull, GIT_DISCOVERY_ACROSS_FILESYSTEM: "1" });
     try {
       await run("git", ["-C", parent, "rev-parse", "--show-toplevel"], {
-        timeout: 5000, maxBuffer: 4096, env: { ...process.env, LC_ALL: "C" },
+        timeout: 5000, maxBuffer: 4096, env: gitEnv,
       });
       refuse("IN_GIT");
     } catch (error) {

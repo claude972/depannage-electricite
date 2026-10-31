@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile, chmod, symlink, link, mkdir, rm, readFile } from "node:fs/promises";
+import { mkdtemp, writeFile, chmod, symlink, link, mkdir, rm, readFile, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
@@ -142,6 +142,33 @@ test("owner check refuses a UID different from runtime identity before reading c
     process.getuid = () => original() + 1;
     await assert.rejects(load(file), { code: "OWNER" });
   } finally { process.getuid = original; }
+});
+
+test("inherited Git discovery/config overrides cannot hide a repository or redirect the outside check", async (t) => {
+  const { dir, file: outside } = await privateFile(t);
+  const repo = path.join(dir, "repo"); await mkdir(repo);
+  execFileSync("git", ["init", "--quiet", repo]);
+  const sub = path.join(repo, "sub"); await mkdir(sub);
+  await writeFile(path.join(sub, "receipt.json"), JSON.stringify(receipt()), { mode: 0o600 });
+  const alias = path.join(dir, "sub-alias"); await symlink(sub, alias);
+  const overrides = {
+    GIT_CEILING_DIRECTORIES: await realpath(repo), GIT_DIR: path.join(dir, "missing.git"),
+    GIT_WORK_TREE: dir, GIT_COMMON_DIR: path.join(dir, "missing-common"),
+    GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.bare", GIT_CONFIG_VALUE_0: "true",
+    GIT_CONFIG_PARAMETERS: "invalid injected parameters", GIT_CONFIG_GLOBAL: path.join(dir, "missing-global"),
+    GIT_CONFIG_SYSTEM: path.join(dir, "missing-system"), GIT_DISCOVERY_ACROSS_FILESYSTEM: "0",
+  };
+  const saved = { ...process.env };
+  try {
+    for (const key of Object.keys(process.env)) if (key.startsWith("GIT_")) delete process.env[key];
+    Object.assign(process.env, overrides);
+    await assert.rejects(load(path.join(sub, "receipt.json")), { code: "IN_GIT" });
+    await assert.rejects(load(path.join(alias, "receipt.json")), { code: "IN_GIT" });
+    assert.equal((await load(outside)).deploymentId, expected.deploymentId);
+  } finally {
+    for (const key of Object.keys(process.env)) if (key.startsWith("GIT_")) delete process.env[key];
+    for (const [key, value] of Object.entries(saved)) if (key.startsWith("GIT_")) process.env[key] = value;
+  }
 });
 
 test("oversized, empty, invalid JSON and invalid UTF8 files are rejected without contents in errors", async (t) => {
