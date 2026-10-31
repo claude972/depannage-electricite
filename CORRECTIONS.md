@@ -50,3 +50,21 @@ Ce journal ne constitue pas une revue passée ; aucune affectation terminée à 
 - result: refus fournisseur pour factures impayées ; aucune base dédiée créée, aucune autre base modifiée
 - consequence: Auth/Storage/RLS/Stripe intégrés ne peuvent pas être déclarés vérifiés ; développement/test isolé et previews continuent
 - next action: signaler blocage concret au propriétaire sans arrêter les lots indépendants ; ne pas créer ailleurs pour contourner la restriction
+
+## CLI-004 — Lecture du contrat autorisée
+- timestamp: 2026-10-30T21:44:47-04:00 (America/Martinique)
+- acting agent: codex
+- target session: b4b555f0
+- action: inspection du prompt CLI normal, commande git log/diff/show du contrat backend en lecture seule ; approbation ponctuelle Yes
+- result: session reprend travail, aucun mode bypass/auto ajouté ; aucun accès sans rapport au projet
+- next: suivre premier checkpoint et demandes techniques
+
+## Finding PWA-001
+- reviewer: codex / verify_web_pwa
+- assigned agent: codex / implement_pwa
+- reviewed branch/revision: codex/web-pwa-backend, copie de travail avant premier commit PWA (base contrat 08c10c5)
+- evidence: components/pwa-registration.tsx, controllerchange et bouton mise à jour ; waiting peut désigner un worker déjà activé par un autre onglet ; message ACTIVATE_UPDATE ensuite sans nouvel événement, bouton reste Actualisation
+- expected correction: préserver rechargement volontaire, détecter worker déjà actif/référence périmée et recharger sur clic explicite ; tester cycle multi-onglets
+- status: in_progress
+- fix commit: à venir
+- recheck evidence: aucune encore ; propriétaire prévenu, pas de statut verified
