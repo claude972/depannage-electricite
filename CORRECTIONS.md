@@ -2385,3 +2385,7 @@ Intégrationc92f4de CI deux jobsPASS : https://github.com/claude972/depannage-el
 
 ### A4 — 2026-10-31T11:53:37-04:00 — Codex
 Ordre récent du propriétaire autorise délégation partielle à Codex pour accélérer. Deux missions nouvelles publiées avant code, distinctes des fichiers Claude actifs : PDF facture/avoir et recette avancée planning/notifications. Lead b4b555f0 averti via même attache ; confirmation de propriété attendue avant dispatch appcode. Claude conserve intégration UI/globaux et ses correctifs. Aucune annonce de délai3h garanti.
+
+
+### A4 — dispatch confirmé — 2026-10-31T11:54:47-04:00
+Lead Claude a explicitement confirmé à15:54:08UTC les deux propriétés exclusives Codex (trace d6ac5fb dans sa branche), aucun worker Claude assigné à ces fichiers. Deux agents Codex réutilisés sur worktrees propres : PDF facture/avoir et recette planning/notifications. Ils ont lu mission distante/règles/skills, confirmé préparation lecture seule puis reçu feu code après accord du lead. Contrats à pousser avant implémentation ; aucun résultat fonctionnel encore annoncé. Claude poursuit interfaces/ancres sur claude/web-anchors et shared, source partagée ee767b6 en cours/revue future. Automations doivent suivre A4 et ne plus imposer tout-code-Claude sur ces seuls modules ; cadence rapport15min conservée.
