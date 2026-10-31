@@ -8,6 +8,8 @@
 // creds.json: {"url":"https://<ref>.supabase.co","publishable_key":"…","service_role_key":"…"}
 // Never prints tokens or headers; summary.md / result.json are redacted; run.log and
 // manifest.json are 0600. Any failed step (scenario, readback, cleanup) fails the run.
+// --suite expiry-prepare | expiry-verify (QA-GW-EXPIRED-REVOKE-003 §1): real JWT expiry in two
+// phases without blocking wait; see docs/CLAUDE_GATEWAY_REMAINING_QA_CONTRACT.md.
 // Cleanup (every path: normal end, HTTP timeout, SIGINT/SIGTERM, unhandled error,
 // --cleanup-manifest) first discovers the cohort's `documents` rows and Storage objects, merges
 // them into the manifest, and deletes nothing while any read is unknown (GW-HARNESS-003).
@@ -42,6 +44,9 @@ import {
   unknownLeftover,
   cleanupRerunMessage,
   parseStorageListing,
+  expiryPrepare,
+  expiryVerify,
+  parseLease,
 } from "./lib.ts";
 
 const BUCKET = "intervention-documents";
@@ -79,12 +84,15 @@ async function main(argv) {
     }
     throw error;
   }
-  const mode = args.cleanupManifest ? "cleanup-manifest" : args.dryRun ? "dry-run" : "run";
+  // Additive, selectable suites: the nine nominal scenarios run only without --suite.
+  const mode = args.cleanupManifest ? "cleanup-manifest" : args.dryRun ? "dry-run" : args.suite === "expiry-prepare" ? "expiry-prepare" : args.suite === "expiry-verify" ? "expiry-verify" : "run";
 
   await mkdir(args.out, { recursive: true, mode: 0o700 });
   await chmod(args.out, 0o700);
   const logPath = path.join(args.out, "run.log");
   const manifestPath = path.join(args.out, "manifest.json");
+  const leasePath = path.join(args.out, "lease.json");
+  const verifyCommand = `node scripts/qa-gateway/run.mjs --suite expiry-verify --lease ${leasePath} --function-url ${args.functionUrl} --project ${args.project} --credentials <creds.json privé> --out <dossier privé 0700 distinct>`;
   await appendFile(logPath, "", { mode: 0o600 });
   await chmod(logPath, 0o600);
 
@@ -105,6 +113,12 @@ async function main(argv) {
   };
   let created = emptyCreated();
   let manifestUnknown = [];
+  // Manifest extras for an expiry cohort (suite + bounded lease end), kept across rewrites.
+  let manifestExtra = {};
+  // Prepare leaves its single technical account on purpose (until verify); a too-early verify
+  // touches nothing. Both skip the cleanup explicitly; every other path cleans up.
+  let skipCleanup = false;
+  let tooEarly = false;
   // Set when the run phase ended abnormally (timeout, abort/signal, thrown error): a request
   // whose outcome is unknown may still settle remotely, so cleanup reconciles late.
   let interrupted = false;
@@ -134,10 +148,11 @@ async function main(argv) {
   const saveManifest = async (nextCreated = created, unknown = manifestUnknown) => {
     created = nextCreated;
     manifestUnknown = unknown;
-    await writePrivate(manifestPath, manifestJson(manifestRunId, args.project, created, new Date(), manifestUnknown));
+    await writePrivate(manifestPath, manifestJson(manifestRunId, args.project, created, new Date(), manifestUnknown, manifestExtra));
   };
-  const record = async (kind, value) => {
+  const record = async (kind, value, extra = {}) => {
     if (!created[kind].includes(value)) created[kind].push(value);
+    manifestExtra = { ...manifestExtra, ...extra };
     await saveManifest();
   };
 
@@ -212,6 +227,7 @@ async function main(argv) {
     if (mode === "cleanup-manifest") {
       const manifest = parseManifest(JSON.parse(await readFile(args.cleanupManifest, "utf8")), args.project);
       manifestRunId = manifest.runId;
+      if (manifest.suite) manifestExtra = { suite: manifest.suite, ...(manifest.leaseEndsAt ? { leaseEndsAt: manifest.leaseEndsAt } : {}) };
       await saveManifest(manifest.created, manifest.unknown);
       await log("info", "manifeste chargé", `run d’origine ${manifest.runId} (${manifest.updatedAt}) : ${Object.entries(created).map(([k, v]) => `${k}=${v.length}`).join(", ")}${manifest.unknown.length ? ` ; ${manifest.unknown.length} lecture(s) inconnue(s) à re-vérifier par la découverte` : ""}`);
     } else {
@@ -224,7 +240,21 @@ async function main(argv) {
       const anonymousProbe = await http(args.functionUrl, { method: "POST", headers: { apikey: credentials.publishableKey } });
       await log(anonymousProbe.status === 401 ? "pass" : mode === "dry-run" ? "info" : "fail", "sonde anonyme POST", `HTTP ${anonymousProbe.status}`);
       if (mode === "dry-run") {
-        await log("info", "dry-run terminé", "aucune cohorte créée, aucune écriture distante");
+        await log("info", "dry-run terminé", `aucune cohorte créée, aucune écriture distante${args.suite ? ` (suite ${args.suite})` : ""}`);
+      } else if (mode === "expiry-prepare") {
+        const prepared = await expiryPrepare(expiryDeps());
+        result.expiry = { phase: "prepare", userId: prepared.userId, verifyNotBefore: prepared.lease ? new Date(prepared.lease.verifyNotBefore * 1000).toISOString() : null, leaseEndsAt: prepared.lease ? new Date(prepared.lease.leaseEndsAt * 1000).toISOString() : null, leasePath: prepared.lease ? leasePath : null, observedCode: null, verifyCommand: prepared.lease ? verifyCommand : null, outcome: prepared.outcome };
+        // PREPARED: the account stays until verify (bounded lease); nothing is cleaned now.
+        skipCleanup = prepared.outcome === "prepared";
+      } else if (mode === "expiry-verify") {
+        const lease = parseLease(JSON.parse(await readFile(args.lease, "utf8")), args.project);
+        await log("info", "bail chargé", `run d’origine ${lease.runId}, compte ${lease.userId}, exp ${new Date(lease.claimExp * 1000).toISOString()}`);
+        manifestExtra = { suite: "expiry", leaseEndsAt: new Date(lease.leaseEndsAt * 1000).toISOString() };
+        const verified = await expiryVerify(lease, expiryDeps());
+        result.expiry = { phase: "verify", userId: lease.userId, verifyNotBefore: new Date(lease.verifyNotBefore * 1000).toISOString(), leaseEndsAt: new Date(lease.leaseEndsAt * 1000).toISOString(), leasePath: args.lease, observedCode: verified.observedCode, verifyCommand: null, outcome: verified.outcome };
+        if (verified.cleanup) await record("userIds", lease.userId, manifestExtra);
+        tooEarly = verified.outcome === "too-early";
+        skipCleanup = !verified.cleanup;
       } else {
         await runScenarios();
       }
@@ -233,7 +263,7 @@ async function main(argv) {
     interrupted = true;
     await log("fail", "interruption", `${error instanceof Error ? error.message : String(error)} — l’issue distante de la requête en cours est inconnue : réconciliation tardive avant nettoyage`);
   } finally {
-    if (mode !== "dry-run") {
+    if (mode !== "dry-run" && !skipCleanup) {
       try {
         await cleanup();
       } catch (error) {
@@ -246,7 +276,57 @@ async function main(argv) {
     await persist();
     console.log(`verdict : ${result.verdict} — rapport ${path.join(args.out, "summary.md")}`);
   }
-  return result.verdict === "pass" ? 0 : 1;
+  if (tooEarly) return 2;
+  // 0 = pass, prepared (account intentionally kept, lease written) or observed (clean, but the
+  // platform code is not bound yet: not a PASS); 1 = fail; 2 = refused before any write.
+  return result.verdict === "pass" || result.verdict === "prepared" || result.verdict === "observed" ? 0 : 1;
+
+  // Injected dependencies of the two expiry phases (lib.ts drives them; fully fakeable in tests).
+  function expiryDeps() {
+    return {
+      now: () => Math.floor(Date.now() / 1000),
+      runId: id,
+      project: args.project,
+      projectUrl: credentials.url,
+      manifestPath,
+      leasePath,
+      verifyCommand,
+      randomPassword: () => cohortPassword(randomBytes(32)),
+      createUser: async (email, password) => {
+        const r = await http(`${credentials.url}/auth/v1/admin/users`, {
+          method: "POST",
+          headers: serviceHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { role: "client", full_name: `QA expiry ${id}` } }),
+        });
+        return { status: r.status, id: typeof r.json?.id === "string" ? r.json.id : null, detail: summarize(r) };
+      },
+      passwordGrant: async (email, password) => {
+        const r = await http(`${credentials.url}/auth/v1/token?grant_type=password`, {
+          method: "POST",
+          headers: { apikey: credentials.publishableKey, "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+        return { status: r.status, json: r.json && typeof r.json === "object" ? r.json : null, detail: r.status === 200 ? "jeton non journalisé" : summarize(r) };
+      },
+      // Mutation-free probe: POST without any body, bearer token as the only difference.
+      probe: async (token) => {
+        const r = await http(args.functionUrl, { method: "POST", headers: { apikey: credentials.publishableKey, Authorization: `Bearer ${token}` } });
+        return { status: r.status, text: r.text };
+      },
+      getUser: async (userId) => {
+        const r = await http(`${credentials.url}/auth/v1/admin/users/${userId}`, { headers: serviceHeaders() });
+        return { status: r.status, json: r.json && typeof r.json === "object" && !Array.isArray(r.json) ? r.json : null };
+      },
+      readManifest: async (manifestFile) => parseManifest(JSON.parse(await readFile(manifestFile, "utf8")), args.project),
+      record,
+      addSecret: (secret) => { if (typeof secret === "string" && secret.length >= 8) secrets.push(secret); },
+      forbidden: () => [...secrets, ...created.userIds],
+      client,
+      // The lease holds the token: written raw (never redacted) at 0600 in the private out dir only.
+      writeLease: (lease) => writePrivate(leasePath, JSON.stringify(lease, null, 2)),
+      log,
+    };
+  }
 
   async function runScenarios() {
     const password = cohortPassword(randomBytes(32));
@@ -384,7 +464,11 @@ function usage() {
   console.error(`Usage :
   node scripts/qa-gateway/run.mjs --function-url <https://<ref>.supabase.co/functions/v1/native-document-upload> --project <ref> --credentials <creds.json privé> --out <dossier 0700> [--dry-run]
   node scripts/qa-gateway/run.mjs --cleanup-manifest <manifest.json> --project <ref> --credentials <creds.json privé> --out <dossier 0700>
+  node scripts/qa-gateway/run.mjs --suite expiry-prepare --function-url <…> --project <ref> --credentials <…> --out <dossier 0700> [--dry-run]
+  node scripts/qa-gateway/run.mjs --suite expiry-verify --lease <dossier 0700>/lease.json --function-url <…> --project <ref> --credentials <…> --out <dossier 0700 distinct>
 creds.json : {"url":"https://<ref>.supabase.co","publishable_key":"…","service_role_key":"…"}
-Le harnais crée une cohorte unique, exerce la fonction déployée, nettoie tout ce qu’il a créé (manifeste durable) et écrit summary.md / result.json caviardés. Aucun jeton ni en-tête n’est affiché. Code de sortie 1 dès qu’une étape échoue.`);
+Le harnais crée une cohorte unique, exerce la fonction déployée, nettoie tout ce qu’il a créé (manifeste durable) et écrit summary.md / result.json caviardés. Aucun jeton ni en-tête n’est affiché. Code de sortie 1 dès qu’une étape échoue.
+--suite expiry-prepare : un seul compte technique, jeton réel prouvé valide sans mutation, bail 0600 (lease.json), verdict PREPARED (code 0), compte laissé jusqu’au verify (≤ 2 h).
+--suite expiry-verify : refus (code 2) si trop tôt ; cohérence bail/manifeste/claims, compte actif ni banni ni effacé (200), appel réel avec le même jeton expiré (401 sans fuite : PASS si enveloppe fonction ou code lié, OBSERVED sinon), suppression du compte et relecture 404.`);
 }
 process.exitCode = await main(process.argv.slice(2));

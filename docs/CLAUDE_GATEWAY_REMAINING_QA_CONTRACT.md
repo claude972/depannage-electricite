@@ -120,5 +120,20 @@ Après §2 (ou indépendamment, `--suite revoke-simple`) : (1) **déconnexion gl
 ## 4. Livraison et commande pilote
 1. Ce contrat (revue). 2. Implémentation §1 + tests (`npx tsx --test tests/qa-gateway*.test.ts`, `tsc`, `node --check`), SHA rapporté. 3. Après décision §2.7, implémentation §2/§3 + tests, SHA rapporté. Commandes pilote : `--suite expiry-prepare` puis, après `verifyNotBefore`, `--suite expiry-verify --lease …` ; `--suite revoke-live --no-other-writer --batch-result <fichier privé>` avec le lot et l’observateur revus (§2.4–2.5) ; `--suite revoke-simple`. Chaque run : nettoyage 0 reliquat exigé avant tout nouveau rédacteur.
 
+## 4 bis. Livraison §1 (implémentation après le contrat v2)
+
+`scripts/qa-gateway/lib.ts` : `decodeJwtClaims` (lecture base64url, aucune signature), `checkTokenConsistency`, `buildLease`/`parseLease`/`leaseDecision`, `assertPreExpiryProbe` (422 enveloppe fonction), `assertExpiredRefusal` (`pass` = enveloppe fonction ou code lié ; `observed` = `UNAUTHORIZED_*` inconnu ; `fail` = `NO_AUTH_HEADER`, `INVALID_JWT_FORMAT`, sans code, code numérique, 422/2xx/5xx, fuite), `EXPIRED_PLATFORM_CODES = []` (vide jusqu’à la première observation), `sha256Hex` (WebCrypto), `expiryPrepare`/`expiryVerify` (orchestration pure sur dépendances injectées : horloge, HTTP, manifeste, bail), manifeste avec `suite`, `leaseEndsAt`, `expiry { userId, email, issuer, claimExp, tokenSha256 }`, verdicts `prepared`/`observed`. `scripts/qa-gateway/run.mjs` : `--suite expiry-prepare|expiry-verify`, `--lease`, dépendances `fetch`, bail `lease.json` 0600 écrit brut dans `--out`, jeton/refresh/mot de passe ajoutés aux secrets de caviardage, nettoyage sauté **seulement** après `prepared` (compte laissé à dessein) ou `too-early` ; codes de sortie 0 (`pass`/`prepared`/`observed`), 1, 2. `tests/qa-gateway-expiry.test.ts` : 12 tests (arguments, claims, bail, sondes, enveloppes, manifeste, verdicts, deux phases enchaînées à horloge factice, non-preuves, câblage).
+
+Commandes pilote (après revue root du contrat v2, jamais exécutées par cet agent) :
+```
+node scripts/qa-gateway/run.mjs --suite expiry-prepare --function-url https://<ref>.supabase.co/functions/v1/native-document-upload --project <ref> --credentials /chemin/privé/creds.json --out /chemin/privé/exp-1
+# verdict attendu : prepared (code 0) ; summary.md donne verifyNotBefore/leaseEndsAt et la commande verify ; lease.json 0600 dans /chemin/privé/exp-1
+node scripts/qa-gateway/run.mjs --suite expiry-verify --lease /chemin/privé/exp-1/lease.json --function-url https://<ref>.supabase.co/functions/v1/native-document-upload --project <ref> --credentials /chemin/privé/creds.json --out /chemin/privé/exp-2
+# avant verifyNotBefore : code 2, rien touché ; après : observed (code 0) tant que le code plateforme n'est pas lié, pass si enveloppe fonction/code lié, fail sinon ; compte supprimé, relecture 404
+node scripts/qa-gateway/run.mjs --cleanup-manifest /chemin/privé/exp-1/manifest.json --project <ref> --credentials /chemin/privé/creds.json --out /chemin/privé/exp-3
+# secours si le verify n'a pas lieu avant leaseEndsAt
+```
+Après la première observation du code plateforme (summary `OBSERVED — code …`), commit de suivi : ajout du code dans `EXPIRED_PLATFORM_CODES` + test fixture verbatim (même méthode que ac72c38).
+
 ## 5. Limites honnêtes
 Aucune exécution par cet agent ; le code plateforme d’un JWT expiré, la durée réelle de `statement_timeout` PostgREST du projet, le comportement de `getUser` après déconnexion globale et la fenêtre réelle entre pré-contrôle et finalisation sont **à observer** lors de la recette pilote et deviennent des faits du rapport, jamais des PASS supposés.

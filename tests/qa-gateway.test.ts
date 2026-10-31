@@ -494,7 +494,11 @@ test("the orchestrator wires discovery-first cleanup into every exit path", asyn
   const source = await readFile(new URL("../scripts/qa-gateway/run.mjs", import.meta.url), "utf8");
   assert.match(source, /interruptGuard\(\(event, handler\) => process\.on\(event, handler\)/);
   assert.match(source, /AbortSignal\.any\(\[active\.signal, AbortSignal\.timeout\(TIMEOUT_MS\)\]\)/);
-  assert.match(source, /\} finally \{\n\s+if \(mode !== "dry-run"\) \{\n\s+try \{\n\s+await cleanup\(\);/);
+  // skipCleanup is set only by expiry-prepare (account kept on purpose, lease written) and by a
+  // too-early expiry-verify (nothing touched); every other path reaches the cleanup.
+  assert.match(source, /\} finally \{\n\s+if \(mode !== "dry-run" && !skipCleanup\) \{\n\s+try \{\n\s+await cleanup\(\);/);
+  assert.match(source, /let skipCleanup = false;/);
+  assert.equal((source.match(/skipCleanup = /g) || []).length, 3, "skipCleanup assigned only at its declaration, prepare and verify");
   assert.match(source, /async function cleanup\(\) \{\n[^]*?active = new AbortController\(\);\n[^]*?await runCleanup\(client, created, \{/);
   assert.match(source, /saveManifest: \(nextCreated, unknown\) => saveManifest\(nextCreated, unknown\)/);
   assert.match(source, /reconcile: interrupted \|\| mode === "cleanup-manifest" \? RECONCILE : undefined/);

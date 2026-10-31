@@ -14,8 +14,12 @@ export type Args = {
   out: string;
   dryRun: boolean;
   cleanupManifest: string;
+  suite: Suite;
+  lease: string;
   help: boolean;
 };
+export const SUITES = ["", "expiry-prepare", "expiry-verify"] as const;
+export type Suite = (typeof SUITES)[number];
 export class UsageError extends Error {}
 
 export function parseArgs(argv: string[]): Args {
@@ -26,6 +30,8 @@ export function parseArgs(argv: string[]): Args {
     out: "",
     dryRun: false,
     cleanupManifest: "",
+    suite: "",
+    lease: "",
     help: false,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -42,6 +48,11 @@ export function parseArgs(argv: string[]): Args {
     else if (token === "--credentials") args.credentials = take();
     else if (token === "--out") args.out = take();
     else if (token === "--cleanup-manifest") args.cleanupManifest = take();
+    else if (token === "--suite") {
+      const value = take();
+      if (!(SUITES as readonly string[]).includes(value) || value === "") throw new UsageError("--suite attend expiry-prepare ou expiry-verify.");
+      args.suite = value as Suite;
+    } else if (token === "--lease") args.lease = take();
     else if (token === "--dry-run") args.dryRun = true;
     else if (token === "--help" || token === "-h") args.help = true;
     else throw new UsageError(`Option inconnue : ${token}`);
@@ -54,6 +65,10 @@ export function parseArgs(argv: string[]): Args {
     if (!args[key]) throw new UsageError(`Option obligatoire manquante : --${kebab(key)}`);
   if (args.cleanupManifest && args.dryRun)
     throw new UsageError("--cleanup-manifest et --dry-run sont exclusifs.");
+  if (args.suite && args.cleanupManifest) throw new UsageError("--suite et --cleanup-manifest sont exclusifs.");
+  if (args.suite === "expiry-verify" && !args.lease) throw new UsageError("--suite expiry-verify exige --lease <lease.json>.");
+  if (args.suite === "expiry-verify" && args.dryRun) throw new UsageError("--dry-run ne s’applique qu’à expiry-prepare.");
+  if (args.lease && args.suite !== "expiry-verify") throw new UsageError("--lease n’a de sens qu’avec --suite expiry-verify.");
   if (!/^[a-z0-9]{20}$/.test(args.project))
     throw new UsageError("--project doit être la référence du projet (20 caractères).");
   if (args.functionUrl && !/^https:\/\//.test(args.functionUrl))
@@ -210,11 +225,13 @@ export function cleanupPlan(created: Created): CleanupStep[] {
 // Durable manifest of everything the run created, rewritten after each creation and again by the
 // cleanup discovery (merged cohort rows/objects, plus every read that stayed unknown).
 export type Unknown = { scope: string; detail: string };
-export type Manifest = { version: 1; runId: string; project: string; updatedAt: string; created: Created; unknown: Unknown[] };
+export type ManifestExpiry = { userId: string; email: string; issuer: string; claimExp: number; tokenSha256: string };
+export type ManifestExtra = { suite?: "expiry"; leaseEndsAt?: string; expiry?: ManifestExpiry };
+export type Manifest = { version: 1; runId: string; project: string; updatedAt: string; created: Created; unknown: Unknown[] } & ManifestExtra;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const OBJECT_PATH = /^[0-9a-f-]{36}\/[0-9a-f-]{36}$/i;
-export function manifestJson(runId: string, project: string, created: Created, now: Date, unknown: Unknown[] = []): string {
-  const manifest: Manifest = { version: 1, runId, project, updatedAt: now.toISOString(), created, unknown };
+export function manifestJson(runId: string, project: string, created: Created, now: Date, unknown: Unknown[] = [], extra: ManifestExtra = {}): string {
+  const manifest: Manifest = { version: 1, runId, project, updatedAt: now.toISOString(), created, unknown, ...extra };
   return JSON.stringify(manifest, null, 2);
 }
 export function parseManifest(raw: unknown, project: string): Manifest {
@@ -245,7 +262,22 @@ export function parseManifest(raw: unknown, project: string): Manifest {
       unknown.push({ scope: u.scope, detail: u.detail });
     }
   }
-  return { version: 1, runId: m.runId, project: m.project, updatedAt: String(m.updatedAt ?? ""), created, unknown };
+  const out: Manifest = { version: 1, runId: m.runId, project: m.project, updatedAt: String(m.updatedAt ?? ""), created, unknown };
+  if (m.suite !== undefined) {
+    if (m.suite !== "expiry") throw new UsageError("Manifeste invalide (suite).");
+    out.suite = "expiry";
+  }
+  if (m.leaseEndsAt !== undefined) {
+    if (typeof m.leaseEndsAt !== "string") throw new UsageError("Manifeste invalide (leaseEndsAt).");
+    out.leaseEndsAt = m.leaseEndsAt;
+  }
+  if (m.expiry !== undefined) {
+    const e = m.expiry as Record<string, unknown> | null;
+    if (!e || typeof e !== "object" || typeof e.userId !== "string" || !UUID.test(e.userId) || typeof e.email !== "string" || typeof e.issuer !== "string" || typeof e.claimExp !== "number" || typeof e.tokenSha256 !== "string" || !/^[0-9a-f]{64}$/.test(e.tokenSha256))
+      throw new UsageError("Manifeste invalide (expiry).");
+    out.expiry = { userId: e.userId, email: e.email, issuer: e.issuer, claimExp: e.claimExp, tokenSha256: e.tokenSha256 };
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -723,17 +755,32 @@ export type StepRecord = { step: string; status: StepStatus; detail: string; at:
 export type RunResult = {
   runId: string;
   project: string;
-  mode: "run" | "dry-run" | "cleanup-manifest";
+  mode: "run" | "dry-run" | "cleanup-manifest" | "expiry-prepare" | "expiry-verify";
   startedAt: string;
   finishedAt: string | null;
   steps: StepRecord[];
   scenarios: { name: string; expected: number; status: number | null; pass: boolean | null; reasons: string[] }[];
   cleanup: { label: string; ok: boolean; remaining: number | null; detail: string }[];
   leftovers: string[];
-  verdict: "pass" | "fail" | "incomplete";
+  verdict: "pass" | "fail" | "incomplete" | "prepared" | "observed";
+  expiry?: ExpiryReport;
+};
+// Platform codes observed for an EXPIRED JWT and bound strictly by the pilot (follow-up commit, same
+// method as PLATFORM_UNAUTHORIZED_CODES). Empty until the first real observation: an unknown
+// UNAUTHORIZED_* code is "observed", never a PASS.
+export const EXPIRED_PLATFORM_CODES: readonly string[] = [];
+export type ExpiryReport = {
+  phase: "prepare" | "verify";
+  userId: string | null;
+  verifyNotBefore: string | null;
+  leaseEndsAt: string | null;
+  leasePath: string | null;
+  observedCode: string | null;
+  verifyCommand: string | null;
+  outcome: "prepared" | "pass" | "observed" | "fail" | "too-early" | null;
 };
 // Any failed step (scenario, readback, cleanup) fails the run; later successes never mask it.
-export function computeVerdict(result: Pick<RunResult, "steps" | "scenarios" | "cleanup" | "leftovers" | "mode">, finished: boolean): RunResult["verdict"] {
+export function computeVerdict(result: Pick<RunResult, "steps" | "scenarios" | "cleanup" | "leftovers" | "mode"> & { expiry?: ExpiryReport }, finished: boolean): RunResult["verdict"] {
   if (!finished) return "incomplete";
   if (result.steps.some((s) => s.status === "fail")) return "fail";
   if (result.cleanup.some((c) => !c.ok) || result.leftovers.length) return "fail";
@@ -741,6 +788,10 @@ export function computeVerdict(result: Pick<RunResult, "steps" | "scenarios" | "
     if (result.scenarios.some((s) => s.pass === null)) return "incomplete";
     if (result.scenarios.some((s) => s.pass === false)) return "fail";
   }
+  // Prepare never claims PASS: the expiry is not proven until verify ran. Verify answers
+  // "observed" (not PASS) while the platform code for an expired JWT is not bound strictly.
+  if (result.mode === "expiry-prepare") return "prepared";
+  if (result.mode === "expiry-verify" && result.expiry?.outcome === "observed") return "observed";
   return "pass";
 }
 export function parseContentRangeTotal(header: string | null): number | null {
@@ -753,9 +804,21 @@ export function summaryMarkdown(result: RunResult): string {
   const lines: string[] = [];
   lines.push(`# QA gateway native-document-upload — run ${result.runId}`);
   lines.push("");
-  const mode = result.mode === "dry-run" ? "DRY RUN (aucune écriture distante)" : result.mode === "cleanup-manifest" ? "nettoyage depuis un manifeste" : "exécution réelle sur la base dédiée";
+  const mode = result.mode === "dry-run" ? "DRY RUN (aucune écriture distante)" : result.mode === "cleanup-manifest" ? "nettoyage depuis un manifeste" : result.mode === "expiry-prepare" ? "expiration réelle — phase prepare" : result.mode === "expiry-verify" ? "expiration réelle — phase verify" : "exécution réelle sur la base dédiée";
   lines.push(`Projet : ${result.project} · ${mode} · début ${result.startedAt} · fin ${result.finishedAt ?? "en cours"} · verdict **${result.verdict}**`);
   lines.push("");
+  if (result.expiry) {
+    const e = result.expiry;
+    lines.push("## Expiration réelle");
+    lines.push("");
+    if (e.phase === "prepare") {
+      lines.push(result.verdict === "prepared" ? "**PREPARED — expiration non encore prouvée.** Le compte technique est laissé intentionnellement jusqu’au verify." : "Préparation en échec : compte nettoyé ou manifeste actionnable.");
+      if (e.verifyNotBefore) lines.push(`Relancer après ${e.verifyNotBefore} et avant ${e.leaseEndsAt ?? "?"} : \`${e.verifyCommand ?? ""}\``);
+    } else {
+      lines.push(result.verdict === "observed" ? `**OBSERVED — pas un PASS.** Code 401 de la plateforme observé : ${e.observedCode ?? "—"} ; à lier strictement dans EXPIRED_PLATFORM_CODES (commit de suivi) avant tout PASS.` : `Corps 401 : ${e.observedCode ?? "—"}.`);
+    }
+    lines.push("");
+  }
   lines.push("## Scénarios");
   lines.push("");
   lines.push("| Scénario | Attendu | Obtenu | Résultat |");
@@ -779,4 +842,293 @@ export function summaryMarkdown(result: RunResult): string {
   lines.push("");
   lines.push("Jetons, clés et en-têtes ne sont jamais écrits ; ce rapport est caviardé. Une lecture en erreur est un échec explicite, jamais un résultat vide. Les tests réseau ne prouvent pas un interleaving concurrent.");
   return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------------------------
+// QA-GW-EXPIRED-REVOKE-003 §1 — real JWT expiry in two modes (prepare / verify), no blocking wait.
+// Pure orchestration over injected deps (clock, HTTP, manifest, lease) so node:test drives both
+// phases with a fake clock and fake responses. No token is ever forged, signed, refreshed or
+// verified here: only the payload claims are READ (base64url) for consistency checks.
+// ---------------------------------------------------------------------------------------------
+export const EXPIRY_VERIFY_MARGIN_S = 60;
+export const EXPIRY_LEASE_MAX_S = 7200;
+export function expiryEmail(run: string): string {
+  return `qa-gw-exp-${run}@qa.invalid`;
+}
+export function decodeJwtClaims(token: string): Record<string, unknown> | null {
+  const parts = typeof token === "string" ? token.split(".") : [];
+  if (parts.length !== 3 || !parts[1]) return null;
+  try {
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+    const bin = atob(padded);
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    const json = JSON.parse(new TextDecoder().decode(bytes));
+    return json && typeof json === "object" && !Array.isArray(json) ? (json as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+export type TokenCheck = { ok: boolean; reasons: string[]; claimExp: number | null };
+export function checkTokenConsistency(input: { token: string; projectUrl: string; userId: string; expiresAt: unknown; expiresIn: unknown; now: number }): TokenCheck {
+  const reasons: string[] = [];
+  const claims = decodeJwtClaims(input.token);
+  if (!claims) return { ok: false, reasons: ["jeton illisible (charge utile JWT invalide)"], claimExp: null };
+  const exp = typeof claims.exp === "number" ? claims.exp : null;
+  if (claims.iss !== `${input.projectUrl}/auth/v1`) reasons.push("iss ≠ projet");
+  if (claims.sub !== input.userId) reasons.push("sub ≠ uid créé");
+  if (claims.aud !== "authenticated") reasons.push("aud ≠ authenticated");
+  if (claims.role !== "authenticated") reasons.push("role ≠ authenticated");
+  if (exp === null) reasons.push("exp absent");
+  else {
+    if (typeof input.expiresAt !== "number" || Math.abs(exp - input.expiresAt) > 5) reasons.push("exp ≠ expires_at (±5 s)");
+    if (typeof input.expiresIn !== "number" || Math.abs(exp - (input.now + input.expiresIn)) > 30) reasons.push("exp ≠ now + expires_in (±30 s)");
+    if (exp <= input.now) reasons.push("jeton déjà expiré à l’obtention");
+  }
+  return { ok: reasons.length === 0, reasons, claimExp: exp };
+}
+export type Lease = {
+  version: 1;
+  suite: "expiry";
+  runId: string;
+  project: string;
+  userId: string;
+  email: string;
+  token: string;
+  issuer: string;
+  tokenExpiresAt: number;
+  claimExp: number;
+  grantExpiresIn: number;
+  preparedAt: number;
+  verifyNotBefore: number;
+  leaseEndsAt: number;
+  manifestPath: string;
+  consumedAt?: number;
+};
+export function buildLease(input: { runId: string; project: string; userId: string; email: string; token: string; issuer: string; expiresAt: number; claimExp: number; expiresIn: number; preparedAt: number; manifestPath: string }): Lease {
+  return {
+    version: 1,
+    suite: "expiry",
+    runId: input.runId,
+    project: input.project,
+    userId: input.userId,
+    email: input.email,
+    token: input.token,
+    issuer: input.issuer,
+    tokenExpiresAt: input.expiresAt,
+    claimExp: input.claimExp,
+    grantExpiresIn: input.expiresIn,
+    preparedAt: input.preparedAt,
+    verifyNotBefore: input.claimExp + EXPIRY_VERIFY_MARGIN_S,
+    leaseEndsAt: Math.min(input.claimExp + EXPIRY_LEASE_MAX_S, input.preparedAt + EXPIRY_LEASE_MAX_S),
+    manifestPath: input.manifestPath,
+  };
+}
+export function parseLease(raw: unknown, project: string): Lease {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new UsageError("Bail invalide.");
+  const l = raw as Record<string, unknown>;
+  if (l.version !== 1 || l.suite !== "expiry") throw new UsageError("Bail invalide (version/suite).");
+  for (const key of ["runId", "project", "userId", "email", "token", "issuer", "manifestPath"]) if (typeof l[key] !== "string" || !l[key]) throw new UsageError(`Bail invalide (${key}).`);
+  for (const key of ["tokenExpiresAt", "claimExp", "grantExpiresIn", "preparedAt", "verifyNotBefore", "leaseEndsAt"]) if (typeof l[key] !== "number" || !Number.isFinite(l[key])) throw new UsageError(`Bail invalide (${key}).`);
+  if (l.project !== project) throw new UsageError(`Refus : le bail appartient au projet ${l.project}, pas ${project}.`);
+  if (!UUID.test(String(l.userId))) throw new UsageError("Bail invalide (userId).");
+  if (l.consumedAt !== undefined && typeof l.consumedAt !== "number") throw new UsageError("Bail invalide (consumedAt).");
+  return { ...(l as unknown as Lease) };
+}
+export type LeaseDecision = { action: "too-early" | "expired-lease" | "verify"; detail: string };
+export function leaseDecision(lease: Lease, now: number): LeaseDecision {
+  const iso = (t: number) => new Date(t * 1000).toISOString();
+  if (lease.consumedAt !== undefined) return { action: "expired-lease", detail: `bail déjà consommé le ${iso(lease.consumedAt)}` };
+  if (now < lease.verifyNotBefore) return { action: "too-early", detail: `trop tôt : relancer après ${iso(lease.verifyNotBefore)} (exp ${iso(lease.claimExp)} + ${EXPIRY_VERIFY_MARGIN_S} s)` };
+  if (now > lease.leaseEndsAt) return { action: "expired-lease", detail: `bail expiré le ${iso(lease.leaseEndsAt)} : expiration non prouvée, nettoyage seulement` };
+  return { action: "verify", detail: `fenêtre de vérification ouverte (exp ${iso(lease.claimExp)}, bail jusqu’au ${iso(lease.leaseEndsAt)})` };
+}
+// Pre-expiry proof: a mutation-free POST (no multipart body) with the valid token must reach the
+// function (platform verify_jwt AND getUser accepted it) and be refused 422 with the function body.
+export function assertPreExpiryProbe(actual: { status: number; bodyText: string }, forbidden: string[]): Verdict {
+  const reasons: string[] = [];
+  if (actual.status === 401) reasons.push("jeton non accepté (401) avant échéance");
+  else if (actual.status < 300) reasons.push(`mutation inattendue (${actual.status}) sur une commande sans corps`);
+  else if (actual.status !== 422) reasons.push(`statut ${actual.status} au lieu de 422`);
+  for (const hit of leakCheck(actual.bodyText, forbidden)) reasons.push(`fuite : ${hit}`);
+  if (!/"error"\s*:\s*"/.test(actual.bodyText)) reasons.push("corps d’erreur sans message (enveloppe de la fonction attendue)");
+  return { pass: reasons.length === 0, reasons };
+}
+// Expired-token refusal: 401, function envelope or a platform envelope whose string code starts
+// with UNAUTHORIZED_ — except NO_AUTH_HEADER, which would prove a transport defect, not expiry.
+// The exact platform code for an expired JWT has not been observed yet: it is recorded for the
+// pilot and bound strictly in a follow-up (same pattern as the two known codes).
+export async function sha256Hex(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+export type ExpiredVerdict = { outcome: "pass" | "observed" | "fail"; reasons: string[]; observedCode: string | null };
+export function assertExpiredRefusal(actual: { status: number; bodyText: string }, forbidden: string[]): ExpiredVerdict {
+  const reasons: string[] = [];
+  let observedCode: string | null = null;
+  let bound = false;
+  if (actual.status === 422) reasons.push("jeton expiré encore accepté (422 : la fonction a été atteinte)");
+  else if (actual.status < 300) reasons.push(`jeton expiré encore accepté (${actual.status})`);
+  else if (actual.status !== 401) reasons.push(`statut ${actual.status} au lieu de 401`);
+  for (const hit of leakCheck(actual.bodyText, forbidden)) reasons.push(`fuite : ${hit}`);
+  if (/"error"\s*:\s*"/.test(actual.bodyText)) {
+    observedCode = "function-envelope";
+    bound = true;
+  } else {
+    let json: unknown = null;
+    try {
+      json = JSON.parse(actual.bodyText);
+    } catch {
+      json = null;
+    }
+    const body = json && typeof json === "object" && !Array.isArray(json) ? (json as Record<string, unknown>) : null;
+    const code = body && typeof body.code === "string" ? body.code : null;
+    const message = body && typeof body.message === "string" && body.message.trim().length > 0;
+    if (!body || !message || !code || !code.startsWith("UNAUTHORIZED_")) reasons.push("corps 401 sans enveloppe reconnue (fonction ou plateforme avec code chaîne UNAUTHORIZED_*)");
+    else if (code === PLATFORM_UNAUTHORIZED_CODES.anonymous || code === PLATFORM_UNAUTHORIZED_CODES.invalid) reasons.push(`code ${code} : en-tête absent ou format invalide, pas une expiration`);
+    else {
+      observedCode = code;
+      bound = EXPIRED_PLATFORM_CODES.includes(code);
+    }
+  }
+  if (reasons.length) return { outcome: "fail", reasons, observedCode };
+  return { outcome: bound ? "pass" : "observed", reasons: bound ? [] : [`code ${observedCode} non encore lié strictement : observé, pas un PASS`], observedCode };
+}
+export type ExpiryDeps = {
+  now(): number;
+  runId: string;
+  project: string;
+  projectUrl: string;
+  manifestPath: string;
+  leasePath: string;
+  verifyCommand: string;
+  randomPassword(): string;
+  createUser(email: string, password: string): Promise<{ status: number; id: string | null; detail: string }>;
+  passwordGrant(email: string, password: string): Promise<{ status: number; json: Record<string, unknown> | null; detail: string }>;
+  probe(token: string): Promise<{ status: number; text: string }>;
+  getUser(userId: string): Promise<{ status: number; json: Record<string, unknown> | null }>;
+  readManifest(path: string): Promise<Manifest>;
+  record(kind: CreatedKind, value: string, extra?: ManifestExtra): Promise<void>;
+  addSecret(secret: string): void;
+  forbidden(): string[];
+  client: Pick<CleanupClient, "listDocuments" | "listObjects">;
+  writeLease(lease: Lease): Promise<void>;
+  log(status: StepStatus, step: string, detail: string): Promise<void>;
+};
+export type PrepareOutcome = { outcome: "prepared" | "fail"; userId: string | null; lease: Lease | null };
+export async function expiryPrepare(deps: ExpiryDeps): Promise<PrepareOutcome> {
+  const email = expiryEmail(deps.runId);
+  const password = deps.randomPassword();
+  deps.addSecret(password);
+  const created = await deps.createUser(email, password);
+  if (created.status >= 300 || !created.id) {
+    await deps.log("fail", "compte technique d’expiration", `création → HTTP ${created.status} ${created.detail}`);
+    return { outcome: "fail", userId: null, lease: null };
+  }
+  const userId = created.id;
+  // Durable id BEFORE any authentication: the manifest can clean it whatever happens next.
+  const leaseEndsAtProvisional = new Date((deps.now() + EXPIRY_LEASE_MAX_S) * 1000).toISOString();
+  await deps.record("userIds", userId, { suite: "expiry", leaseEndsAt: leaseEndsAtProvisional });
+  await deps.log("pass", "compte technique d’expiration créé (un seul, confirmé, rôle client)", userId);
+  const grant = await deps.passwordGrant(email, password);
+  const token = typeof grant.json?.access_token === "string" ? grant.json.access_token : null;
+  if (grant.status !== 200 || !token) {
+    await deps.log("fail", "jeton réel (password grant)", `HTTP ${grant.status} ${grant.detail}`);
+    return { outcome: "fail", userId, lease: null };
+  }
+  deps.addSecret(token);
+  if (typeof grant.json?.refresh_token === "string") deps.addSecret(grant.json.refresh_token);
+  const now = deps.now();
+  const check = checkTokenConsistency({ token, projectUrl: deps.projectUrl, userId, expiresAt: grant.json?.expires_at, expiresIn: grant.json?.expires_in, now });
+  if (!check.ok || check.claimExp === null) {
+    await deps.log("fail", "cohérence du jeton (iss/sub/aud/role/exp vs expires_at)", check.reasons.join(" ; "));
+    return { outcome: "fail", userId, lease: null };
+  }
+  await deps.log("pass", "jeton réel cohérent (claims lues sans secret, jamais rafraîchi)", `exp ${new Date(check.claimExp * 1000).toISOString()}`);
+  const probe = await deps.probe(token);
+  const verdict = assertPreExpiryProbe({ status: probe.status, bodyText: probe.text }, deps.forbidden());
+  await deps.log(verdict.pass ? "pass" : "fail", "jeton accepté avant échéance sur une commande sans mutation (422 attendu)", `HTTP ${probe.status}${verdict.reasons.length ? ` — ${verdict.reasons.join(" ; ")}` : ""}`);
+  if (!verdict.pass) return { outcome: "fail", userId, lease: null };
+  const zero = emptyCreated();
+  zero.userIds.push(userId);
+  const found = await discoverCohort(deps.client, zero);
+  const silent = found.complete && found.added.documentIds.length === 0 && found.added.objectPaths.length === 0;
+  await deps.log(silent ? "pass" : "fail", "aucune écriture par la sonde (documents 0, objets 0)", found.complete ? `${found.added.documentIds.length} ligne(s), ${found.added.objectPaths.length} objet(s)` : found.unknown.map((u) => `${u.scope} (${u.detail})`).join(" ; "));
+  if (!silent) return { outcome: "fail", userId, lease: null };
+  const lease = buildLease({ runId: deps.runId, project: deps.project, userId, email, token, issuer: `${deps.projectUrl}/auth/v1`, expiresAt: Number(grant.json?.expires_at), claimExp: check.claimExp, expiresIn: Number(grant.json?.expires_in), preparedAt: now, manifestPath: deps.manifestPath });
+  if (lease.verifyNotBefore >= lease.leaseEndsAt) {
+    // A TTL longer than the lease window can never be verified: never leave a stale account.
+    await deps.log("fail", "bail inexécutable : aucun bail écrit, compte nettoyé", `TTL ${Number(grant.json?.expires_in)} s : verifyNotBefore ${new Date(lease.verifyNotBefore * 1000).toISOString()} ≥ leaseEndsAt ${new Date(lease.leaseEndsAt * 1000).toISOString()} (fenêtre ${EXPIRY_LEASE_MAX_S} s)`);
+    return { outcome: "fail", userId, lease: null };
+  }
+  const expiry: ManifestExpiry = { userId, email, issuer: lease.issuer, claimExp: lease.claimExp, tokenSha256: await sha256Hex(token) };
+  await deps.record("userIds", userId, { suite: "expiry", leaseEndsAt: new Date(lease.leaseEndsAt * 1000).toISOString(), expiry });
+  await deps.writeLease(lease);
+  await deps.log("info", "PREPARED — expiration non encore prouvée", `relancer après ${new Date(lease.verifyNotBefore * 1000).toISOString()} et avant ${new Date(lease.leaseEndsAt * 1000).toISOString()} : ${deps.verifyCommand}`);
+  return { outcome: "prepared", userId, lease };
+}
+export type VerifyOutcome = { outcome: "pass" | "observed" | "fail" | "too-early"; observedCode: string | null; cleanup: boolean };
+// Returns whether the caller must run the cohort cleanup (never on too-early).
+export async function expiryVerify(lease: Lease, deps: ExpiryDeps): Promise<VerifyOutcome> {
+  const decision = leaseDecision(lease, deps.now());
+  if (decision.action === "too-early") {
+    await deps.log("info", "verify refusé : trop tôt (rien écrit, rien supprimé, compte conservé)", decision.detail);
+    return { outcome: "too-early", observedCode: null, cleanup: false };
+  }
+  deps.addSecret(lease.token);
+  if (decision.action === "expired-lease") {
+    await deps.log("fail", "bail hors fenêtre : expiration non prouvée", decision.detail);
+    return { outcome: "fail", observedCode: null, cleanup: true };
+  }
+  // Lease ↔ manifest consistency before any call: token hash, issuer, uid, exp, aud/role.
+  let manifest: Manifest;
+  try {
+    manifest = await deps.readManifest(lease.manifestPath);
+  } catch (error) {
+    await deps.log("fail", "manifeste du bail illisible", error instanceof Error ? error.message : String(error));
+    return { outcome: "fail", observedCode: null, cleanup: true };
+  }
+  const claims = decodeJwtClaims(lease.token);
+  const mismatch: string[] = [];
+  if (manifest.suite !== "expiry" || !manifest.expiry) mismatch.push("manifeste sans données d’expiration");
+  else {
+    if (manifest.expiry.tokenSha256 !== (await sha256Hex(lease.token))) mismatch.push("empreinte SHA-256 du jeton ≠ manifeste");
+    if (manifest.expiry.userId !== lease.userId || !manifest.created.userIds.includes(lease.userId)) mismatch.push("uid du bail ≠ manifeste");
+    if (manifest.expiry.issuer !== lease.issuer || manifest.expiry.issuer !== `${deps.projectUrl}/auth/v1`) mismatch.push("issuer ≠ manifeste/projet");
+    if (manifest.expiry.claimExp !== lease.claimExp) mismatch.push("exp du bail ≠ manifeste");
+    if (manifest.expiry.email !== lease.email) mismatch.push("e-mail du bail ≠ manifeste");
+  }
+  if (!claims) mismatch.push("jeton du bail illisible");
+  else {
+    if (claims.iss !== lease.issuer) mismatch.push("claim iss ≠ bail");
+    if (claims.sub !== lease.userId) mismatch.push("claim sub ≠ bail");
+    if (claims.exp !== lease.claimExp) mismatch.push("claim exp ≠ bail");
+    if (claims.aud !== "authenticated" || claims.role !== "authenticated") mismatch.push("claims aud/role ≠ authenticated");
+  }
+  await deps.log(mismatch.length ? "fail" : "pass", "cohérence bail ↔ manifeste ↔ claims (empreinte, iss, sub, exp)", mismatch.length ? mismatch.join(" ; ") : "identiques");
+  if (mismatch.length) return { outcome: "fail", observedCode: null, cleanup: true };
+  // Active, not banned, not deleted — otherwise a 401 proves nothing about expiry.
+  const active = await deps.getUser(lease.userId);
+  const u = active.json ?? {};
+  const bannedUntil = typeof u.banned_until === "string" ? Date.parse(u.banned_until) / 1000 : null;
+  const activeReasons: string[] = [];
+  if (active.status !== 200) activeReasons.push(`Auth admin HTTP ${active.status}`);
+  else {
+    if (u.id !== lease.userId) activeReasons.push("id ≠ uid du bail");
+    if (typeof u.email !== "string" || u.email.toLowerCase() !== lease.email.toLowerCase()) activeReasons.push("e-mail ≠ bail");
+    if (u.deleted_at) activeReasons.push("compte effacé (deleted_at)");
+    if (bannedUntil !== null && Number.isFinite(bannedUntil) && bannedUntil > deps.now()) activeReasons.push("compte banni (banned_until futur)");
+  }
+  await deps.log(activeReasons.length ? "fail" : "pass", "compte technique actif, ni banni ni effacé, avant l’appel (isole l’expiration)", activeReasons.length ? activeReasons.join(" ; ") : `Auth admin HTTP ${active.status}, e-mail et id identiques`);
+  if (activeReasons.length) return { outcome: "fail", observedCode: null, cleanup: true };
+  const now = deps.now();
+  if (now < lease.claimExp + EXPIRY_VERIFY_MARGIN_S) {
+    await deps.log("fail", "horloge locale avant exp + 60 s", `now ${new Date(now * 1000).toISOString()} < ${new Date((lease.claimExp + EXPIRY_VERIFY_MARGIN_S) * 1000).toISOString()}`);
+    return { outcome: "fail", observedCode: null, cleanup: true };
+  }
+  const probe = await deps.probe(lease.token);
+  const verdict = assertExpiredRefusal({ status: probe.status, bodyText: probe.text }, deps.forbidden());
+  await deps.log(verdict.outcome === "fail" ? "fail" : verdict.outcome === "observed" ? "info" : "pass", verdict.outcome === "observed" ? "jeton réel expiré refusé 401 sans fuite — code plateforme OBSERVÉ, non lié : pas un PASS" : "jeton réel expiré refusé par la fonction déployée (401 sans fuite)", `HTTP ${probe.status}${verdict.observedCode ? ` — code ${verdict.observedCode}` : ""}${verdict.reasons.length ? ` — ${verdict.reasons.join(" ; ")}` : ""}`);
+  await deps.writeLease({ ...lease, consumedAt: now });
+  return { outcome: verdict.outcome, observedCode: verdict.observedCode, cleanup: true };
 }
