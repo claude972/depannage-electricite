@@ -976,3 +976,9 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - **T14 ANOMALY (190 s), harness cause:** same-session diagnostics `/tmp/depannage-tracking-a9-4c-selected-public/diagnostics/T14/artisanA-ui14.json` + PNG 21:37:52 — isoA part PASS (UI start/point/STOP 200, duplicate STOP 409, late point 409); then MAIN was already shared by T9 (inherited): panel shows « Reprendre le partage » + interruption status, not « Partager »; the 90 s catch stopped MAIN via API (200 at 21:36:21.719) but a same-hash goto does not refresh the control phase ⇒ second timeout. Source ~L590 catch.
 - Fix dispatched to tracking worker a84ded5: contract A10 before code — normalise MAIN (CAS stop + readback `shared=false`, else BLOCKED) BEFORE opening its panel; remove the 90 s catch/late retry; keep all stop/point 409, arrived, on_site, clear assertions; no relogin; no weakening of Resume/Share. Local markup repro + order tests; then root selected T9,T14. Provider PASS not replayed.
 - Root waits for cleanup 552 + readback 42 (cohort active until proven). Deep-link 47423b7 to root peer when ready (no app merge before peer); Delivo web 004 in progress in parallel.
+
+## 2026-10-31 — Delivo web 004 plan be502e1 read; GPS 552 final; no cohort active
+
+- Root read plan `be502e15105fe9c468c9c074a05a80e653537feb`: OK, with one adjustment forwarded to a2ddf36 — wordmark is the DESCRIPTIVE « Dépannage électrique » only; no « courant » brand (not validated by the owner; the test must not name a future platform). Root then checks desktop 1440 layout, ad click and CTA to demande, and publishes a public static `web.html` (no production).
+- **GPS run 552 final:** 9 PASS, 0 FAIL, 1 ANOMALY (T14), exit 0 but not a global PASS; cleanup 29 + root readback 42 PASS 0; no QA cohort active. T14 precondition contract (A10) awaited from the tracking worker before code.
+- Deep-link 47423b7 in root counter-review (reader P2); no merge before root's GO.
