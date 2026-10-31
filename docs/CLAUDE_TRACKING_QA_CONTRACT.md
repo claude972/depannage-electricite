@@ -643,3 +643,16 @@ Décision ROOT : la déconnexion globale actuelle du produit est conservée pour
 Tout autre cas reste `unknown` et n'est jamais `absent` : 404 avec un autre corps ou sans corps, JSON invalide, clés en plus ou en moins, autre `error_code`.
 
 Ces règles ne changent rien d'autre : l'absence ne ferme toujours aucune intention (P2-2/P2-d), et la recherche paginée par e-mail garde sa preuve de fin. Le `UNKNOWN` d'origine du run 4e8bc1a68a89 reste tel quel. Tests prévus : chaque format accepté, ainsi qu'un 404 nu, un 404 HTML, un 404 avec un champ en plus et un 404 avec un autre `error_code`, tous `unknown`.
+
+### 6. Ordre T19 / déconnexion (GO ROOT sur 7502e28, avant le code)
+
+Choix retenu : **T19 passe après toutes les preuves fournisseur**. Le runner exécute dans cet ordre :
+1. les scénarios de suivi sélectionnés, sauf T19 ;
+2. les preuves fournisseur (`--provider-proof`) ;
+3. T19 en dernier, s'il est sélectionné.
+
+Ainsi, aucun scénario ultérieur ne peut réutiliser une session de `users.client` révoquée par la déconnexion globale de T19.
+
+En défense supplémentaire, toute déconnexion faite par un scénario marque comme révoquées toutes les sessions du pool appartenant au même utilisateur. Un `session()` ultérieur pour cet utilisateur échoue en BLOCKED (« session révoquée par une déconnexion globale »), sans reconnexion silencieuse.
+
+Le comportement d'authentification du produit (déconnexion globale) est inchangé. Le format des 404 Auth (§5 e) attend la confirmation de la forme actuelle par ROOT et n'entre pas dans ce lot de code.
