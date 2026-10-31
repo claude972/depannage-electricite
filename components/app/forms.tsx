@@ -1,0 +1,2276 @@
+"use client";
+// Operational forms extracted from the original monolith; behaviour preserved, shared by the
+// role spaces. Styling classes live in app/globals.css.
+import { useEffect, useState, type FormEvent } from "react";
+import { api } from "./api";
+import { Icon } from "./icons";
+import { Empty, Field, ConfirmAction } from "./ui";
+import {
+  CATEGORIES,
+  ROLE_NAMES,
+  category,
+  csv,
+  date,
+  download,
+  money,
+  shortId,
+  uid,
+} from "./format";
+import type {
+  ApprovalRule,
+  Approval,
+  Category,
+  Contract,
+  ComplianceRecord,
+  Intervention,
+  Line,
+  Message,
+  Profile,
+  ProfessionalData,
+  Quote,
+  RequestValues,
+  Review,
+  Role,
+  Site,
+  StoredDocument,
+  WarrantyCase,
+} from "./types";
+
+export function RequestForm({
+  initialCategory,
+  initialValues,
+  sites,
+  mode,
+  busy,
+  onBack,
+  onSubmit,
+  onDemo,
+}: {
+  initialCategory: Category;
+  initialValues: RequestValues | null;
+  sites: Site[];
+  mode: string;
+  busy: boolean;
+  onBack: () => void;
+  onSubmit: (values: RequestValues) => Promise<void>;
+  onDemo: () => void;
+}) {
+  const [step, setStep] = useState(1);
+  const [values, setValues] = useState<RequestValues>(
+    initialValues || {
+      category: initialCategory,
+      description: "",
+      address: "",
+      postal_code: "",
+      city: "",
+      urgency: "scheduled",
+    },
+  );
+  const [validation, setValidation] = useState("");
+  const c = category(values.category);
+  function next(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setValidation("");
+    if (step === 1 && values.description.trim().length < 15) {
+      setValidation("Décrivez le problème en au moins 15 caractères.");
+      return;
+    }
+    if (step < 3) setStep(step + 1);
+    else void onSubmit(values);
+  }
+  return (
+    <div className="form-page">
+      <button className="back-link" onClick={onBack}>
+        <Icon name="back" size={17} />
+        Retour
+      </button>
+      <div className="form-heading">
+        <h1>Créons votre demande.</h1>
+        <p>Le bon point de départ pour résoudre votre problème électrique.</p>
+      </div>
+      <ol className="stepper">
+        {["Le problème", "Le lieu et le besoin", "Le récapitulatif"].map(
+          (s, i) => (
+            <li key={s} className={step >= i + 1 ? "current" : ""}>
+              <span>
+                {step > i + 1 ? <Icon name="check" size={15} /> : i + 1}
+              </span>
+              <strong>{s}</strong>
+            </li>
+          ),
+        )}
+      </ol>
+      <form className="panel request-form" onSubmit={next}>
+        {validation && (
+          <div className="alert error" role="alert">
+            {validation}
+          </div>
+        )}
+        {step === 1 ? (
+          <>
+            <h2>Que se passe-t-il ?</h2>
+            <div className="category-grid">
+              {CATEGORIES.map((cat) => (
+                <button
+                  type="button"
+                  className={values.category === cat.id ? "selected" : ""}
+                  key={cat.id}
+                  onClick={() => setValues({ ...values, category: cat.id })}
+                >
+                  <Icon name={cat.icon} size={25} />
+                  <span>
+                    <strong>{cat.label}</strong>
+                    <small>{cat.description}</small>
+                  </span>
+                  <span className="radio-dot" />
+                </button>
+              ))}
+            </div>
+            <Field
+              label="Décrivez le problème"
+              hint="Ce que vous constatez, les pièces concernées et depuis quand. 15 caractères minimum."
+            >
+              <textarea
+                value={values.description}
+                required
+                minLength={15}
+                maxLength={2000}
+                rows={4}
+                placeholder="Par exemple : le disjoncteur se déclenche depuis ce matin lorsque j’allume le four…"
+                onChange={(e) =>
+                  setValues({ ...values, description: e.target.value })
+                }
+              />
+            </Field>
+            <div className="inline-note">
+              <Icon name="shield" />
+              <p>
+                Ne manipulez pas une installation qui présente un danger. Cette
+                application ne fournit pas de diagnostic d’urgence.
+              </p>
+            </div>
+          </>
+        ) : step === 2 ? (
+          <>
+            <h2>Où faut-il intervenir ?</h2>
+            {sites.length > 0 && (
+              <Field label="Site professionnel (facultatif)">
+                <select
+                  value={values.site_id || ""}
+                  onChange={(e) =>
+                    setValues({
+                      ...values,
+                      site_id: e.target.value || undefined,
+                    })
+                  }
+                >
+                  <option value="">Adresse personnelle ou autre lieu</option>
+                  {sites.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+            <Field label="Adresse d’intervention">
+              <input
+                required
+                minLength={5}
+                maxLength={250}
+                autoComplete="street-address"
+                value={values.address}
+                onChange={(e) =>
+                  setValues({ ...values, address: e.target.value })
+                }
+                placeholder="Numéro et nom de rue"
+              />
+            </Field>
+            <div className="form-columns">
+              <Field label="Code postal">
+                <input
+                  required
+                  inputMode="numeric"
+                  pattern="[0-9]{5}"
+                  maxLength={5}
+                  autoComplete="postal-code"
+                  value={values.postal_code}
+                  onChange={(e) =>
+                    setValues({ ...values, postal_code: e.target.value })
+                  }
+                />
+              </Field>
+              <Field label="Ville">
+                <input
+                  required
+                  minLength={2}
+                  maxLength={100}
+                  autoComplete="address-level2"
+                  value={values.city}
+                  onChange={(e) =>
+                    setValues({ ...values, city: e.target.value })
+                  }
+                />
+              </Field>
+            </div>
+            <fieldset className="urgency-options">
+              <legend>Quel est votre besoin ?</legend>
+              {[
+                [
+                  "scheduled",
+                  "Intervention à planifier",
+                  "Le problème peut attendre un rendez-vous.",
+                ],
+                [
+                  "urgent",
+                  "Demande urgente",
+                  "Le problème nécessite une prise en charge prioritaire.",
+                ],
+              ].map(([id, label, desc]) => (
+                <label
+                  key={id}
+                  className={values.urgency === id ? "selected" : ""}
+                >
+                  <input
+                    type="radio"
+                    name="urgency"
+                    value={id}
+                    checked={values.urgency === id}
+                    onChange={() =>
+                      setValues({
+                        ...values,
+                        urgency: id as "urgent" | "scheduled",
+                      })
+                    }
+                  />
+                  <span>
+                    <strong>{label}</strong>
+                    <small>{desc}</small>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+            <p className="form-note">
+              La disponibilité et les délais seront précisés après prise en
+              charge. Aucune affectation immédiate n’est garantie.
+            </p>
+          </>
+        ) : (
+          <>
+            <h2>Votre demande, en clair.</h2>
+            <div className="recap-service">
+              <span className="service-icon">
+                <Icon name={c.icon} size={27} />
+              </span>
+              <div>
+                <strong>{c.label}</strong>
+                <span>
+                  {values.urgency === "urgent"
+                    ? "Demande urgente"
+                    : "Intervention à planifier"}
+                </span>
+              </div>
+            </div>
+            <p>{values.description}</p>
+            <div className="recap-address">
+              <Icon name="location" />
+              <span>
+                {values.address}
+                <br />
+                {values.postal_code} {values.city}
+              </span>
+            </div>
+            <div className="estimate-box">
+              <span>Estimation indicative</span>
+              <strong>
+                {money(c.min)} – {money(c.max)}
+              </strong>
+              <p>
+                Ces montants sont des exemples de préparation du service. Le
+                prix final et les taxes applicables seront précisés dans un
+                devis à accepter avant intervention.
+              </p>
+            </div>
+            {mode === "public" && (
+              <div className="alert warning">
+                <Icon name="lock" />
+                <span>
+                  Un compte est nécessaire pour enregistrer et suivre votre
+                  demande. Vous pourrez aussi explorer une démonstration sans
+                  envoyer de demande réelle.
+                </span>
+              </div>
+            )}
+            {mode === "demo" && (
+              <div className="alert warning">
+                <Icon name="help" />
+                <span>
+                  Cette demande restera dans la démonstration. Ne saisissez pas
+                  de données personnelles réelles.
+                </span>
+              </div>
+            )}
+          </>
+        )}
+        <div className="form-actions">
+          {step > 1 ? (
+            <button
+              type="button"
+              className="button outline"
+              onClick={() => setStep(step - 1)}
+            >
+              <Icon name="back" size={16} />
+              Précédent
+            </button>
+          ) : (
+            <span />
+          )}
+          <button type="submit" className="button primary" disabled={busy}>
+            {busy
+              ? "Enregistrement…"
+              : step < 3
+                ? "Continuer"
+                : mode === "public"
+                  ? "Créer mon compte et continuer"
+                  : "Enregistrer la demande"}
+            {!busy && <Icon name="arrow" size={16} />}
+          </button>
+        </div>
+        {mode === "public" && step === 3 && (
+          <button type="button" className="text-button full" onClick={onDemo}>
+            Essayer d’abord la démonstration
+          </button>
+        )}
+      </form>
+    </div>
+  );
+}
+export function QuoteEditor({
+  busy,
+  demo,
+  onSubmit,
+}: {
+  busy: boolean;
+  demo: boolean;
+  onSubmit: (values: Record<string, unknown>) => void;
+}) {
+  const [lines, setLines] = useState<Line[]>([
+    { label: "Déplacement", quantity: 1, unit_price_cents: 0 },
+    { label: "Main-d’œuvre", quantity: 1, unit_price_cents: 0 },
+  ]);
+  const [tax, setTax] = useState(20);
+  const [err, setErr] = useState("");
+  const subtotal = lines.reduce(
+    (n, l) => n + Math.round(l.quantity * l.unit_price_cents),
+    0,
+  );
+  return (
+    <form
+      className="panel quote-editor"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (
+          lines.some(
+            (l) =>
+              !l.label.trim() ||
+              !Number.isInteger(l.quantity) ||
+              l.quantity <= 0 ||
+              l.unit_price_cents < 0,
+          ) ||
+          subtotal <= 0
+        ) {
+          setErr(
+            "Renseignez les prestations, les quantités et un montant total supérieur à zéro.",
+          );
+          return;
+        }
+        setErr("");
+        onSubmit({ lines, tax_rate: tax });
+      }}
+    >
+      <h2>Établir le devis</h2>
+      <p>Détaillez les prestations et vérifiez les taxes applicables.</p>
+      {err && (
+        <div className="alert error" role="alert">
+          {err}
+        </div>
+      )}
+      {lines.map((l, index) => (
+        <div className="quote-editor-row" key={index}>
+          <Field label={`Prestation ${index + 1}`}>
+            <input
+              required
+              maxLength={150}
+              value={l.label}
+              onChange={(e) =>
+                setLines(
+                  lines.map((x, j) =>
+                    j === index ? { ...x, label: e.target.value } : x,
+                  ),
+                )
+              }
+            />
+          </Field>
+          <Field label="Quantité">
+            <input
+              required
+              type="number"
+              min="1"
+              max="1000"
+              step="1"
+              value={l.quantity}
+              onChange={(e) =>
+                setLines(
+                  lines.map((x, j) =>
+                    j === index
+                      ? { ...x, quantity: Number(e.target.value) }
+                      : x,
+                  ),
+                )
+              }
+            />
+          </Field>
+          <Field label="Prix unitaire HT (€)">
+            <input
+              required
+              type="number"
+              min="0"
+              max="100000"
+              step="0.01"
+              value={l.unit_price_cents / 100}
+              onChange={(e) =>
+                setLines(
+                  lines.map((x, j) =>
+                    j === index
+                      ? {
+                          ...x,
+                          unit_price_cents: Math.round(
+                            Number(e.target.value) * 100,
+                          ),
+                        }
+                      : x,
+                  ),
+                )
+              }
+            />
+          </Field>
+          <button
+            className="icon-button"
+            type="button"
+            disabled={lines.length === 1}
+            aria-label={`Supprimer la prestation ${index + 1}`}
+            onClick={() => setLines(lines.filter((_, j) => j !== index))}
+          >
+            <Icon name="close" size={17} />
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        className="text-button"
+        onClick={() =>
+          setLines([...lines, { label: "", quantity: 1, unit_price_cents: 0 }])
+        }
+      >
+        <Icon name="plus" size={17} />
+        Ajouter une ligne
+      </button>
+      <Field
+        label="Taux de TVA (%)"
+        hint={
+          demo
+            ? "Taux de démonstration, sans validation fiscale."
+            : "Renseignez le taux applicable à votre prestation."
+        }
+      >
+        <select value={tax} onChange={(e) => setTax(Number(e.target.value))}>
+          <option value="0">0 %</option>
+          <option value="5.5">5,5 %</option>
+          <option value="10">10 %</option>
+          <option value="20">20 %</option>
+        </select>
+      </Field>
+      <div className="quote-totals">
+        <div>
+          <span>Total HT</span>
+          <strong>{money(subtotal)}</strong>
+        </div>
+        <div className="total">
+          <span>Total TTC</span>
+          <strong>
+            {money(subtotal + Math.round((subtotal * tax) / 100))}
+          </strong>
+        </div>
+      </div>
+      <button type="submit" className="button primary full" disabled={busy}>
+        <Icon name="send" />
+        {busy ? "Envoi…" : "Envoyer le devis"}
+      </button>
+    </form>
+  );
+}
+export function MessageCenter({
+  interventions,
+  messages,
+  role,
+  profileId,
+  selectedId,
+  busy,
+  onSubmit,
+}: {
+  interventions: Intervention[];
+  messages: Message[];
+  role: Role;
+  profileId: string;
+  selectedId: string;
+  busy: boolean;
+  onSubmit: (id: string, body: string) => Promise<boolean | undefined>;
+}) {
+  const [id, setId] = useState(selectedId || interventions[0]?.id || "");
+  const [body, setBody] = useState("");
+  const rows = messages.filter((m) => m.intervention_id === id);
+  return (
+    <section className="panel messages-layout">
+      <div className="message-threads">
+        <h2>Interventions</h2>
+        {interventions.map((i) => (
+          <button
+            key={i.id}
+            className={id === i.id ? "selected" : ""}
+            onClick={() => setId(i.id)}
+          >
+            <Icon name={category(i.category).icon} />
+            <span>
+              <strong>{category(i.category).label}</strong>
+              <small>{shortId(i.id)}</small>
+            </span>
+            <Icon name="arrow" size={15} />
+          </button>
+        ))}
+      </div>
+      <div className="message-conversation">
+        {!id ? (
+          <Empty icon="message" title="Aucune conversation">
+            Vos échanges seront disponibles une fois une demande créée.
+          </Empty>
+        ) : (
+          <>
+            <div className="conversation-header">
+              <h2>
+                {
+                  category(
+                    interventions.find((i) => i.id === id)?.category || "",
+                  ).label
+                }
+              </h2>
+              <span>Conversation liée à l’intervention</span>
+            </div>
+            <div className="message-history" aria-live="polite">
+              {rows.length ? (
+                rows.map((m) => (
+                  <div
+                    className={`message-bubble ${m.author_id === profileId ? "mine" : ""}`}
+                    key={m.id}
+                  >
+                    <span>
+                      {m.author_id === profileId
+                        ? "Vous"
+                        : role === "artisan"
+                          ? "Client"
+                          : "Artisan"}
+                    </span>
+                    <p>{m.body}</p>
+                    <small>{date(m.created_at)}</small>
+                  </div>
+                ))
+              ) : (
+                <Empty icon="message" title="Commencez l’échange">
+                  Posez une question sur cette intervention.
+                </Empty>
+              )}
+            </div>
+            <form
+              className="message-compose"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (body.trim()) {
+                  void onSubmit(id, body.trim()).then((saved) => {
+                    if (saved) setBody("");
+                  });
+                }
+              }}
+            >
+              <label className="sr-only" htmlFor="message-body">
+                Votre message
+              </label>
+              <textarea
+                id="message-body"
+                required
+                maxLength={2000}
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                placeholder="Écrivez votre message…"
+                rows={2}
+              />
+              <button
+                className="button primary"
+                disabled={busy || !body.trim()}
+                type="submit"
+                aria-label="Envoyer le message"
+              >
+                <Icon name="send" />
+              </button>
+            </form>
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+export function SiteForm({
+  busy,
+  onSubmit,
+}: {
+  busy: boolean;
+  onSubmit: (values: {
+    name: string;
+    type: string;
+    address: string;
+    budget_cents: number;
+  }) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [address, setAddress] = useState("");
+  const [type, setType] = useState("syndic");
+  const [budget, setBudget] = useState("");
+  return (
+    <section className="panel site-form">
+      <div className="section-heading">
+        <div>
+          <h2>Ajouter un site</h2>
+          <p>Un lieu et un budget de référence pour vos interventions.</p>
+        </div>
+        <button className="button outline" onClick={() => setOpen(!open)}>
+          <Icon name={open ? "close" : "plus"} />
+          {open ? "Fermer" : "Nouveau site"}
+        </button>
+      </div>
+      {open && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void onSubmit({
+              name,
+              address,
+              type,
+              budget_cents: Math.round(Number(budget || 0) * 100),
+            });
+          }}
+        >
+          <div className="form-columns">
+            <Field label="Nom du site">
+              <input
+                required
+                minLength={2}
+                maxLength={100}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </Field>
+            <Field label="Type de site">
+              <select value={type} onChange={(e) => setType(e.target.value)}>
+                <option value="syndic">Syndic / copropriété</option>
+                <option value="restaurant">Restauration</option>
+                <option value="office">Bureaux</option>
+                <option value="erp">ERP</option>
+              </select>
+            </Field>
+          </div>
+          <Field label="Adresse">
+            <input
+              required
+              minLength={5}
+              maxLength={250}
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+            />
+          </Field>
+          <Field label="Budget de référence (€)">
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              max="1000000"
+              value={budget}
+              onChange={(e) => setBudget(e.target.value)}
+            />
+          </Field>
+          <button className="button primary" type="submit" disabled={busy}>
+            {busy ? "Enregistrement…" : "Enregistrer le site"}
+          </button>
+        </form>
+      )}
+    </section>
+  );
+}
+export function ProfileForm({
+  name,
+  phone,
+  role,
+  demo,
+  busy,
+  onSubmit,
+}: {
+  name: string;
+  phone: string;
+  role: Role;
+  demo: boolean;
+  busy: boolean;
+  onSubmit: (values: { full_name: string; phone: string }) => Promise<void>;
+}) {
+  const [fullName, setFullName] = useState(name);
+  const [number, setNumber] = useState(phone);
+  return (
+    <form
+      className="panel profile-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void onSubmit({ full_name: fullName, phone: number });
+      }}
+    >
+      <div className="profile-intro">
+        <span className="avatar large-avatar">
+          {fullName
+            .split(" ")
+            .map((n) => n[0])
+            .slice(0, 2)
+            .join("")}
+        </span>
+        <div>
+          <h2>{name}</h2>
+          <p>
+            {ROLE_NAMES[role]}
+            {demo ? " — démonstration" : ""}
+          </p>
+        </div>
+      </div>
+      <Field label="Nom complet">
+        <input
+          required
+          minLength={2}
+          maxLength={100}
+          autoComplete="name"
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+        />
+      </Field>
+      <Field label="Téléphone (facultatif)">
+        <input
+          type="tel"
+          maxLength={30}
+          autoComplete="tel"
+          value={number}
+          onChange={(e) => setNumber(e.target.value)}
+          placeholder="Votre numéro de téléphone"
+        />
+      </Field>
+      <p className="form-note">
+        Votre rôle et l’approbation d’une candidature artisan ne peuvent pas
+        être modifiés depuis ce formulaire.
+      </p>
+      <button className="button primary" disabled={busy} type="submit">
+        {busy ? "Enregistrement…" : "Enregistrer les informations"}
+      </button>
+    </form>
+  );
+}
+export function AuthForm({
+  mode,
+  onMode,
+  busy,
+  onSubmit,
+  onDemo,
+}: {
+  mode: "login" | "signup" | "reset";
+  onMode: (mode: "login" | "signup" | "reset") => void;
+  busy: boolean;
+  onSubmit: (values: {
+    email: string;
+    password: string;
+    full_name: string;
+    role: Role;
+  }) => Promise<void>;
+  onDemo: () => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [role, setRole] = useState<Role>("client");
+  return (
+    <div className="auth-layout">
+      <section className="auth-copy">
+        <span className="auth-mark">
+          <Icon name="bolt" size={52} />
+        </span>
+        <h1>
+          Votre intervention,
+          <br />
+          en toute clarté.
+        </h1>
+        <p>
+          Retrouvez vos demandes, vos devis et vos échanges dans un même espace.
+        </p>
+        <button className="text-button" onClick={onDemo}>
+          Explorer sans créer de compte
+          <Icon name="arrow" size={16} />
+        </button>
+      </section>
+      <form
+        className="panel auth-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void onSubmit({ email, password, full_name: name, role });
+        }}
+      >
+        <h2>
+          {mode === "login"
+            ? "Connexion"
+            : mode === "signup"
+              ? "Créer un compte"
+              : "Réinitialiser mon mot de passe"}
+        </h2>
+        <p>
+          {mode === "login"
+            ? "Ravi de vous retrouver."
+            : mode === "signup"
+              ? "Choisissez l’espace qui correspond à votre besoin."
+              : "Recevez un lien pour choisir un nouveau mot de passe."}
+        </p>
+        {mode === "signup" && (
+          <>
+            <Field label="Votre espace">
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value as Role)}
+              >
+                <option value="client">Particulier</option>
+                <option value="artisan">Artisan électricien</option>
+                <option value="manager">Professionnel / syndic</option>
+              </select>
+            </Field>
+            <Field label="Nom complet">
+              <input
+                required
+                autoComplete="name"
+                minLength={2}
+                maxLength={100}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </Field>
+            {role === "artisan" && (
+              <div className="inline-note">
+                <Icon name="shield" />
+                <p>
+                  Votre candidature devra être approuvée avant que vous puissiez
+                  accepter des missions.
+                </p>
+              </div>
+            )}
+          </>
+        )}
+        <Field label="Adresse email">
+          <input
+            required
+            type="email"
+            autoComplete="email"
+            maxLength={254}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </Field>
+        {mode !== "reset" && (
+          <Field
+            label="Mot de passe"
+            hint={mode === "signup" ? "Au moins 10 caractères." : undefined}
+          >
+            <input
+              required
+              type="password"
+              autoComplete={
+                mode === "signup" ? "new-password" : "current-password"
+              }
+              minLength={mode === "signup" ? 10 : 1}
+              maxLength={128}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </Field>
+        )}
+        {mode === "login" && (
+          <button
+            type="button"
+            className="forgot-link"
+            onClick={() => onMode("reset")}
+          >
+            Mot de passe oublié ?
+          </button>
+        )}
+        <button className="button primary full" type="submit" disabled={busy}>
+          {busy
+            ? "Veuillez patienter…"
+            : mode === "login"
+              ? "Se connecter"
+              : mode === "signup"
+                ? "Créer mon compte"
+                : "Envoyer le lien"}
+        </button>
+        <p className="auth-switch">
+          {mode === "login"
+            ? "Pas encore de compte ?"
+            : mode === "signup"
+              ? "Déjà un compte ?"
+              : "Vous vous souvenez du mot de passe ?"}{" "}
+          <button
+            type="button"
+            onClick={() => onMode(mode === "login" ? "signup" : "login")}
+          >
+            {mode === "login" ? "Créer un compte" : "Se connecter"}
+          </button>
+        </p>
+        <p className="form-note">
+          Aucun paiement n’est demandé à l’inscription.
+        </p>
+      </form>
+    </div>
+  );
+}
+
+export function ReviewForm({
+  existing,
+  enabled,
+  busy,
+  onSubmit,
+}: {
+  existing?: Review;
+  enabled: boolean;
+  busy: boolean;
+  onSubmit: (values: { rating: number; body: string }) => Promise<void>;
+}) {
+  const [rating, setRating] = useState(5);
+  const [body, setBody] = useState("");
+  if (existing)
+    return (
+      <section className="panel review-panel">
+        <h2>Votre avis</h2>
+        <p className="review-stars" aria-label={`${existing.rating} sur 5`}>
+          {"★".repeat(existing.rating)}
+          {"☆".repeat(5 - existing.rating)}
+        </p>
+        <p>{existing.body || "Merci pour votre évaluation."}</p>
+      </section>
+    );
+  if (!enabled) return null;
+  return (
+    <form
+      className="panel review-panel"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void onSubmit({ rating, body });
+      }}
+    >
+      <h2>Comment s’est passée l’intervention ?</h2>
+      <p>Votre retour porte sur cette intervention terminée et réglée.</p>
+      <fieldset className="rating-options">
+        <legend>Votre note sur cinq</legend>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <label key={n}>
+            <input
+              type="radio"
+              name="rating"
+              value={n}
+              checked={rating === n}
+              onChange={() => setRating(n)}
+            />
+            <span>
+              {n}
+              <Icon name="star" size={15} />
+            </span>
+          </label>
+        ))}
+      </fieldset>
+      <Field label="Votre commentaire (facultatif)">
+        <textarea
+          maxLength={2000}
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          placeholder="Ce qui vous a été utile, ce qui pourrait être amélioré…"
+        />
+      </Field>
+      <button className="button primary" type="submit" disabled={busy}>
+        Enregistrer mon avis
+      </button>
+    </form>
+  );
+}
+export function DocumentManager({
+  documents,
+  interventions,
+  demo,
+  onRefresh,
+}: {
+  documents: StoredDocument[];
+  interventions: Intervention[];
+  demo: boolean;
+  onRefresh: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [selected, setSelected] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  async function upload(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!file || demo) return;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      if (file.size > 4194304)
+        throw new Error("Choisissez un document de moins de 4 Mo.");
+      if (
+        !["application/pdf", "image/jpeg", "image/png", "image/webp"].includes(
+          file.type,
+        )
+      )
+        throw new Error("Formats autorisés : PDF, JPEG, PNG et WebP.");
+      const form = new FormData();
+      form.append("file", file);
+      if (selected) form.append("intervention_id", selected);
+      const response = await fetch("/api/documents", {
+        method: "POST",
+        body: form,
+      });
+      const result = await response.json();
+      if (!response.ok)
+        throw new Error(
+          result.error || "Le document n’a pas pu être enregistré.",
+        );
+      await onRefresh();
+      setNotice("Document enregistré dans votre espace privé.");
+      setFile(null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="panel document-manager">
+      <div className="section-heading">
+        <h2>Pièces et justificatifs</h2>
+        <Icon name="lock" />
+      </div>
+      {error && (
+        <div className="alert error" role="alert">
+          {error}
+        </div>
+      )}
+      {notice && (
+        <div className="alert success" role="status">
+          {notice}
+        </div>
+      )}
+      {documents.length ? (
+        <div className="document-list">
+          {documents.map((d) => (
+            <div key={d.id}>
+              <Icon name="document" />
+              <section>
+                <h3>{d.name}</h3>
+                <p>{date(d.created_at)}</p>
+              </section>
+              <button
+                className="button outline"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  setError("");
+                  try {
+                    const result = await api<{ url: string }>(
+                      `/api/documents?id=${encodeURIComponent(d.id)}`,
+                    );
+                    if (!result.url?.startsWith("https://"))
+                      throw new Error(
+                        "Le lien de téléchargement est indisponible.",
+                      );
+                    window.open(result.url, "_blank", "noopener,noreferrer");
+                  } catch (e) {
+                    setError((e as Error).message);
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                <Icon name="download" />
+                Télécharger
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="document-empty">Aucune pièce jointe pour le moment.</p>
+      )}
+      {demo ? (
+        <div className="inline-note">
+          <Icon name="help" />
+          <p>
+            Le dépôt de documents réels est désactivé dans la démonstration.
+            Connectez-vous à un compte réel pour déposer une pièce dans le
+            stockage privé.
+          </p>
+        </div>
+      ) : (
+        <form onSubmit={upload}>
+          <Field label="Dossier associé (facultatif)">
+            <select
+              value={selected}
+              onChange={(e) => setSelected(e.target.value)}
+            >
+              <option value="">Justificatif personnel</option>
+              {interventions.map((i) => (
+                <option value={i.id} key={i.id}>
+                  {shortId(i.id)} — {category(i.category).label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field
+            label="Document privé"
+            hint="PDF, JPEG, PNG ou WebP, jusqu’à 4 Mo."
+          >
+            <input
+              type="file"
+              required
+              accept="application/pdf,image/jpeg,image/png,image/webp"
+              onChange={(e) => setFile(e.target.files?.[0] || null)}
+            />
+          </Field>
+          <button
+            className="button primary"
+            type="submit"
+            disabled={busy || !file}
+          >
+            <Icon name="plus" />
+            {busy ? "Enregistrement…" : "Ajouter le document"}
+          </button>
+        </form>
+      )}
+    </section>
+  );
+}
+export function ArtisanAdministration({ demo }: { demo: boolean }) {
+  const [rows, setRows] = useState<(Profile & { created_at: string })[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState("");
+  async function load() {
+    setLoading(true);
+    setError("");
+    try {
+      if (demo) {
+        const stored = localStorage.getItem("courant-admin-demo-v1");
+        setRows(
+          stored
+            ? JSON.parse(stored)
+            : [
+                {
+                  id: "demo-artisan",
+                  full_name: "Alex Martin",
+                  role: "artisan",
+                  artisan_approved: true,
+                  created_at: "2026-10-30T09:00:00Z",
+                },
+                {
+                  id: "demo-artisan-2",
+                  full_name: "Sam Laurent",
+                  role: "artisan",
+                  artisan_approved: false,
+                  created_at: "2026-10-30T10:00:00Z",
+                },
+              ],
+        );
+        return;
+      }
+      const result = await api<{
+        artisans: (Profile & { created_at: string })[];
+      }>("/api/admin/artisans");
+      setRows(result.artisans);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => {
+    void load();
+  }, []);
+  return (
+    <section className="panel">
+      <div className="section-heading">
+        <h2>Candidatures artisans</h2>
+        <button
+          className="button outline"
+          onClick={() => void load()}
+          disabled={loading}
+        >
+          <Icon name="refresh" />
+          Actualiser
+        </button>
+      </div>
+      {error && (
+        <div className="alert error" role="alert">
+          {error}
+        </div>
+      )}
+      {loading ? (
+        <div className="page-loader">
+          <span className="spinner" />
+          Chargement des candidatures…
+        </div>
+      ) : rows.length ? (
+        <div className="document-list">
+          {rows.map((p) => (
+            <div key={p.id}>
+              <span className="avatar">
+                {p.full_name.slice(0, 2).toUpperCase()}
+              </span>
+              <section>
+                <h3>{p.full_name}</h3>
+                <p>
+                  {p.artisan_approved
+                    ? "Candidature approuvée"
+                    : "En attente de vérification"}{" "}
+                  — {date(p.created_at)}
+                </p>
+              </section>
+              <ConfirmAction
+                label={p.artisan_approved ? "Suspendre" : "Approuver"}
+                message={
+                  p.artisan_approved
+                    ? "Suspendre l’accès aux nouvelles missions de cet artisan ?"
+                    : "Confirmez-vous avoir vérifié la candidature et ses justificatifs ?"
+                }
+                confirmLabel={
+                  p.artisan_approved
+                    ? "Confirmer la suspension"
+                    : "Confirmer l’approbation"
+                }
+                busy={Boolean(busy)}
+                onConfirm={async () => {
+                  setBusy(p.id);
+                  setError("");
+                  try {
+                    if (demo) {
+                      const next = rows.map((row) =>
+                        row.id === p.id
+                          ? { ...row, artisan_approved: !row.artisan_approved }
+                          : row,
+                      );
+                      localStorage.setItem(
+                        "courant-admin-demo-v1",
+                        JSON.stringify(next),
+                      );
+                      setRows(next);
+                    } else {
+                      await api("/api/admin/artisans", {
+                        user_id: p.id,
+                        approved: !p.artisan_approved,
+                      });
+                      await load();
+                    }
+                  } catch (e) {
+                    setError((e as Error).message);
+                  } finally {
+                    setBusy("");
+                  }
+                }}
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <Empty icon="shield" title="Aucune candidature à vérifier">
+          Les inscriptions artisans apparaîtront ici.
+        </Empty>
+      )}
+    </section>
+  );
+}
+
+export function ProfessionalOperations({
+  data,
+  sites,
+  organizations,
+  quotes,
+  demo,
+  busy,
+  onRefresh,
+  onSave,
+}: {
+  data: ProfessionalData;
+  sites: Site[];
+  organizations: { id: string; name: string }[];
+  quotes: Quote[];
+  demo: boolean;
+  busy: boolean;
+  onRefresh: () => Promise<void>;
+  onSave: (values: Record<string, unknown>) => Promise<boolean | undefined>;
+}) {
+  const [tab, setTab] = useState("approvals");
+  const [site, setSite] = useState("");
+  const [threshold, setThreshold] = useState("200");
+  const [requiredRole, setRequiredRole] = useState("manager");
+  const [enabled, setEnabled] = useState(true);
+  const [title, setTitle] = useState("");
+  const [reference, setReference] = useState("");
+  const [starts, setStarts] = useState("");
+  const [ends, setEnds] = useState("");
+  const [terms, setTerms] = useState("");
+  const [contractStatus, setContractStatus] = useState("draft");
+  const [kind, setKind] = useState("maintenance");
+  const [due, setDue] = useState("");
+  const [recordStatus, setRecordStatus] = useState("pending");
+  const [notes, setNotes] = useState("");
+  const [error, setError] = useState("");
+  const selectedSite = site || sites[0]?.id || "";
+  function siteField() {
+    return (
+      <Field label="Site concerné">
+        <select
+          required
+          value={selectedSite}
+          onChange={(e) => setSite(e.target.value)}
+        >
+          <option value="" disabled>
+            Choisir un site
+          </option>
+          {sites.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+    );
+  }
+  async function report() {
+    setError("");
+    try {
+      if (demo) {
+        const rows = [
+          ["Type", "Site", "Échéance", "Statut"],
+          ...data.compliance_records.map((r) => [
+            r.kind,
+            sites.find((s) => s.id === r.site_id)?.name || "",
+            r.due_on,
+            r.status,
+          ]),
+        ];
+        download(
+          "courant-suivi-demo.csv",
+          "\uFEFF" +
+            rows
+              .map((row) =>
+                row
+                  .map(
+                    (v) =>
+                      `"${v.replace(/^[=+@-]/, "'$&").replaceAll('"', '""')}"`,
+                  )
+                  .join(";"),
+              )
+              .join("\r\n"),
+          "text/csv;charset=utf-8",
+        );
+        return;
+      }
+      const response = await fetch("/api/reports?format=csv", {
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || "Le rapport n’est pas disponible.");
+      }
+      download(
+        "courant-rapport.csv",
+        await response.text(),
+        "text/csv;charset=utf-8",
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  return (
+    <section className="panel professional-operations">
+      <div className="section-heading">
+        <div>
+          <h2>Pilotage professionnel</h2>
+          <p>Approbations, contrats et échéances de vos sites.</p>
+        </div>
+        <button className="button outline" onClick={() => void report()}>
+          <Icon name="download" />
+          Rapport
+        </button>
+      </div>
+      <div
+        className="tabs operations-tabs"
+        role="group"
+        aria-label="Pilotage professionnel"
+      >
+        {[
+          ["approvals", "Approbations"],
+          ["contracts", "Contrats cadres"],
+          ["compliance", "Audits et maintenance"],
+        ].map(([id, label]) => (
+          <button
+            key={id}
+            className={tab === id ? "active" : ""}
+            onClick={() => {
+              setTab(id);
+              setError("");
+            }}
+          >
+            {label}
+          </button>
+        ))}
+        {!demo && (
+          <button
+            className="refresh-operations"
+            aria-label="Actualiser le pilotage professionnel"
+            onClick={() => void onRefresh()}
+          >
+            <Icon name="refresh" size={17} />
+          </button>
+        )}
+      </div>
+      {error && (
+        <div className="alert error" role="alert">
+          {error}
+        </div>
+      )}
+      {tab === "approvals" ? (
+        <div className="operations-grid">
+          <div>
+            <h3>Décisions en attente</h3>
+            {data.approvals.length ? (
+              <div className="approval-list">
+                {data.approvals.map((a) => {
+                  const q = quotes.find((q) => q.id === a.quote_id);
+                  return (
+                    <div key={a.id}>
+                      <section>
+                        <strong>
+                          {q ? money(q.total_cents) : "Devis à approuver"}
+                        </strong>
+                        <p>
+                          {a.site_id
+                            ? sites.find((s) => s.id === a.site_id)?.name
+                            : "Site de l’intervention"}
+                        </p>
+                        <span
+                          className={`badge ${a.status === "approved" ? "status-paid" : a.status === "rejected" ? "status-cancelled" : "status-quoted"}`}
+                        >
+                          {a.status === "approved"
+                            ? "Approuvé"
+                            : a.status === "rejected"
+                              ? "Refusé"
+                              : "En attente"}
+                        </span>
+                        {a.note && <p>{a.note}</p>}
+                      </section>
+                      {a.status === "pending" && (
+                        <ApprovalDecision
+                          busy={busy}
+                          onDecision={(decision, note) =>
+                            onSave({
+                              action: "decide_approval",
+                              approval_id: a.id,
+                              decision,
+                              note,
+                            })
+                          }
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="operation-empty">
+                <Icon name="check" />
+                <p>Aucun devis ne nécessite d’approbation pour le moment.</p>
+              </div>
+            )}
+            <h3>Règles enregistrées</h3>
+            {data.approval_rules.map((r) => (
+              <div className="rule-row" key={r.site_id}>
+                <Icon name="shield" />
+                <span>
+                  <strong>
+                    {sites.find((s) => s.id === r.site_id)?.name || "Site"}
+                  </strong>
+                  <small>
+                    Au-delà de {money(r.threshold_cents)} —{" "}
+                    {r.required_role === "owner"
+                      ? "propriétaire"
+                      : "gestionnaire"}{" "}
+                    — {r.enabled ? "active" : "désactivée"}
+                  </small>
+                </span>
+              </div>
+            ))}
+          </div>
+          <form
+            className="operations-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!selectedSite) return;
+              void onSave({
+                action: "set_approval_rule",
+                site_id: selectedSite,
+                threshold_cents: Math.round(Number(threshold) * 100),
+                required_role: requiredRole,
+                enabled,
+              });
+            }}
+          >
+            <h3>Configurer une approbation</h3>
+            <p>
+              Les nouveaux devis dépassant le seuil nécessiteront une décision
+              avant acceptation.
+            </p>
+            {siteField()}
+            <Field label="Seuil de validation TTC (€)">
+              <input
+                required
+                type="number"
+                min="0"
+                max="1000000"
+                step="0.01"
+                value={threshold}
+                onChange={(e) => setThreshold(e.target.value)}
+              />
+            </Field>
+            <Field label="Responsable de validation">
+              <select
+                value={requiredRole}
+                onChange={(e) => setRequiredRole(e.target.value)}
+              >
+                <option value="manager">Gestionnaire de l’organisation</option>
+                <option value="owner">Propriétaire de l’organisation</option>
+              </select>
+            </Field>
+            <label className="checkbox-field">
+              <input
+                type="checkbox"
+                checked={enabled}
+                onChange={(e) => setEnabled(e.target.checked)}
+              />
+              Règle active
+            </label>
+            <button
+              className="button primary full"
+              type="submit"
+              disabled={busy || !selectedSite}
+            >
+              Enregistrer la règle
+            </button>
+          </form>
+        </div>
+      ) : tab === "contracts" ? (
+        <div className="operations-grid">
+          <div>
+            <h3>Contrats de l’organisation</h3>
+            {data.contracts.length ? (
+              <div className="contract-list">
+                {data.contracts.map((c) => (
+                  <details key={c.id}>
+                    <summary>
+                      <span>
+                        <strong>{c.title}</strong>
+                        <small>
+                          Réf. {c.reference} —{" "}
+                          {c.status === "active"
+                            ? "Actif"
+                            : c.status === "archived"
+                              ? "Archivé"
+                              : "Brouillon"}
+                        </small>
+                      </span>
+                      <Icon name="arrow" size={17} />
+                    </summary>
+                    <p>
+                      Du {date(c.starts_on)}
+                      {c.ends_on ? ` au ${date(c.ends_on)}` : ""}
+                    </p>
+                    <p>{c.terms}</p>
+                    <button
+                      className="button outline"
+                      disabled={busy}
+                      onClick={() =>
+                        void onSave({
+                          action: "save_contract",
+                          id: c.id,
+                          organization_id: c.organization_id,
+                          title: c.title,
+                          reference: c.reference,
+                          starts_on: c.starts_on,
+                          ends_on: c.ends_on || undefined,
+                          terms: c.terms,
+                          status:
+                            c.status === "archived" ? "active" : "archived",
+                        })
+                      }
+                    >
+                      {c.status === "archived" ? "Réactiver" : "Archiver"}
+                    </button>
+                  </details>
+                ))}
+              </div>
+            ) : (
+              <div className="operation-empty">
+                <Icon name="document" />
+                <p>Aucun contrat cadre enregistré.</p>
+              </div>
+            )}
+          </div>
+          <form
+            className="operations-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!organizations[0]?.id) return;
+              void onSave({
+                action: "save_contract",
+                organization_id: organizations[0].id,
+                title,
+                reference,
+                starts_on: starts,
+                ends_on: ends || undefined,
+                terms,
+                status: contractStatus,
+              });
+            }}
+          >
+            <h3>Enregistrer un contrat cadre</h3>
+            <p>
+              Archivage d’un accord existant. Ce formulaire ne constitue pas une
+              signature électronique.
+            </p>
+            <Field label="Intitulé">
+              <input
+                required
+                minLength={2}
+                maxLength={160}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+            </Field>
+            <Field label="Référence">
+              <input
+                required
+                minLength={2}
+                maxLength={100}
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+              />
+            </Field>
+            <div className="form-columns">
+              <Field label="Début">
+                <input
+                  required
+                  type="date"
+                  value={starts}
+                  onChange={(e) => setStarts(e.target.value)}
+                />
+              </Field>
+              <Field label="Fin (facultative)">
+                <input
+                  type="date"
+                  min={starts || undefined}
+                  value={ends}
+                  onChange={(e) => setEnds(e.target.value)}
+                />
+              </Field>
+            </div>
+            <Field label="Conditions et grille tarifaire">
+              <textarea
+                required
+                minLength={5}
+                maxLength={8000}
+                value={terms}
+                onChange={(e) => setTerms(e.target.value)}
+                placeholder="Périmètre, prestations, conditions et tarifs convenus…"
+              />
+            </Field>
+            <Field label="État du document">
+              <select
+                value={contractStatus}
+                onChange={(e) => setContractStatus(e.target.value)}
+              >
+                <option value="draft">Brouillon</option>
+                <option value="active">Actif</option>
+                <option value="archived">Archivé</option>
+              </select>
+            </Field>
+            {!organizations.length && (
+              <p className="form-note">
+                Ajoutez un premier site pour créer votre organisation.
+              </p>
+            )}
+            <button
+              className="button primary full"
+              type="submit"
+              disabled={busy || !organizations.length}
+            >
+              Enregistrer le contrat
+            </button>
+          </form>
+        </div>
+      ) : (
+        <div className="operations-grid">
+          <div>
+            <h3>Échéances et signalements</h3>
+            {data.compliance_records.length ? (
+              <div className="compliance-list">
+                {data.compliance_records.map((r) => (
+                  <div key={r.id}>
+                    <span className="record-icon">
+                      <Icon
+                        name={
+                          r.kind === "safety"
+                            ? "warning"
+                            : r.kind === "audit"
+                              ? "shield"
+                              : "wrench"
+                        }
+                      />
+                    </span>
+                    <section>
+                      <strong>{r.title}</strong>
+                      <p>
+                        {sites.find((s) => s.id === r.site_id)?.name || "Site"}{" "}
+                        — {date(r.due_on)}
+                      </p>
+                      <span
+                        className={`badge ${r.status === "completed" ? "status-paid" : "status-quoted"}`}
+                      >
+                        {r.status === "completed"
+                          ? "Terminé"
+                          : r.status === "scheduled"
+                            ? "Planifié"
+                            : "À traiter"}
+                      </span>
+                      {r.notes && <p>{r.notes}</p>}
+                      {r.status !== "completed" && (
+                        <button
+                          className="button outline"
+                          disabled={busy}
+                          onClick={() =>
+                            void onSave({
+                              action: "save_compliance",
+                              id: r.id,
+                              site_id: r.site_id,
+                              title: r.title,
+                              kind: r.kind,
+                              due_on: r.due_on,
+                              status: "completed",
+                              notes: r.notes,
+                            })
+                          }
+                        >
+                          Marquer terminé
+                        </button>
+                      )}
+                    </section>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="operation-empty">
+                <Icon name="calendar" />
+                <p>Aucune échéance de maintenance ou d’audit enregistrée.</p>
+              </div>
+            )}
+            <div className="inline-note">
+              <Icon name="shield" />
+              <p>
+                Ces enregistrements organisent le suivi. Ils ne certifient pas
+                la conformité d’une installation ou d’un ERP.
+              </p>
+            </div>
+          </div>
+          <form
+            className="operations-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!selectedSite) return;
+              void onSave({
+                action: "save_compliance",
+                site_id: selectedSite,
+                title,
+                kind,
+                due_on: due,
+                status: recordStatus,
+                notes,
+              });
+            }}
+          >
+            <h3>Ajouter une échéance</h3>
+            <p>
+              Audit électrique, maintenance préventive ou signalement de
+              sécurité.
+            </p>
+            {siteField()}
+            <Field label="Intitulé">
+              <input
+                required
+                minLength={2}
+                maxLength={160}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+            </Field>
+            <Field label="Type de suivi">
+              <select value={kind} onChange={(e) => setKind(e.target.value)}>
+                <option value="maintenance">Maintenance préventive</option>
+                <option value="audit">Audit électrique</option>
+                <option value="safety">Signalement de sécurité</option>
+              </select>
+            </Field>
+            <Field label="Échéance">
+              <input
+                required
+                type="date"
+                value={due}
+                onChange={(e) => setDue(e.target.value)}
+              />
+            </Field>
+            <Field label="État">
+              <select
+                value={recordStatus}
+                onChange={(e) => setRecordStatus(e.target.value)}
+              >
+                <option value="pending">À traiter</option>
+                <option value="scheduled">Planifié</option>
+                <option value="completed">Terminé</option>
+              </select>
+            </Field>
+            <Field label="Notes et équipements concernés">
+              <textarea
+                maxLength={4000}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Par exemple : armoire froide, circuit de cuisine, éclairage de sécurité…"
+              />
+            </Field>
+            <button
+              className="button primary full"
+              type="submit"
+              disabled={busy || !selectedSite}
+            >
+              Enregistrer l’échéance
+            </button>
+          </form>
+        </div>
+      )}
+    </section>
+  );
+}
+
+export function WarrantyPanel({
+  interventionId,
+  demo,
+  role,
+}: {
+  interventionId?: string;
+  demo: boolean;
+  role: Role;
+}) {
+  const [cases, setCases] = useState<WarrantyCase[]>([]);
+  const [description, setDescription] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  async function load() {
+    setLoading(true);
+    try {
+      if (demo) {
+        setCases(
+          JSON.parse(localStorage.getItem("courant-warranty-demo-v1") || "[]"),
+        );
+        return;
+      }
+      const result = await api<{ cases: WarrantyCase[] }>("/api/warranty");
+      setCases(result.cases);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => {
+    void load();
+  }, [demo, interventionId]);
+  const visible = cases.filter(
+    (c) => !interventionId || c.intervention_id === interventionId,
+  );
+  async function save(values: Record<string, unknown>) {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      if (demo) {
+        const next =
+          values.action === "request"
+            ? [
+                ...cases,
+                {
+                  id: uid(),
+                  intervention_id: interventionId!,
+                  description,
+                  status: "submitted" as const,
+                  created_at: new Date().toISOString(),
+                },
+              ]
+            : cases.map((c) =>
+                c.id === values.case_id
+                  ? {
+                      ...c,
+                      status: values.status as WarrantyCase["status"],
+                      resolution: String(values.resolution),
+                    }
+                  : c,
+              );
+        localStorage.setItem("courant-warranty-demo-v1", JSON.stringify(next));
+        setCases(next);
+        setNotice(
+          "Suivi enregistré dans la démonstration. Aucune demande réelle n’est transmise.",
+        );
+      } else {
+        await api("/api/warranty", values);
+        await load();
+        setNotice("Votre dossier a été enregistré.");
+      }
+      setDescription("");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="panel warranty-panel">
+      <div className="section-heading">
+        <h2>Suivi après intervention</h2>
+        <Icon name="shield" />
+      </div>
+      <p className="warranty-intro">
+        Le projet prévoit une garantie d’un an. Le dépôt réel des demandes
+        nécessite l’activation des conditions commerciales par l’exploitant.
+        Aucun droit contractuel n’est attesté par cette démonstration.
+      </p>
+      {error && (
+        <div className="alert error" role="alert">
+          {error}
+        </div>
+      )}
+      {notice && (
+        <div className="alert success" role="status">
+          {notice}
+        </div>
+      )}
+      {loading ? (
+        <p className="document-empty">Chargement du suivi…</p>
+      ) : visible.length ? (
+        <div className="warranty-list">
+          {visible.map((c) => (
+            <div key={c.id}>
+              <div>
+                <span
+                  className={`badge ${c.status === "resolved" ? "status-paid" : c.status === "declined" ? "status-cancelled" : "status-quoted"}`}
+                >
+                  {
+                    {
+                      submitted: "Demande enregistrée",
+                      reviewing: "En cours d’examen",
+                      resolved: "Résolue",
+                      declined: "Refusée",
+                    }[c.status]
+                  }
+                </span>
+                <small>{date(c.created_at)}</small>
+              </div>
+              <p>{c.description}</p>
+              {c.resolution && (
+                <p>
+                  <strong>Réponse : </strong>
+                  {c.resolution}
+                </p>
+              )}
+              {role === "admin" &&
+                ["submitted", "reviewing"].includes(c.status) && (
+                  <WarrantyResolution
+                    busy={busy}
+                    initialNote={c.resolution || ""}
+                    onSave={(status, resolution) =>
+                      save({
+                        action: "resolve",
+                        case_id: c.id,
+                        status,
+                        resolution,
+                      })
+                    }
+                  />
+                )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="document-empty">Aucune demande de suivi enregistrée.</p>
+      )}
+      {interventionId &&
+        ["client", "manager"].includes(role) &&
+        !visible.some((c) => ["submitted", "reviewing"].includes(c.status)) && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void save({
+                action: "request",
+                intervention_id: interventionId,
+                description,
+              });
+            }}
+          >
+            <Field
+              label="Signaler un problème après intervention"
+              hint="Décrivez le problème et son lien avec l’intervention terminée."
+            >
+              <textarea
+                required
+                minLength={10}
+                maxLength={4000}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={3}
+              />
+            </Field>
+            <button
+              className="button outline full"
+              type="submit"
+              disabled={busy}
+            >
+              {busy
+                ? "Enregistrement…"
+                : demo
+                  ? "Enregistrer un signalement de démonstration"
+                  : "Déposer une demande de suivi"}
+            </button>
+          </form>
+        )}
+    </section>
+  );
+}
+
+export function BudgetEditor({
+  budgetCents,
+  busy,
+  onSave,
+}: {
+  budgetCents: number;
+  busy: boolean;
+  onSave: (cents: number) => Promise<boolean | undefined>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState(String(budgetCents / 100));
+  const [error, setError] = useState("");
+  return (
+    <div className="budget-editor">
+      {!open ? (
+        <button
+          type="button"
+          className="text-button budget-edit"
+          disabled={busy}
+          onClick={() => {
+            setAmount(String(budgetCents / 100));
+            setError("");
+            setOpen(true);
+          }}
+        >
+          Modifier le budget
+        </button>
+      ) : (
+        <form
+          className="inline-editor"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const cents = Math.round(Number(amount.replace(",", ".")) * 100);
+            if (
+              !amount.trim() ||
+              !Number.isSafeInteger(cents) ||
+              cents < 0 ||
+              cents > 100000000
+            ) {
+              setError("Renseignez un budget compris entre 0 et 1 000 000 €.");
+              return;
+            }
+            setError("");
+            void onSave(cents).then((saved) => {
+              if (saved) setOpen(false);
+            });
+          }}
+        >
+          <Field label="Budget de référence du site (€)">
+            <input
+              required
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              maxLength={15}
+            />
+          </Field>
+          {error && (
+            <p className="inline-validation" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="inline-editor-actions">
+            <button type="submit" className="button primary" disabled={busy}>
+              Enregistrer le budget
+            </button>
+            <button
+              type="button"
+              className="button outline"
+              disabled={busy}
+              onClick={() => setOpen(false)}
+            >
+              Annuler
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+export function ApprovalDecision({
+  busy,
+  onDecision,
+}: {
+  busy: boolean;
+  onDecision: (
+    decision: "approved" | "rejected",
+    note: string,
+  ) => Promise<boolean | undefined>;
+}) {
+  const [note, setNote] = useState("");
+  const [error, setError] = useState("");
+  return (
+    <div className="approval-decision">
+      <Field label="Note de décision (obligatoire en cas de refus)">
+        <textarea
+          rows={2}
+          maxLength={2000}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Votre note de validation ou le motif du refus…"
+        />
+      </Field>
+      {error && (
+        <p className="inline-validation" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="approval-actions">
+        <button
+          type="button"
+          className="button primary"
+          disabled={busy}
+          onClick={() => {
+            setError("");
+            void onDecision("approved", note.trim());
+          }}
+        >
+          Approuver
+        </button>
+        <button
+          type="button"
+          className="button outline"
+          disabled={busy}
+          onClick={() => {
+            if (!note.trim()) {
+              setError(
+                "Renseignez le motif du refus avant de confirmer votre décision.",
+              );
+              return;
+            }
+            setError("");
+            void onDecision("rejected", note.trim());
+          }}
+        >
+          Refuser
+        </button>
+      </div>
+    </div>
+  );
+}
+export function WarrantyResolution({
+  busy,
+  initialNote,
+  onSave,
+}: {
+  busy: boolean;
+  initialNote: string;
+  onSave: (status: string, note: string) => Promise<void>;
+}) {
+  const [note, setNote] = useState(initialNote);
+  const [status, setStatus] = useState("reviewing");
+  return (
+    <form
+      className="warranty-resolution inline-editor"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void onSave(status, note.trim());
+      }}
+    >
+      <Field label="État du traitement">
+        <select value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="reviewing">En cours d’examen</option>
+          <option value="resolved">Résolue</option>
+          <option value="declined">Refusée</option>
+        </select>
+      </Field>
+      <Field
+        label="Note de traitement"
+        hint="Au moins 10 caractères. Cette note sera visible dans le dossier."
+      >
+        <textarea
+          required
+          minLength={10}
+          maxLength={4000}
+          rows={3}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
+      </Field>
+      <button
+        type="submit"
+        className="button primary"
+        disabled={busy || note.trim().length < 10}
+      >
+        Enregistrer la décision
+      </button>
+    </form>
+  );
+}
+
