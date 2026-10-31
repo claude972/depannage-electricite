@@ -68,7 +68,7 @@ test("A9 — T6/T9/T14/T16 bodies unchanged (pinned to the harness ROOT ran); no
   const pinned = {
     T6: "6ac7c3b01c4a7856db29a82d1163aa13159dcbb8940fcf8423517c1542e4672b",
     T9: "dbab3a6bac6128a900ac421a11567b423001841df9d67ddef864f4a61ed955b9",
-    T14: "3975d069f5eced683787f7d78609fa8ff68d553c241a9f90020665a39b86aaf2",
+    T14: "245cf503f8da1cdc628f21268693ddb391ca0a26054ce95f0b9b5bef2c2cf5be", // A10: precondition + no catch (tests/qa-tracking-t14.test.ts); was 3975d069… at the run-552 harness
     T16: "7ffd4e23592ce92b0f48c79dbc655e0d4c8d358a9bcfcb4fedcf51e0fc6bfef4",
   };
   for (const [name, hash] of Object.entries(pinned)) {
