@@ -799,3 +799,72 @@ dimensions intrinsèques déclarées (pas de décalage de mise en page). Contras
 - Revue pilote (P3) : la légende visible est réduite à « Illustration » et l’alternative textuelle à « Illustration : électricien devant un
   tableau électrique » ; la provenance complète (M41 vol. 3 p10, SHA-256, « pas un artisan de la plateforme ») reste documentée ici
   uniquement. Captures `public-home-{360,1280}-after.jpg` régénérées après hydratation ; `tsc` au vert, suite UI 106/106.
+
+## Addendum — entreprise V5-C01, V5-C05, V5-C08 (VISUAL-FIDELITY-001)
+
+**CLAIM — Propriété transférée à l’agent client/documents le 2026-11-01, branche `claude/web-design-enterprise`, base `b7a4b10` ; rédaction initiale agent design** (section reprise verbatim de `origin/claude/web-design-artisan-3` b0701a9, où elle visait la base `a131ccd` / branche `claude/web-design-artisan-2` ; captures « avant » reprises telles quelles). Relecture contre les planches `v5-p2`, `v5-p6`, `v5-p9` et les captures « avant » : tableaux d’écarts confirmés sans modification ; seuls la base, la branche et la numérotation des checkpoints sont adaptées ci-dessous. Réservé, jamais modifié par ce lot : bloc « Opérations du site » (`SiteOperationsView` / `FeatureUnavailable`), JSX `QuoteDocumentsAnchor` (seulement déplacé dans la grille, props identiques), `HeaderBell` / `NotificationsPage` / `PlatformPage`, `anchors.ts`, `*-anchor.tsx`, `feature-unavailable.tsx`, fichiers globaux.
+
+Références (inventaire) : **V5-C01** = `MAQUETTES_UNE_PAR_PAGE_VOLUME_5_MANQUANTES.pdf` **p2** (fiche de site bureaux
+« Tour Horizon », `v5-p2.jpeg`) ; **V5-C05** = même volume **p6** (dashboard bureaux « BUREAUX360 », `v5-p6.jpeg`) ;
+**V5-C08** = même volume **p9** (détail d’approbation d’un devis syndic, `v5-p9.jpeg`) ; V6-C01/V6-C05/V7-C01 sont des
+doublons catalogués. Captures « avant » (démo) : `enterprise-site-office-{360,1280}-before.jpg` (`#demo/manager-site.site-3`),
+`enterprise-overview-1280-before.jpg`, `enterprise-approval-1280-before.jpg`. Fichiers : `components/role/enterprise-space.tsx`,
+`enterprise.module.css`, `enterprise-lists.ts`, `tests/ui/**` ; `client-space`, `public-site` et les helpers d’ancrage ne
+sont pas touchés.
+
+### Règle sur les données
+
+Le modèle `Site` ne porte que nom, type, adresse et budget de référence ; les opérations (équipements, maintenance,
+grilles, délais, contrôles) viennent du lot B2B dans « Opérations du site ». **Jamais fabriqué** : surface, année,
+nombre d’étages, occupant, photo, conformité / certification (jamais attestée), consommation (MWh, %), taux
+d’occupation, « projection fin d’année », impact par étage, ETA, « équipe sur place », rôle d’acteur dans l’historique,
+compteur 500 caractères (limite serveur 2 000 conservée). Les montants restent TTC « calculés sur les dossiers chargés ».
+
+### V5-C01 — fiche de site bureaux (`#demo/manager-site.site-3`)
+
+| Élément de la référence | Composant existant | Écart constaté | Correction prévue |
+| --- | --- | --- | --- |
+| En-tête « FICHE DE SITE / Tour Horizon / adresse », date de mise à jour | `.sheetHeader` (nom, tags, adresse, Nouvelle demande) | Pas de surtitre. | Surtitre « Fiche de site » ; « Site actif » retiré (aucun statut d’activité dans le modèle) ; adresse et type conservés. **Écart assumé** : pas de date de mise à jour (non transmise). |
+| « Présentation du bâtiment » : photo + faits + conformité | — | Absent. | Bloc « Identité du site » avec les seuls faits réels (type, adresse, budget de référence) ; aucune photo, surface, année, occupant ; aucune conformité. **Écart assumé.** |
+| Étages & zones | `Unavailable` « Étages & zones » | Honnête. | Conservé. |
+| Historique des interventions électriques (liste datée, statut) | Panneau Interventions (segments En cours / Passées) | Proche ; segments 40 px. | Liste datée (date, catégorie, statut) pour l’historique, segments 44 px. |
+| Maintenance planifiée + prochaine intervention | Échéances & conformité + onglet Maintenance du lot | Conforme ; « Marquer terminé » 40 px. | 44 px ; libellés inchangés. |
+| Budget : annuel, consommé, engagé, restant, projection, anneau % | Tuiles + panneau Budget (barre, % engagé) | Pas de projection ni de consommé (assumé). | Panneau Budget avec taux réel (déjà non plafonné) ; **assumé** : pas de projection. |
+| Contacts clés, Documents récents | `Unavailable` Contacts ; panneau Documents | Honnête. | Conservés. |
+| Sélecteur de site de la barre de contexte | `.contextControls select` 40 px | < 44 px. | 44 px. |
+
+### V5-C05 — tableau de bord bureaux (`#demo/manager`)
+
+| Élément de la référence | Composant existant | Écart constaté | Correction prévue |
+| --- | --- | --- | --- |
+| 5 KPI (sites, MWh, interventions en cours dont urgentes, maintenances 30 jours, budget engagé % annuel) | 4 `Stat` (en cours, devis à approuver, budget engagé, sites suivis) | Pas d’urgences ni de maintenances à 30 jours. | « Interventions en cours » avec note « dont N urgentes » (champ `urgency` réel) ; « Échéances à 30 jours » (compliance `due_on` réelles) ajoutée ; **assumé** : aucune consommation. Logique pure `overviewFigures(scope, today)` testée. |
+| Tableau Sites & bâtiments (ville, surface, occupation, état) | Tableau « Mes sites » (vue Sites) | Non repris ici : M66 reste maître du tableau de bord (interventions). | **Écart assumé** ; lien « Sites & contrats ». |
+| Budget par bâtiment (barres engagé / restant par site) | — | Absent. | Panneau « Budget par site » : barre par site (engagé / budget, taux réel via `budgetFigures`, « pas de budget de référence » sinon) — données réelles. |
+| Interventions en cours (liste), Maintenances planifiées, Alertes | Tableau d’interventions (M66) + Approbations en attente + Échéances | Conforme en substance. | Conservé ; la cloche du lot porte les alertes. |
+
+### V5-C08 — détail d’approbation (`#demo/manager-approval.approval-demo`)
+
+| Élément de la référence | Composant existant | Écart constaté | Correction prévue |
+| --- | --- | --- | --- |
+| Fil d’Ariane Devis › Approbations, titre, « Retour à la liste » | `ApprovalDetail` en-tête | Conforme ; lien « Devis » 32 px. | 44 px. |
+| Détails du devis (référence, propriété, fournisseur + fiche, réception, description, validité, pièces, montant TTC + TVA) \| **Votre décision** à droite (Approuver vert / Refuser rouge, commentaire 0/500, Enregistrer) | Détails \| documents du lot ; décision en seconde rangée | Décision reléguée sous la grille depuis l’ancrage documents. | Grille : Détails \| Votre décision (haut), puis « Documents, validité et avenants » pleine largeur, puis historique. Boutons Approuver (teinte succès) / Refuser (teinte erreur) en contour, 44 px ; compteur 0 / 2000 (limite serveur). **Assumé** : pas de « fiche fournisseur » (identité dans le dossier). |
+| Historique des statuts : Date, Statut, Acteur, **Rôle**, Commentaire ; note de traçabilité | `.historyTable` (Date, Statut, Acteur, Commentaire) + note | Pas de colonne Rôle. | **Écart assumé** (rôle de l’acteur non transmis). |
+
+### Règles responsive et accessibilité (B)
+
+- 360 : tuiles en pile, grille d’approbation en une colonne (décision après les détails), tableaux en pile ou défilement
+  identifié ; 760 : deux colonnes quand la place existe ; 1280 : grilles existantes.
+- Cibles ≥ 44 px (sélecteur de contexte, segments, « Marquer terminé », liens de fil d’Ariane, boutons de décision) ;
+  statut textuel ; focus visible.
+
+### Vérification (B)
+
+| Par test (`tests/ui/enterprise-lists.test.ts`) | Par capture |
+| --- | --- |
+| `overviewFigures` : urgences = dossiers ouverts `urgency === "urgent"`, échéances à 30 jours = `due_on` dans la fenêtre et non terminées, rien d’autre ; `siteBudgetBars` : un élément par site avec `budgetFigures` (taux réel, null sans budget). | V5-C01 / avant / après (site-3) 360 et 1280 ; V5-C05 / avant / après (tableau de bord) 1280 ; V5-C08 / avant / après (approbation) 1280 ; 0 élément interactif < 44 px ; aucun débordement ; console sans erreur. |
+
+### Checkpoints prévus (branche `claude/web-design-enterprise`)
+
+1. V5-C01 fiche de site — `enterprise-site-office-{360,1280}-after.jpg`.
+2. V5-C05 tableau de bord — `enterprise-overview-{360,1280}-after.jpg`.
+3. V5-C08 approbation — `enterprise-approval-{360,1280}-after.jpg`.
