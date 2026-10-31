@@ -17,9 +17,9 @@ import type {
   View,
 } from "../app/types";
 import { Icon } from "../app/icons";
-import { Empty, Field, Loader, PageTitle, Tag, Unavailable } from "../app/ui";
+import { ConfirmAction, Empty, Field, Loader, PageTitle, Tag, Unavailable } from "../app/ui";
 import { category, date, dateTime, shortId, uid } from "../app/format";
-import { authorLabel, QUEUE_READ_ONLY, supportListView, type SupportQueue } from "./support-lists";
+import { authorLabel, QUEUE_READ_ONLY, runStatusCommand, statusTargets, supportListView, type SupportQueue } from "./support-lists";
 import styles from "./support-tickets.module.css";
 
 type Tone = "neutral" | "blue" | "green" | "amber" | "red" | "violet";
@@ -547,6 +547,8 @@ function TicketDetail({
   const [bodyError, setBodyError] = useState("");
   const [conflict, setConflict] = useState("");
   const [sending, setSending] = useState(false);
+  const [target, setTarget] = useState<"" | SupportStatus>("");
+  const [statusError, setStatusError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -632,6 +634,26 @@ function TicketDetail({
     // Conflit de version : le texte reste dans le champ, rien n'est renvoyé automatiquement.
     if (result.conflict) setConflict(result.message);
     else setBodyError(result.message);
+  }
+
+  // A5: status change by an operator holding read+status (server permission per ticket, CAS on version).
+  async function changeStatus(next: SupportStatus) {
+    if (!detail || sending) return;
+    setStatusError("");
+    setConflict("");
+    setSending(true);
+    const result = await runStatusCommand((c) => session.supportCommand(id, c), detail.ticket, detail.permissions.can_set_status, next);
+    setSending(false);
+    if (result.kind === "ok") {
+      const { ticket, event } = result;
+      setDetail((d) => (d ? { ...d, ticket, page: { ...d.page, total_events: d.page.total_events + 1 } } : d));
+      setEvents((prev) => mergeById(prev, [event]));
+      setTarget("");
+      return;
+    }
+    // 409: the choice is kept, nothing is resent; any other refusal is shown as the server wrote it.
+    if (result.kind === "conflict") setConflict(result.message);
+    else setStatusError(result.message);
   }
 
   if (detail === undefined) return <Loader label="Chargement de la demande…" />;
@@ -750,6 +772,50 @@ function TicketDetail({
           </p>
         )}
       </section>
+
+      {statusTargets(detail.ticket.status, permissions.can_set_status).length > 0 && (
+        <section className="panel" aria-labelledby="support-status-title">
+          <h2 id="support-status-title" style={{ fontSize: 17, marginBottom: 12 }}>
+            État de la demande
+          </h2>
+          {conflict && (
+            <div className={styles.conflict} role="alert">
+              <p>{conflict}</p>
+              <button type="button" className="button outline" disabled={sending} onClick={reread}>
+                <Icon name="refresh" size={17} />
+                Relire la demande
+              </button>
+            </div>
+          )}
+          <Field
+            label="Nouvel état"
+            hint={`État actuel : ${STATUS_META[detail.ticket.status].label}. Seuls les passages autorisés depuis cet état sont proposés.`}
+            error={statusError}
+          >
+            <select value={target} onChange={(e) => setTarget(e.target.value as "" | SupportStatus)} disabled={sending}>
+              <option value="">Choisir un état</option>
+              {statusTargets(detail.ticket.status, permissions.can_set_status).map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_META[s].label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <ConfirmAction
+            label="Changer l’état"
+            message={
+              target
+                ? `Passer la demande de « ${STATUS_META[detail.ticket.status].label} » à « ${STATUS_META[target].label} ». Le changement est inscrit dans l’historique visible par le demandeur.`
+                : ""
+            }
+            confirmLabel="Confirmer"
+            busy={sending || !target}
+            onConfirm={async () => {
+              if (target) await changeStatus(target);
+            }}
+          />
+        </section>
+      )}
 
       <section className={`panel ${styles.reply}`} aria-labelledby="support-reply-title">
         <h2 id="support-reply-title" style={{ fontSize: 17, marginBottom: 12 }}>
