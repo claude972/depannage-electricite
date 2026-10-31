@@ -106,7 +106,7 @@ Cross-verification: Codex examine les preuves de Claude et fait corriger les fin
 - implementation revision: d85da0657586f152ee9bba941d67345b4eead616, revue Claude sans finding et recette Auth/PostgREST réelle fe4, rapports publiés CORRECTIONS.md. Fermeture du lot serveur uniquement ; UI admin reste à intégrer/tester.
 ## Mission WEB-PWA-QUOTE-DRAFT-001 — brouillons privés de devis
 - agent: codex
-- status: in_progress
+- status: done
 - branch: codex/web-pwa-backend
 - base revision: d85da0657586f152ee9bba941d67345b4eead616
 - objective: conserver un brouillon de devis par artisan/dossier, sans publier ni remplacer le devis envoyé avant une action explicite.
@@ -118,9 +118,11 @@ Cross-verification: Codex examine les preuves de Claude et fait corriger les fin
 - preview: intégration après revue obligatoire, pas de production.
 
 
+
+- closure scope: lot serveur revu par Claude sur1be8f00 et testé sur Supabase/Next hébergés ; rapports complets dans CORRECTIONS.md. Interface utilisateur correspondante reste dans mission Claude globale in_progress ; aucune phase entière clôturée.
 ## Mission WEB-PWA-ADMIN-DIRECTORIES-001 — annuaires admin complets
 - agent: codex
-- status: in_progress
+- status: done
 - branch: codex/admin-directories
 - base revision: d85da0657586f152ee9bba941d67345b4eead616
 - worktree: /Volumes/Stockage/Projets/depannage-web-pwa-admin-directories
@@ -133,6 +135,8 @@ Cross-verification: Codex examine les preuves de Claude et fait corriger les fin
 - preview: intégration après revue, pas de production.
 
 
+
+- closure scope: lot serveur revu par Claude sur1be8f00 et testé sur Supabase/Next hébergés ; rapports complets dans CORRECTIONS.md. Interface utilisateur correspondante reste dans mission Claude globale in_progress ; aucune phase entière clôturée.
 ## Mission WEB-PWA-SUPPORT-001 — assistance privée persistante
 - agent: codex
 - status: in_progress

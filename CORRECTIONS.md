@@ -1084,3 +1084,264 @@ Propriétaire Codex pour vercel.json sur integration, coordination et branche ad
 
 ### Migration010
 Revue indépendante Claude terminée réellement sur1be8f00 :51 testsNode,34UI, typecheck, SQLdraft9/main29/sites8/performance6 réussis ; aucun finding actionnable sur010 etdirectory dans ce périmètre. Après revue, dry-run limité exclusivement à010, application distante réussie sur le seul projet dédié. Aucune011 appliquée. Recette cloud brouillons et annuaires à venir sur le déploiement1be prêt.
+
+
+## WEB-PWA-REVIEW-001 — rapport Claude réel010 et annuaires
+
+# Rapport de revue croisée Claude — WEB-PWA-REVIEW-001 (brouillons de devis 010 / annuaires admin)
+
+Même reviewer, même session, lecture seule. Aucun fichier source ou de coordination modifié, aucune autre session Claude contactée, aucun accès cloud ni fichier secret. Affectation revendiquée : uniquement la revue. Le lien node_modules reste un artefact d'outillage non touché.
+
+**SHA revu :** `1be8f00a4945a21e3e30f72c73c62873792271a0` (révision combinée). Périmètre backend : commit 254d497 (migration 010, route quote-draft, tests) et commit 22cf05e (route admin/directory, tests), relatifs à d85da06. Les lots UI et photos présents dans la même révision ne sont pas ma cible.
+
+## Sources lues
+MISSIONS.md et CORRECTIONS.md distants, migration 010, les deux nouvelles routes, les deux contrats et les deux rapports de vérification Codex, les tests quote-draft, admin-directory et le harness SQL brouillons, le diff de la CI.
+
+## Contrôles réellement exécutés
+
+| Contrôle | Résultat |
+|---|---|
+| `npm test` | 51/51 |
+| `npm run typecheck` | passe |
+| `npm run test:ui` (présent dans ce checkout combiné) | 34/34 |
+| `node tests/sql-quote-draft-review.mjs` avec PGlite, 10 migrations, stubs Auth/Storage | 9 groupes PASS |
+| `node tests/sql-review.mjs` | 29 PASS |
+| `node tests/sql-site-access-review.mjs` | 8 PASS |
+| `node tests/sql-performance-review.mjs` | 6 PASS |
+| Build, application distante de 010, Supabase réel, preview | non exécutés |
+
+## Migration 010 et route quote-draft
+- **Confidentialité et RLS.** Table en select seul pour authenticated. La politique se limite à l'artisan courant du dossier, statut assigned ou quoted, profil approuvé, dossier approved, et recalcule le jeton d'attribution. Client, manager, owner, admin et autre artisan ne lisent rien, ni par la RPC ni par lecture directe. Aucune mutation directe possible.
+- **Version et époque d'attribution.** Version monotone, `expected_version` exact sinon 409. Le jeton dérive du dernier événement accept_mission ou admin_reassigned du dossier, avec index partiel sur audit_log. Une réaffectation A→B→A produit un nouveau jeton : l'ancien onglet reçoit 409 et la lecture directe du vieux brouillon est masquée par la politique. Testé.
+- **Immutabilité.** Toute gestion exige assigned ou quoted. Un devis accepté bloque load, save, discard et send. L'envoi passe par la commande `send_quote` existante : montants recalculés serveur, ancien devis rejeté seulement en cas de succès, approbation B2B conservée.
+- **Atomicité.** Consommation du brouillon et publication dans la même transaction. Un échec induit laisse brouillon, version et ancien devis intacts. `base_quote_id` vérifié au save et au send contre le devis sent courant, 409 si publié par un autre canal.
+- **Ordre des verrous.** Organisation pour les dossiers B2B, puis intervention, puis profil, puis dossier artisan, puis brouillon. Cohérent avec le guard de suspension et `approve_artisan`, avec la chaîne `intervention_action` de la migration 009 et avec les commandes d'accès par site. La réaffectation ne verrouille que le dossier. Aucun cycle identifié.
+- **Validation partielle contre envoi.** Le validateur de brouillon accepte label vide, prix 0, TVA nulle et entiers stricts. L'envoi réutilise la validation du calcul existant et renvoie 422 sans effet. Zod refuse totaux et identités venant du navigateur.
+- **EXECUTE.** Le validateur est privé, seule `manage_quote_draft` est accordée, les helpers internes de devis restent refusés. GET sans paramètre, POST strict, erreurs no-store, réponse non-objet en 503.
+
+## Route admin/directory
+- Admin vérifié avant toute lecture. Les rôles null, client, artisan, manager, owner et viewer reçoivent 401 ou 403 sans requête annuaire.
+- Recherche sur le même alphabet littéral que la liste admin, passée en filtre `ilike` dédié et non dans une expression brute. Un UUID devient une égalité sur l'identifiant. Filtres bornés au kind.
+- Curseur strict base64url, versionné, lié au kind et à l'empreinte des filtres, timestamp avec microsecondes et UUID validés, tri created_at puis id décroissants.
+- Total exact avant curseur, `has_more` par COUNT restant plus une ligne, COUNT absent en 503. L'enrichissement artisans est borné à la page et renvoie 503 s'il est incomplet, les profils sans dossier sont conservés.
+- Projections sans email, SIRET, adresse ni Stripe. Détail avec kind et id seuls, 404 si kind incompatible.
+
+## Findings
+Aucun finding actionnable dans le périmètre revu.
+
+Observations sans action requise :
+- Le jeton d'attribution dérive de données lisibles par l'artisan. Il n'est pas une permission, conformément au contrat.
+- Le chargement n'est pas soumis au throttle `consume_action`. Lecture seule, sans effet.
+- COUNT, page et enrichissement sont des lectures séparées, documenté au contrat.
+
+## Dépendances d'intégration frontend
+Charger l'enveloppe avant toute sauvegarde, traiter 409 par rechargement, distinguer sauvegarder et envoyer, sélectionner le `quote_id` exact après envoi, consommer l'annuaire paginé au lieu des 100 entrées overview.
+
+## Limites
+Pas de Supabase, Auth ou PostgREST réels, pas de concurrence multi-connexion, pas de build ni preview par ce reviewer. La migration 010 n'est pas appliquée à distance et cette revue n'en est pas la recette. Le fournisseur HTTP des tests de route est un modèle, pas PostgREST. Les findings UI photos restent assignés séparément.
+
+Rapport également écrit dans `/Users/claudebrafa/.claude/plans/you-are-claude-independent-wobbly-charm.md`.
+
+## WEB-PWA-QUOTE-DRAFT-001 et ADMIN-DIRECTORIES-001 — recette hébergée
+
+# Hosted quote draft and directory QA
+
+Exact revision: 1be8f00a4945a21e3e30f72c73c62873792271a0
+Preview: https://depannage-electricite-ogoz1a5oz-brafas-projects.vercel.app
+
+{
+  "root": "https://depannage-electricite-ogoz1a5oz-brafas-projects.vercel.app",
+  "revision": "1be8f00a4945a21e3e30f72c73c62873792271a0",
+  "checks": [
+    {
+      "name": "assigned_artisan_load_and_save_partial",
+      "status": "pass",
+      "detail": {
+        "version": 1,
+        "partialSaved": true
+      }
+    },
+    {
+      "name": "invalid_publish_422_preserves_draft_version_and_old_quote",
+      "status": "pass",
+      "detail": {
+        "versionUnchanged": true,
+        "oldQuoteUnchanged": true
+      }
+    },
+    {
+      "name": "concurrent_same_version_save_one_winner",
+      "status": "pass",
+      "detail": {
+        "statuses": [
+          200,
+          409
+        ]
+      }
+    },
+    {
+      "name": "publish_exact_quote_and_consume_draft",
+      "status": "pass",
+      "detail": {
+        "exactPublishedQuote": true,
+        "consumed": true,
+        "totalCents": 24000
+      }
+    },
+    {
+      "name": "client_other_artisan_admin_cannot_read_private_draft",
+      "status": "pass",
+      "detail": {
+        "apiDenied": 4,
+        "clientRlsDraftRows": 0,
+        "clientSeesSentQuote": true
+      }
+    },
+    {
+      "name": "accepted_quote_immutable",
+      "status": "pass",
+      "detail": {
+        "immutable": true
+      }
+    },
+    {
+      "name": "directory_all_three_kinds_strict_projections",
+      "status": "pass",
+      "detail": {
+        "artisans": 2,
+        "clientsIncludingManager": 2,
+        "organizations": 117,
+        "noExtraColumns": true
+      }
+    },
+    {
+      "name": "organizations_117_stable_unique_beyond_100_and_oldest_detail",
+      "status": "pass",
+      "detail": {
+        "pages": [
+          40,
+          40,
+          37
+        ],
+        "total": 117,
+        "timestampTies": true,
+        "oldestDetail": true
+      }
+    },
+    {
+      "name": "directory_filters_uuid_and_denials",
+      "status": "pass",
+      "detail": {
+        "filters": 5,
+        "denials": 4
+      }
+    },
+    {
+      "name": "directory_invalid_filters_cursors_and_duplicates_422",
+      "status": "pass",
+      "detail": {
+        "invalidCases": 11
+      }
+    }
+  ],
+  "cleanup": [
+    {
+      "name": "quote_drafts",
+      "status": "pass"
+    },
+    {
+      "name": "quotes",
+      "status": "pass"
+    },
+    {
+      "name": "audit_log",
+      "status": "pass"
+    },
+    {
+      "name": "interventions",
+      "status": "pass"
+    },
+    {
+      "name": "organization_members",
+      "status": "pass"
+    },
+    {
+      "name": "organizations",
+      "status": "pass"
+    },
+    {
+      "name": "actor_audit_client",
+      "status": "pass"
+    },
+    {
+      "name": "auth_profile_client",
+      "status": "pass"
+    },
+    {
+      "name": "actor_audit_artisan",
+      "status": "pass"
+    },
+    {
+      "name": "auth_profile_artisan",
+      "status": "pass"
+    },
+    {
+      "name": "actor_audit_artisan",
+      "status": "pass"
+    },
+    {
+      "name": "auth_profile_artisan",
+      "status": "pass"
+    },
+    {
+      "name": "actor_audit_manager",
+      "status": "pass"
+    },
+    {
+      "name": "auth_profile_manager",
+      "status": "pass"
+    },
+    {
+      "name": "actor_audit_admin",
+      "status": "pass"
+    },
+    {
+      "name": "auth_profile_admin",
+      "status": "pass"
+    }
+  ],
+  "limits": [
+    "Hosted API and direct RLS checks; not UI editing or payment verification.",
+    "Only two actual artisan accounts; greater than 100 pagination is exercised for organizations."
+  ],
+  "finishedAt": "2026-10-31T03:23:01.845Z"
+}
+
+Independent cleanup readback: cleanup-readback.json proves zero remaining exact tracked IDs across audit actor/job scopes, quote_drafts, quotes, interventions, organizations, memberships, profiles, artisan dossiers and action_limits. All five Auth users were deleted and getUserById returned absence. Sixteen cleanup operations passed; ten additional table-scope readbacks passed.
+
+Source references at exact deployed revision 1be8f00a4945a21e3e30f72c73c62873792271a0:
+- app/api/interventions/[id]/quote-draft/route.ts:39-52: origin/auth/schema/RPC mutation and private error handling.
+- supabase/migrations/202610310010_quote_drafts.sql:48-107: assigned approved artisan gate, locked optimistic version, publish transaction and draft consumption.
+- app/api/admin/directory/route.ts:23-57: allowed filters and cursor fingerprint validation; 78-118: admin gate, projections, exact totals and pagination.
+- app/api/interventions/[id]/actions/route.ts:19-77: exact quote acceptance action.
+
+No findings in this tested scope. This is not a complete application acceptance, directory UI verification, 100-plus-artisan real-provider test, email delivery, payment test, or PWA two-deployment pass. All browser sessions were isolated and closed. Existing-row listing was avoided: every successful admin directory read used the unique QA marker, exact tracked ID, or tracked owner filter. No application file was edited.
+
+
+## WEB-PWA-20261030 — PWA lifecycle bloqué, sans succès inventé
+
+# PWA-001 actual two-deployment lifecycle
+
+Status: BLOCKED by Vercel build quota (provider requests retry in 24 hours). No lifecycle pass is claimed.
+
+Two isolated tabs on the stable branch alias were confirmed controlled by the v2 worker, each with distinct unsaved request text, never submitted. READY.json and screenshots preserve readiness proof. The v3 revision b2acc223c84a35dd6eb5f7eb78f5cad3701c1e4f did not deploy. No update, activation, cache migration, or stale second-tab reload was tested.
+
+The task-owned browser and runner were closed after the pilot instructed stopping; no unrelated browser was touched. Fresh v2 tabs must be prepared before the first actual v3 deployment. No native OS installation is claimed.
+
+
+### Avancement complémentaire
+La configuration Vercel opt-out des branches de travail est propagée : coordination2ea8c82, admin-directory36cbe43, UI25a1274, backendb83119f. Les commits coordination/admin-directory n’ont pas reçu de contexte Vercel de déploiement lors de la vérification ; aucune remise à zéro du quota supposée. Le lead UI a reçu les consignes de grouper les checkpoints et de poursuivre sans attendre de connexion Stripe. Le mode CLI auto applique les revues normales de permissions ; aucune protection d’authentification retirée.
+
+b8a277a combine les derniers correctifs UI jusqu’au34e998c : garde Auth823, revalidation6667, photosfcc/dbd/34e, densité529, pagination UI interventionsc279, branchement de contrats quote/directory. Le déploiement nouveau est bloqué par quota. Fallback de test explicitement local : /tmp/depannage-web-pwa-local-qa sur stockage interne, source exacteb8, Next webpack127.0.0.1:3017, dépendances épinglées partagées et fichier .env.local privé/ignoré. Aucun résultat local ne sera nommé preview déployée. Origine de test browser localhost pour correspondre à request.url Next dev ; premier essai127 a donné403 sans créer de demande, historique conservé.
+
+Supportfface1a intégré pour compilation e36b7be, reviewer Claude repris sur branche isolée claude/review-support-011, cible exactfface1a. Processus46162 en cours, rapport attendu ; aucune011 appliquée. Le backend support est prêt à revue, frontend assistance n’a qu’un branchement de session à ce stade.
