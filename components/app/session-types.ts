@@ -139,12 +139,15 @@ export interface Session {
 
   /** Creates the dossier, then uploads the given photos one by one (live only). */
   createIntervention(values: RequestValues, photos?: File[]): Promise<boolean>;
-  /** Photos of the last created dossier still pending or failed; null when nothing is queued. */
-  uploads: UploadQueue | null;
-  /** Retries the failed/pending uploads of the queue without touching the dossier. */
-  retryUploads(): Promise<boolean>;
-  /** Drops the queue (files stay on the device; nothing is deleted on the server). */
-  dismissUploads(): void;
+  /** Photo queues per dossier (pending, failed or uncertain items); never overwritten by a new request. */
+  uploads: UploadQueue[];
+  /**
+   * Retries a dossier's queue: refused/pending files are re-sent; uncertain files are first
+   * reconciled against the dossier's stored documents and re-sent only when `resendUncertain`.
+   */
+  retryUploads(interventionId: string, options?: { resendUncertain?: boolean }): Promise<boolean>;
+  /** Drops a dossier's queue (files stay on the device; nothing is deleted on the server). */
+  dismissUploads(interventionId: string): void;
   sendMessage(interventionId: string, body: string): Promise<boolean>;
   submitReview(interventionId: string, values: { rating: number; body: string }): Promise<boolean>;
   createSite(values: { name: string; type: string; address: string; budget_cents: number; organization_id?: string }): Promise<boolean>;

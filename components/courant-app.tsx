@@ -7,7 +7,14 @@ import { createClient } from "../lib/supabase/client";
 import { api, ApiRequestError, contractStateFromError, uploadDocument } from "./app/api";
 import { createGuard, createRunner, type RunContext, type Runner } from "./app/guard";
 import { adoptIdentity } from "./app/identity";
-import { allUploaded, processUploadQueue, uploadSummary } from "./app/uploads";
+import {
+  allUploaded,
+  processUploadQueue,
+  reconcileUncertain,
+  removeQueue,
+  uploadSummary,
+  upsertQueue,
+} from "./app/uploads";
 import {
   DEMO_IDS,
   DEMO_KEYS,
@@ -73,6 +80,7 @@ import {
   type ReturnContext,
   type Role,
   type Status,
+  type StoredDocument,
   type View,
   type Workspace,
 } from "./app/types";
@@ -111,7 +119,7 @@ export default function CourantApp() {
   const [categoryId, setCategoryId] = useState<Category>("panel");
   const [pendingDraft, setPendingDraft] = useState<RequestValues | null>(null);
   const [pendingInvitation, setPendingInvitation] = useState<string | null>(null);
-  const [uploads, setUploads] = useState<UploadQueue | null>(null);
+  const [uploads, setUploads] = useState<UploadQueue[]>([]);
   // Incremented on every identity change: forces role spaces to remount with fresh local state.
   const [sessionKey, setSessionKey] = useState(0);
 
@@ -151,7 +159,7 @@ export default function CourantApp() {
     setError("");
     setNotice("");
     setPendingDraft(null);
-    setUploads(null);
+    setUploads([]);
     try {
       sessionStorage.removeItem(DRAFT_KEY);
     } catch {}
@@ -948,12 +956,13 @@ export default function CourantApp() {
   }
 
   // Uploads the queue items one by one; each result is recorded, failures stay retryable.
-  const processUploads = (ctx: RunContext, queue: UploadQueue) =>
+  const processUploads = (ctx: RunContext, queue: UploadQueue, resendUncertain = false) =>
     processUploadQueue(
       queue,
       (file, interventionId) => uploadDocument(file, interventionId),
       () => ctx.alive(),
-      ctx.when(setUploads),
+      ctx.when((q: UploadQueue) => setUploads((all) => upsertQueue(all, q))),
+      { resendUncertain },
     );
   async function createIntervention(values: RequestValues, photos: File[] = []) {
     return run(async (ctx) => {
@@ -987,9 +996,11 @@ export default function CourantApp() {
       const result = await api<{ intervention: Intervention }>("/api/interventions", values);
       if (ctx.alive()) await refresh();
       ctx.when(setPendingDraft)(null);
-      try {
-        sessionStorage.removeItem(DRAFT_KEY);
-      } catch {}
+      ctx.when(() => {
+        try {
+          sessionStorage.removeItem(DRAFT_KEY);
+        } catch {}
+      })();
       const id = result.intervention?.id;
       if (id) {
         ctx.when(setSelectedId)(id);
@@ -1002,26 +1013,47 @@ export default function CourantApp() {
       // 2. Then upload the photos; a failure never recreates the dossier.
       const queue: UploadQueue = {
         interventionId: id,
+        startedAt: new Date().toISOString(),
         items: photos.map((file, index) => ({ key: `${index}-${file.name}-${file.size}`, file, status: "pending" })),
       };
-      ctx.when(setUploads)(queue);
+      ctx.when((q: UploadQueue) => setUploads((all) => upsertQueue(all, q)))(queue);
       const finished = await processUploads(ctx, queue);
       if (!ctx.alive()) return;
       await refresh();
-      if (allUploaded(finished)) ctx.when(setUploads)(null);
+      if (allUploaded(finished)) ctx.when(() => setUploads((all) => removeQueue(all, id)))();
       ctx.notice(`Votre demande a été enregistrée. ${uploadSummary(finished)}`);
     });
   }
-  async function retryUploads() {
+  async function retryUploads(interventionId: string, options: { resendUncertain?: boolean } = {}) {
     return run(async (ctx) => {
-      if (!uploads || modeRef.current !== "live") return;
-      const finished = await processUploads(ctx, uploads);
+      if (modeRef.current !== "live") return;
+      const queue = uploads.find((q) => q.interventionId === interventionId);
+      if (!queue) return;
+      // Uncertain items: the dossier's documents decide before anything is re-sent.
+      await refresh();
+      if (!ctx.alive()) return;
+      let fresh: StoredDocument[] = [];
+      try {
+        const docs = await api<{ documents: StoredDocument[] }>("/api/documents");
+        fresh = docs.documents ?? [];
+      } catch {
+        /* reconciliation falls back to the workspace documents already loaded */
+        fresh = data.documents;
+      }
+      if (!ctx.alive()) return;
+      const reconciled = reconcileUncertain(queue, fresh);
+      ctx.when((q: UploadQueue) => setUploads((all) => upsertQueue(all, q)))(reconciled);
+      const finished = await processUploads(ctx, reconciled, options.resendUncertain === true);
       if (!ctx.alive()) return;
       await refresh();
       if (allUploaded(finished)) {
-        ctx.when(setUploads)(null);
+        ctx.when(() => setUploads((all) => removeQueue(all, interventionId)))();
         ctx.notice("Toutes les photos sont enregistrées dans le dossier.");
-      } else ctx.error(uploadSummary(finished));
+      } else if (finished.items.some((i) => i.status === "uncertain") && !options.resendUncertain)
+        ctx.notice(
+          "Vérification effectuée : les photos retrouvées dans le dossier sont marquées enregistrées. Celles au résultat incertain n’ont pas été renvoyées ; confirmez leur renvoi si elles n’apparaissent pas dans vos documents.",
+        );
+      else ctx.error(uploadSummary(finished));
     });
   }
   async function sendMessage(interventionId: string, body: string) {
@@ -1824,8 +1856,8 @@ export default function CourantApp() {
     createIntervention,
     uploads,
     retryUploads,
-    dismissUploads() {
-      setUploads(null);
+    dismissUploads(interventionId) {
+      setUploads((all) => removeQueue(all, interventionId));
     },
     sendMessage,
     submitReview,

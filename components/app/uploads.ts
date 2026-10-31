@@ -1,17 +1,26 @@
 // Sequential upload of the photos attached to a freshly created dossier. Pure: the uploader
 // and the progress sink are injected, so the retry behaviour is testable without a browser.
-import type { UploadQueue } from "./types";
+import { ApiRequestError } from "./api";
+import type { StoredDocument, UploadQueue } from "./types";
 
 export type Uploader = (file: File, interventionId: string) => Promise<{ id: string }>;
+// Network loss (0) or unusable reply (502) after the request left: the server may have stored
+// the file. Anything else is a definite refusal.
+export function classifyUploadError(e: unknown): "failed" | "uncertain" {
+  if (e instanceof ApiRequestError && (e.status === 0 || e.status === 502)) return "uncertain";
+  return "failed";
+}
 export async function processUploadQueue(
   queue: UploadQueue,
   upload: Uploader,
   alive: () => boolean,
   publish: (queue: UploadQueue) => void,
+  options: { resendUncertain?: boolean } = {},
 ): Promise<UploadQueue> {
   let current = queue;
   for (const item of queue.items) {
     if (item.status === "done") continue; // never re-send a stored file
+    if (item.status === "uncertain" && !options.resendUncertain) continue; // needs explicit confirmation
     if (!alive()) return current;
     current = {
       ...current,
@@ -29,10 +38,11 @@ export async function processUploadQueue(
         ),
       };
     } catch (e) {
+      const status = classifyUploadError(e);
       current = {
         ...current,
         items: current.items.map((x) =>
-          x.key === item.key ? { ...x, status: "failed", error: (e as Error).message } : x,
+          x.key === item.key ? { ...x, status, error: (e as Error).message } : x,
         ),
       };
     }
@@ -40,11 +50,41 @@ export async function processUploadQueue(
   }
   return current;
 }
+// After an uncertain outcome, the dossier's documents are the truth: a stored file with the
+// same name attached to this dossier since the queue started counts as done.
+export function reconcileUncertain(queue: UploadQueue, documents: StoredDocument[]): UploadQueue {
+  const since = Date.parse(queue.startedAt) - 60000; // tolerate clock skew
+  return {
+    ...queue,
+    items: queue.items.map((item) => {
+      if (item.status !== "uncertain") return item;
+      const match = documents.find(
+        (d) =>
+          d.intervention_id === queue.interventionId &&
+          d.name === item.file.name.slice(0, 160) &&
+          Date.parse(d.created_at) >= since,
+      );
+      return match ? { ...item, status: "done", documentId: match.id, error: undefined } : item;
+    }),
+  };
+}
 export function uploadSummary(queue: UploadQueue): string {
   const done = queue.items.filter((i) => i.status === "done").length;
   const failed = queue.items.filter((i) => i.status === "failed").length;
+  const uncertain = queue.items.filter((i) => i.status === "uncertain").length;
   const plural = done > 1 ? "s" : "";
-  if (!failed) return `${done} photo${plural} enregistrée${plural} dans le dossier.`;
-  return `${done} photo${plural} enregistrée${plural}, ${failed} en échec. La demande est bien créée : réessayez l’envoi des photos restantes depuis le dossier.`;
+  const parts = [`${done} photo${plural} enregistrée${plural}`];
+  if (failed) parts.push(`${failed} refusée${failed > 1 ? "s" : ""}`);
+  if (uncertain) parts.push(`${uncertain} au résultat incertain`);
+  if (!failed && !uncertain) return `${parts[0]} dans le dossier.`;
+  return `${parts.join(", ")}. La demande est bien créée : vérifiez les photos du dossier avant tout nouvel envoi.`;
 }
 export const allUploaded = (queue: UploadQueue) => queue.items.every((i) => i.status === "done");
+export const hasOpenItems = (queue: UploadQueue) =>
+  queue.items.some((i) => i.status !== "done");
+// Queues are kept per dossier; a new request never overwrites an older queue.
+export function upsertQueue(queues: UploadQueue[], queue: UploadQueue): UploadQueue[] {
+  return [...queues.filter((q) => q.interventionId !== queue.interventionId), queue];
+}
+export const removeQueue = (queues: UploadQueue[], interventionId: string) =>
+  queues.filter((q) => q.interventionId !== interventionId);

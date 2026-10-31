@@ -562,15 +562,18 @@ export type View =
 
 // Photos selected with a request are uploaded one by one AFTER the dossier exists; failures
 // stay in the queue for an explicit retry that never recreates the dossier.
+// "uncertain": the connection dropped or the reply was unusable after the request left; the
+// file may be stored. It is re-sent only after an explicit verification/confirmation.
 export type UploadItem = {
   key: string;
   file: File;
-  status: "pending" | "uploading" | "done" | "failed";
+  status: "pending" | "uploading" | "done" | "failed" | "uncertain";
   error?: string;
   documentId?: string;
 };
 export type UploadQueue = {
   interventionId: string;
+  startedAt: string;
   items: UploadItem[];
 };
 
