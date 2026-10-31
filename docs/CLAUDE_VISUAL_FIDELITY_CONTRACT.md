@@ -255,3 +255,21 @@ Vérifié (démo, script hors dépôt) : cloche visible 44 × 44 et active dans 
 2 non lues », compteur serveur de la démo), clic → `#notifications` et centre rendu ; console sans erreur. Captures :
 `docs/visual-fidelity/anchors-notifications-{artisan,client,manager,admin}-{360,1280}.jpg`. Tests : `tests/ui/anchors.test.ts`
 (visibilité d’entrée selon accès + capacité, portée de feuille) ; suite UI 80/80.
+
+### Ancrage 2 — planning artisan
+
+- Entrée secondaire « Planning » (icône `calendar`) proposée seulement si `canAccess("planning")` admet le rôle et que la
+  capacité `planning` n’est pas absente (`secondaryNav(session)` → `anchorEntryVisible`) ; le même filtre s’applique à la
+  barre latérale, au tiroir et aux liens du profil.
+- Vue `planning` : `ArtisanPlanning` avec `CONTRACT_MESSAGES[state]`, client `session.features.planning`, démo
+  `demoPlanning(demoPlanningRange(now, "America/Martinique"))` en mode démonstration seulement, fuseau
+  `America/Martinique`, « Ouvrir le dossier » → vue `mission`.
+- Droit d’écriture : `planningAuthority(mode, artisan_approved, application_status)` — lecture seule avec raison pour un
+  artisan suspendu, ou non activé en mode réel (même source que les alertes de candidature de la coque) ; le serveur
+  reste l’autorité.
+- Vérifié (démo) : accès par le tiroir à 360 et la barre latérale à 1280 → `#planning` rendu (semaine, légende,
+  disponibilités habituelles), 0 élément interactif < 44 px, aucun débordement ; `#demo/client-planning` → écran « ne
+  fait pas partie de votre espace » sans entrée ; console sans erreur. Captures `anchors-planning-artisan-{360,1280}.jpg`.
+  Tests : `planningAuthority`, `demoPlanningRange` ; suite UI 82/82.
+- Observation hors périmètre (CSS du lot) : à 1280 l’en-tête du jour courant « sam. 31 oct. · Aujourd’hui » passe sur
+  trois lignes dans la colonne de 120 px.
