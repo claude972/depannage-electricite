@@ -736,3 +736,12 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - **Business e6fbcbd** reviewed: 49 tests PASS but **P2 frozen preflight clock** — `nowMs` captured before `await fetch` and reused in verify (receipt 890 000 ms + fetch 20 000 ms ⇒ age 910 000 > 900 000 accepted, fresh helper refuses EXPIRED). Repro `/tmp/depannage-business-e6fbc-clock-repro.mjs`. Fix (fresh clock at each check + barrier test) dispatched to a96ae75. **No business recette before root reviews the fix.**
 - Lead check (read-only) of tracking a67f0e4 `scripts/qa-tracking/lib/preflight.mjs`: `now()` called fresh at `load` (l.109) and again at `verify` after the fetch (l.115) ⇒ **tracking does not have this defect**.
 - Backend 5b5288f doc fix observed; final quick review from integration after the run.
+
+## 2026-10-31 — business frozen-clock P2 fixed: 9f32421
+
+- `claude/web-qa-business` **`9f3242195ba5555ee8774777cfc6f986ecfa013a`**: `scripts/qa-business/**`, tests, contract §19 ter only (Codex and tracking files untouched; lead verified paths).
+- `remotePreflight` takes a clock FUNCTION (default `Date.now`) read immediately before each age check — `loadDeploymentProof`, then `verifyRemoteDeployment` after the fetch resolves; a frozen `nowMs` is refused (TypeError).
+- Barrier tests: injected clock + deferred fetch, receipt 890 s, clock +20 s before fetch resolves ⇒ `{ok:false, stage:"verify", code:"EXPIRED"}`, clock read exactly [t0, t0+20 s]; fast fetch passes; through `main` with stubbed `Date.now`/fetch ⇒ exit 2, BLOCKED « refused at verify: EXPIRED », only result.json + summary.md, only request `GET <origin>/` (no Supabase).
+- Scan: no other age check; b2b dates computed twice across awaits (due date, visit date) now read once per step.
+- Checks: node --check 13/13, tsc clean, `tests/**/*.test.ts` 615 pass / 0 fail / 1 skipped (4c test, passes with `QA_BUSINESS_4C_HTML`), dry-run 0. No recette run.
+- For root: review 9f32421 before the business recette.
