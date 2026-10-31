@@ -477,3 +477,11 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - `lib.ts`: the code is stored as a fact in `OBSERVED_EXPIRED_PLATFORM_CODES`, NOT in `EXPIRED_PLATFORM_CODES` (can never PASS). `classifyExpiredProbe`: 401 + `UNAUTHORIZED_*` ⇒ OBSERVED (code recorded); 401 `NO_AUTH_HEADER`/`INVALID_JWT_FORMAT` ⇒ FAIL; 422 or 2xx ⇒ FAIL; network/5xx ⇒ INCOMPLETE; function's own error envelope ⇒ PASS (unchanged).
 - Behaviour change: network failure on the verify call now INCOMPLETE (exit 1) instead of interruption FAIL; account still recorded and cleaned, lease not consumed.
 - Tests: `tests/*.test.ts` 172/172 (`qa-gateway*` 76/76), tsc 0, node --check 0. §2 revoke 83fdad9 unchanged, awaiting root review.
+
+## 2026-10-31 — business harness root P2 fixes: 4bd9e76
+
+- `claude/web-qa-business` **`4bd9e76a06018b595caf1d7bbbc82e6e281154e1`** (agent files only, shared `scripts/qa` lifecycle untouched; no cloud, no credentials). Contract §15.
+- P2-1: Business-owned guard in `makeRunCleanup`: `gate.pending > 0` after drain ⇒ zero deletions, zero Auth reads, manifest + intents left as last written, INCOMPLETE « producers not drained », exit 3, recovery command printed (`--cleanup-manifest`), recovery in a separate process with nothing pending.
+- P2-2: `ctx.mutation(fn)` = synchronous gate check immediately before emission + promise registered in the drain; `ctx.mutatingClick(locator, response)` same for clicks that POST. Direct RPC now `await sessionAccessToken` then `ctx.mutation(() => userRpc(...))`. Audit converted 8 mutating clicks, every `post()` probe and the RPC; fixture writes stay `creating()` + `guardWrites`; Auth creation checked right before the call.
+- Tests (deferred promises, event-ordered logs): drain timeout with pending producer ⇒ zero delete calls, manifest bytes intact, exit 3, recovery later 0; SIGINT during `await sessionAccessToken` ⇒ RPC never emitted; RPC in flight at SIGINT ⇒ cleanup strictly after settlement. node --check 11/11, tsc clean, harness 38/38, `tests/**/*.test.ts` 411/411, dry-run 0, bad args 2.
+- For root: re-review at 4bd9e76; no cloud before closure.
