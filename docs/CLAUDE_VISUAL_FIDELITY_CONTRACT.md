@@ -48,7 +48,7 @@ Stockées hors dépôt puis copiées dans `docs/visual-fidelity/` avec les captu
 | Fiche de site | V5-C01 / M50 | À auditer |
 | Approbation | V5-C08 | À auditer |
 | Artisan | M35 (shell + tableau de bord), M34 (devis), M36 (profil) | Addendum ci-dessous (base f3fd9c6) ; M14/M65 (documents, candidature) hors de ce lot |
-| Super Admin | M43 (volume 3 p12) | À auditer |
+| Super Admin | M43 (volume 3 p12) | Addendum ci-dessous (base 0d94ec2, branche `claude/web-design-admin`) |
 | Pages publiques | M11 + variantes cataloguées | À auditer |
 
 ## Hors périmètre de ce lot
@@ -339,3 +339,67 @@ Vérifié (démo, script hors dépôt) : cloche visible 44 × 44 et active dans 
   `anchors-rev-reports-sla-1280.jpg`. Tests : visibilité opérateur limité pour artisan / particulier / entreprise par le
   garde `canAccess` réel, mode public sans entrée ; suite UI 89/89. Limite : la démo ne fournit `platformAccess` qu’au
   rôle Super Admin, la présence des entrées pour un opérateur limité est prouvée par les tests, pas par capture.
+
+## Addendum — Super Admin M43 (VISUAL-FIDELITY-001, base `0d94ec2`)
+
+Publié **avant** toute modification de code de la coque Super Admin. Référence maîtresse : **M43** (volume 3 p12,
+`/tmp/courant-audit/pdf-images/v3-p12.jpeg`), tableau de bord administrateur « ArtisanPro » ; les listes Artisans /
+Interventions / Devis & Factures n’ont pas de planche dédiée et suivent la densité de M43. Captures « avant » (démo,
+`#demo/admin…`) : `docs/visual-fidelity/admin-dashboard-{360,1280}-before.jpg`, `admin-artisans-1280-before.jpg`,
+`admin-quotes-360-before.jpg`. Fichiers du lot : `components/role/admin-space.tsx`, `admin.module.css`, logique pure
+testable dans `components/role/admin-lists.ts` (créé au premier checkpoint), `tests/ui/**`, cette page,
+`docs/visual-fidelity/**`. Les ancrages (cloche, entrées Opérateurs / Finance / Modération gardées par `platformEntries`)
+restent intacts.
+
+### Règle sur les données
+
+Les chiffres de M43 (128 interventions du mois, +12 %, 24 850 € HT, 142 630 € annuels, 12 validations, « 4 docs ✓ »,
+échéances, catégories métier, villes) sont des **exemples**. Seules les valeurs du serveur sont affichées :
+`counts.*` (totaux globaux), `financial.paid_service_cents` (prestations payées TTC sur les dossiers chargés,
+revenu plateforme non calculé), listes bornées par `capabilities.list_limit` avec leur mention. **Jamais fabriqué** :
+période « mois en cours » ou « année », tendance vs mois précédent, CA HT, nombre de documents par candidature
+(justificatifs non chargés dans la vue d’ensemble), catégorie métier dans le tableau (absente de la liste), échéance
+d’intervention, SLA, noms de clients (non transmis dans cette vue). Les compteurs restent les totaux serveur ; les
+pieds de liste disent « parmi les N derniers chargés ».
+
+### M43 — tableau de bord (`#demo/admin`)
+
+| Élément de la référence | Composant / section existant | Écart constaté (0d94ec2) | Correction prévue |
+| --- | --- | --- | --- |
+| Barre latérale : marque, 8 entrées, Messages avec compteur, bas : compte « Admin / Super Admin » + Déconnexion | `NAV` (+ Garantie, + entrées back-office gardées), `.account` (avatar, nom, « Super Admin », bouton Déconnexion), compteur sur Artisans (candidatures) | Conforme en structure. | Conservé. **Écart assumé** : pas de compteur sur Messages (aucun total serveur de messages non lus) ; entrées supplémentaires (Garantie, back-office) justifiées par les fonctions réelles. |
+| En-tête : titre + sous-titre ; à droite sélecteur de date « 20 mai 2024 ▾ » + cloche | `.header` : `.heading`, `.tools` (cloche du lot, puce « Données au … », Actualiser) | Pas de sélecteur de période. | **Écart assumé** : aucune période serveur sur la vue d’ensemble ; la puce de fraîcheur + Actualiser en tiennent lieu. ≤ 600 px : outils sur deux lignes (règle déjà en place). |
+| 4 KPI : icône teintée, libellé, grande valeur, note (« ↑ 12 % vs avril ») | `.kpis` > `Kpi` ×4 | Cartes inégales et hautes : notes longues (3 à 5 lignes), valeur moins lisible ; une colonne à 360. | Cartes compactes et alignées : note courte sur une ligne (« total plateforme », « dossiers non clos », « TTC, dossiers chargés », « soumis, à décider »), base de calcul complète déplacée dans une ligne « Base de calcul » (élément `details`) sous la rangée ; grille 2 colonnes dès 360 px, 4 à ≥ 1100 px. Définitions pures `adminKpis(overview)` testées (valeurs = totaux serveur, aucune tendance). |
+| Colonne gauche « Validations artisans en attente (12) » + « Voir toutes les validations → » ; tableau Artisan (avatar, nom, e-mail) / Catégorie / Date de demande / Documents / Actions « Vérifier ▾ » ; pied « Afficher plus de demandes » | `Panel` + `DataTable` (Artisan, Société, Dossier, Date, Actions « Examiner ») + `Basis` | À 1280 la colonne Actions est **coupée** par le panneau (« Examine… »), la date passe sur 3 lignes ; bouton 40 px. | Tableau qui tient : date sur une ligne (`nowrap`), colonne Société fusionnée sous le nom (sous-libellé), action « Examiner » 44 px alignée à droite ; au-dessous de 1240 px, libellé d’action réduit à l’icône avec libellé accessible. Lien d’en-tête conservé ; le pied garde la mention « parmi les N derniers artisans ». **Écarts assumés** : pas d’e-mail (non transmis), pas de catégorie ni de compteur de documents. |
+| Colonne droite « Interventions en cours (32) » : rangées icône / titre / « Client : … • ville » / « Artisan : … » / pastille « En cours » / « Échéance : 22 mai » ; pied « Afficher plus d’interventions » | `Panel` + `InterventionRow` ×6 + `Basis` | Proche ; méta sur une ligne dense (réf · Client · artisan · ville), statut et date à droite. | Rangée en deux lignes de méta comme M43 : « Référence · ville » puis « Artisan : nom ou Non attribué » ; pastille de statut réelle ; « Créée le » conservé (aucune échéance). Six dossiers, pied inchangé. |
+| Mobile (aucune planche M43) | Tableau → pile libellé/valeur (`data-label`), KPI empilés | Une colonne de KPI très haute ; tableau en pile lisible. | KPI en 2 colonnes à 360 ; rangées d’interventions compactes ; aucun débordement horizontal (outils d’en-tête déjà corrigés). |
+
+### Listes (Artisans, Interventions, Devis & Factures) — densité M43
+
+| Constat (0d94ec2) | Correction prévue |
+| --- | --- |
+| Boutons de ligne « Examiner » / « Ouvrir » à 40 px ; bascules de devis « INT-DEMO-00x » à 32 px (Devis & Factures). | Cibles ≥ 44 px (`.rowAction`, `.quoteToggle`), sans changer les actions ni les filtres. |
+| Pieds et compteurs | Inchangés : totaux serveur dans les KPI, listes « parmi les N derniers chargés », pagination réelle des annuaires conservée. |
+
+### Règles responsive
+
+- **360** : barre latérale en tiroir (existant), en-tête sur deux lignes d’outils, KPI 2 colonnes, tableaux en pile
+  libellé/valeur, rangées d’interventions sur deux lignes ; aucun débordement horizontal.
+- **760** : KPI 2 colonnes, deux panneaux empilés (`.columns` existant), tableau en pile ou défilement identifié.
+- **1280** : barre latérale fixe, KPI 4 colonnes, deux panneaux côte à côte, tableau complet sans coupure.
+
+### Accessibilité ciblée
+
+Cibles ≥ 44 × 44 (actions de ligne, bascules, liens de panneau) ; action réduite à l’icône toujours nommée
+(`aria-label`) ; focus visible global ; contrastes des tokens existants (texte `#172b4d` 12,6:1, muted `#526178` 6,3:1,
+bleu `#1457d9` 5,4:1 sur blanc) ; statut jamais porté par la couleur seule (pastilles textuelles).
+
+### Vérification : par test ou par capture
+
+| Par test (`tests/ui/admin-lists.test.ts`, logique pure dans `admin-lists.ts`) | Par capture (démo 360 / 1280) |
+| --- | --- |
+| `adminKpis(overview)` : quatre indicateurs, valeurs issues des totaux serveur et du montant payé formaté, aucune clé de tendance ; `dashboardRows(overview)` : candidatures « soumises » triées par date, six dossiers actifs les plus récents ; mention de borne « parmi les N derniers » à partir de `list_limit`. | Planche M43 / avant / après à 1280 ; tableau des validations sans coupure ; 0 élément interactif < 44 px sur Tableau de bord, Artisans, Interventions, Devis & Factures à 360 et 1280 ; aucun débordement ; console sans erreur ; entrées back-office toujours gardées (présentes en démo Super Admin, absentes pour les autres rôles). |
+
+### Checkpoints prévus
+
+1. Tableau de bord M43 (KPI, validations, interventions en cours) — `admin-dashboard-{360,1280}-after.jpg`.
+2. Listes : cibles 44 px et densité — `admin-artisans-1280-after.jpg`, `admin-quotes-360-after.jpg`.
