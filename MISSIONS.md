@@ -246,7 +246,7 @@ Entreprise cliente et Super Admin restent actuellement livrés/recettés Web ; l
 ## Mission VISUAL-FIDELITY-001 — reprise fidèle aux maquettes, accès Claude reconnecté
 - agent: claude
 - status: pending
-- lead: réutiliser b4b555f0 ; le propriétaire confirme le nouvel accès CLI connecté. Une réponse utile doit confirmer la reprise, pas seulement auth status. Codex pilote/revoit/exécute/intègre, tout code demeure Claude.
+- lead: Codex pilote cette mission ; propriétaire de code Claude Desktop (nouvelle session dédiée sur le worktree design), à confirmer par réponse utile. Le CLI b4b555f0 et un processus neuf renvoient toujours weekly limit malgré auth connectée ; ils ne possèdent pas une exécution concurrente de cette mission. Aucun doublon design ne doit être lancé. Tout code demeure Claude.
 - branch: claude/web-pwa-design
 - base revision: 9b3dae03e1a413ffe89b34e0db7553ddc1b3ade9
 - worktree: /Users/claudebrafa/.codex/worktrees/depannage-claude-design (interne, préparé propre, aucun code créé par Codex).
