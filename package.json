@@ -10,9 +10,9 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/*.test.ts",
+    "test": "tsx --test 'tests/**/*.test.ts'",
     "test:ui": "tsx --test tests/ui/*.test.ts",
-    "check": "npm run typecheck && npm test && npm run test:ui && npm run build"
+    "check": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.7",
