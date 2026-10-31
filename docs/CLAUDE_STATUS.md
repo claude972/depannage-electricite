@@ -851,3 +851,10 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 ## 2026-10-31 — root review A8 18039eb: diagnostics not GO yet (reason allowlist, stop during capture)
 
 - 47 tests PASS; T8 locator and providers-before-T19 correct; T6/T9/T14/T16 unchanged. Diagnostics NOT GO: (1) `diagnostics.mjs` ~31–37 accepts any `^[a-z_]{1,64}$` ⇒ `private_token_from_upstream` persisted — closed set of known tracking reasons required, unknown ⇒ null/constant; (2) `gate.stop` during screenshot then DOM `evaluate` still launched — re-check gate before each operation and after each await, mark capture skipped/truncated, verdict unchanged. Action allowlist fine. Contract clarification before code; small fixes + repro tests by a84ded5; no new agent, no cloud. Root waits for SHA/review before the T6 cloud run. Business 49ff713 review in progress separately.
+
+## 2026-10-31 — business 49ff713 accepted and integrated 7cf61a6; public business run in progress
+
+- Root peer review of 49ff713: **accepted**, 55 PASS, both P2 closed; integrated at **`7cf61a6dc2cc5e27cbd1eed06ffae3686ec057de`** (627 tests + tsc PASS, push in progress).
+- New root PUBLIC business run in progress: `/tmp/depannage-business-49ff-4c-public-real`, PTY 40214, after all cohorts at 0; fresh receipt 20:54:39.212 UTC (READY metadata, Git 4c, Flight W1). **Integration/build not to be modified during the run.**
+- P3 (non-blocking, fix after the run): the trace reads `window.index` on the opaque token ⇒ `ui_window_from: undefined` in the trace only; the assertion uses the correct returned `window_from`. To be queued to a96ae75 after the run.
+- Root waits for the A8 fix (closed reason set + stop between operations, contract before code) and its review before the public T6 diagnostic; no blind T6 fix.
