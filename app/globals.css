@@ -4303,3 +4303,122 @@ body {
     min-width: 95px;
   }
 }
+.inline-confirmation {
+  max-width: 100%;
+}
+.confirmation-review {
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: white;
+  max-width: 420px;
+  text-align: left;
+}
+.confirmation-review > p {
+  font-size: 13px;
+  line-height: 1.8;
+  margin: 0 0 12px;
+}
+.confirmation-review > div,
+.inline-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+.confirmation-review .button,
+.inline-editor .button {
+  font-size: 12px;
+}
+.destructive-button {
+  color: #fff;
+  background: var(--red);
+}
+.destructive-button:hover {
+  background: #8e1b14;
+}
+.inline-editor {
+  padding: 17px 0;
+  margin: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.inline-editor .field {
+  margin-bottom: 15px;
+}
+.inline-editor .field > span {
+  font-size: 13px;
+}
+.inline-editor input,
+.inline-editor textarea,
+.inline-editor select {
+  font-size: 14px;
+}
+.inline-validation {
+  color: var(--red);
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 7px 0 13px;
+}
+.approval-decision {
+  margin-top: 17px;
+}
+.approval-decision .field {
+  margin-bottom: 12px;
+}
+.approval-decision .field > span {
+  font-size: 12px;
+}
+.approval-decision textarea {
+  font-size: 14px;
+  min-height: 75px;
+}
+.demo-banner .inline-confirmation > button {
+  font-size: 12px;
+  padding: 0;
+  min-height: 28px;
+  border: 0;
+  background: none;
+  text-decoration: underline;
+}
+.demo-banner .confirmation-review {
+  margin: 8px 0;
+}
+.demo-banner .confirmation-review button {
+  min-height: 44px;
+  padding: 9px 12px;
+  font-size: 12px;
+  text-decoration: none;
+}
+.document-list .inline-confirmation {
+  flex-shrink: 0;
+}
+.document-list .confirmation-review {
+  max-width: 300px;
+}
+.warranty-panel .warranty-resolution {
+  padding-top: 20px;
+}
+.warranty-resolution .field {
+  margin-bottom: 15px;
+}
+@media (max-width: 760px) {
+  .confirmation-review {
+    max-width: 100%;
+  }
+  .document-list .inline-confirmation {
+    width: 100%;
+  }
+  .document-list .confirmation-review {
+    max-width: none;
+  }
+  .inline-editor-actions .button,
+  .confirmation-review .button {
+    min-height: 44px;
+    font-size: 12px;
+  }
+  .budget-editor .inline-editor-actions {
+    flex-direction: column;
+  }
+  .budget-editor .button {
+    width: 100%;
+  }
+}

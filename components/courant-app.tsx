@@ -2054,20 +2054,14 @@ export default function CourantApp() {
             </section>
             {["requested", "assigned", "quoted"].includes(i.status) &&
               ["client", "manager"].includes(role) && (
-                <button
-                  className="text-button danger"
-                  disabled={busy}
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        "Annuler cette demande ? Cette action ne peut pas être annulée.",
-                      )
-                    )
-                      void action(i.id, "cancel");
-                  }}
-                >
-                  Annuler la demande
-                </button>
+                <ConfirmAction
+                  label="Annuler la demande"
+                  message="Annuler cette demande ? Cette action ne peut pas être annulée."
+                  confirmLabel="Confirmer l’annulation"
+                  busy={busy}
+                  danger
+                  onConfirm={() => action(i.id, "cancel")}
+                />
               )}
           </aside>
         </div>
@@ -2323,27 +2317,11 @@ export default function CourantApp() {
                             : "Parties communes et équipements"}
                     </span>
                   </div>
-                  <button
-                    className="text-button budget-edit"
-                    disabled={busy}
-                    onClick={() => {
-                      const amount = window.prompt(
-                        "Budget de référence du site en euros :",
-                        String((s.budget_cents || 0) / 100),
-                      );
-                      if (amount === null) return;
-                      void run(async () => {
-                        const budget = Math.round(
-                          Number(amount.replace(",", ".")) * 100,
-                        );
-                        if (
-                          !Number.isSafeInteger(budget) ||
-                          budget < 0 ||
-                          budget > 100000000
-                        )
-                          throw new Error(
-                            "Renseignez un budget compris entre 0 et 1 000 000 €.",
-                          );
+                  <BudgetEditor
+                    budgetCents={s.budget_cents || 0}
+                    busy={busy}
+                    onSave={async (budget) =>
+                      await run(async () => {
                         if (mode === "demo")
                           saveDemo({
                             ...data,
@@ -2362,11 +2340,9 @@ export default function CourantApp() {
                           await refresh();
                         }
                         setNotice("Budget de référence mis à jour.");
-                      });
-                    }}
-                  >
-                    Modifier le budget
-                  </button>
+                      })
+                    }
+                  />
                   <div className="site-actions">
                     <button
                       className="button outline"
@@ -2911,25 +2887,20 @@ export default function CourantApp() {
               <strong>Démonstration</strong> — données fictives. Aucun artisan
               contacté, aucun débit bancaire.
             </span>
-            <button
-              onClick={() => {
-                if (
-                  window.confirm(
-                    "Réinitialiser toutes les données de démonstration ?",
-                  )
-                ) {
-                  saveDemo(seed());
-                  setProfessional(proSeed());
-                  try {
-                    localStorage.removeItem("courant-warranty-demo-v1");
-                    localStorage.removeItem("courant-admin-demo-v1");
-                  } catch {}
-                  setNotice("Démonstration réinitialisée.");
-                }
+            <ConfirmAction
+              label="Réinitialiser"
+              message="Réinitialiser toutes les données de démonstration ? Les modifications locales seront effacées."
+              confirmLabel="Confirmer la réinitialisation"
+              onConfirm={async () => {
+                saveDemo(seed());
+                setProfessional(proSeed());
+                try {
+                  localStorage.removeItem("courant-warranty-demo-v1");
+                  localStorage.removeItem("courant-admin-demo-v1");
+                } catch {}
+                setNotice("Démonstration réinitialisée.");
               }}
-            >
-              Réinitialiser
-            </button>
+            />
           </div>
         )}
         <main id="main" className="workspace-content">
@@ -4211,18 +4182,20 @@ function ArtisanAdministration({ demo }: { demo: boolean }) {
                   — {date(p.created_at)}
                 </p>
               </section>
-              <button
-                className="button outline"
-                disabled={Boolean(busy)}
-                onClick={async () => {
-                  if (
-                    !window.confirm(
-                      p.artisan_approved
-                        ? "Suspendre l’accès aux nouvelles missions de cet artisan ?"
-                        : "Confirmez-vous avoir vérifié la candidature et ses justificatifs ?",
-                    )
-                  )
-                    return;
+              <ConfirmAction
+                label={p.artisan_approved ? "Suspendre" : "Approuver"}
+                message={
+                  p.artisan_approved
+                    ? "Suspendre l’accès aux nouvelles missions de cet artisan ?"
+                    : "Confirmez-vous avoir vérifié la candidature et ses justificatifs ?"
+                }
+                confirmLabel={
+                  p.artisan_approved
+                    ? "Confirmer la suspension"
+                    : "Confirmer l’approbation"
+                }
+                busy={Boolean(busy)}
+                onConfirm={async () => {
                   setBusy(p.id);
                   setError("");
                   try {
@@ -4250,13 +4223,7 @@ function ArtisanAdministration({ demo }: { demo: boolean }) {
                     setBusy("");
                   }
                 }}
-              >
-                {busy === p.id
-                  ? "Enregistrement…"
-                  : p.artisan_approved
-                    ? "Suspendre"
-                    : "Approuver"}
-              </button>
+              />
             </div>
           ))}
         </div>
@@ -4450,46 +4417,17 @@ function ProfessionalOperations({
                         {a.note && <p>{a.note}</p>}
                       </section>
                       {a.status === "pending" && (
-                        <div className="approval-actions">
-                          <button
-                            className="button primary"
-                            disabled={busy}
-                            onClick={() => {
-                              const note = window.prompt(
-                                "Note de décision (facultative) :",
-                                "",
-                              );
-                              if (note !== null)
-                                void onSave({
-                                  action: "decide_approval",
-                                  approval_id: a.id,
-                                  decision: "approved",
-                                  note,
-                                });
-                            }}
-                          >
-                            Approuver
-                          </button>
-                          <button
-                            className="button outline"
-                            disabled={busy}
-                            onClick={() => {
-                              const note = window.prompt(
-                                "Motif du refus :",
-                                "",
-                              );
-                              if (note !== null)
-                                void onSave({
-                                  action: "decide_approval",
-                                  approval_id: a.id,
-                                  decision: "rejected",
-                                  note,
-                                });
-                            }}
-                          >
-                            Refuser
-                          </button>
-                        </div>
+                        <ApprovalDecision
+                          busy={busy}
+                          onDecision={(decision, note) =>
+                            onSave({
+                              action: "decide_approval",
+                              approval_id: a.id,
+                              decision,
+                              note,
+                            })
+                          }
+                        />
                       )}
                     </div>
                   );
@@ -5018,40 +4956,18 @@ function WarrantyPanel({
               )}
               {role === "admin" &&
                 ["submitted", "reviewing"].includes(c.status) && (
-                  <div className="warranty-actions">
-                    {[
-                      ["reviewing", "Examiner"],
-                      ["resolved", "Résoudre"],
-                      ["declined", "Refuser"],
-                    ].map(([status, label]) => (
-                      <button
-                        className="button outline"
-                        disabled={busy}
-                        key={status}
-                        onClick={() => {
-                          const resolution = window.prompt(
-                            "Note de traitement (au moins 10 caractères) :",
-                            c.resolution || "",
-                          );
-                          if (resolution === null) return;
-                          if (resolution.trim().length < 10) {
-                            setError(
-                              "La note de traitement doit contenir au moins 10 caractères.",
-                            );
-                            return;
-                          }
-                          void save({
-                            action: "resolve",
-                            case_id: c.id,
-                            status,
-                            resolution,
-                          });
-                        }}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
+                  <WarrantyResolution
+                    busy={busy}
+                    initialNote={c.resolution || ""}
+                    onSave={(status, resolution) =>
+                      save({
+                        action: "resolve",
+                        case_id: c.id,
+                        status,
+                        resolution,
+                      })
+                    }
+                  />
                 )}
             </div>
           ))}
@@ -5099,5 +5015,260 @@ function WarrantyPanel({
           </form>
         )}
     </section>
+  );
+}
+
+function ConfirmAction({
+  label,
+  message,
+  confirmLabel,
+  busy = false,
+  danger = false,
+  onConfirm,
+}: {
+  label: string;
+  message: string;
+  confirmLabel: string;
+  busy?: boolean;
+  danger?: boolean;
+  onConfirm: () => Promise<unknown>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(false);
+  return (
+    <div className={`inline-confirmation ${danger ? "destructive" : ""}`}>
+      {!open ? (
+        <button
+          type="button"
+          className={danger ? "text-button danger" : "button outline"}
+          disabled={busy}
+          onClick={() => setOpen(true)}
+        >
+          {label}
+        </button>
+      ) : (
+        <div className="confirmation-review">
+          <p>{message}</p>
+          <div>
+            <button
+              type="button"
+              className={
+                danger ? "button destructive-button" : "button primary"
+              }
+              disabled={busy || pending}
+              onClick={async () => {
+                setPending(true);
+                try {
+                  await onConfirm();
+                  setOpen(false);
+                } finally {
+                  setPending(false);
+                }
+              }}
+            >
+              {pending ? "Enregistrement…" : confirmLabel}
+            </button>
+            <button
+              type="button"
+              className="button outline"
+              disabled={busy || pending}
+              onClick={() => setOpen(false)}
+            >
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+function BudgetEditor({
+  budgetCents,
+  busy,
+  onSave,
+}: {
+  budgetCents: number;
+  busy: boolean;
+  onSave: (cents: number) => Promise<boolean | undefined>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState(String(budgetCents / 100));
+  const [error, setError] = useState("");
+  return (
+    <div className="budget-editor">
+      {!open ? (
+        <button
+          type="button"
+          className="text-button budget-edit"
+          disabled={busy}
+          onClick={() => {
+            setAmount(String(budgetCents / 100));
+            setError("");
+            setOpen(true);
+          }}
+        >
+          Modifier le budget
+        </button>
+      ) : (
+        <form
+          className="inline-editor"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const cents = Math.round(Number(amount.replace(",", ".")) * 100);
+            if (
+              !amount.trim() ||
+              !Number.isSafeInteger(cents) ||
+              cents < 0 ||
+              cents > 100000000
+            ) {
+              setError("Renseignez un budget compris entre 0 et 1 000 000 €.");
+              return;
+            }
+            setError("");
+            void onSave(cents).then((saved) => {
+              if (saved) setOpen(false);
+            });
+          }}
+        >
+          <Field label="Budget de référence du site (€)">
+            <input
+              required
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              maxLength={15}
+            />
+          </Field>
+          {error && (
+            <p className="inline-validation" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="inline-editor-actions">
+            <button type="submit" className="button primary" disabled={busy}>
+              Enregistrer le budget
+            </button>
+            <button
+              type="button"
+              className="button outline"
+              disabled={busy}
+              onClick={() => setOpen(false)}
+            >
+              Annuler
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+function ApprovalDecision({
+  busy,
+  onDecision,
+}: {
+  busy: boolean;
+  onDecision: (
+    decision: "approved" | "rejected",
+    note: string,
+  ) => Promise<boolean | undefined>;
+}) {
+  const [note, setNote] = useState("");
+  const [error, setError] = useState("");
+  return (
+    <div className="approval-decision">
+      <Field label="Note de décision (obligatoire en cas de refus)">
+        <textarea
+          rows={2}
+          maxLength={2000}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Votre note de validation ou le motif du refus…"
+        />
+      </Field>
+      {error && (
+        <p className="inline-validation" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="approval-actions">
+        <button
+          type="button"
+          className="button primary"
+          disabled={busy}
+          onClick={() => {
+            setError("");
+            void onDecision("approved", note.trim());
+          }}
+        >
+          Approuver
+        </button>
+        <button
+          type="button"
+          className="button outline"
+          disabled={busy}
+          onClick={() => {
+            if (!note.trim()) {
+              setError(
+                "Renseignez le motif du refus avant de confirmer votre décision.",
+              );
+              return;
+            }
+            setError("");
+            void onDecision("rejected", note.trim());
+          }}
+        >
+          Refuser
+        </button>
+      </div>
+    </div>
+  );
+}
+function WarrantyResolution({
+  busy,
+  initialNote,
+  onSave,
+}: {
+  busy: boolean;
+  initialNote: string;
+  onSave: (status: string, note: string) => Promise<void>;
+}) {
+  const [note, setNote] = useState(initialNote);
+  const [status, setStatus] = useState("reviewing");
+  return (
+    <form
+      className="warranty-resolution inline-editor"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void onSave(status, note.trim());
+      }}
+    >
+      <Field label="État du traitement">
+        <select value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="reviewing">En cours d’examen</option>
+          <option value="resolved">Résolue</option>
+          <option value="declined">Refusée</option>
+        </select>
+      </Field>
+      <Field
+        label="Note de traitement"
+        hint="Au moins 10 caractères. Cette note sera visible dans le dossier."
+      >
+        <textarea
+          required
+          minLength={10}
+          maxLength={4000}
+          rows={3}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
+      </Field>
+      <button
+        type="submit"
+        className="button primary"
+        disabled={busy || note.trim().length < 10}
+      >
+        Enregistrer la décision
+      </button>
+    </form>
   );
 }
