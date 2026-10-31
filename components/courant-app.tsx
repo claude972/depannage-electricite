@@ -2,11 +2,15 @@
 // Session controller: identity, mode (public/demo/live), role guards, hash routing, data
 // loading with late-response protection, and every mutation (live contract or explicit demo
 // counterpart). Role spaces under components/role render the screens.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 import { api, ApiRequestError, contractStateFromError, uploadDocument } from "./app/api";
 import { createGuard, createRunner, runForResult, type RunContext, type Runner } from "./app/guard";
 import { adoptIdentity } from "./app/identity";
+import { createDemoFeatureClients, createFeatureClients } from "./app/features";
+import type { PlatformAccess } from "../lib/features/platform-operations/types";
+import { PLATFORM_DEMO } from "../lib/features/platform-operations/demo";
+import { demoNotificationPage } from "../lib/features/notifications/demo";
 import { createRevalidationScheduler } from "./app/revalidate";
 import {
   acknowledgeUpload,
@@ -129,6 +133,8 @@ export default function CourantApp() {
   const [selectedQuoteId, setSelectedQuoteId] = useState("");
   const [activeOrganizationId, setActiveOrganizationId] = useState("");
   const [activeSiteId, setActiveSiteId] = useState("");
+  const [platformAccess, setPlatformAccess] = useState<PlatformAccess | null>(null);
+  const [unreadNotifications, setUnreadNotifications] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [booting, setBooting] = useState(true);
@@ -170,6 +176,8 @@ export default function CourantApp() {
     setData(EMPTY_WORKSPACE);
     setProfessional(EMPTY_PROFESSIONAL);
     setCapabilities(UNKNOWN_CAPABILITIES);
+    setPlatformAccess(null);
+    setUnreadNotifications(null);
     setReturnContext(null);
     setSelectedId("");
     setSelectedQuoteId("");
@@ -2272,6 +2280,49 @@ export default function CourantApp() {
         ? profile.full_name
         : DEMO_NAMES[role]
       : profile?.full_name || "Bienvenue";
+  // Advanced lots (WEB-SHARED-001): one client bundle per identity. Live clients are bound to the
+  // identity generation (a reply after logout/login/demo switch is dropped); demonstration clients
+  // operate on seeds only and never touch the network.
+  const features = useMemo(
+    () =>
+      mode === "demo"
+        ? createDemoFeatureClients(role)
+        : createFeatureClients({
+            generation: () => guard.generation(),
+            setState: (key, state) => setCapabilities((c) => (c[key] === state ? c : { ...c, [key]: state })),
+          }),
+    [mode, role, guard],
+  );
+  // Capability probes after each successful workspace load: cheap reads whose reply alone decides
+  // availability (404 missing, 503 unavailable, 403 present). Nothing here grants anything: the
+  // back-office reply is kept as data for a fail-closed gate, the unread count for the bell.
+  useEffect(() => {
+    if (mode !== "live" || !refreshedAt) return;
+    let active = true;
+    const ignore = () => undefined;
+    void features.notifications
+      .summary()
+      .then((summary) => active && setUnreadNotifications(summary ? summary.unread_count : null))
+      .catch(() => active && setUnreadNotifications(null));
+    void features.platform.load
+      .me()
+      .then((access) => active && setPlatformAccess(access))
+      .catch(() => active && setPlatformAccess(null));
+    if (role === "artisan") {
+      const today = new Date().toISOString().slice(0, 10);
+      void features.planning.load({ from: today, to: today }).catch(ignore);
+    }
+    if (role === "manager" && activeSiteId) void features.siteOperations.load(activeSiteId).catch(ignore);
+    return () => {
+      active = false;
+    };
+  }, [mode, role, refreshedAt, activeSiteId, features]);
+  useEffect(() => {
+    if (mode !== "demo") return;
+    setPlatformAccess(role === "admin" ? PLATFORM_DEMO.access : null);
+    setUnreadNotifications(demoNotificationPage({}).unread_count);
+  }, [mode, role]);
+
   const session: Session = {
     mode: mode === "live" ? "live" : "demo",
     role,
@@ -2384,6 +2435,9 @@ export default function CourantApp() {
       if (modeRef.current === "demo") setData(next);
     },
     setProfessional,
+    features,
+    platformAccess,
+    unreadNotifications,
   };
 
   if (booting)

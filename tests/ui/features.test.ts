@@ -195,3 +195,22 @@ test("platform views are fail-closed on the server reply: no reply, no capabilit
   // A profile role never substitutes for the reply: the helper does not even look at roles.
   assert.equal(platformViewAllowed({ ...base, scopes: [], capabilities: { ...base.capabilities, finance: false } }, "platform-finance"), false);
 });
+
+test("demo clients: seeds only, every command refused with the demonstration message, no request function", async () => {
+  const { createDemoFeatureClients, DEMO_COMMAND_MESSAGE } = await import("../../components/app/features");
+  const demo = createDemoFeatureClients("artisan");
+  assert.equal(demo.demo, true);
+  const planning = await demo.planning.load({ from: "2026-11-02", to: "2026-11-08" });
+  assert.ok(planning && Array.isArray(planning.rules));
+  assert.deepEqual(await demo.planning.command({ action: "save_rule" } as never), { ok: false, conflict: false, message: DEMO_COMMAND_MESSAGE });
+  assert.deepEqual(await demo.notifications.mark({ action: "mark_all_read" }), { ok: false, conflict: false, message: DEMO_COMMAND_MESSAGE });
+  const summary = await demo.notifications.summary();
+  assert.ok(summary && Number.isInteger(summary.unread_count));
+  await assert.rejects(demo.quoteDocuments.command({ action: "generate" } as never), (e: unknown) => e instanceof ApiRequestError && e.message === DEMO_COMMAND_MESSAGE);
+  await assert.rejects(demo.siteOperations.command({ action: "save_equipment" } as never)); // validated like the server, then refused
+  await assert.rejects(demo.platform.command.reconcile({ limit: 1 }), (e: unknown) => e instanceof ApiRequestError && e.message === DEMO_COMMAND_MESSAGE);
+  const me = await demo.platform.load.me();
+  assert.ok(me && typeof me.super_admin === "boolean");
+  const live = createDemoFeatureClients("admin");
+  assert.equal(live.demo, true);
+});

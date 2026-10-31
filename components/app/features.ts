@@ -7,7 +7,12 @@
 //   unavailable, any other refusal (401/403/409/422…) proves the contract is present and is
 //   surfaced to the leaf as the server's own message.
 import { api as defaultApi, ApiRequestError, contractStateFromError } from "./api";
-import type { ContractState } from "./types";
+import type { ContractState, Role } from "./types";
+import { demoPlanning } from "../../lib/features/planning/demo";
+import { demoNotificationPage, demoPreferences } from "../../lib/features/notifications/demo";
+import { demoClient as demoSiteOperationsClient, demoReport } from "../../lib/features/site-operations/demo";
+import { quoteDocumentsDemo } from "../../lib/features/quote-documents/demo";
+import { PLATFORM_DEMO } from "../../lib/features/platform-operations/demo";
 import type { PlanningClient } from "../../lib/features/planning/leaf";
 import type { PlanningCommand, PlanningCommandResponse, PlanningCommandResult, PlanningView } from "../../lib/features/planning/types";
 import type { MarkResult, NotificationsClient, PreferencesSaveResult } from "../../lib/features/notifications/leaf";
@@ -214,4 +219,95 @@ export function platformViewAllowed(access: PlatformAccess | null | undefined, v
     default:
       return false;
   }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Bundle injected through the session, and the strictly isolated demonstration counterpart.
+export type FeatureClients = {
+  planning: PlanningClient;
+  notifications: NotificationsClient;
+  siteOperations: SiteOperationsClient;
+  quoteDocuments: QuoteDocumentsClient;
+  platform: PlatformClient;
+  /** True when every client above operates on demonstration seeds only (no network). */
+  demo: boolean;
+};
+
+export function createFeatureClients(deps: FeatureDeps): FeatureClients {
+  return {
+    planning: createPlanningClient(deps),
+    notifications: createNotificationsClient(deps),
+    siteOperations: createSiteOperationsClient(deps),
+    quoteDocuments: createQuoteDocumentsClient(deps),
+    platform: createPlatformClient(deps),
+    demo: false,
+  };
+}
+
+export const DEMO_COMMAND_MESSAGE = "Démonstration : action non disponible.";
+const page = <T,>(items: T[]) => ({ limit: items.length, total: items.length, has_more: false, next_cursor: null });
+
+/**
+ * Demonstration clients: seeds in memory, zero network, every command refused with the explicit
+ * demonstration message (rendered as-is by the leaves). The leaves also receive the seeds through
+ * their `demo` prop and never call `load` in that mode; these clients are the safety net.
+ */
+export function createDemoFeatureClients(role: Role): FeatureClients {
+  const refuse = { ok: false as const, conflict: false, message: DEMO_COMMAND_MESSAGE };
+  const refusal = () => Promise.reject(new ApiRequestError(403, DEMO_COMMAND_MESSAGE));
+  const d = PLATFORM_DEMO;
+  return {
+    planning: {
+      load: async (range) => demoPlanning(range),
+      command: async () => refuse,
+    },
+    notifications: {
+      list: async (params) => demoNotificationPage(params),
+      summary: async () => ({ unread_count: demoNotificationPage({}).unread_count, latest_created_at: null }),
+      mark: async () => refuse,
+      loadPreferences: async () => demoPreferences(),
+      savePreferences: async () => refuse,
+    },
+    siteOperations: demoSiteOperationsClient(demoReport()),
+    quoteDocuments: {
+      load: async () => quoteDocumentsDemo(role),
+      command: refusal,
+      documentHref: (documentId, inline) => `/api/quote-documents/${enc(documentId)}${inline ? "?inline=1" : ""}`,
+    },
+    platform: {
+      load: {
+        me: async () => d.access,
+        operators: async () => ({ grants: d.grants, page: page(d.grants) }),
+        audit: async () => ({ entries: d.audit, page: page(d.audit) }),
+        settings: async () => ({ invoice_issuer: null, commission_bps: null }),
+        billingContact: async () => ({ billing_contact: null }),
+        finance: async () => ({ report: d.report, config: d.access.config }),
+        ledger: async () => ({ entries: d.ledger, page: page(d.ledger) }),
+        invoices: async () => ({ invoices: d.invoices, page: page(d.invoices) }),
+        invoice: refusal,
+        refundRequests: async () => ({ requests: d.refundRequests, page: page(d.refundRequests) }),
+        disputes: async () => ({ disputes: d.disputes, page: page(d.disputes) }),
+        reviews: async () => ({ reviews: d.reviews, page: page(d.reviews) }),
+      },
+      command: {
+        grant: refusal,
+        revoke: refusal,
+        setSuperAdmin: refusal,
+        setSetting: refusal,
+        setBillingContact: refusal,
+        reconcile: refusal,
+        invoiceReadiness: refusal,
+        issueInvoice: refusal,
+        issueCreditNote: refusal,
+        requestRefund: refusal,
+        decideRefund: refusal,
+        openDispute: refusal,
+        decideDispute: refusal,
+        moderateReview: refusal,
+        contestReview: refusal,
+        decideContestation: refusal,
+      },
+    },
+    demo: true,
+  };
 }
