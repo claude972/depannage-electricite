@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const privateHeaders = { "Cache-Control": "private, no-store" };
 const schema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("create_invitation"), organization_id: uuid, email: z.email().trim().toLowerCase().max(320), role: z.enum(["manager", "viewer"]), expires_in_days: z.number().int().min(1).max(14).default(7) }).strict(),
+  z.object({ action: z.literal("create_invitation"), organization_id: uuid, email: z.email().trim().toLowerCase().max(320), role: z.enum(["manager", "viewer"]), expires_in_days: z.number().int().min(1).max(14).default(7), site_scope: z.enum(["all", "selected"]).default("all"), site_grants: z.array(z.object({ site_id: uuid, can_write: z.boolean() }).strict()).max(100).default([]) }).strict(),
   z.object({ action: z.literal("revoke_invitation"), organization_id: uuid, invitation_id: uuid }).strict(),
   z.object({ action: z.literal("change_member_role"), organization_id: uuid, user_id: uuid, role: z.enum(["manager", "viewer"]) }).strict(),
   z.object({ action: z.literal("remove_member"), organization_id: uuid, user_id: uuid }).strict(),
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     if (data.action === "create_invitation") {
       const token = randomBytes(32).toString("hex");
       const tokenHash = createHash("sha256").update(token).digest("hex");
-      const result = await db.rpc("create_organization_invitation", { p_organization_id: data.organization_id, p_email: data.email, p_role: data.role, p_token_hash: tokenHash, p_expires_in_days: data.expires_in_days });
+      const result = await db.rpc("create_organization_invitation", { p_organization_id: data.organization_id, p_email: data.email, p_role: data.role, p_token_hash: tokenHash, p_expires_in_days: data.expires_in_days, p_site_scope: data.site_scope, p_site_grants: data.site_grants });
       dbError(result.error);
       // A fragment is not sent as a request URL to the app, analytics or the server.
       // The code is revealed only in this no-store response, never listed later or logged here.
