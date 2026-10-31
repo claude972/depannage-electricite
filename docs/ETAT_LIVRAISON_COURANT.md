@@ -45,3 +45,8 @@ Voir `docs/audit/ECARTS_LIVRAISON_D9374FA.md` : GPS/ETA, support opérateur cloi
 ## Coordination
 
 Claude CLI lead unique `b4b555f0` ; commande terminal `claude attach b4b555f0`. Claude conserve les interfaces et ses modules ; Codex pilote/revoit/exécute/intègre et possède les modules A4 (PDF facture/avoir et harnais planning), A5 support et A6 backend GPS/tests dans leurs fichiers délégués. Réutiliser les agents, respecter les worktrees et préserver les WIP. Les rapports détaillés et corrections restent dans `CORRECTIONS.md` et `docs/reviews/`. Le suivi demandé toutes les15minutes est maintenu par l'automation existante, sans doublon.
+
+
+## Actualisation ROOT31oct16h27AST
+
+Public4c rb28derhl inchangé etsansVercelauth. Integration286ab1f poussée615testsPASS/0skip ;CI54fPASS,CI286encours. CallerTrackingREMOTEa67revue40PASS etrunconnecté4e8bc1a68a89 ENCOURS /tmp/depannage-tracking-a67-4c-public-real-2 :setup404/T1–T5PASS, pasverdictfinal ni cleanupencore. Positionsémulées. Cohortevolontaireactiveàsurveillerjusqu'àcleanup/readbackindépendant. BusinessP2horlogee6fermé9f324revue51PASS ;intégrationetrecettepubliquerestentàfaireAPRÈSfinTracking, pasnouveaucumulcohortes. Owneradmin/StripeetphysiqueiPhoneencoredifférés/nonvérifiés.
