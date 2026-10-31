@@ -110,3 +110,21 @@ Ce journal ne constitue pas une revue passée ; aucune affectation terminée à 
 - report: https://github.com/claude972/depannage-electricite/blob/0a014063a6f2ca4fa323d627554bdfb5ffcd9c11/docs/CODEX_BACKEND_VERIFICATION.md
 - limitations: migration non appliquée à Supabase, aucun paiement distant ni accès réel testé ; nouvelles fonctions ne valent pas tout le plan livré ; contrats B2B/suspension conservateurs documentés
 - next: revue indépendante à SHA exact en cours, puis intégration et revue Claude ; suite échecs/reprises de paiement sans actes financiers réels
+
+## API-QUOTE-001 — Accord sur version exacte avant paiement
+- timestamp: 2026-10-30T21:50:20-04:00 (America/Martinique)
+- reviewer: codex pilot ; known gap confirmé par revue backend
+- assigned agent: codex (serveur), claude (appel interface)
+- reviewed revision: 0a014063a6f2ca4fa323d627554bdfb5ffcd9c11
+- evidence: accept_quote actuel ne reçoit pas quote_id affiché ; risque de consentement sur version remplacée entre lecture et clic
+- expected correction: POST actions accept_quote exige quote_id ; RPC sous verrou vérifie version sent exacte/active ; ancien accès direct sans ID refusé ; frontend transmet devis effectivement affiché
+- status: in_progress
+- fix commit: à venir, après checkpoint paiements 70337dc
+- recheck evidence: scénarios ID absent/étranger/remplacé et version courante attendus
+
+## Coordination intégration
+- timestamp: 2026-10-30T21:50:20-04:00 (America/Martinique)
+- backend exact 0a01406 revu indépendamment sans nouveau finding bloquant dans le périmètre ; SQL19 et probes de refus accès sur export exactSHA réussis. Cela ne ferme pas API-QUOTE-001 ni les fonctions hors checkpoint.
+- intégration: merge non destructif de 0a01406 dans integration/web-pwa après revue ; première draft PR https://github.com/claude972/depannage-electricite/pull/1 pour CI et revue, aucun merge main/production
+- CLI Claude : approbation normale ponctuelle de lecture git show des nouvelles routes (variable de boucle inspectée), pas de bypass. Réponses techniques envoyées dans même session, pas de duplication.
+- tests navigateur: preview protégé atteint via identifiant automation déjà configuré, aucun changement de protection ; vérification de bootstrap cookie pour worker en cours, aucune installation OS revendiquée
