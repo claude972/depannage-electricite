@@ -32,7 +32,9 @@ export async function loadPlaywright(modulePath) {
 }
 
 export async function launchBrowser(pw, { headless = true, chromiumPath = "" } = {}) {
-  const options = { headless, timeout: runtime.timeoutMs };
+  // Playwright would otherwise kill the browser and call process.exit(130) itself on SIGINT,
+  // before the harness lifecycle (stop gate → drain → cleanup). Signals are handled in run.mjs.
+  const options = { headless, timeout: runtime.timeoutMs, handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false };
   if (chromiumPath) options.executablePath = chromiumPath;
   return pw.chromium.launch(options);
 }
