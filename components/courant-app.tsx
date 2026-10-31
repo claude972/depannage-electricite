@@ -290,7 +290,9 @@ const category = (id: string) => {
   return { ...visual, min: domain.min, max: domain.max };
 };
 const shortId = (id: string) =>
-  `INT-${id.replaceAll("-", "").slice(0, 6).toUpperCase()}`;
+  id.startsWith("demo-")
+    ? `INT-${id.toUpperCase()}`
+    : `INT-${id.replaceAll("-", "").slice(0, 6).toUpperCase()}`;
 const uid = () => crypto.randomUUID();
 const DEMO_KEY = "courant-demo-v2";
 const PATHS: Record<string, ReactNode> = {
