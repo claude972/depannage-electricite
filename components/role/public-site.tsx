@@ -958,15 +958,17 @@ const DEMO_ROLES = ["client", "artisan", "manager", "admin"] as const;
 // Explicit demonstration entry (#demo/<role> or #demo/<role>-<view>): isolated examples,
 // never a live account. The controller ignores it when a live session exists.
 function DemoEntryView({ session }: { session: PublicSession }) {
-  const [head, ...rest] = session.param.split("-");
+  // #demo/<role>[-<view>[.<id>]] — the optional id selects a demo dossier for the view.
+  const [path, id] = session.param.split(".");
+  const [head, ...rest] = path.split("-");
   const role = (DEMO_ROLES as readonly string[]).includes(head)
     ? (head as (typeof DEMO_ROLES)[number])
     : "client";
   const target = rest.join("-");
   useEffect(() => {
-    session.startDemo(role, (target || undefined) as View | undefined);
+    session.startDemo(role, (target || undefined) as View | undefined, id || undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role, target]);
+  }, [role, target, id]);
   return (
     <section className={`panel ${styles.invitePanel}`} role="status">
       <h1>Ouverture de la démonstration…</h1>

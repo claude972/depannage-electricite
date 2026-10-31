@@ -950,6 +950,19 @@ button.row:hover {
 .pagerButtons :global(.button):disabled {
   opacity: 0.5;
 }
+/* Active owner filter of the organisations directory (chip + removal link). */
+.activeFilter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  flex: 1 1 100%;
+}
+.activeFilter .chip {
+  white-space: normal;
+  min-height: 36px;
+  padding: 6px 12px;
+}
 
 /* ---- Quotes of a dossier (admin detail) --------------------------------------------------- */
 .quoteList {
@@ -1223,5 +1236,138 @@ button.row:hover {
   }
   .quoteTotals {
     justify-content: space-between;
+  }
+}
+
+/* ---- Assistance (contract WEB-PWA-SUPPORT-001) ------------------------------------------- */
+.subjectLink {
+  min-height: 32px;
+  text-align: left;
+  font-weight: 650;
+  color: var(--navy);
+  overflow-wrap: anywhere;
+}
+.subjectLink:hover {
+  color: var(--blue);
+}
+.inlineLink {
+  min-height: 32px;
+  padding: 0;
+}
+.ticketHead {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px 16px;
+  padding: 20px 20px 12px;
+}
+.ticketHead h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.35;
+  color: var(--navy);
+  overflow-wrap: anywhere;
+}
+.ticketHead p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.timeline .message {
+  margin: 0;
+}
+.timeline .fromAdmin {
+  background: var(--surface);
+  border-color: #c9d9f2;
+  border-left: 3px solid var(--blue);
+}
+.timeline .fromAdmin header strong {
+  color: var(--blue);
+}
+.timelineEvent {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 8px 14px;
+  border: 1px dashed #ccd7e5;
+  border-radius: 9px;
+  font-size: 13px;
+  color: var(--navy);
+}
+.timelineEvent small {
+  font-size: 12px;
+  color: var(--muted);
+}
+.timelineMore {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 0 20px 20px;
+  font-size: 13px;
+}
+.conflict {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid #f1d59b;
+  border-radius: 9px;
+  background: var(--amber-soft, #fff4dd);
+  color: var(--amber);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.conflict svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.conflict strong {
+  display: block;
+  color: var(--navy);
+}
+.conflict p {
+  margin: 4px 0 10px;
+  color: var(--text);
+}
+.statusControl {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: minmax(0, 320px) auto;
+  gap: 12px 16px;
+  align-items: end;
+}
+.statusControl :global(.field) {
+  margin-bottom: 0;
+}
+.statusControl :global(.inline-confirmation) {
+  padding-bottom: 2px;
+}
+@media (max-width: 600px) {
+  .ticketHead,
+  .timeline,
+  .timelineMore {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .statusControl {
+    grid-template-columns: 1fr;
+  }
+  .statusControl :global(.button),
+  .timelineMore :global(.button) {
+    width: 100%;
   }
 }

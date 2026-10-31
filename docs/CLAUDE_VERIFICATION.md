@@ -69,7 +69,23 @@ Rapport d’implémentation et de vérification de l’agent Claude (branche `cl
 | Photos (CLI-02) | `RequestForm` (sélection validée), `createIntervention(values, photos)` : création puis `processUploadQueue` séquentielle ; `UploadQueuePanel` avec « Réessayer » ; aucune recréation du dossier, aucun envoi anonyme, démo sans envoi | `tests/ui/uploads.test.ts` (échec partiel puis relance du seul fichier en échec ; arrêt sur changement d’identité) ; `tests/ui/api.test.ts` |
 | Accessibilité | menus `inert`, retour de focus, compteurs lisibles, cibles 44 px, liens d’évitement uniques | audit interne, relecture ; vérification navigateur à faire sur la preview |
 
+| Revalidation sans perte de signal (CL-UI-008) | `components/app/revalidate.ts` : coalescence d’une relance pendant un chargement, relance différée dans la fenêtre de 15 s, annulation à la perte d’identité | `tests/ui/revalidate.test.ts` (horloge déterministe) |
+| Photos incertaines (PHOTO-004) | candidats du dossier de même nom listés pour vérification humaine ; confirmation explicite ou renvoi ; copies sans affirmation d’absence (liste de documents bornée) | `tests/ui/uploads.test.ts` |
+| Super Admin — liste serveur (ADMIN-LISTS-001) | curseur + pile de retour, total serveur, filtres, recherche littérale validée, détail d’ancien dossier avec devis bornés (50) | relecture source ; recette preview pilote |
+| Artisan — brouillon de devis (QUOTE-DRAFT-001) | `components/role/artisan-quote-draft.tsx` ; sauvegarde ≠ envoi, conflits 409 conservés, `quote_id` exact sélectionné ; repli envoi direct | relecture source ; recette preview après intégration 010 |
+
 Limites : aucune capture nouvelle (disque local plein) ; la course réelle entre onglets du SDK n’est pas observée en navigateur, les tests reproduisent les entrelacements de façon déterministe.
+
+## Checkpoint 4 — gardes d’écriture entreprise, assistance, annuaires (ff49688)
+
+| Sujet | Implémentation | Preuve |
+| --- | --- | --- |
+| Autorité d’écriture entreprise (CL-UI-008 bis) | `enterpriseAuthority(rôle de membership, portée du membre)` fail-closed ; tous les contrôles d’écriture de l’espace entreprise masqués et remplacés par la raison ; `ProfessionalOperations` gated | `tests/ui/invitations.test.ts` ; capture `manager-site-gated-1280.png` (owner) ; QA viewer/portée limitée à rejouer par le pilote |
+| Résultats périmés (SUPPORT-REV-001) | `runForResult` et garde `ctx.alive()` sur les commandes retournant une valeur | `tests/ui/guard.test.ts` |
+| Clé d’idempotence (SUPPORT-REV-002) | clé + contenu conservés par utilisateur jusqu’au succès | relecture ; QA pilote |
+| Assistance utilisateur et opérateur | `support-tickets.tsx`, Super Admin › Messages | captures `client-support-360.png`, `admin-messages-1280.png` |
+| Annuaires et listes admin | pagination serveur, totaux exacts | captures `admin-interventions-1280.png`, `admin-clients-1280.png` |
+| Contrôle complet | `npm run check` EXIT 0 (typecheck, 43 tests UI + tests Codex, `next build`) | journal local `check3.log` |
 
 ### Écarts, limites et suites
 - Aucune preview en ligne de ce frontend : le pilote déploie la branche d’intégration ; vérification mobile réelle, installation PWA, et retours Stripe restent à prouver en ligne.

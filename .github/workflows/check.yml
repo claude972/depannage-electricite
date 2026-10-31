@@ -58,3 +58,15 @@ jobs:
         env:
           PGLITE_MODULE: ${{ runner.temp }}/courant-sql/node_modules/@electric-sql/pglite/dist/index.js
         run: node tests/sql-artisan-active-guard-review.mjs
+
+      - name: Verify every other SQL review script of advanced lots (not live Supabase)
+        env:
+          PGLITE_MODULE: ${{ runner.temp }}/courant-sql/node_modules/@electric-sql/pglite/dist/index.js
+        run: |
+          set -eu
+          listed="sql-review.mjs sql-performance-review.mjs sql-site-access-review.mjs sql-quote-draft-review.mjs sql-support-review.mjs sql-artisan-active-guard-review.mjs"
+          for f in tests/sql-*-review.mjs tests/sql-review.mjs; do
+            name="$(basename "$f")"
+            case " $listed " in *" $name "*) continue;; esac
+            echo "== $f"; node "$f"
+          done

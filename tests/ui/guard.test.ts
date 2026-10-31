@@ -112,3 +112,21 @@ test("bound effects run only while their generation is current", () => {
   assert.equal(calls, 1);
   assert.equal(guard.alive(g), false);
 });
+test("runForResult hands back a value only when the chain completed as the current identity", async () => {
+  const { runForResult } = await import("../../components/app/guard");
+  const { guard, runner, state } = harness();
+  const gate = deferred<{ id: string }>();
+  const pending = runForResult(runner, async () => await gate.promise);
+  guard.bump(); // the account changed while the creation was in flight
+  runner.reset();
+  gate.resolve({ id: "ticket-A" });
+  assert.equal(await pending, null, "the stale result is not handed back");
+  assert.equal(state.notice, "");
+  const fresh = await runForResult(runner, async () => ({ id: "ticket-B" }));
+  assert.deepEqual(fresh, { id: "ticket-B" });
+  const failed = await runForResult(runner, async () => {
+    throw new Error("refus");
+  });
+  assert.equal(failed, null);
+  assert.equal(state.error, "refus");
+});
