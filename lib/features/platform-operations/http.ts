@@ -4,7 +4,7 @@ import { z } from "zod";
 import { ApiError, apiError, authenticatedClient, dbError } from "@/lib/supabase/server";
 import { uuid } from "@/lib/supabase/validation";
 import type { PlatformAccess, PlatformScopeKey } from "./types";
-import { financeConfig } from "./config";
+import { INVOICE_RENDERING_AVAILABLE, financeConfig } from "./config";
 
 export const privateHeaders = { "Cache-Control": "private, no-store" };
 // Column lists shared by list and detail routes (route files may only export handlers/config).
@@ -44,7 +44,7 @@ export async function describeAccess(db: Database): Promise<PlatformAccess> {
   }
   return {
     ...access,
-    capabilities: { operators: access.super_admin, audit: hasScope(access, "audit_read"), finance, reviews_moderation: hasScope(access, "reviews_moderate"), refund_execution: false, invoice_rendering: false },
+    capabilities: { operators: access.super_admin, audit: hasScope(access, "audit_read"), finance, reviews_moderation: hasScope(access, "reviews_moderate"), refund_execution: false, invoice_rendering: INVOICE_RENDERING_AVAILABLE },
     config: financeConfig(process.env, setting, issuer),
   };
 }
