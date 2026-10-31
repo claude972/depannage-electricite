@@ -2886,18 +2886,6 @@ function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
           </div>
         </section>
 
-        <QuoteDocumentsAnchor
-          session={session}
-          variant="enterprise"
-          target={{ quoteId: approval.quote_id }}
-          authority={
-            c.authority.canWriteSite(decisionSiteId)
-              ? { canWrite: true }
-              : { canWrite: false, reason: c.authority.readOnlyReason || "Vos droits d’écriture ne couvrent pas le site de ce devis." }
-          }
-          organizationId={c.organization?.id}
-          siteId={decisionSiteId || undefined}
-        />
 
         <section className="panel" aria-labelledby="approval-decision">
           <h2 id="approval-decision">Votre décision</h2>
@@ -2959,6 +2947,21 @@ function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
         </section>
       </div>
 
+      {/* V5-C08 : documents, validité et avenants sous la décision, pleine largeur (JSX de l’ancrage inchangé). */}
+      <section className={styles.approvalDocuments} aria-label="Documents, validité et avenants du devis">
+        <QuoteDocumentsAnchor
+          session={session}
+          variant="enterprise"
+          target={{ quoteId: approval.quote_id }}
+          authority={
+            c.authority.canWriteSite(decisionSiteId)
+              ? { canWrite: true }
+              : { canWrite: false, reason: c.authority.readOnlyReason || "Vos droits d’écriture ne couvrent pas le site de ce devis." }
+          }
+          organizationId={c.organization?.id}
+          siteId={decisionSiteId || undefined}
+        />
+      </section>
       <section className="panel" aria-labelledby="approval-history">
         <h2 id="approval-history">Historique des statuts</h2>
         <table className={styles.historyTable} style={{ marginTop: 12 }}>

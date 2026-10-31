@@ -890,3 +890,21 @@ taux réel non plafonné, « pas de budget de référence » sans budget) avec l
 indicateurs passent en grille (2 colonnes puis 1) et le 4e indicateur, masqué par le bandeau global sur mobile, reste
 visible. Écarts assumés : aucune consommation (MWh), tendance, projection ni tableau « Sites & bâtiments » sur le
 tableau de bord (M66 reste maître). Mesures 360 / 1280 : 0 cible < 44 px, aucun débordement, console vide.
+
+### Résultat du checkpoint 3 (entreprise) — V5-C08 approbation
+
+Captures `docs/visual-fidelity/enterprise-approval-{360,1280}-after.jpg` (`#demo/manager-approval.approval-demo`).
+Grille Détails du devis | Votre décision (haut), puis section « Documents, validité et avenants » pleine largeur
+(bloc `QuoteDocumentsAnchor` déplacé **byte-identique**, props inchangées), puis historique des statuts. Boutons
+Approuver / Refuser en contour teinté (succès / erreur), pleins une fois choisis ; compteur 0 / 2000 (limite serveur)
+conservé ; lien de fil d’Ariane « Devis » à 44 × 44 px. Écarts assumés : pas de « fiche fournisseur », pas de colonne
+« Rôle » dans l’historique (rôle non transmis). Mesures 360 / 1280 : 0 cible < 44 px, aucun débordement, console vide.
+
+### Bilan entreprise V5 (checkpoints 1–3)
+
+Trois vues alignées sur V5-C01 / V5-C05 / V5-C08 en structure et hiérarchie, à partir des seules données chargées
+(aucun fait de bâtiment, surface, année, occupant, photo, conformité, consommation, projection, tendance, rôle
+d’acteur). Comportements inchangés : commandes professionnelles, décision d’approbation, opérations du site
+(`SiteOperationsView` / `FeatureUnavailable`), ancrages notifications / documents / plateforme. Fichiers touchés :
+`components/role/enterprise-space.tsx`, `enterprise.module.css`, `enterprise-lists.ts`, `tests/ui/enterprise-lists.test.ts`,
+cette section, `docs/visual-fidelity/enterprise-*`.

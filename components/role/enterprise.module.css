@@ -2244,3 +2244,24 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* V5-C08 : fil d’Ariane cliquable à 44 px ; section documents pleine largeur sous la grille Détails | Décision ;
+   boutons de décision teintés en contour (succès / erreur), pleins une fois choisis. */
+.breadcrumb button {
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.approvalDocuments {
+  margin: 0 0 16px;
+}
+.decisionApprove {
+  color: #167344;
+  border-color: #9fd3b4;
+}
+.decisionReject {
+  color: #b42318;
+  border-color: #f0c4c0;
+}
