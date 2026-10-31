@@ -432,7 +432,7 @@ export const suite = {
           await noHorizontalOverflow(h.page, 360);
           await capture(h, out, "b2b-owner-equipment-360", s);
         });
-        await s.step("one intercepted 503 → 'Données du site indisponibles' + Réessayer; then real data again", async () => {
+        await s.step("one intercepted 503 → an honest unavailable boundary (parent capability block OR leaf load block) with Réessayer; retry re-probes under the same identity, no reload, real data and rights back", async () => {
           let intercepted = 0;
           await safeRoute(h, s, (url) => url.pathname === "/api/site-operations", async (route) => {
             if (route.request().method() === "GET" && intercepted === 0) {
@@ -440,15 +440,39 @@ export const suite = {
               await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "QA : indisponibilité simulée par interception navigateur." }) });
             } else await route.continue();
           }, "site-operations-503");
+          // Same document across the whole step: a reload would drop this marker.
+          await h.page.evaluate(() => {
+            window.__qaNoReload = "kept";
+          });
           await opsSection(h.page).getByRole("button", { name: "Actualiser", exact: true }).click();
-          await expectVisible(h.page.locator('[data-blocker="site-operations-load"]'), "unavailable block after 503");
-          await expectVisible(h.page.getByText("QA : indisponibilité simulée par interception navigateur.", { exact: true }), "server message rendered as-is");
-          assert.ok(!(await opsSection(h.page).getByRole("list", { name: "Équipements" }).count()), "stale equipment list still rendered after a load failure");
-          await capture(h, out, "b2b-owner-error-360", s);
+          // Shared contract (SHARED-REV-006 / FeatureUnavailable): a 503 makes the capability
+          // `unavailable` and the enterprise shell shows its parent block with a re-probe; the leaf
+          // block appears only while the capability stays available and its own load fails.
+          const parent = opsSection(h.page).locator('[data-blocker="siteOperations:unavailable"]');
+          const leaf = opsSection(h.page).locator('[data-blocker="site-operations-load"]');
+          await expectVisible(parent.or(leaf), "an unavailable boundary after the 503");
+          const boundary = (await parent.count()) ? "parent" : "leaf";
+          const block = boundary === "parent" ? parent : leaf;
+          if (boundary === "parent") await expectVisible(block.getByText("Opérations du site momentanément indisponibles", { exact: true }), "parent block heading");
+          else {
+            await expectVisible(block.getByText("Données du site indisponibles", { exact: true }), "leaf block heading");
+            await expectVisible(block.getByText("QA : indisponibilité simulée par interception navigateur.", { exact: true }), "server message rendered as-is in the leaf");
+          }
+          const retry = block.getByRole("button", { name: "Réessayer", exact: true });
+          await expectVisible(retry, `« Réessayer » in the ${boundary} block`);
+          assert.equal(await opsSection(h.page).getByRole("list", { name: "Équipements" }).count(), 0, "stale equipment list still rendered after a load failure");
+          assert.ok(!(await opsSection(h.page).innerText()).includes(equipmentName), "stale equipment name still shown in the operations section");
+          await capture(h, out, `b2b-owner-error-${boundary}-360`, s);
           await h.page.unrouteAll({ behavior: "ignoreErrors" });
-          await h.page.getByRole("button", { name: "Réessayer", exact: true }).click();
+          const reprobe = waitForApi(h.page, "/api/site-operations", { method: "GET" });
+          await retry.click();
+          assert.equal((await reprobe).status(), 200, "Réessayer must really re-probe the contract");
           await expectVisible(opsSection(h.page).getByRole("list", { name: "Équipements" }).getByText(equipmentName, { exact: true }), "equipment back after retry");
-          return { intercepted, note: "unavailability simulated by browser interception, not by the backend" };
+          await expectVisible(opsSection(h.page).getByRole("button", { name: "Ajouter un équipement", exact: true }), "owner write control unchanged after retry");
+          assert.equal(await h.page.evaluate(() => window.__qaNoReload), "kept", "the page was reloaded");
+          const ws = await api(h.page, "/api/workspace");
+          assert.equal(ws.body?.profile?.id, owner.id, "identity changed across the retry");
+          return { intercepted, boundary, note: "unavailability simulated by browser interception, not by the backend" };
         });
         s.network(h.network);
       } finally {
