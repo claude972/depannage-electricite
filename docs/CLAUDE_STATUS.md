@@ -773,3 +773,11 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - Root reviewed fd13ce6 and published a separate STATIC public preview, READY: deployment `dpl_4XaaMvJrNLtSQgEVavCPFGFoY3BF`, https://depannage-electricite-7xo6v93eo-brafas-projects.vercel.app — GET 200, fresh browser at 390 with 0 cookies, no overflow, no JS errors, dialog/Escape PASS after the role fix. Screenshot for the user produced by root.
 - **DESIGN-DELIVO-TEST-001 closed: test only.** No app redesign and no adoption of this design without an explicit owner order.
 - Coordination d6fa619 pushed by root. GPS diagnosis continues separately; root run (PTY 12335) preserved; no business cloud run before its end, cleanup and readbacks.
+
+## 2026-10-31 16:38 AST — CI green; GPS run still active; tracking diagnostics amendment requested
+
+- CI 28641238727512 SUCCESS. Delivo test delivered (owner capture + public link), no app adoption.
+- GPS run 4e8bc1a68a89 still active: T6/T8/T8-fail/T9 FAIL, T14 ANOMALY (share locator timeout 194 s), T15 PASS, suite continuing. Partial report has `network[]`/`routes[]` empty for failures and no failure PNG.
+- Dispatched to the existing tracking worker (own branch/worktree only, not the active integration): amendment A8 BEFORE code — bounded diagnostics on first failing step captured before closing, same identity and real state (PNG, URL path+hash, `data-blocker` values, redacted card/panel text, tracking request summary without headers/tokens), never changing verdicts; T8 equally strict locator proposal (status element containing the sentence) + audit of T8-fail/T14 for the same exact-text pattern; T6 decision path documented (workspace missing the dossier vs capability `unknown` vs `unavailable`), assertion unchanged, no T6 fix before DOM evidence.
+- Root's UI reviewer track for T6: client session created before the jobs (scenarios ~109 / jobs ~125) and hash `goto` not forcing a workspace refresh; route `#detail` and status accepted correct; cause NOT confirmed without DOM.
+- Root waits for end + cleanup + readbacks before the business 9f32421 cloud run; no new writer/cohort.
