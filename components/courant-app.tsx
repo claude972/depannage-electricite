@@ -558,6 +558,7 @@ export default function CourantApp() {
       notifications: "available",
       siteOperations: "available",
       platformOperations: "available",
+      tracking: "available",
     });
     guard.bump();
     setIdentityEpoch((e) => e + 1);

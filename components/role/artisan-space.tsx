@@ -78,6 +78,7 @@ import { QuoteDraftEditor } from "./artisan-quote-draft";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
+import { TrackingAnchor } from "./tracking-anchor";
 import { ArtisanPlanning } from "../features/planning/artisan-planning";
 import { CONTRACT_MESSAGES } from "../app/api";
 import { demoPlanning } from "../../lib/features/planning/demo";
@@ -1450,6 +1451,7 @@ function WorkDossier({ session, intervention: i }: { session: Session; intervent
               onSet={(next) => operate({ action: "set_travel_stage", stage: next })}
             />
           )}
+          {canTravel && <TrackingAnchor session={session} variant="artisan" interventionId={i.id} authority={{ canWrite: true }} />}
           <QuotePanel
             session={session}
             intervention={i}
@@ -1682,7 +1684,7 @@ function TravelPanel({
   return (
     <section className="panel" aria-labelledby="dossier-travel">
       <h2 id="dossier-travel">Déplacement</h2>
-      <p>Indiquez au client où vous en êtes. Aucune position n’est transmise.</p>
+      <p>Indiquez au client où vous en êtes. Ces étapes ne transmettent aucune position.</p>
       <div className={styles.stageButtons} style={{ marginTop: 12 }}>
         {stages.map((s) => (
           <button

@@ -90,6 +90,7 @@ import {
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
+import { TrackingAnchor } from "./tracking-anchor";
 import { SiteOperationsView } from "../features/site-operations/site-operations-view";
 import { CONTRACT_MESSAGES } from "../app/api";
 import { demoReport } from "../../lib/features/site-operations/demo";
@@ -1605,6 +1606,21 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
               </ol>
             )}
           </section>
+
+          {["accepted", "in_progress"].includes(intervention.status) && (
+            <TrackingAnchor
+              session={c.session}
+              variant="viewer"
+              interventionId={intervention.id}
+              authority={
+                canOperate
+                  ? { canWrite: true }
+                  : { canWrite: false, reason: c.authority.readOnlyReason || "Vos droits d’écriture ne couvrent pas le site de ce dossier." }
+              }
+              organizationId={c.organization?.id}
+              siteId={intervention.site_id || undefined}
+            />
+          )}
 
           <section className="panel" aria-labelledby="dossier-quote">
             <div className={styles.panelTitle}>
