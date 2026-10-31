@@ -154,3 +154,7 @@
 - « Nous rejoindre » ouvre un dialogue local de candidature factice (nom, métier, zone — rien n’est envoyé, pas
   d’authentification), Échap ferme, focus rendu au bouton.
 - Vérif : 1440/1280/390/360 × 2 thèmes, AA, ≥ 44 px, focus, aucune requête externe, console propre.
+- Livré 008 : `web-network.html` (copie de 007 + `web-network.css/.js`). Panneau jaune et bannière vérifiés dans les
+  2 thèmes × 1440/1280/390/360 : pas de débordement, cibles ≥ 44 px, contraste minimal 5,41:1 (texte blanc sur vert),
+  panneau jaune 8,63–12,77:1, dialogue de candidature ouvert/fermé par Échap avec retour du focus, aucune requête
+  externe, console propre. Bannière : 3 colonnes ≥ 900 px, empilée en dessous.
