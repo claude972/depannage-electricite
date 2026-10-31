@@ -32,13 +32,17 @@ select is((select count(*)::integer from public.available_missions()),0,'Pending
 select throws_ok($$select public.intervention_action(current_setting('test.job_id')::uuid,'accept_mission')$$,'42501',null,'Pending artisan cannot claim mission');
 reset role;
 update public.profiles set artisan_approved=true where id in ('10000000-0000-4000-8000-000000000003','10000000-0000-4000-8000-000000000004');
+-- Explicit eligibility fixture; approval alone no longer grants a global offer feed.
+insert into public.artisan_profiles(user_id,company_name,siret,address,postal_codes,categories,available,application_status)
+select id,'Entreprise test','12345678901234','12 rue du Test',array['75001'],array['outage'],true,'approved'
+from public.profiles where id in ('10000000-0000-4000-8000-000000000003','10000000-0000-4000-8000-000000000004');
 set local role authenticated;
 set local request.jwt.claims='{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated"}';
 select is((select count(*)::integer from public.interventions),0,'Approved artisan still cannot read full unassigned request');
 select is((select count(*)::integer from public.available_missions()),1,'Approved artisan sees anonymized offer');
 select lives_ok($$select public.intervention_action(current_setting('test.job_id')::uuid,'accept_mission')$$,'Approved artisan claims request');
 set local request.jwt.claims='{"sub":"10000000-0000-4000-8000-000000000004","role":"authenticated"}';
-select throws_ok($$select public.intervention_action(current_setting('test.job_id')::uuid,'accept_mission')$$,'P0001',null,'Second artisan loses claim');
+select throws_ok($$select public.intervention_action(current_setting('test.job_id')::uuid,'accept_mission')$$,'42501',null,'Second artisan loses claim');
 select is((select count(*)::integer from public.interventions),0,'Losing artisan cannot read customer details');
 select throws_ok($$select public.approve_artisan(auth.uid(),true)$$,'42501',null,'Artisan cannot self-approve');
 select * from finish();

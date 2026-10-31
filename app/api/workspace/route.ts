@@ -13,6 +13,8 @@ export async function GET() {
       documents,
       reviews,
       payments,
+      members,
+      artisanProfile,
     ] = await Promise.all([
       db
         .from("profiles")
@@ -49,6 +51,8 @@ export async function GET() {
         .from("payments")
         .select("id,quote_id,total_cents,currency,status,created_at,paid_at")
         .limit(100),
+      db.from("organization_members").select("organization_id,user_id,role").limit(500),
+      db.from("artisan_profiles").select("*").eq("user_id", user.id).maybeSingle(),
     ]);
     for (const response of [
       profile,
@@ -60,6 +64,8 @@ export async function GET() {
       documents,
       reviews,
       payments,
+      members,
+      artisanProfile,
     ])
       dbError(response.error);
     const offers =
@@ -78,6 +84,8 @@ export async function GET() {
         documents: documents.data,
         reviews: reviews.data,
         payments: payments.data,
+        organization_members: members.data,
+        artisan_profile: artisanProfile.data,
       },
       { headers: { "Cache-Control": "private, no-store" } },
     );

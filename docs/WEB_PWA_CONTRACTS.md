@@ -1,6 +1,6 @@
-# Contrats Web/PWA — checkpoint backend proposé
+# Contrats Web/PWA — checkpoint backend 1
 
-Mission WEB-PWA-20261030. Ces nouveaux contrats sont **en cours d’implémentation**, pas encore disponibles sur la preview. Les API existantes sont conservées. Toutes les réponses authentifiées sont privées/no-store ; erreurs JSON `{error:string}` avec 401/403/404/409/422/429/503. Le rôle est dérivé de la session serveur, jamais du corps. Aucun mode démo serveur.
+Mission WEB-PWA-20261030. Ces nouveaux contrats sont **implémentés et vérifiés dans le code du checkpoint 1**, mais non activés sur une base Supabase dédiée et non validés par une intégration distante. Les API existantes sont conservées. Toutes les réponses authentifiées sont privées/no-store ; erreurs JSON `{error:string}` avec 401/403/404/409/422/429/503. Le rôle est dérivé de la session serveur, jamais du corps. Aucun mode démo serveur.
 
 ## API artisan
 
@@ -13,7 +13,7 @@ Mission WEB-PWA-20261030. Ces nouveaux contrats sont **en cours d’implémentat
 - `{action:"set_availability",available:boolean}` : disponibilité immédiate, pas un calendrier récurrent complet.
 - `{action:"link_credential",document_id:UUID,kind:"registration"|"liability"|"qualification"|"other",expires_on:"YYYY-MM-DD"|null}` : lie une pièce déjà déposée via /api/documents, appartenant à cet artisan et hors intervention. Revue et qualification réelle restent opérateur.
 
-`GET /api/workspace` conserve sa forme et ajoute `organization_members` (sous RLS), `artisan_profile` (profil courant si artisan), et `participants` (projection par dossier attribué). Offres anonymisées, filtrées par disponibilité, code postal configuré, compétence, approbation et refus individuel.
+`GET /api/workspace` conserve sa forme et ajoute `organization_members` (sous RLS), `artisan_profile` (profil courant si artisan) ; `participants` est lu via GET operations par dossier attribué. Offres anonymisées, filtrées par disponibilité, code postal configuré, compétence, approbation et refus individuel.
 
 ## Opérations intervention
 
@@ -26,7 +26,7 @@ Mission WEB-PWA-20261030. Ces nouveaux contrats sont **en cours d’implémentat
 - `{action:"save_report",summary:string,checks:{label:string,result:"pass"|"issue"|"not_applicable"}[],signature_name:string}` : artisan affecté pendant/après travaux. Nom saisi = attestation déclarative, aucune promesse de signature électronique certifiée.
 - `{action:"reassign",artisan_id:UUID|null,reason:string}` : administrateur plateforme ; avant acceptation du devis uniquement. Réaffectation à artisan approuvé/éligible ou remise en attente ; rejette les devis envoyés et trace l’action.
 
-`GET /api/interventions/[id]/operations` → `{participants,appointment,report,travel_stage}` sous autorisation de lecture du dossier.
+`GET /api/interventions/[id]/operations` → `{participants,appointment,report,history,history_limit:100,travel_stage}` sous autorisation de lecture du dossier. Les versions de rendez-vous et rapport sont conservées dans un historique append-only ; liste renvoyée limitée aux 100 derniers événements, explicitement signalée.
 
 ## Administration
 
@@ -39,3 +39,7 @@ Un dossier avec site appartient à son organisation : son créateur client_id ne
 ## À ne pas déduire
 
 Pas de nouvelle API invitations/rôles par site/factures/remboursements dans ce premier checkpoint. Pas de calendrier récurrent, GPS, SLA automatisé, scanner de qualification ou statut certifié inventé. Présenter l’absence honnêtement, jamais simuler une mutation en mode réel.
+
+## Politique technique initiale de candidature/suspension
+
+Une modification du dossier société/zone/compétences réinitialise son approbation et sa disponibilité : soumettre à nouveau puis examiner. Une suspension bloque nouvelles missions et nouvelles écritures terrain (devis/début/fin/rapport), tout en conservant lecture des preuves historiques. Le règlement est déjà bloqué par Checkout ; le traitement commercial des travaux restant dus demeure un blocage d’ouverture, pas une dette annulée automatiquement. Approbation exige dossier submitted ; elle ne certifie pas automatiquement les justificatifs.

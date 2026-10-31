@@ -17,3 +17,19 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+
+  isolated-sql:
+    name: Isolated PostgreSQL (Auth and Storage stubs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned isolated PostgreSQL runtime outside application
+        run: npm install --prefix "$RUNNER_TEMP/courant-sql" --no-save --no-package-lock @electric-sql/pglite@0.5.13
+      - name: Execute migrations and negative authorization scenarios (not live Supabase)
+        env:
+          PGLITE_MODULE: ${{ runner.temp }}/courant-sql/node_modules/@electric-sql/pglite/dist/index.js
+        run: node tests/sql-review.mjs
