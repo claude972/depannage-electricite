@@ -403,3 +403,16 @@ bleu `#1457d9` 5,4:1 sur blanc) ; statut jamais porté par la couleur seule (pas
 
 1. Tableau de bord M43 (KPI, validations, interventions en cours) — `admin-dashboard-{360,1280}-after.jpg`.
 2. Listes : cibles 44 px et densité — `admin-artisans-1280-after.jpg`, `admin-quotes-360-after.jpg`.
+
+### Résultat du checkpoint 1 — tableau de bord M43
+
+| Ligne de l’addendum | Fait | Reste / écart |
+| --- | --- | --- |
+| KPI | Quatre cartes compactes et alignées (`adminKpis`, notes courtes sur une ligne), base de calcul complète dans « Base de calcul des indicateurs » (`details`, 44 px) sous la rangée ; 4 colonnes à 1280, 2 à 360 (cartes verticales). | Pas de période ni de tendance (assumé). |
+| Validations | Tableau qui tient dans le panneau à 1280 (cellules 12 × 14 px, date « Date de demande » sur une ligne, société en sous-libellé du nom, action 44 px alignée à droite ; icône seule avec libellé accessible sous 1400 px). Pied « parmi les N derniers artisans chargés ; le compteur est global ». | Pas d’e-mail, de catégorie ni de compteur de documents (assumé). |
+| Interventions en cours | Rangées en deux lignes de méta (« Référence · ville », « Artisan : … ») comme M43, pastille réelle, « Créée le ». | Pas d’échéance ni de nom de client (assumé). |
+| Cibles / responsive | 0 élément interactif < 44 px sur le tableau de bord à 360 et 1280 ; aucun débordement ; outils d’en-tête sur deux lignes à 360. | — |
+
+Captures : `admin-dashboard-{360,1280}-after.jpg` (avant : `admin-dashboard-{360,1280}-before.jpg`). Tests :
+`tests/ui/admin-lists.test.ts` (`adminKpis` sans période ni tendance, `dashboardRows`) ; suite UI 91/91 ; `tsc` au vert ;
+console sans erreur.
