@@ -84,6 +84,7 @@ import { demoPlanning } from "../../lib/features/planning/demo";
 import { PLANNING_TIME_ZONE } from "../../lib/features/planning/types";
 import { anchorEntryVisible, leafScope, platformEntries } from "./anchors";
 import { PlatformPage } from "./platform-anchor";
+import { FeatureUnavailable } from "./feature-unavailable";
 import {
   appointmentSlotState,
   demoPlanningRange,
@@ -3337,6 +3338,9 @@ function PlanningView({ session, dossier }: { session: Session; dossier: Artisan
         title="Planning"
         subtitle="Vos disponibilités hebdomadaires et vos rendez-vous, heure de Martinique."
       />
+      {state === "unavailable" ? (
+        <FeatureUnavailable session={session} featureKey="planning" title="Planning momentanément indisponible" />
+      ) : (
       <ArtisanPlanning
         state={state}
         unavailableMessage={state === "available" ? "" : CONTRACT_MESSAGES[state]}
@@ -3348,6 +3352,7 @@ function PlanningView({ session, dossier }: { session: Session; dossier: Artisan
           if (view === "intervention" && param) session.go("mission", param);
         }}
       />
+      )}
     </>
   );
 }

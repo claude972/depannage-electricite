@@ -8,7 +8,8 @@ import { platformViewAllowed, type PlatformView } from "../app/features";
 import { PageTitle, Unavailable } from "../app/ui";
 import type { Session } from "../app/session-types";
 import { PLATFORM_DEMO } from "../../lib/features/platform-operations/demo";
-import { PLATFORM_ENTRIES, platformAuthority } from "./anchors";
+import { PLATFORM_ENTRIES, platformAuthority, platformPageRetry } from "./anchors";
+import { FeatureUnavailable } from "./feature-unavailable";
 
 export const PLATFORM_TITLES: Record<PlatformView, { title: string; subtitle: string }> = {
   "platform-operators": { title: "Opérateurs de plateforme", subtitle: "Habilitations, super-administrateurs et journal" },
@@ -29,6 +30,15 @@ export function PlatformPage({
   const access = session.platformAccess;
   const heading = PLATFORM_TITLES[view];
   const title = withTitle ? <PageTitle title={heading.title} subtitle={heading.subtitle} /> : null;
+  if (state === "unavailable" && platformViewAllowed(access, view)) {
+    // Access validated by /me, contract transiently down (503): bounded re-probe, no data loaded.
+    return (
+      <>
+        {title}
+        <FeatureUnavailable session={session} featureKey="platformOperations" title={`${heading.title} — service momentanément indisponible`} />
+      </>
+    );
+  }
   if (!platformViewAllowed(access, view)) {
     // Aucune réponse serveur, service indisponible ou droit absent : état explicite, aucun appel.
     const reason =
@@ -40,7 +50,13 @@ export function PlatformPage({
     return (
       <>
         {title}
-        <Unavailable title="Accès non vérifié" reason={reason} state={state === "available" ? undefined : state} blocker={`platform:${view}:${state}`} />
+        <Unavailable
+          title="Accès non vérifié"
+          reason={reason}
+          state={state === "available" ? undefined : state}
+          blocker={`platform:${view}:${state}`}
+          onRetry={platformPageRetry(state, access) ? () => session.reprobeFeature("platformOperations") : undefined}
+        />
       </>
     );
   }

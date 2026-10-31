@@ -32,6 +32,80 @@ import type { QuoteDocumentsClient, QuoteDocumentsCommand, QuoteDocumentsCommand
 import type { ListQuery, PlatformAccess, PlatformClient } from "../../lib/features/platform-operations/types";
 
 export type FeatureKey = "quoteDocuments" | "planning" | "notifications" | "siteOperations" | "platformOperations";
+/** Context a re-probe needs when the contract has no context-free read. */
+export type ReprobeHint = { siteId?: string; quoteId?: string; interventionId?: string };
+/** Only a transient failure is worth a user retry; a missing contract is a deployment state. */
+export function retryableState(state: ContractState): boolean {
+  return state === "unavailable";
+}
+
+export type ReprobeContext = {
+  bundle: FeatureClients;
+  /** True while the identity, mode and bundle that started this re-probe are still current. */
+  alive(): boolean;
+  setState(key: FeatureKey, state: ContractState): void;
+  /** null = the count is no longer known (current failure). */
+  setUnread(count: number | null): void;
+  /** null = the access reply is withdrawn (current refusal/failure): the shells close the gate. */
+  setAccess(access: PlatformAccess | null): void;
+  /** Active enterprise site when the hint carries none. */
+  activeSiteId?: string;
+};
+
+/**
+ * Re-probes ONE contract. Guarded at entry and after every await: a stale chain (identity changed,
+ * demo switch, bundle rebuilt) produces no effect at all — `null` from a bound client means "stale",
+ * never "currently failing", so nothing of the previous actor touches the next one's state.
+ * The bound client itself records the capability from the reply (success → available, 404 →
+ * missing, 503/network → unavailable); this function only applies the data side effects.
+ */
+export async function reprobe(key: FeatureKey, hint: ReprobeHint | undefined, ctx: ReprobeContext): Promise<void> {
+  if (!ctx.alive()) return;
+  ctx.setState(key, "unknown");
+  const swallow = () => null;
+  // Three outcomes per read: a value (apply), null (stale chain: no effect at all), an exception
+  // (CURRENT failure or refusal: withdraw the derived data under the same guard, never keep stale
+  // rights alive — e.g. /me answering 401/403 after the rights were valid closes the gate).
+  switch (key) {
+    case "notifications": {
+      let summary: Awaited<ReturnType<typeof ctx.bundle.notifications.summary>>;
+      try {
+        summary = await ctx.bundle.notifications.summary();
+      } catch {
+        if (ctx.alive()) ctx.setUnread(null);
+        return;
+      }
+      if (!ctx.alive() || summary === null) return;
+      ctx.setUnread(summary.unread_count);
+      return;
+    }
+    case "platformOperations": {
+      let access: Awaited<ReturnType<typeof ctx.bundle.platform.load.me>>;
+      try {
+        access = await ctx.bundle.platform.load.me();
+      } catch {
+        if (ctx.alive()) ctx.setAccess(null);
+        return;
+      }
+      if (!ctx.alive() || access === null) return;
+      ctx.setAccess(access);
+      return;
+    }
+    case "planning":
+      await ctx.bundle.planning.load(planningProbeRange()).catch(swallow);
+      return;
+    case "siteOperations": {
+      const siteId = hint?.siteId || ctx.activeSiteId;
+      if (siteId) await ctx.bundle.siteOperations.load(siteId).catch(swallow);
+      return;
+    }
+    case "quoteDocuments": {
+      const target = hint?.quoteId ? { quoteId: hint.quoteId } : hint?.interventionId ? { interventionId: hint.interventionId } : null;
+      if (target) await ctx.bundle.quoteDocuments.load(target).catch(swallow);
+      return;
+    }
+  }
+}
 export type Request = <T>(path: string, body?: unknown, method?: string) => Promise<T>;
 export type FeatureDeps = {
   /** Current identity generation (createGuard().generation); bumped on every identity change. */
@@ -256,6 +330,8 @@ export type FeatureClients = {
   platform: PlatformClient;
   /** True when every client above operates on demonstration seeds only (no network). */
   demo: boolean;
+  /** Identity generation that owns this bundle, captured at construction (never at invocation). */
+  owner: number;
 };
 
 export function createFeatureClients(input: FeatureDeps): FeatureClients {
@@ -267,6 +343,7 @@ export function createFeatureClients(input: FeatureDeps): FeatureClients {
     quoteDocuments: createQuoteDocumentsClient(deps),
     platform: createPlatformClient(deps),
     demo: false,
+    owner: deps.owner as number,
   };
 }
 
@@ -335,5 +412,6 @@ export function createDemoFeatureClients(role: Role): FeatureClients {
       },
     },
     demo: true,
+    owner: -1, // demonstration bundles never re-probe
   };
 }

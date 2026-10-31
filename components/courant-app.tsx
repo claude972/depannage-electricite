@@ -7,7 +7,7 @@ import { createClient } from "../lib/supabase/client";
 import { api, ApiRequestError, contractStateFromError, uploadDocument } from "./app/api";
 import { createGuard, createRunner, runForResult, type RunContext, type Runner } from "./app/guard";
 import { adoptIdentity } from "./app/identity";
-import { createDemoFeatureClients, createFeatureClients, planningProbeRange } from "./app/features";
+import { createDemoFeatureClients, createFeatureClients, planningProbeRange, reprobe, type FeatureKey, type ReprobeHint } from "./app/features";
 import type { PlatformAccess } from "../lib/features/platform-operations/types";
 import { PLATFORM_DEMO } from "../lib/features/platform-operations/demo";
 import { demoNotificationPage } from "../lib/features/notifications/demo";
@@ -2324,6 +2324,29 @@ export default function CourantApp() {
     setPlatformAccess(role === "admin" ? PLATFORM_DEMO.access : null);
     setUnreadNotifications(demoNotificationPage({}).unread_count);
   }, [mode, role]);
+  // SHARED-REV-006: explicit recovery action after a transient 503/network failure. Re-probes the
+  // one contract with the bound client (same identity generation, same rights); the reply alone
+  // sets the capability again. Errors are swallowed here: the capability already reflects them.
+  const featuresRef = useRef(features);
+  featuresRef.current = features;
+  const reprobeFeature = useCallback(
+    async (key: FeatureKey, hint?: ReprobeHint) => {
+      const bundle = features;
+      // Alive = the bundle's OWNER generation (captured when the bundle was built, never at
+      // invocation) is still the current one, mode still live, and the bundle handed to the leaves
+      // is still this one. A guard bump before the next render already makes it false.
+      const alive = () => modeRef.current === "live" && bundle.owner === guard.generation() && featuresRef.current === bundle;
+      await reprobe(key, hint, {
+        bundle,
+        alive,
+        setState: (k, state) => setCapabilities((c) => (c[k] === state ? c : { ...c, [k]: state })),
+        setUnread: setUnreadNotifications,
+        setAccess: setPlatformAccess,
+        activeSiteId: activeSiteRef.current,
+      });
+    },
+    [features, guard],
+  );
 
   const session: Session = {
     mode: mode === "live" ? "live" : "demo",
@@ -2441,6 +2464,7 @@ export default function CourantApp() {
     features,
     platformAccess,
     unreadNotifications,
+    reprobeFeature,
   };
 
   if (booting)

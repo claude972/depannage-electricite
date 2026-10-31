@@ -200,15 +200,30 @@ export function Unavailable({
   state,
   blocker,
   children,
+  onRetry,
+  retryLabel = "Réessayer",
 }: {
   title: string;
   reason?: string;
   state?: ContractState;
   blocker?: string;
   children?: ReactNode;
+  /** Bounded recovery action (re-probe of the same contract under the same identity and rights). */
+  onRetry?: () => void | Promise<void>;
+  retryLabel?: string;
 }) {
+  const [retrying, setRetrying] = useState(false);
   const text =
     reason || (state && state !== "available" ? CONTRACT_MESSAGES[state] : "");
+  async function retry() {
+    if (!onRetry || retrying) return;
+    setRetrying(true);
+    try {
+      await onRetry();
+    } finally {
+      setRetrying(false);
+    }
+  }
   return (
     <div className="unavailable" role="note" data-blocker={blocker}>
       <span className="unavailable-icon">
@@ -218,6 +233,11 @@ export function Unavailable({
         <strong>{title}</strong>
         {text && <p>{text}</p>}
         {children}
+        {onRetry && (
+          <button type="button" className="button secondary unavailable-retry" onClick={() => void retry()} disabled={retrying} aria-busy={retrying}>
+            {retrying ? "Nouvelle tentative…" : retryLabel}
+          </button>
+        )}
       </div>
     </div>
   );

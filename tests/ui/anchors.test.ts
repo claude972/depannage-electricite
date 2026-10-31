@@ -83,3 +83,14 @@ test("opérateur limité : un artisan ou un particulier habilité voit ses secti
   // Mode public : aucun rôle → aucune entrée quelle que soit la réponse.
   assert.deepEqual(platformEntries(access({ super_admin: true }), (v) => canAccess(v, null, "public")), []);
 });
+
+test("back-office retry: offered on a transient 503 even with validated access, and without any /me reply; never when missing", async () => {
+  const { platformPageRetry } = await import("../../components/role/anchors");
+  const access = { super_admin: true, scopes: [], super_admin_count: 1, capabilities: { operators: true, audit: true, finance: true, reviews_moderation: true, refund_execution: false, invoice_rendering: false }, config: {} } as never;
+  assert.equal(platformPageRetry("unavailable", access), true, "authorized + 503 → real re-probe offered");
+  assert.equal(platformPageRetry("unavailable", null), true);
+  assert.equal(platformPageRetry("missing", null), false);
+  assert.equal(platformPageRetry("missing", access), false);
+  assert.equal(platformPageRetry("available", access), false, "allowed and available: the leaf renders, no retry screen");
+  assert.equal(platformPageRetry("available", null), true, "no /me reply: honest state with a re-probe");
+});

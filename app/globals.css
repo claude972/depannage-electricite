@@ -4542,6 +4542,10 @@ body {
   color: #6b7a90;
   margin-top: 6px;
 }
+.unavailable-retry {
+  margin-top: 10px;
+  min-height: 44px;
+}
 .field label {
   font-size: 14px;
   font-weight: 600;
