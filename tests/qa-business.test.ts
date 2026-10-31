@@ -808,3 +808,51 @@ test("P2-2 RPC in flight at SIGINT → the drain waits for it and cleanup runs s
   assert.throws(() => guard.mutatingClick(locator, Promise.resolve("x")), (e: Error) => e.name === "StopRequestedError");
   assert.ok(!order.includes("late"));
 });
+
+// ---------------------------------------------------------------- contract §16 (root run 78a5f871aaba)
+test("§16-1 validity is read from snapshot.quote.terms (015 / snapshot.ts shape), not a top-level terms", async () => {
+  const prereq = await lib("prerequisites");
+  const snapshot = parseSnapshot(sampleSnapshot()) as unknown as Row;
+  assert.equal((snapshot as { terms?: unknown }).terms, undefined, "no top-level terms in the canonical snapshot");
+  const quote = (snapshot as { quote: { terms: { valid_until: string | null } } }).quote;
+  assert.equal(prereq.snapshotValidUntil(snapshot), quote.terms.valid_until);
+  const withDate = { quote: { terms: { valid_until: "2026-11-30", validity: "valid" } } };
+  assert.equal(prereq.snapshotValidUntil(withDate), "2026-11-30");
+  assert.equal(prereq.snapshotValidUntil({ terms: { valid_until: "2026-11-30" } }), undefined, "the old wrong path is not accepted");
+});
+test("§16-2 missing documentId ⇒ dependent scenario BLOCKED, never run, zero /undefined calls; present ⇒ runs", async () => {
+  const prereq = await lib("prerequisites");
+  const redactor = redactModule.createRedactor();
+  const report = reportModule.createReport({ run_id: "x" }, redactor);
+  const gate = lifecycleModule.createStopGate();
+  const guarded = orchestrateModule.guardReport(report, gate);
+  const calls: string[] = [];
+  const fakeRequest = (url: string) => calls.push(url);
+  const state: { documentId: string | null } = { documentId: null };
+  await prereq.scenarioWhen(guarded, "docs", "third party: download 404", { quote_document_id: prereq.isId(state.documentId) }, async () => {
+    fakeRequest(`/api/quote-documents/${state.documentId}`);
+  });
+  await prereq.scenarioWhen(guarded, "docs", "former artisan", { quote_document_id: prereq.isId("undefined") }, async () => {
+    fakeRequest("/api/quote-documents/undefined");
+  });
+  assert.deepEqual(calls, [], "no request built with an undefined id");
+  assert.deepEqual(report.scenarios.map((x: Row) => x.status), ["BLOCKED", "BLOCKED"]);
+  assert.match(report.scenarios[0].note, /prerequisite not established: quote_document_id/);
+  assert.deepEqual(report.summary(), { total: 2, pass: 0, fail: 0, anomaly: 0, blocked: 2 });
+  assert.equal(reportModule.exitCode(report.summary(), true), 0, "BLOCKED never turns into FAIL nor PASS");
+  state.documentId = uuid(1, "d0000000");
+  await prereq.scenarioWhen(guarded, "docs", "third party: download 404", { quote_document_id: prereq.isId(state.documentId) }, async () => {
+    fakeRequest(`/api/quote-documents/${state.documentId}`);
+  });
+  assert.deepEqual(calls, [`/api/quote-documents/${uuid(1, "d0000000")}`]);
+  assert.equal(report.scenarios.at(-1).status, "PASS");
+});
+test("§16-4 accepted status read from status elements only; informational sentences are not a status", async () => {
+  const prereq = await lib("prerequisites");
+  // Exactly what root's diagnostic showed on the refused expired quote (informational paragraph + sent card).
+  assert.equal(prereq.acceptedStatusShown({ formNotes: [], statusTags: ["En attente de décision", "Validité dépassée depuis le 30/10/2026"] }), false);
+  assert.equal(prereq.acceptedStatusShown({ formNotes: ["Ce devis ne peut plus être accepté ni refusé."], statusTags: [] }), false);
+  assert.equal(prereq.acceptedStatusShown({ formNotes: ["Prenez le temps de vérifier… Le devis accepté devient la base du règlement, après intervention."], statusTags: [] }), false);
+  assert.equal(prereq.acceptedStatusShown({ formNotes: ["Devis accepté le 31 oct., 15:30. Il sert de base au règlement après intervention."], statusTags: [] }), true);
+  assert.equal(prereq.acceptedStatusShown({ formNotes: [], statusTags: ["Accepté"] }), true);
+});

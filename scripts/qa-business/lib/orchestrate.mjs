@@ -77,6 +77,8 @@ export function guardReport(report, gate, { log = () => {}, diagnose = async () 
     },
     skipped,
     summary: () => report.summary(),
+    /** BLOCKED (prerequisite / environment): recorded as such, never PASS; nothing runs. */
+    blocked: (suite, name, reason) => report.blocked(suite, name, reason),
     async scenario(suite, name, fn) {
       if (gate.stopping) {
         skipped.push({ suite, name, reason: gate.reason });

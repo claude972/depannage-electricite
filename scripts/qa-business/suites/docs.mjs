@@ -10,6 +10,7 @@ import path from "node:path";
 import { login, openHash, api, capture, bodyText, expectVisible, expectAbsentOrDisabled, postsTo, waitForApi, sleep, noHorizontalOverflow } from "../../qa/lib/browser.mjs";
 import { AppDefect } from "../../qa/lib/report.mjs";
 import { euroDigits, expectedEtag, inspectPdf, quoteReference } from "../lib/pdf.mjs";
+import { acceptedStatusShown, isId, scenarioWhen, snapshotValidUntil } from "../lib/prerequisites.mjs";
 
 const PANEL = 'section[aria-labelledby="quote-documents-title"]';
 const isoPlusDays = (days) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
@@ -134,7 +135,8 @@ export const suite = {
           assert.equal(docs[0].revision, 1);
           assert.equal(docs[0].reference, ref1, "document reference");
           assert.equal(docs[0].snapshot?.quote?.total_cents, q1.total_cents, "snapshot carries the exact quote total");
-          assert.equal(docs[0].snapshot?.terms?.valid_until, validUntil, "snapshot carries the explicit validity");
+          // 015 quote_document_snapshot / snapshot.ts: validity lives under snapshot.quote.terms.
+          assert.equal(snapshotValidUntil(docs[0].snapshot), validUntil, "snapshot carries the explicit validity");
           state.documentId = docs[0].id;
           state.etag = expectedEtag(docs[0]);
           return { document_id: docs[0].id, revision: 1 };
@@ -168,7 +170,7 @@ export const suite = {
       }
     });
 
-    await report.scenario(suite.name, "client: reads the right version and amounts, downloads the same PDF, no issuer control, no POST", async (s) => {
+    await scenarioWhen(report, suite.name, "client: reads the right version and amounts, downloads the same PDF, may request generation, no issuer control, no POST", { quote_document_id: isId(state.documentId), quote_document_etag: Boolean(state.etag), artisan_download_size: state.bytes > 0 }, async (s) => {
       const h = await ctx.openPage(s, { width: 360, height: 780 });
       try {
         await s.step("login client", () => login(h, base, client, projectRef));
@@ -180,7 +182,14 @@ export const suite = {
           await expectVisible(section.getByText(/^Valable jusqu’au .* inclus$/), "validity shown to the client");
           await sleep(500);
           await expectAbsentOrDisabled(section.getByRole("button", { name: "Enregistrer la validité", exact: true }), "'Enregistrer la validité' for the client");
-          await expectAbsentOrDisabled(section.getByRole("button", { name: /Générer le PDF|Mettre à jour le PDF/ }), "generation for the client");
+          // Approved contract (CLAUDE_ADV_DOCUMENTS_CONTRACT, generate_quote_document: « artisan auteur,
+          // owns_intervention ou admin »; owns_intervention = client or site manager with write): the
+          // requesting client MAY request the canonical server PDF; issuer/validity edits stay artisan-only.
+          await expectVisible(section.getByRole("button", { name: /^(Générer le PDF du devis|Mettre à jour le PDF du devis)$/ }), "generation offered to the requesting client (approved contract)");
+          const overview = await api(h.page, `/api/quote-documents?quote_id=${q1.id}`);
+          assert.equal(overview.status, 200);
+          const perms = overview.body?.quotes?.[0]?.permissions;
+          assert.deepEqual({ can_generate: perms?.can_generate, can_set_terms: perms?.can_set_terms, can_propose: perms?.can_propose }, { can_generate: true, can_set_terms: false, can_propose: false }, "client: generation yes, issuer validity and amendment no");
           await expectAbsentOrDisabled(section.getByRole("button", { name: "Proposer un avenant", exact: true }), "'Proposer un avenant' for the client");
         });
         await s.step("client download: same bytes and ETag as the artisan's", async () => {
@@ -302,7 +311,7 @@ export const suite = {
       }
     });
 
-    await report.scenario(suite.name, "third party: overview 403, download 404, dossier not shown, no POST", async (s) => {
+    await scenarioWhen(report, suite.name, "third party: overview 403, download 404, dossier not shown, no POST", { quote_document_id: isId(state.documentId) }, async (s) => {
       const h = await ctx.openPage(s, {});
       try {
         await s.step("login third party", () => login(h, base, tiers, projectRef));
@@ -339,7 +348,7 @@ export const suite = {
       }
     });
 
-    await report.scenario(suite.name, "former artisan after reassignment (synthetic, service role): overview 403, download 404, generate/propose 403", async (s) => {
+    await scenarioWhen(report, suite.name, "former artisan after reassignment (synthetic, service role): overview 403, download 404, generate/propose 403", { quote_document_id: isId(state.documentId) }, async (s) => {
       const h = await ctx.openPage(s, {});
       try {
         await s.step("login the original artisan, then reassign D1 to the replacement (service role, labelled QA)", async () => {
@@ -405,9 +414,22 @@ export const suite = {
           assert.equal(quote.status, "sent", "expired quote must stay 'sent'");
           const [job] = await db.select("interventions", { id: `eq.${d2.id}` }, "status");
           assert.equal(job.status, "quoted");
-          const text = await bodyText(h.page);
-          assert.ok(!/Devis accepté/i.test(text), "no success wording after the refusal");
-          return { status: response.status(), quote_status: quote.status };
+          await expectVisible(h.page.locator('.alert.error[role="alert"]').first(), "server refusal rendered as the shell error alert");
+          // Status elements only (contract §16): QuoteView state note and the quote card status tag.
+          const readStatus = async () => {
+            const formNotes = await h.page.locator("p.form-note").allInnerTexts();
+            const card = h.page.locator(`article[aria-labelledby="quote-${q2.id}"]`);
+            const statusTags = await card.locator(".tag").allInnerTexts();
+            return { formNotes, statusTags };
+          };
+          const afterClick = await readStatus();
+          assert.equal(acceptedStatusShown(afterClick), false, `accepted status shown after the refusal: ${JSON.stringify(afterClick)}`);
+          // Re-read through the real navigation (server data): still awaiting decision, still acceptable-looking button.
+          const section = await openClientQuote(h.page, base, d2, q2);
+          await expectVisible(section.locator(`article[aria-labelledby="quote-${q2.id}"]`).getByText("En attente de décision", { exact: true }), "quote card status after re-read");
+          const reread = await readStatus();
+          assert.equal(acceptedStatusShown(reread), false, `accepted status shown after re-read: ${JSON.stringify(reread)}`);
+          return { status: response.status(), quote_status: quote.status, status_elements: reread };
         });
         s.network(h.network);
       } finally {
