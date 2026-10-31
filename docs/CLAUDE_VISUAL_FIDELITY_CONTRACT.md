@@ -288,3 +288,15 @@ Vérifié (démo, script hors dépôt) : cloche visible 44 × 44 et active dans 
 - Vérifié (démo, 360 et 1280) : panneau présent dans les trois variantes (`#demo/artisan-mission.demo-001`,
   `#demo/client-quote.quote-demo-1`, `#demo/manager-approval.approval-demo`), 0 élément interactif < 44 px dans le
   panneau, aucun débordement, console sans erreur. Captures `anchors-quote-documents-{artisan,client,manager}-{360,1280}.jpg`.
+
+### Ancrage 4 — opérations du site (entreprise)
+
+- Fiche de site (`SiteSheet`) : panneau « Opérations du site » après la règle d’approbation, pleine largeur de la grille,
+  rendant `SiteOperationsView` avec l’état `capabilities.siteOperations`, `CONTRACT_MESSAGES[state]`, portée
+  `leafScope(profileId, rôle, écriture, { organizationId, siteId })` où l’écriture = `enterpriseAuthority(...).canWriteSite(site)`
+  (fail-closed) avec `readOnlyReason`, client `session.features.siteOperations`, démo `demoReport()` en démonstration
+  seulement (client de démonstration injecté par la session, jamais importé ici), « intervention » → `openIntervention`.
+- Onglets du lot relevés à 44 px par une règle locale du panneau (composant du lot non modifié).
+- Vérifié (démo `#demo/manager-site.site-1`, 360 et 1280) : panneau présent avec le rapport de démonstration et ses
+  sept onglets (44 px), 0 élément interactif < 44 px, aucun débordement, console sans erreur. Captures
+  `anchors-site-operations-manager-{360,1280}.jpg`.

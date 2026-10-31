@@ -84,6 +84,10 @@ import {
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
+import { SiteOperationsView } from "../features/site-operations/site-operations-view";
+import { CONTRACT_MESSAGES } from "../app/api";
+import { demoReport } from "../../lib/features/site-operations/demo";
+import { leafScope } from "./anchors";
 import type {
   Approval,
   ApprovalRule,
@@ -2259,6 +2263,9 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
   const audits = compliance.filter((r) => ["audit", "safety"].includes(r.kind));
   // Écriture opérationnelle sur CE site : rôle de membre et portée (jamais le rôle seul).
   const canWrite = c.authority.canWriteSite(site.id);
+  // Opérations du site (lot B2B) : état réel du contrat, libellé commun quand il n’est pas disponible.
+  const opsState = session.capabilities.siteOperations;
+  const opsMessage = opsState === "available" ? "" : CONTRACT_MESSAGES[opsState];
 
   return (
     <>
@@ -2493,6 +2500,30 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
           ) : (
             <ReadOnlyNote reason={c.authority.readOnlyReason} />
           )}
+        </section>
+
+        <section className={cx("panel", styles.operationsPanel)} aria-labelledby="site-operations">
+          <h2 id="site-operations">Opérations du site</h2>
+          <p className={styles.muted}>
+            Équipements, maintenance, budget, grilles, délais et contrôles enregistrés pour ce site.
+          </p>
+          <SiteOperationsView
+            state={opsState}
+            unavailableMessage={opsMessage}
+            scope={leafScope(
+              session.profileId,
+              session.role,
+              canWrite
+                ? { canWrite: true }
+                : { canWrite: false, reason: c.authority.readOnlyReason || "Lecture seule sur ce site." },
+              { organizationId: c.organization?.id, siteId: site.id },
+            )}
+            client={session.features.siteOperations}
+            demo={session.mode === "demo" ? demoReport() : undefined}
+            onNavigate={(view, param) => {
+              if (view === "intervention" && param) session.openIntervention(param);
+            }}
+          />
         </section>
 
         {vertical === "restaurant" && (

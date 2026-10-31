@@ -66,6 +66,18 @@
   line-height: 1.3;
   padding-top: 4px;
 }
+/* Opérations du site (lot B2B) : panneau pleine largeur de la fiche, contenu du lot en dessous du titre. */
+.operationsPanel {
+  grid-column: 1 / -1;
+}
+.operationsPanel > h2 + p {
+  margin: 4px 0 12px;
+}
+/* Onglets du lot (40 px) : cible tactile ≥ 44 px dans la fiche, sans modifier le composant. */
+.operationsPanel [role="tablist"] > button,
+.operationsPanel [role="tab"] {
+  min-height: 44px;
+}
 /* Cloche des notifications (composant du lot) posée sur la barre bleu roi : icône blanche, filet translucide. */
 .topbarBell > button {
   background: transparent;
