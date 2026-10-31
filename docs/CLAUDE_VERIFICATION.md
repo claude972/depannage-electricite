@@ -69,6 +69,11 @@ Rapport d’implémentation et de vérification de l’agent Claude (branche `cl
 | Photos (CLI-02) | `RequestForm` (sélection validée), `createIntervention(values, photos)` : création puis `processUploadQueue` séquentielle ; `UploadQueuePanel` avec « Réessayer » ; aucune recréation du dossier, aucun envoi anonyme, démo sans envoi | `tests/ui/uploads.test.ts` (échec partiel puis relance du seul fichier en échec ; arrêt sur changement d’identité) ; `tests/ui/api.test.ts` |
 | Accessibilité | menus `inert`, retour de focus, compteurs lisibles, cibles 44 px, liens d’évitement uniques | audit interne, relecture ; vérification navigateur à faire sur la preview |
 
+| Revalidation sans perte de signal (CL-UI-008) | `components/app/revalidate.ts` : coalescence d’une relance pendant un chargement, relance différée dans la fenêtre de 15 s, annulation à la perte d’identité | `tests/ui/revalidate.test.ts` (horloge déterministe) |
+| Photos incertaines (PHOTO-004) | candidats du dossier de même nom listés pour vérification humaine ; confirmation explicite ou renvoi ; copies sans affirmation d’absence (liste de documents bornée) | `tests/ui/uploads.test.ts` |
+| Super Admin — liste serveur (ADMIN-LISTS-001) | curseur + pile de retour, total serveur, filtres, recherche littérale validée, détail d’ancien dossier avec devis bornés (50) | relecture source ; recette preview pilote |
+| Artisan — brouillon de devis (QUOTE-DRAFT-001) | `components/role/artisan-quote-draft.tsx` ; sauvegarde ≠ envoi, conflits 409 conservés, `quote_id` exact sélectionné ; repli envoi direct | relecture source ; recette preview après intégration 010 |
+
 Limites : aucune capture nouvelle (disque local plein) ; la course réelle entre onglets du SDK n’est pas observée en navigateur, les tests reproduisent les entrelacements de façon déterministe.
 
 ### Écarts, limites et suites
