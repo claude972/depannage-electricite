@@ -533,7 +533,6 @@ export function AdminSpace({ session }: { session: Session }) {
                   render: (a) => <Person name={a.full_name} sub={a.company_name || "Société non renseignée"} />,
                 },
                 { key: "status", label: "Dossier", render: (a) => applicationTag(a.application_status) },
-                { key: "date", label: "Date de demande", className: styles.nowrap, render: (a) => (a.created_at ? date(a.created_at) : "—") },
                 {
                   key: "actions",
                   label: "Actions",
@@ -557,7 +556,9 @@ export function AdminSpace({ session }: { session: Session }) {
                 </Empty>
               }
             />
-            <Basis>Dossiers au statut « soumis » {loadedNote(o.capabilities.list_limit).replace("chargés", "artisans chargés")} ; le compteur est global.</Basis>
+            <Basis>
+              Dossiers au statut « soumis » {loadedNote(o.capabilities.list_limit).replace("chargés", "artisans chargés")}, dans l’ordre transmis ; le compteur est global. La date de soumission n’est pas transmise dans cette vue : elle figure dans le dossier.
+            </Basis>
           </Panel>
           <Panel
             title="Interventions en cours"
