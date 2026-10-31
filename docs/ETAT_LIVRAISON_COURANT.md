@@ -1,3 +1,9 @@
+# Checkpoint prioritaire — 31 octobre 19h35 Martinique
+
+UI-THEME-FOUNDATION-001 en cours chez le lead Claude existant : claim/contrat92a7ff4 poussé et relu ROOT, premiers fichiers noncommittés visibles. Aucun SHA code accepté, aucun déploiement de ce thème. Contrats backend pointread/Realtime confiés au worker existant, encore attendus. Prérevues READONLY58b terminées, risques transmis ; aucune nouvelle fonctionnalité vérifiée depuis le checkpoint B2. Intégration58b/CIverte/app28b publique inchangés, aucune cohorteQA connue active.
+
+Historique conservé ci-dessous.
+
 # Checkpoint prioritaire — 31 octobre 19h25 Martinique
 
 ## ROOT31oct19h25 — B2 clôturé, nouvelle tranche autorisée
