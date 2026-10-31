@@ -94,11 +94,13 @@ window.__appLogin = () => readWorkspace().then((j) => {
 
 function startApp(variant = "ok") {
   const users = new Map(); // id → role
+  const hits = { workspace: 0 };
   const jobs = []; // { id, description, visibleTo: [] }
   const server = http.createServer((req, res) => {
     const u = new URL(req.url, "http://x");
     const who = /qa-user=([0-9a-f-]{36})/.exec(req.headers.cookie || "")?.[1];
     if (u.pathname === "/api/workspace") {
+      hits.workspace++;
       if (!who || !users.has(who)) return res.writeHead(401, { "content-type": "application/json" }).end("{}");
       const interventions = jobs.filter((j) => j.visibleTo.includes(who)).map(({ id, description }) => ({ id, status: "requested", description }));
       return res.writeHead(200, { "content-type": "application/json", "cache-control": "private, no-store" }).end(JSON.stringify({ profile: { id: who, role: users.get(who) }, interventions }));
@@ -107,7 +109,7 @@ function startApp(variant = "ok") {
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(APP.replace("__VARIANT__", JSON.stringify(variant)));
   });
   server.on("upgrade", (req, socket) => socket.destroy()); // never reached when the block works
-  return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve({ server, users, jobs, base: `http://127.0.0.1:${server.address().port}` })));
+  return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve({ server, users, jobs, hits, base: `http://127.0.0.1:${server.address().port}` })));
 }
 
 /** Fake seed with the TrackingFixtures surface used by the scenarios (no service key). */
@@ -133,7 +135,7 @@ function fakeTf(app, cohort) {
   };
 }
 
-async function runScenarios(variant, names, { failLogin = false } = {}) {
+async function runScenarios(variant, names, { failLogin = false, stopDuringLogout = false } = {}) {
   configureBrowser({ timeoutMs: 8000 });
   const app = await startApp(variant);
   const { chromium } = createRequire(import.meta.url)(PW);
@@ -162,6 +164,12 @@ async function runScenarios(variant, names, { failLogin = false } = {}) {
     // A4: the mini-app's own identity switch, in the SAME document (no navigation).
     identity: {
       logout: async (h) => {
+        if (stopDuringLogout) {
+          // DL-QA-806-004 repro: the STOP arrives while the logout is still pending, then it resolves.
+          gate.stop("SIGINT");
+          calls.hitsAtStop = app.hits.workspace;
+          await new Promise((r) => setTimeout(r, 150));
+        }
         await h.context.clearCookies();
         await h.page.evaluate(() => window.__appLogout());
       },
@@ -177,6 +185,7 @@ async function runScenarios(variant, names, { failLogin = false } = {}) {
   const report = createReport({}, redactor);
   const results = {};
   results.calls = calls;
+  results.hits = app.hits;
   try {
     await setupDeeplink(ctx);
     for (const name of names) {
@@ -229,4 +238,12 @@ test("real Chromium — A4 / DL-QA-806-002: D4 (g) other identity in the SAME do
   assert.equal(failed.D4.status, "BLOCKED", JSON.stringify(failed.D4));
   assert.match(failed.D4.error, /login of the second identity failed.*no retry/);
   assert.equal(failed.calls.login, 1, "exactly one login attempt");
+});
+
+test("real Chromium — DL-QA-806-004: STOP during a pending logout ⇒ 0 login, 0 new request, StopRequestedError propagated (not BLOCKED)", { skip: SKIP, timeout: 300000 }, async () => {
+  const r = await runScenarios("ok", ["D4"], { stopDuringLogout: true });
+  assert.equal(r.calls.login, 0, "no login after the stop");
+  assert.equal(r.hits.workspace, r.calls.hitsAtStop, "no new workspace request after the stop");
+  assert.notEqual(r.D4.status, "BLOCKED", JSON.stringify(r.D4));
+  assert.match(r.D4.error, /the run is stopping/, "the STOP propagated");
 });

@@ -6,7 +6,8 @@ import { randomUUID } from "node:crypto";
 import { AppDefect } from "../qa/lib/report.mjs";
 import { newPage, login, logout, goHash, waitForWorkspace, expectVisible } from "../qa/lib/browser.mjs";
 import { createSessionPool } from "../qa-tracking/scenarios.mjs";
-import { gatedWait } from "../qa-tracking/lib/guard.mjs";
+import { gatedWait, act } from "../qa-tracking/lib/guard.mjs";
+import { StopRequestedError } from "../qa/lib/lifecycle.mjs";
 import { trackingPath } from "../qa-tracking/lib/constants.mjs";
 import { assertUnknownIs404 } from "../qa-tracking/lib/preflight.mjs";
 import { UI, VIEWS, SHOW_TIMEOUT_MS, QUIET_WINDOW_MS, REVALIDATE_GUARD_MS, QUIET_MS, GATE_TIMEOUT_MS } from "./lib/constants.mjs";
@@ -16,6 +17,7 @@ import { installProbe, resetSeen, readProbe, leakFlags, armLeakLatch, readLeakLa
 import { openCleanWindow, closeWindow, assertWindow, blocked } from "./lib/window.mjs";
 
 export const PREFLIGHT_SESSION = "dl-preflight";
+const isStop = (error) => error instanceof StopRequestedError || error?.name === "StopRequestedError";
 export const canaryFor = (runId) => `QA-DL-CANARY-${runId}`;
 
 /**
@@ -338,29 +340,28 @@ export const SCENARIO_RUNNERS = {
     // once, never retried: shared logout (global ⇒ every clientA session revoked) + same-document
     // login of clientC, identity proven, document marker unchanged. Any failure ⇒ BLOCKED.
     const switcher = identitySwitch(ctx);
+    // DL-QA-806-004: the auth calls are outside the /api barrier, so the stop gate is checked BEFORE
+    // each identity step and AFTER every await (act); a StopRequestedError is never turned into
+    // BLOCKED — it propagates and nothing further is emitted.
+    const step = async (what, fn) => {
+      try {
+        return await act(ctx.gate, fn);
+      } catch (error) {
+        if (isStop(error)) throw error;
+        throw blocked(`D4 (g) precondition: ${what} (${error?.message || error}); no retry`);
+      }
+    };
     // Leave the absent dossier first: after the login the view must not re-resolve it by itself
     // (that read would land before the window); the window's own navigation is the only cause.
-    await goHash(h.page, VIEWS.requests);
-    const m0 = (await readProbe(h.page))?.marker;
+    await act(ctx.gate, () => goHash(h.page, VIEWS.requests));
+    const m0 = (await act(ctx.gate, () => readProbe(h.page)))?.marker;
     if (!m0) throw blocked("D4 (g) precondition: document marker missing");
-    try {
-      await switcher.logout(h);
-    } catch (error) {
-      throw blocked(`D4 (g) precondition: logout failed (${error?.message || error}); no retry`);
-    }
+    await step("logout failed", () => switcher.logout(h));
     ctx.revokeUser(user.id); // the app logout is global: clientA sessions are revoked
-    try {
-      await switcher.login(h, ctx.users.clientC);
-    } catch (error) {
-      throw blocked(`D4 (g) precondition: login of the second identity failed (${error?.message || error}); no retry`);
-    }
-    ctx.rebind("dl-d4", ctx.users.clientC);
-    try {
-      await waitForWorkspace(h.page, ctx.users.clientC.id, 30000);
-    } catch (error) {
-      throw blocked(`D4 (g) precondition: second identity not proven (${error?.message || error})`);
-    }
-    const m1 = (await readProbe(h.page))?.marker;
+    await step("login of the second identity failed", () => switcher.login(h, ctx.users.clientC));
+    await act(ctx.gate, () => ctx.rebind("dl-d4", ctx.users.clientC));
+    await step("second identity not proven", () => waitForWorkspace(h.page, ctx.users.clientC.id, 30000));
+    const m1 = (await act(ctx.gate, () => readProbe(h.page)))?.marker;
     if (m1 !== m0) throw blocked("D4 (g) precondition: the document changed during the identity switch (reload)");
     await measure(ctx, h, "D4 (g) other identity, same document", 1, async () => {
       await goHash(h.page, VIEWS.client(never));
