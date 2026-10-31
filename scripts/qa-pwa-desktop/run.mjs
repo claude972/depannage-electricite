@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { HELP, Blocked, hash, bounded, parseArgs, verifyBuild, identity, chromeAppId, collision, attributable, baselineUnchanged, absentRegistry, canUninstall, proofMatches, resultStatus, createGate, onceAsync, sameProcess, profileRemovalAllowed } from './lib.mjs';
+import {createPipeClient,unavailablePwa,bindPwaChannel} from './pipe.mjs';
 
 const exec = promisify(execFile);
 const pause = ms => new Promise(r => setTimeout(r,ms));
@@ -129,7 +130,7 @@ async function main(argv) {
   }
   await save();
   if (!o.execute) { console.log(`PREFLIGHT_ONLY ${out}`); return 0; }
-  const gate = createGate(); let child, browser, cdp, page, profileStat, childFact;
+  const gate = createGate(); let child, browser, cdp, pipe, pwa, page, profileStat, childFact;
   const owned = async () => !!child && child.exitCode === null && child.signalCode === null && sameProcess(childFact,await processFact(child.pid));
   const record = async (kind,details = {}) => {
     const intent={kind,at:Date.now(),...details};
@@ -148,7 +149,7 @@ async function main(argv) {
     throw new Blocked('bounded wait expired');
   }
   async function registry() {
-    try { await bounded(cdp.send('PWA.getOsAppState',{manifestId:state.identity.manifestId}),8000,'registry read'); return true; }
+    try { await bounded(pwa.send('PWA.getOsAppState',{manifestId:state.identity.manifestId}),8000,'registry read'); return true; }
     catch(e) { if (absentRegistry(e)) return false; throw e; }
   }
   async function stopChild() {
@@ -168,7 +169,7 @@ async function main(argv) {
     let newBundles=[];
     try {
       const now=await snapshot(); newBundles=now.filter(b => attributable(b,state.identity,state.profileRoot,state.baseline));
-      if (state.installIntent && pending === 0 && cdp && await owned()) {
+      if (state.installIntent && pending === 0 && pwa && await owned()) {
         const installed=await registry();
         if (installed) {
           const currentProfile=await plain(state.profileRoot,true);
@@ -176,7 +177,7 @@ async function main(argv) {
           await record('uninstall',{manifestId:state.identity.manifestId,bundle:newBundles[0].path});
           // bounded transport, but no assumption of cancellation if this times out
           let timer;
-          try { await Promise.race([cdp.send('PWA.uninstall',{manifestId:state.identity.manifestId}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('uninstall unknown after timeout')),10000);})]); }
+          try { await Promise.race([pwa.send('PWA.uninstall',{manifestId:state.identity.manifestId}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('uninstall unknown after timeout')),10000);})]); }
           finally { clearTimeout(timer); }
           cleanup.registryAbsent = await waitFor(async () => !await registry(),10000,{stopping:true});
         } else cleanup.registryAbsent=true;
@@ -186,6 +187,7 @@ async function main(argv) {
     try { state.ownedHelpers=child&&await owned()?await descendants(child.pid):[];await save(); }catch(e){cleanup.errors.push(e.message);}
     try { if (cdp && await owned()) await Promise.race([cdp.send('Browser.close').catch(()=>{}),pause(2000)]); } catch(e) { cleanup.errors.push(e.message); }
     cleanup.browserExited=await stopChild().catch(e => {cleanup.errors.push(e.message);return false;});
+    try{pipe?.close();}catch(e){cleanup.errors.push(e.message);}
     // After owned process exit, no late browser installation/window can materialize.
     try {
       const after=await snapshot(); cleanup.baselineUnchanged=baselineUnchanged(state.baseline,after);
@@ -216,9 +218,10 @@ async function main(argv) {
   process.on('SIGINT',sigint);process.on('SIGTERM',sigterm);
   try {
     await mutation('create-profile',async()=>{state.profileRoot=await mkdtemp(path.join(await realpath(os.tmpdir()),'depannage-pwa-os-'));await chmod(state.profileRoot,0o700);profileStat=await plain(state.profileRoot,true);await save();});gate.check();
-    const args=[`--user-data-dir=${state.profileRoot}`,'--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--enable-automation','--no-first-run','--no-default-browser-check','--disable-sync','about:blank'];
+    const args=[`--user-data-dir=${state.profileRoot}`,'--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--remote-debugging-pipe','--enable-automation','--no-first-run','--no-default-browser-check','--disable-sync','about:blank'];
     child=await mutation('spawn',async()=>{
-      const c=spawn(pf.binary,args,{stdio:['ignore','ignore','ignore'],env:{HOME:os.homedir(),PATH:'/usr/bin:/bin:/usr/sbin:/sbin',TMPDIR:os.tmpdir(),LANG:'fr_FR.UTF-8'}});
+      const c=spawn(pf.binary,args,{stdio:['ignore','ignore','ignore','pipe','pipe'],env:{HOME:os.homedir(),PATH:'/usr/bin:/bin:/usr/sbin:/sbin',TMPDIR:os.tmpdir(),LANG:'fr_FR.UTF-8'}});
+      pipe=createPipeClient(c.stdio[3],c.stdio[4]);
       child=c; c.on('error',e=>{state.spawnError=e.message;});state.browserPid=c.pid;
       // Capture identity inside the tracked spawn operation even if a signal arrives meanwhile.
       for(let n=0;n<30;n++){const fact=c.pid?await processFact(c.pid):null;if(fact){childFact=fact;break;}if(state.spawnError)throw new Error(state.spawnError);await pause(50);}
@@ -233,8 +236,14 @@ async function main(argv) {
       if (!/^\d+$/.test(port) || Number(port)<1024 || Number(port)>65535 || !/^\/devtools\/browser\/[a-f0-9-]+$/.test(socket)) throw new Blocked('unsafe owned CDP endpoint');
       return `ws://127.0.0.1:${port}${socket}`;
     });
+    state.debugPort=Number(new URL(endpoint).port);await save();gate.check();
     gate.check();browser=await pf.pw.chromium.connectOverCDP(endpoint,{timeout:10000});gate.check();cdp=await browser.newBrowserCDPSession();gate.check();
     state.cdp=await bounded(cdp.send('Browser.getVersion'),8000,'browser version');await save();gate.check();
+    const pipeVersion=await bounded(pipe.send('Browser.getVersion'),8000,'pipe browser version');gate.check();
+    const pipeProcesses=await bounded(pipe.send('SystemInfo.getProcessInfo'),8000,'pipe browser PID');gate.check();
+    pwa=bindPwaChannel(pipe,pipeVersion,state.cdp,pipeProcesses.processInfo,child.pid);
+    if(!await owned())throw new Blocked('browser ownership changed before PWA');gate.check();
+    state.pipe={verified:true,transport:'inherited-fd3-fd4',browserPid:child.pid,version:pipeVersion};await save();gate.check();
     page=await browser.contexts()[0].newPage();gate.check();const response=await page.goto(`${o.origin}/`,{timeout:15000});gate.check();
     if (response?.status()!==200 || page.url()!==`${o.origin}/`) throw new Blocked('unexpected app page');
     const session=await page.context().newCDPSession(page);gate.check();const manifest=await bounded(session.send('Page.getAppManifest',{manifestId:state.identity.manifestId}),8000,'processed manifest');gate.check();
@@ -245,15 +254,15 @@ async function main(argv) {
     // A second recognized domain response rules out treating a one-off transport error as absence.
     if (await registry()) throw new Blocked('app registry changed before install');gate.check();
     await mutation('install',async()=>{
-      await cdp.send('PWA.install',{manifestId:state.identity.manifestId,installUrlOrBundleUrl:state.identity.startUrl});
+      await pwa.send('PWA.install',{manifestId:state.identity.manifestId,installUrlOrBundleUrl:state.identity.startUrl});
     },{manifestId:state.identity.manifestId});
     gate.check();state.proofs.installed=await registry();
     const bundle=await waitFor(async()=>{const all=await snapshot();const b=all.filter(x=>attributable(x,state.identity,state.profileRoot,state.baseline));return b.length===1?b[0]:null;});
     if(bundle.plist.CrBundleIdentifier!==state.browserBundleId)throw new Blocked('shim browser bundle mismatch');
     state.bundle=bundle;state.proofs.shim=true;await save();gate.check();
-    await mutation('standalone',()=>cdp.send('PWA.changeAppUserSettings',{manifestId:state.identity.manifestId,displayMode:'standalone'}));
+    await mutation('standalone',()=>pwa.send('PWA.changeAppUserSettings',{manifestId:state.identity.manifestId,displayMode:'standalone'}));
     async function launch(label) {
-      const result=await mutation(label,()=>cdp.send('PWA.launch',{manifestId:state.identity.manifestId}));gate.check();
+      const result=await mutation(label,()=>pwa.send('PWA.launch',{manifestId:state.identity.manifestId}));gate.check();
       const target=result.targetId;if (!target) throw new Error('launch returned no target');
       const p=await waitFor(async()=>{for(const candidate of browser.contexts()[0].pages()){const s=await candidate.context().newCDPSession(candidate);try{const r=await bounded(s.send('Target.getTargetInfo'),3000,'target identity');if(r.targetInfo.targetId===target)return candidate;}finally{await s.detach();}}return null;});
       await p.waitForLoadState('domcontentloaded',{timeout:15000});gate.check();
@@ -279,7 +288,7 @@ async function main(argv) {
     },o.proofTimeoutMs);state.proofs.osProof=true;await save();gate.check();
     await mutation('close-first-window',()=>first.page.close());gate.check();
     const second=await launch('relaunch');if(second.targetId===first.targetId)throw new Error('relaunch reused closed target');state.proofs.relaunched=true;await save();
-  } catch(e) { if(!state.error)state.error={kind:e instanceof Blocked?'Blocked':'Error',message:String(e.message).slice(0,500)}; }
+  } catch(e) { if(!state.error)state.error={kind:e instanceof Blocked||unavailablePwa(e)?'Blocked':'Error',message:String(e.message).slice(0,500)}; }
   finally {
     const code=await finalize();process.removeListener('SIGINT',sigint);process.removeListener('SIGTERM',sigterm);return interrupted?Math.max(code,2):code;
   }
