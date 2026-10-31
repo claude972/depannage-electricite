@@ -342,3 +342,31 @@ B1 is maintained and separate. This amendment applies the two precisions in plac
    - `--only D2` creates its witness itself; it never depends on another scenario.
 
 No B2 or deep-link code before the ROOT GO.
+
+## B2 — implementation claim (mission WEB-DEEPLINK-QA-B2-001, coordination 97d35a7)
+
+The claim is published BEFORE the code. Base: integration 6901e2a (B1 478a2da plus gateway P3), merged cleanly into this branch.
+
+**Exclusive files (new):**
+- `scripts/qa-deeplink/run.mjs`, `scripts/qa-deeplink/scenarios.mjs`;
+- `scripts/qa-deeplink/lib/{constants,args,realtime-block,observe,probe,window,cleanup}.mjs`;
+- `tests/qa-deeplink*.test.ts`;
+- this contract.
+
+**Read-only imports, no copies:**
+- `scripts/qa/lib/*`;
+- from tracking:
+  - `lib/cleanup-proof.mjs` (B1), `lib/cleanup.mjs` (`runTrackingCleanup`, which serves as `runCleanupFn`);
+  - `lib/intents.mjs`, `lib/durable.mjs`, `lib/auth-admin.mjs`, `lib/guard.mjs`, `lib/finalize.mjs`, `lib/diagnostics.mjs`, `lib/preflight.mjs` (`checkBuildProvenance`, `assertUnknownIs404`), `lib/args.mjs` (`REMOTE_FLAGS`), `lib/constants.mjs` (`trackingPath`), `lib/reconcile.mjs`;
+  - `scenarios.mjs` (`TrackingFixtures`, `createSessionPool` with injected deps), `run.mjs` (`runOne`);
+- the Business parser, through `checkBuildProvenance`.
+
+`settleSideEffects` = the no-op `noSideEffects`. The deep-link `--cleanup-manifest` is a small orchestration over the generic `cleanupWithProof`.
+
+**Implementation choices within the contract:**
+- **Realtime.** The `routeWebSocket` interception is installed on each session's context by the `newPageFn` injected into `createSessionPool`, BEFORE the barrier and the login, on every deep-link session (D1–D4).
+  - D3 is also isolated from Realtime, so that its count is attributable.
+  - The « Connecté » check of D4.4 (Realtime not blocked) is NOT asserted. Without an observable SUBSCRIBED state from outside, it stays out of proof, in line with LIVE-WORKSPACE-001.
+- **Window focus.** Only `focus`/`blur` events whose `target === window` are recorded, plus `visibilitychange` (the app listens to `window` `focus` and `document` `visibilitychange`, `courant-app.tsx` ~315). Focusing an element (clicking a button) is not a window focus.
+- **« Dossier shown »** = the dossier's description (unique per run) visible in the detail view (`client-space.tsx` ~1115), plus no « introuvable » and no « Recherche… » left at the end.
+- **D2 witness:** proven before the stub by the page's own bootstrap reply (boolean id check). It is proven again after #1 and after #2 by a hash navigation to `detail/<witness>`: present in the cache ⇒ shown with **0** requests. Then a return to `detail/<jobLate2>`: the error state again, with « Réessayer ».
