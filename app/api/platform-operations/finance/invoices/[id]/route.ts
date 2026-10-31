@@ -1,11 +1,10 @@
 import { authenticatedClient, ApiError, dbError } from "@/lib/supabase/server";
 import { uuid } from "@/lib/supabase/validation";
-import { failed, ok, requireScope } from "@/lib/features/platform-operations/http";
+import { failed, invoiceFields as fields, ok, requireScope } from "@/lib/features/platform-operations/http";
 import { invoiceDocumentInput } from "@/lib/features/platform-operations/invoice-document";
 import type { Invoice } from "@/lib/features/platform-operations/types";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-const fields = "id,request_id,kind,basis,number,issuer_key,issuer,recipient,payment_id,quote_id,intervention_id,related_invoice_id,lines,subtotal_cents,tax_rate,tax_cents,total_cents,currency,reason,issued_by,issued_at";
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
