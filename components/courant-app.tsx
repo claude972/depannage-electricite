@@ -540,6 +540,11 @@ export default function CourantApp() {
       quoteDraft: "available",
       adminDirectory: "available",
       support: "available",
+      quoteDocuments: "available",
+      planning: "available",
+      notifications: "available",
+      siteOperations: "available",
+      platformOperations: "available",
     });
     guard.bump();
     runner.reset();

@@ -68,6 +68,14 @@ const ACCESS: Record<View, readonly Role[] | "public"> = {
   "admin-messages": ["admin"],
   "admin-settings": ["admin"],
   "admin-warranty": ["admin"],
+  // Advanced lots: role gate only; the server re-checks every right (visibility grants nothing).
+  "quote-documents": ["client", "artisan", "manager", "admin"],
+  planning: ["artisan"],
+  notifications: ["client", "artisan", "manager", "admin"],
+  "site-operations": ["manager"],
+  "platform-operators": ["admin"],
+  "platform-finance": ["admin"],
+  "platform-moderation": ["admin"],
 };
 export const ALL_VIEWS = Object.keys(ACCESS) as View[];
 export function isView(value: string): value is View {

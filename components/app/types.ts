@@ -501,6 +501,12 @@ export type Capabilities = {
   quoteDraft: ContractState;
   adminDirectory: ContractState;
   support: ContractState;
+  // Advanced lots (WEB-SHARED-001): probed independently, never assumed deployed.
+  quoteDocuments: ContractState;
+  planning: ContractState;
+  notifications: ContractState;
+  siteOperations: ContractState;
+  platformOperations: ContractState;
 };
 export const UNKNOWN_CAPABILITIES: Capabilities = {
   operations: "unknown",
@@ -515,6 +521,11 @@ export const UNKNOWN_CAPABILITIES: Capabilities = {
   quoteDraft: "unknown",
   adminDirectory: "unknown",
   support: "unknown",
+  quoteDocuments: "unknown",
+  planning: "unknown",
+  notifications: "unknown",
+  siteOperations: "unknown",
+  platformOperations: "unknown",
 };
 export type ReturnContext =
   | { kind: "payment"; state: "pending" | "cancelled"; interventionId: string }
@@ -565,7 +576,15 @@ export type View =
   | "admin-reviews"
   | "admin-messages"
   | "admin-settings"
-  | "admin-warranty";
+  | "admin-warranty"
+  // Advanced lots (WEB-SHARED-001) — reserved views, wired behind capability detection.
+  | "quote-documents"
+  | "planning"
+  | "notifications"
+  | "site-operations"
+  | "platform-operators"
+  | "platform-finance"
+  | "platform-moderation";
 
 // Photos selected with a request are uploaded one by one AFTER the dossier exists; failures
 // stay in the queue for an explicit retry that never recreates the dossier.
