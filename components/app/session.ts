@@ -337,3 +337,46 @@ export function validateContext(
   const siteOk = !activeSiteId || sites.some((s) => s.id === activeSiteId);
   return { organizationId: activeOrganizationId, siteId: siteOk ? activeSiteId : "", organizationDropped: false };
 }
+
+// Write authority inside the active organisation, derived from the membership role AND the
+// site scope/grants of the current member (contract 009). The global "manager" role grants
+// nothing by itself. Used to disable/hide write controls before the server refuses them.
+export type MemberScope = {
+  scope: "all" | "selected";
+  grants: { site_id: string; can_write: boolean }[];
+};
+export type EnterpriseAuthority = {
+  role: "owner" | "manager" | "viewer" | null;
+  /** Organisation-wide writes (create site, contracts, invitations…): owner/manager with scope all. */
+  canWriteOrganization: boolean;
+  /** Operational writes on a given site (requests, budget, rules, compliance). */
+  canWriteSite(siteId: string | null | undefined): boolean;
+  canReadSite(siteId: string | null | undefined): boolean;
+  /** Short reason shown next to a disabled control. */
+  readOnlyReason: string | null;
+};
+export function enterpriseAuthority(
+  role: "owner" | "manager" | "viewer" | null,
+  scope: MemberScope | null | undefined,
+): EnterpriseAuthority {
+  const effectiveScope: MemberScope = role === "owner" ? { scope: "all", grants: [] } : scope ?? { scope: "all", grants: [] };
+  const writer = role === "owner" || role === "manager";
+  const canWriteOrganization = writer && effectiveScope.scope === "all";
+  const canReadSite = (siteId: string | null | undefined) =>
+    !!role && (effectiveScope.scope === "all" || !siteId || effectiveScope.grants.some((g) => g.site_id === siteId));
+  const canWriteSite = (siteId: string | null | undefined) => {
+    if (!writer) return false;
+    if (effectiveScope.scope === "all") return true;
+    if (!siteId) return false;
+    return effectiveScope.grants.some((g) => g.site_id === siteId && g.can_write);
+  };
+  const readOnlyReason =
+    role === null
+      ? "Vous n’êtes pas membre de cette organisation."
+      : role === "viewer"
+        ? "Votre rôle est en lecture seule dans cette organisation."
+        : effectiveScope.scope === "selected"
+          ? "Vos droits d’écriture sont limités à certains sites."
+          : null;
+  return { role, canWriteOrganization, canWriteSite, canReadSite, readOnlyReason };
+}

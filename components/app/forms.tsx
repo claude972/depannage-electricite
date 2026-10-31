@@ -4,7 +4,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, PHOTO_TYPES, validateUpload } from "./api";
 import { Icon } from "./icons";
-import { Empty, Field, ConfirmAction } from "./ui";
+import { Empty, Field, ConfirmAction, Unavailable } from "./ui";
 import {
   CATEGORIES,
   ROLE_NAMES,
@@ -1388,6 +1388,9 @@ export function ProfessionalOperations({
   busy,
   onRefresh,
   onSave,
+  canWriteOrganization = true,
+  canWriteSite = () => true,
+  readOnlyReason = null,
 }: {
   data: ProfessionalData;
   sites: Site[];
@@ -1397,6 +1400,12 @@ export function ProfessionalOperations({
   busy: boolean;
   onRefresh: () => Promise<void>;
   onSave: (values: Record<string, unknown>) => Promise<boolean | undefined>;
+  /** Organisation-wide writes (contracts). Default true for callers without membership scopes. */
+  canWriteOrganization?: boolean;
+  /** Operational writes for a site (approval rules, compliance records, decisions). */
+  canWriteSite?: (siteId: string) => boolean;
+  /** Shown instead of a form when the member cannot write. */
+  readOnlyReason?: string | null;
 }) {
   const [tab, setTab] = useState("approvals");
   const [site, setSite] = useState("");
@@ -1414,7 +1423,16 @@ export function ProfessionalOperations({
   const [recordStatus, setRecordStatus] = useState("pending");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState("");
-  const selectedSite = site || sites[0]?.id || "";
+  // Only sites the member may write on are offered in the forms.
+  const writableSites = sites.filter((s) => canWriteSite(s.id));
+  const selectedSite = site || writableSites[0]?.id || "";
+  const readOnlyNote = (title: string) => (
+    <Unavailable
+      title={title}
+      reason={readOnlyReason || "Vos droits ne permettent pas cette modification dans l’organisation active."}
+      blocker="membership-authority"
+    />
+  );
   function siteField() {
     return (
       <Field label="Site concerné">
@@ -1426,7 +1444,7 @@ export function ProfessionalOperations({
           <option value="" disabled>
             Choisir un site
           </option>
-          {sites.map((s) => (
+          {writableSites.map((s) => (
             <option key={s.id} value={s.id}>
               {s.name}
             </option>
@@ -1559,7 +1577,7 @@ export function ProfessionalOperations({
                         </span>
                         {a.note && <p>{a.note}</p>}
                       </section>
-                      {a.status === "pending" && (
+                      {a.status === "pending" && canWriteSite(a.site_id || "") && (
                         <ApprovalDecision
                           busy={busy}
                           onDecision={(decision, note) =>
@@ -1601,6 +1619,9 @@ export function ProfessionalOperations({
               </div>
             ))}
           </div>
+          {!writableSites.length ? (
+            <div className="operations-form">{readOnlyNote("Configurer une approbation")}</div>
+          ) : (
           <form
             className="operations-form"
             onSubmit={(e) => {
@@ -1657,6 +1678,7 @@ export function ProfessionalOperations({
               Enregistrer la règle
             </button>
           </form>
+          )}
         </div>
       ) : tab === "contracts" ? (
         <div className="operations-grid">
@@ -1685,6 +1707,7 @@ export function ProfessionalOperations({
                       {c.ends_on ? ` au ${date(c.ends_on)}` : ""}
                     </p>
                     <p>{c.terms}</p>
+                    {canWriteOrganization && (
                     <button
                       className="button outline"
                       disabled={busy}
@@ -1705,6 +1728,7 @@ export function ProfessionalOperations({
                     >
                       {c.status === "archived" ? "Réactiver" : "Archiver"}
                     </button>
+                    )}
                   </details>
                 ))}
               </div>
@@ -1715,6 +1739,9 @@ export function ProfessionalOperations({
               </div>
             )}
           </div>
+          {!canWriteOrganization ? (
+            <div className="operations-form">{readOnlyNote("Enregistrer un contrat cadre")}</div>
+          ) : (
           <form
             className="operations-form"
             onSubmit={(e) => {
@@ -1806,6 +1833,7 @@ export function ProfessionalOperations({
               Enregistrer le contrat
             </button>
           </form>
+          )}
         </div>
       ) : (
         <div className="operations-grid">
@@ -1842,7 +1870,7 @@ export function ProfessionalOperations({
                             : "À traiter"}
                       </span>
                       {r.notes && <p>{r.notes}</p>}
-                      {r.status !== "completed" && (
+                      {r.status !== "completed" && canWriteSite(r.site_id) && (
                         <button
                           className="button outline"
                           disabled={busy}
@@ -1880,6 +1908,9 @@ export function ProfessionalOperations({
               </p>
             </div>
           </div>
+          {!writableSites.length ? (
+            <div className="operations-form">{readOnlyNote("Ajouter une échéance")}</div>
+          ) : (
           <form
             className="operations-form"
             onSubmit={(e) => {
@@ -1952,6 +1983,7 @@ export function ProfessionalOperations({
               Enregistrer l’échéance
             </button>
           </form>
+          )}
         </div>
       )}
     </section>

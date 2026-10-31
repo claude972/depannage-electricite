@@ -42,3 +42,26 @@ test("the sole organisation is the membership context without an explicit select
   const several = enterpriseContext([{ id: "o1" }, { id: "o2" }], [], [], "", "").organizationId;
   assert.equal(membershipRole(members, several, "u1"), null, "no authority until the user chooses");
 });
+test("write authority combines membership role and site grants; global manager role grants nothing alone", async () => {
+  const { enterpriseAuthority } = await import("../../components/app/session");
+  const viewer = enterpriseAuthority("viewer", { scope: "all", grants: [] });
+  assert.equal(viewer.canWriteOrganization, false);
+  assert.equal(viewer.canWriteSite("s1"), false);
+  assert.equal(viewer.canReadSite("s1"), true);
+  assert.match(viewer.readOnlyReason ?? "", /lecture seule/);
+  const scoped = enterpriseAuthority("manager", { scope: "selected", grants: [{ site_id: "s1", can_write: true }, { site_id: "s2", can_write: false }] });
+  assert.equal(scoped.canWriteOrganization, false, "no organisation-wide write with a selected scope");
+  assert.equal(scoped.canWriteSite("s1"), true);
+  assert.equal(scoped.canWriteSite("s2"), false, "read-only grant");
+  assert.equal(scoped.canWriteSite("s3"), false, "site outside the scope");
+  assert.equal(scoped.canReadSite("s3"), false);
+  assert.equal(scoped.canWriteSite(null), false, "no site = no operational write for a scoped member");
+  const manager = enterpriseAuthority("manager", { scope: "all", grants: [] });
+  assert.equal(manager.canWriteOrganization, true);
+  assert.equal(manager.canWriteSite("any"), true);
+  const owner = enterpriseAuthority("owner", { scope: "selected", grants: [] });
+  assert.equal(owner.canWriteOrganization, true, "owner always has every site");
+  const none = enterpriseAuthority(null, null);
+  assert.equal(none.canReadSite("s1"), false);
+  assert.equal(none.canWriteOrganization, false);
+});
