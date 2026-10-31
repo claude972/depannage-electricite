@@ -169,3 +169,14 @@ Règles appliquées par `SiteOperationsView` :
 - `Capabilities.siteOperations`, sonde `GET /api/site-operations?site_id=<site actif>` ; vue `site-operations` (param : id de site) ; rôle manager (lecture viewer/gestionnaire, écriture selon grant).
 - Chargeurs lead : `load = (siteId) => api<SiteOperationsReport>(\`/api/site-operations?site_id=${siteId}\`)` ; `command = (c) => api<SiteOperationsCommandResult>("/api/site-operations", c)` bornés par `runForResult`.
 - `scope.authority` = `{ canWrite: enterpriseAuthority(role, scope).canWriteSite(siteId), reason: readOnlyReason ?? undefined }`.
+
+## Amendement A2 — démonstration et réinitialisation de portée (correction pilote sur 467aaf5)
+
+Remplace la règle 1 (partie « démo ») et précise la règle 3 de l’amendement A1 ; le reste est inchangé.
+
+1. **Démonstration.** Le composant feuille n’a **aucun chemin de commande propre à la démo**. Il appelle uniquement le `client` injecté ; la décision démo/réel appartient au lead, qui choisit l’une des deux options :
+   - soit il injecte un `client` de démonstration strictement isolé, opérant seulement sur les graines `demo` (mémoire ou `sessionStorage`), sans aucune requête réseau, jamais mélangé aux données réelles ;
+   - soit il injecte un `client` dont `command` rejette avec le message « Démonstration : action non disponible. » ; le composant rend ce refus tel quel (état honnête, aucune mise à jour).
+   Quand `demo` est fourni, le composant affiche un bandeau « Démonstration — données fictives » (attribut `data-demo="true"`) et ne déclenche jamais `client.load` ; `lib/features/site-operations/demo.ts` fournit les graines et une fabrique `demoClient(seed)` **que seul le lead décide d’injecter** (le composant ne l’importe pas).
+2. **Portée.** Tout changement de `scope.userId`, `scope.organizationId` **ou** `scope.siteId` remonte le contenu (`key`), effaçant formulaires, brouillons, sélections et données chargées, puis recharge via `client.load` — exactement comme le contrat partagé, pas seulement sur `userId`.
+3. Rappel : aucune migration n’est appliquée par cet agent ; Codex applique uniquement les migrations revues.
