@@ -553,6 +553,7 @@ export type View =
   | "members"
   | "invoices"
   | "profile"
+  | "support"
   | "application"
   | "performance"
   | "admin"
