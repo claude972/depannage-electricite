@@ -606,3 +606,15 @@ Initial org deletion was blocked by the professional_audit row emitted by the al
 
 
 Codex a supprimé uniquement son cache de build généré .next (checkout Codex), 76Mo libérés sans source ni dépendance supprimée. Volume toujours presque plein ; builds en ligne prioritaires.
+
+
+## WEB-PWA-20261030 — Auth dédié configuré pour preview
+
+2026-10-30 America/Martinique — Codex, nouveau projet kcpyjzndybfdlnhvscbs uniquement.
+
+- Audit config CLI a confirmé site_url localhost:3000 et aucune URL de retour ; déploiement preview ne suffisait donc pas aux parcours e-mail.
+- Configuration minimale examinée avec `supabase config diff` avant push : adresse de retour stable preview, URLs exactes confirm/reset, objets et HTML français de confirmation/récupération vers le handler SSR token_hash existant. Six propriétés appliquées avec succès. Les douze propriétés distantes non déclarées sont restées inchangées (confirmation requise, MFA, limites, Storage etc.). Aucun message envoyé à un tiers.
+- Sources primaires relues : https://supabase.com/docs/guides/getting-started/tutorials/with-nextjs et https://supabase.com/docs/guides/local-development/customizing-email-templates ; CLI installé supporte le push des corps de templates et le signale explicitement.
+- Codex conserve cette configuration preview minimale et deux templates dans supabase/config.toml et supabase/templates sur integration/web-pwa (fichiers sans secrets, pas de push automatique vers un autre environnement). Vérification des liens/routes SSR prévue en navigateur ; distribution réelle du courrier pas encore vérifiée.
+- CL-UI-007 reste ouvert au75feaab : correction de connexion ordinaire mais ancienne réponse Auth peut encore réinitialiser une identité plus récente. Reproduction indépendante transmise à Claude. CL-UI-008 amendé par8856236, relecture nécessaire avant clôture.
+- En ligne, QA annonce41 parcours/contrôles UI et13 PWA réussis sur0017b48 ; rapport complet et captures attendus. Le finding VIS-001 sur densité artisan reste ouvert, indépendamment du succès fonctionnel.
