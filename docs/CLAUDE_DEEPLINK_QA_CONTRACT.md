@@ -168,3 +168,29 @@ The preflight (authenticated 404 on an unknown UUID) runs in a dedicated context
     - one request per cause and a quiet window;
     - marker unchanged on hash navigation and changed on `reload` (negative check).
 - Then the usual checks: `tsc --noEmit`, all suites, `node --check`, `--dry-run`.
+
+## Amendment A1 (first ROOT observation on 6fb13ad) — proof that the Realtime interception is EFFECTIVE
+
+Zero frames plus a « non connectée » badge do not prove that the route blocks the socket: the app might never have opened one, or might have used another URL. For D1, D2 and D4 (and any scenario that claims « Realtime blocked »), the proof becomes:
+
+1. **The handler is called.** `context.routeWebSocket(REALTIME_PATTERN, handler)` is installed before login. `REALTIME_PATTERN` matches the path `/realtime/v1/websocket` on the project's Supabase origin, whatever the query. The handler increments a call counter and records only scalars:
+   - ISO time;
+   - origin and path, WITHOUT the query (the query carries the `apikey` and `vsn` values, which are never recorded);
+   - the close code and reason it applied: `ws.close({ code: 4000, reason: "qa-realtime-blocked" })`, a constant chosen by the harness.
+
+   Never a message payload, token or header. The handler never calls `ws.connectToServer()`, so nothing reaches the server.
+2. **Zero frames forwarded.** No `connectToServer` happens, so no frame is relayed to the server. The passive observer (`page.on("websocket")`) records zero `framesent` / `framereceived` events delivered by the server for that URL; the count only, never the content. The close that the page observes carries the applied code (4000).
+3. **Verdict.** All of these must hold in each scenario that claims « Realtime blocked »:
+   - handler call count ≥ 1 for that page, before the measured hash navigation;
+   - close code 4000 applied;
+   - zero frames forwarded;
+   - badge « non connectée · Actualiser ».
+
+   Otherwise ⇒ **BLOCKED** (« Realtime interception not proven: handler called N times »), never PASS. A handler that is never called is a BLOCKED, not a sign that Realtime is absent.
+4. **Local control test in real Chromium** (`tests/qa-deeplink-realtime-route.test.ts`, offline):
+   - a local WebSocket server (Node `http` upgrade, minimal frames) and a local page that opens `ws://127.0.0.1:<port>/realtime/v1/websocket?apikey=SECRET&vsn=1.0.0`;
+   - **(a) without the handler**: the socket connects (server upgrade count = 1, at least one frame received by the page);
+   - **(b) with the same `routeWebSocket(REALTIME_PATTERN, handler)` as the harness**: handler call count = 1, server upgrade count = 0, page-side close with code 4000, zero frames;
+   - **(c)** the recorded summary contains neither `SECRET` nor `apikey=` nor any query value.
+   - It is the same pattern object, imported from `scripts/qa-deeplink/lib/realtime-block.mjs`, so the test checks exactly what the harness installs.
+5. **Distinct and OPEN.** This proves only that the deep-link fallback is tested WITHOUT Realtime. **Realtime effectiveness (LIVE-WORKSPACE-001)** stays OPEN and separate (§6). No scenario in this contract may conclude anything about it, either way.
