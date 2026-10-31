@@ -36,24 +36,24 @@ a { color: inherit; }
 .link:hover { text-decoration: underline; }
 
 /* Barre haute */
-.topbar { position: sticky; top: 0; z-index: 5; background: rgba(0, 0, 0, 0.92); border-bottom: 1px solid var(--line); backdrop-filter: saturate(140%) blur(6px); }
-.topbar-inner { display: flex; align-items: center; gap: 28px; min-height: 76px; }
+.topbar { position: sticky; top: 0; z-index: 5; background: #000; border-bottom: 1px solid var(--line); }
+.topbar-inner { display: flex; align-items: center; gap: 20px; min-height: 76px; }
 .brand { display: inline-flex; align-items: center; gap: 12px; min-height: 48px; text-decoration: none; }
 .brand-mark { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 12px; background: var(--primary); color: var(--white); }
 .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
-.brand-text strong { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+.brand-text strong { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; white-space: nowrap; }
 .brand-text small { font-size: 12px; color: var(--muted); }
-.mainnav { display: flex; gap: 4px; margin-left: 8px; }
-.mainnav a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 10px; color: #e8e8e8; font-size: 15px; font-weight: 500; text-decoration: none; }
+.mainnav { display: flex; gap: 2px; margin-left: 4px; }
+.mainnav a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 10px; color: #e8e8e8; font-size: 15px; font-weight: 500; text-decoration: none; white-space: nowrap; }
 .mainnav a:hover { background: #151515; color: var(--accent); }
-.topbar-actions { display: flex; gap: 10px; margin-left: auto; }
+.topbar-actions { display: flex; gap: 10px; margin-left: auto; flex-shrink: 0; }
 
 main { padding-bottom: 72px; }
 .demo-tag { margin: 18px 0 12px; font-size: 13px; font-weight: 600; color: var(--accent); }
 
 /* Bandeau publicitaire large et statique */
 .ad { position: relative; display: block; height: 120px; overflow: hidden; border-radius: 20px; border: 1.5px dashed rgba(255, 255, 255, 0.55); background: var(--dark-green); text-decoration: none; }
-.ad-label { position: absolute; left: 16px; top: 14px; padding: 3px 10px; border-radius: 8px; background: rgba(0, 0, 0, 0.72); font-size: 12px; font-weight: 700; letter-spacing: 0.8px; }
+.ad-label { position: absolute; left: 16px; top: 14px; padding: 3px 10px; border-radius: 8px; background: rgba(0, 0, 0, 0.72); font-size: 12px; font-weight: 700; letter-spacing: 0.2px; }
 .ad-body { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 12px; font-size: 18px; font-weight: 600; }
 .ad-body svg { color: var(--accent); }
 .ad .ad-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
@@ -107,7 +107,8 @@ dialog p { margin: 0 0 16px; color: #ddd; }
 /* 1280 et moins : plus serré */
 @media (max-width: 1320px) {
   .hero h1 { font-size: 46px; }
-  .mainnav a { padding: 0 10px; }
+  .mainnav a { padding: 0 9px; font-size: 14px; }
+  .topbar-inner { gap: 14px; }
 }
 /* Tablette */
 @media (max-width: 1100px) {
@@ -121,6 +122,8 @@ dialog p { margin: 0 0 16px; color: #ddd; }
   .wrap { padding: 0 18px; }
   .topbar-inner { gap: 12px; min-height: 68px; }
   .brand-text small { display: none; }
+  .brand-text strong { font-size: 15px; white-space: normal; line-height: 1.15; }
+  .brand { min-width: 0; }
   .btn-ghost { display: none; }
   .topbar-actions .btn-primary { padding: 0 14px; font-size: 14px; }
   .ad { height: 104px; }
