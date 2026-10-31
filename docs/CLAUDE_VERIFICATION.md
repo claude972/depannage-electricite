@@ -76,6 +76,17 @@ Rapport d’implémentation et de vérification de l’agent Claude (branche `cl
 
 Limites : aucune capture nouvelle (disque local plein) ; la course réelle entre onglets du SDK n’est pas observée en navigateur, les tests reproduisent les entrelacements de façon déterministe.
 
+## Checkpoint 4 — gardes d’écriture entreprise, assistance, annuaires (ff49688)
+
+| Sujet | Implémentation | Preuve |
+| --- | --- | --- |
+| Autorité d’écriture entreprise (CL-UI-008 bis) | `enterpriseAuthority(rôle de membership, portée du membre)` fail-closed ; tous les contrôles d’écriture de l’espace entreprise masqués et remplacés par la raison ; `ProfessionalOperations` gated | `tests/ui/invitations.test.ts` ; capture `manager-site-gated-1280.png` (owner) ; QA viewer/portée limitée à rejouer par le pilote |
+| Résultats périmés (SUPPORT-REV-001) | `runForResult` et garde `ctx.alive()` sur les commandes retournant une valeur | `tests/ui/guard.test.ts` |
+| Clé d’idempotence (SUPPORT-REV-002) | clé + contenu conservés par utilisateur jusqu’au succès | relecture ; QA pilote |
+| Assistance utilisateur et opérateur | `support-tickets.tsx`, Super Admin › Messages | captures `client-support-360.png`, `admin-messages-1280.png` |
+| Annuaires et listes admin | pagination serveur, totaux exacts | captures `admin-interventions-1280.png`, `admin-clients-1280.png` |
+| Contrôle complet | `npm run check` EXIT 0 (typecheck, 43 tests UI + tests Codex, `next build`) | journal local `check3.log` |
+
 ### Écarts, limites et suites
 - Aucune preview en ligne de ce frontend : le pilote déploie la branche d’intégration ; vérification mobile réelle, installation PWA, et retours Stripe restent à prouver en ligne.
 - Les contrats 006 (organisations) et 007 (performance/rendez-vous) sont consommés derrière une détection d’indisponibilité ; tant qu’ils ne sont pas intégrés, l’UI affiche un état indisponible honnête.
