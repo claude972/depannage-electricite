@@ -1,3 +1,13 @@
+# Checkpoint ROOT — 31 octobre 18h33 Martinique
+
+
+## ROOT31oct18h33 — intégration harnais et dispatchB1
+B1autoriséetmission1b3b81dpousséeavantcode ;Claudelead69172a effectivementdispatchéworkerTrackingexistant,claimbf23dc3puisbase7bmergeaf48d3c. WIPextractionrun/libcleanup-proof en cours,aucunSHAcodeB1livréàcettelecture. B2attendrevueB1etcontratA3b : f402contre-revue2P2borne codePageWebSocketimpossible+témoinnonvideD2-only. Focus16s/drainacquis, pasmigrations/appmodifiées. ROOTa transmisclarificationsaulead, jamaiscodeglobalGO.
+GatewaybackendTIP5b5288f5352aa4ea6e2d41e69aa5c7ec73e569f8revuentier9fichiers/76tests+tscstrictPASS,sansapp/Edge/migration/package,aucunP1P2borné. PetitP3résuméOBSERVEDinviteàliergénériqueencoreàneutraliser, aucuneclassificationPASSerronéelisteexpiredvide. Mergeintégration9a1a187,ROOT717npmtestsPASS0skip+typecheckstrictPASS ;pushen coursàconfirmerCIensuite. PasnouveauruncloudGateway/expiry,sourcedéployéeEdgeinchangée,ancienbailconsommépasrejoué. Rapports joints,preuvesréelleshistoriquesrestentbornéesSHAs.
+Previewapp28brelueAPIReadyGitSourceexact+Flightstrict :BUILD_IDmYTq7jnyFyd_WanJwnbB3, métadonnées/HTMLprivés /tmp/depannage-28b-provenance-*. Aucunfixturecréé;provenancefreshàrecollecteravantfuturQA. Protos007/006validésdistincts/appunchangée,AUCUNECOHORTEQAconnueactive. Dernierlienownerhttps://www.mesdepanneurs.fr/electricite consultécommereferencedisposition, pasnouvelleautorisationrefonte.
+
+Historiquepréservéci-dessous.
+
 # Checkpoint prioritaire — 31 octobre 18h12 Martinique
 
 
