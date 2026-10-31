@@ -144,6 +144,30 @@ Ce journal ne constitue pas une revue passée ; aucune affectation terminée à 
 - evidence: accès Vercel autorisé cookie-only, SWscript200 mais offlineprefetch credentials omit sans cookie ; worker échoue, registrations vide, controller false, cache vide, aucune notice UI
 - diagnostic: hypothèse initiale header non transmis corrigée ; autre essai automatisation avec set-cookieheader global provoquait boucle307, distinct de la preuve cookie-only
 - expected correction: cookie same-origin uniquement pour asset public statique, URL exacte/nonredirect/markerHTML vérifiés ; signaler installworker redundant + reprise
-- status: fixed_pending_review
+- status: verified
 - fix commit: 6aaa1b36b99e64de4e0544780c8234c508cc1fd5
-- recheck evidence: revue indépendante +14 tests comportementaux réussis ; preview patchée à retester, aucune portée privée du cache élargie
+- recheck evidence: revue indépendante +14 tests comportementaux et 13 contrôles navigateur réussis sur intégration b0fa1df, chemin authentifié cookie-only ; cache uniquement notice publique. Installation OS et multi-déploiement restent hors preuve.
+
+## WEB-PWA-20261030 / vérification intégration b0fa1df
+- timestamp: 2026-10-30T21:59:00-04:00 (America/Martinique)
+- revision: b0fa1df5476550c32f3eaefc8477fdbb150d0913 ; code Codex incluant6aaa1b3 et4ae3bd1
+- preview vérifiée: https://depannage-electricite-hloqx4c89-brafas-projects.vercel.app (protection Vercel conservée, accès autorisé requis)
+- online CI: check et SQLisolé PASS ; Vercel deployment PASS, draft PR1
+- browser: 13/13 checks, zéro pageerror, mobile360/desktop1440, manifeste/icônes, worker actif, cachepublicunique, API503/no-store, pas de rejeu API/auth hors ligne, fallbackgénérique et reprise réseau
+- evidence report: https://github.com/claude972/depannage-electricite/blob/9b5b495/docs/audit/VERIFICATION_PWA_PREVIEW.md
+- limitations: ancienneUI seulement ; nouvelleUIClaude, vrais comptes/Auth/Storage/Stripe, installationOS et update multi-onglet sur deuxdéploiements nonprouvés
+
+## CLI-006 — Revue croisée Claude indépendante
+- timestamp: 2026-10-30T21:59:00-04:00 (America/Martinique)
+- acting agent: codex
+- target session: c38a6bc4-5051-4ba1-acca-3fd4b37445d2, depannage-web-pwa-cross-review
+- mission/branch: WEB-PWA-REVIEW-001, claude/web-pwa-review, SHA cible6aaa1b36b99e64de4e0544780c8234c508cc1fd5
+- action: après publication mission, checkoutlecture dédié ; CLIprint plan/read-only, aide/inventaire déjàvérifiés, aucunmodebypass, codeisolé du leadfrontend
+- observed result: processusbusy dansinventaire ; rapport pas encore reçu. Ce n’est pas un secondworkerfrontend.
+- next: lire rapport exactSHA, publier findings ou preuve bornée, fairecorriger puis recontrôler
+
+## Backend4ae3bd1 — revue indépendante Codex complémentaire
+- reviewed revision:4ae3bd168bec9e2a704c2fcd7d8b8db379689369
+- checks: exportexactSHA,22 groupesSQL et3testsStripeclassifier ; ancienshelpers/RPCfinancières anon-auth refusés, nouvelle signatureseule et mutationdirectetentativesinterdite
+- result: aucun findingbloquantnouveau danspérimètre ; consentementIDexact backendvérifié, integrationUIencore àfaire
+- report: https://github.com/claude972/depannage-electricite/blob/9b5b495/docs/audit/VERIFICATION_PAIEMENTS_DEVIS.md
