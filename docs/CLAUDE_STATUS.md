@@ -858,3 +858,9 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - New root PUBLIC business run in progress: `/tmp/depannage-business-49ff-4c-public-real`, PTY 40214, after all cohorts at 0; fresh receipt 20:54:39.212 UTC (READY metadata, Git 4c, Flight W1). **Integration/build not to be modified during the run.**
 - P3 (non-blocking, fix after the run): the trace reads `window.index` on the opaque token ⇒ `ui_window_from: undefined` in the trace only; the assertion uses the correct returned `window_from`. To be queued to a96ae75 after the run.
 - Root waits for the A8 fix (closed reason set + stop between operations, contract before code) and its review before the public T6 diagnostic; no blind T6 fix.
+
+## 2026-10-31 — tracking A8 §8 ce4252e accepted: GO targeted fix
+
+- Root read §8 `ce4252e`: closed reason set = ROUTE_REASONS + `tracking_changed` + `application_quota`; unknown ⇒ constant `other`; unreadable/absent ⇒ null. Stop re-checked before/after each page operation; only the bounded local JSON write recording `truncated` allowed after stop; no new `evaluate` after stop. GO for the targeted fix (a84ded5); peer SHA review before any cloud.
+- Business run on 7cf61a6: 3 docs PASS already with the 49ff guard; continuing — integration 7cf61a6 and app 4c untouched during the recette.
+- Root reminder: **no merge to production/main, no adoption of the Delivo TEST mockup.**
