@@ -50,22 +50,33 @@ export async function processUploadQueue(
   }
   return current;
 }
-// After an uncertain outcome, the dossier's documents are the truth: a stored file with the
-// same name attached to this dossier since the queue started counts as done.
+// After an uncertain outcome, the application has no byte hash or upload correlation: it can
+// only list the dossier's documents bearing the same file name as CANDIDATES for the user to
+// open and recognise. The status stays "uncertain" until the user acknowledges a candidate
+// (acknowledgeUpload) or explicitly re-sends the file.
 export function reconcileUncertain(queue: UploadQueue, documents: StoredDocument[]): UploadQueue {
-  const since = Date.parse(queue.startedAt) - 60000; // tolerate clock skew
   return {
     ...queue,
     items: queue.items.map((item) => {
       if (item.status !== "uncertain") return item;
-      const match = documents.find(
-        (d) =>
-          d.intervention_id === queue.interventionId &&
-          d.name === item.file.name.slice(0, 160) &&
-          Date.parse(d.created_at) >= since,
-      );
-      return match ? { ...item, status: "done", documentId: match.id, error: undefined } : item;
+      const candidates = documents
+        .filter(
+          (d) => d.intervention_id === queue.interventionId && d.name === item.file.name.slice(0, 160),
+        )
+        .map((d) => ({ id: d.id, name: d.name, created_at: d.created_at }));
+      return { ...item, candidates };
     }),
+  };
+}
+// Explicit user confirmation that a listed candidate IS the uploaded photo.
+export function acknowledgeUpload(queue: UploadQueue, key: string, documentId: string): UploadQueue {
+  return {
+    ...queue,
+    items: queue.items.map((item) =>
+      item.key === key && item.status === "uncertain" && item.candidates?.some((c) => c.id === documentId)
+        ? { ...item, status: "done", documentId, error: undefined }
+        : item,
+    ),
   };
 }
 export function uploadSummary(queue: UploadQueue): string {

@@ -156,6 +156,8 @@ export interface Session {
    * reconciled against the dossier's stored documents and re-sent only when `resendUncertain`.
    */
   retryUploads(interventionId: string, options?: { resendUncertain?: boolean }): Promise<boolean>;
+  /** User confirms that an existing document (listed as candidate) is the uncertain photo. */
+  acknowledgeUpload(interventionId: string, key: string, documentId: string): void;
   /** Drops a dossier's queue (files stay on the device; nothing is deleted on the server). */
   dismissUploads(interventionId: string): void;
   sendMessage(interventionId: string, body: string): Promise<boolean>;

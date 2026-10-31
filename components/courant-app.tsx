@@ -8,6 +8,7 @@ import { api, ApiRequestError, contractStateFromError, uploadDocument } from "./
 import { createGuard, createRunner, type RunContext, type Runner } from "./app/guard";
 import { adoptIdentity } from "./app/identity";
 import {
+  acknowledgeUpload,
   allUploaded,
   processUploadQueue,
   reconcileUncertain,
@@ -2000,6 +2001,12 @@ export default function CourantApp() {
     createIntervention,
     uploads,
     retryUploads,
+    acknowledgeUpload(interventionId, key, documentId) {
+      setUploads((all) =>
+        all.map((q) => (q.interventionId === interventionId ? acknowledgeUpload(q, key, documentId) : q)),
+      );
+      setNotice("Photo confirmée comme enregistrée dans le dossier.");
+    },
     dismissUploads(interventionId) {
       setUploads((all) => removeQueue(all, interventionId));
     },

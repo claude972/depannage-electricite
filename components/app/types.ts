@@ -572,6 +572,8 @@ export type UploadItem = {
   status: "pending" | "uploading" | "done" | "failed" | "uncertain";
   error?: string;
   documentId?: string;
+  /** Same-name documents of the dossier, shown to the USER for verification; never auto-confirmed. */
+  candidates?: { id: string; name: string; created_at: string }[];
 };
 export type UploadQueue = {
   interventionId: string;
