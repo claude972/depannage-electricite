@@ -16,6 +16,9 @@ const ACCESS: Record<string, Access> = {
   finWrite: { super_admin: false, scopes: ["finance_read", "finance_write"], super_admin_count: null },
   moderator: { super_admin: false, scopes: ["reviews_moderate"], super_admin_count: null },
   admin: { super_admin: true, scopes: [], super_admin_count: 2 },
+  supportRead: { super_admin: false, scopes: ["support_read"], super_admin_count: null },
+  supportWriteOnly: { super_admin: false, scopes: ["support_reply", "support_status"], super_admin_count: null },
+  supportFull: { super_admin: false, scopes: ["support_read", "support_reply", "support_status"], super_admin_count: null },
 };
 const audit: Row[] = Array.from({ length: 57 }, (_, i) => ({ id: 57 - i, actor_id: uuid(1), action: i % 2 ? "operator_scope_granted" : "refund_requested", target_kind: i % 2 ? "operator" : "refund_request", target_id: uuid(2), details: {}, created_at: "2026-10-30T10:00:00Z" }));
 const refunds: Row[] = Array.from({ length: 31 }, (_, i) => ({ id: uuid(i + 1, "60000000"), request_id: uuid(i + 1, "61000000"), payment_id: uuid(1, "70000000"), amount_cents: 1000 + i, currency: "eur", reason: "Motif de démonstration suffisant.", status: ["requested", "approved", "settled"][i % 3], version: 1, requested_by: uuid(1), created_at: `2026-10-30T10:00:${String(59 - i).padStart(2, "0")}.000000+00:00`, updated_at: "2026-10-30T10:00:00Z", decided_by: null, decided_at: null, decision_note: "", provider_reference: null, settled_event_id: null, settled_at: null }));
@@ -135,4 +138,12 @@ test("/me reflects server scopes and configuration states without exposing secre
   assert.ok(!JSON.stringify(body).includes("secretvalue"));
   const none = await (await harness("none").route("me").GET(h.request("/me"))).json();
   assert.equal(none.capabilities.finance, false); assert.equal(none.config.commission.setting_bps, null);
+  assert.deepEqual([none.capabilities.support, none.capabilities.support_reply, none.capabilities.support_status], [false, false, false]);
+  // Support scopes (A5): a write scope without support_read grants nothing; read alone never replies or changes status.
+  const support = async (actor: keyof typeof ACCESS) => { const b = await (await harness(actor).route("me").GET(h.request("/me"))).json(); return [b.capabilities.support, b.capabilities.support_reply, b.capabilities.support_status]; };
+  assert.deepEqual(await support("supportRead"), [true, false, false]);
+  assert.deepEqual(await support("supportWriteOnly"), [false, false, false]);
+  assert.deepEqual(await support("supportFull"), [true, true, true]);
+  assert.deepEqual(await support("admin"), [true, true, true]);
+  assert.deepEqual(await support("finWrite"), [false, false, false]);
 });
