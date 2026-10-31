@@ -13,3 +13,20 @@
 - Police : le ZIP ne contient pas de fichier de licence ; Plus Jakarta Sans est publiée sous SIL OFL 1.1 par son auteur
   (Tokotype) — à confirmer par le propriétaire avant toute adoption ; usage limité à ce prototype.
 - Vérif : 360/390/1280 sans débordement, cibles ≥ 44 px, focus visible, texte ≥ 14–16 px.
+
+## DESIGN-DELIVO-TEST-002 — trois écrans de plus (plan court)
+
+- Fichiers ajoutés : `prototypes/delivo-test/demande.html`, `suivi.html`, `devis.html`, `galerie.html` (liens vers les 4
+  écrans), mêmes `styles.css` + quelques règles par écran, `assets/` existants (police du modèle, image électricité), un
+  petit `dialog.js` local partagé (dialogue de test, Échap, retour du focus). Aucune requête externe.
+- **Demande** : en-tête orange arrondi « Demander un dépannage », pastilles de catégorie (choix local), urgence
+  (Urgente / À planifier), description (textarea avec compteur), zone photo factice (« Ajout de photos — désactivé dans la
+  démonstration »), bouton orange « Envoyer la demande » → dialogue local, rien n’est envoyé. Étiquette « Démonstration ».
+- **Suivi artisan** : carte SCHÉMATIQUE en SVG (blocs et tracé stylisés, libellée « Illustration — pas une position
+  réelle »), étapes texte Demande / Artisan affecté / En route / Sur place / Terminé (état d’exemple), carte « Votre
+  artisan » sans nom ni note (« Artisan attribué »), aucune heure d’arrivée, distance ni position.
+- **Devis** : « Devis de démonstration », lignes Déplacement / Main-d’œuvre / Pièces avec « Montant à venir », totaux
+  « — », encadré distinguant **accepter le devis** (accord sur les prestations) et **régler** (paiement après
+  intervention, non disponible ici) ; bouton « Accepter le devis » → dialogue local ; aucun paiement, société ou SIRET.
+- Navigation basse identique (Accueil / Mes demandes / Messages / Profil) ; liens entre écrans dans la galerie et
+  l’en-tête (retour). Vérif 390×844, 360, 1280 : pas de débordement, cibles ≥ 44 px, console propre.
