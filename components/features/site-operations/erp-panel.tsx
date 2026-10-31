@@ -47,7 +47,7 @@ export function ErpPanel({ context }: { context: PanelContext }) {
       </header>
       <div className={styles.statRow} aria-label="Synthèse des contrôles">
         <div><span>Contrôles</span><strong>{report.completeness.erp.checklists}</strong><small>hors archivés</small></div>
-        <div><span>Réserves ouvertes</span><strong>{openReserves}</strong><small>déclarées, non levées</small></div>
+        <div><span>Réserves ouvertes</span><strong>{openReserves}</strong><small>{report.snapshot.limits.erp_checklists_limited ? "parmi les contrôles affichés (liste tronquée)" : "déclarées, non levées"}</small></div>
       </div>
       {!canWrite && <ReadOnly reason={context.readOnlyReason} />}
       {form.message && !editing && <Notice tone={form.message.tone} onClose={() => form.setMessage(null)}>{form.message.text}</Notice>}

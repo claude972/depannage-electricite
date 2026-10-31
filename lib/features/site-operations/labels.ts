@@ -57,6 +57,7 @@ export const NOT_MEASURABLE: Record<NotMeasurableReason, string> = {
   calendar_without_windows: "le calendrier n’a aucune plage ouvrée",
   calendar_unreachable: "le calendrier est trop restreint pour atteindre la cible",
   invalid_timezone: "le fuseau horaire du calendrier est inconnu",
+  pauses_incomplete: "pauses incomplètes : la liste des pauses reçue ne correspond pas au total enregistré",
 };
 export const WEEKDAY: Record<number, string> = { 1: "Lundi", 2: "Mardi", 3: "Mercredi", 4: "Jeudi", 5: "Vendredi", 6: "Samedi", 7: "Dimanche" };
 export const ENTITY: Record<string, string> = {

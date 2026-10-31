@@ -56,7 +56,9 @@ export type MaintenancePlan = Audited & {
   last_done_on: string | null;
   status: PlanStatus;
   notes: string;
+  /** Last 20 visits; `visits_total` is the server count. */
   visits: MaintenanceVisit[];
+  visits_total: number;
 };
 export type FiscalYear = Audited & {
   organization_id: string;
@@ -127,7 +129,9 @@ export type SlaCase = Audited & {
   responded_at: string | null;
   resolved_at: string | null;
   notes: string;
+  /** Every pause of the case (never truncated server-side); `pauses_total` is the server count. */
   pauses: SlaPause[];
+  pauses_total: number;
 };
 export type ChecklistItem = {
   key: string;
@@ -195,7 +199,8 @@ export type NotMeasurableReason =
   | "no_target"
   | "calendar_without_windows"
   | "calendar_unreachable"
-  | "invalid_timezone";
+  | "invalid_timezone"
+  | "pauses_incomplete";
 export type SlaTrack = {
   target_minutes: number | null;
   deadline_at: string | null;
@@ -240,7 +245,7 @@ export type SiteOperationsReport = {
 
 // ---------------------------------------------------------------- commands (POST /api/site-operations)
 export type EquipmentPayload = Omit<Equipment, keyof Audited | "site_id">;
-export type MaintenancePlanPayload = Omit<MaintenancePlan, keyof Audited | "site_id" | "visits">;
+export type MaintenancePlanPayload = Omit<MaintenancePlan, keyof Audited | "site_id" | "visits" | "visits_total">;
 export type FiscalYearPayload = Omit<FiscalYear, keyof Audited | "organization_id">;
 export type ContractGridPayload = {
   label: string;
@@ -251,7 +256,7 @@ export type ContractGridPayload = {
 };
 export type SlaCalendarPayload = Omit<SlaCalendar, keyof Audited | "organization_id">;
 export type SlaPolicyPayload = Omit<SlaPolicy, keyof Audited | "site_id">;
-export type SlaCasePayload = Omit<SlaCase, keyof Audited | "site_id" | "pauses">;
+export type SlaCasePayload = Omit<SlaCase, keyof Audited | "site_id" | "pauses" | "pauses_total">;
 export type ErpChecklistPayload = Omit<ErpChecklist, keyof Audited | "site_id" | "nature">;
 type Versioned = { id?: string; expected_version?: number };
 export type SiteOperationsCommand =

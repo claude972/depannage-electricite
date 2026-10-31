@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { demoReport } from "../../lib/features/site-operations/demo";
 import { fieldErrors, fromCents, fromInstant, toCents, toInstant, toInt } from "../../lib/features/site-operations/forms";
 import { equipmentPayload } from "../../lib/features/site-operations/schemas";
-import { SCOPE_READ_ONLY, SERVER_READ_ONLY, messageOf, outcomeOf, resolveAuthority, scopeKey } from "../../lib/features/site-operations/view-model";
+import { AUTHORITY_UNVERIFIED, INITIAL_LOAD, SCOPE_READ_ONLY, SERVER_READ_ONLY, STALE_CONTEXT, applyLoadResult, messageOf, outcomeOf, resolveAuthority, scopeKey } from "../../lib/features/site-operations/view-model";
 import type { SiteOperationsScope } from "../../lib/features/site-operations/types";
 
 const scope = (canWrite: boolean, reason?: string): SiteOperationsScope => ({ userId: "u1", role: "manager", organizationId: "o1", siteId: "s1", authority: { canWrite, reason } });
@@ -19,7 +19,7 @@ test("authority: the lead's scope is a ceiling, the server can only restrict fur
   assert.deepEqual(resolveAuthority(scope(true), siteOnly), { canWrite: true, canWriteOrganization: false, readOnlyReason: null });
   const revoked = { ...report, snapshot: { ...report.snapshot, limits: { ...report.snapshot.limits, can_write_site: false, can_write_organization: true } } };
   assert.deepEqual(resolveAuthority(scope(true), revoked), { canWrite: false, canWriteOrganization: false, readOnlyReason: SERVER_READ_ONLY }, "server refusal wins even when the lead allowed writes");
-  assert.equal(resolveAuthority(scope(true), null).canWriteOrganization, false, "no report: no organisation write control");
+  assert.deepEqual(resolveAuthority(scope(true), null), { canWrite: false, canWriteOrganization: false, readOnlyReason: AUTHORITY_UNVERIFIED }, "no report: nothing writable");
 });
 test("scope key changes on user, organisation or site; stable otherwise", () => {
   const base = scope(true);
@@ -56,4 +56,35 @@ test("form helpers: euro text, integers, instants and field-level errors", () =>
   assert.ok(errors.name);
   assert.match(errors.installed_on, /AAAA-MM-JJ/);
   assert.deepEqual(fieldErrors(equipmentPayload, { name: "QA", category: "panel", criticality: "high", location: "", reference: "", installed_on: null, status: "in_service", notes: "" }), {});
+});
+test("a refused or failed load invalidates the displayed report and every write control", () => {
+  const report = demoReport();
+  const loaded = applyLoadResult(INITIAL_LOAD, { kind: "ok", report });
+  assert.equal(loaded.report, report);
+  assert.equal(resolveAuthority(scope(true), loaded.report, loaded.stale).canWrite, true);
+  const refused = applyLoadResult(loaded, { kind: "error", message: "Vous n’avez pas accès à cette action." });
+  assert.equal(refused.report, null, "403: previous report discarded");
+  assert.equal(refused.error, "Vous n’avez pas accès à cette action.");
+  assert.equal(refused.stale, false);
+  assert.deepEqual(resolveAuthority(scope(true), refused.report, refused.stale), { canWrite: false, canWriteOrganization: false, readOnlyReason: AUTHORITY_UNVERIFIED }, "canWrite false after refusal");
+  const failed = applyLoadResult(loaded, { kind: "error", message: "Les données sont momentanément indisponibles. Réessayez." });
+  assert.equal(failed.report, null, "503: nothing stale remains");
+  const recovered = applyLoadResult(failed, { kind: "ok", report });
+  assert.equal(recovered.error, "");
+  assert.equal(resolveAuthority(scope(true), recovered.report, recovered.stale).canWrite, true);
+});
+test("a null (stale) load leaves no actionable state: data untouched, writes disabled until a fresh load", () => {
+  const report = demoReport();
+  const loaded = applyLoadResult(INITIAL_LOAD, { kind: "ok", report });
+  const stale = applyLoadResult(loaded, { kind: "stale" });
+  assert.equal(stale.report, report, "no data update on null");
+  assert.equal(stale.stale, true);
+  assert.deepEqual(resolveAuthority(scope(true), stale.report, stale.stale), { canWrite: false, canWriteOrganization: false, readOnlyReason: STALE_CONTEXT });
+  const staleFromNothing = applyLoadResult(INITIAL_LOAD, { kind: "stale" });
+  assert.equal(staleFromNothing.report, null);
+  assert.equal(resolveAuthority(scope(true), staleFromNothing.report, staleFromNothing.stale).canWrite, false);
+  const fresh = applyLoadResult(stale, { kind: "ok", report });
+  assert.equal(fresh.stale, false);
+  assert.equal(resolveAuthority(scope(true), fresh.report, fresh.stale).canWrite, true);
+  assert.notEqual(scopeKey(scope(true)), scopeKey({ ...scope(true), siteId: "s2" }), "a scope change remounts: the previous report is cleared");
 });
