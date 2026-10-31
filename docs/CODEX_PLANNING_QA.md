@@ -98,6 +98,14 @@ node scripts/qa-advanced/run.mjs --cleanup-manifest <run>/manifest.json \
   --project kcpyjzndybfdlnhvscbs --credentials <json0600> --out <nouveau-dossier>
 ```
 
-Si un résultat de mutation est inconnu (transport, réponse5xx, succès malformé) ou une intention ne s'est pas terminée, **aucune suppression n'est lancée** et exit3 conserve les identifiants/intention pour réconciliation du pilote. Ce mode ne prétend pas lever automatiquement une incertitude distante par un délai ; ne pas effacer les marqueurs d'incertitude sans contrôle opérateur. Un arrêt normal avec erreurs/scénarios refusés de manière certaine conserve une reprise idempotente du cleanup.
+Si un résultat de mutation est inconnu (transport, réponse5xx sans preuve SQL structurée de rollback, succès malformé) ou une intention ne s'est pas terminée, **aucune suppression n'est lancée** et exit3 conserve les identifiants/intention pour réconciliation du pilote. L'unique exception actuellement admise est HTTP500 avec objet PostgREST `code:"P0002"` et message chaîne non vide : SQL `NO_DATA_FOUND`, transaction refusée de manière déterminée, sans renommer le statut500 en404. Ce mode ne prétend pas lever automatiquement une incertitude distante par un délai ; ne pas effacer les marqueurs d'incertitude sans contrôle opérateur. Un arrêt normal avec erreurs/scénarios refusés de manière certaine conserve une reprise idempotente du cleanup.
 
 **Statut : prêt pour revue et exécution pilote, pas accepté cloud/navigateur.** Aucun déploiement, publication, email réel ni opération financière effectué par cet agent.
+
+## Correctif QA-ADV-001 — f766ab657c691fffd40e3a2729a40bcb5b9c68da
+
+Le pilote a signalé un arrêt conservateur du harnais initial pendant la sonde d'un artisan tiers : `delete_availability_rule` lève SQL `P0002` lorsque la ligne appartient à autrui. PostgREST peut exposer ce rollback comme HTTP500, tandis que la route Next transforme cette erreur en404. Le harnais classait tous les5xx avant de parser le JSON et conservait donc la cohorte comme transport-incertaine. La recette interrompue reste historique et n'est pas annoncée réussie.
+
+Correction limitée aux fichiers de cette mission : corps JSON parsé avant classification ; seul `500 + objet non-tableau + code P0002 + message chaîne non vide` est reconnu comme rollback déterminé. La preuve conserve `status:500` et `rollback_code:P0002`. Les assertions de refus propriétaire acceptent ce cas exact ainsi que403/404 ; aucun500 arbitraire, tableau, objet incomplet, autreSQLstate ou message texte contenant P0002 ne passe. Les502/503/504, transports interrompus et réponses nonJSON restent incertains. Aucune modification application/SQL et aucun effacement automatique des anciennes marques d'incertitude.
+
+Vérifications après correction : **14/14 tests Node PASS**, trois scripts `node --check` PASS, typecheck cibléESNext/Bundler PASS, `git diff --check` PASS. Les nouveaux tests couvrent le refusP0002 avec conservation du statut500, les formes malformées et les autres5xx. Aucun cloud par cet agent ; le pilote réconcilie séparément la cohorte précédente avant cleanup et nouvelle exécution.
