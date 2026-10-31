@@ -37,6 +37,9 @@ export async function adoptIdentity(
   //    this attempt is superseded and must never reset that newer session.
   const loaded = deps.loadedUserId();
   if (loaded !== null && loaded !== expectedUserId) return "superseded";
+  // A logout happened during verification (generation bumped, nothing loaded): a stale
+  // "still A" reply must not re-adopt A over the anonymous state the user just chose.
+  if (loaded === null && !ctx.alive()) return "superseded";
   // 3. The listener may already have adopted this very identity: do not clear it again,
   //    simply continue the chain as that identity.
   if (loaded !== expectedUserId) {
