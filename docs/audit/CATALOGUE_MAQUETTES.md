@@ -5,7 +5,15 @@ Annexe factuelle de [l’audit consolidé](../AUDIT_COMPLET_SPECIFICATIONS.md). 
 
 Lecture seule, 30 octobre 2026. Aucun code applicatif modifié pendant la collecte. Rapport de travail pour le parent, non déclaration de conformité fonctionnelle du code.
 
-## État courant après réception du volume 5
+## État courant après réception des volumes 6 à 9
+
+Le corpus comprend **9 PDF, 102 pages, 93 occurrences de maquettes et 63 images distinctes**. Les quatre nouveaux volumes ajoutent 27 occurrences : 23 doublons et quatre images nouvelles du volume 8 (À propos, confidentialité, devis client, détail intervention). Il y a donc deux nouvelles surfaces publiques à ajouter à la couverture, tandis que les détails client précisent plusieurs points déjà inventoriés.
+
+Les références sont qualifiées par volume : V6-C01–C06, V7-C01–C08, V8-C01–C08 et V9-C01–C05. Le préfixe C est un identifiant d’audit : les libellés imprimés restent conservés dans les tableaux et le manifeste. Aucun numéro local ne rétablit arbitrairement les numéros globaux 19 à 32. Les volumes 6/7/9 ne fournissent pas de nouveaux écrans artisan ou Super Admin ; V8 répète M65/M14 pour l’artisan.
+
+Catalogues complémentaires : [volumes 6/7](COMPLEMENTS_VOLUMES_6_7.md), [volume 8](COMPLEMENT_VOLUME_8.md), [volume 9](COMPLEMENT_VOLUME_9.md). Le manifeste JSON contient tous les PDF, pages, identifiants, libellés originaux, dimensions, empreintes et groupes d’images identiques.
+
+## État précédent après réception du volume 5
 
 **5 PDF, 71 pages, 66 occurrences de maquettes et 59 images distinctes**. Le catalogue initial ci-dessous couvre M1–M18 et M33–M70. Le volume 5 ajoute V5-C01 à V5-C10, dont sept doublons exacts et trois nouveaux écrans. Les références bureaux ne sont plus manquantes : fiche V5-C01 et dashboard V5-C05. V5-C08 apporte le détail d’approbation d’un devis syndic.
 
@@ -201,3 +209,35 @@ Confiance élevée sur inventaire56numéros, mappingsPDF/page, titres et grandes
 
 
 Les questions détaillées et les correspondances de doublons sont conservées dans le complément associé.
+
+## Index des 27 occurrences reçues dans les volumes 6 à 9
+
+| ID d’audit | Libellé imprimé | PDF | Page | Image déjà cataloguée ou apport nouveau |
+| --- | --- | --- | --- | --- |
+| V6-C01 | Maquette complémentaire 1 | MAQUETTES_UNE_PAR_PAGE_VOLUME_6.pdf | 2 | V5-C01 |
+| V6-C02 | Maquette complémentaire 2 | MAQUETTES_UNE_PAR_PAGE_VOLUME_6.pdf | 3 | M57, V5-C02 |
+| V6-C03 | Maquette complémentaire 3 | MAQUETTES_UNE_PAR_PAGE_VOLUME_6.pdf | 4 | M50, V5-C03 |
+| V6-C04 | Maquette complémentaire 4 | MAQUETTES_UNE_PAR_PAGE_VOLUME_6.pdf | 5 | M56, V5-C04 |
+| V6-C05 | Maquette complémentaire 5 | MAQUETTES_UNE_PAR_PAGE_VOLUME_6.pdf | 6 | V5-C05 |
+| V6-C06 | Maquette complémentaire 6 | MAQUETTES_UNE_PAR_PAGE_VOLUME_6.pdf | 7 | M37, V5-C06 |
+| V7-C01 | Maquette 1 | MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf | 2 | V5-C01 |
+| V7-C02 | Maquette 2 | MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf | 3 | M57, V5-C02 |
+| V7-C03 | Maquette 3 | MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf | 4 | M50, V5-C03 |
+| V7-C04 | Maquette 4 | MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf | 5 | M56, V5-C04 |
+| V7-C05 | Maquette 5 | MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf | 6 | V5-C05 |
+| V7-C06 | Maquette 6 | MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf | 7 | M37, V5-C06 |
+| V7-C07 | Maquette 7 | MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf | 8 | V5-C07, M13 |
+| V7-C08 | Maquette 8 | MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf | 9 | V5-C08 |
+| V8-C01 | Maquette 1 | MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf | 2 | V5-C09, M16 |
+| V8-C02 | Maquette 2 | MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf | 3 | M55, V5-C10 |
+| V8-C03 | Maquette 3 | MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf | 4 | Nouveau : À propos |
+| V8-C04 | Maquette 4 | MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf | 5 | M65 |
+| V8-C05 | Maquette 5 | MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf | 6 | Nouveau : confidentialité |
+| V8-C06 | Maquette 6 | MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf | 7 | Nouveau : devis client |
+| V8-C07 | Maquette 7 | MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf | 8 | Nouveau : détail intervention |
+| V8-C08 | Maquette 8 | MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf | 9 | M14 |
+| V9-C01 | Maquette finale 1 | MAQUETTES_UNE_PAR_PAGE_VOLUME_9_FINAL.pdf | 2 | V5-C01 |
+| V9-C02 | Maquette finale 2 | MAQUETTES_UNE_PAR_PAGE_VOLUME_9_FINAL.pdf | 3 | M57, V5-C02 |
+| V9-C03 | Maquette finale 3 | MAQUETTES_UNE_PAR_PAGE_VOLUME_9_FINAL.pdf | 4 | M50, V5-C03 |
+| V9-C04 | Maquette finale 4 | MAQUETTES_UNE_PAR_PAGE_VOLUME_9_FINAL.pdf | 5 | M56, V5-C04 |
+| V9-C05 | Maquette finale 5 | MAQUETTES_UNE_PAR_PAGE_VOLUME_9_FINAL.pdf | 6 | V5-C05 |

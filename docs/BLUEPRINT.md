@@ -1,6 +1,6 @@
 # Application de dépannage électrique — Blueprint
 
-> Mise à jour documentaire du 30 octobre 2026 : ce blueprint retrace la première réalisation, qui ne couvre pas entièrement les documents. Lire désormais [l’audit complet](AUDIT_COMPLET_SPECIFICATIONS.md), [le registre des règles à préciser](SPECIFICATIONS_A_COMPLETER.md) et [le plan de reprise](PLAN_REPRISE.md) avant toute nouvelle implémentation. Le volume 5 complémentaire porte le corpus à cinq PDF ; l’audit distingue les back-offices artisan, entreprise cliente, Super Admin et le périmètre éventuel d’une entreprise prestataire. L’étape actuelle reste une revue documentaire sans codage ni déploiement.
+> Mise à jour documentaire du 30 octobre 2026 : ce blueprint retrace la première réalisation, qui ne couvre pas entièrement les documents. Lire désormais [l’audit complet](AUDIT_COMPLET_SPECIFICATIONS.md), [le registre des règles à préciser](SPECIFICATIONS_A_COMPLETER.md) et [le plan de reprise](PLAN_REPRISE.md) avant toute nouvelle implémentation. Les volumes complémentaires 5 à 9 portent le corpus à neuf PDF (102 pages, 93 occurrences et 63 images distinctes) ; l’audit distingue les back-offices artisan, entreprise cliente, Super Admin et le périmètre éventuel d’une entreprise prestataire. L’étape actuelle reste une revue documentaire sans codage ni déploiement.
 
 Version 1 — 30 octobre 2026 — réalisation autonome autorisée par le propriétaire.
 

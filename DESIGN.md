@@ -77,3 +77,8 @@ La structure des écrans, la navigation et la hiérarchie métier font partie de
 - Nouveau volume 5 : V5-C01 fiche bureaux, V5-C05 dashboard Bureaux360, V5-C08 détail d’approbation syndic. Les autres images complémentaires dupliquent des références déjà présentes.
 
 Les chiffres, certifications, dates, identités et promesses des images restent des exemples. Le périmètre électrique de la spécification finale prévaut sur les lignes multi-métiers/facility management des maquettes. Les adaptations d’accessibilité et de responsive doivent être documentées ; aucun style IA générique n’est autorisé.
+
+
+### Références complémentaires des volumes 6 à 9
+
+Le volume 8 ajoute V8-C03 À propos, V8-C05 confidentialité, V8-C06 devis client et V8-C07 détail intervention. Les volumes 6/7/9 reprennent des vues déjà cataloguées ; ne pas les compter comme de nouvelles interfaces à créer plusieurs fois. La structure des pages est une référence, pas une autorisation de publier des équipes fictives, une histoire inventée, un texte YourCompany non adapté ou les promesses d’annulation/satisfaction d’exemple. Le périmètre électrique et la chronologie métier cohérente prévalent sur les exemples peinture/plomberie et l’ordre discutable d’une timeline.

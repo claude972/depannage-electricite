@@ -3,13 +3,13 @@
 ## Primary goal
 Livrer une application fidèle aux maquettes fournies, avec des espaces client, artisan, entreprise cliente et super-administration réellement distincts, des données enregistrées dans la base dédiée et un cycle demande → devis → intervention → paiement Stripe vérifié en ligne.
 
-Statut : plan seulement, enrichi par l’audit complet et le volume 5 complémentaire. La demande actuelle n'autorise ni reprise du codage, ni migration, ni déploiement. Le code applicatif n'est pas modifié pendant cette préparation.
+Statut : plan seulement, enrichi par l’audit complet et les volumes complémentaires 5 à 9. La demande actuelle n'autorise ni reprise du codage, ni migration, ni déploiement. Le code applicatif n'est pas modifié pendant cette préparation.
 
 ## Audit préalable et nouveau document
 
-Lire d’abord [l’audit complet](AUDIT_COMPLET_SPECIFICATIONS.md), [le catalogue](audit/CATALOGUE_MAQUETTES.md) et [les spécifications à compléter](SPECIFICATIONS_A_COMPLETER.md). Les cinq PDF comportent 71 pages, 66 occurrences de maquettes et 59 images distinctes. Les références bureaux existent désormais : V5-C01 et V5-C05. V5-C08 précise le dossier d’approbation syndic. Sept autres images du volume 5 reprennent des écrans déjà fournis. Les numéros 19 à 32 ne sont toujours pas établis.
+Lire d’abord [l’audit complet](AUDIT_COMPLET_SPECIFICATIONS.md), [le catalogue](audit/CATALOGUE_MAQUETTES.md) et [les spécifications à compléter](SPECIFICATIONS_A_COMPLETER.md). Les neuf PDF comportent 102 pages, 93 occurrences de maquettes et 63 images distinctes. Les références bureaux existent désormais : V5-C01 et V5-C05. V5-C08 précise le dossier d’approbation syndic. Sept autres images du volume 5 reprennent des écrans déjà fournis. Les volumes 6/7/9 ne fournissent aucune image nouvelle ; V8 ajoute À propos, confidentialité, devis client et détail d’intervention (V8-C03/C05/C06/C07). Les numéros 19 à 32 ne sont toujours pas établis.
 
-La phase 0 a désormais une collecte complète sur les documents disponibles. Il reste à décider les références maîtresses et les règles métier avant implémentation ; les 74 lignes de couverture ne sont pas 74 fonctions terminées.
+La phase 0 a désormais une collecte complète sur les documents disponibles. Il reste à décider les références maîtresses et les règles métier avant implémentation ; les 76 lignes de couverture ne signifient pas que les fonctions sont terminées.
 
 ## État de départ et méthode
 
@@ -27,7 +27,7 @@ La phase 0 a désormais une collecte complète sur les documents disponibles. Il
 
 Travail : établir une matrice écran / rôle / PDF et page / maquette / route actuelle / API / données réelles ou démo / écarts / critères de fin. Comparer les captures de l'interface existante aux pages sources. Recenser les écrans absents ; ne pas attribuer de contenu aux maquettes 19 à 32, non fournies.
 
-Références : les cinq PDF d'AGENTS.md ; DESIGN.md ; docs/QA.md ; components/courant-app.tsx ; app/api ; supabase/migrations.
+Références : les neuf PDF d'AGENTS.md ; DESIGN.md ; docs/QA.md ; components/courant-app.tsx ; app/api ; supabase/migrations.
 
 Découverte déjà effectuée pour ce plan :
 
@@ -53,7 +53,7 @@ Garde-fous : ne pas confondre backend technique (API, base, traitements) et inte
 
 **How this serves the primary goal:** les utilisateurs retrouvent les écrans et la navigation représentés dans les documents.
 
-Travail : définir les structures propres aux espaces public, client, artisan, professionnel et administration. Reprendre disposition, hiérarchie, navigation, actions et informations des maquettes ; justifier les seules adaptations nécessaires à l'accessibilité ou à la taille d'écran. Donner à l'artisan une navigation mobile dédiée, puis sa version desktop. Extraire progressivement les vues de components/courant-app.tsx en composants par rôle, en conservant les composants partagés utiles et les règles métier.
+Travail : définir les structures propres aux espaces public, client, artisan, professionnel et administration. Ajouter À propos et confidentialité selon V8-C03/C05, avec contenus réels et sans copier le gabarit anglais générique ou ses traceurs d’exemple. Reprendre disposition, hiérarchie, navigation, actions et informations des maquettes ; justifier les seules adaptations nécessaires à l'accessibilité ou à la taille d'écran. Donner à l'artisan une navigation mobile dédiée, puis sa version desktop. Extraire progressivement les vues de components/courant-app.tsx en composants par rôle, en conservant les composants partagés utiles et les règles métier.
 
 Références : DESIGN.md ; maquettes artisan ci-dessus ; fonctions Overview, Requests, Detail, ProfileView et QuoteEditor du composant existant ; skill frontend-design.
 
@@ -89,7 +89,7 @@ Garde-fous : pas de sélecteur de rôle pour accéder à un vrai compte ; le sé
 
 **How this serves the primary goal:** le particulier suit une demande réelle jusqu'à l'intervention et garde la maîtrise de son devis.
 
-Travail : reprendre les écrans client selon la matrice ; connecter demande, photos, estimation, attribution, suivi, devis, acceptation, historique, messages, documents et avis. Conserver les brouillons et afficher les chargements, erreurs et états vides. Séparer estimation indicative, devis accepté et règlement.
+Travail : reprendre les écrans client selon la matrice, notamment V8-C06/C07 ; connecter demande/photos/galerie, estimation, attribution, contact artisan, rendez-vous et replanification, suivi horodaté, devis PDF et version exacte, acceptation/refus, historique, messages, documents et avis. Définir les effets du refus et les conditions d’annulation avant d’ajouter les commandes. Conserver les brouillons et afficher les chargements, erreurs et états vides. Séparer estimation indicative, devis accepté et règlement.
 
 Références : PDF grand format et écrans client inventoriés en phase 0 ; RequestForm, Detail, MessageCenter, DocumentManager et ReviewForm ; routes interventions/messages/documents/reviews ; calculateQuote et canTransition.
 

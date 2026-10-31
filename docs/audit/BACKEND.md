@@ -185,3 +185,10 @@ resolve_warranty(p_case_id uuid,p_status text,p_resolution text)
 ## Confiance et limites
 
 Confiance élevée sur l'inventaire et les écarts de schéma/API lus. Les absences ci-dessus sont des absences dans ce dépôt, pas la preuve qu'un prestataire externe ne pourrait pas les fournir. Les états historiques Supabase/Stripe sont documentés ; l’absence actuelle de variables et de base dédiée a été revérifiée en lecture seule par l’agent principal, pas par ce sous-agent. Les risques d'offboarding et de payeur entreprise sont des écarts métier à cadrer, pas des incidents distants démontrés. Le catalogue visuel du collègue doit confirmer les références des maquettes et les détails UI ; cette mission ne conclut pas à une fidélité graphique. Les ajouts opérationnels non spécifiés dans le PDF doivent rester étiquetés propositions/questions plutôt qu'exigences déjà présentes.
+
+
+## Références ajoutées par les volumes 6 à 9
+
+Le code inspecté n’a pas changé. Les volumes 6/7/9 sont des reprises exactes d’images déjà reçues ; quatre nouvelles images V8 complètent les sources : À propos, confidentialité, détail devis et détail intervention. Les nouvelles lignes PUB-09/PUB-10 et les références V8-C06/C07 sont intégrées dans la matrice principale, désormais à 76 points.
+
+Ces images confirment notamment les manques de pages publiques propres au produit, de refus de devis côté client, de PDF/version commerciale, de contact participant autorisé, de galerie, d’historique métier et de modification de rendez-vous. La politique YourCompany, les histoires/équipes, les promesses de satisfaction/annulation et les exemples peinture/plomberie ne constituent pas des décisions validées. Voir le complément du volume 8 pour les détails. Aucune nouvelle vérification live ni modification applicative n’est déduite de cet apport documentaire.

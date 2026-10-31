@@ -12,7 +12,7 @@ La lecture complète fait aussi apparaître des besoins opérationnels peu visib
 
 ## Documents de l’audit
 
-- [Catalogue des 66 occurrences de maquettes et de leurs fonctions](audit/CATALOGUE_MAQUETTES.md) : PDF, page, rôle, écran, variantes et limites de lecture.
+- [Catalogue des 93 occurrences de maquettes et de leurs fonctions](audit/CATALOGUE_MAQUETTES.md) : PDF, page, rôle, écran, variantes et limites de lecture.
 - [Inventaire complet des interfaces et back-offices](audit/FRONTEND_BACKOFFICES.md) : menus, actions, code, écarts visuels et risques statiques.
 - [Inventaire complet du backend](audit/BACKEND.md) : 59 capacités examinées, fonctions SQL, routes, limites et preuves disponibles.
 - [Spécifications à compléter](SPECIFICATIONS_A_COMPLETER.md) : 38 domaines de décisions et 16 contradictions/variantes à résoudre.
@@ -20,9 +20,9 @@ La lecture complète fait aussi apparaître des besoins opérationnels peu visib
 
 ## Étendue et sources
 
-Lecture de **cinq PDF, soit 71 pages**. Les quatre premiers contiennent **56 maquettes numérotées 1 à 18 et 33 à 70**. Le nouveau volume 5 contient **10 maquettes complémentaires**, identifiées ici **V5-C01 à V5-C10**. Au total : **66 occurrences, correspondant à 59 images distinctes** ; sept images du volume 5 sont des doublons exacts, vérifiés par SHA-256 des images intégrées.
+Lecture de **neuf PDF, soit 102 pages**. Les quatre premiers contiennent **56 maquettes numérotées 1 à 18 et 33 à 70**. Le nouveau volume 5 contient **10 maquettes complémentaires**, identifiées ici **V5-C01 à V5-C10**. Après le volume 5 : 66 occurrences et 59 images distinctes. Avec les volumes 6 à 9 : **93 occurrences, correspondant à 63 images distinctes**. Les identités et doublons sont vérifiés par SHA-256 des images intégrées. Parmi les 27 occurrences des quatre derniers volumes, 23 reprennent des images déjà reçues et quatre sont nouvelles, toutes dans le volume 8.
 
-Le volume 5 apporte trois écrans nouveaux : **V5-C01, fiche détaillée bureaux ; V5-C05, dashboard Bureaux360 ; V5-C08, approbation détaillée d’un devis syndic**. Le constat initial « références bureaux manquantes » est donc résolu. Leur implémentation reste absente. Les identifiants 19 à 32 restent non fournis : la nouvelle numérotation complémentaire ne permet pas de les leur attribuer. Ce trou de numérotation ne prouve pas à lui seul l’absence de quatorze fonctions distinctes.
+Le volume 5 avait apporté trois écrans nouveaux : **V5-C01, fiche détaillée bureaux ; V5-C05, dashboard Bureaux360 ; V5-C08, approbation détaillée d’un devis syndic**. Le constat initial « références bureaux manquantes » est donc résolu. Leur implémentation reste absente. Les identifiants 19 à 32 restent non fournis : la nouvelle numérotation complémentaire ne permet pas de les leur attribuer. Ce trou de numérotation ne prouve pas à lui seul l’absence de quatorze fonctions distinctes.
 
 | Code source | Document | Localisation |
 | --- | --- | --- |
@@ -31,6 +31,10 @@ Le volume 5 apporte trois écrans nouveaux : **V5-C01, fiche détaillée bureaux
 | V3 | MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf | 17 pages ; M33–M48 aux pages 2–17 |
 | V4 | MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf | 23 pages ; M49–M70 aux pages 2–23 |
 | V5 | MAQUETTES_UNE_PAR_PAGE_VOLUME_5_MANQUANTES.pdf | 11 pages ; complémentaire 1–10 aux pages 2–11 ; identifiants V5-C01–C10 |
+| V6 | MAQUETTES_UNE_PAR_PAGE_VOLUME_6.pdf | 7 pages ; 6 images complémentaires, toutes déjà reçues |
+| V7 | MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf | 9 pages ; 8 images locales, toutes déjà reçues |
+| V8 | MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf | 9 pages ; 8 images, dont quatre nouvelles en pages 4/6/7/8 |
+| V9 | MAQUETTES_UNE_PAR_PAGE_VOLUME_9_FINAL.pdf | 6 pages ; 5 images finales, toutes déjà reçues ; aucune primauté fonctionnelle explicite |
 | U | Instructions du propriétaire | Stripe, base dédiée, refus du style IA générique, conformité aux références, back-offices, audit avant nouvelle reprise du code |
 
 Tous les fichiers API, Auth, domaine, migrations, RLS et tests ont été lus, ainsi que le composant principal de **5 274 lignes**, le CSS, les points d’entrée et les documents de suivi. Le dépôt contient **15 fichiers API**, une route de confirmation Auth, une page de récupération de mot de passe, **20 tables SQL** et **27 fonctions SQL personnalisées**. Ces nombres décrivent des fichiers et modèles présents, pas un taux d’achèvement fonctionnel.
@@ -83,6 +87,8 @@ L’expression « super back-office entreprise » doit donc être reliée au bon
 | PUB-06 | Garantie : page et conditions | Partiel | F §4/6 ; M45 | FE-P04 ; BE-29 | FAQ et dossier de suivi ne remplacent pas couverture, exclusions, attestation et processus complet. | P1 |
 | PUB-07 | Recrutement et confirmation artisan | Absent comme parcours métier | M60/64/65 | FE-P02 ; AuthForm | Entrée renvoie au même signup ; pas page complète, dossier à étapes et écran de confirmation candidature. | P1 |
 | PUB-08 | Mentions et informations commerciales | Absent comme contenu réel | M63 ; F §6 | Help | Identité de l’exploitant, contacts et documents commerciaux réels à renseigner ; textes d’exemple non réutilisables tels quels. | P0 |
+| PUB-09 | À propos : mission, exploitant et équipe | Absent comme page dédiée | V8-C03 | renderPublic / Help ; complément V8-G01 | Prévoir la page et ses contenus réels ; ne pas inventer une histoire, une équipe, des avis, chiffres ou engagements pour reproduire les exemples. Aucun CMS n’est imposé par cette maquette. | P1 |
+| PUB-10 | Confidentialité et choix des utilisateurs | Absent comme page/parcours défini | V8-C05 | renderPublic / Help ; BE-49 ; complément V8-G02 | Politique propre au produit, date/contact, préférences et traitement des demandes à définir ; le gabarit anglais YourCompany n’est pas un texte publiable validé ni une autorisation d’ajouter des traceurs. | P0 |
 
 ### Client particulier
 
@@ -91,11 +97,11 @@ L’expression « super back-office entreprise » doit donc être reliée au bon
 | CLI-01 | Demande structurée | Partiel | F §2/7 ; M5/15/55 | RequestForm ; BE-04 | Catégorie/description/adresse/urgence présents ; disponibilité, contact sur place et niveau d’impact non structurés. | P1 |
 | CLI-02 | Photos dans la demande | Absent dans ce parcours | M5/15 | FE-C ; BE-15 | Dépôt générique possible après coup dans Documents ; aucun ajout de photos au formulaire de demande. | P1 |
 | CLI-03 | Matching et absence d’artisan | Partiel | F §4 ; M9/7 | BE-06 ; available_missions | Liste des 100 offres récentes, sans classement compétences/zone/disponibilité ni solution de repli définie. | P1 |
-| CLI-04 | Rendez-vous et changements | Absent | M1/3/9/40/48 | BE-09/13 | Pas créneau confirmé, replanification, no-show ou calendrier ; scheduled ne représente pas un rendez-vous. | P1 |
-| CLI-05 | Suivi, déplacement, carte et ETA | Partiel | F §2/7 ; M7 | BE-13/18 ; Detail | États élémentaires présents ; pas en route/sur place, carte, itinéraire, position ou heure d’arrivée estimée. | P1 |
-| CLI-06 | Identité et contact artisan | Absent comme projection autorisée | M7/62 ; F §2 | BE-10 ; profiles_read ; workspace | Pas de nom/téléphone de la contrepartie fourni après attribution ; prévoir une projection minimale, pas ouvrir tous les profils. | P1 |
-| CLI-07 | Devis complet et accord | Partiel | M34 ; F §2 | BE-11/12 ; FE-C09 | Lignes et acceptation présentes ; refus, version précise, validité, preuve/signature et avenant à définir et développer. | P1 |
-| CLI-08 | Historique et documents exacts | Partiel | F §6 ; M18 | FE-C10/12 ; BE-48 | Données bornées sans pagination ; ancien devis ouvre le devis actif du dossier ; récapitulatif TXT, pas document commercial complet. | P1 |
+| CLI-04 | Rendez-vous et changements | Absent | M1/3/9/40/48 ; V8-C07 | BE-09/13 | Pas créneau confirmé, replanification, no-show ou calendrier ; scheduled ne représente pas un rendez-vous. | P1 |
+| CLI-05 | Suivi, déplacement, carte et ETA | Partiel | F §2/7 ; M7 ; V8-C07 | BE-13/18 ; Detail | États élémentaires présents ; pas en route/sur place, carte, itinéraire, position ou heure d’arrivée estimée. | P1 |
+| CLI-06 | Identité et contact artisan | Absent comme projection autorisée | M7/62 ; V8-C06/C07 ; F §2 | BE-10 ; profiles_read ; workspace | Pas de nom/téléphone de la contrepartie fourni après attribution ; prévoir une projection minimale, pas ouvrir tous les profils. | P1 |
+| CLI-07 | Devis complet et accord | Partiel | M34 ; V8-C06 ; F §2 | BE-11/12 ; FE-C09 | Lignes et acceptation présentes ; Refuser est explicitement montré dans V8-C06 mais absent du contrat de commande. Version précise, unités, validité, preuve/signature et avenant restent à développer/définir. | P1 |
+| CLI-08 | Historique et documents exacts | Partiel | F §6 ; M18 ; V8-C06/C07 | FE-C10/12 ; BE-48 | Données bornées sans pagination ; ancien devis ouvre le devis actif du dossier ; récapitulatif TXT, pas document commercial complet. | P1 |
 | CLI-09 | Profil, adresses et préférences | Partiel | M18 | ProfileForm ; FE-C15 | Nom/téléphone seulement ; adresses multiples, moyens enregistrés et préférences absents ; modalités à cadrer. | P2 |
 | CLI-10 | Avis et gestion des retours | Partiel | F §2 ; M47/43 | ReviewForm ; BE-28 | Avis simple présent ; modération, contestation, réponse et calcul de la réputation artisan absents. | P2 |
 
@@ -213,6 +219,18 @@ La pièce jointe a été copiée sans altération dans le dossier du projet. Le 
 Utiliser le [registre des décisions](SPECIFICATIONS_A_COMPLETER.md). Il couvre notamment les quatre sens de l’entreprise, les plateformes, les rôles, les candidatures, le matching, les rendez-vous, les données privées, les prix/commissions, les factures et paiements, la garantie, les SLA, les verticales, les intégrations et les limites IA. Les 16 contradictions ne doivent pas être résolues en copiant au hasard un écran.
 
 Le périmètre demeure le dépannage électrique. Les exemples plomberie, multi-métiers, comptabilité immobilière globale ou conformité incendie/hygiène ne justifient pas un élargissement automatique. Les besoins assureurs/occupants/entreprise prestataire évoqués dans les blueprints restent explicitement à cadrer.
+
+## Apport des volumes 6 à 9
+
+- **V6 :** 7 pages, 6 occurrences, aucune image nouvelle. **V7 :** 9 pages, 8 occurrences, aucune image nouvelle. **V9 :** 6 pages, 5 occurrences, aucune image nouvelle.
+- **V8 :** 9 pages, 8 occurrences ; V8-C03 À propos, V8-C05 confidentialité, V8-C06 devis client et V8-C07 détail intervention sont quatre nouvelles images. Les quatre autres sont des doublons.
+- Deux nouvelles lignes de couverture publique sont ajoutées : PUB-09 et PUB-10. Les nouveaux détails client renforcent les lignes CLI existantes plutôt que compter artificiellement une nouvelle fonction pour chaque image répétée. La matrice passe donc de **74 à 76 points**.
+- Le refus de devis, le PDF commercial, la fiche artisan, le contact, les photos, l’adresse détaillée, l’historique et la modification de rendez-vous disposent maintenant de références supplémentaires explicites ; leur implémentation reste incomplète ou absente.
+- Les histoires d’entreprise, équipes, notes, certifications, promesses de support et coordonnées des images restent illustratives. La politique YourCompany est un exemple générique anglais à remplacer selon le produit réel, pas une politique validée ni une demande d’ajouter des cookies marketing.
+- Satisfaction 30 jours et garantie de travaux un an ne sont pas automatiquement la même garantie ; l’annulation gratuite 48 h est un exemple à arbitrer. La timeline À planifier après En cours ne doit pas devenir un graphe d’état incohérent. Les exemples peinture/plomberie n’élargissent pas le périmètre électrique.
+- Les mots complémentaires/final et les numéros locaux 1–8 ou 1–5 ne remplacent ni la spécification fonctionnelle ni les numéros initiaux 19–32.
+
+Références et preuves : [volumes 6/7](audit/COMPLEMENTS_VOLUMES_6_7.md), [volume 8](audit/COMPLEMENT_VOLUME_8.md), [volume 9](audit/COMPLEMENT_VOLUME_9.md), et le manifeste des sources dans audit/INVENTAIRE_SOURCES.json.
 
 ## Ce qui peut être conservé
 

@@ -1,6 +1,7 @@
 {
   "date": "2026-10-30",
   "code_commit": "46aac2a",
+  "previous_documentation_commit": "6994caf",
   "documents": [
     {
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf",
@@ -18,6 +19,26 @@
       "sha256": "32923641233f0207816a7f0c4c3da7f135973b0538aafb94f2f47efdc0a98d9e"
     },
     {
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_6.pdf",
+      "pages": 7,
+      "sha256": "a2ab8d3e2e1685577b3526793046a4aae679baa65f35137182a6d0a2069bb1d6"
+    },
+    {
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf",
+      "pages": 9,
+      "sha256": "a60e8d5e00c9f563237d6cea14e7398af83ec5e016cf70779674b22071fe6897"
+    },
+    {
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf",
+      "pages": 9,
+      "sha256": "8008854103929da7b1742cb31cc66ac41f6dce8ec5d9a4ed5cb47099fbc059c2"
+    },
+    {
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_9_FINAL.pdf",
+      "pages": 6,
+      "sha256": "a6ead871d34b1b02594c1062eb36179e23eec238db0f381f7f1d80518ece4b83"
+    },
+    {
       "file": "SPECIFICATION_COMPLETE_FINALE_PROJET.pdf",
       "pages": 1,
       "sha256": "c87580d4a03130368d562d9a2f7b7df31672ded40bbc5195028bd13e351f7c2d"
@@ -31,6 +52,7 @@
   "maquettes": [
     {
       "id": "M33",
+      "printed_label": "Maquette 33",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf",
       "page": 2,
       "image_sha256": "655e0a785ca8370a09a0e854b7caafab8ea1978b85f831f80981dbde05bcebfc",
@@ -39,6 +61,7 @@
     },
     {
       "id": "M34",
+      "printed_label": "Maquette 34",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf",
       "page": 3,
       "image_sha256": "16e9257f14ff0170ce021de8eb814f55e4a7b7ac9ad18c0d68692001fcb8fc9d",
@@ -47,6 +70,7 @@
     },
     {
       "id": "M35",
+      "printed_label": "Maquette 35",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf",
       "page": 4,
       "image_sha256": "7672bb7ee4b5986c3b477a2f726328dd8e885d176ffa21ca54229d3c471d4444",
@@ -55,6 +79,7 @@
     },
     {
       "id": "M36",
+      "printed_label": "Maquette 36",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf",
       "page": 5,
       "image_sha256": "73641e2c0524645a0891bc15b83132a2f8c60089fcd2d3913c81a8a1b9eeb0c9",
@@ -63,6 +88,7 @@
     },
     {
       "id": "M37",
+      "printed_label": "Maquette 37",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf",
       "page": 6,
       "image_sha256": "4e2a4848fc65a8d351daf36e429f2316e1c4f00d07ed2d6feeeeadeb01055ec1",
@@ -71,6 +97,7 @@
     },
     {
       "id": "M38",
+      "printed_label": "Maquette 38",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf",
       "page": 7,
       "image_sha256": "274e1b4b281b86cbd66934a4c5d6e3d1ccad82af6e5cca224c80462055d4766a",
@@ -79,6 +106,7 @@
     },
     {
       "id": "M39",
+      "printed_label": "Maquette 39",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf",
       "page": 8,
       "image_sha256": "9e9103551f5a42508a3560a903d9b4be7da97cf9a94f34fe9ffc084849f1773b",
@@ -87,6 +115,7 @@
     },
     {
       "id": "M40",
+      "printed_label": "Maquette 40",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf",
       "page": 9,
       "image_sha256": "c754f800693f8c3c64d9e029e8d7e3c17a37866159461bf5106979cc5b39d367",
@@ -95,6 +124,7 @@
     },
     {
       "id": "M41",
+      "printed_label": "Maquette 41",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf",
       "page": 10,
       "image_sha256": "3aa31ac93b886aecd9055985e5732e1fe316a2a7cfe43b080af9d129498ade31",
@@ -103,6 +133,7 @@
     },
     {
       "id": "M42",
+      "printed_label": "Maquette 42",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf",
       "page": 11,
       "image_sha256": "87aacd9ad5a57712a9c1d6ee8dbf4d8644b43198cc4161e602102230192fb4ae",
@@ -111,6 +142,7 @@
     },
     {
       "id": "M43",
+      "printed_label": "Maquette 43",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf",
       "page": 12,
       "image_sha256": "c2dc90a3d5e5fb91382977f9e2283a875728fe3f9d4d5ff4e592a717c2b94cb5",
@@ -119,6 +151,7 @@
     },
     {
       "id": "M44",
+      "printed_label": "Maquette 44",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf",
       "page": 13,
       "image_sha256": "9a7ab80fb0173c759b83d7f298bdebd5f549b52b7dd96236a1f3f5a1c9e2c7b7",
@@ -127,6 +160,7 @@
     },
     {
       "id": "M45",
+      "printed_label": "Maquette 45",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf",
       "page": 14,
       "image_sha256": "538973052fcf69054126c28fda54323bd18caacddcd3d89d7c053da8410b0666",
@@ -135,6 +169,7 @@
     },
     {
       "id": "M46",
+      "printed_label": "Maquette 46",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf",
       "page": 15,
       "image_sha256": "1df3bf0346174ab794acb799d051bb7deb7273d64df29bbc26ddaa11fb4fa477",
@@ -143,6 +178,7 @@
     },
     {
       "id": "M47",
+      "printed_label": "Maquette 47",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf",
       "page": 16,
       "image_sha256": "28c320c6bd174c70f80aea27b93b5aad02957b40f2fa19b24458c075c4edbbd5",
@@ -151,6 +187,7 @@
     },
     {
       "id": "M48",
+      "printed_label": "Maquette 48",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf",
       "page": 17,
       "image_sha256": "b347bff90e4767614254f72ba9fab6254cdfae2960e560e53b152c6dbebedf7e",
@@ -159,6 +196,7 @@
     },
     {
       "id": "M49",
+      "printed_label": "Maquette 49",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf",
       "page": 2,
       "image_sha256": "31c21cb0ad2087dcae46d7f4387769ddf30937dc53f37d6940c7aea210f76c5c",
@@ -167,6 +205,7 @@
     },
     {
       "id": "M50",
+      "printed_label": "Maquette 50",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf",
       "page": 3,
       "image_sha256": "4d6d6f7d8a5d78c7ea5d8a21d350cb5502d1e831f930bf6f56e3355a44beba15",
@@ -175,6 +214,7 @@
     },
     {
       "id": "M51",
+      "printed_label": "Maquette 51",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf",
       "page": 4,
       "image_sha256": "8a54bd8ee3cf6f2f3d322c9ec9598339c9d4d6cbb2fa8d9b4b3d97ea010f63e7",
@@ -183,6 +223,7 @@
     },
     {
       "id": "M52",
+      "printed_label": "Maquette 52",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf",
       "page": 5,
       "image_sha256": "5b943673f3140b28e311f607a5ffdd19b557ad197b980a9cea395ca0cfa8d80c",
@@ -191,6 +232,7 @@
     },
     {
       "id": "M53",
+      "printed_label": "Maquette 53",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf",
       "page": 6,
       "image_sha256": "762e1124e085617a6cf7936597dcd0d4fa86c0e6ba8a0cf80d0817a2bc72a2d0",
@@ -199,6 +241,7 @@
     },
     {
       "id": "M54",
+      "printed_label": "Maquette 54",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf",
       "page": 7,
       "image_sha256": "a8fe7632f7758d602d1b1ba95df53fe767d1efd0b82ef6777f419d6266a7812f",
@@ -207,6 +250,7 @@
     },
     {
       "id": "M55",
+      "printed_label": "Maquette 55",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf",
       "page": 8,
       "image_sha256": "2493e0fdfb6bef11b0ed1fb9f557831949b1c8dbd603edbabb5a4043075885de",
@@ -215,6 +259,7 @@
     },
     {
       "id": "M56",
+      "printed_label": "Maquette 56",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf",
       "page": 9,
       "image_sha256": "285d55ed909249edc6c88aa88a770299a1402aa2049c3007277bdec916ced0aa",
@@ -223,6 +268,7 @@
     },
     {
       "id": "M57",
+      "printed_label": "Maquette 57",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf",
       "page": 10,
       "image_sha256": "911af6b66be329f31277d8a9ee78ab5785f585095b65d85da960d9c18861ab6a",
@@ -231,6 +277,7 @@
     },
     {
       "id": "M58",
+      "printed_label": "Maquette 58",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf",
       "page": 11,
       "image_sha256": "60acf3fdff8c97260e03c5ce37a3952ac8b3fa3cebaae025bea627000aa06d14",
@@ -239,6 +286,7 @@
     },
     {
       "id": "M59",
+      "printed_label": "Maquette 59",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf",
       "page": 12,
       "image_sha256": "cc48669d79b983eec7900d64f6a97f930ff2d9f38743ac4615a72df4d45acf4e",
@@ -247,6 +295,7 @@
     },
     {
       "id": "M60",
+      "printed_label": "Maquette 60",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf",
       "page": 13,
       "image_sha256": "48ec7bf682838e2a7c63004aa2f9a18e736006cce50930d766378f8aa6bf4015",
@@ -255,6 +304,7 @@
     },
     {
       "id": "M61",
+      "printed_label": "Maquette 61",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf",
       "page": 14,
       "image_sha256": "4d86dec5afeba3f588c128d1d83c4455f2867a6edbfaf40bbf917ed972dd6bc4",
@@ -263,6 +313,7 @@
     },
     {
       "id": "M62",
+      "printed_label": "Maquette 62",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf",
       "page": 15,
       "image_sha256": "5212f387607b579a126b046b50f4c1cbb5db741e438a3311103e419a32355069",
@@ -271,6 +322,7 @@
     },
     {
       "id": "M63",
+      "printed_label": "Maquette 63",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf",
       "page": 16,
       "image_sha256": "1ae4d66bb33fb7d77d1b7f32f40533e83153757b757561ab55ca57ed54783b67",
@@ -279,6 +331,7 @@
     },
     {
       "id": "M64",
+      "printed_label": "Maquette 64",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf",
       "page": 17,
       "image_sha256": "4286a4d6fddd9b9877308bb2bdcfcc43ffe61120f46420c77d273963842889f8",
@@ -287,6 +340,7 @@
     },
     {
       "id": "M65",
+      "printed_label": "Maquette 65",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf",
       "page": 18,
       "image_sha256": "981e6367be5ceb5b08f3eaee8c241559b421a5f7b19e1ad0775ad8914cf0a79e",
@@ -295,6 +349,7 @@
     },
     {
       "id": "M66",
+      "printed_label": "Maquette 66",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf",
       "page": 19,
       "image_sha256": "f539e7bad2e08c8c19660ad6390f7bc939fd2a4d92140888ae6d4c999781c4e8",
@@ -303,6 +358,7 @@
     },
     {
       "id": "M67",
+      "printed_label": "Maquette 67",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf",
       "page": 20,
       "image_sha256": "a5f408e01644133656ba55993505a81aff9799ddc75645821996d8a5ff827630",
@@ -311,6 +367,7 @@
     },
     {
       "id": "M68",
+      "printed_label": "Maquette 68",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf",
       "page": 21,
       "image_sha256": "381938d09037e59f91dd681e8cc4047c770c7831c2445186df30fff5ad3ea4c6",
@@ -319,6 +376,7 @@
     },
     {
       "id": "M69",
+      "printed_label": "Maquette 69",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf",
       "page": 22,
       "image_sha256": "b73a9a1daad838b3228ff0c570d793075fc7bc2faa9576500c2d2b291519614d",
@@ -327,6 +385,7 @@
     },
     {
       "id": "M70",
+      "printed_label": "Maquette 70",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf",
       "page": 23,
       "image_sha256": "8e1737d55ac8ea8a4f864936508da9e0650e3ed4094d5609dbbb6f106fa4c163",
@@ -335,6 +394,7 @@
     },
     {
       "id": "V5-C01",
+      "printed_label": "Maquette complémentaire 1",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_5_MANQUANTES.pdf",
       "page": 2,
       "image_sha256": "e04e1da2cccbf7b6166964018c6821cf793d2e05c992629d0ebadf3a945ef518",
@@ -343,6 +403,7 @@
     },
     {
       "id": "V5-C02",
+      "printed_label": "Maquette complémentaire 2",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_5_MANQUANTES.pdf",
       "page": 3,
       "image_sha256": "911af6b66be329f31277d8a9ee78ab5785f585095b65d85da960d9c18861ab6a",
@@ -351,6 +412,7 @@
     },
     {
       "id": "V5-C03",
+      "printed_label": "Maquette complémentaire 3",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_5_MANQUANTES.pdf",
       "page": 4,
       "image_sha256": "4d6d6f7d8a5d78c7ea5d8a21d350cb5502d1e831f930bf6f56e3355a44beba15",
@@ -359,6 +421,7 @@
     },
     {
       "id": "V5-C04",
+      "printed_label": "Maquette complémentaire 4",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_5_MANQUANTES.pdf",
       "page": 5,
       "image_sha256": "285d55ed909249edc6c88aa88a770299a1402aa2049c3007277bdec916ced0aa",
@@ -367,6 +430,7 @@
     },
     {
       "id": "V5-C05",
+      "printed_label": "Maquette complémentaire 5",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_5_MANQUANTES.pdf",
       "page": 6,
       "image_sha256": "e19f56f3f3abe875376b869495a02e58ac7208629454523560ded9d76d4ce52d",
@@ -375,6 +439,7 @@
     },
     {
       "id": "V5-C06",
+      "printed_label": "Maquette complémentaire 6",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_5_MANQUANTES.pdf",
       "page": 7,
       "image_sha256": "4e2a4848fc65a8d351daf36e429f2316e1c4f00d07ed2d6feeeeadeb01055ec1",
@@ -383,6 +448,7 @@
     },
     {
       "id": "V5-C07",
+      "printed_label": "Maquette complémentaire 7",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_5_MANQUANTES.pdf",
       "page": 8,
       "image_sha256": "462ea669bc387f3107a96f6de187f9f46cbe345d22d7ee5d7d4d22d628773ecd",
@@ -391,6 +457,7 @@
     },
     {
       "id": "V5-C08",
+      "printed_label": "Maquette complémentaire 8",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_5_MANQUANTES.pdf",
       "page": 9,
       "image_sha256": "c4772f6856bd69bd35fc92205a7e4356632a55b40ad8cf8e7f8f545b72748930",
@@ -399,6 +466,7 @@
     },
     {
       "id": "V5-C09",
+      "printed_label": "Maquette complémentaire 9",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_5_MANQUANTES.pdf",
       "page": 10,
       "image_sha256": "1545f26aa762aef7f484aa56593fa12df867e0b911c6ff18c61d9c9ef4da303d",
@@ -407,6 +475,7 @@
     },
     {
       "id": "V5-C10",
+      "printed_label": "Maquette complémentaire 10",
       "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_5_MANQUANTES.pdf",
       "page": 11,
       "image_sha256": "2493e0fdfb6bef11b0ed1fb9f557831949b1c8dbd603edbabb5a4043075885de",
@@ -414,7 +483,251 @@
       "height": 784
     },
     {
+      "id": "V6-C01",
+      "printed_label": "Maquette complémentaire 1",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_6.pdf",
+      "page": 2,
+      "image_sha256": "e04e1da2cccbf7b6166964018c6821cf793d2e05c992629d0ebadf3a945ef518",
+      "width": 1168,
+      "height": 784
+    },
+    {
+      "id": "V6-C02",
+      "printed_label": "Maquette complémentaire 2",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_6.pdf",
+      "page": 3,
+      "image_sha256": "911af6b66be329f31277d8a9ee78ab5785f585095b65d85da960d9c18861ab6a",
+      "width": 1168,
+      "height": 784
+    },
+    {
+      "id": "V6-C03",
+      "printed_label": "Maquette complémentaire 3",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_6.pdf",
+      "page": 4,
+      "image_sha256": "4d6d6f7d8a5d78c7ea5d8a21d350cb5502d1e831f930bf6f56e3355a44beba15",
+      "width": 1168,
+      "height": 784
+    },
+    {
+      "id": "V6-C04",
+      "printed_label": "Maquette complémentaire 4",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_6.pdf",
+      "page": 5,
+      "image_sha256": "285d55ed909249edc6c88aa88a770299a1402aa2049c3007277bdec916ced0aa",
+      "width": 1168,
+      "height": 784
+    },
+    {
+      "id": "V6-C05",
+      "printed_label": "Maquette complémentaire 5",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_6.pdf",
+      "page": 6,
+      "image_sha256": "e19f56f3f3abe875376b869495a02e58ac7208629454523560ded9d76d4ce52d",
+      "width": 1168,
+      "height": 784
+    },
+    {
+      "id": "V6-C06",
+      "printed_label": "Maquette complémentaire 6",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_6.pdf",
+      "page": 7,
+      "image_sha256": "4e2a4848fc65a8d351daf36e429f2316e1c4f00d07ed2d6feeeeadeb01055ec1",
+      "width": 1168,
+      "height": 784
+    },
+    {
+      "id": "V7-C01",
+      "printed_label": "Maquette 1",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf",
+      "page": 2,
+      "image_sha256": "e04e1da2cccbf7b6166964018c6821cf793d2e05c992629d0ebadf3a945ef518",
+      "width": 1168,
+      "height": 784
+    },
+    {
+      "id": "V7-C02",
+      "printed_label": "Maquette 2",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf",
+      "page": 3,
+      "image_sha256": "911af6b66be329f31277d8a9ee78ab5785f585095b65d85da960d9c18861ab6a",
+      "width": 1168,
+      "height": 784
+    },
+    {
+      "id": "V7-C03",
+      "printed_label": "Maquette 3",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf",
+      "page": 4,
+      "image_sha256": "4d6d6f7d8a5d78c7ea5d8a21d350cb5502d1e831f930bf6f56e3355a44beba15",
+      "width": 1168,
+      "height": 784
+    },
+    {
+      "id": "V7-C04",
+      "printed_label": "Maquette 4",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf",
+      "page": 5,
+      "image_sha256": "285d55ed909249edc6c88aa88a770299a1402aa2049c3007277bdec916ced0aa",
+      "width": 1168,
+      "height": 784
+    },
+    {
+      "id": "V7-C05",
+      "printed_label": "Maquette 5",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf",
+      "page": 6,
+      "image_sha256": "e19f56f3f3abe875376b869495a02e58ac7208629454523560ded9d76d4ce52d",
+      "width": 1168,
+      "height": 784
+    },
+    {
+      "id": "V7-C06",
+      "printed_label": "Maquette 6",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf",
+      "page": 7,
+      "image_sha256": "4e2a4848fc65a8d351daf36e429f2316e1c4f00d07ed2d6feeeeadeb01055ec1",
+      "width": 1168,
+      "height": 784
+    },
+    {
+      "id": "V7-C07",
+      "printed_label": "Maquette 7",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf",
+      "page": 8,
+      "image_sha256": "462ea669bc387f3107a96f6de187f9f46cbe345d22d7ee5d7d4d22d628773ecd",
+      "width": 1168,
+      "height": 784
+    },
+    {
+      "id": "V7-C08",
+      "printed_label": "Maquette 8",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf",
+      "page": 9,
+      "image_sha256": "c4772f6856bd69bd35fc92205a7e4356632a55b40ad8cf8e7f8f545b72748930",
+      "width": 1168,
+      "height": 784
+    },
+    {
+      "id": "V8-C01",
+      "printed_label": "Maquette 1",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf",
+      "page": 2,
+      "image_sha256": "1545f26aa762aef7f484aa56593fa12df867e0b911c6ff18c61d9c9ef4da303d",
+      "width": 1168,
+      "height": 784
+    },
+    {
+      "id": "V8-C02",
+      "printed_label": "Maquette 2",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf",
+      "page": 3,
+      "image_sha256": "2493e0fdfb6bef11b0ed1fb9f557831949b1c8dbd603edbabb5a4043075885de",
+      "width": 1168,
+      "height": 784
+    },
+    {
+      "id": "V8-C03",
+      "printed_label": "Maquette 3",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf",
+      "page": 4,
+      "image_sha256": "7ba2c99f6c9797c48349f09f27ba1e120254f1bd9fc78eb15decf9b98bb3c8e8",
+      "width": 1168,
+      "height": 784
+    },
+    {
+      "id": "V8-C04",
+      "printed_label": "Maquette 4",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf",
+      "page": 5,
+      "image_sha256": "981e6367be5ceb5b08f3eaee8c241559b421a5f7b19e1ad0775ad8914cf0a79e",
+      "width": 1168,
+      "height": 784
+    },
+    {
+      "id": "V8-C05",
+      "printed_label": "Maquette 5",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf",
+      "page": 6,
+      "image_sha256": "a40c2783d477b9075523f53dffb326fdee932a65043b86363f5e122295cf7590",
+      "width": 1168,
+      "height": 784
+    },
+    {
+      "id": "V8-C06",
+      "printed_label": "Maquette 6",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf",
+      "page": 7,
+      "image_sha256": "69d5fa0dd73d65977edb4bab6c2ff863ae776c2370427b651925712f9b52537c",
+      "width": 784,
+      "height": 1168
+    },
+    {
+      "id": "V8-C07",
+      "printed_label": "Maquette 7",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf",
+      "page": 8,
+      "image_sha256": "7a85e07024bfb64dccfda3838aa6144eb23a3dd38ded8e226de84277bb424d48",
+      "width": 784,
+      "height": 1168
+    },
+    {
+      "id": "V8-C08",
+      "printed_label": "Maquette 8",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf",
+      "page": 9,
+      "image_sha256": "746de997ffdb3ca90e640f0dc6577ca570cf3c0a124336eaa6c5d2cf83dd6013",
+      "width": 784,
+      "height": 1168
+    },
+    {
+      "id": "V9-C01",
+      "printed_label": "Maquette finale 1",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_9_FINAL.pdf",
+      "page": 2,
+      "image_sha256": "e04e1da2cccbf7b6166964018c6821cf793d2e05c992629d0ebadf3a945ef518",
+      "width": 1168,
+      "height": 784
+    },
+    {
+      "id": "V9-C02",
+      "printed_label": "Maquette finale 2",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_9_FINAL.pdf",
+      "page": 3,
+      "image_sha256": "911af6b66be329f31277d8a9ee78ab5785f585095b65d85da960d9c18861ab6a",
+      "width": 1168,
+      "height": 784
+    },
+    {
+      "id": "V9-C03",
+      "printed_label": "Maquette finale 3",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_9_FINAL.pdf",
+      "page": 4,
+      "image_sha256": "4d6d6f7d8a5d78c7ea5d8a21d350cb5502d1e831f930bf6f56e3355a44beba15",
+      "width": 1168,
+      "height": 784
+    },
+    {
+      "id": "V9-C04",
+      "printed_label": "Maquette finale 4",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_9_FINAL.pdf",
+      "page": 5,
+      "image_sha256": "285d55ed909249edc6c88aa88a770299a1402aa2049c3007277bdec916ced0aa",
+      "width": 1168,
+      "height": 784
+    },
+    {
+      "id": "V9-C05",
+      "printed_label": "Maquette finale 5",
+      "file": "MAQUETTES_UNE_PAR_PAGE_VOLUME_9_FINAL.pdf",
+      "page": 6,
+      "image_sha256": "e19f56f3f3abe875376b869495a02e58ac7208629454523560ded9d76d4ce52d",
+      "width": 1168,
+      "height": 784
+    },
+    {
       "id": "M1",
+      "printed_label": "Maquette 1",
       "file": "TOUT_EN_UN_MAQUETTES_GRANDES.pdf",
       "page": 1,
       "image_sha256": "ee7509b8f190db7378c4956dc479896be50bff10245e54756b0d63e4d08616c8",
@@ -423,6 +736,7 @@
     },
     {
       "id": "M2",
+      "printed_label": "Maquette 2",
       "file": "TOUT_EN_UN_MAQUETTES_GRANDES.pdf",
       "page": 2,
       "image_sha256": "1da53c3d191c0b6e229fe56888531ce4d7a8c0eb1c35240784c3a6c335783cba",
@@ -431,6 +745,7 @@
     },
     {
       "id": "M3",
+      "printed_label": "Maquette 3",
       "file": "TOUT_EN_UN_MAQUETTES_GRANDES.pdf",
       "page": 3,
       "image_sha256": "87a04cae5b3045d31d42d982bcba8e2dffebd6ce156f4b4da9ebfe9a00854012",
@@ -439,6 +754,7 @@
     },
     {
       "id": "M4",
+      "printed_label": "Maquette 4",
       "file": "TOUT_EN_UN_MAQUETTES_GRANDES.pdf",
       "page": 4,
       "image_sha256": "22228c5d0392dd00944728f0cdbf49bea4e58f1522a635d16ab204c73f98ad46",
@@ -447,6 +763,7 @@
     },
     {
       "id": "M5",
+      "printed_label": "Maquette 5",
       "file": "TOUT_EN_UN_MAQUETTES_GRANDES.pdf",
       "page": 5,
       "image_sha256": "7e1b99e041585c28bac4d2cea36438c995d8998bf57746cebc3c9c50068f80ce",
@@ -455,6 +772,7 @@
     },
     {
       "id": "M6",
+      "printed_label": "Maquette 6",
       "file": "TOUT_EN_UN_MAQUETTES_GRANDES.pdf",
       "page": 6,
       "image_sha256": "506281c8f8238259b775b01eeede4002aea6900fa2f6d5df46bc29fcd6b95308",
@@ -463,6 +781,7 @@
     },
     {
       "id": "M7",
+      "printed_label": "Maquette 7",
       "file": "TOUT_EN_UN_MAQUETTES_GRANDES.pdf",
       "page": 7,
       "image_sha256": "2a2b4662b3d2fbc8d64edb6f46134e2b80c007fae8ffd5c5af2690be915ad0f6",
@@ -471,6 +790,7 @@
     },
     {
       "id": "M8",
+      "printed_label": "Maquette 8",
       "file": "TOUT_EN_UN_MAQUETTES_GRANDES.pdf",
       "page": 8,
       "image_sha256": "1345de4d41414f495eb8ed7e57e845fec80fc10c2bd136a06602624fa60d27d7",
@@ -479,6 +799,7 @@
     },
     {
       "id": "M9",
+      "printed_label": "Maquette 9",
       "file": "TOUT_EN_UN_MAQUETTES_GRANDES.pdf",
       "page": 9,
       "image_sha256": "7bc3692b29edfbe032c0f90b4de0821b79e4298f1a35a01d2e0c609d4d1bdfd7",
@@ -487,6 +808,7 @@
     },
     {
       "id": "M10",
+      "printed_label": "Maquette 10",
       "file": "TOUT_EN_UN_MAQUETTES_GRANDES.pdf",
       "page": 10,
       "image_sha256": "fc6e98529057a73e780319e9b71ea466215d154bae625ba9babfd19a5fcd4d1b",
@@ -495,6 +817,7 @@
     },
     {
       "id": "M11",
+      "printed_label": "Maquette 11",
       "file": "TOUT_EN_UN_MAQUETTES_GRANDES.pdf",
       "page": 11,
       "image_sha256": "2b66abfdf99b637e729ba78c6b65724afba2954aabeed45912ea73fa55dc433e",
@@ -503,6 +826,7 @@
     },
     {
       "id": "M12",
+      "printed_label": "Maquette 12",
       "file": "TOUT_EN_UN_MAQUETTES_GRANDES.pdf",
       "page": 12,
       "image_sha256": "dd7975233ce2904096855ffdda411a05d7db0d8bb06ba7842d7cc3998e7c2008",
@@ -511,6 +835,7 @@
     },
     {
       "id": "M13",
+      "printed_label": "Maquette 13",
       "file": "TOUT_EN_UN_MAQUETTES_GRANDES.pdf",
       "page": 13,
       "image_sha256": "462ea669bc387f3107a96f6de187f9f46cbe345d22d7ee5d7d4d22d628773ecd",
@@ -519,6 +844,7 @@
     },
     {
       "id": "M14",
+      "printed_label": "Maquette 14",
       "file": "TOUT_EN_UN_MAQUETTES_GRANDES.pdf",
       "page": 14,
       "image_sha256": "746de997ffdb3ca90e640f0dc6577ca570cf3c0a124336eaa6c5d2cf83dd6013",
@@ -527,6 +853,7 @@
     },
     {
       "id": "M15",
+      "printed_label": "Maquette 15",
       "file": "TOUT_EN_UN_MAQUETTES_GRANDES.pdf",
       "page": 15,
       "image_sha256": "3b7bc7e48134198654f30ad6a452c77f0039a3bc28da76aae99a91949783a683",
@@ -535,6 +862,7 @@
     },
     {
       "id": "M16",
+      "printed_label": "Maquette 16",
       "file": "TOUT_EN_UN_MAQUETTES_GRANDES.pdf",
       "page": 16,
       "image_sha256": "1545f26aa762aef7f484aa56593fa12df867e0b911c6ff18c61d9c9ef4da303d",
@@ -543,6 +871,7 @@
     },
     {
       "id": "M17",
+      "printed_label": "Maquette 17",
       "file": "TOUT_EN_UN_MAQUETTES_GRANDES.pdf",
       "page": 17,
       "image_sha256": "4ad91606b043a079b5fbb5b5567979c9e78fe88e721a5fb790d635e5ef8262b3",
@@ -551,6 +880,7 @@
     },
     {
       "id": "M18",
+      "printed_label": "Maquette 18",
       "file": "TOUT_EN_UN_MAQUETTES_GRANDES.pdf",
       "page": 18,
       "image_sha256": "4dbdb22178b7958f291c5b2117422a98733e7d7de93f5e8bfb8057d02d4a8389",
@@ -559,10 +889,10 @@
     }
   ],
   "summary": {
-    "pdf_count": 5,
-    "page_count": 71,
-    "image_occurrences": 66,
-    "unique_image_count": 59,
+    "pdf_count": 9,
+    "page_count": 102,
+    "image_occurrences": 93,
+    "unique_image_count": 63,
     "unidentified_original_numbers": [
       19,
       20,
@@ -583,31 +913,69 @@
   "duplicate_groups": [
     [
       "M37",
-      "V5-C06"
+      "V5-C06",
+      "V6-C06",
+      "V7-C06"
     ],
     [
       "M50",
-      "V5-C03"
+      "V5-C03",
+      "V6-C03",
+      "V7-C03",
+      "V9-C03"
     ],
     [
       "M55",
-      "V5-C10"
+      "V5-C10",
+      "V8-C02"
     ],
     [
       "M56",
-      "V5-C04"
+      "V5-C04",
+      "V6-C04",
+      "V7-C04",
+      "V9-C04"
     ],
     [
       "M57",
-      "V5-C02"
+      "V5-C02",
+      "V6-C02",
+      "V7-C02",
+      "V9-C02"
+    ],
+    [
+      "M65",
+      "V8-C04"
+    ],
+    [
+      "V5-C01",
+      "V6-C01",
+      "V7-C01",
+      "V9-C01"
+    ],
+    [
+      "V5-C05",
+      "V6-C05",
+      "V7-C05",
+      "V9-C05"
     ],
     [
       "V5-C07",
+      "V7-C07",
       "M13"
     ],
     [
+      "V5-C08",
+      "V7-C08"
+    ],
+    [
       "V5-C09",
+      "V8-C01",
       "M16"
+    ],
+    [
+      "V8-C08",
+      "M14"
     ]
   ]
 }

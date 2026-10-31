@@ -217,3 +217,10 @@ Conserver les contrats request/action existants, calculateQuote/canTransition/ve
 Points de reprise précis : nav914 ; Overview1386 ; Requests1581 ; Detail1730 ; Sites2186 ; ProfileView2480 ; Auth2644 ; Admin2703 ; RequestForm2966 ; QuoteEditor3275 ; MessageCenter3439 ; SiteForm3557 ; ProfileForm3644 ; AuthForm3715 ; ReviewForm3877 ; DocumentManager3944 ; ArtisanAdministration4100 ; ProfessionalOperations4239 ; WarrantyPanel4826 ; ConfirmAction5021 ; BudgetEditor5085 ; ApprovalDecision5165 ; WarrantyResolution5226. CSSnavigation512+, mobil2523+, override3330+, professionnelles3980+.
 
 Confiance élevée sur l'inventaire de code et les écrans PDF ci-dessus. La conformité visuelle complète des56maquettes requiert le catalogue de la revue complémentaire ; aucune comparaisonpixeln'est prétendue. Confiance limitée sur les servicesexternes car leurétat n'a pas été recontrôlé. Les risques statiques doivent être reproduits avant d'être qualifiés de défautsexploités. Aucun code modifié.
+
+
+## Références ajoutées par les volumes 6 à 9
+
+Le code inspecté n’a pas changé. Les volumes 6/7/9 sont des reprises exactes d’images déjà reçues ; quatre nouvelles images V8 complètent les sources : À propos, confidentialité, détail devis et détail intervention. Les nouvelles lignes PUB-09/PUB-10 et les références V8-C06/C07 sont intégrées dans la matrice principale, désormais à 76 points.
+
+Ces images confirment notamment les manques de pages publiques propres au produit, de refus de devis côté client, de PDF/version commerciale, de contact participant autorisé, de galerie, d’historique métier et de modification de rendez-vous. La politique YourCompany, les histoires/équipes, les promesses de satisfaction/annulation et les exemples peinture/plomberie ne constituent pas des décisions validées. Voir le complément du volume 8 pour les détails. Aucune nouvelle vérification live ni modification applicative n’est déduite de cet apport documentaire.

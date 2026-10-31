@@ -77,7 +77,7 @@ Ces lignes sont des **décisions manquantes dans les documents**, pas des exigen
 | Q-PDF-35 | Diagnostic IA | Fournisseur/modèle, photos/données envoyées, consentement, sécurité du résultat, limites d'usage, protocole d'évaluation, validation humaine, coût et échec/fallback ; simple mentionV3 seulement. | Spécification§4/7. |
 | Q-PDF-36 | Sécurité/exploitation | Authentification renforcée admin, gestion sessions, journaux et supervision, antiabus, sauvegarde/restauration, disponibilité/capacité, droits d'accès/export/suppression et conservation. | Mention sécurité/confidentialité récurrente mais objectifs mesurables/processus absents. |
 | Q-PDF-37 | Serviceclient | Canaux/horaires/rôlessupport, créationtickets, escalades/assistance technique/réclamations/litiges, rappel téléphonique et avisatisfaction ; règles de responsabilité et délais non spécifiés. | Maquettes11/42/60/64/70 etblueprints1/6/58/69. |
-| Q-PDF-38 | Fidélité visuelle | Écranchoisi parmi variantes, typographies/couleurs/tokenscohérents, navigationnativebasse/desktoplatérale, cohérenceclient/artisan/B2B, étatsvideerreurchargementresponsive ; DESIGN.md fournit une proposition, pas des mesures exactes desPDF. | Ensemble des 66 occurrences de maquettes (59 images distinctes) ; note basesàaméliorer ; refusstyle IA du propriétaire. |
+| Q-PDF-38 | Fidélité visuelle | Écranchoisi parmi variantes, typographies/couleurs/tokenscohérents, navigationnativebasse/desktoplatérale, cohérenceclient/artisan/B2B, étatsvideerreurchargementresponsive ; DESIGN.md fournit une proposition, pas des mesures exactes desPDF. | Ensemble des 93 occurrences de maquettes (63 images distinctes) ; note basesàaméliorer ; refusstyle IA du propriétaire. |
 
 ## Contradictions, variantes et exemples à ne pas transformer en règles
 
@@ -122,3 +122,22 @@ Ces points affinent les 38 domaines précédents ; ils ne constituent pas dix fo
 
 
 La fiche Tour Horizon et son tableau de bord montrent des adresses d’exemple différentes. Les sites, badges, chiffres d’énergie/occupation et certifications des images ne doivent pas être importés comme données réelles.
+
+## Neuf précisions issues du volume 8 et bilan des volumes 6/7/9
+
+Le volume 8 ajoute quatre images distinctes ; les volumes 6/7/9 et la moitié des images V8 sont des répétitions. Ces précisions complètent les domaines existants, sans rendre leurs exemples contractuels. Le titre FINAL du volume 9 n’énonce aucune modification des priorités fonctionnelles.
+
+| ID | Domaine | Décision à formaliser |
+| --- | --- | --- |
+| V8-Q01 | Exploitant / contenu public | Nom et équipe réels, photographie et droits, mission/histoire, responsabilité de publication et mise à jour, preuve des notes/certifications/engagements. |
+| V8-Q02 | Confidentialité et langues | Politique propre au produit français, traitements/prestataires/finalités/durées/contact, langue(s) requises et validation professionnelle ; ne pas publier le gabarit YourCompany comme texte réel. |
+| V8-Q03 | Cookies et préférences | Cookies réellement utilisés, catégories retenues, état initial, interface de préférences et preuve des choix ; aucun outil de suivi ajouté par simple mimétisme du texte. |
+| V8-Q04 | Exercice des droits | Qui reçoit et traite une demande d’accès/correction/suppression, vérification du demandeur, périmètre export/effacement, journal et gestion des exceptions ; aucune conclusion juridique présumée. |
+| V8-Q05 | Devis client | Numérotation, émetteur, unités de prestation, document PDF/version/validité, preuve d’accord, refus et possibilité de contre-proposition. |
+| V8-Q06 | Conditions satisfaction / annulation | Satisfaction 30 jours vs garantie un an, annulation gratuite 48 h, étapes où elle est permise, frais/remboursements et information avant acceptation ; exemples non automatiquement contractuels. |
+| V8-Q07 | Rendez-vous | Proposition, confirmation, modification, participants autorisés, calendrier et indisponibilités, replanification pendant travaux, notification des parties et absence/no-show. |
+| V8-Q08 | Détail intervention et données personnelles | Données et coordonnées visibles selon étape, photos et liens vers devis exact, unité adresse/appartement/étage, cartographie et destinataires du partage. |
+| V8-Q09 | Timeline | Ordre des états, événements/acteurs/dates source, distinction planifié/en route/sur place/en cours/terminé ; corriger la variante À planifier après En cours. |
+
+
+Les autres détails et correspondances sont consignés dans les annexes des volumes 6 à 9. Le refus de devis est désormais explicitement illustré ; il reste à définir sa commande, ses effets et ses notifications, distincts d’une annulation de dossier.

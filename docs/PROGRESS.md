@@ -42,3 +42,13 @@
 - Contrôles fournisseur en lecture seule : aucune variable applicative Vercel et aucun projet Supabase dédié identifié. Le refus de création pour facturation reste le constat historique, sans nouvelle tentative pendant cet audit.
 - Aucun nouveau test d’intégration ou paiement n’est prétendu. Les 11 tests et 13 groupes SQL décrits plus haut sont des preuves antérieures, pas une preuve que les manques inventoriés sont résolus.
 - Documents de référence : `AUDIT_COMPLET_SPECIFICATIONS.md`, `SPECIFICATIONS_A_COMPLETER.md`, `PLAN_REPRISE.md` et les annexes `audit/`. Aucun code applicatif, service, secret ou déploiement modifié pendant cette revue.
+
+
+## Intégration documentaire des volumes 6 à 9
+
+- Quatre PDF copiés sans altération et intégralement inspectés : corpus désormais de 9 PDF, 102 pages, 93 occurrences et 63 images distinctes.
+- Les 6 occurrences V6, 8 occurrences V7 et 5 occurrences V9 sont des doublons exacts ; V8 a quatre doublons et quatre images nouvelles : À propos, confidentialité, devis client et détail d’intervention.
+- Deux nouvelles lignes de couverture publique sont ajoutées ; la matrice passe de 74 à 76 points. Les nouveaux détails client renforcent des manques déjà recensés : refus, PDF, contact, galerie, historique et modification de rendez-vous.
+- Neuf précisions V8-Q01–Q09 sont ajoutées au registre, sans transformer les histoires/équipes/garanties/annulation/cookies d’exemple en décisions validées. Le titre FINAL du volume 9 n’a pas modifié la hiérarchie des sources.
+- Références et doublons conservés par volume ; les numéros initiaux 19–32 restent non identifiés. Aucun nouveau back-office artisan ou Super Admin n’est apporté par ces volumes, mais les références précédentes restent à réaliser.
+- Aucun code applicatif, service distant, secret ou déploiement modifié ; aucune nouvelle exécution de paiement ou de test d’intégration prétendue. Source et couverture sont documentées dans les annexes et le manifeste mis à jour.
