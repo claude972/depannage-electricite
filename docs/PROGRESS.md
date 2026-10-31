@@ -30,3 +30,15 @@
 1. Après résolution de la facturation Supabase, créer la base dédiée et appliquer uniquement à celle-ci les deux migrations versionnées.
 2. Configurer les accès Stripe par les canaux de secrets, vérifier les comptes et permissions distants, puis exécuter le paiement de test complet et les reprises webhook.
 3. Compléter les conditions commerciales et les fonctions encore non livrées avant toute ouverture à de vrais clients. Les preuves de démonstration ne valent pas une mise en exploitation commerciale.
+
+
+## Audit complet après les écarts signalés par le propriétaire
+
+- Revue documentaire des cinq PDF disponibles : 71 pages, 66 occurrences de maquettes, 59 images distinctes. Sept images du volume 5 sont des doublons exacts, trois écrans sont nouveaux (fiche bureaux, dashboard bureaux, approbation syndic).
+- Audit de tous les écrans et routes, du composant, du CSS, du backend, des migrations, RLS et fichiers de tests. Matrice consolidée de 74 points de couverture ; annexes par rôle et par capacité serveur.
+- La référence Super Admin M43 et les vrais back-offices artisan/entreprise sont explicites dans les sources ; l’interface commune actuelle ne les couvre pas complètement.
+- 38 domaines de spécification à préciser, 16 contradictions/variantes et dix précisions supplémentaires du volume 5 consignés. L’absence initiale de maquettes bureaux est résolue par le nouveau volume ; les numéros 19–32 restent non identifiés.
+- Nouveaux risques/écarts statiques à traiter avant activation : cache professionnel à la déconnexion et garde des vues, retours Auth/Stripe ignorés, accès aux contacts après attribution, règles de payeur/départ de membre d’organisation, historiques bornés et finance incomplète. Ce sont des constats de code, pas des incidents distants démontrés.
+- Contrôles fournisseur en lecture seule : aucune variable applicative Vercel et aucun projet Supabase dédié identifié. Le refus de création pour facturation reste le constat historique, sans nouvelle tentative pendant cet audit.
+- Aucun nouveau test d’intégration ou paiement n’est prétendu. Les 11 tests et 13 groupes SQL décrits plus haut sont des preuves antérieures, pas une preuve que les manques inventoriés sont résolus.
+- Documents de référence : `AUDIT_COMPLET_SPECIFICATIONS.md`, `SPECIFICATIONS_A_COMPLETER.md`, `PLAN_REPRISE.md` et les annexes `audit/`. Aucun code applicatif, service, secret ou déploiement modifié pendant cette revue.

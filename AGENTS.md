@@ -4,9 +4,11 @@
 - Lire ce fichier et `DESIGN.md` avant tout travail.
 - Référence fonctionnelle : `SPECIFICATION_COMPLETE_FINALE_PROJET.pdf` (une page).
 - Références de parcours et d'interface : `TOUT_EN_UN_MAQUETTES_GRANDES.pdf`, `MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf` et `MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf`.
+- Référence complémentaire reçue pendant l’audit : `MAQUETTES_UNE_PAR_PAGE_VOLUME_5_MANQUANTES.pdf` ; identifier ses écrans V5-C01 à V5-C10, sans les confondre avec les numéros initiaux.
 - La spécification finale prévaut pour le périmètre et les priorités. Les maquettes sont des bases à améliorer, pas des écrans à reproduire aveuglément.
 - À l'initialisation, le dossier contient uniquement ces quatre PDF : aucune stack, application ou infrastructure existante. Ne pas présenter une proposition technique comme une décision validée.
-- Les maquettes 19 à 32 ne figurent pas dans les documents fournis ; ne pas inventer leur contenu.
+- Les numéros 19 à 32 ne sont pas établis dans les documents fournis ; le volume 5 utilise des numéros complémentaires 1 à 10. Ne pas lui attribuer arbitrairement les numéros manquants.
+- Audit de référence avant reprise : `docs/AUDIT_COMPLET_SPECIFICATIONS.md`, catalogue et annexes dans `docs/audit/`, décisions manquantes dans `docs/SPECIFICATIONS_A_COMPLETER.md`. Lire ces documents avec le plan de reprise ; distinguer les back-offices artisan, entreprise cliente, administration de plateforme et éventuelle entreprise prestataire.
 
 ## Produit et périmètre
 Plateforme de dépannage électrique pour particuliers, artisans électriciens, syndics/copropriétés et organisations B2B (restauration, bureaux, ERP).

@@ -65,3 +65,15 @@ Ces règles sont établies pour la suite du projet ; elles ne sont pas présent�
 
 ## Vérification après chaque fonctionnalité
 Contrôler cohérence des composants, responsive, lisibilité, clavier/focus, validations, chargement/erreur/vide, transparence tarifaire et permissions. Comparer aux intentions des PDF et vérifier le résultat sur la preview en ligne adaptée à la plateforme.
+
+
+## Fidélité aux références après audit
+
+La structure des écrans, la navigation et la hiérarchie métier font partie des références à respecter ; reprendre seulement le bleu et le blanc ne suffit pas. Les espaces artisan, entreprise cliente et Super Admin ne doivent pas être une simple vue client renommée. Pour chaque écran, choisir et noter une référence maîtresse parmi les variantes avant reprise visuelle.
+
+- Artisan : M14, M34–M36, M44, M65 et M67, dont navigation basse mobile, profil métier, justificatifs et mission.
+- Entreprise/partenaire : M4/M66, fiches et tableaux propres au syndic, à la restauration, aux bureaux et aux ERP.
+- Super-administration de plateforme : M43 avec ses menus et indicateurs transverses ; ne pas confondre avec l’owner d’une organisation cliente.
+- Nouveau volume 5 : V5-C01 fiche bureaux, V5-C05 dashboard Bureaux360, V5-C08 détail d’approbation syndic. Les autres images complémentaires dupliquent des références déjà présentes.
+
+Les chiffres, certifications, dates, identités et promesses des images restent des exemples. Le périmètre électrique de la spécification finale prévaut sur les lignes multi-métiers/facility management des maquettes. Les adaptations d’accessibilité et de responsive doivent être documentées ; aucun style IA générique n’est autorisé.
