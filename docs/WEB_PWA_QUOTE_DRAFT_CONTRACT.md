@@ -1,6 +1,6 @@
 # WEB-PWA-QUOTE-DRAFT-001 — brouillons privés persistants
 
-Base : d85da0657586f152ee9bba941d67345b4eead616. Branche : codex/web-pwa-backend. **Plan et contrat publiés avant implémentation ; nouvelle route non encore livrée à cette révision.**
+Base : d85da0657586f152ee9bba941d67345b4eead616. Branche : codex/web-pwa-backend. **Plan et contrat publiés avant implémentation dans de6091d ; code et tests locaux livrés, en attente de revue et de recette intégrée en ligne.**
 
 ## Plan du lot et règles conservées
 
@@ -15,7 +15,7 @@ Base : d85da0657586f152ee9bba941d67345b4eead616. Branche : codex/web-pwa-backend
 
 La disponibilité immédiate n’est pas requise pour travailler sur une mission déjà affectée. Une réaffectation ferme les droits ; un jeton d’attribution versionne les événements applicatifs d’acceptation/réaffectation pour empêcher un ancien onglet d’agir même si l’artisan initial est ensuite réaffecté. Ce jeton n’est pas une permission secrète : le serveur vérifie toujours l’acteur et l’état. Les mises à jour manuelles du service hors commandes auditées ne sont pas un parcours métier pris en charge.
 
-Toutes réponses/erreurs privées/no-store. Pas de secret service-role au navigateur. 401 sans session,403 acteur non autorisé/suspendu,404 dossier inconnu,409 état/version/attribution/devis courant modifié,422 données invalides,503 service indisponible.
+Toutes réponses/erreurs privées/no-store. Pas de secret service-role au navigateur. 401 sans session,403 acteur non autorisé/suspendu,404 dossier inconnu,409 état/version/attribution/devis courant modifié,422 données invalides,429 limite technique de commandes atteinte,503 service indisponible.
 
 ## Chargement
 
