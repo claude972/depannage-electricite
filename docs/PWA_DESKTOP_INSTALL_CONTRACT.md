@@ -30,7 +30,7 @@ Cette phase sert l’objectif en rendant chaque effet attribuable au seul essai.
 
 Interface prévue, à implémenter après revue :
 
-`node scripts/qa-pwa-desktop/run.mjs --origin http://127.0.0.1:3017 --app-sha <40hex> --build-id <exact> --chromium-path <binaire-CfT> --playwright-path <module-existant> --out <dossier-neuf-hors-repo> [--execute]`
+`node scripts/qa-pwa-desktop/run.mjs --app-dir <checkout-buildé> --origin http://127.0.0.1:3017 --app-sha <40hex> --build-id <exact> --chromium-path <binaire-CfT> --playwright-path <module-existant> --out <dossier-neuf-hors-repo> [--execute] [--proof-timeout-ms 180000]`
 
 Sans `--execute` : validation de configuration, fichiers et HTTP public seulement, **aucun navigateur/profil/installation**, résultat `PREFLIGHT_ONLY`, jamais PASS installation. Le harnais ne démarre ni ne stoppe le serveur HTTP : celui de root est explicitement externe. Refus d’origine distante, URL avec userinfo/query/hash, redirection hors origine, mauvais SHA/build-ID ou serveur absent ; pas de recherche d’un autre port. L’origine n’est pas un secret ; aucune lecture `.env`.
 
@@ -87,3 +87,35 @@ PASS seulement si installation + shim + fenêtre OS attribuée + relance + unins
 Tests purs à écrire **après feu code**, exécutables sans navigateur, port, macOS UI ou réseau : manifeste relatif et mauvaise origine ; candidat préexistant/même AppID autre profil ; plist usurpé, préfixe de chemin trompeur, symlink, inode changé ; attribution exacte positive ; registre erreur transport ≠ absence ; ordre install-intent avant effet ; interruption pendant attente et installation tardive ; finaliseur réentrant unique ; aucune continuation/spawn après stop ; PID réutilisé/détaché inconnu ; uninstall échoué conserve profil ; flags interdits ; refus de PASS sans preuve OS, relance ou nettoyage. Injection d’interfaces de processus/CDP/fichiers, pas tests regex reproduisant l’implémentation.
 
 Après revue du contrat : implémentation uniquement dans la propriété réservée, tests purs/syntaxe existante sans build ni nouvelle dépendance, commit/push et revue exacte du harnais par root. **Root seul** choisit puis exécute `--execute` sur build/origine figés. La présente livraison ne constitue ni feu d’exécution ni PASS installation.
+
+## Implémentation après feu code root — 31 octobre 2026
+
+Root a accepté `3a96df0` pour code/tests purs uniquement et exigé `--app-dir`. Le runner compare HEAD exact du checkout, `.next/BUILD_ID` disque et présence du même BUILD_ID dans HTML public servi ; aucune assertion sur la provenance d’un build sale ne dépasse ces contrôles. Il n’exécute pas le serveur externe et ne lui envoie aucun signal.
+
+Compléments officiels effectivement lus avant le parseur : [clés plist littérales](https://raw.githubusercontent.com/chromium/chromium/main/chrome/common/mac/app_mode_common.mm), [AppID Chromium double-haché](https://raw.githubusercontent.com/chromium/chromium/main/chrome/browser/web_applications/app_id_helpers.cc), [conversion de hash en alphabet AppID](https://raw.githubusercontent.com/chromium/chromium/main/components/crx_file/id_util.cc), [erreur exacte de registre inconnu](https://raw.githubusercontent.com/chromium/chromium/main/chrome/browser/devtools/protocol/pwa_handler.cc). AppID est le premier SHA-256 binaire re-haché, tronqué à 128 bits, hexadécimal converti a–p. La réponse documentée `Unknown web-app manifest id <url>` seule signifie registre absent ; fermeture/timeout/méthode absente restent des erreurs. Deux lectures du registre reconnu précèdent install, sans mutation préalable des préférences d’une application potentiellement existante.
+
+Le baseline inclut les nouveaux shims potentiels et les métadonnées partagées des dossiers Applications/Chrome Apps existants (inode, permissions, hash des fichiers de localisation et attributs étendus). Si Chrome change un ancien dossier ou laisse un nouveau dossier partagé après uninstall, statut INCOMPLETE : aucun nettoyage global automatique. Les chemins, bundles et métadonnées ambiguës sont conservés dans le manifeste. Avant uninstall, attribution de shim, profil/inode actuel, process exact et intent durable sont de nouveau exigés, y compris après une installation incertaine. Avant fermeture Chrome, les descendants connus sont recensés ; un helper encore vivant empêche l’effacement du profil, sans tentative de le tuer arbitrairement.
+
+### Handoff de preuve OS à root
+
+Après `PWA.launch`, le runner écrit `phase: await-os-proof` et `proofRequest` dans le manifeste puis attend au maximum 180 secondes (configurable de 1 à 300 secondes). Pendant cette attente, root observe la fenêtre réelle via CUA existant ; aucun booléen CLI ne peut valider l’étape. Root dépose une capture PNG mode0600 directement dans le dossier résultat, puis écrit atomiquement `os-proof.json` mode0600 :
+
+```json
+{
+  "kind": "macos-visible-window",
+  "runId": "copier proofRequest.runId",
+  "appId": "copier proofRequest.appId",
+  "windowId": 123,
+  "browserPid": 456,
+  "nonce": "copier proofRequest.nonce",
+  "observedAt": "date ISO de l'observation réelle après proofRequest.startedAt",
+  "capture": "/chemin/absolu/du/dossier-resultat/os-window.png",
+  "sha256": "hash SHA-256 du PNG effectivement observé"
+}
+```
+
+windowId et browserPid sont les nombres exacts de proofRequest. Le PNG doit être attribuable à la fenêtre/process/application observés, pas à une capture générique de page. Le contrôle vérifie liaison, fraîcheur, hash et signature PNG ; la véracité de l’observation indépendante relève de root, elle ne peut être déduite cryptographiquement d’une image seule. Absence, preuve incorrecte, permission OS indisponible ou délai dépassé déclenchent le nettoyage puis BLOCKED si tout est propre, sinon INCOMPLETE.
+
+### Validation livrée, sans navigateur
+
+`tsx --test tests/qa-pwa-desktop.test.ts` : **19 tests purs PASS**. Ils exercent les helpers effectivement importés par le runner : préflight et mismatch checkout/build/HTML, identité et double-hash, collisions/attributions négatives, baseline, registre inconnu versus transport, autorité uninstall après résultat unknown, preuve OS liée/fraîche, refus de PASS incomplet, stop pendant intent, installation tardive/drain après timeout, finalisation unique, PID réutilisé et conservation du profil si nettoyage non prouvé. `node --check` passe sur les deux modules ; `--help` exécuté sans préflight ni effet OS. Aucun build/install de dépendance, préflight HTTP, navigateur, serveur ou installation PWA exécuté par l’agent. Les tests purs ne prouvent pas CDP runtime ni installation OS et ne couvrent pas une exécution réelle du finaliseur macOS ; cette limite reste ouverte pour revue puis recette root.
