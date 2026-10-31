@@ -24,7 +24,7 @@ Livrer la version Web responsive et PWA installable selon docs/PLAN_REPRISE.md, 
 
 ## Claude assignment
 - agent: claude
-- status: pending
+- status: in_progress
 - branch: claude/web-pwa-ui
 - deliverables: full dedicated public/client/artisan/enterprise/SuperAdmin frontend matching source composition; responsive navigation; all loading/error/empty/validation states; live integration with available/provided contracts; P0 account/cache guards; visual evidence and UI/accessibility tests. Delegate coherent sublots internally with isolated ownership.
 - owned files: frontend paths above only

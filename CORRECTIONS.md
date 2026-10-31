@@ -68,3 +68,24 @@ Ce journal ne constitue pas une revue passée ; aucune affectation terminée à 
 - status: in_progress
 - fix commit: à venir
 - recheck evidence: aucune encore ; propriétaire prévenu, pas de statut verified
+
+## CLI-005 — Acceptation Claude et questions techniques
+- timestamp: 2026-10-30T21:47:59-04:00 (America/Martinique)
+- actor: codex
+- target session: b4b555f0
+- branch/checkpoint: claude/web-pwa-ui ; claim 018f93d
+- observed result: docs/CLAUDE_STATUS.md confirme mission accepted/in_progress et lecture des sources/images ; installation npm ci ; checkpoint frontend annoncé
+- action: approvals ponctuelles normales pour extraction des images PDF dans le tmp de la session et lecture des skills/tests ; aucune dérogation de permissions
+- next: implémentation frontend et réponse directe aux Q-C1/Q-C2 ci-dessous
+
+## Réponses pilote aux questions Claude — contrat checkpoint 0a01406
+- Q-C1 : projection réellement implémentée par GET /api/interventions/[id]/operations : participants = tableau {id,full_name,phone,role} des participants réels, vide si non attribué ; accès contrôlé au dossier. workspace participants annoncé dans la première doc mais absent du code 0a01406 : correction demandée au backend, ne pas présumer ce champ. Utiliser operations pour le détail.
+- Q-C2 : capabilities réellement livré par admin_overview = {dispatch_before_quote_acceptance:true,refunds:false,invoices:false,support_tickets:false,list_limit:100} ; garder ce contrat, mapper les menus dans UI selon données réellement présentes et distinguer indisponibilité des fonctions. Les données artisans/clients/organisations/interventions/audit sont présentes ; listes bornées à100, comptes globaux distincts.
+- Q-C3 : confirmé, aucune valeur commerciale inventée ; tarifs/taxes/commission/pays/exploitant inconnus restent explicitement à définir.
+- PWA : source cf52bcdbc46f28348024b8dcf61925ba5d2005e3 prête à revue ; composant PwaInstallControl réel. Codex backend 0a014063a6f2ca4fa323d627554bdfb5ffcd9c11 prêt à revue interne (npmcheck20 tests et SQLisolé19groupes), pas Supabase distant. Claude devra cross-vérifier cette révision ou la suivante publiée avant statut done.
+
+## Preview PWA initiale — pas la nouvelle UI
+- integration revision: 1638e765a44347d71b32968180e8e6781a7a7da7
+- preview: https://depannage-electricite-e9vyf5jtr-brafas-projects.vercel.app
+- build Vercel: réussi ; accès anonyme protégé SSO, accès CLI vercel curl autorisé HTTP200
+- limitations: nouveau frontend et nouvelles routes backend non intégrés dans cette première preview ; tests navigateur nécessitent accès autorisé, aucune protection désactivée
