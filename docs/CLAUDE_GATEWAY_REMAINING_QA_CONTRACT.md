@@ -61,72 +61,80 @@ Prouve : sur la vraie fonction déployée, un jeton réel accepté avant `exp` e
 ### 2.1 Objectif
 Prouver, sur la fonction déployée, qu’une révocation **validée après le pré-contrôle et avant la finalisation** d’un upload réel aboutit à un **403 avec compensation de l’objet** (GW-REV-001/002), puis relectures `documents`/objet absentes — et non seulement le refus d’un jeton déjà révoqué. Un ordre non prouvé, une issue incertaine (503) ou une fenêtre non exercée ⇒ **FAIL / non-preuve**, jamais PASS théorique.
 
-### 2.2 Contraintes d’exécution (révision pilote de 0a7aaa8)
-- Il n’y a **ni psql ni libpq** : le pilote exécute du SQL par `supabase db query --file`, qui envoie un **lot** (batch) ; un `begin` ne peut pas s’étendre sur deux appels CLI. Le verrou, la pause, la révocation et le `commit` doivent donc tenir **dans un seul lot**.
-- Un signal fichier écrit **après** le retour de la CLI peut arriver **après** la réponse Edge : il ne prouve rien. L’horloge de la preuve est **celle de la base**, renvoyée **dans le résultat du lot** (`clock_timestamp()` avant verrou, avant révocation, après révocation, après `commit`), jamais un horodatage de fichier post-CLI.
-- La fonction finalise par `finalize_document_upload` (013), qui prend d’abord `lock_intervention_organization(p_intervention_id)` = `select … for update of o` sur **l’organisation** du dossier (puis `for share` sur le dossier). Le pré-contrôle (`can_access_intervention`) et l’upload Storage **ne sont pas bloqués** ; la finalisation l’est tant que le lot tient le verrou.
-- PostgREST applique `statement_timeout` au rôle `authenticated` (8 s par défaut sur le projet) : si le lot tient le verrou plus longtemps, la RPC échoue (`57014`) ⇒ transport incertain ⇒ **503, objet conservé** (GW-REV-001) ⇒ **non-preuve**. Pause du lot **≤ 4 s**, `statement_timeout` du lot 8 s, `lock_timeout` 2 s.
+### 2.2 Contraintes d’exécution (v3 — revues pilote 46f6cf5 et root `GATEWAY_REVOKE_CONTRACT_46F6CF5.md`)
+- **Ni psql ni libpq** : le pilote exécute du SQL par `supabase db query --file` (Management API), qui envoie un **lot**. Un `begin` ne peut pas s’étendre sur deux appels CLI : verrou, pause, révocation, `commit` et relecture post-commit tiennent **dans un seul lot**. Le lot ne présume **pas** que la CLI renvoie plusieurs jeux de résultats : toutes les mesures sont accumulées dans une table temporaire de session et le lot se termine par **une seule ligne structurée** (jsonb) qui les contient toutes.
+- Aucun horodatage local (retour CLI, mtime, ordre d’écriture de fichiers) n’est une heure de `commit`. Les seules horloges de preuve sont des `clock_timestamp()` **de la base**, renvoyés dans la ligne finale ; `t_after_commit` est une **borne supérieure**, pas l’instant du commit.
+- `finalize_document_upload` (013) prend d’abord `lock_intervention_organization(p_intervention_id)` = `select … for update of o` sur **l’organisation** du dossier (puis `for share` sur le dossier). Le pré-contrôle (`can_access_intervention`) et l’upload Storage **ne sont pas bloqués** ; la finalisation l’est tant que le lot tient le verrou. 009 vérifie le propriétaire et sérialise sur l’organisation ; 013 verrouille cette même organisation puis relit `owns_intervention`.
+- PostgREST applique `statement_timeout` au rôle `authenticated` (valeur projet, non établie par ce contrat) : **pause du lot ≤ 3 s**, `lock_timeout` 2 s, `statement_timeout` 8 s pour le lot. Ni 5 s ni 8 s de fenêtre ne sont supposés ; la pause n’est **jamais** augmentée pour « faire apparaître » la fenêtre. Si la latence/timeout rend l’observation impossible, le résultat est « fenêtre non exercée », jamais un PASS théorique.
+- Tout est préparé **avant** le lot : acteurs, JWT (password grant), organisation/site/dossier, manifeste, résultats attendus. **Aucune création ni connexion** pendant la fenêtre.
 
 ### 2.3 Acteurs et données (cohorte dédiée, jamais une ligne réelle) — variante site, sans admin
-Cohorte du harnais : client QA, artisan QA (attribué), **propriétaire QA** de l’organisation (crée l’organisation et le site de la cohorte par `create_site`), **gestionnaire QA révoqué** = membre `manager` de l’organisation QA à portée `selected` avec grant `can_write` sur le site QA (posé par le propriétaire via `set_organization_member_site_access`). Dossier de **site** QA créé par le propriétaire. **Acteur de l’upload = le gestionnaire QA révoqué** (JWT réel valide, password grant) : il n’est ni le propriétaire, ni le client direct, ni l’artisan attribué. Révocation = **vrai RPC** `set_organization_member_site_access(<org QA>, <gestionnaire QA>, 'selected', '[]'::jsonb)` exécuté **sous l’identité du propriétaire QA** (rôle `authenticated` + claims `sub` = propriétaire QA), dans le lot. Aucun admin, aucune mise à jour directe de table.
+Cohorte du harnais : client QA, artisan QA attribué, **propriétaire QA** (crée organisation et site QA par `create_site`), **gestionnaire QA révoqué** = **membre** `manager` de l’organisation QA — **jamais** le propriétaire, un admin, le client direct ni l’artisan attribué — à portée `selected` avec **un seul** grant `can_write` sur le site QA (posé par le propriétaire via `set_organization_member_site_access`). Dossier de **site** QA créé par le propriétaire. **Acteur de l’upload = le gestionnaire QA** (JWT réel du gestionnaire). Révocation = **vrai RPC** `set_organization_member_site_access(<org QA>, <gestionnaire QA>, 'selected', '[]'::jsonb)` exécuté **sous l’identité du propriétaire QA** (rôle `authenticated` + claims locaux `sub` = propriétaire). Aucune promotion, aucun admin fictif, aucun `UPDATE` direct des permissions. (Un upload par le propriétaire ne prouverait aucune perte de droit.)
 
-### 2.4 Le lot SQL racine (unique, revu, borné)
+### 2.4 Le lot SQL racine (unique, revu, borné) — source exacte à revoir avant toute exécution
 ```
 begin;
 set local statement_timeout = '8s'; set local lock_timeout = '2s';
-select clock_timestamp() as t_begin, pg_backend_pid() as batch_pid;
--- garde : tous les identifiants appartiennent à la cohorte <run> (e-mails qa-gw-<run>-%, organisation/site/dossier liés), sinon raise exception
+create temp table qa_rv(k text primary key, v jsonb);
+insert into qa_rv values('t_begin', to_jsonb(clock_timestamp())), ('batch_pid', to_jsonb(pg_backend_pid())), ('run', '"<run>"'), ('project', '"<ref>"');
+-- Garde (raise exception sinon) : organisation.owner_id = <propriétaire QA> ; site.organization_id = <org QA> ;
+-- dossier.site_id = <site QA> ; membre <gestionnaire QA> : role manager, portée selected, un seul grant can_write
+-- sur <site QA>, distinct de owner/client/artisan, profil non admin ; e-mails exacts qa-gw-<run>-… de la cohorte ;
+-- aucun autre auth.users 'qa-gw-%' hors <run> ; tous les UUID issus du manifeste.
 do $$ … $$;
--- verrou d'ordonnancement, identique à celui de finalize
-select clock_timestamp() as t_lock from public.organizations o where o.id = '<org QA>' for update of o;
--- pause courte et bornée : fenêtre pendant laquelle le harnais uploade et observe l'objet
-select pg_sleep(4);
--- révocation par le vrai RPC sous l'identité du propriétaire QA
+-- Verrou d'ordonnancement sur UNE organisation (le même que finalize) ; t_lock APRÈS acquisition.
+select 1 from public.organizations o where o.id = '<org QA>' for update of o;
+insert into qa_rv values('t_lock', to_jsonb(clock_timestamp()));
+select pg_sleep(3);
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '<propriétaire QA>', true), set_config('request.jwt.claims', '{"sub":"<propriétaire QA>","role":"authenticated","aud":"authenticated"}', true);
-select clock_timestamp() as t_before_revoke;
+insert into qa_rv values('t_before_revoke', to_jsonb(clock_timestamp()));
 select public.set_organization_member_site_access('<org QA>', '<gestionnaire QA>', 'selected', '[]'::jsonb);
-select clock_timestamp() as t_revoked;
+insert into qa_rv values('t_revoked', to_jsonb(clock_timestamp())), ('rpc_ok', 'true');
 reset role;
 commit;
-select clock_timestamp() as t_after_commit;
+-- Après commit : relecture autoritaire de la révocation (portée et grants du membre), puis borne supérieure.
+insert into qa_rv select 'readback', jsonb_build_object('scope', (select scope from public.organization_member_site_scopes where organization_id='<org QA>' and user_id='<gestionnaire QA>'), 'grants', (select count(*) from public.organization_member_site_grants where organization_id='<org QA>' and user_id='<gestionnaire QA>'));
+insert into qa_rv values('t_after_commit', to_jsonb(clock_timestamp()));
+select jsonb_object_agg(k, v) as result from qa_rv;   -- LA ligne finale unique
 ```
-Tous les UUID sont validés par la garde (format + appartenance à la cohorte) ; une seule exécution par run ; le lot est relu par le pilote avant exécution. Si `lock_timeout` ou la garde lève, rien n’est validé.
+Si la garde, `lock_timeout`, `statement_timeout` ou le RPC lève, la transaction est annulée (`rollback` implicite) : **non-preuve** ; aucune nouvelle mutation n’est envoyée après un arrêt ; la fermeture du processus CLI ne signifie pas que la transaction est terminée. Une seule exécution par run ; la **source exacte** (UUID substitués, garde complète) est relue par root avant toute tentative.
 
-### 2.5 L’observateur (lecture seule, second appel CLI pendant la pause)
+### 2.5 L’observation unique (lecture seule, second appel CLI pendant la pause)
+Une **seule** requête relie, à la même `clock_timestamp()` de la base, (a) la finalisation bloquée et (b) l’objet Storage exact :
 ```
-select a.pid, a.state, a.wait_event_type, a.wait_event, pg_blocking_pids(a.pid) as blocked_by, clock_timestamp() as t_observed, left(a.query, 80) as query
+select clock_timestamp() as t_observed, a.pid as finalize_pid, a.wait_event_type, a.wait_event, pg_blocking_pids(a.pid) as blocked_by,
+       exists(select 1 from storage.objects o where o.bucket_id='intervention-documents' and o.name='<gestionnaire QA>/<uuid objet>') as object_visible
 from pg_stat_activity a where a.query ilike '%finalize_document_upload%' and a.pid <> pg_backend_pid();
 ```
-Attendu pendant la pause : **une** ligne, `wait_event_type = 'Lock'`, `blocked_by` contenant `batch_pid`, horodatage `t_observed` entre `t_lock` et `t_revoked`. C’est la preuve que la finalisation de l’upload réel **attendait le lot** (et non qu’elle n’avait pas encore commencé) au moment où l’objet était visible.
+Attendu : **exactement une** ligne, `wait_event_type = 'Lock'`, `blocked_by` contenant **directement** `batch_pid`, `object_visible = true`, `t_lock ≤ t_observed ≤ t_before_revoke`. Le chemin `<gestionnaire QA>/<uuid objet>` est celui **découvert par le harnais** (listage du seul préfixe autorisé) et inscrit au manifeste ; aucune recherche textuelle, aucun autre préfixe. Zéro ligne, plusieurs lignes, PID/requête invisibles par permissions, objet absent ou fenêtre manquée ⇒ **FAIL « fenêtre non exercée »**. L’observateur ne trace ni la requête complète, ni les claims, ni des lignes d’autres utilisateurs. Un fichier local « object-observed » ne remplace jamais cette observation DB.
 
 ### 2.6 Interleaving et preuve d’ordre
-| Étape | Qui | Observation |
+| Étape | Qui | Mesure DB |
 |---|---|---|
-| 1 | pilote : lance le lot (CLI 1, bloque ~4 s) | résultat final : `t_begin`, `batch_pid`, `t_lock`, `t_before_revoke`, `t_revoked`, `t_after_commit` (horloge DB) |
-| 2 | pilote, aussitôt : lance `--suite revoke-live` | le harnais fait **un** upload réel (JPEG 2 Ko, JWT du gestionnaire QA) **sans attendre la réponse**, et liste `<gestionnaire QA>/` toutes les 250 ms (≤ 3 s) jusqu’à voir **un** objet nouveau : `object-observed` (horloge locale du pilote) |
-| 3 | pilote, pendant la pause : observateur (CLI 2) | ligne `Lock`, `blocked_by ∋ batch_pid`, `t_observed` |
-| 4 | lot : révocation puis `commit` | `t_revoked < t_after_commit` |
-| 5 | harnais : réponse reçue | **403** enveloppe fonction, sans fuite ; relectures : objet absent, aucune ligne `documents` du dossier pour cet objet |
+| 1 | pilote : lot (CLI 1, bloque ~3 s) | ligne finale : `run`, `project`, `batch_pid`, `t_begin`, `t_lock`, `t_before_revoke`, `t_revoked`, `rpc_ok`, `readback`, `t_after_commit` |
+| 2 | pilote, aussitôt : `--suite revoke-live` | **un** upload réel (JPEG, JWT du gestionnaire QA), réponse non attendue ; découverte de l’objet sous `<gestionnaire QA>/` (≤ 3 s, 250 ms), chemin inscrit au manifeste |
+| 3 | pilote, pendant la pause : observation unique (CLI 2) | `t_observed`, `finalize_pid`, `blocked_by ∋ batch_pid`, `object_visible = true` |
+| 4 | lot : révocation puis `commit` | `t_revoked < t_after_commit`, `readback.scope = 'selected'`, `readback.grants = 0` |
+| 5 | harnais : réponse | **403** enveloppe gateway sans fuite ; relectures : objet exact absent (même chemin que l’observation), aucune ligne `documents` par id/chemin/propriétaire/dossier |
 
-**Preuve d’ordre exigée pour PASS** : (a) l’observateur montre la finalisation **bloquée par `batch_pid`** à `t_observed` avec `t_lock ≤ t_observed ≤ t_revoked` (horloge DB) ; (b) le harnais a enregistré `object-observed` **avant** de recevoir la réponse, et l’objet était visible pendant la pause (l’observateur (a) le date côté base) ; (c) la réponse est **403** avec objet absent et aucune ligne `documents` ; (d) `t_revoked < t_after_commit` et la RPC de révocation a retourné sans erreur ; (e) aucune lecture inconnue au nettoyage. La comparaison « objet observé avant la révocation » s’appuie sur (a) (la finalisation attendait encore quand l’observateur a lu) et non sur l’horloge locale du pilote.
+**PASS exige toutes les conditions** : (a) observation unique conforme avec `t_lock ≤ t_observed ≤ t_before_revoke ≤ t_revoked < t_after_commit` ; (b) `rpc_ok = true` **et** révocation **commitée** prouvée par la relecture post-commit (`selected`, 0 grant, ancien droit retiré) ; (c) 403 sans fuite, objet absent au chemin observé, aucune ligne `documents` ; (d) le harnais a découvert l’objet avant de recevoir la réponse ; (e) aucune lecture inconnue au nettoyage ; (f) le parseur a accepté la ligne finale : un seul run/PID, horodatages cohérents, projet/UUID/chemin attendus, aucun code d’erreur SQL, aucun champ manquant — **un résultat manquant ou malformé n’est jamais remplacé par du vide**.
+**FAIL / non-preuve** : observation absente ou multiple ; objet jamais visible ; **201** (la révocation a perdu la course : fait documenté, la ligne réellement créée est nettoyée) ; 503 / `57014` / transport / interruption ⇒ issue **inconnue** : aucune suppression sur un minuteur ni sur une seule absence, drain/réconciliation existants et manifeste durable 0600 avant un nettoyage borné et rejouable (lecteur indisponible ≠ zéro) ; lot avorté ; horodatages hors ordre. Les garanties ac72c38/d7abd8c ne sont pas affaiblies par cette suite additive.
 
-**Non-preuve / FAIL** : observateur sans ligne bloquée (la finalisation n’a pas été exercée pendant le verrou) ; objet jamais observé pendant la fenêtre ; 201 (la révocation a perdu la course : fait documenté, pas un PASS) ; 503/`57014`/absence de réponse (issue incertaine ⇒ objet conservé ⇒ découverte + nettoyage) ; lot échoué (garde, `lock_timeout`) ; `t_observed` hors `[t_lock, t_revoked]` ; horloges locale/DB incomparables ne sont **pas** utilisées comme preuve. Aucune garantie codée « par timeout ».
-
-### 2.7 Refus si un autre rédacteur est actif
-Le lot commence par `select count(*) from auth.users where email like 'qa-gw-%' and email not like 'qa-gw-<run>-%'` et lève si > 0 ; le harnais exige `--no-other-writer` (coché par le pilote après vérification qu’aucun manifeste non consommé n’existe) et refuse sinon (code 2). Le nettoyage du run précédent doit être **terminé** (0 reliquat).
+### 2.7 Préflight et refus si un autre rédacteur est actif
+Préflight : projet, URL de fonction, SHA/source du gateway déployé exacts ; aucun autre rédacteur ni manifeste non réconcilié (le pilote coche `--no-other-writer` après vérification) ; le lot refuse (`raise`) s’il existe un `auth.users` `qa-gw-%` hors `<run>` — garde **conservatrice**, pas une preuve qu’aucun rédacteur n’existe. Un bail d’expiration (§1) en attente peut faire refuser ce garde : il n’est **jamais effacé pour passer** ; on attend son verify ou son nettoyage. Le nettoyage du run précédent doit être terminé (0 reliquat).
 
 ### 2.8 Hors périmètre / interdits
 Aucun trigger, hook ou point d’injection ajouté à l’Edge ; aucune modification de l’Auth globale, de la production ou d’une table utilisateur hors cohorte ; pas de garantie « par timeout » codée comme preuve : seule la séquence observée §2.5 vaut preuve.
 
-### 2.9 Tests unitaires (faux client, faux résultats de lot/observateur, faux horloge) — après GO pilote
-`tests/qa-gateway-revoke.test.ts` : le harnais reçoit (par fichier privé fourni par le pilote) le résultat du lot et de l’observateur ; séquence nominale (ligne bloquée par `batch_pid` dans `[t_lock, t_revoked]`, objet observé avant la réponse, 403, relectures absentes ⇒ pass) ; observateur sans ligne bloquée ⇒ fail « finalisation non exercée » ; objet jamais observé ⇒ fail « fenêtre non exercée » ; 201 ⇒ fail documenté ; 503 ⇒ fail incertain + découverte/compensation ; `t_observed` hors fenêtre ⇒ fail ; refus sans `--no-other-writer` ; aucune suppression hors manifeste.
+### 2.9 Tests unitaires (faux client, fausse ligne finale de lot, fausse observation, faux horloge) — après GO root sur v3
+`tests/qa-gateway-revoke.test.ts` : le harnais reçoit (fichiers privés 0600 fournis par le pilote) la **ligne finale** du lot et la **ligne d’observation** ; parseur : rejet de plusieurs runs/PIDs, d’horodatages incohérents, d’un mauvais projet/UUID/chemin, d’un code d’erreur SQL, d’un champ manquant/malformé (jamais substitué par du vide) ; séquence nominale (observation conforme, `rpc_ok`, relecture `selected`/0 grant, objet découvert avant la réponse, 403, relectures absentes ⇒ pass) ; observation absente/multiple ⇒ fail « fenêtre non exercée » ; `object_visible=false` ⇒ fail ; `t_observed` hors `[t_lock, t_before_revoke]` ⇒ fail ; relecture post-commit non révoquée ⇒ fail (RPC réussi mais non commité) ; 201 ⇒ fail documenté + nettoyage de la ligne créée ; 503/57014 ⇒ issue inconnue, aucune suppression sur minuteur ; refus sans `--no-other-writer` ; aucune suppression hors manifeste.
 
 ## 3. Révocation « simple » (jeton déjà révoqué) — complément, même suite
 Après §2 (ou indépendamment, `--suite revoke-simple`) : (1) **déconnexion globale** : `POST /auth/v1/logout?scope=global` avec le JWT de l’artisan QA, puis upload avec le **même** JWT → attendu 401 **si** la fonction/`getUser` invalide la session (`session_id`) ; sinon 201 **documenté comme fait observé** (le JWT reste statutairement valide jusqu’à `exp` : c’est un résultat, pas un PASS/FAIL théorique — le contrat gateway ne promet pas l’invalidation de session) ; (2) **retrait de droit avant upload** : réaffectation/retrait de membership **avant** l’upload → 403 attendu, aucun objet, aucune ligne (déjà couvert par le pré-contrôle, mais relu ici sur la vraie fonction).
 
 ## 4. Livraison et commande pilote
-1. Ce contrat (revue). 2. Implémentation §1 + tests (`npx tsx --test tests/qa-gateway*.test.ts`, `tsc`, `node --check`), SHA rapporté. 3. Après décision §2.7, implémentation §2/§3 + tests, SHA rapporté. Commandes pilote : `--suite expiry-prepare` puis, après `verifyNotBefore`, `--suite expiry-verify --lease …` ; `--suite revoke-live --no-other-writer --batch-result <fichier privé>` avec le lot et l’observateur revus (§2.4–2.5) ; `--suite revoke-simple`. Chaque run : nettoyage 0 reliquat exigé avant tout nouveau rédacteur.
+1. Ce contrat (revue). 2. Implémentation §1 + tests (`npx tsx --test tests/qa-gateway*.test.ts`, `tsc`, `node --check`), SHA rapporté. 3. Après décision §2.7, implémentation §2/§3 + tests, SHA rapporté. Commandes pilote : `--suite expiry-prepare` puis, après `verifyNotBefore`, `--suite expiry-verify --lease …` ; `--suite revoke-live --no-other-writer --batch-result <ligne finale du lot, fichier privé 0600> --observation <ligne d’observation, fichier privé 0600>` avec la source SQL exacte revue (§2.4–2.5) ; `--suite revoke-simple`. Chaque run : nettoyage 0 reliquat exigé avant tout nouveau rédacteur.
 
 ## 4 bis. Livraison §1 (implémentation après le contrat v2)
 
