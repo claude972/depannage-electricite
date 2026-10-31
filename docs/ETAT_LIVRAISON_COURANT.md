@@ -1,13 +1,13 @@
 # État courant de livraison
 
-Mis à jour le 2026-10-31T13:57:10-04:00 (America/Martinique). Les preuves ci-dessous sont bornées à leur SHA et à leur environnement. L'application complète des 76 capacités n'est pas déclarée terminée.
+Mis à jour le 2026-10-31T14:15:00-04:00 (America/Martinique). Les preuves ci-dessous sont bornées à leur SHA et à leur environnement. L'application complète des 76 capacités n'est pas déclarée terminée.
 
 ## Version et environnements
 
 | Élément | État vérifié |
 | --- | --- |
-| Source intégrée et poussée | `integration/web-pwa`, `b13b43a52c102ee91dd2942765226ae4fc5454c4` ; 111 tests UI et typecheck strict passent. |
-| Serveur de recette local | `606127244e86dc28998488dd23bef804f8120ffb`, build webpack réussi, port3017 ; il n'inclut pas encore les derniers visuels artisan et illustration. |
+| Source intégrée et poussée | `integration/web-pwa`, `be17b24adbc0035d1ba82347c09f9045bac03d71` ; 115 tests UI et typecheck strict passent. |
+| Serveur de recette local | `be17b24adbc0035d1ba82347c09f9045bac03d71`, build webpack réussi, port3017, HTTP200 vérifié ; inclut les derniers visuels artisan, entreprise et illustration. |
 | Backend dédié | Supabase `kcpyjzndybfdlnhvscbs`, actif ; migrations001–017 appliquées et historique relu. |
 | Transfert photo Edge | `native-document-upload`, version1, `verify_jwt=true`, source `d7abd8c` ; neuf scénarios réels passent. |
 | Site public seven.vercel.app | Ancien déploiement, inchangé. Aucune nouvelle preview Vercel n'est annoncée. |
@@ -25,16 +25,17 @@ Mis à jour le 2026-10-31T13:57:10-04:00 (America/Martinique). Les preuves ci-de
 
 Les interfaces entreprise M13/M4/M66, artisan M34–M36 et Super Admin M43 ont été revues et intégrées dans leur périmètre. Client M61/V8-C06/V8-C07 : paiement terminal corrigé (statut paid et date serveur requis). Artisan M14/M65 : pièces seulement Manquant/Transmis/À renouveler, candidature globale séparée ; nouvelle pièce et pièce expirée capturées. Accueil public : illustration issue de la référence fournie M41, équilibre titre/visuel M11 rétabli, légende Illustration ; aucun avis, tarif contractuel, qualification ou équipe inventé. Ces captures ne remplacent pas tous les parcours connectés.
 
-Entreprise V5 : C01 est revu sans nouveau P1/P2 ; C08 conserve les permissions et l'ancrage documents. C05 avait un KPI affichant zéro quand les données professionnelles ne sont pas vérifiées ; le correctif `38326f0` est en revue avant fusion.
+Entreprise V5 : C01 est revu sans nouveau P1/P2 ; C08 conserve les permissions et l'ancrage documents. C05 n’affiche plus zéro quand les données professionnelles ne sont pas vérifiées ; le correctif `38326f0` est revu et intégré dans `be17b24`.
 
 ## Travail en cours et gates ouverts
 
-1. Terminer la revue du correctif C05 et compiler/recetter le dernier assemblage visuel.
+1. Dernier assemblage visuel be17b24 compilé et servi ; poursuivre les recettes connectées sur cet assemblage. CI deux jobs PASS, run41227086308.
 2. Fusionner les harnais après leurs dernières revues. Le harnais Codex `719ba46` est accepté par la revue croisée Claude ; ses limites (certaines courses rendez-vous et critères HTTP) restent explicites. L'ancien fixture admin doit être refusé avant seeding sur un schéma protégé par014 (mission QA-ADMIN-PREFLIGHT-001).
-3. **Expiration JWT** : code backend `da5758c` non autorisé en cloud. Le risque de suppression d'UID non validé est corrigé ; restent les interruptions avant suivi durable et le compte conservé malgré échec préalable. Aucun bail/compte d'expiration n'a été préparé. Le futur test utilisera un vrai token et le suivi existant, sans changer le TTL ni forger un JWT.
+3. **Expiration JWT** : correctif `6466b8a` revu, 57 tests purs PASS. Préparation réelle faite : UN client QA volontairement conservé, zéro document/objet. Verdict PREPARED, pas preuve d’expiration. Expiration15:05:23 Martinique ; vérification root après15:06:23 et avant16:05:22, avec checkout épinglé6466 et bail privé. Aucun token publié, TTL inchangé. Les cohortes antérieures sont nettoyées ; ce bail est la seule exception attendue.
 4. **Révocation pendant upload** : protocole sous verrou de la seule cohorte à amender/revoir avant code et exécution ; pas de hook Edge, d'admin fictif permanent ni de nouvelle migration.
 5. **Documents et B2B** : nouvelle recette UI/API isolée demandée au worker B2B existant (QA-DOCUMENTS-B2B-004), contrat avant code ; aucune fixture finance immuable.
-6. Adresse du premier vrai SuperAdmin demandée au propriétaire, sans mot de passe. Aucun administrateur de test permanent n'a été créé.
+6. Adresse du premier vrai SuperAdmin confirmée par le propriétaire (gardée hors rapport Git). Recherche Auth exacte : compte absent. Inscription/confirmation par son propriétaire requise avant promotion atomique ; aucune activation annoncée, aucun mot de passe demandé, aucun administrateur fictif permanent créé.
+7. **Support opérateur A5** : propriété backend Codex et réservation018 confirmées par Claude cf53e4c, aucun chevauchement. Worktree codex/support-operators créé depuis be17 ; agent Codex existant relancé pour contrat détaillé avant code. Interface au worker plateforme Claude après contrat ; pas de fonctionnalité A5 livrée à ce stade.
 
 ## Limites du périmètre global
 
