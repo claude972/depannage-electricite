@@ -8,18 +8,14 @@ import {
   dbError,
 } from "@/lib/supabase/server";
 import { uuid } from "@/lib/supabase/validation";
+import {
+  DOCUMENT_BUCKET as bucket,
+  MAX_DOCUMENT_BYTES,
+  MAX_REQUEST_BYTES,
+  documentNameFor,
+  validateDocumentUpload,
+} from "@/lib/shared/document-policy";
 export const runtime = "nodejs";
-const bucket = "intervention-documents";
-function detectType(bytes: Uint8Array): string | null {
-  const text = Buffer.from(bytes.subarray(0, 12)).toString("ascii");
-  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)
-    return "image/jpeg";
-  if (bytes[0] === 0x89 && text.slice(1, 4) === "PNG") return "image/png";
-  if (text.startsWith("%PDF-")) return "application/pdf";
-  if (text.startsWith("RIFF") && text.slice(8, 12) === "WEBP")
-    return "image/webp";
-  return null;
-}
 export async function GET(request: Request) {
   try {
     const { db } = await authenticatedClient();
@@ -56,12 +52,16 @@ export async function POST(request: Request) {
   try {
     assertOrigin(request);
     const { db, user } = await authenticatedClient();
-    if (Number(request.headers.get("content-length") || 0) > 4400000)
+    if (Number(request.headers.get("content-length") || 0) > MAX_REQUEST_BYTES)
       throw new ApiError(413, "Le fichier doit faire moins de 4 Mo.");
     const form = await request.formData();
     const file = form.get("file");
     const interventionId = form.get("intervention_id");
-    if (!(file instanceof File) || file.size < 1 || file.size > 4194304)
+    if (
+      !(file instanceof File) ||
+      file.size < 1 ||
+      file.size > MAX_DOCUMENT_BYTES
+    )
       throw new ApiError(
         422,
         "Choisissez un fichier PDF, JPEG, PNG ou WebP de moins de 4 Mo.",
@@ -98,12 +98,18 @@ export async function POST(request: Request) {
     const throttle = await db.rpc("check_upload_limit");
     dbError(throttle.error);
     const buffer = new Uint8Array(await file.arrayBuffer());
-    const mime = detectType(buffer);
-    if (!mime || mime !== file.type)
+    // Shared policy with the native gateway: magic bytes must match the declared MIME.
+    const verdict = validateDocumentUpload({
+      size: file.size,
+      declaredType: file.type,
+      bytes: buffer,
+    });
+    if (!verdict.ok)
       throw new ApiError(
         422,
         "Le contenu du fichier ne correspond pas à un format autorisé.",
       );
+    const mime = verdict.mime;
     const id = randomUUID();
     const path = `${user.id}/${id}`;
     const admin = adminClient();
@@ -117,7 +123,7 @@ export async function POST(request: Request) {
         id,
         intervention_id: interventionId || null,
         owner_id: user.id,
-        name: file.name.slice(0, 160),
+        name: documentNameFor(file.name),
         path,
         mime_type: mime,
       })

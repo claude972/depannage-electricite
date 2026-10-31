@@ -50,12 +50,7 @@ import {
   Tag,
   Unavailable,
 } from "../app/ui";
-import {
-  DocumentManager,
-  MessageCenter,
-  ProfileForm,
-  QuoteEditor,
-} from "../app/forms";
+import { DocumentManager, MessageCenter, ProfileForm } from "../app/forms";
 import {
   ARTISAN_STATUS,
   CATEGORIES,
@@ -71,32 +66,75 @@ import {
   time,
 } from "../app/format";
 import {
+  canAccess,
   artisanMissions,
   artisanPerformance,
-  isSameDay,
   pickQuote,
   quoteVersions,
   type Performance,
 } from "../app/session";
 import styles from "./artisan.module.css";
+import { QuoteDraftEditor } from "./artisan-quote-draft";
+import { DossierHelpLink, SupportCenter } from "./support-tickets";
+import { HeaderBell, NotificationsPage } from "./notifications-anchor";
+import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
+import { TrackingAnchor } from "./tracking-anchor";
+import { ArtisanPlanning } from "../features/planning/artisan-planning";
+import { CONTRACT_MESSAGES } from "../app/api";
+import { demoPlanning } from "../../lib/features/planning/demo";
+import { PLANNING_TIME_ZONE } from "../../lib/features/planning/types";
+import { anchorEntryVisible, leafScope, platformEntries } from "./anchors";
+import { PlatformPage } from "./platform-anchor";
+import { FeatureUnavailable } from "./feature-unavailable";
+import {
+  applicationSteps,
+  appointmentSlotState,
+  credentialDateLabel,
+  credentialState,
+  type CredentialState,
+  credentialSummary,
+  demoPlanningRange,
+  fmtRating,
+  missionSegmentOptions,
+  perfTiles,
+  planningAuthority,
+  stepsSummary,
+  type AppointmentEntry,
+  type MissionSegment,
+} from "./artisan-lists";
 
 // ---- Static definitions ---------------------------------------------------------------
 type Tone = "neutral" | "blue" | "green" | "amber" | "red" | "violet";
-type NavItem = { view: View; label: string; icon: string };
+/** `short` : libellé de l’onglet bas (une ligne à 360 px, M36 « Accueil ») ; le menu garde `label`. */
+type NavItem = { view: View; label: string; icon: string; short?: string };
 
 const PRIMARY_NAV: NavItem[] = [
-  { view: "overview", label: "Tableau de bord", icon: "grid" },
+  { view: "overview", label: "Tableau de bord", icon: "grid", short: "Accueil" },
   { view: "missions", label: "Missions", icon: "briefcase" },
   { view: "quotes", label: "Devis", icon: "receipt" },
   { view: "messages", label: "Messages", icon: "message" },
   { view: "profile", label: "Profil", icon: "person" },
 ];
 const SECONDARY_NAV: NavItem[] = [
+  { view: "planning", label: "Planning", icon: "calendar" },
   { view: "documents", label: "Documents", icon: "document" },
   { view: "application", label: "Dossier de candidature", icon: "badge" },
   { view: "performance", label: "Performance", icon: "chart" },
   { view: "help", label: "Aide", icon: "help" },
+  { view: "support", label: "Assistance", icon: "shield" },
 ];
+/**
+ * Entrées secondaires réellement proposées : le planning dépend de la capacité serveur (jamais un
+ * menu sans action) ; les sections du back-office n’apparaissent que si la plateforme a ouvert un
+ * droit d’opérateur à ce compte (`platformEntries`, fail-closed), sans promotion de rôle.
+ */
+function secondaryNav(session: Session): NavItem[] {
+  const base = SECONDARY_NAV.filter((item) =>
+    item.view === "planning" ? anchorEntryVisible(canAccess("planning", session.role, session.mode), session.capabilities.planning) : true,
+  );
+  const platform = platformEntries(session.platformAccess, (v) => canAccess(v, session.role, session.mode));
+  return [...base, ...platform];
+}
 const DRAWER_ID = "artisan-drawer";
 
 const APPLICATION_STATUS: Record<
@@ -175,8 +213,6 @@ const QUOTE_STATUS: Record<string, { label: string; tone: Tone }> = {
 const maskPostal = (code: string) =>
   code.length >= 2 ? `${code.slice(0, 2)}•••` : "•••••";
 const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
-const fmtRating = (value: number) =>
-  value.toLocaleString("fr-FR", { maximumFractionDigits: 1 });
 const activeNav = (view: View): View =>
   view === "mission" || view === "detail" || view === "quote" ? "missions" : view;
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -201,29 +237,6 @@ function seniority(createdAt: string | undefined, now: Date): string | null {
   const years = Math.floor(months / 12);
   const rest = months % 12;
   return `${years} an${years > 1 ? "s" : ""}${rest ? ` et ${rest} mois` : ""}`;
-}
-type CredentialState = {
-  key: "missing" | "expired" | "pending" | "valid";
-  label: string;
-  tone: Tone;
-  credential?: ArtisanCredential;
-};
-// "Validé" only when the operator approved the application and the piece is not expired.
-function credentialState(
-  credentials: ArtisanCredential[],
-  kind: CredentialKind,
-  applicationStatus: ArtisanApplicationStatus | undefined,
-  today: string,
-): CredentialState {
-  const credential = credentials
-    .filter((c) => c.kind === kind)
-    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
-  if (!credential) return { key: "missing", label: "Manquant", tone: "red" };
-  if (credential.expires_on && credential.expires_on < today)
-    return { key: "expired", label: "À renouveler", tone: "amber", credential };
-  if (applicationStatus === "approved")
-    return { key: "valid", label: "Validé", tone: "green", credential };
-  return { key: "pending", label: "Transmis, en attente d’examen", tone: "blue", credential };
 }
 function paymentFor(quotes: Quote[], payments: Payment[], interventionId: string) {
   const accepted = quotes.find(
@@ -340,7 +353,6 @@ function useOperations(session: Session, id: string, version: number) {
   }, [id, version, mode, profileId]);
   return state;
 }
-type AppointmentEntry = { appointment: Appointment | null } | null;
 function useAppointments(session: Session, ids: string[]) {
   const key = ids.join("|");
   const [map, setMap] = useState<Record<string, AppointmentEntry>>({});
@@ -440,6 +452,18 @@ export function ArtisanSpace({ session }: { session: Session }) {
       case "messages":
         content = <Messages session={session} />;
         break;
+      case "notifications":
+        content = <NotificationsPage session={session} />;
+        break;
+      case "planning":
+        content = <PlanningView session={session} dossier={dossier} />;
+        break;
+      case "platform-operators":
+      case "platform-finance":
+      case "platform-moderation":
+      case "support-queue":
+        content = <PlatformPage session={session} view={session.view} />;
+        break;
       case "documents":
         content = (
           <Documents
@@ -476,6 +500,15 @@ export function ArtisanSpace({ session }: { session: Session }) {
       case "help":
         content = <HelpView session={session} />;
         break;
+      case "support":
+        content = (
+          <SupportCenter
+            session={session}
+            interventions={session.data.interventions.filter((x) => x.artisan_id === session.profileId)}
+            backView="overview"
+          />
+        );
+        break;
       default:
         content = <Forbidden onHome={() => session.go("overview")} />;
     }
@@ -502,14 +535,7 @@ export function ArtisanSpace({ session }: { session: Session }) {
             <span>Bonjour,</span>
             <strong>{firstName(session.displayName)}</strong>
           </div>
-          <button
-            type="button"
-            className={styles.iconButton}
-            aria-label="Messages"
-            onClick={() => navigate("messages")}
-          >
-            <Icon name="bell" />
-          </button>
+          <HeaderBell session={session} />
         </header>
         <main id="main" className={styles.main} tabIndex={-1}>
           <Alerts
@@ -530,7 +556,7 @@ export function ArtisanSpace({ session }: { session: Session }) {
               onClick={() => navigate(item.view)}
             >
               <Icon name={item.icon} size={22} />
-              {item.label}
+              {item.short ?? item.label}
             </button>
           ))}
         </nav>
@@ -611,7 +637,7 @@ function Sidebar({
       </nav>
       <span className={styles.sideCaption}>Dossier et aide</span>
       <nav className={styles.sideNav} aria-label="Navigation secondaire">
-        <NavButtons items={SECONDARY_NAV} current={current} onNavigate={onNavigate} />
+        <NavButtons items={secondaryNav(session)} current={current} onNavigate={onNavigate} />
       </nav>
       <div className={styles.sideFoot}>
         <div className={styles.sideUser}>
@@ -690,7 +716,7 @@ function Drawer({
         </nav>
         <span className={styles.sideCaption}>Dossier et aide</span>
         <nav className={styles.sideNav} aria-label="Menu secondaire">
-          <NavButtons items={SECONDARY_NAV} current={current} onNavigate={onNavigate} />
+          <NavButtons items={secondaryNav(session)} current={current} onNavigate={onNavigate} />
         </nav>
         <div className={styles.sideFoot}>
           <button
@@ -761,20 +787,20 @@ function PanelArt() {
   );
 }
 function appointmentSlot(entry: AppointmentEntry | undefined, now: Date): ReactNode {
-  if (entry === undefined)
+  const slot = appointmentSlotState(entry, now);
+  if (slot.kind === "loading")
     return (
       <span role="status" className={styles.rowHint}>
         Horaire en cours de lecture…
       </span>
     );
-  if (entry === null) return <span className={styles.rowHint}>Horaire indisponible</span>;
-  if (!entry.appointment) return <span className={styles.rowHint}>Horaire à fixer</span>;
-  const start = new Date(entry.appointment.starts_at);
+  if (slot.kind === "unavailable") return <span className={styles.rowHint}>Horaire indisponible</span>;
+  if (slot.kind === "unscheduled") return <span className={styles.rowHint}>Horaire à fixer</span>;
   return (
     <>
-      <strong>{isSameDay(start, now) ? "Aujourd’hui" : date(entry.appointment.starts_at)}</strong>
+      <strong>{slot.today ? "Aujourd’hui" : date(slot.startsAt)}</strong>
       <span>
-        {time(entry.appointment.starts_at)} – {time(entry.appointment.ends_at)}
+        {time(slot.startsAt)} – {time(slot.endsAt)}
       </span>
     </>
   );
@@ -1008,6 +1034,7 @@ function Overview({
       >
         Voir missions disponibles
         {offers.length ? <span className={styles.ctaCount}>{offers.length}</span> : null}
+        <Icon name="arrow" size={18} />
       </button>
       {session.mode === "demo" && (
         <DemoNote>
@@ -1019,7 +1046,6 @@ function Overview({
 }
 
 // ---- Missions list -------------------------------------------------------------------------
-type MissionSegment = "available" | "active" | "done";
 function Missions({ session, declinedIds }: { session: Session; declinedIds: string[] }) {
   const [segment, setSegment] = useState<MissionSegment>("available");
   const m = artisanMissions(session.data.interventions, session.profileId);
@@ -1028,11 +1054,7 @@ function Missions({ session, declinedIds }: { session: Session; declinedIds: str
   const done = [...m.awaitingPayment, ...m.done].sort(
     (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
   );
-  const options = [
-    ["available", `Disponibles (${offers.length})`],
-    ["active", `En cours (${m.active.length})`],
-    ["done", `Terminées (${done.length})`],
-  ] as const;
+  const options = missionSegmentOptions({ offers: offers.length, active: m.active.length, done: done.length });
   const open = (id: string) => session.go("mission", id);
   return (
     <>
@@ -1378,6 +1400,7 @@ function WorkDossier({ session, intervention: i }: { session: Session; intervent
         subtitle={`${shortId(i.id)} — créée le ${dateTime(i.created_at)}`}
         action={<Badge status={i.status} wording="artisan" />}
       />
+      <DossierHelpLink session={session} interventionId={i.id} />
       <div className={styles.dossierGrid}>
         <div className={styles.dossierMain}>
           <section className="panel" aria-labelledby="dossier-intervention">
@@ -1428,12 +1451,14 @@ function WorkDossier({ session, intervention: i }: { session: Session; intervent
               onSet={(next) => operate({ action: "set_travel_stage", stage: next })}
             />
           )}
+          {canTravel && <TrackingAnchor session={session} variant="artisan" interventionId={i.id} authority={{ canWrite: true }} />}
           <QuotePanel
             session={session}
             intervention={i}
             versions={versions}
             current={current}
             onView={setViewQuoteId}
+            onPublished={(quoteId) => setViewQuoteId(quoteId ?? "")}
           />
           {canReport && (
             <ReportPanel
@@ -1659,7 +1684,7 @@ function TravelPanel({
   return (
     <section className="panel" aria-labelledby="dossier-travel">
       <h2 id="dossier-travel">Déplacement</h2>
-      <p>Indiquez au client où vous en êtes. Aucune position n’est transmise.</p>
+      <p>Indiquez au client où vous en êtes. Ces étapes ne transmettent aucune position.</p>
       <div className={styles.stageButtons} style={{ marginTop: 12 }}>
         {stages.map((s) => (
           <button
@@ -1684,21 +1709,23 @@ function QuotePanel({
   versions,
   current,
   onView,
+  onPublished,
 }: {
   session: Session;
   intervention: Intervention;
   versions: Quote[];
   current: Quote | undefined;
   onView: (id: string) => void;
+  /** Publication from the draft editor: exact quote id, or undefined (newest sent is shown). */
+  onPublished: (quoteId: string | undefined) => void;
 }) {
+  // Contract QUOTE-DRAFT-001: the draft editor is available while the dossier is assigned
+  // (first quote) or quoted (revision replacing the sent quote). The sent quote stays shown.
+  const sentQuote = [...versions].reverse().find((q) => q.status === "sent");
   if (i.status === "assigned")
     return (
       <>
-        <QuoteEditor
-          busy={session.busy}
-          demo={session.mode === "demo"}
-          onSubmit={(values) => void session.action(i.id, "send_quote", values)}
-        />
+        <QuoteDraftEditor session={session} interventionId={i.id} onPublished={onPublished} />
         {versions.length > 0 && (
           <section className="panel" aria-labelledby="dossier-previous-quotes">
             <h2 id="dossier-previous-quotes">Versions précédentes</h2>
@@ -1718,66 +1745,84 @@ function QuotePanel({
       </>
     );
   return (
-    <section className="panel" aria-labelledby="dossier-quote">
-      <h2 id="dossier-quote">Devis</h2>
-      {!current ? (
-        <p>Aucun devis pour ce dossier.</p>
-      ) : (
-        <>
-          <div className={styles.quoteHead}>
-            <strong>{quoteRef(current.id)}</strong>
-            <Tag tone={quoteStatus(current.status).tone}>
-              {quoteStatus(current.status).label}
-              {current.status === "accepted" && current.accepted_at
-                ? ` le ${date(current.accepted_at)}`
-                : ""}
-            </Tag>
-          </div>
-          {versions.length > 1 && (
-            <div className={styles.versionList} role="group" aria-label="Versions du devis">
-              {versions.map((q, index) => (
-                <button
-                  key={q.id}
-                  type="button"
-                  className={styles.versionButton}
-                  aria-pressed={q.id === current.id}
-                  onClick={() => onView(q.id)}
-                >
-                  Version {index + 1} — {dateTime(q.created_at)}
-                </button>
+    <>
+      <section className="panel" aria-labelledby="dossier-quote">
+        <h2 id="dossier-quote">Devis</h2>
+        {!current ? (
+          <p>Aucun devis pour ce dossier.</p>
+        ) : (
+          <>
+            <div className={styles.quoteHead}>
+              <strong>{quoteRef(current.id)}</strong>
+              <Tag tone={quoteStatus(current.status).tone}>
+                {quoteStatus(current.status).label}
+                {current.status === "accepted" && current.accepted_at
+                  ? ` le ${date(current.accepted_at)}`
+                  : ""}
+              </Tag>
+            </div>
+            {versions.length > 1 && (
+              <div className={styles.versionList} role="group" aria-label="Versions du devis">
+                {versions.map((q, index) => (
+                  <button
+                    key={q.id}
+                    type="button"
+                    className={styles.versionButton}
+                    aria-pressed={q.id === current.id}
+                    onClick={() => onView(q.id)}
+                  >
+                    Version {index + 1} — {dateTime(q.created_at)}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className={styles.quoteLines}>
+              {current.lines.map((l, index) => (
+                <div key={index} className={styles.quoteLine}>
+                  <div>
+                    {l.label}
+                    <span>
+                      {l.quantity} × {money(l.unit_price_cents)} HT
+                    </span>
+                  </div>
+                  <strong>{money(Math.round(l.quantity * l.unit_price_cents))}</strong>
+                </div>
               ))}
             </div>
-          )}
-          <div className={styles.quoteLines}>
-            {current.lines.map((l, index) => (
-              <div key={index} className={styles.quoteLine}>
-                <div>
-                  {l.label}
-                  <span>
-                    {l.quantity} × {money(l.unit_price_cents)} HT
-                  </span>
-                </div>
-                <strong>{money(Math.round(l.quantity * l.unit_price_cents))}</strong>
+            <div className={styles.quoteTotals}>
+              <div>
+                <span>Total HT</span>
+                <span>{money(current.subtotal_cents)}</span>
               </div>
-            ))}
-          </div>
-          <div className={styles.quoteTotals}>
-            <div>
-              <span>Total HT</span>
-              <span>{money(current.subtotal_cents)}</span>
+              <div>
+                <span>TVA ({current.tax_rate} %)</span>
+                <span>{money(current.tax_cents)}</span>
+              </div>
+              <div className={styles.quoteTotal}>
+                <span>Total TTC</span>
+                <span>{money(current.total_cents)}</span>
+              </div>
             </div>
-            <div>
-              <span>TVA ({current.tax_rate} %)</span>
-              <span>{money(current.tax_cents)}</span>
-            </div>
-            <div className={styles.quoteTotal}>
-              <span>Total TTC</span>
-              <span>{money(current.total_cents)}</span>
-            </div>
-          </div>
-        </>
+          </>
+        )}
+      </section>
+      {current && (
+        <QuoteDocumentsAnchor
+          session={session}
+          variant="artisan"
+          target={{ interventionId: i.id }}
+          authority={{ canWrite: true }}
+        />
       )}
-    </section>
+      {i.status === "quoted" && (
+        <QuoteDraftEditor
+          session={session}
+          interventionId={i.id}
+          replaces={sentQuote}
+          onPublished={onPublished}
+        />
+      )}
+    </>
   );
 }
 function ReportPanel({
@@ -2271,9 +2316,9 @@ function Documents({
   const status = dossier?.artisan_profile?.application_status;
   const states = CREDENTIAL_KINDS.map((k) => ({
     ...k,
-    state: credentialState(dossier?.credentials ?? [], k.kind, status, today),
+    state: credentialState(dossier?.credentials ?? [], k.kind, today),
   }));
-  const transmitted = states.filter((s) => s.state.key !== "missing").length;
+  const summary = credentialSummary(states.map((s) => s.state));
   return (
     <>
       <PageTitle title="Mes documents" subtitle="Justificatifs obligatoires et pièces de vos dossiers." />
@@ -2282,15 +2327,24 @@ function Documents({
           <div>
             <h2 id="documents-required">Documents obligatoires</h2>
             <p className={styles.sectionNote} style={{ margin: "4px 0 0" }}>
-              Nécessaires pour exercer sur la plateforme. L’examen des pièces est réalisé par
-              l’opérateur : un justificatif transmis n’est pas validé automatiquement.
+              Nécessaires pour exercer sur la plateforme. L’opérateur examine le dossier dans son
+              ensemble : une pièce transmise reste « transmise », aucune validation individuelle
+              n’est enregistrée.
             </p>
           </div>
           {!pending && dossier && (
-            <span className={styles.credCount}>
-              <Icon name="shield" size={20} />
-              {transmitted}/3 transmis
-            </span>
+            <div className={styles.credHeadStatus}>
+              <span className={`${styles.credCount} ${summary.complete ? styles.credCountComplete : ""}`}>
+                <Icon name="shield" size={20} />
+                {summary.label}
+              </span>
+              {/* L’approbation porte sur le dossier ; aucune pièce n’est validée individuellement (non modélisé). */}
+              {status && (
+                <Tag tone={APPLICATION_STATUS[status].tone}>
+                  Candidature : {APPLICATION_STATUS[status].label.toLowerCase()}
+                </Tag>
+              )}
+            </div>
           )}
         </div>
         {pending ? (
@@ -2364,48 +2418,28 @@ function CredentialCard({
   busy: boolean;
   onLink: () => void;
 }) {
-  const iconClass =
-    state.key === "valid"
-      ? styles.credGreen
-      : state.key === "pending"
-        ? styles.credBlue
-        : state.key === "expired"
-          ? styles.credAmber
-          : styles.credRed;
-  const icon =
-    state.key === "valid"
-      ? "shield"
-      : state.key === "pending"
-        ? "clock"
-        : state.key === "expired"
-          ? "refresh"
-          : "warning";
+  const iconClass = state.key === "pending" ? styles.credBlue : state.key === "expired" ? styles.credAmber : styles.credRed;
+  const icon = state.key === "pending" ? "clock" : state.key === "expired" ? "refresh" : "warning";
   return (
     <section className={`panel ${styles.credCard}`} aria-label={title}>
       <span className={`${styles.credIcon} ${iconClass}`}>
         <Icon name={icon} size={26} />
       </span>
       <div className={styles.credBody}>
-        <div className={styles.credTop}>
-          <div>
-            <div className={styles.credTitle}>{title}</div>
-            <p className={styles.credDesc}>{description}</p>
-          </div>
-          <Tag tone={state.tone}>{state.label}</Tag>
-        </div>
+        <div className={styles.credTitle}>{title}</div>
+        <p className={styles.credDesc}>{description}</p>
         {state.credential && (
           <p className={styles.credMeta}>
             {document ? document.name : "Document lié (nom indisponible dans vos données chargées)"}
-            {" — "}
-            {state.credential.expires_on
-              ? state.key === "expired"
-                ? `expiré le ${date(state.credential.expires_on)}`
-                : `valide jusqu’au ${date(state.credential.expires_on)}`
-              : "sans date d’expiration renseignée"}
             {" — transmis le "}
             {date(state.credential.created_at)}
           </p>
         )}
+      </div>
+      {/* M14 : colonne d’état à droite — pastille réelle et date d’expiration réelle, sinon dit sans date. */}
+      <div className={styles.credStatus}>
+        <Tag tone={state.tone}>{state.label}</Tag>
+        {credentialDateLabel(state) && <small>{credentialDateLabel(state)}</small>}
       </div>
       <div className={styles.credActions}>
         <button type="button" className="button outline" disabled={busy} onClick={onLink}>
@@ -2549,7 +2583,7 @@ function Application({
   const today = localDate(new Date());
   const credentialStates = CREDENTIAL_KINDS.map((k) => ({
     ...k,
-    state: credentialState(dossier?.credentials ?? [], k.kind, profile?.application_status, today),
+    state: credentialState(dossier?.credentials ?? [], k.kind, today),
   }));
   return (
     <>
@@ -2594,6 +2628,14 @@ function ApplicationForm({
   const dirty = appKey(values) !== appKey(appValuesFrom(profile));
   const busy = session.busy;
   const canSubmit = status === "draft" || status === "changes_requested";
+  // Dossier edits are refused by the platform while work is active or completed but unpaid
+  // (contract CL-BE-001): count them from the loaded dossiers to explain the rule up front.
+  const mine = session.data.interventions.filter((i) => i.artisan_id === session.profileId);
+  const activeJobs = mine.filter((i) =>
+    ["assigned", "quoted", "accepted", "in_progress"].includes(i.status),
+  ).length;
+  const unpaidJobs = mine.filter((i) => i.status === "completed").length;
+  const editBlocked = activeJobs + unpaidJobs > 0;
   const set = <K extends keyof AppValues>(key: K, value: AppValues[K]) =>
     setValues((v) => ({ ...v, [key]: value }));
   const saveBody = (): ArtisanCommand => ({
@@ -2631,21 +2673,17 @@ function ApplicationForm({
     if (dirty || !profile) ok = await onCommand(saveBody());
     if (ok) await onCommand({ action: "submit_application" });
   }
-  const sections = [
-    { n: 1, label: "Informations personnelles", done: Boolean(session.profile?.full_name) || session.mode === "demo" },
-    {
-      n: 2,
-      label: "Société",
-      done:
-        values.company_name.trim().length >= 2 &&
-        /^\d{14}$/.test(values.siret) &&
-        Boolean(values.legal_status) &&
-        values.address.trim().length >= 5,
-    },
-    { n: 3, label: "Pièces justificatives", done: credentialStates.every((c) => c.state.key !== "missing") },
-    { n: 4, label: "Zones et compétences", done: values.postal_codes.length > 0 && values.categories.length > 0 },
-    { n: 5, label: "Disponibilité", done: Boolean(profile) },
-  ];
+  const sections = applicationSteps({
+    personalDone: Boolean(session.profile?.full_name) || session.mode === "demo",
+    companyName: values.company_name,
+    siret: values.siret,
+    legalStatus: values.legal_status,
+    address: values.address,
+    postalCodes: values.postal_codes,
+    categories: values.categories,
+    credentialsComplete: credentialStates.every((c) => c.state.key !== "missing"),
+    hasProfile: Boolean(profile),
+  });
   return (
     <form
       onSubmit={(e) => {
@@ -2661,18 +2699,34 @@ function ApplicationForm({
           {profile?.submitted_at && status !== "draft" ? ` Soumise le ${dateTime(profile.submitted_at)}.` : ""}
         </p>
       </div>
+      {editBlocked && (
+        <div className="alert warning" role="note">
+          <Icon name="info" />
+          <span>
+            Dossier professionnel verrouillé tant que des missions restent à terminer ou à régler
+            ({activeJobs} en cours, {unpaidJobs} terminée{unpaidJobs > 1 ? "s" : ""} sans règlement).
+            Terminez-les et attendez leur règlement, ou obtenez leur annulation ou réaffectation,
+            avant de modifier société, zone ou compétences. Votre disponibilité immédiate et vos
+            coordonnées restent modifiables à tout moment ; votre approbation n’est pas retirée.
+          </span>
+        </div>
+      )}
+      {/* M65 : barre d’étapes avec connecteurs ; sous 760 px les libellés passent en lecteur d’écran et le résumé reste visible. */}
       <ol className={styles.appSteps} aria-label="Sections du dossier">
         {sections.map((s) => (
           <li key={s.n} className={s.done ? styles.stepDone : undefined}>
             <span aria-hidden="true">{s.done ? <Icon name="check" size={14} /> : s.n}</span>
-            <span>
+            <span className={styles.stepLabel}>
               {s.label}
               <small>{s.done ? "Renseignée" : "À compléter"}</small>
             </span>
           </li>
         ))}
       </ol>
+      <p className={styles.stepsSummary} role="status">{stepsSummary(sections)}</p>
 
+      <div className={styles.appColumns}>
+      <div className={styles.appColumn}>
       <section className={`panel ${styles.sectionCard}`} aria-labelledby="app-s1">
         <div className={styles.sectionTitle}>
           <span className={styles.sectionNum} aria-hidden="true">1</span>
@@ -2699,7 +2753,7 @@ function ApplicationForm({
         </div>
         <div className="form-columns">
           <Field
-            label="Nom de la société"
+            label="Nom de la société (obligatoire)"
             error={touched && values.company_name.trim().length < 2 ? "Indiquez le nom de votre société." : undefined}
           >
             <input
@@ -2712,7 +2766,7 @@ function ApplicationForm({
             />
           </Field>
           <Field
-            label="SIRET"
+            label="SIRET (obligatoire)"
             hint="14 chiffres, sans espace."
             error={touched && !/^\d{14}$/.test(values.siret) ? "Le SIRET doit comporter exactement 14 chiffres." : undefined}
           >
@@ -2728,7 +2782,7 @@ function ApplicationForm({
         </div>
         <div className="form-columns">
           <Field
-            label="Statut juridique"
+            label="Statut juridique (obligatoire)"
             error={touched && !values.legal_status ? "Choisissez un statut juridique." : undefined}
           >
             <select required value={values.legal_status} onChange={(e) => set("legal_status", e.target.value)}>
@@ -2753,7 +2807,7 @@ function ApplicationForm({
           </Field>
         </div>
         <Field
-          label="Adresse du siège"
+          label="Adresse du siège (obligatoire)"
           error={touched && values.address.trim().length < 5 ? "Indiquez l’adresse complète du siège." : undefined}
         >
           <input
@@ -2765,27 +2819,6 @@ function ApplicationForm({
             onChange={(e) => set("address", e.target.value)}
           />
         </Field>
-      </section>
-
-      <section className={`panel ${styles.sectionCard}`} aria-labelledby="app-s3">
-        <div className={styles.sectionTitle}>
-          <span className={styles.sectionNum} aria-hidden="true">3</span>
-          <h2 id="app-s3">Pièces justificatives</h2>
-        </div>
-        {credentialStates.map((c) => (
-          <div key={c.kind} className={styles.readonlyRow}>
-            <span>{c.title}</span>
-            <Tag tone={c.state.tone}>{c.state.label}</Tag>
-          </div>
-        ))}
-        <p className={styles.sectionNote} style={{ marginTop: 10 }}>
-          Les pièces se déposent et se relient depuis vos documents. Elles peuvent être transmises
-          avant ou après la soumission ; l’opérateur les examine.
-        </p>
-        <button type="button" className={styles.inlineLink} onClick={() => session.go("documents")}>
-          Gérer mes documents
-          <Icon name="arrow" size={15} />
-        </button>
       </section>
 
       <section className={`panel ${styles.sectionCard}`} aria-labelledby="app-s4">
@@ -2864,6 +2897,29 @@ function ApplicationForm({
             </p>
           )}
         </fieldset>
+      </section>
+
+      </div>
+      <div className={styles.appColumn}>
+      <section className={`panel ${styles.sectionCard}`} aria-labelledby="app-s3">
+        <div className={styles.sectionTitle}>
+          <span className={styles.sectionNum} aria-hidden="true">3</span>
+          <h2 id="app-s3">Pièces justificatives</h2>
+        </div>
+        {credentialStates.map((c) => (
+          <div key={c.kind} className={styles.readonlyRow}>
+            <span>{c.title}</span>
+            <Tag tone={c.state.tone}>{c.state.label}</Tag>
+          </div>
+        ))}
+        <p className={styles.sectionNote} style={{ marginTop: 10 }}>
+          Les pièces se déposent et se relient depuis vos documents. Elles peuvent être transmises
+          avant ou après la soumission ; l’opérateur les examine.
+        </p>
+        <button type="button" className={styles.inlineLink} onClick={() => session.go("documents")}>
+          Gérer mes documents
+          <Icon name="arrow" size={15} />
+        </button>
       </section>
 
       <section className={`panel ${styles.sectionCard}`} aria-labelledby="app-s5">
@@ -2946,6 +3002,8 @@ function ApplicationForm({
           <DemoNote>Dossier de démonstration : aucune vérification réelle n’est effectuée.</DemoNote>
         )}
       </section>
+      </div>
+      </div>
     </form>
   );
 }
@@ -2977,52 +3035,28 @@ function PerfTile({
     </div>
   );
 }
+const PERF_TONE = { amber: "amberIcon", green: "greenIcon", blue: "blueIcon" } as const;
 function PerfGrid({ perf, since }: { perf: Performance; since: string | null }) {
+  // Six tuiles M36 ; les indicateurs sans source restent explicitement indisponibles.
   return (
     <>
       <div className={styles.perfGrid}>
-        <div className={styles.perfTile}>
-          <Unavailable
-            title="Taux de satisfaction"
-            reason="Aucun questionnaire de satisfaction n’est collecté."
-            blocker="enquête de satisfaction non prévue"
-          />
-        </div>
-        <PerfTile
-          icon="star"
-          tone={styles.amberIcon}
-          label="Note moyenne"
-          value={perf.rating ? `${fmtRating(perf.rating.average)} / 5` : "—"}
-          note={perf.rating ? `${perf.rating.count} avis client${perf.rating.count > 1 ? "s" : ""}` : "Aucun avis encore"}
-        />
-        <PerfTile
-          icon="check"
-          tone={styles.greenIcon}
-          label="Interventions réalisées"
-          value={perf.completedCount}
-          note="Dossiers réglés"
-        />
-        <PerfTile
-          icon="calendar"
-          tone={styles.blueIcon}
-          label="Ancienneté"
-          value={since ?? "—"}
-          note={since ? "Depuis l’inscription" : "Date d’inscription non transmise"}
-        />
-        <div className={styles.perfTile}>
-          <Unavailable
-            title="Ponctualité"
-            reason="Les rendez-vous ne sont pas comparés aux arrivées."
-            blocker="mesure de ponctualité non prévue"
-          />
-        </div>
-        <PerfTile
-          icon="euro"
-          tone={styles.greenIcon}
-          label="CA du mois"
-          value={money(perf.monthRevenueCents)}
-          note={`${perf.monthPaidCount} règlement${perf.monthPaidCount > 1 ? "s" : ""} — ${perf.period}`}
-        />
+        {perfTiles(perf, since).map((t) =>
+          t.kind === "unavailable" ? (
+            <div key={t.id} className={styles.perfTile}>
+              <Unavailable title={t.label} reason={t.reason} blocker={t.blocker} />
+            </div>
+          ) : (
+            <PerfTile
+              key={t.id}
+              icon={t.icon}
+              tone={styles[PERF_TONE[t.tone]]}
+              label={t.label}
+              value={t.value}
+              note={t.note}
+            />
+          ),
+        )}
       </div>
       <details className={styles.basis}>
         <summary>Base de calcul</summary>
@@ -3064,7 +3098,7 @@ function Profile({
   const verified = session.profile?.artisan_approved === true;
   const today = localDate(now);
   const transmitted = CREDENTIAL_KINDS.filter(
-    (k) => credentialState(dossier?.credentials ?? [], k.kind, artisan?.application_status, today).key !== "missing",
+    (k) => credentialState(dossier?.credentials ?? [], k.kind, today).key !== "missing",
   ).length;
   const since = seniority(session.profile?.created_at, now);
   return (
@@ -3117,9 +3151,6 @@ function Profile({
       </section>
       <div className={styles.sectionHead} style={{ marginTop: 8 }}>
         <h2>Performance</h2>
-        <button type="button" className="text-button" onClick={() => session.go("performance")}>
-          Voir le détail
-        </button>
       </div>
       <PerfGrid perf={perf} since={since} />
       <div className={styles.profileActions}>
@@ -3132,6 +3163,10 @@ function Profile({
         >
           <Icon name="edit" size={18} />
           {editing ? "Fermer le formulaire" : "Modifier le profil"}
+        </button>
+        <button type="button" className={`button outline ${styles.block}`} onClick={() => session.go("performance")}>
+          <Icon name="chart" size={18} />
+          Voir les statistiques détaillées
         </button>
         {editing && (
           <div id="profile-form">
@@ -3182,7 +3217,7 @@ function Profile({
         )}
       </section>
       <section className={`panel ${styles.accountLinks}`} aria-label="Mon compte">
-        {SECONDARY_NAV.map((item) => (
+        {secondaryNav(session).map((item) => (
           <button key={item.view} type="button" className={styles.accountLink} onClick={() => session.go(item.view)}>
             <Icon name={item.icon} size={18} />
             {item.label}
@@ -3268,6 +3303,39 @@ function PerformanceView({ session }: { session: Session }) {
   );
 }
 
+// ---- Planning (ADV-PLANNING-NOTIFICATIONS-001) --------------------------------------------------
+function PlanningView({ session, dossier }: { session: Session; dossier: ArtisanDossier | null }) {
+  const state = session.capabilities.planning;
+  const authority = planningAuthority(
+    session.mode,
+    session.profile?.artisan_approved,
+    dossier?.artisan_profile?.application_status,
+  );
+  return (
+    <>
+      <PageTitle
+        title="Planning"
+        subtitle="Vos disponibilités hebdomadaires et vos rendez-vous, heure de Martinique."
+      />
+      {state === "unavailable" ? (
+        <FeatureUnavailable session={session} featureKey="planning" title="Planning momentanément indisponible" />
+      ) : (
+      <ArtisanPlanning
+        state={state}
+        unavailableMessage={state === "available" ? "" : CONTRACT_MESSAGES[state]}
+        scope={leafScope(session.profileId, session.role, authority)}
+        client={session.features.planning}
+        demo={session.mode === "demo" ? demoPlanning(demoPlanningRange(new Date(), PLANNING_TIME_ZONE)) : undefined}
+        timeZone={PLANNING_TIME_ZONE}
+        onNavigate={(view, param) => {
+          if (view === "intervention" && param) session.go("mission", param);
+        }}
+      />
+      )}
+    </>
+  );
+}
+
 // ---- Help --------------------------------------------------------------------------------------
 function HelpView({ session }: { session: Session }) {
   return (
@@ -3315,11 +3383,18 @@ function HelpView({ session }: { session: Session }) {
             Ouvrir mes messages
           </button>
         </div>
-        <Unavailable
-          title="Contacter l’opérateur"
-          reason="Pas encore activé sur ce service. Pour une intervention, utilisez la conversation du dossier ci-dessus."
-          blocker="tickets support non prévus"
-        />
+        <h3 style={{ fontSize: 15, margin: "18px 0 6px" }}>Contacter l’équipe de la plateforme</h3>
+        <p>
+          Pour une question sur votre dossier de candidature, un règlement ou le fonctionnement de
+          l’espace, ouvrez une demande d’assistance : les réponses apparaissent ici, sans appel ni
+          email, et aucun délai n’est garanti.
+        </p>
+        <div className={styles.formActions}>
+          <button type="button" className="button outline" onClick={() => session.go("support")}>
+            <Icon name="shield" size={17} />
+            Ouvrir l’assistance
+          </button>
+        </div>
       </section>
     </>
   );

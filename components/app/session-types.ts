@@ -2,6 +2,8 @@
 // (components/role/*). Spaces are presentational: every mutation, demo counterpart and
 // live/unavailable decision goes through this object so that identity resets and role
 // guards are enforced in one place.
+import type { FeatureClients, FeatureKey, ReprobeHint } from "./features";
+import type { PlatformAccess } from "../../lib/features/platform-operations/types";
 import type {
   AdminInterventionDetail,
   AdminInterventionsPage,
@@ -34,6 +36,12 @@ import type {
   Role,
   SiteAccessCommand,
   SiteAccessOverview,
+  SupportCommand,
+  SupportCommandResult,
+  SupportCreateResult,
+  SupportDetail,
+  SupportListFilters,
+  SupportListPage,
   UploadQueue,
   View,
   Workspace,
@@ -55,8 +63,8 @@ export interface PublicSession {
   setCategory(category: Category): void;
   setError(message: string): void;
   setNotice(message: string): void;
-  /** Opens the isolated demonstration with the given role. */
-  startDemo(role?: Role, view?: View): void;
+  /** Opens the isolated demonstration with the given role, view and optional demo dossier id. */
+  startDemo(role?: Role, view?: View, param?: string): void;
   /** Keeps an anonymous request draft and routes to account creation. */
   saveDraft(values: RequestValues): void;
   /** Invitation code waiting for a login (view join-organization/CODE). */
@@ -143,6 +151,16 @@ export interface Session {
    * typed lines and offers a reload); a successful send returns the exact created quote_id.
    */
   quoteDraftCommand(interventionId: string, body: QuoteDraftCommand): Promise<QuoteDraftResult>;
+  /** Assistance tickets (contract SUPPORT-001); null when unavailable. */
+  loadSupportTickets(filters: SupportListFilters): Promise<SupportListPage | null>;
+  loadSupportTicket(id: string, page?: { limit?: number; after_version?: number }): Promise<SupportDetail | null>;
+  /**
+   * Creates a ticket. `requestId` is an idempotency key the caller generates ONCE per form
+   * submission and keeps until success, so a retry after an uncertain outcome never duplicates.
+   */
+  createSupportTicket(values: { request_id: string; subject: string; body: string; intervention_id: string | null }): Promise<SupportCreateResult | null>;
+  /** Reply or (admin) status change with the exact expected version; 409 is returned as a conflict. */
+  supportCommand(id: string, body: SupportCommand): Promise<SupportCommandResult>;
   /** Organisation membership read model (GET /api/organizations?organization_id=). */
   loadOrganization(organizationId: string): Promise<OrganizationOverview | null>;
   /** Owner-only member commands; create_invitation resolves with the one-time code. */
@@ -185,4 +203,19 @@ export interface Session {
   resetDemo(): void;
   saveDemo(next: Workspace): void;
   setProfessional(next: ProfessionalData): void;
+
+  /**
+   * Advanced lots (WEB-SHARED-001): clients injected into the leaf components. Built once per
+   * identity; in demonstration they operate on seeds only (`features.demo`).
+   */
+  features: FeatureClients;
+  /** Server reply to the back-office probe (/me); the only truth for platform-* views. null = unknown. */
+  platformAccess: PlatformAccess | null;
+  /** Unread notifications from the server summary; null when unknown or unavailable. */
+  unreadNotifications: number | null;
+  /**
+   * Bounded recovery after a transient failure: re-probes ONE contract under the current identity
+   * and rights (the reply alone decides the new availability). Never grants anything; no-op in demo.
+   */
+  reprobeFeature(key: FeatureKey, hint?: ReprobeHint): Promise<void>;
 }

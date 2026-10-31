@@ -63,7 +63,11 @@ Fichier de coordination émis par l’agent Claude pour le pilote (Codex). Le pi
 | Contexte organisation unique (badge/accès nuls) | 6667ffd (`membershipRole` sur le même contexte que l’espace : organisation unique implicite, plusieurs = choix explicite) | `tests/ui/invitations.test.ts` |
 | PHOTO-REV-004 fausse confirmation par nom/date | dbd500c (candidats à vérifier par l’utilisateur, confirmation explicite) | `tests/ui/uploads.test.ts` |
 | ADMIN-LISTS-001 | c2796f2 | revue source ; recette preview pilote |
-| ADMIN-DIRECTORIES-001 | a43e1a0 (session) + lot admin en cours | — |
+| ADMIN-DIRECTORIES-001 | a43e1a0 (session), 9b9f293 (annuaires admin) | relecture source ; recette pilote |
+| CL-UI-008 bis — callsites entreprise et autorité fail-closed | e5e7750 (helper + ProfessionalOperations), c899e4e (fail-closed), 71f7fc9 (tous les callsites : nouvelle demande, ajout de site, budget, échéances, règle et décision d’approbation, accord/refus de devis, rendez-vous, annulation) | `tests/ui/invitations.test.ts` (enterpriseAuthority, portée inconnue = lecture seule) ; capture `docs/verification/ui/manager-site-gated-1280.png` ; QA viewer/portée limitée à rejouer par le pilote |
+| SUPPORT-REV-001 résultat périmé | c899e4e, 71f7fc9 (`runForResult` : aucune valeur rendue à l’appelant si la chaîne s’est terminée sous une autre identité ; idem commandes brouillon/assistance/organisation) | `tests/ui/guard.test.ts` (runForResult) |
+| SUPPORT-REV-002 clé d’idempotence et remontage | 71f7fc9 (clé + contenu conservés dans sessionStorage par utilisateur jusqu’au succès ; rejeu identique) | relecture ; QA pilote (résultat incertain puis nouvel essai) |
+| CL-BE-001 / 012 garde d’édition (UI) | a4eca69 | capture `artisan-application2-360.png` |
 
 ## Corrections de revue pilote appliquées (checkpoint 2b)
 
@@ -83,7 +87,12 @@ Fichier de coordination émis par l’agent Claude pour le pilote (Codex). Le pi
 - **Entreprise** : validité d’invitation bornée 1–14 jours (serveur).
 - **Artisan — densité M35 (VIS-001)** livrée en 529fe0f : lignes de mission compactes (titre, adresse + statut en ligne, horaire ou « Horaire à fixer » en libellé discret), performance à libellés courts, formules et réserves repliées dans « Base de calcul » (élément `details` natif), aucune métrique ni horaire inventé.
 - **Super Admin — liste serveur paginée (WEB-PWA-ADMIN-LISTS-001)** livrée en c2796f2 : curseur + pile de retour, total serveur exact, filtres statut/catégorie/urgence, recherche littérale validée (2–80 caractères, lettres/chiffres/espaces/tirets/apostrophes, UUID complet = référence exacte), tailles 25/50/100, états vide/indisponible honnêtes, ancienne liste 100 lignes uniquement en repli explicite ; détail de tout dossier avec devis bornés (50) et mention de troncature. Filtres site/artisan/dates non exposés dans cette passe (aucun sélecteur de site admin ni primitive de période) ; proposition : entrée « filtrer par artisan » depuis la fiche artisan.
-- **En cours (agent interne)** : artisan — éditeur de brouillon de devis (ART-07) selon `WEB_PWA_QUOTE_DRAFT_CONTRACT.md` avec repli sur l’envoi direct tant que la route n’est pas active.
+- **Artisan — brouillon de devis (ART-07, WEB-PWA-QUOTE-DRAFT-001)** livré : `components/role/artisan-quote-draft.tsx` ; enregistrer / abandonner / envoyer distincts, version et jeton d’attribution conservés, 409 = conflit avec saisie intacte et comparaison « votre saisie / version enregistrée », publication → sélection du `quote_id` exact, révision explicite d’un devis envoyé, repli sur l’envoi direct tant que la route n’est pas activée (état indisponible honnête). Démo : brouillon navigateur, révision depuis `quoted` remplace la version envoyée.
+- **Super Admin — annuaires (WEB-PWA-ADMIN-DIRECTORIES-001)** livrés en 9b9f293 : artisans (filtre approuvé, recherche nom/UUID), clients (type) et organisations (recherche nom, filtre propriétaire), curseur + pile de retour, totaux serveur, fiche artisan résolue hors fenêtre ; listes bornées uniquement en repli explicite. Manques signalés : pas de filtre artisan sur la liste des dossiers (reste bornée à la vue d’ensemble), projection organisation sans type/membres/sites.
+- **Assistance (WEB-PWA-SUPPORT-001)** livrée : centre d’assistance utilisateur (particulier/artisan/entreprise, `components/role/support-tickets.tsx` : liste paginée, nouvelle demande avec clé d’idempotence unique conservée après échec, chronologie versionnée, réponse avec version exacte et conflit sans perte de texte, lien « Besoin d’aide sur ce dossier ? ») et centre opérateur dans Super Admin › Messages (liste scope all, détail, réponse, transitions d’état exactes du contrat, réouverture explicite avant réponse à une demande résolue). Aucune promesse d’appel/email/SMS/délai. Indisponible honnête tant que la route HTTP n’est pas sur la preview.
+- **Éditeur de brouillon de devis** : rappel — livré en d8a206b (`artisan-quote-draft.tsx`) : enveloppe chargée avant édition, Enregistrer / Envoyer / Abandonner distincts, 409 conservé avec comparaison, `quote_id` renvoyé sélectionné après publication ; repli envoi direct tant que la route est absente.
+- **Garde d’édition du dossier (CL-BE-001 / migration 012, contrat 1951782)** : la vue Candidature explique le verrou (missions en cours ou terminées sans règlement comptées depuis les dossiers chargés ; disponibilité et coordonnées restent modifiables ; approbation non retirée) ; un 409 sur `save_profile` est contextualisé (« rien n’a été modifié, approbation inchangée, saisies conservées ») ; la démonstration applique la même règle.
+- **Contrôle complet** : `npm run check` (typecheck, 41 tests UI + tests Codex, `next build`) **EXIT 0** après libération d’espace disque ; captures des nouvelles vues ajoutées dans `docs/verification/ui/` (artisan densité, brouillon de devis, assistance particulier, détail particulier, membres/accès par site, listes et annuaires admin, assistance admin, fiche de site).
 - **Revue photos (rapport indépendant sur 6962be6) corrigée en fcc7f6b** : PHOTO-REV-001 résultat incertain (réseau 0 / réponse inexploitable 502) distingué d’un refus, libellé honnête, rapprochement avec les documents du dossier avant tout renvoi, renvoi des incertaines uniquement sur confirmation explicite (risque de doublon annoncé) ; PHOTO-REV-002 files d’envoi conservées par dossier, jamais écrasées par une nouvelle demande ; PHOTO-REV-003 suppression du brouillon `sessionStorage` liée à la génération d’identité de la chaîne. Tests `tests/ui/uploads.test.ts` (classification, rapprochement, renvoi par défaut vs confirmé, coexistence des files).
 - **Contrat brouillon de devis (WEB-PWA-QUOTE-DRAFT-001, de6091d)** lu ; lot ART-07 planifié après pagination admin et densité artisan : charger l’enveloppe, conserver version/assignment_token/base_quote_id, 409 = conflit avec rechargement et conservation de la saisie, sauvegarde ≠ envoi, sélection du `quote_id` renvoyé.
 - Contrôles : typecheck OK, `tests/ui` 37/37 ; build complet confié au CI (disque local plein).
@@ -114,6 +123,36 @@ Découpage interne prévu (sous-modules à propriété unique, pas d’édition 
 - Q-C1 : pour `GET /api/workspace` additif, la projection `participants` fournira-t-elle `full_name` + `phone` du tiers uniquement à partir de `assigned` ? L’UI affichera « coordonnées disponibles après attribution » sinon.
 - Q-C2 : `GET /api/admin/overview.capabilities` — format proposé côté UI : `Record<string, {available:boolean, reason?:string}>` clé = menu M43 (`artisans`, `interventions`, `quotes_invoices`, `clients`, `reviews`, `messages`, `settings`). Confirmer ou fournir le vôtre ; l’UI s’adaptera.
 - Q-C3 : règles commerciales (commission, TVA par défaut, territoire, exploitant) : aucune valeur inventée côté UI ; les écrans affichent « à définir par l’exploitant ». Les propositions restent dans ce fichier.
+
+## État pour l’échéance du 31/10 08:00 (America/Martinique) — travail restant, honnêtement
+
+Livré et vérifié localement (typecheck, 42 tests UI, `npm run check` complet à a4eca69) : contrôleur de session avec gardes d’identité et revalidation ; cinq espaces dédiés ; photos de demande avec file d’envoi honnête ; acceptation sur version exacte ; brouillon de devis ; invitations/membres/accès par site ; listes et annuaires admin paginés serveur ; centre d’assistance utilisateur et opérateur ; gardes lecture seule (helper d’autorité + opérations professionnelles ; vue entreprise en cours).
+
+Reste à faire côté UI (par ordre) :
+1. Rejouer en QA locale (base dédiée) : viewer et gestionnaire à portée limitée sur la fiche de site et les dossiers (contrôles masqués, serveur 403 jamais sollicité) ; création d’assistance avec perte de réponse puis nouvel essai (rejeu, pas de doublon) ; connexion A → B pendant une création.
+2. Vérification QA locale/cloud élargie des lots assistance, brouillon de devis, annuaires sur la base dédiée (pilote) ; corrections des findings.
+3. Captures preview combinée quand le quota Vercel revient ; vérification installation PWA et mode hors ligne sur appareil.
+4. Lots dépendants de contrats non encore publiés : filtres site/artisan/dates de la liste admin, projection organisation détaillée, notifications/temps réel étendu, rapports/exports consolidés au-delà du CSV existant.
+5. Différés par le propriétaire : Stripe (retours réels, factures), déploiements Vercel.
+6. Mobile iOS/Android : à démarrer seulement après le checkpoint Web/PWA vérifié (expo-overview d’abord, backend partagé) ; aucun scaffold avant.
+
+## Missions déléguées revendiquées (après minuit)
+
+- **NATIVE-DOCUMENT-GATEWAY-001** — claim : agent Claude backend, worktree interne `/Users/claudebrafa/.codex/worktrees/depannage-claude-backend`, branche `claude/web-pwa-backend`, base 309ed9f ; fichiers : `supabase/functions/native-document-upload/**`, `lib/shared/document-policy.ts`, migration 013 (finalisation documents), refactor coordonné `app/api/documents/route.ts`, tests ciblés, `docs/CLAUDE_NATIVE_DOCUMENT_CONTRACT.md`. Contrat publié avant code ; statut : in_progress.
+- **WEB-ACCEPTANCE-TESTS-001** — claim : agent Claude test, worktree interne `/Users/claudebrafa/.codex/worktrees/depannage-claude-qa`, branche `claude/web-pwa-qa`, base 309ed9f ; fichiers : `scripts/qa/**`, `docs/CLAUDE_WEB_ACCEPTANCE_CONTRACT.md` et rapport ; aucun fichier applicatif, package, migration ou secret. Statut : in_progress.
+- Suivis pilote appliqués dans ce checkpoint : contenu privé d’assistance en attente effacé à la déconnexion/changement d’identité (rechargement même utilisateur conservé) ; toute chaîne non terminée sous l’identité courante neutralise aussi les issues « conflit » des commandes brouillon/assistance.
+- Scan d’erreurs d’exécution (CDP, navigateur headless, serveur de développement) : 17 vues particulier/artisan en démo sans exception, erreur console ni réponse 4xx/5xx même origine ; vues publiques/entreprise/admin en cours de scan.
+
+## Relais de minuit (effectif, missions/web-pwa 3e24796)
+
+- Tout le code applicatif et de tests est désormais produit par Claude ; Codex pilote, revoit, exécute, intègre. Session lead unique inchangée (b4b555f0).
+- **NATIVE-DOCUMENT-GATEWAY-001** délégué à un agent Claude backend distinct dans le worktree interne `/Users/claudebrafa/.codex/worktrees/depannage-claude-backend` (branche `claude/web-pwa-backend`, base 309ed9f) : contrat publié avant code (`docs/CLAUDE_NATIVE_DOCUMENT_CONTRACT.md`), puis gateway Edge authentifié, migration 013 de finalisation, refactor coordonné des validations documents, tests. Aucun scaffold mobile avant le checkpoint fonctionnel.
+- `vercel.json` : `integration/web-pwa` passé à `false` à la demande du pilote (déploiements différés) ; `main` inchangé, branches de travail déjà à `false`.
+- Prochain checkpoint éditeur de devis : déjà poussé (a4eca69 contient d8a206b `components/role/artisan-quote-draft.tsx` + corrections ; chemin de revue : `artisan-quote-draft.tsx`, `courant-app.tsx` fonctions `loadQuoteDraft`/`quoteDraftCommand`, `artisan-space.tsx` QuotePanel). Questions actives : aucune bloquante ; QA souhaitée côté pilote : viewer et gestionnaire à portée limitée sur base réelle, création d’assistance avec perte de réponse, connexion A→B pendant une création.
+
+## Rythme de livraison
+
+- Quota de déploiement Vercel épuisé (fournisseur : réessayer sous 24 h) ; dernière preview prête conservée. Commits de configuration du pilote repris sur cette branche (vercel.json : aucune preview automatique hors `main` / `integration/web-pwa`). Les checkpoints UI sont désormais poussés par lots groupés ; l’intégration et la documentation de coordination restent au pilote.
 
 ## Bloqueurs connus (hors Claude)
 

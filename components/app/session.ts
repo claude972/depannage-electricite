@@ -49,6 +49,7 @@ const ACCESS: Record<View, readonly Role[] | "public"> = {
   messages: ["client", "artisan", "manager", "admin"],
   documents: ["client", "artisan", "manager", "admin"],
   profile: ["client", "artisan", "manager", "admin"],
+  support: ["client", "artisan", "manager", "admin"],
   sites: ["manager"],
   site: ["manager"],
   approvals: ["manager"],
@@ -67,6 +68,18 @@ const ACCESS: Record<View, readonly Role[] | "public"> = {
   "admin-messages": ["admin"],
   "admin-settings": ["admin"],
   "admin-warranty": ["admin"],
+  // Advanced lots: role gate only; the server re-checks every right (visibility grants nothing).
+  "quote-documents": ["client", "artisan", "manager", "admin"],
+  planning: ["artisan"],
+  notifications: ["client", "artisan", "manager", "admin"],
+  "site-operations": ["manager"],
+  // Back-office views: a limited operator keeps a client/manager profile role, so the role gate
+  // admits every signed-in role and the server reply to /me decides, fail-closed (see
+  // platformViewAllowed in features.ts). Visibility never grants anything.
+  "platform-operators": ["client", "artisan", "manager", "admin"],
+  "platform-finance": ["client", "artisan", "manager", "admin"],
+  "platform-moderation": ["client", "artisan", "manager", "admin"],
+  "support-queue": ["client", "artisan", "manager", "admin"],
 };
 export const ALL_VIEWS = Object.keys(ACCESS) as View[];
 export function isView(value: string): value is View {
@@ -99,7 +112,7 @@ export function parseHash(hash: string): { view: View | null; param: string } {
     param = "";
   }
   // Parameters are identifiers; anything else is dropped so it never reaches a lookup or the DOM.
-  if (!/^[A-Za-z0-9_-]{0,80}$/.test(param)) param = "";
+  if (!/^[A-Za-z0-9_.-]{0,120}$/.test(param)) param = "";
   return { view: head, param };
 }
 export function buildHash(view: View, param?: string): string {
@@ -335,4 +348,53 @@ export function validateContext(
   if (!orgOk) return { organizationId: "", siteId: "", organizationDropped: true };
   const siteOk = !activeSiteId || sites.some((s) => s.id === activeSiteId);
   return { organizationId: activeOrganizationId, siteId: siteOk ? activeSiteId : "", organizationDropped: false };
+}
+
+// Write authority inside the active organisation, derived from the membership role AND the
+// site scope/grants of the current member (contract 009). The global "manager" role grants
+// nothing by itself. Used to disable/hide write controls before the server refuses them.
+export type MemberScope = {
+  scope: "all" | "selected";
+  grants: { site_id: string; can_write: boolean }[];
+};
+export type EnterpriseAuthority = {
+  role: "owner" | "manager" | "viewer" | null;
+  /** Organisation-wide writes (create site, contracts, invitations…): owner/manager with scope all. */
+  canWriteOrganization: boolean;
+  /** Operational writes on a given site (requests, budget, rules, compliance). */
+  canWriteSite(siteId: string | null | undefined): boolean;
+  canReadSite(siteId: string | null | undefined): boolean;
+  /** Short reason shown next to a disabled control. */
+  readOnlyReason: string | null;
+};
+// Fail closed: a manager whose site scope could not be read gets NO write control until the
+// scope is known; only the canonical owner always has every site.
+export function enterpriseAuthority(
+  role: "owner" | "manager" | "viewer" | null,
+  scope: MemberScope | null | undefined,
+): EnterpriseAuthority {
+  const scopeKnown = role === "owner" || !!scope;
+  const effectiveScope: MemberScope =
+    role === "owner" ? { scope: "all", grants: [] } : scope ?? { scope: "selected", grants: [] };
+  const writer = (role === "owner" || role === "manager") && scopeKnown;
+  const canWriteOrganization = writer && effectiveScope.scope === "all";
+  const canReadSite = (siteId: string | null | undefined) =>
+    !!role && (effectiveScope.scope === "all" || !siteId || effectiveScope.grants.some((g) => g.site_id === siteId));
+  const canWriteSite = (siteId: string | null | undefined) => {
+    if (!writer) return false;
+    if (effectiveScope.scope === "all") return true;
+    if (!siteId) return false;
+    return effectiveScope.grants.some((g) => g.site_id === siteId && g.can_write);
+  };
+  const readOnlyReason =
+    role === null
+      ? "Vous n’êtes pas membre de cette organisation."
+      : role === "viewer"
+        ? "Votre rôle est en lecture seule dans cette organisation."
+        : !scopeKnown
+          ? "Vos droits par site n’ont pas pu être vérifiés : les modifications sont désactivées jusqu’à la prochaine actualisation."
+          : effectiveScope.scope === "selected"
+            ? "Vos droits d’écriture sont limités à certains sites."
+            : null;
+  return { role, canWriteOrganization, canWriteSite, canReadSite, readOnlyReason };
 }

@@ -1,0 +1,390 @@
+#!/usr/bin/env node
+// Cloud QA harness for the deployed native-document-upload Edge Function.
+// Node 24, ESM, fetch only (no SDK). Usage:
+//   node scripts/qa-gateway/run.mjs --function-url https://<ref>.supabase.co/functions/v1/native-document-upload \
+//     --project <ref> --credentials /private/creds.json --out /private/out-dir [--dry-run]
+//   node scripts/qa-gateway/run.mjs --cleanup-manifest /private/out-dir/manifest.json --project <ref> \
+//     --credentials /private/creds.json --out /private/out-dir-2
+// creds.json: {"url":"https://<ref>.supabase.co","publishable_key":"…","service_role_key":"…"}
+// Never prints tokens or headers; summary.md / result.json are redacted; run.log and
+// manifest.json are 0600. Any failed step (scenario, readback, cleanup) fails the run.
+// Cleanup (every path: normal end, HTTP timeout, SIGINT/SIGTERM, unhandled error,
+// --cleanup-manifest) first discovers the cohort's `documents` rows and Storage objects, merges
+// them into the manifest, and deletes nothing while any read is unknown (GW-HARNESS-003).
+import { mkdir, chmod, writeFile, readFile, appendFile, rename } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import path from "node:path";
+import {
+  UsageError,
+  parseArgs,
+  normalizeCredentials,
+  assertCredentialsProject,
+  assertFunctionProject,
+  runId as makeRunId,
+  COHORT_ROLES,
+  SEED_URGENCY,
+  cohortEmail,
+  cohortProfileRole,
+  cohortPassword,
+  makeRedactor,
+  emptyCreated,
+  manifestJson,
+  parseManifest,
+  scenarioPlan,
+  fixtures,
+  assertScenario,
+  summaryMarkdown,
+  computeVerdict,
+  parseContentRangeTotal,
+  discoverCohort,
+  runCleanup,
+  interruptGuard,
+  unknownLeftover,
+  cleanupRerunMessage,
+  parseStorageListing,
+} from "./lib.ts";
+
+const BUCKET = "intervention-documents";
+const TIMEOUT_MS = 30000;
+// Late reconciliation window after an aborted/timed-out phase (and on --cleanup-manifest):
+// 2 s, 4 s, 8 s, 16 s between re-discoveries, i.e. up to 30 s — the HTTP timeout — for a
+// request whose outcome was unknown to settle remotely.
+const RECONCILE = { attempts: 4, baseDelayMs: 2000, sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) };
+
+async function main(argv) {
+  let args;
+  try {
+    args = parseArgs(argv);
+  } catch (error) {
+    if (error instanceof UsageError) {
+      console.error(error.message);
+      usage();
+      return 2;
+    }
+    throw error;
+  }
+  if (args.help) {
+    usage();
+    return 0;
+  }
+  let credentials;
+  try {
+    credentials = normalizeCredentials(JSON.parse(await readFile(args.credentials, "utf8")));
+    assertCredentialsProject(args.project, credentials.url);
+    if (!args.cleanupManifest) assertFunctionProject(args.project, args.functionUrl);
+  } catch (error) {
+    if (error instanceof UsageError) {
+      console.error(error.message);
+      return 2;
+    }
+    throw error;
+  }
+  const mode = args.cleanupManifest ? "cleanup-manifest" : args.dryRun ? "dry-run" : "run";
+
+  await mkdir(args.out, { recursive: true, mode: 0o700 });
+  await chmod(args.out, 0o700);
+  const logPath = path.join(args.out, "run.log");
+  const manifestPath = path.join(args.out, "manifest.json");
+  await appendFile(logPath, "", { mode: 0o600 });
+  await chmod(logPath, 0o600);
+
+  const secrets = [credentials.serviceRoleKey, credentials.publishableKey];
+  const redact = makeRedactor(secrets);
+  const id = makeRunId(new Date(), randomBytes(3));
+  const result = {
+    runId: id,
+    project: args.project,
+    mode,
+    startedAt: new Date().toISOString(),
+    finishedAt: null,
+    steps: [],
+    scenarios: mode === "run" ? scenarioPlan().map((s) => ({ name: s.name, expected: s.expected, status: null, pass: null, reasons: [] })) : [],
+    cleanup: [],
+    leftovers: [],
+    verdict: "incomplete",
+  };
+  let created = emptyCreated();
+  let manifestUnknown = [];
+  // Set when the run phase ended abnormally (timeout, abort/signal, thrown error): a request
+  // whose outcome is unknown may still settle remotely, so cleanup reconciles late.
+  let interrupted = false;
+  // The manifest keeps the cohort's original run id when cleaning from a manifest.
+  let manifestRunId = id;
+  // One abort controller per phase: a signal aborts the phase in flight, never the process,
+  // so the `finally` below always reaches discovery + cleanup (second signal aborts cleanup
+  // requests; the manifest is kept; third signal exits 130).
+  let active = new AbortController();
+  interruptGuard((event, handler) => process.on(event, handler), {
+    abort: (reason) => active.abort(reason),
+    exit: (code) => process.exit(code),
+  });
+  const persist = async () => {
+    result.verdict = computeVerdict(result, result.finishedAt !== null);
+    await writePrivate(path.join(args.out, "result.json"), redact(JSON.stringify(result, null, 2)));
+    await writePrivate(path.join(args.out, "summary.md"), redact(summaryMarkdown(result)));
+  };
+  const log = async (status, step, detail = "") => {
+    const record = { step, status, detail: redact(String(detail)), at: new Date().toISOString() };
+    result.steps.push(record);
+    await appendFile(logPath, `${record.at} [${status}] ${step}${record.detail ? ` — ${record.detail}` : ""}\n`, { mode: 0o600 });
+    console.log(`[${status}] ${step}${record.detail ? ` — ${record.detail}` : ""}`);
+    await persist();
+  };
+  // Durable manifest: rewritten (atomically, 0600) after every creation, before any further call.
+  const saveManifest = async (nextCreated = created, unknown = manifestUnknown) => {
+    created = nextCreated;
+    manifestUnknown = unknown;
+    await writePrivate(manifestPath, manifestJson(manifestRunId, args.project, created, new Date(), manifestUnknown));
+  };
+  const record = async (kind, value) => {
+    if (!created[kind].includes(value)) created[kind].push(value);
+    await saveManifest();
+  };
+
+  const http = async (url, init = {}) => {
+    const response = await fetch(url, { ...init, signal: AbortSignal.any([active.signal, AbortSignal.timeout(TIMEOUT_MS)]) });
+    const text = await response.text();
+    let json = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      json = null;
+    }
+    return { status: response.status, headers: response.headers, text, json };
+  };
+  const serviceHeaders = (extra = {}) => ({ apikey: credentials.serviceRoleKey, Authorization: `Bearer ${credentials.serviceRoleKey}`, ...extra });
+  const userHeaders = (token, extra = {}) => ({ apikey: credentials.publishableKey, Authorization: `Bearer ${token}`, ...extra });
+  const rest = (pathname, init = {}, headers = {}) => http(`${credentials.url}/rest/v1/${pathname}`, { ...init, headers: { "Content-Type": "application/json", ...headers } });
+  const summarize = (r) => redact((r.text || "").slice(0, 200));
+  const rpcAs = async (token, fn, body) => {
+    const r = await rest(`rpc/${fn}`, { method: "POST", body: JSON.stringify(body) }, userHeaders(token));
+    if (r.status >= 300) throw new Error(`rpc ${fn} → HTTP ${r.status} ${summarize(r)}`);
+    return r.json;
+  };
+  // Reads return {ok:false} on any HTTP/shape error: callers log an explicit FAIL, never "empty".
+  const readRows = async (query, headers = serviceHeaders()) => {
+    const r = await rest(query, {}, headers);
+    if (r.status !== 200 || !Array.isArray(r.json)) return { ok: false, rows: [], detail: `HTTP ${r.status} ${summarize(r)}` };
+    return { ok: true, rows: r.json, detail: `HTTP ${r.status}` };
+  };
+  // Fetch-backed CleanupClient (lib.ts drives discovery and cleanup through it). Every read
+  // answers {ok:false} on any HTTP/shape error so discovery records it as unknown, never empty.
+  const client = {
+    listDocuments: async (filter, from, to) => {
+      const r = await rest(`documents?${filter}&select=id,owner_id,intervention_id,path&order=id.asc`, {}, serviceHeaders({ Prefer: "count=exact", Range: `${from}-${to}`, "Range-Unit": "items" }));
+      if ((r.status !== 200 && r.status !== 206) || !Array.isArray(r.json)) return { ok: false, detail: `HTTP ${r.status} ${summarize(r)}` };
+      return { ok: true, items: r.json, total: parseContentRangeTotal(r.headers.get("content-range")), detail: `HTTP ${r.status}` };
+    },
+    listObjects: async (prefix, { limit, offset, search }) => {
+      const body = { prefix, limit, offset, sortBy: { column: "name", order: "asc" }, ...(search ? { search } : {}) };
+      const r = await http(`${credentials.url}/storage/v1/object/list/${BUCKET}`, { method: "POST", headers: serviceHeaders({ "Content-Type": "application/json" }), body: JSON.stringify(body) });
+      if (r.status !== 200 || !Array.isArray(r.json)) return { ok: false, detail: `HTTP ${r.status} ${summarize(r)}` };
+      // Rows without a string `name` (or of any other shape) are reported as malformed: discovery
+      // marks them unknown and refuses to delete — never "absent".
+      const { items, malformed } = parseStorageListing(r.json);
+      return { ok: true, items, total: null, detail: `HTTP ${r.status}`, malformed };
+    },
+    deleteObjects: async (paths) => {
+      const r = await http(`${credentials.url}/storage/v1/object/${BUCKET}`, { method: "DELETE", headers: serviceHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ prefixes: paths }) });
+      return { status: r.status, detail: summarize(r) };
+    },
+    deleteRows: async (table, filter) => {
+      const r = await rest(`${table}?${filter}`, { method: "DELETE" }, serviceHeaders({ Prefer: "return=minimal" }));
+      return { status: r.status, detail: summarize(r) };
+    },
+    countRows: async (table, filter) => {
+      const r = await rest(`${table}?${filter}&select=*`, { method: "HEAD" }, serviceHeaders({ Prefer: "count=exact", Range: "0-0", "Range-Unit": "items" }));
+      if (r.status !== 200 && r.status !== 206) return null;
+      return parseContentRangeTotal(r.headers.get("content-range"));
+    },
+    deleteUser: async (userId) => {
+      const r = await http(`${credentials.url}/auth/v1/admin/users/${userId}`, { method: "DELETE", headers: serviceHeaders() });
+      return { status: r.status };
+    },
+    userRemaining: async (userId) => {
+      const r = await http(`${credentials.url}/auth/v1/admin/users/${userId}`, { headers: serviceHeaders() });
+      return r.status === 404 ? 0 : r.status === 200 ? 1 : null;
+    },
+  };
+
+  try {
+    await log("info", "démarrage", `run ${id}, projet ${args.project}, mode ${mode}`);
+    if (mode === "cleanup-manifest") {
+      const manifest = parseManifest(JSON.parse(await readFile(args.cleanupManifest, "utf8")), args.project);
+      manifestRunId = manifest.runId;
+      await saveManifest(manifest.created, manifest.unknown);
+      await log("info", "manifeste chargé", `run d’origine ${manifest.runId} (${manifest.updatedAt}) : ${Object.entries(created).map(([k, v]) => `${k}=${v.length}`).join(", ")}${manifest.unknown.length ? ` ; ${manifest.unknown.length} lecture(s) inconnue(s) à re-vérifier par la découverte` : ""}`);
+    } else {
+      // Read-only preflight (also the whole of a dry run).
+      const health = await http(`${credentials.url}/auth/v1/health`, { headers: { apikey: credentials.publishableKey } });
+      await log(health.status === 200 ? "pass" : "fail", "Auth joignable (/auth/v1/health)", `HTTP ${health.status}`);
+      const preflight = await http(args.functionUrl, { method: "OPTIONS", headers: { apikey: credentials.publishableKey } });
+      const reachable = preflight.status === 204 || preflight.status === 200;
+      await log(reachable ? "pass" : mode === "dry-run" ? "info" : "fail", "fonction déployée répond au pré-vol OPTIONS", `HTTP ${preflight.status}${reachable ? "" : " — fonction non joignable (déploiement requis avant l’exécution réelle)"}`);
+      const anonymousProbe = await http(args.functionUrl, { method: "POST", headers: { apikey: credentials.publishableKey } });
+      await log(anonymousProbe.status === 401 ? "pass" : mode === "dry-run" ? "info" : "fail", "sonde anonyme POST", `HTTP ${anonymousProbe.status}`);
+      if (mode === "dry-run") {
+        await log("info", "dry-run terminé", "aucune cohorte créée, aucune écriture distante");
+      } else {
+        await runScenarios();
+      }
+    }
+  } catch (error) {
+    interrupted = true;
+    await log("fail", "interruption", `${error instanceof Error ? error.message : String(error)} — l’issue distante de la requête en cours est inconnue : réconciliation tardive avant nettoyage`);
+  } finally {
+    if (mode !== "dry-run") {
+      try {
+        await cleanup();
+      } catch (error) {
+        // A crash inside cleanup still ends with the manifest on disk and a failed verdict.
+        result.leftovers.push(`nettoyage interrompu : ${error instanceof Error ? error.message : String(error)}`);
+        await log("fail", "nettoyage interrompu", `${error instanceof Error ? error.message : String(error)} — ${cleanupRerunMessage(manifestPath)}`);
+      }
+    }
+    result.finishedAt = new Date().toISOString();
+    await persist();
+    console.log(`verdict : ${result.verdict} — rapport ${path.join(args.out, "summary.md")}`);
+  }
+  return result.verdict === "pass" ? 0 : 1;
+
+  async function runScenarios() {
+    const password = cohortPassword(randomBytes(32));
+    secrets.push(password);
+    const users = {};
+    for (const role of COHORT_ROLES) {
+      const email = cohortEmail(id, role);
+      const r = await http(`${credentials.url}/auth/v1/admin/users`, {
+        method: "POST",
+        headers: serviceHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { role: cohortProfileRole(role), full_name: `QA ${role} ${id}` } }),
+      });
+      if (r.status >= 300 || typeof r.json?.id !== "string") throw new Error(`création utilisateur ${role} → HTTP ${r.status} ${summarize(r)}`);
+      users[role] = { id: r.json.id, email };
+      await record("userIds", r.json.id);
+      await log("pass", `utilisateur ${role} créé`, r.json.id);
+    }
+    const tokens = {};
+    for (const role of COHORT_ROLES) {
+      const r = await http(`${credentials.url}/auth/v1/token?grant_type=password`, {
+        method: "POST",
+        headers: { apikey: credentials.publishableKey, "Content-Type": "application/json" },
+        body: JSON.stringify({ email: users[role].email, password }),
+      });
+      if (r.status !== 200 || typeof r.json?.access_token !== "string") throw new Error(`jeton ${role} → HTTP ${r.status} ${summarize(r)}`);
+      tokens[role] = r.json.access_token;
+      secrets.push(r.json.access_token);
+      if (r.json.refresh_token) secrets.push(r.json.refresh_token);
+      await log("pass", `jeton utilisateur ${role} obtenu (password grant)`, "jeton non journalisé");
+    }
+    const clientJob = await rpcAs(tokens.client, "create_intervention", {
+      p_category: "panel", p_description: `QA gateway ${id} : dossier client de test.`, p_address: "1 rue de test", p_postal_code: "97200", p_city: "Fort-de-France", p_urgency: SEED_URGENCY, p_site_id: null,
+    });
+    if (typeof clientJob?.id !== "string") throw new Error("create_intervention (client) sans id");
+    await record("interventionIds", clientJob.id);
+    await log("pass", "dossier client créé (RPC create_intervention)", clientJob.id);
+    const assign = await rest(`interventions?id=eq.${clientJob.id}`, { method: "PATCH", body: JSON.stringify({ artisan_id: users.artisan.id, status: "assigned" }) }, serviceHeaders({ Prefer: "return=representation" }));
+    if (assign.status >= 300 || !Array.isArray(assign.json) || assign.json.length !== 1) throw new Error(`affectation artisan → HTTP ${assign.status} ${summarize(assign)}`);
+    await log("pass", "artisan affecté au dossier client (écriture service de seeding, pas le parcours métier)", users.artisan.id);
+    const site = await rpcAs(tokens.manager, "create_site", { p_name: `Site QA ${id}`, p_type: "office", p_address: "2 rue des bureaux", p_budget_cents: 100000, p_organization_id: null });
+    if (typeof site?.id !== "string" || typeof site?.organization_id !== "string") throw new Error("create_site sans id/organization_id");
+    await record("organizationIds", site.organization_id);
+    await record("siteIds", site.id);
+    await log("pass", "organisation et site créés (RPC create_site)", `${site.organization_id} / ${site.id}`);
+    const member = await rest("organization_members", { method: "POST", body: JSON.stringify({ organization_id: site.organization_id, user_id: users.viewer.id, role: "viewer" }) }, serviceHeaders({ Prefer: "return=representation" }));
+    if (member.status >= 300) throw new Error(`membre viewer → HTTP ${member.status} ${summarize(member)}`);
+    await log("pass", "viewer ajouté à l’organisation", users.viewer.id);
+    const siteJob = await rpcAs(tokens.manager, "create_intervention", {
+      p_category: "lighting", p_description: `QA gateway ${id} : dossier de site de test.`, p_address: "2 rue des bureaux", p_postal_code: "97200", p_city: "Fort-de-France", p_urgency: SEED_URGENCY, p_site_id: site.id,
+    });
+    if (typeof siteJob?.id !== "string") throw new Error("create_intervention (site) sans id");
+    await record("interventionIds", siteJob.id);
+    await log("pass", "dossier de site créé", siteJob.id);
+    const viewerSees = await readRows(`interventions?id=eq.${siteJob.id}&select=id`, userHeaders(tokens.viewer));
+    await log(viewerSees.ok && viewerSees.rows.length === 1 ? "pass" : "fail", "le viewer lit le dossier de site (lecture seule attendue)", viewerSees.detail);
+
+    const forbidden = [...secrets, ...created.userIds];
+    for (const [index, scenario] of scenarioPlan().entries()) {
+      const rec = result.scenarios[index];
+      const form = new FormData();
+      const bytes = scenario.file === "jpeg" ? fixtures.jpeg(2048) : scenario.file === "fakeMime" ? fixtures.png() : fixtures.jpeg(fixtures.OVERSIZE);
+      form.set("file", new Blob([bytes], { type: "image/jpeg" }), scenario.file === "fakeMime" ? "fake.jpg" : "photo.jpg");
+      const dossierId = scenario.dossier === "client" ? clientJob.id : scenario.dossier === "site" ? siteJob.id : null;
+      if (dossierId) form.set("intervention_id", dossierId);
+      const headers = { apikey: credentials.publishableKey };
+      if (scenario.actor === "invalid") headers.Authorization = "Bearer invalid.token.value";
+      else if (scenario.actor !== "anonymous") headers.Authorization = `Bearer ${tokens[scenario.actor]}`;
+      const r = await http(args.functionUrl, { method: "POST", headers, body: form });
+      const document = r.json && typeof r.json === "object" && !Array.isArray(r.json) && "document" in r.json ? r.json.document : null;
+      const verdict = assertScenario(scenario, { status: r.status, bodyText: r.text, document }, forbidden);
+      if (r.status === 201 && typeof document?.id === "string") {
+        const owner = users[scenario.actor].id;
+        const objectPath = `${owner}/${document.id}`;
+        await record("documentIds", document.id);
+        await record("objectPaths", objectPath);
+        const row = await readRows(`documents?id=eq.${document.id}&select=id,owner_id,intervention_id,path,mime_type`);
+        if (!row.ok) verdict.reasons.push(`relecture documents en erreur : ${row.detail}`);
+        else if (row.rows.length !== 1) verdict.reasons.push("aucune ligne documents après 201");
+        else {
+          const stored = row.rows[0];
+          if (stored.owner_id !== owner) verdict.reasons.push("owner_id inattendu");
+          if ((stored.intervention_id ?? null) !== dossierId) verdict.reasons.push("intervention_id inattendu");
+          if (stored.path !== objectPath) verdict.reasons.push("chemin inattendu");
+          if (stored.mime_type !== "image/jpeg") verdict.reasons.push("mime inattendu");
+        }
+        const listing = await client.listObjects(owner, { limit: 1000, offset: 0, search: document.id });
+        if (!listing.ok) verdict.reasons.push(`listage Storage en erreur : ${listing.detail}`);
+        else if (!listing.items.includes(document.id)) verdict.reasons.push("objet Storage absent après 201");
+        verdict.pass = verdict.reasons.length === 0;
+      }
+      rec.status = r.status;
+      rec.pass = verdict.pass;
+      rec.reasons = verdict.reasons;
+      await log(verdict.pass ? "pass" : "fail", `scénario : ${scenario.name}`, `HTTP ${r.status}${verdict.reasons.length ? ` — ${verdict.reasons.join(" ; ")}` : ""}`);
+    }
+    // Refused attempts must not have left metadata or objects behind. Same paginated discovery
+    // as the cleanup; anything found is merged into the manifest, any unknown read is a FAIL.
+    const found = await discoverCohort(client, created);
+    await saveManifest(found.created, found.unknown);
+    for (const u of found.unknown) await log("fail", `découverte de cohorte : ${u.scope}`, u.detail);
+    if (found.unknown.every((u) => !u.scope.startsWith("documents")))
+      await log(found.added.documentIds.length === 0 ? "pass" : "fail", "aucune métadonnée créée par les tentatives refusées", `${found.added.documentIds.length} ligne(s) inattendue(s)`);
+    if (found.unknown.every((u) => !u.scope.startsWith("Storage")))
+      await log(found.added.objectPaths.length === 0 ? "pass" : "fail", "aucun objet Storage orphelin sous les préfixes de la cohorte", `${found.added.objectPaths.length} orphelin(s)`);
+  }
+
+  // Runs on every path (normal end, timeout, signal, unhandled error, --cleanup-manifest):
+  // discovery of the cohort's rows and objects, merged manifest persisted, then deletion in FK
+  // order (objects first) — or no deletion at all while any read is unknown (exit 1).
+  async function cleanup() {
+    // A signal during the run aborted the previous controller; cleanup gets its own.
+    active = new AbortController();
+    const outcome = await runCleanup(client, created, {
+      saveManifest: (nextCreated, unknown) => saveManifest(nextCreated, unknown),
+      note: (status, step, detail) => log(status, step, detail),
+      step: async (entry, leftover) => {
+        result.cleanup.push(entry);
+        if (leftover) result.leftovers.push(leftover);
+        await log(entry.ok ? "pass" : "fail", `nettoyage : ${entry.label}`, `${entry.detail}${entry.remaining === null ? "" : ` ; restant ${entry.remaining}`}`);
+      },
+    }, { manifestPath, reconcile: interrupted || mode === "cleanup-manifest" ? RECONCILE : undefined });
+    if (!outcome.discovery.complete) {
+      for (const u of outcome.discovery.unknown) result.leftovers.push(unknownLeftover(u));
+    }
+    if (!outcome.clean) await log("info", "manifeste conservé pour --cleanup-manifest", `${manifestPath} (${manifestUnknown.length} lecture(s) inconnue(s) marquée(s))`);
+  }
+}
+async function writePrivate(target, content) {
+  const temp = `${target}.tmp`;
+  await writeFile(temp, content, { mode: 0o600 });
+  await chmod(temp, 0o600);
+  await rename(temp, target);
+}
+function usage() {
+  console.error(`Usage :
+  node scripts/qa-gateway/run.mjs --function-url <https://<ref>.supabase.co/functions/v1/native-document-upload> --project <ref> --credentials <creds.json privé> --out <dossier 0700> [--dry-run]
+  node scripts/qa-gateway/run.mjs --cleanup-manifest <manifest.json> --project <ref> --credentials <creds.json privé> --out <dossier 0700>
+creds.json : {"url":"https://<ref>.supabase.co","publishable_key":"…","service_role_key":"…"}
+Le harnais crée une cohorte unique, exerce la fonction déployée, nettoie tout ce qu’il a créé (manifeste durable) et écrit summary.md / result.json caviardés. Aucun jeton ni en-tête n’est affiché. Code de sortie 1 dès qu’une étape échoue.`);
+}
+process.exitCode = await main(process.argv.slice(2));

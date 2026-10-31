@@ -63,10 +63,6 @@
   .main {
     padding: 28px 40px 48px;
   }
-  .bottomNav,
-  .menuButton {
-    display: none;
-  }
 }
 .sidebarBrand {
   padding: 0 8px 20px;
@@ -250,6 +246,12 @@
 .iconButton:hover {
   background: #f1f5fb;
 }
+/* Déclaré après .iconButton : à même spécificité, l’ordre masque bien le bouton menu ≥ 1024 px. */
+@media (min-width: 1024px) {
+  .menuButton {
+    display: none;
+  }
+}
 
 /* ---- Mobile bottom navigation (<1024) ------------------------------------------------ */
 .bottomNav {
@@ -276,10 +278,19 @@
   font-weight: 550;
   color: #5b6b82;
   border-top: 2px solid transparent;
+  /* M35 : libellé sur une ligne, l’onglet garde 60 px. */
+  white-space: nowrap;
+  letter-spacing: -0.1px;
 }
 .bottomItem[aria-current="page"] {
   color: var(--a-blue);
   border-top-color: var(--a-blue);
+}
+/* Déclaré après .bottomNav : à même spécificité, l’ordre masque bien les onglets ≥ 1024 px. */
+@media (min-width: 1024px) {
+  .bottomNav {
+    display: none;
+  }
 }
 
 /* ---- Mobile drawer ------------------------------------------------------------------ */
@@ -413,6 +424,26 @@
   height: 110px;
 }
 @media (max-width: 420px) {
+  .banner {
+    padding: 20px 18px;
+    gap: 12px;
+  }
+  .banner h1 {
+    font-size: 26px;
+    letter-spacing: -0.6px;
+  }
+  .bannerArt {
+    width: 64px;
+    height: 64px;
+  }
+  .cta {
+    padding-left: 16px;
+    padding-right: 44px;
+    font-size: 15px;
+    white-space: nowrap;
+  }
+}
+@media (max-width: 339px) {
   .bannerArt {
     display: none;
   }
@@ -543,6 +574,13 @@
   color: var(--a-muted);
 }
 @media (max-width: 480px) {
+  .rowTitle {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 1.3;
+  }
   .rowRight {
     max-width: 96px;
     font-size: 12px;
@@ -653,7 +691,7 @@
 }
 .basis summary {
   cursor: pointer;
-  min-height: 40px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -702,13 +740,23 @@
   margin: 2px 0 4px;
 }
 .basisFlat summary {
-  min-height: 36px;
+  min-height: 44px;
   font-weight: 550;
 }
 .cta {
+  position: relative;
   min-height: 52px;
   font-size: 16px;
   margin-top: 4px;
+  padding-right: 48px;
+  padding-left: 48px;
+}
+/* M35 : flèche calée à droite, texte centré. */
+.cta > svg:last-child {
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 .ctaCount {
   background: rgba(255, 255, 255, 0.2);
@@ -1071,12 +1119,43 @@
   gap: 12px;
   margin-bottom: 16px;
 }
+/* M14 : icône teintée | titre + description | colonne d’état (pastille, date) ; actions en bas. */
 .credCard {
   display: grid;
-  grid-template-columns: 56px minmax(0, 1fr);
+  grid-template-columns: 56px minmax(0, 1fr) auto;
   gap: 12px 16px;
   padding: 18px;
   margin: 0;
+  align-items: start;
+}
+.credStatus {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  text-align: right;
+}
+.credStatus small {
+  font-size: 12px;
+  color: var(--a-muted);
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .credCard {
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
+  .credIcon {
+    width: 48px;
+    height: 48px;
+  }
+  .credStatus {
+    grid-column: 2;
+    align-items: flex-start;
+    text-align: left;
+  }
+  .credStatus small {
+    white-space: normal;
+  }
 }
 .credIcon {
   display: inline-flex;
@@ -1133,6 +1212,20 @@
   flex-wrap: wrap;
   gap: 10px;
 }
+.credCountComplete {
+  color: var(--a-green);
+}
+.credHeadStatus {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+@media (max-width: 480px) {
+  .credHeadStatus {
+    align-items: flex-start;
+  }
+}
 .linkForm {
   margin: 0 0 16px;
   border-color: #bfd2f3;
@@ -1155,29 +1248,73 @@
   font-size: 14px;
   margin: 0;
 }
+/* M65 : barre d’étapes avec connecteurs entre les pastilles ; état « fait » en vert. */
 .appSteps {
   list-style: none;
   padding: 0;
-  margin: 0 0 16px;
+  margin: 0 0 6px;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 6px;
-}
-@media (max-width: 760px) {
-  .appSteps {
-    grid-template-columns: 1fr;
-  }
+  gap: 0;
 }
 .appSteps li {
+  position: relative;
   display: flex;
   gap: 10px;
   align-items: center;
-  padding: 10px 12px;
-  background: #fff;
-  border: 1px solid var(--a-line);
-  border-radius: 8px;
+  padding: 10px 12px 10px 0;
+  min-height: 44px;
   font-size: 13px;
   color: var(--a-navy);
+}
+.appSteps li + li::before {
+  content: "";
+  position: absolute;
+  left: -14px;
+  top: 23px;
+  width: 14px;
+  height: 1px;
+  background: var(--a-line);
+}
+.stepsSummary {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--a-muted);
+}
+/* Deux colonnes M65 ≥ 1024 px : 1 · 2 · 4 | 3 · 5 · soumission ; une colonne en dessous. */
+.appColumns {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0 20px;
+  align-items: start;
+}
+@media (min-width: 1024px) {
+  .appColumns {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+@media (max-width: 760px) {
+  .appSteps {
+    display: flex;
+    gap: 0;
+  }
+  .appSteps li {
+    flex: 1 1 0;
+    justify-content: center;
+    padding: 10px 0;
+  }
+  .appSteps li + li::before {
+    left: calc(-50% + 13px);
+    width: calc(100% - 26px);
+  }
+  .stepLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
 }
 .appSteps li span:first-child {
   display: inline-flex;
@@ -1251,8 +1388,8 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 0 4px 0 12px;
-  min-height: 36px;
+  padding: 0 0 0 12px;
+  min-height: 44px;
   border-radius: 999px;
   background: #eaf1ff;
   color: var(--a-blue);
@@ -1263,8 +1400,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   color: inherit;
 }
@@ -1283,8 +1420,16 @@
 .checkGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 6px 16px;
+  gap: 0 16px;
   margin-bottom: 8px;
+}
+/* Ligne de case à cocher cliquable sur 44 px (la case native reste 16 px, le libellé porte la cible). */
+.checkGrid :global(.checkbox-field) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  cursor: pointer;
 }
 .switchRow {
   display: flex;
@@ -1349,11 +1494,21 @@
 }
 
 /* ---- Profile (M36) -------------------------------------------------------------------- */
+/* M36 : en-tête teinté pleine largeur (déborde le padding de .main), avatar + identité. */
 .profileHead {
   display: flex;
   gap: 16px;
   align-items: center;
-  padding: 8px 0 20px;
+  margin: -8px -16px 16px;
+  padding: 16px 16px 20px;
+  background: #edf3fd;
+  border-bottom: 1px solid #d6e2f5;
+}
+@media (min-width: 1024px) {
+  .profileHead {
+    margin: -8px -40px 20px;
+    padding: 20px 40px 24px;
+  }
 }
 .avatar {
   display: inline-flex;
@@ -1423,14 +1578,10 @@
 .perfGrid + .basis {
   margin-bottom: 16px;
 }
+/* M36 garde 3 colonnes sur téléphone ; ici 2 colonnes dès 360 px (lisibilité 13–14 px). */
 @media (max-width: 760px) {
   .perfGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-@media (max-width: 420px) {
-  .perfGrid {
-    grid-template-columns: 1fr;
   }
 }
 .perfTile {
@@ -1441,12 +1592,41 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
 }
+/* Tuile indisponible compacte : même primitive, densité de la grille. */
 .perfTile :global(.unavailable) {
   margin: 0;
   border: 0;
   padding: 0;
   background: transparent;
+  gap: 10px;
+}
+.perfTile :global(.unavailable-icon) {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+.perfTile :global(.unavailable) strong {
+  font-size: 13px;
+  font-weight: 550;
+}
+.perfTile :global(.unavailable) p {
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 2px;
+}
+@media (max-width: 420px) {
+  .perfTile {
+    padding: 10px;
+  }
+  .perfTileTop strong {
+    font-size: 18px;
+  }
+  .perfTile :global(.unavailable) {
+    flex-direction: column;
+    gap: 6px;
+  }
 }
 .perfTileTop {
   display: flex;
@@ -1599,4 +1779,15 @@
 
 .segmentsWrap {
   margin-bottom: 14px;
+}
+/* Trois segments sur une ligne à 360 px, cibles 44 px (primitive partagée non modifiée). */
+.segmentsWrap :global(.tabs) {
+  flex-wrap: nowrap;
+}
+.segmentsWrap :global(.tabs) > button {
+  flex: 1 1 0;
+  min-height: 44px;
+  padding: 8px 6px;
+  text-align: center;
+  white-space: nowrap;
 }

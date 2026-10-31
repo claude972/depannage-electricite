@@ -2,11 +2,16 @@
 // Session controller: identity, mode (public/demo/live), role guards, hash routing, data
 // loading with late-response protection, and every mutation (live contract or explicit demo
 // counterpart). Role spaces under components/role render the screens.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 import { api, ApiRequestError, contractStateFromError, uploadDocument } from "./app/api";
-import { createGuard, createRunner, type RunContext, type Runner } from "./app/guard";
+import { createGuard, createRunner, runForResult, type RunContext, type Runner } from "./app/guard";
 import { adoptIdentity } from "./app/identity";
+import { demoTicketPermissions } from "./role/support-lists";
+import { createDemoFeatureClients, createFeatureClients, planningProbeRange, reprobe, type FeatureKey, type ReprobeHint } from "./app/features";
+import type { PlatformAccess } from "../lib/features/platform-operations/types";
+import { PLATFORM_DEMO } from "../lib/features/platform-operations/demo";
+import { demoNotificationPage } from "../lib/features/notifications/demo";
 import { createRevalidationScheduler } from "./app/revalidate";
 import {
   acknowledgeUpload,
@@ -71,6 +76,15 @@ import {
   type PaymentStatusReport,
   type SiteAccessCommand,
   type SiteAccessOverview,
+  type SupportCommand,
+  type SupportCommandResult,
+  type SupportCreateResult,
+  type SupportDetail,
+  type SupportEvent,
+  type SupportListFilters,
+  type SupportListPage,
+  type SupportMessage,
+  type SupportTicket,
   type UploadQueue,
   type Capabilities,
   type Category,
@@ -120,6 +134,11 @@ export default function CourantApp() {
   const [selectedQuoteId, setSelectedQuoteId] = useState("");
   const [activeOrganizationId, setActiveOrganizationId] = useState("");
   const [activeSiteId, setActiveSiteId] = useState("");
+  const [platformAccess, setPlatformAccess] = useState<PlatformAccess | null>(null);
+  // Counts identity changes (logout, login as someone else, demo switch) so that the client bundle
+  // handed to the leaves is rebuilt for the new actor; the old bundle refuses to send anything.
+  const [identityEpoch, setIdentityEpoch] = useState(0);
+  const [unreadNotifications, setUnreadNotifications] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [booting, setBooting] = useState(true);
@@ -155,12 +174,15 @@ export default function CourantApp() {
 
   const clearSessionState = useCallback(() => {
     seq.current += 1; // any in-flight workspace response is now stale
-    guard.bump(); // any in-flight mutation chain is now foreign
+    guard.bump();
+    setIdentityEpoch((e) => e + 1); // any in-flight mutation chain is now foreign
     runner.reset();
     userId.current = null;
     setData(EMPTY_WORKSPACE);
     setProfessional(EMPTY_PROFESSIONAL);
     setCapabilities(UNKNOWN_CAPABILITIES);
+    setPlatformAccess(null);
+    setUnreadNotifications(null);
     setReturnContext(null);
     setSelectedId("");
     setSelectedQuoteId("");
@@ -173,6 +195,10 @@ export default function CourantApp() {
     setUploads([]);
     try {
       sessionStorage.removeItem(DRAFT_KEY);
+      // Pending private content (unsent assistance request) of the outgoing user never survives
+      // a logout or an identity change; a same-user reload keeps it (no reset happens then).
+      for (const key of Object.keys(sessionStorage))
+        if (key.startsWith("courant-support-pending-")) sessionStorage.removeItem(key);
     } catch {}
     setSessionKey((k) => k + 1);
   }, []);
@@ -500,7 +526,7 @@ export default function CourantApp() {
     [runner],
   );
 
-  function startDemo(nextRole: Role = "client", next?: View) {
+  function startDemo(nextRole: Role = "client", next?: View, nextParam?: string) {
     if (modeRef.current === "live") return; // never mix a live account with demo data
     const valid = (v: unknown) => {
       const d = v as Workspace;
@@ -526,14 +552,23 @@ export default function CourantApp() {
       adminLists: "available",
       quoteDraft: "available",
       adminDirectory: "available",
+      support: "available",
+      quoteDocuments: "available",
+      planning: "available",
+      notifications: "available",
+      siteOperations: "available",
+      platformOperations: "available",
+      tracking: "available",
     });
     guard.bump();
+    setIdentityEpoch((e) => e + 1);
     runner.reset();
     setMode("demo");
     setRole(nextRole);
     setLoading(false);
     setSessionKey((k) => k + 1);
-    navigate(next || homeFor(nextRole, "demo"));
+    if (nextParam) setSelectedId(nextParam);
+    navigate(next || homeFor(nextRole, "demo"), nextParam);
   }
   async function logout() {
     if (modeRef.current === "live") {
@@ -584,7 +619,7 @@ export default function CourantApp() {
         };
         const allowed: Record<string, Status[]> = {
           accept_mission: ["requested"],
-          send_quote: ["assigned"],
+          send_quote: ["assigned", "quoted"],
           accept_quote: ["quoted"],
           start: ["accepted"],
           complete: ["in_progress"],
@@ -620,8 +655,12 @@ export default function CourantApp() {
             (n, l) => n + Math.round(l.quantity * l.unit_price_cents),
             0,
           );
+          // A revision replaces the previously sent (not accepted) version, as the server does.
+          qs = qs.map((q) =>
+            q.intervention_id === id && q.status === "sent" ? { ...q, status: "rejected" } : q,
+          );
           const quote: Quote = {
-            id: uid(),
+            id: typeof extra?.quote_id === "string" ? extra.quote_id : uid(),
             intervention_id: id,
             artisan_id: DEMO_IDS.artisan,
             lines,
@@ -887,6 +926,16 @@ export default function CourantApp() {
         let nextProfile = profile;
         let credentials = dossier.credentials;
         if (body.action === "save_profile") {
+          // Mirrors the platform rule (CL-BE-001): no dossier edit while work is active or unpaid.
+          const blocking = data.interventions.filter(
+            (i) =>
+              i.artisan_id === DEMO_IDS.artisan &&
+              ["assigned", "quoted", "accepted", "in_progress", "completed"].includes(i.status),
+          ).length;
+          if (blocking)
+            throw new Error(
+              `Modification refusée : ${blocking} mission${blocking > 1 ? "s" : ""} en cours ou terminée${blocking > 1 ? "s" : ""} sans règlement. Terminez-les et attendez leur règlement, ou obtenez leur annulation ou réaffectation, avant de modifier le dossier. Rien n’a été modifié ; vos saisies restent dans le formulaire.`,
+            );
           const { action: _a, ...fields } = body;
           nextProfile = {
             ...profile,
@@ -938,6 +987,11 @@ export default function CourantApp() {
       } catch (e) {
         const state = contractStateFromError(e);
         if (state === "missing") ctx.when(setCapabilities)((c) => ({ ...c, artisan: "missing" }));
+        if (body.action === "save_profile" && e instanceof ApiRequestError && e.status === 409)
+          // Active-work guard: the dossier and the approval are untouched; the form keeps the input.
+          throw new Error(
+            `${e.message} Rien n’a été modifié et votre approbation est inchangée ; vos saisies restent dans le formulaire.`,
+          );
         throw e;
       }
       if (ctx.alive()) await refresh();
@@ -1482,7 +1536,7 @@ export default function CourantApp() {
     body: QuoteDraftCommand,
   ): Promise<QuoteDraftResult> {
     let outcome: QuoteDraftResult = { ok: false, conflict: false, message: "Action interrompue." };
-    await run(async (ctx) => {
+    const completed = await run(async (ctx) => {
       if (modeRef.current === "demo") {
         const all = demoDrafts();
         const envelope = demoDraftEnvelope(interventionId);
@@ -1534,8 +1588,12 @@ export default function CourantApp() {
         const draft = envelope.draft;
         if (draft.tax_rate === null || !draft.lines.length || draft.lines.some((l) => !l.label.trim()))
           throw new Error("Le brouillon n’est pas publiable : lignes nommées et taux de TVA requis.");
-        const beforeIds = new Set(data.quotes.map((q) => q.id));
-        const ok = await action(interventionId, "send_quote", { lines: draft.lines, tax_rate: draft.tax_rate });
+        const newQuoteId = uid();
+        const ok = await action(interventionId, "send_quote", {
+          lines: draft.lines,
+          tax_rate: draft.tax_rate,
+          quote_id: newQuoteId,
+        });
         if (!ok) {
           outcome = { ok: false, conflict: false, message: "Le devis n’a pas pu être publié ; le brouillon est conservé." };
           return;
@@ -1548,14 +1606,14 @@ export default function CourantApp() {
             ...envelope,
             draft: null,
             version: envelope.version + 1,
-            // The exact quote created by this publication is read back after the state update.
-            quote_id: data.quotes.find((q) => !beforeIds.has(q.id))?.id,
+            quote_id: newQuoteId,
           },
         };
         return;
       }
       try {
         const result = await api<QuoteDraftEnvelope>(`/api/interventions/${interventionId}/quote-draft`, body);
+        if (!ctx.alive()) return;
         ctx.when(setCapabilities)((c) => ({ ...c, quoteDraft: "available" }));
         outcome = { ok: true, envelope: result };
         if (body.action === "send") {
@@ -1574,10 +1632,200 @@ export default function CourantApp() {
         }
         if (contractStateFromError(e) === "missing")
           ctx.when(setCapabilities)((c) => ({ ...c, quoteDraft: "missing" }));
+        // Reported inline by the editor; no duplicate banner.
         outcome = { ok: false, conflict: false, message: (e as Error).message };
+      }
+    });
+    // A chain that did not complete as the current identity reports neither success nor conflict.
+    if (!completed) return { ok: false, conflict: false, message: "Action interrompue." };
+    return outcome;
+  }
+  // ---- Assistance tickets (contract SUPPORT-001). Demo: browser-only tickets; live: dedicated
+  // routes, honest unavailable state until the backend checkpoint is integrated.
+  type DemoSupportStore = Record<string, { ticket: SupportTicket; messages: SupportMessage[]; events: SupportEvent[]; request_id?: string }>;
+  const demoSupport = () =>
+    readDemo<DemoSupportStore>(DEMO_KEYS.support, {}, (v) => !!v && typeof v === "object");
+  const demoActor = () => `demo-${roleRef.current}`;
+  async function loadSupportTickets(filters: SupportListFilters): Promise<SupportListPage | null> {
+    const limit = Math.min(100, Math.max(1, filters.limit ?? 25));
+    if (modeRef.current === "demo") {
+      const me = demoActor();
+      const all = Object.values(demoSupport())
+        .map((e) => e.ticket)
+        .filter((t) => (roleRef.current === "admin" && filters.scope !== "mine") || t.creator_id === me)
+        .filter((t) => !filters.status || t.status === filters.status)
+        .filter((t) => !filters.intervention_id || t.intervention_id === filters.intervention_id)
+        .filter((t) => !filters.q || t.subject.toLowerCase().includes(filters.q.toLowerCase()))
+        .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id.localeCompare(a.id));
+      const start = filters.cursor ? Number(filters.cursor) || 0 : 0;
+      return {
+        tickets: all.slice(start, start + limit),
+        page: { limit, total: all.length, has_more: start + limit < all.length, next_cursor: start + limit < all.length ? String(start + limit) : null },
+        filters: { scope: filters.scope ?? (roleRef.current === "admin" ? "all" : "mine"), status: filters.status ?? null, intervention_id: filters.intervention_id ?? null, q: filters.q ?? null },
+      };
+    }
+    const my = seq.current;
+    try {
+      const q = new URLSearchParams({ limit: String(limit) });
+      if (filters.cursor) q.set("cursor", filters.cursor);
+      if (filters.scope) q.set("scope", filters.scope);
+      if (filters.status) q.set("status", filters.status);
+      if (filters.intervention_id) q.set("intervention_id", filters.intervention_id);
+      if (filters.q) q.set("q", filters.q);
+      const result = await api<SupportListPage>(`/api/support?${q}`);
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, support: "available" }));
+      return result;
+    } catch (e) {
+      if (my !== seq.current) return null;
+      if (e instanceof ApiRequestError && e.status === 422) {
+        setError(e.message);
+        return null;
+      }
+      setCapabilities((c) => ({ ...c, support: contractStateFromError(e) }));
+      return null;
+    }
+  }
+  async function loadSupportTicket(id: string, page: { limit?: number; after_version?: number } = {}): Promise<SupportDetail | null> {
+    const limit = Math.min(100, Math.max(1, page.limit ?? 50));
+    const after = Math.max(0, page.after_version ?? 0);
+    if (modeRef.current === "demo") {
+      const entry = demoSupport()[id];
+      if (!entry) return null;
+      const me = demoActor();
+      if (roleRef.current !== "admin" && entry.ticket.creator_id !== me) return null;
+      const events = entry.events.filter((e) => e.version > after).sort((a, b) => a.version - b.version).slice(0, limit);
+      const versions = new Set(events.map((e) => e.version));
+      return {
+        ticket: entry.ticket,
+        messages: entry.messages.filter((m) => versions.has(m.version)),
+        events,
+        // Same rule as the server for an administrator (018): no reply on a resolved ticket.
+        permissions: demoTicketPermissions(
+          { can_reply_all: roleRef.current === "admin", can_set_status_all: roleRef.current === "admin" },
+          me,
+          entry.ticket,
+        ),
+        page: {
+          limit,
+          after_version: after,
+          next_after_version: events.length === limit ? events[events.length - 1].version : null,
+          has_more: entry.events.some((e) => e.version > (events[events.length - 1]?.version ?? after)),
+          total_events: entry.events.length,
+          total_messages: entry.messages.length,
+        },
+      };
+    }
+    const my = seq.current;
+    try {
+      const result = await api<SupportDetail>(
+        `/api/support/${encodeURIComponent(id)}?limit=${limit}&after_version=${after}`,
+      );
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, support: "available" }));
+      return result;
+    } catch (e) {
+      if (my !== seq.current) return null;
+      if (e instanceof ApiRequestError && (e.status === 404 || e.status === 403)) {
+        setError("Cette demande d’assistance n’est pas accessible depuis votre compte.");
+        return null;
+      }
+      setCapabilities((c) => ({ ...c, support: contractStateFromError(e) }));
+      return null;
+    }
+  }
+  async function createSupportTicket(values: { request_id: string; subject: string; body: string; intervention_id: string | null }): Promise<SupportCreateResult | null> {
+    return runForResult<SupportCreateResult>(runner, async (ctx) => {
+      if (modeRef.current === "demo") {
+        const store = demoSupport();
+        const existing = Object.values(store).find((e) => e.request_id === values.request_id);
+        if (existing) return { ticket: existing.ticket, initial_message: existing.messages[0], replayed: true };
+        const now = new Date().toISOString();
+        const id = uid();
+        const message: SupportMessage = { id: uid(), ticket_id: id, author_id: demoActor(), author_kind: "user", version: 1, body: values.body.trim(), created_at: now };
+        const ticket: SupportTicket = { id, creator_id: demoActor(), intervention_id: values.intervention_id, subject: values.subject.trim(), status: "open", version: 1, created_at: now, updated_at: now, last_message_at: now };
+        const event: SupportEvent = { id: uid(), ticket_id: id, actor_id: demoActor(), kind: "ticket_created", from_status: null, to_status: "open", version: 1, message_id: message.id, created_at: now };
+        store[id] = { ticket, messages: [message], events: [event], request_id: values.request_id };
+        writeDemo(DEMO_KEYS.support, store);
+        ctx.notice("Demande d’assistance enregistrée dans la démonstration ; aucun opérateur réel n’est prévenu.");
+        return { ticket, initial_message: message, replayed: false };
+      }
+      try {
+        const result = await api<SupportCreateResult>("/api/support", values);
+        if (!ctx.alive()) return undefined; // stale chain: runForResult yields null to the caller
+        ctx.when(setCapabilities)((c) => ({ ...c, support: "available" }));
+        ctx.notice(
+          result.replayed
+            ? "Votre demande avait déjà été enregistrée ; aucun doublon créé."
+            : "Demande d’assistance enregistrée. Les réponses s’afficheront ici à l’actualisation.",
+        );
+        return result;
+      } catch (e) {
+        if (contractStateFromError(e) === "missing") ctx.when(setCapabilities)((c) => ({ ...c, support: "missing" }));
         throw e;
       }
     });
+  }
+  async function supportCommand(id: string, body: SupportCommand): Promise<SupportCommandResult> {
+    let outcome: SupportCommandResult = { ok: false, conflict: false, message: "Action interrompue." };
+    const completed = await run(async (ctx) => {
+      if (modeRef.current === "demo") {
+        const store = demoSupport();
+        const entry = store[id];
+        if (!entry) throw new Error("Demande d’assistance introuvable.");
+        if (entry.ticket.version !== body.expected_version) {
+          outcome = { ok: false, conflict: true, message: "La demande a évolué depuis votre lecture. Relisez-la ; votre texte est conservé." };
+          return;
+        }
+        const isAdmin = roleRef.current === "admin";
+        const now = new Date().toISOString();
+        const version = entry.ticket.version + 1;
+        let status = entry.ticket.status;
+        let message: SupportMessage | null = null;
+        if (body.action === "set_status") {
+          if (!isAdmin) throw new Error("Seule l’administration peut changer l’état d’une demande.");
+          const allowed: Record<string, string[]> = { open: ["in_progress", "awaiting_user", "resolved"], in_progress: ["awaiting_user", "resolved"], awaiting_user: ["in_progress", "resolved"], resolved: ["in_progress"] };
+          if (!allowed[status]?.includes(body.status)) {
+            outcome = { ok: false, conflict: true, message: "Ce changement d’état n’est pas possible depuis l’état actuel." };
+            return;
+          }
+          status = body.status;
+        } else {
+          if (isAdmin && status === "resolved") {
+            outcome = { ok: false, conflict: true, message: "Réouvrez la demande avant d’y répondre." };
+            return;
+          }
+          if (!isAdmin && (status === "awaiting_user" || status === "resolved")) status = "open";
+          message = { id: uid(), ticket_id: id, author_id: demoActor(), author_kind: isAdmin ? "admin" : "user", version, body: body.body.trim(), created_at: now };
+        }
+        const event: SupportEvent = { id: uid(), ticket_id: id, actor_id: demoActor(), kind: body.action === "reply" ? "replied" : "status_changed", from_status: entry.ticket.status, to_status: status, version, message_id: message?.id ?? null, created_at: now };
+        entry.ticket = { ...entry.ticket, status, version, updated_at: now, last_message_at: message ? now : entry.ticket.last_message_at };
+        if (message) entry.messages.push(message);
+        entry.events.push(event);
+        writeDemo(DEMO_KEYS.support, store);
+        outcome = { ok: true, ticket: entry.ticket, message, event };
+        ctx.notice("Enregistré dans la démonstration.");
+        return;
+      }
+      try {
+        const result = await api<{ ticket: SupportTicket; message: SupportMessage | null; event: SupportEvent }>(
+          `/api/support/${encodeURIComponent(id)}`,
+          body,
+        );
+        if (!ctx.alive()) return;
+        ctx.when(setCapabilities)((c) => ({ ...c, support: "available" }));
+        outcome = { ok: true, ...result };
+        ctx.notice(body.action === "reply" ? "Réponse enregistrée." : "État de la demande mis à jour.");
+      } catch (e) {
+        if (e instanceof ApiRequestError && e.status === 409) {
+          outcome = { ok: false, conflict: true, message: e.message };
+          return;
+        }
+        if (contractStateFromError(e) === "missing") ctx.when(setCapabilities)((c) => ({ ...c, support: "missing" }));
+        outcome = { ok: false, conflict: false, message: (e as Error).message };
+      }
+    });
+    if (!completed) return { ok: false, conflict: false, message: "Action interrompue." };
     return outcome;
   }
   // Membership lost or never held: drop every cached view of the organisation.
@@ -1661,6 +1909,7 @@ export default function CourantApp() {
             invitation,
             ...invitations.filter((i) => i.email !== body.email || i.status !== "pending"),
           ]);
+          if (!ctx.alive()) return;
           created = {
             invitation,
             invitation_code: code,
@@ -1729,7 +1978,8 @@ export default function CourantApp() {
           : "Modification enregistrée.",
       );
     });
-    return created ?? ok;
+    if (!ok) return false; // failed or stale: no one-time code may leak into another session
+    return created ?? true;
   }
   async function acceptInvitation(token: string) {
     return run(async (ctx) => {
@@ -2042,6 +2292,69 @@ export default function CourantApp() {
         ? profile.full_name
         : DEMO_NAMES[role]
       : profile?.full_name || "Bienvenue";
+  // Advanced lots (WEB-SHARED-001): one client bundle per identity. Live clients are bound to the
+  // identity generation (a reply after logout/login/demo switch is dropped); demonstration clients
+  // operate on seeds only and never touch the network.
+  const features = useMemo(
+    () =>
+      mode === "demo"
+        ? createDemoFeatureClients(role)
+        : createFeatureClients({
+            generation: () => guard.generation(),
+            setState: (key, state) => setCapabilities((c) => (c[key] === state ? c : { ...c, [key]: state })),
+          }),
+    [mode, role, guard, identityEpoch, profile?.id],
+  );
+  // Capability probes after each successful workspace load: cheap reads whose reply alone decides
+  // availability (404 missing, 503 unavailable, 403 present). Nothing here grants anything: the
+  // back-office reply is kept as data for a fail-closed gate, the unread count for the bell.
+  useEffect(() => {
+    if (mode !== "live" || !refreshedAt) return;
+    let active = true;
+    const ignore = () => undefined;
+    void features.notifications
+      .summary()
+      .then((summary) => active && setUnreadNotifications(summary ? summary.unread_count : null))
+      .catch(() => active && setUnreadNotifications(null));
+    void features.platform.load
+      .me()
+      .then((access) => active && setPlatformAccess(access))
+      .catch(() => active && setPlatformAccess(null));
+    if (role === "artisan") void features.planning.load(planningProbeRange()).catch(ignore);
+    if (role === "manager" && activeSiteId) void features.siteOperations.load(activeSiteId).catch(ignore);
+    return () => {
+      active = false;
+    };
+  }, [mode, role, refreshedAt, activeSiteId, features]);
+  useEffect(() => {
+    if (mode !== "demo") return;
+    setPlatformAccess(role === "admin" ? PLATFORM_DEMO.access : null);
+    setUnreadNotifications(demoNotificationPage({}).unread_count);
+  }, [mode, role]);
+  // SHARED-REV-006: explicit recovery action after a transient 503/network failure. Re-probes the
+  // one contract with the bound client (same identity generation, same rights); the reply alone
+  // sets the capability again. Errors are swallowed here: the capability already reflects them.
+  const featuresRef = useRef(features);
+  featuresRef.current = features;
+  const reprobeFeature = useCallback(
+    async (key: FeatureKey, hint?: ReprobeHint) => {
+      const bundle = features;
+      // Alive = the bundle's OWNER generation (captured when the bundle was built, never at
+      // invocation) is still the current one, mode still live, and the bundle handed to the leaves
+      // is still this one. A guard bump before the next render already makes it false.
+      const alive = () => modeRef.current === "live" && bundle.owner === guard.generation() && featuresRef.current === bundle;
+      await reprobe(key, hint, {
+        bundle,
+        alive,
+        setState: (k, state) => setCapabilities((c) => (c[k] === state ? c : { ...c, [k]: state })),
+        setUnread: setUnreadNotifications,
+        setAccess: setPlatformAccess,
+        activeSiteId: activeSiteRef.current,
+      });
+    },
+    [features, guard],
+  );
+
   const session: Session = {
     mode: mode === "live" ? "live" : "demo",
     role,
@@ -2100,6 +2413,10 @@ export default function CourantApp() {
     loadAdminIntervention,
     loadQuoteDraft,
     quoteDraftCommand,
+    loadSupportTickets,
+    loadSupportTicket,
+    createSupportTicket,
+    supportCommand,
     loadOrganization,
     organizationCommand,
     acceptInvitation,
@@ -2130,6 +2447,7 @@ export default function CourantApp() {
     setDemoRole(next) {
       if (modeRef.current !== "demo") return;
       guard.bump();
+    setIdentityEpoch((e) => e + 1);
       runner.reset();
       setRole(next);
       setSelectedId("");
@@ -2150,6 +2468,10 @@ export default function CourantApp() {
       if (modeRef.current === "demo") setData(next);
     },
     setProfessional,
+    features,
+    platformAccess,
+    unreadNotifications,
+    reprobeFeature,
   };
 
   if (booting)

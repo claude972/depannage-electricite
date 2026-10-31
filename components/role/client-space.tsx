@@ -18,7 +18,7 @@ import {
   quoteRef,
   shortId,
 } from "../app/format";
-import { pickQuote, quoteVersions } from "../app/session";
+import { canAccess, pickQuote, quoteVersions } from "../app/session";
 import { Icon } from "../app/icons";
 import { InstallPanel } from "../app/install-panel";
 import {
@@ -54,7 +54,14 @@ import type {
   View,
 } from "../app/types";
 import styles from "./client.module.css";
+import { CLIENT_STEPS, currentStepIndex, detailHistory, quoteDecisionState, quoteLineCells, recentRowDescriptor } from "./client-lists";
+import { HeaderBell, NotificationsPage } from "./notifications-anchor";
+import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
+import { TrackingAnchor } from "./tracking-anchor";
+import { PlatformPage } from "./platform-anchor";
+import { platformEntries } from "./anchors";
 import { UploadQueuePanel } from "../app/upload-queue";
+import { DossierHelpLink, SupportCenter } from "./support-tickets";
 
 const CLIENT_VIEWS: readonly View[] = [
   "overview",
@@ -63,9 +70,15 @@ const CLIENT_VIEWS: readonly View[] = [
   "detail",
   "quote",
   "messages",
+  "notifications",
+  "platform-operators",
+  "platform-finance",
+  "platform-moderation",
+  "support-queue",
   "documents",
   "profile",
   "help",
+  "support",
 ];
 const VIEW_NAMES: Partial<Record<View, string>> = {
   overview: "Vue d’ensemble",
@@ -74,9 +87,15 @@ const VIEW_NAMES: Partial<Record<View, string>> = {
   detail: "Intervention",
   quote: "Devis",
   messages: "Messages",
+  notifications: "Notifications",
+  "platform-operators": "Opérateurs de plateforme",
+  "platform-finance": "Finance plateforme",
+  "platform-moderation": "Modération des avis",
+  "support-queue": "File d’assistance",
   documents: "Documents",
   profile: "Mon profil",
   help: "Aide",
+  support: "Assistance",
 };
 const SIDE_NAV: { id: View; label: string; icon: string }[] = [
   { id: "overview", label: "Vue d’ensemble", icon: "home" },
@@ -88,23 +107,7 @@ const BOTTOM_NAV: { id: View; label: string; icon: string; also: View[] }[] = [
   { id: "overview", label: "Accueil", icon: "home", also: [] },
   { id: "requests", label: "Demandes", icon: "list", also: ["new", "detail", "quote"] },
   { id: "messages", label: "Messages", icon: "message", also: [] },
-  { id: "profile", label: "Profil", icon: "person", also: ["help", "documents"] },
-];
-const PROGRESS: Status[] = [
-  "requested",
-  "assigned",
-  "quoted",
-  "accepted",
-  "in_progress",
-  "completed",
-  "paid",
-];
-const STEPS: { label: string; reachedAt: Status }[] = [
-  { label: "Demandée", reachedAt: "requested" },
-  { label: "Artisan", reachedAt: "assigned" },
-  { label: "Devis", reachedAt: "quoted" },
-  { label: "Intervention", reachedAt: "in_progress" },
-  { label: "Terminée", reachedAt: "paid" },
+  { id: "profile", label: "Profil", icon: "person", also: ["help", "documents", "support"] },
 ];
 const FAQ: [string, string][] = [
   [
@@ -241,12 +244,21 @@ export function ClientSpace({ session }: { session: Session }) {
             />
           </>
         );
+      case "notifications":
+        return <NotificationsPage session={session} />;
+      case "platform-operators":
+      case "platform-finance":
+      case "platform-moderation":
+      case "support-queue":
+        return <PlatformPage session={session} view={view} />;
       case "documents":
         return <DocumentsView session={session} rows={rows} />;
       case "profile":
         return <ProfileView session={session} />;
       case "help":
         return <HelpView session={session} />;
+      case "support":
+        return <SupportCenter session={session} interventions={rows} backView="overview" />;
       default:
         return <Forbidden onHome={() => session.go("overview")} />;
     }
@@ -303,6 +315,24 @@ export function ClientSpace({ session }: { session: Session }) {
             );
           })}
         </nav>
+        {platformEntries(session.platformAccess, (v) => canAccess(v, session.role, session.mode)).length > 0 && (
+          <>
+            <span className={styles.navCaption}>Opérateur de plateforme</span>
+            <nav className={styles.sideNav} aria-label="Back-office de la plateforme">
+              {platformEntries(session.platformAccess, (v) => canAccess(v, session.role, session.mode)).map((n) => (
+                <button
+                  type="button"
+                  key={n.view}
+                  aria-current={view === n.view ? "page" : undefined}
+                  onClick={() => session.go(n.view)}
+                >
+                  <Icon name={n.icon} size={18} />
+                  <span>{n.label}</span>
+                </button>
+              ))}
+            </nav>
+          </>
+        )}
         <div className={styles.sidebarBottom}>
           <button
             type="button"
@@ -311,6 +341,14 @@ export function ClientSpace({ session }: { session: Session }) {
           >
             <Icon name="help" size={18} />
             Aide
+          </button>
+          <button
+            type="button"
+            aria-current={view === "support" ? "page" : undefined}
+            onClick={() => session.go("support")}
+          >
+            <Icon name="shield" size={18} />
+            Assistance
           </button>
           <button
             type="button"
@@ -347,13 +385,14 @@ export function ClientSpace({ session }: { session: Session }) {
                 {session.connection === "SUBSCRIBED" ? "En direct" : "Actualiser"}
               </button>
             )}
+            <HeaderBell session={session} />
             <button
               type="button"
               className={styles.bellButton}
               aria-label={received ? `Messages (${received} reçus)` : "Messages"}
               onClick={goMessages}
             >
-              <Icon name="bell" size={20} />
+              <Icon name="message" size={20} />
               {received > 0 && <span className={styles.bellDot} aria-hidden="true" />}
             </button>
             <button
@@ -378,15 +417,18 @@ export function ClientSpace({ session }: { session: Session }) {
           >
             <Brand compact />
           </button>
-          <button
-            type="button"
-            className={styles.bellButton}
-            aria-label={received ? `Messages (${received} reçus)` : "Messages"}
-            onClick={goMessages}
-          >
-            <Icon name="bell" size={22} />
-            {received > 0 && <span className={styles.bellDot} aria-hidden="true" />}
-          </button>
+          <div className={styles.mobileHeaderTools}>
+            <HeaderBell session={session} />
+            <button
+              type="button"
+              className={styles.bellButton}
+              aria-label={received ? `Messages (${received} reçus)` : "Messages"}
+              onClick={goMessages}
+            >
+              <Icon name="message" size={22} />
+              {received > 0 && <span className={styles.bellDot} aria-hidden="true" />}
+            </button>
+          </div>
         </header>
 
         {demo && (
@@ -521,29 +563,30 @@ function OverviewView({ session, rows }: { session: Session; rows: Intervention[
         </div>
         {recent.length ? (
           <div className={styles.recentList}>
-            {recent.map((i) => (
-              <button
-                type="button"
-                key={i.id}
-                className={styles.recentRow}
-                onClick={() => session.openIntervention(i.id)}
-              >
-                <span>
-                  <Icon name={category(i.category).icon} size={22} />
-                </span>
-                <span className={styles.recentBody}>
-                  <strong>{category(i.category).label}</strong>
+            {recent.map((i) => {
+              const row = recentRowDescriptor(i, (id) => category(id).label);
+              return (
+                <button
+                  type="button"
+                  key={i.id}
+                  className={styles.recentRow}
+                  onClick={() => session.openIntervention(i.id)}
+                >
                   <span>
-                    {i.address}, {i.postal_code} {i.city}
+                    <Icon name={category(i.category).icon} size={22} />
                   </span>
-                  <span className={styles.recentMeta}>
-                    <Badge status={i.status} />
-                    <span>{date(i.created_at)}</span>
+                  <span className={styles.recentBody}>
+                    <strong>{row.title}</strong>
+                    <span>{row.address}</span>
+                    <span className={styles.recentMeta}>
+                      <Badge status={row.status} />
+                      <time dateTime={row.createdAt}>{date(row.createdAt)}</time>
+                    </span>
                   </span>
-                </span>
-                <Icon name="arrow" size={18} />
-              </button>
-            ))}
+                  <Icon name="arrow" size={18} />
+                </button>
+              );
+            })}
           </div>
         ) : (
           <section className="panel">{emptyList}</section>
@@ -678,7 +721,7 @@ function OverviewView({ session, rows }: { session: Session; rows: Intervention[
                 L’estimation est indicative. Avant de commencer, votre artisan vous propose un
                 devis détaillé à accepter.
               </p>
-              <button type="button" className="text-button" onClick={() => session.go("help")}>
+              <button type="button" className={`text-button ${styles.linkTarget}`} onClick={() => session.go("help")}>
                 Comprendre les étapes <Icon name="arrow" size={15} />
               </button>
             </section>
@@ -700,7 +743,7 @@ function OverviewView({ session, rows }: { session: Session; rows: Intervention[
               </span>
               <section>
                 <strong>Une question sur le parcours ?</strong>
-                <button type="button" onClick={() => session.go("help")}>
+                <button type="button" className={styles.linkTarget} onClick={() => session.go("help")}>
                   Consulter l’aide
                 </button>
               </section>
@@ -889,38 +932,16 @@ function DetailView({
   const photos = session.data.documents.filter(
     (d) => d.intervention_id === i.id && d.mime_type.startsWith("image/"),
   );
-  const progressIndex = PROGRESS.indexOf(i.status);
-  const stepIndex = STEPS.reduce(
-    (acc, step, index) =>
-      progressIndex >= PROGRESS.indexOf(step.reachedAt) ? index : acc,
-    -1,
-  );
+  const stepIndex = currentStepIndex(i.status, i.paid_at);
   const canSchedule = ["assigned", "quoted", "accepted"].includes(i.status);
   const travelStage = ops?.travel_stage || i.travel_stage || "planned";
   const opsState = session.capabilities.operations;
 
-  const history: { label: string; when: string; state: "done" | "current" | "upcoming" }[] =
-    i.status === "cancelled"
-      ? [
-          { label: "Demande créée", when: dateTime(i.created_at), state: "done" },
-          { label: "Demande annulée", when: "—", state: "done" },
-        ]
-      : [
-          ["Demande créée", dateTime(i.created_at)],
-          ["Artisan attribué", "—"],
-          ["Devis reçu", shown ? dateTime(shown.created_at) : "—"],
-          ["Devis accepté", accepted?.accepted_at ? dateTime(accepted.accepted_at) : "—"],
-          [
-            "Intervention",
-            ops?.appointment ? `Créneau ${dateTime(ops.appointment.starts_at)}` : "—",
-          ],
-          ["Intervention terminée", i.completed_at ? dateTime(i.completed_at) : "—"],
-          ["Règlement", i.paid_at ? dateTime(i.paid_at) : "—"],
-        ].map(([label, when], index) => ({
-          label,
-          when: index > progressIndex ? "À venir" : when,
-          state: index < progressIndex ? "done" : index === progressIndex ? "current" : "upcoming",
-        }));
+  const history = detailHistory(
+    i,
+    { quoteReceivedAt: shown?.created_at, quoteAcceptedAt: accepted?.accepted_at, appointmentStartsAt: ops?.appointment?.starts_at },
+    dateTime,
+  );
 
   const primary = (() => {
     if (i.status === "quoted" && shown)
@@ -988,7 +1009,7 @@ function DetailView({
           <p className={styles.description}>Cette demande a été annulée. Aucune étape n’est à venir.</p>
         ) : (
           <ol className={styles.stepper} aria-label="Avancement">
-            {STEPS.map((step, index) => {
+            {CLIENT_STEPS.map((step, index) => {
               const state = index < stepIndex ? "done" : index === stepIndex ? "current" : "";
               return (
                 <li key={step.label} className={state ? styles[state] : ""}>
@@ -1061,11 +1082,13 @@ function DetailView({
           <br />
           {i.postal_code} {i.city}
         </address>
-        <Unavailable
-          title="Carte non disponible"
-          reason="Aucun fournisseur de cartographie n’a été choisi."
-          blocker="CLI-05"
-        />
+        <div className={styles.compactUnavailable}>
+          <Unavailable
+            title="Carte non disponible"
+            reason="Aucun fournisseur de cartographie n’a été choisi."
+            blocker="CLI-05"
+          />
+        </div>
       </section>
 
       <div className={styles.cardHead}>
@@ -1086,6 +1109,7 @@ function DetailView({
           </Tag>
         </div>
       </section>
+      <DossierHelpLink session={session} interventionId={i.id} />
 
       <div className={styles.cardHead}>
         <h2>
@@ -1269,10 +1293,12 @@ function DetailView({
               {TRAVEL_STAGE[travelStage]}
             </p>
             <p className="form-note">
-              Étape déclarée par l’artisan. Aucune géolocalisation ni heure d’arrivée estimée
-              n’est disponible.
+              {session.capabilities.tracking === "available"
+                ? "Étape déclarée par l’artisan. La position n’apparaît que s’il la partage ; l’heure d’arrivée reste indicative."
+                : "Étape déclarée par l’artisan. Aucune géolocalisation ni heure d’arrivée estimée n’est disponible."}
             </p>
           </section>
+          <TrackingAnchor session={session} variant="viewer" interventionId={i.id} authority={{ canWrite: true }} />
         </>
       )}
 
@@ -1371,6 +1397,7 @@ function DetailView({
             confirmLabel="Confirmer l’annulation"
             busy={session.busy}
             danger
+            className={`button outline ${styles.cancelButton}`}
             onConfirm={() => session.action(i.id, "cancel")}
           />
         ) : (
@@ -1508,10 +1535,9 @@ function QuoteView({
       </Empty>
     );
   const current = pickQuote(session.data.quotes, i.id);
-  const isActive = quote.status === "sent" && i.status === "quoted";
-  const superseded =
-    quote.status === "rejected" ||
-    (quote.status === "sent" && current && current.id !== quote.id);
+  const decision = quoteDecisionState(quote, current, i.status);
+  const isActive = decision === "active";
+  const superseded = decision === "superseded";
   const artisan = ops?.participants.find((p) => p.role === "artisan");
 
   return (
@@ -1552,6 +1578,22 @@ function QuoteView({
         </div>
       )}
 
+      <div className={styles.cardHead}>
+        <h2>
+          <Icon name="document" size={20} />
+          Détail du devis
+        </h2>
+        <button
+          type="button"
+          className={`text-button ${styles.linkTarget}`}
+          onClick={() =>
+            document.getElementById("quote-documents")?.scrollIntoView({ behavior: "smooth", block: "start" })
+          }
+        >
+          <Icon name="download" size={16} />
+          Télécharger le devis (PDF)
+        </button>
+      </div>
       <table className={styles.quoteTable}>
         <caption className="sr-only">Détail du devis {quoteRef(quote.id)}</caption>
         <thead>
@@ -1562,15 +1604,16 @@ function QuoteView({
           </tr>
         </thead>
         <tbody>
-          {quote.lines.map((l, index) => (
-            <tr key={index}>
-              <td>{l.label}</td>
-              <td>
-                {l.quantity} × {money(l.unit_price_cents)}
-              </td>
-              <td>{money(Math.round(l.quantity * l.unit_price_cents))}</td>
-            </tr>
-          ))}
+          {quote.lines.map((l, index) => {
+            const cells = quoteLineCells(l, money);
+            return (
+              <tr key={index}>
+                <td>{l.label}</td>
+                <td>{cells.unit}</td>
+                <td>{money(cells.total_cents)}</td>
+              </tr>
+            );
+          })}
         </tbody>
         <tfoot>
           <tr>
@@ -1589,7 +1632,13 @@ function QuoteView({
       </table>
       {demo && <DemoNote>Montants et taux de TVA de démonstration, sans valeur contractuelle.</DemoNote>}
 
-      <section className={styles.card} style={{ marginTop: 14 }}>
+      <div className={styles.cardHead}>
+        <h2>
+          <Icon name="person" size={20} />
+          Artisan
+        </h2>
+      </div>
+      <section className={styles.card}>
         <div className={styles.artisanRow}>
           <span aria-hidden="true">{artisan ? initials(artisan.full_name) || "A" : "A"}</span>
           <div>
@@ -1700,6 +1749,15 @@ function QuoteView({
         </form>
       )}
 
+      <section id="quote-documents" className={styles.documentsSection} aria-label="Documents du devis et avenants">
+        <QuoteDocumentsAnchor
+          session={session}
+          variant="client"
+          target={{ quoteId: quote.id }}
+          authority={{ canWrite: true }}
+        />
+      </section>
+
       <div className={styles.docActions}>
         <button
           type="button"
@@ -1711,14 +1769,10 @@ function QuoteView({
           <Icon name="download" />
           Télécharger le récapitulatif (texte)
         </button>
-        <Unavailable
-          title="Télécharger le devis (PDF)"
-          reason="Pas encore activé sur ce service. Utilisez le récapitulatif texte ci-dessus ; le devis détaillé reste consultable dans ce dossier."
-          blocker="CLI-07"
-        />
       </div>
       <p className="form-note">
-        Le récapitulatif texte n’est pas une facture et n’a pas de valeur comptable.
+        Le PDF du devis est proposé dans la section « Documents du devis » ci-dessus ; le récapitulatif
+        texte n’est pas une facture et n’a pas de valeur comptable.
       </p>
     </>
   );
@@ -1846,6 +1900,18 @@ function ProfileView({ session }: { session: Session }) {
             </button>
           </section>
           <section className={styles.asideCard}>
+            <Icon name="shield" size={26} />
+            <h3>Assistance</h3>
+            <p>Vos demandes à l’équipe de la plateforme et leurs réponses, consultables ici.</p>
+            <button
+              type="button"
+              className="button outline full"
+              onClick={() => session.go("support")}
+            >
+              Ouvrir l’assistance
+            </button>
+          </section>
+          <section className={styles.asideCard}>
             <Icon name="help" size={26} />
             <h3>Aide</h3>
             <p>Comprendre les étapes : estimation, devis, intervention, règlement.</p>
@@ -1857,6 +1923,23 @@ function ProfileView({ session }: { session: Session }) {
               Consulter l’aide
             </button>
           </section>
+          {/* Opérateur limité : accès au back-office aussi sur mobile (barre latérale masquée < 1024 px),
+              même garde fail-closed que la barre latérale ; aucune entrée sans réponse serveur. */}
+          {platformEntries(session.platformAccess, (v) => canAccess(v, session.role, session.mode)).length > 0 && (
+            <section className={styles.asideCard} aria-labelledby="profile-platform">
+              <Icon name="settings" size={26} />
+              <h3 id="profile-platform">Opérateur de plateforme</h3>
+              <p>Sections du back-office ouvertes par la plateforme pour votre compte.</p>
+              <div className={styles.asideLinks}>
+                {platformEntries(session.platformAccess, (v) => canAccess(v, session.role, session.mode)).map((n) => (
+                  <button key={n.view} type="button" className="button outline full" onClick={() => session.go(n.view)}>
+                    <Icon name={n.icon} size={17} />
+                    {n.label}
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
           <button
             type="button"
             className="button outline full"
@@ -1905,6 +1988,21 @@ function HelpView({ session }: { session: Session }) {
               onClick={() => session.go("new")}
             >
               Créer une demande
+            </button>
+          </section>
+          <section className={styles.asideCard}>
+            <Icon name="shield" size={26} />
+            <h3>Une question que l’aide ne couvre pas ?</h3>
+            <p>
+              Écrivez à l’équipe de la plateforme : les réponses apparaissent dans votre espace, sans
+              appel ni email, et aucun délai n’est garanti.
+            </p>
+            <button
+              type="button"
+              className="button outline full"
+              onClick={() => session.go("support")}
+            >
+              Ouvrir l’assistance
             </button>
           </section>
           <section className={styles.asideCard}>

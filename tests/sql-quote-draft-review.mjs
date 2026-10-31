@@ -1,3 +1,4 @@
+import { isolatedMigrationSql } from './sql-isolated-migrations.mjs';
 process.on('uncaughtException',error=>{console.error(error.message,error.query||'',error.detail||'');process.exit(1)});
 // Isolated PostgreSQL with explicit Auth/Storage stubs, not a live Supabase test.
 import { readFile, readdir } from 'node:fs/promises';
@@ -17,7 +18,7 @@ create table storage.objects(id uuid primary key default gen_random_uuid(),bucke
 alter table storage.objects enable row level security;
 `);
 const migrationDir = new URL('../supabase/migrations/', import.meta.url);
-for (const name of (await readdir(migrationDir)).filter(n=>n.endsWith('.sql')).sort()) await db.exec((await readFile(new URL(name,migrationDir),'utf8')).replace('create extension if not exists pgcrypto;','-- extension omitted only in this isolated harness'));
+for (const name of (await readdir(migrationDir)).filter(n=>n.endsWith('.sql')).sort()) await db.exec((await isolatedMigrationSql(db, name, await readFile(new URL(name,migrationDir),'utf8'))).replace('create extension if not exists pgcrypto;','-- extension omitted only in this isolated harness'));
 console.log('PASS: all ten migrations execute with explicit Auth/Storage stubs');
 const ids={};let index=1;
 for(const actor of ['client','otherClient','artisan','otherArtisan','manager','admin']) {

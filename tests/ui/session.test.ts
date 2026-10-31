@@ -28,6 +28,31 @@ test("role guard: hash views outside the role are refused, demo role grants noth
   // A live user whose role is client cannot open the artisan dossier even if a demo role was chosen earlier.
   assert.equal(canAccess("application", "client", "live"), false);
 });
+
+test("advanced lot views: role gate only, platform views stay admin, planning stays artisan", () => {
+  assert.equal(canAccess("planning", "artisan", "live"), true);
+  assert.equal(canAccess("planning", "client", "live"), false);
+  assert.equal(canAccess("planning", "manager", "demo"), false);
+  for (const role of ["client", "artisan", "manager", "admin"] as const) {
+    assert.equal(canAccess("notifications", role, "live"), true);
+    assert.equal(canAccess("quote-documents", role, "live"), true);
+  }
+  assert.equal(canAccess("notifications", null, "public"), false);
+  assert.equal(canAccess("site-operations", "manager", "live"), true);
+  assert.equal(canAccess("site-operations", "client", "live"), false);
+  assert.equal(canAccess("site-operations", "admin", "live"), false);
+  // Back-office views: the role gate admits any signed-in role (a limited operator keeps a
+  // client/manager profile); the server /me reply decides, fail-closed (tests in features.test.ts).
+  // A5: the assistance queue follows the same rule (server capability decides, role gate open).
+  for (const role of ["client", "artisan", "manager", "admin"] as const) assert.equal(canAccess("support-queue", role, "live"), true);
+  assert.equal(canAccess("support-queue", null, "public"), false);
+  for (const view of ["platform-operators", "platform-finance", "platform-moderation"] as const) {
+    assert.equal(canAccess(view, "admin", "live"), true);
+    assert.equal(canAccess(view, "manager", "live"), true);
+    assert.equal(canAccess(view, "client", "live"), true);
+    assert.equal(canAccess(view, null, "public"), false);
+  }
+});
 test("home view depends on role and mode", () => {
   assert.equal(homeFor(null, "public"), "home");
   assert.equal(homeFor("admin", "live"), "admin");

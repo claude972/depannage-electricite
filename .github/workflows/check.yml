@@ -29,6 +29,12 @@ jobs:
           node-version: '24'
       - name: Install pinned isolated PostgreSQL runtime outside application
         run: npm install --prefix "$RUNNER_TEMP/courant-sql" --no-save --no-package-lock @electric-sql/pglite@0.5.13
+      - name: Mandatory 020 retention checks (native absence refusal and explicit scheduler stub, not a real worker)
+        env:
+          PGLITE_MODULE: ${{ runner.temp }}/courant-sql/node_modules/@electric-sql/pglite/dist/index.js
+        run: node tests/sql-tracking-retention-review.mjs
+      - name: Verify strict isolated migration adaptation
+        run: node --test tests/sql-isolated-migrations.test.mjs
       - name: Execute migrations and negative authorization scenarios (not live Supabase)
         env:
           PGLITE_MODULE: ${{ runner.temp }}/courant-sql/node_modules/@electric-sql/pglite/dist/index.js
@@ -58,3 +64,15 @@ jobs:
         env:
           PGLITE_MODULE: ${{ runner.temp }}/courant-sql/node_modules/@electric-sql/pglite/dist/index.js
         run: node tests/sql-artisan-active-guard-review.mjs
+
+      - name: Verify every other SQL review script of advanced lots (not live Supabase)
+        env:
+          PGLITE_MODULE: ${{ runner.temp }}/courant-sql/node_modules/@electric-sql/pglite/dist/index.js
+        run: |
+          set -eu
+          listed="sql-tracking-retention-review.mjs sql-review.mjs sql-performance-review.mjs sql-site-access-review.mjs sql-quote-draft-review.mjs sql-support-review.mjs sql-artisan-active-guard-review.mjs"
+          for f in tests/sql-*-review.mjs tests/sql-review.mjs; do
+            name="$(basename "$f")"
+            case " $listed " in *" $name "*) continue;; esac
+            echo "== $f"; node "$f"
+          done

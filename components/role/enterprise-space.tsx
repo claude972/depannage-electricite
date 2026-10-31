@@ -4,6 +4,7 @@
 // (approbation), V5-C01 / M50 (fiche de site), M13 / M56 / V5-C05 (tableaux de bord).
 // Tout indicateur est calculé depuis session.data et annonce sa base ("dossiers chargés").
 import {
+  Fragment,
   useEffect,
   useId,
   useMemo,
@@ -57,9 +58,45 @@ import {
   quoteRef,
   shortId,
 } from "../app/format";
-import { enterpriseContext, pickQuote, quoteVersions } from "../app/session";
+import {
+  canAccess,
+  enterpriseAuthority,
+  enterpriseContext,
+  pickQuote,
+  quoteVersions,
+  type EnterpriseAuthority,
+  type MemberScope,
+} from "../app/session";
 import type { Session } from "../app/session-types";
 import { UploadQueuePanel } from "../app/upload-queue";
+import {
+  FIGURE_PLACEHOLDER,
+  dashboardFigures,
+  overviewSubtitle,
+  siteBudgetBars,
+  NO_FILTERS,
+  budgetFigures,
+  budgetTone,
+  filterInterventions,
+  isFiltered,
+  pageWindow,
+  reconcileFilters,
+  siteAlertSummary,
+  siteAlerts,
+  wholePercent,
+  type InterventionFilters,
+  type ListContext,
+} from "./enterprise-lists";
+import { DossierHelpLink, SupportCenter } from "./support-tickets";
+import { HeaderBell, NotificationsPage } from "./notifications-anchor";
+import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
+import { TrackingAnchor } from "./tracking-anchor";
+import { SiteOperationsView } from "../features/site-operations/site-operations-view";
+import { CONTRACT_MESSAGES } from "../app/api";
+import { demoReport } from "../../lib/features/site-operations/demo";
+import { leafScope, platformEntries } from "./anchors";
+import { PlatformPage } from "./platform-anchor";
+import { FeatureUnavailable, useProbeWhenUnknown } from "./feature-unavailable";
 import type {
   Approval,
   ApprovalRule,
@@ -136,6 +173,7 @@ const NAV: { view: View; label: string; icon: string; section: "main" | "more" }
   { view: "messages", label: "Messages", icon: "message", section: "main" },
   { view: "documents", label: "Documents", icon: "document", section: "more" },
   { view: "members", label: "Membres", icon: "users", section: "more" },
+  { view: "support", label: "Assistance", icon: "shield", section: "more" },
   { view: "profile", label: "Profil", icon: "person", section: "more" },
 ];
 const NAV_PARENT: Partial<Record<View, View>> = {
@@ -210,13 +248,16 @@ function siteFigures(site: Site, data: Workspace) {
       .map((p) => p.total_cents),
   );
   const budget = site.budget_cents || 0;
+  // `ratio` est le taux réel (peut dépasser 100), `width` la seule valeur plafonnée (barre).
+  const { ratio, width, over } = budgetFigures(committed, budget);
   return {
     budget,
     committed,
     paid,
     remaining: budget - committed,
-    ratio: budget > 0 ? Math.min(100, (committed / budget) * 100) : 0,
-    over: budget > 0 && committed > budget,
+    ratio,
+    width,
+    over,
     count: mine.length,
     open: mine.filter((i) => OPEN_STATUSES.includes(i.status)).length,
   };
@@ -235,6 +276,10 @@ type Ctx = {
   scope: Scope;
   /** Portées de sites des membres : undefined = chargement, null = indisponible. */
   siteAccess: SiteAccessOverview | null | undefined;
+  /** Pouvoir d’écriture : rôle de membre ET portée de sites du membre courant (jamais le rôle seul). */
+  authority: EnterpriseAuthority;
+  /** Au moins un site où une demande peut être créée (ou écriture sur toute l’organisation). */
+  canCreateRequest: boolean;
   reloadSiteAccess: () => void;
   go: (view: View, param?: string) => void;
 };
@@ -336,6 +381,20 @@ export function EnterpriseSpace({ session }: { session: Session }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx.organizationId, accessKey, session.refreshedAt]);
 
+  // Autorité d’écriture recalculée à chaque changement de rôle ou de portée (les deux sont relus
+  // sur session.refreshedAt). Portée inconnue (chargement/indisponible) → null : le helper ferme
+  // l’écriture pour owner excepté, les contrôles restent en lecture jusqu’au chargement.
+  const ownScope = useMemo<MemberScope | null>(() => {
+    const me = siteAccess?.members.find((m) => m.user_id === session.profileId);
+    return me ? { scope: me.scope, grants: me.grants } : null;
+  }, [siteAccess, session.profileId]);
+  const authority = useMemo(
+    () => enterpriseAuthority(session.membershipRole, ownScope),
+    [session.membershipRole, ownScope],
+  );
+  const canCreateRequest =
+    authority.canWriteOrganization || orgCtx.sites.some((s) => authority.canWriteSite(s.id));
+
   const closeMenu = () => {
     restoreMenuFocus.current = true;
     setMenuOpen(false);
@@ -357,6 +416,8 @@ export function EnterpriseSpace({ session }: { session: Session }) {
     orgInterventions: orgCtx.interventions,
     scope,
     siteAccess,
+    authority,
+    canCreateRequest,
     reloadSiteAccess: () => setAccessKey((k) => k + 1),
     go,
   };
@@ -406,15 +467,31 @@ export function EnterpriseSpace({ session }: { session: Session }) {
           return <MembersView c={c} />;
         case "messages":
           return <MessagesView c={c} />;
+        case "notifications":
+          return (
+            <NotificationsPage
+              session={session}
+              organizationId={c.organization?.id}
+              siteId={c.activeSite?.id}
+            />
+          );
+        case "platform-operators":
+        case "platform-finance":
+        case "platform-moderation":
+        case "support-queue":
+      case "support-queue":
+          return <PlatformPage session={session} view={view} />;
         case "documents":
           return <DocumentsView c={c} />;
         case "profile":
           return <ProfileView c={c} />;
+        case "support":
+          return <SupportCenter session={session} interventions={c.orgInterventions} backView="overview" />;
         case "help":
           return (
             <>
               <PageTitle title="Aide" subtitle="Repères pour piloter vos sites dans cet espace." />
-              <HelpContent />
+              <HelpContent onSupport={() => go("support")} />
             </>
           );
         default:
@@ -445,9 +522,12 @@ export function EnterpriseSpace({ session }: { session: Session }) {
         </button>
         <button type="button" className={styles.brandButton} onClick={() => go("overview")}>
           <Brand compact />
-          <span className={styles.brandSub}>Espace entreprise</span>
+          <span className={styles.brandSub}>Portail entreprise</span>
         </button>
         <div className={styles.topbarActions}>
+          <span className={styles.topbarBell}>
+            <HeaderBell session={session} />
+          </span>
           <button
             type="button"
             className={styles.iconButton}
@@ -459,7 +539,7 @@ export function EnterpriseSpace({ session }: { session: Session }) {
             title="Messages"
             onClick={() => go("messages")}
           >
-            <Icon name="bell" />
+            <Icon name="message" />
             {receivedMessages > 0 && (
               <span className={styles.iconCount} aria-hidden="true">
                 {receivedMessages}
@@ -551,20 +631,30 @@ export function EnterpriseSpace({ session }: { session: Session }) {
               <NavButton key={n.view} item={n} active={activeNav === n.view} onClick={() => go(n.view)}
                 count={n.view === "approvals" ? pendingApprovals : 0} />
             ))}
-            <span className={styles.navCaption}>Organisation</span>
+            <span className={styles.navDivider} role="separator" />
             {NAV.filter((n) => n.section === "more").map((n) => (
               <NavButton key={n.view} item={n} active={activeNav === n.view} onClick={() => go(n.view)} />
             ))}
+            {platformEntries(session.platformAccess, (v) => canAccess(v, session.role, session.mode)).map((n, k) => (
+              <Fragment key={n.view}>
+                {k === 0 && <span className={styles.navDivider} role="separator" />}
+                <NavButton item={{ ...n, section: "more" }} active={activeNav === n.view} onClick={() => go(n.view)} />
+              </Fragment>
+            ))}
           </nav>
           <div className={styles.sidebarBottom}>
+            <button type="button" className={styles.sidebarHelp} onClick={() => go("support")}>
+              <Icon name="help" size={20} />
+              <span>
+                <strong>Besoin d’aide ?</strong>
+                Ouvrir une demande d’assistance
+              </span>
+              <Icon name="arrow" size={16} />
+            </button>
             <button type="button" className={styles.navItem} onClick={() => void session.logout()}>
               <Icon name="logout" />
               Se déconnecter
             </button>
-            <div className={styles.sidebarHelp}>
-              <strong>{organization?.name || "Aucune organisation"}</strong>
-              {activeSite ? `Site filtré : ${activeSite.name}` : "Tous les sites de l’organisation"}
-            </div>
           </div>
         </aside>
 
@@ -581,7 +671,7 @@ export function EnterpriseSpace({ session }: { session: Session }) {
                 <Icon name="close" size={18} />
               </button>
               <h2>Comment utiliser cet espace</h2>
-              <HelpContent />
+              <HelpContent onSupport={() => go("support")} />
             </section>
           )}
           {renderView()}
@@ -621,8 +711,9 @@ function NavButton({
   );
 }
 
-function HelpContent() {
+function HelpContent({ onSupport }: { onSupport: () => void }) {
   return (
+    <>
     <ul>
       <li>Choisissez l’organisation puis, si besoin, un site : toutes les listes, indicateurs et exports suivent ce périmètre.</li>
       <li>Les indicateurs sont calculés sur les dossiers chargés (100 derniers) ; le rapport CSV du serveur fait foi.</li>
@@ -630,6 +721,27 @@ function HelpContent() {
       <li>Le règlement Stripe est réservé au demandeur du dossier ; la délégation de payeur n’est pas définie.</li>
       <li>Les fonctions absentes (factures, invitations, équipements, SLA…) sont signalées avec leur bloqueur plutôt que simulées.</li>
     </ul>
+    <p className={styles.description} style={{ marginTop: 12 }}>
+      Une question que ces repères ne couvrent pas ? Écrivez à l’équipe de la plateforme : les réponses
+      apparaissent dans cet espace, sans appel ni email, et aucun délai n’est garanti.
+    </p>
+    <div className={styles.actions}>
+      <button type="button" className="button outline" onClick={onSupport}>
+        <Icon name="shield" size={17} />
+        Ouvrir l’assistance
+      </button>
+    </div>
+    </>
+  );
+}
+
+/** Remplace un contrôle d’écriture masqué : la raison est toujours affichée en texte. */
+function ReadOnlyNote({ reason, compact = false }: { reason: string | null; compact?: boolean }) {
+  return (
+    <p className={cx(styles.readOnly, compact && styles.readOnlyCompact)}>
+      <Icon name="lock" size={15} />
+      <span>{reason || "Vos droits ne permettent pas cette action sur ce périmètre."}</span>
+    </p>
   );
 }
 
@@ -732,140 +844,178 @@ function ContextBar({
   );
 }
 
-// ---- Tableau d’interventions (M66 / M4) -------------------------------------------------
+// ---- Tableau d’interventions (M4 structure, M66 lignes) -----------------------------------
+const timeOf = (value: string) =>
+  new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+
+type InterventionList = ReturnType<typeof useInterventionList>;
+function useInterventionList(c: Ctx) {
+  const { scope } = c;
+  const [filters, setFilters] = useState<InterventionFilters>(NO_FILTERS);
+  const [page, setPage] = useState(1);
+  // Périmètre global vu au dernier rendu : un changement d’organisation ou de site global
+  // invalide le filtre local de site (sélecteur masqué) et ramène à la première page.
+  const context: ListContext = { organizationId: c.organization?.id || "", siteId: c.activeSite?.id || "" };
+  const [seen, setSeen] = useState(context);
+  const reconciled = reconcileFilters(
+    filters,
+    seen,
+    context,
+    scope.sites.map((s) => s.id),
+  );
+  if (seen.organizationId !== context.organizationId || seen.siteId !== context.siteId) setSeen(context);
+  if (reconciled.reset) {
+    if (reconciled.filters !== filters) setFilters(reconciled.filters);
+    if (page !== 1) setPage(1);
+  }
+  const siteName = (id?: string | null) => scope.sites.find((s) => s.id === id)?.name || "";
+  // Le prédicat effectif ne croise jamais un site local avec un périmètre incompatible.
+  const effective = reconciled.filters;
+  const rows = filterInterventions(scope.interventions, effective, (i) =>
+    [siteName(i.site_id), i.description, shortId(i.id), fullAddress(i), category(i.category).label].join(" "),
+  );
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const current = Math.min(reconciled.reset ? 1 : page, pages);
+  return {
+    filters: effective,
+    rows,
+    pageRows: rows.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE),
+    current,
+    pages,
+    filtered: isFiltered(effective),
+    siteName,
+    setPage,
+    set: <K extends keyof InterventionFilters>(key: K, value: InterventionFilters[K]) => {
+      setFilters((f) => ({ ...f, [key]: value }));
+      setPage(1);
+    },
+    reset: () => {
+      setFilters((f) => ({ ...NO_FILTERS, sort: f.sort }));
+      setPage(1);
+    },
+    exportCsv: () =>
+      download(
+        "courant-interventions.csv",
+        csv([
+          ["Référence", "Site", "Type", "Statut", "Adresse", "Estimation min (EUR)", "Estimation max (EUR)", "Date"],
+          ...rows.map((i) => [
+            shortId(i.id),
+            siteName(i.site_id) || "Hors site",
+            category(i.category).label,
+            STATUS[i.status],
+            fullAddress(i),
+            (i.estimate_min_cents / 100).toFixed(2),
+            (i.estimate_max_cents / 100).toFixed(2),
+            dateTime(i.created_at),
+          ]),
+        ]),
+        "text/csv;charset=utf-8",
+      ),
+  };
+}
+
+function ExportButton({ list }: { list: InterventionList }) {
+  return (
+    <button type="button" className="button outline" onClick={list.exportCsv} disabled={!list.rows.length}>
+      <Icon name="download" size={17} />
+      Exporter
+    </button>
+  );
+}
+
+// Carte de filtres séparée, au-dessus du tableau (M4) ; recherche reprise de M66.
+function InterventionFiltersCard({ c, list }: { c: Ctx; list: InterventionList }) {
+  const { filters: f, set } = list;
+  return (
+    <div className={cx("panel", styles.filtersCard)} role="search" aria-label="Filtres des interventions">
+      {!c.activeSite && (
+        <label className={styles.filterField}>
+          Site
+          <select value={f.site} onChange={(e) => set("site", e.target.value)}>
+            <option value="">Tous les sites</option>
+            {c.scope.sites.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <label className={styles.filterField}>
+        Type d’intervention
+        <select value={f.type} onChange={(e) => set("type", e.target.value)}>
+          <option value="">Tous les types</option>
+          {CATEGORIES.map((cat) => (
+            <option key={cat.id} value={cat.id}>
+              {cat.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className={styles.filterField}>
+        Statut
+        <select value={f.status} onChange={(e) => set("status", e.target.value)}>
+          <option value="">Tous les statuts</option>
+          {(Object.keys(STATUS) as Status[]).map((s) => (
+            <option key={s} value={s}>
+              {STATUS[s]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className={cx(styles.filterField, styles.filterSearch)}>
+        Recherche
+        <span className={styles.searchInput}>
+          <Icon name="search" size={16} />
+          <input
+            type="search"
+            value={f.search}
+            maxLength={120}
+            placeholder="Site, référence, adresse…"
+            onChange={(e) => set("search", e.target.value)}
+          />
+        </span>
+      </label>
+      <button type="button" className={styles.resetButton} onClick={list.reset} disabled={!list.filtered}>
+        <Icon name="refresh" size={16} />
+        Réinitialiser
+      </button>
+    </div>
+  );
+}
+
 function InterventionsTable({
   c,
+  list,
   title,
-  exportable = false,
   emptyAction,
 }: {
   c: Ctx;
+  list: InterventionList;
   title: string;
-  exportable?: boolean;
   emptyAction?: ReactNode;
 }) {
-  const { scope, activeSite } = c;
-  const [siteFilter, setSiteFilter] = useState("");
-  const [typeFilter, setTypeFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const siteName = (id?: string | null) => scope.sites.find((s) => s.id === id)?.name || "";
-  const needle = search.trim().toLowerCase();
-  const rows = byDateDesc(scope.interventions).filter(
-    (i) =>
-      (!siteFilter || i.site_id === siteFilter) &&
-      (!typeFilter || i.category === typeFilter) &&
-      (!statusFilter || i.status === statusFilter) &&
-      (!needle ||
-        [siteName(i.site_id), i.description, shortId(i.id), fullAddress(i), category(i.category).label]
-          .join(" ")
-          .toLowerCase()
-          .includes(needle)),
-  );
-  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-  const current = Math.min(page, pages);
-  const pageRows = rows.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
-  const filtered = Boolean(siteFilter || typeFilter || statusFilter || needle);
-  const reset = () => {
-    setSiteFilter("");
-    setTypeFilter("");
-    setStatusFilter("");
-    setSearch("");
-    setPage(1);
-  };
-  const update = (setter: (v: string) => void) => (v: string) => {
-    setter(v);
-    setPage(1);
-  };
-  function exportCsv() {
-    download(
-      "courant-interventions.csv",
-      csv([
-        ["Référence", "Site", "Type", "Statut", "Adresse", "Estimation min (EUR)", "Estimation max (EUR)", "Date"],
-        ...rows.map((i) => [
-          shortId(i.id),
-          siteName(i.site_id) || "Hors site",
-          category(i.category).label,
-          STATUS[i.status],
-          fullAddress(i),
-          (i.estimate_min_cents / 100).toFixed(2),
-          (i.estimate_max_cents / 100).toFixed(2),
-          dateTime(i.created_at),
-        ]),
-      ]),
-      "text/csv;charset=utf-8",
-    );
-  }
+  const { rows, pageRows, current, pages, filtered, siteName } = list;
+  const headingId = useId();
+  const count = `${rows.length} intervention${rows.length > 1 ? "s" : ""}`;
   return (
-    <section className={cx("panel", styles.tablePanel)} aria-labelledby="interventions-table-title">
+    <section className={cx("panel", styles.tablePanel)} aria-labelledby={headingId}>
       <div className={styles.tableHead}>
-        <div>
-          <h2 id="interventions-table-title">{title}</h2>
-          <p className={styles.muted}>
-            {rows.length} dossier{rows.length > 1 ? "s" : ""}
-            {filtered ? " après filtres" : ""} · {LOADED_NOTE.toLowerCase()}
-          </p>
-        </div>
-        {exportable && (
-          <div className={styles.tableHeadActions}>
-            <button type="button" className="button outline" onClick={exportCsv} disabled={!rows.length}>
-              <Icon name="download" size={17} />
-              Exporter CSV
-            </button>
-          </div>
-        )}
-      </div>
-      <div className={styles.filters} role="search" aria-label="Filtres des interventions">
-        {!activeSite && (
-          <label className={styles.filterField}>
-            Site
-            <select value={siteFilter} onChange={(e) => update(setSiteFilter)(e.target.value)}>
-              <option value="">Tous les sites</option>
-              {scope.sites.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <label className={styles.filterField}>
-          Type
-          <select value={typeFilter} onChange={(e) => update(setTypeFilter)(e.target.value)}>
-            <option value="">Tous les types</option>
-            {CATEGORIES.map((cat) => (
-              <option key={cat.id} value={cat.id}>
-                {cat.label}
-              </option>
-            ))}
+        <h2 id={headingId}>
+          {count}
+          {filtered ? " après filtres" : ""}
+          <span className="sr-only"> — {title}</span>
+        </h2>
+        <label className={styles.sortField}>
+          Trier par :
+          <select
+            value={list.filters.sort}
+            onChange={(e) => list.set("sort", e.target.value as InterventionFilters["sort"])}
+          >
+            <option value="recent">Date de création (récent)</option>
+            <option value="oldest">Date de création (ancien)</option>
           </select>
         </label>
-        <label className={styles.filterField}>
-          Statut
-          <select value={statusFilter} onChange={(e) => update(setStatusFilter)(e.target.value)}>
-            <option value="">Tous les statuts</option>
-            {(Object.keys(STATUS) as Status[]).map((s) => (
-              <option key={s} value={s}>
-                {STATUS[s]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className={cx(styles.filterField, styles.filterSearch)}>
-          Recherche
-          <input
-            type="search"
-            value={search}
-            maxLength={120}
-            placeholder="Site, référence, adresse, description…"
-            onChange={(e) => update(setSearch)(e.target.value)}
-          />
-        </label>
-        <button type="button" className={styles.resetButton} onClick={reset} disabled={!filtered}>
-          <Icon name="refresh" size={16} />
-          Réinitialiser
-        </button>
       </div>
       {rows.length === 0 ? (
         <Empty
@@ -873,7 +1023,7 @@ function InterventionsTable({
           title={filtered ? "Aucun dossier ne correspond aux filtres" : "Aucune intervention sur ce périmètre"}
           action={
             filtered ? (
-              <button type="button" className="button outline" onClick={reset}>
+              <button type="button" className="button outline" onClick={list.reset}>
                 Réinitialiser les filtres
               </button>
             ) : (
@@ -887,7 +1037,7 @@ function InterventionsTable({
         </Empty>
       ) : (
         <>
-          <table className={styles.table}>
+          <table className={cx(styles.table, styles.interventionsTable)}>
             <caption className="sr-only">{title}</caption>
             <thead>
               <tr>
@@ -904,36 +1054,44 @@ function InterventionsTable({
             <tbody>
               {pageRows.map((i) => (
                 <tr key={i.id}>
-                  <td data-label="Site">
-                    <div className={styles.cellMain}>
-                      <span className={styles.cellIcon} aria-hidden="true">
-                        <Icon name="building" size={18} />
-                      </span>
+                  <td className={styles.cellSite}>
+                    <button
+                      type="button"
+                      className={styles.rowOpen}
+                      onClick={() => c.session.openIntervention(i.id)}
+                    >
+                      <Icon name="building" size={22} />
                       <span>
                         <strong>{siteName(i.site_id) || "Hors site"}</strong>
                         <small>{fullAddress(i)}</small>
                       </span>
-                    </div>
+                    </button>
                   </td>
-                  <td data-label="Type">
-                    <div className={styles.cellStack}>
-                      <span>{category(i.category).label}</span>
-                      {urgencyTag(i)}
-                    </div>
+                  <td className={styles.cellType}>
+                    <span>{category(i.category).label}</span>
+                    {urgencyTag(i)}
                   </td>
-                  <td data-label="Artisan">{i.artisan_id ? "Attribué" : "En attente"}</td>
-                  <td data-label="Statut">
+                  <td className={styles.cellArtisan}>
+                    {i.artisan_id ? "Artisan attribué" : <span className={styles.muted}>Recherche en cours</span>}
+                  </td>
+                  <td className={styles.cellStatus}>
                     <Badge status={i.status} />
                   </td>
-                  <td data-label="Date">{dateTime(i.created_at)}</td>
-                  <td data-label="">
+                  <td className={styles.cellDate}>
+                    <time dateTime={i.created_at}>
+                      {date(i.created_at)}
+                      <small>{timeOf(i.created_at)}</small>
+                    </time>
+                  </td>
+                  <td className={styles.cellAction}>
                     <button
                       type="button"
-                      className={cx("button outline", styles.rowAction)}
+                      className={styles.rowMore}
                       onClick={() => c.session.openIntervention(i.id)}
                       aria-label={`Ouvrir le dossier ${shortId(i.id)}`}
+                      title="Ouvrir le dossier"
                     >
-                      Ouvrir
+                      <Icon name="arrow" size={18} />
                     </button>
                   </td>
                 </tr>
@@ -941,30 +1099,49 @@ function InterventionsTable({
             </tbody>
           </table>
           <div className={styles.tableFoot}>
-            <span>Le périmètre est limité aux 100 derniers dossiers chargés.</span>
-            <nav className={styles.pagination} aria-label="Pagination des interventions">
-              <button
-                type="button"
-                className={styles.pageButton}
-                aria-label="Page précédente"
-                disabled={current <= 1}
-                onClick={() => setPage(current - 1)}
-              >
-                <Icon name="back" size={16} />
-              </button>
-              <span className={styles.pageLabel} aria-live="polite">
-                Page {current} / {pages}
-              </span>
-              <button
-                type="button"
-                className={styles.pageButton}
-                aria-label="Page suivante"
-                disabled={current >= pages}
-                onClick={() => setPage(current + 1)}
-              >
-                <Icon name="arrow" size={16} />
-              </button>
-            </nav>
+            <span>
+              {count} · {LOADED_NOTE.toLowerCase()}
+            </span>
+            {pages > 1 && (
+              <nav className={styles.pagination} aria-label="Pagination des interventions">
+                <button
+                  type="button"
+                  className={styles.pageButton}
+                  aria-label="Page précédente"
+                  disabled={current <= 1}
+                  onClick={() => list.setPage(current - 1)}
+                >
+                  <Icon name="back" size={16} />
+                </button>
+                {pageWindow(current, pages).map((n, k) =>
+                  n === null ? (
+                    <span key={`gap-${k}`} className={styles.pageGap} aria-hidden="true">
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={n}
+                      type="button"
+                      className={cx(styles.pageNumber, n === current && styles.pageNumberActive)}
+                      aria-current={n === current ? "page" : undefined}
+                      aria-label={`Page ${n}`}
+                      onClick={() => list.setPage(n)}
+                    >
+                      {n}
+                    </button>
+                  ),
+                )}
+                <button
+                  type="button"
+                  className={styles.pageButton}
+                  aria-label="Page suivante"
+                  disabled={current >= pages}
+                  onClick={() => list.setPage(current + 1)}
+                >
+                  <Icon name="arrow" size={16} />
+                </button>
+              </nav>
+            )}
           </div>
         </>
       )}
@@ -975,11 +1152,19 @@ function InterventionsTable({
 // ---- Tableau de bord ---------------------------------------------------------------------
 function OverviewView({ c }: { c: Ctx }) {
   const { scope } = c;
-  const open = scope.interventions.filter((i) => OPEN_STATUSES.includes(i.status)).length;
+  const list = useInterventionList(c);
+  // V5-C05 : chiffres réels seulement (ouverts, dont urgentes). Les chiffres qui dépendent des données
+  // professionnelles (échéances, approbations, budget) ne sont affichés que lorsque le contrat est
+  // réellement chargé ; sinon leur état est dit (vérification / non vérifié), jamais un 0.
+  const professionalState = c.session.capabilities.professional;
+  const figures = dashboardFigures(professionalState, scope, new Date().toISOString().slice(0, 10), (status) => OPEN_STATUSES.includes(status));
+  const open = figures.open;
+  const loaded = figures.professional === "loaded";
+  const placeholder = figures.professional === "loaded" ? "" : FIGURE_PLACEHOLDER[figures.professional];
+  const siteBars = loaded ? siteBudgetBars(scope.sites, scope.interventions, scope.quotes) : [];
   const pending = byDateDesc(
     scope.approvals.filter((a) => a.status === "pending").map((a) => ({ ...a, created_at: a.created_at || "" })),
   );
-  const committed = sum(scope.quotes.filter((q) => q.status === "accepted").map((q) => q.total_cents));
   const budget = sum(scope.sites.map((s) => s.budget_cents || 0));
   const deadlines = [...scope.compliance]
     .filter((r) => r.status !== "completed")
@@ -989,35 +1174,99 @@ function OverviewView({ c }: { c: Ctx }) {
     <>
       <PageTitle
         title="Tableau de bord"
-        subtitle={`${c.organization?.name || "Organisation"} · ${LOADED_NOTE}`}
+        subtitle={overviewSubtitle(professionalState, c.organization?.name || "Organisation", LOADED_NOTE)}
         action={
-          <button type="button" className="button primary" onClick={() => c.go("new")}>
-            <Icon name="plus" size={17} />
-            Nouvelle demande
-          </button>
+          c.canCreateRequest ? (
+            <button type="button" className="button primary" onClick={() => c.go("new")}>
+              <Icon name="plus" size={17} />
+              Nouvelle demande
+            </button>
+          ) : (
+            <ReadOnlyNote compact reason={c.authority.readOnlyReason} />
+          )
         }
       />
-      <div className={cx("stats-strip", styles.kpis)}>
-        <Stat icon="wrench" label="Interventions en cours" value={open} note="Demandes ouvertes, hors terminées et annulées" />
-        <Stat icon="receipt" tone="amber" label="Devis à approuver" value={pending.length} note="Approbations en attente sur le périmètre" />
+      <div className={cx("stats-strip", styles.kpis)} data-professional={figures.professional}>
+        <Stat
+          icon="wrench"
+          label="Interventions en cours"
+          value={open}
+          note={figures.urgent > 0 ? `dont ${figures.urgent} urgente${figures.urgent > 1 ? "s" : ""} · hors terminées et annulées` : "Demandes ouvertes, hors terminées et annulées"}
+        />
+        <Stat
+          icon="receipt"
+          tone="amber"
+          label="Devis à approuver"
+          value={figures.approvalsPending ?? placeholder}
+          note={loaded ? "Approbations en attente parmi les données chargées" : "Données professionnelles non chiffrables"}
+        />
+        <Stat
+          icon="calendar"
+          tone="violet"
+          label="Échéances à 30 jours"
+          value={figures.deadlines30 ?? placeholder}
+          note={loaded ? "Contrôles et maintenances enregistrés, non terminés, parmi les données chargées" : "Données professionnelles non chiffrables"}
+        />
         <Stat
           icon="euro"
           tone="navy"
           label="Budget engagé"
-          value={money(committed)}
-          note={budget > 0 ? `sur ${money(budget)} de budget de référence · ${BASIS}` : `Aucun budget de référence · ${BASIS}`}
+          value={figures.committedCents === null ? placeholder : money(figures.committedCents)}
+          note={
+            !loaded
+              ? "Données professionnelles non chiffrables"
+              : budget > 0
+                ? `sur ${money(budget)} de budget de référence · ${BASIS}`
+                : `Aucun budget de référence · ${BASIS}`
+          }
         />
         <Stat icon="building" tone="green" label="Sites suivis" value={scope.sites.length} note={c.activeSite ? "Site filtré" : "Organisation active"} />
       </div>
+      <InterventionFiltersCard c={c} list={list} />
       <InterventionsTable
         c={c}
+        list={list}
         title="Interventions récentes"
         emptyAction={
-          <button type="button" className="button primary" onClick={() => c.go("new")}>
-            Créer une demande
-          </button>
+          c.canCreateRequest ? (
+            <button type="button" className="button primary" onClick={() => c.go("new")}>
+              Créer une demande
+            </button>
+          ) : undefined
         }
       />
+      {siteBars.length > 0 && (
+        <section className="panel" aria-labelledby="site-budgets-title">
+          <div className={styles.panelTitle}>
+            <div>
+              <h2 id="site-budgets-title">Budget par site</h2>
+              <p>Devis acceptés rapportés au budget de référence de chaque site · {BASIS}</p>
+            </div>
+            <button type="button" className={styles.textLink} onClick={() => c.go("sites")}>
+              Sites & contrats
+              <Icon name="arrow" size={15} />
+            </button>
+          </div>
+          <ul className={styles.siteBudgets}>
+            {siteBars.map((b) => (
+              <li key={b.id}>
+                <span className={styles.siteBudgetName}>{b.name}</span>
+                <div
+                  className={cx(styles.budgetBar, b.over && styles.budgetBarOver)}
+                  role="img"
+                  aria-label={b.ratio === null ? `${b.name} : pas de budget de référence` : `${b.name} : ${percent(b.ratio)} du budget engagé${b.over ? ", budget dépassé" : ""}`}
+                >
+                  <span style={{ width: `${b.width}%` }} />
+                </div>
+                <span className={styles.siteBudgetValue}>
+                  <strong>{money(b.committed)}</strong>
+                  {b.ratio === null ? " · pas de budget de référence" : ` · ${percent(b.ratio)} de ${money(b.budget)}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <div className={styles.twoCol}>
         <section className="panel" aria-labelledby="pending-approvals-title">
           <div className={styles.panelTitle}>
@@ -1100,26 +1349,37 @@ function ComplianceRow({ c, record }: { c: Ctx; record: ComplianceRecord }) {
 
 // ---- Interventions -------------------------------------------------------------------------
 function RequestsView({ c }: { c: Ctx }) {
+  const list = useInterventionList(c);
   return (
     <>
       <PageTitle
         title="Interventions"
-        subtitle={`Suivi des demandes de ${c.activeSite ? c.activeSite.name : "tous les sites"} · ${LOADED_NOTE}`}
+        subtitle={`Suivez les demandes de ${c.activeSite ? c.activeSite.name : "tous vos sites"}, de la demande au règlement.`}
         action={
-          <button type="button" className="button primary" onClick={() => c.go("new")}>
-            <Icon name="plus" size={17} />
-            Nouvelle demande
-          </button>
+          <div className={styles.titleActions}>
+            <ExportButton list={list} />
+            {c.canCreateRequest ? (
+              <button type="button" className="button primary" onClick={() => c.go("new")}>
+                <Icon name="plus" size={17} />
+                Nouvelle demande
+              </button>
+            ) : (
+              <ReadOnlyNote compact reason={c.authority.readOnlyReason} />
+            )}
+          </div>
         }
       />
+      <InterventionFiltersCard c={c} list={list} />
       <InterventionsTable
         c={c}
+        list={list}
         title="Toutes les interventions"
-        exportable
         emptyAction={
-          <button type="button" className="button primary" onClick={() => c.go("new")}>
-            Créer une demande
-          </button>
+          c.canCreateRequest ? (
+            <button type="button" className="button primary" onClick={() => c.go("new")}>
+              Créer une demande
+            </button>
+          ) : undefined
         }
       />
     </>
@@ -1128,6 +1388,22 @@ function RequestsView({ c }: { c: Ctx }) {
 
 function NewRequestView({ c, siteId }: { c: Ctx; siteId: string }) {
   const site = c.orgSites.find((s) => s.id === siteId) || null;
+  const writableSites = c.orgSites.filter((s) => c.authority.canWriteSite(s.id));
+  const allowed = site ? c.authority.canWriteSite(site.id) : c.canCreateRequest;
+  if (!allowed)
+    return (
+      <>
+        <PageTitle
+          title="Nouvelle demande"
+          subtitle={site ? `Site ${site.name}` : c.organization?.name || "Organisation active"}
+          back={{ label: "Retour aux interventions", onClick: () => c.go("requests") }}
+        />
+        <Unavailable
+          title="Création de demande non autorisée sur ce périmètre"
+          reason={c.authority.readOnlyReason || "Vos droits ne permettent pas de créer une demande ici."}
+        />
+      </>
+    );
   return (
     <>
       {site && (
@@ -1151,7 +1427,7 @@ function NewRequestView({ c, siteId }: { c: Ctx; siteId: string }) {
               }
             : null
         }
-        sites={c.orgSites}
+        sites={writableSites}
         mode={c.session.mode}
         busy={c.session.busy}
         onBack={() => c.go("requests")}
@@ -1228,6 +1504,8 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
   const artisan = ops?.participants.find((p) => p.role === "artisan");
   const reachedIndex = TIMELINE.findIndex(([s]) => s === intervention.status);
   const isPayer = Boolean(intervention.client_id) && session.profileId === intervention.client_id;
+  // Actions opérationnelles (devis, créneau, annulation) : écriture sur le site du dossier.
+  const canOperate = c.authority.canWriteSite(intervention.site_id);
   const cat = category(intervention.category);
 
   async function reject(e: FormEvent<HTMLFormElement>) {
@@ -1266,6 +1544,7 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
           </div>
         }
       />
+      <DossierHelpLink session={session} interventionId={intervention.id} />
       <div className={styles.detailGrid}>
         <div>
           <section className="panel" aria-labelledby="dossier-summary">
@@ -1327,6 +1606,21 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
               </ol>
             )}
           </section>
+
+          {["accepted", "in_progress"].includes(intervention.status) && (
+            <TrackingAnchor
+              session={c.session}
+              variant="viewer"
+              interventionId={intervention.id}
+              authority={
+                canOperate
+                  ? { canWrite: true }
+                  : { canWrite: false, reason: c.authority.readOnlyReason || "Vos droits d’écriture ne couvrent pas le site de ce dossier." }
+              }
+              organizationId={c.organization?.id}
+              siteId={intervention.site_id || undefined}
+            />
+          )}
 
           <section className="panel" aria-labelledby="dossier-quote">
             <div className={styles.panelTitle}>
@@ -1397,7 +1691,7 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
                     </p>
                   </div>
                 )}
-                {canDecide && !blocking && (
+                {canDecide && !blocking && canOperate && (
                   <div className={styles.quoteActions}>
                     <ConfirmAction
                       label="Accepter le devis"
@@ -1441,6 +1735,9 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
                     reason="Le devis affiché doit être approuvé dans « Devis & approbations » avant de pouvoir être accepté."
                   />
                 )}
+                {canDecide && !blocking && !canOperate && (
+                  <ReadOnlyNote reason={c.authority.readOnlyReason} />
+                )}
               </>
             ) : (
               <p className={styles.muted}>Le devis de l’artisan apparaîtra ici dès son envoi.</p>
@@ -1450,6 +1747,7 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
           <AppointmentPanel
             c={c}
             intervention={intervention}
+            canWrite={canOperate}
             ops={ops}
             loading={opsLoading}
             onSaved={() => setReloadKey((k) => k + 1)}
@@ -1574,14 +1872,18 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
             <section className="panel" aria-labelledby="dossier-cancel">
               <h2 id="dossier-cancel">Annulation</h2>
               <p className={styles.note}>Possible tant que le devis n’est pas accepté.</p>
-              <ConfirmAction
-                label="Annuler la demande"
-                message="Annuler cette demande ? L’artisan éventuellement affecté en sera informé et aucun montant ne sera dû."
-                confirmLabel="Confirmer l’annulation"
-                danger
-                busy={session.busy}
-                onConfirm={() => session.action(id, "cancel")}
-              />
+              {canOperate ? (
+                <ConfirmAction
+                  label="Annuler la demande"
+                  message="Annuler cette demande ? L’artisan éventuellement affecté en sera informé et aucun montant ne sera dû."
+                  confirmLabel="Confirmer l’annulation"
+                  danger
+                  busy={session.busy}
+                  onConfirm={() => session.action(id, "cancel")}
+                />
+              ) : (
+                <ReadOnlyNote reason={c.authority.readOnlyReason} />
+              )}
             </section>
           )}
         </div>
@@ -1593,12 +1895,15 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
 function AppointmentPanel({
   c,
   intervention,
+  canWrite,
   ops,
   loading,
   onSaved,
 }: {
   c: Ctx;
   intervention: Intervention;
+  /** Écriture sur le site du dossier (rôle + portée) : sinon le panneau reste en lecture. */
+  canWrite: boolean;
   ops: Operations | null;
   loading: boolean;
   onSaved: () => void;
@@ -1609,7 +1914,8 @@ function AppointmentPanel({
   const [ends, setEnds] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
-  const editable = APPOINTMENT_STATUSES.includes(intervention.status);
+  const stageOpen = APPOINTMENT_STATUSES.includes(intervention.status);
+  const editable = stageOpen && canWrite;
   async function save(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const start = Date.parse(starts);
@@ -1678,6 +1984,7 @@ function AppointmentPanel({
                 : "Aucun créneau enregistré pour ce dossier."}
             </p>
           )}
+          {stageOpen && !canWrite && <ReadOnlyNote reason={c.authority.readOnlyReason} />}
           {open && (
             <form className={cx(styles.rejectForm)} onSubmit={save}>
               <div className="form-columns">
@@ -1738,83 +2045,272 @@ function ProfessionalBlock({ c }: { c: Ctx }) {
       busy={session.busy}
       onRefresh={session.loadProfessional}
       onSave={session.professionalCommand}
+      canWriteOrganization={c.authority.canWriteOrganization}
+      canWriteSite={c.authority.canWriteSite}
+      readOnlyReason={c.authority.readOnlyReason}
     />
   );
 }
 
+// Sites (M13 « Mes immeubles » + « Interventions récentes ») : tableaux denses, données réelles.
 function SitesView({ c }: { c: Ctx }) {
   const { session, scope } = c;
+  // Disponibilité réelle des approbations/échéances : jamais supposée (VIS-REV-001).
+  const alertsState = session.capabilities.professional;
+  const recent = byDateDesc(scope.interventions).slice(0, 5);
+  const siteName = (id?: string | null) => scope.sites.find((s) => s.id === id)?.name || "Hors site";
   return (
     <>
       <PageTitle
         title="Sites & contrats"
-        subtitle={`${scope.sites.length} site${scope.sites.length > 1 ? "s" : ""} · budgets ${BASIS}`}
+        subtitle={`Vos sites, leurs interventions en cours et le budget engagé (${BASIS}).`}
         action={
-          <button type="button" className="button outline" onClick={() => c.go("contracts")}>
-            <Icon name="document" size={17} />
-            Contrats cadres
-          </button>
+          <div className={styles.titleActions}>
+            <button type="button" className="button outline" onClick={() => c.go("contracts")}>
+              <Icon name="document" size={17} />
+              Contrats cadres
+            </button>
+            {c.canCreateRequest && (
+              <button type="button" className="button primary" onClick={() => c.go("new")}>
+                <Icon name="plus" size={17} />
+                Nouvelle demande
+              </button>
+            )}
+          </div>
         }
       />
-      {scope.sites.length ? (
-        <div className={styles.siteGrid}>
-          {scope.sites.map((s) => {
-            const f = siteFigures(s, session.data);
-            return (
-              <section key={s.id} className={cx("panel", styles.siteCard)} aria-labelledby={`site-${s.id}`}>
-                <div className={styles.siteCardTop}>
-                  <Tag tone="blue">{(s.type && SITE_TYPES[s.type]) || "Site"}</Tag>
-                  <span className={styles.siteMeta}>
-                    {f.open} en cours · {f.count} dossier{f.count > 1 ? "s" : ""}
-                  </span>
-                </div>
-                <h2 id={`site-${s.id}`}>{s.name}</h2>
-                <p className={styles.siteAddress}>
-                  <Icon name="location" size={15} />
-                  {s.address}
-                </p>
-                <div>
-                  <div className={styles.budgetHead}>
-                    <span>Devis acceptés</span>
-                    <strong>
-                      {money(f.committed)}
-                      {f.budget > 0 ? ` / ${money(f.budget)}` : ""}
-                    </strong>
-                  </div>
-                  <div className={cx(styles.budgetBar, f.over && styles.budgetBarOver)} role="img" aria-label={f.budget > 0 ? `${percent(f.ratio)} du budget de référence engagé` : "Aucun budget de référence"}>
-                    <span style={{ width: `${f.ratio}%` }} />
-                  </div>
-                  <p className={styles.note}>
-                    {f.budget > 0 ? `${percent(f.ratio)} du budget de référence` : "Budget de référence non renseigné"} · {BASIS}
-                  </p>
-                </div>
-                <div className={styles.siteActions}>
-                  <button type="button" className="button outline" onClick={() => c.go("site", s.id)}>
-                    Fiche du site
-                  </button>
-                  <button type="button" className="button primary" onClick={() => c.go("new", s.id)}>
-                    <Icon name="plus" size={16} />
-                    Nouvelle demande
-                  </button>
-                </div>
-              </section>
-            );
-          })}
+      <section className={styles.listSection} aria-labelledby="sites-table-title">
+        <div className={styles.sectionHead}>
+          <h2 id="sites-table-title">
+            Mes sites <span className={styles.countPill}>{scope.sites.length}</span>
+          </h2>
         </div>
-      ) : (
-        <Empty icon="building" title="Aucun site sur ce périmètre">
-          Ajoutez un premier site pour rattacher vos demandes, budgets et règles d’approbation.
-        </Empty>
+        {scope.sites.length && alertsState !== "unknown" && alertsState !== "available" ? (
+          <Unavailable title="Alertes des sites non vérifiées" state={alertsState}>
+            <p>
+              Les devis à approuver et les échéances de contrôle n’ont pas pu être chargés : aucune
+              absence d’alerte n’est affirmée ci-dessous.
+            </p>
+            <button type="button" className="button outline" onClick={() => void session.loadProfessional()}>
+              Réessayer
+            </button>
+          </Unavailable>
+        ) : null}
+        {scope.sites.length ? (
+          <div className={cx("panel", styles.tablePanel, styles.scrollX)}>
+            <table className={cx(styles.table, styles.sitesTable)}>
+              <caption className="sr-only">
+                Sites de l’organisation active ; interventions, budget et alertes {BASIS}
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Site</th>
+                  <th scope="col">Interventions en cours</th>
+                  <th scope="col">Budget engagé</th>
+                  <th scope="col">Montant</th>
+                  <th scope="col">
+                    Alertes
+                    <span className={styles.thHint}>parmi les données chargées</span>
+                  </th>
+                  <th scope="col">
+                    <span className="sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {scope.sites.map((s) => {
+                  const f = siteFigures(s, session.data);
+                  const tone = budgetTone(f.ratio ?? 0, f.over);
+                  const alerts = siteAlertSummary(
+                    alertsState,
+                    siteAlerts(
+                      s.id,
+                      scope.approvals,
+                      scope.compliance,
+                      session.data.interventions,
+                      session.data.quotes,
+                    ),
+                  );
+                  const writable = c.authority.canWriteSite(s.id);
+                  return (
+                    <tr key={s.id}>
+                      <td className={styles.cellSite}>
+                        <button type="button" className={styles.rowOpen} onClick={() => c.go("site", s.id)}>
+                          <span className={styles.siteIcon} aria-hidden="true">
+                            <Icon name="building" size={20} />
+                          </span>
+                          <span>
+                            <strong>{s.name}</strong>
+                            <small>
+                              {(s.type && SITE_TYPES[s.type]) || "Site"} · {s.address}
+                            </small>
+                          </span>
+                        </button>
+                      </td>
+                      <td className={styles.cellOpen}>
+                        <span className={styles.openWrap}>
+                          <span className={cx(styles.openCount, f.open === 0 && styles.openCountNone)} aria-hidden="true">
+                            {f.open}
+                          </span>
+                          <span className={f.open ? styles.openText : styles.muted}>
+                            {f.open} en cours
+                            <small>
+                              {f.count} dossier{f.count > 1 ? "s" : ""} au total
+                            </small>
+                          </span>
+                        </span>
+                      </td>
+                      <td className={styles.cellBudget}>
+                        {f.ratio !== null ? (
+                          <span className={styles.budgetLine}>
+                            <span
+                              className={cx(styles.budgetBar, styles[`budget_${tone}`])}
+                              role="img"
+                              aria-label={`${percent(f.ratio)} du budget de référence engagé${f.over ? ", budget dépassé" : ""}`}
+                            >
+                              <span style={{ width: `${f.width}%` }} />
+                            </span>
+                            <span className={cx(styles.budgetPercent, f.over && styles.budgetPercentOver)}>
+                              {wholePercent(f.ratio)}
+                            </span>
+                          </span>
+                        ) : (
+                          <span className={styles.muted}>Pas de budget de référence</span>
+                        )}
+                      </td>
+                      <td className={styles.cellAmount}>
+                        <strong>{money(f.committed)}</strong>
+                        <small>{f.budget > 0 ? `sur ${money(f.budget)}` : "devis acceptés"}</small>
+                      </td>
+                      <td className={styles.cellAlerts}>
+                        {alerts.kind === "alerts" ? (
+                          <span className={alerts.overdue ? styles.alertRed : styles.alertAmber}>
+                            {alerts.parts.join(", ")}
+                          </span>
+                        ) : alerts.kind === "none" ? (
+                          <span className={styles.muted}>
+                            Aucune
+                            {/* Visible sur mobile (en-tête de colonne masqué), lu partout. */}
+                            <span className={styles.alertQualifier}> parmi les données chargées</span>
+                          </span>
+                        ) : alerts.kind === "checking" ? (
+                          <span className={styles.muted}>Vérification…</span>
+                        ) : (
+                          <span className={styles.alertUnverified}>
+                            <Icon name="lock" size={14} />
+                            Non vérifiées
+                          </span>
+                        )}
+                      </td>
+                      <td className={styles.cellActions}>
+                        <button type="button" className={styles.rowLink} onClick={() => c.go("site", s.id)}>
+                          Fiche<span className="sr-only"> du site {s.name}</span>
+                        </button>
+                        {writable ? (
+                          <button type="button" className={styles.rowLink} onClick={() => c.go("new", s.id)}>
+                            <Icon name="plus" size={15} />
+                            Demande<span className="sr-only"> pour {s.name}</span>
+                          </button>
+                        ) : (
+                          <span className={styles.readOnlyTag} title="Lecture seule sur ce site">
+                            <Icon name="lock" size={14} />
+                            Lecture seule
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="panel">
+            <Empty icon="building" title="Aucun site sur ce périmètre">
+              {c.authority.canWriteOrganization
+                ? "Ajoutez un premier site pour rattacher vos demandes, budgets et règles d’approbation."
+                : "Aucun site ne vous est accessible sur ce périmètre."}
+            </Empty>
+          </div>
+        )}
+      </section>
+
+      {scope.sites.length > 0 && (
+        <section className={styles.listSection} aria-labelledby="sites-recent-title">
+          <div className={styles.sectionHead}>
+            <h2 id="sites-recent-title">
+              Interventions récentes <span className={styles.sectionHint}>(tous les sites)</span>{" "}
+              <span className={styles.countPill}>{scope.interventions.length}</span>
+            </h2>
+            <button type="button" className={styles.textLink} onClick={() => c.go("requests")}>
+              Voir toutes les interventions
+              <Icon name="arrow" size={15} />
+            </button>
+          </div>
+          <div className={cx("panel", styles.tablePanel)}>
+            {recent.length ? (
+              <table className={cx(styles.table, styles.recentTable)}>
+                <caption className="sr-only">Cinq dernières interventions de vos sites</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Référence</th>
+                    <th scope="col">Site</th>
+                    <th scope="col">Intervention</th>
+                    <th scope="col">Date</th>
+                    <th scope="col">Statut</th>
+                    <th scope="col">Priorité</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recent.map((i) => (
+                    <tr key={i.id}>
+                      <td className={styles.cellRef}>
+                        <button type="button" className={styles.refLink} onClick={() => c.session.openIntervention(i.id)}>
+                          {shortId(i.id)}
+                        </button>
+                      </td>
+                      <td className={styles.cellRecentSite}>{siteName(i.site_id)}</td>
+                      <td className={styles.cellRecentType}>{category(i.category).label}</td>
+                      <td className={styles.cellRecentDate}>{date(i.created_at)}</td>
+                      <td className={styles.cellStatus}>
+                        <Badge status={i.status} />
+                      </td>
+                      <td className={styles.cellPriority}>
+                        <span className={i.urgency === "urgent" ? styles.priorityUrgent : styles.priorityPlanned}>
+                          {i.urgency === "urgent" ? "Urgent" : "Planifiée"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <Empty icon="wrench" title="Aucune intervention sur vos sites">
+                Les demandes créées depuis un site apparaîtront ici.
+              </Empty>
+            )}
+          </div>
+        </section>
       )}
-      <SiteForm
-        busy={session.busy}
-        onSubmit={async (values) => {
-          await session.createSite({
-            ...values,
-            organization_id: c.organization?.id || undefined,
-          });
-        }}
-      />
+
+      {c.authority.canWriteOrganization ? (
+        <SiteForm
+          busy={session.busy}
+          onSubmit={async (values) => {
+            await session.createSite({
+              ...values,
+              organization_id: c.organization?.id || undefined,
+            });
+          }}
+        />
+      ) : (
+        <section className="panel" aria-labelledby="site-add-readonly">
+          <h2 id="site-add-readonly">Ajouter un site</h2>
+          <ReadOnlyNote
+            reason={`L’ajout d’un site requiert un droit d’écriture sur toute l’organisation. ${c.authority.readOnlyReason || ""}`.trim()}
+          />
+        </section>
+      )}
       <ProfessionalBlock c={c} />
     </>
   );
@@ -1837,6 +2333,9 @@ function ContractsView({ c }: { c: Ctx }) {
 function SiteSheet({ c, id }: { c: Ctx; id: string }) {
   const { session } = c;
   const site = c.orgSites.find((s) => s.id === id);
+  // Live: probe the site-operations contract for THIS site once while it is unknown (works with
+  // « Tous les sites » too, where no global active site triggers the controller probe).
+  useProbeWhenUnknown(c.session, "siteOperations", { siteId: id }, Boolean(site));
   const [tab, setTab] = useState<"open" | "past">("open");
   if (!site)
     return (
@@ -1864,6 +2363,11 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
   const documents = session.data.documents.filter((d) => d.intervention_id && siteIds.has(d.intervention_id));
   const vertical = site.type || site.vertical || "";
   const audits = compliance.filter((r) => ["audit", "safety"].includes(r.kind));
+  // Écriture opérationnelle sur CE site : rôle de membre et portée (jamais le rôle seul).
+  const canWrite = c.authority.canWriteSite(site.id);
+  // Opérations du site (lot B2B) : état réel du contrat, libellé commun quand il n’est pas disponible.
+  const opsState = session.capabilities.siteOperations;
+  const opsMessage = opsState === "available" ? "" : CONTRACT_MESSAGES[opsState];
 
   return (
     <>
@@ -1873,21 +2377,40 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
       </button>
       <div className={styles.sheetHeader}>
         <div>
+          <span className={styles.kicker}>Fiche de site</span>
           <h1>
             {site.name}
             <Tag tone="blue">{(vertical && SITE_TYPES[vertical]) || "Site"}</Tag>
-            <Tag tone="green">Site actif</Tag>
           </h1>
           <p>
             <Icon name="location" size={15} />
             {site.address}
           </p>
+          {/* V5-C01 « Présentation du bâtiment » : seuls les faits enregistrés (type, adresse, budget). */}
+          <dl className={styles.facts} aria-label="Identité du site">
+            <div>
+              <dt>Type de site</dt>
+              <dd>{(vertical && SITE_TYPES[vertical]) || "Non renseigné"}</dd>
+            </div>
+            <div>
+              <dt>Adresse</dt>
+              <dd>{site.address}</dd>
+            </div>
+            <div>
+              <dt>Budget de référence</dt>
+              <dd>{f.budget > 0 ? money(f.budget) : "Non renseigné"}</dd>
+            </div>
+          </dl>
         </div>
         <div className={styles.sheetActions}>
-          <button type="button" className="button primary" onClick={() => c.go("new", site.id)}>
-            <Icon name="plus" size={16} />
-            Nouvelle demande
-          </button>
+          {canWrite ? (
+            <button type="button" className="button primary" onClick={() => c.go("new", site.id)}>
+              <Icon name="plus" size={16} />
+              Nouvelle demande
+            </button>
+          ) : (
+            <ReadOnlyNote reason={c.authority.readOnlyReason} />
+          )}
         </div>
       </div>
 
@@ -1904,7 +2427,13 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
         <div className={styles.tile}>
           <span>Restant</span>
           <strong>{f.budget > 0 ? money(f.remaining) : "—"}</strong>
-          <small>{f.budget > 0 ? (f.over ? "Budget dépassé" : `${percent(f.ratio)} engagé`) : "Budget non défini"}</small>
+          <small>
+            {f.ratio === null
+              ? "Budget non défini"
+              : f.over
+                ? `Budget dépassé · ${percent(f.ratio)} engagé`
+                : `${percent(f.ratio)} engagé`}
+          </small>
         </div>
         <div className={styles.tile}>
           <span>Interventions en cours</span>
@@ -1922,24 +2451,27 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
         <section className="panel" aria-labelledby="site-interventions">
           <div className={styles.panelTitle}>
             <h2 id="site-interventions">Interventions</h2>
-            <Segments
-              label="Filtre des interventions du site"
-              value={tab}
-              options={[
-                ["open", `En cours (${open.length})`],
-                ["past", `Passées (${past.length})`],
-              ]}
-              onChange={setTab}
-            />
+            <div className={styles.segmentsWrap}>
+              <Segments
+                label="Filtre des interventions du site"
+                value={tab}
+                options={[
+                  ["open", `En cours (${open.length})`],
+                  ["past", `Passées (${past.length})`],
+                ]}
+                onChange={setTab}
+              />
+            </div>
           </div>
           {shown.length ? (
             shown.map((i) => (
               <button
                 key={i.id}
                 type="button"
-                className={cx(styles.listRow, styles.listRowButton)}
+                className={cx(styles.listRow, styles.listRowButton, styles.datedRow)}
                 onClick={() => session.openIntervention(i.id)}
               >
+                <time dateTime={i.created_at}>{date(i.created_at)}</time>
                 <section>
                   <strong>{category(i.category).label}</strong>
                   <small>
@@ -1966,8 +2498,16 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
               {f.budget > 0 ? ` / ${money(f.budget)}` : ""}
             </strong>
           </div>
-          <div className={cx(styles.budgetBar, f.over && styles.budgetBarOver)} role="img" aria-label={f.budget > 0 ? `${percent(f.ratio)} du budget engagé` : "Aucun budget de référence"}>
-            <span style={{ width: `${f.ratio}%` }} />
+          <div
+            className={cx(styles.budgetBar, f.over && styles.budgetBarOver)}
+            role="img"
+            aria-label={
+              f.ratio === null
+                ? "Aucun budget de référence"
+                : `${percent(f.ratio)} du budget engagé${f.over ? ", budget dépassé" : ""}`
+            }
+          >
+            <span style={{ width: `${f.width}%` }} />
           </div>
           <div className={styles.keyValue}>
             <span>Réglé (Stripe confirmé)</span>
@@ -1978,22 +2518,36 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
             <strong>{money(f.committed - f.paid)}</strong>
           </div>
           <p className={styles.note}>Montants TTC {BASIS}. Le rapport CSV du serveur fait foi.</p>
-          <BudgetEditor
-            budgetCents={f.budget}
-            busy={session.busy}
-            onSave={(cents) =>
-              session.professionalCommand({ action: "set_site_budget", site_id: site.id, budget_cents: cents })
-            }
-          />
+          {canWrite ? (
+            <BudgetEditor
+              budgetCents={f.budget}
+              busy={session.busy}
+              onSave={(cents) =>
+                session.professionalCommand({ action: "set_site_budget", site_id: site.id, budget_cents: cents })
+              }
+            />
+          ) : (
+            <>
+              <div className={styles.keyValue}>
+                <span>Budget de référence</span>
+                <strong>{f.budget > 0 ? money(f.budget) : "Non renseigné"}</strong>
+              </div>
+              <ReadOnlyNote reason={c.authority.readOnlyReason} />
+            </>
+          )}
         </section>
 
         <section className="panel" aria-labelledby="site-compliance">
           <div className={styles.panelTitle}>
             <h2 id="site-compliance">Échéances & conformité</h2>
-            <button type="button" className={styles.textLink} onClick={() => c.go("contracts")}>
-              Ajouter
-              <Icon name="arrow" size={15} />
-            </button>
+            {canWrite ? (
+              <button type="button" className={styles.textLink} onClick={() => c.go("contracts")}>
+                Ajouter
+                <Icon name="arrow" size={15} />
+              </button>
+            ) : (
+              <ReadOnlyNote compact reason="Lecture seule" />
+            )}
           </div>
           {compliance.length ? (
             compliance.map((r) => (
@@ -2006,7 +2560,7 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
                   </small>
                 </section>
                 <Tag tone={r.status === "completed" ? "green" : "amber"}>{COMPLIANCE_STATUS[r.status] || r.status}</Tag>
-                {r.status !== "completed" && (
+                {r.status !== "completed" && canWrite && (
                   <button
                     type="button"
                     className={cx("button outline", styles.rowAction)}
@@ -2032,6 +2586,9 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
           ) : (
             <p className={styles.muted}>Aucune échéance enregistrée pour ce site.</p>
           )}
+          {!canWrite && compliance.some((r) => r.status !== "completed") && (
+            <ReadOnlyNote reason={c.authority.readOnlyReason} />
+          )}
           <p className={styles.note}>Ces enregistrements organisent le suivi ; ils ne certifient pas la conformité d’une installation.</p>
         </section>
 
@@ -2055,16 +2612,48 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
           ) : (
             <p className={styles.muted}>Aucune règle : les devis de ce site sont acceptables sans approbation préalable.</p>
           )}
-          <button type="button" className={styles.textLink} onClick={() => c.go("contracts")}>
-            Configurer la règle
-            <Icon name="arrow" size={15} />
-          </button>
+          {canWrite ? (
+            <button type="button" className={styles.textLink} onClick={() => c.go("contracts")}>
+              Configurer la règle
+              <Icon name="arrow" size={15} />
+            </button>
+          ) : (
+            <ReadOnlyNote reason={c.authority.readOnlyReason} />
+          )}
+        </section>
+
+        <section className={cx("panel", styles.operationsPanel)} aria-labelledby="site-operations">
+          <h2 id="site-operations">Opérations du site</h2>
+          <p className={styles.muted}>
+            Équipements, maintenance, budget, grilles, délais et contrôles enregistrés pour ce site.
+          </p>
+          {opsState === "unavailable" ? (
+            <FeatureUnavailable session={session} featureKey="siteOperations" title="Opérations du site momentanément indisponibles" hint={{ siteId: site.id }} />
+          ) : (
+          <SiteOperationsView
+            state={opsState}
+            unavailableMessage={opsMessage}
+            scope={leafScope(
+              session.profileId,
+              session.role,
+              canWrite
+                ? { canWrite: true }
+                : { canWrite: false, reason: c.authority.readOnlyReason || "Lecture seule sur ce site." },
+              { organizationId: c.organization?.id, siteId: site.id },
+            )}
+            client={session.features.siteOperations}
+            demo={session.mode === "demo" ? demoReport() : undefined}
+            onNavigate={(view, param) => {
+              if (view === "intervention" && param) session.openIntervention(param);
+            }}
+          />
+          )}
         </section>
 
         {vertical === "restaurant" && (
           <Unavailable
             title="Équipements critiques (cuisine, froid, éclairage)"
-            reason="Aucun équipement de site n’est modélisé ; l’état des systèmes ne peut pas être affiché."
+            reason="Les équipements, leur criticité et leur état se gèrent dans « Opérations du site » ci-dessus. Aucune télémesure ni alerte automatique n’est raccordée : l’état affiché est celui déclaré."
             blocker="ENT-07"
           />
         )}
@@ -2099,9 +2688,6 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
         )}
 
         <Unavailable title="Contacts du site" reason="Aucun contact de site n’est modélisé." blocker="ENT-04" />
-        {vertical !== "restaurant" && (
-          <Unavailable title="Équipements" reason="Aucun équipement de site n’est modélisé." blocker="ENT-07" />
-        )}
 
         <section className="panel" aria-labelledby="site-docs">
           <h2 id="site-docs">Documents</h2>
@@ -2202,13 +2788,17 @@ function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
   const rule = session.professional.approval_rules.find(
     (r) => r.site_id === (approval.site_id || intervention?.site_id),
   );
-  const authority = session.membershipRole;
+  // Décision : rôle de membre (règle du site) ET écriture sur le site du devis (portée).
+  const role = c.authority.role;
+  const decisionSiteId = approval.site_id || intervention?.site_id;
   const decisionBlocked =
-    authority === "viewer"
+    role === "viewer"
       ? "Votre accès à cette organisation est en lecture seule : la décision revient à un gestionnaire ou au propriétaire."
-      : rule?.required_role === "owner" && authority === "manager"
-        ? "La règle de ce site réserve la décision au propriétaire de l’organisation."
-        : "";
+      : !c.authority.canWriteSite(decisionSiteId)
+        ? c.authority.readOnlyReason || "Vos droits d’écriture ne couvrent pas le site de ce devis."
+        : rule?.required_role === "owner" && role === "manager"
+          ? "La règle de ce site réserve la décision au propriétaire de l’organisation."
+          : "";
   const history = [
     {
       date: approval.created_at || "",
@@ -2316,9 +2906,6 @@ function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
               )}
             </div>
             <div className={styles.quoteFactsWide}>
-              <Unavailable title="Validité du devis" reason="Validité du devis non définie (règle à fixer)." />
-            </div>
-            <div className={styles.quoteFactsWide}>
               <small>Pièces jointes</small>
               {documents.length ? (
                 documents.map((d) => (
@@ -2343,6 +2930,7 @@ function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
             )}
           </div>
         </section>
+
 
         <section className="panel" aria-labelledby="approval-decision">
           <h2 id="approval-decision">Votre décision</h2>
@@ -2404,6 +2992,21 @@ function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
         </section>
       </div>
 
+      {/* V5-C08 : documents, validité et avenants sous la décision, pleine largeur (JSX de l’ancrage inchangé). */}
+      <section className={styles.approvalDocuments} aria-label="Documents, validité et avenants du devis">
+        <QuoteDocumentsAnchor
+          session={session}
+          variant="enterprise"
+          target={{ quoteId: approval.quote_id }}
+          authority={
+            c.authority.canWriteSite(decisionSiteId)
+              ? { canWrite: true }
+              : { canWrite: false, reason: c.authority.readOnlyReason || "Vos droits d’écriture ne couvrent pas le site de ce devis." }
+          }
+          organizationId={c.organization?.id}
+          siteId={decisionSiteId || undefined}
+        />
+      </section>
       <section className="panel" aria-labelledby="approval-history">
         <h2 id="approval-history">Historique des statuts</h2>
         <table className={styles.historyTable} style={{ marginTop: 12 }}>
@@ -2554,7 +3157,11 @@ function ReportsView({ c }: { c: Ctx }) {
       <div className={styles.threeCol}>
         <Unavailable title="Consommation d’énergie" reason="Aucune source énergétique n’est raccordée." blocker="ENT-09" />
         <Unavailable title="Assemblées générales & appels de fonds" reason="Non modélisés pour les copropriétés." blocker="ENT-05" />
-        <Unavailable title="Respect des SLA" reason="Aucun SLA contractuel ni mesure de délai n’existe côté serveur." blocker="ENT-11" />
+        <Unavailable
+          title="Respect des SLA (consolidé)"
+          reason="Les délais et calendriers se suivent site par site dans la fiche de site (« Opérations du site »). Le consolidé multi-sites n’est pas livré ; aucune conformité contractuelle ou réglementaire n’est attestée ici."
+          blocker="ENT-11"
+        />
       </div>
     </>
   );
@@ -3307,9 +3914,11 @@ function MessagesView({ c }: { c: Ctx }) {
         />
       ) : (
         <Empty icon="message" title="Aucune conversation" action={
-          <button type="button" className="button primary" onClick={() => c.go("new")}>
-            Créer une demande
-          </button>
+          c.canCreateRequest ? (
+            <button type="button" className="button primary" onClick={() => c.go("new")}>
+              Créer une demande
+            </button>
+          ) : undefined
         }>
           Les échanges apparaissent dès qu’une intervention existe sur le périmètre.
         </Empty>
@@ -3396,6 +4005,10 @@ function ProfileView({ c }: { c: Ctx }) {
         </p>
         {/* Emplacement réservé à l’installation PWA (composant Codex, hors de ce lot). */}
         <div className={styles.actions} style={{ marginTop: 16 }}>
+          <button type="button" className="button outline" onClick={() => c.go("support")}>
+            <Icon name="shield" size={17} />
+            Assistance
+          </button>
           <button type="button" className="button outline" onClick={() => void session.logout()}>
             <Icon name="logout" size={17} />
             Se déconnecter

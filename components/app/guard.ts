@@ -96,3 +96,18 @@ export function createRunner(guard: Guard, effects: RunEffects): Runner {
     },
   };
 }
+
+// Runs a task that produces a value. The value is returned only when the chain completed
+// while its identity was still current; a failed or stale chain yields null, so callers can
+// never navigate or announce on behalf of a previous account.
+export async function runForResult<T>(
+  runner: Runner,
+  task: (ctx: RunContext) => Promise<T | undefined>,
+): Promise<T | null> {
+  let value: T | undefined;
+  const completed = await runner.run(async (ctx) => {
+    const result = await task(ctx);
+    if (ctx.alive()) value = result;
+  });
+  return completed && value !== undefined ? value : null;
+}
