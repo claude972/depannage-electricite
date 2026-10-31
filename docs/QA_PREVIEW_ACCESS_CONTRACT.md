@@ -1,6 +1,6 @@
 # QA-PREVIEW-ACCESS-001 — contrat : recette hébergée contre une preview Vercel protégée, par le seul cookie de protection
 
-Statut : **contrat seulement, publié avant tout code ; aucune implémentation avant le GO de root.** Branche `claude/web-pwa-qa`. Propriétaire : Claude QA (cœur `scripts/qa/**`). Ce n'est pas du code produit : aucune modification de l'application, de la configuration Vercel ni de Supabase.
+Statut : **contrat publié avant code (`de376db`), amendé A1–A6 par root avant code ; GO root pour le helper après cet amendement.** Point **ouvert** : durée de vie réelle du cookie (§1, A5). Branche `claude/web-pwa-qa`. Propriétaire : Claude QA (cœur `scripts/qa/**`). Ce n'est pas du code produit : aucune modification de l'application, de la configuration Vercel ni de Supabase.
 
 ## 0. Objectif et principe
 
@@ -41,14 +41,14 @@ Règles de validation (toute violation ⇒ rejet de l'état **entier**, « état
 - clés du cookie exactement `name, value, domain, path, expires, httpOnly, secure, sameSite` (aucun champ supplémentaire, aucun `partitionKey` inattendu) ;
 - `domain` = **hôte exact** de `--base-url`, en minuscules, **sans point initial** (pas de domaine parent, pas de joker, pas de `vercel.app` nu) ; `path === "/"` ; `secure === true` ; `httpOnly === true` ; `sameSite` ∈ {`Lax`, `Strict`, `None`} ;
 - `value` : JWT compact de trois segments base64url non vides (`^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$`), longueur 32–4096 ; la charge utile n'est **pas** utilisée pour l'autorisation (aucune vérification de signature côté QA) ; seule l'expiration du cookie fait foi ;
-- `expires` : nombre fini en secondes Unix, **ni session (`-1`), ni passé** ; et `expires*1000 ≥ maintenant + --max-run-ms + marge 5 min` ; sinon exit 2 « accès preview expiré ou expirant pendant la recette » ;
+- `expires` : **point OUVERT** (amendement A5). Root exportera un vrai `_vercel_jwt` frais et confirmera d'abord sa durée de vie réelle ; aucune expiration n'est inventée. Règles provisoires : cookie à expiration (`expires` > 0) ⇒ exiger `expires*1000 ≥ maintenant + --max-run-ms + marge 5 min`, sinon exit 2 « accès preview expiré ou expirant pendant la recette » ; cookie de session (`expires === -1`) ⇒ accepté **seulement** avec `--max-run-ms` déclaré explicitement **et** un export frais (horodatage de fichier `mtime` ≤ 30 min avant le démarrage), sinon refusé ; toute autre valeur (0, NaN, chaîne) ⇒ rejet. Si root constate un cookie de session, ce contrat est amendé à ce moment-là ;
 - aucune présence, nulle part dans le fichier, de chaîne ressemblant à un secret interdit : `x-vercel-protection-bypass`, `service_role`, `sb_secret_`, `sb-…-auth-token`, `access_token`, `refresh_token` ⇒ rejet.
 
 Interdits absolus : jeton Supabase Auth, clé service, secret de contournement Vercel, ou le cookie lui-même dans le code client, Git, `run.log`, `result.json`, `summary.md`, `events.ndjson`, `manifest.json`, `cleanup.json`, captures (métadonnées), messages d'erreur ou diagnostics.
 
 ## 2. Contraintes sur l'URL de base
 
-- `--base-url` : origine nue `https://<hôte>` (pas de chemin, requête, fragment, identifiants, port non standard) ; schéma **https obligatoire** pour une preview ; hôte ∈ `*.vercel.app` **et** strictement égal au `domain` du cookie ; refus explicite de l'alias de production et de `main` (liste fournie par root, ex. domaine personnalisé et alias `depannage-electricite.vercel.app`) ;
+- `--base-url` : origine nue `https://<hôte>` (pas de chemin, requête, fragment, identifiants, port non standard) ; schéma **https obligatoire** pour une preview ; hôte ∈ `*.vercel.app` **et** strictement égal au `domain` du cookie ; refus explicite de l'alias de production et de `main` : **refus codé en dur** de `depannage-electricite-seven.vercel.app` (alias réel de `main`), complété par la liste fournie par root (`--forbid-origin`, répétable, et/ou fichier root) ; toute origine de la liste est refusée même si elle figure dans l'allowlist ;
 - l'origine doit aussi figurer dans l'allowlist existante (`--allow-base-url` / `allowed_base_urls`) et sera étiquetée `remote-allowed` (`target`), jamais « preview réputée réussie » ;
 - `--sha` reste vérifiable seulement par `--app-dir` ; à défaut, il est « déclaré ». (Option prévue, non implémentée sans GO : lire l'identifiant de déploiement/commit exposé par le déploiement si root en fournit une source fiable.)
 
@@ -58,10 +58,13 @@ Interdits absolus : jeton Supabase Auth, clé service, secret de contournement V
 
 **Node** : `sameOriginFetch(path, init)` — seul chemin Node autorisé à porter le cookie :
 - `const url = new URL(path, baseOrigin)` ; si `url.origin !== baseOrigin` ⇒ exception (pas de requête) ; chemins absolus vers un autre hôte, `//autre`, schémas différents refusés ;
-- ajoute l'en-tête `Cookie: _vercel_jwt=<value>` **uniquement** à cette requête ; refuse un `init.headers` contenant déjà `cookie`/`authorization`/`x-vercel-*` ; `redirect: "manual"` — une redirection vers une autre origine est une erreur (et vers l'origine de base, suivie au plus 3 fois avec la même vérification) ;
+- ajoute l'en-tête `Cookie: _vercel_jwt=<value>` **uniquement** à cette requête ; refuse un `init.headers` contenant déjà `cookie`/`authorization`/`x-vercel-*` ;
+- redirections gérées **manuellement** (`redirect: "manual"`, amendement A3) : l'en-tête `Location` est résolu contre l'URL courante ; cible d'une autre origine ⇒ erreur, **le Cookie n'est jamais transmis à un autre hôte** ; même origine ⇒ suivie au plus 3 fois, avec la même vérification à chaque saut ; une méthode non `GET`/`HEAD` n'est **jamais rejouée** : 301/302/303 sur `POST` ⇒ erreur, 307/308 sur `POST` ⇒ **refus**, pas de nouveau POST ; le corps n'est jamais renvoyé ;
 - usage réservé au **préflight même origine** (`/`, `/sw.js`, `/offline.html`, `/manifest.webmanifest`, `/api/workspace` anonyme 401, mesures d'en-têtes) ; jamais vers Supabase (`*.supabase.co`), IGN (`data.geopf.fr`), OSM/CDN, ni aucun tiers. Le client service Supabase existant (`lib/supabase.mjs`) n'est **pas** modifié et ne reçoit jamais ce cookie. Aucun `globalThis.fetch` remplacé.
 
 **Garde de route navigateur (défense en profondeur)** : `context.route('**/*', …)` installé par le helper : toute requête sortante dont l'origine ≠ `baseOrigin` et qui porte la valeur du cookie (en-tête `cookie`, `authorization`, URL, corps texte) est **abandonnée** (`route.abort('blockedbyclient')`) et consignée comme **défaut** (`FAIL` de l'étape en cours, événement `preview-cookie-leak` sans la valeur) ; les autres requêtes continuent (`route.continue()` / `fallback`) sans altération. Le garde coexiste avec `safeRoute` existant et ne le remplace pas ; il est retiré par `stopBrowser`.
+
+**Coexistence et ordre (amendement A4).** Le garde est installé **au niveau du contexte** (`context.route`) immédiatement après `applyToContext`, avant toute page ; les gestionnaires des suites restent au niveau de la **page** (`page.route` via `safeRoute`), que Playwright évalue **avant** ceux du contexte. Pour qu'aucune requête n'échappe au garde, le garde de contexte ne traite que ce qui lui parvient (`route.fallback()`/`continue()` sans `fetch` propre) et les gestionnaires de page qui exécutent eux-mêmes `route.fetch()` vers une autre origine sont couverts par un contrôle équivalent dans `safeRoute` (même prédicat « valeur du cookie vers une autre origine ⇒ abort + défaut ») — sans modifier la logique métier des suites. Invariants testés : une requête n'est émise **qu'une fois** (le garde n'appelle jamais `route.fetch` et ne relance jamais) ; aucune nouvelle tentative aveugle après un `abort` ; un gestionnaire de page qui retient ou abandonne une requête (suites support/photos) n'est pas perturbé ; l'ordre est documenté : page (`safeRoute`, avec contrôle de fuite) → contexte (garde) → réseau.
 
 ## 4. Redaction
 
@@ -86,11 +89,12 @@ Raccordement : option CLI `--preview-access <fichier>` dans `scripts/qa/run.mjs`
 | Élément | Propriétaire | Moment |
 | --- | --- | --- |
 | `scripts/qa/lib/preview-access.mjs`, `scripts/qa/tests/preview-access.test.mjs`, option `--preview-access` de `scripts/qa/run.mjs`, ce contrat | Claude QA (cœur) | après GO root |
-| Appels dans `scripts/qa-advanced/**` (suivi/planning) | worker Codex propriétaire de ces fichiers | après livraison et revue du helper, dans ses seuls fichiers |
-| Appels dans d'autres harnais métier (s'il en existe hors `scripts/qa/**`) | leur propriétaire respectif | idem |
+| Appels dans `scripts/qa-tracking/**` (recette GPS/suivi) | worker **tracking** | après livraison **et revue** du helper, dans ses seuls fichiers |
+| Appels dans `scripts/qa-business/**` (recette métier) | worker **business** | idem |
+| `scripts/qa-advanced/**` (= **planning**, pas GPS) | worker Codex planning | seulement si root le demande, mêmes règles |
 | Export du fichier d'état, partage de déploiement, liste des alias interdits | ROOT | avant la recette |
 
-Les workers n'ajoutent que l'import du helper et l'appel (`--preview-access`, `allowBaseOrigin`) ; ils ne modifient pas le helper.
+Les workers n'ajoutent que l'import du helper et l'appel (`--preview-access`, `allowBaseOrigin`) ; ils ne modifient pas le helper ; **aucune édition concurrente** d'un même fichier. Les workers ne placent **jamais** l'URL ou le jeton de partage Vercel, ni le cookie, ni le chemin réel du fichier d'état dans le dépôt, la CI, un commit, un rapport ou une sortie (amendement A6).
 
 ## 6. Tests prévus (hors réseau, `node --test scripts/qa/tests/preview-access.test.mjs`)
 
@@ -104,6 +108,9 @@ Les workers n'ajoutent que l'import du helper et l'appel (`--preview-access`, `a
 8. Garde de route (faux `route`) : requête vers une autre origine portant la valeur (en-tête, URL, corps) → `abort` + `onLeak` sans valeur ; même requête sans la valeur → `continue` ; requête même origine → `continue`.
 9. **Capture de secret** : exécuter chargement, injection, refus et garde avec un redactor réel et un faux `writeFile`/`stdout` ; vérifier que ni la valeur, ni un segment, ni sa forme encodée n'apparaissent dans les journaux, `result.json`, `summary.md`, `events.ndjson` ni les messages d'erreur.
 10. Sans `--preview-access` : chemins existants inchangés (tests actuels verts, dry-run identique).
+11. Redirections Node : 302 même origine suivie avec cookie ; 302 vers autre hôte ⇒ erreur, faux fetch jamais appelé avec cookie pour cet hôte ; 307/308 sur POST ⇒ refus sans second POST ; plus de 3 sauts ⇒ erreur.
+12. Coexistence : faux contexte + faux gestionnaire de page `safeRoute` : une seule émission par requête, pas de relance après `abort`, gestionnaire de page qui retient/abandonne inchangé, `route.fetch` de page vers une autre origine portant la valeur ⇒ abort + défaut.
+13. Alias interdit : `https://depannage-electricite-seven.vercel.app` refusé même présent dans l'allowlist ; origine de `--forbid-origin` refusée.
 
 ## 7. Hors périmètre / interdit
 
