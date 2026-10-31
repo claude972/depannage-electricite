@@ -1,3 +1,17 @@
+# Dernier checkpoint — 31 octobre 17h54 Martinique
+
+Ce checkpoint prime sur les états historiques ci-dessous.
+
+
+## Checkpoint ROOT — 31 octobre 17h54 Martinique
+
+- Prototype desktop WEB004 livré séparément, source poussée `9430bf7e2efe86b747e96a07d24287bc79288795`. Public : https://depannage-electricite-8toxy3njd-brafas-projects.vercel.app/web.html (dpl_Ay5EQYGKEkf8QggKzfG3z1QvKLLs). ROOT navigateur neuf 1440/1280/390 : HTTP200, cookies0, aucun débordement ni erreur JS. Preuve privée `/tmp/depannage-delivo-web-public-proof.json`, capture réelle montrée au propriétaire. Aucun changement du thème applicatif.
+- GPS run552 terminé : 9 PASS / 1 ANOMALY, aucun FAIL ; T14 reste non validé. Vraie route IGN et géocodage acquis ; positions émulées, pas GPS physique. Cleanup29 PASS puis ROOT42 lectures indépendantes PASS (10Auth404,22REST0,10Storage0). Aucune cohorte QA connue maintenue. L'anomalie T14 est la précondition MAIN déjà partagée par T9, sans reprise produit supposée.
+- A10 `cf61dee4f41cc2ca305ea39d550c857e062ae30e` relu indépendamment : 57 tests PASS, zéro skip, aucun P1/P2 borné ; normalisation CAS+readback avant panneau, pas catch/retry tardif, assertions identiques. Fusion effectuée ; contrôles combinés en cours avant push et recette ROOT T9,T14.
+- Produit deep-link `47423b7` accepté après contre-revue 80 tests. Intégration `28b9b797f678646b3b7b6511273349511b6f3962` poussée, 672 tests et TypeScript strict PASS, CI41245014262 SUCCESS. Preview GitSource exacte demandée dpl_EJntCWSDtnWBzHTM1TUccWkUwU4W, dernier état BUILDING ; pas encore présentée comme testée. App4c publique historique inchangée. LIVE-WORKSPACE-001 (efficacité realtime) et limite de liste100 demeurent ouverts ; la défense deep-link ne les ferme pas.
+- CLI69172 : instruction envoyée au lead existant pour contrat de recette de cette défense, sans code avant GO, sans cloud agent. Publication du prototype WEB004 confirmée au lead ; aucune refonte générale autorisée.
+
+---
 # État courant de livraison
 
 Mis à jour le 2026-10-31T16:02:00-04:00 (America/Martinique). Les preuves ci-dessous sont bornées à leur SHA et à leur environnement. L'application complète des 76 capacités n'est pas déclarée terminée.
