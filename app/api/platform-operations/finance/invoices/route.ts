@@ -1,11 +1,10 @@
 import { z } from "zod";
 import { authenticatedClient, assertOrigin, dbError } from "@/lib/supabase/server";
 import { uuid, validated } from "@/lib/supabase/validation";
-import { failed, invalidQuery, listRows, objectResult, ok, requireScope } from "@/lib/features/platform-operations/http";
+import { failed, invalidQuery, invoiceFields, listRows, objectResult, ok, requireScope } from "@/lib/features/platform-operations/http";
 import type { Invoice } from "@/lib/features/platform-operations/types";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const invoiceFields = "id,request_id,kind,basis,number,issuer_key,issuer,recipient,payment_id,quote_id,intervention_id,related_invoice_id,lines,subtotal_cents,tax_rate,tax_cents,total_cents,currency,reason,issued_by,issued_at";
 const basis = z.enum(["service", "platform_commission"]);
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("readiness"), basis, payment_id: uuid }).strict(),

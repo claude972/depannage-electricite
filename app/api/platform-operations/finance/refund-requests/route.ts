@@ -1,11 +1,10 @@
 import { z } from "zod";
 import { authenticatedClient, assertOrigin, dbError } from "@/lib/supabase/server";
 import { uuid, validated } from "@/lib/supabase/validation";
-import { failed, invalidQuery, listRows, objectResult, ok, requireScope } from "@/lib/features/platform-operations/http";
+import { failed, invalidQuery, listRows, objectResult, ok, refundFields, requireScope } from "@/lib/features/platform-operations/http";
 import type { RefundRequest } from "@/lib/features/platform-operations/types";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const refundFields = "id,request_id,payment_id,amount_cents,currency,reason,status,version,requested_by,created_at,updated_at,decided_by,decided_at,decision_note,provider_reference,settled_event_id,settled_at";
 const schema = z.object({ request_id: uuid, payment_id: uuid, amount_cents: z.number().int().min(1).max(10000000), reason: z.string().trim().min(10).max(2000).regex(/^[^\u0000]*$/) }).strict();
 export async function GET(request: Request) {
   try {
