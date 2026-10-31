@@ -63,10 +63,7 @@ export const suite = {
   ],
   async run(ctx) {
     /** Every application write probe checks the stop gate first. */
-    const post = (page, route, body) => {
-      ctx.gate.check();
-      return api(page, route, body);
-    };
+    const post = (page, route, body) => ctx.mutation(() => api(page, route, body));
     const { base, projectRef, fixtures, db, browser, cohort, out, report, redactor } = ctx;
     const client = await fixtures.createUser("client", "client");
     const artisan = await fixtures.createUser("artisan", "artisan");
@@ -100,9 +97,8 @@ export const suite = {
         });
         await s.step("valid date saved: POST 200, label updated, quote_terms readback", async () => {
           await h.page.locator(PANEL).getByLabel("Valable jusqu’au (inclus)", { exact: true }).fill(validUntil);
-          ctx.gate.check(); // no mutating click once the run is stopping
           const wait = waitForApi(h.page, "/api/quote-documents", { method: "POST" });
-          await h.page.locator(PANEL).getByRole("button", { name: "Enregistrer la validité", exact: true }).click();
+          await ctx.mutatingClick(h.page.locator(PANEL).getByRole("button", { name: "Enregistrer la validité", exact: true }), wait); // gate checked right before the click; drain waits for click + response
           const response = await wait;
           assert.equal(response.status(), 200);
           await expectVisible(h.page.locator(PANEL).getByText(/^Valable jusqu’au .* inclus$/), "validity label with the saved date");
@@ -128,9 +124,8 @@ export const suite = {
           await openHash(h.page, base, `mission/${d1.id}`);
           const button = h.page.locator(PANEL).getByRole("button", { name: "Générer le PDF du devis", exact: true });
           await expectVisible(button, "'Générer le PDF du devis'");
-          ctx.gate.check(); // no mutating click once the run is stopping
           const wait = waitForApi(h.page, "/api/quote-documents", { method: "POST" });
-          await button.click();
+          await ctx.mutatingClick(button, wait); // gate checked right before the click; drain waits for click + response
           const response = await wait;
           assert.equal(response.status(), 201, "first generation must create (201)");
           const docs = await db.select("quote_documents", { quote_id: `eq.${q1.id}`, amendment_id: "is.null" }, "id,kind,revision,reference,snapshot_sha256,snapshot");
@@ -218,9 +213,8 @@ export const suite = {
           await openClientQuote(hc.page, base, d1, q1);
           const button = hc.page.getByRole("button", { name: "Accepter le devis", exact: true });
           await expectVisible(button, "'Accepter le devis'");
-          ctx.gate.check(); // no mutating click once the run is stopping
           const wait = waitForApi(hc.page, `/api/interventions/${d1.id}/actions`, { method: "POST" });
-          await button.click();
+          await ctx.mutatingClick(button, wait); // gate checked right before the click; drain waits for click + response
           const response = await wait;
           assert.equal(response.status(), 200, "accept_quote answered " + response.status());
           const [quote] = await db.select("quotes", { id: `eq.${q1.id}` }, "status,accepted_at");
@@ -243,9 +237,8 @@ export const suite = {
           await panel.getByLabel("Prix unitaire HT (€)", { exact: true }).fill("25");
           await panel.getByLabel("TVA", { exact: true }).selectOption("20");
           await panel.getByLabel("Motif de l’avenant", { exact: true }).fill(cohort.description("avenant de recette : prestation complémentaire"));
-          ctx.gate.check(); // no mutating click once the run is stopping
           const wait = waitForApi(ha.page, "/api/quote-amendments", { method: "POST" });
-          await panel.getByRole("button", { name: "Proposer l’avenant", exact: true }).click();
+          await ctx.mutatingClick(panel.getByRole("button", { name: "Proposer l’avenant", exact: true }), wait); // gate checked right before the click; drain waits for click + response
           const response = await wait;
           assert.equal(response.status(), 201, "propose answered " + response.status());
           const amendments = await db.select("quote_amendments", { base_quote_id: `eq.${q1.id}` }, "id,version,status,subtotal_cents,tax_rate,tax_cents,total_cents,artisan_id");
@@ -263,9 +256,8 @@ export const suite = {
           await accept.click();
           const confirm = section.getByRole("button", { name: "Confirmer l’acceptation", exact: true });
           await expectVisible(confirm, "'Confirmer l’acceptation'");
-          ctx.gate.check(); // no mutating click once the run is stopping
           const wait = waitForApi(hc.page, "/api/quote-amendments", { method: "POST" });
-          await confirm.click();
+          await ctx.mutatingClick(confirm, wait); // gate checked right before the click; drain waits for click + response
           const response = await wait;
           assert.equal(response.status(), 200, "accept answered " + response.status());
           const [am] = await db.select("quote_amendments", { id: `eq.${state.amendmentId}` }, "status,decided_by,decided_at");
@@ -291,9 +283,8 @@ export const suite = {
           const panel = ha.page.locator(PANEL);
           const button = panel.getByRole("button", { name: "Générer le PDF de l’avenant", exact: true });
           await expectVisible(button, "'Générer le PDF de l’avenant'");
-          ctx.gate.check(); // no mutating click once the run is stopping
           const wait = waitForApi(ha.page, "/api/quote-documents", { method: "POST" });
-          await button.click();
+          await ctx.mutatingClick(button, wait); // gate checked right before the click; drain waits for click + response
           assert.equal((await wait).status(), 201);
           const docs = await db.select("quote_documents", { amendment_id: `eq.${state.amendmentId}` }, "id,kind,revision,reference,snapshot_sha256");
           assert.equal(docs.length, 1);
@@ -405,9 +396,8 @@ export const suite = {
         await s.step("'Accepter le devis' (circuit exposed) → server 409, quote still sent, dossier still quoted", async () => {
           const button = h.page.getByRole("button", { name: "Accepter le devis", exact: true });
           if (!(await button.count())) throw new AppDefect("'Accepter le devis' not exposed on an expired sent quote: the server-side refusal could not be exercised through the UI");
-          ctx.gate.check(); // no mutating click once the run is stopping
           const wait = waitForApi(h.page, `/api/interventions/${d2.id}/actions`, { method: "POST" });
-          await button.click();
+          await ctx.mutatingClick(button, wait); // gate checked right before the click; drain waits for click + response
           const response = await wait;
           assert.equal(response.status(), 409, `accept_quote on an expired quote answered ${response.status()}`);
           await sleep(500);

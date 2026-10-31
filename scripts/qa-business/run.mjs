@@ -24,7 +24,7 @@ import { CLEANUP_STEPS, finalizeCleanup } from "./lib/cleanup.mjs";
 import { BusinessFixtures } from "./lib/fixtures.mjs";
 import { createAdminAuth } from "./lib/auth.mjs";
 import { readLocalBuildId, servedBuildIdentity, compareBuildIds } from "./lib/preflight.mjs";
-import { orchestrate, NOT_EXERCISED, guardReport, createDiagnose } from "./lib/orchestrate.mjs";
+import { orchestrate, NOT_EXERCISED, guardReport, createDiagnose, createMutationGuard } from "./lib/orchestrate.mjs";
 import { guardWrites } from "../qa/lib/fixtures.mjs";
 import { chmod } from "node:fs/promises";
 import { SUITES, suiteByName } from "./suites/index.mjs";
@@ -181,6 +181,8 @@ async function main(argv) {
       gate,
       drainTimeoutMs: options.timeoutMs,
       cleanup: makeRunCleanup({
+        gate,
+        project: context.project,
         fixtures,
         db,
         auth,
@@ -282,6 +284,7 @@ async function main(argv) {
         log,
         credentials,
         timeoutMs: options.timeoutMs,
+        ...createMutationGuard(gate),
         openPage: async (s, opts = {}) => {
           gate.check();
           return s.track(await newPage(browser, { baseUrl: context.base_url, redactor, ...opts }));
@@ -341,12 +344,34 @@ const cleanupLine = (entry) =>
     ? `cleanup ${String(entry.status).padEnd(15)} ${entry.table}${entry.column ? ` by ${entry.column}` : ""}: requested ${entry.requested}, remaining ${entry.remaining}${entry.error ? ` — ${entry.error}` : ""}`
     : `intent ${String(entry.status).padEnd(10)} ${entry.label}${entry.error ? ` — ${entry.error}` : ""}`;
 
-/** Cleanup used by the lifecycle (normal end, crash, signal): browser stopped first, then the fail-closed finalizer. */
-export function makeRunCleanup({ fixtures, db, auth, outDir, redactor, log = () => {}, stopBrowser = async () => {} }) {
+export const recoveryCommand = (manifestPath, project) => `node scripts/qa-business/run.mjs --cleanup-manifest ${manifestPath} --credentials <credentials.json> --project ${project || "<ref>"}`;
+
+/**
+ * Cleanup used by the lifecycle (normal end, crash, signal). Business-owned guard on top of the
+ * shared lifecycle (which runs cleanup even after a drain timeout): while ANY producer registered in
+ * the stop gate is still pending (scenario, fixture creation, mutation, RPC), nothing is deleted at
+ * all — the manifest and its intents stay on disk exactly as last written, the result is INCOMPLETE
+ * (exit 3) and the recovery command is printed. Otherwise: browser stopped, then the fail-closed
+ * finalizer.
+ */
+export function makeRunCleanup({ gate = null, project = "", fixtures, db, auth, outDir, redactor, log = () => {}, stopBrowser = async () => {} }) {
   return async () => {
+    if (gate && gate.pending > 0) {
+      const result = {
+        ok: false,
+        halted: "producers not drained",
+        incomplete: [`${gate.pending} producer(s) still in flight after the drain: deletion refused, manifest kept; recover with: ${recoveryCommand(fixtures.manifestPath, project)}`],
+        intents: [],
+        steps: [],
+      };
+      for (const reason of result.incomplete) log(`INCOMPLETE: ${reason}`);
+      await writeFile(path.join(outDir, "cleanup.json"), JSON.stringify(redactor.redact(result), null, 2) + "\n", { mode: 0o600 });
+      return result;
+    }
     await stopBrowser();
     const result = await finalizeCleanup({ db, auth, manifest: fixtures.manifest, collect: () => fixtures.collectIndirect(), save: () => fixtures.save(), log: (entry) => log(cleanupLine(entry)) });
     for (const reason of result.incomplete ?? []) log(`INCOMPLETE: ${reason}`);
+    if (!result.ok) log(`recover with: ${recoveryCommand(fixtures.manifestPath, project)}`);
     await writeFile(path.join(outDir, "cleanup.json"), JSON.stringify(redactor.redact(result), null, 2) + "\n", { mode: 0o600 });
     return result;
   };

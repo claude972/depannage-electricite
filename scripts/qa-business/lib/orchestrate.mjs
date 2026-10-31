@@ -155,3 +155,25 @@ export function createDiagnose({ out, redactor, writeFile, chmod, join, maxText 
     return files;
   };
 }
+
+// ---------------------------------------------------------------- mutations: check right before emission, tracked in the drain
+/**
+ * `mutation(fn)`: checks the stop gate SYNCHRONOUSLY right before calling `fn` (no await between
+ * the check and the emission) and registers the resulting promise in the gate, so the drain waits
+ * for its settlement before any cleanup. Every await that precedes a mutation (token read, form
+ * filling…) must therefore sit OUTSIDE `fn`, before the call.
+ * `mutatingClick(locator, responsePromise)`: same for a UI click that triggers a POST; the drain
+ * waits for the click AND the server response.
+ */
+export function createMutationGuard(gate) {
+  const mutation = (fn) => {
+    gate.check();
+    return gate.register(fn());
+  };
+  const mutatingClick = (locator, responsePromise) =>
+    mutation(async () => {
+      await locator.click();
+      return responsePromise;
+    });
+  return { mutation, mutatingClick };
+}

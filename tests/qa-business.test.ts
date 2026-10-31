@@ -713,3 +713,98 @@ test("diagnostics on the first failing step: private screenshot + main-region te
   assert.deepEqual(entry.evidence.map((e: Row) => e.kind), ["diagnostic", "diagnostic"], "diagnostics captured once (first failure)");
   assert.equal(calls, 1);
 });
+
+// ---------------------------------------------------------------- root review of c97a018: drain timeout and await-then-emit gaps
+const deferred = <T = void>() => {
+  let resolve!: (v: T) => void;
+  const promise = new Promise<T>((r) => (resolve = r));
+  return { promise, resolve };
+};
+test("P2-1 repro cleanupWhilePending=1 → drain timeout with a pending producer: zero delete calls, manifest bytes intact, exit 3, recovery command printed", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "qa-business-pending-"));
+  const manifestPath = path.join(dir, "manifest.json");
+  const redactor = redactModule.createRedactor();
+  const cohort = cohortModule.createCohort(RUN);
+  const gate = lifecycleModule.createStopGate();
+  const { db, calls } = recordingDb();
+  const auth = { ...fakeAuth([]), async getUser() { calls.push("auth:get"); return null; }, async findUsersByEmail() { calls.push("auth:list"); return []; } };
+  const fixtures = new fixturesModule.BusinessFixtures({ db, auth, cohort, manifestPath, context: { project: "qaproject12345678" }, redactor, gate });
+  fixtures.manifest.intents.push(intent(60, "owner"));
+  fixtures.manifest.created.sites.push(uuid(1, "b0000000"));
+  await fixtures.save();
+  const before = await readFile(manifestPath);
+  const never = deferred();
+  gate.register(never.promise); // a producer (scenario / creation) that does not settle
+  const log: string[] = [];
+  const lifecycle = lifecycleModule.createLifecycle({
+    gate,
+    drainTimeoutMs: 30,
+    cleanup: runModule.makeRunCleanup({ gate, project: "qaproject12345678", fixtures, db, auth, outDir: dir, redactor, log: (l: string) => log.push(l), stopBrowser: async () => { log.push("browser stopped"); } }),
+    writeResults: async () => {},
+  });
+  const { cleanup: result, drain } = await lifecycle.finalize("signal:SIGINT");
+  assert.equal(drain.timedOut, true);
+  assert.equal(drain.pending, 1);
+  assert.deepEqual(calls, [], "no delete and not even an Auth read while a producer is pending");
+  assert.equal(result.ok, false);
+  assert.equal(result.halted, "producers not drained");
+  assert.ok((await readFile(manifestPath)).equals(before), "manifest file byte-identical");
+  assert.equal(reportModule.exitCode({ fail: 0 }, result.ok), 3);
+  assert.ok(log.some((l) => l.includes("--cleanup-manifest " + manifestPath)), "recovery command printed");
+  assert.ok(!log.includes("browser stopped"));
+  never.resolve();
+  // Recovery in a later process: nothing pending → the manifest is cleaned normally.
+  const recovery = recordingDb();
+  const code = await runModule.runCleanupOnly({ manifestPath, project: "qaproject12345678", db: recovery.db, auth: fakeAuth([]), redactor });
+  assert.equal(code, 0);
+  assert.ok(recovery.calls.includes("delete:sites"));
+});
+test("P2-2 SIGINT during `await sessionAccessToken` → the direct RPC is never emitted", async () => {
+  const gate = lifecycleModule.createStopGate();
+  const guard = orchestrateModule.createMutationGuard(gate);
+  const order: string[] = [];
+  const token = deferred<string>();
+  let emitted = 0;
+  const probe = (async () => {
+    const t = await token.promise; // same shape as b2b.mjs: token read, then ctx.mutation(() => userRpc(...))
+    order.push("token read");
+    return guard.mutation(async () => {
+      emitted++;
+      order.push(`rpc emitted with ${t}`);
+      return { status: 403 };
+    });
+  })();
+  gate.stop("signal:SIGINT");
+  order.push("stop");
+  token.resolve("jwt");
+  await assert.rejects(probe, (e: Error) => e.name === "StopRequestedError");
+  assert.equal(emitted, 0);
+  assert.deepEqual(order, ["stop", "token read"]);
+});
+test("P2-2 RPC in flight at SIGINT → the drain waits for it and cleanup runs strictly after its settlement", async () => {
+  const gate = lifecycleModule.createStopGate();
+  const guard = orchestrateModule.createMutationGuard(gate);
+  const order: string[] = [];
+  const answer = deferred<{ status: number }>();
+  const rpc = guard.mutation(async () => {
+    order.push("rpc emitted");
+    const r = await answer.promise;
+    order.push("rpc settled");
+    return r;
+  });
+  const clickAnswer = deferred<string>();
+  const locator = { async click() { order.push("click emitted"); } };
+  const click = guard.mutatingClick(locator, clickAnswer.promise.then((v) => (order.push("POST answered"), v)));
+  const lifecycle = lifecycleModule.createLifecycle({ gate, drainTimeoutMs: 5000, cleanup: async () => { order.push(`cleanup (pending ${gate.pending})`); return { ok: true, steps: [] }; }, writeResults: async () => {} });
+  gate.stop("signal:SIGINT");
+  const finalizing = lifecycle.finalize("signal:SIGINT");
+  await new Promise((r) => setTimeout(r, 20));
+  assert.ok(!order.some((o) => o.startsWith("cleanup")), "cleanup must not start while the RPC and the click are in flight");
+  answer.resolve({ status: 403 });
+  clickAnswer.resolve("201");
+  await Promise.all([rpc, click, finalizing]);
+  assert.deepEqual(order, ["rpc emitted", "click emitted", "rpc settled", "POST answered", "cleanup (pending 0)"]);
+  assert.throws(() => guard.mutation(async () => order.push("late")), (e: Error) => e.name === "StopRequestedError");
+  assert.throws(() => guard.mutatingClick(locator, Promise.resolve("x")), (e: Error) => e.name === "StopRequestedError");
+  assert.ok(!order.includes("late"));
+});

@@ -40,10 +40,7 @@ export const suite = {
   ],
   async run(ctx) {
     /** Every application write probe checks the stop gate first. */
-    const post = (page, route, body) => {
-      ctx.gate.check();
-      return api(page, route, body);
-    };
+    const post = (page, route, body) => ctx.mutation(() => api(page, route, body));
     const { base, projectRef, fixtures, db, browser, cohort, out, report, redactor, credentials, timeoutMs } = ctx;
     const owner = await fixtures.createUser("owner", "manager");
     const reader = await fixtures.createUser("lecteur", "manager");
@@ -70,9 +67,8 @@ export const suite = {
       await sleep(200);
     };
     const submitAndWait = async (page, buttonName) => {
-      ctx.gate.check(); // no mutating click once the run is stopping
       const wait = waitForApi(page, "/api/site-operations", { method: "POST" });
-      await opsSection(page).getByRole("button", { name: buttonName, exact: true }).click();
+      await ctx.mutatingClick(opsSection(page).getByRole("button", { name: buttonName, exact: true }), wait); // gate checked right before the click; drain waits for click + response
       return (await wait).status();
     };
 
@@ -357,7 +353,8 @@ export const suite = {
           const token = await sessionAccessToken(h.context, projectRef);
           assert.ok(token, "could not read the user's session token from the auth cookie");
           const conn = { url: credentials.supabase.url, publishableKey: key, accessToken: token, timeoutMs };
-          const r = await userRpc(conn, "save_site_equipment", { p_site_id: siteA1.id, p_payload: equipmentPayload("QA refus RPC"), p_id: null, p_expected_version: null });
+          // The gate is re-checked AFTER the token await, immediately before emission; the RPC is drained.
+          const r = await ctx.mutation(() => userRpc(conn, "save_site_equipment", { p_site_id: siteA1.id, p_payload: equipmentPayload("QA refus RPC"), p_id: null, p_expected_version: null }));
           assert.ok(r.status >= 400 && r.status < 500, `RPC answered ${r.status}`);
           assert.equal(String(r.code), "42501", `RPC refused with ${r.code}`);
           assert.equal(await db.count("site_equipment", { site_id: `eq.${siteA1.id}` }), 1);
