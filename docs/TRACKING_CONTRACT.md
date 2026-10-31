@@ -123,3 +123,27 @@ Fichiers autorisés en plus020 : tests/tracking-retention*.test.ts, tests/sql-tr
 ROOT seul : préflight module/role/cron.job, apply020exactSHA revue, puis constater extension + une lignejobexacte et attente d'au moins une exécution **cron.job_run_details.status=succeeded** pour ce job aprèscréation de pointsQA (unexpired/fresh). Vérifier expired réellement NULL après passage, fresh conservé par tranchehoraire contrôlée, aucun autrejob modifié, cleanupborné cohorte/readbacks et historique020. Les fixtures ne nécessitent aucun admin/grantpermanent ; pas de mutation d'une positionutilisateurréelle. Une exécution manuelle fonction ne remplace pas une exécutionparscheduler. Les verrous SKIPLOCKED demandent un test deuxconnexions root séparé s'il doit être déclaré prouvé.
 
 Exploitation : documenter requêteopérateur de contrôle dernierstatus/end_time/return_message du jobnomexact et backlogcount/minexpired ; échec, jobdésactivé, absence de succès récent ou backlogcroissant demandent intervention. Cadence1min+cutoff60s décrit un fonctionnement ordinaire, **pas un TTLphysiquedur** : pannecron, backlog>1000, lignesverrouillées ou indisponibilitébase peuvent différer l'effacement. Ne pas promettre un SLA non supervisé. job_run_details croît : aucun nettoyage global d'historiquecron n'est ajouté dans ce lot ; sa rétention/exploitation reste documentée. Aucun PASSscheduler avant preuve ROOT, aucun cloud de cet auteur.
+
+### Livraison020 — code prêt pour revue, ordonnanceur NON déployé
+
+Feu ROOT après contrat44cfb15. Nouvelle020 uniquement ;019 et précédentes inchangées. Fonction signature/ACL conservées, indexexpiry partiel, sélection1000/SKIPLOCKED puis effacement des cinq seuls champsGPS. Préflight refuse module absent/mauvaisrôle/schéma inattendu, puis jobnomexact contrôlé sous verroutable et row_securityoff **local à la transaction**. Jobconforme nonreschedulé ; nonconforme/étranger refusé sans réparation ni autrejobmodifié. Aucun droitcronapp accordé, aucun réseau/restart/paramètresystème/achat.
+
+Exécuté auteur : `PGLITE_MODULE=<cache>/@electric-sql/pglite/dist/index.js node tests/sql-tracking-retention-review.mjs` PASS : migrationnative échoue explicitement quand pg_cron absent ; ensuite **stubcron déclaré** teste commande/cadence/ownerDB/active/collisions et conservation des autresjobs, secondeapplication aucun appelschedule, refusUSAGEcronapp, ACLservice-only,1001expired traités1000puis1puis0 et2fresh conservés ; champs métier/destination/consent/version/identité strictement inchangés. L'ordonnanceurstub ne lance aucunehorloge/fonction automatiquement. Ancien `sql-tracking-review.mjs` réexécuté avec020stubscheduler explicite : PASS20migrations/matriceGPSstop/reassign/suspension/fin/rollback et critèreQA001 rejeté. **15/15 tests tracking PASS**, TypeScriptglobal/cache PASS, syntaxe des deuxscripts et diffcheck PASS.018 continue d'être lue enreadonly depuis6062 si absente de la basebranche ; aucun fichierA5 importé/modifié.
+
+Gates ROOT inchangés : exactSHAcrossreview puis apply020, vraieextension/cron.job et vrai cron.job_run_details.succeeded sur pointQAexpiré crééaprèsjobactif, freshcontraste contrôlé au même passage, readbackcohorte/cleanup. Pas de preuve moteurcron/SKIPLOCKEDdeuxconnexions par ces tests, aucuneactivationcloud effectuée par auteur.
+
+Supervision SQL par opérateurDB autorisé (ne retourne aucunecoordonnée) :
+
+```sql
+select jobid, jobname, schedule, active, database, username
+from cron.job where jobname='depannage_tracking_retention_v1';
+select d.runid, d.status, d.start_time, d.end_time, left(d.return_message,200) as message
+from cron.job_run_details d join cron.job j on j.jobid=d.jobid
+where j.jobname='depannage_tracking_retention_v1'
+order by d.runid desc limit 10;
+select count(*) as expired_backlog, min(least(sampled_at,received_at)) as oldest_sample
+from public.intervention_tracking
+where latitude is not null and least(sampled_at,received_at)<clock_timestamp()-interval '60 seconds';
+```
+
+Alerteopérationnelle à traiter si jobabsent/inactif, dernièreexécutionfailed ou absencesuccèsdepuis3minutes, ou backlognebaissantpas. Ce seuil est une consigne de surveillance, **pas une automationdéployée** ni garantiemaximumd'effacement ; root doit vérifierjob_run_details disponible et accèsopérateur. Historiqueruns conservé selon exploitationSupabase, aucun nettoyageglobal ajouté.
