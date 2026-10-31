@@ -2,7 +2,8 @@
 // lives here so it can be tested without a DOM. Rules of WEB-SHARED-001: a `null` command result
 // is a stale chain (no notice, no update); write controls need canWrite AND the server permission.
 import { formatEuro, formatTaxRate } from "./format";
-import type { QuoteDocumentsCommandResult, QuoteDocumentsFailure, QuoteDocumentsOverview, QuoteDocumentsScope, QuoteDocumentsTarget, QuoteLine } from "./types";
+import type { QuoteDocumentsClient, QuoteDocumentsCommand, QuoteDocumentsCommandResult, QuoteDocumentsFailure, QuoteDocumentsOverview, QuoteDocumentsScope, QuoteDocumentsTarget, QuoteLine } from "./types";
+import { isQuoteDocumentsFailure } from "./types";
 import { validateValidUntil } from "./validity";
 
 export type Phase = "idle" | "loading" | "ready" | "error";
@@ -79,6 +80,46 @@ export function panelReducer(state: PanelState, event: PanelEvent): PanelState {
       return { ...state, pending: null };
     case "dismiss":
       return { ...state, notice: null, commandError: null };
+  }
+}
+
+export function toFailure(error: unknown): QuoteDocumentsFailure {
+  if (isQuoteDocumentsFailure(error)) return error;
+  return { status: 0, message: "L’action n’a pas pu être réalisée. Réessayez." };
+}
+/** Runs one command then a fresh read. After EVERY await the mounted scope/target is re-checked
+ *  (`isCurrent`) and a `null` result is treated as a stale chain: nothing is dispatched, `false`
+ *  is returned, so a caller never resets a form or shows a notice that belongs to another scope.
+ *  `true` only when the command succeeded, the reload is current and not null, and the fresh
+ *  overview has been applied — the success notice follows the fresh read. */
+export async function executeCommand(deps: {
+  client: Pick<QuoteDocumentsClient, "command" | "load">;
+  body: QuoteDocumentsCommand;
+  target: QuoteDocumentsTarget;
+  isCurrent: () => boolean;
+  dispatch: (event: PanelEvent) => void;
+}): Promise<boolean> {
+  const { client, body, target, isCurrent, dispatch } = deps;
+  dispatch({ type: "command", action: body.action });
+  try {
+    const result = await client.command(body);
+    if (!isCurrent()) return false;
+    if (result === null) {
+      dispatch({ type: "stale" });
+      return false;
+    }
+    const overview = await client.load(target);
+    if (!isCurrent()) return false;
+    if (overview === null) {
+      dispatch({ type: "stale" });
+      return false;
+    }
+    dispatch({ type: "loaded", overview });
+    dispatch({ type: "command_done", result });
+    return true;
+  } catch (error) {
+    if (isCurrent()) dispatch({ type: "command_failed", failure: toFailure(error) });
+    return false;
   }
 }
 

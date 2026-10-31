@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { canWrite, initialPanelState, panelReducer, previewTotals, readOnlyReason, scopeKey, successMessage, validateAmendmentForm, type PanelState } from "../../lib/features/quote-documents/panel-model";
+import { canWrite, executeCommand, initialPanelState, panelReducer, previewTotals, readOnlyReason, scopeKey, successMessage, validateAmendmentForm, type PanelEvent, type PanelState } from "../../lib/features/quote-documents/panel-model";
 import { quoteDocumentsDemo } from "../../lib/features/quote-documents/demo";
 import type { QuoteDocumentsScope } from "../../lib/features/quote-documents/types";
 
@@ -69,4 +69,84 @@ test("amendment form validation keeps errors near fields and only emits server-s
   assert.equal(validateAmendmentForm({ lines: [], taxRate: "20", reason: "Motif", validUntil: "" }, now).ok, false);
   assert.deepEqual(previewTotals({ lines: [{ label: "x", quantity: "2", price: "60" }], taxRate: "20", reason: "", validUntil: "" }), { subtotal: "120,00 €", tax: "24,00 €", total: "144,00 €", taxLabel: "20 %" });
   assert.equal(previewTotals({ lines: [{ label: "x", quantity: "", price: "60" }], taxRate: "20", reason: "", validUntil: "" }), null);
+});
+
+// --- Continuation guard: a command that resolves after a scope/target change changes nothing ---
+const overview = () => quoteDocumentsDemo("artisan");
+const proposeBody = { action: "propose" as const, base_quote_id: "q", lines: [{ label: "x", quantity: 1, unit_price_cents: 100 }], tax_rate: 20 as const, reason: "m", valid_until: null };
+const amendmentResult = { action: "propose" as const, amendment: overview().quotes[0].amendments[0] };
+function recorder() {
+  const events: PanelEvent[] = [];
+  let state = panelReducer(initialPanelState("old"), { type: "loaded", overview: overview() });
+  const dispatch = (event: PanelEvent) => {
+    events.push(event);
+    state = panelReducer(state, event);
+  };
+  return { events, dispatch, state: () => state };
+}
+test("a command resolving after the scope changed: false, no notice, no reload, the new scope's form is not reset", async () => {
+  let current = true;
+  let loads = 0;
+  const r = recorder();
+  const client = {
+    command: async () => {
+      current = false; // identity/scope changed while the request was in flight
+      return amendmentResult;
+    },
+    load: async () => {
+      loads++;
+      return overview();
+    },
+  };
+  let proposingFormOpenInNewScope = true;
+  const ok = await executeCommand({ client, body: proposeBody, target: { interventionId: "i" }, isCurrent: () => current, dispatch: r.dispatch });
+  if (ok) proposingFormOpenInNewScope = false; // the component callback pattern
+  assert.equal(ok, false);
+  assert.equal(proposingFormOpenInNewScope, true, "the new scope's form stays open");
+  assert.deepEqual(r.events.map((e) => e.type), ["command"], "nothing after the stale await");
+  assert.equal(loads, 0, "no reload for a scope that is no longer mounted");
+  assert.equal(r.state().notice, null);
+});
+test("a null command result (stale chain) stops before the reload with no notice", async () => {
+  const r = recorder();
+  let loads = 0;
+  const ok = await executeCommand({ client: { command: async () => null, load: async () => (loads++, overview()) }, body: proposeBody, target: { interventionId: "i" }, isCurrent: () => true, dispatch: r.dispatch });
+  assert.equal(ok, false);
+  assert.deepEqual(r.events.map((e) => e.type), ["command", "stale"]);
+  assert.equal(loads, 0);
+  assert.equal(r.state().notice, null);
+  assert.equal(r.state().pending, null);
+});
+test("a null reload after a successful command: false, no success notice, no data update", async () => {
+  const r = recorder();
+  const before = r.state().overview;
+  const ok = await executeCommand({ client: { command: async () => amendmentResult, load: async () => null }, body: proposeBody, target: { interventionId: "i" }, isCurrent: () => true, dispatch: r.dispatch });
+  assert.equal(ok, false);
+  assert.deepEqual(r.events.map((e) => e.type), ["command", "stale"]);
+  assert.equal(r.state().notice, null);
+  assert.equal(r.state().overview, before);
+});
+test("a scope change during the reload: false, nothing dispatched after the second await", async () => {
+  let current = true;
+  const r = recorder();
+  const ok = await executeCommand({ client: { command: async () => amendmentResult, load: async () => ((current = false), overview()) }, body: proposeBody, target: { interventionId: "i" }, isCurrent: () => current, dispatch: r.dispatch });
+  assert.equal(ok, false);
+  assert.deepEqual(r.events.map((e) => e.type), ["command"]);
+  assert.equal(r.state().notice, null);
+});
+test("a current, successful command applies the fresh read first, then the notice, and returns true", async () => {
+  const r = recorder();
+  const fresh = overview();
+  fresh.history = [];
+  const ok = await executeCommand({ client: { command: async () => amendmentResult, load: async () => fresh }, body: proposeBody, target: { interventionId: "i" }, isCurrent: () => true, dispatch: r.dispatch });
+  assert.equal(ok, true);
+  assert.deepEqual(r.events.map((e) => e.type), ["command", "loaded", "command_done"]);
+  assert.equal(r.state().overview, fresh);
+  assert.match(r.state().notice ?? "", /Avenant n° 1 proposé/);
+  const failed = recorder();
+  assert.equal(await executeCommand({ client: { command: async () => { throw { status: 403, message: "Refusé par le serveur." }; }, load: async () => fresh }, body: proposeBody, target: { interventionId: "i" }, isCurrent: () => true, dispatch: failed.dispatch }), false);
+  assert.equal(failed.state().commandError?.message, "Refusé par le serveur.");
+  const staleFailure = recorder();
+  assert.equal(await executeCommand({ client: { command: async () => { throw { status: 403, message: "x" }; }, load: async () => fresh }, body: proposeBody, target: { interventionId: "i" }, isCurrent: () => false, dispatch: staleFailure.dispatch }), false);
+  assert.deepEqual(staleFailure.events.map((e) => e.type), ["command"], "a failure of a stale chain is not shown either");
 });

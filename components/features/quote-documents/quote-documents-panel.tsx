@@ -13,7 +13,7 @@ import {
   issuerFieldLabels,
   validityLabel,
 } from "../../../lib/features/quote-documents/format";
-import { canWrite, initialPanelState, panelReducer, readOnlyReason, scopeKey } from "../../../lib/features/quote-documents/panel-model";
+import { canWrite, executeCommand, initialPanelState, panelReducer, readOnlyReason, scopeKey, toFailure } from "../../../lib/features/quote-documents/panel-model";
 import type {
   ContractState,
   OverviewAmendment,
@@ -23,12 +23,10 @@ import type {
   QuoteDocumentsClient,
   QuoteDocumentsCommand,
   QuoteDocumentsDemo,
-  QuoteDocumentsFailure,
   QuoteDocumentsScope,
   QuoteDocumentsTarget,
   QuoteLine,
 } from "../../../lib/features/quote-documents/types";
-import { isQuoteDocumentsFailure } from "../../../lib/features/quote-documents/types";
 import { AmendmentForm } from "./amendment-form";
 import { ValidityForm } from "./validity-form";
 import styles from "./quote-documents.module.css";
@@ -65,10 +63,6 @@ const EVENT_LABELS: Record<QuoteDocumentEvent["action"], string> = {
 };
 const DEMO_NOTICE = "Démonstration : cette action n’est pas enregistrée.";
 
-function toFailure(error: unknown): QuoteDocumentsFailure {
-  if (isQuoteDocumentsFailure(error)) return error;
-  return { status: 0, message: "L’action n’a pas pu être réalisée. Réessayez." };
-}
 function statusTone(status: string): string {
   if (status === "accepted") return "tag tag-green";
   if (status === "rejected" || status === "withdrawn") return "tag tag-red";
@@ -122,14 +116,15 @@ export function QuoteDocumentsPanel(props: QuoteDocumentsPanelProps) {
 
   const reload = async () => {
     if (demo) return;
+    const mountedKey = key;
     dispatch({ type: "load" });
     try {
       const overview = await client.load(target);
-      if (keyRef.current !== key) return;
-      if (overview === null) dispatch({ type: "reset", key });
+      if (keyRef.current !== mountedKey) return;
+      if (overview === null) dispatch({ type: "reset", key: mountedKey });
       else dispatch({ type: "loaded", overview });
     } catch (error) {
-      if (keyRef.current === key) dispatch({ type: "load_failed", failure: toFailure(error) });
+      if (keyRef.current === mountedKey) dispatch({ type: "load_failed", failure: toFailure(error) });
     }
   };
   const run = async (body: QuoteDocumentsCommand): Promise<boolean> => {
@@ -138,22 +133,10 @@ export function QuoteDocumentsPanel(props: QuoteDocumentsPanelProps) {
       dispatch({ type: "command_failed", failure: { status: 0, message: DEMO_NOTICE } });
       return false;
     }
-    dispatch({ type: "command", action: body.action });
-    try {
-      const result = await client.command(body);
-      if (keyRef.current !== key) return false;
-      if (result === null) {
-        dispatch({ type: "stale" });
-        return false;
-      }
-      dispatch({ type: "command_done", result });
-      const overview = await client.load(target);
-      if (keyRef.current === key && overview !== null) dispatch({ type: "loaded", overview });
-      return true;
-    } catch (error) {
-      if (keyRef.current === key) dispatch({ type: "command_failed", failure: toFailure(error) });
-      return false;
-    }
+    // Continuation guard: the key mounted when the command started must still be the current one
+    // after every await; otherwise nothing is dispatched and callers get `false` (no form reset).
+    const mountedKey = key;
+    return executeCommand({ client, body, target, isCurrent: () => keyRef.current === mountedKey, dispatch });
   };
 
   if (state !== "available" && !demo) {
