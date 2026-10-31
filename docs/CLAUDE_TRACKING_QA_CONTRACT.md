@@ -443,3 +443,80 @@ cascade ; budget jamais modifié. Exécution cloud par ROOT uniquement ; aucune 
 | Mode normal : UID récupéré présent sur disque à la première suppression, conservé après | « durability — normal mode… » (vraies `Fixtures` + écriture durable, contrôle disque injecté à la 1ʳᵉ suppression) |
 | Mode `--cleanup-manifest` : idem | « durability — --cleanup-manifest mode… » (vrai `cleanupOnly`, clients injectés) |
 | Interruption entre récupération et suppression ⇒ UID sur disque, intention ouverte ; reprise `--cleanup-manifest` le retrouve et le supprime ; état disque cohérent | « durability — interruption between recovery and DELETE… » |
+
+## Amendement A6 — provenance du déploiement (BUILD_ID Flight)
+
+Défaut confirmé par ROOT dans d3338e9 : `checkBuildId` (`scripts/qa-tracking/lib/preflight.mjs`) cherche la chaîne par simple `includes` (`/_next/static/<id>/` ou `"<id>"`). Elle refuse la forme Flight échappée (`\"b\":\"W1T6udg45nuoEg3XO7IGT\"`) du BUILD_ID public 4c398e8. Le relevé ROOT `/tmp/depannage-public-4c-build-probe.json` est une preuve en lecture seule : identité `source=flight`, un seul candidat, non ambiguë, et `preflightError` émis par ce check. La recherche par sous-chaîne est abandonnée dans les deux modes. Le reste de d3338e9 ne change pas (P2 clos, 33 PASS ROOT).
+
+**Mode REMOTE.** Le pré-vol, avant toute fixture, IntentLog ou écriture, passe par le helper Codex `scripts/qa/lib/deployment-proof.mjs` (contrat 1e5f808, `codex/qa-deployment-proof`), une fois revu :
+1. `loadDeploymentProof({receiptPath, expected, nowMs})` charge le reçu ROOT : fichier 0600 hors Git, métadonnées Vercel projet/équipe/déploiement, GitSource 4c.
+2. `GET /` est lu une seule fois, sans cookie ni clé.
+3. `verifyRemoteDeployment({proof, html, expected, nowMs})` vérifie le reçu et exige un BUILD_ID Flight unique, égal à celui du reçu et à `expected`.
+
+Les huit valeurs `expected` viennent de la configuration ROOT explicite passée au runner (CLI), jamais de la page ni du seul reçu. Tout refus ⇒ BLOCKED avant fixtures, exit non nul, aucune donnée du reçu ni du HTML dans les journaux. La sortie conserve seulement la preuve compacte retournée (`provenance: "root-receipt+served-flight"`).
+
+**Mode LOCAL.** Il garde un contrôle réel par parseur strict, sans sous-chaîne :
+- les pushes `self.__next_f` du document sont analysés ;
+- les chunks de type 1 sont concaténés, puis la ligne racine `0:` est analysée en JSON, ce qui gère les formes échappées ;
+- `b` est lu dans le jeu de caractères BUILD_ID ;
+- il faut exactement un identifiant au total (Flight et manifestes `/_next/static/<id>/` confondus), égal à `--build-id`.
+
+Zéro identifiant ⇒ refus « non vérifié ». Plusieurs ⇒ refus « ambigu ». Différent ⇒ refus « autre build ». Le parseur réutilisé est `servedBuildIdentity`, importé en lecture seule (le même que le helper Codex).
+
+**Hors périmètre / interdits.**
+- Les fichiers Codex (`scripts/qa/lib/deployment-proof.mjs`, `scripts/qa/tests/deployment-proof.test.mjs`, `docs/QA_DEPLOYMENT_PROVENANCE_CONTRACT.md`) et `scripts/qa/lib/*` ne sont pas modifiés.
+- Aucun `.next/BUILD_ID` fabriqué pour les tests. Ceux-ci utilisent des documents HTML Flight synthétiques : forme échappée réelle, zéro, plusieurs ou mauvais identifiant, push invalide.
+- Ni cloud, ni cookie, ni clé, ni lecture de reçu réel de ma part.
+- Le câblage du code (`scripts/qa-tracking/**` et `tests/qa-tracking*.test.ts` uniquement) attend la revue du helper et le feu vert du coordinateur.
+
+## Amendement A7 — contrat de câblage REMOTE / LOCAL (helper 4a1d148, fixtures 5fa7f82)
+
+Sources lues : `codex/qa-deployment-proof` 4a1d148 (`scripts/qa/lib/deployment-proof.mjs`), parseur Business `scripts/qa-business/lib/preflight.mjs` (avec la correction propriétaire 38702cf), fixtures `claude/web-pwa-qa` 5fa7f82. Ces trois fichiers sont importés en lecture seule. Ils ne sont ni copiés, ni modifiés, ni bouchonnés dans les tests.
+
+**Appels exacts (REMOTE).**
+1. `proof = await loadDeploymentProof({ receiptPath, expected, nowMs: Date.now() })` : reçu ROOT absolu, hors Git, 0600, propriétaire courant, ≤ 16 KiB, schéma exact, âge ≤ 15 min.
+2. Le runner fait un seul `GET <origin>/` : `redirect: "manual"`, sans cookie, en-tête d'auth ni clé, avec timeout `--timeout-ms`. Il exige un statut 200 et lit le corps de façon bornée (au-delà de 8 MiB ⇒ refus `HTML`).
+3. `served = verifyRemoteDeployment({ proof, html, expected, nowMs: Date.now() })`. Cet appel revalide le reçu et l'horloge, refuse tout push Flight invalide, et exige `source="flight"`, un candidat unique et un id égal à `proof.servedBuildId` et à `expected.servedBuildId`.
+
+Le contexte du run ne garde que la preuve compacte gelée `{mode:"remote", origin, sha, deploymentId, servedBuildId, capturedAt, provenance:"root-receipt+served-flight"}`. Ni le chemin du reçu, ni son contenu, ni le HTML n'y figurent.
+
+**Drapeaux CLI.** `--mode remote|local` est obligatoire pour un vrai run ; il ne l'est pas pour `--dry-run` ni `--cleanup-manifest`.
+
+En REMOTE, les huit valeurs `expected` viennent toutes de la ligne de commande ROOT, jamais de la page ni du reçu :
+
+| Champ `expected` | Source CLI |
+| --- | --- |
+| `origin` | `--base-url`, déjà réduit à une origine exacte |
+| `sha` | `--sha` |
+| `servedBuildId` | `--build-id` |
+| `projectId` | `--vercel-project-id` |
+| `teamId` | `--vercel-team-id` |
+| `deploymentId` | `--vercel-deployment-id` |
+| `repoId` | `--git-repo-id` (entier décimal positif sûr) |
+| `ref` | `--git-ref` |
+
+`--deployment-receipt <chemin absolu>` est également requis. Le parseur d'arguments ne contrôle que la présence et la syntaxe ; les formats fins restent au helper (code `EXPECTED`).
+
+En LOCAL, tout drapeau REMOTE est refusé, l'hôte de `--base-url` doit être loopback (`localhost`, `127.0.0.1`, `[::1]`), et `--build-id` reste requis.
+
+**Placement.** La preuve de build est le premier contrôle réseau du runner. Elle passe après les contrôles locaux en lecture seule déjà présents (arguments, liste blanche, `verifySha`, `--out` hors dépôt) et avant `checkAnonymous`, `checkTrackingTable`, la création de `--out` et du tee, `IntentLog`, `Fixtures` et toute requête service. Un refus n'écrit donc rien et ne crée aucune fixture.
+
+**Correspondance des issues.**
+- Refus du helper (`error.code` ∈ `EXPECTED`/`CLOCK`/`SCHEMA`/`STATE`/`IDENTITY`/`MISMATCH`/`DATE`/`EXPIRED`/`PATH`/`IN_GIT`/`GIT_CHECK`/`FILE_TYPE`/`OWNER`/`MODE`/`SIZE`/`CHANGED`/`JSON`/`FILE_READ`/`HTML`/`FLIGHT_INVALID`/`SERVED_BUILD`), statut ≠ 200, corps trop grand, timeout ou erreur de transport : tous donnent `PreflightError`.
+- La sortie standard d'erreur reçoit une ligne `refused: BLOCKED deployment provenance <CODE>`. Le code est fixe ; elle ne contient ni valeur reçue, ni extrait HTML, ni chemin. Code de sortie : 2.
+- Toute autre exception du helper est réduite à `FILE_READ`/`UNKNOWN`, sans message d'origine.
+- En LOCAL, mêmes règles avec les codes `LOCAL_NONE` (aucun id), `LOCAL_AMBIGUOUS` (plusieurs) et `LOCAL_MISMATCH` (≠ `--build-id`), plus `FLIGHT_INVALID` si un push est mal formé.
+
+**LOCAL strict.** Le contrôle s'appuie sur `servedBuildIdentity(html)` et `flightPushes(html).invalid === 0`, importés du parseur Business. Il exige exactement un candidat, toutes sources confondues, égal à `--build-id`. La source `flight` ou `static` est acceptée seulement si elle est unique et non ambiguë. Aucune recherche par sous-chaîne. Aucun `.next/BUILD_ID` n'est écrit, ni par le code ni par les tests. `checkBuildId` d3338e9 est remplacé.
+
+**Fixtures 5fa7f82.** Le constructeur n'écrit plus. `init()` est paresseux, idempotent et passe par la `save` de l'INSTANCE ; `creating()` exécute check → `await init()` → check → mutation. `makeManifestDurable` continue de remplacer `fixtures.save` sur l'instance et d'écrire le manifeste vide immédiatement. Le premier `init()` appelle donc cette version atomique (comportement couvert par le test « REAL tracking makeManifestDurable honoured » de 5fa7f82). `TrackingFixtures` et `cleanupWithProof` ne changent pas. Un test côté tracking reprend ce point avec les vraies `Fixtures` intégrées.
+
+**Acquisition.** Le code arrive par un merge de travail contrôlé de `origin/integration/web-pwa` (≥ 54f877c, helper et fixtures acceptés), sans rebase ni force. Le diff de la branche contre l'intégration doit ensuite se limiter à `scripts/qa-tracking/**`, `tests/qa-tracking*.test.ts` et ce document.
+
+**Plan de tests (hors ligne, sans cloud).**
+- Un HTML Flight synthétique avec la forme échappée réelle passe en LOCAL ; avec zéro id, deux ids, un mauvais id, un push invalide ou une ancienne forme sous-chaîne seule, il est refusé.
+- REMOTE avec reçu temporaire 0600 hors Git et horloge injectée : nominal ; reçu expiré (> 15 min) ⇒ `EXPIRED` ; chaque champ `expected` divergent ⇒ `MISMATCH` ; HTML d'un autre build ⇒ `SERVED_BUILD` ; statut 3xx/500 ⇒ refus ; aucune écriture dans `--out` ni requête service avant le refus (transports injectés et comptés).
+- Le message de refus ne contient ni le contenu du reçu, ni le HTML, ni le chemin.
+- Arguments : `--mode` manquant, drapeaux REMOTE en LOCAL, LOCAL hors loopback, `--git-repo-id` non entier.
+- Le vrai HTML public 4c est lu via `QA_TRACKING_REAL_HTML` (défaut `/tmp/depannage-public-4c-home-private.html`, lecture seule, jamais commité). Le LOCAL strict doit y trouver exactement `W1T6udg45nuoEg3XO7IGT` et l'ancien contrôle par sous-chaîne doit échouer dessus ; test SKIPPED si le fichier est absent.
+- Ensuite : suite complète, `tsc --noEmit`, `node --check`, `--dry-run`.

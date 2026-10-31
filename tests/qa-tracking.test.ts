@@ -12,7 +12,7 @@ import { IntentLog, intentsVerdict, defaultDefinitive } from "../scripts/qa-trac
 import { redactPosition, redactPositionString, withPositionRedaction, snapshotEvidence, POSITION } from "../scripts/qa-tracking/lib/position-redact.mjs";
 import { parseTrackingUrl, summarizeTrackingRequest, restartViolations, queryViolations, actions } from "../scripts/qa-tracking/lib/requests.mjs";
 import { classifyRoute, classifyGeocode } from "../scripts/qa-tracking/lib/provider-proof.mjs";
-import { checkAnonymous, checkBuildId, checkTrackingTable, assertUnknownIs404 } from "../scripts/qa-tracking/lib/preflight.mjs";
+import { checkAnonymous, checkLocalBuild, checkTrackingTable, assertUnknownIs404 } from "../scripts/qa-tracking/lib/preflight.mjs";
 import { canonicalEmailPattern, assertCanonicalEmail, proveOwnership } from "../scripts/qa-tracking/lib/ownership.mjs";
 import { cleanupOrder, runTrackingCleanup, NEVER_TOUCHED, TRACKING_PRE_STEPS } from "../scripts/qa-tracking/lib/cleanup.mjs";
 import { createTrackingApi, act, gatedWait, classifyMutation } from "../scripts/qa-tracking/lib/guard.mjs";
@@ -129,10 +129,9 @@ test("preflight: anonymous 401 JSON private no-store, served BUILD_ID, table HEA
   await assert.rejects(checkAnonymous((async () => json(404, { error: "x" }, { "cache-control": "private, no-store" })) as typeof fetch, "https://app.test"), PreflightError);
   await assert.rejects(checkAnonymous((async () => json(401, { error: "x" }, { "cache-control": "no-cache" })) as typeof fetch, "https://app.test"), PreflightError);
   await assert.rejects(checkAnonymous((async () => new Response("<html>", { status: 401, headers: { "cache-control": "private, no-store" } })) as typeof fetch, "https://app.test"), PreflightError);
-  const page = async () => new Response('<script src="/_next/static/AbC123xyz/_buildManifest.js"></script>', { status: 200 });
-  assert.equal((await checkBuildId(page as typeof fetch, "https://app.test", "AbC123xyz")).verified, true);
-  await assert.rejects(checkBuildId(page as typeof fetch, "https://app.test", "Other999"), PreflightError);
-  await assert.rejects(checkBuildId(page as typeof fetch, "https://app.test", null), PreflightError);
+  const page = '<script src="/_next/static/AbC123xyz/_buildManifest.js"></script>';
+  assert.equal(checkLocalBuild(page, "AbC123xyz").servedBuildId, "AbC123xyz");
+  assert.throws(() => checkLocalBuild(page, "Other999"), PreflightError);
   assert.equal((await checkTrackingTable({ count: async () => 0 })).present, true);
   await assert.rejects(checkTrackingTable({ count: async () => { throw new Error("PGRST205 not found"); } }), PreflightError);
   assert.deepEqual(assertUnknownIs404({ status: 404, cache: "private, no-store" }), { status: 404 });

@@ -25,7 +25,7 @@ import { parseArgs, HELP, selectedProviderScenarios } from "./lib/args.mjs";
 import { POSITION_SOURCE, POSITION_DISCLAIMER, REASSIGNMENT_DISCLAIMER } from "./lib/constants.mjs";
 import { withPositionRedaction } from "./lib/position-redact.mjs";
 import { IntentLog, intentsVerdict } from "./lib/intents.mjs";
-import { checkBuildId, checkAnonymous, checkTrackingTable } from "./lib/preflight.mjs";
+import { checkBuildProvenance, checkAnonymous, checkTrackingTable } from "./lib/preflight.mjs";
 import { proveOwnership, readOwnership } from "./lib/ownership.mjs";
 import { createAuthAdmin } from "./lib/auth-admin.mjs";
 import { runTrackingCleanup, cleanupOrder } from "./lib/cleanup.mjs";
@@ -138,11 +138,12 @@ async function main(argv) {
             target,
             sha: options.sha,
             build_id: options.buildId || "REQUIRED for a real run",
+            build_provenance: options.mode === "remote" ? "REMOTE: root receipt (loadDeploymentProof, <= 15 min) + served Flight build id (verifyRemoteDeployment), 8 expected values from the CLI" : options.mode === "local" ? "LOCAL: strict Flight parse (servedBuildIdentity), exactly one id equal to --build-id" : "--mode remote|local REQUIRED for a real run",
             project: options.project,
             position_source: POSITION_SOURCE,
             position_disclaimer: POSITION_DISCLAIMER,
             reassignment: REASSIGNMENT_DISCLAIMER,
-            preflight: ["BUILD_ID referenced by the served page", "anonymous GET tracking → 401 JSON, Cache-Control private no-store", "service HEAD intervention_tracking (019)", "first account announced by a durable intent, then authenticated GET unknown UUID → 404"],
+            preflight: ["build provenance (A7) before any fixture/intent/write; refusal = BLOCKED, exit 2", "anonymous GET tracking → 401 JSON, Cache-Control private no-store", "service HEAD intervention_tracking (019)", "first account announced by a durable intent, then authenticated GET unknown UUID → 404"],
             scenarios: options.scenarios,
             provider_proof: providers.length ? providers : "disabled (opt-in --provider-proof; one real call each, no burst, no retry)",
             cleanup_order: cleanupOrder(),
@@ -173,7 +174,10 @@ async function main(argv) {
     const base = new URL(options.baseUrl).origin;
     const db = createServiceClient({ url: credentials.supabase.url, serviceKey: credentials.supabase.serviceKey, redactor, timeoutMs: options.timeoutMs });
     // ---- Preflight BEFORE any fixture (A5.1). A refusal here creates nothing.
-    const build = await checkBuildId(fetch, base, options.buildId, options.timeoutMs);
+    // A7: build provenance is the first network check (REMOTE: root receipt + served Flight via the
+    // reviewed helper; LOCAL: strict parse). Nothing written, no service request before it.
+    const build = await checkBuildProvenance({ options, origin: base, fetchFn: fetch, timeoutMs: options.timeoutMs });
+    log(`build provenance ${build.mode}: ${build.servedBuildId} (${build.provenance})`);
     const anonymous = await checkAnonymous(fetch, base, options.timeoutMs);
     const table = await checkTrackingTable(db);
 
