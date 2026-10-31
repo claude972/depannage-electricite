@@ -168,3 +168,21 @@ Cross-verification: Codex examine les preuves de Claude et fait corriger les fin
 
 ## Amendment A2 — objectif08h, services différés et reprise de nuit
 Le propriétaire demande le résultat le31octobre2026 à08h America/Martinique et autorise explicitement Vercel/Stripe à attendre. Continuer le reste sans bloquer le code/tests. La preuve locale/backend réel peut établir le checkpoint fonctionnel préalable au natif hors ces services différés ; aucune nouvelle preview ni paiement réel ne sera prétendu. Lire docs/NIGHT_DELIVERY_8H.md et les derniers findings CORRECTIONS avant action. Dès00h tout code, y compris code des tests, appartient à Claude ; Codex conserve pilotage/revues/exécution/intégration. Reprises actives00–07 et bilan distinct08, pas de doublon à créer.
+
+
+## Relais effectif00h — propriété du code
+Depuis le31octobre00h America/Martinique, l’affectation Codex devient pilotage/revue/exécution/intégration uniquement. Aucun agent Codex ne doit produire ou modifier de source applicative ou de code de test ; les rapports et coordination restent autorisés. Les branches codex/* demeurent comme preuves pré-relais, ne pas y reprendre du développement. Claude lead b4b555f0 conserve la direction du code et délègue au besoin dans la limite1–10 agents réels.
+
+## Mission NATIVE-DOCUMENT-GATEWAY-001 — backend partagé hors Vercel
+- agent: claude
+- status: pending
+- branch: claude/web-pwa-backend
+- base revision: 309ed9f2815c855f5e99ecad6368e2fe96f58975
+- worktree: /Users/claudebrafa/.codex/worktrees/depannage-claude-backend
+- delegate: lead b4b555f0 désigne un agent Claude backend distinct ; aucun doublon de la session lead.
+- objective: permettre les uploads privés authentifiés depuis le futur natif et fermer la fenêtre entre autorisation initiale et insertion de métadonnées, en réutilisant les validations et règles Web existantes. Ce backend peut avancer pendant les corrections Web ; aucun scaffold mobile avant son checkpoint fonctionnel.
+- owned files: supabase/functions/native-document-upload/**, lib/shared/document-policy.ts si utile, migration013 additive réservée à la finalisation des documents, app/api/documents/route.ts refactor coordonné pour validations/finalisation partagées, tests ciblés, docs/CLAUDE_NATIVE_DOCUMENT_CONTRACT.md et rapport. Ne pas modifier les autres routes, UI, migrations001–012, config Auth ou mobile package en parallèle.
+- deliverables: lire les docs officielles Supabase Edge/Auth actuelles, produire/pousser plan et contrat avant code ; gateway JWT utilisateur vérifié côté serveur, même magic bytes/MIME/4MiB que le Web ; pas de service key dans l’app ni bucket public. Autorisation finale sous verrous cohérents org→dossier, contrôles de chemin propriétaire/objet réel et métadonnées, compensation des objets créés par la tentative en cas d’échec. Si idempotence retenue, corrélation serveur réelle (hash/contenu/clé), jamais nom/date comme preuve.
+- acceptance: anonyme/token invalide/tiers/rôle lecture seule/droits révoqués refusés avant métadonnées ; authentifié autorisé réussi ; retrait concurrent avant finalisation ne crée pas un document accessible ; aucun effacement d’objet d’une autre tentative ; pas d’élargissement des helpers/RLS existants ni de cache privé. Exécuter tests significatifs + revue indépendante et recette contrôlée dans le seul projet dédié avant clôture. Déploiement Edge de test par pilote après revue, pas d’achat/production client.
+- dependencies: backend012 actif, contrat Web documents existant, futur natif utilise SDK Supabase/RPC non-paiement plutôt qu’un secret de bypass Vercel. Préserver le parcours de pièces artisan sans dossier intervention.
+- verification report: CORRECTIONS.md / NATIVE-DOCUMENT-GATEWAY-001 et rapport exactSHA complémentaire.
