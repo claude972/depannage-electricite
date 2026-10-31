@@ -72,13 +72,14 @@ Pas d’idempotence par nom de fichier ou date : chaque tentative choisit un UUI
 5. `rpc check_upload_limit` (53300 → 429) avant toute écriture.
 6. Lecture des octets ; `validateDocumentUpload` : `empty` → 422, `too_large` → 413, `type_mismatch` → 415.
 7. `id = crypto.randomUUID()`, `path = <uid>/<id>`. Upload Storage via le client serveur de la fonction (`upsert: false`, `contentType` = type détecté). Erreur → 503 et compensation best-effort du chemin de cette tentative (il peut avoir été écrit malgré une erreur réseau ; personne d’autre ne peut l’avoir créé).
-8. `rpc finalize_document_upload(p_id, p_path, p_name, p_mime, p_intervention_id)` **avec le client utilisateur** (auth.uid() réel, pas la clé serveur). Succès → 201.
+8. `rpc finalize_document_upload(p_id, p_path, p_name, p_mime, p_intervention_id)` **avec le client utilisateur** (auth.uid() réel, pas la clé serveur). Un 201 n’est renvoyé que si la ligne retournée est **exactement** celle demandée (revue GW-REV-002) : `id` = UUID choisi, `path` = `<uid>/<id>`, `owner_id` = utilisateur vérifié, `name`/`mime_type`/`intervention_id` tels qu’envoyés, `created_at` chaîne non vide. Toute autre valeur (`null` sans erreur, `{}`, `[]`, autre id/chemin/propriétaire, champ manquant) est traitée comme une issue **incertaine** : 503 incertain, objet conservé, aucune compensation (la base a pu valider quelque chose), journal opérateur limité à l’identifiant de tentative (jamais de chemin, d’utilisateur ni de nom).
 9. Échec de finalisation. Règle (revue GW-REV-001) : la suppression de l’objet n’est décidée **que** par une erreur définitive renvoyée par la base — un code SQL levé **dans** la fonction (42501, P0001, P0002, 53300, 22xxx, 23xxx), qui prouve le rollback. Toute incertitude de transport (fetch jeté, délai dépassé, pas de réponse HTTP, 5xx sans code PostgreSQL, code PGRST…) laisse la transaction possiblement en vol : elle peut encore être validée après coup. Dans ce cas l’objet est **conservé** et la réponse est explicitement incertaine. La relecture de `documents` par `id` (client serveur, erreur propagée par `index.ts`) sert **uniquement** à renvoyer 201 quand la ligne existe déjà ; une relecture « aucune ligne » ou en erreur ne décide jamais d’une suppression. Table des issues :
 
 | Finalisation | Relecture | Objet Storage | Réponse |
 |---|---|---|---|
 | succès | — | conservé | 201 |
-| toute erreur/exception, ligne trouvée | trouvée | conservé | 201 (réponse perdue après commit) |
+| toute erreur/exception, ligne trouvée **et conforme** | trouvée | conservé | 201 (réponse perdue après commit) |
+| succès ou relecture avec ligne **non conforme** (`{}`, `[]`, autre id/chemin/propriétaire, champ manquant) | — | **conservé** | 503 incertain (journal : id de tentative seulement) |
 | code SQL définitif (42501, P0002, 23505, 22xxx, 53300…) | aucune ligne ou relecture en erreur | **supprimé** (ce chemin seul) | 403 / 404 / 409 / 422 / 429 selon le code |
 | incertitude de transport (exception, code absent ou non-SQL : PGRST, 57014, 08006…) | aucune ligne ou relecture en erreur | **conservé** | 503 `{ error: "L’enregistrement du fichier est incertain. Vérifiez la liste des documents du dossier avant de réessayer.", uncertain: true }` |
 
@@ -124,3 +125,20 @@ Régressions : `node tests/sql-review.mjs`, `sql-performance-review`, `sql-site-
 ## Reste pour le pilote
 
 Revue indépendante du SHA ; application de 013 à la seule base dédiée ; `supabase functions deploy native-document-upload` de test (après revue, aucune production) ; recette : jeton valide/invalide/expiré, tiers, viewer, droits révoqués entre pré-contrôle et finalisation, dépassement de taille, contenu falsifié ; vérification qu’aucune réponse n’expose un chemin ou une clé.
+
+## Harnais QA cloud (`scripts/qa-gateway`)
+
+Exécutable par le pilote sans écrire de test, après application de 013 et déploiement de test de la fonction. Node 24, ESM, `fetch` uniquement (aucun SDK) ; helpers purs dans `scripts/qa-gateway/lib.ts` (testés par `tests/qa-gateway.test.ts`), orchestration dans `scripts/qa-gateway/run.mjs`.
+
+```
+node scripts/qa-gateway/run.mjs --function-url https://<ref>.supabase.co/functions/v1/native-document-upload \
+  --project <ref> --credentials /chemin/privé/creds.json --out /chemin/privé/sortie [--dry-run]
+node scripts/qa-gateway/run.mjs --cleanup-manifest /chemin/privé/sortie/manifest.json --project <ref> --credentials … --out …
+```
+`creds.json` (privé, jamais commité) : `{"url":"https://<ref>.supabase.co","publishable_key":"…","service_role_key":"…"}` (alias `anon_key`/`secret_key` acceptés). Refus immédiat (code 2) si `--project` ne correspond pas à l’hôte des identifiants ou de l’URL de fonction, ou si l’URL ne désigne pas `native-document-upload`.
+
+Déroulé réel : cohorte unique `qa-gw-<run>-<rôle>@example.invalid` (client, artisan, manager, viewer, tiers) créée par l’API Auth admin, **jetons utilisateur réels** par password grant ; dossier client (RPC `create_intervention`, urgence `scheduled`), artisan affecté par écriture service de seeding (pas le parcours métier), organisation + site (RPC `create_site`), viewer ajouté, dossier de site. Scénarios : anonyme 401, jeton invalide 401, tiers 403, viewer 403, propriétaire JPEG 201 (+ relecture `documents` et présence de l’objet Storage), artisan affecté 201, MIME falsifié 415, 4 MiB + 1 → 413, pièce personnelle artisan 201 ; vérification qu’aucun corps d’erreur ne contient chemin, code SQL/PostgREST, JWT ou clé ; vérification qu’aucune métadonnée ni objet orphelin n’a été laissé par les tentatives refusées.
+
+Garanties : manifeste `manifest.json` (0600) réécrit atomiquement après **chaque** création, avant tout autre appel, pour permettre `--cleanup-manifest` après un crash ; nettoyage dans l’ordre des clés étrangères (objets Storage → `artisan_credentials`/`documents` → enfants d’intervention dont `audit_log` → `interventions` → membres/événements/audit/contrats d’organisation → `approvals`/règles/conformité → `sites` → `organizations` → `audit_log`/`professional_audit`/`action_limits` par `actor_id`, tables artisan, `documents`/`interventions` résiduels → utilisateurs Auth, qui cascadent `profiles`) avec relecture à compte exact (`Prefer: count=exact`) ; une lecture ou un listage en erreur est un **échec explicite**, jamais « vide » ; tout échec (scénario, relecture, nettoyage, reliquat) rend le verdict `fail` et le code de sortie 1, sans masquage par les succès suivants. `summary.md` et `result.json` sont réécrits après chaque étape et caviardés (clés, JWT, Bearer, mots de passe) ; `run.log` est 0600 ; aucun jeton ni en-tête n’est affiché. `--dry-run` : contrôle des arguments/identifiants/projet, santé Auth, sondes OPTIONS/POST de la fonction (informatives tant qu’elle n’est pas déployée), aucune écriture distante.
+
+Limites : scénarios séquentiels (pas de preuve d’interleaving) ; l’affectation artisan et l’adhésion viewer sont semées par la clé serveur ; le harnais n’a pas été exécuté contre un projet réel par cet agent (aucun identifiant ni déploiement disponible) : seule la logique pure est testée localement.
