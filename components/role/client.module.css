@@ -133,6 +133,9 @@
   gap: 8px;
 }
 .mobileHeader > button:first-child {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   padding: 0;
   text-align: left;
 }
@@ -334,7 +337,8 @@
   border-radius: 12px;
   background: var(--blue);
   color: #fff;
-  font-size: 17px;
+  /* M61 : libellé sur une seule ligne dès 360 px (15,5 px), 17 px à partir de ~400 px. */
+  font-size: clamp(14px, 4.3vw, 17px);
   font-weight: 650;
   text-align: left;
 }
@@ -353,6 +357,9 @@
 }
 .ctaButton > span:nth-child(2) {
   flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .sectionRow {
   display: flex;
@@ -460,6 +467,30 @@
   font-size: 13px;
   color: var(--muted);
 }
+/* M61 : état à gauche sur une ligne, date alignée à droite sur la même rangée. */
+.recentMeta {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+.recentMeta :global(.badge) {
+  white-space: nowrap;
+}
+.recentMeta time {
+  flex: none;
+  white-space: nowrap;
+  margin-left: auto;
+}
+.recentBody strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Cibles ≥ 44 px pour les liens texte du tableau de bord desktop (classes globales à 25 px). */
+.space .desktopOnly .linkTarget {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
 
 /* ---- Vue d’ensemble desktop ------------------------------------------------------- */
 .desktopOnly {
@@ -514,9 +545,10 @@
 }
 .cardHead {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 4px 12px;
   margin: 18px 0 8px;
 }
 .cardHead h2 {
@@ -524,6 +556,7 @@
   align-items: center;
   gap: 8px;
   font-size: 16px;
+  white-space: nowrap;
 }
 .cardHead h2 > svg {
   color: var(--blue);
@@ -629,8 +662,13 @@
 }
 .artisanRow {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
+  gap: 12px 14px;
+}
+.artisanRow > div {
+  flex: 1 1 160px;
+  min-width: 0;
 }
 .artisanRow > span:first-child {
   display: flex;
@@ -705,6 +743,32 @@
   justify-content: space-between;
   gap: 12px;
   font-size: 14px;
+}
+/* V8-C07 : libellé repliable, montant sur une ligne. */
+.lines > div > span:last-child {
+  white-space: nowrap;
+}
+/* Bloc « indisponible » compact (carte) : titre et raison sur une ligne quand la place existe. */
+.compactUnavailable :global(.unavailable) {
+  padding: 10px 12px;
+  align-items: center;
+}
+.compactUnavailable :global(.unavailable) > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+}
+.compactUnavailable :global(.unavailable) p {
+  margin-top: 0;
+}
+.cancelButton {
+  color: var(--red);
+  border-color: #f0c4c0;
+}
+.cancelButton:hover {
+  background: #fff4f3;
+  border-color: var(--red);
 }
 .lines > div > span:first-child {
   color: var(--text);
@@ -1261,8 +1325,16 @@
     align-items: center;
   }
 }
-@media (max-width: 1023px) {
-  .quoteTable td:nth-child(2) {
-    white-space: normal;
-  }
+/* V8-C06 à 360 : seul le libellé se replie ; quantité × PU et prix restent sur une ligne. */
+.quoteTable td:first-child {
+  overflow-wrap: anywhere;
+}
+.documentsSection {
+  margin-top: 24px;
+  scroll-margin-top: 72px;
+}
+.space .linkTarget {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
 }

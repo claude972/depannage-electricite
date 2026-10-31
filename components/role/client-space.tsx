@@ -54,6 +54,7 @@ import type {
   View,
 } from "../app/types";
 import styles from "./client.module.css";
+import { CLIENT_STEPS, currentStepIndex, detailHistory, quoteDecisionState, quoteLineCells, recentRowDescriptor } from "./client-lists";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
 import { PlatformPage } from "./platform-anchor";
@@ -104,22 +105,6 @@ const BOTTOM_NAV: { id: View; label: string; icon: string; also: View[] }[] = [
   { id: "requests", label: "Demandes", icon: "list", also: ["new", "detail", "quote"] },
   { id: "messages", label: "Messages", icon: "message", also: [] },
   { id: "profile", label: "Profil", icon: "person", also: ["help", "documents", "support"] },
-];
-const PROGRESS: Status[] = [
-  "requested",
-  "assigned",
-  "quoted",
-  "accepted",
-  "in_progress",
-  "completed",
-  "paid",
-];
-const STEPS: { label: string; reachedAt: Status }[] = [
-  { label: "Demandée", reachedAt: "requested" },
-  { label: "Artisan", reachedAt: "assigned" },
-  { label: "Devis", reachedAt: "quoted" },
-  { label: "Intervention", reachedAt: "in_progress" },
-  { label: "Terminée", reachedAt: "paid" },
 ];
 const FAQ: [string, string][] = [
   [
@@ -574,29 +559,30 @@ function OverviewView({ session, rows }: { session: Session; rows: Intervention[
         </div>
         {recent.length ? (
           <div className={styles.recentList}>
-            {recent.map((i) => (
-              <button
-                type="button"
-                key={i.id}
-                className={styles.recentRow}
-                onClick={() => session.openIntervention(i.id)}
-              >
-                <span>
-                  <Icon name={category(i.category).icon} size={22} />
-                </span>
-                <span className={styles.recentBody}>
-                  <strong>{category(i.category).label}</strong>
+            {recent.map((i) => {
+              const row = recentRowDescriptor(i, (id) => category(id).label);
+              return (
+                <button
+                  type="button"
+                  key={i.id}
+                  className={styles.recentRow}
+                  onClick={() => session.openIntervention(i.id)}
+                >
                   <span>
-                    {i.address}, {i.postal_code} {i.city}
+                    <Icon name={category(i.category).icon} size={22} />
                   </span>
-                  <span className={styles.recentMeta}>
-                    <Badge status={i.status} />
-                    <span>{date(i.created_at)}</span>
+                  <span className={styles.recentBody}>
+                    <strong>{row.title}</strong>
+                    <span>{row.address}</span>
+                    <span className={styles.recentMeta}>
+                      <Badge status={row.status} />
+                      <time dateTime={row.createdAt}>{date(row.createdAt)}</time>
+                    </span>
                   </span>
-                </span>
-                <Icon name="arrow" size={18} />
-              </button>
-            ))}
+                  <Icon name="arrow" size={18} />
+                </button>
+              );
+            })}
           </div>
         ) : (
           <section className="panel">{emptyList}</section>
@@ -731,7 +717,7 @@ function OverviewView({ session, rows }: { session: Session; rows: Intervention[
                 L’estimation est indicative. Avant de commencer, votre artisan vous propose un
                 devis détaillé à accepter.
               </p>
-              <button type="button" className="text-button" onClick={() => session.go("help")}>
+              <button type="button" className={`text-button ${styles.linkTarget}`} onClick={() => session.go("help")}>
                 Comprendre les étapes <Icon name="arrow" size={15} />
               </button>
             </section>
@@ -753,7 +739,7 @@ function OverviewView({ session, rows }: { session: Session; rows: Intervention[
               </span>
               <section>
                 <strong>Une question sur le parcours ?</strong>
-                <button type="button" onClick={() => session.go("help")}>
+                <button type="button" className={styles.linkTarget} onClick={() => session.go("help")}>
                   Consulter l’aide
                 </button>
               </section>
@@ -942,38 +928,16 @@ function DetailView({
   const photos = session.data.documents.filter(
     (d) => d.intervention_id === i.id && d.mime_type.startsWith("image/"),
   );
-  const progressIndex = PROGRESS.indexOf(i.status);
-  const stepIndex = STEPS.reduce(
-    (acc, step, index) =>
-      progressIndex >= PROGRESS.indexOf(step.reachedAt) ? index : acc,
-    -1,
-  );
+  const stepIndex = currentStepIndex(i.status, i.paid_at);
   const canSchedule = ["assigned", "quoted", "accepted"].includes(i.status);
   const travelStage = ops?.travel_stage || i.travel_stage || "planned";
   const opsState = session.capabilities.operations;
 
-  const history: { label: string; when: string; state: "done" | "current" | "upcoming" }[] =
-    i.status === "cancelled"
-      ? [
-          { label: "Demande créée", when: dateTime(i.created_at), state: "done" },
-          { label: "Demande annulée", when: "—", state: "done" },
-        ]
-      : [
-          ["Demande créée", dateTime(i.created_at)],
-          ["Artisan attribué", "—"],
-          ["Devis reçu", shown ? dateTime(shown.created_at) : "—"],
-          ["Devis accepté", accepted?.accepted_at ? dateTime(accepted.accepted_at) : "—"],
-          [
-            "Intervention",
-            ops?.appointment ? `Créneau ${dateTime(ops.appointment.starts_at)}` : "—",
-          ],
-          ["Intervention terminée", i.completed_at ? dateTime(i.completed_at) : "—"],
-          ["Règlement", i.paid_at ? dateTime(i.paid_at) : "—"],
-        ].map(([label, when], index) => ({
-          label,
-          when: index > progressIndex ? "À venir" : when,
-          state: index < progressIndex ? "done" : index === progressIndex ? "current" : "upcoming",
-        }));
+  const history = detailHistory(
+    i,
+    { quoteReceivedAt: shown?.created_at, quoteAcceptedAt: accepted?.accepted_at, appointmentStartsAt: ops?.appointment?.starts_at },
+    dateTime,
+  );
 
   const primary = (() => {
     if (i.status === "quoted" && shown)
@@ -1041,7 +1005,7 @@ function DetailView({
           <p className={styles.description}>Cette demande a été annulée. Aucune étape n’est à venir.</p>
         ) : (
           <ol className={styles.stepper} aria-label="Avancement">
-            {STEPS.map((step, index) => {
+            {CLIENT_STEPS.map((step, index) => {
               const state = index < stepIndex ? "done" : index === stepIndex ? "current" : "";
               return (
                 <li key={step.label} className={state ? styles[state] : ""}>
@@ -1114,11 +1078,13 @@ function DetailView({
           <br />
           {i.postal_code} {i.city}
         </address>
-        <Unavailable
-          title="Carte non disponible"
-          reason="Aucun fournisseur de cartographie n’a été choisi."
-          blocker="CLI-05"
-        />
+        <div className={styles.compactUnavailable}>
+          <Unavailable
+            title="Carte non disponible"
+            reason="Aucun fournisseur de cartographie n’a été choisi."
+            blocker="CLI-05"
+          />
+        </div>
       </section>
 
       <div className={styles.cardHead}>
@@ -1425,6 +1391,7 @@ function DetailView({
             confirmLabel="Confirmer l’annulation"
             busy={session.busy}
             danger
+            className={`button outline ${styles.cancelButton}`}
             onConfirm={() => session.action(i.id, "cancel")}
           />
         ) : (
@@ -1562,10 +1529,9 @@ function QuoteView({
       </Empty>
     );
   const current = pickQuote(session.data.quotes, i.id);
-  const isActive = quote.status === "sent" && i.status === "quoted";
-  const superseded =
-    quote.status === "rejected" ||
-    (quote.status === "sent" && current && current.id !== quote.id);
+  const decision = quoteDecisionState(quote, current, i.status);
+  const isActive = decision === "active";
+  const superseded = decision === "superseded";
   const artisan = ops?.participants.find((p) => p.role === "artisan");
 
   return (
@@ -1606,6 +1572,22 @@ function QuoteView({
         </div>
       )}
 
+      <div className={styles.cardHead}>
+        <h2>
+          <Icon name="document" size={20} />
+          Détail du devis
+        </h2>
+        <button
+          type="button"
+          className={`text-button ${styles.linkTarget}`}
+          onClick={() =>
+            document.getElementById("quote-documents")?.scrollIntoView({ behavior: "smooth", block: "start" })
+          }
+        >
+          <Icon name="download" size={16} />
+          Télécharger le devis (PDF)
+        </button>
+      </div>
       <table className={styles.quoteTable}>
         <caption className="sr-only">Détail du devis {quoteRef(quote.id)}</caption>
         <thead>
@@ -1616,15 +1598,16 @@ function QuoteView({
           </tr>
         </thead>
         <tbody>
-          {quote.lines.map((l, index) => (
-            <tr key={index}>
-              <td>{l.label}</td>
-              <td>
-                {l.quantity} × {money(l.unit_price_cents)}
-              </td>
-              <td>{money(Math.round(l.quantity * l.unit_price_cents))}</td>
-            </tr>
-          ))}
+          {quote.lines.map((l, index) => {
+            const cells = quoteLineCells(l, money);
+            return (
+              <tr key={index}>
+                <td>{l.label}</td>
+                <td>{cells.unit}</td>
+                <td>{money(cells.total_cents)}</td>
+              </tr>
+            );
+          })}
         </tbody>
         <tfoot>
           <tr>
@@ -1643,14 +1626,13 @@ function QuoteView({
       </table>
       {demo && <DemoNote>Montants et taux de TVA de démonstration, sans valeur contractuelle.</DemoNote>}
 
-      <QuoteDocumentsAnchor
-        session={session}
-        variant="client"
-        target={{ quoteId: quote.id }}
-        authority={{ canWrite: true }}
-      />
-
-      <section className={styles.card} style={{ marginTop: 14 }}>
+      <div className={styles.cardHead}>
+        <h2>
+          <Icon name="person" size={20} />
+          Artisan
+        </h2>
+      </div>
+      <section className={styles.card}>
         <div className={styles.artisanRow}>
           <span aria-hidden="true">{artisan ? initials(artisan.full_name) || "A" : "A"}</span>
           <div>
@@ -1761,6 +1743,15 @@ function QuoteView({
         </form>
       )}
 
+      <section id="quote-documents" className={styles.documentsSection} aria-label="Documents du devis et avenants">
+        <QuoteDocumentsAnchor
+          session={session}
+          variant="client"
+          target={{ quoteId: quote.id }}
+          authority={{ canWrite: true }}
+        />
+      </section>
+
       <div className={styles.docActions}>
         <button
           type="button"
@@ -1772,14 +1763,10 @@ function QuoteView({
           <Icon name="download" />
           Télécharger le récapitulatif (texte)
         </button>
-        <Unavailable
-          title="Télécharger le devis (PDF)"
-          reason="Pas encore activé sur ce service. Utilisez le récapitulatif texte ci-dessus ; le devis détaillé reste consultable dans ce dossier."
-          blocker="CLI-07"
-        />
       </div>
       <p className="form-note">
-        Le récapitulatif texte n’est pas une facture et n’a pas de valeur comptable.
+        Le PDF du devis est proposé dans la section « Documents du devis » ci-dessus ; le récapitulatif
+        texte n’est pas une facture et n’a pas de valeur comptable.
       </p>
     </>
   );

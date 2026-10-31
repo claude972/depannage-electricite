@@ -48,7 +48,7 @@ Stockées hors dépôt puis copiées dans `docs/visual-fidelity/` avec les captu
 | Fiche de site | V5-C01 / M50 | À auditer |
 | Approbation | V5-C08 | À auditer |
 | Artisan | M35 (shell + tableau de bord), M34 (devis), M36 (profil) | Addendum ci-dessous (base f3fd9c6) ; M14/M65 (documents, candidature) hors de ce lot |
-| Super Admin | M43 (volume 3 p12) | À auditer |
+| Super Admin | M43 (volume 3 p12) | Addendum ci-dessous (base 0d94ec2, branche `claude/web-design-admin`) |
 | Pages publiques | M11 + variantes cataloguées | À auditer |
 
 ## Hors périmètre de ce lot
@@ -339,3 +339,408 @@ Vérifié (démo, script hors dépôt) : cloche visible 44 × 44 et active dans 
   `anchors-rev-reports-sla-1280.jpg`. Tests : visibilité opérateur limité pour artisan / particulier / entreprise par le
   garde `canAccess` réel, mode public sans entrée ; suite UI 89/89. Limite : la démo ne fournit `platformAccess` qu’au
   rôle Super Admin, la présence des entrées pour un opérateur limité est prouvée par les tests, pas par capture.
+
+## Addendum — Super Admin M43 (VISUAL-FIDELITY-001, base `0d94ec2`)
+
+Publié **avant** toute modification de code de la coque Super Admin. Référence maîtresse : **M43** (volume 3 p12,
+`/tmp/courant-audit/pdf-images/v3-p12.jpeg`), tableau de bord administrateur « ArtisanPro » ; les listes Artisans /
+Interventions / Devis & Factures n’ont pas de planche dédiée et suivent la densité de M43. Captures « avant » (démo,
+`#demo/admin…`) : `docs/visual-fidelity/admin-dashboard-{360,1280}-before.jpg`, `admin-artisans-1280-before.jpg`,
+`admin-quotes-360-before.jpg`. Fichiers du lot : `components/role/admin-space.tsx`, `admin.module.css`, logique pure
+testable dans `components/role/admin-lists.ts` (créé au premier checkpoint), `tests/ui/**`, cette page,
+`docs/visual-fidelity/**`. Les ancrages (cloche, entrées Opérateurs / Finance / Modération gardées par `platformEntries`)
+restent intacts.
+
+### Règle sur les données
+
+Les chiffres de M43 (128 interventions du mois, +12 %, 24 850 € HT, 142 630 € annuels, 12 validations, « 4 docs ✓ »,
+échéances, catégories métier, villes) sont des **exemples**. Seules les valeurs du serveur sont affichées :
+`counts.*` (totaux globaux), `financial.paid_service_cents` (prestations payées TTC sur les dossiers chargés,
+revenu plateforme non calculé), listes bornées par `capabilities.list_limit` avec leur mention. **Jamais fabriqué** :
+période « mois en cours » ou « année », tendance vs mois précédent, CA HT, nombre de documents par candidature
+(justificatifs non chargés dans la vue d’ensemble), catégorie métier dans le tableau (absente de la liste), échéance
+d’intervention, SLA, noms de clients (non transmis dans cette vue). Les compteurs restent les totaux serveur ; les
+pieds de liste disent « parmi les N derniers chargés ».
+
+### M43 — tableau de bord (`#demo/admin`)
+
+| Élément de la référence | Composant / section existant | Écart constaté (0d94ec2) | Correction prévue |
+| --- | --- | --- | --- |
+| Barre latérale : marque, 8 entrées, Messages avec compteur, bas : compte « Admin / Super Admin » + Déconnexion | `NAV` (+ Garantie, + entrées back-office gardées), `.account` (avatar, nom, « Super Admin », bouton Déconnexion), compteur sur Artisans (candidatures) | Conforme en structure. | Conservé. **Écart assumé** : pas de compteur sur Messages (aucun total serveur de messages non lus) ; entrées supplémentaires (Garantie, back-office) justifiées par les fonctions réelles. |
+| En-tête : titre + sous-titre ; à droite sélecteur de date « 20 mai 2024 ▾ » + cloche | `.header` : `.heading`, `.tools` (cloche du lot, puce « Données au … », Actualiser) | Pas de sélecteur de période. | **Écart assumé** : aucune période serveur sur la vue d’ensemble ; la puce de fraîcheur + Actualiser en tiennent lieu. ≤ 600 px : outils sur deux lignes (règle déjà en place). |
+| 4 KPI : icône teintée, libellé, grande valeur, note (« ↑ 12 % vs avril ») | `.kpis` > `Kpi` ×4 | Cartes inégales et hautes : notes longues (3 à 5 lignes), valeur moins lisible ; une colonne à 360. | Cartes compactes et alignées : note courte sur une ligne (« total plateforme », « dossiers non clos », « TTC, dossiers chargés », « soumis, à décider »), base de calcul complète déplacée dans une ligne « Base de calcul » (élément `details`) sous la rangée ; grille 2 colonnes dès 360 px, 4 à ≥ 1100 px. Définitions pures `adminKpis(overview)` testées (valeurs = totaux serveur, aucune tendance). |
+| Colonne gauche « Validations artisans en attente (12) » + « Voir toutes les validations → » ; tableau Artisan (avatar, nom, e-mail) / Catégorie / Date de demande / Documents / Actions « Vérifier ▾ » ; pied « Afficher plus de demandes » | `Panel` + `DataTable` (Artisan, Société, Dossier, Date, Actions « Examiner ») + `Basis` | À 1280 la colonne Actions est **coupée** par le panneau (« Examine… »), la date passe sur 3 lignes ; bouton 40 px. | Tableau qui tient : date sur une ligne (`nowrap`), colonne Société fusionnée sous le nom (sous-libellé), action « Examiner » 44 px alignée à droite ; au-dessous de 1240 px, libellé d’action réduit à l’icône avec libellé accessible. Lien d’en-tête conservé ; le pied garde la mention « parmi les N derniers artisans ». **Écarts assumés** : pas d’e-mail (non transmis), pas de catégorie ni de compteur de documents. |
+| Colonne droite « Interventions en cours (32) » : rangées icône / titre / « Client : … • ville » / « Artisan : … » / pastille « En cours » / « Échéance : 22 mai » ; pied « Afficher plus d’interventions » | `Panel` + `InterventionRow` ×6 + `Basis` | Proche ; méta sur une ligne dense (réf · Client · artisan · ville), statut et date à droite. | Rangée en deux lignes de méta comme M43 : « Référence · ville » puis « Artisan : nom ou Non attribué » ; pastille de statut réelle ; « Créée le » conservé (aucune échéance). Six dossiers, pied inchangé. |
+| Mobile (aucune planche M43) | Tableau → pile libellé/valeur (`data-label`), KPI empilés | Une colonne de KPI très haute ; tableau en pile lisible. | KPI en 2 colonnes à 360 ; rangées d’interventions compactes ; aucun débordement horizontal (outils d’en-tête déjà corrigés). |
+
+### Listes (Artisans, Interventions, Devis & Factures) — densité M43
+
+| Constat (0d94ec2) | Correction prévue |
+| --- | --- |
+| Boutons de ligne « Examiner » / « Ouvrir » à 40 px ; bascules de devis « INT-DEMO-00x » à 32 px (Devis & Factures). | Cibles ≥ 44 px (`.rowAction`, `.quoteToggle`), sans changer les actions ni les filtres. |
+| Pieds et compteurs | Inchangés : totaux serveur dans les KPI, listes « parmi les N derniers chargés », pagination réelle des annuaires conservée. |
+
+### Règles responsive
+
+- **360** : barre latérale en tiroir (existant), en-tête sur deux lignes d’outils, KPI 2 colonnes, tableaux en pile
+  libellé/valeur, rangées d’interventions sur deux lignes ; aucun débordement horizontal.
+- **760** : KPI 2 colonnes, deux panneaux empilés (`.columns` existant), tableau en pile ou défilement identifié.
+- **1280** : barre latérale fixe, KPI 4 colonnes, deux panneaux côte à côte, tableau complet sans coupure.
+
+### Accessibilité ciblée
+
+Cibles ≥ 44 × 44 (actions de ligne, bascules, liens de panneau) ; action réduite à l’icône toujours nommée
+(`aria-label`) ; focus visible global ; contrastes des tokens existants (texte `#172b4d` 12,6:1, muted `#526178` 6,3:1,
+bleu `#1457d9` 5,4:1 sur blanc) ; statut jamais porté par la couleur seule (pastilles textuelles).
+
+### Vérification : par test ou par capture
+
+| Par test (`tests/ui/admin-lists.test.ts`, logique pure dans `admin-lists.ts`) | Par capture (démo 360 / 1280) |
+| --- | --- |
+| `adminKpis(overview)` : quatre indicateurs, valeurs issues des totaux serveur et du montant payé formaté, aucune clé de tendance ; `dashboardRows(overview)` : candidatures « soumises » triées par date, six dossiers actifs les plus récents ; mention de borne « parmi les N derniers » à partir de `list_limit`. | Planche M43 / avant / après à 1280 ; tableau des validations sans coupure ; 0 élément interactif < 44 px sur Tableau de bord, Artisans, Interventions, Devis & Factures à 360 et 1280 ; aucun débordement ; console sans erreur ; entrées back-office toujours gardées (présentes en démo Super Admin, absentes pour les autres rôles). |
+
+### Checkpoints prévus
+
+1. Tableau de bord M43 (KPI, validations, interventions en cours) — `admin-dashboard-{360,1280}-after.jpg`.
+2. Listes : cibles 44 px et densité — `admin-artisans-1280-after.jpg`, `admin-quotes-360-after.jpg`.
+
+### Résultat du checkpoint 1 — tableau de bord M43
+
+| Ligne de l’addendum | Fait | Reste / écart |
+| --- | --- | --- |
+| KPI | Quatre cartes compactes et alignées (`adminKpis`, notes courtes sur une ligne), base de calcul complète dans « Base de calcul des indicateurs » (`details`, 44 px) sous la rangée ; 4 colonnes à 1280, 2 à 360 (cartes verticales). | Pas de période ni de tendance (assumé). |
+| Validations | Tableau qui tient dans le panneau à 1280 (cellules 12 × 14 px, société en sous-libellé du nom, action 44 px alignée à droite ; icône seule avec libellé accessible sous 1400 px). Pied « parmi les N derniers artisans chargés, dans l’ordre transmis ; le compteur est global ». | Pas d’e-mail, de catégorie ni de compteur de documents (assumé). **Colonne « Date de demande » retirée (ADMIN-DATE-001)** : la vue d’ensemble ne transmet ni date de soumission ni date de candidature — la `created_at` disponible est celle du compte, jamais affichée comme date de demande ni utilisée pour trier ; l’ordre serveur est conservé, la date de soumission se lit dans le dossier artisan. |
+| Interventions en cours | Rangées en deux lignes de méta (« Référence · ville », « Artisan : … ») comme M43, pastille réelle, « Créée le ». | Pas d’échéance ni de nom de client (assumé). |
+| Cibles / responsive | 0 élément interactif < 44 px sur le tableau de bord à 360 et 1280 ; aucun débordement ; outils d’en-tête sur deux lignes à 360. | — |
+
+Captures : `admin-dashboard-{360,1280}-after.jpg` (avant : `admin-dashboard-{360,1280}-before.jpg`). Tests :
+`tests/ui/admin-lists.test.ts` (`adminKpis` sans période ni tendance, `dashboardRows`) ; suite UI 91/91 ; `tsc` au vert ;
+console sans erreur.
+
+### Résultat du checkpoint 2 — listes (cibles 44 px, densité)
+
+| Constat | Fait |
+| --- | --- |
+| Liens de référence « INT-DEMO-00x » (Devis & Factures, Avis & Notes) à 32 px par style en ligne ; « Ouvrir le dossier » (Messages), liens d’assistance (`.subjectLink`, `.inlineLink`) à 32 px | Styles en ligne retirés ; règles à 44 px. |
+| Vue Messages : débordement horizontal à 360 (groupe de segments `flex: 0 0 auto` non réductible) | Groupe de segments réductible et passant à la ligne (`flex: 1 1 auto; min-width: 0`). |
+| Actions de ligne « Examiner » / « Ouvrir » (Artisans, Interventions) à 40 px | 44 px depuis le checkpoint 1 (`.rowAction`). |
+
+Vérifié (démo, 360 et 1280) : 0 élément interactif < 44 px et aucun débordement sur Artisans, Interventions, Devis &
+Factures, Clients, Avis & Notes, Messages, Paramètres, Garantie ; console sans erreur. Captures `admin-artisans-1280-after.jpg`,
+`admin-quotes-360-after.jpg`, `admin-messages-360-after.jpg` (avant : `admin-artisans-1280-before.jpg`,
+`admin-quotes-360-before.jpg`). Filtres, pagination réelle des annuaires et pieds « parmi les N derniers chargés » inchangés.
+
+### Bilan Super Admin (checkpoints 1–2)
+
+Présentation seulement : aucune route, commande ni donnée nouvelle ; totaux serveur et bornes de liste inchangés ;
+entrées du back-office toujours gardées par `platformEntries` (présentes en démo Super Admin, absentes sinon).
+Écarts assumés consolidés : pas de sélecteur de période, de tendance, de CA HT, d’e-mail, de catégorie, de compteur de
+documents ni d’échéance ; entrées Garantie et back-office en plus de M43 (fonctions réelles).
+
+## Addendum — espace client (M61 / V8-C06 / V8-C07)
+
+Publié **avant** toute modification de code de l’espace client (transfert consigné dans `docs/CLAUDE_STATUS.md`).
+Branche `claude/web-design-client`, base `f58b3f4` (`claude/web-shared`). Références maîtresses : **M61** (volume 4
+p14) pour l’accueil mobile, **V8-C06** (volume 8 p7) pour le devis, **V8-C07** (volume 8 p8) pour le détail
+d’intervention. Les planches ne sont pas dans le dépôt : elles ont été rendues depuis les PDF nommés dans
+`docs/audit/INVENTAIRE_SOURCES.json` (PyMuPDF, zoom 1,6) vers `/tmp/claude-client-ref/{M61,V8-C06,V8-C07}.png`
+(empreintes SHA-256 des images d’origine dans l’inventaire). Captures « avant » prises sur la démo locale
+(`next dev -p 3191`, Chromium headless 1248 piloté par un script Playwright hors dépôt, 360 × 800 et 1280 × 900,
+page entière) : `docs/visual-fidelity/client-{overview,detail,quote}-{360,1280}-before.jpg` (`#demo/client`,
+`#demo/client-detail.demo-003`, `#demo/client-quote.quote-demo-1`).
+Fichiers du lot : `components/role/client-space.tsx`, `client.module.css`, `components/role/client-lists.ts` (logique
+pure, créé au premier checkpoint), `tests/ui/client-*.test.ts`, cette section, `docs/visual-fidelity/client-*`.
+Présentation seulement : devis (acceptation/refus par `session`), règlements, téléversements, assistance, ancrages
+notifications / documents de devis / plateforme (`*-anchor.tsx`, `anchors.ts`) restent appelés à l’identique, avec les
+mêmes props.
+
+### Règle sur les données
+
+Les éléments des planches sans source serveur ne sont **jamais fabriqués** : note et nombre d’avis de l’artisan,
+« Profil vérifié / Certifié », années d’expérience, spécialité, photo, « Garantie satisfaction 30 jours »,
+« Annulation gratuite jusqu’à 48 h », « Paiement sécurisé » comme promesse, point rouge de notification sans compteur,
+carte et vignettes photo. Seules les données chargées sont affichées : catégorie, adresse, état, dates enregistrées,
+lignes/TVA/totaux calculés serveur, coordonnées réelles du participant, règlement confirmé par la plateforme,
+compteurs de messages reçus. Les absences restent explicites (« Carte non disponible », « Aucune photo jointe »,
+« Téléphone non communiqué »).
+
+### M61 — accueil mobile (`#demo/client`, < 1024 px)
+
+| Élément de la référence | Composant / section existant | Écart constaté (f58b3f4) | Correction prévue |
+| --- | --- | --- | --- |
+| Barre haute : logo + cloche avec point | `.mobileHeader` : marque compacte, `HeaderBell` (ancrage notifications), bouton Messages avec point si messages reçus | Conforme ; bouton marque 42 px de haut (cible < 44). | Cible 44 px. **Écart assumé** : point de cloche seulement avec un compteur réel (ancrage), jamais décoratif. |
+| « Bonjour » + « Comment pouvons-nous vous aider ? » | `.hello` | Conforme (prénom réel). | — |
+| CTA bleu « ⚡ J’ai besoin d’un électricien › » sur une ligne | `.ctaButton` | Libellé sur deux lignes à 360 (18 px). | Libellé 16 px sur une ligne à 360, tuile icône 40 px, chevron à droite ; hauteur ≥ 56 px. |
+| « Actions rapides » + « Voir tout › » ; 4 tuiles (icône bleue, libellé 2 lignes) | `.sectionRow` + `.tiles` (4 catégories réelles) | Conforme ; libellés sur 2 lignes. | — |
+| « Interventions récentes » + « Voir tout › » ; carte : tuile calendrier teintée, titre, adresse, **état en bleu à gauche et date à droite sur une ligne**, « ⋯ » | `.recentList` > `.recentRow` (icône catégorie, titre, adresse, `Badge` + date, chevron) | État et date se replient sur deux rangées (pastille haute, « Recherche d’un artisan » sur 2 lignes) ; date non alignée à droite. | Rangée état/date en `space-between`, état sur une ligne (pastille compacte `nowrap`, texte jamais couleur seule), date alignée à droite ; titre 1 ligne (ellipse), adresse 1 ligne (inchangé). **Écart assumé** : chevron au lieu de « ⋯ » (aucune action secondaire sur la ligne). |
+| Onglets bas Accueil / Demandes / Messages (badge) / Profil | `.bottomNav` (4 entrées, badge Messages réel) | Conforme (icône 22 px, libellé 12 px). | Vérification 44 px seulement. |
+| Hors référence : bandeau de démonstration | `.demoBanner` | — | Conservé (démo explicite). |
+| Desktop (hors M61, composition tableau de bord existante) | `.desktopOnly` : accueil, bandeau de 3 compteurs réels, « Un devis attend votre décision », récentes, catégories, colonne d’aide | Liens texte « Comprendre les étapes » (26 px) et « Consulter l’aide » (25 px) sous 44 px (classes globales). | Classes du module ajoutées sur ces deux boutons pour une cible ≥ 44 px, sans toucher `globals.css`. |
+
+### V8-C06 — devis (`#demo/client-quote.quote-demo-1`)
+
+| Élément de la référence | Composant / section existant | Écart constaté | Correction prévue |
+| --- | --- | --- | --- |
+| « ← Devis #D1258 / Reçu le 20 mai 2024 à 10:30 » | `PageTitle` (retour au dossier, référence `quoteRef`, « Reçu le … ») | Conforme (titre à gauche). | — |
+| Bouclier vert « Étudiez tranquillement le devis » | `.quoteNote` (icône bouclier, bleu) | Conforme en structure. | **Écart assumé** : bleu action (DESIGN.md : vert réservé aux réussites). |
+| Carte « Devis accepté = tranquillité assurée » (artisan sélectionné avec soin, garantie 30 jours, paiement sécurisé) + illustration | aucune | Absente. | **Écart assumé** : non reproduite (promesses commerciales non établies, cf. AGENTS.md). |
+| « Détail du devis » + lien « Télécharger le devis (PDF) » à droite | tableau sans en-tête de section ; bloc `Unavailable` « Télécharger le devis (PDF) » (CLI-07) en bas de page | L’ancrage documents de devis (lot ADV-DOCUMENTS-001, `QuoteDocumentsAnchor`) fournit désormais le PDF ; le bloc CLI-07 est contradictoire et le panneau documents s’intercale **entre le tableau et la décision**, repoussant Accepter/Refuser en bas d’une page de 3 000 px à 360. | En-tête de section « Détail du devis » avec lien texte « Télécharger le devis (PDF) » qui **fait défiler** jusqu’au panneau documents (aucun `location.hash`, aucune nouvelle requête) ; bloc CLI-07 retiré ; ordre de la référence rétabli : note → tableau → artisan → décision → panneau documents/avenants (ancrage inchangé, mêmes props) → récapitulatif texte. |
+| Tableau Prestation / prix unitaire / Prix ; Sous-total HT, TVA (10 %), **TOTAL TTC** sur fond vert | `.quoteTable` (Prestation / Quantité × PU HT / Prix, pied avec TVA réelle et Total TTC bleu pâle) | « 1 × 60,00 € » replié sur 2 lignes à 360. | Colonne quantité × PU en `nowrap`, libellé seul repliable ; Total TTC mis en avant (bleu pâle, 18 px). **Écart assumé** : pas de fond vert. |
+| Carte « Artisan recommandé » : photo, nom, spécialité, expérience, note, « Profil vérifié », « Contacter » | `.artisanRow` (initiales, nom réel, « Artisan électricien ayant établi ce devis », Contacter) | Conforme en structure. | Intitulé de carte « Artisan » ; **écart assumé** : aucune note, expérience, vérification ni photo (données absentes). |
+| Bouton vert « ✓ Accepter le devis / Je suis satisfait… » puis cadre rouge « ✕ Refuser / Je ne souhaite pas… » | `.quoteActions` : « Accepter le devis » (primary) + « Refuser » (outline), formulaire de motif | Conforme en fonction ; placé après le panneau documents. | Remonté sous la carte artisan ; pleine largeur à 360, côte à côte dès 761 px. **Écart assumé** : bleu action / contour neutre (pas de vert/rouge pleins), pas de sous-titres promettant satisfaction. |
+| Pied « 🔒 Paiement sécurisé • Annulation gratuite jusqu’à 48 h » | `form-note` sur le récapitulatif | — | **Écart assumé** : non reproduit (conditions non établies). |
+
+### V8-C07 — détail d’intervention (`#demo/client-detail.demo-003`)
+
+| Élément de la référence | Composant / section existant | Écart constaté | Correction prévue |
+| --- | --- | --- | --- |
+| « ‹ Détail de l’intervention ⇪ » | `PageTitle` + retour | Conforme ; pas de partage. | **Écart assumé** : pas d’action de partage (aucun lien public). |
+| Carte statut : tuile icône, « Statut / En cours / Intervention n° », 4 étapes Demandée / En cours / À planifier / Terminée | `.statusCard` + `.stepper` (5 étapes Demandée / Artisan / Devis / Intervention / Terminée, numéros/coches) | Conforme ; libellés 11 px. | Libellés 12 px, cercles 30 px ; **écart assumé** : 5 étapes alignées sur les statuts réels (« À planifier » n’est pas un statut). |
+| « Artisan assigné » + « Contacter » ; carte photo, nom, « plombier – Certifié ✓ », téléphone, ★ 4,9 (128 avis) | `.cardHead` + `.artisanRow` (initiales, nom, téléphone réel ou « non communiqué ») | Conforme. | **Écart assumé** : pas de spécialité, certification, note ni photo. |
+| « Adresse de l’intervention » + carte miniature | `.addressCard` : adresse + `Unavailable` « Carte non disponible » | Bloc indisponible volumineux. | `Unavailable` rendu compact (icône + titre + raison sur une ligne à 1280, 2 à 360) via une classe du module ; adresse en premier. **Écart assumé** : pas de carte (aucun fournisseur). |
+| « Description du problème » + pastille « Catégorie : Plomberie » | `.card` + `.tagRow` (catégorie réelle, urgence, estimation indicative) | Conforme. | — |
+| « Photos du problème (3) » vignettes défilantes | liste de noms de fichiers + lien « Gérer les pièces » | Pas de vignettes. | **Écart assumé** : documents privés servis à la demande ; liste conservée, compte réel dans le titre. |
+| « Devis & résumé » : lignes, **Total TTC** bleu, « ⓘ Devis accepté le … », « Voir le devis » | `.lines` + `.totals` + `.quoteFoot` | Conforme. | Lignes avec libellé repliable et montant `nowrap` à 360. |
+| « Historique & avancement » : chronologie icônes, états Terminé / En cours / À venir à droite | `.history` | Conforme. | — |
+| Pied : « Annuler l’intervention ⊗ » (contour) + « Modifier le rendez-vous » (bleu) | `.actionBar` : annulation (texte danger, confirmation) + action principale selon l’état ; rendez-vous modifiable dans sa carte | Conforme en fonction. | Annulation en bouton contour 44 px (confirmation inchangée). **Écart assumé** : modification du rendez-vous dans la carte Rendez-vous (formulaire existant), pas de bouton dupliqué. |
+| Hors référence : Déplacement, Compte rendu, Règlement, Avis, Suivi après intervention, file de téléversement | sections existantes | — | Conservées (fonctions réelles). |
+
+### Règles responsive
+
+- **360** : une colonne ; barre haute collante, onglets bas fixes (≥ 60 px + zone sûre) ; CTA pleine largeur sur une
+  ligne ; tuiles 4 colonnes (M61) ; lignes récentes titre / adresse / état + date ; tableau de devis avec libellé
+  repliable et montants `nowrap` ; décision Accepter puis Refuser empilées pleine largeur ; stepper sur une rangée
+  (5 cercles 30 px) ; aucun défilement horizontal.
+- **760** : mêmes composants ; décision côte à côte ; `cardHead` avec action à droite ; tuiles 4 colonnes.
+- **1280** : barre latérale 240 px, contenu ≤ 1180 px ; tableau de bord desktop existant (3 compteurs réels) ;
+  onglets bas et en-tête mobile masqués (règles existantes) ; carte statut : texte à gauche, stepper à droite.
+
+### Accessibilité ciblée
+
+- Cibles ≥ 44 × 44 : marque mobile (42 → 44), liens texte du tableau de bord desktop (26/25 → 44), onglets bas,
+  tuiles, lignes récentes, boutons de décision, « Télécharger le devis (PDF) » (lien texte 44), annulation (44).
+  Mesure automatisée à 360 et 1280 sur les trois vues : objectif 0 élément interactif visible < 44 px (hors
+  indicateur de développement Next).
+- Focus visible : anneau global ; ordre de lecture : titre → statut → sections → actions.
+- Contraste sur les tokens : blanc sur `#1457d9` 5,4:1 ; `#526178` sur blanc 6,3:1 ; état jamais porté par la
+  couleur seule (pastilles textuelles).
+
+### Vérification : par test ou par capture
+
+| Par test (`tests/ui/client-lists.test.ts`, logique pure dans `client-lists.ts`) | Par capture (démo 360 / 1280, script Playwright hors dépôt) |
+| --- | --- |
+| Descripteur d’une ligne récente (libellé d’état, date, adresse sur une ligne) ; état de décision d’un devis (actif / remplacé / accepté / clos) à partir des versions réelles ; cellules d’une ligne de devis (quantité × PU, total HT de ligne) ; étape courante du stepper et chronologie du détail (dates enregistrées seulement, « — » sinon, « À venir » après l’étape courante) ; compte de photos. | Composition M61 / V8-C06 / V8-C07 ; ordre note → tableau → artisan → décision → documents ; 0 cible < 44 px ; aucun débordement horizontal ; console sans erreur ; libellés longs (adresse, prestation). |
+
+### Checkpoints prévus
+
+1. Accueil M61 + cibles desktop — captures `client-overview-{360,1280}-after.jpg`.
+2. Devis V8-C06 — captures `client-quote-{360,1280}-after.jpg`.
+3. Détail V8-C07 — captures `client-detail-{360,1280}-after.jpg`.
+
+### Résultat du checkpoint 1 — accueil M61 (client)
+
+Captures `docs/visual-fidelity/client-overview-{360,1280}-after.jpg`. Lignes récentes : état sur une ligne et date
+alignée à droite sur la même rangée (la date passe sous l’état seulement quand le libellé d’état est trop long à
+360 px, sans troncature) ; CTA sur une ligne à 360 (`clamp(14px, 4.3vw, 17px)`) ; marque mobile et liens texte du
+tableau de bord desktop portés à 44 px via des classes du module (`globals.css` intouché). Logique pure
+`components/role/client-lists.ts` (`recentRowDescriptor`, `quoteLineCells`, `quoteDecisionState`, `CLIENT_STEPS`,
+`currentStepIndex`, `detailHistory`) couverte par `tests/ui/client-lists.test.ts`. Mesures automatisées à 360 et
+1280 : 0 cible interactive visible < 44 px, aucun débordement horizontal, console vide. Desktop inchangé hors cibles.
+
+### Résultat du checkpoint 2 — devis V8-C06 (client)
+
+Captures `docs/visual-fidelity/client-quote-{360,1280}-after.jpg`. Ordre de la référence rétabli : note → en-tête
+« Détail du devis » avec lien « Télécharger le devis (PDF) » (défilement vers la section Documents du devis, sans
+changement de hash) → tableau (libellé repliable, quantité × PU et prix sur une ligne à 360) → carte « Artisan » →
+décision Accepter / Refuser (empilée à 360, côte à côte à 1280) → section `#quote-documents` (ancrage
+`QuoteDocumentsAnchor` inchangé, mêmes props) → récapitulatif texte. Bloc `Unavailable` CLI-07 « Télécharger le devis
+(PDF) » retiré (le lot documents fournit le PDF ; en démonstration, le panneau indique lui-même l’indisponibilité).
+État de décision calculé par `quoteDecisionState` (testé). Mesures 360 / 1280 : 0 cible < 44 px, aucun débordement,
+console vide. Acceptation, refus (motif), téléchargement du récapitulatif : commandes `session` inchangées.
+
+### Résultat du checkpoint 3 — détail V8-C07 (client)
+
+Captures `docs/visual-fidelity/client-detail-{360,1280}-after.jpg` (`#demo/client-detail.demo-003`, dossier réglé ;
+`demo-001`, devis à valider, vérifié sans capture versionnée). Stepper et chronologie désormais calculés par
+`CLIENT_STEPS`, `currentStepIndex` et `detailHistory` (logique pure testée : dates enregistrées seulement, « — »
+sinon, « À venir » après l’étape courante, deux entrées pour une annulation) ; bloc « Carte non disponible » compact
+(titre et raison sur une ligne à 1280, empilés à 360) sans modifier la primitive ; annulation en bouton contour
+44 px rouge discret (confirmation et commande `cancel` inchangées) ; montants de « Devis & résumé » sur une ligne.
+Mesures 360 / 1280 sur `demo-003` et `demo-001` : 0 cible < 44 px, aucun débordement, console vide.
+
+### Bilan client (checkpoints 1–3)
+
+Trois vues alignées sur M61 / V8-C06 / V8-C07 en structure, ordre et hiérarchie ; aucune donnée fabriquée (pas de
+note, certification, expérience, carte, vignettes, garanties ni promesses d’annulation) ; comportements inchangés
+(devis, règlement, rendez-vous, téléversements, assistance, ancrages notifications / documents / plateforme) ;
+fichiers touchés : `components/role/client-space.tsx`, `client.module.css`, `client-lists.ts`,
+`tests/ui/client-lists.test.ts`, cette section, `docs/visual-fidelity/client-*`. Restent déclarés comme écarts
+assumés : bleu action au lieu du vert/rouge pleins, 5 étapes réelles, pas de partage ni de « ⋯ », pas de carte.
+
+## Addendum — pages publiques (VISUAL-FIDELITY-001, branche `claude/web-design-public`, base `f58b3f4`)
+
+Publié **avant** toute modification de code. Fichiers exclusifs : `components/role/public-site.tsx`, `components/role/public.module.css`
+(module CSS actuel du site public ; aucun `public-site.module.css` n’existe), `components/role/public-lists.ts` (listes et règles pures,
+testées), `tests/ui/public-*.test.ts`, cette section, `docs/visual-fidelity/public-*`. Jamais touchés : autres coques, `anchors.ts`,
+`*-anchor.tsx`, `components/app/**` (dont `AuthForm`, `RequestForm`, `Brand`, `InstallPanel`), `courant-app.tsx`, `components/features/**`,
+`lib/**`, `app/**`, `app/globals.css`, package, migrations. Les classes globales de la page d’accueil (`.landing`, `.service-board`,
+`.service-options`, `.professional-band`, `.public-footer`, `.help-layout`, `.auth-layout`) ne sont pas modifiées dans `app/globals.css` :
+le module les complète ou les remplace par ses propres classes dans le balisage du site public.
+
+Captures « avant » (démo locale `next dev`, port propre à ce worktree, navigateur sans tête ; aucune preview en ligne) :
+`docs/visual-fidelity/public-{home,help,pricing,join,about,privacy,legal,auth}-{360,1280}-before.jpg`. Mesures avant : aucun
+débordement horizontal à 360/760/1280 ; console sans erreur ; éléments interactifs < 44 px : bouton de menu 42 × 44 (360),
+`summary` des questions fréquentes 30 px (toutes largeurs), « Mot de passe oublié ? » 30 px et « Créer un compte » 20 px (formulaire
+partagé `AuthForm`, hors périmètre).
+
+### Références maîtresses retenues (catalogue `docs/audit/CATALOGUE_MAQUETTES.md`, images `/tmp/courant-audit/`)
+
+| Page (`#route`) | Référence maîtresse | Variantes consultées | Remarque de source |
+| --- | --- | --- | --- |
+| Accueil (`#`) | **M11** « Accueil commercial Électricien Pro », grand format p11 (`pdf-images/v1-p11.jpeg`) | M41 vol. 3 p10 (`v3-p10`), M51 vol. 4 p4 (`v4-p4`) | M11 : en-tête (marque 2 lignes, 5 liens, téléphone, CTA), hero titre 2 lignes avec mot-clé bleu + photo d’artisan, **carte blanche des 3 étapes** (badge numéroté, icône ronde, flèches) chevauchant le bas du hero, bandeau de 4 réassurances (icône + titre + sous-titre), phrase de confiance. M51 : 4 cartes de catégories (tuile icône + titre + description). |
+| Comment ça marche / Aide (`#help`) | **M46** « Comment ça marche », vol. 3 p15 (`v3-p15`) | M70 FAQ vol. 4 p23 (`v4-p23`), M42 Contact & aide vol. 3 p11 (`v3-p11`) | M46 : pastille d’accroche, H1, sous-titre, illustration, carte « Notre processus en 4 étapes » (icône ronde, badge, titre, texte, pictogramme), bandeau sécurité. M70 : accordéons en cartes bordées (tuile icône + question + chevron, réponse encadrée) et pied « Vous ne trouvez pas votre réponse ? ». M42 : colonne contact + colonne FAQ. |
+| Tarifs (`#pricing`) | **M38** « Tarifs intervention », vol. 3 p7 (`v3-p7`) | — | Titre avec second mot bleu, sous-titre, encart « Aucune majoration » (exemple), **tableau pleine largeur** (en-tête « Type d’intervention / Fourchette de prix (TTC) », tuile icône + nom + description, montant à droite), encart exemple, bandeau 3 promesses. |
+| Vous êtes artisan (`#join`) | **M60** « Recrutement réseau électriciens », vol. 4 p13 (`v4-p13`) | — | Hero titre 2 lignes + accroche + 3 faits + photo ; carte « Les avantages » (4 tuiles icône/titre/texte) ; carte « Pour nous rejoindre » (liste à coches : assurance, diplôme, données) ; CTA bleu pleine largeur « Postuler » ; compteurs 2 500+/15 000+/4,8 et témoignage. |
+| À propos (`#about`) | **V8-C03** vol. 8 p4 (`v8/p4-0.jpeg`) | — | Bandeau titre + accroche + photo ; colonnes « NOTRE MISSION » (titre, texte, encart devis) et « NOS VALEURS » (3 cartes icône/titre/texte) ; « NOTRE HISTOIRE » + « NOTRE ÉQUIPE » (portraits) ; bandeau confiance ; pied légal. |
+| Confidentialité (`#privacy`) | **V8-C05** vol. 8 p6 (`v8/p6-0.jpeg`) | — | Document étroit : fil d’Ariane, H1, intro, « dernière mise à jour », sections numérotées à puces séparées par filets, carte de contact en pied. Gabarit anglais « YourCompany », non traduisible tel quel. |
+| Mentions légales (`#legal`) | **M63** vol. 4 p16 (`v4-p16`) | — | Colonne étroite, H1 + phrase, titres de section numérotés en bleu, lignes « Libellé : valeur », date de mise à jour. Identités d’exemple à ne pas reprendre. |
+| Entrée compte (`#auth`) | **M49** « Connexion Électro Pro », vol. 4 p2 (`v4-p2`) | — | Carte centrée seule : logo, « Connexion » + sous-titre, champs avec icône, bouton bleu pleine largeur, séparateur « ou », lien « Créer un compte ». Le formulaire lui-même est le composant partagé `AuthForm` (hors périmètre) : seule sa mise en page de page est traitée ici. |
+| Invitation (`#join-organization`), ouverture démo (`#demo/…`) | aucune référence cataloguée | — | Conservés tels quels (structure actuelle, règles DESIGN.md). |
+
+### Règle sur les données
+
+Les références affichent des promesses et des chiffres d’exemple : « sous 24 h à 48 h », « 24h/24 – 7j/7 », « aucune majoration »,
+« garantie 1 an », « prix fixe », « couverture nationale », « des milliers de clients », « 2 500+ électriciens », « 15 000+ missions »,
+« 4,8/5 », « jusqu’à 85 % reversés », « paiement sous 48 h », équipe nommée avec portraits, histoire « fondée en 2020 », numéros de
+téléphone, adresses, SIREN, hébergeur, dates. **Aucun n’est repris.** Ne sont affichés que des faits du produit livré : devis accepté
+avant travaux, règlement traité avec Stripe après intervention confirmé serveur, attribution contrôlée à un seul artisan, suivi au
+même endroit, dossier artisan examiné par l’opérateur, fourchettes indicatives calculées depuis les catégories du domaine. Les
+absences restent des états explicites (`Unavailable` : barème, majorations, commission, exploitant, DPO, mentions). Une liste pure
+`FORBIDDEN_PUBLIC_CLAIMS` (expressions bannies) est testée contre toutes les chaînes publiques de `public-lists.ts`.
+
+### Accueil — M11 (+ M51 pour les catégories)
+
+| Élément de la référence | Composant / section (f58b3f4) | Écart constaté | Correction prévue |
+| --- | --- | --- | --- |
+| En-tête : marque 2 lignes, liens, téléphone, CTA | `.header` : `Brand` (2 lignes), 3 liens, « Se connecter » | Conforme en structure ; pas de téléphone ni de CTA « Demander un rappel » (aucun numéro, aucun rappel). | Conservé. **Écart assumé** : ni numéro ni rappel. Bouton de menu 44 × 44 (était 42). |
+| Hero : accroche bleue, H1 avec mot-clé bleu, sous-titre, CTA bleu avec flèche, photo d’artisan, pastille « qualifiés et assurés » | `.landing` (global) : `context-line`, H1 marine, texte, CTA « Demander une intervention », lien démo, 2 réassurances ; **colonne droite = carte marine « De la demande à la résolution »** | Pas de mot-clé bleu ; carte sombre à droite au lieu d’un visuel ; étapes verticales dans la carte au lieu de la carte horizontale M11. | Bande hero teintée pleine largeur (fond `#eaf0fb` → surface), H1 « Une panne électrique. **Un parcours clair.** » (second énoncé en bleu action), sous-titre, CTA bleu avec flèche, lien démo conservé. **Écart assumé** : aucune photographie (aucune image réelle disponible, aucune image de banque inventée) ; aucune pastille « qualifiés et assurés ». |
+| Carte blanche des 3 étapes chevauchant le hero : badge numéroté, icône ronde teintée, titre, texte, flèches | carte marine verticale (`.service-board`, `.board-flow`) | Composition et couleurs différentes. | Nouvelle carte blanche `.stepsCard` sous le hero, 3 colonnes à ≥ 960 px avec flèches, pile verticale en dessous ; étapes réelles : décrire la panne / valider le devis / suivre l’intervention et régler. Classes globales `.service-board*` abandonnées dans le balisage (non modifiées dans `globals.css`). |
+| Bandeau 4 réassurances (icône + titre + sous-titre) puis phrase de confiance | `.landing-assurance` : 2 lignes « Devis avant intervention », « Paiement avec Stripe » | 2 au lieu de 4, sans titre/sous-titre. | Bandeau `.facts` de 4 faits du produit : Devis avant travaux / Règlement après intervention (Stripe) / Attribution contrôlée / Suivi au même endroit, avec sous-titre factuel. **Écart assumé** : pas de phrase « des milliers de clients ». |
+| Cartes de catégories M51 (tuile icône, titre, description) | `.service-options` : 5 boutons bordés, icône nue, flèche | Proche ; icône sans tuile, 5 colonnes serrées à 760. | Grille `.categories` : tuile icône teintée 44 px, titre, description, flèche ; 5 → 3 → 2 colonnes (1280 / 760 / 360) ; cible ≥ 44 px. |
+| Bandeau professionnel (ajout projet, aucune référence) | `.professional-band` | — | Conservé, repris dans le module pour l’alignement (icône, texte, bouton à droite). |
+
+### Aide — M46 + M70 (+ M42 colonne)
+
+| Élément | Composant | Écart | Correction |
+| --- | --- | --- | --- |
+| Pastille d’accroche + H1 + sous-titre + illustration | `PageTitle` | Pas de pastille ; pas d’illustration. | Pastille « Dépannage électrique » au-dessus du titre ; **écart assumé** : pas d’illustration. Titre « Comment ça marche ». |
+| Carte « Notre processus en 4 étapes » | absente | Absente. | Carte `.processCard` 4 étapes réelles : Décrire la panne (estimation indicative) → Devis de l’artisan → Intervention → Règlement et suivi ; icônes rondes teintées, badges, 4 → 2 → 1 colonnes. **Écart assumé** : pas d’appel 24h/24, pas de « diagnostic » promis. |
+| FAQ M70 : cartes bordées, tuile icône, chevron, réponse encadrée | `details` globales `.faq-panel` (summary 30 px, « + ») | Cibles < 44 px ; pas de tuile ni chevron. | Accordéons `.faqItem` : `summary` ≥ 44 px, tuile icône par thème (euro, clock, truck, shield, building, eye), chevron tournant, réponse encadrée bleu pâle ; mêmes questions/réponses (texte conservé). |
+| Pied « Vous ne trouvez pas votre réponse ? » + Contact | aside : carte CTA, « Contact et informations légales », `InstallPanel` | Conforme à M42 (colonne latérale) ; pas de formulaire ni de téléphone. | Conservé ; **écart assumé** : aucun formulaire de contact (pas de route), aucune coordonnée (à publier), aucune ligne d’urgence. |
+
+### Tarifs — M38
+
+| Élément | Composant | Écart | Correction |
+| --- | --- | --- | --- |
+| Titre « Nos tarifs d’intervention » (2ᵉ mot bleu) + sous-titre | `PageTitle` « Comment le prix se forme » | Pas d’accent. | Titre « Les prix, **en trois montants** » avec accent bleu ; sous-titre conservé. |
+| Encart « Aucune majoration 24/7 » | `Unavailable` barème/majorations (sous la colonne gauche) | Promesse non reprise (correct). | `Unavailable` conservé, placé à droite du titre comme l’encart M38 (même emplacement, contenu honnête). |
+| Tableau pleine largeur : en-tête, tuile icône + nom + description, fourchette à droite | `.table` dans la colonne droite (2 colonnes) | Tableau en demi-largeur, après les étapes. | Tableau pleine largeur en premier bloc, en-tête « Type de problème / Fourchette indicative », lignes 56 px, tuile 40 px ; à 760 → lignes empilées. **Écart assumé** : pas de mention TTC (nature des fourchettes non décidée), pas d’encart « exemple », pas de bandeau de promesses. |
+| « Trois montants, trois moments » (ajout projet) | `.steps` | — | Conservé sous le tableau, en 3 colonnes à ≥ 960 px. CTA conservé. |
+
+### Vous êtes artisan — M60
+
+| Élément | Composant | Écart | Correction |
+| --- | --- | --- | --- |
+| Hero : titre 2 lignes, accroche, 3 faits, photo | `PageTitle` | Pas de faits ; pas de photo. | Titre + sous-titre conservés ; 3 faits réels sous le titre : dossier examiné par l’opérateur / missions par zones et catégories déclarées / règlement traité avec Stripe. **Écart assumé** : pas de photo, pas de « zéro abonnement » ni « commissions justes ». |
+| Carte « Les avantages » 4 tuiles | liste « Ce que l’espace artisan permet » | Liste à puces. | Grille `.tiles` 4 tuiles (icône, titre, texte) : missions, devis, suivi, règlement — mêmes phrases. |
+| Carte « Pour nous rejoindre » (liste à coches) | « Ce que contient le dossier » (5 étapes) + « Comment se déroule l’examen » | Proche. | Carte à coches `.checklist` pour les 5 parties du dossier (icône check bleue, titre, texte) ; « Comment se déroule l’examen » conservée en dessous. |
+| CTA bleu pleine largeur « Postuler maintenant → » | `.cta` + 2 boutons | Bouton de largeur contenu. | CTA bleu pleine largeur de la colonne avec flèche ; bouton démo outline en dessous. |
+| Compteurs + témoignage | absents | — | **Écart assumé** : rien d’ajouté (aucune donnée réelle). `Unavailable` commission conservé. |
+
+### À propos — V8-C03
+
+| Élément | Composant | Écart | Correction |
+| --- | --- | --- | --- |
+| Bandeau titre + accroche + photo | `PageTitle` | Pas de bandeau. | Bande teintée pleine largeur avec titre + accroche (sans photo, assumé). |
+| « NOTRE MISSION » + encart devis / « NOS VALEURS » 3 cartes | « Ce que fait l’application » + dl 4 définitions | Définitions en liste. | Deux colonnes : mission (texte actuel + encart « Besoin d’un électricien ? » → Demander une intervention) ; « Ce qui guide le service » 3 cartes icône/titre/texte (devis avant travaux, règlement après intervention, attribution contrôlée) + « Pour qui » en texte. Libellés de section en petites capitales bleues. |
+| « NOTRE HISTOIRE », « NOTRE ÉQUIPE », bandeau confiance | `Unavailable` exploitant | Correct. | Conservé : aucune histoire, équipe ni portrait inventés. |
+| Pied légal | footer | Conforme. | — |
+
+### Confidentialité — V8-C05 ; Mentions légales — M63
+
+- Confidentialité : fil d’Ariane « Accueil › Confidentialité » (bouton de retour), intro, **sections numérotées** (1. Données
+  enregistrées, 2. Mode démonstration, 3. Traceurs, 4. Vos droits et le contact) avec filets, listes à puces pour les données
+  (libellé en gras + texte, comme la référence), carte de pied avec icône bouclier reprenant l’`Unavailable` actuel. **Écart assumé** :
+  pas de « dernière mise à jour », pas de cookies analytiques/marketing (aucun n’existe), pas d’adresse de contact.
+- Mentions légales : titres de section numérotés en bleu (« 1. Éditeur », …), lignes « Libellé : À renseigner par l’exploitant »
+  (ambre), colonne étroite ; `Unavailable` conservé. **Écart assumé** : pas de date, pas de section « Limitation de responsabilité »
+  (texte juridique à produire par l’exploitant).
+
+### Entrée compte — M49
+
+Le formulaire partagé n’est pas modifié. Mise en page de la page `#auth` : carte du formulaire **centrée seule** à ≥ 760 px
+(largeur ≤ 480 px, comme M49) ; le texte d’accompagnement global (`.auth-layout` colonne gauche) est masqué par le module sur cette
+page ; brouillon en attente affiché au-dessus. Cibles : les liens « Mot de passe oublié ? » / « Créer un compte » reçoivent une hauteur
+minimale de 44 px par règle du module (balisage inchangé). **Écart assumé** : pas d’icônes dans les champs, pas de séparateur « ou »,
+logo non répété dans la carte (le composant partagé n’expose pas ces options).
+
+### Responsive, accessibilité, vérification
+
+- 360 : une colonne partout ; hero teinté, carte des étapes empilée, faits en 2 colonnes, catégories en 2 colonnes (icône + titre
+  + description), tableau tarifs en lignes empilées, tuiles artisan en 1 colonne, FAQ pleine largeur ; menu mobile inchangé.
+- 760 : catégories 3 colonnes, étapes 3 colonnes, faits 4 → 2 colonnes, colonnes informatives empilées (règle existante 950 px).
+- 1280 : hero 2/3 de largeur, étapes 3 colonnes chevauchant la bande, catégories 5 colonnes, tarifs tableau pleine largeur.
+- Cibles ≥ 44 × 44 : menu, liens d’en-tête/pied, `summary` FAQ, catégories, boutons CTA, liens du formulaire (module). Contraste :
+  tokens DESIGN.md (`#1457d9` sur blanc 5,4:1, `#526178` sur blanc 6,3:1, `#102a43` 14,6:1) ; accent bleu dans le H1 à 53 px ≥ 3:1.
+  Polices et dégradés : aucune police ajoutée (famille globale), aucun dégradé.
+- Par test (`tests/ui/public-lists.test.ts`, listes dans `components/role/public-lists.ts`) : aucune expression bannie dans les
+  textes publics (délais, 24/7, garantie, compteurs, notes, pourcentages, téléphone) ; étapes/faits/questions uniques et non vides ;
+  lignes de tarifs dérivées des catégories du domaine avec min < max ; sections légales conservant leurs champs ; numérotation.
+- Par capture (après, mêmes routes 360/1280, script hors dépôt) : composition côte à côte avec la référence, 0 élément interactif
+  visible < 44 px hors formulaire partagé, aucun débordement horizontal, console sans erreur ; parcours vérifiés : liens d’en-tête et
+  de pied, `#demo/client`, `#demo/artisan`, `#join-organization/<code>`, contrôle d’installation PWA présent dans l’aide.
+
+### Checkpoints prévus
+
+1. Accueil + en-tête/pied + `public-lists.ts` et tests — captures `public-home-{360,1280}-after.jpg`.
+2. Aide, Tarifs, Vous êtes artisan — captures correspondantes.
+3. À propos, Confidentialité, Mentions légales, Entrée compte — captures correspondantes, bilan.
+
+### Résultat — pages publiques (checkpoints 1 à 3 livrés ensemble)
+
+Présentation seulement : `session` (`go`, `setAuthMode`, `startDemo`, `saveDraft`, `keepInvitation`, `signIn/Up`, `resetPassword`),
+`RequestForm`, `AuthForm`, `InstallPanel`, `Brand`, `PageTitle`, `Unavailable` et le routage par hash sont inchangés ; textes des FAQ,
+du dossier artisan, des données enregistrées et des mentions conservés mot pour mot (listes dans `components/role/public-lists.ts`).
+
+| Page | Fait | Reste / écart assumé |
+| --- | --- | --- |
+| Accueil (M11, M51) | Bande hero teintée pleine largeur, pastille, H1 avec second énoncé bleu, CTA avec flèche, lien démo ; carte blanche des 3 étapes (badge numéroté, icône ronde, flèches) chevauchant la bande ; bandeau de 4 faits du produit ; catégories en cartes (tuile 44 px, titre, description, flèche) 5 / 3 / 2 colonnes ; bandeau professionnel en carte. En-tête : « Se connecter » avec icône, bouton de menu 44 × 44. | Pas de photo ni d’illustration, pas de pastille « qualifiés et assurés », pas de téléphone/rappel, pas de phrase de confiance chiffrée. |
+| Aide (M46, M70, M42) | Pastille + titre « Comment ça marche » ; carte « Le parcours en quatre étapes » (4 → 1 colonnes) ; FAQ en accordéons bordés (tuile icône, chevron, réponse encadrée, `summary` 56 px) ; pied « Vous ne trouvez pas votre réponse ? » (assistance dans l’espace, aucun canal promis) ; colonne CTA / contact à publier / installation PWA conservée. | Pas de formulaire de contact, de coordonnées ni d’illustration. |
+| Tarifs (M38) | Titre avec accent bleu + `Unavailable` barème à droite (emplacement de l’encart M38) ; tableau pleine largeur en premier (tuile icône + nom + description, fourchette 17 px à droite, lignes empilées ≤ 760) ; « Trois montants » en 3 colonnes ; CTA. | Pas de mention TTC, pas d’encart « exemple », pas de bandeau de promesses. |
+| Vous êtes artisan (M60) | Titre avec accent, 3 faits du produit, 4 tuiles « Ce que l’espace permet », carte à coches « Ce que contient le dossier », examen conservé, CTA bleu pleine largeur avec flèche + démo outline ; `Unavailable` commission conservé. | Pas de photo, de compteurs, de témoignage, de « zéro abonnement ». |
+| À propos (V8-C03) | Bande titre + accroche + filet bleu ; colonnes « Ce que fait l’application » (texte + encart « Besoin d’un électricien ? ») et « Ce qui guide le service » (3 cartes) ; `Unavailable` exploitant/équipe/histoire ; CTA. | Aucune équipe, histoire, photo ni bandeau de confiance. |
+| Confidentialité (V8-C05) | Fil d’Ariane, document étroit, 4 sections numérotées en bleu avec filets, données en liste « libellé : texte », carte de pied avec bouclier. | Pas de date de mise à jour ni d’adresse de contact. |
+| Mentions légales (M63) | Fil d’Ariane, sections numérotées en bleu, lignes « Libellé : À renseigner par l’exploitant » (ambre), `Unavailable` conservé. | Pas de date ni de section responsabilité. |
+| Entrée compte (M49) | Carte centrée seule (≤ 480 px), texte d’accompagnement global masqué sur cette page, liens « Mot de passe oublié ? » / « Créer un compte » portés à 44 px par règle du module. | Icônes de champs, séparateur « ou », logo dans la carte : non exposés par le formulaire partagé. |
+
+Mesures « après » (script hors dépôt, 360 / 760 / 1280, huit routes) : **0** élément interactif visible < 44 px (y compris les liens du
+formulaire partagé), aucun débordement horizontal, console sans erreur ni avertissement. Parcours vérifiés à 360 : menu mobile
+(ouverture, liens, fermeture par navigation), « Tarifs » → `#pricing`, accordéon FAQ, contrôle d’installation présent dans l’aide,
+`#join-organization/<code 64 hex>` (bouton « Se connecter pour accepter ») et code invalide (alerte), bascule connexion → création de
+compte, hash protégé `#sites` → bandeau « Connectez-vous », `#demo/client` → vue d’ensemble avec bandeau démo, `#demo/artisan` →
+accueil artisan, `#demo/manager-sites` → Sites & contrats, `#demo/admin` → tableau de bord ; CTA « Demander une intervention »,
+carte de catégorie et CTA de l’aide → formulaire de demande (`#new`). Observation hors périmètre : un rechargement direct sur `#new`
+affiche le bandeau de connexion (comportement du contrôleur, inchangé).
+
+Captures : `docs/visual-fidelity/public-{home,help,pricing,join,about,privacy,legal,auth}-{360,1280}-after.jpg` (avant : `…-before.jpg`).
+Tests : `tests/ui/public-lists.test.ts` (4 tests : aucune expression bannie dans les textes publics et détection des exemples des
+références ; unicité/tailles des listes ; lignes de tarifs issues des catégories du domaine ; numérotation et champs légaux) ; suite UI
+93/93 ; `npx tsc --noEmit` au vert. Aucun fichier hors périmètre modifié (`app/globals.css`, `components/app/**`, autres coques intacts).
+
+### Correction CLIENT-HISTORY-001 (revue pilote de 4a2ab70)
+
+`detailHistory` laissait « Règlement » en état courant (« En cours ») pour un dossier `paid` avec `paid_at` serveur.
+Correction : `isSettled` (statut `paid` **et** `paid_at` enregistré) termine toutes les entrées de la chronologie et
+`currentStepIndex(status, paid_at)` renvoie `CLIENT_STEPS.length` (stepper entièrement coché). Sans confirmation
+serveur (`completed`, ou `paid` sans horodatage), rien n’est présenté comme réglé : l’étape reste courante / à venir.
+Tests ajoutés (`tests/ui/client-lists.test.ts`) ; captures `client-detail-{360,1280}-after.jpg` remplacées.
