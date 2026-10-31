@@ -176,3 +176,7 @@ Un lot se termine lorsque son écran correspond à la référence retenue, ses a
 ## Préparation actuelle
 
 Cette préparation et cet audit ne modifient que la documentation et ajoutent la copie du nouveau PDF source. Aucun code applicatif, aucune base et aucun déploiement ne sont modifiés. Le plan initial reste conservé dans BLUEPRINT.md pour la traçabilité ; ce plan de reprise répond aux écarts visuels et fonctionnels signalés par le propriétaire.
+
+## Sources JSX/CSS complémentaires
+
+Lire [l’audit des archives](audit/ARCHIVES_CODE.md) en phase 0 puis en phase 1. Les 12 composants donnent des bases de composition ; choisir leur correspondance PDF et conserver les besoins détaillés des back-offices. Vérifier la frontière client et la stratégie CSS lors d’une future intégration. Aucun backend ou Stripe n’est livré par ces fichiers ; aucune phase métier n’est accomplie par leur réception.

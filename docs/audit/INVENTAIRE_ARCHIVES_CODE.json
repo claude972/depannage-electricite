@@ -1,0 +1,256 @@
+{
+  "method": "Lecture statique tarfile ; aucune exécution ; empreintes SHA-256 ; originaux conservés",
+  "archives": [
+    {
+      "archive": "1-CODES_PAGES_COMPLET.tar.gz",
+      "bytes": 3537,
+      "sha256": "f614904fb52f43f1963950306cb9332945664fa5ed9f4ea83989ec791fff1790",
+      "members": [
+        {
+          "path": "ArtisanMission.jsx",
+          "bytes": 1077,
+          "sha256": "6deddfaead4696cfe8c59b1679ea9d72f8c7ca9982009d15e4d4c67399dc3c82"
+        },
+        {
+          "path": "B2BDashboard.jsx",
+          "bytes": 1626,
+          "sha256": "7c9efac620563aaaad418ac75c198172ec6a53519569da8c7314e661e6c9e802"
+        },
+        {
+          "path": "CreateRequest.jsx",
+          "bytes": 1662,
+          "sha256": "06a0d0cff046de4370650a79935bc561fbd22e9de845158cda70a491dcc5869b"
+        },
+        {
+          "path": "HomePage.jsx",
+          "bytes": 2330,
+          "sha256": "16dd7ce6017f6fe833e1505ac9b47cb6224e96dcbb44b6324cf7cfe0fbf37af9"
+        },
+        {
+          "path": "Login.jsx",
+          "bytes": 1645,
+          "sha256": "b30ec2c81724b12a53663cea1ae735cbed7639d476cccc104256755e52d68783"
+        },
+        {
+          "path": "Payment.jsx",
+          "bytes": 1144,
+          "sha256": "bb37f34441c7181d65abc12e4946c1c89945c887cc604cd88bc63d5afd7a5464"
+        },
+        {
+          "path": "Rating.jsx",
+          "bytes": 1130,
+          "sha256": "210519db52986ca1e1b505b7b0f6c95150c2ab5e09d06ac1c97b60b89b4d609f"
+        },
+        {
+          "path": "Tracking.jsx",
+          "bytes": 1323,
+          "sha256": "553b54dd5078a0bff877b0424d3473b8ecd7c71d9f7a7d68387feb93286b932d"
+        },
+        {
+          "path": "README.md",
+          "bytes": 585,
+          "sha256": "9ccb8ada0f1ac63c6de8169e39e36c98435ac6cb3eacee9a63cdbe773c63e10d"
+        }
+      ]
+    },
+    {
+      "archive": "2-CODES_PAGES_TOUS.tar.gz",
+      "bytes": 4483,
+      "sha256": "eaa89c0e12382825ae0f709910bbbd6ee479d991b0bb7d118bcfba0c535ae8e9",
+      "members": [
+        {
+          "path": "ArtisanDashboard.jsx",
+          "bytes": 1578,
+          "sha256": "7b3f9c5dacde58d4ceed57080e00a31611295f717268bba5a999d58bd3804cfa"
+        },
+        {
+          "path": "ArtisanMission.jsx",
+          "bytes": 1077,
+          "sha256": "6deddfaead4696cfe8c59b1679ea9d72f8c7ca9982009d15e4d4c67399dc3c82"
+        },
+        {
+          "path": "B2BDashboard.jsx",
+          "bytes": 1626,
+          "sha256": "7c9efac620563aaaad418ac75c198172ec6a53519569da8c7314e661e6c9e802"
+        },
+        {
+          "path": "Chat.jsx",
+          "bytes": 1066,
+          "sha256": "05601057b794afe2e983c44d4e767bd825f43cfb70038a25d3f1687d1c195538"
+        },
+        {
+          "path": "CreateRequest.jsx",
+          "bytes": 1662,
+          "sha256": "06a0d0cff046de4370650a79935bc561fbd22e9de845158cda70a491dcc5869b"
+        },
+        {
+          "path": "HomePage.jsx",
+          "bytes": 2330,
+          "sha256": "16dd7ce6017f6fe833e1505ac9b47cb6224e96dcbb44b6324cf7cfe0fbf37af9"
+        },
+        {
+          "path": "Login.jsx",
+          "bytes": 1645,
+          "sha256": "b30ec2c81724b12a53663cea1ae735cbed7639d476cccc104256755e52d68783"
+        },
+        {
+          "path": "Payment.jsx",
+          "bytes": 1144,
+          "sha256": "bb37f34441c7181d65abc12e4946c1c89945c887cc604cd88bc63d5afd7a5464"
+        },
+        {
+          "path": "Rating.jsx",
+          "bytes": 1130,
+          "sha256": "210519db52986ca1e1b505b7b0f6c95150c2ab5e09d06ac1c97b60b89b4d609f"
+        },
+        {
+          "path": "Signup.jsx",
+          "bytes": 1522,
+          "sha256": "407b9e8a04793dac153c2bc0cf05e1ddb11a9d52d50a3bf7434a09f3d160ab0a"
+        },
+        {
+          "path": "SiteDetail.jsx",
+          "bytes": 1343,
+          "sha256": "1f76e9ba6b10d05ef519421b84c624c56e63d21b94bac2d7a14219098baee0cb"
+        },
+        {
+          "path": "Tracking.jsx",
+          "bytes": 1323,
+          "sha256": "553b54dd5078a0bff877b0424d3473b8ecd7c71d9f7a7d68387feb93286b932d"
+        },
+        {
+          "path": "README.md",
+          "bytes": 585,
+          "sha256": "9ccb8ada0f1ac63c6de8169e39e36c98435ac6cb3eacee9a63cdbe773c63e10d"
+        }
+      ]
+    },
+    {
+      "archive": "3-CODES_ET_CSS_COMPLET.tar.gz",
+      "bytes": 5646,
+      "sha256": "21d2ff7a2ba112a3d4b551a8c573561b9b6b0376b126b2dbcb56e5e7d5a17fa7",
+      "members": [
+        {
+          "path": "ArtisanDashboard.jsx",
+          "bytes": 1578,
+          "sha256": "7b3f9c5dacde58d4ceed57080e00a31611295f717268bba5a999d58bd3804cfa"
+        },
+        {
+          "path": "ArtisanMission.jsx",
+          "bytes": 1077,
+          "sha256": "6deddfaead4696cfe8c59b1679ea9d72f8c7ca9982009d15e4d4c67399dc3c82"
+        },
+        {
+          "path": "B2BDashboard.jsx",
+          "bytes": 1626,
+          "sha256": "7c9efac620563aaaad418ac75c198172ec6a53519569da8c7314e661e6c9e802"
+        },
+        {
+          "path": "Chat.jsx",
+          "bytes": 1066,
+          "sha256": "05601057b794afe2e983c44d4e767bd825f43cfb70038a25d3f1687d1c195538"
+        },
+        {
+          "path": "CreateRequest.jsx",
+          "bytes": 1662,
+          "sha256": "06a0d0cff046de4370650a79935bc561fbd22e9de845158cda70a491dcc5869b"
+        },
+        {
+          "path": "HomePage.jsx",
+          "bytes": 2330,
+          "sha256": "16dd7ce6017f6fe833e1505ac9b47cb6224e96dcbb44b6324cf7cfe0fbf37af9"
+        },
+        {
+          "path": "Login.jsx",
+          "bytes": 1645,
+          "sha256": "b30ec2c81724b12a53663cea1ae735cbed7639d476cccc104256755e52d68783"
+        },
+        {
+          "path": "Payment.jsx",
+          "bytes": 1144,
+          "sha256": "bb37f34441c7181d65abc12e4946c1c89945c887cc604cd88bc63d5afd7a5464"
+        },
+        {
+          "path": "Rating.jsx",
+          "bytes": 1130,
+          "sha256": "210519db52986ca1e1b505b7b0f6c95150c2ab5e09d06ac1c97b60b89b4d609f"
+        },
+        {
+          "path": "Signup.jsx",
+          "bytes": 1522,
+          "sha256": "407b9e8a04793dac153c2bc0cf05e1ddb11a9d52d50a3bf7434a09f3d160ab0a"
+        },
+        {
+          "path": "SiteDetail.jsx",
+          "bytes": 1343,
+          "sha256": "1f76e9ba6b10d05ef519421b84c624c56e63d21b94bac2d7a14219098baee0cb"
+        },
+        {
+          "path": "Tracking.jsx",
+          "bytes": 1323,
+          "sha256": "553b54dd5078a0bff877b0424d3473b8ecd7c71d9f7a7d68387feb93286b932d"
+        },
+        {
+          "path": "globals.css",
+          "bytes": 1088,
+          "sha256": "b8b81e382c5f42ab053a0658127748cf646819b96b4960e7e99195f54d8b98ec"
+        },
+        {
+          "path": "styles.css",
+          "bytes": 1089,
+          "sha256": "3a32c81a379e7076533164ffba3276bf1f7cfb529f0d27d3a5a8c6ab84562928"
+        },
+        {
+          "path": "tailwind.config.js",
+          "bytes": 529,
+          "sha256": "ff572fd0fcd783fe41cc03d838564bb3ba2aca5308e7a2d871a91b2030b73b5c"
+        },
+        {
+          "path": "README.md",
+          "bytes": 585,
+          "sha256": "9ccb8ada0f1ac63c6de8169e39e36c98435ac6cb3eacee9a63cdbe773c63e10d"
+        }
+      ]
+    },
+    {
+      "archive": "4-CODES_PAGES_PRINCIPALES.tar.gz",
+      "bytes": 2701,
+      "sha256": "f33c29601cf175324bc4214bb3536c68769928e43710f7032982f5ff6e3e8f0c",
+      "members": [
+        {
+          "path": "ArtisanMission.jsx",
+          "bytes": 1077,
+          "sha256": "6deddfaead4696cfe8c59b1679ea9d72f8c7ca9982009d15e4d4c67399dc3c82"
+        },
+        {
+          "path": "B2BDashboard.jsx",
+          "bytes": 1626,
+          "sha256": "7c9efac620563aaaad418ac75c198172ec6a53519569da8c7314e661e6c9e802"
+        },
+        {
+          "path": "CreateRequest.jsx",
+          "bytes": 1662,
+          "sha256": "06a0d0cff046de4370650a79935bc561fbd22e9de845158cda70a491dcc5869b"
+        },
+        {
+          "path": "HomePage.jsx",
+          "bytes": 2330,
+          "sha256": "16dd7ce6017f6fe833e1505ac9b47cb6224e96dcbb44b6324cf7cfe0fbf37af9"
+        },
+        {
+          "path": "Tracking.jsx",
+          "bytes": 1323,
+          "sha256": "553b54dd5078a0bff877b0424d3473b8ecd7c71d9f7a7d68387feb93286b932d"
+        },
+        {
+          "path": "README.md",
+          "bytes": 585,
+          "sha256": "9ccb8ada0f1ac63c6de8169e39e36c98435ac6cb3eacee9a63cdbe773c63e10d"
+        }
+      ]
+    }
+  ],
+  "distinct_paths": 16,
+  "distinct_contents": 16,
+  "all_other_archives_are_exact_subsets_of": "3-CODES_ET_CSS_COMPLET.tar.gz"
+}

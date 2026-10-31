@@ -52,3 +52,10 @@
 - Neuf précisions V8-Q01–Q09 sont ajoutées au registre, sans transformer les histoires/équipes/garanties/annulation/cookies d’exemple en décisions validées. Le titre FINAL du volume 9 n’a pas modifié la hiérarchie des sources.
 - Références et doublons conservés par volume ; les numéros initiaux 19–32 restent non identifiés. Aucun nouveau back-office artisan ou Super Admin n’est apporté par ces volumes, mais les références précédentes restent à réaliser.
 - Aucun code applicatif, service distant, secret ou déploiement modifié ; aucune nouvelle exécution de paiement ou de test d’intégration prétendue. Source et couverture sont documentées dans les annexes et le manifeste mis à jour.
+
+## Audit des quatre archives de code
+
+- Lecture statique intégrale : 44 membres, 16 fichiers distincts, dont 12 composants JSX ; aucun conflit de version par nom. Les archives 1/2/4 sont des sous-ensembles exacts de la troisième.
+- Originaux conservés dans references/code-archives ; SHA-256 et membres dans docs/audit/INVENTAIRE_ARCHIVES_CODE.json.
+- Interfaces de base, sans backend, Stripe ou Super Admin ; aucune capacité intégrée déclarée terminée par ces apports. Corpus PDF et matrice de 76 points inchangés.
+- Audit et plan enrichis ; aucun code joint exécuté, aucun code applicatif, secret, service ou déploiement modifié.

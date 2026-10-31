@@ -141,3 +141,7 @@ Le volume 8 ajoute quatre images distinctes ; les volumes 6/7/9 et la moitié de
 
 
 Les autres détails et correspondances sont consignés dans les annexes des volumes 6 à 9. Le refus de devis est désormais explicitement illustré ; il reste à définir sa commande, ses effets et ses notifications, distincts d’une annulation de dossier.
+
+## Précisions issues des archives JSX/CSS
+
+Les quatre archives ne résolvent pas les règles manquantes : estimation fixe, disponibilité fictive, gains et budgets figés, absence de soumission ou Stripe. La promesse sans majoration 24/7 et les montants sont des exemples à arbitrer avec les contradictions déjà recensées. Le fichier B2BDashboard ne définit pas les droits d’organisation ; ArtisanDashboard ne définit pas les comptes d’une entreprise prestataire. Voir [l’annexe](audit/ARCHIVES_CODE.md).

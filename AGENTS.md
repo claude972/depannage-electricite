@@ -57,3 +57,6 @@ Approbations avancées, fiches de site complètes, contrats cadres, reporting co
 
 ## Stack retenue
 Décision du 30 octobre 2026, prise dans le cadre de la réalisation autonome autorisée : application web responsive Next.js App Router / React, TypeScript strict, Supabase Postgres/Auth sous RLS, Stripe Checkout/Connect, hébergement Vercel. Versions épinglées dans package.json et package-lock.json.
+
+## Archives de code complémentaires
+Quatre archives sources sont conservées sans modification dans `references/code-archives/`. Lire `docs/audit/ARCHIVES_CODE.md` et son manifeste avant toute reprise. Elles contiennent 12 composants de base et des styles, aucun backend ni Super Admin. Ne pas exécuter ou intégrer leur code sur la seule base de leur réception pendant l’audit.

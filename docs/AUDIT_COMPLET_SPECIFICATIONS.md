@@ -247,3 +247,7 @@ Conserver ces éléments n’interdit pas de corriger leurs limites. Une reprise
 Cet audit est complet sur les fichiers et pages disponibles, pas une garantie qu’aucun besoin futur n’existe. Il ne prétend ni certifier la conformité réglementaire, ni démontrer une faille exploitée, ni revalider chaque service distant. Les risques statiques sont signalés avec leur niveau de preuve ; ils restent à reproduire dans un environnement de test avant activation.
 
 Aucun code applicatif, PDF source, secret, service distant ou déploiement n’a été modifié. Les changements de cette étape sont exclusivement documentaires. Les éléments seront ensuite suivis individuellement comme **à spécifier / à coder / codé / connecté / vérifié / bloqué** ; aucun groupe de fonctions ne doit être marqué terminé sur la seule existence d’un écran.
+
+## Archives de code reçues après les PDF
+
+[Audit des quatre archives](audit/ARCHIVES_CODE.md) : 44 occurrences de fichiers, 16 fichiers distincts dont 12 composants JSX. Les archives 1/2/4 sont des sous-ensembles exacts de la troisième. Elles apportent des bases de composition, sans serveur, Stripe ou Super Admin. Aucun manque de la matrice n’est déclaré résolu ; les comptes PDF et les 76 capacités restent inchangés. Les originaux et empreintes sont conservés séparément.
