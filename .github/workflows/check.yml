@@ -48,3 +48,8 @@ jobs:
         env:
           PGLITE_MODULE: ${{ runner.temp }}/courant-sql/node_modules/@electric-sql/pglite/dist/index.js
         run: node tests/sql-quote-draft-review.mjs
+
+      - name: Verify private support access, transitions and rollback (not live Supabase)
+        env:
+          PGLITE_MODULE: ${{ runner.temp }}/courant-sql/node_modules/@electric-sql/pglite/dist/index.js
+        run: node tests/sql-support-review.mjs

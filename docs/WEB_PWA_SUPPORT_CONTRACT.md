@@ -1,6 +1,6 @@
 # WEB-PWA-SUPPORT-001 — assistance privée persistante
 
-Base :254d497e92b2e6e6286dbb59254660dc39aa27f3. Branche codex/web-pwa-backend. **Plan/contrat publiés avant code ; pas encore implémenté à cette révision.**
+Base :254d497e92b2e6e6286dbb59254660dc39aa27f3. Branche codex/web-pwa-backend. **Plan/contrat publiés avant code dans e7fb62d ; code et tests locaux livrés, en attente de revue et recette en ligne.**
 
 ## Plan et périmètre
 
@@ -24,7 +24,7 @@ Changements explicites **admin uniquement** : open → in_progress/awaiting_user
 
 Réponse créateur : en open/in_progress garde l’état ; en awaiting_user ou resolved **réouvre à open**. Réponse admin : conserve l’état, mais resolved doit être explicitement réouvert avant réponse. Toutes ces décisions sont visibles dans l’historique, pas d’état implicite non tracé. Chaque réponse crée exactement un message et un événement replied pour sa nouvelle version. Une répétition avec l’ancienne version est409, pas un double message. Préserver le texte local après un conflit ; ne pas le renvoyer automatiquement.
 
-Verrous : organisation liée → intervention liée → ticket ; création verrouille aussi le profil créateur avant insertion pour sérialiser la clé idempotente. L’accès courant est recontrôlé après ces verrous. Aucune action financière ou opération de chantier dans ces commandes.
+Verrous : organisation liée → intervention liée → ticket ; création verrouille aussi le profil créateur en NO KEY UPDATE avant insertion (compatible avec les verrous de clé étrangère des réponses) pour sérialiser la clé idempotente. L’accès courant est recontrôlé après ces verrous. Aucune action financière ou opération de chantier dans ces commandes.
 
 ## Création
 
@@ -50,7 +50,7 @@ Réponse : `{tickets,page:{limit,total,has_more,next_cursor},filters:{scope,stat
  permissions:{can_reply:boolean,can_set_status:boolean},
  page:{limit,after_version,next_after_version:number|null,has_more,total_events,total_messages}}
 ```
-Événements par version ASC, un événement par version. La page contient jusqu’à limit événements après after_version et les messages de ces mêmes versions, sans réclamer tous les messages historiques en une fois. Totaux serveur exacts de tout le ticket. Event={id,ticket_id,actor_id,kind:"ticket_created"|"replied"|"status_changed",from_status:null|Status,to_status:Status,version,message_id:UUID|null,created_at}. Aucun corps de note interne ou champ caché partagé.
+Événements par version ASC, un événement par version. La page contient jusqu’à limit événements après after_version et les messages de ces mêmes versions, sans réclamer tous les messages historiques en une fois. Totaux serveur exacts de tout le ticket. Event={id,ticket_id,actor_id,kind:"ticket_created"|"replied"|"status_changed",from_status:null|Status,to_status:Status,version,message_id:UUID|null,created_at}. Aucun corps de note interne ou champ caché partagé. Métadonnées, pages et compteurs proviennent de lectures distinctes ; ils ne constituent pas un snapshot commun sous concurrence. Une mutation reçoit409 si la version lue entre-temps a changé.
 
 ## Réponse et traitement
 
@@ -64,3 +64,7 @@ body1..4000 caractères après trim ; version entière1..2147483647. Limite30 co
 ## Limites de ce lot
 
 Pas de suppression/archivage automatique, pièces jointes, attribution aux équipes, séparation support/finance, import email, contact public ou export intégral implicite. Les commandes n’annulent ni ne remboursent une intervention. Une copie déjà lue ne peut pas être révoquée à distance ; les requêtes suivantes suivent la RLS courante. La recette doit distinguer tests isolés, Auth/PostgREST réels et UI/preview.
+
+## Capacité serveur et déploiement
+
+Après application011, admin_overview conserve sa garde/projection et annonce seulement `capabilities.support_tickets:true`. L’ancien helper est privé et non appelable par les comptes applicatifs. Ce drapeau décrit le workflow **DB installé**, pas une preuve que les nouvelles routes Next ou les interfaces sont déployées : quota Vercel et recette HTTP/UI restent des étapes indépendantes. Aucune capacité financière, limite de débit ou autre champ d’overview changé. Le texte refuse le caractère NUL incompatible avec les champs texte PostgreSQL.
