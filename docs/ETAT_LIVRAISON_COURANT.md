@@ -1,3 +1,11 @@
+# Checkpoint prioritaire — 31 octobre 19h25 Martinique
+
+## ROOT31oct19h25 — B2 clôturé, nouvelle tranche autorisée
+
+D4 réel9f8 terminé setup+D4=2/2PASS ;cleanup29 puisROOT47PASS23:24:45UTC(7Auth404/33REST0/7Storage0). Avec973D1–D3 même app28b, checkpointB2 vérifié, sans hériterD4de973. Aucun résidu de ces cohortes ; aucun QA writer actif. Rapport D4 joint, tous findings001–004 du harnais fermés, intégration58b CI41252298721SUCCESS/745tests+tscPASS. UI-THEME-FOUNDATION-001 mission publiée avant code, lead seul layout/globals, nouveaux tokens opt-in sans remapper aveuglémentlegacy ; pas encore migration visuelle livrée. WEB-REMAINING-CONTRACTS-001 backend existant docs-only RT diagnostic/cap100 en parallèle, aucun cloud agent. Ces deux manques restent OPEN, pas d’application déclarée complète.
+
+Historique préservé ci-dessous.
+
 # Checkpoint prioritaire — 31 octobre 19h23 Martinique
 
 ## ROOT31oct19h23 — D1–D3 réels PASS, D4 réel ACTIF
