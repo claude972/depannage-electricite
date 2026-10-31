@@ -779,3 +779,20 @@ dimensions intrinsèques déclarées (pas de décalage de mise en page). Contras
 
 **Vérification.** Captures après hydratation complète (script corrigé) `public-home-{360,1280}-after.jpg` (remplacent celles de
 69556aa) comparées à M11 ; console propre ; `npx tsc --noEmit` ; `npx tsx --test tests/ui/*.test.ts` (test de garde public toujours vert).
+
+#### Résultat PUBLIC-HERO-001
+
+- Asset livré : `public/images/public-hero-m41.jpg` (346 × 306, 13 369 octets, SHA-256 `b079b89009f925e6f05994ebe45632074d48f13bab897eedb76e725f84617eff`),
+  conforme à la traçabilité ci-dessus ; servi tel quel (`<img>` avec dimensions intrinsèques, `loading="eager"`, `decoding="async"`), aucun
+  composant global ni formulaire modifié.
+- 1280 : colonne gauche titre / sous-titre / CTA, colonne droite figure 400 × 354 centrée verticalement avec sa légende ; la zone vide a
+  disparu ; la carte des trois étapes chevauche toujours le bas de la bande (M11). 760 : figure 280 px sous le texte. 360 : figure 220 px sous
+  le CTA ; titre, sous-titre et CTA (52 px) restent au-dessus du pli.
+- Clavier (mesuré) : lien d’évitement → marque → Comment ça marche → Tarifs → Vous êtes artisan ? → Se connecter → Demander une
+  intervention → Explorer la démonstration → catégories (1280) ; marque → Se connecter → menu → CTA → démo → catégories (360). La figure
+  n’entre pas dans l’ordre de tabulation.
+- Mesures après hydratation complète (8 routes × 360/760/1280) : 0 élément interactif < 44 px, aucun débordement horizontal, console sans
+  erreur. `npx tsc --noEmit` au vert ; `npx tsx --test tests/ui/*.test.ts` 106/106 (test de garde public inclus). Captures remplacées :
+  `public-home-360-after.jpg`, `public-home-1280-after.jpg`.
+- Écart assumé : silhouette illustrative (M41) au lieu de la photographie de M11 (visage et badge « qualifiés et assurés » exclus par la
+  consigne) ; la légende dit explicitement qu’il ne s’agit pas d’un artisan de la plateforme.
