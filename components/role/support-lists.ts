@@ -83,3 +83,19 @@ export function ticketAuthorityKey(
   if (!caps) return `${ticketId}|all|unverified`;
   return `${ticketId}|all|${caps.support ? 1 : 0}${caps.support_reply ? 1 : 0}${caps.support_status ? 1 : 0}`;
 }
+
+/**
+ * Same rule as the server (lib/features/support/permissions.ts, migration 018): with the reply-all
+ * right, no reply on a resolved ticket; otherwise only the creator replies (011). Used by the
+ * isolated demonstration so it never shows a reply form the server would refuse.
+ */
+export function demoTicketPermissions(
+  rights: { can_reply_all: boolean; can_set_status_all: boolean },
+  userId: string,
+  ticket: { creator_id: string; status: string },
+): { can_reply: boolean; can_set_status: boolean } {
+  return {
+    can_reply: rights.can_reply_all ? ticket.status !== "resolved" : ticket.creator_id === userId,
+    can_set_status: rights.can_set_status_all,
+  };
+}

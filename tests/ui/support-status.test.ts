@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { runStatusCommand, statusTargets, SUPPORT_TRANSITIONS } from "../../components/role/support-lists";
+import { demoTicketPermissions, runStatusCommand, statusTargets, SUPPORT_TRANSITIONS } from "../../components/role/support-lists";
 import type { SupportCommand, SupportCommandResult } from "../../components/app/types";
 
 const ticket = (status: "open" | "in_progress" | "awaiting_user" | "resolved", version = 7) => ({ status, version });
@@ -40,4 +40,15 @@ test("status command: a target not offered (or no permission) sends nothing", as
   assert.equal((await runStatusCommand(send, ticket("open"), false, "resolved")).kind, "skipped");
   assert.equal((await runStatusCommand(send, ticket("in_progress"), true, "open")).kind, "skipped", "open n’est pas une cible depuis in_progress");
   assert.equal(calls, 0);
+});
+
+test("permissions follow the status (read+reply+status): open→resolved closes the reply, resolved→in_progress reopens it", () => {
+  const all = { can_reply_all: true, can_set_status_all: true };
+  assert.deepEqual(demoTicketPermissions(all, "op", { creator_id: "u1", status: "open" }), { can_reply: true, can_set_status: true });
+  assert.deepEqual(demoTicketPermissions(all, "op", { creator_id: "u1", status: "resolved" }), { can_reply: false, can_set_status: true });
+  assert.deepEqual(demoTicketPermissions(all, "op", { creator_id: "u1", status: "in_progress" }), { can_reply: true, can_set_status: true });
+  // Creator without operator rights keeps the 011 rule: own ticket replyable even resolved, no status.
+  const none = { can_reply_all: false, can_set_status_all: false };
+  assert.deepEqual(demoTicketPermissions(none, "u1", { creator_id: "u1", status: "resolved" }), { can_reply: true, can_set_status: false });
+  assert.deepEqual(demoTicketPermissions(none, "u2", { creator_id: "u1", status: "open" }), { can_reply: false, can_set_status: false });
 });

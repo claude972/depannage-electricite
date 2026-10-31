@@ -654,10 +654,12 @@ function TicketDetail({
     const result = await runStatusCommand((c) => session.supportCommand(id, c), detail.ticket, detail.permissions.can_set_status, next);
     setSending(false);
     if (result.kind === "ok") {
-      const { ticket, event } = result;
-      setDetail((d) => (d ? { ...d, ticket, page: { ...d.page, total_events: d.page.total_events + 1 } } : d));
-      setEvents((prev) => mergeById(prev, [event]));
+      // The per-ticket permissions depend on the new status (e.g. no operator reply on a resolved
+      // ticket, reply possible again after reopening): re-read the ticket and its permissions from
+      // the server instead of deriving them locally.
       setTarget("");
+      setBody("");
+      reread();
       return;
     }
     // 409: the choice is kept, nothing is resent; any other refusal is shown as the server wrote it.
