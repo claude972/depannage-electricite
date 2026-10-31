@@ -55,6 +55,7 @@ import type {
 } from "../app/types";
 import styles from "./client.module.css";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
+import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
 import { UploadQueuePanel } from "../app/upload-queue";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
 
@@ -1611,6 +1612,13 @@ function QuoteView({
         </tfoot>
       </table>
       {demo && <DemoNote>Montants et taux de TVA de démonstration, sans valeur contractuelle.</DemoNote>}
+
+      <QuoteDocumentsAnchor
+        session={session}
+        variant="client"
+        target={{ quoteId: quote.id }}
+        authority={{ canWrite: true }}
+      />
 
       <section className={styles.card} style={{ marginTop: 14 }}>
         <div className={styles.artisanRow}>

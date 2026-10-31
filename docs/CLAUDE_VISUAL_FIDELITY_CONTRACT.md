@@ -273,3 +273,18 @@ Vérifié (démo, script hors dépôt) : cloche visible 44 × 44 et active dans 
   Tests : `planningAuthority`, `demoPlanningRange` ; suite UI 82/82.
 - Observation hors périmètre (CSS du lot) : à 1280 l’en-tête du jour courant « sam. 31 oct. · Aujourd’hui » passe sur
   trois lignes dans la colonne de 120 px.
+
+### Ancrage 3 — documents, validité et avenants de devis
+
+- `QuoteDocumentsAnchor` (`components/role/quote-documents-anchor.tsx`) : `QuoteDocumentsPanel` avec l’état
+  `capabilities.quoteDocuments`, `CONTRACT_MESSAGES[state]`, portée `leafScope(profileId, rôle, autorité, org/site)`,
+  client `session.features.quoteDocuments`, démo `{ overview: quoteDocumentsDemo(rôle) }` en démonstration seulement,
+  `onNavigate("artisan-profile")` → vue `profile`.
+- Artisan : sous le devis courant du dossier (`variant="artisan"`, cible `{ interventionId }`, écriture vraie) ; l’éditeur
+  de révision reste en dessous. Particulier : sous le tableau du devis (`variant="client"`, cible `{ quoteId }`, écriture
+  vraie). Entreprise : après « Détails du devis » dans l’approbation (`variant="enterprise"`, cible `{ quoteId }`,
+  écriture = `canWriteSite(site du devis)` du helper fail-closed, sinon `readOnlyReason`) ; l’ancien bloc
+  « Validité du devis — règle à fixer » est retiré, la validité étant désormais portée par le lot.
+- Vérifié (démo, 360 et 1280) : panneau présent dans les trois variantes (`#demo/artisan-mission.demo-001`,
+  `#demo/client-quote.quote-demo-1`, `#demo/manager-approval.approval-demo`), 0 élément interactif < 44 px dans le
+  panneau, aucun débordement, console sans erreur. Captures `anchors-quote-documents-{artisan,client,manager}-{360,1280}.jpg`.

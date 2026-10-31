@@ -77,6 +77,7 @@ import styles from "./artisan.module.css";
 import { QuoteDraftEditor } from "./artisan-quote-draft";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
+import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
 import { ArtisanPlanning } from "../features/planning/artisan-planning";
 import { CONTRACT_MESSAGES } from "../app/api";
 import { demoPlanning } from "../../lib/features/planning/demo";
@@ -1806,6 +1807,14 @@ function QuotePanel({
           </>
         )}
       </section>
+      {current && (
+        <QuoteDocumentsAnchor
+          session={session}
+          variant="artisan"
+          target={{ interventionId: i.id }}
+          authority={{ canWrite: true }}
+        />
+      )}
       {i.status === "quoted" && (
         <QuoteDraftEditor
           session={session}

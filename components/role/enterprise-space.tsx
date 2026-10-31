@@ -83,6 +83,7 @@ import {
 } from "./enterprise-lists";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
+import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
 import type {
   Approval,
   ApprovalRule,
@@ -2753,9 +2754,6 @@ function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
               )}
             </div>
             <div className={styles.quoteFactsWide}>
-              <Unavailable title="Validité du devis" reason="Validité du devis non définie (règle à fixer)." />
-            </div>
-            <div className={styles.quoteFactsWide}>
               <small>Pièces jointes</small>
               {documents.length ? (
                 documents.map((d) => (
@@ -2780,6 +2778,19 @@ function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
             )}
           </div>
         </section>
+
+        <QuoteDocumentsAnchor
+          session={session}
+          variant="enterprise"
+          target={{ quoteId: approval.quote_id }}
+          authority={
+            c.authority.canWriteSite(decisionSiteId)
+              ? { canWrite: true }
+              : { canWrite: false, reason: c.authority.readOnlyReason || "Vos droits d’écriture ne couvrent pas le site de ce devis." }
+          }
+          organizationId={c.organization?.id}
+          siteId={decisionSiteId || undefined}
+        />
 
         <section className="panel" aria-labelledby="approval-decision">
           <h2 id="approval-decision">Votre décision</h2>
