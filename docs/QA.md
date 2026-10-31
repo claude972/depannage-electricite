@@ -78,3 +78,7 @@ Le dépôt de garantie est interdit dans la base tant que le réglage commercial
 ## Conclusion de revue
 
 Les règles métier et les frontières SQL exercées dans le harnais passent leurs contrôles. Les écarts de contrat identifiés ont été corrigés par les agents responsables ; aucune validation de production n'est donnée. L'autorisation de livrer une démonstration doit être fondée également sur le build final et la vérification de la preview. L'ouverture à de vrais clients et l'encaissement réel restent bloqués par les accès et validations externes mentionnés ci-dessus.
+
+## Attribution des déploiements Vercel
+
+La compilation de l'instantané final n'a pas démarré : l'API Vercel retourne `BLOCKED` / `TEAM_ACCESS_REQUIRED`, car l'auteur du commit initial utilise une adresse locale sans attribution reconnue. L'ancienne CLI affichait cet état comme `UNKNOWN`. L'identité GitHub connectée a été vérifiée (`claude972`, identifiant 65830944) ; les nouveaux commits utilisent son adresse noreply canonique dans la configuration Git locale du dépôt. Aucun historique n'est réécrit et aucun droit d'accès Vercel n'est modifié. Le nouveau déploiement automatique doit être contrôlé séparément avant d'annoncer une preview disponible.
