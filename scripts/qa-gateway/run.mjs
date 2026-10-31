@@ -49,6 +49,9 @@ import {
   expiryVerify,
   parseLease,
   checkPrivatePath,
+  revokePrepare,
+  revokeLive,
+  parseRevokeState,
 } from "./lib.ts";
 
 const BUCKET = "intervention-documents";
@@ -100,13 +103,17 @@ export async function main(argv, deps = defaultDeps()) {
     throw error;
   }
   // Additive, selectable suites: the nine nominal scenarios run only without --suite.
-  const mode = args.cleanupManifest ? "cleanup-manifest" : args.dryRun ? "dry-run" : args.suite === "expiry-prepare" ? "expiry-prepare" : args.suite === "expiry-verify" ? "expiry-verify" : "run";
+  const mode = args.cleanupManifest ? "cleanup-manifest" : args.dryRun ? "dry-run" : args.suite === "expiry-prepare" ? "expiry-prepare" : args.suite === "expiry-verify" ? "expiry-verify" : args.suite === "revoke-prepare" ? "revoke-prepare" : args.suite === "revoke-live" ? "revoke-live" : "run";
 
   await mkdir(args.out, { recursive: true, mode: 0o700 });
   await chmod(args.out, 0o700);
   const logPath = path.join(args.out, "run.log");
   const manifestPath = path.join(args.out, "manifest.json");
   const leasePath = path.join(args.out, "lease.json");
+  const revokeStatePath = path.join(args.out, "revoke.json");
+  const batchSqlPath = path.join(args.out, "revoke-live-batch.sql");
+  const observeSqlPath = path.join(args.out, "revoke-live-observe.sql");
+  const liveCommand = `node scripts/qa-gateway/run.mjs --suite revoke-live --no-other-writer --lease ${revokeStatePath} --batch-result <ligne finale du lot, fichier privé 0600> --observation <ligne d’observation, fichier privé 0600> --function-url ${args.functionUrl} --project ${args.project} --credentials <creds.json privé> --out <dossier privé 0700 distinct>`;
   const verifyCommand = `node scripts/qa-gateway/run.mjs --suite expiry-verify --lease ${leasePath} --function-url ${args.functionUrl} --project ${args.project} --credentials <creds.json privé> --out <dossier privé 0700 distinct>`;
   await appendFile(logPath, "", { mode: 0o600 });
   await chmod(logPath, 0o600);
@@ -277,6 +284,22 @@ export async function main(argv, deps = defaultDeps()) {
         if (verified.cleanup) await record("userIds", lease.userId, manifestExtra);
         tooEarly = verified.outcome === "too-early";
         skipCleanup = !verified.cleanup;
+      } else if (mode === "revoke-prepare") {
+        if (result.steps.some((s) => s.status === "fail")) throw new Error("préalables en échec : revoke-prepare interrompu avant toute création de compte");
+        const prepared = await revokePrepare(await revokeDeps());
+        result.revoke = { phase: "prepare", outcome: prepared.outcome, objectPath: null, responseStatus: null, conditions: {}, reasons: [], liveCommand: prepared.state ? liveCommand : null };
+        if (prepared.outcome === "refused") refusedBeforeWrite = true;
+        skipCleanup = (prepared.outcome === "prepared" && !result.steps.some((s) => s.status === "fail")) || prepared.outcome === "refused";
+      } else if (mode === "revoke-live") {
+        const state = parseRevokeState(JSON.parse(await readPrivate(args.lease, "état revoke (--lease)")), args.project);
+        await log("info", "état revoke chargé", `run d’origine ${state.runId}, dossier ${state.dossierId}, gestionnaire ${state.managerId}`);
+        manifestExtra = { suite: "revoke" };
+        const live = await revokeLive(state, await revokeDeps(), { batchResultPath: args.batchResult, observationPath: args.observation });
+        result.revoke = { phase: "live", outcome: live.outcome, objectPath: live.objectPath, responseStatus: live.responseStatus, conditions: live.verdict?.conditions ?? {}, reasons: live.verdict?.reasons ?? [], liveCommand: null };
+        // Unknown outcome (no response / 5xx / transport): the object may be kept by the gateway —
+        // handled like an interruption: late reconcile window before the discovery-first cleanup.
+        if (live.outcome === "unknown") interrupted = true;
+        skipCleanup = !live.cleanup;
       } else {
         await runScenarios();
       }
@@ -309,6 +332,92 @@ export async function main(argv, deps = defaultDeps()) {
   // 0 = pass, prepared (account intentionally kept, lease written) or observed (clean, but the
   // platform code is not bound yet: not a PASS); 1 = fail; 2 = refused before any write.
   return result.verdict === "pass" || result.verdict === "prepared" || result.verdict === "observed" ? 0 : 1;
+
+  // Injected dependencies of the two revocation phases (contract v4 §2); the harness never runs SQL.
+  async function revokeDeps() {
+    const sqlDir = new URL("./sql/", import.meta.url);
+    const templates = { batch: await readFile(new URL("revoke-live-batch.sql", sqlDir), "utf8"), observe: await readFile(new URL("revoke-live-observe.sql", sqlDir), "utf8") };
+    const userRows = async (token, query) => {
+      const r = await rest(query, {}, userHeaders(token));
+      return r.status === 200 && Array.isArray(r.json) ? { ok: true, rows: r.json, detail: `HTTP ${r.status}` } : { ok: false, rows: [], detail: `HTTP ${r.status} ${summarize(r)}` };
+    };
+    return {
+      now: deps.now,
+      nowMs: () => deps.now() * 1000 + (Date.now() % 1000),
+      sleep: (ms) => deps.reconcile.sleep(ms),
+      runId: id,
+      project: args.project,
+      projectUrl: credentials.url,
+      manifestPath,
+      statePath: revokeStatePath,
+      batchSqlPath,
+      observeSqlPath,
+      liveCommand,
+      templates,
+      randomPassword: () => cohortPassword(randomBytes(32)),
+      listUserEmails: async () => {
+        const emails = [];
+        for (let page = 1; page <= 5; page++) {
+          const r = await http(`${credentials.url}/auth/v1/admin/users?page=${page}&per_page=1000`, { headers: serviceHeaders() });
+          const users = Array.isArray(r.json?.users) ? r.json.users : Array.isArray(r.json) ? r.json : null;
+          if (r.status !== 200 || !users) return { ok: false, emails: [], detail: `HTTP ${r.status} ${summarize(r)}` };
+          for (const u of users) if (typeof u?.email === "string") emails.push(u.email);
+          if (users.length < 1000) break;
+        }
+        return { ok: true, emails, detail: `${emails.length} compte(s)` };
+      },
+      createUser: async (email, password, role) => {
+        const r = await http(`${credentials.url}/auth/v1/admin/users`, { method: "POST", headers: serviceHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { role, full_name: `QA révocation ${id}` } }) });
+        return { status: r.status, id: typeof r.json?.id === "string" ? r.json.id : null, detail: summarize(r) };
+      },
+      passwordGrant: async (email, password) => {
+        const r = await http(`${credentials.url}/auth/v1/token?grant_type=password`, { method: "POST", headers: { apikey: credentials.publishableKey, "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) });
+        return { status: r.status, json: r.json && typeof r.json === "object" ? r.json : null, detail: r.status === 200 ? "jeton non journalisé" : summarize(r) };
+      },
+      rpc: async (token, fn, body) => {
+        const r = await rest(`rpc/${fn}`, { method: "POST", body: JSON.stringify(body) }, userHeaders(token));
+        return { status: r.status, json: r.json, detail: r.status >= 300 ? summarize(r) : "" };
+      },
+      serviceInsert: async (table, row) => {
+        const r = await rest(table, { method: "POST", body: JSON.stringify(row) }, serviceHeaders({ Prefer: "return=minimal" }));
+        return { status: r.status, detail: r.status >= 300 ? summarize(r) : "" };
+      },
+      serviceRows: async (query) => readRows(query),
+      userRows,
+      // ONE real upload: 2 KiB JPEG, multipart, manager JWT, intervention_id of the QA site dossier.
+      upload: async (token, dossierId) => {
+        const form = new FormData();
+        form.set("file", new Blob([fixtures.jpeg(2048)], { type: "image/jpeg" }), "photo.jpg");
+        form.set("intervention_id", dossierId);
+        const r = await http(args.functionUrl, { method: "POST", headers: { apikey: credentials.publishableKey, Authorization: `Bearer ${token}` }, body: form });
+        return { status: r.status, text: r.text };
+      },
+      getUser: async (userId) => {
+        const r = await http(`${credentials.url}/auth/v1/admin/users/${userId}`, { headers: serviceHeaders() });
+        return { status: r.status, json: r.json && typeof r.json === "object" && !Array.isArray(r.json) ? r.json : null };
+      },
+      readManifest: async (manifestFile) => parseManifest(JSON.parse(await readPrivate(manifestFile, "manifeste de l’état")), args.project),
+      record,
+      recordValidated: (kind, value) => record(kind, value, manifestExtra),
+      addSecret: (secret) => { if (typeof secret === "string" && secret.length >= 8) secrets.push(secret); },
+      forbidden: () => [...secrets, ...created.userIds],
+      client,
+      writeState: async (state, target) => {
+        const file = target === "original" ? args.lease : revokeStatePath;
+        await assertPrivatePath(file, target === "original" ? "état original (--lease)" : "état (--out)", { mustExist: target === "original" });
+        await writePrivate(file, JSON.stringify(state, null, 2));
+      },
+      writeSql: (file, text) => writePrivate(file, text),
+      readResultFile: async (file) => {
+        const st = await lstat(file).catch(() => null);
+        if (!st) return null;
+        const text = await readPrivate(file, "résultat fourni par le pilote");
+        if (!text.trim()) return null;
+        return JSON.parse(text);
+      },
+      log,
+    };
+  }
 
   // Injected dependencies of the two expiry phases (lib.ts drives them; fully fakeable in tests).
   function expiryDeps() {
@@ -523,10 +632,14 @@ function usage() {
   node scripts/qa-gateway/run.mjs --cleanup-manifest <manifest.json> --project <ref> --credentials <creds.json privé> --out <dossier 0700>
   node scripts/qa-gateway/run.mjs --suite expiry-prepare --function-url <…> --project <ref> --credentials <…> --out <dossier 0700> [--dry-run]
   node scripts/qa-gateway/run.mjs --suite expiry-verify --lease <dossier 0700>/lease.json --function-url <…> --project <ref> --credentials <…> --out <dossier 0700 distinct>
+  node scripts/qa-gateway/run.mjs --suite revoke-prepare --no-other-writer --function-url <…> --project <ref> --credentials <…> --out <dossier 0700>
+  node scripts/qa-gateway/run.mjs --suite revoke-live --no-other-writer --lease <dossier 0700>/revoke.json --batch-result <fichier> --observation <fichier> --function-url <…> --project <ref> --credentials <…> --out <dossier 0700 distinct>
 creds.json : {"url":"https://<ref>.supabase.co","publishable_key":"…","service_role_key":"…"}
 Le harnais crée une cohorte unique, exerce la fonction déployée, nettoie tout ce qu’il a créé (manifeste durable) et écrit summary.md / result.json caviardés. Aucun jeton ni en-tête n’est affiché. Code de sortie 1 dès qu’une étape échoue.
 --suite expiry-prepare : un seul compte technique, jeton réel prouvé valide sans mutation, bail 0600 (lease.json), verdict PREPARED (code 0), compte laissé jusqu’au verify (≤ 2 h).
---suite expiry-verify : refus (code 2) si trop tôt ; cohérence bail/manifeste/claims, compte actif ni banni ni effacé (200), appel réel avec le même jeton expiré (401 sans fuite : PASS si enveloppe fonction ou code lié, OBSERVED sinon), suppression du compte et relecture 404.`);
+--suite expiry-verify : refus (code 2) si trop tôt ; cohérence bail/manifeste/claims, compte actif ni banni ni effacé (200), appel réel avec le même jeton expiré (401 sans fuite : PASS si enveloppe fonction ou code lié, OBSERVED sinon), suppression du compte et relecture 404.
+--suite revoke-prepare --no-other-writer : garde autre rédacteur, cohorte propriétaire/gestionnaire QA (selected + 1 grant can_write), dossier de site, lot et observation SQL rendus dans --out pour revue root, état revoke.json 0600, verdict PREPARED.
+--suite revoke-live --no-other-writer --lease <revoke.json> --batch-result <fichier> --observation <fichier> : preuve de cohorte, UN upload réel pendant la pause du lot, découverte de l’objet, relectures, verdict (a)–(g) sur la ligne finale du lot et l’observation fournies par le pilote, nettoyage.`);
 }
 // Auto-run only when executed as a script; tests import main() and inject their runtime.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = await main(process.argv.slice(2));

@@ -500,7 +500,7 @@ test("the orchestrator wires discovery-first cleanup into every exit path", asyn
   // too-early expiry-verify (nothing touched); every other path reaches the cleanup.
   assert.match(source, /\} finally \{\n\s+if \(mode !== "dry-run" && !skipCleanup\) \{\n\s+try \{\n\s+await cleanup\(\);/);
   assert.match(source, /let skipCleanup = false;/);
-  assert.equal((source.match(/skipCleanup = /g) || []).length, 4, "skipCleanup assigned only at its declaration, prepare (prepared AND no failed step), verify (too early) and the pre-write UsageError refusal (nothing recorded)");
+  assert.equal((source.match(/skipCleanup = /g) || []).length, 6, "skipCleanup assigned only at its declaration, expiry prepare (prepared AND no failed step), expiry verify (too early), the pre-write UsageError refusal (nothing recorded), revoke prepare (prepared AND no failed step, or refused before any write) and revoke live (refused)");
   assert.match(source, /if \(error instanceof UsageError && created\.userIds\.length === 0\) \{\n\s+\/\/[^\n]*\n\s+refusedBeforeWrite = true;\n\s+skipCleanup = true;/);
   assert.match(source, /async function cleanup\(\) \{\n[^]*?active = new AbortController\(\);\n[^]*?await runCleanup\(client, created, \{/);
   assert.match(source, /saveManifest: \(nextCreated, unknown\) => saveManifest\(nextCreated, unknown\)/);

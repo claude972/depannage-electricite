@@ -16,9 +16,12 @@ export type Args = {
   cleanupManifest: string;
   suite: Suite;
   lease: string;
+  noOtherWriter: boolean;
+  batchResult: string;
+  observation: string;
   help: boolean;
 };
-export const SUITES = ["", "expiry-prepare", "expiry-verify"] as const;
+export const SUITES = ["", "expiry-prepare", "expiry-verify", "revoke-prepare", "revoke-live"] as const;
 export type Suite = (typeof SUITES)[number];
 export class UsageError extends Error {}
 
@@ -32,6 +35,9 @@ export function parseArgs(argv: string[]): Args {
     cleanupManifest: "",
     suite: "",
     lease: "",
+    noOtherWriter: false,
+    batchResult: "",
+    observation: "",
     help: false,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -50,9 +56,12 @@ export function parseArgs(argv: string[]): Args {
     else if (token === "--cleanup-manifest") args.cleanupManifest = take();
     else if (token === "--suite") {
       const value = take();
-      if (!(SUITES as readonly string[]).includes(value) || value === "") throw new UsageError("--suite attend expiry-prepare ou expiry-verify.");
+      if (!(SUITES as readonly string[]).includes(value) || value === "") throw new UsageError("--suite attend expiry-prepare, expiry-verify, revoke-prepare ou revoke-live.");
       args.suite = value as Suite;
     } else if (token === "--lease") args.lease = take();
+    else if (token === "--no-other-writer") args.noOtherWriter = true;
+    else if (token === "--batch-result") args.batchResult = take();
+    else if (token === "--observation") args.observation = take();
     else if (token === "--dry-run") args.dryRun = true;
     else if (token === "--help" || token === "-h") args.help = true;
     else throw new UsageError(`Option inconnue : ${token}`);
@@ -67,8 +76,12 @@ export function parseArgs(argv: string[]): Args {
     throw new UsageError("--cleanup-manifest et --dry-run sont exclusifs.");
   if (args.suite && args.cleanupManifest) throw new UsageError("--suite et --cleanup-manifest sont exclusifs.");
   if (args.suite === "expiry-verify" && !args.lease) throw new UsageError("--suite expiry-verify exige --lease <lease.json>.");
-  if (args.suite === "expiry-verify" && args.dryRun) throw new UsageError("--dry-run ne s’applique qu’à expiry-prepare.");
-  if (args.lease && args.suite !== "expiry-verify") throw new UsageError("--lease n’a de sens qu’avec --suite expiry-verify.");
+  if (args.suite === "revoke-live" && !args.lease) throw new UsageError("--suite revoke-live exige --lease <revoke.json de revoke-prepare>.");
+  if (args.suite === "revoke-live" && (!args.batchResult || !args.observation)) throw new UsageError("--suite revoke-live exige --batch-result <fichier> et --observation <fichier>.");
+  if ((args.suite === "revoke-prepare" || args.suite === "revoke-live") && !args.noOtherWriter) throw new UsageError("--suite revoke-* exige --no-other-writer (coché par le pilote après vérification).");
+  if (args.dryRun && args.suite !== "" && args.suite !== "expiry-prepare" && args.suite !== "revoke-prepare") throw new UsageError("--dry-run ne s’applique qu’aux phases prepare.");
+  if (args.lease && args.suite !== "expiry-verify" && args.suite !== "revoke-live") throw new UsageError("--lease n’a de sens qu’avec --suite expiry-verify ou revoke-live.");
+  if ((args.batchResult || args.observation) && args.suite !== "revoke-live") throw new UsageError("--batch-result/--observation n’ont de sens qu’avec --suite revoke-live.");
   if (!/^[a-z0-9]{20}$/.test(args.project))
     throw new UsageError("--project doit être la référence du projet (20 caractères).");
   if (args.functionUrl && !/^https:\/\//.test(args.functionUrl))
@@ -226,7 +239,8 @@ export function cleanupPlan(created: Created): CleanupStep[] {
 // cleanup discovery (merged cohort rows/objects, plus every read that stayed unknown).
 export type Unknown = { scope: string; detail: string };
 export type ManifestExpiry = { userId: string; email: string; issuer: string; claimExp: number; tokenSha256: string };
-export type ManifestExtra = { suite?: "expiry"; leaseEndsAt?: string; expiry?: ManifestExpiry };
+export type ManifestRevoke = { ownerId: string; managerId: string; orgId: string; siteId: string; dossierId: string; ownerEmail: string; managerEmail: string; tokenSha256: string };
+export type ManifestExtra = { suite?: "expiry" | "revoke"; leaseEndsAt?: string; expiry?: ManifestExpiry; revoke?: ManifestRevoke };
 export type Manifest = { version: 1; runId: string; project: string; updatedAt: string; created: Created; unknown: Unknown[] } & ManifestExtra;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const OBJECT_PATH = /^[0-9a-f-]{36}\/[0-9a-f-]{36}$/i;
@@ -264,8 +278,15 @@ export function parseManifest(raw: unknown, project: string): Manifest {
   }
   const out: Manifest = { version: 1, runId: m.runId, project: m.project, updatedAt: String(m.updatedAt ?? ""), created, unknown };
   if (m.suite !== undefined) {
-    if (m.suite !== "expiry") throw new UsageError("Manifeste invalide (suite).");
-    out.suite = "expiry";
+    if (m.suite !== "expiry" && m.suite !== "revoke") throw new UsageError("Manifeste invalide (suite).");
+    out.suite = m.suite;
+  }
+  if (m.revoke !== undefined) {
+    const r = m.revoke as Record<string, unknown> | null;
+    if (!r || typeof r !== "object") throw new UsageError("Manifeste invalide (revoke).");
+    for (const key of ["ownerId", "managerId", "orgId", "siteId", "dossierId"]) if (typeof r[key] !== "string" || !UUID.test(r[key] as string)) throw new UsageError(`Manifeste invalide (revoke.${key}).`);
+    if (typeof r.ownerEmail !== "string" || typeof r.managerEmail !== "string" || typeof r.tokenSha256 !== "string" || !/^[0-9a-f]{64}$/.test(r.tokenSha256)) throw new UsageError("Manifeste invalide (revoke).");
+    out.revoke = { ownerId: r.ownerId as string, managerId: r.managerId as string, orgId: r.orgId as string, siteId: r.siteId as string, dossierId: r.dossierId as string, ownerEmail: r.ownerEmail, managerEmail: r.managerEmail, tokenSha256: r.tokenSha256 };
   }
   if (m.leaseEndsAt !== undefined) {
     if (typeof m.leaseEndsAt !== "string") throw new UsageError("Manifeste invalide (leaseEndsAt).");
@@ -755,7 +776,7 @@ export type StepRecord = { step: string; status: StepStatus; detail: string; at:
 export type RunResult = {
   runId: string;
   project: string;
-  mode: "run" | "dry-run" | "cleanup-manifest" | "expiry-prepare" | "expiry-verify";
+  mode: "run" | "dry-run" | "cleanup-manifest" | "expiry-prepare" | "expiry-verify" | "revoke-prepare" | "revoke-live";
   startedAt: string;
   finishedAt: string | null;
   steps: StepRecord[];
@@ -764,6 +785,16 @@ export type RunResult = {
   leftovers: string[];
   verdict: "pass" | "fail" | "incomplete" | "prepared" | "observed";
   expiry?: ExpiryReport;
+  revoke?: RevokeReport;
+};
+export type RevokeReport = {
+  phase: "prepare" | "live";
+  outcome: "prepared" | "pass" | "fail" | "unknown" | "refused" | null;
+  objectPath: string | null;
+  responseStatus: number | null;
+  conditions: Record<string, boolean | null>;
+  reasons: string[];
+  liveCommand: string | null;
 };
 // Platform codes observed for an EXPIRED JWT and bound strictly by the pilot (follow-up commit, same
 // method as PLATFORM_UNAUTHORIZED_CODES). Empty until the first real observation: an unknown
@@ -780,7 +811,7 @@ export type ExpiryReport = {
   outcome: "prepared" | "pass" | "observed" | "fail" | "refused" | "too-early" | null;
 };
 // Any failed step (scenario, readback, cleanup) fails the run; later successes never mask it.
-export function computeVerdict(result: Pick<RunResult, "steps" | "scenarios" | "cleanup" | "leftovers" | "mode"> & { expiry?: ExpiryReport }, finished: boolean): RunResult["verdict"] {
+export function computeVerdict(result: Pick<RunResult, "steps" | "scenarios" | "cleanup" | "leftovers" | "mode"> & { expiry?: ExpiryReport; revoke?: RevokeReport }, finished: boolean): RunResult["verdict"] {
   if (!finished) return "incomplete";
   if (result.steps.some((s) => s.status === "fail")) return "fail";
   if (result.cleanup.some((c) => !c.ok) || result.leftovers.length) return "fail";
@@ -790,7 +821,8 @@ export function computeVerdict(result: Pick<RunResult, "steps" | "scenarios" | "
   }
   // Prepare never claims PASS: the expiry is not proven until verify ran. Verify answers
   // "observed" (not PASS) while the platform code for an expired JWT is not bound strictly.
-  if (result.mode === "expiry-prepare") return "prepared";
+  if (result.mode === "expiry-prepare" || result.mode === "revoke-prepare") return "prepared";
+  if (result.mode === "revoke-live" && result.revoke?.outcome !== "pass") return "fail";
   if (result.mode === "expiry-verify" && result.expiry?.outcome === "observed") return "observed";
   // A too-early verify proved nothing and touched nothing: never "pass".
   if (result.mode === "expiry-verify" && result.expiry?.outcome === "too-early") return "incomplete";
@@ -806,7 +838,7 @@ export function summaryMarkdown(result: RunResult): string {
   const lines: string[] = [];
   lines.push(`# QA gateway native-document-upload — run ${result.runId}`);
   lines.push("");
-  const mode = result.mode === "dry-run" ? "DRY RUN (aucune écriture distante)" : result.mode === "cleanup-manifest" ? "nettoyage depuis un manifeste" : result.mode === "expiry-prepare" ? "expiration réelle — phase prepare" : result.mode === "expiry-verify" ? "expiration réelle — phase verify" : "exécution réelle sur la base dédiée";
+  const mode = result.mode === "dry-run" ? "DRY RUN (aucune écriture distante)" : result.mode === "cleanup-manifest" ? "nettoyage depuis un manifeste" : result.mode === "expiry-prepare" ? "expiration réelle — phase prepare" : result.mode === "expiry-verify" ? "expiration réelle — phase verify" : result.mode === "revoke-prepare" ? "révocation pendant upload — phase prepare" : result.mode === "revoke-live" ? "révocation pendant upload — phase live" : "exécution réelle sur la base dédiée";
   lines.push(`Projet : ${result.project} · ${mode} · début ${result.startedAt} · fin ${result.finishedAt ?? "en cours"} · verdict **${result.verdict}**`);
   lines.push("");
   if (result.expiry) {
@@ -818,6 +850,18 @@ export function summaryMarkdown(result: RunResult): string {
       if (e.verifyNotBefore) lines.push(`Relancer après ${e.verifyNotBefore} et avant ${e.leaseEndsAt ?? "?"} : \`${e.verifyCommand ?? ""}\``);
     } else {
       lines.push(result.verdict === "observed" ? `**OBSERVED — pas un PASS.** Code 401 de la plateforme observé : ${e.observedCode ?? "—"} ; à lier strictement dans EXPIRED_PLATFORM_CODES (commit de suivi) avant tout PASS.` : `Corps 401 : ${e.observedCode ?? "—"}.`);
+    }
+    lines.push("");
+  }
+  if (result.revoke) {
+    const r = result.revoke;
+    lines.push("## Révocation pendant un upload réel");
+    lines.push("");
+    if (r.phase === "prepare") lines.push(result.verdict === "prepared" ? `**PREPARED — rien n’est prouvé.** Cohorte laissée pour la phase live : \`${r.liveCommand ?? ""}\`` : "Préparation en échec : cohorte nettoyée ou manifeste actionnable.");
+    else {
+      lines.push(`Issue : **${r.outcome ?? "—"}** ; réponse HTTP ${r.responseStatus ?? "—"} ; objet ${r.objectPath ? "découvert" : "non observé"}.`);
+      for (const [k, v] of Object.entries(r.conditions)) lines.push(`- ${v === true ? "OK" : v === false ? "ÉCHEC" : "non évalué"} ${k}`);
+      for (const reason of r.reasons) lines.push(`- ${reason}`);
     }
     lines.push("");
   }
@@ -1192,4 +1236,464 @@ export async function expiryVerify(lease: Lease, deps: ExpiryDeps): Promise<Veri
   await deps.writeLease(consumed, "original");
   await deps.writeLease(consumed, "out");
   return { outcome: verdict.outcome, observedCode: verdict.observedCode, cleanup: true };
+}
+
+// ---------------------------------------------------------------------------------------------
+// QA-GW-EXPIRED-REVOKE-003 §2 (contract v4 ac4eadf) — revocation during a REAL upload.
+// Pure parsers/verdict + orchestration over injected deps. The harness never runs SQL: the pilot
+// executes the rendered batch and the observation with `db query --file` and hands the two result
+// rows back as private files. Any missing/malformed result is a rejection, never "empty".
+// ---------------------------------------------------------------------------------------------
+export const REVOKE_PAUSE_S = 3;
+export const REVOKE_DISCOVERY_MS = 3000;
+export const REVOKE_DISCOVERY_STEP_MS = 250;
+export const REVOKE_RESULT_WAIT_MS = 120000;
+export const REVOKE_RESULT_STEP_MS = 500;
+export function revokeEmail(run: string, role: "owner" | "manager"): string {
+  return `qa-gw-rv-${run}-${role}@qa.invalid`;
+}
+export const REVOKE_EMAIL_PATTERN = /^qa-gw-rv-[0-9a-z]{2,40}-(owner|manager)@qa\.invalid$/;
+export function isRevokeCohortEmail(email: unknown, runId: string, role: "owner" | "manager"): boolean {
+  return typeof email === "string" && REVOKE_EMAIL_PATTERN.test(email) && email === revokeEmail(runId, role);
+}
+// Conservative other-writer guard over the Auth admin listing: any qa-gw-* account that is not of
+// this run (including a pending expiry lease) refuses the run; the pilot never erases it to pass.
+export function otherWriters(emails: string[], runId: string): string[] {
+  return emails.filter((e) => typeof e === "string" && /^qa-gw-/i.test(e) && !e.includes(`-${runId}-`) && !e.includes(`-${runId}@`));
+}
+export type RevokeIds = { RUN: string; PROJECT: string; ORG: string; SITE: string; DOSSIER: string; OWNER: string; MANAGER: string };
+// Renders a SQL template: every {{KEY}} replaced by a validated value; unknown placeholders refused.
+export function renderSqlTemplate(template: string, ids: RevokeIds): string {
+  for (const [key, value] of Object.entries(ids)) {
+    const ok = key === "RUN" ? /^[0-9a-z]{2,40}$/.test(value) : key === "PROJECT" ? /^[a-z0-9]{20}$/.test(value) : UUID.test(value);
+    if (!ok) throw new UsageError(`Rendu SQL refusé : ${key} invalide.`);
+  }
+  const rendered = template.replace(/\{\{([A-Z_]+)\}\}/g, (_, key: string) => {
+    if (!(key in ids)) throw new UsageError(`Rendu SQL refusé : placeholder inconnu ${key}.`);
+    return ids[key as keyof RevokeIds];
+  });
+  if (/\{\{[A-Z_]+\}\}/.test(rendered)) throw new UsageError("Rendu SQL refusé : placeholder restant.");
+  return rendered;
+}
+export type RevokeState = {
+  version: 1;
+  suite: "revoke";
+  runId: string;
+  project: string;
+  ownerId: string;
+  managerId: string;
+  orgId: string;
+  siteId: string;
+  dossierId: string;
+  managerToken: string;
+  managerTokenExp: number;
+  preparedAt: number;
+  manifestPath: string;
+  batchSqlPath: string;
+  observeSqlPath: string;
+  consumedAt?: number;
+};
+export function parseRevokeState(raw: unknown, project: string): RevokeState {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new UsageError("État revoke invalide.");
+  const l = raw as Record<string, unknown>;
+  if (l.version !== 1 || l.suite !== "revoke") throw new UsageError("État revoke invalide (version/suite).");
+  for (const key of ["runId", "project", "managerToken", "manifestPath", "batchSqlPath", "observeSqlPath"]) if (typeof l[key] !== "string" || !l[key]) throw new UsageError(`État revoke invalide (${key}).`);
+  for (const key of ["ownerId", "managerId", "orgId", "siteId", "dossierId"]) if (typeof l[key] !== "string" || !UUID.test(l[key] as string)) throw new UsageError(`État revoke invalide (${key}).`);
+  for (const key of ["managerTokenExp", "preparedAt"]) if (typeof l[key] !== "number" || !Number.isFinite(l[key])) throw new UsageError(`État revoke invalide (${key}).`);
+  if (l.project !== project) throw new UsageError(`Refus : l’état appartient au projet ${l.project}, pas ${project}.`);
+  if (l.ownerId === l.managerId) throw new UsageError("État revoke invalide : gestionnaire = propriétaire.");
+  if (l.consumedAt !== undefined && typeof l.consumedAt !== "number") throw new UsageError("État revoke invalide (consumedAt).");
+  return { ...(l as unknown as RevokeState) };
+}
+// ---- Strict parsers of the two pilot-provided result rows --------------------------------------
+type Row = Record<string, unknown>;
+function singleRow(raw: unknown, label: string, column: string): Row {
+  // Accepted shapes: the bare object; [{column: obj}]; {column: obj}; [obj]. Exactly one row.
+  let rows: unknown[] = [];
+  if (Array.isArray(raw)) rows = raw;
+  else if (raw && typeof raw === "object") rows = [raw];
+  else throw new UsageError(`${label} : contenu non tabulaire.`);
+  if (rows.length !== 1) throw new UsageError(`${label} : ${rows.length} ligne(s) au lieu d’une seule.`);
+  let row = rows[0];
+  if (row && typeof row === "object" && !Array.isArray(row) && column in (row as Row) && Object.keys(row as Row).length === 1) row = (row as Row)[column];
+  if (!row || typeof row !== "object" || Array.isArray(row)) throw new UsageError(`${label} : ligne malformée.`);
+  const r = row as Row;
+  if (typeof r.code === "string" && /^[0-9A-Z]{5}$/.test(r.code) && typeof r.message === "string") throw new UsageError(`${label} : erreur SQL ${r.code} — ${r.message}`);
+  if (typeof r.error === "string") throw new UsageError(`${label} : erreur — ${r.error}`);
+  return r;
+}
+const ts = (v: unknown, label: string): number => {
+  if (typeof v !== "string" || !v) throw new UsageError(`${label} manquant ou non textuel.`);
+  const t = Date.parse(v);
+  if (!Number.isFinite(t)) throw new UsageError(`${label} : horodatage illisible.`);
+  return t / 1000;
+};
+export type BatchResult = {
+  run: string;
+  project: string;
+  batchPid: number;
+  tBegin: number;
+  tLock: number;
+  tBeforeRevoke: number;
+  tRevoked: number;
+  tAfterCommit: number;
+  rpcOk: true;
+  actorRole: string;
+  actorUid: string;
+  readback: { scope: string; grants: number };
+  ids: { orgId: string; siteId: string; dossierId: string; ownerId: string; managerId: string };
+};
+export function parseBatchResult(raw: unknown, expected: { runId: string; project: string; ownerId: string; managerId: string; orgId: string; siteId: string; dossierId: string }): BatchResult {
+  const r = singleRow(raw, "résultat du lot", "result");
+  const str = (k: string) => {
+    if (typeof r[k] !== "string" || !r[k]) throw new UsageError(`résultat du lot : ${k} manquant.`);
+    return r[k] as string;
+  };
+  const run = str("run");
+  const project = str("project");
+  if (run !== expected.runId) throw new UsageError(`résultat du lot : run ${run} ≠ ${expected.runId}.`);
+  if (project !== expected.project) throw new UsageError(`résultat du lot : projet ${project} ≠ ${expected.project}.`);
+  const ids = { orgId: str("org_id"), siteId: str("site_id"), dossierId: str("dossier_id"), ownerId: str("owner_id"), managerId: str("manager_id") };
+  for (const [k, v] of Object.entries(ids)) if (v !== expected[k as keyof typeof expected]) throw new UsageError(`résultat du lot : ${k} ≠ cohorte attendue.`);
+  if (typeof r.batch_pid !== "number" || !Number.isInteger(r.batch_pid) || r.batch_pid <= 0) throw new UsageError("résultat du lot : batch_pid manquant ou invalide.");
+  const tBegin = ts(r.t_begin, "t_begin");
+  const tLock = ts(r.t_lock, "t_lock");
+  const tBeforeRevoke = ts(r.t_before_revoke, "t_before_revoke");
+  const tRevoked = ts(r.t_revoked, "t_revoked");
+  const tAfterCommit = ts(r.t_after_commit, "t_after_commit");
+  if (!(tBegin <= tLock && tLock <= tBeforeRevoke && tBeforeRevoke <= tRevoked && tRevoked < tAfterCommit)) throw new UsageError("résultat du lot : horodatages incohérents (t_begin ≤ t_lock ≤ t_before_revoke ≤ t_revoked < t_after_commit attendu).");
+  if (tBeforeRevoke - tLock > REVOKE_PAUSE_S + 2) throw new UsageError(`résultat du lot : pause de ${(tBeforeRevoke - tLock).toFixed(1)} s > ${REVOKE_PAUSE_S} s (+2 s de marge) : fenêtre non conforme.`);
+  if (r.rpc_ok !== true) throw new UsageError("résultat du lot : rpc_ok absent ou ≠ true.");
+  if (r.actor_role !== "authenticated") throw new UsageError(`résultat du lot : actor_role ${String(r.actor_role)} ≠ authenticated (preuve de l’acteur).`);
+  if (r.actor_uid !== expected.ownerId) throw new UsageError("résultat du lot : actor_uid ≠ propriétaire QA (preuve de l’acteur).");
+  const rb = r.readback as Row | undefined;
+  if (!rb || typeof rb !== "object" || Array.isArray(rb)) throw new UsageError("résultat du lot : readback manquant.");
+  const grants = typeof rb.grants === "number" ? rb.grants : typeof rb.grants === "string" && /^\d+$/.test(rb.grants) ? Number(rb.grants) : NaN;
+  if (rb.scope !== "selected" || grants !== 0) throw new UsageError(`résultat du lot : relecture post-commit non révoquée (scope ${String(rb.scope)}, grants ${String(rb.grants)}).`);
+  return { run, project, batchPid: r.batch_pid, tBegin, tLock, tBeforeRevoke, tRevoked, tAfterCommit, rpcOk: true, actorRole: "authenticated", actorUid: expected.ownerId, readback: { scope: "selected", grants: 0 }, ids };
+}
+export type Observation = { tObserved: number; finalizePid: number; waitEventType: string; blockedBy: number[]; objects: string[] };
+export function parseObservation(raw: unknown): Observation {
+  const r = singleRow(raw, "observation", "row");
+  const tObserved = ts(r.t_observed, "t_observed");
+  if (typeof r.finalize_pid !== "number" || !Number.isInteger(r.finalize_pid)) throw new UsageError("observation : finalize_pid manquant.");
+  if (typeof r.wait_event_type !== "string") throw new UsageError("observation : wait_event_type manquant.");
+  const blocked = Array.isArray(r.blocked_by) ? r.blocked_by : typeof r.blocked_by === "string" ? r.blocked_by.replace(/[{}\s]/g, "").split(",").filter(Boolean).map(Number) : null;
+  if (!blocked || blocked.some((x) => typeof x !== "number" || !Number.isInteger(x))) throw new UsageError("observation : blocked_by manquant ou illisible.");
+  const objects = Array.isArray(r.objects) ? r.objects : null;
+  if (!objects || objects.some((o) => typeof o !== "string")) throw new UsageError("observation : objects manquant ou illisible.");
+  return { tObserved, finalizePid: r.finalize_pid, waitEventType: r.wait_event_type, blockedBy: blocked as number[], objects: objects as string[] };
+}
+// ---- Verdict over the full condition set (a)–(g) ------------------------------------------------
+export type RevokeInput = {
+  batch: BatchResult | null;
+  observation: Observation | null;
+  parseErrors: string[];
+  objectPath: string | null;
+  discoveredAtMs: number | null;
+  responseAtMs: number | null;
+  response: { status: number; bodyText: string } | null;
+  readbacks: { documentRows: number | null; objectPresent: boolean | null };
+  forbidden: string[];
+  managerId: string;
+};
+export type RevokeVerdict = { outcome: "pass" | "fail" | "unknown"; conditions: Record<string, boolean | null>; reasons: string[] };
+export function revokeVerdict(i: RevokeInput): RevokeVerdict {
+  const c: Record<string, boolean | null> = { "a) observation : finalisation bloquée par le lot, objet exact visible, dans [t_lock, t_before_revoke]": null, "b) RPC réussi et révocation commitée (relecture post-commit)": null, "c) réponse 403 enveloppe gateway sans fuite, objet absent, aucune ligne documents": null, "d) objet découvert avant la réponse": null, "f) ligne finale et observation acceptées par le parseur": null, "g) preuve de l’acteur (actor_role/actor_uid)": null };
+  const reasons: string[] = [];
+  const keys = Object.keys(c);
+  const [A, B, C, D, F, G] = keys;
+  // Unknown outcome first: no response, 5xx, or transport — nothing can be concluded, nothing deleted on a timer.
+  if (!i.response) {
+    reasons.push("aucune réponse HTTP (transport/interruption) : issue inconnue");
+    return { outcome: "unknown", conditions: c, reasons };
+  }
+  if (i.response.status >= 500) {
+    reasons.push(`HTTP ${i.response.status} : issue inconnue (objet possiblement conservé par le gateway)`);
+    return { outcome: "unknown", conditions: c, reasons };
+  }
+  c[F] = i.parseErrors.length === 0 && i.batch !== null && i.observation !== null;
+  if (!c[F]) for (const e of i.parseErrors) reasons.push(`parseur : ${e}`);
+  if (i.batch) {
+    c[G] = i.batch.actorRole === "authenticated" && UUID.test(i.batch.actorUid);
+    c[B] = i.batch.rpcOk && i.batch.readback.scope === "selected" && i.batch.readback.grants === 0;
+  }
+  if (i.batch && i.observation) {
+    const o = i.observation;
+    const inWindow = i.batch.tLock <= o.tObserved && o.tObserved <= i.batch.tBeforeRevoke;
+    const blocked = o.waitEventType === "Lock" && o.blockedBy.includes(i.batch.batchPid);
+    const exact = i.objectPath !== null && o.objects.length === 1 && o.objects[0] === i.objectPath;
+    c[A] = inWindow && blocked && exact;
+    if (!inWindow) reasons.push(`observation hors fenêtre : t_observed ${new Date(o.tObserved * 1000).toISOString()} ∉ [t_lock, t_before_revoke]`);
+    if (!blocked) reasons.push(`finalisation non bloquée par le lot (wait ${o.waitEventType}, blocked_by ${o.blockedBy.join(",") || "∅"}, batch_pid ${i.batch.batchPid}) : fenêtre non exercée`);
+    if (!exact) reasons.push(`objet observé ${JSON.stringify(o.objects)} ≠ objet découvert ${i.objectPath ?? "∅"}`);
+  }
+  c[D] = i.objectPath !== null && i.discoveredAtMs !== null && i.responseAtMs !== null && i.discoveredAtMs < i.responseAtMs;
+  if (i.objectPath === null) reasons.push("objet jamais observé pendant la fenêtre : fenêtre non exercée");
+  else if (!c[D]) reasons.push("objet découvert après la réponse : ordre non prouvé");
+  const status = i.response.status;
+  if (status === 201) {
+    c[C] = false;
+    reasons.push("201 : la révocation a perdu la course (fait documenté, pas un PASS) ; la ligne créée est nettoyée par le manifeste");
+  } else if (status === 403) {
+    const envelope = /"error"\s*:\s*"/.test(i.response.bodyText);
+    const leaks = leakCheck(i.response.bodyText, i.forbidden);
+    const absent = i.readbacks.objectPresent === false && i.readbacks.documentRows === 0;
+    c[C] = envelope && leaks.length === 0 && absent;
+    if (!envelope) reasons.push("403 sans enveloppe gateway");
+    for (const hit of leaks) reasons.push(`fuite : ${hit}`);
+    if (i.readbacks.objectPresent !== false) reasons.push(i.readbacks.objectPresent === null ? "relecture Storage inconnue" : "objet encore présent après 403 (compensation absente)");
+    if (i.readbacks.documentRows !== 0) reasons.push(i.readbacks.documentRows === null ? "relecture documents inconnue" : `${i.readbacks.documentRows} ligne(s) documents après 403`);
+  } else {
+    c[C] = false;
+    reasons.push(`statut ${status} au lieu de 403`);
+  }
+  const outcome = keys.every((k) => c[k] === true) ? "pass" : "fail";
+  return { outcome, conditions: c, reasons };
+}
+// ---- Orchestration ------------------------------------------------------------------------------
+export type RevokeDeps = {
+  now(): number;
+  nowMs(): number;
+  sleep(ms: number): Promise<void>;
+  runId: string;
+  project: string;
+  projectUrl: string;
+  manifestPath: string;
+  statePath: string;
+  batchSqlPath: string;
+  observeSqlPath: string;
+  liveCommand: string;
+  templates: { batch: string; observe: string };
+  randomPassword(): string;
+  listUserEmails(): Promise<{ ok: boolean; emails: string[]; detail: string }>;
+  createUser(email: string, password: string, role: "manager"): Promise<{ status: number; id: string | null; detail: string }>;
+  passwordGrant(email: string, password: string): Promise<{ status: number; json: Record<string, unknown> | null; detail: string }>;
+  rpc(token: string, fn: string, body: Record<string, unknown>): Promise<{ status: number; json: unknown; detail: string }>;
+  serviceInsert(table: string, row: Record<string, unknown>): Promise<{ status: number; detail: string }>;
+  serviceRows(query: string): Promise<{ ok: boolean; rows: Record<string, unknown>[]; detail: string }>;
+  userRows(token: string, query: string): Promise<{ ok: boolean; rows: Record<string, unknown>[]; detail: string }>;
+  upload(token: string, dossierId: string): Promise<{ status: number; text: string }>;
+  getUser(userId: string): Promise<{ status: number; json: Record<string, unknown> | null }>;
+  readManifest(path: string): Promise<Manifest>;
+  record(kind: CreatedKind, value: string, extra?: ManifestExtra): Promise<void>;
+  recordValidated(kind: CreatedKind, value: string): Promise<void>;
+  addSecret(secret: string): void;
+  forbidden(): string[];
+  client: CleanupClient;
+  writeState(state: RevokeState, target: "out" | "original"): Promise<void>;
+  writeSql(path: string, text: string): Promise<void>;
+  readResultFile(path: string): Promise<unknown | null>;
+  log(status: StepStatus, step: string, detail: string): Promise<void>;
+};
+export type RevokePrepareOutcome = { outcome: "prepared" | "fail" | "refused"; state: RevokeState | null };
+export async function revokePrepare(deps: RevokeDeps): Promise<RevokePrepareOutcome> {
+  const listing = await deps.listUserEmails();
+  if (!listing.ok) {
+    await deps.log("fail", "garde autre rédacteur : listage Auth impossible", listing.detail);
+    return { outcome: "refused", state: null };
+  }
+  const others = otherWriters(listing.emails, deps.runId);
+  if (others.length) {
+    await deps.log("fail", "garde autre rédacteur : refus (rien créé)", `${others.length} compte(s) qa-gw hors run (autre cohorte ou bail d’expiration en attente) : jamais effacés pour passer`);
+    return { outcome: "refused", state: null };
+  }
+  await deps.log("pass", "garde autre rédacteur : aucun compte qa-gw étranger", `${listing.emails.length} compte(s) listés`);
+  const password = deps.randomPassword();
+  deps.addSecret(password);
+  const users: Record<"owner" | "manager", string> = { owner: "", manager: "" };
+  const tokens: Record<"owner" | "manager", string> = { owner: "", manager: "" };
+  let managerExp = 0;
+  for (const role of ["owner", "manager"] as const) {
+    const email = revokeEmail(deps.runId, role);
+    const created = await deps.createUser(email, password, "manager");
+    if (created.status >= 300 || !created.id) {
+      await deps.log("fail", `compte QA ${role}`, `création → HTTP ${created.status} ${created.detail}`);
+      return { outcome: "fail", state: null };
+    }
+    users[role] = created.id;
+    await deps.record("userIds", created.id, { suite: "revoke" });
+    const grant = await deps.passwordGrant(email, password);
+    const token = typeof grant.json?.access_token === "string" ? grant.json.access_token : null;
+    if (grant.status !== 200 || !token) {
+      await deps.log("fail", `jeton QA ${role}`, `HTTP ${grant.status} ${grant.detail}`);
+      return { outcome: "fail", state: null };
+    }
+    deps.addSecret(token);
+    if (typeof grant.json?.refresh_token === "string") deps.addSecret(grant.json.refresh_token);
+    tokens[role] = token;
+    const claims = decodeJwtClaims(token);
+    if (role === "manager") managerExp = typeof claims?.exp === "number" ? claims.exp : 0;
+    await deps.log("pass", `compte QA ${role} créé, jeton réel obtenu`, created.id);
+  }
+  const site = await deps.rpc(tokens.owner, "create_site", { p_name: `Site QA ${deps.runId}`, p_type: "office", p_address: "2 avenue du Test QA", p_budget_cents: 100000, p_organization_id: null });
+  const siteRow = site.json && typeof site.json === "object" ? (site.json as Row) : null;
+  if (site.status >= 300 || typeof siteRow?.id !== "string" || typeof siteRow?.organization_id !== "string") {
+    await deps.log("fail", "create_site (propriétaire QA)", `HTTP ${site.status} ${site.detail}`);
+    return { outcome: "fail", state: null };
+  }
+  const orgId = siteRow.organization_id as string;
+  const siteId = siteRow.id as string;
+  await deps.record("organizationIds", orgId);
+  await deps.record("siteIds", siteId);
+  const member = await deps.serviceInsert("organization_members", { organization_id: orgId, user_id: users.manager, role: "manager" });
+  if (member.status >= 300) {
+    await deps.log("fail", "membre gestionnaire QA (écriture de seeding)", `HTTP ${member.status} ${member.detail}`);
+    return { outcome: "fail", state: null };
+  }
+  const access = await deps.rpc(tokens.owner, "set_organization_member_site_access", { p_organization_id: orgId, p_user_id: users.manager, p_scope: "selected", p_grants: [{ site_id: siteId, can_write: true }] });
+  if (access.status >= 300) {
+    await deps.log("fail", "grant can_write du gestionnaire QA (RPC du propriétaire)", `HTTP ${access.status} ${access.detail}`);
+    return { outcome: "fail", state: null };
+  }
+  const job = await deps.rpc(tokens.owner, "create_intervention", { p_category: "panel", p_description: `QA révocation ${deps.runId} : dossier de site.`, p_address: "2 avenue du Test QA", p_postal_code: "97200", p_city: "Fort-de-France", p_urgency: SEED_URGENCY, p_site_id: siteId });
+  const jobRow = job.json && typeof job.json === "object" ? (job.json as Row) : null;
+  if (job.status >= 300 || typeof jobRow?.id !== "string") {
+    await deps.log("fail", "create_intervention (dossier de site QA)", `HTTP ${job.status} ${job.detail}`);
+    return { outcome: "fail", state: null };
+  }
+  const dossierId = jobRow.id as string;
+  await deps.record("interventionIds", dossierId);
+  await deps.log("pass", "organisation, site, membre gestionnaire (selected + 1 grant can_write), dossier de site", `${orgId} / ${siteId} / ${dossierId}`);
+  // Guards read back through the service role (the batch re-checks them under root).
+  const checks: [string, string, (rows: Row[]) => boolean][] = [
+    ["organisation QA possédée par le propriétaire", `organizations?id=eq.${orgId}&select=id,owner_id`, (rows) => rows.length === 1 && rows[0].owner_id === users.owner],
+    ["site QA dans l’organisation", `sites?id=eq.${siteId}&select=id,organization_id`, (rows) => rows.length === 1 && rows[0].organization_id === orgId],
+    ["dossier QA sur le site, demandeur = propriétaire, aucun artisan", `interventions?id=eq.${dossierId}&select=id,site_id,client_id,artisan_id`, (rows) => rows.length === 1 && rows[0].site_id === siteId && rows[0].client_id === users.owner && !rows[0].artisan_id],
+    ["membre gestionnaire QA (role manager)", `organization_members?organization_id=eq.${orgId}&user_id=eq.${users.manager}&select=role`, (rows) => rows.length === 1 && rows[0].role === "manager"],
+    ["portée selected", `organization_member_site_scopes?organization_id=eq.${orgId}&user_id=eq.${users.manager}&select=scope`, (rows) => rows.length === 1 && rows[0].scope === "selected"],
+    ["un seul grant can_write sur le site QA", `organization_member_site_grants?organization_id=eq.${orgId}&user_id=eq.${users.manager}&select=site_id,can_write`, (rows) => rows.length === 1 && rows[0].site_id === siteId && rows[0].can_write === true],
+    ["aucun admin dans la cohorte", `profiles?id=in.(${users.owner},${users.manager})&select=id,role`, (rows) => rows.length === 2 && rows.every((r) => r.role !== "admin")],
+  ];
+  for (const [label, query, test] of checks) {
+    const r = await deps.serviceRows(query);
+    const ok = r.ok && test(r.rows);
+    await deps.log(ok ? "pass" : "fail", `garde : ${label}`, r.ok ? `${r.rows.length} ligne(s)` : r.detail);
+    if (!ok) return { outcome: "fail", state: null };
+  }
+  const visible = await deps.userRows(tokens.manager, `interventions?id=eq.${dossierId}&select=id`);
+  await deps.log(visible.ok && visible.rows.length === 1 ? "pass" : "fail", "le gestionnaire QA lit le dossier sous RLS avant révocation (lecture seule)", visible.detail);
+  if (!visible.ok || visible.rows.length !== 1) return { outcome: "fail", state: null };
+  const ids: RevokeIds = { RUN: deps.runId, PROJECT: deps.project, ORG: orgId, SITE: siteId, DOSSIER: dossierId, OWNER: users.owner, MANAGER: users.manager };
+  await deps.writeSql(deps.batchSqlPath, renderSqlTemplate(deps.templates.batch, ids));
+  await deps.writeSql(deps.observeSqlPath, renderSqlTemplate(deps.templates.observe, ids));
+  const state: RevokeState = { version: 1, suite: "revoke", runId: deps.runId, project: deps.project, ownerId: users.owner, managerId: users.manager, orgId, siteId, dossierId, managerToken: tokens.manager, managerTokenExp: managerExp, preparedAt: deps.now(), manifestPath: deps.manifestPath, batchSqlPath: deps.batchSqlPath, observeSqlPath: deps.observeSqlPath };
+  await deps.record("userIds", users.owner, { suite: "revoke", revoke: { ownerId: users.owner, managerId: users.manager, orgId, siteId, dossierId, ownerEmail: revokeEmail(deps.runId, "owner"), managerEmail: revokeEmail(deps.runId, "manager"), tokenSha256: await sha256Hex(tokens.manager) } });
+  await deps.writeState(state, "out");
+  await deps.log("info", "PREPARED — rien n’est prouvé ; lot et observation rendus pour revue root", `lot ${deps.batchSqlPath} ; observation ${deps.observeSqlPath} ; jeton gestionnaire exp ${new Date(managerExp * 1000).toISOString()} ; phase live : ${deps.liveCommand}`);
+  return { outcome: "prepared", state };
+}
+export type RevokeLiveOutcome = { outcome: "pass" | "fail" | "unknown" | "refused"; cleanup: boolean; verdict: RevokeVerdict | null; objectPath: string | null; responseStatus: number | null };
+export async function revokeLive(state: RevokeState, deps: RevokeDeps, files: { batchResultPath: string; observationPath: string }): Promise<RevokeLiveOutcome> {
+  const refused = async (step: string, detail: string): Promise<RevokeLiveOutcome> => {
+    await deps.log("fail", `live refusé : ${step} — aucune suppression, aucun identifiant enregistré`, detail);
+    return { outcome: "refused", cleanup: false, verdict: null, objectPath: null, responseStatus: null };
+  };
+  deps.addSecret(state.managerToken);
+  if (state.consumedAt !== undefined) return refused("état déjà consommé", new Date(state.consumedAt * 1000).toISOString());
+  const listing = await deps.listUserEmails();
+  if (!listing.ok) return refused("garde autre rédacteur : listage Auth impossible", listing.detail);
+  const others = otherWriters(listing.emails, state.runId);
+  if (others.length) return refused("garde autre rédacteur", `${others.length} compte(s) qa-gw hors run`);
+  let manifest: Manifest;
+  try {
+    manifest = await deps.readManifest(state.manifestPath);
+  } catch (error) {
+    return refused("manifeste de l’état illisible", error instanceof Error ? error.message : String(error));
+  }
+  const m = manifest.revoke;
+  const mismatch: string[] = [];
+  if (manifest.runId !== state.runId || manifest.project !== state.project) mismatch.push("run/projet du manifeste ≠ état");
+  if (manifest.suite !== "revoke" || !m) mismatch.push("manifeste sans données de révocation");
+  else {
+    if (m.tokenSha256 !== (await sha256Hex(state.managerToken))) mismatch.push("empreinte du jeton gestionnaire ≠ manifeste");
+    for (const k of ["ownerId", "managerId", "orgId", "siteId", "dossierId"] as const) if (m[k] !== state[k]) mismatch.push(`${k} ≠ manifeste`);
+    if (!manifest.created.userIds.includes(state.ownerId) || !manifest.created.userIds.includes(state.managerId)) mismatch.push("uids absents du manifeste");
+    if (!isRevokeCohortEmail(m.ownerEmail, state.runId, "owner") || !isRevokeCohortEmail(m.managerEmail, state.runId, "manager")) mismatch.push("e-mails du manifeste hors cohorte");
+  }
+  const claims = decodeJwtClaims(state.managerToken);
+  if (!claims || claims.sub !== state.managerId || claims.iss !== `${deps.projectUrl}/auth/v1` || claims.exp !== state.managerTokenExp) mismatch.push("claims du jeton gestionnaire ≠ état");
+  if (mismatch.length) return refused("cohérence état ↔ manifeste ↔ claims", mismatch.join(" ; "));
+  for (const [role, uid] of [["owner", state.ownerId], ["manager", state.managerId]] as const) {
+    const u = await deps.getUser(uid);
+    const email = typeof u.json?.email === "string" ? u.json.email.toLowerCase() : "";
+    if (u.status !== 200 || u.json?.id !== uid || !isRevokeCohortEmail(email, state.runId, role) || email !== (m as ManifestRevoke)[`${role}Email`].toLowerCase()) return refused(`preuve de cohorte Auth (${role})`, `HTTP ${u.status}`);
+  }
+  await deps.log("pass", "preuve de cohorte Auth : propriétaire et gestionnaire QA (suppression autorisée)", `run ${state.runId}`);
+  // Durable record of the validated cohort BEFORE any further network call.
+  for (const [kind, value] of [["userIds", state.ownerId], ["userIds", state.managerId], ["organizationIds", state.orgId], ["siteIds", state.siteId], ["interventionIds", state.dossierId]] as const) await deps.recordValidated(kind, value);
+  if (state.managerTokenExp <= deps.now() + 30) {
+    await deps.log("fail", "jeton gestionnaire expiré ou trop proche de l’échéance : upload non tenté", new Date(state.managerTokenExp * 1000).toISOString());
+    return { outcome: "fail", cleanup: true, verdict: null, objectPath: null, responseStatus: null };
+  }
+  // ONE real upload (JPEG) with the manager's JWT, response not awaited yet; discovery of the exact object
+  // under the sole authorised prefix, every 250 ms for at most 3 s.
+  const started = deps.nowMs();
+  const responsePromise = deps.upload(state.managerToken, state.dossierId).then((r) => ({ ok: true as const, r, at: deps.nowMs() }), (error) => ({ ok: false as const, error, at: deps.nowMs() }));
+  let objectPath: string | null = null;
+  let discoveredAtMs: number | null = null;
+  while (deps.nowMs() - started <= REVOKE_DISCOVERY_MS && objectPath === null) {
+    const listing = await deps.client.listObjects(state.managerId, { limit: 1000, offset: 0 });
+    if (listing.ok) {
+      const name = listing.items.find((n) => UUID.test(n));
+      if (name) {
+        objectPath = `${state.managerId}/${name}`;
+        discoveredAtMs = deps.nowMs();
+        await deps.record("objectPaths", objectPath);
+        await deps.log("pass", "objet Storage découvert pendant la fenêtre (préfixe du gestionnaire QA)", `${discoveredAtMs - started} ms après l’envoi`);
+        break;
+      }
+    }
+    await deps.sleep(REVOKE_DISCOVERY_STEP_MS);
+  }
+  if (objectPath === null) await deps.log("fail", "objet jamais observé pendant la fenêtre de découverte", `${REVOKE_DISCOVERY_MS} ms`);
+  const settled = await responsePromise;
+  const response = settled.ok ? { status: settled.r.status, bodyText: settled.r.text } : null;
+  const responseAtMs = settled.at;
+  if (!settled.ok) await deps.log("fail", "réponse HTTP absente (transport/interruption) : issue inconnue", settled.error instanceof Error ? settled.error.message : String(settled.error));
+  else await deps.log("info", "réponse du gateway reçue", `HTTP ${settled.r.status} ${responseAtMs - started} ms après l’envoi`);
+  // Readbacks (service role): document rows for this object/dossier, exact object presence.
+  let documentRows: number | null = null;
+  let objectPresent: boolean | null = null;
+  if (objectPath) {
+    const docs = await deps.serviceRows(`documents?intervention_id=eq.${state.dossierId}&select=id,path,owner_id`);
+    documentRows = docs.ok ? docs.rows.filter((d) => d.path === objectPath || d.owner_id === state.managerId).length : null;
+    for (const d of docs.ok ? docs.rows : []) if (typeof d.id === "string") await deps.record("documentIds", d.id);
+    const name = objectPath.slice(state.managerId.length + 1);
+    const l = await deps.client.listObjects(state.managerId, { limit: 1000, offset: 0, search: name });
+    objectPresent = l.ok && !l.malformed?.length ? l.items.includes(name) : null;
+    await deps.log("info", "relectures après réponse", `documents ${documentRows ?? "inconnu"} ; objet ${objectPresent === null ? "inconnu" : objectPresent ? "présent" : "absent"}`);
+  }
+  // Bounded wait for the two pilot files (batch final row, observation row).
+  let batchRaw: unknown = null;
+  let observationRaw: unknown = null;
+  const waitStart = deps.nowMs();
+  while (deps.nowMs() - waitStart <= REVOKE_RESULT_WAIT_MS && (batchRaw === null || observationRaw === null)) {
+    if (batchRaw === null) batchRaw = await deps.readResultFile(files.batchResultPath);
+    if (observationRaw === null) observationRaw = await deps.readResultFile(files.observationPath);
+    if (batchRaw === null || observationRaw === null) await deps.sleep(REVOKE_RESULT_STEP_MS);
+  }
+  const parseErrors: string[] = [];
+  let batch: BatchResult | null = null;
+  let observation: Observation | null = null;
+  if (batchRaw === null) parseErrors.push("résultat du lot non fourni dans le délai");
+  else {
+    try {
+      batch = parseBatchResult(batchRaw, { runId: state.runId, project: state.project, ownerId: state.ownerId, managerId: state.managerId, orgId: state.orgId, siteId: state.siteId, dossierId: state.dossierId });
+    } catch (error) {
+      parseErrors.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+  if (observationRaw === null) parseErrors.push("observation non fournie dans le délai");
+  else {
+    try {
+      observation = parseObservation(observationRaw);
+    } catch (error) {
+      parseErrors.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+  const verdict = revokeVerdict({ batch, observation, parseErrors, objectPath, discoveredAtMs, responseAtMs, response, readbacks: { documentRows, objectPresent }, forbidden: deps.forbidden(), managerId: state.managerId });
+  await deps.log(verdict.outcome === "pass" ? "pass" : verdict.outcome === "unknown" ? "fail" : "fail", `verdict révocation pendant upload : ${verdict.outcome}`, verdict.reasons.join(" ; ") || "toutes les conditions (a)–(g) satisfaites");
+  await deps.writeState({ ...state, consumedAt: deps.now() }, "original");
+  return { outcome: verdict.outcome, cleanup: true, verdict, objectPath, responseStatus: response?.status ?? null };
 }

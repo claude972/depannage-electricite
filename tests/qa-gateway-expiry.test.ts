@@ -150,7 +150,7 @@ test("manifest carries the expiry suite, lease end and token fingerprint (never 
   assert.equal(m.suite, "expiry");
   assert.equal(m.leaseEndsAt, "2026-10-31T08:00:00.000Z");
   assert.equal(m.expiry?.tokenSha256, fingerprint);
-  assert.throws(() => parseManifest({ version: 1, runId: "x", project: REF, created: {}, suite: "revoke" }, REF), UsageError);
+  assert.throws(() => parseManifest({ version: 1, runId: "x", project: REF, created: {}, suite: "other" }, REF), UsageError);
   assert.throws(() => parseManifest({ version: 1, runId: "x", project: REF, created: {}, expiry: { userId: UID } }, REF), UsageError);
   assert.equal(parseManifest({ version: 1, runId: "x", project: REF, created: {} }, REF).suite, undefined);
 });
@@ -441,7 +441,7 @@ test("verify non-proofs after a proven cohort: banned or deleted account, token 
 
 test("the orchestrator wires the suites without replaying the nine scenarios, keeps the token out of logs, and maps exit codes", async () => {
   const source = await readFile(new URL("../scripts/qa-gateway/run.mjs", import.meta.url), "utf8");
-  assert.match(source, /args\.suite === "expiry-prepare" \? "expiry-prepare" : args\.suite === "expiry-verify" \? "expiry-verify" : "run"/);
+  assert.match(source, /args\.suite === "expiry-prepare" \? "expiry-prepare" : args\.suite === "expiry-verify" \? "expiry-verify" : args\.suite === "revoke-prepare" \? "revoke-prepare" : args\.suite === "revoke-live" \? "revoke-live" : "run"/);
   assert.match(source, /\} else if \(mode === "expiry-prepare"\) \{[^]*?if \(result\.steps\.some\(\(s\) => s\.status === "fail"\)\) throw new Error\("préalables en échec[^]*?const prepared = await expiryPrepare\(expiryDeps\(\)\);/);
   assert.match(source, /skipCleanup = prepared\.outcome === "prepared" && !result\.steps\.some\(\(s\) => s\.status === "fail"\);/);
   assert.match(source, /\} else if \(mode === "expiry-verify"\) \{\n\s+const lease = parseLease\(/);
