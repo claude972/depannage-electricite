@@ -509,7 +509,7 @@ Ordreowner : blocConseilsetformationjaune etajoutbannièreRejoignezréseaudepros
 DécisionUIowneractéeDESIGN/docsDIRECTION_UI_UX_VALIDEE.md sourcece54944. RéutiliserworkerUIprototypeEXISTANTidlepourpréparerplanadoptionSANSappcode,branchepropreclaude/ui-adoption-plan depuisce54944oubaseintegrationplusrécenteavecDESIGNvalidé,checkoutisoléréutilisésansWIPécrasé. PropriétéDOCSSEULEMENTdocs/UI_ADOPTION_IMPLEMENTATION_PLAN.md. Lirecodeapp/components/globals/design/refs8etPDFcatalogueexistant sansréaudit. Livrer3tranchesbornéestokens/clair-sombre+composantscommuns,accueilclientréel+pannesformulaires,espacesclient/artisan/entreprise/SuperAdmin ;identifierfichiers/propriétaireuniqueCSS/session,références6bc0cab+PDFparrôle,modulesdynamiquesblog/recrutementencoreprovisoiresànepasprésenterlivrés. ReleverrisquesCSS/themeSSR/stockage/retourfocus/formulaires/read-only/backoff/approrules,testsréelsàréutiliser/changementsoracleminimaux,captures2themes360/390/1280/1440etpreviewpartranche,ordreintégrationaprèsQAfonctionnelleB2. Aucunmodifapp/global/backend/API/maquettehistoriqueni nouvellesharedskills. PlanpousséSHApourrevueROOTavantcodeUI,aucunnouveauagentdoublonni cloud.
 
 
-## UI-THEME-FOUNDATION-001 — agent: claude — in_progress
+## UI-THEME-FOUNDATION-001 — agent: claude — done
 
 Après le checkpoint fonctionnel B2 vérifié, réaliser la première tranche du plan UI approuvé. Base intégration58b76414f6233220f938dbc42681c089abe58316, DESIGN.md et docs/UI_ADOPTION_IMPLEMENTATION_PLAN.md, référence6bc0cab. Réutiliser le lead Claude (propriétaire UNIQUE layout/globals/primitives), worktree partagé propre retrouvé par git worktree list, nouvelle branche claude/ui-theme-foundation ; conserver anciens travaux et aucune édition concurrente.
 

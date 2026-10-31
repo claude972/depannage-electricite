@@ -1,3 +1,9 @@
+# Checkpoint prioritaire — 31 octobre 19h52 Martinique
+
+Fondation UI743d acceptée,intégrée1d2ebd42f71dee8499ca441c19d5da307399a9ac POUSSÉE :756tests0skip+tscstrictPASS/buildwebpackPASS. Nouvellepreviewfondationgpxp9f3iw READY/public,ROOTlight/dark390/hydratation/policevariable/persist/nooverflowJS/APIanon401PASS23:51:21UTC. CI41254159891encoursàvérifier. AUCUNécranencorere-thémé : UI-PUBLIC-HOME-001 prochainebase1d2/missionf54/GOenvoyéetacceptéworkerUIexistant,claimattendu. RT348deuxfindingsfermésmaisupdate-token/Authintent/ownership/joinrefuséàamender ; DETAIL2f9troisP2àamender, pasbackendcodeGO. AucunecohorteQAconnueactive,nouvelowneradmin/Stripeexplicitementdifférés.
+
+Historique conservé ci-dessous.
+
 # Checkpoint prioritaire — 31 octobre 19h35 Martinique
 
 UI-THEME-FOUNDATION-001 en cours chez le lead Claude existant : claim/contrat92a7ff4 poussé et relu ROOT, premiers fichiers noncommittés visibles. Aucun SHA code accepté, aucun déploiement de ce thème. Contrats backend pointread/Realtime confiés au worker existant, encore attendus. Prérevues READONLY58b terminées, risques transmis ; aucune nouvelle fonctionnalité vérifiée depuis le checkpoint B2. Intégration58b/CIverte/app28b publique inchangés, aucune cohorteQA connue active.
