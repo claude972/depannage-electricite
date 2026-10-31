@@ -36,7 +36,7 @@ Livrer la version Web responsive et PWA installable selon docs/PLAN_REPRISE.md, 
 
 ## Codex assignment
 - agent: codex
-- status: pending
+- status: in_progress
 - branch: codex/web-pwa-backend
 - deliverables: auth/data/RLS/session contracts, domain commands per plan, backend gaps, reliable Stripe test state handling, PWA infrastructure and private-cache protection, integration/negative/concurrency tests; provision dedicated services only when possible; coordinate and review Claude
 - owned files: backend/PWA paths above only
