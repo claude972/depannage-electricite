@@ -5,6 +5,9 @@ import { createRequire } from "node:module";
 import vm from "node:vm";
 import { transformSync } from "esbuild";
 import { createClient } from "@supabase/supabase-js";
+// Ownership: Claude QA (historical support route unit test, aligned to the A5 scoped-operator
+// backend: migration 018, lib/features/support/permissions.ts, RPC support_operator_permissions).
+// The REAL permissions module is compiled through the loader; only the RPC answer is mocked.
 const require = createRequire(import.meta.url);
 const uuid = (n: number, prefix = "50000000") => `${prefix}-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const user = uuid(1), other = uuid(2), job = uuid(1, "70000000");
@@ -23,15 +26,34 @@ function atom(row: Row, expression: string): boolean {
   return op === "eq" ? actual === expected : op === "lt" ? actual < expected : op === "gt" ? actual > expected : actual <= expected;
 }
 function logic(row: Row, expression: string): boolean { const match = /^(and|or)\((.*)\)$/s.exec(expression); if (!match) return atom(row, expression); return match[1] === "and" ? split(match[2]).every(v => logic(row, v)) : split(match[2]).some(v => logic(row, v)); }
-type Options = { role?: string | null; revoked?: boolean; rpcError?: string; rpcData?: unknown; missingCount?: boolean };
+/** Real RPC shape (migration 018): read-all from support_read; reply/status only together with read; super admin implicit. */
+type Rights = { can_read_all: boolean; can_reply_all: boolean; can_set_status_all: boolean };
+const noRights: Rights = { can_read_all: false, can_reply_all: false, can_set_status_all: false };
+const allRights: Rights = { can_read_all: true, can_reply_all: true, can_set_status_all: true };
+const rightsFromScopes = (scopes: string[]): Rights => { const read = scopes.includes("support_read"); return { can_read_all: read, can_reply_all: read && scopes.includes("support_reply"), can_set_status_all: read && scopes.includes("support_status") }; };
+type Options = {
+  role?: string | null; revoked?: boolean; rpcError?: string; rpcData?: unknown; missingCount?: boolean;
+  /** Operator scopes held (non-admin): the RPC answer is computed exactly like 018 (reply/status require read). */
+  scopes?: string[];
+  /** Raw RPC answer for support_operator_permissions (malformed/inconsistent cases); overrides role/scopes. */
+  rightsResponse?: unknown;
+  /** HTTP status + PostgREST error body for support_operator_permissions (absent function → PGRST202 404). */
+  rightsError?: { status: number; code: string };
+};
 function harness(options: Options = {}) {
   const role = options.role === undefined ? "client" : options.role;
   const requests: { table: string; args?: Record<string, unknown>; url: URL }[] = [];
-  const visible = (ticket: Row) => role === "admin" || (ticket.creator_id === user && !(options.revoked && ticket.intervention_id));
+  const rights: Rights = role === "admin" ? allRights : rightsFromScopes(options.scopes ?? []);
+  const rightsAnswer = "rightsResponse" in options ? options.rightsResponse : rights;
+  const visible = (ticket: Row) => role === "admin" || rights.can_read_all || (ticket.creator_id === user && !(options.revoked && ticket.intervention_id));
   const fetch: typeof globalThis.fetch = async (input, init) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url), table = url.pathname.split("/").at(-1)!;
     if (url.pathname.includes("/rpc/")) {
       const args = JSON.parse(String(init?.body ?? "{}")); requests.push({ table, args, url });
+      if (table === "support_operator_permissions") {
+        if (options.rightsError) return Response.json({ code: options.rightsError.code, message: "Could not find the function", details: null, hint: null }, { status: options.rightsError.status });
+        return Response.json(rightsAnswer);
+      }
       return options.rpcError ? Response.json({ code: options.rpcError, message: "Refus SQL" }, { status: 409 }) : Response.json("rpcData" in options ? options.rpcData : { ticket: tickets[0], initial_message: messages[0], replayed: false });
     }
     requests.push({ table, url });
@@ -56,12 +78,14 @@ function harness(options: Options = {}) {
   };
   function compile(path: string, imports: Record<string, unknown>) { const module: { exports: Record<string, unknown> } = { exports: {} }; const code = transformSync(readFileSync(new URL(path, import.meta.url), "utf8"), { loader: "ts", format: "cjs", target: "es2022" }).code; vm.runInNewContext(code, { module, exports: module.exports, require: (name: string) => imports[name] ?? require(name), Buffer, URL, URLSearchParams, Request, Response, SyntaxError }, { filename: path }); return module.exports; }
   const validation = compile("../lib/supabase/validation.ts", { "./server": helpers });
-  const imports = { "@/lib/supabase/server": helpers, "@/lib/supabase/validation": validation };
+  // The REAL rights module (decode strictness, per-ticket computation) runs against the mocked RPC only.
+  const permissions = compile("../lib/features/support/permissions.ts", { "@/lib/supabase/server": helpers });
+  const imports = { "@/lib/supabase/server": helpers, "@/lib/supabase/validation": validation, "@/lib/features/support/permissions": permissions };
   const list = compile("../app/api/support/route.ts", imports), detail = compile("../app/api/support/[id]/route.ts", imports);
   const request = (path: string, body?: unknown, origin = "https://app.example.test") => new Request(`https://app.example.test${path}`, body === undefined ? undefined : { method: "POST", headers: { origin, "Content-Type": "application/json" }, body: JSON.stringify(body) });
   type ListHandler = (r: Request) => Promise<Response>; type DetailHandler = (r: Request, c: { params: Promise<{ id: string }> }) => Promise<Response>;
   return {
-    requests,
+    requests, permissions,
     list: (params: URLSearchParams | string = "") => (list.GET as ListHandler)(request(`/api/support?${params}`)),
     create: (body: unknown, origin?: string) => (list.POST as ListHandler)(request("/api/support", body, origin)),
     detail: (id = String(tickets[0].id), params: URLSearchParams | string = "") => (detail.GET as DetailHandler)(request(`/api/support/${id}?${params}`), { params: Promise.resolve({ id }) }),
@@ -102,4 +126,63 @@ test("RPC version/permission/rate errors remain explicit/no-store, cross-origin 
   for (const [code, expected] of [["P0001", 409], ["42501", 403], ["53300", 429]] as const) { const response = await harness({ rpcError: code }).mutate({ action: "reply", expected_version: 1, body: "Texte" }); assert.equal(response.status, expected); assert.equal(response.headers.get("Cache-Control"), "private, no-store"); }
   const h = harness(); assert.equal((await h.mutate({ action: "reply", expected_version: 1, body: "Texte" }, undefined, "https://foreign.example.test")).status, 403); assert.equal(h.requests.length, 0);
   assert.equal((await harness({ missingCount: true }).list()).status, 503); assert.equal((await harness({ rpcData: null }).create({ request_id: uuid(9), subject: "Question assistance", body: "Message détaillé de demande.", intervention_id: null })).status, 503);
+});
+// ---- A5 scoped operators (migration 018, real permissions module through the loader) ----------
+test("rights RPC absent (PGRST202) → 503 private/no-store on the global list and on the detail; the own list never needs the rights RPC", async () => {
+  const absent = { status: 404, code: "PGRST202" };
+  for (const role of ["client", "admin"]) {
+    const h = harness({ role, rightsError: absent });
+    const all = await h.list("scope=all"); assert.equal(all.status, 503); assert.equal(all.headers.get("Cache-Control"), "private, no-store");
+    assert.equal(h.requests.some(r => r.table === "support_tickets"), false, "no ticket read when the rights probe failed");
+    const detail = await h.detail(); assert.equal(detail.status, 503); assert.equal(detail.headers.get("Cache-Control"), "private, no-store");
+  }
+  const mine = harness({ rightsError: absent }); assert.equal((await mine.list()).status, 200, "scope=mine does not depend on the operator rights RPC"); assert.equal(mine.requests.some(r => r.table === "support_operator_permissions"), false);
+});
+test("malformed or inconsistent rights replies → 503, never an arbitrary false nor a client-side grant", async () => {
+  const malformed: unknown[] = [null, "x", 42, [], {}, { can_read_all: true }, { can_read_all: "true", can_reply_all: false, can_set_status_all: false }, { can_read_all: true, can_reply_all: true, can_set_status_all: true, extra: true }, { can_read_all: false, can_reply_all: true, can_set_status_all: false }, { can_read_all: false, can_reply_all: false, can_set_status_all: true }];
+  for (const rightsResponse of malformed) {
+    const h = harness({ role: "admin", rightsResponse });
+    const all = await h.list("scope=all"); assert.equal(all.status, 503, JSON.stringify(rightsResponse)); assert.equal(all.headers.get("Cache-Control"), "private, no-store");
+    assert.equal(h.requests.some(r => r.table === "support_tickets"), false);
+    assert.equal((await h.detail()).status, 503, JSON.stringify(rightsResponse));
+  }
+  // The real decoder is the one compiled from lib/features/support/permissions.ts.
+  const decode = harness().permissions.decodeSupportOperatorPermissions as (v: unknown) => Rights;
+  // The decoder runs in the loader's VM realm: spread into this realm before a strict structural comparison.
+  assert.deepEqual({ ...decode({ can_read_all: true, can_reply_all: false, can_set_status_all: true }) }, { can_read_all: true, can_reply_all: false, can_set_status_all: true });
+  assert.throws(() => decode({ can_read_all: false, can_reply_all: true, can_set_status_all: false }));
+});
+test("scope=all requires support_read: write scopes alone (reply-only, status-only, both) are refused 403 without reading tickets", async () => {
+  for (const scopes of [["support_reply"], ["support_status"], ["support_reply", "support_status"], []]) {
+    const h = harness({ role: "manager", scopes });
+    const all = await h.list("scope=all"); assert.equal(all.status, 403, scopes.join("+")); assert.equal(all.headers.get("Cache-Control"), "private, no-store");
+    assert.equal(h.requests.some(r => r.table === "support_tickets"), false);
+    assert.equal(h.requests.filter(r => r.table === "support_operator_permissions").length, 1, "exactly one rights probe");
+    const own = await (await h.list()).json(); assert.equal(own.filters.scope, "mine"); assert.equal(own.page.total, 131, "own list unchanged for a write-only scope holder");
+  }
+});
+test("non-admin operator with read+reply: global list 200/147, reply allowed on an open ticket, refused on a resolved one, status per support_status", async () => {
+  const resolved = tickets.find(t => t.status === "resolved" && t.creator_id === other)!, open = tickets.find(t => t.status === "open" && t.creator_id === other)!;
+  const reader = harness({ role: "client", scopes: ["support_read"] });
+  const readerAll = await (await reader.list("scope=all")).json(); assert.equal(readerAll.page.total, 147); assert.equal(readerAll.filters.scope, "all");
+  assert.equal((await (await reader.list()).json()).filters.scope, "mine", "default scope stays mine for a non-admin operator");
+  const readerOpen = await (await reader.detail(String(open.id))).json(); assert.deepEqual(readerOpen.permissions, { can_reply: false, can_set_status: false }, "read-only operator cannot reply to someone else's ticket");
+  const replier = harness({ role: "client", scopes: ["support_read", "support_reply"] });
+  assert.equal((await (await replier.list("scope=all")).json()).page.total, 147);
+  assert.deepEqual((await (await replier.detail(String(open.id))).json()).permissions, { can_reply: true, can_set_status: false });
+  assert.deepEqual((await (await replier.detail(String(resolved.id))).json()).permissions, { can_reply: false, can_set_status: false }, "operator reply refused on a resolved ticket (explicit reopening is a status action)");
+  const statusOperator = harness({ role: "client", scopes: ["support_read", "support_status"] });
+  assert.deepEqual((await (await statusOperator.detail(String(resolved.id))).json()).permissions, { can_reply: false, can_set_status: true });
+  const full = harness({ role: "client", scopes: ["support_read", "support_reply", "support_status"] });
+  assert.deepEqual((await (await full.detail(String(resolved.id))).json()).permissions, { can_reply: false, can_set_status: true });
+  assert.deepEqual((await (await harness({ role: "admin" }).detail(String(open.id))).json()).permissions, { can_reply: true, can_set_status: true }, "super admin keeps every right implicitly");
+});
+test("creator rights preserved with all-false rights: own ticket readable/replyable, resolved own ticket still replyable, others' tickets 404, status never granted", async () => {
+  const h = harness({ role: "client" });
+  const ownOpen = await (await h.detail(String(tickets[0].id))).json(); assert.deepEqual(ownOpen.permissions, { can_reply: true, can_set_status: false });
+  const ownResolved = tickets.find(t => t.status === "resolved" && t.creator_id === user)!;
+  assert.deepEqual((await (await h.detail(String(ownResolved.id))).json()).permissions, { can_reply: true, can_set_status: false }, "a creator may write on their own resolved ticket (auto-reopening belongs to the RPC)");
+  const foreign = tickets.find(t => t.creator_id === other)!; assert.equal((await h.detail(String(foreign.id))).status, 404);
+  assert.equal(h.requests.filter(r => r.table === "support_operator_permissions").length, 2, "the rights probe only runs for visible tickets");
+  assert.equal((await harness({ role: "client", revoked: true }).detail()).status, 404, "revoked linked ticket stays invisible whatever the RPC answers");
 });
