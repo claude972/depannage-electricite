@@ -6,6 +6,7 @@ import {
   dbError,
 } from "@/lib/supabase/server";
 import { stripeClient } from "@/lib/supabase/stripe";
+import { checkoutEventOutcome } from "@/lib/payment-events";
 import { uuid } from "@/lib/supabase/validation";
 export const runtime = "nodejs";
 export async function POST(request: Request) {
@@ -28,14 +29,9 @@ export async function POST(request: Request) {
     } catch {
       throw new ApiError(400, "Signature de paiement invalide.");
     }
-    if (
-      event.type !== "checkout.session.completed" &&
-      event.type !== "checkout.session.async_payment_succeeded"
-    )
-      return Response.json({ received: true });
     const session = event.data.object as Stripe.Checkout.Session;
-    if (session.payment_status !== "paid")
-      return Response.json({ received: true });
+    const outcome = checkoutEventOutcome(event.type, session);
+    if (outcome === "ignore") return Response.json({ received: true });
     const quoteId = session.metadata?.quote_id;
     if (
       !uuid.safeParse(quoteId).success ||
@@ -50,7 +46,7 @@ export async function POST(request: Request) {
         "Les références du paiement ne correspondent pas.",
       );
     const admin = adminClient();
-    const { error } = await admin.rpc("confirm_stripe_payment", {
+    const { error } = await admin.rpc(outcome === "paid" ? "confirm_stripe_payment" : "record_stripe_payment_failure", {
       p_event_id: event.id,
       p_event_type: event.type,
       p_session_id: session.id,

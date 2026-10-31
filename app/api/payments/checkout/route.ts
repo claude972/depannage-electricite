@@ -69,7 +69,7 @@ export async function POST(request: Request) {
       );
     const previous = await admin
       .from("payments")
-      .select("session_id,status")
+      .select("session_id,status,failure_code")
       .eq("quote_id", quote_id)
       .maybeSingle();
     dbError(previous.error);
@@ -84,8 +84,20 @@ export async function POST(request: Request) {
       if (existing.status === "complete")
         throw new ApiError(
           409,
-          "Le paiement est en cours de confirmation. Actualisez le suivi dans un instant.",
+          previous.data.status === "failed"
+            ? "Cette tentative a échoué. Contactez l’assistance avant une nouvelle tentative afin de vérifier le règlement."
+            : "Le paiement est en cours de confirmation. Actualisez le suivi dans un instant.",
         );
+      if (existing.status !== "expired")
+        throw new ApiError(409, "L’état du paiement doit être vérifié avant une nouvelle tentative.");
+      // A fresh Stripe read established terminal expiry. Preserve it before replacing this attempt.
+      const expired = await admin.from("payments")
+        .update({ status: "failed", failure_code: "expired" })
+        .eq("quote_id", quote_id).eq("session_id", previous.data.session_id)
+        .neq("status", "paid").select("session_id");
+      dbError(expired.error);
+      if (!expired.data?.length)
+        throw new ApiError(409, "Le règlement a changé. Actualisez le dossier avant de réessayer.");
     }
     // Browser amounts and destinations are never accepted. The accepted immutable quote is authoritative.
     const session = await stripe.checkout.sessions.create(
@@ -130,9 +142,10 @@ export async function POST(request: Request) {
     if (previous.data) {
       const update = await admin
         .from("payments")
-        .update({ session_id: session.id, status: "pending" })
+        .update({ session_id: session.id, status: "pending", failure_code: null })
         .eq("quote_id", quote_id)
         .eq("session_id", previous.data.session_id)
+        .neq("status", "paid")
         .select("session_id");
       dbError(update.error);
       if (!update.data?.length) {

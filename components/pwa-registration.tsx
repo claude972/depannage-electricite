@@ -56,6 +56,26 @@ export function requestPwaUpdate(
   worker.postMessage({ type: "ACTIVATE_UPDATE" });
 }
 
+/** Observe real installation outcomes; register() resolving is not proof of a usable worker. */
+export function observePwaInstallation(
+  worker: Pick<ServiceWorker, "state" | "addEventListener" | "removeEventListener">,
+  onInstalled: () => void,
+  onFailed: () => void,
+) {
+  let reachedInstalled = false;
+  const onStateChange = () => {
+    if (["installed", "activating", "activated"].includes(worker.state)) {
+      reachedInstalled = true;
+      onInstalled();
+    } else if (worker.state === "redundant" && !reachedInstalled) {
+      onFailed();
+    }
+  };
+  worker.addEventListener("statechange", onStateChange);
+  onStateChange();
+  return () => worker.removeEventListener("statechange", onStateChange);
+}
+
 /** Only generic network/update status. This component never reads user data. */
 export function PwaRegistration() {
   const [offline, setOffline] = useState(false);
@@ -96,6 +116,7 @@ export function PwaRegistration() {
     let registration: ServiceWorkerRegistration | undefined;
     const observedWorkers = new Map<ServiceWorker, () => void>();
     const onControllerChange = () => {
+      if (alive && navigator.serviceWorker.controller) setRegistrationError(false);
       // Never reload an in-progress form merely because a worker activated.
       if (reloadRequested.current) window.location.reload();
     };
@@ -107,11 +128,21 @@ export function PwaRegistration() {
     const observeInstallation = () => {
       const worker = registration?.installing;
       if (!worker || observedWorkers.has(worker)) return;
-      const onStateChange = () => {
-        if (worker.state === "installed") inspectWaiting();
-      };
-      worker.addEventListener("statechange", onStateChange);
-      observedWorkers.set(worker, onStateChange);
+      const stopObserving = observePwaInstallation(
+        worker,
+        () => {
+          if (!alive) return;
+          setRegistrationError(false);
+          inspectWaiting();
+        },
+        () => {
+          if (!alive) return;
+          setWaiting(null);
+          setActivating(false);
+          setRegistrationError(true);
+        },
+      );
+      observedWorkers.set(worker, stopObserving);
     };
 
     navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
@@ -123,9 +154,13 @@ export function PwaRegistration() {
         if (!alive) return;
         registration = result;
         setRegistrationError(false);
+        registration.addEventListener("updatefound", observeInstallation);
         inspectWaiting();
         observeInstallation();
-        registration.addEventListener("updatefound", observeInstallation);
+        if (!registration.active && !registration.waiting && !registration.installing) {
+          // A very fast install failure can precede the registration promise callback.
+          setRegistrationError(true);
+        }
       })
       .catch(() => {
         if (alive) setRegistrationError(true);
@@ -134,9 +169,7 @@ export function PwaRegistration() {
       alive = false;
       navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
       registration?.removeEventListener("updatefound", observeInstallation);
-      for (const [worker, listener] of observedWorkers) {
-        worker.removeEventListener("statechange", listener);
-      }
+      for (const stopObserving of observedWorkers.values()) stopObserving();
     };
   }, [retry]);
 

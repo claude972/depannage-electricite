@@ -3,16 +3,25 @@
  * Deliberately no runtime cache, background sync, push handler or request queue.
  */
 const PUBLIC_CACHE_PREFIX = "courant-pwa-public-";
-const PUBLIC_CACHE = `${PUBLIC_CACHE_PREFIX}v1`;
+const PUBLIC_CACHE = `${PUBLIC_CACHE_PREFIX}v2`;
 const OFFLINE_URL = "/offline.html";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       const response = await fetch(
-        new Request(OFFLINE_URL, { cache: "reload", credentials: "omit" }),
+        new Request(OFFLINE_URL, { cache: "reload", credentials: "same-origin", redirect: "error" }),
       );
-      if (!response.ok || !response.headers.get("content-type")?.includes("text/html")) {
+      // A preview protection cookie may be needed to reach this static asset.
+      // Never cache an SSO/login redirect, authenticated page or URL with query data.
+      const expectedUrl = new URL(OFFLINE_URL, self.location.origin).href;
+      if (
+        !response.ok ||
+        response.redirected ||
+        response.url !== expectedUrl ||
+        response.headers.get("X-Courant-Public-Offline") !== "1" ||
+        !response.headers.get("content-type")?.includes("text/html")
+      ) {
         throw new Error("Public offline notice unavailable");
       }
       const cache = await caches.open(PUBLIC_CACHE);

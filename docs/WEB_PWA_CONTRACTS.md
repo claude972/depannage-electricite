@@ -43,3 +43,15 @@ Pas de nouvelle API invitations/rôles par site/factures/remboursements dans ce 
 ## Politique technique initiale de candidature/suspension
 
 Une modification du dossier société/zone/compétences réinitialise son approbation et sa disponibilité : soumettre à nouveau puis examiner. Une suspension bloque nouvelles missions et nouvelles écritures terrain (devis/début/fin/rapport), tout en conservant lecture des preuves historiques. Le règlement est déjà bloqué par Checkout ; le traitement commercial des travaux restant dus demeure un blocage d’ouverture, pas une dette annulée automatiquement. Approbation exige dossier submitted ; elle ne certifie pas automatiquement les justificatifs.
+
+## Checkpoint 2 — tentatives et échecs Checkout (implémenté, intégration distante non vérifiée)
+
+Webhook ajoute `checkout.session.expired` et `checkout.session.async_payment_failed`, après signature et contrôle session/devis/montant/devise. Un échec ne rétrograde jamais un paiement payé ni une intervention payée. Les tentatives précédentes restent dans `payment_attempts`, accessibles via `GET /api/payments/status?quote_id=UUID` aux lecteurs autorisés du dossier, avec limite explicite 50. Aucune donnée carte ni secret de session n’est renvoyé.
+
+Une session encore ouverte est réutilisée ; une session expirée peut être remplacée en conservant la trace précédente. Une session complete non payée reste en confirmation ou en échec déclaré : pas de nouvelle charge automatique tant que la conciliation n’a pas de règle validée. Les événements d’une ancienne tentative échouée n’altèrent pas la nouvelle tentative. Les remboursements, litiges et versements restent hors de ce checkpoint.
+
+Précision stable checkpoint 1 : **workspace ne renvoie pas participants**. `GET /api/interventions/[id]/operations` renvoie `participants: Array<{id:string,full_name:string,phone:string,role:string}>` ; tableau vide sans artisan attribué, parties client/artisan après attribution, 404 si dossier non lisible. `admin_overview.capabilities` est un objet de booléens `{dispatch_before_quote_acceptance:true,refunds:false,invoices:false,support_tickets:false,list_limit:100}`, pas une liste de menus.
+
+## Checkpoint 3 — accord sur version exacte (implémenté, intégration distante non vérifiée)
+
+`POST /api/interventions/[id]/actions` avec `action:"accept_quote"` exige désormais `quote_id:UUID` correspondant à la version affichée. Aucun identifiant implicite « dernier devis » au moment du clic. Le SQL prend le verrou du dossier, contrôle le droit de décision et le devis actif exact avant accord ; ancienne version, identifiant étranger, absence d’identifiant et appel à l’ancien helper privé sont refusés. Les autres actions restent compatibles sans quote_id. La signature RPC publique devient `intervention_action(p_id uuid,p_action text,p_lines jsonb default null,p_tax_rate numeric default 20,p_quote_id uuid default null)` ; pas de surcharge publique quatre arguments contournable. Le trigger d’approbation B2B reste appliqué.

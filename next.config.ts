@@ -25,6 +25,7 @@ const config: NextConfig = {
       {
         source: "/offline.html",
         headers: [
+          { key: "X-Courant-Public-Offline", value: "1" },
           { key: "Cache-Control", value: "no-store" },
           { key: "Content-Security-Policy", value: "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" },
         ],
