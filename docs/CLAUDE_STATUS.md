@@ -698,3 +698,9 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - Independent reviews: provenance helper **4a1d148 accepted** (17 PASS, both P2 closed; root report `/tmp/depannage-deployment-4a1d-recheck.md`); QA core fixtures **5fa7f82 accepted** (149 PASS; `/tmp/depannage-qacore-fixtures-5fa7f82-review.md`). Integrated together without conflict at **`54f877c57487df92b61e1d59b437f20a03776eab`** (combined tests in progress, then push).
 - GO sent to the existing business (a96ae75) and tracking (a84ded5) workers: publish REMOTE contracts, controlled merge of integration ≥ 54f877c, wire their callers in their own files: 8 expected fields independently from ROOT config, receipt age ≤ 15 min, real Flight verified BEFORE fixtures; LOCAL strict kept; no BUILD_ID falsification; tests incl. real 4c HTML via env path (SKIPPED if absent). Short pushed deliveries.
 - Root runs cloud alone after reviewing the SHAs. No app 4c rebuild or new preview needed (QA only).
+
+## 2026-10-31 — integration 54f877c pushed; expiry aee66b0 accepted (P3 doc fix dispatched)
+
+- **54f877c pushed** by root: 608 npm + 27 QA tests + tsc PASS; CI 41237745126 in progress.
+- **Expiry review aee66b0 accepted** (23 tests, syntax, no P1/P2): generic 401 ⇒ OBSERVED, 5xx/transport ⇒ INCOMPLETE, never PASS. P3 documentary: contract line ~66 still says a platform 401 `UNAUTHORIZED_*` is PASS ⇒ must read OBSERVED consistent with §1.4 bis. Bounded doc fix dispatched to backend agent a3ad58f (no cloud, no new lease). Root report `/tmp/depannage-gateway-expiry-aee66b0-review.md`.
+- REMOTE callers (business, tracking) remain the priority to deliver and review before the public recette.
