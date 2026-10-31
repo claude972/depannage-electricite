@@ -1,6 +1,7 @@
 // Redaction of secrets in anything that may be logged or written to the evidence directory.
 // Pure and testable. Known secrets are replaced verbatim; well-known token shapes are
-// replaced by pattern even when they were never registered.
+// replaced by pattern even when they were never registered. Error objects are redacted
+// INCLUDING their stack, and header-like keys (cookie, authorization, apikey…) are masked whole.
 const REPLACEMENT = "[REDACTED]";
 const MIN_SECRET_LENGTH = 8;
 
@@ -10,6 +11,8 @@ const PATTERNS = [
   [/\b(access_token|refresh_token|token_hash|provider_token|code|apikey)=([^&\s"'<>]+)/gi, (_m, name) => `${name}=${REPLACEMENT}`],
   // Authorization headers (header text form).
   [/\b(authorization\s*[:=]\s*)(?:bearer\s+)?[A-Za-z0-9._~+/=-]{8,}/gi, (_m, prefix) => `${prefix}${REPLACEMENT}`],
+  // Cookie header text: "cookie: a=b; c=d" → keep the header name only.
+  [/\b((?:set-)?cookie\s*[:=]\s*)[^\n\r]+/gi, (_m, prefix) => `${prefix}${REPLACEMENT}`],
   // Supabase auth cookies, possibly chunked (.0, .1).
   [/\bsb-[a-z0-9]+-auth-token(?:\.\d+)?=[^;\s"'<>]+/gi, () => REPLACEMENT],
   // JWT.
@@ -19,7 +22,7 @@ const PATTERNS = [
   // Stripe keys (never expected here, redacted anyway).
   [/\b(?:sk|rk|whsec)_(?:live_|test_)?[A-Za-z0-9]{8,}\b/g, () => REPLACEMENT],
 ];
-const SENSITIVE_KEY = /password|service_role|secret|authorization|cookie|api_key|apikey|token/i;
+const SENSITIVE_KEY = /password|service_role|secret|authorization|cookie|api[-_]?key|token|headers$/i;
 
 export function createRedactor(initialSecrets = []) {
   const secrets = new Set();
@@ -36,18 +39,34 @@ export function createRedactor(initialSecrets = []) {
     return out;
   }
 
+  /** Any thrown value → plain {name, message, stack} with every field redacted (stack included). */
+  function redactError(error) {
+    if (!(error instanceof Error) && !(error && typeof error === "object" && "message" in error))
+      return { name: "Error", message: redactString(String(error)), stack: null };
+    return {
+      name: String(error.name || "Error"),
+      message: redactString(error.message || ""),
+      stack: typeof error.stack === "string" ? redactString(error.stack) : null,
+    };
+  }
+
   /** Redacts strings, Error objects, arrays and plain objects (recursively, as new copies). */
   function redact(value, depth = 0) {
     if (value === null || value === undefined) return value;
     if (typeof value === "string") return redactString(value);
     if (typeof value !== "object") return value;
     if (depth > 12) return "[depth]";
-    if (value instanceof Error) return { name: value.name, message: redactString(value.message || "") };
+    if (value instanceof Error) return redactError(value);
     if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1));
     const out = {};
     for (const [key, v] of Object.entries(value)) out[key] = SENSITIVE_KEY.test(key) ? REPLACEMENT : redact(v, depth + 1);
     return out;
   }
 
-  return { add, redact, redactString, size: () => secrets.size, REPLACEMENT };
+  return { add, redact, redactString, redactError, size: () => secrets.size, REPLACEMENT };
+}
+
+/** Network summary: method, path and status only — never URL query, headers, cookies or bodies. */
+export function summarizeNetwork(list = []) {
+  return list.map((n) => ({ method: String(n.method || ""), path: String(n.path || ""), status: Number(n.status ?? 0) }));
 }

@@ -1,7 +1,7 @@
 // Contract §5 `admin-old-dossiers`: >100 dossiers seeded; the server-paginated admin list reaches
 // the oldest one page by page; opening it shows the detail read by id.
 import assert from "node:assert/strict";
-import { newPage, login, openHash, capture, expectVisible, sleep } from "../lib/browser.mjs";
+import { newPage, login, openHash, capture, expectVisible, sleep, waitForApi } from "../lib/browser.mjs";
 
 const shortId = (id) => `INT-${id.replaceAll("-", "").slice(0, 6).toUpperCase()}`;
 const ROWS = 120;
@@ -13,7 +13,7 @@ export const suite = {
   needsCredentials: true,
   plan: ["cohort admin (profiles.role=admin set by service role, deleted at cleanup)", "client F", `${ROWS} interventions of F with distinct created_at`],
   async run(ctx) {
-    const { base, projectRef, fixtures, db, browser, cohort, out, report, redactor } = ctx;
+    const { base, projectRef, fixtures, browser, cohort, out, report, redactor } = ctx;
     const admin = await fixtures.createUser("admin-listes", "admin");
     const f = await fixtures.createUser("client-listes", "client");
     const now = Date.now();
@@ -39,13 +39,15 @@ export const suite = {
         await s.step("login cohort admin", () => login(h, base, admin, projectRef));
         await s.step("open the server-paginated dossier list, 100 per page", async () => {
           await openHash(h.page, base, "admin-interventions");
-          await expectVisible(h.page.getByLabel("Dossiers par page", { exact: true }), "page size control", { timeout: 45000 });
-          const response = h.page.waitForResponse((r) => r.url().includes("/api/admin/interventions?") && r.request().method() === "GET", { timeout: 30000 });
-          await h.page.getByLabel("Dossiers par page", { exact: true }).selectOption("100");
+          // The <label> wraps its text and the <select>: role + accessible name (QA-004).
+          const pageSize = h.page.getByRole("combobox", { name: "Dossiers par page", exact: true });
+          await expectVisible(pageSize, "page size control");
+          const response = waitForApi(h.page, "/api/admin/interventions", { query: "limit=100" });
+          await pageSize.selectOption("100");
           await response;
-          await expectVisible(h.page.getByRole("row").nth(1), "first data row", { timeout: 30000 });
+          await expectVisible(h.page.getByRole("row").nth(1), "first data row");
           const info = await h.page.locator('[role="status"]').filter({ hasText: /dossiers? correspondants?/ }).first().innerText();
-          const total = Number((info.match(/(\d[\d\s ]*)\s+dossiers?/) || [])[1]?.replace(/[\s ]/g, ""));
+          const total = Number((info.match(/(\d[\d\s ]*)\s+dossiers?/) || [])[1]?.replace(/[\s ]/g, ""));
           assert.ok(Number.isFinite(total) && total >= ROWS, `displayed total ${total} < ${ROWS} (text: ${info})`);
           await capture(h, out, "admin-dossiers-page-1", s);
           return { total };
@@ -59,10 +61,10 @@ export const suite = {
             const next = h.page.getByRole("button", { name: "Suivant", exact: true });
             assert.ok(await next.count(), "no Suivant control");
             assert.ok(await next.isEnabled(), `Suivant disabled after ${pages} page(s) without reaching ${ref}`);
-            const response = h.page.waitForResponse((r) => r.url().includes("/api/admin/interventions?") && r.request().method() === "GET", { timeout: 30000 });
+            const response = waitForApi(h.page, "/api/admin/interventions", { query: "cursor=" });
             await next.click();
             await response;
-            await expectVisible(h.page.getByRole("row").nth(1), "rows of the next page", { timeout: 30000 });
+            await expectVisible(h.page.getByRole("row").nth(1), "rows of the next page");
             pages++;
           }
           assert.fail(`row ${ref} not reached within ${MAX_PAGES} pages`);
@@ -70,11 +72,11 @@ export const suite = {
         await s.step("open the old dossier: detail read by id shows its description", async () => {
           const row = h.page.getByRole("row", { name: new RegExp(ref) }).first();
           await capture(h, out, "admin-dossiers-old-row", s);
-          const detail = h.page.waitForResponse((r) => r.url().includes(`/api/admin/interventions?id=${oldest.id}`), { timeout: 30000 });
+          const detail = waitForApi(h.page, "/api/admin/interventions", { query: `id=${oldest.id}` });
           await row.getByRole("button", { name: "Ouvrir", exact: true }).click();
           const response = await detail;
           assert.equal(response.status(), 200, `detail → ${response.status()}`);
-          await expectVisible(h.page.getByText(/OLDEST dossier de pagination/), "old dossier description in the detail", { timeout: 30000 });
+          await expectVisible(h.page.getByText(/OLDEST dossier de pagination/), "old dossier description in the detail");
           await sleep(300);
           await capture(h, out, "admin-dossiers-old-detail", s);
           return { id: oldest.id, ref, pages };

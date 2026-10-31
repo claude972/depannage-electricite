@@ -128,6 +128,17 @@ export class Fixtures {
     return { id, total_cents: subtotal + tax };
   }
 
+  /** Pending approval of a quote on a site (cleanup: approvals by site_id, before quotes). */
+  async createApproval({ quote, site }) {
+    const [approval] = await this.db.insert("approvals", [{ quote_id: quote.id, site_id: site.id, status: "pending" }]);
+    return approval;
+  }
+  /** Approval rule of a site (cleanup: approval_rules by site_id). */
+  async setApprovalRule(site, { thresholdCents = 0, requiredRole = "manager", enabled = true } = {}) {
+    const [rule] = await this.db.upsert("approval_rules", [{ site_id: site.id, threshold_cents: thresholdCents, required_role: requiredRole, enabled }], "site_id");
+    return rule;
+  }
+
   /** Reads what the application created on behalf of cohort users and adds it to the manifest. */
   async collectIndirect() {
     const userIds = this.manifest.created.profiles;

@@ -31,7 +31,7 @@ export const CLEANUP_STEPS = [
   { kind: "table", table: "intervention_operation_events", column: "intervention_id", ids: "interventions" },
   { kind: "table", table: "intervention_appointments", column: "intervention_id", ids: "interventions" },
   { kind: "table", table: "intervention_reports", column: "intervention_id", ids: "interventions" },
-  { kind: "table", table: "approvals", column: "intervention_id", ids: "interventions", optional: true },
+  { kind: "table", table: "approvals", column: "site_id", ids: "sites" },
   { kind: "table", table: "quotes", column: "intervention_id", ids: "interventions" },
   { kind: "table", table: "audit_log", column: "intervention_id", ids: "interventions" },
   { kind: "table", table: "audit_log", column: "actor_id", ids: "profiles" },
@@ -58,9 +58,10 @@ export const CLEANUP_STEPS = [
 export const FK_PARENTS = {
   support_tickets: ["support_events", "support_messages"],
   interventions: ["quote_drafts", "documents", "messages", "quotes", "audit_log", "intervention_operation_events", "intervention_appointments", "intervention_reports"],
+  quotes: ["approvals", "quote_drafts"],
   profiles: ["interventions", "quotes", "documents", "support_tickets", "audit_log", "action_limits", "organization_members", "artisan_profiles", "artisan_credentials", "organizations"],
   organizations: ["sites", "organization_members", "organization_invitations", "organization_membership_events", "professional_audit", "organization_member_site_scopes", "organization_member_site_grants", "contracts"],
-  sites: ["interventions", "organization_member_site_grants", "approval_rules", "compliance_records"],
+  sites: ["interventions", "organization_member_site_grants", "approval_rules", "approvals", "compliance_records"],
   organization_member_site_scopes: ["organization_member_site_grants"],
   organization_members: ["organization_member_site_scopes"],
 };

@@ -23,7 +23,10 @@ const STRING_FLAGS = new Map([
   ["--chromium-path", "chromiumPath"],
   ["--app-dir", "appDir"],
   ["--cleanup-manifest", "cleanupManifest"],
+  ["--timeout-ms", "timeoutMs"],
 ]);
+export const DEFAULT_TIMEOUT_MS = 90000;
+const MIN_TIMEOUT_MS = 1000;
 const LIST_FLAGS = new Map([
   ["--suite", "suites"],
   ["--allow-base-url", "allowBaseUrls"],
@@ -49,6 +52,7 @@ export function defaultOptions(env = {}) {
     chromiumPath: env.QA_CHROMIUM_PATH || "",
     appDir: "",
     cleanupManifest: "",
+    timeoutMs: String(DEFAULT_TIMEOUT_MS),
     suites: [],
     allowBaseUrls: [],
     headless: true,
@@ -92,6 +96,9 @@ export function parseArgs(argv, env = {}) {
     }
   }
   if (!options.suites.length) options.suites = [...SUITE_NAMES];
+  const timeout = Number(options.timeoutMs);
+  if (!Number.isInteger(timeout) || timeout < MIN_TIMEOUT_MS) errors.push(`--timeout-ms must be an integer >= ${MIN_TIMEOUT_MS} (default ${DEFAULT_TIMEOUT_MS})`);
+  else options.timeoutMs = timeout;
   return { options, errors: [...errors, ...validate(options)] };
 }
 
@@ -162,7 +169,8 @@ function validate(options) {
 export const HELP = `Usage: node scripts/qa/run.mjs --base-url <url> --sha <sha> --project <ref> --credentials <json>
                                [--suite <name>]... [--headless|--no-headless] [--out <dir>]
                                [--playwright-path <dir>] [--chromium-path <bin>] [--app-dir <checkout>]
-                               [--allow-base-url <origin>]... [--keep-fixtures] [--dry-run] [--json]
+                               [--allow-base-url <origin>]... [--timeout-ms <ms, default 90000>]
+                               [--keep-fixtures] [--dry-run] [--json]
        node scripts/qa/run.mjs --cleanup-manifest <manifest.json> --credentials <json> --project <ref>
 
 Suites: ${SUITE_NAMES.join(", ")}

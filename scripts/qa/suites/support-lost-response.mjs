@@ -2,7 +2,7 @@
 // the form keeps text + idempotency key across a remount and a full reload; the retry replays
 // the SAME key and the server answers replayed:true — one ticket, no duplicate.
 import assert from "node:assert/strict";
-import { newPage, login, goHash, capture, bodyText, expectVisible, sleep } from "../lib/browser.mjs";
+import { newPage, login, goHash, capture, bodyText, expectVisible, sleep, safeRoute, routeFetch, pollUntil } from "../lib/browser.mjs";
 
 export const suite = {
   name: "support-lost-response",
@@ -21,33 +21,32 @@ export const suite = {
         await s.step("login C", () => login(h, base, c, projectRef));
         await s.step("open the form", async () => {
           await goHash(h.page, "support/new");
-          await expectVisible(h.page.getByLabel("Sujet", { exact: true }), "support creation form");
+          await expectVisible(h.page.getByRole("textbox", { name: "Sujet", exact: true }), "support creation form");
         });
         const seen = [];
         let committed = null;
-        await h.page.route(`${base}/api/support`, async (route) => {
+        await safeRoute(h, s, `${base}/api/support`, async (route) => {
           if (route.request().method() !== "POST") return route.continue();
           const payload = route.request().postDataJSON();
           seen.push(payload?.request_id || null);
           if (seen.length === 1) {
-            const response = await route.fetch(); // committed server-side
-            committed = { status: response.status(), body: JSON.parse(await response.text()) };
+            const response = await routeFetch(route); // committed server-side
+            committed = { status: response.status(), body: safeJson(await response.text()) };
             return route.abort("failed"); // ...but the browser never gets the answer
           }
           return route.continue();
-        });
+        }, "POST /api/support (lost response)");
         await s.step("submit: committed server-side, response lost, text kept, error shown", async () => {
-          await h.page.getByLabel("Sujet", { exact: true }).fill(subject);
-          await h.page.getByLabel("Message", { exact: true }).fill(message);
+          await h.page.getByRole("textbox", { name: "Sujet", exact: true }).fill(subject);
+          await h.page.getByRole("textbox", { name: "Message", exact: true }).fill(message);
           await h.page.getByRole("button", { name: "Envoyer la demande", exact: true }).click();
-          const deadline = Date.now() + 30000;
-          while (!committed && Date.now() < deadline) await sleep(100);
-          assert.ok(committed?.body?.ticket?.id, "creation never committed");
+          await pollUntil(() => committed);
+          assert.ok(committed?.body?.ticket?.id, `creation never committed (status ${committed?.status ?? "none"})`);
           await fixtures.track("support_tickets", committed.body.ticket.id);
           await sleep(800);
           const text = await bodyText(h.page);
           assert.match(text, /interrompue|rechargez/i, "no 'connection interrupted, re-read' message shown");
-          assert.equal(await h.page.getByLabel("Sujet", { exact: true }).inputValue(), subject, "typed subject lost");
+          assert.equal(await h.page.getByRole("textbox", { name: "Sujet", exact: true }).inputValue(), subject, "typed subject lost");
           assert.equal(await h.page.evaluate(() => window.location.hash), "#support/new", "navigated despite the lost response");
           await capture(h, out, "support-lost-after-abort", s);
           return { requestId: seen[0], ticket: committed.body.ticket.id };
@@ -56,25 +55,22 @@ export const suite = {
           await goHash(h.page, "support");
           await sleep(800);
           await goHash(h.page, "support/new");
-          await expectVisible(h.page.getByLabel("Sujet", { exact: true }), "support form after remount");
-          assert.equal(await h.page.getByLabel("Sujet", { exact: true }).inputValue(), subject, "subject not restored after remount");
-          assert.equal(await h.page.getByLabel("Message", { exact: true }).inputValue(), message, "message not restored after remount");
+          await expectVisible(h.page.getByRole("textbox", { name: "Sujet", exact: true }), "support form after remount");
+          assert.equal(await h.page.getByRole("textbox", { name: "Sujet", exact: true }).inputValue(), subject, "subject not restored after remount");
+          assert.equal(await h.page.getByRole("textbox", { name: "Message", exact: true }).inputValue(), message, "message not restored after remount");
         });
         await s.step("full reload: form pre-filled again", async () => {
           await h.page.reload({ waitUntil: "domcontentloaded" });
-          await expectVisible(h.page.getByLabel("Sujet", { exact: true }), "support form after reload", { timeout: 45000 });
-          assert.equal(await h.page.getByLabel("Sujet", { exact: true }).inputValue(), subject, "subject not restored after reload");
+          await expectVisible(h.page.getByRole("textbox", { name: "Sujet", exact: true }), "support form after reload");
+          assert.equal(await h.page.getByRole("textbox", { name: "Sujet", exact: true }).inputValue(), subject, "subject not restored after reload");
           await capture(h, out, "support-lost-after-reload", s);
         });
         await s.step("retry replays the same key: replayed notice, navigation to the single ticket", async () => {
           await h.page.getByRole("button", { name: "Envoyer la demande", exact: true }).click();
-          const deadline = Date.now() + 30000;
-          let hash = "";
-          while (Date.now() < deadline) {
-            hash = await h.page.evaluate(() => window.location.hash);
-            if (/^#support\/[0-9a-f-]{36}$/i.test(hash)) break;
-            await sleep(150);
-          }
+          const hash = (await pollUntil(async () => {
+            const current = await h.page.evaluate(() => window.location.hash);
+            return /^#support\/[0-9a-f-]{36}$/i.test(current) ? current : null;
+          })) || (await h.page.evaluate(() => window.location.hash));
           assert.match(hash, /^#support\/[0-9a-f-]{36}$/i, `no navigation to the ticket (hash ${hash})`);
           assert.equal(hash.slice("#support/".length), committed.body.ticket.id, "navigated to a different ticket");
           assert.equal(seen.length, 2, `expected 2 creation requests, saw ${seen.length}`);
@@ -100,3 +96,11 @@ export const suite = {
     });
   },
 };
+
+function safeJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}

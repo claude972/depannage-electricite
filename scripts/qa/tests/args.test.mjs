@@ -61,6 +61,13 @@ test("base URL allow-list: local always, remote only when listed by origin", () 
   assert.equal(baseUrlAllowed("not a url").allowed, false);
 });
 
+test("--timeout-ms defaults to 90000 and refuses values below 1000 or non-integers", () => {
+  assert.equal(parseArgs(base).options.timeoutMs, 90000);
+  assert.equal(parseArgs([...base, "--timeout-ms", "120000"]).options.timeoutMs, 120000);
+  assert.ok(parseArgs([...base, "--timeout-ms", "500"]).errors.some((e) => /--timeout-ms/.test(e)));
+  assert.ok(parseArgs([...base, "--timeout-ms", "soon"]).errors.some((e) => /--timeout-ms/.test(e)));
+});
+
 test("--cleanup-manifest mode needs credentials and project only", () => {
   assert.deepEqual(parseArgs(["--cleanup-manifest", "/tmp/m.json", "--credentials", "/c.json", "--project", "abcdefghijklmnopqrst"]).errors, []);
   assert.ok(parseArgs(["--cleanup-manifest", "/tmp/m.json"]).errors.length >= 2);

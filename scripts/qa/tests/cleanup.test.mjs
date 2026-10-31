@@ -25,6 +25,8 @@ test("the mission's required sequence is respected", () => {
   assert.ok(storage < CLEANUP_STEPS.findIndex((s) => s.table === "documents"));
   assert.ok(idx("documents") < idx("interventions"));
   assert.ok(idx("quotes") < idx("interventions") && idx("messages") < idx("interventions"));
+  assert.ok(idx("approvals") < idx("quotes"), "approvals (FK quote_id) must precede quotes");
+  assert.ok(idx("approvals") < idx("sites") && idx("approval_rules") < idx("sites"));
   assert.ok(idx("interventions") < idx("organization_member_site_grants"));
   assert.ok(idx("organization_member_site_grants") < idx("organization_member_site_scopes"));
   assert.ok(idx("organization_member_site_scopes") < idx("organization_members"));
@@ -98,7 +100,7 @@ test("runCleanup deletes by exact id lists, reads back, and reports a remaining 
 test("optional tables absent from the schema are skipped, not failed", async () => {
   const db = {
     async delete(table) {
-      if (table === "approvals") throw new Error('relation "public.approvals" does not exist (42P01)');
+      if (table === "compliance_records") throw new Error('relation "public.compliance_records" does not exist (42P01)');
     },
     async count() {
       return 0;
@@ -113,8 +115,9 @@ test("optional tables absent from the schema are skipped, not failed", async () 
     },
   };
   const manifest = emptyManifest();
-  manifest.created.interventions = [uuid(3)];
+  manifest.created.sites = [uuid(3)];
   const result = await runCleanup(db, manifest);
   assert.equal(result.ok, true);
-  assert.equal(result.steps.find((s) => s.table === "approvals").status, "skipped");
+  assert.equal(result.steps.find((s) => s.table === "compliance_records").status, "skipped");
+  assert.equal(result.steps.find((s) => s.table === "approvals").status, "pass");
 });

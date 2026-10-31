@@ -2,7 +2,7 @@
 // that photo; then an upload whose response is lost (uncertain) → candidates → explicit confirm
 // without re-sending. Never a duplicate dossier.
 import assert from "node:assert/strict";
-import { newPage, login, openHash, capture, expectVisible, sleep, PNG_1x1 } from "../lib/browser.mjs";
+import { newPage, login, openHash, capture, expectVisible, sleep, safeRoute, routeFetch, PNG_1x1 } from "../lib/browser.mjs";
 
 export const suite = {
   name: "photos-recovery",
@@ -15,37 +15,39 @@ export const suite = {
 
     async function createRequest(page, description, files) {
       await openHash(page, base, "new");
-      await expectVisible(page.getByLabel("Décrivez le problème", { exact: true }), "request form");
-      await page.getByLabel("Décrivez le problème", { exact: true }).fill(description);
+      await expectVisible(page.getByRole("textbox", { name: "Décrivez le problème", exact: true }), "request form");
+      await page.getByRole("textbox", { name: "Décrivez le problème", exact: true }).fill(description);
       await page.getByLabel("Photos du problème (facultatif)", { exact: true }).setInputFiles(files.map((name) => ({ name, mimeType: "image/png", buffer: PNG_1x1 })));
       await page.getByRole("button", { name: "Continuer", exact: true }).click();
-      await page.getByLabel("Adresse d’intervention", { exact: true }).fill("Adresse technique QA, aucun déplacement");
-      await page.getByLabel("Code postal", { exact: true }).fill("97200");
-      await page.getByLabel("Ville", { exact: true }).fill("TEST QA");
+      await page.getByRole("textbox", { name: "Adresse d’intervention", exact: true }).fill("Adresse technique QA, aucun déplacement");
+      await page.getByRole("textbox", { name: "Code postal", exact: true }).fill("97200");
+      await page.getByRole("textbox", { name: "Ville", exact: true }).fill("TEST QA");
       await page.getByRole("button", { name: "Continuer", exact: true }).click();
       await page.getByRole("button", { name: "Enregistrer la demande", exact: true }).click();
     }
+    const trackDocs = async (docs) => {
+      await fixtures.track("documents", ...docs.map((x) => x.id));
+      await fixtures.track("storage_paths", ...docs.map((x) => x.path));
+    };
 
     await report.scenario(suite.name, "partial refusal keeps one dossier; retry sends only the refused photo", async (s) => {
       const h = await newPage(browser, { baseUrl: base, redactor });
       let uploads = 0;
-      let forwarded = 0;
       let refused = 0;
       try {
         await s.step("login D", () => login(h, base, d, projectRef));
-        await h.page.route(`${base}/api/documents`, async (route) => {
+        await safeRoute(h, s, `${base}/api/documents`, async (route) => {
           if (route.request().method() !== "POST") return route.continue();
           uploads++;
           if (uploads === 2) {
             refused++;
             return route.fulfill({ status: 422, contentType: "application/json", body: JSON.stringify({ error: "QA: refus certain avant envoi au serveur." }) });
           }
-          forwarded++;
           return route.continue();
-        });
+        }, "POST /api/documents (definite refusal)");
         await s.step("create a request with two photos, the second refused", async () => {
           await createRequest(h.page, cohort.description("demande photos refus partiel, texte de validation"), ["qa-first.png", "qa-second.png"]);
-          await expectVisible(h.page.locator('.upload-queue li[data-status="failed"]'), "failed upload item", { timeout: 90000 });
+          await expectVisible(h.page.locator('.upload-queue li[data-status="failed"]'), "failed upload item");
           const created = h.network.filter((n) => n.method === "POST" && n.path === "/api/interventions").length;
           assert.equal(created, 1, `dossiers created: ${created}`);
           assert.equal(uploads, 2);
@@ -56,22 +58,20 @@ export const suite = {
           await fixtures.track("interventions", ...jobs.map((j) => j.id));
           const docs = await db.select("documents", { owner_id: `eq.${d.id}` }, "id,name,path");
           assert.deepEqual(docs.map((x) => x.name), ["qa-first.png"]);
-          await fixtures.track("documents", ...docs.map((x) => x.id));
-          await fixtures.track("storage_paths", ...docs.map((x) => x.path));
+          await trackDocs(docs);
           await capture(h, out, "photos-partial-failure", s);
           return { dossiers: 1, uploads, refused, stored: docs.length };
         });
         await s.step("retry re-sends only the refused photo", async () => {
           await h.page.getByRole("button", { name: "Réessayer les 1 photo refusée", exact: true }).click();
-          await expectVisible(h.page.locator(".upload-queue").filter({ hasText: /Toutes les photos sont enregistrées/ }), "all stored message", { timeout: 60000 });
+          await expectVisible(h.page.locator(".upload-queue").filter({ hasText: /Toutes les photos sont enregistrées/ }), "all stored message");
           assert.equal(uploads, 3, `upload requests: ${uploads}`);
           assert.equal(h.network.filter((n) => n.method === "POST" && n.path === "/api/interventions").length, 1, "a second dossier was created");
           const docs = await db.select("documents", { owner_id: `eq.${d.id}` }, "id,name,path");
           assert.equal(docs.length, 2);
           assert.equal(docs.filter((x) => x.name === "qa-first.png").length, 1);
           assert.equal(docs.filter((x) => x.name === "qa-second.png").length, 1);
-          await fixtures.track("documents", ...docs.map((x) => x.id));
-          await fixtures.track("storage_paths", ...docs.map((x) => x.path));
+          await trackDocs(docs);
           await capture(h, out, "photos-retry-success", s);
           return { uploads, stored: docs.length, firstNotResent: true };
         });
@@ -87,16 +87,16 @@ export const suite = {
       let storedBeforeAbort = 0;
       try {
         await s.step("login D", () => login(h, base, d, projectRef));
-        await h.page.route(`${base}/api/documents`, async (route) => {
+        await safeRoute(h, s, `${base}/api/documents`, async (route) => {
           if (route.request().method() !== "POST") return route.continue();
           uploads++;
-          const response = await route.fetch(); // reaches the server and is stored
+          const response = await routeFetch(route); // reaches the server and is stored
           if (response.status() === 201 || response.status() === 200) storedBeforeAbort++;
           return route.abort("failed"); // the browser never learns it
-        });
+        }, "POST /api/documents (lost response)");
         await s.step("one photo, response lost → uncertain, no automatic resend", async () => {
           await createRequest(h.page, cohort.description("demande photo réponse perdue, texte de validation"), ["qa-uncertain.png"]);
-          await expectVisible(h.page.locator('.upload-queue li[data-status="uncertain"]'), "uncertain upload item", { timeout: 90000 });
+          await expectVisible(h.page.locator('.upload-queue li[data-status="uncertain"]'), "uncertain upload item");
           assert.equal(uploads, 1);
           assert.equal(storedBeforeAbort, 1, "server did not store the photo");
           const jobs = await db.select("interventions", { client_id: `eq.${d.id}` }, "id");
@@ -104,14 +104,13 @@ export const suite = {
           await fixtures.track("interventions", ...jobs.map((j) => j.id));
           const docs = await db.select("documents", { owner_id: `eq.${d.id}`, name: "eq.qa-uncertain.png" }, "id,path");
           assert.equal(docs.length, 1);
-          await fixtures.track("documents", ...docs.map((x) => x.id));
-          await fixtures.track("storage_paths", ...docs.map((x) => x.path));
+          await trackDocs(docs);
           await capture(h, out, "photos-uncertain", s);
           return { uploads, serverStored: storedBeforeAbort };
         });
         await s.step("verify lists the same-name candidate; resend control present but not used", async () => {
           await h.page.getByRole("button", { name: /^Vérifier le dossier/ }).click();
-          await expectVisible(h.page.getByRole("button", { name: "C’est bien cette photo", exact: true }), "candidate acknowledgement button", { timeout: 45000 });
+          await expectVisible(h.page.getByRole("button", { name: "C’est bien cette photo", exact: true }), "candidate acknowledgement button");
           assert.equal(await h.page.locator('.upload-queue li[data-status="uncertain"]').count(), 1);
           assert.equal(uploads, 1, "verification re-sent the photo");
           const resend = await h.page.getByRole("button", { name: /^Renvoyer les photos incertaines/ }).count();
@@ -126,8 +125,7 @@ export const suite = {
           const docs = await db.select("documents", { owner_id: `eq.${d.id}` }, "id,name,path");
           assert.equal(docs.length, 3, `documents for D: ${docs.length}`);
           assert.equal(await db.count("interventions", { client_id: `eq.${d.id}` }), 2);
-          await fixtures.track("documents", ...docs.map((x) => x.id));
-          await fixtures.track("storage_paths", ...docs.map((x) => x.path));
+          await trackDocs(docs);
           await capture(h, out, "photos-acknowledged", s);
           return { uploads, stored: docs.length, dossiers: 2 };
         });

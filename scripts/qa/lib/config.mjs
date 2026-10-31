@@ -46,7 +46,10 @@ export async function loadCredentials(filePath) {
     const info = await stat(filePath);
     if (info.mode & 0o077) process.stderr.write("warning: credentials file is readable by other users (recommended mode 0600)\n");
   } catch {}
-  return { supabase: { url: sb.url.replace(/\/$/, ""), projectRef: ref, serviceKey: sb.service_role_key }, allowedBaseUrls: allowed };
+  // Optional public (anon/publishable) key: only used as the API gateway key for DIRECT RPC
+  // probes made with a cohort user's own session token. Never grants anything by itself.
+  const publishableKey = typeof sb.publishable_key === "string" && sb.publishable_key.length >= 20 ? sb.publishable_key : null;
+  return { supabase: { url: sb.url.replace(/\/$/, ""), projectRef: ref, serviceKey: sb.service_role_key, publishableKey }, allowedBaseUrls: allowed };
 }
 
 /** Refuses a project mismatch between --project and the credentials. */

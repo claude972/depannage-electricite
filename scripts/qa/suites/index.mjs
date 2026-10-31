@@ -1,5 +1,6 @@
 // Suite registry. Each suite exports { name, description, needsCredentials, plan, run(ctx) }.
-// ctx = { base, target, projectRef, fixtures, db, browser, cohort, out, report, redactor, log }.
+// ctx = { base, target, projectRef, fixtures, db, browser, cohort, out, report, redactor, log,
+//         credentials, timeoutMs }.
 import { suite as viewerSiteGrants } from "./viewer-site-grants.mjs";
 import { suite as supportStaleAB } from "./support-stale-a-b.mjs";
 import { suite as supportLostResponse } from "./support-lost-response.mjs";

@@ -2,7 +2,7 @@
 // response is held; A logs out and B logs in (same document); the late response must neither
 // navigate nor notify B, and B's list stays empty. Server readback: exactly one ticket of A.
 import assert from "node:assert/strict";
-import { newPage, login, logout, goHash, api, capture, bodyText, expectVisible, sleep } from "../lib/browser.mjs";
+import { newPage, login, logout, goHash, api, capture, bodyText, expectVisible, sleep, safeRoute, routeFetch, pollUntil } from "../lib/browser.mjs";
 
 export const suite = {
   name: "support-stale-a-b",
@@ -18,30 +18,29 @@ export const suite = {
 
     await report.scenario(suite.name, "held creation response of A is ignored once B is the identity", async (s) => {
       const h = await newPage(browser, { baseUrl: base, redactor });
+      let release = () => {};
       try {
         await s.step("login A through the form", () => login(h, base, a, projectRef));
         await s.step("open the new assistance request form", async () => {
           await goHash(h.page, "support/new");
-          await expectVisible(h.page.getByLabel("Sujet", { exact: true }), "support creation form (Sujet)");
+          await expectVisible(h.page.getByRole("textbox", { name: "Sujet", exact: true }), "support creation form (Sujet)");
         });
-        let release;
         const held = new Promise((resolve) => (release = resolve));
         let committed = null;
-        await h.page.route(`${base}/api/support`, async (route) => {
+        await safeRoute(h, s, `${base}/api/support`, async (route) => {
           if (route.request().method() !== "POST") return route.continue();
-          const response = await route.fetch(); // sent now, with A's cookies: the server commits as A
+          const response = await routeFetch(route); // sent now, with A's cookies: the server commits as A
           const text = await response.text();
           committed = { status: response.status(), body: safeJson(text) };
           await held; // the browser only sees the answer after B is logged in
           await route.fulfill({ status: response.status(), headers: { "content-type": "application/json", "cache-control": "private, no-store" }, body: text });
-        });
+        }, "POST /api/support (held)");
         await s.step("A submits; the server commits the ticket while the response is held", async () => {
-          await h.page.getByLabel("Sujet", { exact: true }).fill(subject);
-          await h.page.getByLabel("Message", { exact: true }).fill(message);
+          await h.page.getByRole("textbox", { name: "Sujet", exact: true }).fill(subject);
+          await h.page.getByRole("textbox", { name: "Message", exact: true }).fill(message);
           await h.page.getByRole("button", { name: "Envoyer la demande", exact: true }).click();
-          const deadline = Date.now() + 30000;
-          while (!committed && Date.now() < deadline) await sleep(100);
-          assert.ok(committed, "the creation request never reached the server");
+          await pollUntil(() => committed);
+          assert.ok(committed, "the creation request never reached the server (or the route handler failed)");
           assert.equal(committed.status, 200, `server answered ${committed.status}`);
           assert.ok(committed.body?.ticket?.id, "server did not return a ticket");
           await fixtures.track("support_tickets", committed.body.ticket.id);
@@ -85,6 +84,7 @@ export const suite = {
         });
         s.network(h.network);
       } finally {
+        release(); // never leave a route handler awaiting forever
         await h.close();
       }
     });

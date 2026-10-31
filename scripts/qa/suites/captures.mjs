@@ -23,7 +23,7 @@ export const suite = {
           try {
             await s.step("open the demo deep link", async () => {
               await openHash(h.page, base, target.hash);
-              await expectVisible(target.landmark(h.page), `${target.name} landmark`, { timeout: 60000 });
+              await expectVisible(target.landmark(h.page), `${target.name} landmark`);
             });
             await s.step("no horizontal overflow", () => noHorizontalOverflow(h.page, width));
             await s.step("capture", async () => {
