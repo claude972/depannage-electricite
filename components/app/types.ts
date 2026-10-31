@@ -499,6 +499,7 @@ export type Capabilities = {
   siteAccess: ContractState;
   adminLists: ContractState;
   quoteDraft: ContractState;
+  adminDirectory: ContractState;
 };
 export const UNKNOWN_CAPABILITIES: Capabilities = {
   operations: "unknown",
@@ -511,6 +512,7 @@ export const UNKNOWN_CAPABILITIES: Capabilities = {
   siteAccess: "unknown",
   adminLists: "unknown",
   quoteDraft: "unknown",
+  adminDirectory: "unknown",
 };
 export type ReturnContext =
   | { kind: "payment"; state: "pending" | "cancelled"; interventionId: string }
@@ -653,3 +655,34 @@ export type QuoteDraftResult =
   | { ok: true; envelope: QuoteDraftEnvelope }
   | { ok: false; conflict: true; message: string }
   | { ok: false; conflict: false; message: string };
+
+// Contract WEB-PWA-ADMIN-DIRECTORIES-001: keyset-paginated admin directories with exact totals.
+export type DirectoryKind = "artisans" | "clients" | "organizations";
+export type DirectoryArtisan = {
+  id: string;
+  full_name: string;
+  phone: string;
+  artisan_approved: boolean;
+  created_at: string;
+  company_name: string | null;
+  application_status: ArtisanApplicationStatus | null;
+};
+export type DirectoryClient = { id: string; full_name: string; phone: string; role: "client" | "manager"; created_at: string };
+export type DirectoryOrganization = { id: string; name: string; owner_id: string; created_at: string };
+export type DirectoryItem<K extends DirectoryKind> = K extends "artisans"
+  ? DirectoryArtisan
+  : K extends "clients"
+    ? DirectoryClient
+    : DirectoryOrganization;
+export type DirectoryFilters = {
+  q?: string;
+  approved?: boolean;
+  role?: "client" | "manager";
+  owner_id?: string;
+};
+export type DirectoryPage<K extends DirectoryKind = DirectoryKind> = {
+  kind: K;
+  items: DirectoryItem<K>[];
+  page: { limit: number; has_more: boolean; next_cursor: string | null; total: number };
+  filters: { q: string | null; approved: boolean | null; role: string | null; owner_id: string | null };
+};

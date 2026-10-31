@@ -56,6 +56,10 @@ import {
   type AdminInterventionsPage,
   type AdminListFilters,
   type AdminOverview,
+  type DirectoryFilters,
+  type DirectoryItem,
+  type DirectoryKind,
+  type DirectoryPage,
   type ArtisanCommand,
   type ArtisanDossier,
   type ArtisanPerformanceReport,
@@ -521,6 +525,7 @@ export default function CourantApp() {
       siteAccess: "available",
       adminLists: "available",
       quoteDraft: "available",
+      adminDirectory: "available",
     });
     guard.bump();
     runner.reset();
@@ -1312,6 +1317,105 @@ export default function CourantApp() {
       return null;
     }
   }
+  function demoDirectoryRows<K extends DirectoryKind>(kind: K): DirectoryItem<K>[] {
+    const artisans = readDemo(DEMO_KEYS.admin, adminSeed(), Array.isArray);
+    const dossier = readDemo(DEMO_KEYS.artisan, artisanSeed()).artisan_profile;
+    if (kind === "artisans")
+      return artisans.map((a) => ({
+        id: a.id,
+        full_name: a.full_name,
+        phone: a.phone || "",
+        artisan_approved: !!a.artisan_approved,
+        created_at: a.created_at,
+        company_name: a.id === DEMO_IDS.artisan ? dossier?.company_name ?? null : null,
+        application_status: a.id === DEMO_IDS.artisan ? dossier?.application_status ?? null : a.artisan_approved ? "approved" : "submitted",
+      })) as DirectoryItem<K>[];
+    if (kind === "clients")
+      return [
+        { id: DEMO_IDS.client, full_name: DEMO_NAMES.client, phone: "", role: "client" as const, created_at: "2026-10-01T09:00:00Z" },
+        { id: DEMO_IDS.manager, full_name: DEMO_NAMES.manager, phone: "", role: "manager" as const, created_at: "2026-10-02T09:00:00Z" },
+      ] as DirectoryItem<K>[];
+    return data.organizations.map((o) => ({
+      id: o.id,
+      name: o.name,
+      owner_id: o.owner_id || DEMO_IDS.manager,
+      created_at: "2026-10-02T09:00:00Z",
+    })) as DirectoryItem<K>[];
+  }
+  async function loadAdminDirectory<K extends DirectoryKind>(
+    kind: K,
+    params: DirectoryFilters & { limit?: number; cursor?: string | null },
+  ): Promise<DirectoryPage<K> | null> {
+    const limit = Math.min(100, Math.max(1, params.limit ?? 25));
+    if (modeRef.current === "demo") {
+      const q = params.q?.trim().toLowerCase();
+      const rows = demoDirectoryRows(kind)
+        .filter((row) => {
+          const r = row as unknown as Record<string, unknown>;
+          if (q && !String(r.full_name ?? r.name ?? "").toLowerCase().includes(q) && r.id !== q) return false;
+          if (params.approved !== undefined && r.artisan_approved !== params.approved) return false;
+          if (params.role && r.role !== params.role) return false;
+          if (params.owner_id && r.owner_id !== params.owner_id) return false;
+          return true;
+        })
+        .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id.localeCompare(a.id));
+      const start = params.cursor ? Number(params.cursor) || 0 : 0;
+      return {
+        kind,
+        items: rows.slice(start, start + limit),
+        page: {
+          limit,
+          has_more: start + limit < rows.length,
+          next_cursor: start + limit < rows.length ? String(start + limit) : null,
+          total: rows.length,
+        },
+        filters: { q: params.q ?? null, approved: params.approved ?? null, role: params.role ?? null, owner_id: params.owner_id ?? null },
+      };
+    }
+    const my = seq.current;
+    try {
+      const search = new URLSearchParams({ kind, limit: String(limit) });
+      if (params.cursor) search.set("cursor", params.cursor);
+      if (params.q) search.set("q", params.q);
+      if (params.approved !== undefined) search.set("approved", String(params.approved));
+      if (params.role) search.set("role", params.role);
+      if (params.owner_id) search.set("owner_id", params.owner_id);
+      const result = await api<DirectoryPage<K>>(`/api/admin/directory?${search}`);
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, adminDirectory: "available" }));
+      return result;
+    } catch (e) {
+      if (my !== seq.current) return null;
+      if (e instanceof ApiRequestError && e.status === 422) {
+        setError(e.message);
+        return null;
+      }
+      if (e instanceof ApiRequestError && e.status === 403) {
+        void refresh();
+        setError("Vos droits d’administration ne sont plus reconnus. Vos données ont été rechargées.");
+        return null;
+      }
+      setCapabilities((c) => ({ ...c, adminDirectory: contractStateFromError(e) }));
+      return null;
+    }
+  }
+  async function loadAdminDirectoryItem<K extends DirectoryKind>(kind: K, id: string): Promise<DirectoryItem<K> | null> {
+    if (modeRef.current === "demo") return demoDirectoryRows(kind).find((r) => r.id === id) ?? null;
+    const my = seq.current;
+    try {
+      const result = await api<{ kind: K; item: DirectoryItem<K> }>(
+        `/api/admin/directory?kind=${kind}&id=${encodeURIComponent(id)}`,
+      );
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, adminDirectory: "available" }));
+      return result.item;
+    } catch (e) {
+      if (my !== seq.current) return null;
+      if (e instanceof ApiRequestError && e.status === 404) return null;
+      setCapabilities((c) => ({ ...c, adminDirectory: contractStateFromError(e) }));
+      return null;
+    }
+  }
   async function loadAdminIntervention(id: string): Promise<AdminInterventionDetail | null> {
     if (modeRef.current === "demo") {
       const intervention = data.interventions.find((i) => i.id === id);
@@ -1988,6 +2092,8 @@ export default function CourantApp() {
     artisanCommand,
     loadAdminOverview,
     loadAdminInterventions,
+    loadAdminDirectory,
+    loadAdminDirectoryItem,
     loadAdminIntervention,
     loadQuoteDraft,
     quoteDraftCommand,

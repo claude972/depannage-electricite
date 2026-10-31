@@ -12,6 +12,10 @@ import type {
   ArtisanPerformanceReport,
   Capabilities,
   Category,
+  DirectoryFilters,
+  DirectoryItem,
+  DirectoryKind,
+  DirectoryPage,
   InterventionAction,
   InvitationCreated,
   Mode,
@@ -123,6 +127,13 @@ export interface Session {
   loadAdminOverview(): Promise<AdminOverview | null>;
   /** Admin dossier list, server-paginated (cursor) and filtered; null when unavailable. */
   loadAdminInterventions(params: AdminListFilters & { limit?: number; cursor?: string | null }): Promise<AdminInterventionsPage | null>;
+  /** Admin directories (artisans / clients / organisations), keyset-paginated with exact totals; null when unavailable. */
+  loadAdminDirectory<K extends DirectoryKind>(
+    kind: K,
+    params: DirectoryFilters & { limit?: number; cursor?: string | null },
+  ): Promise<DirectoryPage<K> | null>;
+  /** Minimal detail of one directory entry outside the loaded window; null when absent/unavailable. */
+  loadAdminDirectoryItem<K extends DirectoryKind>(kind: K, id: string): Promise<DirectoryItem<K> | null>;
   /** Admin detail of any dossier (not limited to the 100 loaded in workspace), with bounded quotes. */
   loadAdminIntervention(id: string): Promise<AdminInterventionDetail | null>;
   /** Quote draft envelope of the assigned artisan (contract QUOTE-DRAFT-001); null when unavailable. */
