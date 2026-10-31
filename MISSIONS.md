@@ -443,3 +443,12 @@ Basecommune4c398e8393026598c5b629d3912cf80285acc2f5. Brancheclaude/design-delivo
 
 
 DESIGN-DELIVO-TEST-001 clôture bornée ROOT31oct16h56 : fd13ce6 poussé, revue visuelle réelle390/360/1280 + interactions et preview publique statique 7xo6v93eo vérifiées/livrées au propriétaire. Aucun changement application ni adoption implicite. Voir CORRECTIONS.md et rapport DELIVO_TEST_DESIGN.md de claude/design-delivo-test.
+
+
+## DESIGN-DELIVO-TEST-002 —31oct17h03AST — agent:claude — pending
+
+Ordreowner «Fait2/3maquettesupplémentairepourvoircommentonfait». Interprétationannoncée :3écranssupplémentaires cohérentsduprototypeDelivo :1demande de dépannage,2suivi artisan,3devis. MAQUETTESUNIQUEMENT, pasrefonteapplication ni backend/GPS/paiement/auth. Réutiliserbrancheclaude/design-delivo-test worktree/tmp/depannage-delivo-test-worktree basefd13ce6ec104cf829f120a10feaa3da70b0ffafb. PropriétaireClaudeUIexistantseul ; ROOTpilotage/revue/captures/previewstatiqueisolée. Fichiersexclusifsprototypes/delivo-test/** etrapportdocs/reviews/DELIVO_TEST_DESIGN.md, aucunapp/globals/tests. Plancompactavantcode/commitpoussé ; conserveraccueilprécédentetZIP.
+
+Références :ZIPDelivo fourni déjàextraitlectureseule/tmp/depannage-delivo-reference contientaussiordertracking/checkoutsourcesencoreaccessiblesarchiveinitialsiutile ; styleexactnoir/orange#FD6931/Jakarta, en-têterond/navigationbasse/adaptationmobile. RéutiliserpolicesetimageM41, pasgénérerunautrestyle. Demande : choixpanne/adresse/description/photoétatvide/actionpoursuivre locale ;suivi : artisanscénariodémoexplicitementfictif, états/timelineetcarteillustrative sansfausseposition/ETA réel, prixsurdevis ;devis : ligneslisibles+totaldemonstrationclairementidentifiésoumontantsàvenir, distinctiondevis/paiement, acceptationlocaleaucunservice. Aucunfauxavis/certifications/délaispromis/chiffresréels. Boutonslocaux réellementnavigables/dialogues/clairs, aucuneémissionAPI.
+
+Galerieparcoursliantles4écrans, titres/lienretourvisibles, élément de choixécran horsfluxprincipalclairementmaquettetest ; nepasfairepasserpourappfinale. Vérification360/390/1280sansoverflow,44px/focus/retour/catégories/formsprototype, capturesréelles3écrans390àmontrerdanschat. Commit/pushréguliersisolés, livraisonscourtes ; ROOTpreviewstatiquePUBLICséparéedu4cbackend etancienprototypefd13 resteconsultable. Aucuneadoptiondansapp sansordreowner.
