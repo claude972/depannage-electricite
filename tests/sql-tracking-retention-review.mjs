@@ -6,13 +6,17 @@ import assert from 'node:assert/strict';
 export const nativeInstallPattern=/-- BEGIN PG_CRON INSTALL[\s\S]*?-- END PG_CRON INSTALL/;
 /** Simulates named schedule upsert and observable call count, NOT a timer or extension loader. */
 export async function installCronStub(db){
- await db.exec(`create schema cron;
+ await db.exec(`create role cron_owner nosuperuser;create schema cron authorization cron_owner;
  create table cron.job(jobid bigint generated always as identity primary key,jobname text not null,schedule text not null,command text not null,database text not null default current_database(),username text not null default current_user,active boolean not null default true,nodename text not null default 'localhost',nodeport integer default inet_server_port(),unique(jobname,username));
- create table cron.schedule_calls(id integer);
- create function cron.schedule(name text,cadence text,sql text) returns bigint language plpgsql as $$declare result bigint;begin
+ alter table cron.job owner to cron_owner;
+ alter table cron.job enable row level security;
+ create policy owner_jobs on cron.job using(username=current_user);
+ create table cron.schedule_calls(id integer);alter table cron.schedule_calls owner to cron_owner;
+ create function cron.schedule(name text,cadence text,sql text) returns bigint language plpgsql security definer set search_path=pg_catalog as $$declare result bigint;caller text;begin
+ caller=nullif(current_setting('role',true),'none');if caller is null then caller=session_user;end if;
  insert into cron.schedule_calls values(1);
- insert into cron.job(jobname,schedule,command) values(name,cadence,sql) on conflict(jobname,username) do update set schedule=excluded.schedule,command=excluded.command returning jobid into result;return result;
- end$$;`);
+ insert into cron.job(jobname,schedule,command,username) values(name,cadence,sql,caller) on conflict(jobname,username) do update set schedule=excluded.schedule,command=excluded.command returning jobid into result;return result;
+ end$$;alter function cron.schedule(text,text,text) owner to cron_owner;`);
 }
 export function stubbedRetentionSql(source){if(!nativeInstallPattern.test(source))throw Error('Native extension block missing');return source.replace(nativeInstallPattern,'-- TEST ONLY: pg_cron install replaced by explicit metadata/schedule stub; NO worker exists.');}
 async function main(){
@@ -26,22 +30,35 @@ async function main(){
  await assert.rejects(db.exec(original),e=>e.code==='P0001'&&e.message.includes('pg_cron is unavailable'));await db.exec('rollback');
  assert.equal((await db.query("select to_regclass('cron.job') v")).rows[0].v,null);
  await installCronStub(db);const source=stubbedRetentionSql(original);
- await db.exec("insert into cron.job(jobname,schedule,command) values('foreign_untouched','0 0 * * *','select 42;')");
- const foreign=(await db.query("select * from cron.job where jobname='foreign_untouched'")).rows;
- await db.exec(source);
- const name='depannage_tracking_retention_v1';const jobs=(await db.query('select * from cron.job where jobname=$1',[name])).rows;assert.equal(jobs.length,1);assert.equal(jobs[0].schedule,'* * * * *');assert.equal(jobs[0].command,'select public.purge_expired_tracking_points();');assert.equal(jobs[0].username,'postgres');assert.equal(jobs[0].active,true);
+ await db.exec(`create role retention_installer nosuperuser;
+ grant usage,create on schema public to retention_installer;
+ alter table public.intervention_tracking owner to retention_installer;
+ alter function public.purge_expired_tracking_points() owner to retention_installer;
+ grant usage on schema cron to retention_installer;
+ grant select on cron.job to retention_installer;
+ grant execute on function cron.schedule(text,text,text) to retention_installer;`);
+ const deploy=async()=>{await db.exec('set role retention_installer');try{await db.exec(source);}catch(e){await db.exec('rollback');throw e;}finally{await db.exec('reset role');}};
+ const name='depannage_tracking_retention_v1';
+ await db.query("insert into cron.job(jobname,schedule,command,username) values('foreign_untouched','0 0 * * *','select 42;','foreign_owner'),($1,'0 0 * * *','select 43;','foreign_owner')",[name]);
+ const foreign=(await db.query("select * from cron.job where username='foreign_owner' order by jobid")).rows;
+ await db.exec('set role retention_installer');
+ assert.equal((await db.query("select count(*)::int n from cron.job where username='foreign_owner'")).rows[0].n,0,'RLS hides foreign owner');
+ assert.equal((await db.query("select has_table_privilege(current_user,'cron.job','UPDATE') v")).rows[0].v,false);
+ await assert.rejects(db.exec('begin;lock table cron.job in share row exclusive mode;'),e=>e.code==='42501');await db.exec('rollback;reset role');
+ await deploy();
+ const jobs=(await db.query('select * from cron.job where jobname=$1 and username=$2',[name,'retention_installer'])).rows;assert.equal(jobs.length,1);assert.equal(jobs[0].schedule,'* * * * *');assert.equal(jobs[0].command,'select public.purge_expired_tracking_points();');assert.equal(jobs[0].username,'retention_installer');assert.equal(jobs[0].active,true);
  assert.equal((await db.query('select count(*)::int n from cron.schedule_calls')).rows[0].n,1);
- await db.exec(source);assert.deepEqual((await db.query('select * from cron.job where jobname=$1',[name])).rows,jobs);assert.equal((await db.query('select count(*)::int n from cron.schedule_calls')).rows[0].n,1);
- assert.deepEqual((await db.query("select * from cron.job where jobname='foreign_untouched'")).rows,foreign);
- console.log('PASS explicit scheduler STUB: native install fails unavailable; correct named job is created once/reapply untouched; foreign job unchanged. NO worker/timing proof.');
- // Every ownership/target/command drift must be refused without fixing or scheduling it.
- for(const [column,value] of [['command','select 99;'],['schedule','*/5 * * * *'],['username','foreign_owner'],['database','foreign_db'],['nodename','foreign.example'],['active',false],['nodeport',5433]]){
-  await db.query(`update cron.job set "${column}"=$1 where jobname=$2`,[value,name]);const before=(await db.query('select * from cron.job order by jobid')).rows;
-  await assert.rejects(db.exec(source),e=>e.code==='P0001'&&e.message.includes('collision'));await db.exec('rollback');assert.deepEqual((await db.query('select * from cron.job order by jobid')).rows,before);assert.equal((await db.query('select count(*)::int n from cron.schedule_calls')).rows[0].n,1);
-  const reset=jobs[0][column];await db.query(`update cron.job set "${column}"=$1 where jobname=$2`,[reset,name]);
+ await deploy();assert.deepEqual((await db.query('select * from cron.job where jobname=$1 and username=$2',[name,'retention_installer'])).rows,jobs);assert.equal((await db.query('select count(*)::int n from cron.schedule_calls')).rows[0].n,1);
+ assert.deepEqual((await db.query("select * from cron.job where username='foreign_owner' order by jobid")).rows,foreign);
+ console.log('PASS scheduler STUB under non-super SELECT-only installer, different cron owner and real RLS: old table lock fails42501; official schedule wrapper creates own key once; hidden foreign same-name job remains intact. NO worker proof.');
+ for(const [column,value] of [['command','select 99;'],['schedule','*/5 * * * *'],['database','foreign_db'],['nodename','foreign.example'],['active',false],['nodeport',5433]]){
+  await db.query(`update cron.job set "${column}"=$1 where jobname=$2 and username=$3`,[value,name,'retention_installer']);const before=(await db.query('select * from cron.job order by jobid')).rows;
+  await assert.rejects(deploy(),e=>e.code==='P0001'&&e.message.includes('collision'));assert.deepEqual((await db.query('select * from cron.job order by jobid')).rows,before);assert.equal((await db.query('select count(*)::int n from cron.schedule_calls')).rows[0].n,1);
+  await db.query(`update cron.job set "${column}"=$1 where jobname=$2 and username=$3`,[jobs[0][column],name,'retention_installer']);
  }
- await db.exec('grant usage on schema cron to authenticated');await assert.rejects(db.exec(source),e=>e.code==='42501');await db.exec('rollback');await db.exec('revoke usage on schema cron from authenticated');
- console.log('PASS collision/foreign owner/endpoint/inactive job and unexpected app schema access all fail closed without other job changes.');
+ await db.exec('grant usage on schema cron to authenticated');await assert.rejects(deploy(),e=>e.code==='42501');await db.exec('revoke usage on schema cron from authenticated');
+ await db.exec('revoke select on cron.job from retention_installer');await assert.rejects(deploy(),e=>e.code==='42501');await db.exec('grant select on cron.job to retention_installer');
+ console.log('PASS same-owner incompatible target/command/inactive collisions and missing read/unexpected app schema privileges refuse without repairing or altering foreign jobs.');
  for(const role of ['anon','authenticated']){await db.exec(`set role ${role}`);await assert.rejects(db.query('select public.purge_expired_tracking_points()'),e=>e.code==='42501');await assert.rejects(db.query('select * from cron.job'),e=>e.code==='42501');await db.exec('reset role');}
  // SQL fixture points only: no user coordinate, admin, grant or provider call.
  await db.exec(`insert into auth.users(id,email,raw_user_meta_data) values('92000000-0000-4000-8000-000000000001','qa-retention@example.invalid','{"role":"client","full_name":"QA retention"}');
