@@ -3,7 +3,7 @@
  * Deliberately no runtime cache, background sync, push handler or request queue.
  */
 const PUBLIC_CACHE_PREFIX = "courant-pwa-public-";
-const PUBLIC_CACHE = `${PUBLIC_CACHE_PREFIX}v2`;
+const PUBLIC_CACHE = `${PUBLIC_CACHE_PREFIX}v3`;
 const OFFLINE_URL = "/offline.html";
 
 self.addEventListener("install", (event) => {

@@ -160,7 +160,7 @@ test("activation only removes obsolete Courant public caches and claims clients"
   await Promise.all(h.emit("activate").waits);
   assert.equal(h.stores.has("courant-pwa-public-v0"), false);
   assert.equal(h.stores.has("another-application"), true);
-  assert.equal(h.stores.has("courant-pwa-public-v2"), true);
+  assert.equal(h.stores.has("courant-pwa-public-v3"), true);
   assert.equal(h.claims(), 1);
 });
 
