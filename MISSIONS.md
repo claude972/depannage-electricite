@@ -116,3 +116,18 @@ Cross-verification: Codex examine les preuves de Claude et fait corriger les fin
 - dependencies: règles003/005/008/009 et intervention_action actuelles, coordination UI Claude nécessaire avant branchement ; pas de Stripe ni données d’exploitant requis. Relais à Claude à00h si inachevé.
 - verification report: CORRECTIONS.md / WEB-PWA-QUOTE-DRAFT-001, rapport exactSHA complémentaire.
 - preview: intégration après revue obligatoire, pas de production.
+
+
+## Mission WEB-PWA-ADMIN-DIRECTORIES-001 — annuaires admin complets
+- agent: codex
+- status: in_progress
+- branch: codex/admin-directories
+- base revision: d85da0657586f152ee9bba941d67345b4eead616
+- worktree: /Volumes/Stockage/Projets/depannage-web-pwa-admin-directories
+- objective: rechercher et paginer artisans, clients et organisations au-delà des100 entrées du dashboard, sans inventer des commandes de finance/support.
+- owned files: nouvelle route app/api/admin/directory/route.ts, nouveau helper lib/supabase/admin-directory.ts si nécessaire, tests/admin-directory.test.ts, docs/WEB_PWA_ADMIN_DIRECTORY_CONTRACT.md et docs/CODEX_ADMIN_DIRECTORY_VERIFICATION.md. Aucune modification des anciennes routes, migrations, frontend, package ou droits RLS.
+- deliverables: contrat strict prépublié avant code ; type artisans/clients/organizations, projections minimales reprises de l’overview autorisé, pagination stable timestamp/id, recherche serveur sûre et total exact avant curseur ; détail UUID seulement si nécessaire à l’ancien dossier et projection explicitement définie. Ne pas exposer Auth/email/coordonnées supplémentaires.
+- acceptance: session vérifiée admin, refus des autres rôles et paramètres invalides ; curseurs liés au type/filtres, >100 éléments par type sans doublons sur jeu fixe, recherche avant limite, données privées/no-store ; conservation des règles de dossier artisan existantes ; tests ciblés de route réelle avec SDK/provider synthétique, puis revue et recette cloud en intégration.
+- dependencies: pagination interventions déjà revue d85, backend Supabase dédié actif ; UI Claude branchera après contrat vérifié. Relais à Claude à00h si lot inachevé.
+- verification report: CORRECTIONS.md / WEB-PWA-ADMIN-DIRECTORIES-001 et rapport complémentaire exactSHA.
+- preview: intégration après revue, pas de production.
