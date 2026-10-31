@@ -891,3 +891,14 @@ Captures : `artisan-documents-{360,1280}-after.jpg` (avant : `artisan-documents-
 Captures : `artisan-application-{360,1280}-after.jpg` (avant : `artisan-application-{360,1280}-before.jpg`). Tests :
 `applicationSteps`, `stepsSummary` (suite UI 104/104) ; `tsc` au vert. Les checkpoints V5-C01 / C05 / C08 sont transférés
 par le lead à un autre propriétaire (enterprise) ; aucun code entreprise n’a été commencé ici.
+
+### Correction ART-CREDENTIAL-001 — aucune validation par pièce
+
+L’ancien `credentialState` affichait « Validé » sur toute pièce dès que la candidature était approuvée, alors que le
+modèle n’enregistre aucun examen par pièce (`link_artisan_credential` ne change pas le statut de candidature). Désormais
+l’état d’une pièce vient de la pièce seule (`credentialState(credentials, kind, today)`, `artisan-lists.ts`) :
+**Manquant**, **Transmis** ou **À renouveler** (avec « Expiré le … ») ; l’approbation est affichée à part comme état du
+dossier (« Candidature : approuvée / soumise / … »). **Écart assumé** vs M14 « Validé » : validation par pièce non
+modélisée. Tests : pièce ajoutée après approbation → « Transmis » ; pièce expirée → « À renouveler » ; dernière pièce du
+type retenue. Capture (démo, dossier approuvé avec une pièce nouvelle et une pièce expirée injectées dans le stockage du
+navigateur, aucune graine modifiée) : `artisan-documents-{360,1280}-credential.jpg`.

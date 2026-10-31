@@ -223,3 +223,33 @@ export function applicationSteps(i: ApplicationStepInput): ApplicationStep[] {
 
 export const stepsSummary = (steps: readonly ApplicationStep[]) =>
   `${steps.filter((s) => s.done).length} section${steps.filter((s) => s.done).length > 1 ? "s" : ""} sur ${steps.length} renseignée${steps.filter((s) => s.done).length > 1 ? "s" : ""}`;
+
+// ---- État d’une pièce justificative (ART-CREDENTIAL-001) ----------------------------------------
+import type { ArtisanCredential, CredentialKind } from "../app/types";
+
+export type CredentialState = {
+  key: "missing" | "expired" | "pending";
+  label: string;
+  tone: "red" | "amber" | "blue";
+  credential?: ArtisanCredential;
+};
+
+/**
+ * État d’une pièce déduit de la pièce seule (dernière transmise pour ce type) : manquante,
+ * expirée (date d’expiration dépassée) ou transmise. Le modèle n’enregistre aucune validation
+ * par pièce : l’approbation de la candidature est un état du dossier, affiché à part, jamais
+ * reporté comme « Validé » sur une pièce.
+ */
+export function credentialState(
+  credentials: readonly ArtisanCredential[],
+  kind: CredentialKind,
+  today: string,
+): CredentialState {
+  const credential = [...credentials]
+    .filter((c) => c.kind === kind)
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
+  if (!credential) return { key: "missing", label: "Manquant", tone: "red" };
+  if (credential.expires_on && credential.expires_on < today)
+    return { key: "expired", label: "À renouveler", tone: "amber", credential };
+  return { key: "pending", label: "Transmis", tone: "blue", credential };
+}

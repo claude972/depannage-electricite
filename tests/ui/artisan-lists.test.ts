@@ -175,3 +175,30 @@ test("candidature : sections renseignées seulement d’après les valeurs et pi
   const partial = applicationSteps({ ...blank, personalDone: true, companyName: "Martin Élec", siret: "1234567890123", legalStatus: "EURL", address: "3 rue des Ateliers" });
   assert.deepEqual(partial.map((s) => s.done), [true, false, false, false, false]);
 });
+
+// ---- ART-CREDENTIAL-001 : aucune validation par pièce déduite de l’approbation --------------------
+import { credentialState } from "../../components/role/artisan-lists";
+import type { ArtisanCredential } from "../../components/app/types";
+
+const cred = (kind: ArtisanCredential["kind"], created_at: string, expires_on: string | null = null): ArtisanCredential => ({
+  id: `c-${kind}-${created_at}`, user_id: "u", document_id: `d-${kind}`, kind, expires_on, created_at,
+});
+
+test("pièce ajoutée après approbation : « Transmis », jamais « Validé »", () => {
+  // L’approbation de la candidature n’est pas un paramètre : la pièce ne peut pas en hériter.
+  const s = credentialState([cred("registration", "2026-10-31T10:00:00Z", "2027-06-15")], "registration", "2026-10-31");
+  assert.equal(s.key, "pending");
+  assert.equal(s.label, "Transmis");
+  assert.ok(!/valid/i.test(s.label));
+  assert.equal(credentialState([], "qualification", "2026-10-31").label, "Manquant");
+});
+
+test("pièce expirée : « À renouveler » (date dépassée), dernière pièce du type retenue", () => {
+  const s = credentialState([cred("liability", "2024-01-10T00:00:00Z", "2024-05-10")], "liability", "2026-10-31");
+  assert.equal(s.key, "expired");
+  assert.equal(s.label, "À renouveler");
+  assert.equal(credentialDateLabel(s), `Expiré le ${formatDate("2024-05-10")}`);
+  // Une pièce plus récente du même type remplace l’ancienne expirée.
+  const renewed = credentialState([cred("liability", "2024-01-10T00:00:00Z", "2024-05-10"), cred("liability", "2026-10-30T00:00:00Z", "2027-05-10")], "liability", "2026-10-31");
+  assert.equal(renewed.label, "Transmis");
+});

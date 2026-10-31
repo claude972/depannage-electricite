@@ -1215,6 +1215,17 @@
 .credCountComplete {
   color: var(--a-green);
 }
+.credHeadStatus {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+@media (max-width: 480px) {
+  .credHeadStatus {
+    align-items: flex-start;
+  }
+}
 .linkForm {
   margin: 0 0 16px;
   border-color: #bfd2f3;
