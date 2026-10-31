@@ -9,7 +9,7 @@ export type PlatformDemo = {
 export const PLATFORM_DEMO: PlatformDemo = {
   access: {
     super_admin: true, scopes: [], super_admin_count: 2,
-    capabilities: { support: false, support_reply: false, support_status: false, operators: true, audit: true, finance: true, reviews_moderation: true, refund_execution: false, invoice_rendering: true },
+    capabilities: { support: true, support_reply: true, support_status: true, operators: true, audit: true, finance: true, reviews_moderation: true, refund_execution: false, invoice_rendering: true },
     config: { commission: { setting_bps: null, setting_version: null, checkout_bps: null, aligned: null }, payment_provider: { configured: false, mode: null, live_enabled: false }, invoice_issuer: { configured: false } },
   },
   grants: [
