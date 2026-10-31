@@ -1,7 +1,9 @@
 # Direction de design
 
 ## Statut et références
-Ce document fixe une direction initiale issue des PDF fournis et des règles de qualité du projet. Les valeurs de tokens ci-dessous sont des propositions de normalisation, pas des couleurs extraites exactement des maquettes.
+Le 31 octobre 2026, le propriétaire a retenu la maquette Delivo adaptée comme nouvelle direction UI/UX : « Je pense qu’on tient une partie de nos maquettes ça sera la nouvelle direction UI/ux ». La référence visuelle courante est le prototype `6bc0cab3a9eabcc52ac62802b5ddfb953a5cb78e`, `prototypes/delivo-test/web-network.html`, consultable sur https://depannage-electricite-mgyxn7dsb-brafas-projects.vercel.app/web-network.html. Voir `docs/DIRECTION_UI_UX_VALIDEE.md` pour les décisions et leur adoption progressive.
+
+Cette décision remplace la proposition initiale bleu/blanc pour la direction graphique. Les PDF restent les références fonctionnelles et de structure propres à chaque rôle. Le prototype valide une direction et une partie des compositions ; il ne prouve ni la migration de l’application, ni la validation de tous ses écrans.
 
 Les maquettes couvrent interfaces mobiles client/artisan, pages web publiques, portails professionnels et administration. Elles peuvent être améliorées tout en conservant leurs intentions métier. Plusieurs noms et logos y coexistent : le nom final, le logo, les coordonnées et la zone de couverture restent à décider. Ne pas adopter une marque concurrente visible dans les schémas de comparaison.
 
@@ -9,30 +11,33 @@ Les maquettes couvrent interfaces mobiles client/artisan, pages web publiques, p
 Une interface de service claire, rassurante et opérationnelle : comprendre la prochaine action, son coût estimé et l'état de la demande. Donner la priorité à la lisibilité et à la transparence, particulièrement en situation urgente.
 
 ## Langage visuel
-- Base claire, surfaces blanches, fond gris très pâle, titres bleu nuit et action principale bleue.
-- Vert réservé aux réussites, validations et disponibilités ; orange aux alertes et rouge aux erreurs ou urgences qui le justifient.
+- Identité verte : vert forêt pour les actions, noir en mode sombre, blanc et gris pâle en mode clair ; famille Plus Jakarta Sans. Conserver les boutons, cartes, arrondis et espacements de la maquette retenue.
+- Thème clair/sombre avec choix système initial et choix utilisateur mémorisé. Le jaune distingue le bloc « Conseils et formation » ; il ne constitue pas un état de validation ou d’alerte à lui seul.
+- Accueil web : grand diaporama photographique manuel, bord à bord, premier écran complet sous la navigation, sans publicité. Les photos restent lisibles, avec texte contrasté, commandes clavier et réduction du mouvement.
+- Interventions en cartes compactes avec photos pertinentes, services par onglets, conseils en grand article + vignettes et bannière verte pour rejoindre le réseau professionnel. La composition et les règles de ces blocs viennent du prototype retenu.
+- Réserver les couleurs de statut aux besoins métier et les accompagner de libellés. Ne pas utiliser la seule couleur verte de marque pour signifier qu’une information a été vérifiée.
 - Icônes simples et cohérentes, accompagnées de libellés lorsque leur sens n'est pas évident.
 - Bordures discrètes, arrondis modérés, ombres légères ; hiérarchie par espacement et typographie.
 - Photographies pertinentes d'interventions et d'artisans pour les pages publiques ; aucune fausse preuve de qualification.
 
-### Tokens initiaux proposés
+### Tokens de la direction retenue
 | Usage | Valeur |
 | --- | --- |
-| Action principale | `#1457D9` |
-| Titres / navigation sombre | `#102A43` |
-| Texte principal | `#172B4D` |
-| Texte secondaire | `#526178` |
-| Fond | `#F5F7FB` |
-| Surface | `#FFFFFF` |
-| Bordure | `#D8E0EB` |
-| Succès | `#167344` |
-| Alerte | `#925C00` |
-| Erreur | `#B42318` |
+| Action principale | `#18794E` |
+| Accent sur fond sombre | `#5BD49A` |
+| Fond sombre / surface / carte | `#000000` / `#141414` / `#1A1A1A` |
+| Texte sombre principal / secondaire | `#FFFFFF` / `#B5B5B5` |
+| Fond clair / surface / carte | `#FFFFFF` / `#F4F6F5` / `#FFFFFF` |
+| Texte clair principal / secondaire | `#111111` / `#4B5563` |
+| Accent sur fond clair | `#0F5C3A` |
+| Conseils et formation | fond `#F4D649`, texte `#141414`, secondaire `#343434` |
+| Bordure sombre / claire | `#2A2A2A` / `#D9DFDC` |
+| Erreur | `#B42318` (adapter le contraste à la surface) |
 
 Vérifier le contraste des combinaisons réellement utilisées avant livraison. Centraliser couleurs, espacements, typographie, rayons et états dans le thème de la stack retenue.
 
 ## Typographie et disposition
-- Police sans empattement lisible ; retenir une famille commune avant implémentation et utiliser les conventions natives si une application mobile est choisie.
+- Plus Jakarta Sans pour le web/PWA, conformément à la maquette retenue ; conserver une hiérarchie de titres et un texte courant lisibles. Toute adaptation native ultérieure suit les règles de sa plateforme.
 - Texte courant web autour de 16 px ; ne pas réduire les textes pour faire entrer un tableau.
 - Échelle d'espacement initiale : 4, 8, 12, 16, 24, 32, 48 et 64.
 - Mobile : une colonne, action principale visible, progression explicite pour les demandes et devis.
@@ -69,7 +74,7 @@ Contrôler cohérence des composants, responsive, lisibilité, clavier/focus, va
 
 ## Fidélité aux références après audit
 
-La structure des écrans, la navigation et la hiérarchie métier font partie des références à respecter ; reprendre seulement le bleu et le blanc ne suffit pas. Les espaces artisan, entreprise cliente et Super Admin ne doivent pas être une simple vue client renommée. Pour chaque écran, choisir et noter une référence maîtresse parmi les variantes avant reprise visuelle.
+La structure des écrans, la navigation et la hiérarchie métier font partie des références à respecter ; reprendre seulement les couleurs ne suffit pas. Les espaces artisan, entreprise cliente et Super Admin ne doivent pas être une simple vue client renommée. Pour chaque écran, choisir et noter une référence maîtresse parmi les variantes avant reprise visuelle.
 
 - Artisan : M14, M34–M36, M44, M65 et M67, dont navigation basse mobile, profil métier, justificatifs et mission.
 - Entreprise/partenaire : M4/M66, fiches et tableaux propres au syndic, à la restauration, aux bureaux et aux ERP.
