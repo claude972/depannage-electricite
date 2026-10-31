@@ -30,6 +30,8 @@ import {
   cleanupRerunMessage,
   unknownLeftover,
   parseStorageListing,
+  reconcileWindowMs,
+  verifyKnownAbsent,
   type CleanupClient,
   type CleanupEntry,
   type Created,
@@ -542,15 +544,17 @@ test("cleanup: a nameless Storage row is persisted as unknown, forbids every del
   assert.equal(storage?.ok, false);
   assert.equal(storage?.remaining, null);
 });
-const reconcile = (delays: number[], onSleep?: (attempt: number) => void) => ({ attempts: 3, baseDelayMs: 10, sleep: async (ms: number) => { delays.push(ms); onSleep?.(delays.length); } });
+const reconcile = (delays: number[], onSleep?: (attempt: number) => void, calls?: string[]) => ({ attempts: 3, baseDelayMs: 10, sleep: async (ms: number) => { delays.push(ms); calls?.push(`sleep:${ms}`); onSleep?.(delays.length); } });
 test("cleanup: after an aborted phase the late reconcile finds the settled upload, manifests it and deletes it", async () => {
   const state: FakeState = { rows: [], objects: [], users: [U1] };
   const calls: string[] = [];
   const delays: number[] = [];
   const h = hooks(calls);
   // The upload/finalization that timed out settles remotely during the first backoff.
-  const outcome = await runCleanup(fakeClient(state, calls), manifestAfterTimeout(), h.hooks, { manifestPath: "/p/out/manifest.json", reconcile: reconcile(delays, (attempt) => { if (attempt === 1) { state.rows.push({ id: D1, owner_id: U1, intervention_id: I1, path: `${U1}/${D1}` }); state.objects.push(`${U1}/${D1}`); } }) });
-  assert.deepEqual(delays, [10, 20], "settle found at attempt 1, stability confirmed at attempt 2");
+  const outcome = await runCleanup(fakeClient(state, calls), manifestAfterTimeout(), h.hooks, { manifestPath: "/p/out/manifest.json", reconcile: reconcile(delays, (attempt) => { if (attempt === 1) { state.rows.push({ id: D1, owner_id: U1, intervention_id: I1, path: `${U1}/${D1}` }); state.objects.push(`${U1}/${D1}`); } }, calls) });
+  assert.deepEqual(delays, [10, 20, 40], "the full backoff window is observed even though attempt 2 already found nothing new");
+  assert.ok(calls.indexOf("sleep:40") < calls.findIndex((c) => c.startsWith("delete:")), "every backoff elapsed before the first deletion");
+  assert.equal(calls.filter((c) => c.startsWith("sleep:")).length, 3);
   assert.equal(outcome.clean, true);
   assert.deepEqual(outcome.created.documentIds, [D1]);
   assert.deepEqual(outcome.created.objectPaths, [`${U1}/${D1}`]);
@@ -561,7 +565,8 @@ test("cleanup: after an aborted phase the late reconcile finds the settled uploa
   assert.ok(calls.indexOf(`delete:storage:${U1}/${D1}`) < calls.findIndex((c) => c.startsWith("delete:rows:documents:")));
   assert.deepEqual(state, { rows: [], objects: [], users: [] });
   assert.ok(h.notes.some((n) => /règlement tardif détecté/.test(n.step)));
-  assert.ok(h.notes.some((n) => n.status === "pass" && /cohorte stable/.test(n.step)));
+  assert.ok(h.notes.some((n) => n.status === "pass" && /fenêtre complète observée avant toute suppression \(3 passes, 70 ms de replis\)/.test(n.step)));
+  assert.ok(h.notes.some((n) => /réconciliation tardive 3\/3 : rien de nouveau/.test(n.step)));
   assert.ok(h.notes.some((n) => n.status === "pass" && /réconciliation finale/.test(n.step)));
   // No reconcile requested: no sleep, single discovery (unchanged nominal behaviour).
   const calls2: string[] = [];
@@ -601,7 +606,7 @@ test("cleanup: a cohort that keeps settling inside the window is not stable: no 
   assert.equal(outcome.clean, false);
   assert.ok(calls.every((c) => !c.startsWith("delete:")));
   assert.equal(outcome.created.objectPaths.length, 3, "everything seen is manifested");
-  assert.match(h.manifests.at(-1)!.unknown[0].detail, /non stabilisée après 3 tentative/);
+  assert.match(h.manifests.at(-1)!.unknown[0].detail, /non stabilisée : règlement tardif encore trouvé à la dernière passe 3\/3 \(fenêtre 70 ms\)/);
 });
 test("cleanup: a settle that lands after the deletion pass is caught by the final reconcile and reported for re-run", async () => {
   const state = committedUpload();
@@ -611,7 +616,7 @@ test("cleanup: a settle that lands after the deletion pass is caught by the fina
   const base = fakeClient(state, calls);
   const client = { ...base, deleteUser: async (userId: string) => { state.objects.push(`${U1}/${D2}`); return base.deleteUser(userId); } };
   const outcome = await runCleanup(client, manifestAfterTimeout(), h.hooks, { manifestPath: "/p/out/manifest.json", reconcile: reconcile(delays) });
-  assert.deepEqual(delays, [10]);
+  assert.deepEqual(delays, [10, 20, 40]);
   assert.equal(outcome.clean, false);
   assert.ok(outcome.created.objectPaths.includes(`${U1}/${D2}`));
   assert.ok(h.manifests.at(-1)!.created.objectPaths.includes(`${U1}/${D2}`));
@@ -620,6 +625,73 @@ test("cleanup: a settle that lands after the deletion pass is caught by the fina
   assert.equal(fail?.status, "fail");
   assert.match(fail?.detail ?? "", /--cleanup-manifest \/p\/out\/manifest\.json/);
   assert.ok(outcome.leftovers.some((l) => /règlement tardif après nettoyage/.test(l)));
-  // Nominal path with reconcile: nothing settles, two sleeps at most? No: stable at attempt 1.
   assert.ok(calls.filter((c) => c.startsWith("delete:")).length > 0, "the known cohort was still deleted before the final check");
+});
+
+// ---------------------------------------------------------------------------------------------
+// Pilot follow-ups on 71dd522: reappearance of KNOWN items after deletion; full window always.
+// ---------------------------------------------------------------------------------------------
+test("reconcile window: the guaranteed wait is the sum of all backoffs (run.mjs: 2+4+8+16 s = 30 s)", () => {
+  assert.equal(reconcileWindowMs({ attempts: 4, baseDelayMs: 2000 }), 30000);
+  assert.equal(reconcileWindowMs({ attempts: 3, baseDelayMs: 10 }), 70);
+  assert.equal(reconcileWindowMs({ attempts: 0, baseDelayMs: 10 }), 10);
+});
+test("final reconciliation: a KNOWN object or row that reappears after the deletion pass fails, never clean", async () => {
+  for (const what of ["object", "row", "both"] as const) {
+    const state = committedUpload();
+    const calls: string[] = [];
+    const delays: number[] = [];
+    const h = hooks(calls);
+    const base = fakeClient(state, calls);
+    // Reappearance of items already in the manifest, right after the last deletion step.
+    const client = { ...base, deleteUser: async (userId: string) => {
+      const r = await base.deleteUser(userId);
+      if (what !== "row") state.objects.push(`${U1}/${D1}`);
+      if (what !== "object") state.rows.push({ id: D1, owner_id: U1, intervention_id: I1, path: `${U1}/${D1}` });
+      return r;
+    } };
+    const outcome = await runCleanup(client, manifestAfterTimeout(), h.hooks, { manifestPath: "/p/out/manifest.json", reconcile: reconcile(delays) });
+    assert.equal(outcome.clean, false, what);
+    assert.ok(outcome.entries.every((e) => e.ok), "every deletion step had read back clean before the reappearance");
+    const last = h.manifests.at(-1)!;
+    assert.deepEqual(last.created.documentIds, [D1]);
+    assert.deepEqual(last.created.objectPaths, [`${U1}/${D1}`]);
+    const details = last.unknown.map((u) => u.detail).join(" | ");
+    if (what !== "row") assert.match(details, new RegExp(`réapparition : objet Storage ${U1}/${D1} présent après nettoyage`));
+    if (what !== "object") assert.match(details, new RegExp(`réapparition : ligne documents ${D1} présente après nettoyage`));
+    assert.equal(last.unknown.length, what === "both" ? 2 : 1);
+    const fail = h.notes.find((n) => /réconciliation finale/.test(n.step));
+    assert.equal(fail?.status, "fail");
+    assert.match(fail?.detail ?? "", /--cleanup-manifest \/p\/out\/manifest\.json/);
+    assert.equal(outcome.leftovers.length, last.unknown.length);
+  }
+});
+test("final reconciliation: a read that cannot confirm the absence of a known item is unknown (fail), a clean one verifies every known id/path", async () => {
+  const state = committedUpload();
+  const calls: string[] = [];
+  const h = hooks(calls);
+  const base = fakeClient(state, calls);
+  let afterDeletion = false;
+  const client = { ...base,
+    deleteUser: async (userId: string) => { afterDeletion = true; return base.deleteUser(userId); },
+    listDocuments: async (filter: string, from: number, to: number) => (afterDeletion && filter.startsWith("id=in.") ? { ok: false as const, detail: "HTTP 500" } : base.listDocuments(filter, from, to)),
+  };
+  const outcome = await runCleanup(client, manifestAfterTimeout(), h.hooks, { reconcile: reconcile([]) });
+  assert.equal(outcome.clean, false);
+  assert.match(h.manifests.at(-1)!.unknown[0].scope, /documents par id/);
+  assert.match(h.manifests.at(-1)!.unknown[0].detail, /HTTP 500/);
+  // Direct check of the presence helper.
+  const present = await verifyKnownAbsent(fakeClient(committedUpload(), []), { ...emptyCreated(), documentIds: [D1, D2], objectPaths: [`${U1}/${D1}`, `${U1}/${D2}`] });
+  assert.deepEqual(present.present, { documentIds: [D1], objectPaths: [`${U1}/${D1}`] });
+  assert.deepEqual(present.unknown, []);
+  const nameless = await verifyKnownAbsent(fakeClient({ rows: [], objects: [], users: [] }, [], { listObjects: async () => ({ ok: true, items: [], total: null, detail: "", malformed: ["entrée 0 sans name (clés id)"] }) }), { ...emptyCreated(), objectPaths: [`${U1}/${D1}`] });
+  assert.equal(nameless.unknown.length, 1);
+  assert.match(nameless.unknown[0].detail, /forme inattendue/);
+  // Clean path: the known cohort is verified absent after deletion (note names the counts).
+  const calls2: string[] = [];
+  const h2 = hooks(calls2);
+  const clean = await runCleanup(fakeClient(committedUpload(), calls2), manifestAfterTimeout(), h2.hooks, { reconcile: reconcile([]) });
+  assert.equal(clean.clean, true);
+  assert.ok(calls2.some((c) => c.startsWith("list:documents:id=in.(") ), "known rows re-read by id after deletion");
+  assert.ok(h2.notes.some((n) => n.status === "pass" && /réconciliation finale/.test(n.step) && /1 ligne\(s\) et 1 objet\(s\) connus vérifiés absents/.test(n.detail)));
 });
