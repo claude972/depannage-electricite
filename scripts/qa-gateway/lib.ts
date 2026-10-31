@@ -852,7 +852,7 @@ export function summaryMarkdown(result: RunResult): string {
       lines.push(result.verdict === "prepared" ? "**PREPARED — expiration non encore prouvée.** Le compte technique est laissé intentionnellement jusqu’au verify." : "Préparation en échec : compte nettoyé ou manifeste actionnable.");
       if (e.verifyNotBefore) lines.push(`Relancer après ${e.verifyNotBefore} et avant ${e.leaseEndsAt ?? "?"} : \`${e.verifyCommand ?? ""}\``);
     } else {
-      lines.push(result.verdict === "observed" ? `**OBSERVED — pas un PASS.** Code 401 de la plateforme observé : ${e.observedCode ?? "—"} ; à lier strictement dans EXPIRED_PLATFORM_CODES (commit de suivi) avant tout PASS.` : `Corps 401 : ${e.observedCode ?? "—"}.`);
+      lines.push(result.verdict === "observed" ? `**OBSERVED — pas un PASS.** Code 401 de la plateforme observé : ${e.observedCode ?? "—"} ; un 401 générique de la plateforme est consigné comme observation et ne prouve pas à lui seul que l’expiration en est la cause.` : `Corps 401 : ${e.observedCode ?? "—"}.`);
     }
     lines.push("");
   }
