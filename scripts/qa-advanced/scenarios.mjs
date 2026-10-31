@@ -73,7 +73,8 @@ export async function apiScenarios(ctx) {
     const ownBefore=ok(await request(u.delegate,'GET','/rest/v1/notifications?select=id,support_ticket_id,read_at'));assert.ok(ownBefore.some(n=>n.id===linked.id));
     assert.equal(ok(await request(u.client,'GET',`/rest/v1/notifications?id=eq.${linked.id}&select=id`)).length,0);
     const before=ok(await rpc(u.delegate,'notification_summary',{})).unread_count;
-    ok(await rpc(u.owner,'set_organization_member_site_access',{p_organization_id:org,p_user_id:u.delegate.id,p_scope:'selected',p_grants:[]}));
+    // Migration009 returns void: PostgREST confirms this command with204, not a JSON200.
+    ok(await rpc(u.owner,'set_organization_member_site_access',{p_organization_id:org,p_user_id:u.delegate.id,p_scope:'selected',p_grants:[]}),204);
     const afterRows=ok(await request(u.delegate,'GET','/rest/v1/notifications?select=id,support_ticket_id,read_at'));assert.ok(!afterRows.some(n=>n.id===linked.id));assert.ok(afterRows.some(n=>n.id===personal.id));
     assert.equal(ok(await request(u.delegate,'GET',`/rest/v1/support_tickets?id=eq.${linked.ticket.id}&select=id`)).length,0);
     assert.equal(ok(await request(u.delegate,'GET',`/rest/v1/support_tickets?id=eq.${personal.ticket.id}&select=id`)).length,1);

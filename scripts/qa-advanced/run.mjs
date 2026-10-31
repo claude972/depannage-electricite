@@ -46,7 +46,7 @@ async function main() {
   };
   const change=(label,actor,method,endpoint,body)=>mutate(gate,registry,label,()=>request(actor,method,endpoint,body));
   const rpc=(actor,name,args)=>change('rpc:'+name,actor,'POST','/rest/v1/rpc/'+name,args);
-  const ok=(r,status=200)=>{if(r.status>=200 && r.status<300 && r.status!==status){const e=Error('unexpected success reply; verify remote outcome');e.remoteUnknown=true;throw e;}assert.equal(r.status,status,'unexpected HTTP status');return r.body;};
+  const ok=(r,status=200)=>{assert.equal(r.status,status,`unexpected status (observed ${r.status} expected ${status})`);return r.body;};
   const select=async(table,filters={},columns='id')=>{
     const q=new URLSearchParams({select:columns,...filters,limit:'1000'});
     // Exact count distinguishes an empty result from truncation or malformed provider output.
