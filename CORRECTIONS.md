@@ -1352,3 +1352,7 @@ Plan read-only enregistré : docs/NATIVE_READINESS_PLAN.md, découverte des API 
 
 ## CL-BE-001 — correction opérationnelle assignée
 Le finding Claude sur l’édition du dossier qui retire l’approbation pendant une mission est traité par un blocage conservateur de cette édition, pas par un relâchement des droits terrain. Voir mission ci-dessus : sérialiser aussi acceptation/réaffectation afin d’éviter une course. Code réservé à012, plan/contrat avant implémentation ; ancienne mission Support011 demeure en revue indépendante, aucune011/012 appliquée à ce stade.
+
+
+### CL-BE-001 — précision avant contrat/code012
+L’implémenteur a identifié que Checkout exige encore l’approbation après clôture terrain. La garde conservatrice couvre donc aussi completed (non payé), en plus des quatre états actifs. Seuls paid/cancelled permettent l’édition du dossier ; disponibilité/contact séparés restent possibles. Aucune validation Stripe ni règle financière relâchée. Contrat à publier avec cette décision et tests completed refusé/paid autorisé. Les comptes historiques déjà non approuvés avec règlement dû restent à réexaminer par opérateur, sans auto-approbation.
