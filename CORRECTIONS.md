@@ -2448,3 +2448,7 @@ Appd937/runner579e3f5 --suiteall : SEPTétapesAPI etdeuxbrowser (vraiesessionart
 
 ### PWA-LIFECYCLE-REV-001 — P2 safety suspect, assigné Claude QA, 5a81731
 Revueexactescriptnouveau5a817310addde17770db16b097dc1d8d505c2d9a : stopgatecréé mais step/startServer nevérifientpasgate/neregistrentpasopérationenvole. SIGINTpendantarrêtoldpourraitfinalizercleanup puiscontinuationstartNEWaprèsparcoursstopAll, childsurvivant. NEPASexécuterceSHAavantconfirmation/correctif/revue. Aucunserveur3020rootlancé. SignaléauleadCLI, réceptionencoreàvérifier. AgentCodexlectureseulefinaliserapport.
+
+
+### PWA-LIFECYCLE-REV-001/002/003 — P2 OPEN confirmés, Claude QA, 13h00 Martinique
+Rapport exact5a817310addde17770db16b097dc1d8d505c2d9a docs/reviews/PWA_5A81731.md, 11unitPASS ne couvrentpasdéfauts. Rootsourceconfirmé :001 startServer awaitwriteFile puispawn sansgate/drain etstepnongardé→lancementtardifaprèsfinalize; stopServerdéjàstoppé doitaussirelireport sanskillétranger. 002 témoincachetierscréé étape8 APRÈSactivationv3étape7 : déplaceravantupdate/activation etvérifierclé+contenuaprès. 003 splitConsoleRecords masqueTOUTEpageerrorphaseoffline : toujourséchouerpageerror, n'accepterqu'erreursréseauattenduesattribuéesstrictement. MêmeagentClaudeQA,corrigerpousser/revuavantlancer, pasnouveauworker/appchangement. RootNEPASlancé5a81731. BUILD_IDdisqueàlibellercommetel,SWservihashestvéritablepreuveHTTP.
