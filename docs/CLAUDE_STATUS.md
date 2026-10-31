@@ -623,3 +623,9 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - **Global fixtures durability**: separate contract BEFORE fix (initial save before the first mutation; atomic serialised write queue, temp 0600 + rename for consistent reads). Exclusive ownership `scripts/qa/lib/fixtures.mjs` + core tests; global lifecycle/drain not modified; tracking overrides not broken; tests for base + business lost-create/drain. Root authorisation given (no owner re-ask). Dispatched to af69ab8.
 - Budget 4c integrated (573 tests + tsc, local build Ready); preview 4c building.
 - **Gateway 4: ROOT PASS real** on conditions a–g; cleanup 35 PASS + 12 independent checks 0 / Auth 404 / Storage 0; no new gateway cohort. Source report sync dispatched to backend agent a3ad58f (docs only, root's labels, earlier FAIL kept).
+
+## 2026-10-31 — gateway source report synced: aee66b0
+
+- `claude/web-pwa-backend` **`aee66b0db5b8a9599c39c246c28aeef904fca126`** (docs only, `docs/CLAUDE_GATEWAY_REMAINING_QA_CONTRACT.md` §2.7 bis). It corrects the agent's previous commit `f6c35b6`, which used attempt numbers 1–4 inferred from the lead's wording (lead error, now removed).
+- Records root's labels as reported: first real race FAIL non-proof (SQL 0 rows, window not observed; acquired: real RPC as `authenticated` committed with 0 grants selected, upload 403, object absent, 0 documents, discovery before response; cleanup 35 PASS); « Gateway 2 FAIL 201 course perdue » (cleanup 37 PASS + 12 scopes 0 / 2 Auth 404 / 2 Storage 0); « Gateway 4 ROOT PASS réel conditions a–g » (race window observed with DB proof; cleanup 35 PASS + 12 independent checks 0 / Auth 404 / Storage 0). Run-to-label mapping « as reported by root »; no reconstructed timestamps; FAIL results kept.
+- Proof scope: one real ordering on the dedicated project, site variant; not general multi-session concurrency, not the client variant without site, not a different PostgREST timeout. No new gateway cohort.
