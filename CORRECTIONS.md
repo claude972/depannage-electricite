@@ -2420,3 +2420,7 @@ HarnaisCodex avancé4def/4be revu source+13tests, rapport docs/reviews/ADVANCED_
 CorrectionCodexb91 parseréponseavantclassement, seuls500P0002structurés surendpointsPostgRESTreconnus déterminés, Auth/Storage/Next/autres500restentincertains ;14testsPASS/source relue. Run /tmp/depannage-planning-advanced-api-b91 : récurring/idempotence/versionPASS ; vraiecourseHTTPcréneaux1commit+1conflit+readbackPASS ; exceptiondisponibilité/suspendureadonlyPASS. Puis lectureinitialeprefs demandaitcolonneid inexistante (PKuser_id), erreur400/42703masquéecommeexactcount : défautharnais, PASapplication. Cleanup14PASS/exit1 sansincertitude ; relectureindépendante 2cohortes précédentes (12Auth et7tables) absentes.
 
 Correctiond5ae664 cibleuser_id etsorterreurservice sûre table+HTTP+SQLcode, diffrelu ; nouvelle exécution API sura2/001–017 lancée dans /tmp/depannage-planning-advanced-api-d5, résultatattendu. Aucunevalidationbrowseravancé/finance réelle/native proclamée. Toutescohortes restent QA ; aucundébit, adminpermanentfactice niEdge/déploiementVercel.
+
+
+### Mission PWA browser publiée — 2026-10-31T12:38:22-04:00
+La porte PWA garde une preuve lifecycledeuxversions/deuxonglets ouverte ; QA-PWA-LIFECYCLE-002 autorise un harnais Claude sur buildsréels isolés/sameoriginlocalhost3020, en fallbackVercel explicitementdifféré. Aucune nouvellepreview/installationOS déclarée, aucuneauthcohorte nécessaire. Le pilote prépare source1be etsourcea2, workerQA ne touchepas aux sources SW/app.
