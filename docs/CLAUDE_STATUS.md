@@ -372,3 +372,12 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - New tests suspend the quota claim and mutate state mid-wait; provider never called; they would fail on 8366c05.
 - Ran at c8ca4cc: `tests/tracking*.test.ts` 15/15, `tests/sql-tracking-review.mjs` PGlite PASS (19 migrations, rollback counts unchanged), `tsc --noEmit` clean.
 - **Verdict: no P1, quota-wait P2 closed. 019 can be applied alone on lead side.** Still open: P2-1 scheduled purge (root decision = migration 020 pg_cron reserved to Codex, to be reviewed separately), P2-2 two-connection concurrency (separate gate). Not proven: cloud, applied migration, real IGN call, real device.
+
+## 2026-10-31 — business harness fixes c97a018 (after root real run of 947e299)
+
+- `claude/web-qa-business` at `c97a018378d49cbe66f268f3d7a034bc5343288e` (agent files only, no cloud, root historic FAIL results untouched; branch base b13b43a, client locators re-read on integration f9dd366: identical).
+- (1) Stop race: gate-bound report `guardReport`; no scenario starts after stop (logged « not started », never PASS); every step checks the gate; running scenarios registered so drain waits before cleanup; mutations gated everywhere (service client `guardWrites`, suite `post()` probes, gate check before each mutating click / POST wait / `submitAndWait` / page open, fixture service-role writes).
+- (2) Client route: `#detail/<dossier>` → real « Consulter le devis » / « Voir le devis » → must land on `#quote/<exact id>` (else FAIL); documents panel, « Accepter le devis » and amendment acceptance on QuoteView; third party checked on `#quote/<Q1>`; artisan unchanged.
+- (3) Diagnostics on first failing step: `diag-<suite>-<scenario>-<n>.png/.json` 0600, path+hash without query, redacted `main` text, network method/path/status, page errors; verdict never changed.
+- Checks: `node --check` 11/11, tsc clean, `tests/qa-business.test.ts` 35/35 (simulated SIGINT mid-scenario, diagnostics), `tests/**/*.test.ts` 408/408, dry-run 0. Contract §14.
+- **Root next:** integrate lead fix 1a77fe0 (`claude/web-shared-a5`), then rerun `--suite all` with c97a018. No real-run result yet.
