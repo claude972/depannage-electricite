@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader, Tag, Unavailable } from "../../app/ui";
 import { Icon } from "../../app/icons";
 import type { TrackingRoute, TrackingSnapshot } from "../../../lib/features/tracking/types";
-import { RouteGate, arrivalEstimate, failureOf, haversineM, isTrackingChanged, relativeAge, routeContextKey, routeFailureMessage, routeMatches, trackingDisplay } from "./model";
+import { RouteScheduler, arrivalEstimate, failureOf, haversineM, isTrackingChanged, relativeAge, routeContextKey, routeFailureMessage, routeMatches, trackingDisplay } from "./model";
 import { trackingKey, type TrackingLeafProps } from "./props";
 import { TrackingMap, type MapPoint } from "./tracking-map";
 import { DestinationPicker } from "./destination-picker";
@@ -29,8 +29,8 @@ function CardBody({ state, unavailableMessage, scope, client, demo, onNavigate, 
   const [loadError, setLoadError] = useState("");
   const [routing, setRouting] = useState(false);
   const [draft, setDraft] = useState<MapPoint | null>(null);
-  /** Porte d’itinéraire (≥ 30 s, Retry-After, 409 par état) ; `gateVersion` réarme l’unique minuterie. */
-  const gate = useRef(new RouteGate());
+  /** Ordonnanceur d’itinéraire (une seule demande en vol, ≥ 30 s, Retry-After, 409 par état) ; `gateVersion` réarme la minuterie. */
+  const scheduler = useRef(new RouteScheduler());
   const [gateVersion, setGateVersion] = useState(0);
   const [, setTick] = useState(0);
   const available = state === "available";
@@ -72,27 +72,24 @@ function CardBody({ state, unavailableMessage, scope, client, demo, onNavigate, 
 
   const recompute = useCallback(async () => {
     const { client: routeClient, load: reload, contextKey: key } = live.current;
-    const now = Date.now();
-    if (demo || !gate.current.canRequest(now, key)) return;
-    gate.current.onRequest(now);
+    if (demo) return;
+    // Exclusion synchrone : aucune autre demande tant que celle-ci est en vol (minuterie, sondage ou clic).
+    const pending = scheduler.current.request(Date.now(), key, () => routeClient.route(), () => live.current.contextKey, () => Date.now());
+    if (!pending) return;
     setRouting(true);
     setRouteError("");
-    try {
-      const r = await routeClient.route();
-      if (r !== null) setRoute(r);
-    } catch (error) {
-      const f = failureOf(error);
+    const outcome = await pending;
+    if (outcome.kind === "result") setRoute(outcome.route);
+    else if (outcome.kind === "failure") {
       setRoute(null);
-      gate.current.onFailure(Date.now(), key, f);
-      if (isTrackingChanged(f)) {
-        // Suivi changé pendant le calcul : une relecture ; nouvelle demande seulement pour un nouvel état.
-        void reload();
-      } else setRouteError(routeFailureMessage(f));
-    } finally {
-      setRouting(false);
-      setGateVersion((n) => n + 1);
+      if (isTrackingChanged(outcome.failure)) void reload(); // une relecture ; suivi seulement pour un nouvel état
+      else setRouteError(routeFailureMessage(outcome.failure));
     }
+    setRouting(false);
+    setGateVersion((n) => n + 1); // réarme la minuterie une fois le jeton libéré
   }, [demo]);
+  // Démontage : résultat en vol ignoré (invalidate, pas dispose : compatible avec le double montage du mode strict).
+  useEffect(() => () => scheduler.current.invalidate(), []);
 
   // Snapshot relu toutes les 15 s (pas d’itinéraire) ; itinéraire : une seule minuterie armée sur le temps restant de la porte.
   useEffect(() => {
@@ -102,7 +99,7 @@ function CardBody({ state, unavailableMessage, scope, client, demo, onNavigate, 
   }, [available, demo, load]);
   useEffect(() => {
     if (!available || demo || !canRoute) return;
-    const wait = gate.current.waitMs(Date.now(), contextKey);
+    const wait = scheduler.current.waitMs(Date.now(), contextKey);
     if (!Number.isFinite(wait)) return;
     const id = window.setTimeout(() => void recompute(), wait);
     return () => window.clearTimeout(id);
@@ -216,7 +213,7 @@ function CardBody({ state, unavailableMessage, scope, client, demo, onNavigate, 
 
           <div className={styles.actions}>
             {canRoute && !demo && (() => {
-              const wait = gate.current.waitMs(Date.now(), contextKey);
+              const wait = scheduler.current.waitMs(Date.now(), contextKey);
               const blocked = routing || wait > 0;
               return (
                 <button type="button" className="button outline" onClick={() => void recompute()} disabled={blocked}>

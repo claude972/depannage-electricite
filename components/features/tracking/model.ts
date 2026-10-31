@@ -591,3 +591,76 @@ export class RouteGate {
     if (f.status === 409) this.blockedKey = key;
   }
 }
+
+// ---- Revue ROOT 8bcee45 : une seule demande d’itinéraire en vol par carte -------------------------
+export type RouteRequestOutcome =
+  | { kind: "result"; route: TrackingRoute }
+  | { kind: "failure"; failure: TrackingFailure }
+  | { kind: "stale" } // client null (identité périmée) ou contexte changé / carte démontée : résultat ignoré
+  ;
+
+/**
+ * Ordonnanceur utilisé tel quel par TrackingCard (corps de l’effet extrait pour être testé).
+ * Exclusion SYNCHRONE : un jeton `inFlight` (pas d’état React) bloque toute autre demande — minuterie, sondage,
+ * changement de contexte ou clic « Recalculer » — tant que la demande en cours n’est pas réglée.
+ * Choix explicite : jamais deux demandes simultanées d’une même carte vers le serveur. Au changement de contexte ou au
+ * démontage, le résultat en vol est ignoré (génération), mais le jeton n’est libéré qu’au règlement de SA promesse
+ * (comparaison de jeton : un `finally` ancien ne libère jamais un jeton plus récent). Ensuite la porte (≥ 30 s,
+ * Retry-After, 409) s’applique ; un état plus récent vu entre-temps déclenche au plus une demande de suivi.
+ */
+export class RouteScheduler {
+  readonly gate: RouteGate;
+  private inFlight: symbol | null = null;
+  private generation = 0;
+  private disposed = false;
+  constructor(intervalMs = ROUTE_REFRESH_MS) {
+    this.gate = new RouteGate(intervalMs);
+  }
+  get busy() {
+    return this.inFlight !== null;
+  }
+  /** Attente avant la prochaine demande possible ; Infinity si une demande est en vol ou l’état bloqué. */
+  waitMs(now: number, key: string): number {
+    if (this.inFlight !== null || this.disposed) return Infinity;
+    return this.gate.waitMs(now, key);
+  }
+  /** Invalide les résultats en vol (changement d’identité/dossier, démontage) sans libérer le jeton. */
+  invalidate() {
+    this.generation++;
+  }
+  dispose() {
+    this.disposed = true;
+    this.generation++;
+  }
+  /**
+   * Émet au plus une demande. Retourne null si refusée de façon synchrone (en vol, porte fermée, démonté) ;
+   * sinon la promesse de l’issue. `currentKey()` est relu au règlement pour ignorer un résultat d’un ancien contexte.
+   */
+  request(now: number, key: string, route: () => Promise<TrackingRoute | null>, currentKey: () => string, clock: () => number = () => now): Promise<RouteRequestOutcome> | null {
+    if (this.disposed || this.inFlight !== null || !this.gate.canRequest(now, key)) return null;
+    const token = Symbol("route");
+    const gen = this.generation;
+    this.inFlight = token;
+    this.gate.onRequest(now);
+    let call: Promise<TrackingRoute | null>;
+    try {
+      call = route();
+    } catch (error) {
+      call = Promise.reject(error);
+    }
+    return call.then(
+      (r): RouteRequestOutcome => {
+        if (gen !== this.generation || this.disposed || r === null || currentKey() !== key) return { kind: "stale" };
+        return { kind: "result", route: r };
+      },
+      (error): RouteRequestOutcome => {
+        const f = failureOf(error);
+        this.gate.onFailure(clock(), key, f); // Retry-After et 409 s’appliquent même si le contexte a changé
+        if (gen !== this.generation || this.disposed) return { kind: "stale" };
+        return { kind: "failure", failure: f };
+      },
+    ).finally(() => {
+      if (this.inFlight === token) this.inFlight = null;
+    });
+  }
+}
