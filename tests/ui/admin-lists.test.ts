@@ -38,9 +38,12 @@ test("indicateurs : quatre valeurs issues des totaux serveur, notes courtes, auc
   assert.match(kpis[2].basis, /Revenu plateforme : non calculé/);
 });
 
-test("tableau de bord : candidatures soumises triées, six dossiers actifs les plus récents", () => {
+test("tableau de bord : candidatures soumises dans l’ordre serveur (aucun tri par date de compte), six dossiers actifs", () => {
   const rows = dashboardRows(overview);
-  assert.deepEqual(rows.pending.map((a) => a.id), ["a3", "a1"]);
+  // a1 puis a3 : ordre de la réponse serveur conservé, bien que created_at (date du compte) soit plus récent pour a3.
+  assert.deepEqual(rows.pending.map((a) => a.id), ["a1", "a3"]);
+  // Aucune date de soumission n’est fabriquée à partir du compte.
+  assert.ok(rows.pending.every((a) => !("submitted_at" in a)));
   assert.equal(rows.active.length, 6);
   assert.ok(rows.active.every((i) => i.status !== "paid" && i.status !== "cancelled"));
   assert.deepEqual(rows.active.map((i) => i.id).slice(0, 2), ["i9", "i8"]);

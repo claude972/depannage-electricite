@@ -62,11 +62,13 @@ export function adminKpis(o: AdminOverview): AdminKpi[] {
 
 const byNewest = <T extends { created_at: string }>(a: T, b: T) => Date.parse(b.created_at) - Date.parse(a.created_at);
 
-/** Candidatures soumises (plus récentes d’abord) et six dossiers actifs les plus récents, sur les listes chargées. */
+/**
+ * Candidatures soumises dans l’ordre transmis par le serveur, et six dossiers actifs les plus
+ * récents, sur les listes chargées. La vue d’ensemble ne transmet ni date de soumission ni
+ * `created_at` de candidature : aucun tri ni affichage de date n’est déduit du compte.
+ */
 export function dashboardRows(o: AdminOverview, activeLimit = 6) {
-  const pending = o.artisans
-    .filter((a) => a.application_status === "submitted")
-    .sort((a, b) => Date.parse(b.created_at ?? "") - Date.parse(a.created_at ?? ""));
+  const pending = o.artisans.filter((a) => a.application_status === "submitted");
   const active: Intervention[] = o.interventions
     .filter((i) => ACTIVE_STATUSES.includes(i.status))
     .sort(byNewest)
