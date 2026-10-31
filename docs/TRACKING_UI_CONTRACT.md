@@ -225,3 +225,13 @@ reprise cachée. Échec du `stop` (409/403/404…) : relecture du snapshot, affi
 - Non couvert par test d’effet React (pas de moteur de rendu de test dans les dépendances, aucun ajout) : la logique des
   effets est extraite dans `ShareController` et `RouteGate`, testés de façon déterministe ; le câblage est vérifié par
   captures (harnais temporaire non commité).
+
+## Revue ROOT de 8bcee45 — une seule demande d’itinéraire en vol
+
+`RouteScheduler` (dans `model.ts`, utilisé tel quel par `TrackingCard`) tient un jeton `inFlight` synchrone, hors état
+React : tant qu’une demande est en vol, aucune autre n’est émise (minuterie, sondage, changement de contexte, clic
+« Recalculer »). **Choix : jamais deux demandes simultanées d’une même carte.** Au changement de contexte ou au démontage
+le résultat en vol est ignoré (génération), mais le jeton n’est libéré qu’au règlement de sa propre promesse (comparaison de
+jeton) ; ensuite la porte (≥ 30 s, Retry-After, 409) s’applique et un état plus récent vu entre-temps déclenche au plus une
+demande de suivi. Démontage : `invalidate()` (compatible double montage du mode strict). Test du scénario ROOT porté sur le
+vrai `CardBody` (`tests/ui/tracking-inflight.test.ts`, échoue sur 7b3cd18 à t30, passe ici).
