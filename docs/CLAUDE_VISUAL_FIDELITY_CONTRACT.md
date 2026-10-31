@@ -300,3 +300,23 @@ Vérifié (démo, script hors dépôt) : cloche visible 44 × 44 et active dans 
 - Vérifié (démo `#demo/manager-site.site-1`, 360 et 1280) : panneau présent avec le rapport de démonstration et ses
   sept onglets (44 px), 0 élément interactif < 44 px, aucun débordement, console sans erreur. Captures
   `anchors-site-operations-manager-{360,1280}.jpg`.
+
+### Ancrage 5 — back-office plateforme (Opérateurs, Finance, Modération)
+
+- Entrées : `platformEntries(platformAccess, canAccess)` (`components/role/anchors.ts`, testé) — une entrée n’existe que si
+  `canAccess` admet le rôle **et** `platformViewAllowed(platformAccess, vue)` est vrai ; sans réponse serveur (`null`)
+  aucune entrée. Super Admin : les trois entrées après la navigation existante ; particulier et entreprise : section
+  « Opérateur de plateforme » dans la barre latérale, seulement si le serveur a ouvert au moins une vue (opérateur limité).
+- Vues `platform-operators` / `platform-finance` / `platform-moderation` : `PlatformPage` (`components/role/platform-anchor.tsx`)
+  rend la vue du lot avec l’état `capabilities.platformOperations`, `CONTRACT_MESSAGES[state]`, portée
+  `{ userId, role, authority: platformAuthority(platformAccess, vue) }` (écriture = super-admin ou capacité de la vue,
+  sinon lecture avec raison), client `session.features.platform`, démo `PLATFORM_DEMO` en démonstration seulement ;
+  sinon écran « Accès non vérifié » (`Unavailable`, raison : service indisponible, droit absent ou droits non vérifiés),
+  aucune donnée chargée. Les vues sont ajoutées à l’allowlist locale `CLIENT_VIEWS`.
+- En-tête Super Admin à ≤ 600 px : outils en deux lignes (puce de fraîcheur, puis cloche et « Actualiser ») pour
+  supprimer le débordement horizontal constaté à 360 (préexistant, aggravé par la cloche).
+- Vérifié (démo) : Super Admin → trois entrées à 1280 (barre latérale) et 360 (menu), chaque vue rendue sous son hash,
+  0 élément interactif < 44 px, aucun débordement ; particulier et entreprise (sans `platformAccess`) → aucune entrée,
+  lien direct `#platform-finance` → « Accès non vérifié » sans donnée ; console sans erreur. Captures
+  `anchors-platform-{operators,finance,moderation}-admin-{360,1280}.jpg`, `anchors-platform-unverified-client-1280.jpg`.
+  Tests : `platformEntries`, `platformAuthority` ; suite UI 86/86.

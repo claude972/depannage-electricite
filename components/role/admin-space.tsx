@@ -68,7 +68,7 @@ import {
   ProfileForm,
   WarrantyPanel,
 } from "../app/forms";
-import { quoteVersions } from "../app/session";
+import { canAccess, quoteVersions } from "../app/session";
 import {
   CATEGORIES,
   ROLE_NAMES,
@@ -85,6 +85,8 @@ import {
 } from "../app/format";
 import styles from "./admin.module.css";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
+import { PLATFORM_TITLES, PlatformPage } from "./platform-anchor";
+import { platformEntries } from "./anchors";
 
 type Tone = "neutral" | "blue" | "green" | "amber" | "red" | "violet";
 type OverviewArtisan = AdminOverview["artisans"][number];
@@ -475,6 +477,10 @@ export function AdminSpace({ session }: { session: Session }) {
         return { title: "Messages", subtitle: "Assistance et messages des dossiers" };
       case "notifications":
         return { title: "Notifications", subtitle: "Événements enregistrés par la plateforme pour votre compte" };
+      case "platform-operators":
+      case "platform-finance":
+      case "platform-moderation":
+        return PLATFORM_TITLES[view];
       case "admin-settings":
         return { title: "Paramètres", subtitle: "Réglages de la plateforme, fonctions activées et journal d’audit" };
       case "admin-warranty":
@@ -995,6 +1001,11 @@ export function AdminSpace({ session }: { session: Session }) {
       case "notifications":
         content = <NotificationsPage session={session} withTitle={false} />;
         break;
+      case "platform-operators":
+      case "platform-finance":
+      case "platform-moderation":
+        content = <PlatformPage session={session} view={view} withTitle={false} />;
+        break;
       case "admin-settings":
         content = withOverview(renderSettings);
         break;
@@ -1029,7 +1040,7 @@ export function AdminSpace({ session }: { session: Session }) {
           </button>
         </div>
         <nav className={styles.nav} aria-label="Sections de l’administration">
-          {NAV.map((item, index) => (
+          {[...NAV, ...platformEntries(session.platformAccess, (v) => canAccess(v, session.role, session.mode))].map((item, index) => (
             <button
               type="button"
               key={item.view}

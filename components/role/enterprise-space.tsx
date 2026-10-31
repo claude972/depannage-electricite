@@ -4,6 +4,7 @@
 // (approbation), V5-C01 / M50 (fiche de site), M13 / M56 / V5-C05 (tableaux de bord).
 // Tout indicateur est calculé depuis session.data et annonce sa base ("dossiers chargés").
 import {
+  Fragment,
   useEffect,
   useId,
   useMemo,
@@ -58,6 +59,7 @@ import {
   shortId,
 } from "../app/format";
 import {
+  canAccess,
   enterpriseAuthority,
   enterpriseContext,
   pickQuote,
@@ -87,7 +89,8 @@ import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
 import { SiteOperationsView } from "../features/site-operations/site-operations-view";
 import { CONTRACT_MESSAGES } from "../app/api";
 import { demoReport } from "../../lib/features/site-operations/demo";
-import { leafScope } from "./anchors";
+import { leafScope, platformEntries } from "./anchors";
+import { PlatformPage } from "./platform-anchor";
 import type {
   Approval,
   ApprovalRule,
@@ -466,6 +469,10 @@ export function EnterpriseSpace({ session }: { session: Session }) {
               siteId={c.activeSite?.id}
             />
           );
+        case "platform-operators":
+        case "platform-finance":
+        case "platform-moderation":
+          return <PlatformPage session={session} view={view} />;
         case "documents":
           return <DocumentsView c={c} />;
         case "profile":
@@ -619,6 +626,12 @@ export function EnterpriseSpace({ session }: { session: Session }) {
             <span className={styles.navDivider} role="separator" />
             {NAV.filter((n) => n.section === "more").map((n) => (
               <NavButton key={n.view} item={n} active={activeNav === n.view} onClick={() => go(n.view)} />
+            ))}
+            {platformEntries(session.platformAccess, (v) => canAccess(v, session.role, session.mode)).map((n, k) => (
+              <Fragment key={n.view}>
+                {k === 0 && <span className={styles.navDivider} role="separator" />}
+                <NavButton item={{ ...n, section: "more" }} active={activeNav === n.view} onClick={() => go(n.view)} />
+              </Fragment>
             ))}
           </nav>
           <div className={styles.sidebarBottom}>

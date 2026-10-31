@@ -18,7 +18,7 @@ import {
   quoteRef,
   shortId,
 } from "../app/format";
-import { pickQuote, quoteVersions } from "../app/session";
+import { canAccess, pickQuote, quoteVersions } from "../app/session";
 import { Icon } from "../app/icons";
 import { InstallPanel } from "../app/install-panel";
 import {
@@ -56,6 +56,8 @@ import type {
 import styles from "./client.module.css";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
+import { PlatformPage } from "./platform-anchor";
+import { platformEntries } from "./anchors";
 import { UploadQueuePanel } from "../app/upload-queue";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
 
@@ -67,6 +69,9 @@ const CLIENT_VIEWS: readonly View[] = [
   "quote",
   "messages",
   "notifications",
+  "platform-operators",
+  "platform-finance",
+  "platform-moderation",
   "documents",
   "profile",
   "help",
@@ -80,6 +85,9 @@ const VIEW_NAMES: Partial<Record<View, string>> = {
   quote: "Devis",
   messages: "Messages",
   notifications: "Notifications",
+  "platform-operators": "Opérateurs de plateforme",
+  "platform-finance": "Finance plateforme",
+  "platform-moderation": "Modération des avis",
   documents: "Documents",
   profile: "Mon profil",
   help: "Aide",
@@ -250,6 +258,10 @@ export function ClientSpace({ session }: { session: Session }) {
         );
       case "notifications":
         return <NotificationsPage session={session} />;
+      case "platform-operators":
+      case "platform-finance":
+      case "platform-moderation":
+        return <PlatformPage session={session} view={view} />;
       case "documents":
         return <DocumentsView session={session} rows={rows} />;
       case "profile":
@@ -314,6 +326,24 @@ export function ClientSpace({ session }: { session: Session }) {
             );
           })}
         </nav>
+        {platformEntries(session.platformAccess, (v) => canAccess(v, session.role, session.mode)).length > 0 && (
+          <>
+            <span className={styles.navCaption}>Opérateur de plateforme</span>
+            <nav className={styles.sideNav} aria-label="Back-office de la plateforme">
+              {platformEntries(session.platformAccess, (v) => canAccess(v, session.role, session.mode)).map((n) => (
+                <button
+                  type="button"
+                  key={n.view}
+                  aria-current={view === n.view ? "page" : undefined}
+                  onClick={() => session.go(n.view)}
+                >
+                  <Icon name={n.icon} size={18} />
+                  <span>{n.label}</span>
+                </button>
+              ))}
+            </nav>
+          </>
+        )}
         <div className={styles.sidebarBottom}>
           <button
             type="button"
