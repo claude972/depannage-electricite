@@ -69,7 +69,7 @@ Règles :
 1. `support_events`, `support_messages`, `support_tickets` (par `ticket_id` / `id`) ;
 2. `quote_drafts` (par `intervention_id`) ;
 3. objets Storage du bucket `intervention-documents` (chemins exacts des `documents` de la cohorte) puis `documents` ;
-4. `messages`, `intervention_operation_events`, `intervention_appointments`, `intervention_reports`, `quotes`, `audit_log` (par `intervention_id`), `interventions` ; puis `audit_log` et `action_limits` par `actor_id` de la cohorte ;
+4. `messages`, `intervention_operation_events`, `intervention_appointments`, `intervention_reports`, `quotes`, `audit_log` (par `intervention_id` puis par `actor_id` de la cohorte), `action_limits` (par `actor_id`), puis `interventions` ;
 5. `organization_member_site_grants`, `organization_member_site_scopes`, `organization_invitations`, `organization_membership_events`, `professional_audit`, `approvals`, `approval_rules`, `compliance_records`, `contracts`, `organization_members`, `sites`, `organizations` ;
 6. `artisan_credentials`, `artisan_profiles`, `profiles` ;
 7. utilisateurs Auth (API admin), un par un.
