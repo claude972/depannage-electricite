@@ -1,6 +1,6 @@
 # NATIVE-DOCUMENT-GATEWAY-001 — gateway d’upload privé hors Vercel
 
-Base 309ed9f2815c855f5e99ecad6368e2fe96f58975 ; branche claude/web-pwa-backend. **Plan/contrat publiés avant code. Aucune implémentation, déploiement Edge ni application de migration dans ce commit.**
+Base 309ed9f2815c855f5e99ecad6368e2fe96f58975 ; branche claude/web-pwa-backend. **Plan/contrat publiés avant code dans e53c0f1 ; implémentation et tests locaux livrés dans le commit suivant de cette branche. Aucun déploiement Edge, aucune application de 013 à une base, aucune recette hébergée par cet agent : revue indépendante et recette pilote requises.**
 
 ## Plan court
 
@@ -30,7 +30,7 @@ Le Web lit les octets côté serveur et vérifie les magic bytes avant toute éc
 - `supabase/functions/native-document-upload/handler.ts` : logique HTTP pure (Request → Response) paramétrée par une interface de dépendances, testable sous Node avec des fausses dépendances.
 - `supabase/functions/native-document-upload/index.ts` : glue Deno (`Deno.serve`, `Deno.env`, clients supabase-js) ; seul fichier avec des globaux Deno. `deno.json` épingle `npm:@supabase/supabase-js@2.118.0`.
 - `supabase/migrations/202610310013_document_finalization.sql`.
-- `app/api/documents/route.ts` : importe le module partagé à la place de son `detectType` local ; mêmes codes/messages HTTP qu’aujourd’hui ; insertion admin conservée (voir « Ce que ce lot ne change pas »).
+- `app/api/documents/route.ts` : importe le module partagé à la place de son `detectType` local ; mêmes codes/messages HTTP qu’aujourd’hui ; insertion admin conservée (voir « Ce que ce lot ne change pas »). Deux différences minimes et volontaires : la détection compare les octets exacts (l’ancien décodage `ascii` de Buffer masquait le bit haut, donc acceptait en théorie un faux « PNG ») et un nom de fichier vide devient « document » au lieu d’une chaîne vide.
 - `tests/document-policy.test.ts`, `tests/native-document-gateway.test.ts`, `tests/sql-document-finalization-review.mjs`.
 - `tsconfig.json` : exclusion du seul `supabase/functions/native-document-upload/index.ts` (globaux Deno) et `allowImportingTsExtensions` (noEmit déjà actif) pour que Node typecheck le handler qui importe `../_shared/document-policy.ts` avec l’extension exigée par Deno. Aucune autre option modifiée.
 
@@ -58,7 +58,8 @@ Erreurs `{ "error": "<message français>" }` :
 - `415` : MIME déclaré hors liste, ou contenu dont les magic bytes ne correspondent pas au MIME déclaré (le Web renvoie 422 pour ce cas ; la validation est identique, seul le code transport diffère et est documenté ici).
 - `422` : `file` absent/vide, `intervention_id` non UUID, nom invalide.
 - `429` : quota `check_upload_limit` (10 uploads/minute/compte, inchangé) atteint — code SQL 53300.
-- `503` : configuration serveur absente, Storage ou base indisponible. Aucune donnée interne, aucun code SQL brut, aucun chemin Storage n’est renvoyé.
+- `503` : configuration serveur absente, Storage ou base indisponible.
+- `500` : exception inattendue du handler (message générique). Aucune donnée interne, aucun code SQL brut, aucun chemin Storage n’est renvoyé par aucune réponse.
 
 Pas d’idempotence par nom de fichier ou date : chaque tentative choisit un UUID neuf et un chemin neuf. Une réponse perdue côté client ne peut pas être « rejouée » ; le client relit la liste des documents du dossier (RLS) pour constater l’état. Aucune idempotence par hash de contenu n’est retenue dans ce lot.
 
