@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import manifest from "../app/manifest";
-import { requestPwaUpdate } from "../components/pwa-registration";
+import { observePwaInstallation, requestPwaUpdate } from "../components/pwa-registration";
 
 const workerSource = readFileSync(new URL("../public/sw.js", import.meta.url), "utf8");
 const origin = "https://courant.example";
@@ -20,7 +20,8 @@ type WorkerEvent = {
 function workerHarness() {
   const listeners = new Map<string, (event: WorkerEvent) => void>();
   const stores = new Map<string, Map<string, Response>>();
-  const fetched: { url: string; cache?: string; credentials?: string }[] = [];
+  const fetched: { url: string; cache?: string; credentials?: string; redirect?: string }[] = [];
+  let noticeResponse: { url?: string; redirected?: boolean; marker?: string | null; contentType?: string; status?: number } = {};
   let disconnected = false;
   let claims = 0;
   let activations = 0;
@@ -52,9 +53,15 @@ function workerHarness() {
       },
     },
     fetch: async (input: RequestLike, init?: RequestInit) => {
-      fetched.push({ url: input.url, cache: init?.cache ?? (input as Request).cache, credentials: (input as Request).credentials });
+      fetched.push({ url: input.url, cache: init?.cache ?? (input as Request).cache, credentials: (input as Request).credentials, redirect: (input as Request).redirect });
       if (disconnected) throw new TypeError("Network unavailable");
-      return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+      const notice = new URL(input.url).pathname === "/offline.html";
+      const headers = new Headers({ "Content-Type": notice ? noticeResponse.contentType ?? "text/html; charset=utf-8" : "text/html; charset=utf-8" });
+      if (notice && noticeResponse.marker !== null) headers.set("X-Courant-Public-Offline", noticeResponse.marker ?? "1");
+      const response = new Response(html, { status: notice ? noticeResponse.status ?? 200 : 200, headers });
+      Object.defineProperty(response, "url", { value: notice ? noticeResponse.url ?? input.url : input.url });
+      Object.defineProperty(response, "redirected", { value: notice ? noticeResponse.redirected ?? false : false });
+      return response;
     },
   });
   function emit(name: string, extra: Partial<WorkerEvent> = {}) {
@@ -76,6 +83,7 @@ function workerHarness() {
     emit, navigate, stores, fetched,
     setOffline: () => { disconnected = true; },
     setHtml: (value: string) => { html = value; },
+    setNoticeResponse: (value: typeof noticeResponse) => { noticeResponse = value; },
     claims: () => claims,
     activations: () => activations,
   };
@@ -99,12 +107,13 @@ test("PWA manifest uses local installable icons with real declared PNG dimension
   assert.equal(apple.readUInt32BE(20), 180);
 });
 
-test("worker installs only a public offline notice, without user credentials or immediate update", async () => {
+test("worker installs only marked static notice using same-origin access without immediate update", async () => {
   const h = workerHarness();
   await Promise.all(h.emit("install").waits);
   assert.equal(h.fetched.length, 1);
   assert.equal(h.fetched[0].url, `${origin}/offline.html`);
-  assert.equal(h.fetched[0].credentials, "omit");
+  assert.equal(h.fetched[0].credentials, "same-origin");
+  assert.equal(h.fetched[0].redirect, "error");
   assert.equal(h.activations(), 0);
   assert.deepEqual([...h.stores.values()].flatMap((store) => [...store.keys()]), ["/offline.html"]);
 });
@@ -151,7 +160,7 @@ test("activation only removes obsolete Courant public caches and claims clients"
   await Promise.all(h.emit("activate").waits);
   assert.equal(h.stores.has("courant-pwa-public-v0"), false);
   assert.equal(h.stores.has("another-application"), true);
-  assert.equal(h.stores.has("courant-pwa-public-v1"), true);
+  assert.equal(h.stores.has("courant-pwa-public-v2"), true);
   assert.equal(h.claims(), 1);
 });
 
@@ -191,4 +200,68 @@ test("explicit reload still works after a different tab activated or superseded 
   requestPwaUpdate(worker, null, () => { reloads += 1; });
   assert.equal(reloads, 2);
   assert.equal(messages.length, 1, "no stuck activation request to a superseded worker");
+});
+
+
+test("worker refuses an SSO/login redirect instead of caching protected-preview login HTML", async () => {
+  const h = workerHarness();
+  h.setNoticeResponse({ redirected: true, url: `${origin}/offline.html` });
+  await assert.rejects(Promise.all(h.emit("install").waits), /Public offline notice unavailable/);
+  assert.equal(h.stores.size, 0);
+});
+
+test("worker refuses wrong origin/path/query notice URLs even when an HTML marker is present", async () => {
+  for (const url of ["https://login.example/offline.html", `${origin}/login`, `${origin}/offline.html?token=private`, ""]) {
+    const h = workerHarness();
+    h.setNoticeResponse({ url });
+    await assert.rejects(Promise.all(h.emit("install").waits), /Public offline notice unavailable/, url);
+    assert.equal(h.stores.size, 0);
+  }
+});
+
+test("worker refuses unmarked, unsuccessful or non-HTML responses before opening cache", async () => {
+  for (const response of [{ marker: null }, { marker: "0" }, { status: 403 }, { contentType: "application/json" }]) {
+    const h = workerHarness();
+    h.setNoticeResponse(response);
+    await assert.rejects(Promise.all(h.emit("install").waits), /Public offline notice unavailable/);
+    assert.equal(h.stores.size, 0);
+  }
+});
+
+class InstallingWorker extends EventTarget {
+  state: ServiceWorkerState = "installing";
+  change(state: ServiceWorkerState) {
+    this.state = state;
+    this.dispatchEvent(new Event("statechange"));
+  }
+}
+
+test("redundant initial installation surfaces failure even though register already resolved", () => {
+  const worker = new InstallingWorker();
+  let installed = 0, failed = 0;
+  const stop = observePwaInstallation(worker as unknown as ServiceWorker, () => { installed += 1; }, () => { failed += 1; });
+  assert.equal(installed, 0);
+  assert.equal(failed, 0);
+  worker.change("redundant");
+  assert.equal(failed, 1);
+  assert.equal(installed, 0);
+  stop();
+  worker.change("installed");
+  assert.equal(installed, 0, "unmounted observer removes its listener");
+  const alreadyFailed = new InstallingWorker();
+  alreadyFailed.state = "redundant";
+  observePwaInstallation(alreadyFailed as unknown as ServiceWorker, () => {}, () => { failed += 1; })();
+  assert.equal(failed, 2, "fast failure preceding observer attachment is still surfaced");
+});
+
+test("a successfully installed worker becoming obsolete is not misreported as an install failure", () => {
+  const worker = new InstallingWorker();
+  let installed = 0, failed = 0;
+  const stop = observePwaInstallation(worker as unknown as ServiceWorker, () => { installed += 1; }, () => { failed += 1; });
+  worker.change("installed");
+  assert.equal(installed, 1);
+  worker.change("activated");
+  worker.change("redundant");
+  assert.equal(failed, 0);
+  stop();
 });
