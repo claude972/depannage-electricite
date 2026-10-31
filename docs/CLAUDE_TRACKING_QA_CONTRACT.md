@@ -244,3 +244,40 @@ comme `ANOMALY: restart-after-reload` (défaut de raccordement), pas masqué par
 
 **Inchangé** : pas de code ni d'exécution avant le GO de ROOT ; sélecteurs de l'amendement A1 ; position simulée étiquetée ;
 preuve fournisseur séparée et optionnelle ; redaction des coordonnées ; codes de sortie.
+
+## Amendement A3 — réponses ROOT (réaffectation simulée, preuve du 429)
+
+**T12 — réaffectation : simulée, sur identifiants de cohorte validés uniquement.** T12 n'est plus `skipped` ; il devient
+`T12-sim` avec l'étiquette obligatoire `state_source: "simulated_service_key_reassignment"` dans `result.json` et `summary.md`, et la
+mention « état simulé par la clé service — **pas** une preuve du flux de réaffectation administrateur (`reassign_intervention`) ».
+Garde avant toute écriture (échec ⇒ scénario `BLOCKED`, aucune écriture, pas d'exit 1) :
+1. l'identifiant du dossier figure dans `manifest.created.interventions` du run courant **et** sa relecture par la clé service montre
+   `client_id` = le client de la cohorte et `artisan_id` = artisanA de la cohorte ;
+2. l'artisan cible (artisanB) figure dans `manifest.created.profiles` du run courant, `role='artisan'`, et appartient au même
+   `run_id` (préfixe d'e-mail `qa.invalid` de la cohorte) ;
+3. l'intervention est `accepted` ou `in_progress` ;
+4. une intention est enregistrée avant l'écriture et réglée après.
+Écriture unique : `update interventions set artisan_id = <artisanB> where id = <dossier> and artisan_id = <artisanA>` (clé service,
+condition sur l'ancien artisan ; 0 ligne ⇒ `BLOCKED`). Attendus : déclencheur `tracking_intervention_invalidation` → ligne purgée
+(`shared=false`, point NULL, `control_version` +1, leases supprimés) ; artisanA : GET 404, POST 403, aucune coordonnée ; artisanB :
+`can_share` vrai seulement après son propre consentement + start ; snapshot côté client `stopped`. Aucune autre écriture directe sur
+`interventions` dans la recette.
+
+**429 fournisseur : jamais provoqué en conditions réelles.** La recette ne fait **aucune** rafale vers IGN ; aucune boucle, aucun
+nouvel essai automatique. Une seule route nominale réelle (et, si `--provider-proof`, un seul géocodage public) suffit. La preuve du
+429 et du backoff partagé est faite hors cloud, dans mes fichiers :
+- `tests/qa-tracking-provider.test.ts` (unitaire, aucun réseau) : `providerJson(url, fetcher)` exporté par
+  `lib/features/tracking/provider.ts` reçoit un faux `fetch` répondant 429 avec `Retry-After: 7` ⇒ `TrackingProviderError`
+  `reason:'provider_quota'`, `retryAfter=7` ; sans en-tête ⇒ 30 ; `Retry-After: 999` ⇒ borné à 60. Import en lecture seule, aucun fichier
+  backend modifié.
+- `scripts/qa-tracking/sql-backoff-review.mjs` (PGlite **local** isolé, migrations 001–019 chargées depuis le merge de travail, stubs
+  Auth/Storage comme les revues SQL existantes) : sous `service_role`, `tracking_provider_backoff(7)` ⇒ `backoff_until` ≈ now+7 s dans
+  `tracking_provider_budget` ; puis `claim_tracking_provider(<dossier>, 'route', <clé 64 hex>)` ⇒ `{allowed:false, retry_after_s≥1}` ;
+  `tracking_provider_backoff(0|61)` ⇒ 22023 ; `authenticated`/`anon` ⇒ refus d'exécution. Le chemin HTTP (429 fournisseur ⇒ appel
+  `tracking_provider_backoff` ⇒ réponse 503 `provider_quota` + `retry_after_s`) reste couvert par les tests backend de Codex ; je le
+  cite sans le dupliquer.
+- **Cloud** : le singleton `tracking_provider_budget` reste en lecture seule (champ `backoff_until` seulement rapporté). Si la route
+  réelle répond 503 `provider_quota` ou 429 `application_quota`, c'est consigné comme indisponibilité, sans nouvel essai.
+
+Inchangé : pas de code ni d'exécution avant le GO de ROOT ; incohérence de reprise après rechargement (A2) toujours à arbitrer par
+le lead.
