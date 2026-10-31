@@ -685,3 +685,35 @@ Cause côté harnais : la session `client` est ouverte dans `setupCohort` (l. 11
 4. **Le cas session périmée n'est pas abandonné en silence.** Une session ouverte avant la création d'un dossier ne voit pas ce dossier sans rechargement : c'est un constat PRODUIT distinct, **LIVE-WORKSPACE-001**, qui appartient au lead. Il est consigné ici et dans le rapport du run comme « hors périmètre QA, non clos par ce correctif ». Le correctif QA aligne la précondition du test, il ne déclare pas le comportement produit conforme. Aucun scénario ne le transforme en PASS.
 
 **Hors périmètre.** Aucun changement à `client-space.tsx`, à l'app, à `scripts/qa` ou à l'authentification. L'ordre du §6 (fournisseurs puis T19) et la révocation des sessions sont conservés. `--only T6` reste le run ciblé (§7).
+
+## Amendement A10 — T14 : précondition « MAIN non partagé » avant l'ouverture du panneau (run ROOT 552)
+
+**Faits ROOT** (run 552, sélection publique). Passent : T6, T8, T8-fail, T9, T16, provider-route (vraie route IGN et ETA sur la carte), provider-geocode et T19. Seul T14 est en ANOMALY (190 s).
+
+Preuve de diagnostic sous la même session : `/tmp/depannage-tracking-a9-4c-selected-public/diagnostics/T14/artisanA-ui14.json` et le PNG de 21:37:52, en lecture seule. La première partie de T14 passe : sur isoA, démarrage UI, point, STOP 200, STOP répété 409, point tardif 409. Ensuite :
+1. La navigation vers MAIN tombe sur un dossier DÉJÀ partagé par la session API de T9 : c'est un état hérité.
+2. Le panneau, présent et visible, affiche le statut d'interruption et « Reprendre le partage », pas « Partager ma position ».
+3. Le `catch` intervient après 90 s. L'arrêt API de MAIN répond 200 (21:36:21.719), mais le `goto` sur le même hash ne rafraîchit pas la phase de contrôle, d'où un second timeout.
+
+Cela confirme la piste du §4 : cause HARNAIS.
+
+**Contrat.**
+1. **Normalisation de MAIN avant d'ouvrir son panneau** : `ensureUnshared(ctx, page, MAIN)`.
+   - Lecture de l'instantané ; s'il n'est pas partagé, rien n'est envoyé.
+   - S'il est partagé : `stop` avec compare-and-set sur la version courante (`expected_version = control_version`, `payload.session_id` = la session courante de l'instantané), via l'API de la même identité artisan A, sous intention durable comme toute écriture du harnais. Il faut un 200.
+   - Relecture obligatoire de `shared=false`.
+   - Un refus du stop, ou une relecture encore `shared=true`, donne BLOCKED avec la raison (statut et `reason` connue), jamais PASS.
+   - Ensuite seulement, ouverture du panneau MAIN par `uiStart`, qui change de dossier : le panneau remonte et relit son instantané.
+2. **Suppression du `catch` et de la reprise tardive** (`uiStart(...).catch(...)` vers l. 590). Plus aucun second essai.
+3. **Assertions conservées** :
+   - STOP répété 409 et point après arrêt 409 ;
+   - « Partager ma position » attendu (aucun repli sur « Reprendre le partage »), puis consentement et point ;
+   - « Je suis arrivé » avec `arrived` 200, puis `travel_stage = on_site`, `shared=false` et `position=null` ;
+   - pas de reconnexion au point d'échec, diagnostics actifs.
+
+**Tests prévus (hors ligne).**
+- Reproduction locale du markup dans un vrai Chromium : un panneau sur un dossier déjà partagé affiche « Reprendre le partage ». Après l'étape de précondition, l'ouverture du panneau affiche « Partager ma position ». Sans cette étape, le panneau affiche toujours « Reprendre le partage ».
+- Test d'ordre : lecture, `stop` CAS, relecture, puis ouverture du panneau. Un refus ou une relecture encore partagée donne BLOCKED. Un dossier déjà non partagé n'envoie aucun `stop`.
+- Contrôle de source : aucun `catch` ni reprise dans T14, et les assertions listées ci-dessus sont présentes.
+
+ROOT vérifiera ensuite avec la sélection `--only T9,T14`, sans rejouer les scénarios fournisseur.
