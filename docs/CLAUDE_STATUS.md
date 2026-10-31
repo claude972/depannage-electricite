@@ -864,3 +864,11 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - Root read §8 `ce4252e`: closed reason set = ROUTE_REASONS + `tracking_changed` + `application_quota`; unknown ⇒ constant `other`; unreadable/absent ⇒ null. Stop re-checked before/after each page operation; only the bounded local JSON write recording `truncated` allowed after stop; no new `evaluate` after stop. GO for the targeted fix (a84ded5); peer SHA review before any cloud.
 - Business run on 7cf61a6: 3 docs PASS already with the 49ff guard; continuing — integration 7cf61a6 and app 4c untouched during the recette.
 - Root reminder: **no merge to production/main, no adoption of the Delivo TEST mockup.**
+
+## 2026-10-31 — tracking diagnostics fix 1225f28 (closed reasons, stop between operations)
+
+- `claude/web-qa-tracking`: contract §8 `ce4252e` (before code), code **`1225f28`** — only `scripts/qa-tracking/lib/diagnostics.mjs` and `tests/qa-tracking-diagnostics.test.ts` (lead verified).
+- Reasons: closed set of 10 (8 route reasons + `tracking_changed` + `application_quota`, from `lib/features/tracking/http.ts`/`provider.ts` and harness constants); anything else ⇒ `"other"` (incl. `private_token_from_upstream`, absent from the file in a real Chromium repro); unreadable/absent ⇒ `null`.
+- Stop: gate checked before each page, after the screenshot and after the DOM read; once raised, no further page operation, capture `truncated: "stopping"`, remaining pages skipped; current page JSON still written locally. Repro: stop during screenshot ⇒ 1 screenshot, 0 DOM reads, second page untouched; stop during DOM read truncated; verdict stays FAIL through `runOne`.
+- Checks: tsc 0; `tests/qa-tracking*` 48/48; `tests/*.test.ts` 324/324; `tests/ui` 166/166; `scripts/qa/tests` 92/92; node --check; `--dry-run --only T6` 0.
+- For root: peer review 1225f28, then the targeted T6 public diagnostic run.
