@@ -950,6 +950,19 @@ button.row:hover {
 .pagerButtons :global(.button):disabled {
   opacity: 0.5;
 }
+/* Active owner filter of the organisations directory (chip + removal link). */
+.activeFilter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  flex: 1 1 100%;
+}
+.activeFilter .chip {
+  white-space: normal;
+  min-height: 36px;
+  padding: 6px 12px;
+}
 
 /* ---- Quotes of a dossier (admin detail) --------------------------------------------------- */
 .quoteList {
