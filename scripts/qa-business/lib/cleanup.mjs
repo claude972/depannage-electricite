@@ -6,7 +6,7 @@
 // `ok` is false and the manifest is kept for --cleanup-manifest. Never a name pattern, never a
 // date range, never a whole table.
 import { CLEANUP_STEPS as BASE_STEPS, FK_PARENTS as BASE_FK, MANIFEST_KEYS as BASE_KEYS } from "../../qa/lib/cleanup.mjs";
-import { isUuid } from "../../qa/lib/cohort.mjs";
+import { createCohort, isUuid } from "../../qa/lib/cohort.mjs";
 
 export const MANIFEST_KEYS = [...BASE_KEYS, "quote_amendments", "quote_documents", "intents"];
 
@@ -181,42 +181,78 @@ export async function runCleanup(db, manifest, log = () => {}, steps = CLEANUP_S
 }
 
 /**
- * Intents (users whose Auth creation was requested with a pre-generated id). Precondition NOT
- * assumed: that Auth honours the requested id. A pending intent is therefore established by TWO
- * exact reads: `GET admin/users/<intent id>` and an exhaustive listing filtered on the exact intent
- * email (cohort-unique `qa-<runId>-<label>@qa.invalid`).
- *  - resolved : exactly one account carries the intent email (its id, pre-generated or not, is
- *               added to the manifest lists) and no other account holds the intent id;
- *  - absent   : the id answers 404 AND the exhaustive email listing finds nothing;
- *  - mismatch : the intent id belongs to an account with another email (never claimed);
- *  - unknown  : any read failed, the listing was not exhausted, or several accounts match.
- * Only `resolved` and `absent` are definite; anything else makes the cleanup incomplete.
+ * The ONLY email an intent may carry: recomputed from the manifest run id and the intent label with
+ * the creation-time function (scripts/qa/lib/cohort.mjs). Returns null for a malformed run id,
+ * label or id, or any other email: such an intent is never looked up and never adopted.
+ */
+export function expectedIntentEmail(manifest, intent) {
+  if (!intent || typeof intent !== "object" || !isUuid(intent.id) || typeof intent.label !== "string" || !intent.label.trim()) return null;
+  let cohort;
+  try {
+    cohort = createCohort(manifest?.run_id);
+  } catch {
+    return null;
+  }
+  const expected = cohort.email(intent.label);
+  if (!/^qa-[0-9a-f]{12}-[a-z0-9]+(?:-[a-z0-9]+)*@qa\.invalid$/.test(expected)) return null;
+  return intent.email === expected ? expected : null;
+}
+const isCohortAccount = (account, expected) => !!account && isUuid(account.id) && typeof account.email === "string" && account.email.toLowerCase() === expected;
+
+/**
+ * Intents (users whose Auth creation was requested with a pre-generated id). The intent is first
+ * validated against the cohort (exact `qa-<run_id>-<slug(label)>@qa.invalid`, UUID id); a rejected
+ * intent is never looked up. Auth honouring the requested id is NOT assumed: the account is
+ * established by `GET admin/users/<id>` AND an exhaustive listing filtered on that exact email, and
+ * every returned account must itself be a cohort account (UUID id, exact email).
+ *  - resolved : exactly one cohort account carries the email; its id is adopted;
+ *  - absent   : id 404 AND exhaustive listing empty;
+ *  - rejected : the intent is not a cohort intent (edited email, wrong run id/label, bad id);
+ *  - mismatch : a returned account is not the cohort account (other email, non-UUID id, divergent id);
+ *  - unknown  : a read failed, the listing was not exhausted, or several accounts match.
+ * Only `resolved` and `absent` are definite. `rejected`/`mismatch` mean the manifest or the
+ * account directory is not what this run created: the whole cleanup is then refused.
  */
 export async function resolveIntents(auth, manifest, log = () => {}) {
   const intents = Array.isArray(manifest?.intents) ? manifest.intents : [];
   const resolved = [];
   for (const intent of intents) {
-    if (intent.status === "resolved") continue;
-    const entry = { id: intent.id, label: intent.label, status: "unknown", account_id: null, error: null };
+    if (intent?.status === "resolved" && expectedIntentEmail(manifest, intent) && isUuid(intent.server_id ?? intent.id)) continue;
+    const entry = { id: intent?.id ?? null, label: intent?.label ?? null, status: "unknown", account_id: null, error: null };
+    const expected = expectedIntentEmail(manifest, intent);
+    if (!expected) {
+      entry.status = "rejected";
+      entry.error = "intent is not a cohort intent of this manifest (email, run id, label or id invalid): never looked up";
+      log(entry);
+      resolved.push(entry);
+      continue;
+    }
     try {
       const byId = await auth.getUser(intent.id);
-      const byEmail = await auth.findUsersByEmail(intent.email);
-      if (byId && byId.email !== intent.email) {
+      const listed = await auth.findUsersByEmail(expected);
+      if (!Array.isArray(listed)) throw new Error("email listing did not return a list");
+      if (byId && !isCohortAccount(byId, expected)) {
         entry.status = "mismatch";
-        entry.error = "an account holds the intent id with another email: left untouched";
-      } else if (byEmail.length > 1) {
-        entry.error = `${byEmail.length} accounts carry the intent email: ambiguous`;
-      } else if (byEmail.length === 1 && (!byId || byId.id === byEmail[0].id)) {
-        const accountId = byEmail[0].id;
+        entry.error = "the intent id belongs to an account that is not this cohort account: left untouched";
+      } else if (listed.some((a) => !isCohortAccount(a, expected))) {
+        entry.status = "mismatch";
+        entry.error = "the email listing returned a non-cohort account: nothing adopted";
+      } else if (listed.length > 1) {
+        entry.error = `${listed.length} accounts carry the intent email: ambiguous`;
+      } else if (listed.length === 1 && (!byId || byId.id === listed[0].id)) {
+        const accountId = listed[0].id;
         for (const key of ["auth_users", "profiles"]) if (!manifest.created[key].includes(accountId)) manifest.created[key].push(accountId);
         intent.status = "resolved";
         intent.server_id = accountId;
         entry.status = "resolved";
         entry.account_id = accountId;
-      } else if (!byId && byEmail.length === 0) {
+      } else if (!byId && listed.length === 0) {
         intent.status = "absent";
         entry.status = "absent";
-      } else entry.error = "id and email reads disagree";
+      } else {
+        entry.status = "mismatch";
+        entry.error = "id and email reads designate different accounts";
+      }
     } catch (error) {
       entry.status = "unknown";
       entry.error = String(error?.message || error);
@@ -251,13 +287,21 @@ export async function finalizeCleanup({ db, auth, manifest, collect = null, save
   } catch (error) {
     incomplete.push(`intent resolution failed: ${String(error?.message || error)}`);
   }
-  for (const entry of intents) if (entry.status === "unknown" || entry.status === "mismatch") incomplete.push(`intent ${entry.label} (${entry.id}) ${entry.status}${entry.error ? `: ${entry.error}` : ""}`);
+  for (const entry of intents) if (entry.status !== "resolved" && entry.status !== "absent") incomplete.push(`intent ${entry.label} (${entry.id}) ${entry.status}${entry.error ? `: ${entry.error}` : ""}`);
+  // A non-cohort intent or account means the manifest is not trustworthy: nothing is deleted at all.
+  const untrusted = intents.some((e) => e.status === "rejected" || e.status === "mismatch");
+  try {
+    planCleanup(manifest);
+  } catch (error) {
+    return { ok: false, halted: "manifest validation", incomplete: [...incomplete, String(error?.message || error)], intents, steps: [] };
+  }
   try {
     await save(manifest);
   } catch (error) {
     // Without a durable manifest no newly resolved id may be deleted.
     return { ok: false, halted: "manifest save", incomplete: [...incomplete, `manifest could not be saved before deletion: ${String(error?.message || error)}`], intents, steps: [] };
   }
+  if (untrusted) return { ok: false, halted: "untrusted manifest", incomplete: [...incomplete, "deletion refused: the manifest carries an intent or account that is not this cohort's; manifest kept for manual review"], intents, steps: [] };
   const result = await runCleanup(db, manifest, log);
   return { ...result, ok: result.ok && incomplete.length === 0, incomplete, intents };
 }

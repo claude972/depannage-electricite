@@ -149,24 +149,27 @@ function fakeAuth(accounts: { id: string; email: string }[], fail: { getUser?: b
     async deleteAuthUser() {},
   };
 }
-const intent = (n: number, label: string) => ({ id: uuid(n, "c0000000"), label, email: `qa-x-${label}@qa.invalid`, status: "pending" });
+const RUN = "0123456789ab";
+const cohortEmail = (label: string) => `qa-${RUN}-${label}@qa.invalid`;
+const intent = (n: number, label: string) => ({ id: uuid(n, "c0000000"), label, email: cohortEmail(label), status: "pending" });
+const cohortManifest = () => cleanup.emptyManifest({ run_id: RUN, project: "qaproject12345678" });
 test("intents: resolved by exact email (even if Auth ignored the pre-id), absent only after id 404 AND exhaustive email listing, else mismatch/unknown", async () => {
-  const manifest = cleanup.emptyManifest({});
+  const manifest = cohortManifest();
   manifest.intents.push(intent(1, "a"), intent(2, "b"), intent(3, "c"), intent(4, "d"), intent(5, "e"));
   const otherId = uuid(99, "c0000000");
   const auth = fakeAuth([
-    { id: uuid(1, "c0000000"), email: "qa-x-a@qa.invalid" },
+    { id: uuid(1, "c0000000"), email: cohortEmail("a") },
     { id: uuid(2, "c0000000"), email: "someone-else@example.invalid" },
-    { id: otherId, email: "qa-x-d@qa.invalid" }, // Auth assigned another id than requested
-    { id: uuid(98, "c0000000"), email: "qa-x-e@qa.invalid" },
-    { id: uuid(97, "c0000000"), email: "QA-X-E@qa.invalid" }, // two accounts: ambiguous
+    { id: otherId, email: cohortEmail("d") }, // Auth assigned another id than requested
+    { id: uuid(98, "c0000000"), email: cohortEmail("e") },
+    { id: uuid(97, "c0000000"), email: cohortEmail("e").toUpperCase() }, // two accounts: ambiguous
   ]);
   const entries = await cleanup.resolveIntents(auth, manifest);
   assert.deepEqual(entries.map((e: Row) => e.status), ["resolved", "mismatch", "absent", "resolved", "unknown"]);
   assert.deepEqual(manifest.created.auth_users, [uuid(1, "c0000000"), otherId], "the account found by exact email is tracked, never the pre-id guess");
   assert.equal(manifest.intents[1].status, "pending", "a mismatching account is never claimed");
   assert.equal(manifest.intents[3].server_id, otherId);
-  const unreachable = cleanup.emptyManifest({});
+  const unreachable = cohortManifest();
   unreachable.intents.push(intent(6, "f"));
   const [timedOut] = await cleanup.resolveIntents(fakeAuth([], { getUser: true }), unreachable);
   assert.equal(timedOut.status, "unknown", "a 404 cannot be inferred from a timeout");
@@ -174,7 +177,7 @@ test("intents: resolved by exact email (even if Auth ignored the pre-id), absent
   assert.equal(partial.status, "unknown", "an id 404 without an exhausted email listing is not proof of absence");
 });
 test("finalizeCleanup: an unknown intent with an empty `created` list is INCOMPLETE (never ok:true, steps:0); manifest saved before deletion", async () => {
-  const manifest = cleanup.emptyManifest({});
+  const manifest = cohortManifest();
   manifest.intents.push(intent(7, "timeout"));
   const order: string[] = [];
   const db = fakeDb();
@@ -184,20 +187,20 @@ test("finalizeCleanup: an unknown intent with an empty `created` list is INCOMPL
   assert.ok(result.incomplete.some((r: string) => /intent timeout .* unknown/.test(r)));
   assert.deepEqual(order, ["save"]);
   // A resolved id is written to the manifest and saved BEFORE its deletion.
-  const resolvedManifest = cleanup.emptyManifest({});
+  const resolvedManifest = cohortManifest();
   resolvedManifest.intents.push(intent(8, "late"));
   const seen: string[] = [];
   const trackingDb = { ...fakeDb(), async deleteAuthUser(id: string) { seen.push(`delete:${id}`); }, async authUserExists() { return false; }, async delete(table: string) { seen.push(`delete:${table}`); } };
   const done = await cleanup.finalizeCleanup({
     db: trackingDb,
-    auth: fakeAuth([{ id: uuid(8, "c0000000"), email: "qa-x-late@qa.invalid" }]),
+    auth: fakeAuth([{ id: uuid(8, "c0000000"), email: cohortEmail("late") }]),
     manifest: resolvedManifest,
     save: async (m: Row) => seen.push(`save:${JSON.stringify((m.created as Row).auth_users)}`),
   });
   assert.equal(done.ok, true);
   assert.equal(seen[0], `save:["${uuid(8, "c0000000")}"]`, "manifest saved with the resolved id first");
   assert.ok(seen.includes(`delete:${uuid(8, "c0000000")}`));
-  const failingSave = await cleanup.finalizeCleanup({ db: trackingDb, auth: fakeAuth([]), manifest: cleanup.emptyManifest({}), save: async () => { throw new Error("ENOSPC"); } });
+  const failingSave = await cleanup.finalizeCleanup({ db: trackingDb, auth: fakeAuth([]), manifest: cohortManifest(), save: async () => { throw new Error("ENOSPC"); } });
   assert.equal(failingSave.ok, false);
   assert.equal(failingSave.halted, "manifest save");
   const collectFails = await cleanup.finalizeCleanup({ db: fakeDb(), auth: fakeAuth([]), manifest: manifestWith(), collect: async () => { throw new Error("select timed out"); } });
@@ -487,7 +490,7 @@ test("--cleanup-manifest path: unknown intent → 3 and manifest rewritten with 
   const manifestPath = path.join(dir, "manifest.json");
   const redactor = redactModule.createRedactor();
   const write = async (intents: Row[]) => {
-    const m = cleanup.emptyManifest({ project: "qaproject12345678" });
+    const m = cohortManifest();
     m.intents.push(...intents);
     await writeFile(manifestPath, JSON.stringify(m));
   };
@@ -496,7 +499,7 @@ test("--cleanup-manifest path: unknown intent → 3 and manifest rewritten with 
   await write([intent(31, "found")]);
   const deleted: string[] = [];
   const db = { ...fakeDb(), async deleteAuthUser(id: string) { const saved = JSON.parse(await readFile(manifestPath, "utf8")); deleted.push(saved.created.auth_users.includes(id) ? "saved-first" : "not-saved"); }, async authUserExists() { return false; } };
-  assert.equal(await runModule.runCleanupOnly({ manifestPath, project: "qaproject12345678", db, auth: fakeAuth([{ id: uuid(31, "c0000000"), email: "qa-x-found@qa.invalid" }]), redactor }), 0);
+  assert.equal(await runModule.runCleanupOnly({ manifestPath, project: "qaproject12345678", db, auth: fakeAuth([{ id: uuid(31, "c0000000"), email: cohortEmail("found") }]), redactor }), 0);
   assert.deepEqual(deleted, ["saved-first"]);
   await assert.rejects(() => runModule.runCleanupOnly({ manifestPath, project: "otherproject123456", db: fakeDb(), auth: fakeAuth([]), redactor }), /created for project/);
 });
@@ -526,4 +529,60 @@ test("admin auth email discovery: exact email only, pages until exhausted, unexh
   const full = async () => new Response(JSON.stringify({ users: [{ id: "x", email: "z@qa.invalid" }, { id: "y", email: "w@qa.invalid" }] }), { status: 200 });
   const endless = authModule.createAdminAuth({ url: "https://qaproject12345678.supabase.co", serviceKey: "service-key-xxxxxxxxxxxxxxxxxxxx", fetchImpl: full, timeoutMs: 1000 });
   await assert.rejects(() => endless.findUsersByEmail("qa-x-a@qa.invalid", { perPage: 2, maxPages: 3 }), /not exhausted/);
+});
+
+// ---------------------------------------------------------------- cohort validation: zero deletion on any non-cohort intent/account
+function recordingDb() {
+  const calls: string[] = [];
+  const db = { ...fakeDb(), async delete(table: string) { calls.push(`delete:${table}`); }, async deleteAuthUser(id: string) { calls.push(`auth:${id}`); }, async storageRemove() { calls.push("storage"); } };
+  return { db, calls };
+}
+const REAL = uuid(500, "f0000000");
+test("cohort email is recomputed from the manifest run id and label; anything else is rejected before any lookup", () => {
+  const m = cohortManifest();
+  assert.equal(cleanup.expectedIntentEmail(m, intent(1, "owner")), cohortEmail("owner"));
+  assert.equal(cleanup.expectedIntentEmail(m, { ...intent(1, "owner"), email: "real-user@example.com" }), null);
+  assert.equal(cleanup.expectedIntentEmail(m, { ...intent(1, "owner"), label: "tiers" }), null, "label must match the email");
+  assert.equal(cleanup.expectedIntentEmail({ ...m, run_id: "fedcba987654" }, intent(1, "owner")), null, "other run id");
+  assert.equal(cleanup.expectedIntentEmail({ ...m, run_id: "not-a-run" }, intent(1, "owner")), null, "malformed run id");
+  assert.equal(cleanup.expectedIntentEmail(m, { ...intent(1, "owner"), id: "x" }), null, "malformed UUID");
+  assert.equal(cleanup.expectedIntentEmail(m, { ...intent(1, "Manager Site A"), email: cohortEmail("manager-site-a") }), cohortEmail("manager-site-a"), "same slug as creation");
+});
+const tampered: [string, (m: Row) => void, Row][] = [
+  ["edited intent email (real-looking address)", (m) => (m.intents as Row[]).push({ ...intent(40, "owner"), email: "real-user@example.com" }), fakeAuth([{ id: REAL, email: "real-user@example.com" }])],
+  ["corrupted manifest run id", (m) => { m.run_id = "../../etc"; (m.intents as Row[]).push(intent(41, "owner")); }, fakeAuth([{ id: REAL, email: cohortEmail("owner") }])],
+  ["intent label edited", (m) => (m.intents as Row[]).push({ ...intent(42, "owner"), label: "admin" }), fakeAuth([{ id: REAL, email: cohortEmail("owner") }])],
+  ["divergent UID: pre-id resolves to another email", (m) => (m.intents as Row[]).push(intent(43, "owner")), fakeAuth([{ id: uuid(43, "c0000000"), email: "real-user@example.com" }, { id: REAL, email: cohortEmail("owner") }])],
+  ["listing returns a non-cohort account", (m) => (m.intents as Row[]).push(intent(44, "owner")), { async getUser() { return null; }, async findUsersByEmail() { return [{ id: REAL, email: "real-user@example.com" }]; } }],
+  ["listing returns a non-UUID id", (m) => (m.intents as Row[]).push(intent(45, "owner")), { async getUser() { return null; }, async findUsersByEmail() { return [{ id: "1", email: cohortEmail("owner") }]; } }],
+];
+for (const [name, mutate, auth] of tampered)
+  test(`zero deletion, no adoption, incomplete: ${name}`, async () => {
+    const m = cohortManifest();
+    m.created.sites.push(uuid(1, "b0000000"));
+    m.created.profiles.push(uuid(2, "b0000000"));
+    m.created.auth_users.push(uuid(2, "b0000000"));
+    mutate(m);
+    const { db, calls } = recordingDb();
+    const result = await cleanup.finalizeCleanup({ db, auth, manifest: m });
+    assert.equal(result.ok, false);
+    assert.deepEqual(calls, [], "nothing at all was deleted");
+    assert.ok(!m.created.auth_users.includes(REAL) && !m.created.profiles.includes(REAL), "the foreign account was never adopted");
+    assert.ok(["rejected", "mismatch"].includes(result.intents[0].status), result.intents[0].status);
+    assert.equal(result.halted, "untrusted manifest");
+  });
+test("--cleanup-manifest with an edited intent email: exit 3, manifest kept, zero deletion", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "qa-business-tamper-"));
+  const manifestPath = path.join(dir, "manifest.json");
+  const m = cohortManifest();
+  m.intents.push({ ...intent(50, "owner"), email: "real-user@example.com" });
+  m.created.sites.push(uuid(1, "b0000000"));
+  await writeFile(manifestPath, JSON.stringify(m));
+  const { db, calls } = recordingDb();
+  const code = await runModule.runCleanupOnly({ manifestPath, project: "qaproject12345678", db, auth: fakeAuth([{ id: REAL, email: "real-user@example.com" }]), redactor: redactModule.createRedactor() });
+  assert.equal(code, 3);
+  assert.deepEqual(calls, []);
+  const kept = JSON.parse(await readFile(manifestPath, "utf8"));
+  assert.ok(!kept.created.auth_users.includes(REAL));
+  assert.equal(kept.intents[0].email, "real-user@example.com", "manifest kept as found for manual review");
 });
