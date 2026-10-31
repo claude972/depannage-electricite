@@ -14,6 +14,10 @@ export const MANIFEST_KEYS = [
   "documents",
   "storage_paths",
   "support_tickets",
+  // Profile ids whose role was set to 'admin' by the service key (subset of `profiles`). Not a
+  // cleanup step: used to name the QA admin account when its deletion is refused (a
+  // last-super-admin guard, platform migration 014, blocks deleting the last admin profile).
+  "admin_profiles",
 ];
 
 /**
@@ -155,10 +159,25 @@ export async function runCleanup(db, manifest, log = () => {}) {
         entry.status = "fail";
         entry.error = String(error?.message || error);
         ok = false;
+        // A refused deletion of a QA admin account is never reported as clean: name it, with the
+        // server's exact error kept above, so the pilot can tell a guard refusal from an outage.
+        const admins = adminAccountsIn(manifest, op);
+        if (admins.length) {
+          entry.admin_accounts = admins;
+          entry.error += ` — ${admins.length} QA admin account(s) among the requested ids (${admins.join(", ")}): if the deletion was refused by the last-super-admin guard (platform migration 014), the admin cohort strategy no longer applies on this project; the account remains and must be handled manually (see docs/CLAUDE_WEB_ACCEPTANCE_REPORT.md, admin cohort and migration 014)`;
+        }
       }
     }
     log(entry);
     results.push(entry);
   }
   return { ok, steps: results };
+}
+
+/** QA admin ids (manifest `admin_profiles`) targeted by a `profiles` or Auth deletion step. */
+export function adminAccountsIn(manifest, op) {
+  const admins = new Set(manifest?.created?.admin_profiles || []);
+  if (!admins.size) return [];
+  if (!(op.kind === "auth" || (op.kind === "table" && op.table === "profiles"))) return [];
+  return op.values.filter((id) => admins.has(id));
 }
