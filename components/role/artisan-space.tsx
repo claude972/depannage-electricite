@@ -75,6 +75,7 @@ import {
 } from "../app/session";
 import styles from "./artisan.module.css";
 import { QuoteDraftEditor } from "./artisan-quote-draft";
+import { DossierHelpLink, SupportCenter } from "./support-tickets";
 
 // ---- Static definitions ---------------------------------------------------------------
 type Tone = "neutral" | "blue" | "green" | "amber" | "red" | "violet";
@@ -92,6 +93,7 @@ const SECONDARY_NAV: NavItem[] = [
   { view: "application", label: "Dossier de candidature", icon: "badge" },
   { view: "performance", label: "Performance", icon: "chart" },
   { view: "help", label: "Aide", icon: "help" },
+  { view: "support", label: "Assistance", icon: "shield" },
 ];
 const DRAWER_ID = "artisan-drawer";
 
@@ -471,6 +473,15 @@ export function ArtisanSpace({ session }: { session: Session }) {
         break;
       case "help":
         content = <HelpView session={session} />;
+        break;
+      case "support":
+        content = (
+          <SupportCenter
+            session={session}
+            interventions={session.data.interventions.filter((x) => x.artisan_id === session.profileId)}
+            backView="overview"
+          />
+        );
         break;
       default:
         content = <Forbidden onHome={() => session.go("overview")} />;
@@ -1374,6 +1385,7 @@ function WorkDossier({ session, intervention: i }: { session: Session; intervent
         subtitle={`${shortId(i.id)} — créée le ${dateTime(i.created_at)}`}
         action={<Badge status={i.status} wording="artisan" />}
       />
+      <DossierHelpLink session={session} interventionId={i.id} />
       <div className={styles.dossierGrid}>
         <div className={styles.dossierMain}>
           <section className="panel" aria-labelledby="dossier-intervention">
@@ -3324,11 +3336,18 @@ function HelpView({ session }: { session: Session }) {
             Ouvrir mes messages
           </button>
         </div>
-        <Unavailable
-          title="Contacter l’opérateur"
-          reason="Pas encore activé sur ce service. Pour une intervention, utilisez la conversation du dossier ci-dessus."
-          blocker="tickets support non prévus"
-        />
+        <h3 style={{ fontSize: 15, margin: "18px 0 6px" }}>Contacter l’équipe de la plateforme</h3>
+        <p>
+          Pour une question sur votre dossier de candidature, un règlement ou le fonctionnement de
+          l’espace, ouvrez une demande d’assistance : les réponses apparaissent ici, sans appel ni
+          email, et aucun délai n’est garanti.
+        </p>
+        <div className={styles.formActions}>
+          <button type="button" className="button outline" onClick={() => session.go("support")}>
+            <Icon name="shield" size={17} />
+            Ouvrir l’assistance
+          </button>
+        </div>
       </section>
     </>
   );

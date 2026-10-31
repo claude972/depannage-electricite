@@ -60,6 +60,7 @@ import {
 import { enterpriseContext, pickQuote, quoteVersions } from "../app/session";
 import type { Session } from "../app/session-types";
 import { UploadQueuePanel } from "../app/upload-queue";
+import { DossierHelpLink, SupportCenter } from "./support-tickets";
 import type {
   Approval,
   ApprovalRule,
@@ -136,6 +137,7 @@ const NAV: { view: View; label: string; icon: string; section: "main" | "more" }
   { view: "messages", label: "Messages", icon: "message", section: "main" },
   { view: "documents", label: "Documents", icon: "document", section: "more" },
   { view: "members", label: "Membres", icon: "users", section: "more" },
+  { view: "support", label: "Assistance", icon: "shield", section: "more" },
   { view: "profile", label: "Profil", icon: "person", section: "more" },
 ];
 const NAV_PARENT: Partial<Record<View, View>> = {
@@ -410,11 +412,13 @@ export function EnterpriseSpace({ session }: { session: Session }) {
           return <DocumentsView c={c} />;
         case "profile":
           return <ProfileView c={c} />;
+        case "support":
+          return <SupportCenter session={session} interventions={c.orgInterventions} backView="overview" />;
         case "help":
           return (
             <>
               <PageTitle title="Aide" subtitle="Repères pour piloter vos sites dans cet espace." />
-              <HelpContent />
+              <HelpContent onSupport={() => go("support")} />
             </>
           );
         default:
@@ -581,7 +585,7 @@ export function EnterpriseSpace({ session }: { session: Session }) {
                 <Icon name="close" size={18} />
               </button>
               <h2>Comment utiliser cet espace</h2>
-              <HelpContent />
+              <HelpContent onSupport={() => go("support")} />
             </section>
           )}
           {renderView()}
@@ -621,8 +625,9 @@ function NavButton({
   );
 }
 
-function HelpContent() {
+function HelpContent({ onSupport }: { onSupport: () => void }) {
   return (
+    <>
     <ul>
       <li>Choisissez l’organisation puis, si besoin, un site : toutes les listes, indicateurs et exports suivent ce périmètre.</li>
       <li>Les indicateurs sont calculés sur les dossiers chargés (100 derniers) ; le rapport CSV du serveur fait foi.</li>
@@ -630,6 +635,17 @@ function HelpContent() {
       <li>Le règlement Stripe est réservé au demandeur du dossier ; la délégation de payeur n’est pas définie.</li>
       <li>Les fonctions absentes (factures, invitations, équipements, SLA…) sont signalées avec leur bloqueur plutôt que simulées.</li>
     </ul>
+    <p className={styles.description} style={{ marginTop: 12 }}>
+      Une question que ces repères ne couvrent pas ? Écrivez à l’équipe de la plateforme : les réponses
+      apparaissent dans cet espace, sans appel ni email, et aucun délai n’est garanti.
+    </p>
+    <div className={styles.actions}>
+      <button type="button" className="button outline" onClick={onSupport}>
+        <Icon name="shield" size={17} />
+        Ouvrir l’assistance
+      </button>
+    </div>
+    </>
   );
 }
 
@@ -1266,6 +1282,7 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
           </div>
         }
       />
+      <DossierHelpLink session={session} interventionId={intervention.id} />
       <div className={styles.detailGrid}>
         <div>
           <section className="panel" aria-labelledby="dossier-summary">
@@ -3396,6 +3413,10 @@ function ProfileView({ c }: { c: Ctx }) {
         </p>
         {/* Emplacement réservé à l’installation PWA (composant Codex, hors de ce lot). */}
         <div className={styles.actions} style={{ marginTop: 16 }}>
+          <button type="button" className="button outline" onClick={() => c.go("support")}>
+            <Icon name="shield" size={17} />
+            Assistance
+          </button>
           <button type="button" className="button outline" onClick={() => void session.logout()}>
             <Icon name="logout" size={17} />
             Se déconnecter
