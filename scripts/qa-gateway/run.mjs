@@ -295,7 +295,8 @@ export async function main(argv, deps = defaultDeps()) {
         await log("info", "état revoke chargé", `run d’origine ${state.runId}, dossier ${state.dossierId}, gestionnaire ${state.managerId}`);
         manifestExtra = { suite: "revoke" };
         const live = await revokeLive(state, await revokeDeps(), { batchResultPath: args.batchResult, observationPath: args.observation });
-        result.revoke = { phase: "live", outcome: live.outcome, objectPath: live.objectPath, responseStatus: live.responseStatus, conditions: live.verdict?.conditions ?? {}, reasons: live.verdict?.reasons ?? [], liveCommand: null };
+        result.revoke = { phase: "live", outcome: live.outcome, objectPath: live.objectPath, responseStatus: live.responseStatus, conditions: live.verdict?.conditions ?? {}, reasons: live.verdict?.reasons ?? [], liveCommand: null, unverifiedEntities: live.unverifiedEntities ?? [] };
+        if (live.unverifiedEntities?.length) result.leftovers.push(`entités non prouvées non nettoyées : ${live.unverifiedEntities.join(" ; ")}`);
         // Unknown outcome (no response / 5xx / transport): the object may be kept by the gateway —
         // handled like an interruption: late reconcile window before the discovery-first cleanup.
         if (live.outcome === "unknown") interrupted = true;
@@ -329,6 +330,9 @@ export async function main(argv, deps = defaultDeps()) {
     deps.print(`verdict : ${result.verdict} — rapport ${path.join(args.out, "summary.md")}`);
   }
   if (tooEarly || refusedBeforeWrite) return 2;
+  // 3 = cleanup incomplete by design: some entities could not be proven to belong to the cohort and
+  // were neither recorded nor deleted (diagnostic in summary.md / result.json).
+  if (result.revoke?.unverifiedEntities?.length) return 3;
   // 0 = pass, prepared (account intentionally kept, lease written) or observed (clean, but the
   // platform code is not bound yet: not a PASS); 1 = fail; 2 = refused before any write.
   return result.verdict === "pass" || result.verdict === "prepared" || result.verdict === "observed" ? 0 : 1;

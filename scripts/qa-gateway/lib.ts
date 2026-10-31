@@ -795,6 +795,7 @@ export type RevokeReport = {
   conditions: Record<string, boolean | null>;
   reasons: string[];
   liveCommand: string | null;
+  unverifiedEntities?: string[];
 };
 // Platform codes observed for an EXPIRED JWT and bound strictly by the pilot (follow-up commit, same
 // method as PLATFORM_UNAUTHORIZED_CODES). Empty until the first real observation: an unknown
@@ -1594,7 +1595,63 @@ export async function revokePrepare(deps: RevokeDeps): Promise<RevokePrepareOutc
   await deps.log("info", "PREPARED — rien n’est prouvé ; lot et observation rendus pour revue root", `lot ${deps.batchSqlPath} ; observation ${deps.observeSqlPath} ; jeton gestionnaire exp ${new Date(managerExp * 1000).toISOString()} ; phase live : ${deps.liveCommand}`);
   return { outcome: "prepared", state };
 }
-export type RevokeLiveOutcome = { outcome: "pass" | "fail" | "unknown" | "refused"; cleanup: boolean; verdict: RevokeVerdict | null; objectPath: string | null; responseStatus: number | null };
+export type RevokeLiveOutcome = { outcome: "pass" | "fail" | "unknown" | "refused"; cleanup: boolean; verdict: RevokeVerdict | null; objectPath: string | null; responseStatus: number | null; unverifiedEntities?: string[] };
+// Remote proof of the entity chain BEFORE any of them may be recorded for deletion (root P1 on 13b68c3):
+// each entity is re-read with the service client and must belong to the validated cohort —
+// org.owner_id = QA owner, member manager of that org, site.organization_id = org and name of the run,
+// dossier.site_id = site, dossier.client_id = QA owner and description of the run — and be listed in
+// the manifest's created lists. A child is only considered once its parent is proven. Any unknown,
+// failed or mismatched read leaves that entity (and its dependants) UNRECORDED: never deleted.
+export type EntityProof = { proven: { kind: CreatedKind; id: string }[]; unverified: string[] };
+export async function proveRevokeEntities(state: RevokeState, manifest: Manifest, deps: Pick<RevokeDeps, "serviceRows">): Promise<EntityProof> {
+  const proven: { kind: CreatedKind; id: string }[] = [];
+  const unverified: string[] = [];
+  const one = async (label: string, query: string, test: (row: Row) => string | null): Promise<boolean> => {
+    let r: { ok: boolean; rows: Row[]; detail: string };
+    try {
+      r = await deps.serviceRows(query);
+    } catch (error) {
+      r = { ok: false, rows: [], detail: error instanceof Error ? error.message : String(error) };
+    }
+    if (!r.ok) {
+      unverified.push(`${label} : lecture en erreur (${r.detail})`);
+      return false;
+    }
+    if (r.rows.length !== 1) {
+      unverified.push(`${label} : ${r.rows.length} ligne(s) au lieu d’une`);
+      return false;
+    }
+    const why = test(r.rows[0]);
+    if (why) unverified.push(`${label} : ${why}`);
+    return why === null;
+  };
+  const inManifest = (kind: CreatedKind, id: string) => manifest.created[kind].includes(id);
+  const orgOk =
+    inManifest("organizationIds", state.orgId) &&
+    (await one("organisation", `organizations?id=eq.${state.orgId}&select=id,owner_id`, (r) => (r.id !== state.orgId ? "id différent" : r.owner_id !== state.ownerId ? "propriétaire ≠ propriétaire QA validé" : null))) &&
+    (await one("membre gestionnaire QA", `organization_members?organization_id=eq.${state.orgId}&user_id=eq.${state.managerId}&select=organization_id,user_id,role`, (r) => (r.organization_id !== state.orgId || r.user_id !== state.managerId ? "rattachement différent" : r.role !== "manager" ? `rôle ${String(r.role)} ≠ manager` : null)));
+  if (!inManifest("organizationIds", state.orgId)) unverified.push("organisation absente des créations du manifeste");
+  if (!orgOk) {
+    unverified.push("site et dossier non évalués (organisation non prouvée)");
+    return { proven, unverified };
+  }
+  proven.push({ kind: "organizationIds", id: state.orgId });
+  const siteOk =
+    inManifest("siteIds", state.siteId) &&
+    (await one("site", `sites?id=eq.${state.siteId}&select=id,organization_id,name`, (r) => (r.id !== state.siteId ? "id différent" : r.organization_id !== state.orgId ? "organisation ≠ organisation QA" : r.name !== `Site QA ${state.runId}` ? "nom ≠ site du run" : null)));
+  if (!inManifest("siteIds", state.siteId)) unverified.push("site absent des créations du manifeste");
+  if (!siteOk) {
+    unverified.push("dossier non évalué (site non prouvé)");
+    return { proven, unverified };
+  }
+  proven.push({ kind: "siteIds", id: state.siteId });
+  const dossierOk =
+    inManifest("interventionIds", state.dossierId) &&
+    (await one("dossier", `interventions?id=eq.${state.dossierId}&select=id,site_id,client_id,description`, (r) => (r.id !== state.dossierId ? "id différent" : r.site_id !== state.siteId ? "site ≠ site QA" : r.client_id !== state.ownerId ? "demandeur ≠ propriétaire QA validé" : typeof r.description !== "string" || !r.description.startsWith(`QA révocation ${state.runId}`) ? "description ≠ dossier du run" : null)));
+  if (!inManifest("interventionIds", state.dossierId)) unverified.push("dossier absent des créations du manifeste");
+  if (dossierOk) proven.push({ kind: "interventionIds", id: state.dossierId });
+  return { proven, unverified };
+}
 export async function revokeLive(state: RevokeState, deps: RevokeDeps, files: { batchResultPath: string; observationPath: string }): Promise<RevokeLiveOutcome> {
   const refused = async (step: string, detail: string): Promise<RevokeLiveOutcome> => {
     await deps.log("fail", `live refusé : ${step} — aucune suppression, aucun identifiant enregistré`, detail);
@@ -1631,8 +1688,16 @@ export async function revokeLive(state: RevokeState, deps: RevokeDeps, files: { 
     if (u.status !== 200 || u.json?.id !== uid || !isRevokeCohortEmail(email, state.runId, role) || email !== (m as ManifestRevoke)[`${role}Email`].toLowerCase()) return refused(`preuve de cohorte Auth (${role})`, `HTTP ${u.status}`);
   }
   await deps.log("pass", "preuve de cohorte Auth : propriétaire et gestionnaire QA (suppression autorisée)", `run ${state.runId}`);
-  // Durable record of the validated cohort BEFORE any further network call.
-  for (const [kind, value] of [["userIds", state.ownerId], ["userIds", state.managerId], ["organizationIds", state.orgId], ["siteIds", state.siteId], ["interventionIds", state.dossierId]] as const) await deps.recordValidated(kind, value);
+  // Durable record of the Auth-proven QA accounts BEFORE any further network call.
+  for (const value of [state.ownerId, state.managerId]) await deps.recordValidated("userIds", value);
+  // Entities are recorded only after their remote chain proof; an unproven entity is never recorded.
+  const entities = await proveRevokeEntities(state, manifest, deps);
+  for (const e of entities.proven) await deps.recordValidated(e.kind, e.id);
+  if (entities.unverified.length) {
+    await deps.log("fail", "preuve distante des entités de la cohorte incomplète : entités non prouvées NON enregistrées, jamais supprimées ; upload non tenté", entities.unverified.join(" ; "));
+    return { outcome: "fail", cleanup: true, verdict: null, objectPath: null, responseStatus: null, unverifiedEntities: entities.unverified };
+  }
+  await deps.log("pass", "preuve distante des entités : organisation (propriétaire QA, membre gestionnaire), site (organisation, nom du run), dossier (site, demandeur, description du run)", entities.proven.map((e) => e.kind).join(", "));
   if (state.managerTokenExp <= deps.now() + 30) {
     await deps.log("fail", "jeton gestionnaire expiré ou trop proche de l’échéance : upload non tenté", new Date(state.managerTokenExp * 1000).toISOString());
     return { outcome: "fail", cleanup: true, verdict: null, objectPath: null, responseStatus: null };

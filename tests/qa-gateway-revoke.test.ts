@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import {
   REVOKE_DISCOVERY_MS,
+  cleanupPlan,
   REVOKE_RESULT_WAIT_MS,
   UsageError,
   emptyCreated,
@@ -231,11 +232,14 @@ type Cloud = {
   docs: { id: string; path: string; owner_id: string }[];
   upload: (token: string) => Promise<{ status: number; text: string }>;
   secrets: string[];
+  // Remote rows overrides for the entity proof (adversarial tests) and the cohort recorded for deletion.
+  remote: Record<string, any>;
+  validated: ReturnType<typeof emptyCreated>;
 };
 const b64url = (s: string) => Buffer.from(s, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const tokenFor = (sub: string, exp: number) => `${b64url('{"alg":"HS256"}')}.${b64url(JSON.stringify({ iss: `${URL_}/auth/v1`, sub, aud: "authenticated", role: "authenticated", exp }))}.${b64url("sig")}`;
 function cloud(): Cloud {
-  const c: Cloud = { clock: T0, users: new Map(), emails: [], calls: [], logs: [], manifest: null, states: [], sql: {}, files: {}, objects: [], docs: [], upload: async () => ({ status: 403, text: '{"error":"Accès refusé."}' }), secrets: [] };
+  const c: Cloud = { clock: T0, users: new Map(), emails: [], calls: [], logs: [], manifest: null, states: [], sql: {}, files: {}, objects: [], docs: [], upload: async () => ({ status: 403, text: '{"error":"Accès refusé."}' }), secrets: [], remote: {}, validated: emptyCreated() };
   return c;
 }
 async function templates() {
@@ -263,10 +267,11 @@ async function deps(c: Cloud, overrides: Partial<RevokeDeps> = {}): Promise<Revo
     serviceInsert: async (table) => { c.calls.push(`insert:${table}`); return { status: 201, detail: "" }; },
     serviceRows: async (query) => {
       c.calls.push(`rows:${query.split("?")[0]}`);
-      if (query.startsWith("organizations?")) return { ok: true, rows: [{ id: ORG, owner_id: OWNER }], detail: "" };
-      if (query.startsWith("sites?")) return { ok: true, rows: [{ id: SITE, organization_id: ORG }], detail: "" };
-      if (query.startsWith("interventions?")) return { ok: true, rows: [{ id: DOSSIER, site_id: SITE, client_id: OWNER, artisan_id: null }], detail: "" };
-      if (query.startsWith("organization_members?")) return { ok: true, rows: [{ role: "manager" }], detail: "" };
+      if (c.remote[query.split("?")[0]] === "error") return { ok: false, rows: [], detail: "HTTP 500" };
+      if (query.startsWith("organizations?")) return { ok: true, rows: [{ id: ORG, owner_id: OWNER, ...c.remote.organizations_patch }], detail: "" };
+      if (query.startsWith("sites?")) return { ok: true, rows: [{ id: SITE, organization_id: ORG, name: `Site QA ${RUN}`, ...c.remote.sites_patch }], detail: "" };
+      if (query.startsWith("interventions?")) return { ok: true, rows: [{ id: DOSSIER, site_id: SITE, client_id: OWNER, artisan_id: null, description: `QA révocation ${RUN} : dossier de site.`, ...c.remote.interventions_patch }], detail: "" };
+      if (query.startsWith("organization_members?")) return { ok: true, rows: [{ organization_id: ORG, user_id: MANAGER, role: "manager", ...c.remote.organization_members_patch }], detail: "" };
       if (query.startsWith("organization_member_site_scopes?")) return { ok: true, rows: [{ scope: "selected" }], detail: "" };
       if (query.startsWith("organization_member_site_grants?")) return { ok: true, rows: [{ site_id: SITE, can_write: true }], detail: "" };
       if (query.startsWith("profiles?")) return { ok: true, rows: [{ id: OWNER, role: "manager" }, { id: MANAGER, role: "manager" }], detail: "" };
@@ -283,7 +288,7 @@ async function deps(c: Cloud, overrides: Partial<RevokeDeps> = {}): Promise<Revo
       const keep = c.manifest ? { suite: c.manifest.suite, revoke: c.manifest.revoke } : {};
       c.manifest = parseManifest(JSON.parse(manifestJson(RUN, REF, created, new Date(c.clock * 1000), [], { ...keep, ...extra })), REF);
     },
-    recordValidated: async (kind, value) => { c.calls.push(`recordValidated:${kind}:${value === OWNER ? "owner" : value === MANAGER ? "manager" : "id"}`); },
+    recordValidated: async (kind, value) => { c.calls.push(`recordValidated:${kind}:${value === OWNER ? "owner" : value === MANAGER ? "manager" : "id"}`); if (!c.validated[kind].includes(value)) c.validated[kind].push(value); },
     addSecret: (s) => c.secrets.push(s),
     forbidden: () => [...c.secrets],
     client: {
@@ -441,4 +446,70 @@ test("the orchestrator wires the revoke suites without replaying the nine scenar
   assert.match(source, /revoke-live-batch\.sql/);
   assert.match(source, /form\.set\("intervention_id", dossierId\)/);
   assert.doesNotMatch(source, /console\.log\([^)]*(managerToken|state\.)/);
+});
+
+// ---- Root P1 on 13b68c3: entities are recorded for deletion only after a remote chain proof ---------
+const FOREIGN = "00000000-0000-4000-8000-0000000000f9";
+const deletionTargets = (c: Cloud) => cleanupPlan(c.validated).map((step) => JSON.stringify(step)).join("\n");
+test("entity proof (adversarial): foreign/unprovable org, site or dossier is NEVER recorded for deletion; no upload; exit-3 diagnostic", async () => {
+  const cases: [string, (c: Cloud) => void, ("organizationIds" | "siteIds" | "interventionIds")[]][] = [
+    ["org owned by another user", (c) => { c.remote.organizations_patch = { owner_id: FOREIGN }; }, []],
+    ["foreign org id (row of another org)", (c) => { c.remote.organizations_patch = { id: FOREIGN }; }, []],
+    ["manager not a member of the org", (c) => { c.remote.organization_members_patch = { role: "viewer" }; }, []],
+    ["foreign site under the QA org (not the run's site)", (c) => { c.remote.sites_patch = { name: "Siège réel" }; }, ["organizationIds"]],
+    ["site of another org", (c) => { c.remote.sites_patch = { organization_id: FOREIGN }; }, ["organizationIds"]],
+    ["foreign dossier (another client)", (c) => { c.remote.interventions_patch = { client_id: FOREIGN }; }, ["organizationIds", "siteIds"]],
+    ["foreign dossier (another site)", (c) => { c.remote.interventions_patch = { site_id: FOREIGN }; }, ["organizationIds", "siteIds"]],
+    ["dossier of another run (partial mismatch)", (c) => { c.remote.interventions_patch = { description: "Panne réelle" }; }, ["organizationIds", "siteIds"]],
+    ["read error on organizations", (c) => { c.remote.organizations = "error"; }, []],
+    ["read error on sites", (c) => { c.remote.sites = "error"; }, ["organizationIds"]],
+    ["read error on interventions", (c) => { c.remote.interventions = "error"; }, ["organizationIds", "siteIds"]],
+  ];
+  for (const [label, mutate, provenKinds] of cases) {
+    const { c, state } = await liveWorld(mutate);
+    const out = await revokeLive(state, await deps(c), files);
+    assert.equal(out.outcome, "fail", label);
+    assert.equal(out.cleanup, true, `${label}: the Auth-proven QA users stay cleanable`);
+    assert.ok(out.unverifiedEntities && out.unverifiedEntities.length > 0, `${label}: diagnostic`);
+    assert.ok(!c.calls.includes("upload"), `${label}: no upload`);
+    for (const kind of ["organizationIds", "siteIds", "interventionIds"] as const) {
+      const recorded = c.validated[kind].length > 0;
+      assert.equal(recorded, provenKinds.includes(kind), `${label}: ${kind} recorded=${recorded}`);
+    }
+    // Zero DELETE of an unproven entity: the cleanup plan built from what was recorded never targets it.
+    const targets = deletionTargets(c);
+    if (!provenKinds.includes("organizationIds")) assert.doesNotMatch(targets, new RegExp(`organizations par id|${ORG}`), `${label}: no org deletion`);
+    if (!provenKinds.includes("siteIds")) assert.doesNotMatch(targets, new RegExp(`sites par id|${SITE}`), `${label}: no site deletion`);
+    if (!provenKinds.includes("interventionIds")) assert.doesNotMatch(targets, /interventions par id/, `${label}: no dossier deletion`);
+    assert.ok(c.logs.some((l) => l.status === "fail" && /preuve distante des entités de la cohorte incomplète/.test(l.step)), label);
+  }
+  // Manifest that does not list the entity in its created lists: not recorded either.
+  const { c, state } = await liveWorld();
+  c.manifest = { ...c.manifest!, created: { ...c.manifest!.created, siteIds: [] } };
+  const out = await revokeLive(state, await deps(c), files);
+  assert.ok(out.unverifiedEntities?.some((u) => /site absent des créations du manifeste/.test(u)));
+  assert.deepEqual(c.validated.siteIds, []);
+  assert.deepEqual(c.validated.interventionIds, []);
+});
+
+test("entity proof (nominal): org, site and dossier proven remotely, then recorded; cleanup plan deletes them in FK order", async () => {
+  const { c, state } = await liveWorld();
+  const out = await revokeLive(state, await deps(c), files);
+  assert.equal(out.outcome, "pass", out.verdict?.reasons.join(" | ") ?? "");
+  assert.equal(out.unverifiedEntities, undefined);
+  assert.deepEqual(c.validated.organizationIds, [ORG]);
+  assert.deepEqual(c.validated.siteIds, [SITE]);
+  assert.deepEqual(c.validated.interventionIds, [DOSSIER]);
+  const reads = c.calls.filter((k) => /^rows:(organizations|organization_members|sites|interventions)$/.test(k));
+  assert.deepEqual(reads.slice(0, 4), ["rows:organizations", "rows:organization_members", "rows:sites", "rows:interventions"], "chain read remotely before recording");
+  assert.ok(c.calls.indexOf("rows:interventions") < c.calls.indexOf("recordValidated:interventionIds:id") && c.calls.indexOf("recordValidated:interventionIds:id") < c.calls.indexOf("upload"));
+  const labels = cleanupPlan(c.validated).map((s) => s.label);
+  const at = (l: string) => labels.indexOf(l);
+  assert.ok(at("interventions par id") >= 0 && at("interventions par id") < at("sites par id") && at("sites par id") < at("organizations par id") && at("organizations par id") < at(`utilisateur Auth ${OWNER}`));
+});
+
+test("runner maps unverified entities to exit code 3 and a leftover diagnostic", async () => {
+  const source = await readFile(new URL("../scripts/qa-gateway/run.mjs", import.meta.url), "utf8");
+  assert.match(source, /if \(result\.revoke\?\.unverifiedEntities\?\.length\) return 3;/);
+  assert.match(source, /entités non prouvées non nettoyées/);
 });
