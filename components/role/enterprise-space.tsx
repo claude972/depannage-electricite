@@ -59,6 +59,7 @@ import {
 } from "../app/format";
 import { enterpriseContext, pickQuote, quoteVersions } from "../app/session";
 import type { Session } from "../app/session-types";
+import { UploadQueuePanel } from "../app/upload-queue";
 import type {
   Approval,
   ApprovalRule,
@@ -271,21 +272,51 @@ export function EnterpriseSpace({ session }: { session: Session }) {
   const [accessKey, setAccessKey] = useState(0);
   const menuButton = useRef<HTMLButtonElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
+  const helpButton = useRef<HTMLButtonElement>(null);
+  const restoreMenuFocus = useRef(false);
+  const [isNarrow, setIsNarrow] = useState(false);
   const navId = useId();
   const helpId = useId();
+
+  // Mobile layout: the off-canvas sidebar is inert while closed, the rest of the page while open.
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 1023px)");
+    const update = () => setIsNarrow(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     if (!menuOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        restoreMenuFocus.current = true;
         setMenuOpen(false);
-        menuButton.current?.focus();
       }
     };
     window.addEventListener("keydown", onKey);
     sidebarRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
     return () => window.removeEventListener("keydown", onKey);
   }, [menuOpen]);
+
+  useEffect(() => {
+    if (menuOpen || !restoreMenuFocus.current) return;
+    restoreMenuFocus.current = false;
+    menuButton.current?.focus();
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (!helpOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !menuOpen) {
+        setHelpOpen(false);
+        helpButton.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [helpOpen, menuOpen]);
 
   useEffect(() => {
     if (!ctx.organizationId) {
@@ -300,13 +331,18 @@ export function EnterpriseSpace({ session }: { session: Session }) {
     return () => {
       active = false;
     };
-    // Recharge à chaque changement d’organisation ou sur demande explicite (membres).
+    // Recharge à chaque changement d’organisation, sur demande explicite (membres) ou après
+    // une relecture du workspace (focus/visibilité).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ctx.organizationId, accessKey]);
+  }, [ctx.organizationId, accessKey, session.refreshedAt]);
 
   const closeMenu = () => {
+    restoreMenuFocus.current = true;
     setMenuOpen(false);
-    menuButton.current?.focus();
+  };
+  const closeHelp = () => {
+    setHelpOpen(false);
+    helpButton.current?.focus();
   };
   const go = (next: View, nextParam?: string) => {
     setMenuOpen(false);
@@ -395,10 +431,7 @@ export function EnterpriseSpace({ session }: { session: Session }) {
 
   return (
     <div className={styles.shell}>
-      <a className="skip-link" href="#main">
-        Aller au contenu
-      </a>
-      <header className={styles.topbar}>
+      <header className={styles.topbar} inert={isNarrow && menuOpen}>
         <button
           ref={menuButton}
           type="button"
@@ -434,6 +467,7 @@ export function EnterpriseSpace({ session }: { session: Session }) {
             )}
           </button>
           <button
+            ref={helpButton}
             type="button"
             className={cx(styles.iconButton, helpOpen && styles.iconButtonActive)}
             aria-expanded={helpOpen}
@@ -462,7 +496,7 @@ export function EnterpriseSpace({ session }: { session: Session }) {
       </header>
 
       {demo && (
-        <div className={styles.demoBanner} role="note">
+        <div className={styles.demoBanner} role="note" inert={isNarrow && menuOpen}>
           <span>
             <Icon name="info" size={16} />
             Démonstration — données fictives, aucun artisan contacté, aucun débit.
@@ -507,6 +541,7 @@ export function EnterpriseSpace({ session }: { session: Session }) {
           ref={sidebarRef}
           id={navId}
           className={cx(styles.sidebar, menuOpen && styles.sidebarOpen)}
+          inert={isNarrow && !menuOpen}
         >
           <button type="button" className={styles.sidebarClose} aria-label="Fermer le menu" onClick={closeMenu}>
             <Icon name="close" />
@@ -533,7 +568,7 @@ export function EnterpriseSpace({ session }: { session: Session }) {
           </div>
         </aside>
 
-        <main id="main" className={styles.main}>
+        <main id="main" className={styles.main} inert={isNarrow && menuOpen}>
           <Alerts
             error={session.error}
             notice={session.notice}
@@ -542,7 +577,7 @@ export function EnterpriseSpace({ session }: { session: Session }) {
           />
           {helpOpen && (
             <section id={helpId} className={styles.helpPanel} aria-label="Aide de l’espace entreprise">
-              <button type="button" className={styles.helpClose} aria-label="Fermer l’aide" onClick={() => setHelpOpen(false)}>
+              <button type="button" className={styles.helpClose} aria-label="Fermer l’aide" onClick={closeHelp}>
                 <Icon name="close" size={18} />
               </button>
               <h2>Comment utiliser cet espace</h2>
@@ -577,8 +612,9 @@ function NavButton({
       <Icon name={item.icon} />
       {item.label}
       {count > 0 && (
-        <span className={styles.navCount} aria-label={`${count} en attente`}>
-          {count}
+        <span className={styles.navCount}>
+          <span aria-hidden="true">{count}</span>
+          <span className="sr-only">{`${count} en attente d’approbation`}</span>
         </span>
       )}
     </button>
@@ -645,7 +681,7 @@ function ContextBar({
       ? c.siteAccess?.members.find((m) => m.user_id === c.session.profileId)
       : undefined;
   return (
-    <div className={styles.contextBar} aria-label="Périmètre actif">
+    <div className={styles.contextBar} role="group" aria-label="Périmètre actif">
       <div className={styles.contextNames}>
         <Icon name="building" size={18} />
         <span>
@@ -1119,8 +1155,8 @@ function NewRequestView({ c, siteId }: { c: Ctx; siteId: string }) {
         mode={c.session.mode}
         busy={c.session.busy}
         onBack={() => c.go("requests")}
-        onSubmit={async (values) => {
-          await c.session.createIntervention(values);
+        onSubmit={async (values, photos) => {
+          await c.session.createIntervention(values, photos);
         }}
         onDemo={() => undefined}
       />
@@ -1454,6 +1490,7 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
               <WarrantyPanel interventionId={id} demo={demo} role={session.role} />
             </>
           )}
+          <UploadQueuePanel session={session} interventionId={id} />
         </div>
 
         <div>
@@ -2692,6 +2729,7 @@ function SiteScopeControl({
                       onChange={(e) => toggleWrite(s.id, e.target.checked)}
                     />
                     écriture
+                    <span className="sr-only"> pour {s.name}</span>
                   </label>
                 </li>
               );
@@ -2909,9 +2947,10 @@ function MembersView({ c }: { c: Ctx }) {
     return () => {
       active = false;
     };
-    // Recharge quand l’organisation, la liste des membres ou une commande change.
+    // Recharge quand l’organisation, la liste des membres, une commande ou une relecture
+    // du workspace (focus/visibilité) change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orgId, reloadKey, memberList]);
+  }, [orgId, reloadKey, memberList, session.refreshedAt]);
 
   const reload = () => {
     setReloadKey((k) => k + 1);
@@ -2939,8 +2978,8 @@ function MembersView({ c }: { c: Ctx }) {
       setInviteError("Renseignez une adresse email valide.");
       return;
     }
-    if (!Number.isInteger(expires) || expires < 1 || expires > 30) {
-      setInviteError("La validité doit être comprise entre 1 et 30 jours.");
+    if (!Number.isInteger(expires) || expires < 1 || expires > 14) {
+      setInviteError("La validité doit être comprise entre 1 et 14 jours.");
       return;
     }
     if (inviteScope === "selected" && !inviteGrants.length) {
@@ -3159,11 +3198,11 @@ function MembersView({ c }: { c: Ctx }) {
                         <option value="viewer">Lecture</option>
                       </select>
                     </Field>
-                    <Field label="Validité (jours)">
+                    <Field label="Validité (jours)" hint="Entre 1 et 14 jours (7 par défaut).">
                       <input
                         type="number"
                         min={1}
-                        max={30}
+                        max={14}
                         step={1}
                         required
                         value={days}

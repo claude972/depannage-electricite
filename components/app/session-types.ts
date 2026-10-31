@@ -3,6 +3,9 @@
 // live/unavailable decision goes through this object so that identity resets and role
 // guards are enforced in one place.
 import type {
+  AdminInterventionDetail,
+  AdminInterventionsPage,
+  AdminListFilters,
   AdminOverview,
   ArtisanCommand,
   ArtisanDossier,
@@ -24,6 +27,7 @@ import type {
   Role,
   SiteAccessCommand,
   SiteAccessOverview,
+  UploadQueue,
   View,
   Workspace,
 } from "./types";
@@ -114,6 +118,10 @@ export interface Session {
   artisanCommand(body: ArtisanCommand): Promise<boolean>;
   /** New contract GET /api/admin/overview. */
   loadAdminOverview(): Promise<AdminOverview | null>;
+  /** Admin dossier list, server-paginated (cursor) and filtered; null when unavailable. */
+  loadAdminInterventions(params: AdminListFilters & { limit?: number; cursor?: string | null }): Promise<AdminInterventionsPage | null>;
+  /** Admin detail of any dossier (not limited to the 100 loaded in workspace), with bounded quotes. */
+  loadAdminIntervention(id: string): Promise<AdminInterventionDetail | null>;
   /** Organisation membership read model (GET /api/organizations?organization_id=). */
   loadOrganization(organizationId: string): Promise<OrganizationOverview | null>;
   /** Owner-only member commands; create_invitation resolves with the one-time code. */
@@ -129,7 +137,14 @@ export interface Session {
   /** Server truth for a quote's payment (status + attempts); the return URL never decides. */
   loadPaymentStatus(quoteId: string): Promise<PaymentStatusReport | null>;
 
-  createIntervention(values: RequestValues): Promise<boolean>;
+  /** Creates the dossier, then uploads the given photos one by one (live only). */
+  createIntervention(values: RequestValues, photos?: File[]): Promise<boolean>;
+  /** Photos of the last created dossier still pending or failed; null when nothing is queued. */
+  uploads: UploadQueue | null;
+  /** Retries the failed/pending uploads of the queue without touching the dossier. */
+  retryUploads(): Promise<boolean>;
+  /** Drops the queue (files stay on the device; nothing is deleted on the server). */
+  dismissUploads(): void;
   sendMessage(interventionId: string, body: string): Promise<boolean>;
   submitReview(interventionId: string, values: { rating: number; body: string }): Promise<boolean>;
   createSite(values: { name: string; type: string; address: string; budget_cents: number; organization_id?: string }): Promise<boolean>;

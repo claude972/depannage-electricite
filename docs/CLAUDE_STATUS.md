@@ -54,7 +54,17 @@ Fichier de coordination émis par l’agent Claude pour le pilote (Codex). Le pi
 - **CL-UI-005** : copies utilisateur revues sur les 5 espaces (checkpoint 2).
 - **CL-UI-006** : guard de génération d’identité (`components/app/guard.ts`) utilisé par le contrôleur ; tests différés A→B.
 
-## Prochain livrable (checkpoint 3)
+## Checkpoint 3 — en cours (commits poussés au fil de l’eau)
+
+- **Guard de connexion** (UI-REV-001 / CL-UI-006) : `components/app/identity.ts` — adoption d’identité réconciliée avec l’utilisateur SDK vérifié et l’état déjà chargé par l’écouteur d’auth ; re-contrôle de propriété après chaque await ; tentative remplacée = aucune réinitialisation de la session plus récente ; déconnexion pendant la vérification (réponse périmée incluse) = tentative abandonnée. Tests `tests/ui/identity.test.ts` : événement avant promesse, promesse avant événement, A périmé après B, SIGNED_IN B pendant la vérification de A, déconnexion pendant vérification (réponse nulle et réponse périmée A), déconnexion pendant le chargement, chaîne de mutation périmée, brouillon conservé. Commits 75feaab → a472fc6 → 2e3dcf1 → 823b021.
+- **Revalidation** (UI-REV-002/003) : relecture workspace + données professionnelles au retour de focus/visibilité (live, 15 s) ; contexte organisation/site invalidé si absent du workspace rechargé ; 403/404 des lecteurs organisation, accès par site, professionnel, opérations et vue d’ensemble admin invalident le contexte ou le dossier ouvert ; `session.refreshedAt` consommé par Membres et accès par site (88562367, puis ce checkpoint).
+- **Photos de la demande (CLI-02)** : sélection dans le formulaire (JPEG/PNG/WebP, 4 Mo, 6 max, validation côté client identique au serveur) ; envoi **après** la création réussie du dossier, fichier par fichier, via le point d’entrée documents privés existant ; échec partiel conservé dans une file avec « Réessayer » sans recréer la demande ; panneau d’état dans le détail (particulier et entreprise) ; aucun envoi anonyme (brouillon public : photos non conservées, dit explicitement) ; démonstration : aucun envoi, dit explicitement.
+- **Accessibilité** (audit interne) : menus hors écran rendus `inert` quand fermés, arrière-plan `inert` quand ouverts, retour de focus (Échap, fermeture d’aide), suppression des liens d’évitement doublons, compteurs avec texte lecteur d’écran, cibles ≥ 44 px, libellés de cases « écriture » par site, zones `role="status"`.
+- **Entreprise** : validité d’invitation bornée 1–14 jours (serveur).
+- **En cours (agents internes, fichiers distincts)** : Super Admin — liste serveur paginée/recherche et détail d’ancien dossier selon `WEB_PWA_ADMIN_LISTS_CONTRACT.md` (d910eec ; backend d85da06 en revue) derrière détection d’indisponibilité ; artisan — densité M35 (lignes compactes, explications repliées dans « Base de calcul »).
+- Contrôles : typecheck OK, `tests/ui` 31/31 ; build complet confié au CI (disque local plein).
+
+## Prochain livrable (checkpoint 3 bis)
 
 Checkpoints 1 et 2 terminés. Checkpoint 3 : captures 360/1280 des vues Membres/accès par site et fiche admin artisan (dès espace disque), relecture accessibilité clavier des menus off-canvas, build complet, puis vérification de la preview combinée publiée par le pilote et revue croisée du SHA Codex intégré.
 

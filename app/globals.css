@@ -4615,3 +4615,69 @@ body {
   color: var(--blue);
   flex-shrink: 0;
 }
+.photo-list {
+  list-style: none;
+  margin: -8px 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.photo-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+.photo-list li > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.upload-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.upload-queue ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.upload-queue li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 13px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.upload-queue li[data-status="failed"] {
+  border-color: #f0c3bf;
+  background: var(--red-soft);
+}
+.upload-queue li[data-status="done"] {
+  border-color: #c5e5d0;
+  background: var(--green-soft);
+}
+.upload-queue li small {
+  display: block;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.upload-queue-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}

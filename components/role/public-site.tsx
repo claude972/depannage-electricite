@@ -1,7 +1,7 @@
 "use client";
 // Public site (mode "public"): landing, request draft, account entry, help and the honest
 // informational pages. Presentational only: every action goes through `session`.
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { PublicSession } from "../app/session-types";
 import type { Category, View } from "../app/types";
 import { Alerts, Brand, PageTitle, Unavailable } from "../app/ui";
@@ -122,13 +122,17 @@ const PENDING = "À renseigner par l’exploitant";
 export function PublicSite({ session }: { session: PublicSession }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const navId = useId();
+  const menuToggle = useRef<HTMLButtonElement>(null);
   const known = PUBLIC_VIEWS.includes(session.view);
   const view: View = known ? session.view : "home";
 
   useEffect(() => {
     if (!menuOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMenuOpen(false);
+      if (e.key === "Escape") {
+        setMenuOpen(false);
+        menuToggle.current?.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -202,6 +206,7 @@ export function PublicSite({ session }: { session: PublicSession }) {
               Se connecter
             </button>
             <button
+              ref={menuToggle}
               type="button"
               className={styles.menuButton}
               aria-expanded={menuOpen}

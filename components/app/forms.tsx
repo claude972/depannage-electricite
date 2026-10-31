@@ -2,7 +2,7 @@
 // Operational forms extracted from the original monolith; behaviour preserved, shared by the
 // role spaces. Styling classes live in app/globals.css.
 import { useEffect, useState, type FormEvent } from "react";
-import { api } from "./api";
+import { api, PHOTO_TYPES, validateUpload } from "./api";
 import { Icon } from "./icons";
 import { Empty, Field, ConfirmAction } from "./ui";
 import {
@@ -52,10 +52,28 @@ export function RequestForm({
   mode: string;
   busy: boolean;
   onBack: () => void;
-  onSubmit: (values: RequestValues) => Promise<void>;
+  onSubmit: (values: RequestValues, photos: File[]) => Promise<void>;
   onDemo: () => void;
 }) {
   const [step, setStep] = useState(1);
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [photoError, setPhotoError] = useState("");
+  function addPhotos(list: FileList | null) {
+    if (!list) return;
+    const next = [...photos];
+    const problems: string[] = [];
+    for (const file of Array.from(list)) {
+      if (next.length >= 6) {
+        problems.push("Six photos au maximum.");
+        break;
+      }
+      const invalid = validateUpload(file, PHOTO_TYPES);
+      if (invalid) problems.push(`${file.name} : ${invalid}`);
+      else if (!next.some((f) => f.name === file.name && f.size === file.size)) next.push(file);
+    }
+    setPhotos(next);
+    setPhotoError(problems.join(" "));
+  }
   const [values, setValues] = useState<RequestValues>(
     initialValues || {
       category: initialCategory,
@@ -76,7 +94,7 @@ export function RequestForm({
       return;
     }
     if (step < 3) setStep(step + 1);
-    else void onSubmit(values);
+    else void onSubmit(values, photos);
   }
   return (
     <div className="form-page">
@@ -142,6 +160,47 @@ export function RequestForm({
                 }
               />
             </Field>
+            <Field
+              label="Photos du problème (facultatif)"
+              hint={
+                mode === "live"
+                  ? "JPEG, PNG ou WebP, 4 Mo par photo, six au plus. Elles sont envoyées dans votre espace privé juste après l’enregistrement de la demande."
+                  : mode === "demo"
+                    ? "La démonstration n’envoie aucun fichier : la sélection sert seulement à visualiser l’étape."
+                    : "Les photos ne sont pas conservées avec le brouillon : vous pourrez les ajouter une fois connecté."
+              }
+              error={photoError || undefined}
+            >
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                onChange={(e) => {
+                  addPhotos(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+            </Field>
+            {photos.length > 0 && (
+              <ul className="photo-list" aria-label="Photos sélectionnées">
+                {photos.map((f, index) => (
+                  <li key={`${f.name}-${f.size}`}>
+                    <Icon name="camera" size={16} />
+                    <span>
+                      {f.name} · {Math.max(1, Math.round(f.size / 1024))} Ko
+                    </span>
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label={`Retirer ${f.name}`}
+                      onClick={() => setPhotos(photos.filter((_, j) => j !== index))}
+                    >
+                      <Icon name="close" size={15} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
             <div className="inline-note">
               <Icon name="shield" />
               <p>
@@ -272,6 +331,17 @@ export function RequestForm({
               </div>
             </div>
             <p>{values.description}</p>
+            {photos.length > 0 && (
+              <p className="form-note">
+                {photos.length} photo{photos.length > 1 ? "s" : ""} sélectionnée
+                {photos.length > 1 ? "s" : ""}
+                {mode === "live"
+                  ? ", envoyée(s) après l’enregistrement."
+                  : mode === "demo"
+                    ? " (non envoyée(s) en démonstration)."
+                    : " (à rajouter une fois connecté)."}
+              </p>
+            )}
             <div className="recap-address">
               <Icon name="location" />
               <span>

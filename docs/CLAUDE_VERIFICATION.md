@@ -60,6 +60,17 @@ Rapport d’implémentation et de vérification de l’agent Claude (branche `cl
 - Retour paiement : `paymentReturnMessage` (serveur d’abord) ; `parseApiBody` (200 non JSON = résultat incertain).
 - Contrôles : typecheck OK ; `tests/ui` 21/21 ; `next build` non relancé (volume plein, ENV-CL-001) ; captures des nouvelles vues reportées au retour d’espace disque.
 
+## Checkpoint 3 — guard de connexion, revalidation, photos (75feaab → 7661be1)
+
+| Sujet | Implémentation | Preuve |
+| --- | --- | --- |
+| Connexion A/B (UI-REV-001) | `components/app/identity.ts` : vérification SDK (`auth.getUser`), re-contrôle de propriété après chaque await, adoption uniquement si utilisateur SDK = utilisateur promis = utilisateur chargé (ou rien chargé et chaîne vivante) ; tentative remplacée → message explicite, aucune réinitialisation de la session plus récente | `tests/ui/identity.test.ts` (8 scénarios) + `tests/ui/guard.test.ts` |
+| Revalidation (UI-REV-002/003) | focus/visibilité → workspace (+ données pro) ; `validateContext` ; 403/404 → invalidation du contexte ou du dossier ; `refreshedAt` consommé par Membres et accès par site | `tests/ui/session.test.ts` (validateContext) |
+| Photos (CLI-02) | `RequestForm` (sélection validée), `createIntervention(values, photos)` : création puis `processUploadQueue` séquentielle ; `UploadQueuePanel` avec « Réessayer » ; aucune recréation du dossier, aucun envoi anonyme, démo sans envoi | `tests/ui/uploads.test.ts` (échec partiel puis relance du seul fichier en échec ; arrêt sur changement d’identité) ; `tests/ui/api.test.ts` |
+| Accessibilité | menus `inert`, retour de focus, compteurs lisibles, cibles 44 px, liens d’évitement uniques | audit interne, relecture ; vérification navigateur à faire sur la preview |
+
+Limites : aucune capture nouvelle (disque local plein) ; la course réelle entre onglets du SDK n’est pas observée en navigateur, les tests reproduisent les entrelacements de façon déterministe.
+
 ### Écarts, limites et suites
 - Aucune preview en ligne de ce frontend : le pilote déploie la branche d’intégration ; vérification mobile réelle, installation PWA, et retours Stripe restent à prouver en ligne.
 - Les contrats 006 (organisations) et 007 (performance/rendez-vous) sont consommés derrière une détection d’indisponibilité ; tant qu’ils ne sont pas intégrés, l’UI affiche un état indisponible honnête.
