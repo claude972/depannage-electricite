@@ -62,8 +62,9 @@ const bindPool = (pool) => ({ session: (l, u) => pool.session(l, u), freshSessio
  * `deps` (tests only; defaults are the real modules): loadCredentials, verifySha, loadPlaywright,
  * checkBuildProvenance, makeDb, makeAuth, launchBrowser, afterManifest({fixtures,intents,cohort}),
  * cleanupDeps (for --cleanup-manifest).
- * Exit precedence (documented, A8 finalize rules): cleanup incomplete/unknown (3) wins over anything
- * thrown afterwards; then preflight refusal (2); then interruption (130); then FAIL/FATAL (1).
+ * Exit precedence (documented): cleanup incomplete/unknown (3) wins over anything thrown afterwards;
+ * then preflight refusal (2); then a clean interruption (130, signal handlers); then FAIL/FATAL (1) —
+ * a crash with a COMPLETE cleanup is FATAL ⇒ 1.
  */
 export async function main(argv, deps = {}) {
   const { options, errors } = parseArgs(argv, process.env);
@@ -279,9 +280,10 @@ export async function main(argv, deps = {}) {
       process.stderr.write(`refused: ${redactor.redactString(error.message)}\n`);
       return 2;
     }
+    // DL-QA-806-003: a crash (cleanup complete, or before any fixture) is FATAL ⇒ 1, never 2.
     const info = redactor.redactError(error);
     process.stderr.write(`fatal: ${info.name}: ${info.message}\n`);
-    return 2;
+    return 1;
   }
 }
 

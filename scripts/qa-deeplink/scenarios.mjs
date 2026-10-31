@@ -12,7 +12,7 @@ import { assertUnknownIs404 } from "../qa-tracking/lib/preflight.mjs";
 import { UI, VIEWS, SHOW_TIMEOUT_MS, QUIET_WINDOW_MS, REVALIDATE_GUARD_MS, QUIET_MS, GATE_TIMEOUT_MS } from "./lib/constants.mjs";
 import { createRealtimeBlock, installRealtimeBlock } from "./lib/realtime-block.mjs";
 import { observeDeeplinkNetwork } from "./lib/observe.mjs";
-import { installProbe, resetSeen, leakFlags } from "./lib/probe.mjs";
+import { installProbe, resetSeen, leakFlags, armLeakLatch, readLeakLatch } from "./lib/probe.mjs";
 import { openCleanWindow, closeWindow, assertWindow, blocked } from "./lib/window.mjs";
 
 export const PREFLIGHT_SESSION = "dl-preflight";
@@ -263,11 +263,21 @@ export const SCENARIO_RUNNERS = {
         await expectVisible(h.page.getByText(v.title, { exact: true }), `${v.label}: « ${v.title} »`, { timeout: limits(ctx).showMs });
         if (v.text) await expectVisible(h.page.getByText(v.text, { exact: true }), `${v.label}: wording`, { timeout: limits(ctx).showMs });
       };
-      await measure(ctx, h, `D3 ${v.label} foreign id`, 1, async () => {
+      // DL-QA-806-001: a latching boolean observer is armed BEFORE each navigation and read after
+      // EVERY window, so a transient appearance (shown then removed) is a FAIL too.
+      const latched = async (what, expected, action) => {
+        if (!(await armLeakLatch(h.page, [ctx.canary, v.id]))) throw blocked(`${what}: leak observer not armed`);
+        await measure(ctx, h, what, expected, action);
+        const flags = await readLeakLatch(h.page);
+        if (!flags) throw blocked(`${what}: leak observer lost (document changed)`);
+        if (flags[0]) throw new AppDefect(`${what}: foreign canary appeared in the DOM (text/data/aria), even transiently`);
+        if (flags[1]) throw new AppDefect(`${what}: foreign dossier id appeared in the DOM (text/data/aria), even transiently`);
+      };
+      await latched(`D3 ${v.label} foreign id`, 1, async () => {
         await goHash(h.page, v.hash);
         await expectNotFound();
       });
-      await measure(ctx, h, `D3 ${v.label} same id again`, 0, async () => {
+      await latched(`D3 ${v.label} same id again`, 0, async () => {
         await goHash(h.page, VIEWS.requests);
         await goHash(h.page, v.hash);
         await expectNotFound();

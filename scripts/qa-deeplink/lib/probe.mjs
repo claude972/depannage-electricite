@@ -58,3 +58,43 @@ const LEAK = (needles) => `(() => {
   return needles.map((n) => blob.indexOf(n) !== -1);
 })()`;
 export const leakFlags = (page, needles) => page.evaluate(LEAK(needles));
+
+/**
+ * DL-QA-806-001: LATCHING leak observer, armed BEFORE the navigation of each window. Any appearance
+ * of a needle — even transient (shown then removed) — in DOM text or in a data-* / aria-* attribute
+ * sets a boolean that stays true. Only booleans are kept (needles live in page memory only; the
+ * harness never persists them). Re-arming resets the latch.
+ */
+const ARM_LATCH = (needles) => `(() => {
+  const needles = ${JSON.stringify(needles)};
+  if (window.__qaDlLatch) window.__qaDlLatch.observer.disconnect();
+  const flags = needles.map(() => false);
+  const check = (s) => { if (!s) return; for (let i = 0; i < needles.length; i++) if (!flags[i] && s.indexOf(needles[i]) !== -1) flags[i] = true; };
+  const attrs = (el) => { if (!el || !el.attributes) return; for (const a of el.attributes) if (a.name.startsWith("data-") || a.name.startsWith("aria-")) check(a.value); };
+  const scan = (node) => {
+    if (!node) return;
+    if (node.nodeType === 3) return check(node.data);
+    if (node.nodeType !== 1 || node.nodeName === "SCRIPT" || node.nodeName === "STYLE") return;
+    check(node.textContent);
+    attrs(node);
+    for (const el of node.querySelectorAll("*")) attrs(el);
+  };
+  scan(document.body);
+  const observer = new MutationObserver((records) => {
+    for (const r of records) {
+      if (r.type === "characterData") check(r.target.data);
+      else if (r.type === "attributes") { if (r.attributeName && (r.attributeName.startsWith("data-") || r.attributeName.startsWith("aria-"))) check(r.target.getAttribute(r.attributeName)); }
+      else for (const n of r.addedNodes) scan(n);
+    }
+  });
+  observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true });
+  Object.defineProperty(window, "__qaDlLatch", { value: { flags, observer }, configurable: true, enumerable: false });
+  return true;
+})()`;
+const READ_LATCH = `(() => { const l = window.__qaDlLatch; return l ? l.flags.slice() : null; })()`;
+export const armLeakLatch = (page, needles) => page.evaluate(ARM_LATCH(needles));
+/** Reads the latch after one task tick, so pending mutation records have been delivered. */
+export async function readLeakLatch(page) {
+  await page.evaluate("new Promise((r) => setTimeout(r, 0))");
+  return page.evaluate(READ_LATCH);
+}

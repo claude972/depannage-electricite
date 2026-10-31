@@ -18,6 +18,7 @@ import { main } from "../scripts/qa-deeplink/run.mjs";
 import { REVALIDATE_GUARD_MS, REALTIME_CLOSE } from "../scripts/qa-deeplink/lib/constants.mjs";
 import { createAuthAdmin } from "../scripts/qa-tracking/lib/auth-admin.mjs";
 import { AppDefect } from "../scripts/qa/lib/report.mjs";
+import { PreflightError } from "../scripts/qa/lib/config.mjs";
 
 const PROJECT = "abcdefghijklmnopqrst";
 const SHA = "6901e2a0000000000000000000000000000000aa".slice(0, 40);
@@ -232,12 +233,17 @@ test("main: indirect collection error ⇒ cleanup INCOMPLETE ⇒ exit 3 (never �
   assert.match(cleanup.error, /indirect collection failed/);
 });
 
-test("main: exit precedence — a throw after an INCOMPLETE cleanup keeps 3; with a complete cleanup the throw gives 2", async () => {
+test("main: exit codes — a throw after an INCOMPLETE cleanup keeps 3; a crash with a COMPLETE cleanup is FATAL 1; a PreflightError is 2", async () => {
   const { credentials } = cleanupDir({ manifest: goodManifest() });
   const out1 = path.join(tmp(), "out");
   assert.equal(await main(runArgs(out1, credentials), runDeps({ browserThrows: true, selectThrows: true }).deps), 3);
   assert.ok(existsSync(path.join(out1, "cleanup.json")));
   const out2 = path.join(tmp(), "out");
-  assert.equal(await main(runArgs(out2, credentials), runDeps({ browserThrows: true }).deps), 2);
+  assert.equal(await main(runArgs(out2, credentials), runDeps({ browserThrows: true }).deps), 1, "crash + complete cleanup ⇒ FATAL 1");
   assert.equal(JSON.parse(readFileSync(path.join(out2, "cleanup.json"), "utf8")).ok, true);
+  const refused = runDeps();
+  refused.deps.checkBuildProvenance = async () => { throw new PreflightError("BLOCKED deployment provenance SERVED_BUILD"); };
+  const out3 = path.join(tmp(), "out");
+  assert.equal(await main(runArgs(out3, credentials), refused.deps), 2, "preflight refusal ⇒ 2");
+  assert.equal(existsSync(out3), false, "refused before --out is created");
 });

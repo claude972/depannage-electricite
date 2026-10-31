@@ -62,7 +62,15 @@ function render() {
     if (!mem) { if (VARIANT === "eagerNotFound") { m.innerHTML = notFound(); setTimeout(() => attempt(id), 30); return; } return attempt(id); }
     if (mem === "pending") { m.innerHTML = '<p role="status">Recherche du dossier…</p>'; return; }
     if (mem === "failed") { m.innerHTML = '<div class="unavailable" role="note" data-blocker="deeplink:error"><strong>Dossier momentanément indisponible</strong><p>Ce dossier n’a pas pu être vérifié.</p><button type="button">Réessayer</button></div>'; m.querySelector("button").onclick = () => attempt(id); return; }
-    m.innerHTML = notFound(); return;
+    m.innerHTML = notFound();
+    if (VARIANT.startsWith("flash")) { // transient leak of the foreign id, removed after 50 ms
+      const el = document.createElement("span");
+      if (VARIANT === "flashText") el.textContent = id;
+      if (VARIANT === "flashData") el.setAttribute("data-ref", id);
+      if (VARIANT === "flashAria") el.setAttribute("aria-label", "dossier " + id);
+      m.appendChild(el); setTimeout(() => el.remove(), 50);
+    }
+    return;
   }
   m.innerHTML = "<h1>Mes demandes</h1><ul>" + st.data.interventions.map((i) => "<li>" + i.id.slice(0, 8) + "</li>").join("") + "</ul>";
 }
@@ -173,4 +181,12 @@ test("real Chromium — broken apps are FAIL, never PASS: eager « introuvable �
   const cleared = await runScenarios("clearOnFailure", ["D2"]);
   assert.equal(cleared.D2.status, "FAIL", JSON.stringify(cleared.D2));
   assert.match(cleared.D2.error, /witness missing|data cleared/);
+});
+
+test("real Chromium — DL-QA-806-001: a TRANSIENT foreign-id leak (text, data-*, aria-*; removed after 50 ms) is FAIL, never PASS", { skip: SKIP, timeout: 240000 }, async () => {
+  for (const variant of ["flashText", "flashData", "flashAria"]) {
+    const r = await runScenarios(variant, ["D3"]);
+    assert.equal(r.D3.status, "FAIL", `${variant}: ${JSON.stringify(r.D3)}`);
+    assert.match(r.D3.error, /foreign dossier id appeared in the DOM .*even transiently/, variant);
+  }
 });
