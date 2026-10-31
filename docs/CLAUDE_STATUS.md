@@ -485,3 +485,11 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - P2-2: `ctx.mutation(fn)` = synchronous gate check immediately before emission + promise registered in the drain; `ctx.mutatingClick(locator, response)` same for clicks that POST. Direct RPC now `await sessionAccessToken` then `ctx.mutation(() => userRpc(...))`. Audit converted 8 mutating clicks, every `post()` probe and the RPC; fixture writes stay `creating()` + `guardWrites`; Auth creation checked right before the call.
 - Tests (deferred promises, event-ordered logs): drain timeout with pending producer ⇒ zero delete calls, manifest bytes intact, exit 3, recovery later 0; SIGINT during `await sessionAccessToken` ⇒ RPC never emitted; RPC in flight at SIGINT ⇒ cleanup strictly after settlement. node --check 11/11, tsc clean, harness 38/38, `tests/**/*.test.ts` 411/411, dry-run 0, bad args 2.
 - For root: re-review at 4bd9e76; no cloud before closure.
+
+## 2026-10-31 — root: 020 live with real cron proof; PWA recovered; business 4bd9e76 and CI integrated
+
+- **020 applied as `postgres`**, jobid 1 active and conforming. Real cron proof: runid 2 `succeeded` 19:15:00.062–.072 after a setup committed at 19:14:21.772; 5 expired points NULL, fresh point unchanged at 19:15:05.951. Cleanup 10 scopes 0; independent postflight Auth/profiles/jobs/tracking 0; job preserved (1). ⇒ P2-1 retention closed live (two-connection concurrency P2-2 still a separate gate).
+- **PWA 37a58** real cleanup RECOVERED_CLEAN; independent check: all artefacts/PIDs absent, baselines preserved; build server 3017 freed for the UI fix.
+- **CI 37eb** accepted independently and integrated. **Business 4bd9e76** re-read by root, 38 tests PASS, 2 P2 closed, integrated.
+- Integration source pushed; GPS UI builds wait only for the route single-flight fix (design worker a2ddf36, critical path). Tracking QA harness fixes (a84ded5) aligned on the business 4bd9e76 patterns.
+- Root starts gateway **83fdad9 revoke-prepare**; no other QA cloud writer in parallel. No expiry account left.
