@@ -33,3 +33,20 @@ Ce journal ne constitue pas une revue passée ; aucune affectation terminée à 
 - checks: supabase projects list ; vercel env ls
 - result: aucune base dédiée identifiée, aucune variable applicative Vercel ; projet site électricité préservé sans mutation
 - next action: tentative autorisée de création d’une base dédiée, sans toucher une autre base ; résultat à consigner
+
+## CLI-003 — Contrats et statut transmis à Claude
+- timestamp: 2026-10-30T21:42:51-04:00 (America/Martinique)
+- acting agent: codex
+- target session: b4b555f0-67e3-4f63-9671-fc3c14f9e67c
+- mission/branch: WEB-PWA-20261030 ; claude/web-pwa-ui
+- action: contrôle session busy/working ; attach CLI officiel et message de pilotage dans même session (pas de worker dupliqué) : contrat 08c10c5, propriété PWA/installation, demande premier checkpoint
+- observed result: Claude annonce lecture mission/corrections et exécute les lectures ; message envoyé dans la session active ; acceptation finale à vérifier via status
+- next action: lire CLAUDE_STATUS et révision frontend ; poursuivre backend/PWA
+
+## ENV-002 — Création dédiée bloquée
+- timestamp: 2026-10-30T21:42:51-04:00 (America/Martinique)
+- actor: codex
+- action: supabase projects create depannage-web-pwa, région eu-west-3, taille micro, organisation existante ; secret généré stocké hors dépôt sans affichage
+- result: refus fournisseur pour factures impayées ; aucune base dédiée créée, aucune autre base modifiée
+- consequence: Auth/Storage/RLS/Stripe intégrés ne peuvent pas être déclarés vérifiés ; développement/test isolé et previews continuent
+- next action: signaler blocage concret au propriétaire sans arrêter les lots indépendants ; ne pas créer ailleurs pour contourner la restriction
