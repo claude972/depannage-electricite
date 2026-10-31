@@ -276,3 +276,52 @@ Repro tests (offline, injected Auth/DB):
 - interruption between recovery and DELETE ⇒ UID on disk, resumed by `--cleanup-manifest`.
 
 Code only after ROOT GO on A2. If B is chosen, B1 (tracking extraction) comes first, as a separate SHA reviewed before any deep-link code.
+
+## Amendment A3 (ROOT counter-review of 914cfae) — WS proof, passive focus gate, option B chosen
+
+### P2 WS — proof on the handler side; the page-side close is optional
+
+ROOT's local fact (Playwright 1.64): for a routed socket that never reaches the server, the handler sees `hits 1` and `closePromise` resolved, with `upgrades 0`, native close 4000 and 0 frames. But the page receives NO `websocket` event (`pageWebSockets 0`, `pageCloses 0`). A2 §P2-1 is corrected as follows.
+- **Required proof, per page claiming « Realtime blocked »:**
+  1. `realtime_hits ≥ 1` on the exact path and origin, before the measured navigation;
+  2. `await ws.close({ code: 4000, reason: "qa-realtime-blocked" })` RESOLVED (`close_resolved` count = hits);
+  3. `connectToServer()` NEVER called for that path (`connect_calls_realtime = 0`, counted by the handler itself);
+  4. no handler error.
+- **Page-side observation is OPTIONAL.** If the API emits a page `websocket` event for that URL, its close and frames are recorded and must agree (code 4000, 0 frames). Its absence is NOT a failure and is never required. No close code is asserted on the page side when no event exists.
+- **Native proof of code 4000 and 0 upgrades:** only by the LOCAL control test against a real local WS server.
+  - Without the handler: 1 upgrade, frames received.
+  - With the same `REALTIME_PATTERN` and handler: 1 hit, close resolved, 0 upgrades, the client receives close 4000, 0 frames.
+  - Plus the negative cases: socket opened before installation, other path left alone, handler error ⇒ BLOCKED.
+- **BLOCKED** (never PASS or FAIL): 0 hits, wrong path or origin, close not resolved, `connectToServer` called on the Realtime path, handler error, or a server frame observed (if visible).
+
+### P2 focus — passive gate ≥ 15 s since the last focus/visibility event
+
+The 1 s quiet of A2 is not enough. Repro: last request ends at t0, a focus at t7, the 15 s revalidation timer fires at t15, and a window t8..t18 gets a stray request. Replaced by a **bounded passive gate** before each window. The window opens only when ALL of these hold at the same instant:
+- (a) no `GET /api/workspace` in flight;
+- (b) ≥ 1 s of quiet on `/api/workspace`;
+- (c) ≥ `REVALIDATE_GUARD_MS = 15 000 + 1 000` ms since the LAST `focus`, `blur` or `visibilitychange` event recorded by the passive in-page listener (installed with the doc marker, BEFORE login). If no such event happened since the page was created, the reference point is page creation.
+
+Rules:
+- Gate timeout: 45 s ⇒ **BLOCKED** (« revalidation gate not reached »).
+- After the window: if a focus/visibility event, or a `/api/workspace` request not attributed to the action, appears in the window, the window is **BLOCKED**. No assertion is made on an unknown attribution, neither FAIL nor PASS.
+- The scenarios do not bring the page to the foreground during a window and use only one tab per context. `bringToFront` happens only BEFORE the gate, and so restarts it.
+- No test clock is instrumented in the app (not needed; the option is set aside). The offline tests reproduce ROOT's case with a local server and a deterministic page timer: last request at t0, focus at t7, timer at t15. The window opened by the gate does not start before t23, and the case where the stray request lands in a window is BLOCKED.
+
+### Option B CHOSEN by ROOT — B1 ownership and limits
+
+- **B1, separate SHA, reviewed BEFORE any B2 or deep-link code.** Owner: Claude, the tracking worker; A10 is frozen. Branch `claude/web-qa-tracking`. **Reserved files, and ONLY these:**
+  - `scripts/qa-tracking/run.mjs`: removal of the `cleanupWithProof` body and import/re-export from the new module, with the tracking parameters;
+  - NEW `scripts/qa-tracking/lib/cleanup-proof.mjs`: `cleanupWithProof({ db, auth, manifest, intents, runId, log, persist, runCleanupFn, settleSideEffects })`, with the same body as today. `runCleanupFn` is required (no default). `settleSideEffects` defaults to a no-op; tracking passes its provider-lease settlement;
+  - the cleanup tests: `tests/qa-tracking-auth.test.ts` and `tests/qa-tracking.test.ts` for the cleanup parts, plus a new `tests/qa-tracking-cleanup-proof.test.ts` (adapter);
+  - `docs/CLAUDE_TRACKING_QA_CONTRACT.md`: a « B1 — extraction of cleanupWithProof » note.
+- **No other shared file** is touched: not `scripts/qa/**`, not the other `scripts/qa-tracking/**` files, not `scripts/qa-business/**`.
+- **Behavioural invariance:** same order (reconcileOpen ⇒ persist ⇒ recovery by canonical e-mail ⇒ persist ⇒ ownership proof ⇒ `cleanup_attempt` persisted BEFORE DELETE ⇒ cleanup ⇒ side-effect settlement ⇒ result persisted). Same manifest fields, same verdicts and exit codes.
+- **B1 proofs:** the existing tracking tests (57) pass unchanged in their assertions, and the adapter test checks:
+  - `runCleanupFn` is required;
+  - `settleSideEffects` is called only after the lease check;
+  - a no-op hook leaves the provider intents open;
+  - persist happens before the first DELETE in both modes (normal and `--cleanup-manifest`).
+- **Start of B1:** only after ROOT's mission entry.
+- **B2**, on `claude/web-qa-deeplink` after review of B1, imports `cleanupWithProof` and `TrackingFixtures` READ-ONLY, as in A2 §P2-4.
+
+Still no global code GO: B1 waits for ROOT's mission entry, and the deep-link code waits for the GO on A3 and the review of B1.
