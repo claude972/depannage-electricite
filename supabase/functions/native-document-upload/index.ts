@@ -5,7 +5,6 @@ import { DOCUMENT_BUCKET } from "../_shared/document-policy.ts";
 import {
   handleNativeDocumentUpload,
   jsonResponse,
-  type DocumentRow,
   type GatewayDeps,
 } from "./handler.ts";
 
@@ -84,13 +83,14 @@ function buildDeps(url: string, anon: string, server: string): GatewayDeps {
     async findDocument(id) {
       const { data, error } = await admin
         .from("documents")
-        .select("id,name,mime_type,created_at")
+        .select("id,intervention_id,owner_id,name,path,mime_type,created_at")
         .eq("id", id)
         .maybeSingle();
       // Propagate the lookup error: a failed readback is "unknown", not "absent".
-      return { row: (data as DocumentRow | null) ?? null, error };
+      return { row: data ?? null, error };
     },
     randomUUID: () => crypto.randomUUID(),
+    log: (message, context) => console.error(message, context),
   };
 }
 

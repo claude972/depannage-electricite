@@ -3,6 +3,7 @@ import { z } from "zod";
 import { authenticatedClient, apiError, ApiError, dbError } from "@/lib/supabase/server";
 import { uuid, validated } from "@/lib/supabase/validation";
 import { assertOrigin } from "@/lib/supabase/server";
+import { supportOperatorPermissions } from "@/lib/features/support/permissions";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 const privateHeaders = { "Cache-Control": "private, no-store" };
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
     const limitText = params.get("limit") ?? "25"; if (!/^(?:[1-9]|[1-9][0-9]|100)$/.test(limitText)) invalid(); const limit = Number(limitText);
     const scope = params.get("scope") ?? (actor.data?.role === "admin" ? "all" : "mine");
     if (scope !== "mine" && scope !== "all") invalid();
-    if (scope === "all" && actor.data?.role !== "admin") throw new ApiError(403, "La liste globale est réservée à l’administration.");
+    if (scope === "all" && !(await supportOperatorPermissions(db)).can_read_all) throw new ApiError(403, "Vous n’avez pas accès à la liste globale de l’assistance.");
     const statusFilter = params.get("status"), intervention = params.get("intervention_id");
     if ((statusFilter !== null && !status.safeParse(statusFilter).success) || (intervention !== null && !uuid.safeParse(intervention).success)) invalid();
     const q = params.get("q")?.normalize("NFKC").replace(/\s+/gu, " ").trim() || null;

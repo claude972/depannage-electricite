@@ -16,6 +16,44 @@ export type DocumentRow = {
   mime_type: string;
   created_at: string;
 };
+// Full public.documents row returned by finalize_document_upload and by the readback.
+export type FinalizedRow = DocumentRow & {
+  path: string;
+  owner_id: string;
+  intervention_id: string | null;
+};
+export type ExpectedRow = {
+  id: string;
+  path: string;
+  ownerId: string;
+  name: string;
+  mime: string;
+  interventionId: string | null;
+};
+// A 201 is only answered for a row that is exactly the one this attempt asked for.
+// Anything else ({} , [], another id/path, missing fields) is an uncertain outcome.
+export function validateFinalizedRow(
+  value: unknown,
+  expected: ExpectedRow,
+): FinalizedRow | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  if (row.id !== expected.id || row.path !== expected.path) return null;
+  if (row.owner_id !== expected.ownerId) return null;
+  if (row.name !== expected.name || row.mime_type !== expected.mime) return null;
+  if ((row.intervention_id ?? null) !== expected.interventionId) return null;
+  if (typeof row.created_at !== "string" || row.created_at.length === 0)
+    return null;
+  return {
+    id: expected.id,
+    path: expected.path,
+    owner_id: expected.ownerId,
+    name: expected.name,
+    mime_type: expected.mime,
+    intervention_id: expected.interventionId,
+    created_at: row.created_at,
+  };
+}
 export interface GatewayDeps {
   // Verifies the access token against the Auth server; null when refused.
   authenticate(token: string): Promise<{ id: string } | null>;
@@ -40,8 +78,10 @@ export interface GatewayDeps {
   // Server-side readback of the metadata row, used only to report a success whose
   // RPC response was lost. `error` set means the lookup itself failed. A "no row"
   // answer never proves a rollback (a transport-failed call may still commit).
-  findDocument(id: string): Promise<{ row: DocumentRow | null; error: DbFailure }>;
+  findDocument(id: string): Promise<{ row: unknown; error: DbFailure }>;
   randomUUID(): string;
+  // Operational log for unexpected shapes; receives the attempt id only, never a path or user.
+  log?(message: string, context: { id: string }): void;
 }
 // SQL states raised inside finalize_document_upload: the transaction rolled back,
 // so the metadata row is known to be absent even without a readback.
@@ -214,29 +254,45 @@ export async function handleNativeDocumentUpload(
         "Le fichier n’a pas pu être enregistré. Réessayez.",
       );
     }
-    let finalized: RpcResult<DocumentRow>;
+    const expected: ExpectedRow = {
+      id,
+      path,
+      ownerId: user.id,
+      name: documentNameFor(file.name || ""),
+      mime: verdict.mime,
+      interventionId,
+    };
+    let finalized: RpcResult<unknown>;
     try {
-      finalized = await deps.rpc<DocumentRow>(token, "finalize_document_upload", {
+      finalized = await deps.rpc<unknown>(token, "finalize_document_upload", {
         p_id: id,
         p_path: path,
-        p_name: documentNameFor(file.name || ""),
-        p_mime: verdict.mime,
+        p_name: expected.name,
+        p_mime: expected.mime,
         p_intervention_id: interventionId,
       });
     } catch {
       finalized = { data: null, error: { code: "network" } };
     }
-    if (finalized.error || !finalized.data) {
+    if (!finalized.error && finalized.data) {
+      const confirmed = validateFinalizedRow(finalized.data, expected);
+      if (confirmed) return jsonResponse({ document: pick(confirmed) }, 201);
+      deps.log?.("finalize_document_upload returned an unexpected row shape", { id });
+    }
+    {
       // A lost response after commit must not orphan a referenced object.
-      let lookup: { row: DocumentRow | null; error: DbFailure };
+      let lookup: { row: unknown; error: DbFailure };
       try {
         lookup = await deps.findDocument(id);
       } catch {
         lookup = { row: null, error: { code: "network" } };
       }
       // The readback only confirms a success; it never decides a deletion.
-      if (lookup.row) return jsonResponse({ document: pick(lookup.row) }, 201);
-      if (isDefiniteRollback(finalized.error?.code)) {
+      if (lookup.row) {
+        const confirmed = validateFinalizedRow(lookup.row, expected);
+        if (confirmed) return jsonResponse({ document: pick(confirmed) }, 201);
+        deps.log?.("documents readback returned an unexpected row shape", { id });
+      } else if (isDefiniteRollback(finalized.error?.code)) {
         // The database answered with an error raised inside the function: rolled back.
         await compensate(deps, path);
         throw mapDbCode(finalized.error?.code);
@@ -246,7 +302,6 @@ export async function handleNativeDocumentUpload(
       // claim failure; the client must re-check the documents list.
       return jsonResponse({ error: UNCERTAIN_MESSAGE, uncertain: true }, 503);
     }
-    return jsonResponse({ document: pick(finalized.data) }, 201);
   } catch (error) {
     if (error instanceof GatewayError)
       return jsonResponse({ error: error.message }, error.status);

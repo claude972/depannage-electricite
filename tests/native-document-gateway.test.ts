@@ -6,7 +6,9 @@ import {
   handleNativeDocumentUpload,
   isDefiniteRollback,
   mapDbCode,
+  validateFinalizedRow,
   type DocumentRow,
+  type FinalizedRow,
   type GatewayDeps,
   type RpcResult,
 } from "../supabase/functions/native-document-upload/handler.ts";
@@ -16,14 +18,34 @@ const USER = "00000000-0000-4000-8000-000000000001";
 const OTHER = "00000000-0000-4000-8000-000000000002";
 const JOB = "00000000-0000-4000-8000-00000000aaaa";
 const NEW_ID = "11111111-1111-4111-8111-111111111111";
+const CREATED = "2026-10-31T06:00:00Z";
 const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-const row: DocumentRow = {
+// What the database returns for a personal JPEG named photo.jpg uploaded by USER.
+const personalRow: FinalizedRow = {
   id: NEW_ID,
+  path: `${USER}/${NEW_ID}`,
+  owner_id: USER,
   name: "photo.jpg",
   mime_type: "image/jpeg",
-  created_at: "2026-10-31T06:00:00Z",
+  intervention_id: null,
+  created_at: CREATED,
 };
+const publicRow: DocumentRow = { id: NEW_ID, name: "photo.jpg", mime_type: "image/jpeg", created_at: CREATED };
+type Args = Record<string, unknown> | undefined;
+// Echo the finalize arguments back as the committed row, like the SQL function does.
+function rowFor(args: Args): FinalizedRow {
+  const a = args ?? {};
+  return {
+    id: String(a.p_id),
+    path: String(a.p_path),
+    owner_id: USER,
+    name: String(a.p_name),
+    mime_type: String(a.p_mime),
+    intervention_id: (a.p_intervention_id as string | null) ?? null,
+    created_at: CREATED,
+  };
+}
 
 type Calls = {
   authenticated: string[];
@@ -32,22 +54,24 @@ type Calls = {
   put: { path: string; mime: string; size: number }[];
   removed: string[];
   found: string[];
+  logged: { message: string; context: { id: string } }[];
 };
+type RpcEntry = RpcResult<unknown> | ((args: Args) => RpcResult<unknown> | Promise<RpcResult<unknown>>);
 type Options = {
   user?: { id: string } | null;
   intervention?: { artisan_id: string | null } | null;
-  rpc?: Record<string, RpcResult<unknown> | (() => RpcResult<unknown> | Promise<RpcResult<unknown>>)>;
+  rpc?: Record<string, RpcEntry>;
   putError?: boolean | "throw";
-  existing?: DocumentRow | null;
+  existing?: unknown;
   findError?: boolean | "throw";
 };
 function fake(options: Options = {}): { deps: GatewayDeps; calls: Calls } {
-  const calls: Calls = { authenticated: [], selected: [], rpc: [], put: [], removed: [], found: [] };
-  const rpcTable: NonNullable<Options["rpc"]> = {
+  const calls: Calls = { authenticated: [], selected: [], rpc: [], put: [], removed: [], found: [], logged: [] };
+  const rpcTable: Record<string, RpcEntry> = {
     owns_intervention: { data: true, error: null },
     is_admin: { data: false, error: null },
     check_upload_limit: { data: null, error: null },
-    finalize_document_upload: { data: { ...row }, error: null },
+    finalize_document_upload: (args) => ({ data: rowFor(args), error: null }),
     ...options.rpc,
   };
   const deps: GatewayDeps = {
@@ -63,7 +87,7 @@ function fake(options: Options = {}): { deps: GatewayDeps; calls: Calls } {
       calls.rpc.push({ token, fn, args });
       const entry = rpcTable[fn];
       if (!entry) throw new Error(`unexpected rpc ${fn}`);
-      const result = typeof entry === "function" ? await entry() : entry;
+      const result = typeof entry === "function" ? await entry(args) : entry;
       return result as RpcResult<T>;
     },
     async putObject(path, bytes, mime) {
@@ -83,6 +107,9 @@ function fake(options: Options = {}): { deps: GatewayDeps; calls: Calls } {
       };
     },
     randomUUID: () => NEW_ID,
+    log(message, context) {
+      calls.logged.push({ message, context });
+    },
   };
   return { deps, calls };
 }
@@ -99,11 +126,12 @@ function upload(
   return new Request(URL_, { method: "POST", body: form, headers });
 }
 async function body(response: Response) {
-  return (await response.json()) as { error?: string; document?: DocumentRow };
+  return (await response.json()) as { error?: string; uncertain?: boolean; document?: DocumentRow };
 }
 function assertPrivate(response: Response) {
   assert.equal(response.headers.get("cache-control"), "private, no-store");
 }
+const ATTEMPT_PATH = `${USER}/${NEW_ID}`;
 
 test("OPTIONS preflight is answered without credentials; other verbs are refused", async () => {
   const { deps, calls } = fake();
@@ -224,29 +252,94 @@ test("success: quota, upload under the owner path, then finalization with the us
   );
   assert.equal(response.status, 201);
   assertPrivate(response);
-  assert.deepEqual((await body(response)).document, row);
-  assert.deepEqual(calls.put, [{ path: `${USER}/${NEW_ID}`, mime: "image/png", size: png.length }]);
+  assert.deepEqual((await body(response)).document, {
+    id: NEW_ID,
+    name: "x".repeat(160),
+    mime_type: "image/png",
+    created_at: CREATED,
+  });
+  assert.deepEqual(calls.put, [{ path: ATTEMPT_PATH, mime: "image/png", size: png.length }]);
   const order = calls.rpc.map((c) => c.fn);
   assert.ok(order.indexOf("check_upload_limit") < order.indexOf("finalize_document_upload"));
   const finalize = calls.rpc.find((c) => c.fn === "finalize_document_upload");
   assert.equal(finalize?.token, "token-user");
   assert.deepEqual(finalize?.args, {
     p_id: NEW_ID,
-    p_path: `${USER}/${NEW_ID}`,
+    p_path: ATTEMPT_PATH,
     p_name: "x".repeat(160),
     p_mime: "image/png",
     p_intervention_id: JOB,
   });
   assert.equal(calls.removed.length, 0);
   assert.equal(calls.found.length, 0);
+  assert.equal(calls.logged.length, 0);
 });
 test("a personal document (no dossier) needs no intervention checks", async () => {
   const { deps, calls } = fake();
   const response = await handleNativeDocumentUpload(upload(jpeg, "image/jpeg"), deps);
   assert.equal(response.status, 201);
+  assert.deepEqual((await body(response)).document, publicRow);
   assert.equal(calls.selected.length, 0);
   const finalize = calls.rpc.find((c) => c.fn === "finalize_document_upload");
   assert.equal(finalize?.args?.p_intervention_id, null);
+});
+// GW-REV-002: a truthy but malformed or mismatched row never yields 201.
+test("GW-REV-002: malformed or mismatched finalize rows are uncertain (503, object kept, logged without leaking)", async () => {
+  const cases: { label: string; data: unknown }[] = [
+    { label: "data null without error", data: null },
+    { label: "empty object", data: {} },
+    { label: "array", data: [] },
+    { label: "array with the right row", data: [personalRow] },
+    { label: "wrong id", data: { ...personalRow, id: "22222222-2222-4222-8222-222222222222" } },
+    { label: "wrong path", data: { ...personalRow, path: `${OTHER}/${NEW_ID}` } },
+    { label: "wrong owner", data: { ...personalRow, owner_id: OTHER } },
+    { label: "wrong name", data: { ...personalRow, name: "other.jpg" } },
+    { label: "wrong mime", data: { ...personalRow, mime_type: "image/png" } },
+    { label: "wrong intervention", data: { ...personalRow, intervention_id: JOB } },
+    { label: "missing created_at", data: { ...personalRow, created_at: undefined } },
+    { label: "created_at not a string", data: { ...personalRow, created_at: 1 } },
+    { label: "string", data: "ok" },
+  ];
+  for (const c of cases) {
+    const { deps, calls } = fake({ rpc: { finalize_document_upload: { data: c.data, error: null } } });
+    const response = await handleNativeDocumentUpload(upload(jpeg, "image/jpeg"), deps);
+    assert.equal(response.status, 503, c.label);
+    const parsed = await body(response);
+    assert.equal(parsed.error, UNCERTAIN_MESSAGE, c.label);
+    assert.equal(parsed.uncertain, true, c.label);
+    assert.equal(parsed.document, undefined, c.label);
+    assert.equal(calls.removed.length, 0, `${c.label}: object must be kept`);
+    assert.deepEqual(calls.found, [NEW_ID], `${c.label}: readback attempted`);
+    if (c.data !== null) {
+      assert.equal(calls.logged.length, 1, c.label);
+      assert.deepEqual(calls.logged[0].context, { id: NEW_ID });
+      assert.doesNotMatch(JSON.stringify(calls.logged), new RegExp(`${USER}|token-user|photo.jpg`), c.label);
+    } else assert.equal(calls.logged.length, 0, c.label);
+  }
+});
+test("GW-REV-002: validateFinalizedRow accepts exactly the expected row and drops extra fields", () => {
+  const expected = { id: NEW_ID, path: ATTEMPT_PATH, ownerId: USER, name: "photo.jpg", mime: "image/jpeg", interventionId: null };
+  assert.deepEqual(validateFinalizedRow({ ...personalRow, extra: "x" }, expected), personalRow);
+  assert.deepEqual(validateFinalizedRow({ ...personalRow, intervention_id: undefined }, expected), personalRow);
+  assert.equal(validateFinalizedRow(personalRow, { ...expected, interventionId: JOB }), null);
+  assert.equal(validateFinalizedRow(null, expected), null);
+  assert.equal(validateFinalizedRow([personalRow], expected), null);
+  assert.equal(validateFinalizedRow({ ...personalRow, created_at: "" }, expected), null);
+});
+test("GW-REV-002: a readback row that does not match the attempt is uncertain too", async () => {
+  const { deps, calls } = fake({
+    rpc: {
+      finalize_document_upload: () => {
+        throw new Error("fetch failed");
+      },
+    },
+    existing: { ...personalRow, path: `${OTHER}/${NEW_ID}` },
+  });
+  const response = await handleNativeDocumentUpload(upload(jpeg, "image/jpeg"), deps);
+  assert.equal(response.status, 503);
+  assert.equal((await body(response)).uncertain, true);
+  assert.equal(calls.removed.length, 0);
+  assert.equal(calls.logged.length, 1);
 });
 test("rights revoked between pre-check and finalization: 403, only this attempt's object removed", async () => {
   const { deps, calls } = fake({
@@ -255,20 +348,20 @@ test("rights revoked between pre-check and finalization: 403, only this attempt'
   });
   const response = await handleNativeDocumentUpload(upload(jpeg, "image/jpeg", { interventionId: JOB }), deps);
   assert.equal(response.status, 403);
-  assert.deepEqual(calls.removed, [`${USER}/${NEW_ID}`]);
+  assert.deepEqual(calls.removed, [ATTEMPT_PATH]);
   assert.deepEqual(calls.found, [NEW_ID]);
 });
 test("missing storage object at finalization is 404 with compensation", async () => {
   const { deps, calls } = fake({ rpc: { finalize_document_upload: { data: null, error: { code: "P0002" } } } });
   const response = await handleNativeDocumentUpload(upload(jpeg, "image/jpeg"), deps);
   assert.equal(response.status, 404);
-  assert.deepEqual(calls.removed, [`${USER}/${NEW_ID}`]);
+  assert.deepEqual(calls.removed, [ATTEMPT_PATH]);
 });
 test("duplicate id or path at finalization is 409 with compensation", async () => {
   const { deps, calls } = fake({ rpc: { finalize_document_upload: { data: null, error: { code: "23505" } } } });
   const response = await handleNativeDocumentUpload(upload(jpeg, "image/jpeg"), deps);
   assert.equal(response.status, 409);
-  assert.deepEqual(calls.removed, [`${USER}/${NEW_ID}`]);
+  assert.deepEqual(calls.removed, [ATTEMPT_PATH]);
 });
 test("a lost finalization response with committed metadata returns 201 and deletes nothing", async () => {
   const { deps, calls } = fake({
@@ -277,11 +370,11 @@ test("a lost finalization response with committed metadata returns 201 and delet
         throw new Error("fetch failed");
       },
     },
-    existing: row,
+    existing: personalRow,
   });
   const response = await handleNativeDocumentUpload(upload(jpeg, "image/jpeg"), deps);
   assert.equal(response.status, 201);
-  assert.deepEqual((await body(response)).document, row);
+  assert.deepEqual((await body(response)).document, publicRow);
   assert.equal(calls.removed.length, 0);
 });
 test("a transport-level finalization failure is 503 uncertain and the object is kept, even when the readback shows no row", async () => {
@@ -294,7 +387,7 @@ test("a transport-level finalization failure is 503 uncertain and the object is 
   });
   const response = await handleNativeDocumentUpload(upload(jpeg, "image/jpeg"), deps);
   assert.equal(response.status, 503);
-  const parsed = (await response.json()) as { error: string; uncertain?: boolean };
+  const parsed = await body(response);
   assert.equal(parsed.error, UNCERTAIN_MESSAGE);
   assert.equal(parsed.uncertain, true);
   // The transaction may still commit after the readback: a "no row" answer decides nothing.
@@ -303,11 +396,11 @@ test("a transport-level finalization failure is 503 uncertain and the object is 
 test("a definitive RPC error whose readback finds a committed row returns 201 and deletes nothing", async () => {
   const { deps, calls } = fake({
     rpc: { finalize_document_upload: { data: null, error: { code: "23505" } } },
-    existing: row,
+    existing: personalRow,
   });
   const response = await handleNativeDocumentUpload(upload(jpeg, "image/jpeg"), deps);
   assert.equal(response.status, 201);
-  assert.deepEqual((await body(response)).document, row);
+  assert.deepEqual((await body(response)).document, publicRow);
   assert.equal(calls.removed.length, 0);
 });
 test("compensation happens only for definitive database errors", async () => {
@@ -315,13 +408,13 @@ test("compensation happens only for definitive database errors", async () => {
     const { deps, calls } = fake({ rpc: { finalize_document_upload: { data: null, error: { code } } } });
     const response = await handleNativeDocumentUpload(upload(jpeg, "image/jpeg"), deps);
     assert.ok(response.status >= 400 && response.status !== 503, code);
-    assert.deepEqual(calls.removed, [`${USER}/${NEW_ID}`], code);
+    assert.deepEqual(calls.removed, [ATTEMPT_PATH], code);
   }
   for (const code of [undefined, "PGRST000", "PGRST504", "57014", "08006"]) {
     const { deps, calls } = fake({ rpc: { finalize_document_upload: { data: null, error: { code } } } });
     const response = await handleNativeDocumentUpload(upload(jpeg, "image/jpeg"), deps);
     assert.equal(response.status, 503, String(code));
-    assert.equal(((await response.json()) as { uncertain?: boolean }).uncertain, true, String(code));
+    assert.equal((await body(response)).uncertain, true, String(code));
     assert.equal(calls.removed.length, 0, String(code));
   }
 });
@@ -337,7 +430,7 @@ test("finalization outcome unknown AND readback unavailable: object kept, explic
     });
     const response = await handleNativeDocumentUpload(upload(jpeg, "image/jpeg", { interventionId: JOB }), deps);
     assert.equal(response.status, 503);
-    const parsed = (await response.json()) as { error: string; uncertain?: boolean };
+    const parsed = await body(response);
     assert.equal(parsed.error, UNCERTAIN_MESSAGE);
     assert.equal(parsed.uncertain, true);
     assert.doesNotMatch(JSON.stringify(parsed), new RegExp(`${USER}/|${NEW_ID}|PGRST|connection refused`));
@@ -352,7 +445,7 @@ test("an indeterminate finalization with a non-SQL error code is treated like a 
   });
   const response = await handleNativeDocumentUpload(upload(jpeg, "image/jpeg"), deps);
   assert.equal(response.status, 503);
-  assert.equal(((await response.json()) as { uncertain?: boolean }).uncertain, true);
+  assert.equal((await body(response)).uncertain, true);
   assert.equal(calls.removed.length, 0);
 });
 test("a definite SQL rollback (42501) is compensated even when the readback fails", async () => {
@@ -362,7 +455,7 @@ test("a definite SQL rollback (42501) is compensated even when the readback fail
   });
   const response = await handleNativeDocumentUpload(upload(jpeg, "image/jpeg", { interventionId: JOB }), deps);
   assert.equal(response.status, 403);
-  assert.deepEqual(calls.removed, [`${USER}/${NEW_ID}`]);
+  assert.deepEqual(calls.removed, [ATTEMPT_PATH]);
 });
 test("definite rollback states are exactly the ones finalize_document_upload raises", () => {
   for (const code of ["42501", "P0001", "P0002", "53300", "22023", "22P02", "23505", "23502", "23514"])
@@ -375,7 +468,7 @@ test("storage upload failure is 503, the attempt path is compensated and finaliz
     const { deps, calls } = fake({ putError });
     const response = await handleNativeDocumentUpload(upload(jpeg, "image/jpeg"), deps);
     assert.equal(response.status, 503);
-    assert.deepEqual(calls.removed, [`${USER}/${NEW_ID}`]);
+    assert.deepEqual(calls.removed, [ATTEMPT_PATH]);
     assert.equal(calls.rpc.filter((c) => c.fn === "finalize_document_upload").length, 0);
   }
 });
@@ -383,6 +476,7 @@ test("error bodies never expose storage paths, SQL codes or keys", async () => {
   const cases: Options[] = [
     { rpc: { finalize_document_upload: { data: null, error: { code: "42501", message: "permission denied for table documents" } } } },
     { rpc: { check_upload_limit: { data: null, error: { code: "53300", message: "Rate limit exceeded" } } } },
+    { rpc: { finalize_document_upload: { data: { ...personalRow, id: OTHER }, error: null } } },
     { putError: true },
     { user: null },
   ];
@@ -415,9 +509,10 @@ test("the Deno entry point keeps the server key in the environment only", async 
   assert.doesNotMatch(source, /Response\.json\([^)]*serverKey/);
   // Finalization runs under the user's token, never the server key.
   assert.match(source, /userClient\(token\)\.rpc\(fn, args\)/);
-  // The metadata readback propagates its error instead of reporting "absent".
+  // The metadata readback propagates its error and returns the full row for validation.
   const findDocument = /async findDocument\(id\) \{[\s\S]*?\n    \},/.exec(source)?.[0] ?? "";
   assert.match(findDocument, /const \{ data, error \} = await admin/);
+  assert.match(findDocument, /select\("id,intervention_id,owner_id,name,path,mime_type,created_at"\)/);
   assert.match(findDocument, /return \{ row: [^;]*, error \};/);
   const config = await readFile(new URL("../supabase/config.toml", import.meta.url), "utf8");
   assert.doesNotMatch(config, /verify_jwt\s*=\s*false/);
