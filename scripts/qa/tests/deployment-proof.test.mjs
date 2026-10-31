@@ -107,6 +107,16 @@ test("wrong, missing, malformed and ambiguous served identities are refused", ()
   }
 });
 
+test("owner parser dependency rejects a non-array push beside otherwise valid Flight", () => {
+  reject(() => verifyRemoteDeployment({ proof: receipt(),
+    html: flight() + '<script>self.__next_f.push(null)</script>', expected, nowMs: now }), "FLIGHT_INVALID");
+});
+
+test("owner parser dependency rejects a valid root payload with its closing push parenthesis removed", () => {
+  reject(() => verifyRemoteDeployment({ proof: receipt(),
+    html: flight().replace(")</script>", "</script>"), expected, nowMs: now }), "FLIGHT_INVALID");
+});
+
 test("private outside-Git receipt is read successfully", async (t) => {
   const { file } = await privateFile(t);
   assert.equal((await load(file)).gitSource.sha, expected.sha);

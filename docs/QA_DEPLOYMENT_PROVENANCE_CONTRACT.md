@@ -40,6 +40,8 @@ Commande : `node --test scripts/qa/tests/deployment-proof.test.mjs` ; syntaxe : 
 
 Le reçu hors Git est vérifié via son parent canonique et `git rev-parse --show-toplevel`, avec locale C et refus sur toute erreur autre que « not a git repository ». L’ouverture finale refuse les symlinks et les fichiers non réguliers ; une lecture bornée et les statistiques fd avant/après détectent les modifications observables. Cette protection ne prétend pas résister à un opérateur malveillant disposant du même UID. Le module refuse aussi les appels Flight syntaxiquement mal formés au lieu de les ignorer quand un autre appel serait valide.
 
+Reprise après revue : correction ENV17b2dd5 et dépendance propriétaire Business38702cf819dc16598f67b5c27693518f5cb17b8e intégrées (contrat propriétaire0f3b767 avant son code). Le module n’a ni réécrit ni dupliqué le parseur. Deux régressions ciblées vérifient maintenant le refus FLIGHT_INVALID pour un push(null) après une page valide et pour une parenthèse fermante absente. Les17tests du module passent, dont la capture privée réelle public4c sans SKIP sur ce poste ; cela ne constitue pas encore une exécution des runners distants ou une preuve métier.
+
 
 ## Revue et propriété ROOT
 
