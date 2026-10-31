@@ -508,3 +508,8 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - GPS UI 44e4dc3 reviewed independently by root and integrated: **`557d599f4fca4c7f549b8aa9ca354282dd8cb4d1`**. TypeScript PASS; npm test 507/510 — the 3 failures are business 4bd9e76 summary expectations (tests ~301/312/499) lacking `blocked: 0`, a field added by the shared report (95e…). Dispatched to b2b worker a96ae75: test expectations only on its branch, contracts/code/verdicts unchanged, verified on top of 557d599; short SHA needed before root push/build.
 - **Gateway 83fdad9 real race: root verdict FAIL (non-proof)** because the SQL observation returned 0 rows. Acquired: authenticated batch through the real RPC committed with 0 selected grants; upload 403, object absent, doc 0, discovery before response. **Not acquired: the blocking window was not observed** ⇒ no PASS race claimed. Cleanup 35 PASS; root independent postflight in progress.
 - Root prepares a second attempt with a NEW cohort after cleanup and a new process ordering to align cold latency without lengthening the 3 s pause; DB proof still mandatory. No new Edge hook harness.
+
+## 2026-10-31 — business test expectations fixed: f8e36d4 (direct child of 557d599)
+
+- `claude/web-qa-business` **`f8e36d4d45f9f4042aa0256bc065d9b9cf5f1114`**: fast-forwarded to integration 557d599 (already containing 4bd9e76), then ONE commit changing only `tests/qa-business.test.ts` — the three summary expectations (lines 306, 317, 501) now include `blocked: 0` exactly. No contract, harness code or verdict logic changed.
+- On top of 557d599: harness 38/38, `tests/**/*.test.ts` **510/510**, tsc clean. Fast-forwardable for root.
