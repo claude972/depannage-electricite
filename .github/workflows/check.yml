@@ -33,3 +33,8 @@ jobs:
         env:
           PGLITE_MODULE: ${{ runner.temp }}/courant-sql/node_modules/@electric-sql/pglite/dist/index.js
         run: node tests/sql-review.mjs
+
+      - name: Verify global artisan aggregates and appointment isolation (not live Supabase)
+        env:
+          PGLITE_MODULE: ${{ runner.temp }}/courant-sql/node_modules/@electric-sql/pglite/dist/index.js
+        run: node tests/sql-performance-review.mjs

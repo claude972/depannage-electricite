@@ -1,6 +1,6 @@
 # Artisan read-model contract — implementation checkpoint in progress
 
-Mission WEB-PWA-20261030, scoped Codex read models. This document defines the next additive contract before code. It is not yet active on preview or Supabase.
+Mission WEB-PWA-20261030, scoped Codex read models. Published before implementation in b1ba515; the additive code is now implemented and verified in the scoped checkpoint. It is not yet activated on Supabase or verified on a connected preview.
 
 ## GET /api/artisan/performance
 
