@@ -36,3 +36,22 @@ Les harnais qui en dépendent l'ont contourné localement : `scripts/qa-tracking
 ## 4. Non prouvé
 
 Durabilité réelle sur le système de fichiers de la machine du pilote (sémantique `fsync`/`rename` du volume), crash du noyau ou coupure d'alimentation, systèmes de fichiers réseau. Les tests prouvent l'ordre des opérations et la cohérence observable, pas la persistance matérielle.
+
+## 5. Amendement root (lecture de `2ec7a34`) — avant code
+
+1. **Aucun appel de méthode surchargeable dans le constructeur.** Le constructeur ne fait qu'assigner des champs. `init()` est **paresseux** : déclenché par le premier `creating()` ou `track()` (ou un `await fixtures.init()` explicite après construction), donc après que les sous-classes (`BusinessFixtures`) et les remplacements par instance (`makeManifestDurable` du tracking, qui affecte `fixtures.save` puis écrit immédiatement) sont en place.
+2. **Graphe d'appel sans interblocage ni récursion.**
+   - `init()` : mémorise une promesse unique `this.#ready` ; appelle **`this.save()`** une fois ; ne fait rien d'autre.
+   - `save()` (méthode de base) : met en file `#writeNow()` ; **n'attend jamais `init()`** et ne s'appelle pas lui-même.
+   - `#writeNow()` : instantané du manifeste + écriture atomique ; n'appelle ni `save`, ni `init`, ni la file.
+   - `track()` : `await this.init()` puis modification du manifeste puis `await this.save()`.
+   - `creating(fn)` : `gate.check()` puis `await this.init()` puis `fn()` (qui peut appeler `track`) — `init` déjà résolu ne rappelle pas `save`.
+   - La file est une chaîne `this.#queue = this.#queue.then(writeNow, writeNow)` : un maillon n'attend jamais la file elle-même ni `init` ; une erreur rejette la promesse de **ce** `save()` seulement et la chaîne continue.
+   - Un `save` remplacé par instance (tracking) est appelé par `init()`/`track()` à la place de la base ; la file de base n'est alors jamais utilisée (aucune double écriture).
+   - Si `init()` échoue, `#ready` est **réinitialisé** pour qu'une nouvelle tentative soit possible, et l'appelant (`creating`) refuse la mutation.
+3. **fsync du répertoire** : seules les erreurs documentées « non supporté » sont ignorées — `EINVAL`, `ENOTSUP`, `EOPNOTSUPP`, `EISDIR`, `EPERM` **à l'ouverture d'un répertoire sous Windows uniquement** (`process.platform === "win32"`), `EBADF` à l'ouverture sous Windows ; toute autre erreur (`EIO`, `ENOSPC`, `EDQUOT`, `EROFS`, `EPERM` hors Windows, `EACCES`…) **est propagée** et fait échouer la sauvegarde. Les erreurs `fsync` du **fichier** temporaire et de `rename` sont toujours propagées.
+4. **Tests sur le vrai code des autres harnais** : fusion **contrôlée** (merge seulement, aucune édition de leurs fichiers) de `origin/integration/web-pwa` @ `4c398e8` (contient `scripts/qa-business/**`) et de `claude/web-qa-tracking` @ `d3338e9` (contient `scripts/qa-tracking/**`) dans ma branche ; les tests importent `BusinessFixtures` et `makeManifestDurable` par chemins relatifs du dépôt, sans chemin machine ni copie.
+5. **Protocoles d'intention Auth Business/Tracking intacts** : aucun changement de `intend`/`resolveIntent`/`IntentLog` ; les tests vérifient que l'intention est sur disque avant l'appel Auth et qu'une création perdue reste `pending`/ouverte.
+6. **Hors périmètre déclaré** : la création Auth perdue pour les **fixtures génériques de base** (`createUser` de `scripts/qa`) n'est **pas** résolue automatiquement (pas d'intention pré-générée dans ce lot) ; un manifeste vide ou incomplet ne permet **jamais** d'affirmer un nettoyage complet. Le correctif garantit la présence et la cohérence du fichier, pas la récupération des identifiants dont la réponse est perdue.
+
+Aucun changement de `lifecycle.mjs`, du drain ni de `run.mjs`.
