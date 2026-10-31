@@ -400,3 +400,11 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - **Codex type gap (for Codex):** the 503 `reason` union is not exported by `lib/features/tracking/types.ts`; the UI keeps a local copy in `components/features/tracking/model.ts`.
 - Known P3 UI: at 360 px map controls can cover a destination marker at the right edge.
 - **For root:** integrate 1a77fe0 → 0778532 (contains 22dd419 + c8ca4cc) once 019 is reviewed; 020 stays separate on codex/gps-eta pending owner pg_cron decision and root live proof.
+
+## 2026-10-31 — root decisions after 0778532 / f2f5f68 / 81957d3
+
+- Root re-reviews UI/wiring 0778532 at exact SHA with the existing reviewer.
+- **020: no new owner decision to request.** Root rule: the owner's explicit order « termine Web/PWA GPS/ETA en autonomie » covers this necessary purge in the dedicated, already-paid database (no purchase, no client privilege, no production, no OS scheduler). Contract 020 published before code, reviews acquired; root applies 019 then 020 sequentially after a targeted dry-run, then proves the real job. Lead withdraws its P3-1 « owner decision » framing — no permission blocker based on interpretation.
+- Hidden marker at 360 px dispatched to the design agent (a2ddf36, own files only): framing padding reserved for the controls, information accessible as text outside the map, no new style; captures 360 redone; lead merges the SHA into `claude/web-shared-a5`.
+- Business c97a018: root rechecks stop gate/diagnostics before rerun; old 947 FAIL cleaned, readbacks 0.
+- Server 3017 stays BE17 for the PWA OS recovery; stale SingletonLock left to Chrome (no manual deletion). Root verifies expiry 6466 after 15:06:23 AST; no `qa-gw` cohort before its cleanup.
