@@ -605,3 +605,14 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - 10 offline test groups planned (valid, foreign states, file rules, expiry, base URL, exact-host injection, cross-origin fetch incl. redirects, route guard, secret capture, no-op without option).
 - Not proven by contract (root live): share mechanism and real cookie lifetime, protection on sub-resources, SW registration on a protected preview (reported as finding if it fails, never worked around).
 - Lead reread: consistent with root's proposal; no objection. **Awaiting root GO before code.**
+
+## 2026-10-31 — tracking QA durability P2 fixed: d3338e9
+
+- `claude/web-qa-tracking` **`d3338e9752952188ab043699c29c3731823321fe`** on 4b57800; own files only, shared `scripts/qa` untouched; no cloud, no credentials (root report file was not present yet; worked from the forwarded finding).
+- Reproduced on 4b57800 first: at the first DELETE `{memory:true, disk:false}`, still missing on disk after cleanup.
+- Fix: `cleanupWithProof` requires a durable `persist()` (normal mode atomic `fixtures.save()`; `--cleanup-manifest` atomic manifest rewrite) and refuses to run without it; writes before the first DELETE after unknown re-check, after each UID found by email (`recovered[]`), after the ownership proof (`cleanup_attempt` proven/unproven), and once more with the result; the manifest never drops an id.
+- Second defect found: a failed manifest write during recovery was swallowed by the email search `try/catch` and cleanup continued — now only the search failure is caught; a failed `persist()` stops cleanup before any deletion.
+- `cleanupOnly` exported with injectable DB/Auth clients for offline tests.
+- Tests (`tests/qa-tracking-auth.test.ts`, real code): normal mode disk check at first DELETE; `--cleanup-manifest` mode same (exit 3); interruption between recovery and DELETE ⇒ UID on disk, intent open, restart finds and deletes it after on-disk check, exit 3.
+- Checks: tsc 0; `tests/qa-tracking*` 33/33; `tests/*.test.ts` 194/194; `tests/ui` 115/115; shared QA 65/65; node --check; dry-run 0.
+- For root: recheck d3338e9; no cloud before closure.
