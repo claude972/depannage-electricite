@@ -362,11 +362,42 @@ function NewTicket({
 }) {
   // Clé d'idempotence générée une fois à l'ouverture du formulaire et conservée tant que la
   // création n'a pas abouti : une nouvelle tentative ne crée jamais de doublon.
-  const [requestId, setRequestId] = useState(uid);
+  // The idempotency key and the content it covers survive a remount (navigation, identity
+  // refresh): a retry after an uncertain outcome re-sends the SAME key with the SAME content,
+  // which the platform replays instead of duplicating. Cleared only after success.
+  const PENDING_KEY = `courant-support-pending-${session.profileId}`;
+  const [requestId, setRequestId] = useState<string>(() => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(PENDING_KEY) || "null") as { request_id?: string } | null;
+      if (saved?.request_id && /^[0-9a-f-]{36}$/i.test(saved.request_id)) return saved.request_id;
+    } catch {}
+    return uid();
+  });
   const presetKnown = Boolean(presetId) && interventions.some((i) => i.id === presetId);
-  const [subject, setSubject] = useState("");
-  const [body, setBody] = useState("");
-  const [interventionId, setInterventionId] = useState(presetKnown ? presetId : "");
+  const pendingSaved = (() => {
+    try {
+      return JSON.parse(sessionStorage.getItem(PENDING_KEY) || "null") as
+        | { request_id?: string; subject?: string; body?: string; intervention_id?: string }
+        | null;
+    } catch {
+      return null;
+    }
+  })();
+  const [subject, setSubject] = useState(pendingSaved?.subject ?? "");
+  const [body, setBody] = useState(pendingSaved?.body ?? "");
+  const [interventionId, setInterventionId] = useState(
+    pendingSaved?.intervention_id ?? (presetKnown ? presetId : ""),
+  );
+  // Keep key + content together: a replay must carry exactly the same content.
+  useEffect(() => {
+    try {
+      if (subject || body)
+        sessionStorage.setItem(
+          PENDING_KEY,
+          JSON.stringify({ request_id: requestId, subject, body, intervention_id: interventionId }),
+        );
+    } catch {}
+  }, [PENDING_KEY, requestId, subject, body, interventionId]);
   const [errors, setErrors] = useState<{ subject?: string; body?: string }>({});
   const [sending, setSending] = useState(false);
   const busy = session.busy || sending;
@@ -396,6 +427,9 @@ function NewTicket({
     setSending(false);
     // Échec : session.error l'affiche en haut ; le texte et la clé sont conservés pour réessayer.
     if (!result) return;
+    try {
+      sessionStorage.removeItem(PENDING_KEY);
+    } catch {}
     setRequestId(uid());
     session.go("support", result.ticket.id);
     session.setNotice(

@@ -57,7 +57,14 @@ import {
   quoteRef,
   shortId,
 } from "../app/format";
-import { enterpriseContext, pickQuote, quoteVersions } from "../app/session";
+import {
+  enterpriseAuthority,
+  enterpriseContext,
+  pickQuote,
+  quoteVersions,
+  type EnterpriseAuthority,
+  type MemberScope,
+} from "../app/session";
 import type { Session } from "../app/session-types";
 import { UploadQueuePanel } from "../app/upload-queue";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
@@ -237,6 +244,10 @@ type Ctx = {
   scope: Scope;
   /** Portées de sites des membres : undefined = chargement, null = indisponible. */
   siteAccess: SiteAccessOverview | null | undefined;
+  /** Pouvoir d’écriture : rôle de membre ET portée de sites du membre courant (jamais le rôle seul). */
+  authority: EnterpriseAuthority;
+  /** Au moins un site où une demande peut être créée (ou écriture sur toute l’organisation). */
+  canCreateRequest: boolean;
   reloadSiteAccess: () => void;
   go: (view: View, param?: string) => void;
 };
@@ -338,6 +349,20 @@ export function EnterpriseSpace({ session }: { session: Session }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx.organizationId, accessKey, session.refreshedAt]);
 
+  // Autorité d’écriture recalculée à chaque changement de rôle ou de portée (les deux sont relus
+  // sur session.refreshedAt). Portée inconnue (chargement/indisponible) → null : le helper ferme
+  // l’écriture pour owner excepté, les contrôles restent en lecture jusqu’au chargement.
+  const ownScope = useMemo<MemberScope | null>(() => {
+    const me = siteAccess?.members.find((m) => m.user_id === session.profileId);
+    return me ? { scope: me.scope, grants: me.grants } : null;
+  }, [siteAccess, session.profileId]);
+  const authority = useMemo(
+    () => enterpriseAuthority(session.membershipRole, ownScope),
+    [session.membershipRole, ownScope],
+  );
+  const canCreateRequest =
+    authority.canWriteOrganization || orgCtx.sites.some((s) => authority.canWriteSite(s.id));
+
   const closeMenu = () => {
     restoreMenuFocus.current = true;
     setMenuOpen(false);
@@ -359,6 +384,8 @@ export function EnterpriseSpace({ session }: { session: Session }) {
     orgInterventions: orgCtx.interventions,
     scope,
     siteAccess,
+    authority,
+    canCreateRequest,
     reloadSiteAccess: () => setAccessKey((k) => k + 1),
     go,
   };
@@ -646,6 +673,16 @@ function HelpContent({ onSupport }: { onSupport: () => void }) {
       </button>
     </div>
     </>
+  );
+}
+
+/** Remplace un contrôle d’écriture masqué : la raison est toujours affichée en texte. */
+function ReadOnlyNote({ reason, compact = false }: { reason: string | null; compact?: boolean }) {
+  return (
+    <p className={cx(styles.readOnly, compact && styles.readOnlyCompact)}>
+      <Icon name="lock" size={15} />
+      <span>{reason || "Vos droits ne permettent pas cette action sur ce périmètre."}</span>
+    </p>
   );
 }
 
@@ -1007,10 +1044,14 @@ function OverviewView({ c }: { c: Ctx }) {
         title="Tableau de bord"
         subtitle={`${c.organization?.name || "Organisation"} · ${LOADED_NOTE}`}
         action={
-          <button type="button" className="button primary" onClick={() => c.go("new")}>
-            <Icon name="plus" size={17} />
-            Nouvelle demande
-          </button>
+          c.canCreateRequest ? (
+            <button type="button" className="button primary" onClick={() => c.go("new")}>
+              <Icon name="plus" size={17} />
+              Nouvelle demande
+            </button>
+          ) : (
+            <ReadOnlyNote compact reason={c.authority.readOnlyReason} />
+          )
         }
       />
       <div className={cx("stats-strip", styles.kpis)}>
@@ -1029,9 +1070,11 @@ function OverviewView({ c }: { c: Ctx }) {
         c={c}
         title="Interventions récentes"
         emptyAction={
-          <button type="button" className="button primary" onClick={() => c.go("new")}>
-            Créer une demande
-          </button>
+          c.canCreateRequest ? (
+            <button type="button" className="button primary" onClick={() => c.go("new")}>
+              Créer une demande
+            </button>
+          ) : undefined
         }
       />
       <div className={styles.twoCol}>
@@ -1122,10 +1165,14 @@ function RequestsView({ c }: { c: Ctx }) {
         title="Interventions"
         subtitle={`Suivi des demandes de ${c.activeSite ? c.activeSite.name : "tous les sites"} · ${LOADED_NOTE}`}
         action={
-          <button type="button" className="button primary" onClick={() => c.go("new")}>
-            <Icon name="plus" size={17} />
-            Nouvelle demande
-          </button>
+          c.canCreateRequest ? (
+            <button type="button" className="button primary" onClick={() => c.go("new")}>
+              <Icon name="plus" size={17} />
+              Nouvelle demande
+            </button>
+          ) : (
+            <ReadOnlyNote compact reason={c.authority.readOnlyReason} />
+          )
         }
       />
       <InterventionsTable
@@ -1133,9 +1180,11 @@ function RequestsView({ c }: { c: Ctx }) {
         title="Toutes les interventions"
         exportable
         emptyAction={
-          <button type="button" className="button primary" onClick={() => c.go("new")}>
-            Créer une demande
-          </button>
+          c.canCreateRequest ? (
+            <button type="button" className="button primary" onClick={() => c.go("new")}>
+              Créer une demande
+            </button>
+          ) : undefined
         }
       />
     </>
@@ -1144,6 +1193,22 @@ function RequestsView({ c }: { c: Ctx }) {
 
 function NewRequestView({ c, siteId }: { c: Ctx; siteId: string }) {
   const site = c.orgSites.find((s) => s.id === siteId) || null;
+  const writableSites = c.orgSites.filter((s) => c.authority.canWriteSite(s.id));
+  const allowed = site ? c.authority.canWriteSite(site.id) : c.canCreateRequest;
+  if (!allowed)
+    return (
+      <>
+        <PageTitle
+          title="Nouvelle demande"
+          subtitle={site ? `Site ${site.name}` : c.organization?.name || "Organisation active"}
+          back={{ label: "Retour aux interventions", onClick: () => c.go("requests") }}
+        />
+        <Unavailable
+          title="Création de demande non autorisée sur ce périmètre"
+          reason={c.authority.readOnlyReason || "Vos droits ne permettent pas de créer une demande ici."}
+        />
+      </>
+    );
   return (
     <>
       {site && (
@@ -1167,7 +1232,7 @@ function NewRequestView({ c, siteId }: { c: Ctx; siteId: string }) {
               }
             : null
         }
-        sites={c.orgSites}
+        sites={writableSites}
         mode={c.session.mode}
         busy={c.session.busy}
         onBack={() => c.go("requests")}
@@ -1244,6 +1309,8 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
   const artisan = ops?.participants.find((p) => p.role === "artisan");
   const reachedIndex = TIMELINE.findIndex(([s]) => s === intervention.status);
   const isPayer = Boolean(intervention.client_id) && session.profileId === intervention.client_id;
+  // Actions opérationnelles (devis, créneau, annulation) : écriture sur le site du dossier.
+  const canOperate = c.authority.canWriteSite(intervention.site_id);
   const cat = category(intervention.category);
 
   async function reject(e: FormEvent<HTMLFormElement>) {
@@ -1414,7 +1481,7 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
                     </p>
                   </div>
                 )}
-                {canDecide && !blocking && (
+                {canDecide && !blocking && canOperate && (
                   <div className={styles.quoteActions}>
                     <ConfirmAction
                       label="Accepter le devis"
@@ -1458,6 +1525,9 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
                     reason="Le devis affiché doit être approuvé dans « Devis & approbations » avant de pouvoir être accepté."
                   />
                 )}
+                {canDecide && !blocking && !canOperate && (
+                  <ReadOnlyNote reason={c.authority.readOnlyReason} />
+                )}
               </>
             ) : (
               <p className={styles.muted}>Le devis de l’artisan apparaîtra ici dès son envoi.</p>
@@ -1467,6 +1537,7 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
           <AppointmentPanel
             c={c}
             intervention={intervention}
+            canWrite={canOperate}
             ops={ops}
             loading={opsLoading}
             onSaved={() => setReloadKey((k) => k + 1)}
@@ -1591,14 +1662,18 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
             <section className="panel" aria-labelledby="dossier-cancel">
               <h2 id="dossier-cancel">Annulation</h2>
               <p className={styles.note}>Possible tant que le devis n’est pas accepté.</p>
-              <ConfirmAction
-                label="Annuler la demande"
-                message="Annuler cette demande ? L’artisan éventuellement affecté en sera informé et aucun montant ne sera dû."
-                confirmLabel="Confirmer l’annulation"
-                danger
-                busy={session.busy}
-                onConfirm={() => session.action(id, "cancel")}
-              />
+              {canOperate ? (
+                <ConfirmAction
+                  label="Annuler la demande"
+                  message="Annuler cette demande ? L’artisan éventuellement affecté en sera informé et aucun montant ne sera dû."
+                  confirmLabel="Confirmer l’annulation"
+                  danger
+                  busy={session.busy}
+                  onConfirm={() => session.action(id, "cancel")}
+                />
+              ) : (
+                <ReadOnlyNote reason={c.authority.readOnlyReason} />
+              )}
             </section>
           )}
         </div>
@@ -1610,12 +1685,15 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
 function AppointmentPanel({
   c,
   intervention,
+  canWrite,
   ops,
   loading,
   onSaved,
 }: {
   c: Ctx;
   intervention: Intervention;
+  /** Écriture sur le site du dossier (rôle + portée) : sinon le panneau reste en lecture. */
+  canWrite: boolean;
   ops: Operations | null;
   loading: boolean;
   onSaved: () => void;
@@ -1626,7 +1704,8 @@ function AppointmentPanel({
   const [ends, setEnds] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
-  const editable = APPOINTMENT_STATUSES.includes(intervention.status);
+  const stageOpen = APPOINTMENT_STATUSES.includes(intervention.status);
+  const editable = stageOpen && canWrite;
   async function save(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const start = Date.parse(starts);
@@ -1695,6 +1774,7 @@ function AppointmentPanel({
                 : "Aucun créneau enregistré pour ce dossier."}
             </p>
           )}
+          {stageOpen && !canWrite && <ReadOnlyNote reason={c.authority.readOnlyReason} />}
           {open && (
             <form className={cx(styles.rejectForm)} onSubmit={save}>
               <div className="form-columns">
@@ -1755,6 +1835,9 @@ function ProfessionalBlock({ c }: { c: Ctx }) {
       busy={session.busy}
       onRefresh={session.loadProfessional}
       onSave={session.professionalCommand}
+      canWriteOrganization={c.authority.canWriteOrganization}
+      canWriteSite={c.authority.canWriteSite}
+      readOnlyReason={c.authority.readOnlyReason}
     />
   );
 }
@@ -1809,10 +1892,14 @@ function SitesView({ c }: { c: Ctx }) {
                   <button type="button" className="button outline" onClick={() => c.go("site", s.id)}>
                     Fiche du site
                   </button>
-                  <button type="button" className="button primary" onClick={() => c.go("new", s.id)}>
-                    <Icon name="plus" size={16} />
-                    Nouvelle demande
-                  </button>
+                  {c.authority.canWriteSite(s.id) ? (
+                    <button type="button" className="button primary" onClick={() => c.go("new", s.id)}>
+                      <Icon name="plus" size={16} />
+                      Nouvelle demande
+                    </button>
+                  ) : (
+                    <ReadOnlyNote compact reason="Lecture seule sur ce site" />
+                  )}
                 </div>
               </section>
             );
@@ -1820,18 +1907,29 @@ function SitesView({ c }: { c: Ctx }) {
         </div>
       ) : (
         <Empty icon="building" title="Aucun site sur ce périmètre">
-          Ajoutez un premier site pour rattacher vos demandes, budgets et règles d’approbation.
+          {c.authority.canWriteOrganization
+            ? "Ajoutez un premier site pour rattacher vos demandes, budgets et règles d’approbation."
+            : "Aucun site ne vous est accessible sur ce périmètre."}
         </Empty>
       )}
-      <SiteForm
-        busy={session.busy}
-        onSubmit={async (values) => {
-          await session.createSite({
-            ...values,
-            organization_id: c.organization?.id || undefined,
-          });
-        }}
-      />
+      {c.authority.canWriteOrganization ? (
+        <SiteForm
+          busy={session.busy}
+          onSubmit={async (values) => {
+            await session.createSite({
+              ...values,
+              organization_id: c.organization?.id || undefined,
+            });
+          }}
+        />
+      ) : (
+        <section className="panel" aria-labelledby="site-add-readonly">
+          <h2 id="site-add-readonly">Ajouter un site</h2>
+          <ReadOnlyNote
+            reason={`L’ajout d’un site requiert un droit d’écriture sur toute l’organisation. ${c.authority.readOnlyReason || ""}`.trim()}
+          />
+        </section>
+      )}
       <ProfessionalBlock c={c} />
     </>
   );
@@ -1881,6 +1979,8 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
   const documents = session.data.documents.filter((d) => d.intervention_id && siteIds.has(d.intervention_id));
   const vertical = site.type || site.vertical || "";
   const audits = compliance.filter((r) => ["audit", "safety"].includes(r.kind));
+  // Écriture opérationnelle sur CE site : rôle de membre et portée (jamais le rôle seul).
+  const canWrite = c.authority.canWriteSite(site.id);
 
   return (
     <>
@@ -1901,10 +2001,14 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
           </p>
         </div>
         <div className={styles.sheetActions}>
-          <button type="button" className="button primary" onClick={() => c.go("new", site.id)}>
-            <Icon name="plus" size={16} />
-            Nouvelle demande
-          </button>
+          {canWrite ? (
+            <button type="button" className="button primary" onClick={() => c.go("new", site.id)}>
+              <Icon name="plus" size={16} />
+              Nouvelle demande
+            </button>
+          ) : (
+            <ReadOnlyNote reason={c.authority.readOnlyReason} />
+          )}
         </div>
       </div>
 
@@ -1995,22 +2099,36 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
             <strong>{money(f.committed - f.paid)}</strong>
           </div>
           <p className={styles.note}>Montants TTC {BASIS}. Le rapport CSV du serveur fait foi.</p>
-          <BudgetEditor
-            budgetCents={f.budget}
-            busy={session.busy}
-            onSave={(cents) =>
-              session.professionalCommand({ action: "set_site_budget", site_id: site.id, budget_cents: cents })
-            }
-          />
+          {canWrite ? (
+            <BudgetEditor
+              budgetCents={f.budget}
+              busy={session.busy}
+              onSave={(cents) =>
+                session.professionalCommand({ action: "set_site_budget", site_id: site.id, budget_cents: cents })
+              }
+            />
+          ) : (
+            <>
+              <div className={styles.keyValue}>
+                <span>Budget de référence</span>
+                <strong>{f.budget > 0 ? money(f.budget) : "Non renseigné"}</strong>
+              </div>
+              <ReadOnlyNote reason={c.authority.readOnlyReason} />
+            </>
+          )}
         </section>
 
         <section className="panel" aria-labelledby="site-compliance">
           <div className={styles.panelTitle}>
             <h2 id="site-compliance">Échéances & conformité</h2>
-            <button type="button" className={styles.textLink} onClick={() => c.go("contracts")}>
-              Ajouter
-              <Icon name="arrow" size={15} />
-            </button>
+            {canWrite ? (
+              <button type="button" className={styles.textLink} onClick={() => c.go("contracts")}>
+                Ajouter
+                <Icon name="arrow" size={15} />
+              </button>
+            ) : (
+              <ReadOnlyNote compact reason="Lecture seule" />
+            )}
           </div>
           {compliance.length ? (
             compliance.map((r) => (
@@ -2023,7 +2141,7 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
                   </small>
                 </section>
                 <Tag tone={r.status === "completed" ? "green" : "amber"}>{COMPLIANCE_STATUS[r.status] || r.status}</Tag>
-                {r.status !== "completed" && (
+                {r.status !== "completed" && canWrite && (
                   <button
                     type="button"
                     className={cx("button outline", styles.rowAction)}
@@ -2049,6 +2167,9 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
           ) : (
             <p className={styles.muted}>Aucune échéance enregistrée pour ce site.</p>
           )}
+          {!canWrite && compliance.some((r) => r.status !== "completed") && (
+            <ReadOnlyNote reason={c.authority.readOnlyReason} />
+          )}
           <p className={styles.note}>Ces enregistrements organisent le suivi ; ils ne certifient pas la conformité d’une installation.</p>
         </section>
 
@@ -2072,10 +2193,14 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
           ) : (
             <p className={styles.muted}>Aucune règle : les devis de ce site sont acceptables sans approbation préalable.</p>
           )}
-          <button type="button" className={styles.textLink} onClick={() => c.go("contracts")}>
-            Configurer la règle
-            <Icon name="arrow" size={15} />
-          </button>
+          {canWrite ? (
+            <button type="button" className={styles.textLink} onClick={() => c.go("contracts")}>
+              Configurer la règle
+              <Icon name="arrow" size={15} />
+            </button>
+          ) : (
+            <ReadOnlyNote reason={c.authority.readOnlyReason} />
+          )}
         </section>
 
         {vertical === "restaurant" && (
@@ -2219,13 +2344,17 @@ function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
   const rule = session.professional.approval_rules.find(
     (r) => r.site_id === (approval.site_id || intervention?.site_id),
   );
-  const authority = session.membershipRole;
+  // Décision : rôle de membre (règle du site) ET écriture sur le site du devis (portée).
+  const role = c.authority.role;
+  const decisionSiteId = approval.site_id || intervention?.site_id;
   const decisionBlocked =
-    authority === "viewer"
+    role === "viewer"
       ? "Votre accès à cette organisation est en lecture seule : la décision revient à un gestionnaire ou au propriétaire."
-      : rule?.required_role === "owner" && authority === "manager"
-        ? "La règle de ce site réserve la décision au propriétaire de l’organisation."
-        : "";
+      : !c.authority.canWriteSite(decisionSiteId)
+        ? c.authority.readOnlyReason || "Vos droits d’écriture ne couvrent pas le site de ce devis."
+        : rule?.required_role === "owner" && role === "manager"
+          ? "La règle de ce site réserve la décision au propriétaire de l’organisation."
+          : "";
   const history = [
     {
       date: approval.created_at || "",
@@ -3324,9 +3453,11 @@ function MessagesView({ c }: { c: Ctx }) {
         />
       ) : (
         <Empty icon="message" title="Aucune conversation" action={
-          <button type="button" className="button primary" onClick={() => c.go("new")}>
-            Créer une demande
-          </button>
+          c.canCreateRequest ? (
+            <button type="button" className="button primary" onClick={() => c.go("new")}>
+              Créer une demande
+            </button>
+          ) : undefined
         }>
           Les échanges apparaissent dès qu’une intervention existe sur le périmètre.
         </Empty>

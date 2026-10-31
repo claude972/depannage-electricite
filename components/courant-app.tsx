@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 import { api, ApiRequestError, contractStateFromError, uploadDocument } from "./app/api";
-import { createGuard, createRunner, type RunContext, type Runner } from "./app/guard";
+import { createGuard, createRunner, runForResult, type RunContext, type Runner } from "./app/guard";
 import { adoptIdentity } from "./app/identity";
 import { createRevalidationScheduler } from "./app/revalidate";
 import {
@@ -1706,15 +1706,11 @@ export default function CourantApp() {
     }
   }
   async function createSupportTicket(values: { request_id: string; subject: string; body: string; intervention_id: string | null }): Promise<SupportCreateResult | null> {
-    let created: SupportCreateResult | null = null;
-    const completed = await run(async (ctx) => {
+    return runForResult<SupportCreateResult>(runner, async (ctx) => {
       if (modeRef.current === "demo") {
         const store = demoSupport();
         const existing = Object.values(store).find((e) => e.request_id === values.request_id);
-        if (existing) {
-          created = { ticket: existing.ticket, initial_message: existing.messages[0], replayed: true };
-          return;
-        }
+        if (existing) return { ticket: existing.ticket, initial_message: existing.messages[0], replayed: true };
         const now = new Date().toISOString();
         const id = uid();
         const message: SupportMessage = { id: uid(), ticket_id: id, author_id: demoActor(), author_kind: "user", version: 1, body: values.body.trim(), created_at: now };
@@ -1722,26 +1718,24 @@ export default function CourantApp() {
         const event: SupportEvent = { id: uid(), ticket_id: id, actor_id: demoActor(), kind: "ticket_created", from_status: null, to_status: "open", version: 1, message_id: message.id, created_at: now };
         store[id] = { ticket, messages: [message], events: [event], request_id: values.request_id };
         writeDemo(DEMO_KEYS.support, store);
-        created = { ticket, initial_message: message, replayed: false };
         ctx.notice("Demande d’assistance enregistrée dans la démonstration ; aucun opérateur réel n’est prévenu.");
-        return;
+        return { ticket, initial_message: message, replayed: false };
       }
       try {
         const result = await api<SupportCreateResult>("/api/support", values);
-        if (!ctx.alive()) return; // stale chain: the caller must not navigate or announce anything
-        created = result;
+        if (!ctx.alive()) return undefined; // stale chain: runForResult yields null to the caller
         ctx.when(setCapabilities)((c) => ({ ...c, support: "available" }));
         ctx.notice(
           result.replayed
             ? "Votre demande avait déjà été enregistrée ; aucun doublon créé."
             : "Demande d’assistance enregistrée. Les réponses s’afficheront ici à l’actualisation.",
         );
+        return result;
       } catch (e) {
         if (contractStateFromError(e) === "missing") ctx.when(setCapabilities)((c) => ({ ...c, support: "missing" }));
         throw e;
       }
     });
-    return completed ? created : null;
   }
   async function supportCommand(id: string, body: SupportCommand): Promise<SupportCommandResult> {
     let outcome: SupportCommandResult = { ok: false, conflict: false, message: "Action interrompue." };

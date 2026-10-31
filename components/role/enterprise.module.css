@@ -1142,6 +1142,34 @@
   margin-top: 14px;
 }
 
+/* ---- Lecture seule (contrôle d’écriture masqué, raison toujours en texte) ---------- */
+.readOnly {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  border: 1px solid #dce4ee;
+  border-radius: 8px;
+  background: #f5f7fb;
+  color: #526178;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.readOnly svg {
+  flex: none;
+  margin-top: 2px;
+}
+.readOnlyCompact {
+  margin-top: 0;
+  padding: 6px 10px;
+  align-items: center;
+  font-size: 12px;
+}
+.readOnlyCompact svg {
+  margin-top: 0;
+}
+
 /* ---- Membres / paiements --------------------------------------------------------- */
 .memberRow {
   display: flex;
