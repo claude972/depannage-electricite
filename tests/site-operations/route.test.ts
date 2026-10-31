@@ -39,10 +39,13 @@ function harness(options: Options = {}) {
     },
   };
   const code = transformSync(readFileSync(new URL("../../app/api/site-operations/route.ts", import.meta.url), "utf8"), { loader: "ts", format: "cjs", target: "es2022" }).code;
-  const module: { exports: Record<string, (request: Request) => Promise<Response>> } = { exports: {} };
+  type Handler = (request: Request) => Promise<Response>;
+  const module: { exports: { GET?: Handler; POST?: Handler } } = { exports: {} };
   const imports: Record<string, unknown> = { "@/lib/supabase/server": helpers, "@/lib/supabase/validation": validation, "@/lib/features/site-operations/schemas": schemas, "@/lib/features/site-operations/report": report };
   vm.runInNewContext(code, { module, exports: module.exports, require: (name: string) => imports[name] ?? require(name), URL, Request, Response, SyntaxError, Date, Intl }, { filename: "route.ts" });
-  return { ...module.exports, calls };
+  const { GET, POST } = module.exports;
+  if (!GET || !POST) throw new Error("route handlers not exported");
+  return { GET, POST, calls };
 }
 const get = (query: string, options?: Options) => harness(options).GET(new Request(`https://app.example.test/api/site-operations${query}`));
 const post = (body: unknown, options?: Options, headers: Record<string, string> = {}) => {

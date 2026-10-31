@@ -180,3 +180,18 @@ Remplace la règle 1 (partie « démo ») et précise la règle 3 de l’amendem
    Quand `demo` est fourni, le composant affiche un bandeau « Démonstration — données fictives » (attribut `data-demo="true"`) et ne déclenche jamais `client.load` ; `lib/features/site-operations/demo.ts` fournit les graines et une fabrique `demoClient(seed)` **que seul le lead décide d’injecter** (le composant ne l’importe pas).
 2. **Portée.** Tout changement de `scope.userId`, `scope.organizationId` **ou** `scope.siteId` remonte le contenu (`key`), effaçant formulaires, brouillons, sélections et données chargées, puis recharge via `client.load` — exactement comme le contrat partagé, pas seulement sur `userId`.
 3. Rappel : aucune migration n’est appliquée par cet agent ; Codex applique uniquement les migrations revues.
+
+## État de livraison (checkpoint composants)
+
+Fichiers livrés (propriété du lot uniquement) :
+- `supabase/migrations/202610310017_site_operations.sql` — 12 tables RLS, 15 helpers privés, 13 RPC versionnées, `site_operations_snapshot` (security invoker), journal `site_operations_events`.
+- `lib/features/site-operations/` : `types.ts`, `schemas.ts` (zod strict + `toRpc`), `sla.ts` (calendrier ouvré pur), `report.ts` (évaluation + complétude), `labels.ts`, `forms.ts`, `view-model.ts` (autorité, clé de portée, résultat périmé), `demo.ts` (graines + `demoClient`, injecté seulement par le lead).
+- `app/api/site-operations/route.ts` — `GET ?site_id=`, `POST` commandes.
+- `components/features/site-operations/` : `site-operations-view.tsx` (**seule surface d’intégration : `SiteOperationsView`**), panneaux internes `equipment-panel`, `maintenance-panel`, `budget-panel`, `grids-panel`, `sla-panel`, `erp-panel`, `history-panel`, `shared.tsx`, `site-operations.module.css`.
+- Tests : `tests/site-operations/{sla,report,schemas,route,view-model}.test.ts` (26 tests), `tests/sql-site-operations-review.mjs` (11 groupes PASS en PostgreSQL isolé).
+
+Vérifications exécutées par l’agent : `npx tsc --noEmit` ✓ ; `npx tsx --test tests/site-operations/*.test.ts` 26/26 ✓ ; `npx tsx --test tests/*.test.ts` 93/93 ✓ ; `npx tsx --test tests/ui/*.test.ts` 43/43 ✓ ; `PGLITE_MODULE=… node tests/sql-site-operations-review.mjs` ✓ (pglite 0.5.13 installé hors dépôt dans un dossier temporaire selon `docs/QA.md`). Aucun `next build`/`next dev`, aucune migration appliquée, aucune capture.
+
+À raccorder par le lead (WEB-SHARED-001) : clé `Capabilities.siteOperations` (sonde `GET /api/site-operations?site_id=`), vue `site-operations`, chargeurs `load`/`command` bornés par `runForResult`, `scope.authority` depuis `enterpriseAuthority`, choix du client de démonstration (A2), ancrage dans la coque entreprise via l’agent design, tests de raccordement `tests/ui`, captures 360/1280.
+
+À vérifier par Codex : revue SQL 017 sur base dédiée (matrice de refus owner/manager/viewer × grant, révocation, immutabilité des grilles publiées, versions, chevauchement d’exercices), revue des routes et des composants, application séquentielle 014 → 017 uniquement après revue.
