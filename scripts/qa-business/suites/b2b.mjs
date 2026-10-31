@@ -156,27 +156,29 @@ export const suite = {
           await section.getByLabel("Intitulé", { exact: true }).fill(cohort.name("vérification semestrielle").slice(0, 160));
           await section.getByLabel("Périodicité", { exact: true }).selectOption("months");
           await section.getByLabel("Valeur N", { exact: true }).fill("6");
-          await section.getByLabel("Prochaine échéance (facultatif)", { exact: true }).fill(isoPlusDays(10));
+          const dueOn = isoPlusDays(10); // one reading, reused for the fill and the readback
+          await section.getByLabel("Prochaine échéance (facultatif)", { exact: true }).fill(dueOn);
           const status = await submitAndWait(h.page, "Enregistrer");
           assert.equal(status, 200, `save_maintenance_plan answered ${status}`);
           await expectVisible(section.getByText("Plan ajouté.", { exact: true }), "plan notice");
           const plans = await db.select("site_maintenance_plans", { site_id: `eq.${siteA1.id}` }, "id,frequency_kind,frequency_value,next_due_on,last_done_on,version");
           assert.equal(plans.length, 1);
-          assert.deepEqual({ kind: plans[0].frequency_kind, value: plans[0].frequency_value, next: plans[0].next_due_on, last: plans[0].last_done_on }, { kind: "months", value: 6, next: isoPlusDays(10), last: null });
+          assert.deepEqual({ kind: plans[0].frequency_kind, value: plans[0].frequency_value, next: plans[0].next_due_on, last: plans[0].last_done_on }, { kind: "months", value: 6, next: dueOn, last: null });
           state.planId = plans[0].id;
           return { plan_id: plans[0].id };
         });
         await s.step("visit recorded today → last_done_on today, next_due_on = today + 6 months (server), visits_total 1", async () => {
           const section = opsSection(h.page);
           await section.getByRole("button", { name: "Enregistrer une visite", exact: true }).click();
-          await section.getByLabel("Date de la visite", { exact: true }).fill(isoToday());
+          const visitOn = isoToday(); // one reading: a midnight crossing cannot split fill and readback
+          await section.getByLabel("Date de la visite", { exact: true }).fill(visitOn);
           await section.getByLabel("Compte rendu (facultatif)", { exact: true }).fill(cohort.description("visite de recette"));
           const status = await submitAndWait(h.page, "Enregistrer la visite");
           assert.equal(status, 200, `record_maintenance_visit answered ${status}`);
           await expectVisible(section.getByText("Visite enregistrée.", { exact: true }), "visit notice");
           const [plan] = await db.select("site_maintenance_plans", { id: `eq.${state.planId}` }, "next_due_on,last_done_on,version");
-          assert.equal(plan.last_done_on, isoToday());
-          assert.equal(plan.next_due_on, addMonthsLikePostgres(isoToday(), 6), "next due recomputed from the configured periodicity");
+          assert.equal(plan.last_done_on, visitOn);
+          assert.equal(plan.next_due_on, addMonthsLikePostgres(visitOn, 6), "next due recomputed from the configured periodicity");
           assert.equal(plan.version, 2);
           const report017 = await api(h.page, `/api/site-operations?site_id=${siteA1.id}`);
           const shown = report017.body?.snapshot?.maintenance_plans?.find((p) => p.id === state.planId);
