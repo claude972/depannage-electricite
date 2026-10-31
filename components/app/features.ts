@@ -38,6 +38,57 @@ export type ReprobeHint = { siteId?: string; quoteId?: string; interventionId?: 
 export function retryableState(state: ContractState): boolean {
   return state === "unavailable";
 }
+
+export type ReprobeContext = {
+  bundle: FeatureClients;
+  /** True while the identity, mode and bundle that started this re-probe are still current. */
+  alive(): boolean;
+  setState(key: FeatureKey, state: ContractState): void;
+  setUnread(count: number): void;
+  setAccess(access: PlatformAccess): void;
+  /** Active enterprise site when the hint carries none. */
+  activeSiteId?: string;
+};
+
+/**
+ * Re-probes ONE contract. Guarded at entry and after every await: a stale chain (identity changed,
+ * demo switch, bundle rebuilt) produces no effect at all — `null` from a bound client means "stale",
+ * never "currently failing", so nothing of the previous actor touches the next one's state.
+ * The bound client itself records the capability from the reply (success → available, 404 →
+ * missing, 503/network → unavailable); this function only applies the data side effects.
+ */
+export async function reprobe(key: FeatureKey, hint: ReprobeHint | undefined, ctx: ReprobeContext): Promise<void> {
+  if (!ctx.alive()) return;
+  ctx.setState(key, "unknown");
+  const swallow = () => null;
+  switch (key) {
+    case "notifications": {
+      const summary = await ctx.bundle.notifications.summary().catch(swallow);
+      if (!ctx.alive() || summary === null) return;
+      ctx.setUnread(summary.unread_count);
+      return;
+    }
+    case "platformOperations": {
+      const access = await ctx.bundle.platform.load.me().catch(swallow);
+      if (!ctx.alive() || access === null) return;
+      ctx.setAccess(access);
+      return;
+    }
+    case "planning":
+      await ctx.bundle.planning.load(planningProbeRange()).catch(swallow);
+      return;
+    case "siteOperations": {
+      const siteId = hint?.siteId || ctx.activeSiteId;
+      if (siteId) await ctx.bundle.siteOperations.load(siteId).catch(swallow);
+      return;
+    }
+    case "quoteDocuments": {
+      const target = hint?.quoteId ? { quoteId: hint.quoteId } : hint?.interventionId ? { interventionId: hint.interventionId } : null;
+      if (target) await ctx.bundle.quoteDocuments.load(target).catch(swallow);
+      return;
+    }
+  }
+}
 export type Request = <T>(path: string, body?: unknown, method?: string) => Promise<T>;
 export type FeatureDeps = {
   /** Current identity generation (createGuard().generation); bumped on every identity change. */

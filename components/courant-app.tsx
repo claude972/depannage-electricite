@@ -7,7 +7,7 @@ import { createClient } from "../lib/supabase/client";
 import { api, ApiRequestError, contractStateFromError, uploadDocument } from "./app/api";
 import { createGuard, createRunner, runForResult, type RunContext, type Runner } from "./app/guard";
 import { adoptIdentity } from "./app/identity";
-import { createDemoFeatureClients, createFeatureClients, planningProbeRange, type FeatureKey, type ReprobeHint } from "./app/features";
+import { createDemoFeatureClients, createFeatureClients, planningProbeRange, reprobe, type FeatureKey, type ReprobeHint } from "./app/features";
 import type { PlatformAccess } from "../lib/features/platform-operations/types";
 import { PLATFORM_DEMO } from "../lib/features/platform-operations/demo";
 import { demoNotificationPage } from "../lib/features/notifications/demo";
@@ -2327,38 +2327,25 @@ export default function CourantApp() {
   // SHARED-REV-006: explicit recovery action after a transient 503/network failure. Re-probes the
   // one contract with the bound client (same identity generation, same rights); the reply alone
   // sets the capability again. Errors are swallowed here: the capability already reflects them.
+  const featuresRef = useRef(features);
+  featuresRef.current = features;
   const reprobeFeature = useCallback(
     async (key: FeatureKey, hint?: ReprobeHint) => {
-      if (modeRef.current !== "live") return;
-      setCapabilities((c) => (c[key] === "unknown" ? c : { ...c, [key]: "unknown" }));
-      const ignore = () => undefined;
-      switch (key) {
-        case "notifications": {
-          const summary = await features.notifications.summary().catch(() => null);
-          if (summary) setUnreadNotifications(summary.unread_count);
-          return;
-        }
-        case "platformOperations": {
-          const access = await features.platform.load.me().catch(() => null);
-          setPlatformAccess(access);
-          return;
-        }
-        case "planning":
-          await features.planning.load(planningProbeRange()).catch(ignore);
-          return;
-        case "siteOperations": {
-          const siteId = hint?.siteId || activeSiteRef.current;
-          if (siteId) await features.siteOperations.load(siteId).catch(ignore);
-          return;
-        }
-        case "quoteDocuments": {
-          const target = hint?.quoteId ? { quoteId: hint.quoteId } : hint?.interventionId ? { interventionId: hint.interventionId } : null;
-          if (target) await features.quoteDocuments.load(target).catch(ignore);
-          return;
-        }
-      }
+      const bundle = features;
+      const generation = guard.generation();
+      // Alive = same identity generation, still live, and the bundle handed to the leaves is still
+      // this one (rebuilt on identity/profile change). Checked at entry and after every await.
+      const alive = () => modeRef.current === "live" && generation === guard.generation() && featuresRef.current === bundle;
+      await reprobe(key, hint, {
+        bundle,
+        alive,
+        setState: (k, state) => setCapabilities((c) => (c[k] === state ? c : { ...c, [k]: state })),
+        setUnread: setUnreadNotifications,
+        setAccess: setPlatformAccess,
+        activeSiteId: activeSiteRef.current,
+      });
     },
-    [features],
+    [features, guard],
   );
 
   const session: Session = {

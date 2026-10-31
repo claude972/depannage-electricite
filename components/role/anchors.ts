@@ -3,6 +3,7 @@
 // une entrée n’apparaît que si le rôle y a accès (ACCESS) et que la capacité n’est pas absente.
 import type { ContractState, Role } from "../app/types";
 import type { LeafScope } from "../../lib/features/planning/leaf";
+import { retryableState as transient } from "../app/features";
 
 /**
  * Entrée de menu d’un lot : visible quand le rôle est admis et que la capacité est disponible ou
@@ -11,6 +12,16 @@ import type { LeafScope } from "../../lib/features/planning/leaf";
  */
 /** Transient failure → the shell offers a bounded "Réessayer" (re-probe); missing → honest state only. */
 export { retryableState } from "../app/features";
+/**
+ * Back-office page: a re-probe is offered when the contract is transiently unavailable (even with a
+ * validated access reply, e.g. 503 on finance/operators) or when no access reply exists yet while
+ * the contract is not known missing. Never when the contract is missing.
+ */
+export function platformPageRetry(state: ContractState, access: PlatformAccess | null | undefined): boolean {
+  if (state === "missing") return false;
+  if (transient(state)) return true;
+  return !access; // no /me reply yet (or dropped as stale): a re-probe is the honest recovery
+}
 
 export function anchorEntryVisible(
   allowed: boolean,
