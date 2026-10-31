@@ -65,9 +65,9 @@ Ce journal ne constitue pas une revue passée ; aucune affectation terminée à 
 - reviewed branch/revision: codex/web-pwa-backend, copie de travail avant premier commit PWA (base contrat 08c10c5)
 - evidence: components/pwa-registration.tsx, controllerchange et bouton mise à jour ; waiting peut désigner un worker déjà activé par un autre onglet ; message ACTIVATE_UPDATE ensuite sans nouvel événement, bouton reste Actualisation
 - expected correction: préserver rechargement volontaire, détecter worker déjà actif/référence périmée et recharger sur clic explicite ; tester cycle multi-onglets
-- status: in_progress
-- fix commit: à venir
-- recheck evidence: aucune encore ; propriétaire prévenu, pas de statut verified
+- status: fixed_pending_review
+- fix commit: cf52bcdbc46f28348024b8dcf61925ba5d2005e3
+- recheck evidence: code et 9 tests recontrôlés indépendamment ; cycle navigateur en cours, cross-review Claude encore attendu
 
 ## CLI-005 — Acceptation Claude et questions techniques
 - timestamp: 2026-10-30T21:47:59-04:00 (America/Martinique)
@@ -89,3 +89,24 @@ Ce journal ne constitue pas une revue passée ; aucune affectation terminée à 
 - preview: https://depannage-electricite-e9vyf5jtr-brafas-projects.vercel.app
 - build Vercel: réussi ; accès anonyme protégé SSO, accès CLI vercel curl autorisé HTTP200
 - limitations: nouveau frontend et nouvelles routes backend non intégrés dans cette première preview ; tests navigateur nécessitent accès autorisé, aucune protection désactivée
+
+## WEB-PWA-20261030 / codex — checkpoint PWA
+- timestamp: 2026-10-30T21:49:02-04:00 (America/Martinique)
+- agent: codex ; scoped implement_pwa
+- branch/revision: codex/web-pwa-backend / cf52bcdbc46f28348024b8dcf61925ba5d2005e3
+- changes: manifest standalone, icônes PNG/maskable/Apple, installation, mises à jour volontaires, fallback public hors ligne, aucun cache privé/API/auth
+- checks: 9 tests comportementaux du worker/mise à jour ; TypeScript ; revue indépendante ; PWA-001 corrigé et recontrôlé dans le code
+- report: https://github.com/claude972/depannage-electricite/blob/cf52bcdbc46f28348024b8dcf61925ba5d2005e3/docs/PWA_VERIFICATION.md
+- preview: integration 1638e765a44347d71b32968180e8e6781a7a7da7, build Vercel réussi, URL ci-dessus
+- limitations: frontend ancien sur première preview ; tests navigateur en cours via identifiant automation existant, jamais affiché ; authentification preview préservée ; vraie installation OS/mobile non validée
+- other agent should verify: Claude doit revoir exactSHA puis intégration UI/retour hors ligne ; ready_for_review pour ce sous-lot uniquement, affectation Codex globale in_progress
+
+## WEB-PWA-20261030 / codex — checkpoint backend
+- timestamp: 2026-10-30T21:49:02-04:00 (America/Martinique)
+- agent: codex ; scoped implement_backend
+- branch/revision: codex/web-pwa-backend / 0a014063a6f2ca4fa323d627554bdfb5ffcd9c11
+- changes: migration003, dossier/disponibilité/éligibilité artisan, opérations refus/RDV/rapport et historique immuable, contacts limités, dispatch préaccord, overview admin, propriété dossiers B2B et retrait de droits documents, CI SQLisolée
+- checks: npm run check passé (20 tests + typecheck + build) ; 19 groupes SQLisolés avec stubs Auth/Storage ; diffcheck
+- report: https://github.com/claude972/depannage-electricite/blob/0a014063a6f2ca4fa323d627554bdfb5ffcd9c11/docs/CODEX_BACKEND_VERIFICATION.md
+- limitations: migration non appliquée à Supabase, aucun paiement distant ni accès réel testé ; nouvelles fonctions ne valent pas tout le plan livré ; contrats B2B/suspension conservateurs documentés
+- next: revue indépendante à SHA exact en cours, puis intégration et revue Claude ; suite échecs/reprises de paiement sans actes financiers réels
