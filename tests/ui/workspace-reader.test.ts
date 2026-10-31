@@ -158,3 +158,13 @@ test("coordinator + real reader: a deep link after a 200 {profile only} reply is
   const attempt = outcome.kind === "failed" ? ({ state: "failed", status: outcome.status } as const) : ({ state: "loaded" } as const);
   assert.equal(decideDetail({ present: false, live: true, attempt }), "error");
 });
+
+test("artisan workspace with REDACTED offers (available_missions: no client, address, description) is valid", () => {
+  const offer = { id: "o1", category: "outage", city: "Ville", postal_code: "972**", urgency: "urgent", status: "requested", estimate_min_cents: 1, estimate_max_cents: 2, created_at: "2026-10-31T00:00:00Z" };
+  const w = valid({ profile: { ...valid().profile, role: "artisan" }, interventions: [offer] });
+  assert.equal(validateWorkspace(w).ok, true);
+});
+
+test("an intervention with an unknown status is rejected (status set = DB check constraint)", () => {
+  assert.equal(validateWorkspace(valid({ interventions: [{ id: "i1", status: "teleported" }] })).ok, false);
+});

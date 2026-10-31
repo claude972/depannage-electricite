@@ -108,3 +108,9 @@ No API, backend, SQL, dependency or tracking-leaf change.
 **P3 — « Actualiser » visible.** Under `SUBSCRIBED` the badge button showed only « Connecté » (« Actualiser » was only the `title`). The visible label becomes « Connexion temps réel : Connecté · Actualiser » (or « … : non connectée · Actualiser »), « Actualiser » rendered as visible text in every state.
 
 Files added to A3's list: `components/app/workspace-reader.ts`, `tests/ui/workspace-reader.test.ts`. Owner: lead only. No merge before root's counter-review.
+
+## Amendment A6 (root read of A5) — status set, redacted offers, and the 100-dossier bound
+
+- Intervention `status` must belong to the DB check-constraint set (`requested, assigned, quoted, accepted, in_progress, completed, paid, cancelled`). Artisan offers returned by `available_missions()` are REDACTED on purpose: only `id` and `status` are required; client id, address and description are never required.
+- Superseded sequences / old contexts are discarded FIRST (before validation), the identity guard is kept.
+- **Bound to record honestly:** `GET /api/workspace` returns at most 100 interventions (`limit(100)`, plus up to 100 offers). A `loaded` refresh proves a VALID SNAPSHOT, not that a dossier absent from it does not exist: an older dossier beyond the 100 most recent is not proven absent. This contract covers the incident (a NEW id created after the tab loaded, which is among the most recent). Truncation detection or a point read by id (RLS) is proposed in a separate finding (`docs/CLAUDE_DEEPLINK_TRUNCATION.md`) BEFORE any API change; no migration and no hidden API change in this reader fix.

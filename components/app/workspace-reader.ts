@@ -6,10 +6,12 @@
 // An invalid 2xx is a failure — nothing applied, no sign-out, never « introuvable ». Only a real
 // 401 or a foreign identity touches the session.
 import { ApiRequestError } from "./api";
-import type { Role, Workspace } from "./types";
+import type { Role, Status, Workspace } from "./types";
 import type { ReadResult } from "./workspace-refresh";
 
 const ROLES: readonly Role[] = ["client", "artisan", "manager", "admin"];
+/** Same set as the database check constraint on interventions.status (migration 0001) and `Status`. */
+const STATUSES: readonly Status[] = ["requested", "assigned", "quoted", "accepted", "in_progress", "completed", "paid", "cancelled"];
 const COLLECTIONS = [
   "interventions",
   "quotes",
@@ -48,6 +50,10 @@ export function validateWorkspace(raw: unknown): WorkspaceValidation {
     const keys = ESSENTIAL[key];
     if (keys && !everyRecord(list, keys)) return { ok: false, reason: key };
   }
+  // Artisan offers from available_missions() are deliberately REDACTED (no client, address or
+  // description): only id and status are required, and status must be a known value.
+  if (!(raw.interventions as Record<string, unknown>[]).every((i) => STATUSES.includes(i.status as Status)))
+    return { ok: false, reason: "interventions" };
   if (raw.artisan_profile !== null && !isObject(raw.artisan_profile)) return { ok: false, reason: "artisan_profile" };
   return { ok: true, workspace: raw as unknown as Workspace };
 }
