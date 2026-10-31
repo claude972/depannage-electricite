@@ -2073,7 +2073,9 @@ function SitesView({ c }: { c: Ctx }) {
                           </span>
                         ) : alerts.kind === "none" ? (
                           <span className={styles.muted}>
-                            Aucune<span className="sr-only"> parmi les données chargées</span>
+                            Aucune
+                            {/* Visible sur mobile (en-tête de colonne masqué), lu partout. */}
+                            <span className={styles.alertQualifier}> parmi les données chargées</span>
                           </span>
                         ) : alerts.kind === "checking" ? (
                           <span className={styles.muted}>Vérification…</span>

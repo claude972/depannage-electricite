@@ -927,6 +927,16 @@
   color: #b42318;
   font-weight: 550;
 }
+/* Qualificatif « parmi les données chargées » : porté par l’en-tête de colonne sur grand
+   écran (masqué visuellement ici, toujours lu), affiché dans la cellule sur mobile. */
+.alertQualifier {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
 /* Alertes non vérifiées : données professionnelles indisponibles, aucune absence affirmée. */
 .alertUnverified {
   display: inline-flex;
@@ -1911,6 +1921,14 @@
   }
   .thHint {
     display: none;
+  }
+  .alertQualifier {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
   }
   /* Sites : site pleine largeur, puis en cours | montant, budget, alertes, actions. */
   .sitesTable .cellSite {
