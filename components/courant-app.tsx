@@ -1062,7 +1062,7 @@ export default function CourantApp() {
         ctx.notice("Toutes les photos sont enregistrées dans le dossier.");
       } else if (finished.items.some((i) => i.status === "uncertain") && !options.resendUncertain)
         ctx.notice(
-          "Vérification effectuée : les photos retrouvées dans le dossier sont marquées enregistrées. Celles au résultat incertain n’ont pas été renvoyées ; confirmez leur renvoi si elles n’apparaissent pas dans vos documents.",
+          "Vérification effectuée : les documents du dossier portant le même nom sont proposés comme candidats. Ces photos restent incertaines tant que vous n’avez pas confirmé un candidat ou renvoyé le fichier.",
         );
       else ctx.error(uploadSummary(finished));
     });

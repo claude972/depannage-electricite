@@ -110,7 +110,10 @@ export function UploadQueuePanel({ session, interventionId }: { session: Session
                       </ul>
                     </>
                   ) : (
-                    <small>Aucun document de ce nom dans le dossier après vérification : renvoyez la photo.</small>
+                    <small>
+                      Aucun document de ce nom parmi les documents chargés (liste limitée). Vérifiez le dossier
+                      avant de renvoyer : la photo reste incertaine.
+                    </small>
                   )}
                 </div>
               )}
