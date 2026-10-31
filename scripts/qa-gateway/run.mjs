@@ -13,9 +13,10 @@
 // Cleanup (every path: normal end, HTTP timeout, SIGINT/SIGTERM, unhandled error,
 // --cleanup-manifest) first discovers the cohort's `documents` rows and Storage objects, merges
 // them into the manifest, and deletes nothing while any read is unknown (GW-HARNESS-003).
-import { mkdir, chmod, writeFile, readFile, appendFile, rename } from "node:fs/promises";
+import { mkdir, chmod, writeFile, readFile, appendFile, rename, lstat } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   UsageError,
   parseArgs,
@@ -47,6 +48,7 @@ import {
   expiryPrepare,
   expiryVerify,
   parseLease,
+  checkPrivatePath,
 } from "./lib.ts";
 
 const BUCKET = "intervention-documents";
@@ -56,7 +58,20 @@ const TIMEOUT_MS = 30000;
 // request whose outcome was unknown to settle remotely.
 const RECONCILE = { attempts: 4, baseDelayMs: 2000, sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) };
 
-async function main(argv) {
+// Injectable runtime (tests drive the FULL cycle — preflight, seed, verify, interruption, finally
+// cleanup — with a fake fetch, a fake clock and fast reconcile timings; production uses the defaults).
+export function defaultDeps() {
+  return {
+    fetch: (url, init) => fetch(url, init),
+    now: () => Math.floor(Date.now() / 1000),
+    reconcile: RECONCILE,
+    on: (event, handler) => process.on(event, handler),
+    exit: (code) => process.exit(code),
+    print: (line) => console.log(line),
+  };
+}
+
+export async function main(argv, deps = defaultDeps()) {
   let args;
   try {
     args = parseArgs(argv);
@@ -119,6 +134,7 @@ async function main(argv) {
   // touches nothing. Both skip the cleanup explicitly; every other path cleans up.
   let skipCleanup = false;
   let tooEarly = false;
+  let refusedBeforeWrite = false;
   // Set when the run phase ended abnormally (timeout, abort/signal, thrown error): a request
   // whose outcome is unknown may still settle remotely, so cleanup reconciles late.
   let interrupted = false;
@@ -128,9 +144,9 @@ async function main(argv) {
   // so the `finally` below always reaches discovery + cleanup (second signal aborts cleanup
   // requests; the manifest is kept; third signal exits 130).
   let active = new AbortController();
-  interruptGuard((event, handler) => process.on(event, handler), {
+  interruptGuard(deps.on, {
     abort: (reason) => active.abort(reason),
-    exit: (code) => process.exit(code),
+    exit: (code) => deps.exit(code),
   });
   const persist = async () => {
     result.verdict = computeVerdict(result, result.finishedAt !== null);
@@ -141,7 +157,7 @@ async function main(argv) {
     const record = { step, status, detail: redact(String(detail)), at: new Date().toISOString() };
     result.steps.push(record);
     await appendFile(logPath, `${record.at} [${status}] ${step}${record.detail ? ` — ${record.detail}` : ""}\n`, { mode: 0o600 });
-    console.log(`[${status}] ${step}${record.detail ? ` — ${record.detail}` : ""}`);
+    deps.print(`[${status}] ${step}${record.detail ? ` — ${record.detail}` : ""}`);
     await persist();
   };
   // Durable manifest: rewritten (atomically, 0600) after every creation, before any further call.
@@ -157,7 +173,7 @@ async function main(argv) {
   };
 
   const http = async (url, init = {}) => {
-    const response = await fetch(url, { ...init, signal: AbortSignal.any([active.signal, AbortSignal.timeout(TIMEOUT_MS)]) });
+    const response = await deps.fetch(url, { ...init, signal: AbortSignal.any([active.signal, AbortSignal.timeout(TIMEOUT_MS)]) });
     const text = await response.text();
     let json = null;
     try {
@@ -242,18 +258,22 @@ async function main(argv) {
       if (mode === "dry-run") {
         await log("info", "dry-run terminé", `aucune cohorte créée, aucune écriture distante${args.suite ? ` (suite ${args.suite})` : ""}`);
       } else if (mode === "expiry-prepare") {
+        // REVIEW-003: a failed preflight step aborts prepare BEFORE any creation; prepared never
+        // coexists with a FAIL (no account is left behind after a failed step).
+        if (result.steps.some((s) => s.status === "fail")) throw new Error("préalables en échec : prepare interrompu avant toute création de compte");
         const prepared = await expiryPrepare(expiryDeps());
         result.expiry = { phase: "prepare", userId: prepared.userId, verifyNotBefore: prepared.lease ? new Date(prepared.lease.verifyNotBefore * 1000).toISOString() : null, leaseEndsAt: prepared.lease ? new Date(prepared.lease.leaseEndsAt * 1000).toISOString() : null, leasePath: prepared.lease ? leasePath : null, observedCode: null, verifyCommand: prepared.lease ? verifyCommand : null, outcome: prepared.outcome };
         // PREPARED: the account stays until verify (bounded lease); nothing is cleaned now.
-        skipCleanup = prepared.outcome === "prepared";
+        skipCleanup = prepared.outcome === "prepared" && !result.steps.some((s) => s.status === "fail");
       } else if (mode === "expiry-verify") {
-        const lease = parseLease(JSON.parse(await readFile(args.lease, "utf8")), args.project);
+        const lease = parseLease(JSON.parse(await readPrivate(args.lease, "bail (--lease)")), args.project);
         await log("info", "bail chargé", `run d’origine ${lease.runId}, compte ${lease.userId}, exp ${new Date(lease.claimExp * 1000).toISOString()}`);
         manifestExtra = { suite: "expiry", leaseEndsAt: new Date(lease.leaseEndsAt * 1000).toISOString() };
         const verified = await expiryVerify(lease, expiryDeps());
         result.expiry = { phase: "verify", userId: lease.userId, verifyNotBefore: new Date(lease.verifyNotBefore * 1000).toISOString(), leaseEndsAt: new Date(lease.leaseEndsAt * 1000).toISOString(), leasePath: args.lease, observedCode: verified.observedCode, verifyCommand: null, outcome: verified.outcome };
-        // The uid is recorded for deletion ONLY after expiryVerify granted the cleanup permission
-        // (independent Auth cohort proof). A refused verify records nothing and deletes nothing.
+        // The uid was recorded durably by expiryVerify (recordValidated) right after the Auth cohort
+        // proof and before any further network call; a refused verify records nothing. This line is a
+        // no-op safety net (idempotent) for the permitted outcomes.
         if (verified.cleanup) await record("userIds", lease.userId, manifestExtra);
         tooEarly = verified.outcome === "too-early";
         skipCleanup = !verified.cleanup;
@@ -262,8 +282,15 @@ async function main(argv) {
       }
     }
   } catch (error) {
-    interrupted = true;
-    await log("fail", "interruption", `${error instanceof Error ? error.message : String(error)} — l’issue distante de la requête en cours est inconnue : réconciliation tardive avant nettoyage`);
+    if (error instanceof UsageError && created.userIds.length === 0) {
+      // Refused before any write (unsafe/unreadable lease path, foreign project…): nothing to clean.
+      refusedBeforeWrite = true;
+      skipCleanup = true;
+      await log("fail", "refus", error.message);
+    } else {
+      interrupted = true;
+      await log("fail", "interruption", `${error instanceof Error ? error.message : String(error)} — l’issue distante de la requête en cours est inconnue : réconciliation tardive avant nettoyage`);
+    }
   } finally {
     if (mode !== "dry-run" && !skipCleanup) {
       try {
@@ -276,9 +303,9 @@ async function main(argv) {
     }
     result.finishedAt = new Date().toISOString();
     await persist();
-    console.log(`verdict : ${result.verdict} — rapport ${path.join(args.out, "summary.md")}`);
+    deps.print(`verdict : ${result.verdict} — rapport ${path.join(args.out, "summary.md")}`);
   }
-  if (tooEarly) return 2;
+  if (tooEarly || refusedBeforeWrite) return 2;
   // 0 = pass, prepared (account intentionally kept, lease written) or observed (clean, but the
   // platform code is not bound yet: not a PASS); 1 = fail; 2 = refused before any write.
   return result.verdict === "pass" || result.verdict === "prepared" || result.verdict === "observed" ? 0 : 1;
@@ -286,7 +313,7 @@ async function main(argv) {
   // Injected dependencies of the two expiry phases (lib.ts drives them; fully fakeable in tests).
   function expiryDeps() {
     return {
-      now: () => Math.floor(Date.now() / 1000),
+      now: deps.now,
       runId: id,
       project: args.project,
       projectUrl: credentials.url,
@@ -319,14 +346,19 @@ async function main(argv) {
         const r = await http(`${credentials.url}/auth/v1/admin/users/${userId}`, { headers: serviceHeaders() });
         return { status: r.status, json: r.json && typeof r.json === "object" && !Array.isArray(r.json) ? r.json : null };
       },
-      readManifest: async (manifestFile) => parseManifest(JSON.parse(await readFile(manifestFile, "utf8")), args.project),
+      readManifest: async (manifestFile) => parseManifest(JSON.parse(await readPrivate(manifestFile, "manifeste du bail")), args.project),
+      recordValidated: (userId) => record("userIds", userId, manifestExtra),
       record,
       addSecret: (secret) => { if (typeof secret === "string" && secret.length >= 8) secrets.push(secret); },
       forbidden: () => [...secrets, ...created.userIds],
       client,
       // The lease holds the token: written raw (never redacted) at 0600 — in the private out dir
       // ("out") and, for verify's consumedAt, on the ORIGINAL file given by --lease ("original").
-      writeLease: (lease, target) => writePrivate(target === "original" ? args.lease : leasePath, JSON.stringify(lease, null, 2)),
+      writeLease: async (lease, target) => {
+        const file = target === "original" ? args.lease : leasePath;
+        await assertPrivatePath(file, target === "original" ? "bail original (--lease)" : "bail (--out)", { mustExist: target === "original" });
+        await writePrivate(file, JSON.stringify(lease, null, 2));
+      },
       log,
     };
   }
@@ -450,12 +482,34 @@ async function main(argv) {
         if (leftover) result.leftovers.push(leftover);
         await log(entry.ok ? "pass" : "fail", `nettoyage : ${entry.label}`, `${entry.detail}${entry.remaining === null ? "" : ` ; restant ${entry.remaining}`}`);
       },
-    }, { manifestPath, reconcile: interrupted || mode === "cleanup-manifest" ? RECONCILE : undefined });
+    }, { manifestPath, reconcile: interrupted || mode === "cleanup-manifest" ? deps.reconcile : undefined });
     if (!outcome.discovery.complete) {
       for (const u of outcome.discovery.unknown) result.leftovers.push(unknownLeftover(u));
     }
     if (!outcome.clean) await log("info", "manifeste conservé pour --cleanup-manifest", `${manifestPath} (${manifestUnknown.length} lecture(s) inconnue(s) marquée(s))`);
   }
+}
+// Lease and manifest files are read/written only as regular private files: no symlink, 0600 file,
+// 0700 directory, no group/other bits. Refused (UsageError-like exit 2) otherwise.
+async function privateFacts(file) {
+  const dirPath = path.dirname(file);
+  const dir = await lstat(dirPath).catch(() => null);
+  const st = await lstat(file).catch(() => null);
+  return {
+    exists: st !== null,
+    isSymlink: st?.isSymbolicLink() ?? false,
+    isFile: st?.isFile() ?? false,
+    mode: st?.mode ?? 0,
+    dir: { isSymlink: dir?.isSymbolicLink() ?? false, isDirectory: dir?.isDirectory() ?? false, mode: dir?.mode ?? 0 },
+  };
+}
+async function assertPrivatePath(file, label, options) {
+  const reasons = checkPrivatePath(label, await privateFacts(file), options);
+  if (reasons.length) throw new UsageError(`Refus : ${reasons.join(" ; ")}`);
+}
+async function readPrivate(file, label) {
+  await assertPrivatePath(file, label, { mustExist: true });
+  return readFile(file, "utf8");
 }
 async function writePrivate(target, content) {
   const temp = `${target}.tmp`;
@@ -474,4 +528,5 @@ Le harnais crée une cohorte unique, exerce la fonction déployée, nettoie tout
 --suite expiry-prepare : un seul compte technique, jeton réel prouvé valide sans mutation, bail 0600 (lease.json), verdict PREPARED (code 0), compte laissé jusqu’au verify (≤ 2 h).
 --suite expiry-verify : refus (code 2) si trop tôt ; cohérence bail/manifeste/claims, compte actif ni banni ni effacé (200), appel réel avec le même jeton expiré (401 sans fuite : PASS si enveloppe fonction ou code lié, OBSERVED sinon), suppression du compte et relecture 404.`);
 }
-process.exitCode = await main(process.argv.slice(2));
+// Auto-run only when executed as a script; tests import main() and inject their runtime.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = await main(process.argv.slice(2));

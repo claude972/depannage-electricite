@@ -792,6 +792,8 @@ export function computeVerdict(result: Pick<RunResult, "steps" | "scenarios" | "
   // "observed" (not PASS) while the platform code for an expired JWT is not bound strictly.
   if (result.mode === "expiry-prepare") return "prepared";
   if (result.mode === "expiry-verify" && result.expiry?.outcome === "observed") return "observed";
+  // A too-early verify proved nothing and touched nothing: never "pass".
+  if (result.mode === "expiry-verify" && result.expiry?.outcome === "too-early") return "incomplete";
   return "pass";
 }
 export function parseContentRangeTotal(header: string | null): number | null {
@@ -939,7 +941,33 @@ export function parseLease(raw: unknown, project: string): Lease {
   if (l.project !== project) throw new UsageError(`Refus : le bail appartient au projet ${l.project}, pas ${project}.`);
   if (!UUID.test(String(l.userId))) throw new UsageError("Bail invalide (userId).");
   if (l.consumedAt !== undefined && typeof l.consumedAt !== "number") throw new UsageError("Bail invalide (consumedAt).");
-  return { ...(l as unknown as Lease) };
+  const lease = { ...(l as unknown as Lease) };
+  // Relations are re-validated, not trusted: verifyNotBefore = exp + 60 s, leaseEndsAt =
+  // min(exp, preparedAt) + 2 h, lease ≤ 2 h after preparation, expires_at ≈ exp, uid e-mail of the run.
+  if (lease.verifyNotBefore !== lease.claimExp + EXPIRY_VERIFY_MARGIN_S) throw new UsageError("Bail invalide : verifyNotBefore ≠ exp + 60 s.");
+  if (lease.leaseEndsAt !== Math.min(lease.claimExp + EXPIRY_LEASE_MAX_S, lease.preparedAt + EXPIRY_LEASE_MAX_S)) throw new UsageError("Bail invalide : leaseEndsAt ≠ min(exp, preparedAt) + 2 h.");
+  if (lease.leaseEndsAt - lease.preparedAt > EXPIRY_LEASE_MAX_S || lease.leaseEndsAt <= lease.preparedAt) throw new UsageError("Bail invalide : fenêtre de bail hors bornes (≤ 2 h).");
+  if (Math.abs(lease.tokenExpiresAt - lease.claimExp) > 5) throw new UsageError("Bail invalide : expires_at ≠ exp (±5 s).");
+  if (lease.claimExp <= lease.preparedAt) throw new UsageError("Bail invalide : exp antérieur à la préparation.");
+  if (lease.verifyNotBefore >= lease.leaseEndsAt) throw new UsageError("Bail invalide : bail inexécutable (verifyNotBefore ≥ leaseEndsAt).");
+  if (!isExpiryCohortEmail(lease.email, lease.runId)) throw new UsageError("Bail invalide : e-mail hors cohorte d’expiration.");
+  if (lease.issuer !== `https://${lease.project}.supabase.co/auth/v1`) throw new UsageError("Bail invalide : issuer ≠ projet.");
+  return lease;
+}
+// Private file/dir policy for the lease and the manifest (read and write): regular file, no symlink,
+// no group/other bits (0600 file, 0700 directory). Pure check over lstat-like facts.
+export type PrivatePathFacts = { exists: boolean; isSymlink: boolean; isFile: boolean; mode: number; dir: { isSymlink: boolean; isDirectory: boolean; mode: number } };
+export function checkPrivatePath(label: string, facts: PrivatePathFacts, options: { mustExist: boolean }): string[] {
+  const reasons: string[] = [];
+  if (facts.dir.isSymlink) reasons.push(`${label} : le dossier est un lien symbolique`);
+  if (!facts.dir.isDirectory) reasons.push(`${label} : le dossier parent n’existe pas`);
+  if ((facts.dir.mode & 0o077) !== 0) reasons.push(`${label} : dossier lisible par le groupe/les autres (mode ${(facts.dir.mode & 0o777).toString(8)}, attendu 0700)`);
+  if (facts.exists) {
+    if (facts.isSymlink) reasons.push(`${label} : lien symbolique refusé`);
+    else if (!facts.isFile) reasons.push(`${label} : pas un fichier régulier`);
+    if ((facts.mode & 0o077) !== 0) reasons.push(`${label} : fichier lisible par le groupe/les autres (mode ${(facts.mode & 0o777).toString(8)}, attendu 0600)`);
+  } else if (options.mustExist) reasons.push(`${label} : fichier absent`);
+  return reasons;
 }
 export type LeaseDecision = { action: "too-early" | "expired-lease" | "verify"; detail: string };
 export function leaseDecision(lease: Lease, now: number): LeaseDecision {
@@ -1015,6 +1043,9 @@ export type ExpiryDeps = {
   getUser(userId: string): Promise<{ status: number; json: Record<string, unknown> | null }>;
   readManifest(path: string): Promise<Manifest>;
   record(kind: CreatedKind, value: string, extra?: ManifestExtra): Promise<void>;
+  // Verify only: durable record of the uid ONCE the cohort proof succeeded and BEFORE any further
+  // network call, so an interrupted verify still leaves a cleanable manifest (REVIEW-002).
+  recordValidated(userId: string): Promise<void>;
   addSecret(secret: string): void;
   forbidden(): string[];
   client: Pick<CleanupClient, "listDocuments" | "listObjects">;
@@ -1109,6 +1140,7 @@ export async function expiryVerify(lease: Lease, deps: ExpiryDeps): Promise<Veri
     if (manifest.expiry.claimExp !== lease.claimExp) mismatch.push("exp du bail ≠ manifeste");
     if (manifest.expiry.email !== lease.email) mismatch.push("e-mail du bail ≠ manifeste");
   }
+  if (manifest.leaseEndsAt !== new Date(lease.leaseEndsAt * 1000).toISOString()) mismatch.push("leaseEndsAt du bail ≠ manifeste");
   const claims = decodeJwtClaims(lease.token);
   if (!claims) mismatch.push("jeton du bail illisible");
   else {
@@ -1132,7 +1164,9 @@ export async function expiryVerify(lease: Lease, deps: ExpiryDeps): Promise<Veri
   if (!manifest.expiry || email !== manifest.expiry.email.toLowerCase()) cohort.push("e-mail Auth ≠ manifeste");
   if (cohort.length) return refused("preuve de cohorte Auth", cohort.join(" ; "));
   await deps.log("pass", "preuve de cohorte Auth : uid exact → e-mail du run, égal au bail et au manifeste (suppression autorisée)", `Auth admin HTTP 200, run ${lease.runId}`);
-  // From here on, cleanup of lease.userId is permitted (cohort proven).
+  // From here on, cleanup of lease.userId is permitted (cohort proven): record it durably NOW, before
+  // any further network call, so an interruption still leaves a cleanable manifest.
+  await deps.recordValidated(lease.userId);
   if (decision.action === "expired-lease") {
     // Non-proof: the account is proven ours, but the window is gone; nothing is deleted here —
     // the manifest written by prepare remains the rescue path.

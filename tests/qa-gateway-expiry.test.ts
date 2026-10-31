@@ -88,6 +88,14 @@ test("lease: bounded window, project binding, refusals, decisions with a fake cl
   assert.throws(() => parseLease({ ...lease, token: "" }, REF), UsageError);
   assert.throws(() => parseLease({ ...lease, claimExp: "soon" }, REF), UsageError);
   assert.throws(() => parseLease("nope", REF), UsageError);
+  // Relations and bounds are re-validated, never trusted.
+  assert.throws(() => parseLease({ ...lease, verifyNotBefore: exp + 59 }, REF), /verifyNotBefore ≠ exp \+ 60 s/);
+  assert.throws(() => parseLease({ ...lease, leaseEndsAt: prepared + 7201 }, REF), /leaseEndsAt ≠ min/);
+  assert.throws(() => parseLease({ ...lease, preparedAt: prepared - 10000, leaseEndsAt: Math.min(exp, prepared - 10000) + 7200 }, REF), /inexécutable/);
+  assert.throws(() => parseLease({ ...lease, claimExp: prepared - 1, tokenExpiresAt: prepared - 1, verifyNotBefore: prepared - 1 + 60, leaseEndsAt: Math.min(prepared - 1, prepared) + 7200 }, REF), /exp antérieur/);
+  assert.throws(() => parseLease({ ...lease, tokenExpiresAt: exp + 6 }, REF), /expires_at ≠ exp/);
+  assert.throws(() => parseLease({ ...lease, email: "victim@example.com" }, REF), /hors cohorte/);
+  assert.throws(() => parseLease({ ...lease, issuer: "https://evil.example/auth/v1" }, REF), /issuer ≠ projet/);
   assert.equal(leaseDecision(lease, exp + 30).action, "too-early");
   assert.equal(leaseDecision(lease, exp + 60).action, "verify");
   assert.equal(leaseDecision(lease, prepared + 7200 + 1).action, "expired-lease");
@@ -242,7 +250,11 @@ function deps(w: World, overrides: Partial<ExpiryDeps> = {}): ExpiryDeps {
     record: async (kind, value, extra = {}) => {
       w.calls.push(`record:${kind}`);
       if (!created[kind].includes(value)) created[kind].push(value);
-      w.manifestStore = parseManifest(JSON.parse(manifestJson("r1", REF, created, new Date(w.clock * 1000), [], { ...(w.manifestStore ?? {}), ...extra })), REF);
+      const keep = w.manifestStore ? { suite: w.manifestStore.suite, leaseEndsAt: w.manifestStore.leaseEndsAt, expiry: w.manifestStore.expiry } : {};
+      w.manifestStore = parseManifest(JSON.parse(manifestJson("r1", REF, created, new Date(w.clock * 1000), [], { ...keep, ...extra })), REF);
+    },
+    recordValidated: async (userId) => {
+      w.calls.push(`recordValidated:${userId === UID ? "uid" : "other"}`);
     },
     addSecret: (s) => w.secrets.push(s),
     forbidden: () => [...w.secrets],
@@ -317,7 +329,7 @@ test("phase 2 verify: too early refuses without any call; after exp + 60 s the s
   assert.equal(verified.outcome, "observed");
   assert.equal(verified.observedCode, "UNAUTHORIZED_JWT_EXPIRED");
   assert.equal(verified.cleanup, true);
-  assert.deepEqual(w.calls, ["readManifest", "getUser", "probe", "writeLease:original", "writeLease:out"], "cohort lookup before any permission; consumedAt on the ORIGINAL lease file and the out copy");
+  assert.deepEqual(w.calls, ["readManifest", "getUser", "recordValidated:uid", "probe", "writeLease:original", "writeLease:out"], "cohort lookup → durable record of the validated uid → only then the Edge call; consumedAt on the ORIGINAL lease file and the out copy");
   assert.equal(w.leases.at(-1)?.consumedAt, lease.claimExp + 120);
   assert.ok(w.logs.some((l) => /preuve de cohorte Auth/.test(l.step) && l.status === "pass"));
   assert.ok(w.logs.some((l) => /cohérence bail ↔ manifeste/.test(l.step) && l.status === "pass"));
@@ -349,7 +361,7 @@ test("verify refusals (no DELETE, no manifest entry): altered uid/token, manifes
     assert.equal(r.out.outcome, "refused", label);
     assert.equal(r.out.cleanup, false, `${label}: no cleanup permission`);
     assert.ok(!r.x.calls.includes("probe"), `${label}: no Edge call`);
-    assert.ok(!r.x.calls.some((c) => c.startsWith("record:")), `${label}: no manifest write from an unvalidated uid`);
+    assert.ok(!r.x.calls.some((c) => c.startsWith("record")), `${label}: no manifest write from an unvalidated uid`);
     assert.ok(!r.x.calls.some((c) => c.startsWith("writeLease")), `${label}: lease untouched`);
     assert.ok(r.x.logs.some((l) => l.status === "fail" && /verify refusé/.test(l.step) && /aucune suppression/.test(l.step)), `${label}: redacted diagnostic`);
   };
@@ -390,7 +402,7 @@ test("verify refusals (no DELETE, no manifest entry): altered uid/token, manifes
   const stale = await run((x) => { x.clock = lease.leaseEndsAt + 1; });
   assert.equal(stale.out.outcome, "refused");
   assert.equal(stale.out.cleanup, false);
-  assert.ok(stale.x.calls.includes("getUser") && !stale.x.calls.includes("probe"));
+  assert.deepEqual(stale.x.calls, ["readManifest", "getUser", "recordValidated:uid"], "proven cohort recorded, no probe, no lease write");
   assert.ok(stale.x.logs.some((l) => /bail hors fenêtre/.test(l.step) && /--cleanup-manifest/.test(l.detail)));
 });
 
@@ -424,23 +436,24 @@ test("verify non-proofs after a proven cohort: banned or deleted account, token 
   const nominal = await run(() => {});
   assert.equal(nominal.out.outcome, "observed");
   assert.equal(nominal.out.cleanup, true);
-  assert.deepEqual(nominal.x.calls, ["readManifest", "getUser", "probe", "writeLease:original", "writeLease:out"]);
+  assert.deepEqual(nominal.x.calls, ["readManifest", "getUser", "recordValidated:uid", "probe", "writeLease:original", "writeLease:out"]);
 });
 
 test("the orchestrator wires the suites without replaying the nine scenarios, keeps the token out of logs, and maps exit codes", async () => {
   const source = await readFile(new URL("../scripts/qa-gateway/run.mjs", import.meta.url), "utf8");
   assert.match(source, /args\.suite === "expiry-prepare" \? "expiry-prepare" : args\.suite === "expiry-verify" \? "expiry-verify" : "run"/);
-  assert.match(source, /\} else if \(mode === "expiry-prepare"\) \{\n\s+const prepared = await expiryPrepare\(expiryDeps\(\)\);/);
-  assert.match(source, /skipCleanup = prepared\.outcome === "prepared";/);
+  assert.match(source, /\} else if \(mode === "expiry-prepare"\) \{[^]*?if \(result\.steps\.some\(\(s\) => s\.status === "fail"\)\) throw new Error\("préalables en échec[^]*?const prepared = await expiryPrepare\(expiryDeps\(\)\);/);
+  assert.match(source, /skipCleanup = prepared\.outcome === "prepared" && !result\.steps\.some\(\(s\) => s\.status === "fail"\);/);
   assert.match(source, /\} else if \(mode === "expiry-verify"\) \{\n\s+const lease = parseLease\(/);
   assert.match(source, /tooEarly = verified\.outcome === "too-early";/);
   assert.match(source, /if \(mode !== "dry-run" && !skipCleanup\) \{/);
-  assert.match(source, /if \(tooEarly\) return 2;/);
+  assert.match(source, /if \(tooEarly \|\| refusedBeforeWrite\) return 2;/);
   assert.match(source, /result\.verdict === "pass" \|\| result\.verdict === "prepared" \|\| result\.verdict === "observed" \? 0 : 1/);
-  assert.match(source, /writeLease: \(lease, target\) => writePrivate\(target === "original" \? args\.lease : leasePath, JSON\.stringify\(lease, null, 2\)\)/);
-  // The uid reaches the manifest (and therefore the cleanup) only after the cohort proof granted it.
-  assert.match(source, /const verified = await expiryVerify\(lease, expiryDeps\(\)\);[^]*?if \(verified\.cleanup\) await record\("userIds", lease\.userId, manifestExtra\);/);
-  assert.doesNotMatch(source, /record\("userIds", lease\.userId[^\n]*\n[^\n]*expiryVerify/);
+  assert.match(source, /recordValidated: \(userId\) => record\("userIds", userId, manifestExtra\)/);
+  assert.match(source, /export async function main\(argv, deps = defaultDeps\(\)\)/);
+  assert.match(source, /import\.meta\.url === pathToFileURL\(process\.argv\[1\]\)\.href/);
+  // Behavioural proof (finally cleanup, preflight abort, symlink/perm refusals) lives in
+  // tests/qa-gateway-runner.test.ts with a fake cloud behind fetch; this file only checks wiring.
   assert.match(source, /readManifest: async \(manifestFile\) => parseManifest\(/);
   assert.match(source, /addSecret: \(secret\) =>/);
   assert.doesNotMatch(source, /console\.log\([^)]*(lease|token)/);
