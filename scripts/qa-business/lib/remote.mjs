@@ -38,11 +38,14 @@ export async function fetchPublicHtml(origin, { timeoutMs = 30000, fetchImpl = f
  * tests; defaults are the Codex helper and fetchPublicHtml. Returns {ok:true, proof} (short frozen
  * proof) or {ok:false, code, stage}; never the receipt or page content.
  */
-export async function remotePreflight({ options, nowMs = Date.now(), load = helper.loadDeploymentProof, fetchHtml = fetchPublicHtml, verify = helper.verifyRemoteDeployment, timeoutMs }) {
+export async function remotePreflight({ options, clock = () => Date.now(), load = helper.loadDeploymentProof, fetchHtml = fetchPublicHtml, verify = helper.verifyRemoteDeployment, timeoutMs, ...rest }) {
+  // The clock is READ at each age check, never captured before an await and reused after it
+  // (root review of e6fbcbd): a slow fetch must not let an expiring receipt pass verification.
+  if ("nowMs" in rest) throw new TypeError("remotePreflight takes a clock function, not a frozen nowMs");
   const expected = buildExpected(options);
   let proof;
   try {
-    proof = await load({ receiptPath: options.deploymentReceipt, expected, nowMs });
+    proof = await load({ receiptPath: options.deploymentReceipt, expected, nowMs: clock() });
   } catch (error) {
     return { ok: false, stage: "receipt", code: String(error?.code || "RECEIPT") };
   }
@@ -53,7 +56,8 @@ export async function remotePreflight({ options, nowMs = Date.now(), load = help
     return { ok: false, stage: "fetch", code: String(error?.code === "FETCH_STATUS" ? "FETCH_STATUS" : "FETCH") };
   }
   try {
-    return { ok: true, proof: verify({ proof, html, expected, nowMs }) };
+    // Fresh reading AFTER the fetch completed: the receipt age is re-checked at verification time.
+    return { ok: true, proof: verify({ proof, html, expected, nowMs: clock() }) };
   } catch (error) {
     return { ok: false, stage: "verify", code: String(error?.code || "VERIFY") };
   }

@@ -955,18 +955,18 @@ test("§19 real helper: fresh 0600 receipt outside Git + matching Flight page �
   const expected = remote.buildExpected(base);
   const page = nextFlightHtml([root("W1T6udg45nuoEg3XO7IGT")]);
   const good = await privateReceipt(receiptFor(expected, nowMs));
-  const ok = await remote.remotePreflight({ options: { ...base, deploymentReceipt: good }, nowMs, fetchHtml: async () => page });
+  const ok = await remote.remotePreflight({ options: { ...base, deploymentReceipt: good }, clock: () => nowMs, fetchHtml: async () => page });
   assert.equal(ok.ok, true);
   assert.deepEqual(Object.keys(ok.proof).sort(), ["capturedAt", "deploymentId", "mode", "origin", "provenance", "servedBuildId", "sha"]);
   assert.equal(ok.proof.servedBuildId, "W1T6udg45nuoEg3XO7IGT");
   const worldReadable = await privateReceipt(receiptFor(expected, nowMs), 0o644);
-  assert.equal((await remote.remotePreflight({ options: { ...base, deploymentReceipt: worldReadable }, nowMs, fetchHtml: async () => page })).code, "MODE");
+  assert.equal((await remote.remotePreflight({ options: { ...base, deploymentReceipt: worldReadable }, clock: () => nowMs, fetchHtml: async () => page })).code, "MODE");
   const stale = await privateReceipt(receiptFor(expected, nowMs - 16 * 60 * 1000));
-  assert.equal((await remote.remotePreflight({ options: { ...base, deploymentReceipt: stale }, nowMs, fetchHtml: async () => page })).code, "EXPIRED", "receipt older than 15 min");
+  assert.equal((await remote.remotePreflight({ options: { ...base, deploymentReceipt: stale }, clock: () => nowMs, fetchHtml: async () => page })).code, "EXPIRED", "receipt older than 15 min");
   const otherBuild = nextFlightHtml([root("SomeOtherBuild1")]);
-  assert.equal((await remote.remotePreflight({ options: { ...base, deploymentReceipt: good }, nowMs, fetchHtml: async () => otherBuild })).code, "SERVED_BUILD");
+  assert.equal((await remote.remotePreflight({ options: { ...base, deploymentReceipt: good }, clock: () => nowMs, fetchHtml: async () => otherBuild })).code, "SERVED_BUILD");
   const malformed = page + "<script>self.__next_f.push(null)</script>";
-  assert.equal((await remote.remotePreflight({ options: { ...base, deploymentReceipt: good }, nowMs, fetchHtml: async () => malformed })).code, "FLIGHT_INVALID");
+  assert.equal((await remote.remotePreflight({ options: { ...base, deploymentReceipt: good }, clock: () => nowMs, fetchHtml: async () => malformed })).code, "FLIGHT_INVALID");
 });
 test("§19 main: a refused remote provenance creates nothing, writes a private BLOCKED result and exits 2, without network to Supabase", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "qa-business-remote-main-"));
@@ -1018,7 +1018,67 @@ test("§19 real public 4c HTML (path from QA_BUSINESS_4C_HTML; skipped if absent
   const { options: base } = args.parseArgs([...remoteArgs(), "--dry-run"]);
   const nowMs = Date.parse("2026-10-31T20:00:00.000Z");
   const receipt = await privateReceipt(receiptFor(remote.buildExpected(base), nowMs));
-  const ok = await remote.remotePreflight({ options: { ...base, deploymentReceipt: receipt }, nowMs, fetchHtml: async () => html });
+  const ok = await remote.remotePreflight({ options: { ...base, deploymentReceipt: receipt }, clock: () => nowMs, fetchHtml: async () => html });
   assert.equal(ok.ok, true, JSON.stringify({ code: ok.code, stage: ok.stage }));
   assert.equal(ok.proof.servedBuildId, "W1T6udg45nuoEg3XO7IGT");
+});
+test("§19 clock barrier (root review e6fbcbd): receipt 890 s old, fetch completes after the clock advanced 20 s ⇒ EXPIRED at verify; fast fetch passes", async () => {
+  const remote = await lib("remote");
+  const { options: base } = args.parseArgs([...remoteArgs(), "--dry-run"]);
+  const t0 = Date.parse("2026-10-31T20:00:00.000Z");
+  const receipt = await privateReceipt(receiptFor(remote.buildExpected(base), t0 - 890_000));
+  const page = nextFlightHtml([root("W1T6udg45nuoEg3XO7IGT")]);
+  let now = t0;
+  const reads: number[] = [];
+  const clock = () => (reads.push(now), now);
+  const gate = deferred<string>();
+  const pending = remote.remotePreflight({ options: { ...base, deploymentReceipt: receipt }, clock, fetchHtml: () => gate.promise });
+  await new Promise((r) => setTimeout(r, 30));
+  now = t0 + 20_000;
+  gate.resolve(page);
+  assert.deepEqual(await pending, { ok: false, stage: "verify", code: "EXPIRED" });
+  assert.deepEqual(reads, [t0, t0 + 20_000], "one fresh reading per age check, the second after the fetch");
+  now = t0;
+  const fast = await remote.remotePreflight({ options: { ...base, deploymentReceipt: receipt }, clock: () => now, fetchHtml: async () => page });
+  assert.equal(fast.ok, true, "nominal fast fetch still passes");
+  await assert.rejects(() => remote.remotePreflight({ options: base, nowMs: t0, fetchHtml: async () => page }), /clock function/);
+});
+test("§19 clock barrier through main: slow public fetch ⇒ exit 2, BLOCKED 'refused at verify: EXPIRED', nothing created, no Supabase call", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "qa-business-clock-main-"));
+  const creds = path.join(dir, "credentials.json");
+  await writeFile(creds, JSON.stringify({ supabase: { url: "https://qaproject12345678.supabase.co", project_ref: "qaproject12345678", service_role_key: "service-role-key-for-tests-only-xxxx" }, allowed_base_urls: [REMOTE_ORIGIN] }), { mode: 0o600 });
+  const remote = await lib("remote");
+  const { options: base } = args.parseArgs([...remoteArgs(), "--dry-run"]);
+  const t0 = Date.parse("2026-10-31T20:00:00.000Z");
+  const receipt = await privateReceipt(receiptFor(remote.buildExpected(base), t0 - 890_000));
+  const out = path.join(dir, "out");
+  const originalNow = Date.now;
+  const originalFetch = globalThis.fetch;
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  const fetched: string[] = [];
+  let now = t0;
+  Date.now = () => now;
+  globalThis.fetch = (async (input: string) => {
+    fetched.push(String(input));
+    if (!String(input).startsWith(REMOTE_ORIGIN)) throw new Error("only the public page may be fetched");
+    now = t0 + 20_000; // the fetch takes 20 s
+    return new Response(nextFlightHtml([root("W1T6udg45nuoEg3XO7IGT")]), { status: 200 });
+  }) as typeof fetch;
+  process.stdout.write = (() => true) as typeof process.stdout.write;
+  let code: number;
+  try {
+    code = await runModule.main([...remoteArgs(), "--credentials", creds, "--out", out].map((a, i, all) => (all[i - 1] === "--deployment-receipt" ? receipt : a)));
+  } finally {
+    Date.now = originalNow;
+    globalThis.fetch = originalFetch;
+    process.stdout.write = originalWrite;
+  }
+  assert.equal(code, 2);
+  assert.deepEqual(fetched, [`${REMOTE_ORIGIN}/`], "only the public page; no Supabase request");
+  const result = JSON.parse(await readFile(path.join(out, "result.json"), "utf8"));
+  assert.equal(result.scenarios[0].status, "BLOCKED");
+  assert.equal(result.scenarios[0].note, "refused at verify: EXPIRED");
+  assert.equal(result.build_identity.attributable, false);
+  const { readdir } = await import("node:fs/promises");
+  assert.deepEqual((await readdir(out)).sort(), ["result.json", "summary.md"], "no manifest, no fixture, no run log");
 });
