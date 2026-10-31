@@ -59,6 +59,11 @@ Fichier de coordination émis par l’agent Claude pour le pilote (Codex). Le pi
 | CL-UI-009 validité d’invitation 14 j | 6962be6 | — |
 | PHOTO-REV-001/002/003 | fcc7f6b, puis correction du rapprochement (aucune confirmation automatique par nom/date : candidats à vérifier par l’utilisateur, confirmation explicite ou renvoi) | `tests/ui/uploads.test.ts` |
 | VIS-001 densité artisan | 529fe0f | capture preview à refaire par le pilote |
+| CL-UI-008 revalidation (signal perdu < 15 s) | 6667ffd (`components/app/revalidate.ts` : coalescence + relance différée, aucun signal perdu) | `tests/ui/revalidate.test.ts` |
+| Contexte organisation unique (badge/accès nuls) | 6667ffd (`membershipRole` sur le même contexte que l’espace : organisation unique implicite, plusieurs = choix explicite) | `tests/ui/invitations.test.ts` |
+| PHOTO-REV-004 fausse confirmation par nom/date | dbd500c (candidats à vérifier par l’utilisateur, confirmation explicite) | `tests/ui/uploads.test.ts` |
+| ADMIN-LISTS-001 | c2796f2 | revue source ; recette preview pilote |
+| ADMIN-DIRECTORIES-001 | a43e1a0 (session) + lot admin en cours | — |
 
 ## Corrections de revue pilote appliquées (checkpoint 2b)
 
