@@ -443,3 +443,28 @@ cascade ; budget jamais modifié. Exécution cloud par ROOT uniquement ; aucune 
 | Mode normal : UID récupéré présent sur disque à la première suppression, conservé après | « durability — normal mode… » (vraies `Fixtures` + écriture durable, contrôle disque injecté à la 1ʳᵉ suppression) |
 | Mode `--cleanup-manifest` : idem | « durability — --cleanup-manifest mode… » (vrai `cleanupOnly`, clients injectés) |
 | Interruption entre récupération et suppression ⇒ UID sur disque, intention ouverte ; reprise `--cleanup-manifest` le retrouve et le supprime ; état disque cohérent | « durability — interruption between recovery and DELETE… » |
+
+## Amendement A6 — provenance du déploiement (BUILD_ID Flight)
+
+Défaut confirmé par ROOT dans d3338e9 : `checkBuildId` (`scripts/qa-tracking/lib/preflight.mjs`) cherche la chaîne par simple `includes` (`/_next/static/<id>/` ou `"<id>"`). Elle refuse la forme Flight échappée (`\"b\":\"W1T6udg45nuoEg3XO7IGT\"`) du BUILD_ID public 4c398e8. Le relevé ROOT `/tmp/depannage-public-4c-build-probe.json` est une preuve en lecture seule : identité `source=flight`, un seul candidat, non ambiguë, et `preflightError` émis par ce check. La recherche par sous-chaîne est abandonnée dans les deux modes. Le reste de d3338e9 ne change pas (P2 clos, 33 PASS ROOT).
+
+**Mode REMOTE.** Le pré-vol, avant toute fixture, IntentLog ou écriture, passe par le helper Codex `scripts/qa/lib/deployment-proof.mjs` (contrat 1e5f808, `codex/qa-deployment-proof`), une fois revu :
+1. `loadDeploymentProof({receiptPath, expected, nowMs})` charge le reçu ROOT : fichier 0600 hors Git, métadonnées Vercel projet/équipe/déploiement, GitSource 4c.
+2. `GET /` est lu une seule fois, sans cookie ni clé.
+3. `verifyRemoteDeployment({proof, html, expected, nowMs})` vérifie le reçu et exige un BUILD_ID Flight unique, égal à celui du reçu et à `expected`.
+
+Les huit valeurs `expected` viennent de la configuration ROOT explicite passée au runner (CLI), jamais de la page ni du seul reçu. Tout refus ⇒ BLOCKED avant fixtures, exit non nul, aucune donnée du reçu ni du HTML dans les journaux. La sortie conserve seulement la preuve compacte retournée (`provenance: "root-receipt+served-flight"`).
+
+**Mode LOCAL.** Il garde un contrôle réel par parseur strict, sans sous-chaîne :
+- les pushes `self.__next_f` du document sont analysés ;
+- les chunks de type 1 sont concaténés, puis la ligne racine `0:` est analysée en JSON, ce qui gère les formes échappées ;
+- `b` est lu dans le jeu de caractères BUILD_ID ;
+- il faut exactement un identifiant au total (Flight et manifestes `/_next/static/<id>/` confondus), égal à `--build-id`.
+
+Zéro identifiant ⇒ refus « non vérifié ». Plusieurs ⇒ refus « ambigu ». Différent ⇒ refus « autre build ». Le parseur réutilisé est `servedBuildIdentity`, importé en lecture seule (le même que le helper Codex).
+
+**Hors périmètre / interdits.**
+- Les fichiers Codex (`scripts/qa/lib/deployment-proof.mjs`, `scripts/qa/tests/deployment-proof.test.mjs`, `docs/QA_DEPLOYMENT_PROVENANCE_CONTRACT.md`) et `scripts/qa/lib/*` ne sont pas modifiés.
+- Aucun `.next/BUILD_ID` fabriqué pour les tests. Ceux-ci utilisent des documents HTML Flight synthétiques : forme échappée réelle, zéro, plusieurs ou mauvais identifiant, push invalide.
+- Ni cloud, ni cookie, ni clé, ni lecture de reçu réel de ma part.
+- Le câblage du code (`scripts/qa-tracking/**` et `tests/qa-tracking*.test.ts` uniquement) attend la revue du helper et le feu vert du coordinateur.
