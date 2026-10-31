@@ -51,3 +51,18 @@ Claude : connecter les contrats exacts, ne pas assimiler rejet d’approbation a
 - accept_quote exige l’UUID affiché, contrôle sous verrou le propriétaire/gestionnaire et l’appartenance du devis actif à cette intervention ; aucune sélection implicite du devis le plus récent. Trigger d’approbation B2B conservé. API actions exige quote_id et le refuse sur les autres actions.
 - Vérifications : npm run check réussi (TypeScript, 23 tests et build) ; SQL : 22 groupes passent, dont absent/supplanté/étranger/tiers/helper privé refusés et devis actif exact accepté. Les scénarios B2B d’approbation continuent de passer.
 - Interface cliente : doit transmettre quote_id de la version affichée. L’ancienne interface qui ne transmet pas cet identifiant reçoit désormais 422 ; cela reste à intégrer/vérifier par Claude et le pilote avant preview combinée. La validité calendaire du devis reste un besoin à définir/modéliser, non prétendu résolu par ce contrôle de version.
+
+## Correction de revue Claude CL-001/CL-002 — migration008
+
+Findings distants lus depuis `origin/missions/web-pwa:CORRECTIONS.md` après la revue Claude du SHA6aaa1b36b99e64de4e0544780c8234c508cc1fd5. Base de ce correctif :409a082 (inclut006 organisations et007 read models performance). Migration003 historique inchangée ; aucun fichier UI/PWA/API hors ownership modifié.
+
+- CL-001 : wrappers self-service verrouillent profiles puis artisan_profiles et refusent toute édition/soumission/disponibilité pendant suspended. Helpers précédents renommés et privés. `approve_artisan(false)` répété conserve suspended ; true explicite opérateur exige un dossier complet soumis/examiné, conserve disponibilité false lors de réactivation. Compte approuvé hérité sans dossier : suspension matérialisée par shell suspended ; pas de réapprobation d’un dossier vide.
+- CL-002 : prédicats externes status requested/artisan NULL ajoutés à available_missions sans changer champs anonymisés, ordre, limite ou helper d’éligibilité.
+- Sonde reviewer reproductible : dans tests/sql-review.mjs, rechercher CL-001. Artisan approuvé puis suspendu → save/submit/dispo true/false refusés ; helpers privés refusés ; statut toujours suspended ; nouvel appel adminfalse ne change pas ce statut ; admintrue sur dossier complet restaure approved, disponibilité encorefalse, puis l’artisan peut se rendre disponible. Cas legacy incomplet refusé à l’approbation.
+- Ce correctif ne constitue pas une preuve de concurrence réelle ou cloud. Le lock order est vérifié en source et les scénarios d’autorisation sont exécutés sous PostgreSQL isolé ; la revue Claude doit encore recontrôler le SHA exact du fix. Aucun dossier réel ni dette modifié.
+
+### Preuves fraîches du correctif008
+
+- `npm run check` : TypeScript, 30 tests (zéro échec) et build Next réussis.
+- Harness SQL principal :29 groupes PASS, dont nouveaux scénarios CL-001/CL-002 ; harness performance :6 groupes PASS. Tous exécutent les huit migrations avec stubs Auth/Storage déclarés.
+- `git diff --check` propre ; aucune modification de la migration003 ou des chemins frontend. Pas de tests cloud ni de concurrence réelle revendiqués.

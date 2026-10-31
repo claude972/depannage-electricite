@@ -42,7 +42,7 @@ Pas de nouvelle API invitations/rôles par site/factures/remboursements dans ce 
 
 ## Politique technique initiale de candidature/suspension
 
-Une modification du dossier société/zone/compétences réinitialise son approbation et sa disponibilité : soumettre à nouveau puis examiner. Une suspension bloque nouvelles missions et nouvelles écritures terrain (devis/début/fin/rapport), tout en conservant lecture des preuves historiques. Le règlement est déjà bloqué par Checkout ; le traitement commercial des travaux restant dus demeure un blocage d’ouverture, pas une dette annulée automatiquement. Approbation exige dossier submitted ; elle ne certifie pas automatiquement les justificatifs.
+Hors suspension, une modification du dossier société/zone/compétences réinitialise son approbation et sa disponibilité : soumettre à nouveau puis examiner. Un dossier suspendu ne peut pas utiliser cette réinitialisation ; la suspension reste une décision opérateur. Une suspension bloque nouvelles missions et nouvelles écritures terrain (devis/début/fin/rapport), tout en conservant lecture des preuves historiques. Le règlement est déjà bloqué par Checkout ; le traitement commercial des travaux restant dus demeure un blocage d’ouverture, pas une dette annulée automatiquement. Approbation exige dossier submitted ; elle ne certifie pas automatiquement les justificatifs.
 
 ## Checkpoint 2 — tentatives et échecs Checkout (implémenté, intégration distante non vérifiée)
 
@@ -74,3 +74,13 @@ Ces routes sont implémentées et vérifiées localement dans le checkpoint006, 
 Toutes les commandes sont auditées avec acteur, objet et modification de rôle, sans code secret ni texte email dans le journal. Pas de mutation directe des tables par authenticated/anon ; invitations et événements passent par les RPC contrôlées. Les détails de facturation, délégations par site, invitations par email automatisées et transfert de payeur restent ouverts.
 
 Intégration frontend006 : relire workspace et les membres après acceptation/modification/retrait et à la reprise de visibilité ; si une organisation disparaît de la membership ou si son API répond403, invalider organisation/site actifs, données professionnelles et vues locales de ce périmètre. Une réponse tardive ne doit pas réintroduire ce cache. Les droits SQL se ferment aux requêtes suivantes ; un lien Storage déjà signé reste valable jusqu’à sa courte échéance et une copie déjà lue ne peut pas être effacée à distance. Le rôle global manager ne prouve pas l’accès à une organisation. Les exceptions créateur/payeur préexistantes ne sont pas remplacées ici par une nouvelle règle financière.
+
+## Correction de revue CL-001/CL-002 — migration008
+
+**Suspension persistante.** Tant que `artisan_profile.application_status === "suspended"`, les commandes artisan `save_profile`, `submit_application` et `set_availability` (true comme false) renvoient403 et ne modifient pas le dossier. Répéter `approve_artisan(user_id,false)` conserve suspended ; cela ne devient pas une demande de correction ordinaire. Seul un administrateur plateforme appelant explicitement `approve_artisan(user_id,true)` peut réactiver un dossier complet déjà soumis/examiné, avec les champs déclaratifs requis ; cette action ne certifie pas leur authenticité. La disponibilité reste false après réactivation jusqu’au choix de l’artisan. Aucun changement de dette, règlement ou preuve historique.
+
+Les points d’entrée modifiés prennent tous les verrous `profiles` puis `artisan_profiles`. Les anciennes fonctions de self-service sont renommées en helpers privés, EXECUTE révoqué pour public/anon/authenticated ; elles ne sont pas des RPC alternatives. Les contrats HTTP/signatures publiques restent inchangés.
+
+**Cas hérité conservateur.** Si un compte ancien est marqué approuvé sans aucun dossier et qu’un opérateur le suspend, un dossier vide explicitement suspended est créé. L’artisan ne peut pas l’effacer en recréant sa candidature ; l’opérateur ne peut pas l’approuver fictivement tant que les données manquantes n’ont pas fait l’objet d’une remise en état contrôlée et d’un examen. Cette remise en état reste un blocage opérateur/service explicite, pas une nouvelle API de réactivation libre.
+
+**Offres CL-002.** `available_missions()` filtre explicitement les dossiers `status='requested'` et `artisan_id IS NULL` avant le contrôle d’éligibilité existant. Projection anonymisée, ordre ancienneté/ID, limite100, zones/compétences/disponibilité et refus individuels inchangés. Pas de nouvelle promesse de performance cloud.
