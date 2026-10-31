@@ -70,6 +70,8 @@ import {
 import type { Session } from "../app/session-types";
 import { UploadQueuePanel } from "../app/upload-queue";
 import {
+  overviewFigures,
+  siteBudgetBars,
   NO_FILTERS,
   budgetFigures,
   budgetTone,
@@ -1146,7 +1148,10 @@ function InterventionsTable({
 function OverviewView({ c }: { c: Ctx }) {
   const { scope } = c;
   const list = useInterventionList(c);
-  const open = scope.interventions.filter((i) => OPEN_STATUSES.includes(i.status)).length;
+  // V5-C05 : chiffres réels seulement (ouverts, dont urgentes, échéances à 30 jours) ; aucune consommation.
+  const figures = overviewFigures(scope, new Date().toISOString().slice(0, 10), (status) => OPEN_STATUSES.includes(status));
+  const open = figures.open;
+  const siteBars = siteBudgetBars(scope.sites, scope.interventions, scope.quotes);
   const pending = byDateDesc(
     scope.approvals.filter((a) => a.status === "pending").map((a) => ({ ...a, created_at: a.created_at || "" })),
   );
@@ -1173,8 +1178,14 @@ function OverviewView({ c }: { c: Ctx }) {
         }
       />
       <div className={cx("stats-strip", styles.kpis)}>
-        <Stat icon="wrench" label="Interventions en cours" value={open} note="Demandes ouvertes, hors terminées et annulées" />
+        <Stat
+          icon="wrench"
+          label="Interventions en cours"
+          value={open}
+          note={figures.urgent > 0 ? `dont ${figures.urgent} urgente${figures.urgent > 1 ? "s" : ""} · hors terminées et annulées` : "Demandes ouvertes, hors terminées et annulées"}
+        />
         <Stat icon="receipt" tone="amber" label="Devis à approuver" value={pending.length} note="Approbations en attente sur le périmètre" />
+        <Stat icon="calendar" tone="violet" label="Échéances à 30 jours" value={figures.deadlines30} note="Contrôles et maintenances enregistrés, non terminés" />
         <Stat
           icon="euro"
           tone="navy"
@@ -1197,6 +1208,38 @@ function OverviewView({ c }: { c: Ctx }) {
           ) : undefined
         }
       />
+      {siteBars.length > 0 && (
+        <section className="panel" aria-labelledby="site-budgets-title">
+          <div className={styles.panelTitle}>
+            <div>
+              <h2 id="site-budgets-title">Budget par site</h2>
+              <p>Devis acceptés rapportés au budget de référence de chaque site · {BASIS}</p>
+            </div>
+            <button type="button" className={styles.textLink} onClick={() => c.go("sites")}>
+              Sites & contrats
+              <Icon name="arrow" size={15} />
+            </button>
+          </div>
+          <ul className={styles.siteBudgets}>
+            {siteBars.map((b) => (
+              <li key={b.id}>
+                <span className={styles.siteBudgetName}>{b.name}</span>
+                <div
+                  className={cx(styles.budgetBar, b.over && styles.budgetBarOver)}
+                  role="img"
+                  aria-label={b.ratio === null ? `${b.name} : pas de budget de référence` : `${b.name} : ${percent(b.ratio)} du budget engagé${b.over ? ", budget dépassé" : ""}`}
+                >
+                  <span style={{ width: `${b.width}%` }} />
+                </div>
+                <span className={styles.siteBudgetValue}>
+                  <strong>{money(b.committed)}</strong>
+                  {b.ratio === null ? " · pas de budget de référence" : ` · ${percent(b.ratio)} de ${money(b.budget)}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <div className={styles.twoCol}>
         <section className="panel" aria-labelledby="pending-approvals-title">
           <div className={styles.panelTitle}>

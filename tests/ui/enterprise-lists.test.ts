@@ -201,3 +201,52 @@ test("alertes : données chargées, libellés réels avec accord du pluriel", ()
     overdue: true,
   });
 });
+
+import { overviewFigures, siteBudgetBars } from "../../components/role/enterprise-lists";
+
+test("chiffres du tableau de bord V5-C05 : urgences = dossiers ouverts urgents, échéances à 30 jours bornées, rien d’autre", () => {
+  const isOpen = (s: string) => !["paid", "cancelled"].includes(s);
+  const figures = overviewFigures(
+    {
+      interventions: [
+        { status: "requested", urgency: "urgent" },
+        { status: "in_progress", urgency: "urgent" },
+        { status: "paid", urgency: "urgent" },
+        { status: "assigned", urgency: "scheduled" },
+      ],
+      compliance: [
+        { status: "pending", due_on: "2026-11-01" },
+        { status: "pending", due_on: "2026-12-01" },
+        { status: "pending", due_on: "2026-12-02" },
+        { status: "completed", due_on: "2026-11-10" },
+        { status: "pending", due_on: "2026-10-31" },
+      ],
+    },
+    "2026-11-01",
+    isOpen as never,
+  );
+  assert.deepEqual(figures, { open: 3, urgent: 2, deadlines30: 2 }, "aujourd’hui et J+30 inclus, dépassées et terminées exclues");
+  assert.deepEqual(overviewFigures({ interventions: [], compliance: [] }, "2026-11-01", isOpen as never), { open: 0, urgent: 0, deadlines30: 0 });
+});
+test("budget par site : engagé = devis acceptés du site, taux réel ou null sans budget", () => {
+  const bars = siteBudgetBars(
+    [
+      { id: "s1", name: "Siège", budget_cents: 100000 },
+      { id: "s2", name: "Annexe", budget_cents: 0 },
+    ],
+    [
+      { id: "i1", site_id: "s1" },
+      { id: "i2", site_id: "s1" },
+      { id: "i3", site_id: "s2" },
+    ],
+    [
+      { intervention_id: "i1", status: "accepted", total_cents: 60000 },
+      { intervention_id: "i2", status: "sent", total_cents: 99999 },
+      { intervention_id: "i2", status: "accepted", total_cents: 90000 },
+      { intervention_id: "i3", status: "accepted", total_cents: 5000 },
+    ],
+  );
+  assert.equal(bars.length, 2);
+  assert.deepEqual(bars[0], { id: "s1", name: "Siège", committed: 150000, budget: 100000, ratio: 150, width: 100, over: true }, "taux réel non plafonné, barre plafonnée");
+  assert.deepEqual(bars[1], { id: "s2", name: "Annexe", committed: 5000, budget: 0, ratio: null, width: 0, over: false }, "sans budget : aucun taux déduit");
+});

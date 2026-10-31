@@ -2179,3 +2179,68 @@
     justify-content: flex-start;
   }
 }
+
+/* V5-C05 : budget par site (barres engagé / budget, données réelles). */
+.siteBudgets {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.siteBudgets li {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px 14px;
+}
+.siteBudgetName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #102a43;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.siteBudgetValue {
+  font-size: 13px;
+  color: #526178;
+  white-space: nowrap;
+}
+.siteBudgetValue strong {
+  color: #102a43;
+}
+@media (max-width: 640px) {
+  .siteBudgets li {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .siteBudgetValue {
+    white-space: normal;
+  }
+}
+/* V5-C05 à 360 / 760 : cinq indicateurs en grille lisible (2 colonnes, puis 1 sous 400 px). */
+@media (max-width: 760px) {
+  .kpis {
+    display: grid;
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    border: 0;
+    background: transparent;
+  }
+  .kpis > div {
+    border: 1px solid #dce4ee;
+    border-radius: 10px;
+    min-width: 0;
+  }
+  /* Le bandeau global masque son 4e indicateur sur mobile ; ici les cinq chiffres réels restent visibles. */
+  .kpis > div:nth-child(4) {
+    display: flex;
+  }
+}
+@media (max-width: 400px) {
+  .kpis {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -879,3 +879,14 @@ terminé », bouton de menu et fermeture du tiroir à 44 px ; lignes de liste re
 état et action dessous). Bloc « Opérations du site » et ancrages non modifiés. Mesures 360 / 1280 : 0 cible < 44 px,
 aucun débordement, console vide. Écarts assumés : pas de photo, surface, année, étages, occupant, conformité,
 certification, consommation, projection, date de mise à jour.
+
+### Résultat du checkpoint 2 (entreprise) — V5-C05 tableau de bord
+
+Captures `docs/visual-fidelity/enterprise-overview-{360,1280}-after.jpg` (`#demo/manager`). Cinq indicateurs réels :
+interventions en cours « dont N urgentes » (champ `urgency`), devis à approuver, **échéances à 30 jours** (`due_on`
+non terminées, aujourd’hui et J+30 inclus, dépassées exclues), budget engagé, sites suivis — calculés par
+`overviewFigures` (testé). Panneau « Budget par site » : une barre par site via `siteBudgetBars` (`budgetFigures`,
+taux réel non plafonné, « pas de budget de référence » sans budget) avec lien « Sites & contrats ». À 360 / 760 les
+indicateurs passent en grille (2 colonnes puis 1) et le 4e indicateur, masqué par le bandeau global sur mobile, reste
+visible. Écarts assumés : aucune consommation (MWh), tendance, projection ni tableau « Sites & bâtiments » sur le
+tableau de bord (M66 reste maître). Mesures 360 / 1280 : 0 cible < 44 px, aucun débordement, console vide.
