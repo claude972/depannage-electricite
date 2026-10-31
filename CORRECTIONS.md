@@ -2489,3 +2489,10 @@ Revueindépendante d2e906ef09a41d39bee8ed27dadb8fd41344e1be :15testsciblésPASS,
 ### Pilotage et périmètre —13h17 Martinique
 Root a interrompu UNEfois sa réponseCLI lead17:14:52UTC viaESC pourregrouperpriorités/revues (pasdemandeutilisateurderetrait, aucunautreprojetarrêté, workersWIPpréservés), puis transmisbatchcritique. Leadobservé17:11litfindingsdistants/redispatchmêmesagents ;17:16 résoutfusionclientc511 etimplémentevraieactionre-sondeSHARED006. BackendWIPgatewayparser401 etQA PWAcorrectifsobservés, paslivrésavantcommit. NeplusrépétermessageimprécisaucunClaudeactif. Staticd93785fichiersaudités :0occurrencedelacléserviceeffective, pasgarantietoutsecretgénérale.
 Auditcourtécarts conservédocs/audit/ECARTS_LIVRAISON_D9374FA.md : distinguecodeprésent/nonrecetté/manquesGPSsupportscopéautomatisationsetextensionsconditionnelles. Publicd2estmaintenantrevu(codeacceptable/captureouverte), actualisationpostérieureàl'audit. Ne déclarerWebfinal76ni natiflivré àpartir13tests. Poursuivrefonctionsautoriséesparphases, aucunreportimplicitedesservicesautresqueStripe/Vercel.
+
+
+### CLIENT-HISTORY001 VERIFIED —13h19 Martinique
+c511ee0b5d9230bcf971a34f2517a3ff67d880e7 :5testsciblésPASS, paid+paid_atserveur→historiqueRèglementdone/steppercomplètementcoché, completedoupayésanstimestampneconfirmentrien. Capture1280reluecohérenteavecreçu, rapportdocs/reviews/CLIENT_C511EE0.md. RevuuniquementborneprésentationpasproviderStripe.
+
+### PWA-LIFECYCLE-REV-004 — P2 harness fauxéchec cleanup, Claude QA, d97049f
+Confirmationlectureindépendante : stopAll itèreold→new ; olddéjàsorti maisnewactifmêmeport, stop(old)attend/retournefalsecarportoccupéparNEWpropre, puisstopnewlibère ; every(steps.stopped)conservefalsemêmepropre. Corrigerordreinverseou séparerPIDparchild/portglobalfinal, testoldsorti+newactif+stopAll=>cleanupvrai/aucunPIDrestant. Ne pas tuerétranger niignorervraieoccupationfinale. DéfautfauxFAILconservateurpaspreuveorphelin, distinctREV001launchrace ; pasdéréglerreadbackportdéjàcorrigé. RapportPWA_D97049Frevuecomplétéhorsrepoagent, findingassignémêmeQA.
