@@ -817,3 +817,11 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 
 - Root read §20 `a815881`: **GO code** — bounded immutable UI window after driver probes + remove the b2b `status != 403` filter (UI 403 must FAIL); server 403/404 and 0-event asserts kept; tests driver 403 before baseline allowed, UI 403/200 after baseline FAIL. Public rerun only after SHA review and root's independent cleanup. Forwarded to a96ae75.
 - **Business run d467d88c7206 finished:** 14 total, 13 PASS, 1 FAIL (docs third-party `noPosts`, harness attribution), 0 ANOMALY, 0 BLOCKED, exit 1; cleanup complete, drain pending 0, timed out false, open incomplete 0; root independent postflight (48) being prepared by an existing agent before any new cloud. App unchanged.
+
+## 2026-10-31 — business §20 UI window fix: b943b45
+
+- `claude/web-qa-business`: amendment `a8158818ea272f97295f030ae0eb4bec9dd521d9`, fix **`b943b458e1edc0ac9cdac1a380935d1b96a82ad0`** (branch only, no integration change, no cloud).
+- New `scripts/qa-business/lib/network.mjs`: `settledBaseline(h, {since, driverMutations})` waits until exactly the expected driver mutations are observed since probes began (late responses included), FAIL if more, ANOMALY if never observed, returns a frozen `{index}`; `assertNoUiWrites(h, baseline)` FAILs on ANY mutating (non GET/HEAD) `/api/` request after the baseline, whatever its status.
+- Applied: docs third party (baseline after overview 403 / download 404 / driver generate 403 / 0-event asserts, unchanged, then UI navigation), docs client reading (window after login), b2b reader (window after login, before its driver probes), b2b third party (baseline after GET 403 / driver POST 403 / B1 200; `status !== 403` filter removed). Old whole-log `noPosts` deleted.
+- Tests: driver POST 403 before baseline PASS; UI POST 403 in window FAIL; UI PATCH 200 FAIL; late driver response before window; extra write during probes FAIL; driver never observed ⇒ anomaly. Harness 52 pass / 1 skipped; `tests/**/*.test.ts` 617 / 0 fail / 1 skipped; tsc clean; node --check 14/14; dry-run 0.
+- For root: review b943b45, then public rerun after independent cleanup.
