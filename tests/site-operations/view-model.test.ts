@@ -88,3 +88,26 @@ test("a null (stale) load leaves no actionable state: data untouched, writes dis
   assert.equal(resolveAuthority(scope(true), fresh.report, fresh.stale).canWrite, true);
   assert.notEqual(scopeKey(scope(true)), scopeKey({ ...scope(true), siteId: "s2" }), "a scope change remounts: the previous report is cleared");
 });
+test("budget selection barrier: mount with 0 years → first year created → refreshed report makes the lines table reachable", async () => {
+  const { effectiveFiscalYearId, selectionAfterYearCreated } = await import("../../lib/features/site-operations/view-model");
+  // Mount: the panel's initial state is computed from an empty report (as in root run 78a5f871aaba).
+  let chosen = "";
+  assert.equal(effectiveFiscalYearId(chosen, [], null), "", "no year: nothing selected, no lines table");
+  // « Ajouter un exercice » succeeds: onDone receives the created row; the report then refreshes.
+  const created = { id: "f1", starts_on: "2026-01-01", ends_on: "2026-12-31" };
+  chosen = selectionAfterYearCreated(chosen, created, "2026-10-31");
+  assert.equal(chosen, "f1", "a newly created CURRENT year becomes the selection");
+  const refreshed = [{ id: "f1" }];
+  assert.equal(effectiveFiscalYearId(chosen, refreshed, "f1"), "f1", "lines table and « Saisir » reachable without remount");
+  // Even without the onDone selection (e.g. a year created elsewhere), the refreshed report recovers.
+  assert.equal(effectiveFiscalYearId("", refreshed, "f1"), "f1");
+  assert.equal(effectiveFiscalYearId("", refreshed, null), "f1", "no current year: first listed");
+  // A non-current created year does not steal an existing choice.
+  assert.equal(selectionAfterYearCreated("f1", { id: "f2", starts_on: "2027-01-01", ends_on: "2027-12-31" }, "2026-10-31"), "f1");
+  assert.equal(selectionAfterYearCreated("f1", null, "2026-10-31"), "f1");
+  // Explicit choice kept while it exists; removed/unknown choice falls back.
+  const two = [{ id: "f2" }, { id: "f1" }];
+  assert.equal(effectiveFiscalYearId("f2", two, "f1"), "f2", "explicit choice kept");
+  assert.equal(effectiveFiscalYearId("gone", two, "f1"), "f1", "unknown choice → current");
+  assert.equal(effectiveFiscalYearId("gone", two, "absent"), "f2", "unknown choice and unknown current → first");
+});

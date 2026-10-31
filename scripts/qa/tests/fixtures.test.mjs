@@ -140,6 +140,7 @@ test("a creation in flight when the signal is raised still records its id in the
   const gateInsert = new Promise((resolve) => (release = resolve));
   const db = fakeDb({ hooks: { beforeInsertResolves: (table) => (table === "sites" ? gateInsert : null) } });
   await withFixtures(db, gate, async (fixtures, manifest) => {
+    await fixtures.init(); // manifest already on disk: the insert is sent before the signal (durability contract)
     const org = { id: uuid(11) };
     const pending = fixtures.createSite(org, "Site A"); // insert sent, response not yet received
     await new Promise((r) => setImmediate(r));

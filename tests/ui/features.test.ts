@@ -205,7 +205,7 @@ test("platform views are fail-closed on the server reply: no reply, no capabilit
     super_admin: false,
     scopes: ["finance_read"],
     super_admin_count: 2,
-    capabilities: { operators: false, audit: false, finance: true, reviews_moderation: false, refund_execution: false, invoice_rendering: false },
+    capabilities: { support: false, support_reply: false, support_status: false, operators: false, audit: false, finance: true, reviews_moderation: false, refund_execution: false, invoice_rendering: false },
     config: {} as PlatformAccess["config"],
   };
   assert.equal(platformViewAllowed(null, "platform-finance"), false);
@@ -337,4 +337,32 @@ test("bundle owner is captured at construction, not at invocation", async () => 
   h.bump();
   assert.equal(bundle.owner, 1, "unchanged by later identity changes");
   assert.equal(createFeatureClients(h.deps).owner, 2);
+});
+
+test("quote documents first access: unknown → one real GET for the exact target → available; identity change restores nothing", async () => {
+  const { reprobe, createFeatureClients } = await import("../../components/app/features");
+  // Nominal: the probe is a real read of the exact quote; only the reply marks the contract available.
+  const h = harness(() => Promise.resolve({ quotes: [] }));
+  const bundle = createFeatureClients(h.deps);
+  const states: string[] = [];
+  const ctx = { bundle, alive: () => h.deps.generation() === bundle.owner, setState: (k: string, s: string) => states.push(`${k}:${s}`), setUnread: () => {}, setAccess: () => {} };
+  await reprobe("quoteDocuments", { quoteId: "q-1" }, ctx as never);
+  assert.deepEqual(h.calls.map((c) => [c.path, c.method]), [["/api/quote-documents?quote_id=q-1", undefined]], "one GET, exact target, no mutation");
+  assert.deepEqual(h.states, [["quoteDocuments", "available"]], "availability set by the reply only");
+  // Server refusal keeps the contract present (403) and is not turned into a grant.
+  const r = harness(() => Promise.reject(new ApiRequestError(403, "refus")));
+  await reprobe("quoteDocuments", { interventionId: "i-1" }, { ...ctx, bundle: createFeatureClients(r.deps), alive: () => true } as never);
+  assert.deepEqual(r.states, [["quoteDocuments", "available"]]);
+  const u = harness(() => Promise.reject(new ApiRequestError(503, "panne")));
+  await reprobe("quoteDocuments", { quoteId: "q-1" }, { ...ctx, bundle: createFeatureClients(u.deps), alive: () => true } as never);
+  assert.deepEqual(u.states, [["quoteDocuments", "unavailable"]], "503 → unavailable (retry offered by the shell)");
+  // Identity changes while the GET is pending: the reply restores nothing.
+  let release: (v: unknown) => void = () => {};
+  const s = harness(() => new Promise((res) => (release = res)));
+  const sb = createFeatureClients(s.deps);
+  const pending = reprobe("quoteDocuments", { quoteId: "q-1" }, { ...ctx, bundle: sb, alive: () => s.deps.generation() === sb.owner } as never);
+  s.bump();
+  release({ quotes: [] });
+  await pending;
+  assert.deepEqual(s.states, [], "no availability recorded for the previous identity");
 });

@@ -46,3 +46,21 @@ export function outcomeOf(result: SiteOperationsCommandResult | null, alive = tr
   if (!alive || result === null) return { status: "stale" };
   return { status: "done", result };
 }
+
+/**
+ * Fiscal year effectively shown by the budget panel, derived at every render (no effect loop):
+ * the user's explicit choice while it still exists in the refreshed report, otherwise the current
+ * fiscal year, otherwise the first listed one, otherwise none. Fixes the dead end where the panel
+ * mounted with 0 years kept an empty selection after the first year was created.
+ */
+export function effectiveFiscalYearId(selected: string, years: { id: string }[], currentId: string | null): string {
+  if (selected && years.some((y) => y.id === selected)) return selected;
+  if (currentId && years.some((y) => y.id === currentId)) return currentId;
+  return years[0]?.id ?? "";
+}
+/** After a fiscal year is created: select it when it covers `today` (UTC date), else keep the choice. */
+export function selectionAfterYearCreated(previous: string, created: unknown, today: string): string {
+  const row = created as { id?: unknown; starts_on?: unknown; ends_on?: unknown } | null;
+  if (!row || typeof row.id !== "string" || typeof row.starts_on !== "string" || typeof row.ends_on !== "string") return previous;
+  return row.starts_on <= today && row.ends_on >= today ? row.id : previous;
+}

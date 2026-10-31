@@ -30,8 +30,9 @@ import type {
 import type { SiteOperationsClient, SiteOperationsCommand, SiteOperationsCommandResult, SiteOperationsReport } from "../../lib/features/site-operations/types";
 import type { QuoteDocumentsClient, QuoteDocumentsCommand, QuoteDocumentsCommandResult, QuoteDocumentsOverview, QuoteDocumentsTarget } from "../../lib/features/quote-documents/types";
 import type { ListQuery, PlatformAccess, PlatformClient } from "../../lib/features/platform-operations/types";
+import type { GeocodeCandidates, TrackingClient, TrackingCommand, TrackingRoute, TrackingSnapshot } from "../../lib/features/tracking/types";
 
-export type FeatureKey = "quoteDocuments" | "planning" | "notifications" | "siteOperations" | "platformOperations";
+export type FeatureKey = "quoteDocuments" | "planning" | "notifications" | "siteOperations" | "platformOperations" | "tracking";
 /** Context a re-probe needs when the contract has no context-free read. */
 export type ReprobeHint = { siteId?: string; quoteId?: string; interventionId?: string };
 /** Only a transient failure is worth a user retry; a missing contract is a deployment state. */
@@ -99,6 +100,10 @@ export async function reprobe(key: FeatureKey, hint: ReprobeHint | undefined, ct
       if (siteId) await ctx.bundle.siteOperations.load(siteId).catch(swallow);
       return;
     }
+    case "tracking": {
+      if (hint?.interventionId) await ctx.bundle.tracking(hint.interventionId).load().catch(swallow);
+      return;
+    }
     case "quoteDocuments": {
       const target = hint?.quoteId ? { quoteId: hint.quoteId } : hint?.interventionId ? { interventionId: hint.interventionId } : null;
       if (target) await ctx.bundle.quoteDocuments.load(target).catch(swallow);
@@ -134,6 +139,10 @@ function query(params: Record<string, string | number | boolean | null | undefin
 
 /** Records only what an error proves about the contract: absent, down, or present (other refusals). */
 function observe(deps: FeatureDeps, key: FeatureKey, error: unknown): void {
+  if (error instanceof ApiRequestError && key === "tracking") {
+    deps.setState(key, trackingStateFromError(error));
+    return;
+  }
   if (error instanceof ApiRequestError) {
     if (error.status === 404 || error.status === 405 || error.status === 503 || error.status === 0) {
       deps.setState(key, contractStateFromError(error));
@@ -234,6 +243,31 @@ export function createSiteOperationsClient(input: FeatureDeps): SiteOperationsCl
   };
 }
 
+/**
+ * Tracking answers 404 « Ce suivi est introuvable » (JSON) for a dossier the actor cannot see, and
+ * 503 with a machine reason when the provider or a precondition is down: both prove the contract
+ * is deployed. Only a framework 404/405 (no JSON body) means missing, and a 503 without reason or
+ * a network failure means unavailable.
+ */
+export function trackingStateFromError(error: ApiRequestError): ContractState {
+  if (error.status === 404 || error.status === 405) return error.json ? "available" : "missing";
+  if (error.status === 503) return error.reason ? "available" : "unavailable";
+  if (error.status === 0) return "unavailable";
+  return "available";
+}
+
+export function createTrackingClient(input: FeatureDeps, interventionId: string): TrackingClient {
+  const deps = owned(input);
+  const request = requestOf(deps);
+  const base = `/api/interventions/${enc(interventionId)}/tracking`;
+  return {
+    load: () => bound(deps, "tracking", () => request<TrackingSnapshot>(base)),
+    command: (command: TrackingCommand) => bound(deps, "tracking", () => request<TrackingSnapshot>(base, command)),
+    route: () => bound(deps, "tracking", () => request<TrackingRoute>(`${base}/route`, {})),
+    geocode: (q: string) => bound(deps, "tracking", () => request<GeocodeCandidates>(`${base}/geocode`, { query: q })),
+  };
+}
+
 export function createQuoteDocumentsClient(input: FeatureDeps): QuoteDocumentsClient {
   const deps = owned(input);
   const request = requestOf(deps);
@@ -298,6 +332,13 @@ export function createPlatformClient(input: FeatureDeps): PlatformClient {
 }
 
 export type PlatformView = "platform-operators" | "platform-finance" | "platform-moderation";
+/** Views opened only by the /me reply: the three back-office views and the A5 assistance queue. */
+export type OperatorView = PlatformView | "support-queue";
+/** Fail-closed gate for every operator view; the assistance queue needs the server capability `support`. */
+export function operatorViewAllowed(access: PlatformAccess | null | undefined, view: OperatorView): boolean {
+  if (view === "support-queue") return !!access && access.capabilities?.support === true;
+  return platformViewAllowed(access, view);
+}
 /**
  * Fail-closed gate for the back-office views: the server reply to /me is the only truth. A limited
  * operator keeps an ordinary profile role (client/manager) and is never promoted; without a reply
@@ -328,6 +369,8 @@ export type FeatureClients = {
   siteOperations: SiteOperationsClient;
   quoteDocuments: QuoteDocumentsClient;
   platform: PlatformClient;
+  /** Tracking client for one dossier, bound to the bundle owner like every other client. */
+  tracking(interventionId: string): TrackingClient;
   /** True when every client above operates on demonstration seeds only (no network). */
   demo: boolean;
   /** Identity generation that owns this bundle, captured at construction (never at invocation). */
@@ -342,6 +385,7 @@ export function createFeatureClients(input: FeatureDeps): FeatureClients {
     siteOperations: createSiteOperationsClient(deps),
     quoteDocuments: createQuoteDocumentsClient(deps),
     platform: createPlatformClient(deps),
+    tracking: (interventionId: string) => createTrackingClient(deps, interventionId),
     demo: false,
     owner: deps.owner as number,
   };
@@ -411,6 +455,9 @@ export function createDemoFeatureClients(role: Role): FeatureClients {
         decideContestation: refusal,
       },
     },
+    // The tracking leaves receive their demonstration snapshot through `demo` and never call the
+    // client in that mode; this safety net reads nothing and refuses every command.
+    tracking: () => ({ load: refusal, command: refusal, route: refusal, geocode: refusal }),
     demo: true,
     owner: -1, // demonstration bundles never re-probe
   };

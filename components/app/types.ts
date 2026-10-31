@@ -507,6 +507,7 @@ export type Capabilities = {
   notifications: ContractState;
   siteOperations: ContractState;
   platformOperations: ContractState;
+  tracking: ContractState;
 };
 export const UNKNOWN_CAPABILITIES: Capabilities = {
   operations: "unknown",
@@ -526,6 +527,7 @@ export const UNKNOWN_CAPABILITIES: Capabilities = {
   notifications: "unknown",
   siteOperations: "unknown",
   platformOperations: "unknown",
+  tracking: "unknown",
 };
 export type ReturnContext =
   | { kind: "payment"; state: "pending" | "cancelled"; interventionId: string }
@@ -584,7 +586,9 @@ export type View =
   | "site-operations"
   | "platform-operators"
   | "platform-finance"
-  | "platform-moderation";
+  | "platform-moderation"
+  // A5: global assistance queue for scoped support operators (server capability `support`).
+  | "support-queue";
 
 // Photos selected with a request are uploaded one by one AFTER the dossier exists; failures
 // stay in the queue for an explicit retry that never recreates the dossier.
@@ -727,7 +731,7 @@ export type SupportMessage = {
   id: string;
   ticket_id: string;
   author_id: string;
-  author_kind: "user" | "admin";
+  author_kind: "user" | "admin" | "operator";
   version: number;
   body: string;
   created_at: string;

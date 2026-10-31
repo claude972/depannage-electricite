@@ -90,12 +90,13 @@ import {
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
+import { TrackingAnchor } from "./tracking-anchor";
 import { SiteOperationsView } from "../features/site-operations/site-operations-view";
 import { CONTRACT_MESSAGES } from "../app/api";
 import { demoReport } from "../../lib/features/site-operations/demo";
 import { leafScope, platformEntries } from "./anchors";
 import { PlatformPage } from "./platform-anchor";
-import { FeatureUnavailable } from "./feature-unavailable";
+import { FeatureUnavailable, useProbeWhenUnknown } from "./feature-unavailable";
 import type {
   Approval,
   ApprovalRule,
@@ -477,6 +478,8 @@ export function EnterpriseSpace({ session }: { session: Session }) {
         case "platform-operators":
         case "platform-finance":
         case "platform-moderation":
+        case "support-queue":
+      case "support-queue":
           return <PlatformPage session={session} view={view} />;
         case "documents":
           return <DocumentsView c={c} />;
@@ -1604,6 +1607,21 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
             )}
           </section>
 
+          {["accepted", "in_progress"].includes(intervention.status) && (
+            <TrackingAnchor
+              session={c.session}
+              variant="viewer"
+              interventionId={intervention.id}
+              authority={
+                canOperate
+                  ? { canWrite: true }
+                  : { canWrite: false, reason: c.authority.readOnlyReason || "Vos droits d’écriture ne couvrent pas le site de ce dossier." }
+              }
+              organizationId={c.organization?.id}
+              siteId={intervention.site_id || undefined}
+            />
+          )}
+
           <section className="panel" aria-labelledby="dossier-quote">
             <div className={styles.panelTitle}>
               <div>
@@ -2315,6 +2333,9 @@ function ContractsView({ c }: { c: Ctx }) {
 function SiteSheet({ c, id }: { c: Ctx; id: string }) {
   const { session } = c;
   const site = c.orgSites.find((s) => s.id === id);
+  // Live: probe the site-operations contract for THIS site once while it is unknown (works with
+  // « Tous les sites » too, where no global active site triggers the controller probe).
+  useProbeWhenUnknown(c.session, "siteOperations", { siteId: id }, Boolean(site));
   const [tab, setTab] = useState<"open" | "past">("open");
   if (!site)
     return (

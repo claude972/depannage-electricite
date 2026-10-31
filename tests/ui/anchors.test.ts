@@ -1,3 +1,4 @@
+import type { OperatorView } from "../../components/app/features";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { anchorEntryVisible, leafScope } from "../../components/role/anchors";
@@ -42,7 +43,7 @@ const access = (over: Omit<Partial<PlatformAccess>, "capabilities"> & { capabili
   super_admin_count: null,
   config: { commission: { setting_bps: null, setting_version: null, checkout_bps: null, aligned: null }, payment_provider: { configured: false, mode: null, live_enabled: false }, invoice_issuer: { configured: false } },
   ...over,
-  capabilities: { operators: false, audit: false, finance: false, reviews_moderation: false, refund_execution: false, invoice_rendering: false, ...(over.capabilities ?? {}) },
+  capabilities: { support: false, support_reply: false, support_status: false, operators: false, audit: false, finance: false, reviews_moderation: false, refund_execution: false, invoice_rendering: false, ...(over.capabilities ?? {}) },
 });
 const all = () => true;
 
@@ -75,10 +76,16 @@ import { canAccess } from "../../components/app/session";
 
 test("opérateur limité : un artisan ou un particulier habilité voit ses sections, jamais sans réponse", () => {
   for (const role of ["artisan", "client", "manager"] as const) {
-    const guard = (v: "platform-operators" | "platform-finance" | "platform-moderation") => canAccess(v, role, "live");
+    const guard = (v: OperatorView) => canAccess(v, role, "live");
     assert.deepEqual(platformEntries(null, guard), [], `${role} sans réponse`);
     assert.deepEqual(platformEntries(access({ capabilities: { finance: true } }), guard).map((e) => e.view), ["platform-finance"], `${role} finance`);
-    assert.deepEqual(platformEntries(access({ super_admin: true }), guard).length, 3, `${role} super-admin`);
+    assert.deepEqual(platformEntries(access({ super_admin: true }), guard).length, 3, `${role} super-admin (3 vues back-office ; la file d’assistance suit la capacité serveur, pas le statut)`);
+    assert.deepEqual(
+      platformEntries(access({ capabilities: { support: true } }), guard).map((e) => e.view),
+      ["support-queue"],
+      `${role} opérateur d’assistance : seule la file`,
+    );
+    assert.deepEqual(platformEntries(access({ capabilities: { support_reply: true } }), guard), [], `${role} write sans read : rien`);
   }
   // Mode public : aucun rôle → aucune entrée quelle que soit la réponse.
   assert.deepEqual(platformEntries(access({ super_admin: true }), (v) => canAccess(v, null, "public")), []);

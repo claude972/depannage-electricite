@@ -7,6 +7,7 @@ import { createClient } from "../lib/supabase/client";
 import { api, ApiRequestError, contractStateFromError, uploadDocument } from "./app/api";
 import { createGuard, createRunner, runForResult, type RunContext, type Runner } from "./app/guard";
 import { adoptIdentity } from "./app/identity";
+import { demoTicketPermissions } from "./role/support-lists";
 import { createDemoFeatureClients, createFeatureClients, planningProbeRange, reprobe, type FeatureKey, type ReprobeHint } from "./app/features";
 import type { PlatformAccess } from "../lib/features/platform-operations/types";
 import { PLATFORM_DEMO } from "../lib/features/platform-operations/demo";
@@ -557,6 +558,7 @@ export default function CourantApp() {
       notifications: "available",
       siteOperations: "available",
       platformOperations: "available",
+      tracking: "available",
     });
     guard.bump();
     setIdentityEpoch((e) => e + 1);
@@ -1698,7 +1700,12 @@ export default function CourantApp() {
         ticket: entry.ticket,
         messages: entry.messages.filter((m) => versions.has(m.version)),
         events,
-        permissions: { can_reply: true, can_set_status: roleRef.current === "admin" },
+        // Same rule as the server for an administrator (018): no reply on a resolved ticket.
+        permissions: demoTicketPermissions(
+          { can_reply_all: roleRef.current === "admin", can_set_status_all: roleRef.current === "admin" },
+          me,
+          entry.ticket,
+        ),
         page: {
           limit,
           after_version: after,

@@ -478,6 +478,7 @@ export function AdminSpace({ session }: { session: Session }) {
       case "platform-operators":
       case "platform-finance":
       case "platform-moderation":
+      case "support-queue":
         return PLATFORM_TITLES[view];
       case "admin-settings":
         return { title: "Paramètres", subtitle: "Réglages de la plateforme, fonctions activées et journal d’audit" };
@@ -1005,6 +1006,7 @@ export function AdminSpace({ session }: { session: Session }) {
       case "platform-operators":
       case "platform-finance":
       case "platform-moderation":
+      case "support-queue":
         content = <PlatformPage session={session} view={view} withTitle={false} />;
         break;
       case "admin-settings":

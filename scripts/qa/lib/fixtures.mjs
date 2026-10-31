@@ -5,7 +5,15 @@
 // Stop gate (QA-003): every write goes through `guardWrites`, which refuses the call once the
 // lifecycle raised the stop signal (StopRequestedError), and every creation helper is registered
 // as in-flight so the lifecycle drains it (ids written to the manifest) BEFORE cleanup deletes.
-import { writeFile } from "node:fs/promises";
+//
+// Durability (docs/QA_FIXTURES_DURABILITY_CONTRACT.md + amendment c89758b): the manifest is on disk
+// BEFORE the first mutation (lazy init(), never from the constructor, through the INSTANCE save so
+// subclass/instance overrides apply); base saves are serialised (snapshot at their turn) and written
+// atomically (same-dir temp 0600 wx, fsync, rename, chmod, directory fsync). Call graph:
+// track/creating -> init -> save -> queue -> writeNow; writeNow never calls save/init/queue.
+import * as fsp from "node:fs/promises";
+import path from "node:path";
+import { randomBytes } from "node:crypto";
 import { randomUUID } from "node:crypto";
 import { emptyManifest } from "./cleanup.mjs";
 import { newPassword } from "./cohort.mjs";
@@ -27,8 +35,53 @@ export function guardWrites(db, gate) {
   return guarded;
 }
 
+/** Errnos meaning "a directory cannot be fsynced here" (ignored); everything else propagates. */
+export function ignorableDirFsyncError(error, platform = process.platform) {
+  const code = error?.code;
+  if (["EINVAL", "ENOTSUP", "EOPNOTSUPP", "EISDIR"].includes(code)) return true;
+  return platform === "win32" && (code === "EPERM" || code === "EBADF");
+}
+
+/**
+ * Atomic JSON write: same-directory temp file (exclusive, 0600), full write, fsync, rename onto the
+ * target, chmod 0600, directory fsync (only documented "not supported" errnos ignored). On a failure
+ * before the rename the temp file is removed and the previous file is left intact.
+ */
+export async function atomicWriteJson(file, value, { fs = fsp, platform = process.platform } = {}) {
+  const dir = path.dirname(file);
+  const tmp = path.join(dir, `.${path.basename(file)}.${randomBytes(6).toString("hex")}.tmp`);
+  const text = JSON.stringify(value, null, 2) + "\n";
+  let renamed = false;
+  try {
+    const handle = await fs.open(tmp, "wx", 0o600);
+    try {
+      await handle.writeFile(text, "utf8");
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await fs.rename(tmp, file);
+    renamed = true;
+  } finally {
+    if (!renamed) await fs.unlink(tmp).catch(() => {});
+  }
+  await fs.chmod(file, 0o600);
+  let dirHandle = null;
+  try {
+    dirHandle = await fs.open(dir, "r");
+    await dirHandle.sync();
+  } catch (error) {
+    if (!ignorableDirFsyncError(error, platform)) throw error;
+  } finally {
+    if (dirHandle) await dirHandle.close().catch(() => {});
+  }
+}
+
 export class Fixtures {
-  constructor({ db, cohort, manifestPath, context, redactor, gate = createStopGate() }) {
+  #ready = null;
+  #queue = Promise.resolve();
+  constructor({ db, cohort, manifestPath, context, redactor, gate = createStopGate(), writeJson = atomicWriteJson }) {
+    // Field assignments only: no overridable method is called here (amendment 1).
     this.gate = gate;
     this.db = guardWrites(db, gate);
     this.cohort = cohort;
@@ -36,13 +89,32 @@ export class Fixtures {
     this.redactor = redactor;
     this.manifest = emptyManifest({ run_id: cohort.runId, ...context });
     this.users = [];
+    this.writeJson = writeJson;
   }
 
-  /** Runs one creation: refused once stopping, registered as in-flight until it settles. */
+  /**
+   * Lazy, idempotent first write of the manifest through the INSTANCE save (subclass or instance
+   * override). A failure clears the memo so a later call can retry; the caller sees the error.
+   */
+  init() {
+    if (!this.#ready) {
+      this.#ready = Promise.resolve()
+        .then(() => this.save())
+        .catch((error) => {
+          this.#ready = null;
+          throw error;
+        });
+    }
+    return this.#ready;
+  }
+
+  /** Runs one creation: refused once stopping, manifest on disk first, registered as in-flight. */
   creating(fn) {
     return this.gate.register(
       (async () => {
         this.gate.check();
+        await this.init(); // no mutation without a manifest on disk
+        this.gate.check(); // the stop signal may have arrived during the initial write
         return fn();
       })(),
     );
@@ -50,13 +122,23 @@ export class Fixtures {
 
   /** Manifest tracking is never gated: an id created after the signal must still be deleted. */
   async track(key, ...ids) {
+    await this.init();
     const list = this.manifest.created[key] || (this.manifest.created[key] = []);
     for (const id of ids) if (id && !list.includes(id)) list.push(id);
     await this.save();
   }
-  async save() {
+
+  /** Serialised atomic write; each write snapshots the manifest at its turn. Errors reach this caller. */
+  save() {
+    const write = () => this.#writeNow();
+    const turn = this.#queue.then(write, write);
+    this.#queue = turn.catch(() => {});
+    return turn;
+  }
+  async #writeNow() {
     this.manifest.updated_at = new Date().toISOString();
-    await writeFile(this.manifestPath, JSON.stringify(this.manifest, null, 2) + "\n", { mode: 0o600 });
+    const snapshot = JSON.parse(JSON.stringify(this.manifest));
+    await this.writeJson(this.manifestPath, snapshot);
   }
 
   /** Creates a confirmed Auth user + profile role. Password generated here, never persisted. */

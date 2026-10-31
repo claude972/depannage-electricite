@@ -43,6 +43,9 @@ test("advanced lot views: role gate only, platform views stay admin, planning st
   assert.equal(canAccess("site-operations", "admin", "live"), false);
   // Back-office views: the role gate admits any signed-in role (a limited operator keeps a
   // client/manager profile); the server /me reply decides, fail-closed (tests in features.test.ts).
+  // A5: the assistance queue follows the same rule (server capability decides, role gate open).
+  for (const role of ["client", "artisan", "manager", "admin"] as const) assert.equal(canAccess("support-queue", role, "live"), true);
+  assert.equal(canAccess("support-queue", null, "public"), false);
   for (const view of ["platform-operators", "platform-finance", "platform-moderation"] as const) {
     assert.equal(canAccess(view, "admin", "live"), true);
     assert.equal(canAccess(view, "manager", "live"), true);

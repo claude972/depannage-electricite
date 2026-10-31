@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { authenticatedClient, apiError, ApiError, assertOrigin, dbError } from "@/lib/supabase/server";
 import { uuid, validated } from "@/lib/supabase/validation";
+import { supportOperatorPermissions, supportTicketPermissions } from "@/lib/features/support/permissions";
 export const dynamic = "force-dynamic";
 const privateHeaders = { "Cache-Control": "private, no-store" };
 const ticketFields = "id,creator_id,intervention_id,subject,status,version,created_at,updated_at,last_message_at";
@@ -26,21 +27,20 @@ export async function GET(request: Request, context: Context) {
     const limit = Number(limitText), after = Number(afterText);
     const ticket = await db.from("support_tickets").select(ticketFields).eq("id", id).maybeSingle(); dbError(ticket.error);
     if (!ticket.data) throw new ApiError(404, "Cette demande est introuvable.");
-    const [events, eventTotal, messageTotal, actor] = await Promise.all([
+    const [events, eventTotal, messageTotal, rights] = await Promise.all([
       db.from("support_events").select(eventFields, { count: "exact" }).eq("ticket_id", id).gt("version", after).order("version").limit(limit + 1),
       db.from("support_events").select("id", { count: "exact", head: true }).eq("ticket_id", id),
       db.from("support_messages").select("id", { count: "exact", head: true }).eq("ticket_id", id),
-      db.from("profiles").select("role").eq("id", user.id).single(),
+      supportOperatorPermissions(db),
     ]);
-    for (const result of [events, eventTotal, messageTotal, actor]) dbError(result.error);
+    for (const result of [events, eventTotal, messageTotal]) dbError(result.error);
     const pageEvents = (events.data ?? []).slice(0, limit), hasMore = count(events.count) > pageEvents.length;
     const end = pageEvents.at(-1)?.version ?? after;
     if (hasMore && pageEvents.length === 0) throw new ApiError(503, "L’historique n’a pas été renvoyé. Réessayez.");
     const messages = pageEvents.length ? await db.from("support_messages").select(messageFields).eq("ticket_id", id).gt("version", after).lte("version", end).order("version").limit(limit) : { data: [], error: null };
     dbError(messages.error);
-    const operator = actor.data?.role === "admin";
     return Response.json({ ticket: ticket.data, messages: messages.data ?? [], events: pageEvents,
-      permissions: { can_reply: (operator || ticket.data.creator_id === user.id) && (!operator || ticket.data.status !== "resolved"), can_set_status: operator },
+      permissions: supportTicketPermissions(rights, user.id, ticket.data),
       page: { limit, after_version: after, next_after_version: hasMore ? end : null, has_more: hasMore, total_events: count(eventTotal.count), total_messages: count(messageTotal.count) },
     }, { headers: privateHeaders });
   } catch (error) { return failed(error); }

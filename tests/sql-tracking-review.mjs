@@ -4,6 +4,7 @@ import {execFileSync} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import {isolatedMigrationSql} from './sql-isolated-migrations.mjs';
 process.on('uncaughtException',e=>{console.error(e.code||'',e.message,e.where||'');process.exit(1);});
 const ids=Object.fromEntries(['client','other','artisan','former','admin','owner','viewer'].map(k=>[k,randomUUID()]));
 const run=randomUUID(),q=v=>`'${String(v).replaceAll("'","''")}'`;
@@ -116,11 +117,11 @@ if(process.argv[2]==='--emit-rollback'){
  await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key,aud text,role text,email text,raw_user_meta_data jsonb default '{}',email_confirmed_at timestamptz,created_at timestamptz,updated_at timestamptz);create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema auth to anon,authenticated,service_role;grant execute on function auth.uid() to anon,authenticated,service_role;create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text);alter table storage.objects enable row level security;`);
  const dir=new URL('../supabase/migrations/',import.meta.url);const names=(await readdir(dir)).filter(n=>n.endsWith('.sql')).sort();
  let used18=false;
- for(const name of names){if(name.includes('019_')&&!names.some(n=>n.includes('018_'))){const migration18=execFileSync('git',['show','6062f92cef83f54c0af1f6713a050fa62a7baeb2:supabase/migrations/202610310018_scoped_support_operators.sql'],{encoding:'utf8'});await db.exec(migration18);used18=true;}await db.exec((await readFile(new URL(name,dir),'utf8')).replace('create extension if not exists pgcrypto;','-- local stub only'));}
+ for(const name of names){if(name.includes('019_')&&!names.some(n=>n.includes('018_'))){const migration18=execFileSync('git',['show','6062f92cef83f54c0af1f6713a050fa62a7baeb2:supabase/migrations/202610310018_scoped_support_operators.sql'],{encoding:'utf8'});await db.exec(migration18);used18=true;}const source=await isolatedMigrationSql(db,name,await readFile(new URL(name,dir),'utf8'));await db.exec(source.replace('create extension if not exists pgcrypto;','-- local stub only'));}
  const tables=(await db.query("select table_schema s,table_name n from information_schema.tables where table_type='BASE TABLE' and table_schema in ('public','auth','storage') order by table_schema,table_name")).rows;
  const snapshot=async()=>{const out={};for(const t of tables)out[t.s+'.'+t.n]=(await db.query(`select count(*)::int n from "${t.s}"."${t.n}"`)).rows[0].n;return out;};
  const before=await snapshot();await db.exec(sql);assert.deepEqual(await snapshot(),before);
- console.log(`PASS ${names.length+(used18?1:0)} migrations (018 read-only ${used18?'from reviewed 6062f92':'in checkout'}); isolated tracking matrix, triggers, pacing and rollback counts unchanged. NOT concurrency/cloud/provider/device.`);
+ console.log(`PASS ${names.length+(used18?1:0)} migrations (018 read-only ${used18?'from reviewed 6062f92':'in checkout'}); isolated tracking matrix, triggers, pacing and rollback counts unchanged. 020 uses an explicit scheduler STUB, NOT a real worker. NOT concurrency/cloud/provider/device.`);
  await assert.rejects(db.exec(sql.replace("(s->'tracking'->>'control_version')::integer=0","false")),e=>e.code==='QA001');await db.exec('rollback');assert.deepEqual(await snapshot(),before);console.log('PASS failed assertion aborts and rollback leaves every table count unchanged.');
  }finally{await db.close();}
 }
