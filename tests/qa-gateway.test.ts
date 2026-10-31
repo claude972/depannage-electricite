@@ -30,6 +30,7 @@ import {
   cleanupRerunMessage,
   unknownLeftover,
   parseStorageListing,
+  isPlatformUnauthorizedEnvelope,
   reconcileWindowMs,
   verifyKnownAbsent,
   type CleanupClient,
@@ -694,4 +695,67 @@ test("final reconciliation: a read that cannot confirm the absence of a known it
   assert.equal(clean.clean, true);
   assert.ok(calls2.some((c) => c.startsWith("list:documents:id=in.(") ), "known rows re-read by id after deletion");
   assert.ok(h2.notes.some((n) => n.status === "pass" && /réconciliation finale/.test(n.step) && /1 ligne\(s\) et 1 objet\(s\) connus vérifiés absents/.test(n.detail)));
+});
+
+// ---------------------------------------------------------------------------------------------
+// verify_jwt: true — the platform answers missing/invalid JWT before the function (cloud run of d7abd8c).
+// ---------------------------------------------------------------------------------------------
+test("platform 401 envelope: accepted strictly (non-empty message, optional numeric code 401), never generic", () => {
+  assert.equal(isPlatformUnauthorizedEnvelope('{"message":"Invalid JWT"}'), true);
+  assert.equal(isPlatformUnauthorizedEnvelope('{"code":401,"message":"Invalid JWT"}'), true);
+  assert.equal(isPlatformUnauthorizedEnvelope('{"message":"Missing authorization header","hint":"x"}'), true);
+  assert.equal(isPlatformUnauthorizedEnvelope('{}'), false);
+  assert.equal(isPlatformUnauthorizedEnvelope(''), false);
+  assert.equal(isPlatformUnauthorizedEnvelope('null'), false);
+  assert.equal(isPlatformUnauthorizedEnvelope('[]'), false);
+  assert.equal(isPlatformUnauthorizedEnvelope('"Unauthorized"'), false);
+  assert.equal(isPlatformUnauthorizedEnvelope('{"message":""}'), false);
+  assert.equal(isPlatformUnauthorizedEnvelope('{"message":"   "}'), false);
+  assert.equal(isPlatformUnauthorizedEnvelope('{"message":42}'), false);
+  assert.equal(isPlatformUnauthorizedEnvelope('{"code":"401","message":"Invalid JWT"}'), false);
+  assert.equal(isPlatformUnauthorizedEnvelope('{"code":403,"message":"Forbidden"}'), false);
+  assert.equal(isPlatformUnauthorizedEnvelope('{"code":500,"message":"boom"}'), false);
+  assert.equal(isPlatformUnauthorizedEnvelope('not json'), false);
+});
+test("anonymous and invalid-token scenarios pass on a 401 with either the function or the platform envelope", () => {
+  const [anonymous, invalid] = scenarioPlan();
+  for (const scenario of [anonymous, invalid]) {
+    assert.equal(assertScenario(scenario, { status: 401, bodyText: '{"error":"Connectez-vous"}' }, []).pass, true, `${scenario.actor} function envelope`);
+    assert.equal(assertScenario(scenario, { status: 401, bodyText: '{"message":"Invalid JWT"}' }, []).pass, true, `${scenario.actor} platform message`);
+    assert.equal(assertScenario(scenario, { status: 401, bodyText: '{"code":401,"message":"Invalid JWT"}' }, []).pass, true, `${scenario.actor} platform code+message`);
+    // Generic or empty 401 bodies still fail.
+    for (const body of ["", "{}", "Unauthorized", '{"message":""}', '{"code":401}', '{"code":500,"message":"x"}']) {
+      const v = assertScenario(scenario, { status: 401, bodyText: body }, []);
+      assert.equal(v.pass, false, `${scenario.actor} generic body ${JSON.stringify(body)}`);
+      assert.match(v.reasons.join(), /corps d’erreur sans message/);
+    }
+    // Leak checks still apply to the platform envelope.
+    const leak = assertScenario(scenario, { status: 401, bodyText: `{"message":"token eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnopqrstuvwxyz rejected"}` }, []);
+    assert.equal(leak.pass, false);
+    assert.match(leak.reasons.join(), /contient un JWT/);
+  }
+});
+test("negative: a platform message never rescues a wrong status, and other refusals keep the function envelope", () => {
+  const [anonymous, invalid, third, viewer, , , fake] = scenarioPlan();
+  for (const scenario of [anonymous, invalid]) {
+    const ok200 = assertScenario(scenario, { status: 200, bodyText: '{"message":"ok"}' }, []);
+    assert.equal(ok200.pass, false);
+    assert.match(ok200.reasons.join(), /statut 200 au lieu de 401/);
+    assert.match(ok200.reasons.join(), /succès inattendu/);
+    const forbidden403 = assertScenario(scenario, { status: 403, bodyText: '{"message":"Forbidden"}' }, []);
+    assert.equal(forbidden403.pass, false);
+    assert.match(forbidden403.reasons.join(), /statut 403 au lieu de 401/);
+    assert.match(forbidden403.reasons.join(), /corps d’erreur sans message/);
+  }
+  // Third party / viewer (403) and fake MIME (415) are not broadened: the platform envelope is not a function body.
+  for (const [scenario, status] of [[third, 403], [viewer, 403], [fake, 415]] as const) {
+    const v = assertScenario(scenario, { status, bodyText: '{"message":"Forbidden"}' }, []);
+    assert.equal(v.pass, false, scenario.name);
+    assert.deepEqual(v.reasons, ["corps d’erreur sans message"]);
+    assert.equal(assertScenario(scenario, { status, bodyText: '{"error":"Refusé"}' }, []).pass, true, scenario.name);
+  }
+  // A 401 on a scenario that expects 403 is still a wrong status even with a platform envelope.
+  const wrong = assertScenario(third, { status: 401, bodyText: '{"code":401,"message":"Invalid JWT"}' }, []);
+  assert.equal(wrong.pass, false);
+  assert.match(wrong.reasons.join(), /statut 401 au lieu de 403/);
 });

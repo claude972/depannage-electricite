@@ -667,6 +667,23 @@ export function leakCheck(text: string, forbidden: string[]): string[] {
   return hits;
 }
 export type Verdict = { pass: boolean; reasons: string[] };
+// With `verify_jwt: true` on the deployed function, the Supabase platform answers a missing or
+// invalid JWT BEFORE the function runs, with its own envelope: `{"message":"…"}` or
+// `{"code":401,"message":"…"}`. Accepted strictly: a JSON object, a non-empty string `message`,
+// and if `code` is present it must be the number 401. Never a generic, empty or array body.
+export function isPlatformUnauthorizedEnvelope(bodyText: string): boolean {
+  let json: unknown;
+  try {
+    json = JSON.parse(bodyText);
+  } catch {
+    return false;
+  }
+  if (!json || typeof json !== "object" || Array.isArray(json)) return false;
+  const body = json as Record<string, unknown>;
+  if (typeof body.message !== "string" || body.message.trim().length === 0) return false;
+  if ("code" in body && body.code !== 401) return false;
+  return true;
+}
 export function assertScenario(
   scenario: Scenario,
   actual: { status: number; bodyText: string; document?: { id?: unknown } | null },
@@ -676,7 +693,12 @@ export function assertScenario(
   if (actual.status !== scenario.expected) reasons.push(`statut ${actual.status} au lieu de ${scenario.expected}`);
   if (scenario.expected >= 400) {
     for (const hit of leakCheck(actual.bodyText, forbidden)) reasons.push(`fuite : ${hit}`);
-    if (!/"error"\s*:\s*"/.test(actual.bodyText)) reasons.push("corps d’erreur sans message");
+    const functionEnvelope = /"error"\s*:\s*"/.test(actual.bodyText);
+    // Only the no-JWT / invalid-JWT scenarios, and only on a real 401, may carry the platform
+    // envelope instead of the function's `{"error":…}`; every other refusal keeps the function body.
+    const platformEnvelope =
+      scenario.expected === 401 && actual.status === 401 && (scenario.actor === "anonymous" || scenario.actor === "invalid") && isPlatformUnauthorizedEnvelope(actual.bodyText);
+    if (!functionEnvelope && !platformEnvelope) reasons.push("corps d’erreur sans message");
   }
   if (scenario.expected === 201 && actual.status === 201) {
     if (!actual.document || typeof actual.document.id !== "string") reasons.push("201 sans document.id");
