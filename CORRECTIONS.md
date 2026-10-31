@@ -2280,3 +2280,9 @@ Ces notes sont une revue de contrat, pas un passe esthétique ni un déploiement
 - écarts restants assumés : nom d’artisan absent des données (« Artisan attribué ») ; pas de colonne Statut site (absente du modèle) ; pas de filtre Période ; marque sur une ligne ; couleurs d’icônes multi-accents de M13 non reprises (DESIGN.md).
 - non vérifié : preview Vercel (différée), compte réel/RLS en ligne, rôle lecture seule rendu en démo (logique de droits inchangée, non recapturée).
 - à vérifier par Codex : comparaison des planches, absence de régression lecture seule/devis/support/photos, navigation clavier sur les nouveaux boutons de ligne.
+
+
+## Plan actualisé demandé par le propriétaire — sources et reste distingués
+Le propriétaire demande « Que manque-t-il ? Fait un plan ». Skill make-plan appliqué : collectes indépendantes de sources/API/snippets/limites (frontend e7aaef7, QA07d7332, intégration9b3 et contrats backend/PWA/natif), synthèse Codex dans docs/PLAN_LIVRAISON_ACTUALISE.md. Le plan conserve PLAN_REPRISE et les76capacités ; il distingue livré/non intégré, non vérifié, réellement absent, V2/V3 et services différés. Aucun code ni test créé par cette rédaction.
+
+Nouveaux états observés : designe7aaef7 et QA07d7332 poussés, pas encore intégrés/revus en combinaison. Première correction concrète relevée sur design2034 : Aucune sur alertes potentiellement partielles à préciser. Les autres rôles visuels restent à comparer. Prochaine phase = revue/corrections/recette Web exacte, puis checkpoint fonctionnel et visuel avant natif ; les extensions avancées ne sont pas ajoutées arbitrairement à cette porte, mais restent explicitement ouvertes au périmètre global. Vercel/Stripe différés, pas de production/store implicites.
