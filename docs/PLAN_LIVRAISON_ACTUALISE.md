@@ -3,7 +3,7 @@
 ## Primary goal
 Livrer une application de dépannage électrique utilisable dans des espaces client, artisan, entreprise et SuperAdmin réellement fidèles aux maquettes fournies, avec un backend privé vérifié ; puis livrer de véritables applications iOS/Android. Toute fonction absente ou non vérifiée reste explicitement suivie, sans être présentée comme terminée.
 
-Ce document actualise l’exécution de PLAN_REPRISE.md et ses76 capacités, sans supprimer son périmètre ni recommencer les fonctions déjà réalisées. Tout code et script de test est écrit par Claude ; Codex pilote, revoit, exécute et intègre. Le nouvel accès CLI par abonnement a été vérifié par un appel réel réussi. Le propriétaire maintient Vercel/Stripe différés et donne priorité à la fidélité réelle aux PDF.
+Ce document actualise l’exécution de PLAN_REPRISE.md et ses76 capacités, sans supprimer son périmètre ni recommencer les fonctions déjà réalisées. Claude réalise les interfaces et ses modules existants ; amendement A4 autorise désormais deux modules Codex isolés (PDF facture/avoir et harnais planning/notifications). Codex pilote aussi les revues, recettes et intégrations. Le nouvel accès CLI par abonnement a été vérifié par un appel réel réussi. Le propriétaire maintient Vercel/Stripe différés et donne priorité à la fidélité réelle aux PDF.
 
 ## État de départ vérifié
 
@@ -120,3 +120,8 @@ Le gateway peut être terminé en parallèle des phasesWeb : finir GW002, ses te
 - Claude CLIb4b555f0 : coordination de ses agents QA/backend dans leurs worktrees existants, pas de copie du design ; QAlivré07d7332, backendGW002 à livrer.
 - Codex : synthèse, revues indépendantes, exécution des recettes, intégration, migrations/déploiements de test autorisés et rapports ; aucun code applicatif/test depuis minuit.
 - Prochaine action concrète : revue exacte des deux nouvelles livraisons, correction Aucune partielle, intégration sans conflit puis recette réelle combinée. Pas de nouvelle échéance complète inventée.
+
+
+## Actualisation opérationnelle —31octobre2026à13h09America/Martinique
+Les tableaux initiaux ci-dessus sont historiques ; MISSIONS/CORRECTIONSdistants et preuvesSHAexactes prévalent. Intégrationd9374fa pousséeCIdeuxjobsPASS ; Supabase001–017appliquées. CoreWeb16scénariosPASSsur57cavant014, avancé13étapesAPI/browserPASSsurd937, SQLrollback343PASSd352survraibase, PDFfacture/avoirrendus5pageset70tests/revuecroisée ; toutescohortesreluesabsentes. SourceM13/M4/M66etartisan837intégrée, clientbf37549visuelaccepté maisnouveau4a2ab70attendCLIENT-HISTORY001, admin32b7754attendADMIN-DATE001avantrootmerge. SHARED006actionreprise503resteàcoder/revoir.
+Gatewayd7déployéTESTdédiéversion1JWTtrue :7scénariosPASS/2FAILharnaisenveloppe401, nettoyage40PASS/readbacksindépendants ; correctionparseretrecetterestantes, pasdernierverdictPASS. PWA5a troisfindingsP2harnaisàcorrigeravantvraielifecycledeuxbuilds3020 ; aucunepreuveOSinstall. Pagespubliques/M14/M65/écartsV5enworkerClaude, comparaisonsvisuellesetassemblagefinalencoreouverts. Vercel/Stripedifférésexplicitement, mainancieninchangé, aucunbinaireiOSAndroidniEASdanscettetranche. N'annonceraucuneapplicationcomplète ; fermerlesgatesdocumentésavantlivraison.
