@@ -520,3 +520,83 @@ En LOCAL, tout drapeau REMOTE est refusé, l'hôte de `--base-url` doit être lo
 - Arguments : `--mode` manquant, drapeaux REMOTE en LOCAL, LOCAL hors loopback, `--git-repo-id` non entier.
 - Le vrai HTML public 4c est lu via `QA_TRACKING_REAL_HTML` (défaut `/tmp/depannage-public-4c-home-private.html`, lecture seule, jamais commité). Le LOCAL strict doit y trouver exactement `W1T6udg45nuoEg3XO7IGT` et l'ancien contrôle par sous-chaîne doit échouer dessus ; test SKIPPED si le fichier est absent.
 - Ensuite : suite complète, `tsc --noEmit`, `node --check`, `--dry-run`.
+
+## Amendement A8 — diagnostics bornés à l'échec, sélecteur T8, pistes T6/T14 (run ROOT 4e8bc1a68a89)
+
+Contexte : run ROOT 4e8bc1a68a89 — T6, T8, T8-fail et T9 en FAIL ; T14 en ANOMALY (timeout du sélecteur de partage après 194 s) ; T15 en PASS. Base lue : la source 4c intégrée sur cette branche (`components/features/tracking/*`, `components/role/tracking-anchor.tsx`). Ce document précède le code ; aucun code avant lecture ROOT.
+
+### 1. Diagnostics bornés au premier échec
+
+**Quand.** Au premier échec de chaque scénario, qu'il s'agisse d'une assertion, d'`AppDefect`, d'un BLOCKED ou d'une ANOMALY. Les scénarios s'arrêtent au premier échec, donc il y a au plus une capture par scénario. La capture se fait dans `runOne`, AVANT le classement et avant toute fermeture de session ou de page. Les pages concernées sont celles que le scénario a ouvertes ou utilisées : le pool trace, par scénario, les libellés obtenus via `session` et `freshSession`.
+
+**Sous la même identité, sans rien changer.** La capture ne fait pas de nouvelle connexion, pas de `reload`, pas de `goto`, ni de clic ou de saisie. Elle n'appelle aucune API. Ce sont des lectures seules du DOM et de l'état déjà présents. Si la porte d'arrêt est levée, la capture est sautée et notée `skipped: stopping` ; elle n'enregistre aucune mutation dans le drain.
+
+**Contenu, par page, dans `--out/diagnostics/<scénario>/`** (dossier 0700, fichiers 0600, passés par le redacteur du run complété du masquage des positions) :
+- `<libellé>.png` : capture de la fenêtre, viewport seulement, chmod 0600 après écriture ;
+- `<libellé>.json`, qui contient :
+  - le chemin et le hash de l'URL, sans query ;
+  - toutes les valeurs `[data-blocker]` présentes, avec le texte visible de chaque bloc `.unavailable` (au plus 20 entrées de 200 caractères) ;
+  - le texte visible du panneau artisan (section titrée « Partage de ma position ») et de la carte client (« Suivi de l’artisan »), ou `absent` pour chacun, plafonné à 4 000 caractères ;
+  - les titres h1 à h3 visibles (au plus 20 de 120 caractères) et le nombre d'éléments `role="status"` et `role="alert"` avec leur texte (même plafond), ce qui sert à décider si l'espace de travail affiche le dossier ;
+  - un résumé des requêtes de suivi vues par la page (`/api/interventions/<id>/tracking|route|geocode` et la sonde de capacité) : méthode, chemin avec identifiants, statut, horodatage ISO, `action` pour un POST et origine `ui` ou `harness`. Il ne contient ni en-têtes, ni jetons, ni corps de requête ou de réponse. Seule exception : le champ serveur `reason`, s'il est une chaîne au format `^[a-z_]{1,64}$`, lu sur les réponses de statut ≥ 400. Ce résumé couvre au plus les 50 dernières requêtes.
+
+Ce recueil s'appuie sur un enregistreur par page posé dès la création de la page par le pool. L'enregistreur actuel des scénarios n'est pas modifié.
+
+**Bornes.**
+- Au plus 3 pages par scénario.
+- 5 s par opération Playwright.
+- 20 s au total par scénario, au-delà la capture est tronquée et notée `truncated: time_cap`.
+- Aucune nouvelle tentative.
+
+Une erreur de diagnostic est notée `diagnostics_error: <code fixe>` et ne remonte pas. Les diagnostics ne changent jamais le verdict, le code de sortie ni le nettoyage. Le rapport référence seulement les fichiers.
+
+**Propriété.** Le code ira dans `scripts/qa-tracking/lib/diagnostics.mjs`, dans le pool de `scenarios.mjs` et dans `runOne` (`run.mjs`). Rien dans `scripts/qa`. Le même mécanisme pourrait plus tard servir aux autres harnais via `scripts/qa/lib`, mais ce serait une proposition au propriétaire, pas une modification.
+
+### 2. Sélecteur T8 et T8-fail (diagnostic lead, confirmé par la source)
+
+Dans `artisan-tracking-panel.tsx` (branche `stale`, l. 146-149), la phrase « Partage interrompu par le rechargement de la page. » est rendue dans un `<p role="status">` plus long, qui continue par « L’arrêt côté service est tenté ; … après 60 s. ». `getByText(UI.reloadInterrupted, { exact: true })` ne peut donc jamais correspondre. Deux lignes sont touchées dans `scenarios.mjs` : 408 (T8) et 438 (T8-fail).
+
+Remplacement, aussi strict : `panel(page).getByRole("status").filter({ hasText: UI.reloadInterrupted })`. Le locator est limité au panneau artisan et au rôle `status`. Il doit correspondre à exactement un élément, et le mode strict de Playwright refuse plusieurs correspondances. Le bouton `panel(page).getByRole("button", { name: UI.resume, exact: true })` doit aussi être visible. La lecture de l'état serveur (`shared=true`) reste inchangée.
+
+Revue des autres contrôles « texte exact » contre la source 4c :
+
+| Ligne | Texte | Source | Verdict |
+| --- | --- | --- | --- |
+| 191 | `declaredSource` | `<dd>` seul (panneau) | correct |
+| 215 | `permissionRefused` | `<p role="alert">` avec le message seul, `retryable: false` (`model.ts` l. 434) | correct ; il deviendrait faux si `retryable` changeait, la même forme `getByRole("alert").filter({ hasText })` est donc proposée par cohérence |
+| 479 | `activeTracking` | `<Tag>` seul | correct |
+| 738 | `osmAttribution` | `<a>` seul | correct |
+
+Seules les lignes 408 et 438 sont en défaut. **T14 n'emploie aucun texte exact** : son échec a une autre cause (§4).
+
+### 3. T6 : comment les diagnostics décideront (aucun changement d'assertion ni correctif avant les preuves DOM)
+
+Piste du relecteur UI ROOT, non confirmée : la session client est ouverte pendant `setupCohort` (l. 109), avant la création des dossiers (l. 125). Ensuite, un `goto` qui ne change que le hash ne force pas l'espace de travail React à se rafraîchir, donc la liste du client peut ne pas contenir le nouveau dossier. T9 réutilise la même session client et la même route ; il est concerné par la même décision.
+
+| Observation au point d'échec (page client, même identité) | Conclusion |
+| --- | --- |
+| Carte « Suivi de l’artisan » `absent` ; aucun `data-blocker` de suivi ; titres et texte sans le dossier (ou état « introuvable ») ; aucune requête `GET …/tracking` de la page pour ce dossier | L'espace de travail ne contient pas le dossier (ordre du harnais ou défaut de rafraîchissement de l'app). L'attribution sera décidée par ROOT et le lead UI au vu des requêtes de liste vues. |
+| Carte présente avec `data-blocker="capability:tracking"` et le texte « Disponibilité du service en cours de vérification. » | Capacité restée `unknown` (hypothèse lead : sonde sans effet sur un bundle reconstruit). Le résumé dira si la sonde a été émise et avec quel statut. |
+| Bloc `data-blocker="tracking:unavailable"` (`FeatureUnavailable`), avec le statut et la `reason` de la sonde | Capacité `unavailable` |
+| Carte présente et disponible, sans « Position périmée … » | Écart d'affichage ou d'état, comparé à la preuve d'instantané déjà notée (`evidence T6`) |
+
+### 4. T14 : piste à confirmer par les mêmes diagnostics (pas de correctif avant)
+
+La source et l'ordre des scénarios donnent une explication cohérente avec la durée observée :
+1. T9 démarre un partage sur `main` via la session API et ne l'arrête pas.
+2. Le panneau de T14 sur `main` affiche alors la branche `needsExplicitRestart` (partage actif sans contrôleur local), donc « Reprendre le partage » et non « Partager ma position ».
+3. Le clic de partage attend jusqu'au timeout (90 s par défaut).
+4. Le repli arrête le partage par API puis rappelle `uiStart`. Mais le `goto` vers la même URL à hash ne relit pas l'instantané du panneau, ce qui provoque un second timeout. Deux attentes de 90 s plus le reste donnent environ 194 s.
+
+Les diagnostics (texte du panneau, boutons visibles via les titres et le texte, requêtes `GET`) confirmeront ou infirmeront cette lecture. Le correctif éventuel est un remplacement du repli par un état préalable propre : arrêt API AVANT l'ouverture du panneau, ou session fraîche. Il viendra dans un amendement ultérieur, avec preuve et sans relâcher l'assertion.
+
+### Tests prévus (hors ligne)
+
+- Le diagnostic, testé dans un vrai Chromium avec un serveur local, ne fait ni `goto`, ni `reload`, ni requête réseau.
+- Les fichiers sont en 0600 et le dossier en 0700.
+- Aucune query dans l'URL notée, aucun en-tête, aucun jeton ni corps hors `reason`.
+- Les positions sont masquées.
+- Les plafonds de 3 pages, 20 s et des tailles de texte sont respectés.
+- Le verdict n'est pas modifié quand le diagnostic échoue.
+- Le diagnostic est sauté une fois la porte d'arrêt levée.
+- Le sélecteur T8 correspond au markup réel du panneau (rendu statique de la branche `stale`) et refuse l'ancienne forme exacte.
