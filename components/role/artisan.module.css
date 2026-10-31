@@ -1397,11 +1397,21 @@
 }
 
 /* ---- Profile (M36) -------------------------------------------------------------------- */
+/* M36 : en-tête teinté pleine largeur (déborde le padding de .main), avatar + identité. */
 .profileHead {
   display: flex;
   gap: 16px;
   align-items: center;
-  padding: 8px 0 20px;
+  margin: -8px -16px 16px;
+  padding: 16px 16px 20px;
+  background: #edf3fd;
+  border-bottom: 1px solid #d6e2f5;
+}
+@media (min-width: 1024px) {
+  .profileHead {
+    margin: -8px -40px 20px;
+    padding: 20px 40px 24px;
+  }
 }
 .avatar {
   display: inline-flex;
@@ -1471,14 +1481,10 @@
 .perfGrid + .basis {
   margin-bottom: 16px;
 }
+/* M36 garde 3 colonnes sur téléphone ; ici 2 colonnes dès 360 px (lisibilité 13–14 px). */
 @media (max-width: 760px) {
   .perfGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-@media (max-width: 420px) {
-  .perfGrid {
-    grid-template-columns: 1fr;
   }
 }
 .perfTile {
@@ -1489,12 +1495,41 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
 }
+/* Tuile indisponible compacte : même primitive, densité de la grille. */
 .perfTile :global(.unavailable) {
   margin: 0;
   border: 0;
   padding: 0;
   background: transparent;
+  gap: 10px;
+}
+.perfTile :global(.unavailable-icon) {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+.perfTile :global(.unavailable) strong {
+  font-size: 13px;
+  font-weight: 550;
+}
+.perfTile :global(.unavailable) p {
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 2px;
+}
+@media (max-width: 420px) {
+  .perfTile {
+    padding: 10px;
+  }
+  .perfTileTop strong {
+    font-size: 18px;
+  }
+  .perfTile :global(.unavailable) {
+    flex-direction: column;
+    gap: 6px;
+  }
 }
 .perfTileTop {
   display: flex;

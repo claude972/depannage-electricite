@@ -196,3 +196,17 @@ compteur de notifications. Ces absences restent des états explicites (`Unavaila
 Captures : `artisan-overview-360-after.jpg`, `artisan-overview-1280-after.jpg`, `artisan-missions-360-after.jpg`
 (avant : `artisan-overview-{360,1280}-before.jpg`). Tests : `tests/ui/artisan-lists.test.ts` (états d’horaire,
 segments) ; suite UI 61/61 ; `tsc` au vert ; console sans erreur à 360 / 760 / 1280.
+
+### Résultat du checkpoint 2 — profil M36
+
+| Ligne de l’addendum | Fait | Reste / écart |
+| --- | --- | --- |
+| En-tête teinté | Bandeau bleu pâle pleine largeur (déborde le padding du contenu à 360 et 1280), avatar initiales, raison sociale, nom, note réelle « 5 / 5 (1 avis) », état de candidature ou « Artisan vérifié ». | Pas de rangée d’étoiles décoratives (assumé). |
+| Documents & assurances | Inchangé : justificatifs transmis `/3`, « examinés par l’opérateur », lien Documents. | « validées » / coche verte non affichées (aucun statut par document). |
+| Performance | Six tuiles pilotées par `perfTiles` (ordre M36) : 2 colonnes dès 360 px (hauteur de grille 458 px contre une colonne auparavant), 3 colonnes ≥ 761 px ; tuiles `Unavailable` compactes (icône, titre, raison) sans modifier la primitive ; satisfaction et ponctualité restent indisponibles. | M36 garde 3 colonnes sur téléphone : 2 colonnes ici pour conserver 13–14 px (assumé). |
+| Actions | « Modifier le profil » (bleu) puis « Voir les statistiques détaillées » (outline, → Performance) ; lien texte « Voir le détail » retiré de l’en-tête de section ; Stripe conservé en dessous. | — |
+| Cibles | 0 élément interactif visible < 44 px à 360 et 1280 sur Profil et Performance ; aucun débordement horizontal. | — |
+
+Captures : `artisan-profile-360-after.jpg`, `artisan-profile-1280-after.jpg` (avant : `artisan-profile-360-before.jpg`).
+Tests : `perfTiles` (valeurs formatées par les mêmes formateurs que l’affichage, tuiles indisponibles sans valeur) ;
+suite UI 63/63 ; `tsc` au vert ; console sans erreur.

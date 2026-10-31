@@ -38,3 +38,53 @@ test("segments de missions : trois états avec compteurs réels", () => {
     ["done", "Terminées (0)"],
   ]);
 });
+
+// ---- Performance M36 : six tuiles, deux indisponibles, aucune valeur inventée ---------------
+import { perfTiles } from "../../components/role/artisan-lists";
+import { money } from "../../components/app/format";
+import type { Performance } from "../../components/app/session";
+
+const perf: Performance = {
+  rating: { average: 4.66, count: 3 },
+  monthRevenueCents: 14400,
+  monthPaidCount: 1,
+  completedCount: 1,
+  onTimeRate: null,
+  period: "octobre 2026",
+  basis: "dossiers chargés",
+};
+
+test("tuiles de performance : valeurs réelles formatées, ordre M36", () => {
+  const tiles = perfTiles(perf, "2 mois");
+  assert.deepEqual(tiles.map((t) => t.id), ["satisfaction", "rating", "completed", "seniority", "punctuality", "revenue"]);
+  const rating = tiles[1];
+  assert.equal(rating.kind, "value");
+  if (rating.kind === "value") {
+    assert.equal(rating.value, "4,7 / 5");
+    assert.equal(rating.note, "3 avis clients");
+  }
+  const revenue = tiles[5];
+  if (revenue.kind === "value") {
+    assert.equal(revenue.value, money(14400)); // même formateur que l’affichage (espace insécable)
+    assert.equal(revenue.note, "1 règlement — octobre 2026");
+  }
+  const seniority = tiles[3];
+  if (seniority.kind === "value") assert.equal(seniority.note, "Depuis l’inscription");
+});
+
+test("tuiles de performance : sans source, état indisponible explicite ; sans avis, tiret", () => {
+  const tiles = perfTiles({ ...perf, rating: null }, null);
+  const unavailable = tiles.filter((t) => t.kind === "unavailable");
+  assert.deepEqual(unavailable.map((t) => t.id), ["satisfaction", "punctuality"]);
+  assert.ok(unavailable.every((t) => t.kind === "unavailable" && t.reason.length > 0 && !("value" in t)));
+  const rating = tiles[1];
+  if (rating.kind === "value") {
+    assert.equal(rating.value, "—");
+    assert.equal(rating.note, "Aucun avis encore");
+  }
+  const seniority = tiles[3];
+  if (seniority.kind === "value") {
+    assert.equal(seniority.value, "—");
+    assert.equal(seniority.note, "Date d’inscription non transmise");
+  }
+});

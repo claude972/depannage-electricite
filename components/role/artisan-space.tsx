@@ -75,7 +75,14 @@ import {
 import styles from "./artisan.module.css";
 import { QuoteDraftEditor } from "./artisan-quote-draft";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
-import { appointmentSlotState, missionSegmentOptions, type AppointmentEntry, type MissionSegment } from "./artisan-lists";
+import {
+  appointmentSlotState,
+  fmtRating,
+  missionSegmentOptions,
+  perfTiles,
+  type AppointmentEntry,
+  type MissionSegment,
+} from "./artisan-lists";
 
 // ---- Static definitions ---------------------------------------------------------------
 type Tone = "neutral" | "blue" | "green" | "amber" | "red" | "violet";
@@ -174,8 +181,6 @@ const QUOTE_STATUS: Record<string, { label: string; tone: Tone }> = {
 const maskPostal = (code: string) =>
   code.length >= 2 ? `${code.slice(0, 2)}•••` : "•••••";
 const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
-const fmtRating = (value: number) =>
-  value.toLocaleString("fr-FR", { maximumFractionDigits: 1 });
 const activeNav = (view: View): View =>
   view === "mission" || view === "detail" || view === "quote" ? "missions" : view;
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -3014,52 +3019,28 @@ function PerfTile({
     </div>
   );
 }
+const PERF_TONE = { amber: "amberIcon", green: "greenIcon", blue: "blueIcon" } as const;
 function PerfGrid({ perf, since }: { perf: Performance; since: string | null }) {
+  // Six tuiles M36 ; les indicateurs sans source restent explicitement indisponibles.
   return (
     <>
       <div className={styles.perfGrid}>
-        <div className={styles.perfTile}>
-          <Unavailable
-            title="Taux de satisfaction"
-            reason="Aucun questionnaire de satisfaction n’est collecté."
-            blocker="enquête de satisfaction non prévue"
-          />
-        </div>
-        <PerfTile
-          icon="star"
-          tone={styles.amberIcon}
-          label="Note moyenne"
-          value={perf.rating ? `${fmtRating(perf.rating.average)} / 5` : "—"}
-          note={perf.rating ? `${perf.rating.count} avis client${perf.rating.count > 1 ? "s" : ""}` : "Aucun avis encore"}
-        />
-        <PerfTile
-          icon="check"
-          tone={styles.greenIcon}
-          label="Interventions réalisées"
-          value={perf.completedCount}
-          note="Dossiers réglés"
-        />
-        <PerfTile
-          icon="calendar"
-          tone={styles.blueIcon}
-          label="Ancienneté"
-          value={since ?? "—"}
-          note={since ? "Depuis l’inscription" : "Date d’inscription non transmise"}
-        />
-        <div className={styles.perfTile}>
-          <Unavailable
-            title="Ponctualité"
-            reason="Les rendez-vous ne sont pas comparés aux arrivées."
-            blocker="mesure de ponctualité non prévue"
-          />
-        </div>
-        <PerfTile
-          icon="euro"
-          tone={styles.greenIcon}
-          label="CA du mois"
-          value={money(perf.monthRevenueCents)}
-          note={`${perf.monthPaidCount} règlement${perf.monthPaidCount > 1 ? "s" : ""} — ${perf.period}`}
-        />
+        {perfTiles(perf, since).map((t) =>
+          t.kind === "unavailable" ? (
+            <div key={t.id} className={styles.perfTile}>
+              <Unavailable title={t.label} reason={t.reason} blocker={t.blocker} />
+            </div>
+          ) : (
+            <PerfTile
+              key={t.id}
+              icon={t.icon}
+              tone={styles[PERF_TONE[t.tone]]}
+              label={t.label}
+              value={t.value}
+              note={t.note}
+            />
+          ),
+        )}
       </div>
       <details className={styles.basis}>
         <summary>Base de calcul</summary>
@@ -3154,9 +3135,6 @@ function Profile({
       </section>
       <div className={styles.sectionHead} style={{ marginTop: 8 }}>
         <h2>Performance</h2>
-        <button type="button" className="text-button" onClick={() => session.go("performance")}>
-          Voir le détail
-        </button>
       </div>
       <PerfGrid perf={perf} since={since} />
       <div className={styles.profileActions}>
@@ -3169,6 +3147,10 @@ function Profile({
         >
           <Icon name="edit" size={18} />
           {editing ? "Fermer le formulaire" : "Modifier le profil"}
+        </button>
+        <button type="button" className={`button outline ${styles.block}`} onClick={() => session.go("performance")}>
+          <Icon name="chart" size={18} />
+          Voir les statistiques détaillées
         </button>
         {editing && (
           <div id="profile-form">

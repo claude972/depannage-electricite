@@ -45,3 +45,75 @@ export function missionSegmentOptions(counts: {
     ["done", `Terminées (${counts.done})`],
   ] as const;
 }
+
+// ---- Performance (M36 / M35) : descripteurs de tuiles, jamais de valeur inventée -----------
+import type { Performance } from "../app/session";
+import { money } from "../app/format";
+
+/** Note moyenne au dixième, virgule française (« 4,7 »). */
+export const fmtRating = (value: number) =>
+  value.toLocaleString("fr-FR", { maximumFractionDigits: 1 });
+
+export type PerfTileSpec =
+  | { id: string; kind: "value"; icon: string; tone: "amber" | "green" | "blue"; label: string; value: string; note: string }
+  | { id: string; kind: "unavailable"; label: string; reason: string; blocker: string };
+
+/**
+ * Six tuiles de la grille M36. Les indicateurs sans source (satisfaction, ponctualité) restent
+ * « indisponibles » avec leur raison ; les autres sont calculés sur les dossiers chargés.
+ */
+export function perfTiles(perf: Performance, since: string | null): PerfTileSpec[] {
+  const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? "s" : ""}`;
+  return [
+    {
+      id: "satisfaction",
+      kind: "unavailable",
+      label: "Taux de satisfaction",
+      reason: "Aucun questionnaire de satisfaction n’est collecté.",
+      blocker: "enquête de satisfaction non prévue",
+    },
+    {
+      id: "rating",
+      kind: "value",
+      icon: "star",
+      tone: "amber",
+      label: "Note moyenne",
+      value: perf.rating ? `${fmtRating(perf.rating.average)} / 5` : "—",
+      note: perf.rating ? `${plural(perf.rating.count, "avis client")}` : "Aucun avis encore",
+    },
+    {
+      id: "completed",
+      kind: "value",
+      icon: "check",
+      tone: "green",
+      label: "Interventions réalisées",
+      value: String(perf.completedCount),
+      note: "Dossiers réglés",
+    },
+    {
+      id: "seniority",
+      kind: "value",
+      icon: "calendar",
+      tone: "blue",
+      label: "Ancienneté",
+      value: since ?? "—",
+      note: since ? "Depuis l’inscription" : "Date d’inscription non transmise",
+    },
+    {
+      id: "punctuality",
+      kind: "unavailable",
+      label: "Ponctualité",
+      reason: "Les rendez-vous ne sont pas comparés aux arrivées.",
+      blocker: "mesure de ponctualité non prévue",
+    },
+    {
+      id: "revenue",
+      kind: "value",
+      icon: "euro",
+      tone: "green",
+      label: "CA du mois",
+      value: money(perf.monthRevenueCents),
+      note: `${plural(perf.monthPaidCount, "règlement")} — ${perf.period}`,
+    },
+  ];
+}
