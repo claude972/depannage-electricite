@@ -252,6 +252,8 @@ async function main(argv) {
         manifestExtra = { suite: "expiry", leaseEndsAt: new Date(lease.leaseEndsAt * 1000).toISOString() };
         const verified = await expiryVerify(lease, expiryDeps());
         result.expiry = { phase: "verify", userId: lease.userId, verifyNotBefore: new Date(lease.verifyNotBefore * 1000).toISOString(), leaseEndsAt: new Date(lease.leaseEndsAt * 1000).toISOString(), leasePath: args.lease, observedCode: verified.observedCode, verifyCommand: null, outcome: verified.outcome };
+        // The uid is recorded for deletion ONLY after expiryVerify granted the cleanup permission
+        // (independent Auth cohort proof). A refused verify records nothing and deletes nothing.
         if (verified.cleanup) await record("userIds", lease.userId, manifestExtra);
         tooEarly = verified.outcome === "too-early";
         skipCleanup = !verified.cleanup;
@@ -322,8 +324,9 @@ async function main(argv) {
       addSecret: (secret) => { if (typeof secret === "string" && secret.length >= 8) secrets.push(secret); },
       forbidden: () => [...secrets, ...created.userIds],
       client,
-      // The lease holds the token: written raw (never redacted) at 0600 in the private out dir only.
-      writeLease: (lease) => writePrivate(leasePath, JSON.stringify(lease, null, 2)),
+      // The lease holds the token: written raw (never redacted) at 0600 — in the private out dir
+      // ("out") and, for verify's consumedAt, on the ORIGINAL file given by --lease ("original").
+      writeLease: (lease, target) => writePrivate(target === "original" ? args.lease : leasePath, JSON.stringify(lease, null, 2)),
       log,
     };
   }

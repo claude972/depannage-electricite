@@ -777,7 +777,7 @@ export type ExpiryReport = {
   leasePath: string | null;
   observedCode: string | null;
   verifyCommand: string | null;
-  outcome: "prepared" | "pass" | "observed" | "fail" | "too-early" | null;
+  outcome: "prepared" | "pass" | "observed" | "fail" | "refused" | "too-early" | null;
 };
 // Any failed step (scenario, readback, cleanup) fails the run; later successes never mask it.
 export function computeVerdict(result: Pick<RunResult, "steps" | "scenarios" | "cleanup" | "leftovers" | "mode"> & { expiry?: ExpiryReport }, finished: boolean): RunResult["verdict"] {
@@ -854,6 +854,12 @@ export const EXPIRY_VERIFY_MARGIN_S = 60;
 export const EXPIRY_LEASE_MAX_S = 7200;
 export function expiryEmail(run: string): string {
   return `qa-gw-exp-${run}@qa.invalid`;
+}
+// Cohort proof: the e-mail returned by Auth for the exact uid must be the technical account of
+// THIS run (pattern and exact equality with the lease and the manifest). Nothing else is ever deleted.
+export const EXPIRY_EMAIL_PATTERN = /^qa-gw-exp-[0-9a-z]{2,40}@qa\.invalid$/;
+export function isExpiryCohortEmail(email: unknown, runId: string): boolean {
+  return typeof email === "string" && EXPIRY_EMAIL_PATTERN.test(email) && email === expiryEmail(runId);
 }
 export function decodeJwtClaims(token: string): Record<string, unknown> | null {
   const parts = typeof token === "string" ? token.split(".") : [];
@@ -1012,7 +1018,8 @@ export type ExpiryDeps = {
   addSecret(secret: string): void;
   forbidden(): string[];
   client: Pick<CleanupClient, "listDocuments" | "listObjects">;
-  writeLease(lease: Lease): Promise<void>;
+  // "out": the private out dir of this run; "original": the file given by --lease (verify only).
+  writeLease(lease: Lease, target: "out" | "original"): Promise<void>;
   log(status: StepStatus, step: string, detail: string): Promise<void>;
 };
 export type PrepareOutcome = { outcome: "prepared" | "fail"; userId: string | null; lease: Lease | null };
@@ -1063,33 +1070,37 @@ export async function expiryPrepare(deps: ExpiryDeps): Promise<PrepareOutcome> {
   }
   const expiry: ManifestExpiry = { userId, email, issuer: lease.issuer, claimExp: lease.claimExp, tokenSha256: await sha256Hex(token) };
   await deps.record("userIds", userId, { suite: "expiry", leaseEndsAt: new Date(lease.leaseEndsAt * 1000).toISOString(), expiry });
-  await deps.writeLease(lease);
+  await deps.writeLease(lease, "out");
   await deps.log("info", "PREPARED — expiration non encore prouvée", `relancer après ${new Date(lease.verifyNotBefore * 1000).toISOString()} et avant ${new Date(lease.leaseEndsAt * 1000).toISOString()} : ${deps.verifyCommand}`);
   return { outcome: "prepared", userId, lease };
 }
-export type VerifyOutcome = { outcome: "pass" | "observed" | "fail" | "too-early"; observedCode: string | null; cleanup: boolean };
-// Returns whether the caller must run the cohort cleanup (never on too-early).
+export type VerifyOutcome = { outcome: "pass" | "observed" | "fail" | "refused" | "too-early"; observedCode: string | null; cleanup: boolean };
+// `cleanup: true` is a PERMISSION to delete lease.userId. It is granted only after the independent
+// cohort proof (Auth admin GET by the exact uid → e-mail of THIS run, equal to lease and manifest).
+// Every mismatch (stale lease, unreadable manifest, uid/hash/claims/e-mail mismatch) refuses WITHOUT
+// deleting anything and without recording the unvalidated uid anywhere.
 export async function expiryVerify(lease: Lease, deps: ExpiryDeps): Promise<VerifyOutcome> {
+  const refused = async (step: string, detail: string): Promise<VerifyOutcome> => {
+    await deps.log("fail", `verify refusé : ${step} — aucune suppression, aucun identifiant enregistré`, detail);
+    return { outcome: "refused", observedCode: null, cleanup: false };
+  };
   const decision = leaseDecision(lease, deps.now());
   if (decision.action === "too-early") {
     await deps.log("info", "verify refusé : trop tôt (rien écrit, rien supprimé, compte conservé)", decision.detail);
     return { outcome: "too-early", observedCode: null, cleanup: false };
   }
   deps.addSecret(lease.token);
-  if (decision.action === "expired-lease") {
-    await deps.log("fail", "bail hors fenêtre : expiration non prouvée", decision.detail);
-    return { outcome: "fail", observedCode: null, cleanup: true };
-  }
-  // Lease ↔ manifest consistency before any call: token hash, issuer, uid, exp, aud/role.
+  if (lease.project !== deps.project) return refused("projet du bail ≠ projet", `${lease.project} ≠ ${deps.project}`);
+  // 1. Manifest of the lease, readable and of the same run/project.
   let manifest: Manifest;
   try {
     manifest = await deps.readManifest(lease.manifestPath);
   } catch (error) {
-    await deps.log("fail", "manifeste du bail illisible", error instanceof Error ? error.message : String(error));
-    return { outcome: "fail", observedCode: null, cleanup: true };
+    return refused("manifeste du bail illisible", `${error instanceof Error ? error.message : String(error)} — relancer « --cleanup-manifest <manifeste de prepare> » si le compte doit être nettoyé`);
   }
-  const claims = decodeJwtClaims(lease.token);
   const mismatch: string[] = [];
+  if (manifest.runId !== lease.runId) mismatch.push("runId du manifeste ≠ bail");
+  if (manifest.project !== lease.project) mismatch.push("projet du manifeste ≠ bail");
   if (manifest.suite !== "expiry" || !manifest.expiry) mismatch.push("manifeste sans données d’expiration");
   else {
     if (manifest.expiry.tokenSha256 !== (await sha256Hex(lease.token))) mismatch.push("empreinte SHA-256 du jeton ≠ manifeste");
@@ -1098,6 +1109,7 @@ export async function expiryVerify(lease: Lease, deps: ExpiryDeps): Promise<Veri
     if (manifest.expiry.claimExp !== lease.claimExp) mismatch.push("exp du bail ≠ manifeste");
     if (manifest.expiry.email !== lease.email) mismatch.push("e-mail du bail ≠ manifeste");
   }
+  const claims = decodeJwtClaims(lease.token);
   if (!claims) mismatch.push("jeton du bail illisible");
   else {
     if (claims.iss !== lease.issuer) mismatch.push("claim iss ≠ bail");
@@ -1105,21 +1117,34 @@ export async function expiryVerify(lease: Lease, deps: ExpiryDeps): Promise<Veri
     if (claims.exp !== lease.claimExp) mismatch.push("claim exp ≠ bail");
     if (claims.aud !== "authenticated" || claims.role !== "authenticated") mismatch.push("claims aud/role ≠ authenticated");
   }
-  await deps.log(mismatch.length ? "fail" : "pass", "cohérence bail ↔ manifeste ↔ claims (empreinte, iss, sub, exp)", mismatch.length ? mismatch.join(" ; ") : "identiques");
-  if (mismatch.length) return { outcome: "fail", observedCode: null, cleanup: true };
-  // Active, not banned, not deleted — otherwise a 401 proves nothing about expiry.
+  if (!isExpiryCohortEmail(lease.email, lease.runId)) mismatch.push("e-mail du bail hors cohorte d’expiration");
+  if (mismatch.length) return refused("cohérence bail ↔ manifeste ↔ claims", mismatch.join(" ; "));
+  await deps.log("pass", "cohérence bail ↔ manifeste ↔ claims (empreinte, iss, sub, exp, e-mail, run, projet)", "identiques");
+  // 2. Independent cohort proof from Auth, by the exact uid, BEFORE any cleanup permission.
   const active = await deps.getUser(lease.userId);
   const u = active.json ?? {};
+  if (active.status !== 200) return refused("compte introuvable dans Auth (preuve de cohorte impossible)", `Auth admin HTTP ${active.status} — rien n’est supprimé ; relancer « --cleanup-manifest <manifeste de prepare> » si nécessaire`);
+  const email = typeof u.email === "string" ? u.email.toLowerCase() : "";
+  const cohort: string[] = [];
+  if (u.id !== lease.userId) cohort.push("id renvoyé par Auth ≠ uid demandé");
+  if (!isExpiryCohortEmail(email, lease.runId)) cohort.push("e-mail Auth hors motif qa-gw-exp-<run>@qa.invalid");
+  if (email !== lease.email.toLowerCase()) cohort.push("e-mail Auth ≠ bail");
+  if (!manifest.expiry || email !== manifest.expiry.email.toLowerCase()) cohort.push("e-mail Auth ≠ manifeste");
+  if (cohort.length) return refused("preuve de cohorte Auth", cohort.join(" ; "));
+  await deps.log("pass", "preuve de cohorte Auth : uid exact → e-mail du run, égal au bail et au manifeste (suppression autorisée)", `Auth admin HTTP 200, run ${lease.runId}`);
+  // From here on, cleanup of lease.userId is permitted (cohort proven).
+  if (decision.action === "expired-lease") {
+    // Non-proof: the account is proven ours, but the window is gone; nothing is deleted here —
+    // the manifest written by prepare remains the rescue path.
+    await deps.log("fail", "bail hors fenêtre : expiration non prouvée — aucune suppression par verify", `${decision.detail} ; nettoyer par « --cleanup-manifest ${lease.manifestPath} »`);
+    return { outcome: "refused", observedCode: null, cleanup: false };
+  }
+  // 3. Active, not banned, not deleted — otherwise a 401 proves nothing about expiry.
   const bannedUntil = typeof u.banned_until === "string" ? Date.parse(u.banned_until) / 1000 : null;
   const activeReasons: string[] = [];
-  if (active.status !== 200) activeReasons.push(`Auth admin HTTP ${active.status}`);
-  else {
-    if (u.id !== lease.userId) activeReasons.push("id ≠ uid du bail");
-    if (typeof u.email !== "string" || u.email.toLowerCase() !== lease.email.toLowerCase()) activeReasons.push("e-mail ≠ bail");
-    if (u.deleted_at) activeReasons.push("compte effacé (deleted_at)");
-    if (bannedUntil !== null && Number.isFinite(bannedUntil) && bannedUntil > deps.now()) activeReasons.push("compte banni (banned_until futur)");
-  }
-  await deps.log(activeReasons.length ? "fail" : "pass", "compte technique actif, ni banni ni effacé, avant l’appel (isole l’expiration)", activeReasons.length ? activeReasons.join(" ; ") : `Auth admin HTTP ${active.status}, e-mail et id identiques`);
+  if (u.deleted_at) activeReasons.push("compte effacé (deleted_at)");
+  if (bannedUntil !== null && Number.isFinite(bannedUntil) && bannedUntil > deps.now()) activeReasons.push("compte banni (banned_until futur)");
+  await deps.log(activeReasons.length ? "fail" : "pass", "compte technique actif, ni banni ni effacé, avant l’appel (isole l’expiration)", activeReasons.length ? activeReasons.join(" ; ") : "Auth admin HTTP 200, e-mail et id identiques");
   if (activeReasons.length) return { outcome: "fail", observedCode: null, cleanup: true };
   const now = deps.now();
   if (now < lease.claimExp + EXPIRY_VERIFY_MARGIN_S) {
@@ -1129,6 +1154,8 @@ export async function expiryVerify(lease: Lease, deps: ExpiryDeps): Promise<Veri
   const probe = await deps.probe(lease.token);
   const verdict = assertExpiredRefusal({ status: probe.status, bodyText: probe.text }, deps.forbidden());
   await deps.log(verdict.outcome === "fail" ? "fail" : verdict.outcome === "observed" ? "info" : "pass", verdict.outcome === "observed" ? "jeton réel expiré refusé 401 sans fuite — code plateforme OBSERVÉ, non lié : pas un PASS" : "jeton réel expiré refusé par la fonction déployée (401 sans fuite)", `HTTP ${probe.status}${verdict.observedCode ? ` — code ${verdict.observedCode}` : ""}${verdict.reasons.length ? ` — ${verdict.reasons.join(" ; ")}` : ""}`);
-  await deps.writeLease({ ...lease, consumedAt: now });
+  const consumed = { ...lease, consumedAt: now };
+  await deps.writeLease(consumed, "original");
+  await deps.writeLease(consumed, "out");
   return { outcome: verdict.outcome, observedCode: verdict.observedCode, cleanup: true };
 }
