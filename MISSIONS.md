@@ -100,3 +100,17 @@ Cross-verification: Codex examine les preuves de Claude et fait corriger les fin
 - dependencies: API server helpers et schéma actuel, Supabase dédié prêt ; pas de Stripe nécessaire. Relais à Claude à00h si lot non terminé.
 - verification report: CORRECTIONS.md / WEB-PWA-ADMIN-LISTS-001, rapport complémentaire docs/CODEX_ADMIN_LISTS_VERIFICATION.md
 - preview: integration/web-pwa après revue, pas de production
+
+
+## Mission WEB-PWA-QUOTE-DRAFT-001 — brouillons privés de devis
+- agent: codex
+- status: in_progress
+- branch: codex/web-pwa-backend
+- base revision: d85da0657586f152ee9bba941d67345b4eead616
+- objective: conserver un brouillon de devis par artisan/dossier, sans publier ni remplacer le devis envoyé avant une action explicite.
+- owned files: migration010 additive quote drafts (aucune modification001–009), nouvelle route app/api/interventions/[id]/quote-draft/route.ts, tests ciblés SQL/API, docs/WEB_PWA_QUOTE_DRAFT_CONTRACT.md et docs/CODEX_QUOTE_DRAFT_VERIFICATION.md ; ajout ciblé d’étape CI si nécessaire coordonné avec pilote. Aucun frontend/paiement/modification des anciennes routes.
+- deliverables: plan court et contrat strict publiés avant code ; save/load/discard/send avec version optimiste et erreurs409 explicites ; publication transactionnelle par règles existantes et consommation atomique du brouillon. Aucune nouvelle règle de TVA, validité, signature ou document légal inventée.
+- acceptance: seul artisan actuellement attribué, autorisé et non suspendu peut gérer son brouillon ; envoi exige toutes les autorisations métier actuelles. Réaffectation, lecture autre artisan/client/admin directes, conflit de révision, send rollback, montants invalides et devis accepté inchangé couverts. Brouillon jamais compté envoyé/accepté ni visible client. Verrouillage cohérent organisation puis dossier, et refus des anciens chemins internes. La publication retourne quote_id exact du devis créé ; échec ne détruit pas le brouillon. No-store, aucun service-role navigateur.
+- dependencies: règles003/005/008/009 et intervention_action actuelles, coordination UI Claude nécessaire avant branchement ; pas de Stripe ni données d’exploitant requis. Relais à Claude à00h si inachevé.
+- verification report: CORRECTIONS.md / WEB-PWA-QUOTE-DRAFT-001, rapport exactSHA complémentaire.
+- preview: intégration après revue obligatoire, pas de production.

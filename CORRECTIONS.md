@@ -618,3 +618,159 @@ Codex a supprimé uniquement son cache de build généré .next (checkout Codex)
 - Codex conserve cette configuration preview minimale et deux templates dans supabase/config.toml et supabase/templates sur integration/web-pwa (fichiers sans secrets, pas de push automatique vers un autre environnement). Vérification des liens/routes SSR prévue en navigateur ; distribution réelle du courrier pas encore vérifiée.
 - CL-UI-007 reste ouvert au75feaab : correction de connexion ordinaire mais ancienne réponse Auth peut encore réinitialiser une identité plus récente. Reproduction indépendante transmise à Claude. CL-UI-008 amendé par8856236, relecture nécessaire avant clôture.
 - En ligne, QA annonce41 parcours/contrôles UI et13 PWA réussis sur0017b48 ; rapport complet et captures attendus. Le finding VIS-001 sur densité artisan reste ouvert, indépendamment du succès fonctionnel.
+
+
+## WEB-PWA-20261030 — revues et contrôles complémentaires
+
+# Real hosted concurrency QA
+
+UTC 2026-10-31T03:00:50.425Z
+Dedicated Supabase project kcpyjzndybfdlnhvscbs; migrations001–009. Real authenticated PostgREST HTTP requests sent concurrently with Promise.all. Four temporary synthetic QA users. Approved artisan fixture fields set by service-role only for the two tracked QA identities; not an operator approval or legal qualification test. No schema changes, no email, no Stripe.
+
+## Functional checks
+
+19/19 passed.
+
+| Check | Result | Detail |
+| --- | --- | --- |
+| artisan1 initially eligible | PASS |  |
+| artisan2 initially eligible | PASS |  |
+| Exactly one simultaneous claim succeeds | PASS |  |
+| Exactly one simultaneous claim fails | PASS |  |
+| Stored assignment has single winning artisan | PASS |  |
+| Winner retains authorized private job | PASS |  |
+| Loser cannot read private job | PASS |  |
+| Loser cannot read document metadata | PASS |  |
+| Loser cannot request private Storage URL | PASS |  |
+| Loser cannot request participant contacts | PASS |  |
+| Winner may retrieve assigned participant contacts | PASS |  |
+| artisan1 no longer offered assigned mission | PASS |  |
+| artisan2 no longer offered assigned mission | PASS |  |
+| Exactly one concurrent invitation accept succeeds | PASS |  |
+| Exactly one concurrent invitation accept fails | PASS |  |
+| Single recipient membership stored | PASS |  |
+| Single invitation acceptance event stored | PASS |  |
+| Invitation consumed by correct recipient | PASS |  |
+| Successful concurrent accept retains selected-site grant | PASS |  |
+
+## Sanitized race responses
+
+```json
+[
+  {
+    "label": "Two artisan claim requests via Promise.all",
+    "elapsed_ms": 261,
+    "responses": [
+      {
+        "actor": "artisan1",
+        "success": true,
+        "error_code": null,
+        "status": 200
+      },
+      {
+        "actor": "artisan2",
+        "success": false,
+        "error_code": "42501",
+        "status": 403
+      }
+    ]
+  },
+  {
+    "label": "Same recipient invitation accepts via Promise.all",
+    "elapsed_ms": 198,
+    "responses": [
+      {
+        "success": true,
+        "error_code": null,
+        "status": 200
+      },
+      {
+        "success": false,
+        "error_code": "P0001",
+        "status": 400
+      }
+    ]
+  }
+]
+```
+
+## Cleanup
+
+- Remove QA Storage objects: PASS
+- Remove QA documents: PASS
+- Remove QA job audit: PASS
+- Remove QA jobs: PASS
+- Remove QA sites: PASS
+- Remove tracked QA professional_audit: PASS
+- Remove tracked QA organization_membership_events: PASS
+- Remove tracked QA organization_invitations: PASS
+- Remove QA organizations: PASS
+- Remove QA actor audit: PASS
+- Remove QA Auth user: PASS
+- Remove QA actor audit: PASS
+- Remove QA Auth user: PASS
+- Remove QA actor audit: PASS
+- Remove QA Auth user: PASS
+- Remove QA actor audit: PASS
+- Remove QA Auth user: PASS
+
+## Cleanup readback
+
+- No tracked profiles: PASS
+- No tracked organizations: PASS
+- No tracked sites: PASS
+- No tracked interventions: PASS
+- No tracked documents: PASS
+- QA Auth identity absent: PASS
+- QA Auth identity absent: PASS
+- QA Auth identity absent: PASS
+- QA Auth identity absent: PASS
+- QA Storage prefix empty: PASS
+
+## Limits
+Concurrent client requests demonstrate bounded production-hosted locking behavior for these two scenarios. This is not a load/stress test or guarantee for every interleaving. No browser, payments, email delivery, native mobile or long-lived signed URL revocation tested. Only tracked temporary QA records removed; public project settings unchanged.
+
+
+# Focused independent login recheck — 2e3dcf1
+
+Exact reviewed revision: `2e3dcf14ce6e0d6750329dae97ca1e51c759ee3b`. Owner working files not read as delivery and not edited. Helpers/test snapshot exported to `/tmp/depannage-ui-review-2e3`.
+
+## Confirmed corrections
+
+Former awaiting-verification A → newer B listener → old verification responseA now returns superseded before clear/rebind, because loadedB differs from expectedA. Independent reproduction additionally confirms B's active runner busy flag remains true and B's eventual notice publishes normally. A stale verification rejection after B does not publish A's error. Ordinary promise-before-event, own event-before-promise, and identity change during workspace load tests pass.
+
+The former different-account P1 reset finding is corrected in this bounded path.
+
+## Remaining actionable edge — P2 stale logout continuation resets new public state
+
+`components/app/identity.ts:33–46` still permits adoption when loadedUserId is null, without checking whether the original chain was invalidated during verification. Null is correct for initial anonymous login, but also occurs after an explicit later logout.
+
+Deterministic reproduction:
+1. A login continuation awaits currentUserId; verification request was sent forA.
+2. A later logout clears session, bumps generation, resets runner and leaves loadedUserId null / SDK user null.
+3. User enters a new anonymous request draft after logout.
+4. Old verification response returnsA (for the earlier request's token). Test controller current state remains loggedout.
+5. Helper accepts loadednull, calls clearSessionState again, setsrefA, rebinds the invalidated chain and starts another refresh. This erases the newer public draft. An unauthenticated workspace response triggers the existing401 clear, so private navigation is prevented.
+
+Evidence: helper's clear before checking current context, and actual controller clearSessionState resets pendingDraft and removes DRAFT_KEY. Independent reproduction asserts reset count increases after logout and newer anonymous draft is removed. It also asserts no private navigation and finalrefnull with an unauthenticated-refresh-equivalent reset. This is **public-state loss from obsolete auth work**, not a demonstrated server authorization bypass, return to an authenticated SDK session, or private data leak.
+
+Existing owner test `logout during verification (SDK user null)` has verification returnnull; it does not exercise stale verifiedA arriving after logout.
+
+A minimal bounded guard after awaited verification could reject `!ctx.alive() && loaded === null`, retaining initial anonymous login (alive) and legitimate own listenerA adoption (loadedA). Owner should implement and test the actual controller-used helper, preserving all existing successful-login controls. No need to claim a broader auth rewrite or invent additional interleavings for closure of this finding.
+
+## Actual verification
+
+- **30 existing UI tests PASS**, exit0.
+- **3 independent cases PASS**, exit0, in `/tmp/depannage-ui-review-2e3/independent-auth.test.ts`: B preserved during stale verification; staleA verification error suppressed; post-logout staleA response reproduces public draft loss.
+- Total **33 tests PASS**. Passing final reproduction documents current bad behavior rather than its correction.
+- Harness invokes exact reviewed adoptIdentity/createRunner/createGuard and mirrors relevant controller logout/reset/unauthenticated refresh state transitions. It is a deterministic helper-level test, not a mounted React test or a real Supabase/browser timing observation.
+- No build, cloud, preview, visual or complete Auth journey executed by this reviewer. No owner code, build artifacts or dependencies modified.
+
+Verdict: previous B-reset race corrected; one P2 logout/public-state edge remains. UI cache and invitation findings are outside this focused recheck, with no status change asserted here.
+
+
+### CLI Claude reviewer — ADMIN-LISTS
+Codex a vérifié le reviewer c38a6bc4 inactif après son précédent rapport, avancé uniquement son checkout lecture seule jusqu’au d85da06, puis repris la même session CLI en mode plan normal. Revue admin pagination et009 demandée avec tests autorisés et sans mutation cloud/code. Processus lancé, résultat attendu dans /tmp/depannage-claude-admin-review.json ; pas de verdict déduit du lancement. Lead UI b4b555f0 distinct et non interrompu. Suite : publier le rapport réel et traiter les findings avant clôture.
+
+### Intégration courante
+fe4c9c9 intègre d85da06 et le correctif Auth2e3dcf1/revalidation8856236 pour recette. P1 ancienne réponse A sur session B recontrôlé corrigé ; P2 brouillon anonyme après logout reste assigné Claude. La nouvelle interface professionnelle doit encore consommer refreshedAt. Aucune clôture globale. Le CSV révisé préserve76IDs et leurs états historiques ; preuves cloud/preview enregistrées dans docs/verification.
