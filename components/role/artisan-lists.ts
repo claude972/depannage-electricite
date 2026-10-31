@@ -168,3 +168,58 @@ export function demoPlanningRange(now: Date, zone: string): { from: string; to: 
   const iso = (d: Date) => d.toISOString().slice(0, 10);
   return { from: `${iso(monday)}T00:00:00`, to: `${iso(next)}T00:00:00` };
 }
+
+// ---- Documents obligatoires (M14) : compte réel de pièces, libellé de date sans invention -------
+import { date as formatDate } from "../app/format";
+
+export type CredentialLike = {
+  key: "missing" | "pending" | "expired" | "valid";
+  credential?: { expires_on?: string | null; created_at: string };
+};
+
+/** Compte des pièces transmises sur les trois obligatoires ; « complet » seulement à 3/3 (jamais un pourcentage de validation). */
+export function credentialSummary(states: readonly CredentialLike[]) {
+  const total = states.length;
+  const transmitted = states.filter((s) => s.key !== "missing").length;
+  return { transmitted, total, complete: total > 0 && transmitted === total, label: `${transmitted}/${total} pièces transmises` };
+}
+
+/** Colonne d’état M14 : la date vient uniquement de `expires_on` ; sans date, on le dit. */
+export function credentialDateLabel(state: CredentialLike): string | null {
+  if (!state.credential) return null;
+  const until = state.credential.expires_on;
+  if (!until) return "Sans date d’expiration renseignée";
+  return state.key === "expired" ? `Expiré le ${formatDate(until)}` : `Valide jusqu’au ${formatDate(until)}`;
+}
+
+// ---- Candidature (M65) : état des cinq sections, déduit des valeurs et pièces réelles -----------
+export type ApplicationStepInput = {
+  personalDone: boolean;
+  companyName: string;
+  siret: string;
+  legalStatus: string;
+  address: string;
+  postalCodes: readonly string[];
+  categories: readonly string[];
+  credentialsComplete: boolean;
+  hasProfile: boolean;
+};
+export type ApplicationStep = { n: 1 | 2 | 3 | 4 | 5; label: string; done: boolean };
+
+/** Cinq sections M65 ; « renseignée » vient uniquement des valeurs saisies et des pièces transmises. */
+export function applicationSteps(i: ApplicationStepInput): ApplicationStep[] {
+  return [
+    { n: 1, label: "Informations personnelles", done: i.personalDone },
+    {
+      n: 2,
+      label: "Société",
+      done: i.companyName.trim().length >= 2 && /^\d{14}$/.test(i.siret) && Boolean(i.legalStatus) && i.address.trim().length >= 5,
+    },
+    { n: 3, label: "Pièces justificatives", done: i.credentialsComplete },
+    { n: 4, label: "Zones et compétences", done: i.postalCodes.length > 0 && i.categories.length > 0 },
+    { n: 5, label: "Disponibilité", done: i.hasProfile },
+  ];
+}
+
+export const stepsSummary = (steps: readonly ApplicationStep[]) =>
+  `${steps.filter((s) => s.done).length} section${steps.filter((s) => s.done).length > 1 ? "s" : ""} sur ${steps.length} renseignée${steps.filter((s) => s.done).length > 1 ? "s" : ""}`;
