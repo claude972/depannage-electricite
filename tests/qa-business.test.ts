@@ -1082,3 +1082,36 @@ test("§19 clock barrier through main: slow public fetch ⇒ exit 2, BLOCKED 're
   const { readdir } = await import("node:fs/promises");
   assert.deepEqual((await readdir(out)).sort(), ["result.json", "summary.md"], "no manifest, no fixture, no run log");
 });
+
+// ---------------------------------------------------------------- §20 bounded UI observation window (run d467d88c7206)
+test("§20 driver POST 403 before the window is allowed; a UI POST during the window FAILS whatever its status", async () => {
+  const net = await lib("network");
+  const fresh = () => ({ network: [{ method: "GET", path: "/api/workspace", status: 200 }] as Row[] });
+  // Third-party shape: the driver's deliberate generate probe answered 403, then UI navigation (GETs only).
+  const h = fresh();
+  const before = h.network.length;
+  h.network.push({ method: "GET", path: "/api/quote-documents", status: 403 }, { method: "POST", path: "/api/quote-documents", status: 403 });
+  const window = await net.settledBaseline(h, { since: before, driverMutations: 1 });
+  h.network.push({ method: "GET", path: "/api/workspace", status: 200 });
+  assert.deepEqual(net.assertNoUiWrites(h, window), { window_from: 3, observed: 1 }, "driver 403 before the window: PASS");
+  // A UI POST answered 403 inside the window is a FAIL (no status filter).
+  h.network.push({ method: "POST", path: "/api/quote-documents", status: 403 });
+  assert.throws(() => net.assertNoUiWrites(h, window), (e: Error) => e.name === "AssertionError" && /1 write request/.test(e.message));
+  // A UI POST answered 200 inside the window is a FAIL.
+  const h2 = fresh();
+  const w2 = await net.settledBaseline(h2, { driverMutations: 0 });
+  h2.network.push({ method: "PATCH", path: "/api/site-operations", status: 200 });
+  assert.throws(() => net.assertNoUiWrites(h2, w2), (e: Error) => e.name === "AssertionError");
+  assert.equal(Object.isFrozen(window), true, "baseline immutable");
+});
+test("§20 baseline waits for a driver response recorded late, and an extra write during the probes is a FAIL", async () => {
+  const net = await lib("network");
+  const h = { network: [] as Row[] };
+  setTimeout(() => h.network.push({ method: "POST", path: "/api/site-operations", status: 403 }), 40); // response event after the probe resolved
+  const w = await net.settledBaseline(h, { since: 0, driverMutations: 1, timeoutMs: 1000 });
+  assert.equal(w.index, 1, "the late driver POST is before the window, not in it");
+  assert.deepEqual(net.assertNoUiWrites(h, w).observed, 0);
+  const extra = { network: [{ method: "POST", path: "/api/site-operations", status: 403 }, { method: "POST", path: "/api/quote-documents", status: 200 }] as Row[] };
+  await assert.rejects(() => net.settledBaseline(extra, { since: 0, driverMutations: 1 }), (e: Error) => e.name === "AssertionError");
+  await assert.rejects(() => net.settledBaseline({ network: [] }, { driverMutations: 1, timeoutMs: 60 }), (e: Error) => e.name === "Error" && /driver mutation/.test(e.message), "missing observation is a harness anomaly, not a PASS");
+});
