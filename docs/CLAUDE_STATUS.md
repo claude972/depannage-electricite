@@ -767,3 +767,9 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - Root's a11y fix included: `role="listitem"` removed from the category buttons; container `role="group" aria-label="Catégories de dépannage"` (lead verified in index.html); no visual change; 44 px targets; dialog opens on click, Escape closes, focus returns; no console errors; no overflow at 360/390/1280.
 - Font licence: no licence file for Plus Jakarta Sans in the ZIP; plan notes SIL OFL 1.1 by its author — owner to confirm before any use beyond this prototype.
 - Root: static preview from fd13ce6 (app and current preview untouched).
+
+## 2026-10-31 — Delivo test mockup delivered (static public preview); mission closed
+
+- Root reviewed fd13ce6 and published a separate STATIC public preview, READY: deployment `dpl_4XaaMvJrNLtSQgEVavCPFGFoY3BF`, https://depannage-electricite-7xo6v93eo-brafas-projects.vercel.app — GET 200, fresh browser at 390 with 0 cookies, no overflow, no JS errors, dialog/Escape PASS after the role fix. Screenshot for the user produced by root.
+- **DESIGN-DELIVO-TEST-001 closed: test only.** No app redesign and no adoption of this design without an explicit owner order.
+- Coordination d6fa619 pushed by root. GPS diagnosis continues separately; root run (PTY 12335) preserved; no business cloud run before its end, cleanup and readbacks.
