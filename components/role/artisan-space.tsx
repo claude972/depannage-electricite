@@ -2615,6 +2615,14 @@ function ApplicationForm({
   const dirty = appKey(values) !== appKey(appValuesFrom(profile));
   const busy = session.busy;
   const canSubmit = status === "draft" || status === "changes_requested";
+  // Dossier edits are refused by the platform while work is active or completed but unpaid
+  // (contract CL-BE-001): count them from the loaded dossiers to explain the rule up front.
+  const mine = session.data.interventions.filter((i) => i.artisan_id === session.profileId);
+  const activeJobs = mine.filter((i) =>
+    ["assigned", "quoted", "accepted", "in_progress"].includes(i.status),
+  ).length;
+  const unpaidJobs = mine.filter((i) => i.status === "completed").length;
+  const editBlocked = activeJobs + unpaidJobs > 0;
   const set = <K extends keyof AppValues>(key: K, value: AppValues[K]) =>
     setValues((v) => ({ ...v, [key]: value }));
   const saveBody = (): ArtisanCommand => ({
@@ -2682,6 +2690,18 @@ function ApplicationForm({
           {profile?.submitted_at && status !== "draft" ? ` Soumise le ${dateTime(profile.submitted_at)}.` : ""}
         </p>
       </div>
+      {editBlocked && (
+        <div className="alert warning" role="note">
+          <Icon name="info" />
+          <span>
+            Dossier professionnel verrouillé tant que des missions restent à terminer ou à régler
+            ({activeJobs} en cours, {unpaidJobs} terminée{unpaidJobs > 1 ? "s" : ""} sans règlement).
+            Terminez-les et attendez leur règlement, ou obtenez leur annulation ou réaffectation,
+            avant de modifier société, zone ou compétences. Votre disponibilité immédiate et vos
+            coordonnées restent modifiables à tout moment ; votre approbation n’est pas retirée.
+          </span>
+        </div>
+      )}
       <ol className={styles.appSteps} aria-label="Sections du dossier">
         {sections.map((s) => (
           <li key={s.n} className={s.done ? styles.stepDone : undefined}>

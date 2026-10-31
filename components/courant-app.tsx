@@ -902,6 +902,16 @@ export default function CourantApp() {
         let nextProfile = profile;
         let credentials = dossier.credentials;
         if (body.action === "save_profile") {
+          // Mirrors the platform rule (CL-BE-001): no dossier edit while work is active or unpaid.
+          const blocking = data.interventions.filter(
+            (i) =>
+              i.artisan_id === DEMO_IDS.artisan &&
+              ["assigned", "quoted", "accepted", "in_progress", "completed"].includes(i.status),
+          ).length;
+          if (blocking)
+            throw new Error(
+              `Modification refusée : ${blocking} mission${blocking > 1 ? "s" : ""} en cours ou terminée${blocking > 1 ? "s" : ""} sans règlement. Terminez-les et attendez leur règlement, ou obtenez leur annulation ou réaffectation, avant de modifier le dossier. Rien n’a été modifié ; vos saisies restent dans le formulaire.`,
+            );
           const { action: _a, ...fields } = body;
           nextProfile = {
             ...profile,
@@ -953,6 +963,11 @@ export default function CourantApp() {
       } catch (e) {
         const state = contractStateFromError(e);
         if (state === "missing") ctx.when(setCapabilities)((c) => ({ ...c, artisan: "missing" }));
+        if (body.action === "save_profile" && e instanceof ApiRequestError && e.status === 409)
+          // Active-work guard: the dossier and the approval are untouched; the form keeps the input.
+          throw new Error(
+            `${e.message} Rien n’a été modifié et votre approbation est inchangée ; vos saisies restent dans le formulaire.`,
+          );
         throw e;
       }
       if (ctx.alive()) await refresh();
