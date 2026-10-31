@@ -1,3 +1,12 @@
+# Checkpoint prioritaire — 31 octobre 19h23 Martinique
+
+## ROOT31oct19h23 — D1–D3 réels PASS, D4 réel ACTIF
+973 terminé4/4PASSsetup+D1+D2+D3 surapp28b/harnaisPIN771 ;cleanup29+ROOT45postflightPASS23:17:20UTC6Auth404/33REST0/6Storage0,aucunrésidu973. Rapportdocs/reviews/DEEPLINK_771_28B_D123_HOSTED_PASS.md.
+002couvertureidentitéfermée4b09(18testsPASS),004gardeSTOPfermée86651bca1d7c924ee63c3d607c208df64e280e10(19testsPASS+reproindépD4loginAfterStop0,STOPpréservé). Rapportsjoints. Intégration58b76414f6233220f938dbc42681c089abe58316POUSSÉE745tests0skip+tscstrictPASS,CIàsuivre ;aucunappdeploy/Supabasemigration/Edgechangé.
+NOUVELLErecetteD4SEULROOTACTUELLE PTY98962 run9f8cd3b6626d /tmp/depannage-deeplink-866-28b-d4-real app28b/pin866,provenanceROOTfreshGitSourceReady/Flightavantfixture. CohorteVOLONTAIREACTIVE7Auth1org2sites4jobsàdernièrelecture(pasfinencore,nombreàfigerAPRESFIN). ReviewerbackendpréparepostflightREADONLY9f8sanscloudcredentials,àrootrevoir/exécuterAPRESFIN+cleanup seulement. Ne pasannoncertoutescohortes0/relancerautrewriter/interrompreaveugleoumodifierpinnés/app. D4n’héritepasduPASS973 ;LIVErealtime/cap100/adminStripeOPEN.
+
+Historiquepréservéci-dessous.
+
 # Checkpoint prioritaire — 31 octobre 18h48 Martinique
 
 
