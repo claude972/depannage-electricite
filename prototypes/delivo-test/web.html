@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Maquette test — Accueil web, dépannage électrique</title>
+  <link rel="stylesheet" href="web.css" />
+</head>
+<body>
+  <a class="skip" href="#contenu">Aller au contenu</a>
+
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <a class="brand" href="web.html" aria-label="courant — Dépannage électrique, accueil">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path d="M13 2L5 14h6l-1 8 8-12h-6l1-8z" fill="currentColor"/></svg>
+        </span>
+        <span class="brand-text"><strong>courant</strong><small>Dépannage électrique</small></span>
+      </a>
+      <nav class="mainnav" aria-label="Navigation principale">
+        <a href="#services">Services</a>
+        <a href="#parcours">Comment ça marche</a>
+        <a href="#" data-open="Espace professionnel">Espace pro</a>
+        <a href="suivi.html">Mes demandes</a>
+      </nav>
+      <div class="topbar-actions">
+        <a class="btn btn-ghost" href="#" data-open="Se connecter">Se connecter</a>
+        <a class="btn btn-primary" href="demande.html">Décrire ma panne</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="contenu">
+    <div class="wrap">
+      <p class="demo-tag">Maquette test — aucune donnée réelle</p>
+
+      <!-- Emplacement publicitaire STATIQUE (maquette) : prêt pour une image future (<img class="ad-media" … alt="…">). -->
+      <a class="ad" href="#" data-open="Emplacement publicitaire" aria-label="Publicité : emplacement disponible (démonstration)">
+        <span class="ad-label">PUBLICITÉ</span>
+        <span class="ad-body">
+          <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="9" cy="10" r="1.8" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M4 17l5-4 4 3 3-2 4 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          Votre publicité ici
+        </span>
+      </a>
+
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-text">
+          <p class="eyebrow">Dépannage électrique</p>
+          <h1 id="hero-title">Une panne électrique&nbsp;? Décrivez-la, on s’occupe de la suite.</h1>
+          <p class="lead">Coupure, prise, tableau ou éclairage : décrivez le problème en quelques étapes. Vous voyez une estimation indicative, puis un devis avant toute intervention.</p>
+          <form class="hero-form" action="demande.html" method="get">
+            <label for="adresse">Adresse d’intervention</label>
+            <div class="hero-field">
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="9.5" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+              <input id="adresse" type="text" placeholder="Rue, commune" autocomplete="off" />
+              <button class="btn btn-primary" type="submit">Décrire ma panne</button>
+            </div>
+          </form>
+        </div>
+        <figure class="hero-media">
+          <img src="assets/electricite.jpg" alt="Illustration d’une intervention sur un tableau électrique" width="640" height="360" />
+        </figure>
+      </section>
+
+      <section id="services" class="section" aria-labelledby="services-title">
+        <div class="section-head">
+          <h2 id="services-title">Nos services</h2>
+          <a class="link" href="demande.html">Décrire ma panne <span aria-hidden="true">→</span></a>
+        </div>
+        <ul class="services">
+          <li><a class="service" href="#" data-open="Panne de courant">
+            <span class="service-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24"><path d="M13 2L5 14h6l-1 8 8-12h-6l1-8z" fill="currentColor"/></svg></span>
+            <strong>Panne de courant</strong><span>Coupure totale ou partielle, disjoncteur qui saute.</span></a></li>
+          <li><a class="service" href="#" data-open="Prise ou interrupteur">
+            <span class="service-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24"><rect x="4" y="4" width="16" height="16" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9.5" cy="12" r="1.4" fill="currentColor"/><circle cx="14.5" cy="12" r="1.4" fill="currentColor"/></svg></span>
+            <strong>Prise / interrupteur</strong><span>Prise qui ne fonctionne plus, interrupteur abîmé.</span></a></li>
+          <li><a class="service" href="#" data-open="Tableau électrique">
+            <span class="service-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24"><rect x="4" y="3" width="16" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 8v3M12 8v3M16 8v3M8 15h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+            <strong>Tableau électrique</strong><span>Diagnostic, remise en service, protection.</span></a></li>
+          <li><a class="service" href="#" data-open="Éclairage">
+            <span class="service-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>
+            <strong>Éclairage</strong><span>Point lumineux, luminaire, circuit d’éclairage.</span></a></li>
+        </ul>
+      </section>
+
+      <section id="parcours" class="section" aria-labelledby="journey-title">
+        <div class="section-head"><h2 id="journey-title">Comment ça marche</h2></div>
+        <ol class="journey">
+          <li><span class="step-num">1</span><div><h3>Estimation indicative</h3><p>Vous décrivez la panne ; une fourchette indicative s’affiche. Ce n’est pas un prix garanti.</p></div></li>
+          <li><span class="step-num">2</span><div><h3>Devis avant toute intervention</h3><p>L’artisan propose un devis détaillé. Rien n’est engagé tant que vous ne l’avez pas accepté.</p><a class="link" href="devis.html">Voir un exemple de devis <span aria-hidden="true">→</span></a></div></li>
+          <li><span class="step-num">3</span><div><h3>Paiement, étape distincte</h3><p>Le paiement est une étape séparée de l’acceptation du devis.</p></div></li>
+        </ol>
+      </section>
+
+      <section class="cta-band" aria-labelledby="cta-title">
+        <div>
+          <h2 id="cta-title">Prêt à décrire votre panne&nbsp;?</h2>
+          <p>Quelques informations suffisent pour préparer la demande.</p>
+        </div>
+        <div class="cta-actions">
+          <a class="btn btn-dark" href="demande.html">Décrire ma panne</a>
+          <a class="btn btn-outline-light" href="suivi.html">Suivre une demande</a>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <span class="brand-text small"><strong>courant</strong><small>Dépannage électrique — maquette test</small></span>
+      <nav aria-label="Liens de pied de page">
+        <a href="#" data-open="Mentions légales">Mentions légales</a>
+        <a href="#" data-open="Confidentialité">Confidentialité</a>
+        <a href="galerie.html">Écrans mobiles</a>
+      </nav>
+    </div>
+  </footer>
+
+  <dialog id="test-dialog" aria-labelledby="dialog-title" aria-describedby="dialog-text">
+    <h2 id="dialog-title">Maquette test</h2>
+    <p id="dialog-text">« <span id="dialog-subject"></span> » : dans l’application réelle, cette action serait traitée par le service. Ici, rien n’est envoyé.</p>
+    <form method="dialog"><button class="btn btn-primary" value="close" autofocus>Fermer</button></form>
+  </dialog>
+  <script src="dialog.js"></script>
+</body>
+</html>
