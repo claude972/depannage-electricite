@@ -7,6 +7,7 @@ import { createClient } from "../lib/supabase/client";
 import { api, ApiRequestError, contractStateFromError, uploadDocument } from "./app/api";
 import { createGuard, createRunner, type RunContext, type Runner } from "./app/guard";
 import { adoptIdentity } from "./app/identity";
+import { allUploaded, processUploadQueue, uploadSummary } from "./app/uploads";
 import {
   DEMO_IDS,
   DEMO_KEYS,
@@ -947,42 +948,13 @@ export default function CourantApp() {
   }
 
   // Uploads the queue items one by one; each result is recorded, failures stay retryable.
-  async function processUploads(ctx: RunContext, queue: UploadQueue): Promise<UploadQueue> {
-    let current = queue;
-    for (const item of queue.items) {
-      if (item.status === "done") continue;
-      if (!ctx.alive()) return current;
-      current = {
-        ...current,
-        items: current.items.map((x) => (x.key === item.key ? { ...x, status: "uploading", error: undefined } : x)),
-      };
-      ctx.when(setUploads)(current);
-      try {
-        const doc = await uploadDocument(item.file, queue.interventionId);
-        current = {
-          ...current,
-          items: current.items.map((x) =>
-            x.key === item.key ? { ...x, status: "done", documentId: doc.id } : x,
-          ),
-        };
-      } catch (e) {
-        current = {
-          ...current,
-          items: current.items.map((x) =>
-            x.key === item.key ? { ...x, status: "failed", error: (e as Error).message } : x,
-          ),
-        };
-      }
-      ctx.when(setUploads)(current);
-    }
-    return current;
-  }
-  function uploadSummary(queue: UploadQueue): string {
-    const done = queue.items.filter((i) => i.status === "done").length;
-    const failed = queue.items.filter((i) => i.status === "failed").length;
-    if (!failed) return `${done} photo${done > 1 ? "s" : ""} enregistrée${done > 1 ? "s" : ""} dans le dossier.`;
-    return `${done} photo${done > 1 ? "s" : ""} enregistrée${done > 1 ? "s" : ""}, ${failed} en échec. La demande est bien créée : réessayez l’envoi des photos restantes depuis le dossier.`;
-  }
+  const processUploads = (ctx: RunContext, queue: UploadQueue) =>
+    processUploadQueue(
+      queue,
+      (file, interventionId) => uploadDocument(file, interventionId),
+      () => ctx.alive(),
+      ctx.when(setUploads),
+    );
   async function createIntervention(values: RequestValues, photos: File[] = []) {
     return run(async (ctx) => {
       if (modeRef.current === "demo") {
@@ -1036,7 +1008,7 @@ export default function CourantApp() {
       const finished = await processUploads(ctx, queue);
       if (!ctx.alive()) return;
       await refresh();
-      if (finished.items.every((i) => i.status === "done")) ctx.when(setUploads)(null);
+      if (allUploaded(finished)) ctx.when(setUploads)(null);
       ctx.notice(`Votre demande a été enregistrée. ${uploadSummary(finished)}`);
     });
   }
@@ -1046,7 +1018,7 @@ export default function CourantApp() {
       const finished = await processUploads(ctx, uploads);
       if (!ctx.alive()) return;
       await refresh();
-      if (finished.items.every((i) => i.status === "done")) {
+      if (allUploaded(finished)) {
         ctx.when(setUploads)(null);
         ctx.notice("Toutes les photos sont enregistrées dans le dossier.");
       } else ctx.error(uploadSummary(finished));
