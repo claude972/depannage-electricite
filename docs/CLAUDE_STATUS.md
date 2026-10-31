@@ -136,6 +136,13 @@ Reste à faire côté UI (par ordre) :
 5. Différés par le propriétaire : Stripe (retours réels, factures), déploiements Vercel.
 6. Mobile iOS/Android : à démarrer seulement après le checkpoint Web/PWA vérifié (expo-overview d’abord, backend partagé) ; aucun scaffold avant.
 
+## Relais de minuit (effectif, missions/web-pwa 3e24796)
+
+- Tout le code applicatif et de tests est désormais produit par Claude ; Codex pilote, revoit, exécute, intègre. Session lead unique inchangée (b4b555f0).
+- **NATIVE-DOCUMENT-GATEWAY-001** délégué à un agent Claude backend distinct dans le worktree interne `/Users/claudebrafa/.codex/worktrees/depannage-claude-backend` (branche `claude/web-pwa-backend`, base 309ed9f) : contrat publié avant code (`docs/CLAUDE_NATIVE_DOCUMENT_CONTRACT.md`), puis gateway Edge authentifié, migration 013 de finalisation, refactor coordonné des validations documents, tests. Aucun scaffold mobile avant le checkpoint fonctionnel.
+- `vercel.json` : `integration/web-pwa` passé à `false` à la demande du pilote (déploiements différés) ; `main` inchangé, branches de travail déjà à `false`.
+- Prochain checkpoint éditeur de devis : déjà poussé (a4eca69 contient d8a206b `components/role/artisan-quote-draft.tsx` + corrections ; chemin de revue : `artisan-quote-draft.tsx`, `courant-app.tsx` fonctions `loadQuoteDraft`/`quoteDraftCommand`, `artisan-space.tsx` QuotePanel). Questions actives : aucune bloquante ; QA souhaitée côté pilote : viewer et gestionnaire à portée limitée sur base réelle, création d’assistance avec perte de réponse, connexion A→B pendant une création.
+
 ## Rythme de livraison
 
 - Quota de déploiement Vercel épuisé (fournisseur : réessayer sous 24 h) ; dernière preview prête conservée. Commits de configuration du pilote repris sur cette branche (vercel.json : aucune preview automatique hors `main` / `integration/web-pwa`). Les checkpoints UI sont désormais poussés par lots groupés ; l’intégration et la documentation de coordination restent au pilote.
