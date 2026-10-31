@@ -216,7 +216,10 @@ export const suite = {
         });
         await s.step("budget line Maintenance 1 234,50 € → amount_cents 123450, no invented consumption", async () => {
           const section = opsSection(h.page);
-          await section.getByRole("button", { name: "Saisir", exact: true }).first().click();
+          // The « Maintenance » row of the lines table, then ITS « Saisir » button (no `.first()`).
+          const maintenanceInput = section.getByRole("table").getByRole("row", { name: /^Maintenance\b/ }).getByRole("button", { name: "Saisir", exact: true });
+          await expectVisible(maintenanceInput, "« Saisir » on the Maintenance row of the selected fiscal year", { timeout: 30000 });
+          await maintenanceInput.click();
           await section.getByLabel("Montant (€)", { exact: true }).fill("1234,50");
           const status = await submitAndWait(h.page, "Enregistrer");
           assert.equal(status, 200, `save_budget_line answered ${status}`);

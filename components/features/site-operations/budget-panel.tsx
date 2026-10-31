@@ -4,6 +4,7 @@ import { z } from "zod";
 import { fiscalYearPayload } from "../../../lib/features/site-operations/schemas";
 import { BUDGET_CATEGORY, date, money } from "../../../lib/features/site-operations/labels";
 import type { BudgetCategory, FiscalYear, FiscalYearStatus } from "../../../lib/features/site-operations/types";
+import { effectiveFiscalYearId, selectionAfterYearCreated } from "../../../lib/features/site-operations/view-model";
 import { EmptyState, Field, Notice, ReadOnly, Tag, Truncated, fromCents, toCents, useSubmit, type PanelContext } from "./shared";
 import styles from "./site-operations.module.css";
 
@@ -15,7 +16,10 @@ export function BudgetPanel({ context }: { context: PanelContext }) {
   const { report, canWrite, canWriteOrganization } = context;
   const { fiscal_years: years, budget_lines: lines, budget_consumption: consumption, limits } = report.snapshot;
   const current = report.completeness.budget.current_fiscal_year_id;
-  const [selected, setSelected] = useState<string>(current ?? years[0]?.id ?? "");
+  const [chosen, setSelected] = useState<string>(current ?? years[0]?.id ?? "");
+  // Derived at render: a choice that no longer exists (or none, when the panel mounted with 0 years)
+  // falls back to the current fiscal year, then the first one.
+  const selected = effectiveFiscalYearId(chosen, years, current);
   const [yearEditing, setYearEditing] = useState<{ id: string | null; version: number | null } | null>(null);
   const [yearDraft, setYearDraft] = useState<YearDraft>(emptyYear);
   const [lineEditing, setLineEditing] = useState<BudgetCategory | null>(null);
@@ -63,7 +67,10 @@ export function BudgetPanel({ context }: { context: PanelContext }) {
               yearEditing.id
                 ? { action: "save_fiscal_year", organization_id: report.snapshot.site.organization_id, payload: { ...yearDraft, label: yearDraft.label.trim() }, id: yearEditing.id, expected_version: yearEditing.version ?? 0 }
                 : { action: "save_fiscal_year", organization_id: report.snapshot.site.organization_id, payload: { ...yearDraft, label: yearDraft.label.trim() } },
-              () => setYearEditing(null),
+              (done) => {
+                setYearEditing(null);
+                if (!yearEditing.id) setSelected((prev) => selectionAfterYearCreated(prev, done.result, report.computed_at.slice(0, 10)));
+              },
               yearEditing.id ? "Exercice mis à jour." : "Exercice ajouté.",
             )
           }
