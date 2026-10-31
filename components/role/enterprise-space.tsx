@@ -91,6 +91,7 @@ import { CONTRACT_MESSAGES } from "../app/api";
 import { demoReport } from "../../lib/features/site-operations/demo";
 import { leafScope, platformEntries } from "./anchors";
 import { PlatformPage } from "./platform-anchor";
+import { FeatureUnavailable } from "./feature-unavailable";
 import type {
   Approval,
   ApprovalRule,
@@ -2520,6 +2521,9 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
           <p className={styles.muted}>
             Équipements, maintenance, budget, grilles, délais et contrôles enregistrés pour ce site.
           </p>
+          {opsState === "unavailable" ? (
+            <FeatureUnavailable session={session} featureKey="siteOperations" title="Opérations du site momentanément indisponibles" hint={{ siteId: site.id }} />
+          ) : (
           <SiteOperationsView
             state={opsState}
             unavailableMessage={opsMessage}
@@ -2537,6 +2541,7 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
               if (view === "intervention" && param) session.openIntervention(param);
             }}
           />
+          )}
         </section>
 
         {vertical === "restaurant" && (

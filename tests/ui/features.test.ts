@@ -251,3 +251,90 @@ test("planning probe range passes the real API validation (full ISO instants wit
   // A bare calendar date is exactly what the API refuses (the previous probe shape).
   assert.equal(isoInstant.safeParse("2026-10-31").success, false);
 });
+
+test("retryable state: only a transient unavailable contract offers a retry (missing/unknown/available do not)", async () => {
+  const { retryableState } = await import("../../components/app/features");
+  assert.equal(retryableState("unavailable"), true);
+  assert.equal(retryableState("missing"), false);
+  assert.equal(retryableState("unknown"), false);
+  assert.equal(retryableState("available"), false);
+});
+
+test("reprobe: a delayed retry of identity A never touches identity B (guard at entry and after the await)", async () => {
+  const { reprobe, createFeatureClients } = await import("../../components/app/features");
+  let release: (v: unknown) => void = () => {};
+  const h = harness(({ path }) => (path.endsWith("/me") ? new Promise((resolve) => (release = resolve)) : Promise.resolve({ unread_count: 4, latest_created_at: null })));
+  const bundleA = createFeatureClients(h.deps);
+  const effects: string[] = [];
+  let currentBundle: unknown = bundleA;
+  const ctx = {
+    bundle: bundleA,
+    alive: () => h.deps.generation() === 1 && currentBundle === bundleA,
+    setState: (k: string, s: string) => effects.push(`state:${k}:${s}`),
+    setUnread: (n: number) => effects.push(`unread:${n}`),
+    setAccess: (a: unknown) => effects.push(`access:${JSON.stringify(a)}`),
+  };
+  // (a) retry started under A, identity switches to B while /me is pending: no effect for B.
+  const pending = reprobe("platformOperations", undefined, ctx);
+  h.bump();
+  currentBundle = {}; // bundle rebuilt for B
+  release({ super_admin: true, scopes: [], capabilities: {} });
+  await pending;
+  assert.deepEqual(effects, ["state:platformOperations:unknown"], "only the pre-await reset under A, nothing applied after the switch");
+  // (b) a callback kept by A and fired after B is already current: nothing at all, no request.
+  effects.length = 0;
+  const calls = h.calls.length;
+  await reprobe("notifications", undefined, ctx);
+  assert.deepEqual(effects, []);
+  assert.equal(h.calls.length, calls, "no request emitted by the stale retry");
+});
+
+test("reprobe: nominal path applies the reply; a null (stale) reply is not a failure and applies nothing", async () => {
+  const { reprobe } = await import("../../components/app/features");
+  const effects: string[] = [];
+  const base = {
+    alive: () => true,
+    setState: (k: string, s: string) => effects.push(`state:${k}:${s}`),
+    setUnread: (n: number | null) => effects.push(`unread:${n}`),
+    setAccess: (a: { super_admin: boolean } | null) => effects.push(`access:${a === null ? "null" : a.super_admin}`),
+  };
+  const live = { ...base, bundle: { notifications: { summary: async () => ({ unread_count: 2, latest_created_at: null }) }, platform: { load: { me: async () => ({ super_admin: true }) } } } as never };
+  await reprobe("notifications", undefined, live);
+  await reprobe("platformOperations", undefined, live);
+  assert.deepEqual(effects, ["state:notifications:unknown", "unread:2", "state:platformOperations:unknown", "access:true"]);
+  effects.length = 0;
+  const stale = { ...base, bundle: { notifications: { summary: async () => null }, platform: { load: { me: async () => null } } } as never };
+  await reprobe("notifications", undefined, stale);
+  await reprobe("platformOperations", undefined, stale);
+  assert.deepEqual(effects, ["state:notifications:unknown", "state:platformOperations:unknown"], "null never clears the unread count or the access reply");
+});
+
+test("reprobe: a CURRENT /me refusal withdraws the access (gate closes), a stale null keeps nothing alive either way", async () => {
+  const { reprobe } = await import("../../components/app/features");
+  const effects: string[] = [];
+  const base = {
+    alive: () => true,
+    setState: (k: string, s: string) => effects.push(`state:${k}:${s}`),
+    setUnread: (n: number | null) => effects.push(`unread:${n}`),
+    setAccess: (a: { super_admin: boolean } | null) => effects.push(`access:${a === null ? "null" : a.super_admin}`),
+  };
+  const refusing = { ...base, bundle: { platform: { load: { me: async () => { throw new ApiRequestError(401, "Session expirée"); } } }, notifications: { summary: async () => { throw new ApiRequestError(403, "refus"); } } } as never };
+  await reprobe("platformOperations", undefined, refusing);
+  await reprobe("notifications", undefined, refusing);
+  assert.deepEqual(effects, ["state:platformOperations:unknown", "access:null", "state:notifications:unknown", "unread:null"], "a current exception withdraws the derived rights/data");
+  // Same exception but the chain died meanwhile: nothing applied.
+  effects.length = 0;
+  let aliveNow = true;
+  const dying = { ...refusing, alive: () => aliveNow, bundle: { platform: { load: { me: async () => { aliveNow = false; throw new ApiRequestError(401, "x"); } } } } as never };
+  await reprobe("platformOperations", undefined, dying);
+  assert.deepEqual(effects, ["state:platformOperations:unknown"]);
+});
+
+test("bundle owner is captured at construction, not at invocation", async () => {
+  const h = harness(() => Promise.resolve({ ok: 1 }));
+  const bundle = createFeatureClients(h.deps);
+  assert.equal(bundle.owner, 1);
+  h.bump();
+  assert.equal(bundle.owner, 1, "unchanged by later identity changes");
+  assert.equal(createFeatureClients(h.deps).owner, 2);
+});

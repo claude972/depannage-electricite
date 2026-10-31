@@ -48,7 +48,7 @@ Stockées hors dépôt puis copiées dans `docs/visual-fidelity/` avec les captu
 | Fiche de site | V5-C01 / M50 | À auditer |
 | Approbation | V5-C08 | À auditer |
 | Artisan | M35 (shell + tableau de bord), M34 (devis), M36 (profil) | Addendum ci-dessous (base f3fd9c6) ; M14/M65 (documents, candidature) hors de ce lot |
-| Super Admin | M43 (volume 3 p12) | À auditer |
+| Super Admin | M43 (volume 3 p12) | Addendum ci-dessous (base 0d94ec2, branche `claude/web-design-admin`) |
 | Pages publiques | M11 + variantes cataloguées | À auditer |
 
 ## Hors périmètre de ce lot
@@ -340,6 +340,243 @@ Vérifié (démo, script hors dépôt) : cloche visible 44 × 44 et active dans 
   garde `canAccess` réel, mode public sans entrée ; suite UI 89/89. Limite : la démo ne fournit `platformAccess` qu’au
   rôle Super Admin, la présence des entrées pour un opérateur limité est prouvée par les tests, pas par capture.
 
+## Addendum — Super Admin M43 (VISUAL-FIDELITY-001, base `0d94ec2`)
+
+Publié **avant** toute modification de code de la coque Super Admin. Référence maîtresse : **M43** (volume 3 p12,
+`/tmp/courant-audit/pdf-images/v3-p12.jpeg`), tableau de bord administrateur « ArtisanPro » ; les listes Artisans /
+Interventions / Devis & Factures n’ont pas de planche dédiée et suivent la densité de M43. Captures « avant » (démo,
+`#demo/admin…`) : `docs/visual-fidelity/admin-dashboard-{360,1280}-before.jpg`, `admin-artisans-1280-before.jpg`,
+`admin-quotes-360-before.jpg`. Fichiers du lot : `components/role/admin-space.tsx`, `admin.module.css`, logique pure
+testable dans `components/role/admin-lists.ts` (créé au premier checkpoint), `tests/ui/**`, cette page,
+`docs/visual-fidelity/**`. Les ancrages (cloche, entrées Opérateurs / Finance / Modération gardées par `platformEntries`)
+restent intacts.
+
+### Règle sur les données
+
+Les chiffres de M43 (128 interventions du mois, +12 %, 24 850 € HT, 142 630 € annuels, 12 validations, « 4 docs ✓ »,
+échéances, catégories métier, villes) sont des **exemples**. Seules les valeurs du serveur sont affichées :
+`counts.*` (totaux globaux), `financial.paid_service_cents` (prestations payées TTC sur les dossiers chargés,
+revenu plateforme non calculé), listes bornées par `capabilities.list_limit` avec leur mention. **Jamais fabriqué** :
+période « mois en cours » ou « année », tendance vs mois précédent, CA HT, nombre de documents par candidature
+(justificatifs non chargés dans la vue d’ensemble), catégorie métier dans le tableau (absente de la liste), échéance
+d’intervention, SLA, noms de clients (non transmis dans cette vue). Les compteurs restent les totaux serveur ; les
+pieds de liste disent « parmi les N derniers chargés ».
+
+### M43 — tableau de bord (`#demo/admin`)
+
+| Élément de la référence | Composant / section existant | Écart constaté (0d94ec2) | Correction prévue |
+| --- | --- | --- | --- |
+| Barre latérale : marque, 8 entrées, Messages avec compteur, bas : compte « Admin / Super Admin » + Déconnexion | `NAV` (+ Garantie, + entrées back-office gardées), `.account` (avatar, nom, « Super Admin », bouton Déconnexion), compteur sur Artisans (candidatures) | Conforme en structure. | Conservé. **Écart assumé** : pas de compteur sur Messages (aucun total serveur de messages non lus) ; entrées supplémentaires (Garantie, back-office) justifiées par les fonctions réelles. |
+| En-tête : titre + sous-titre ; à droite sélecteur de date « 20 mai 2024 ▾ » + cloche | `.header` : `.heading`, `.tools` (cloche du lot, puce « Données au … », Actualiser) | Pas de sélecteur de période. | **Écart assumé** : aucune période serveur sur la vue d’ensemble ; la puce de fraîcheur + Actualiser en tiennent lieu. ≤ 600 px : outils sur deux lignes (règle déjà en place). |
+| 4 KPI : icône teintée, libellé, grande valeur, note (« ↑ 12 % vs avril ») | `.kpis` > `Kpi` ×4 | Cartes inégales et hautes : notes longues (3 à 5 lignes), valeur moins lisible ; une colonne à 360. | Cartes compactes et alignées : note courte sur une ligne (« total plateforme », « dossiers non clos », « TTC, dossiers chargés », « soumis, à décider »), base de calcul complète déplacée dans une ligne « Base de calcul » (élément `details`) sous la rangée ; grille 2 colonnes dès 360 px, 4 à ≥ 1100 px. Définitions pures `adminKpis(overview)` testées (valeurs = totaux serveur, aucune tendance). |
+| Colonne gauche « Validations artisans en attente (12) » + « Voir toutes les validations → » ; tableau Artisan (avatar, nom, e-mail) / Catégorie / Date de demande / Documents / Actions « Vérifier ▾ » ; pied « Afficher plus de demandes » | `Panel` + `DataTable` (Artisan, Société, Dossier, Date, Actions « Examiner ») + `Basis` | À 1280 la colonne Actions est **coupée** par le panneau (« Examine… »), la date passe sur 3 lignes ; bouton 40 px. | Tableau qui tient : date sur une ligne (`nowrap`), colonne Société fusionnée sous le nom (sous-libellé), action « Examiner » 44 px alignée à droite ; au-dessous de 1240 px, libellé d’action réduit à l’icône avec libellé accessible. Lien d’en-tête conservé ; le pied garde la mention « parmi les N derniers artisans ». **Écarts assumés** : pas d’e-mail (non transmis), pas de catégorie ni de compteur de documents. |
+| Colonne droite « Interventions en cours (32) » : rangées icône / titre / « Client : … • ville » / « Artisan : … » / pastille « En cours » / « Échéance : 22 mai » ; pied « Afficher plus d’interventions » | `Panel` + `InterventionRow` ×6 + `Basis` | Proche ; méta sur une ligne dense (réf · Client · artisan · ville), statut et date à droite. | Rangée en deux lignes de méta comme M43 : « Référence · ville » puis « Artisan : nom ou Non attribué » ; pastille de statut réelle ; « Créée le » conservé (aucune échéance). Six dossiers, pied inchangé. |
+| Mobile (aucune planche M43) | Tableau → pile libellé/valeur (`data-label`), KPI empilés | Une colonne de KPI très haute ; tableau en pile lisible. | KPI en 2 colonnes à 360 ; rangées d’interventions compactes ; aucun débordement horizontal (outils d’en-tête déjà corrigés). |
+
+### Listes (Artisans, Interventions, Devis & Factures) — densité M43
+
+| Constat (0d94ec2) | Correction prévue |
+| --- | --- |
+| Boutons de ligne « Examiner » / « Ouvrir » à 40 px ; bascules de devis « INT-DEMO-00x » à 32 px (Devis & Factures). | Cibles ≥ 44 px (`.rowAction`, `.quoteToggle`), sans changer les actions ni les filtres. |
+| Pieds et compteurs | Inchangés : totaux serveur dans les KPI, listes « parmi les N derniers chargés », pagination réelle des annuaires conservée. |
+
+### Règles responsive
+
+- **360** : barre latérale en tiroir (existant), en-tête sur deux lignes d’outils, KPI 2 colonnes, tableaux en pile
+  libellé/valeur, rangées d’interventions sur deux lignes ; aucun débordement horizontal.
+- **760** : KPI 2 colonnes, deux panneaux empilés (`.columns` existant), tableau en pile ou défilement identifié.
+- **1280** : barre latérale fixe, KPI 4 colonnes, deux panneaux côte à côte, tableau complet sans coupure.
+
+### Accessibilité ciblée
+
+Cibles ≥ 44 × 44 (actions de ligne, bascules, liens de panneau) ; action réduite à l’icône toujours nommée
+(`aria-label`) ; focus visible global ; contrastes des tokens existants (texte `#172b4d` 12,6:1, muted `#526178` 6,3:1,
+bleu `#1457d9` 5,4:1 sur blanc) ; statut jamais porté par la couleur seule (pastilles textuelles).
+
+### Vérification : par test ou par capture
+
+| Par test (`tests/ui/admin-lists.test.ts`, logique pure dans `admin-lists.ts`) | Par capture (démo 360 / 1280) |
+| --- | --- |
+| `adminKpis(overview)` : quatre indicateurs, valeurs issues des totaux serveur et du montant payé formaté, aucune clé de tendance ; `dashboardRows(overview)` : candidatures « soumises » triées par date, six dossiers actifs les plus récents ; mention de borne « parmi les N derniers » à partir de `list_limit`. | Planche M43 / avant / après à 1280 ; tableau des validations sans coupure ; 0 élément interactif < 44 px sur Tableau de bord, Artisans, Interventions, Devis & Factures à 360 et 1280 ; aucun débordement ; console sans erreur ; entrées back-office toujours gardées (présentes en démo Super Admin, absentes pour les autres rôles). |
+
+### Checkpoints prévus
+
+1. Tableau de bord M43 (KPI, validations, interventions en cours) — `admin-dashboard-{360,1280}-after.jpg`.
+2. Listes : cibles 44 px et densité — `admin-artisans-1280-after.jpg`, `admin-quotes-360-after.jpg`.
+
+### Résultat du checkpoint 1 — tableau de bord M43
+
+| Ligne de l’addendum | Fait | Reste / écart |
+| --- | --- | --- |
+| KPI | Quatre cartes compactes et alignées (`adminKpis`, notes courtes sur une ligne), base de calcul complète dans « Base de calcul des indicateurs » (`details`, 44 px) sous la rangée ; 4 colonnes à 1280, 2 à 360 (cartes verticales). | Pas de période ni de tendance (assumé). |
+| Validations | Tableau qui tient dans le panneau à 1280 (cellules 12 × 14 px, société en sous-libellé du nom, action 44 px alignée à droite ; icône seule avec libellé accessible sous 1400 px). Pied « parmi les N derniers artisans chargés, dans l’ordre transmis ; le compteur est global ». | Pas d’e-mail, de catégorie ni de compteur de documents (assumé). **Colonne « Date de demande » retirée (ADMIN-DATE-001)** : la vue d’ensemble ne transmet ni date de soumission ni date de candidature — la `created_at` disponible est celle du compte, jamais affichée comme date de demande ni utilisée pour trier ; l’ordre serveur est conservé, la date de soumission se lit dans le dossier artisan. |
+| Interventions en cours | Rangées en deux lignes de méta (« Référence · ville », « Artisan : … ») comme M43, pastille réelle, « Créée le ». | Pas d’échéance ni de nom de client (assumé). |
+| Cibles / responsive | 0 élément interactif < 44 px sur le tableau de bord à 360 et 1280 ; aucun débordement ; outils d’en-tête sur deux lignes à 360. | — |
+
+Captures : `admin-dashboard-{360,1280}-after.jpg` (avant : `admin-dashboard-{360,1280}-before.jpg`). Tests :
+`tests/ui/admin-lists.test.ts` (`adminKpis` sans période ni tendance, `dashboardRows`) ; suite UI 91/91 ; `tsc` au vert ;
+console sans erreur.
+
+### Résultat du checkpoint 2 — listes (cibles 44 px, densité)
+
+| Constat | Fait |
+| --- | --- |
+| Liens de référence « INT-DEMO-00x » (Devis & Factures, Avis & Notes) à 32 px par style en ligne ; « Ouvrir le dossier » (Messages), liens d’assistance (`.subjectLink`, `.inlineLink`) à 32 px | Styles en ligne retirés ; règles à 44 px. |
+| Vue Messages : débordement horizontal à 360 (groupe de segments `flex: 0 0 auto` non réductible) | Groupe de segments réductible et passant à la ligne (`flex: 1 1 auto; min-width: 0`). |
+| Actions de ligne « Examiner » / « Ouvrir » (Artisans, Interventions) à 40 px | 44 px depuis le checkpoint 1 (`.rowAction`). |
+
+Vérifié (démo, 360 et 1280) : 0 élément interactif < 44 px et aucun débordement sur Artisans, Interventions, Devis &
+Factures, Clients, Avis & Notes, Messages, Paramètres, Garantie ; console sans erreur. Captures `admin-artisans-1280-after.jpg`,
+`admin-quotes-360-after.jpg`, `admin-messages-360-after.jpg` (avant : `admin-artisans-1280-before.jpg`,
+`admin-quotes-360-before.jpg`). Filtres, pagination réelle des annuaires et pieds « parmi les N derniers chargés » inchangés.
+
+### Bilan Super Admin (checkpoints 1–2)
+
+Présentation seulement : aucune route, commande ni donnée nouvelle ; totaux serveur et bornes de liste inchangés ;
+entrées du back-office toujours gardées par `platformEntries` (présentes en démo Super Admin, absentes sinon).
+Écarts assumés consolidés : pas de sélecteur de période, de tendance, de CA HT, d’e-mail, de catégorie, de compteur de
+documents ni d’échéance ; entrées Garantie et back-office en plus de M43 (fonctions réelles).
+
+## Addendum — espace client (M61 / V8-C06 / V8-C07)
+
+Publié **avant** toute modification de code de l’espace client (transfert consigné dans `docs/CLAUDE_STATUS.md`).
+Branche `claude/web-design-client`, base `f58b3f4` (`claude/web-shared`). Références maîtresses : **M61** (volume 4
+p14) pour l’accueil mobile, **V8-C06** (volume 8 p7) pour le devis, **V8-C07** (volume 8 p8) pour le détail
+d’intervention. Les planches ne sont pas dans le dépôt : elles ont été rendues depuis les PDF nommés dans
+`docs/audit/INVENTAIRE_SOURCES.json` (PyMuPDF, zoom 1,6) vers `/tmp/claude-client-ref/{M61,V8-C06,V8-C07}.png`
+(empreintes SHA-256 des images d’origine dans l’inventaire). Captures « avant » prises sur la démo locale
+(`next dev -p 3191`, Chromium headless 1248 piloté par un script Playwright hors dépôt, 360 × 800 et 1280 × 900,
+page entière) : `docs/visual-fidelity/client-{overview,detail,quote}-{360,1280}-before.jpg` (`#demo/client`,
+`#demo/client-detail.demo-003`, `#demo/client-quote.quote-demo-1`).
+Fichiers du lot : `components/role/client-space.tsx`, `client.module.css`, `components/role/client-lists.ts` (logique
+pure, créé au premier checkpoint), `tests/ui/client-*.test.ts`, cette section, `docs/visual-fidelity/client-*`.
+Présentation seulement : devis (acceptation/refus par `session`), règlements, téléversements, assistance, ancrages
+notifications / documents de devis / plateforme (`*-anchor.tsx`, `anchors.ts`) restent appelés à l’identique, avec les
+mêmes props.
+
+### Règle sur les données
+
+Les éléments des planches sans source serveur ne sont **jamais fabriqués** : note et nombre d’avis de l’artisan,
+« Profil vérifié / Certifié », années d’expérience, spécialité, photo, « Garantie satisfaction 30 jours »,
+« Annulation gratuite jusqu’à 48 h », « Paiement sécurisé » comme promesse, point rouge de notification sans compteur,
+carte et vignettes photo. Seules les données chargées sont affichées : catégorie, adresse, état, dates enregistrées,
+lignes/TVA/totaux calculés serveur, coordonnées réelles du participant, règlement confirmé par la plateforme,
+compteurs de messages reçus. Les absences restent explicites (« Carte non disponible », « Aucune photo jointe »,
+« Téléphone non communiqué »).
+
+### M61 — accueil mobile (`#demo/client`, < 1024 px)
+
+| Élément de la référence | Composant / section existant | Écart constaté (f58b3f4) | Correction prévue |
+| --- | --- | --- | --- |
+| Barre haute : logo + cloche avec point | `.mobileHeader` : marque compacte, `HeaderBell` (ancrage notifications), bouton Messages avec point si messages reçus | Conforme ; bouton marque 42 px de haut (cible < 44). | Cible 44 px. **Écart assumé** : point de cloche seulement avec un compteur réel (ancrage), jamais décoratif. |
+| « Bonjour » + « Comment pouvons-nous vous aider ? » | `.hello` | Conforme (prénom réel). | — |
+| CTA bleu « ⚡ J’ai besoin d’un électricien › » sur une ligne | `.ctaButton` | Libellé sur deux lignes à 360 (18 px). | Libellé 16 px sur une ligne à 360, tuile icône 40 px, chevron à droite ; hauteur ≥ 56 px. |
+| « Actions rapides » + « Voir tout › » ; 4 tuiles (icône bleue, libellé 2 lignes) | `.sectionRow` + `.tiles` (4 catégories réelles) | Conforme ; libellés sur 2 lignes. | — |
+| « Interventions récentes » + « Voir tout › » ; carte : tuile calendrier teintée, titre, adresse, **état en bleu à gauche et date à droite sur une ligne**, « ⋯ » | `.recentList` > `.recentRow` (icône catégorie, titre, adresse, `Badge` + date, chevron) | État et date se replient sur deux rangées (pastille haute, « Recherche d’un artisan » sur 2 lignes) ; date non alignée à droite. | Rangée état/date en `space-between`, état sur une ligne (pastille compacte `nowrap`, texte jamais couleur seule), date alignée à droite ; titre 1 ligne (ellipse), adresse 1 ligne (inchangé). **Écart assumé** : chevron au lieu de « ⋯ » (aucune action secondaire sur la ligne). |
+| Onglets bas Accueil / Demandes / Messages (badge) / Profil | `.bottomNav` (4 entrées, badge Messages réel) | Conforme (icône 22 px, libellé 12 px). | Vérification 44 px seulement. |
+| Hors référence : bandeau de démonstration | `.demoBanner` | — | Conservé (démo explicite). |
+| Desktop (hors M61, composition tableau de bord existante) | `.desktopOnly` : accueil, bandeau de 3 compteurs réels, « Un devis attend votre décision », récentes, catégories, colonne d’aide | Liens texte « Comprendre les étapes » (26 px) et « Consulter l’aide » (25 px) sous 44 px (classes globales). | Classes du module ajoutées sur ces deux boutons pour une cible ≥ 44 px, sans toucher `globals.css`. |
+
+### V8-C06 — devis (`#demo/client-quote.quote-demo-1`)
+
+| Élément de la référence | Composant / section existant | Écart constaté | Correction prévue |
+| --- | --- | --- | --- |
+| « ← Devis #D1258 / Reçu le 20 mai 2024 à 10:30 » | `PageTitle` (retour au dossier, référence `quoteRef`, « Reçu le … ») | Conforme (titre à gauche). | — |
+| Bouclier vert « Étudiez tranquillement le devis » | `.quoteNote` (icône bouclier, bleu) | Conforme en structure. | **Écart assumé** : bleu action (DESIGN.md : vert réservé aux réussites). |
+| Carte « Devis accepté = tranquillité assurée » (artisan sélectionné avec soin, garantie 30 jours, paiement sécurisé) + illustration | aucune | Absente. | **Écart assumé** : non reproduite (promesses commerciales non établies, cf. AGENTS.md). |
+| « Détail du devis » + lien « Télécharger le devis (PDF) » à droite | tableau sans en-tête de section ; bloc `Unavailable` « Télécharger le devis (PDF) » (CLI-07) en bas de page | L’ancrage documents de devis (lot ADV-DOCUMENTS-001, `QuoteDocumentsAnchor`) fournit désormais le PDF ; le bloc CLI-07 est contradictoire et le panneau documents s’intercale **entre le tableau et la décision**, repoussant Accepter/Refuser en bas d’une page de 3 000 px à 360. | En-tête de section « Détail du devis » avec lien texte « Télécharger le devis (PDF) » qui **fait défiler** jusqu’au panneau documents (aucun `location.hash`, aucune nouvelle requête) ; bloc CLI-07 retiré ; ordre de la référence rétabli : note → tableau → artisan → décision → panneau documents/avenants (ancrage inchangé, mêmes props) → récapitulatif texte. |
+| Tableau Prestation / prix unitaire / Prix ; Sous-total HT, TVA (10 %), **TOTAL TTC** sur fond vert | `.quoteTable` (Prestation / Quantité × PU HT / Prix, pied avec TVA réelle et Total TTC bleu pâle) | « 1 × 60,00 € » replié sur 2 lignes à 360. | Colonne quantité × PU en `nowrap`, libellé seul repliable ; Total TTC mis en avant (bleu pâle, 18 px). **Écart assumé** : pas de fond vert. |
+| Carte « Artisan recommandé » : photo, nom, spécialité, expérience, note, « Profil vérifié », « Contacter » | `.artisanRow` (initiales, nom réel, « Artisan électricien ayant établi ce devis », Contacter) | Conforme en structure. | Intitulé de carte « Artisan » ; **écart assumé** : aucune note, expérience, vérification ni photo (données absentes). |
+| Bouton vert « ✓ Accepter le devis / Je suis satisfait… » puis cadre rouge « ✕ Refuser / Je ne souhaite pas… » | `.quoteActions` : « Accepter le devis » (primary) + « Refuser » (outline), formulaire de motif | Conforme en fonction ; placé après le panneau documents. | Remonté sous la carte artisan ; pleine largeur à 360, côte à côte dès 761 px. **Écart assumé** : bleu action / contour neutre (pas de vert/rouge pleins), pas de sous-titres promettant satisfaction. |
+| Pied « 🔒 Paiement sécurisé • Annulation gratuite jusqu’à 48 h » | `form-note` sur le récapitulatif | — | **Écart assumé** : non reproduit (conditions non établies). |
+
+### V8-C07 — détail d’intervention (`#demo/client-detail.demo-003`)
+
+| Élément de la référence | Composant / section existant | Écart constaté | Correction prévue |
+| --- | --- | --- | --- |
+| « ‹ Détail de l’intervention ⇪ » | `PageTitle` + retour | Conforme ; pas de partage. | **Écart assumé** : pas d’action de partage (aucun lien public). |
+| Carte statut : tuile icône, « Statut / En cours / Intervention n° », 4 étapes Demandée / En cours / À planifier / Terminée | `.statusCard` + `.stepper` (5 étapes Demandée / Artisan / Devis / Intervention / Terminée, numéros/coches) | Conforme ; libellés 11 px. | Libellés 12 px, cercles 30 px ; **écart assumé** : 5 étapes alignées sur les statuts réels (« À planifier » n’est pas un statut). |
+| « Artisan assigné » + « Contacter » ; carte photo, nom, « plombier – Certifié ✓ », téléphone, ★ 4,9 (128 avis) | `.cardHead` + `.artisanRow` (initiales, nom, téléphone réel ou « non communiqué ») | Conforme. | **Écart assumé** : pas de spécialité, certification, note ni photo. |
+| « Adresse de l’intervention » + carte miniature | `.addressCard` : adresse + `Unavailable` « Carte non disponible » | Bloc indisponible volumineux. | `Unavailable` rendu compact (icône + titre + raison sur une ligne à 1280, 2 à 360) via une classe du module ; adresse en premier. **Écart assumé** : pas de carte (aucun fournisseur). |
+| « Description du problème » + pastille « Catégorie : Plomberie » | `.card` + `.tagRow` (catégorie réelle, urgence, estimation indicative) | Conforme. | — |
+| « Photos du problème (3) » vignettes défilantes | liste de noms de fichiers + lien « Gérer les pièces » | Pas de vignettes. | **Écart assumé** : documents privés servis à la demande ; liste conservée, compte réel dans le titre. |
+| « Devis & résumé » : lignes, **Total TTC** bleu, « ⓘ Devis accepté le … », « Voir le devis » | `.lines` + `.totals` + `.quoteFoot` | Conforme. | Lignes avec libellé repliable et montant `nowrap` à 360. |
+| « Historique & avancement » : chronologie icônes, états Terminé / En cours / À venir à droite | `.history` | Conforme. | — |
+| Pied : « Annuler l’intervention ⊗ » (contour) + « Modifier le rendez-vous » (bleu) | `.actionBar` : annulation (texte danger, confirmation) + action principale selon l’état ; rendez-vous modifiable dans sa carte | Conforme en fonction. | Annulation en bouton contour 44 px (confirmation inchangée). **Écart assumé** : modification du rendez-vous dans la carte Rendez-vous (formulaire existant), pas de bouton dupliqué. |
+| Hors référence : Déplacement, Compte rendu, Règlement, Avis, Suivi après intervention, file de téléversement | sections existantes | — | Conservées (fonctions réelles). |
+
+### Règles responsive
+
+- **360** : une colonne ; barre haute collante, onglets bas fixes (≥ 60 px + zone sûre) ; CTA pleine largeur sur une
+  ligne ; tuiles 4 colonnes (M61) ; lignes récentes titre / adresse / état + date ; tableau de devis avec libellé
+  repliable et montants `nowrap` ; décision Accepter puis Refuser empilées pleine largeur ; stepper sur une rangée
+  (5 cercles 30 px) ; aucun défilement horizontal.
+- **760** : mêmes composants ; décision côte à côte ; `cardHead` avec action à droite ; tuiles 4 colonnes.
+- **1280** : barre latérale 240 px, contenu ≤ 1180 px ; tableau de bord desktop existant (3 compteurs réels) ;
+  onglets bas et en-tête mobile masqués (règles existantes) ; carte statut : texte à gauche, stepper à droite.
+
+### Accessibilité ciblée
+
+- Cibles ≥ 44 × 44 : marque mobile (42 → 44), liens texte du tableau de bord desktop (26/25 → 44), onglets bas,
+  tuiles, lignes récentes, boutons de décision, « Télécharger le devis (PDF) » (lien texte 44), annulation (44).
+  Mesure automatisée à 360 et 1280 sur les trois vues : objectif 0 élément interactif visible < 44 px (hors
+  indicateur de développement Next).
+- Focus visible : anneau global ; ordre de lecture : titre → statut → sections → actions.
+- Contraste sur les tokens : blanc sur `#1457d9` 5,4:1 ; `#526178` sur blanc 6,3:1 ; état jamais porté par la
+  couleur seule (pastilles textuelles).
+
+### Vérification : par test ou par capture
+
+| Par test (`tests/ui/client-lists.test.ts`, logique pure dans `client-lists.ts`) | Par capture (démo 360 / 1280, script Playwright hors dépôt) |
+| --- | --- |
+| Descripteur d’une ligne récente (libellé d’état, date, adresse sur une ligne) ; état de décision d’un devis (actif / remplacé / accepté / clos) à partir des versions réelles ; cellules d’une ligne de devis (quantité × PU, total HT de ligne) ; étape courante du stepper et chronologie du détail (dates enregistrées seulement, « — » sinon, « À venir » après l’étape courante) ; compte de photos. | Composition M61 / V8-C06 / V8-C07 ; ordre note → tableau → artisan → décision → documents ; 0 cible < 44 px ; aucun débordement horizontal ; console sans erreur ; libellés longs (adresse, prestation). |
+
+### Checkpoints prévus
+
+1. Accueil M61 + cibles desktop — captures `client-overview-{360,1280}-after.jpg`.
+2. Devis V8-C06 — captures `client-quote-{360,1280}-after.jpg`.
+3. Détail V8-C07 — captures `client-detail-{360,1280}-after.jpg`.
+
+### Résultat du checkpoint 1 — accueil M61 (client)
+
+Captures `docs/visual-fidelity/client-overview-{360,1280}-after.jpg`. Lignes récentes : état sur une ligne et date
+alignée à droite sur la même rangée (la date passe sous l’état seulement quand le libellé d’état est trop long à
+360 px, sans troncature) ; CTA sur une ligne à 360 (`clamp(14px, 4.3vw, 17px)`) ; marque mobile et liens texte du
+tableau de bord desktop portés à 44 px via des classes du module (`globals.css` intouché). Logique pure
+`components/role/client-lists.ts` (`recentRowDescriptor`, `quoteLineCells`, `quoteDecisionState`, `CLIENT_STEPS`,
+`currentStepIndex`, `detailHistory`) couverte par `tests/ui/client-lists.test.ts`. Mesures automatisées à 360 et
+1280 : 0 cible interactive visible < 44 px, aucun débordement horizontal, console vide. Desktop inchangé hors cibles.
+
+### Résultat du checkpoint 2 — devis V8-C06 (client)
+
+Captures `docs/visual-fidelity/client-quote-{360,1280}-after.jpg`. Ordre de la référence rétabli : note → en-tête
+« Détail du devis » avec lien « Télécharger le devis (PDF) » (défilement vers la section Documents du devis, sans
+changement de hash) → tableau (libellé repliable, quantité × PU et prix sur une ligne à 360) → carte « Artisan » →
+décision Accepter / Refuser (empilée à 360, côte à côte à 1280) → section `#quote-documents` (ancrage
+`QuoteDocumentsAnchor` inchangé, mêmes props) → récapitulatif texte. Bloc `Unavailable` CLI-07 « Télécharger le devis
+(PDF) » retiré (le lot documents fournit le PDF ; en démonstration, le panneau indique lui-même l’indisponibilité).
+État de décision calculé par `quoteDecisionState` (testé). Mesures 360 / 1280 : 0 cible < 44 px, aucun débordement,
+console vide. Acceptation, refus (motif), téléchargement du récapitulatif : commandes `session` inchangées.
+
+### Résultat du checkpoint 3 — détail V8-C07 (client)
+
+Captures `docs/visual-fidelity/client-detail-{360,1280}-after.jpg` (`#demo/client-detail.demo-003`, dossier réglé ;
+`demo-001`, devis à valider, vérifié sans capture versionnée). Stepper et chronologie désormais calculés par
+`CLIENT_STEPS`, `currentStepIndex` et `detailHistory` (logique pure testée : dates enregistrées seulement, « — »
+sinon, « À venir » après l’étape courante, deux entrées pour une annulation) ; bloc « Carte non disponible » compact
+(titre et raison sur une ligne à 1280, empilés à 360) sans modifier la primitive ; annulation en bouton contour
+44 px rouge discret (confirmation et commande `cancel` inchangées) ; montants de « Devis & résumé » sur une ligne.
+Mesures 360 / 1280 sur `demo-003` et `demo-001` : 0 cible < 44 px, aucun débordement, console vide.
+
+### Bilan client (checkpoints 1–3)
+
+Trois vues alignées sur M61 / V8-C06 / V8-C07 en structure, ordre et hiérarchie ; aucune donnée fabriquée (pas de
+note, certification, expérience, carte, vignettes, garanties ni promesses d’annulation) ; comportements inchangés
+(devis, règlement, rendez-vous, téléversements, assistance, ancrages notifications / documents / plateforme) ;
+fichiers touchés : `components/role/client-space.tsx`, `client.module.css`, `client-lists.ts`,
+`tests/ui/client-lists.test.ts`, cette section, `docs/visual-fidelity/client-*`. Restent déclarés comme écarts
+assumés : bleu action au lieu du vert/rouge pleins, 5 étapes réelles, pas de partage ni de « ⋯ », pas de carte.
+
 ## Addendum — pages publiques (VISUAL-FIDELITY-001, branche `claude/web-design-public`, base `f58b3f4`)
 
 Publié **avant** toute modification de code. Fichiers exclusifs : `components/role/public-site.tsx`, `components/role/public.module.css`
@@ -499,3 +736,11 @@ Captures : `docs/visual-fidelity/public-{home,help,pricing,join,about,privacy,le
 Tests : `tests/ui/public-lists.test.ts` (4 tests : aucune expression bannie dans les textes publics et détection des exemples des
 références ; unicité/tailles des listes ; lignes de tarifs issues des catégories du domaine ; numérotation et champs légaux) ; suite UI
 93/93 ; `npx tsc --noEmit` au vert. Aucun fichier hors périmètre modifié (`app/globals.css`, `components/app/**`, autres coques intacts).
+
+### Correction CLIENT-HISTORY-001 (revue pilote de 4a2ab70)
+
+`detailHistory` laissait « Règlement » en état courant (« En cours ») pour un dossier `paid` avec `paid_at` serveur.
+Correction : `isSettled` (statut `paid` **et** `paid_at` enregistré) termine toutes les entrées de la chronologie et
+`currentStepIndex(status, paid_at)` renvoie `CLIENT_STEPS.length` (stepper entièrement coché). Sans confirmation
+serveur (`completed`, ou `paid` sans horodatage), rien n’est présenté comme réglé : l’étape reste courante / à venir.
+Tests ajoutés (`tests/ui/client-lists.test.ts`) ; captures `client-detail-{360,1280}-after.jpg` remplacées.
