@@ -31,6 +31,7 @@ import {
   unknownLeftover,
   parseStorageListing,
   isPlatformUnauthorizedEnvelope,
+  PLATFORM_UNAUTHORIZED_CODES,
   reconcileWindowMs,
   verifyKnownAbsent,
   type CleanupClient,
@@ -713,13 +714,47 @@ test("platform 401 envelope: accepted strictly (non-empty message, optional nume
   assert.equal(isPlatformUnauthorizedEnvelope('{"message":"   "}'), false);
   assert.equal(isPlatformUnauthorizedEnvelope('{"message":42}'), false);
   assert.equal(isPlatformUnauthorizedEnvelope('{"code":"401","message":"Invalid JWT"}'), false);
+  // Real bodies published by the pilot (verify_jwt: true), verbatim.
+  const NO_HEADER = '{"code":"UNAUTHORIZED_NO_AUTH_HEADER","message":"Missing authorization header"}';
+  const BAD_JWT = '{"code":"UNAUTHORIZED_INVALID_JWT_FORMAT","message":"Invalid JWT"}';
+  assert.deepEqual(PLATFORM_UNAUTHORIZED_CODES, { anonymous: "UNAUTHORIZED_NO_AUTH_HEADER", invalid: "UNAUTHORIZED_INVALID_JWT_FORMAT" });
+  assert.equal(isPlatformUnauthorizedEnvelope(NO_HEADER), true);
+  assert.equal(isPlatformUnauthorizedEnvelope(BAD_JWT), true);
+  assert.equal(isPlatformUnauthorizedEnvelope(NO_HEADER, "anonymous"), true);
+  assert.equal(isPlatformUnauthorizedEnvelope(BAD_JWT, "invalid"), true);
+  // Bound to the scenario: swapped codes are refused.
+  assert.equal(isPlatformUnauthorizedEnvelope(NO_HEADER, "invalid"), false);
+  assert.equal(isPlatformUnauthorizedEnvelope(BAD_JWT, "anonymous"), false);
+  // No other string code, with or without binding.
+  assert.equal(isPlatformUnauthorizedEnvelope('{"code":"UNAUTHORIZED_OTHER","message":"Unauthorized"}'), false);
+  assert.equal(isPlatformUnauthorizedEnvelope('{"code":"UNAUTHORIZED_OTHER","message":"Unauthorized"}', "anonymous"), false);
+  assert.equal(isPlatformUnauthorizedEnvelope('{"code":"unauthorized_no_auth_header","message":"x"}', "anonymous"), false);
+  assert.equal(isPlatformUnauthorizedEnvelope('{"code":"UNAUTHORIZED_NO_AUTH_HEADER","message":""}', "anonymous"), false);
+  // The numeric form stays accepted for both scenarios.
+  assert.equal(isPlatformUnauthorizedEnvelope('{"code":401,"message":"Invalid JWT"}', "anonymous"), true);
+  assert.equal(isPlatformUnauthorizedEnvelope('{"code":401,"message":"Invalid JWT"}', "invalid"), true);
   assert.equal(isPlatformUnauthorizedEnvelope('{"code":403,"message":"Forbidden"}'), false);
   assert.equal(isPlatformUnauthorizedEnvelope('{"code":500,"message":"boom"}'), false);
   assert.equal(isPlatformUnauthorizedEnvelope('not json'), false);
 });
 test("anonymous and invalid-token scenarios pass on a 401 with either the function or the platform envelope", () => {
   const [anonymous, invalid] = scenarioPlan();
+  const observed = { anonymous: '{"code":"UNAUTHORIZED_NO_AUTH_HEADER","message":"Missing authorization header"}', invalid: '{"code":"UNAUTHORIZED_INVALID_JWT_FORMAT","message":"Invalid JWT"}' } as const;
+  assert.equal(assertScenario(anonymous, { status: 401, bodyText: observed.anonymous }, []).pass, true, "anonymous: observed platform body");
+  assert.equal(assertScenario(invalid, { status: 401, bodyText: observed.invalid }, []).pass, true, "invalid: observed platform body");
+  // Swapped codes fail on both scenarios; a foreign string code fails too.
+  for (const [scenario, body] of [[anonymous, observed.invalid], [invalid, observed.anonymous]] as const) {
+    const swapped = assertScenario(scenario, { status: 401, bodyText: body }, []);
+    assert.equal(swapped.pass, false, `${scenario.actor} swapped code`);
+    assert.deepEqual(swapped.reasons, ["corps d’erreur sans message"]);
+  }
   for (const scenario of [anonymous, invalid]) {
+    assert.equal(assertScenario(scenario, { status: 401, bodyText: '{"code":"UNAUTHORIZED_OTHER","message":"Unauthorized"}' }, []).pass, false, `${scenario.actor} other string code`);
+    // A 403 with the observed codes is still a wrong status (and not a function body).
+    const forbiddenObserved = assertScenario(scenario, { status: 403, bodyText: observed[scenario.actor as "anonymous" | "invalid"] }, []);
+    assert.equal(forbiddenObserved.pass, false);
+    assert.match(forbiddenObserved.reasons.join(), /statut 403 au lieu de 401/);
+    assert.match(forbiddenObserved.reasons.join(), /corps d’erreur sans message/);
     assert.equal(assertScenario(scenario, { status: 401, bodyText: '{"error":"Connectez-vous"}' }, []).pass, true, `${scenario.actor} function envelope`);
     assert.equal(assertScenario(scenario, { status: 401, bodyText: '{"message":"Invalid JWT"}' }, []).pass, true, `${scenario.actor} platform message`);
     assert.equal(assertScenario(scenario, { status: 401, bodyText: '{"code":401,"message":"Invalid JWT"}' }, []).pass, true, `${scenario.actor} platform code+message`);
@@ -753,6 +788,11 @@ test("negative: a platform message never rescues a wrong status, and other refus
     assert.equal(v.pass, false, scenario.name);
     assert.deepEqual(v.reasons, ["corps d’erreur sans message"]);
     assert.equal(assertScenario(scenario, { status, bodyText: '{"error":"Refusé"}' }, []).pass, true, scenario.name);
+  }
+  for (const [scenario, status] of [[third, 403], [viewer, 403]] as const) {
+    const v = assertScenario(scenario, { status, bodyText: '{"code":"UNAUTHORIZED_NO_AUTH_HEADER","message":"Missing authorization header"}' }, []);
+    assert.equal(v.pass, false, `${scenario.name} observed code on 403`);
+    assert.deepEqual(v.reasons, ["corps d’erreur sans message"]);
   }
   // A 401 on a scenario that expects 403 is still a wrong status even with a platform envelope.
   const wrong = assertScenario(third, { status: 401, bodyText: '{"code":401,"message":"Invalid JWT"}' }, []);

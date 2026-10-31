@@ -668,10 +668,18 @@ export function leakCheck(text: string, forbidden: string[]): string[] {
 }
 export type Verdict = { pass: boolean; reasons: string[] };
 // With `verify_jwt: true` on the deployed function, the Supabase platform answers a missing or
-// invalid JWT BEFORE the function runs, with its own envelope: `{"message":"…"}` or
-// `{"code":401,"message":"…"}`. Accepted strictly: a JSON object, a non-empty string `message`,
-// and if `code` is present it must be the number 401. Never a generic, empty or array body.
-export function isPlatformUnauthorizedEnvelope(bodyText: string): boolean {
+// invalid JWT BEFORE the function runs, with its own envelope. Bodies observed by the pilot:
+//   anonymous      → {"code":"UNAUTHORIZED_NO_AUTH_HEADER","message":"Missing authorization header"}
+//   invalid token  → {"code":"UNAUTHORIZED_INVALID_JWT_FORMAT","message":"Invalid JWT"}
+// Accepted strictly: a JSON object, a non-empty string `message`, and `code` absent, the number
+// 401, or exactly the string bound to the scenario below. No other string code; never a generic,
+// empty, string or array body.
+export const PLATFORM_UNAUTHORIZED_CODES = {
+  anonymous: "UNAUTHORIZED_NO_AUTH_HEADER",
+  invalid: "UNAUTHORIZED_INVALID_JWT_FORMAT",
+} as const;
+export type PlatformUnauthorizedActor = keyof typeof PLATFORM_UNAUTHORIZED_CODES;
+export function isPlatformUnauthorizedEnvelope(bodyText: string, actor?: PlatformUnauthorizedActor): boolean {
   let json: unknown;
   try {
     json = JSON.parse(bodyText);
@@ -681,8 +689,10 @@ export function isPlatformUnauthorizedEnvelope(bodyText: string): boolean {
   if (!json || typeof json !== "object" || Array.isArray(json)) return false;
   const body = json as Record<string, unknown>;
   if (typeof body.message !== "string" || body.message.trim().length === 0) return false;
-  if ("code" in body && body.code !== 401) return false;
-  return true;
+  if (!("code" in body) || body.code === 401) return true;
+  if (typeof body.code !== "string") return false;
+  const allowed: readonly string[] = actor ? [PLATFORM_UNAUTHORIZED_CODES[actor]] : Object.values(PLATFORM_UNAUTHORIZED_CODES);
+  return allowed.includes(body.code);
 }
 export function assertScenario(
   scenario: Scenario,
@@ -697,7 +707,7 @@ export function assertScenario(
     // Only the no-JWT / invalid-JWT scenarios, and only on a real 401, may carry the platform
     // envelope instead of the function's `{"error":…}`; every other refusal keeps the function body.
     const platformEnvelope =
-      scenario.expected === 401 && actual.status === 401 && (scenario.actor === "anonymous" || scenario.actor === "invalid") && isPlatformUnauthorizedEnvelope(actual.bodyText);
+      scenario.expected === 401 && actual.status === 401 && (scenario.actor === "anonymous" || scenario.actor === "invalid") && isPlatformUnauthorizedEnvelope(actual.bodyText, scenario.actor);
     if (!functionEnvelope && !platformEnvelope) reasons.push("corps d’erreur sans message");
   }
   if (scenario.expected === 201 && actual.status === 201) {
