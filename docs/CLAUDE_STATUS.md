@@ -728,3 +728,11 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - Root notes: run command must add `--mode remote` + the 6 REMOTE flags; `--sha` = HEAD of `--app-dir` check unchanged and in REMOTE also compared with the receipt's SHA ⇒ `--app-dir` must be a checkout of that SHA.
 - **Lead P3 (ergonomics, no behaviour issue):** the two harnesses use different flag names for the same values — business `--vercel-project`/`--vercel-team`/`--vercel-deployment`/`--github-repo-id`/`--expected-build-id` with ref constant `integration/web-pwa`; tracking `--vercel-project-id`/`--vercel-team-id`/`--vercel-deployment-id`/`--git-repo-id`/`--build-id` + explicit `--git-ref`. Root must build two command lines; aligning names is optional, after root's review, not before the run.
 - For root: review e6fbcbd (business) and a67f0e4 (tracking); then root alone runs the hosted public + Supabase recettes.
+
+## 2026-10-31 — tracking a67f0e4 accepted and running HOST PUBLIC; business e6fbcbd P2 frozen clock
+
+- **Tracking a67f0e4 accepted** by root (40 tests), integrated (286ab1f in progress). HOST PUBLIC run `4e8bc1a68a89` in progress (root-only, `/tmp/depannage-tracking-a67-4c-public-real-2`). App 4c/build and active harness unchanged.
+  - First attempt: root receipt `capturedAt` key error ⇒ SCHEMA refusal BEFORE fixtures (harness behaved as designed); new receipt with corrected `capturedAt`, original timestamp preserved. Second attempt: provenance PASS, technical account created normally.
+- **Business e6fbcbd** reviewed: 49 tests PASS but **P2 frozen preflight clock** — `nowMs` captured before `await fetch` and reused in verify (receipt 890 000 ms + fetch 20 000 ms ⇒ age 910 000 > 900 000 accepted, fresh helper refuses EXPIRED). Repro `/tmp/depannage-business-e6fbc-clock-repro.mjs`. Fix (fresh clock at each check + barrier test) dispatched to a96ae75. **No business recette before root reviews the fix.**
+- Lead check (read-only) of tracking a67f0e4 `scripts/qa-tracking/lib/preflight.mjs`: `now()` called fresh at `load` (l.109) and again at `verify` after the fetch (l.115) ⇒ **tracking does not have this defect**.
+- Backend 5b5288f doc fix observed; final quick review from integration after the run.
