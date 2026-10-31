@@ -1,3 +1,4 @@
+import { isolatedMigrationSql } from './sql-isolated-migrations.mjs';
 process.on('uncaughtException',error=>{console.error(error.message,error.query||'',error.detail||'',(error.stack||'').split('\n')[1]||'');process.exit(1)});
 // QA-ADV-ROLLBACK-001 — local verification of scripts/qa-advanced-platform/rollback.sql under isolated
 // PostgreSQL (@electric-sql/pglite@0.5.13 outside the app, PGLITE_MODULE → dist/index.js). Auth/Storage are
@@ -29,7 +30,7 @@ alter table storage.objects enable row level security;
 `);
 const dir=new URL('../supabase/migrations/',import.meta.url);
 const migrations=(await readdir(dir)).filter(n=>n.endsWith('.sql')).sort();
-for(const name of migrations)await db.exec((await readFile(new URL(name,dir),'utf8')).replace('create extension if not exists pgcrypto;','-- extension omitted only in this isolated harness'));
+for(const name of migrations)await db.exec((await isolatedMigrationSql(db, name, await readFile(new URL(name,dir),'utf8'))).replace('create extension if not exists pgcrypto;','-- extension omitted only in this isolated harness'));
 assert.ok(migrations.some(n=>n.includes('_platform_operators'))&&migrations.some(n=>n.includes('_quote_documents'))&&migrations.some(n=>n.includes('_site_operations')),'014/015/017 present');
 console.log(`PASS: ${migrations.length} migrations execute under isolated PostgreSQL with Auth/Storage stubs`);
 

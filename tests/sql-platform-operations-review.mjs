@@ -1,3 +1,4 @@
+import { isolatedMigrationSql } from './sql-isolated-migrations.mjs';
 process.on('uncaughtException',error=>{console.error(error.message,error.query||'',error.detail||'');process.exit(1)});
 // ADV-PLATFORM-FINANCE-001 — isolated PostgreSQL with explicit Auth/Storage stubs, never a live Supabase claim.
 import { readFile,readdir } from 'node:fs/promises';
@@ -11,7 +12,7 @@ create schema storage;create table storage.buckets(id text primary key,name text
 create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text);alter table storage.objects enable row level security;`);
 const dir=new URL('../supabase/migrations/',import.meta.url);
 const names=(await readdir(dir)).filter(n=>n.endsWith('.sql')).sort();
-for(const name of names)await db.exec((await readFile(new URL(name,dir),'utf8')).replace('create extension if not exists pgcrypto;','-- extension omitted only in local harness'));
+for(const name of names)await db.exec((await isolatedMigrationSql(db, name, await readFile(new URL(name,dir),'utf8'))).replace('create extension if not exists pgcrypto;','-- extension omitted only in local harness'));
 console.log(`PASS: all ${names.length} migrations execute under isolated PostgreSQL/Auth/Storage stubs`);
 const ids={};let i=1;
 for(const actor of['client','other','manager','artisan','otherArtisan','admin','admin2','finRead','finWrite','moderator','auditor']){

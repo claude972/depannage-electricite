@@ -1,3 +1,4 @@
+import { isolatedMigrationSql } from './sql-isolated-migrations.mjs';
 process.on('uncaughtException',error=>{console.error(error.code||'',error.message,error.where||'');process.exit(1);});
 // Isolated Auth/Storage stubs only. --emit-rollback writes reviewable SQL; never runs cloud SQL.
 import { readFile, readdir, open } from 'node:fs/promises';
@@ -158,7 +159,7 @@ if(process.argv[2]==='--emit-rollback'){
  create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
  create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text);alter table storage.objects enable row level security;`);
  const dir=new URL('../supabase/migrations/',import.meta.url);const files=(await readdir(dir)).filter(n=>n.endsWith('.sql')).sort();
- for(const name of files)await db.exec((await readFile(new URL(name,dir),'utf8')).replace('create extension if not exists pgcrypto;','-- local stub: no pgcrypto extension'));
+ for(const name of files)await db.exec((await isolatedMigrationSql(db, name, await readFile(new URL(name,dir),'utf8'))).replace('create extension if not exists pgcrypto;','-- local stub: no pgcrypto extension'));
  const tables=(await db.query("select table_schema s,table_name n from information_schema.tables where table_type='BASE TABLE' and table_schema in ('public','auth','storage') order by table_schema,table_name")).rows;
  const snapshot=async()=>{const out={};for(const t of tables)out[t.s+'.'+t.n]=(await db.query(`select count(*)::int n from "${t.s}"."${t.n}"`)).rows[0].n;return out;};
  const before=await snapshot();await db.exec(sql);assert.deepEqual(await snapshot(),before,'rollback leaves every persistent table count unchanged');
