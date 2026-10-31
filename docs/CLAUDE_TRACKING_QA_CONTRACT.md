@@ -628,10 +628,18 @@ Deux correctifs du harnais seront évalués APRÈS la preuve DOM seulement, sans
 
 Jamais par une nouvelle connexion, qui masquerait la cause. Si la preuve montre un défaut de rafraîchissement de l'app, le FAIL reste et il est signalé au lead.
 
-**d) Isolation des déconnexions.** Constat source : la déconnexion de l'app appelle `createClient().auth.signOut()` sans `scope` (`components/courant-app.tsx` l. 576). La portée par défaut de supabase-js est globale, ce qui révoque toutes les sessions de l'utilisateur. T19 déconnecte `users.client` (session `switch`). Les scénarios fournisseur réutilisent ensuite `ctx.session("client")`, ce qui est cohérent avec leur 401. Les deux FAIL fournisseur restent des FAIL pour ce run ; aucune requalification en PASS.
+**d) Isolation des déconnexions.** Constat source, pour mémoire et sans proposition de changement : la déconnexion de l'app appelle `createClient().auth.signOut()` sans `scope` (`components/courant-app.tsx` l. 576). La portée par défaut de supabase-js est globale, ce qui révoque toutes les sessions de l'utilisateur. T19 déconnecte `users.client` (session `switch`). Les scénarios fournisseur réutilisent ensuite `ctx.session("client")`, ce qui est cohérent avec leur 401. Les deux FAIL fournisseur restent des FAIL pour ce run ; aucune requalification en PASS.
 
 Règles à coder :
 - Un scénario qui se déconnecte utilise une identité dédiée, créée pour lui et non partagée, ou passe en dernier, après les scénarios fournisseur.
 - Après une déconnexion, toute session du pool appartenant au même utilisateur est marquée révoquée. Une réutilisation ultérieure est refusée : BLOCKED « session révoquée par une déconnexion globale », jamais une reconnexion silencieuse.
 
-Le caractère global de la déconnexion est un comportement produit à signaler au lead. La QA ne le modifie pas.
+Décision ROOT : la déconnexion globale actuelle du produit est conservée pour cette tranche, et l'authentification n'est pas modifiée pour la QA. C'est l'ordre et l'isolation du harnais qui s'adaptent. Ce correctif d'ordre QA ne demande aucune question au propriétaire.
+
+**e) Format des 404 Auth admin (postflight ROOT).** Le harnais actuel (`auth-admin.mjs` l. 85, `readUser`) considère TOUT statut 404 comme `absent`, quel que soit le corps. Ce comportement est trop large et sera corrigé. Seuls deux corps seront acceptés comme `absent` sur un `GET /auth/v1/admin/users/<id>` en statut 404 :
+- le format historique, objet exact `{code: 404, error_code: "user_not_found", msg: <chaîne>}` ;
+- le format actuel, objet exact `{code: "user_not_found", message: <chaîne>}` (aligné sur la relecture v2 de ROOT, forme exacte à confirmer par ROOT avant le code).
+
+Tout autre cas reste `unknown` et n'est jamais `absent` : 404 avec un autre corps ou sans corps, JSON invalide, clés en plus ou en moins, autre `error_code`.
+
+Ces règles ne changent rien d'autre : l'absence ne ferme toujours aucune intention (P2-2/P2-d), et la recherche paginée par e-mail garde sa preuve de fin. Le `UNKNOWN` d'origine du run 4e8bc1a68a89 reste tel quel. Tests prévus : chaque format accepté, ainsi qu'un 404 nu, un 404 HTML, un 404 avec un champ en plus et un 404 avec un autre `error_code`, tous `unknown`.
