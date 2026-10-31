@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { CLIENT_STEPS, currentStepIndex, detailHistory, quoteDecisionState, quoteLineCells, recentRowDescriptor } from "../../components/role/client-lists";
+import { CLIENT_STEPS, currentStepIndex, detailHistory, isSettled, quoteDecisionState, quoteLineCells, recentRowDescriptor } from "../../components/role/client-lists";
 
 const label = (id: string) => ({ panel: "Tableau électrique", outage: "Coupure de courant" })[id] ?? id;
 const money = (cents: number) => `${(cents / 100).toFixed(2).replace(".", ",")} €`;
@@ -31,8 +31,13 @@ test("stepper V8-C07 : cinq étapes alignées sur les statuts réels", () => {
   assert.equal(currentStepIndex("accepted"), 2, "accepté = devis validé, intervention pas encore démarrée");
   assert.equal(currentStepIndex("in_progress"), 3);
   assert.equal(currentStepIndex("completed"), 3);
-  assert.equal(currentStepIndex("paid"), 4);
+  assert.equal(currentStepIndex("paid"), 4, "payé sans horodatage serveur : dernière étape encore courante");
+  assert.equal(currentStepIndex("paid", "2026-10-22T05:00:00Z"), CLIENT_STEPS.length, "règlement confirmé : toutes les étapes terminées");
+  assert.equal(currentStepIndex("completed", "2026-10-22T05:00:00Z"), 3, "un horodatage sans statut payé ne termine rien");
   assert.equal(currentStepIndex("cancelled"), -1);
+  assert.equal(isSettled({ status: "paid", paid_at: "x" }), true);
+  assert.equal(isSettled({ status: "paid", paid_at: null }), false);
+  assert.equal(isSettled({ status: "completed", paid_at: "x" }), false);
 });
 test("chronologie V8-C07 : dates enregistrées seulement, « — » sinon, « À venir » après l’étape courante", () => {
   const format = (iso: string) => `[${iso}]`;
@@ -48,7 +53,15 @@ test("chronologie V8-C07 : dates enregistrées seulement, « — » sinon, « À
   ]);
   const paid = detailHistory({ status: "paid", created_at: "c", completed_at: "f", paid_at: "p" }, { appointmentStartsAt: "s" }, format);
   assert.equal(paid[4].when, "Créneau [s]");
-  assert.equal(paid[6].state, "current");
+  assert.equal(paid[6].state, "done", "règlement confirmé par le serveur (paid + paid_at) : terminé");
   assert.equal(paid[6].when, "[p]");
+  assert.ok(paid.every((h) => h.state === "done"), "un dossier réglé n’a plus d’étape courante ni à venir");
+  const pending = detailHistory({ status: "completed", created_at: "c", completed_at: "f", paid_at: null }, {}, format);
+  assert.equal(pending[5].state, "current", "terminée, règlement non confirmé : l’étape terminée est courante");
+  assert.equal(pending[6].state, "upcoming");
+  assert.equal(pending[6].when, "À venir", "jamais de règlement affiché avant la confirmation serveur");
+  const paidWithoutStamp = detailHistory({ status: "paid", created_at: "c", completed_at: "f", paid_at: null }, {}, format);
+  assert.equal(paidWithoutStamp[6].state, "current", "statut payé sans horodatage : pas de succès anticipé");
+  assert.equal(paidWithoutStamp[6].when, "—");
   assert.deepEqual(detailHistory({ status: "cancelled", created_at: "c", completed_at: null, paid_at: null }, {}, format).map((h) => h.label), ["Demande créée", "Demande annulée"]);
 });

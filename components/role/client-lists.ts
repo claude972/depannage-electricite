@@ -47,8 +47,15 @@ export const CLIENT_STEPS: { label: string; reachedAt: Status }[] = [
 ];
 const PROGRESS: Status[] = ["requested", "assigned", "quoted", "accepted", "in_progress", "completed", "paid"];
 export const progressIndex = (status: Status) => PROGRESS.indexOf(status);
-/** Index de l’étape atteinte (−1 pour une demande annulée ou inconnue). */
-export function currentStepIndex(status: Status): number {
+/** Règlement confirmé par le serveur : statut « paid » ET horodatage `paid_at` enregistré. */
+export const isSettled = (i: { status: Status; paid_at?: string | null }) => i.status === "paid" && Boolean(i.paid_at);
+/**
+ * Index de l’étape courante (−1 pour une demande annulée ou inconnue). Un dossier réglé avec
+ * `paid_at` serveur renvoie `CLIENT_STEPS.length` : toutes les étapes sont terminées. Sans
+ * confirmation serveur, la dernière étape reste courante — jamais de succès anticipé.
+ */
+export function currentStepIndex(status: Status, paidAt?: string | null): number {
+  if (isSettled({ status, paid_at: paidAt })) return CLIENT_STEPS.length;
   const progress = progressIndex(status);
   return CLIENT_STEPS.reduce((acc, step, index) => (progress >= PROGRESS.indexOf(step.reachedAt) ? index : acc), -1);
 }
@@ -82,9 +89,11 @@ export function detailHistory(
     ["Intervention terminée", i.completed_at ? format(i.completed_at) : "—"],
     ["Règlement", i.paid_at ? format(i.paid_at) : "—"],
   ];
+  // The terminal event is "done" only once the server has recorded the payment (paid + paid_at).
+  const settled = isSettled(i);
   return rows.map(([label, when], index) => ({
     label,
     when: index > progress ? "À venir" : when,
-    state: index < progress ? "done" : index === progress ? "current" : "upcoming",
+    state: settled || index < progress ? "done" : index === progress ? "current" : "upcoming",
   }));
 }

@@ -479,3 +479,11 @@ note, certification, expérience, carte, vignettes, garanties ni promesses d’a
 fichiers touchés : `components/role/client-space.tsx`, `client.module.css`, `client-lists.ts`,
 `tests/ui/client-lists.test.ts`, cette section, `docs/visual-fidelity/client-*`. Restent déclarés comme écarts
 assumés : bleu action au lieu du vert/rouge pleins, 5 étapes réelles, pas de partage ni de « ⋯ », pas de carte.
+
+### Correction CLIENT-HISTORY-001 (revue pilote de 4a2ab70)
+
+`detailHistory` laissait « Règlement » en état courant (« En cours ») pour un dossier `paid` avec `paid_at` serveur.
+Correction : `isSettled` (statut `paid` **et** `paid_at` enregistré) termine toutes les entrées de la chronologie et
+`currentStepIndex(status, paid_at)` renvoie `CLIENT_STEPS.length` (stepper entièrement coché). Sans confirmation
+serveur (`completed`, ou `paid` sans horodatage), rien n’est présenté comme réglé : l’étape reste courante / à venir.
+Tests ajoutés (`tests/ui/client-lists.test.ts`) ; captures `client-detail-{360,1280}-after.jpg` remplacées.
