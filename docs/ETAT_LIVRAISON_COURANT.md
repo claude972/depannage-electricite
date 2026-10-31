@@ -1,3 +1,12 @@
+# Checkpoint prioritaire — 31 octobre 18h35 Martinique
+
+
+## ROOT31oct18h35 — B1 intégré, GO B2 borné
+B1exact478a2da7f4f22c27763ca263b1e65455909bf9ca peer66PASS0skip+probespersisterror0DELETE/cleanupthrowhook0,aucunP1P2borné. Sourceexportgitarchivepin carplanningcheckout a basculéPROPREMENT surclaude/web-qa-deeplink aprèsfreeze,B1branchepréservée478poussée. MergeB1ROOTsuite726PASS0skip+tscstrictPASS. GatewayP3c1e8a7e38d5706ac7c0d2a51d06bed83fb1c8888 ROOTdifftexteuniquementreluneutreOBSERVED ;76testsGatewayaprèsmergePASS,listeexpiredvide/classificationsinchangées. Integration6901e2a3c4ada1972286598d07039387db2ebd2b POUSSÉE,CI41248802434en cours(9a1CI41248521471SUCCESS). Aucunapp/Edge/migration/deploynifakeQAcréé.
+ContratA3be357a5551c89b9a6b4b9d66a0d14a9d2c71dca14 ROOTlu/peercontre-revueclôt2P2,pascodePageWS,D2witnessnonvideautonome,focus16s/cleanwindowdoublecauseFAIL. MissionB2publiée97d35a7avantcode,GOEXPLICITEenvoyéCLI69172bornénouveauxscripts/qa-deeplink/**tests/contratseulement,base6901,primitivessharedREADONLY,workerQAClaudeEXISTANTréutilisé,pascloud/credentialsagent. Attendrepriseenchargeeffective/claim+SHAcodeB2etrevueavantROOTrecette28b. LIVErealtime/cap100toujoursOPEN ;aucunecohorteQAconnueactive.
+
+Historiquepréservéci-dessous.
+
 # Checkpoint ROOT — 31 octobre 18h31 Martinique
 
 
