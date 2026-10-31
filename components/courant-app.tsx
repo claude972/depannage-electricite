@@ -509,7 +509,7 @@ export default function CourantApp() {
     [runner],
   );
 
-  function startDemo(nextRole: Role = "client", next?: View) {
+  function startDemo(nextRole: Role = "client", next?: View, nextParam?: string) {
     if (modeRef.current === "live") return; // never mix a live account with demo data
     const valid = (v: unknown) => {
       const d = v as Workspace;
@@ -543,7 +543,8 @@ export default function CourantApp() {
     setRole(nextRole);
     setLoading(false);
     setSessionKey((k) => k + 1);
-    navigate(next || homeFor(nextRole, "demo"));
+    if (nextParam) setSelectedId(nextParam);
+    navigate(next || homeFor(nextRole, "demo"), nextParam);
   }
   async function logout() {
     if (modeRef.current === "live") {

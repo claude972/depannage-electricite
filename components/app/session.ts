@@ -100,7 +100,7 @@ export function parseHash(hash: string): { view: View | null; param: string } {
     param = "";
   }
   // Parameters are identifiers; anything else is dropped so it never reaches a lookup or the DOM.
-  if (!/^[A-Za-z0-9_-]{0,80}$/.test(param)) param = "";
+  if (!/^[A-Za-z0-9_.-]{0,120}$/.test(param)) param = "";
   return { view: head, param };
 }
 export function buildHash(view: View, param?: string): string {

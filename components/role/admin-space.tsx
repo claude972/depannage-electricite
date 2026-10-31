@@ -37,6 +37,12 @@ import type {
   Quote,
   Role,
   Status,
+  SupportCommand,
+  SupportDetail,
+  SupportEvent,
+  SupportListPage,
+  SupportMessage,
+  SupportStatus,
   Urgency,
   View,
 } from "../app/types";
@@ -157,6 +163,7 @@ const maskSiret = (siret: string) => {
   if (digits.length <= 4) return digits;
   return `${"•".repeat(digits.length - 4)} ${digits.slice(-4)}`;
 };
+const yesNo = (value: boolean) => (value ? "Oui" : "Non");
 const todayIso = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -464,7 +471,7 @@ export function AdminSpace({ session }: { session: Session }) {
         return { title: "Avis & Notes", subtitle: "Avis déposés par les clients après règlement" };
       case "admin-messages":
       case "messages":
-        return { title: "Messages", subtitle: "Support et échanges des dossiers" };
+        return { title: "Messages", subtitle: "Assistance et messages des dossiers" };
       case "admin-settings":
         return { title: "Paramètres", subtitle: "Réglages de la plateforme, fonctions activées et journal d’audit" };
       case "admin-warranty":
@@ -799,14 +806,12 @@ export function AdminSpace({ session }: { session: Session }) {
       session.data.interventions.find((i) => i.id === id) || overview?.interventions.find((i) => i.id === id);
     return (
       <>
-        <Unavailable
-          title="Boîte de support"
-          reason={
-            caps?.support_tickets
-              ? "Fonction annoncée mais pas encore activée dans cette interface : attendez son activation."
-              : "Pas encore activé sur ce service : les demandes d’assistance ne transitent pas par cette interface. Les messages des dossiers restent lisibles ci-dessous."
-          }
-          blocker="ADM-07"
+        <AssistanceCentre
+          session={session}
+          ticketId={view === "admin-messages" ? session.param : ""}
+          onOpenTicket={(id) => go("admin-messages", id)}
+          onBack={() => go("admin-messages")}
+          onOpenDossier={openDossier}
         />
         <Panel title="Messages des dossiers (lecture)" count={messages.length} intro="Vingt derniers messages échangés dans les dossiers chargés, en lecture seule.">
           {messages.length ? (
@@ -864,15 +869,22 @@ export function AdminSpace({ session }: { session: Session }) {
               <tbody>
                 {(
                   [
-                    ["Réaffectation avant acceptation du devis", o.capabilities.dispatch_before_quote_acceptance],
-                    ["Remboursements", o.capabilities.refunds],
-                    ["Factures", o.capabilities.invoices],
-                    ["Tickets support", o.capabilities.support_tickets],
+                    ["Réaffectation avant acceptation du devis", yesNo(o.capabilities.dispatch_before_quote_acceptance)],
+                    ["Remboursements", yesNo(o.capabilities.refunds)],
+                    ["Factures", yesNo(o.capabilities.invoices)],
+                    [
+                      "Demandes d’assistance",
+                      o.capabilities.support_tickets
+                        ? "Oui"
+                        : session.capabilities.support === "available"
+                          ? "Activé par le service d’assistance"
+                          : "Non",
+                    ],
                   ] as const
                 ).map(([label, value]) => (
                   <tr key={label}>
                     <td data-label="Fonction">{label}</td>
-                    <td data-label="Valeur">{value ? "Oui" : "Non"}</td>
+                    <td data-label="Valeur">{value}</td>
                   </tr>
                 ))}
                 <tr>
@@ -2410,13 +2422,16 @@ function PageSizeSelect({ label, directory }: { label: string; directory: Pick<A
     </label>
   );
 }
-function DirectoryPager({
-  directory,
-  noun,
-}: {
-  directory: Pick<AnyDirectory, "page" | "rows" | "position" | "hasPrevious" | "goNext" | "goPrevious">;
-  noun: { one: string; many: string };
-}) {
+// Any server-paginated source: the directories and the assistance list share this pager.
+type PagerSource = {
+  page: { page: { total: number; has_more: boolean; next_cursor: string | null } } | null | undefined;
+  rows: unknown[];
+  position: PagePosition;
+  hasPrevious: boolean;
+  goNext: () => void;
+  goPrevious: () => void;
+};
+function DirectoryPager({ directory, noun }: { directory: PagerSource; noun: { one: string; many: string } }) {
   const { page, rows, position } = directory;
   if (!page) return null;
   const total = page.page.total;
@@ -3373,5 +3388,632 @@ function ReassignPanel({
     <Panel title="Réaffectation">
       <div className={styles.panelBody}>{body}</div>
     </Panel>
+  );
+}
+
+// ---- Assistance (contract WEB-PWA-SUPPORT-001) ---------------------------------------------
+// Private persistent tickets handled by the platform administration. The contract transmits
+// no name or email of the creator: a user is shown as "Utilisateur" plus a shortened identifier.
+const SUPPORT_STATUS: Record<SupportStatus, { label: string; tone: Tone }> = {
+  open: { label: "Ouverte", tone: "blue" },
+  in_progress: { label: "En cours", tone: "amber" },
+  awaiting_user: { label: "Réponse attendue de l’utilisateur", tone: "violet" },
+  resolved: { label: "Résolue", tone: "green" },
+};
+// Transitions the contract allows from each state; the server refuses anything else.
+const SUPPORT_TRANSITIONS: Record<SupportStatus, readonly SupportStatus[]> = {
+  open: ["in_progress", "awaiting_user", "resolved"],
+  in_progress: ["awaiting_user", "resolved"],
+  awaiting_user: ["in_progress", "resolved"],
+  resolved: ["in_progress"],
+};
+const SUPPORT_SEARCH_HELP =
+  "Recherche littérale sur le sujet : 2 à 80 caractères, lettres, chiffres, espaces, tirets et apostrophes.";
+const SUPPORT_BODY_MAX = 4000;
+const SUPPORT_HISTORY_LIMIT = 50;
+type SupportFilters = { status: "" | SupportStatus; q: string };
+const NO_SUPPORT_FILTERS: SupportFilters = { status: "", q: "" };
+
+const mergeById = <T extends { id: string }>(current: T[], added: T[]) => {
+  const seen = new Set(current.map((x) => x.id));
+  return [...current, ...added.filter((x) => !seen.has(x.id))];
+};
+function SupportStatusTag({ status }: { status: SupportStatus }) {
+  const s = SUPPORT_STATUS[status];
+  return <Tag tone={s.tone}>{s.label}</Tag>;
+}
+
+// Server-paginated list of every ticket of the platform (scope all), on the directory model:
+// a filter change restarts from the first page (the cursor is bound to the filters), "Précédent"
+// replays the cursors kept client-side, the total is the server count.
+// undefined = loading, null = unavailable (capabilities.support tells why).
+function useSupportList(session: Session, ticketId: string) {
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  const [filters, setFilters] = useState<SupportFilters>(NO_SUPPORT_FILTERS);
+  const [limit, setLimit] = useState<PageSize>(25);
+  const [position, setPosition] = useState<PagePosition>(FIRST_PAGE);
+  const [previous, setPrevious] = useState<PagePosition[]>([]);
+  const [search, setSearchText] = useState("");
+  const [searchError, setSearchError] = useState("");
+  const [page, setPage] = useState<SupportListPage | null | undefined>(undefined);
+  const [attempt, setAttempt] = useState(0);
+  const requestId = useRef(0);
+  const wasOnTicket = useRef(false);
+
+  useEffect(() => {
+    const my = ++requestId.current;
+    setPage(undefined);
+    void sessionRef.current
+      .loadSupportTickets({
+        scope: "all",
+        status: filters.status || undefined,
+        q: filters.q || undefined,
+        limit,
+        cursor: position.cursor,
+      })
+      .then((result) => {
+        if (my === requestId.current) setPage(result);
+      });
+  }, [filters, limit, position, attempt, session.refreshedAt, session.mode]);
+  // Coming back from a ticket: its replies and state changes must appear in the list.
+  useEffect(() => {
+    if (ticketId) {
+      wasOnTicket.current = true;
+    } else if (wasOnTicket.current) {
+      wasOnTicket.current = false;
+      setAttempt((n) => n + 1);
+    }
+  }, [ticketId]);
+
+  const restart = (next: Partial<SupportFilters>) => {
+    setFilters((f) => ({ ...f, ...next }));
+    setPosition(FIRST_PAGE);
+    setPrevious([]);
+  };
+  const changeLimit = (next: PageSize) => {
+    setLimit(next);
+    setPosition(FIRST_PAGE);
+    setPrevious([]);
+  };
+  const reset = () => {
+    setSearchText("");
+    setSearchError("");
+    setLimit(25);
+    restart(NO_SUPPORT_FILTERS);
+  };
+  const setSearch = (value: string) => {
+    setSearchText(value);
+    if (searchError) setSearchError("");
+  };
+  const submitSearch = (event: FormEvent) => {
+    event.preventDefault();
+    const check = checkSearch(search);
+    if (!check.ok) {
+      setSearchError(check.error);
+      return;
+    }
+    setSearchError("");
+    setSearchText(check.value);
+    if (check.value !== filters.q) restart({ q: check.value });
+  };
+  const goNext = () => {
+    if (!page?.page.next_cursor) return;
+    setPrevious((stack) => [...stack, position]);
+    setPosition({ cursor: page.page.next_cursor, offset: position.offset + page.tickets.length });
+  };
+  const goPrevious = () => {
+    const last = previous[previous.length - 1];
+    if (!last) return;
+    setPrevious((stack) => stack.slice(0, -1));
+    setPosition(last);
+  };
+  return {
+    page,
+    rows: page?.tickets ?? [],
+    filters,
+    limit,
+    position,
+    hasPrevious: previous.length > 0,
+    search,
+    searchError,
+    setSearch,
+    submitSearch,
+    restart,
+    changeLimit,
+    reset,
+    retry: () => setAttempt((n) => n + 1),
+    goNext,
+    goPrevious,
+  };
+}
+
+function AssistanceCentre({
+  session,
+  ticketId,
+  onOpenTicket,
+  onBack,
+  onOpenDossier,
+}: {
+  session: Session;
+  ticketId: string;
+  onOpenTicket: (id: string) => void;
+  onBack: () => void;
+  onOpenDossier: (id: string) => void;
+}) {
+  const list = useSupportList(session, ticketId);
+  if (ticketId) return <SupportTicketView session={session} id={ticketId} onBack={onBack} onOpenDossier={onOpenDossier} />;
+
+  const { page, rows, filters } = list;
+  const filtering = Boolean(filters.status || filters.q);
+  let body: ReactNode;
+  if (page === undefined) {
+    body = <Loader label="Chargement des demandes d’assistance…" />;
+  } else if (page === null) {
+    const state = session.capabilities.support;
+    body = (
+      <div className={styles.panelBody}>
+        <Unavailable
+          title="Centre d’assistance indisponible"
+          state={state}
+          reason={
+            state === "available"
+              ? "La liste des demandes n’a pas pu être chargée. Vérifiez les filtres ou réessayez dans un instant."
+              : "L’assistance n’est pas encore activée sur ce service. Les messages des dossiers restent lisibles ci-dessous."
+          }
+        >
+          <div className={styles.actions} style={{ marginTop: 12 }}>
+            <button type="button" className="button outline" onClick={list.retry}>
+              <Icon name="refresh" size={16} />
+              Réessayer
+            </button>
+          </div>
+        </Unavailable>
+      </div>
+    );
+  } else if (!rows.length) {
+    body = (
+      <DirectoryEmpty
+        directory={list}
+        filtering={filtering}
+        icon="message"
+        texts={{
+          gone: "Cette page ne contient plus de demande",
+          noMatch: "Aucune demande ne correspond",
+          none: "Aucune demande d’assistance",
+          noneText: "Les demandes envoyées par les utilisateurs depuis leur espace apparaîtront ici.",
+        }}
+      />
+    );
+  } else {
+    body = (
+      <DataTable
+        caption="Demandes d’assistance"
+        rows={rows}
+        keyOf={(t) => t.id}
+        columns={[
+          {
+            key: "subject",
+            label: "Sujet",
+            wide: true,
+            render: (t) => (
+              <button type="button" className={`${styles.link} ${styles.subjectLink}`} onClick={() => onOpenTicket(t.id)}>
+                {t.subject}
+              </button>
+            ),
+          },
+          { key: "status", label: "État", render: (t) => <SupportStatusTag status={t.status} /> },
+          {
+            key: "creator",
+            label: "Demandeur",
+            render: (t) => (
+              <span className={styles.cellStack}>
+                Utilisateur
+                <small className={styles.mono}>{shortUser(t.creator_id)}</small>
+              </span>
+            ),
+          },
+          {
+            key: "dossier",
+            label: "Dossier lié",
+            render: (t) =>
+              t.intervention_id ? (
+                <button type="button" className={`${styles.link} ${styles.mono}`} onClick={() => onOpenDossier(t.intervention_id as string)}>
+                  {shortId(t.intervention_id)}
+                </button>
+              ) : (
+                <span className={styles.muted}>Aucun</span>
+              ),
+          },
+          { key: "activity", label: "Dernière activité", render: (t) => dateTime(t.last_message_at) },
+        ]}
+        empty={null}
+      />
+    );
+  }
+
+  return (
+    <Panel
+      title="Demandes d’assistance"
+      count={page?.page.total}
+      intro="Demandes privées envoyées par les utilisateurs depuis leur espace, traitées par l’administration. Les réponses se lisent en actualisant : aucun appel, e-mail ou notification n’est envoyé."
+    >
+      <form className={styles.filters} onSubmit={list.submitSearch} noValidate>
+        <DirectorySearch id="admin-support-search" label="Recherche sur le sujet" placeholder="Mot du sujet" directory={list} />
+        <Segments
+          label="État"
+          value={filters.status}
+          options={[
+            ["", "Toutes"],
+            ["open", "Ouvertes"],
+            ["in_progress", "En cours"],
+            ["awaiting_user", "Réponse attendue de l’utilisateur"],
+            ["resolved", "Résolues"],
+          ]}
+          onChange={(status) => list.restart({ status })}
+        />
+        <PageSizeSelect label="Demandes par page" directory={list} />
+        <button type="button" className={styles.link} onClick={list.reset}>
+          <Icon name="refresh" size={15} />
+          Réinitialiser
+        </button>
+        <p
+          id="admin-support-search-help"
+          className={styles.searchHelp}
+          data-error={list.searchError ? "true" : undefined}
+          role={list.searchError ? "alert" : undefined}
+        >
+          {list.searchError || SUPPORT_SEARCH_HELP}
+        </p>
+      </form>
+      {body}
+      <DirectoryPager directory={list} noun={{ one: "demande", many: "demandes" }} />
+      {page && <Basis>{DIRECTORY_TOTAL_NOTE}</Basis>}
+    </Panel>
+  );
+}
+
+// One ticket: header, immutable timeline (events ascending, one per version), reply and state
+// change with the exact expected version. A 409 keeps the typed text and asks for a re-read.
+type SupportThread = { detail: SupportDetail; events: SupportEvent[]; messages: SupportMessage[] };
+function SupportTicketView({
+  session,
+  id,
+  onBack,
+  onOpenDossier,
+}: {
+  session: Session;
+  id: string;
+  onBack: () => void;
+  onOpenDossier: (id: string) => void;
+}) {
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  // undefined = loading, null = unknown / unreadable / unavailable.
+  const [thread, setThread] = useState<SupportThread | null | undefined>(undefined);
+  const [attempt, setAttempt] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [body, setBody] = useState("");
+  const [bodyError, setBodyError] = useState("");
+  const [sending, setSending] = useState(false);
+  const [conflict, setConflict] = useState("");
+  const [failure, setFailure] = useState("");
+  const [target, setTarget] = useState<"" | SupportStatus>("");
+  const requestId = useRef(0);
+
+  useEffect(() => {
+    const my = ++requestId.current;
+    setThread(undefined);
+    setConflict("");
+    setFailure("");
+    void sessionRef.current.loadSupportTicket(id, { limit: SUPPORT_HISTORY_LIMIT }).then((result) => {
+      if (my !== requestId.current) return;
+      setThread(result ? { detail: result, events: result.events, messages: result.messages } : null);
+    });
+  }, [id, attempt]);
+  // The typed text survives a re-read after a conflict, not a change of ticket.
+  useEffect(() => {
+    setBody("");
+    setBodyError("");
+    setTarget("");
+  }, [id]);
+
+  const reread = () => setAttempt((n) => n + 1);
+
+  const loadMore = async () => {
+    if (!thread || thread.detail.page.next_after_version === null) return;
+    setLoadingMore(true);
+    const more = await sessionRef.current.loadSupportTicket(id, {
+      limit: SUPPORT_HISTORY_LIMIT,
+      after_version: thread.detail.page.next_after_version,
+    });
+    setLoadingMore(false);
+    if (!more) {
+      setFailure("La suite de l’historique n’a pas pu être chargée. Réessayez dans un instant.");
+      return;
+    }
+    setFailure("");
+    setThread((t) =>
+      t ? { detail: more, events: mergeById(t.events, more.events), messages: mergeById(t.messages, more.messages) } : t,
+    );
+  };
+
+  // Applies a server result: new version and appended message/event, or the conflict to show.
+  const runCommand = async (command: SupportCommand) => {
+    const result = await sessionRef.current.supportCommand(id, command);
+    if (result.ok) {
+      setConflict("");
+      setFailure("");
+      setThread((t) =>
+        t
+          ? {
+              detail: {
+                ...t.detail,
+                ticket: result.ticket,
+                page: {
+                  ...t.detail.page,
+                  total_events: t.detail.page.total_events + 1,
+                  total_messages: t.detail.page.total_messages + (result.message ? 1 : 0),
+                },
+              },
+              events: mergeById(t.events, [result.event]),
+              messages: result.message ? mergeById(t.messages, [result.message]) : t.messages,
+            }
+          : t,
+      );
+      return true;
+    }
+    if (result.conflict) setConflict(result.message);
+    else setFailure(result.message);
+    return false;
+  };
+
+  const submitReply = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!thread) return;
+    const text = body.trim();
+    if (!text) {
+      setBodyError("Saisissez votre réponse avant d’envoyer.");
+      return;
+    }
+    if (text.length > SUPPORT_BODY_MAX) {
+      setBodyError(`La réponse est limitée à ${SUPPORT_BODY_MAX} caractères.`);
+      return;
+    }
+    setBodyError("");
+    setSending(true);
+    const ok = await runCommand({ action: "reply", expected_version: thread.detail.ticket.version, body: text });
+    setSending(false);
+    if (ok) setBody("");
+  };
+
+  const back = (
+    <button type="button" className={styles.backLink} onClick={onBack}>
+      <Icon name="back" size={16} />
+      Retour aux demandes
+    </button>
+  );
+  if (thread === undefined)
+    return (
+      <>
+        {back}
+        <Loader label="Chargement de la demande…" />
+      </>
+    );
+  if (thread === null) {
+    const state = session.capabilities.support;
+    return (
+      <>
+        {back}
+        <Panel title="Demande d’assistance">
+          <div className={styles.panelBody}>
+            <Unavailable
+              title="Demande indisponible"
+              state={state}
+              reason={
+                state === "available"
+                  ? "Cette demande est introuvable ou n’a pas pu être chargée."
+                  : "L’assistance n’est pas encore activée sur ce service."
+              }
+            >
+              <div className={styles.actions} style={{ marginTop: 12 }}>
+                <button type="button" className="button outline" onClick={reread}>
+                  <Icon name="refresh" size={16} />
+                  Réessayer
+                </button>
+              </div>
+            </Unavailable>
+          </div>
+        </Panel>
+      </>
+    );
+  }
+
+  const { ticket, permissions, page } = thread.detail;
+  const events = [...thread.events].sort((a, b) => a.version - b.version);
+  const messageById = new Map(thread.messages.map((m) => [m.id, m]));
+  const me = session.profileId;
+  const authorOf = (m: SupportMessage) =>
+    m.author_kind === "admin" ? (m.author_id === me ? "Assistance (vous)" : "Assistance") : "Utilisateur";
+  const actorOf = (actorId: string) => (actorId === me ? "par vous" : "par l’assistance");
+  const targets = SUPPORT_TRANSITIONS[ticket.status];
+  const chosen = target && targets.includes(target) ? target : "";
+  const resolved = ticket.status === "resolved";
+  const busy = session.busy || sending;
+  const remaining = SUPPORT_BODY_MAX - body.trim().length;
+
+  const statusControl = permissions.can_set_status && (
+    <div className={styles.statusControl}>
+      <Field
+        label="Nouvel état"
+        hint={`État actuel : ${SUPPORT_STATUS[ticket.status].label}. Seuls les passages autorisés depuis cet état sont proposés.`}
+      >
+        <select value={chosen} onChange={(e) => setTarget(e.target.value as "" | SupportStatus)} disabled={busy}>
+          <option value="">Choisir un état</option>
+          {targets.map((s) => (
+            <option key={s} value={s}>
+              {SUPPORT_STATUS[s].label}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <ConfirmAction
+        label="Changer l’état"
+        message={
+          chosen
+            ? `Passer la demande de « ${SUPPORT_STATUS[ticket.status].label} » à « ${SUPPORT_STATUS[chosen].label} ». Le changement est inscrit dans l’historique visible par l’utilisateur.`
+            : ""
+        }
+        confirmLabel="Confirmer"
+        busy={busy || !chosen}
+        onConfirm={async () => {
+          if (!chosen) return;
+          const ok = await runCommand({ action: "set_status", expected_version: ticket.version, status: chosen });
+          if (ok) setTarget("");
+        }}
+      />
+    </div>
+  );
+
+  return (
+    <>
+      {back}
+      <section className={styles.panel}>
+        <div className={styles.ticketHead}>
+          <div>
+            <h2>{ticket.subject}</h2>
+            <p>
+              Utilisateur <span className={styles.mono}>{shortUser(ticket.creator_id)}</span> · créée le {dateTime(ticket.created_at)} · dernière
+              activité {dateTime(ticket.last_message_at)}
+            </p>
+          </div>
+          <SupportStatusTag status={ticket.status} />
+        </div>
+        <dl className={styles.definitions}>
+          <dt>Dossier lié</dt>
+          <dd>
+            {ticket.intervention_id ? (
+              <button type="button" className={`${styles.link} ${styles.inlineLink}`} onClick={() => onOpenDossier(ticket.intervention_id as string)}>
+                Ouvrir le dossier <span className={styles.mono}>{shortId(ticket.intervention_id)}</span>
+              </button>
+            ) : (
+              "Aucun dossier lié"
+            )}
+          </dd>
+          <dt>Référence</dt>
+          <dd className={styles.mono}>{shortId(ticket.id)}</dd>
+          <dt>Historique</dt>
+          <dd>
+            {page.total_events} {page.total_events === 1 ? "événement" : "événements"} · {page.total_messages}{" "}
+            {page.total_messages === 1 ? "message" : "messages"} · version {ticket.version}
+          </dd>
+        </dl>
+      </section>
+
+      <Panel title="Historique" count={events.length} intro="Du plus ancien au plus récent. Chaque réponse et chaque changement d’état y sont inscrits ; rien n’est modifié a posteriori.">
+        <ol className={styles.timeline}>
+          {events.map((ev) => {
+            const msg = ev.message_id ? messageById.get(ev.message_id) : undefined;
+            if (ev.kind === "status_changed")
+              return (
+                <li key={ev.id} className={styles.timelineEvent}>
+                  <span>
+                    État passé de « {ev.from_status ? SUPPORT_STATUS[ev.from_status].label : "—"} » à « {SUPPORT_STATUS[ev.to_status].label} »
+                  </span>
+                  <small>
+                    {actorOf(ev.actor_id)} · {dateTime(ev.created_at)}
+                  </small>
+                </li>
+              );
+            const fromAdmin = msg ? msg.author_kind === "admin" : false;
+            return (
+              <li key={ev.id} className={`${styles.message} ${fromAdmin ? styles.fromAdmin : ""}`}>
+                <header>
+                  <strong>{msg ? authorOf(msg) : ev.kind === "ticket_created" ? "Utilisateur" : "Réponse"}</strong>
+                  <span>
+                    {ev.kind === "ticket_created" ? "Demande créée · " : ""}
+                    {dateTime(ev.created_at)}
+                  </span>
+                </header>
+                {msg ? <p>{msg.body}</p> : <p className={styles.muted}>Message non chargé dans cette page de l’historique.</p>}
+              </li>
+            );
+          })}
+        </ol>
+        {page.has_more && page.next_after_version !== null && (
+          <div className={styles.timelineMore}>
+            <button type="button" className="button outline" onClick={() => void loadMore()} disabled={loadingMore}>
+              {loadingMore ? "Chargement…" : "Charger la suite"}
+            </button>
+            <span className={styles.muted}>
+              {events.length} sur {page.total_events} {page.total_events === 1 ? "événement" : "événements"} affichés
+            </span>
+          </div>
+        )}
+      </Panel>
+
+      <Panel title="Traitement">
+        <div className={styles.panelBody}>
+          {conflict && (
+            <div className={styles.conflict} role="alert">
+              <Icon name="warning" size={16} />
+              <div>
+                <strong>La demande a changé depuis votre lecture.</strong>
+                <p>{conflict} Votre texte est conservé : relisez la demande, puis renvoyez-le si nécessaire.</p>
+                <button type="button" className="button outline" onClick={reread}>
+                  <Icon name="refresh" size={16} />
+                  Relire la demande
+                </button>
+              </div>
+            </div>
+          )}
+          {failure && (
+            <p className={styles.inlineError} role="alert">
+              {failure}
+            </p>
+          )}
+          {permissions.can_reply ? (
+            <form onSubmit={(e) => void submitReply(e)} noValidate>
+              <Field
+                label="Votre réponse"
+                hint={`Visible par l’utilisateur dans son espace. ${remaining >= 0 ? `${remaining} caractères restants.` : ""}`}
+                error={bodyError}
+              >
+                <textarea
+                  value={body}
+                  onChange={(e) => {
+                    setBody(e.target.value);
+                    if (bodyError) setBodyError("");
+                  }}
+                  rows={5}
+                  maxLength={SUPPORT_BODY_MAX + 200}
+                  disabled={busy}
+                  placeholder="Réponse de l’assistance"
+                />
+              </Field>
+              {resolved ? (
+                <p className={styles.formNote}>
+                  Cette demande est résolue : rouvrez-la (état « {SUPPORT_STATUS.in_progress.label} ») avant d’envoyer une réponse. Votre texte est conservé.
+                </p>
+              ) : (
+                <div className={styles.actions}>
+                  <button type="submit" className="button primary" disabled={busy || Boolean(conflict)}>
+                    <Icon name="send" size={16} />
+                    {sending ? "Envoi…" : "Envoyer la réponse"}
+                  </button>
+                </div>
+              )}
+              {conflict && !resolved && <p className={styles.formNote}>Relisez la demande avant de renvoyer votre réponse.</p>}
+            </form>
+          ) : (
+            <p className={styles.formNote}>Vous ne pouvez pas répondre à cette demande.</p>
+          )}
+          {statusControl}
+          {!permissions.can_reply && !permissions.can_set_status && (
+            <p className={styles.formNote}>Aucune action n’est possible sur cette demande avec vos droits actuels.</p>
+          )}
+        </div>
+      </Panel>
+    </>
   );
 }

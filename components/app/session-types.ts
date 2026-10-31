@@ -61,8 +61,8 @@ export interface PublicSession {
   setCategory(category: Category): void;
   setError(message: string): void;
   setNotice(message: string): void;
-  /** Opens the isolated demonstration with the given role. */
-  startDemo(role?: Role, view?: View): void;
+  /** Opens the isolated demonstration with the given role, view and optional demo dossier id. */
+  startDemo(role?: Role, view?: View, param?: string): void;
   /** Keeps an anonymous request draft and routes to account creation. */
   saveDraft(values: RequestValues): void;
   /** Invitation code waiting for a login (view join-organization/CODE). */

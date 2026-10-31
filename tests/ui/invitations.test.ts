@@ -12,7 +12,7 @@ test("invitation links route to a public view and keep only well-formed codes", 
   assert.equal(INVITE_TOKEN.test("A".repeat(64)), false, "uppercase hex is not accepted by the server");
   assert.equal(INVITE_TOKEN.test("a".repeat(63)), false);
   // Over-long or non-identifier parameters are dropped before they reach a lookup.
-  assert.equal(parseHash(`#join-organization/${"a".repeat(81)}`).param, "");
+  assert.equal(parseHash(`#join-organization/${"a".repeat(121)}`).param, "");
 });
 test("authority in an organisation comes from membership, never from the global manager role", () => {
   const members = [
