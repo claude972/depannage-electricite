@@ -89,6 +89,8 @@ import {
   applicationSteps,
   appointmentSlotState,
   credentialDateLabel,
+  credentialState,
+  type CredentialState,
   credentialSummary,
   demoPlanningRange,
   fmtRating,
@@ -234,29 +236,6 @@ function seniority(createdAt: string | undefined, now: Date): string | null {
   const years = Math.floor(months / 12);
   const rest = months % 12;
   return `${years} an${years > 1 ? "s" : ""}${rest ? ` et ${rest} mois` : ""}`;
-}
-type CredentialState = {
-  key: "missing" | "expired" | "pending" | "valid";
-  label: string;
-  tone: Tone;
-  credential?: ArtisanCredential;
-};
-// "Validé" only when the operator approved the application and the piece is not expired.
-function credentialState(
-  credentials: ArtisanCredential[],
-  kind: CredentialKind,
-  applicationStatus: ArtisanApplicationStatus | undefined,
-  today: string,
-): CredentialState {
-  const credential = credentials
-    .filter((c) => c.kind === kind)
-    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
-  if (!credential) return { key: "missing", label: "Manquant", tone: "red" };
-  if (credential.expires_on && credential.expires_on < today)
-    return { key: "expired", label: "À renouveler", tone: "amber", credential };
-  if (applicationStatus === "approved")
-    return { key: "valid", label: "Validé", tone: "green", credential };
-  return { key: "pending", label: "Transmis, en attente d’examen", tone: "blue", credential };
 }
 function paymentFor(quotes: Quote[], payments: Payment[], interventionId: string) {
   const accepted = quotes.find(
@@ -2334,7 +2313,7 @@ function Documents({
   const status = dossier?.artisan_profile?.application_status;
   const states = CREDENTIAL_KINDS.map((k) => ({
     ...k,
-    state: credentialState(dossier?.credentials ?? [], k.kind, status, today),
+    state: credentialState(dossier?.credentials ?? [], k.kind, today),
   }));
   const summary = credentialSummary(states.map((s) => s.state));
   return (
@@ -2345,15 +2324,24 @@ function Documents({
           <div>
             <h2 id="documents-required">Documents obligatoires</h2>
             <p className={styles.sectionNote} style={{ margin: "4px 0 0" }}>
-              Nécessaires pour exercer sur la plateforme. L’examen des pièces est réalisé par
-              l’opérateur : un justificatif transmis n’est pas validé automatiquement.
+              Nécessaires pour exercer sur la plateforme. L’opérateur examine le dossier dans son
+              ensemble : une pièce transmise reste « transmise », aucune validation individuelle
+              n’est enregistrée.
             </p>
           </div>
           {!pending && dossier && (
-            <span className={`${styles.credCount} ${summary.complete ? styles.credCountComplete : ""}`}>
-              <Icon name="shield" size={20} />
-              {summary.label}
-            </span>
+            <div className={styles.credHeadStatus}>
+              <span className={`${styles.credCount} ${summary.complete ? styles.credCountComplete : ""}`}>
+                <Icon name="shield" size={20} />
+                {summary.label}
+              </span>
+              {/* L’approbation porte sur le dossier ; aucune pièce n’est validée individuellement (non modélisé). */}
+              {status && (
+                <Tag tone={APPLICATION_STATUS[status].tone}>
+                  Candidature : {APPLICATION_STATUS[status].label.toLowerCase()}
+                </Tag>
+              )}
+            </div>
           )}
         </div>
         {pending ? (
@@ -2427,22 +2415,8 @@ function CredentialCard({
   busy: boolean;
   onLink: () => void;
 }) {
-  const iconClass =
-    state.key === "valid"
-      ? styles.credGreen
-      : state.key === "pending"
-        ? styles.credBlue
-        : state.key === "expired"
-          ? styles.credAmber
-          : styles.credRed;
-  const icon =
-    state.key === "valid"
-      ? "shield"
-      : state.key === "pending"
-        ? "clock"
-        : state.key === "expired"
-          ? "refresh"
-          : "warning";
+  const iconClass = state.key === "pending" ? styles.credBlue : state.key === "expired" ? styles.credAmber : styles.credRed;
+  const icon = state.key === "pending" ? "clock" : state.key === "expired" ? "refresh" : "warning";
   return (
     <section className={`panel ${styles.credCard}`} aria-label={title}>
       <span className={`${styles.credIcon} ${iconClass}`}>
@@ -2606,7 +2580,7 @@ function Application({
   const today = localDate(new Date());
   const credentialStates = CREDENTIAL_KINDS.map((k) => ({
     ...k,
-    state: credentialState(dossier?.credentials ?? [], k.kind, profile?.application_status, today),
+    state: credentialState(dossier?.credentials ?? [], k.kind, today),
   }));
   return (
     <>
@@ -3121,7 +3095,7 @@ function Profile({
   const verified = session.profile?.artisan_approved === true;
   const today = localDate(now);
   const transmitted = CREDENTIAL_KINDS.filter(
-    (k) => credentialState(dossier?.credentials ?? [], k.kind, artisan?.application_status, today).key !== "missing",
+    (k) => credentialState(dossier?.credentials ?? [], k.kind, today).key !== "missing",
   ).length;
   const since = seniority(session.profile?.created_at, now);
   return (
