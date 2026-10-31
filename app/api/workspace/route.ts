@@ -73,6 +73,16 @@ export async function GET() {
         ? await db.rpc("available_missions")
         : { data: [], error: null };
     dbError(offers.error);
+    // Latest saved appointments only for dossiers already readable/loaded in this response.
+    // Unassigned offers never gain an address, note or participant through this projection.
+    const loadedIds = (jobs.data ?? []).map((job: { id: string }) => job.id);
+    const appointments = loadedIds.length
+      ? await db.from("intervention_appointments")
+          .select("intervention_id,starts_at,ends_at,note,updated_by,updated_at", { count: "exact" })
+          .in("intervention_id", loadedIds)
+          .order("starts_at", { ascending: true }).order("intervention_id").limit(200)
+      : { data: [], error: null, count: 0 };
+    dbError(appointments.error);
     return Response.json(
       {
         profile: profile.data,
@@ -86,6 +96,9 @@ export async function GET() {
         payments: payments.data,
         organization_members: members.data,
         artisan_profile: artisanProfile.data,
+        appointments: appointments.data,
+        appointments_limit: 200,
+        appointments_limited: (appointments.count ?? 0) > 200,
       },
       { headers: { "Cache-Control": "private, no-store" } },
     );
