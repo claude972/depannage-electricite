@@ -10,6 +10,8 @@ import { pathToFileURL } from 'node:url';
 import { HELP, Blocked, hash, bounded, parseArgs, verifyBuild, identity, chromeAppId, collision, attributable, baselineUnchanged, absentRegistry, canUninstall, proofMatches, resultStatus, createGate, onceAsync, sameProcess, profileRemovalAllowed } from './lib.mjs';
 import {createPipeClient,unavailablePwa,bindPwaChannel} from './pipe.mjs';
 import {validateRecovery,recoveryEffectAllowed,readRegistry,validateAdoption,adoptFolder,removeAdoptedFolder,inspectSingletonLock,assertSameLock} from './recovery.mjs';
+import {targetDiagnostic,selectLaunchedPage} from './targets.mjs';
+import {validRunFolder,readGeneratedMetadata,adoptNormalPostClose,observeOriginalMutation} from './normal-cleanup.mjs';
 
 const exec = promisify(execFile);
 const pause = ms => new Promise(r => setTimeout(r,ms));
@@ -171,6 +173,19 @@ async function main(argv) {
     try { await bounded(pwa.send('PWA.getOsAppState',{manifestId:state.identity.manifestId}),8000,'registry read'); return true; }
     catch(e) { if (absentRegistry(e)) return false; throw e; }
   }
+  const generatedPath=path.join(os.homedir(),'Applications','Chromium Apps.localized');
+  async function rememberGeneratedFolder(){
+    if(recovery||state.baseline.some(b=>b.path===generatedPath))return;
+    gate.check();if(!await present(generatedPath))return;gate.check();
+    const st=await plain(generatedPath,true);gate.check();
+    if(!validRunFolder(st,state.startedAt,process.getuid()))throw new Blocked('new generated folder not owned by current run');
+    if(state.generatedFolder&&state.generatedFolder.inode!==st.ino)throw new Blocked('generated folder replaced during install');
+    if(!state.generatedFolder){state.generatedFolder={path:generatedPath,inode:st.ino,birthtimeMs:st.birthtimeMs,uid:st.uid};await save();gate.check();}
+    const locPath=path.join(generatedPath,'.localized');if(!await present(locPath))return;gate.check();const loc=await plain(locPath,true);gate.check();
+    if(!validRunFolder(loc,state.startedAt,process.getuid()))throw new Blocked('new localization folder not owned by run');
+    if(state.generatedFolder.localizedInode&&state.generatedFolder.localizedInode!==loc.ino)throw new Blocked('localization directory replaced during install');
+    if(!state.generatedFolder.localizedInode){state.generatedFolder.localizedInode=loc.ino;state.generatedFolder.localizedBirthtimeMs=loc.birthtimeMs;await save();gate.check();}
+  }
   async function stopChild() {
     if (!child) return true;
     if (child.exitCode !== null || child.signalCode !== null) return true;
@@ -207,6 +222,7 @@ async function main(argv) {
     try { state.ownedHelpers=child&&await owned()?await descendants(child.pid):[];await save(); }catch(e){cleanup.errors.push(e.message);}
     try { if (cdp && await owned()) await Promise.race([cdp.send('Browser.close').catch(()=>{}),pause(2000)]); } catch(e) { cleanup.errors.push(e.message); }
     cleanup.browserExited=await stopChild().catch(e => {cleanup.errors.push(e.message);return false;});
+    state.browserExitedAt=Date.now();
     try{pipe?.close();}catch(e){cleanup.errors.push(e.message);}
     // After owned process exit, no late browser installation/window can materialize.
     try {
@@ -225,6 +241,17 @@ async function main(argv) {
         if((await pendingShimProcesses(newBundles)).length)throw new Error('shim process still live; shared folder preserved');
         for(const helper of state.ownedHelpers||[])if(sameProcess(helper,await processFact(helper.pid)))throw new Error('helper still live; shared folder preserved');
         await removeAdoptedFolder(pf.folderAdoption,record);cleanup.sharedFolderRemoved=true;
+      }
+      if(!recovery&&state.generatedInitial&&cleanup.registryAbsent&&cleanup.browserExited&&!pending){
+        const local=JSON.parse(await readFile(path.join(state.profileRoot,'Local State'),'utf8'));
+        if(Object.keys(local.app_shims||{}).length)throw new Error('normal-run app_shims remain after close');
+        const before=await snapshot();if(before.some(b=>collision(b,state.identity))||!baselineUnchanged(state.baseline,before))throw new Error('normal-run shim/baseline not clean before metadata adoption');
+        if((await pendingShimProcesses(newBundles)).length)throw new Error('normal-run shim process still alive');
+        for(const helper of state.ownedHelpers||[])if(sameProcess(helper,await processFact(helper.pid)))throw new Error('normal-run helper still alive');
+        state.osQuiescentAt=Date.now();const post=await readGeneratedMetadata(generatedPath);
+        state.generatedPostClose=adoptNormalPostClose(state.generatedInitial,post,{baseline:state.baseline,start:state.startedAt,closedAt:state.osQuiescentAt,uid:process.getuid(),observed:state.generatedFolder});
+        await record('adopt-normal-post-close-metadata',{folder:state.generatedPostClose});
+        await removeAdoptedFolder(state.generatedPostClose,record);cleanup.sharedFolderRemoved=true;
       }
       const after=await snapshot(); cleanup.baselineUnchanged=baselineUnchanged(state.baseline,after);
       cleanup.shimsAbsent=!after.some(b => collision(b,state.identity) || (state.profileRoot && String(b.plist.CrAppModeUserDataDir).startsWith(`${state.profileRoot}/`)));
@@ -298,26 +325,58 @@ async function main(argv) {
     // A second recognized domain response rules out treating a one-off transport error as absence.
     if (await registry()) throw new Blocked('app registry changed before install');gate.check();
     await mutation('install',async()=>{
-      await pwa.send('PWA.install',{manifestId:state.identity.manifestId,installUrlOrBundleUrl:state.identity.startUrl});
+      const install=pwa.send('PWA.install',{manifestId:state.identity.manifestId,installUrlOrBundleUrl:state.identity.startUrl});
+      await observeOriginalMutation(install,rememberGeneratedFolder,{gate,pause:()=>pause(100)});
     },{manifestId:state.identity.manifestId});
     gate.check();state.proofs.installed=await registry();
     }
     const bundle=await waitFor(async()=>{const all=await snapshot();let localState;try{localState=await readRegistry(state.profileRoot,state.identity.appId);}catch{return null;}const b=all.filter(x=>attributable(x,state.identity,state.profileRoot,state.baseline,localState));return b.length===1?b[0]:null;});
     if(bundle.plist.CrBundleIdentifier!==state.browserBundleId)throw new Blocked('shim browser bundle mismatch');
     state.bundle=bundle;state.proofs.shim=true;await save();gate.check();
+    if(!recovery&&state.generatedFolder){
+      const initial=await waitFor(async()=>{await rememberGeneratedFolder();try{return await readGeneratedMetadata(generatedPath,bundle.path,{allowPending:true});}catch(e){if(e.code==='ENOENT')return null;throw e;}});gate.check();
+      adoptNormalPostClose(initial,initial,{baseline:state.baseline,start:state.startedAt,closedAt:Date.now(),uid:process.getuid(),observed:state.generatedFolder});
+      state.generatedInitial=initial;await save();gate.check();
+    }
     await mutation('standalone',()=>pwa.send('PWA.changeAppUserSettings',{manifestId:state.identity.manifestId,displayMode:'standalone'}));
     async function launch(label) {
+      state.phase=`${label}:command`;await save();gate.check();
       const result=await mutation(label,()=>pwa.send('PWA.launch',{manifestId:state.identity.manifestId}));gate.check();
       const target=result.targetId;if (!target) throw new Error('launch returned no target');
-      const p=await waitFor(async()=>{for(const candidate of browser.contexts()[0].pages()){const s=await candidate.context().newCDPSession(candidate);try{const r=await bounded(s.send('Target.getTargetInfo'),3000,'target identity');if(r.targetInfo.targetId===target)return candidate;}finally{await s.detach();}}return null;});
+      state.targetDiagnostics??={};const diagnostic=state.targetDiagnostics[label]={returnedTargetId:target,returnedAt:Date.now(),snapshots:[]};await save();gate.check();
+      const targetInfo=await bounded(cdp.send('Target.getTargetInfo',{targetId:target}),3000,`${label}:returned-target`);gate.check();
+      if(targetInfo.targetInfo.targetId!==target)throw new Blocked('returned launch target identity changed');
+      const launchWindow=await bounded(cdp.send('Browser.getWindowForTarget',{targetId:target}),3000,`${label}:returned-window`);gate.check();
+      diagnostic.returned=targetDiagnostic(targetInfo.targetInfo,launchWindow);state.phase=`${label}:resolve-page`;await save();gate.check();
+      const deadline=Date.now()+15000;let p,lastFingerprint='';
+      const remaining=()=>{gate.check();const left=deadline-Date.now();if(left<=0)throw new Blocked(`${label}:resolve-page timed out (15000ms)`);return Math.min(left,3000);};
+      while(!p){
+        remaining();const candidates=[],pages=browser.contexts()[0].pages();if(pages.length>20)throw new Blocked('too many owned page targets to resolve safely');
+        for(const [index,candidate] of pages.entries()){
+          gate.check();const session=await candidate.context().newCDPSession(candidate);gate.check();
+          try{
+            const info=await bounded(session.send('Target.getTargetInfo'),remaining(),`${label}:candidate-target`);gate.check();
+            const w=await bounded(cdp.send('Browser.getWindowForTarget',{targetId:info.targetInfo.targetId}),remaining(),`${label}:candidate-window`);gate.check();
+            candidates.push({...targetDiagnostic(info.targetInfo,w),index});
+          }finally{await session.detach();}
+        }
+        const fingerprint=hash(JSON.stringify(candidates));
+        if(fingerprint!==lastFingerprint){if(diagnostic.snapshots.length>=20)throw new Blocked('target diagnostic snapshot limit reached');diagnostic.snapshots.push({at:Date.now(),candidates});if(Buffer.byteLength(JSON.stringify(diagnostic.snapshots))>128*1024)throw new Blocked('target diagnostic byte limit reached');lastFingerprint=fingerprint;await save();gate.check();}
+        const selected=selectLaunchedPage(diagnostic.returned,candidates);if(selected){p=pages[selected.index];diagnostic.selected=selected;await save();gate.check();}else await pause(100);
+      }
+      state.phase=`${label}:verify-page`;await save();gate.check();
       await p.waitForLoadState('domcontentloaded',{timeout:15000});gate.check();
       await p.waitForFunction(()=>document.readyState!=='loading'&&document.visibilityState==='visible'&&matchMedia('(display-mode: standalone)').matches,{},{timeout:15000});gate.check();
       if (p.url()!==state.identity.startUrl || !/Courant/.test(await p.title())) throw new Error('launched page is not product');
+      const selectedSession=await p.context().newCDPSession(p);gate.check();
+      try{const manifest=await bounded(selectedSession.send('Page.getAppManifest',{manifestId:state.identity.manifestId}),8000,`${label}:selected-manifest`);gate.check();if(manifest.url!==pf.manifestUrl||!manifest.data||identity(JSON.parse(manifest.data),manifest.url,o.origin).manifestId!==state.identity.manifestId)throw new Blocked('selected app manifest mismatch');}finally{await selectedSession.detach();}
       const w=await bounded(cdp.send('Browser.getWindowForTarget',{targetId:target}),8000,'window identity');gate.check();
+      const pageWindow=await bounded(cdp.send('Browser.getWindowForTarget',{targetId:diagnostic.selected.targetId}),3000,'selected page window identity');gate.check();
+      if(w.windowId!==launchWindow.windowId||pageWindow.windowId!==launchWindow.windowId)throw new Blocked('launched window changed during page verification');
       if (!(w.bounds.width>0&&w.bounds.height>0) || w.bounds.windowState==='minimized') throw new Error('window not visible');
       await p.screenshot({path:path.join(out,`${label}-content.png`)});gate.check();
       await chmod(path.join(out,`${label}-content.png`),0o600);gate.check();
-      state[label]={targetId:target,windowId:w.windowId,bounds:w.bounds,at:Date.now()};await save();return {page:p,...state[label]};
+      state[label]={targetId:target,pageTargetId:diagnostic.selected.targetId,windowId:w.windowId,bounds:w.bounds,at:Date.now()};await save();return {page:p,...state[label]};
     }
     const first=await launch('launch');state.proofs.window=true;
     state.phase='await-os-proof';state.proofRequest={kind:'macos-visible-window',runId:state.runId,appId:state.identity.appId,windowId:first.windowId,browserPid:state.browserPid,nonce:randomBytes(16).toString('hex'),startedAt:first.at};await save();
@@ -332,7 +391,8 @@ async function main(argv) {
       state.osProof={...proof,capture:path.basename(proof.capture)};return true;
     },o.proofTimeoutMs);state.proofs.osProof=true;await save();gate.check();
     await mutation('close-first-window',()=>first.page.close());gate.check();
-    const second=await launch('relaunch');if(second.targetId===first.targetId)throw new Error('relaunch reused closed target');state.proofs.relaunched=true;await save();
+    await waitFor(async()=>{try{await bounded(cdp.send('Target.getTargetInfo',{targetId:first.targetId}),2000,'closed app target');return false;}catch(e){if(/No target with given id found/.test(e.message))return true;throw e;}});gate.check();
+    const second=await launch('relaunch');if(second.targetId===first.targetId||second.pageTargetId===first.pageTargetId)throw new Error('relaunch reused closed target');state.proofs.relaunched=true;await save();
   } catch(e) { if(!state.error)state.error={kind:e instanceof Blocked||unavailablePwa(e)?'Blocked':'Error',message:String(e.message).slice(0,500)}; }
   finally {
     const code=await finalize();process.removeListener('SIGINT',sigint);process.removeListener('SIGTERM',sigterm);return interrupted?Math.max(code,2):code;
