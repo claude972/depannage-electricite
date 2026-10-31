@@ -339,3 +339,103 @@ Vérifié (démo, script hors dépôt) : cloche visible 44 × 44 et active dans 
   `anchors-rev-reports-sla-1280.jpg`. Tests : visibilité opérateur limité pour artisan / particulier / entreprise par le
   garde `canAccess` réel, mode public sans entrée ; suite UI 89/89. Limite : la démo ne fournit `platformAccess` qu’au
   rôle Super Admin, la présence des entrées pour un opérateur limité est prouvée par les tests, pas par capture.
+
+## Addendum — espace client (M61 / V8-C06 / V8-C07)
+
+Publié **avant** toute modification de code de l’espace client (transfert consigné dans `docs/CLAUDE_STATUS.md`).
+Branche `claude/web-design-client`, base `f58b3f4` (`claude/web-shared`). Références maîtresses : **M61** (volume 4
+p14) pour l’accueil mobile, **V8-C06** (volume 8 p7) pour le devis, **V8-C07** (volume 8 p8) pour le détail
+d’intervention. Les planches ne sont pas dans le dépôt : elles ont été rendues depuis les PDF nommés dans
+`docs/audit/INVENTAIRE_SOURCES.json` (PyMuPDF, zoom 1,6) vers `/tmp/claude-client-ref/{M61,V8-C06,V8-C07}.png`
+(empreintes SHA-256 des images d’origine dans l’inventaire). Captures « avant » prises sur la démo locale
+(`next dev -p 3191`, Chromium headless 1248 piloté par un script Playwright hors dépôt, 360 × 800 et 1280 × 900,
+page entière) : `docs/visual-fidelity/client-{overview,detail,quote}-{360,1280}-before.jpg` (`#demo/client`,
+`#demo/client-detail.demo-003`, `#demo/client-quote.quote-demo-1`).
+Fichiers du lot : `components/role/client-space.tsx`, `client.module.css`, `components/role/client-lists.ts` (logique
+pure, créé au premier checkpoint), `tests/ui/client-*.test.ts`, cette section, `docs/visual-fidelity/client-*`.
+Présentation seulement : devis (acceptation/refus par `session`), règlements, téléversements, assistance, ancrages
+notifications / documents de devis / plateforme (`*-anchor.tsx`, `anchors.ts`) restent appelés à l’identique, avec les
+mêmes props.
+
+### Règle sur les données
+
+Les éléments des planches sans source serveur ne sont **jamais fabriqués** : note et nombre d’avis de l’artisan,
+« Profil vérifié / Certifié », années d’expérience, spécialité, photo, « Garantie satisfaction 30 jours »,
+« Annulation gratuite jusqu’à 48 h », « Paiement sécurisé » comme promesse, point rouge de notification sans compteur,
+carte et vignettes photo. Seules les données chargées sont affichées : catégorie, adresse, état, dates enregistrées,
+lignes/TVA/totaux calculés serveur, coordonnées réelles du participant, règlement confirmé par la plateforme,
+compteurs de messages reçus. Les absences restent explicites (« Carte non disponible », « Aucune photo jointe »,
+« Téléphone non communiqué »).
+
+### M61 — accueil mobile (`#demo/client`, < 1024 px)
+
+| Élément de la référence | Composant / section existant | Écart constaté (f58b3f4) | Correction prévue |
+| --- | --- | --- | --- |
+| Barre haute : logo + cloche avec point | `.mobileHeader` : marque compacte, `HeaderBell` (ancrage notifications), bouton Messages avec point si messages reçus | Conforme ; bouton marque 42 px de haut (cible < 44). | Cible 44 px. **Écart assumé** : point de cloche seulement avec un compteur réel (ancrage), jamais décoratif. |
+| « Bonjour » + « Comment pouvons-nous vous aider ? » | `.hello` | Conforme (prénom réel). | — |
+| CTA bleu « ⚡ J’ai besoin d’un électricien › » sur une ligne | `.ctaButton` | Libellé sur deux lignes à 360 (18 px). | Libellé 16 px sur une ligne à 360, tuile icône 40 px, chevron à droite ; hauteur ≥ 56 px. |
+| « Actions rapides » + « Voir tout › » ; 4 tuiles (icône bleue, libellé 2 lignes) | `.sectionRow` + `.tiles` (4 catégories réelles) | Conforme ; libellés sur 2 lignes. | — |
+| « Interventions récentes » + « Voir tout › » ; carte : tuile calendrier teintée, titre, adresse, **état en bleu à gauche et date à droite sur une ligne**, « ⋯ » | `.recentList` > `.recentRow` (icône catégorie, titre, adresse, `Badge` + date, chevron) | État et date se replient sur deux rangées (pastille haute, « Recherche d’un artisan » sur 2 lignes) ; date non alignée à droite. | Rangée état/date en `space-between`, état sur une ligne (pastille compacte `nowrap`, texte jamais couleur seule), date alignée à droite ; titre 1 ligne (ellipse), adresse 1 ligne (inchangé). **Écart assumé** : chevron au lieu de « ⋯ » (aucune action secondaire sur la ligne). |
+| Onglets bas Accueil / Demandes / Messages (badge) / Profil | `.bottomNav` (4 entrées, badge Messages réel) | Conforme (icône 22 px, libellé 12 px). | Vérification 44 px seulement. |
+| Hors référence : bandeau de démonstration | `.demoBanner` | — | Conservé (démo explicite). |
+| Desktop (hors M61, composition tableau de bord existante) | `.desktopOnly` : accueil, bandeau de 3 compteurs réels, « Un devis attend votre décision », récentes, catégories, colonne d’aide | Liens texte « Comprendre les étapes » (26 px) et « Consulter l’aide » (25 px) sous 44 px (classes globales). | Classes du module ajoutées sur ces deux boutons pour une cible ≥ 44 px, sans toucher `globals.css`. |
+
+### V8-C06 — devis (`#demo/client-quote.quote-demo-1`)
+
+| Élément de la référence | Composant / section existant | Écart constaté | Correction prévue |
+| --- | --- | --- | --- |
+| « ← Devis #D1258 / Reçu le 20 mai 2024 à 10:30 » | `PageTitle` (retour au dossier, référence `quoteRef`, « Reçu le … ») | Conforme (titre à gauche). | — |
+| Bouclier vert « Étudiez tranquillement le devis » | `.quoteNote` (icône bouclier, bleu) | Conforme en structure. | **Écart assumé** : bleu action (DESIGN.md : vert réservé aux réussites). |
+| Carte « Devis accepté = tranquillité assurée » (artisan sélectionné avec soin, garantie 30 jours, paiement sécurisé) + illustration | aucune | Absente. | **Écart assumé** : non reproduite (promesses commerciales non établies, cf. AGENTS.md). |
+| « Détail du devis » + lien « Télécharger le devis (PDF) » à droite | tableau sans en-tête de section ; bloc `Unavailable` « Télécharger le devis (PDF) » (CLI-07) en bas de page | L’ancrage documents de devis (lot ADV-DOCUMENTS-001, `QuoteDocumentsAnchor`) fournit désormais le PDF ; le bloc CLI-07 est contradictoire et le panneau documents s’intercale **entre le tableau et la décision**, repoussant Accepter/Refuser en bas d’une page de 3 000 px à 360. | En-tête de section « Détail du devis » avec lien texte « Télécharger le devis (PDF) » qui **fait défiler** jusqu’au panneau documents (aucun `location.hash`, aucune nouvelle requête) ; bloc CLI-07 retiré ; ordre de la référence rétabli : note → tableau → artisan → décision → panneau documents/avenants (ancrage inchangé, mêmes props) → récapitulatif texte. |
+| Tableau Prestation / prix unitaire / Prix ; Sous-total HT, TVA (10 %), **TOTAL TTC** sur fond vert | `.quoteTable` (Prestation / Quantité × PU HT / Prix, pied avec TVA réelle et Total TTC bleu pâle) | « 1 × 60,00 € » replié sur 2 lignes à 360. | Colonne quantité × PU en `nowrap`, libellé seul repliable ; Total TTC mis en avant (bleu pâle, 18 px). **Écart assumé** : pas de fond vert. |
+| Carte « Artisan recommandé » : photo, nom, spécialité, expérience, note, « Profil vérifié », « Contacter » | `.artisanRow` (initiales, nom réel, « Artisan électricien ayant établi ce devis », Contacter) | Conforme en structure. | Intitulé de carte « Artisan » ; **écart assumé** : aucune note, expérience, vérification ni photo (données absentes). |
+| Bouton vert « ✓ Accepter le devis / Je suis satisfait… » puis cadre rouge « ✕ Refuser / Je ne souhaite pas… » | `.quoteActions` : « Accepter le devis » (primary) + « Refuser » (outline), formulaire de motif | Conforme en fonction ; placé après le panneau documents. | Remonté sous la carte artisan ; pleine largeur à 360, côte à côte dès 761 px. **Écart assumé** : bleu action / contour neutre (pas de vert/rouge pleins), pas de sous-titres promettant satisfaction. |
+| Pied « 🔒 Paiement sécurisé • Annulation gratuite jusqu’à 48 h » | `form-note` sur le récapitulatif | — | **Écart assumé** : non reproduit (conditions non établies). |
+
+### V8-C07 — détail d’intervention (`#demo/client-detail.demo-003`)
+
+| Élément de la référence | Composant / section existant | Écart constaté | Correction prévue |
+| --- | --- | --- | --- |
+| « ‹ Détail de l’intervention ⇪ » | `PageTitle` + retour | Conforme ; pas de partage. | **Écart assumé** : pas d’action de partage (aucun lien public). |
+| Carte statut : tuile icône, « Statut / En cours / Intervention n° », 4 étapes Demandée / En cours / À planifier / Terminée | `.statusCard` + `.stepper` (5 étapes Demandée / Artisan / Devis / Intervention / Terminée, numéros/coches) | Conforme ; libellés 11 px. | Libellés 12 px, cercles 30 px ; **écart assumé** : 5 étapes alignées sur les statuts réels (« À planifier » n’est pas un statut). |
+| « Artisan assigné » + « Contacter » ; carte photo, nom, « plombier – Certifié ✓ », téléphone, ★ 4,9 (128 avis) | `.cardHead` + `.artisanRow` (initiales, nom, téléphone réel ou « non communiqué ») | Conforme. | **Écart assumé** : pas de spécialité, certification, note ni photo. |
+| « Adresse de l’intervention » + carte miniature | `.addressCard` : adresse + `Unavailable` « Carte non disponible » | Bloc indisponible volumineux. | `Unavailable` rendu compact (icône + titre + raison sur une ligne à 1280, 2 à 360) via une classe du module ; adresse en premier. **Écart assumé** : pas de carte (aucun fournisseur). |
+| « Description du problème » + pastille « Catégorie : Plomberie » | `.card` + `.tagRow` (catégorie réelle, urgence, estimation indicative) | Conforme. | — |
+| « Photos du problème (3) » vignettes défilantes | liste de noms de fichiers + lien « Gérer les pièces » | Pas de vignettes. | **Écart assumé** : documents privés servis à la demande ; liste conservée, compte réel dans le titre. |
+| « Devis & résumé » : lignes, **Total TTC** bleu, « ⓘ Devis accepté le … », « Voir le devis » | `.lines` + `.totals` + `.quoteFoot` | Conforme. | Lignes avec libellé repliable et montant `nowrap` à 360. |
+| « Historique & avancement » : chronologie icônes, états Terminé / En cours / À venir à droite | `.history` | Conforme. | — |
+| Pied : « Annuler l’intervention ⊗ » (contour) + « Modifier le rendez-vous » (bleu) | `.actionBar` : annulation (texte danger, confirmation) + action principale selon l’état ; rendez-vous modifiable dans sa carte | Conforme en fonction. | Annulation en bouton contour 44 px (confirmation inchangée). **Écart assumé** : modification du rendez-vous dans la carte Rendez-vous (formulaire existant), pas de bouton dupliqué. |
+| Hors référence : Déplacement, Compte rendu, Règlement, Avis, Suivi après intervention, file de téléversement | sections existantes | — | Conservées (fonctions réelles). |
+
+### Règles responsive
+
+- **360** : une colonne ; barre haute collante, onglets bas fixes (≥ 60 px + zone sûre) ; CTA pleine largeur sur une
+  ligne ; tuiles 4 colonnes (M61) ; lignes récentes titre / adresse / état + date ; tableau de devis avec libellé
+  repliable et montants `nowrap` ; décision Accepter puis Refuser empilées pleine largeur ; stepper sur une rangée
+  (5 cercles 30 px) ; aucun défilement horizontal.
+- **760** : mêmes composants ; décision côte à côte ; `cardHead` avec action à droite ; tuiles 4 colonnes.
+- **1280** : barre latérale 240 px, contenu ≤ 1180 px ; tableau de bord desktop existant (3 compteurs réels) ;
+  onglets bas et en-tête mobile masqués (règles existantes) ; carte statut : texte à gauche, stepper à droite.
+
+### Accessibilité ciblée
+
+- Cibles ≥ 44 × 44 : marque mobile (42 → 44), liens texte du tableau de bord desktop (26/25 → 44), onglets bas,
+  tuiles, lignes récentes, boutons de décision, « Télécharger le devis (PDF) » (lien texte 44), annulation (44).
+  Mesure automatisée à 360 et 1280 sur les trois vues : objectif 0 élément interactif visible < 44 px (hors
+  indicateur de développement Next).
+- Focus visible : anneau global ; ordre de lecture : titre → statut → sections → actions.
+- Contraste sur les tokens : blanc sur `#1457d9` 5,4:1 ; `#526178` sur blanc 6,3:1 ; état jamais porté par la
+  couleur seule (pastilles textuelles).
+
+### Vérification : par test ou par capture
+
+| Par test (`tests/ui/client-lists.test.ts`, logique pure dans `client-lists.ts`) | Par capture (démo 360 / 1280, script Playwright hors dépôt) |
+| --- | --- |
+| Descripteur d’une ligne récente (libellé d’état, date, adresse sur une ligne) ; état de décision d’un devis (actif / remplacé / accepté / clos) à partir des versions réelles ; cellules d’une ligne de devis (quantité × PU, total HT de ligne) ; étape courante du stepper et chronologie du détail (dates enregistrées seulement, « — » sinon, « À venir » après l’étape courante) ; compte de photos. | Composition M61 / V8-C06 / V8-C07 ; ordre note → tableau → artisan → décision → documents ; 0 cible < 44 px ; aucun débordement horizontal ; console sans erreur ; libellés longs (adresse, prestation). |
+
+### Checkpoints prévus
+
+1. Accueil M61 + cibles desktop — captures `client-overview-{360,1280}-after.jpg`.
+2. Devis V8-C06 — captures `client-quote-{360,1280}-after.jpg`.
+3. Détail V8-C07 — captures `client-detail-{360,1280}-after.jpg`.
