@@ -233,6 +233,8 @@ begin
  if am.artisan_id is distinct from auth.uid() then raise insufficient_privilege; end if;
  perform public.lock_intervention_organization(am.intervention_id);
  select * into job from public.interventions where id=am.intervention_id for share;
+ -- The author must still be the attributed artisan with current access to the dossier.
+ if job.artisan_id is distinct from auth.uid() or not public.can_access_intervention(job.id) then raise insufficient_privilege; end if;
  select * into am from public.quote_amendments where id=p_id for update;
  if am.status<>'proposed' then raise exception 'Amendment already decided' using errcode='P0001'; end if;
  perform public.consume_action('quote_amendment',20);
@@ -250,7 +252,7 @@ begin
  if not found then raise no_data_found; end if;
  perform public.lock_intervention_organization(am.intervention_id);
  select * into job from public.interventions where id=am.intervention_id for update;
- if not public.owns_intervention(job.id) then raise insufficient_privilege; end if;
+ if not public.owns_intervention(job.id) or not public.can_access_intervention(job.id) then raise insufficient_privilege; end if;
  if p_decision is null or p_decision not in ('accepted','rejected') or p_note is null or char_length(p_note)>2000 then raise invalid_parameter_value; end if;
  select * into am from public.quote_amendments where id=p_id for update;
  if am.status<>'proposed' then raise exception 'Amendment already decided' using errcode='P0001'; end if;
@@ -283,7 +285,11 @@ begin
  if not found then raise no_data_found; end if;
  perform public.lock_intervention_organization(q.intervention_id);
  select * into job from public.interventions where id=q.intervention_id for share;
- if not coalesce(q.artisan_id=auth.uid() or public.owns_intervention(job.id) or public.is_admin(),false) then raise insufficient_privilege; end if;
+ -- Current access only, under the dossier lock: historical authorship is never sufficient. An
+ -- artisan-issued document requires the author to still be the attributed artisan; owners and
+ -- admins are checked through the current helpers (site grants, membership, role).
+ if not public.can_access_intervention(job.id) then raise insufficient_privilege; end if;
+ if not coalesce((q.artisan_id=auth.uid() and job.artisan_id=auth.uid()) or public.owns_intervention(job.id) or public.is_admin(),false) then raise insufficient_privilege; end if;
  -- Serializes generation per quote and keeps acceptance ordered against the snapshot.
  select * into q from public.quotes where id=p_quote_id for update;
  if p_amendment_id is not null then
@@ -340,7 +346,7 @@ begin
     'terms',(select jsonb_build_object('valid_until',t.valid_until,'validity',public.quote_validity_state(t.valid_until),'updated_at',t.updated_at) from public.quote_terms t where t.quote_id=q.id),
     'permissions',jsonb_build_object(
      'can_set_terms',is_artisan and approved and q.artisan_id=auth.uid() and q.status='sent',
-     'can_generate',q.artisan_id=auth.uid() or can_manage or admin,
+     'can_generate',(is_artisan and q.artisan_id=auth.uid()) or can_manage or admin,
      'can_propose',is_artisan and approved and q.artisan_id=auth.uid() and q.status='accepted' and job.status in ('accepted','in_progress')
       and not exists(select 1 from public.quote_amendments a where a.base_quote_id=q.id and a.status='proposed')),
     'documents',(select coalesce(jsonb_agg(public.quote_document_json(d) order by d.revision desc),'[]'::jsonb) from public.quote_documents d where d.quote_id=q.id and d.amendment_id is null),
@@ -348,7 +354,7 @@ begin
       'permissions',jsonb_build_object(
        'can_decide',can_manage and a.status='proposed' and job.status in ('accepted','in_progress'),
        'can_withdraw',is_artisan and a.artisan_id=auth.uid() and a.status='proposed',
-       'can_generate',q.artisan_id=auth.uid() or can_manage or admin),
+       'can_generate',(is_artisan and q.artisan_id=auth.uid()) or can_manage or admin),
       'documents',(select coalesce(jsonb_agg(public.quote_document_json(d) order by d.revision desc),'[]'::jsonb) from public.quote_documents d where d.amendment_id=a.id)
      ) order by a.version desc),'[]'::jsonb) from public.quote_amendments a where a.base_quote_id=q.id)
    ) order by q.created_at desc,q.id),'[]'::jsonb) from public.quotes q where q.intervention_id=p_intervention_id),

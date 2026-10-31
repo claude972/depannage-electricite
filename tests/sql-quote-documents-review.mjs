@@ -51,9 +51,9 @@ for(const fn of ['quote_document_snapshot(uuid,uuid)','quote_document_issuer(uui
 console.log('PASS: only the seven commands are callable by authenticated; snapshot/issuer/guard stay private');
 
 const ids={};let index=1;
-for(const actor of ['client','otherClient','artisan','otherArtisan','manager','viewer','admin']){
+for(const actor of ['client','otherClient','artisan','otherArtisan','manager','viewer','delegate','admin']){
  ids[actor]=`70000000-0000-4000-8000-${String(index++).padStart(12,'0')}`;
- const role=actor==='artisan'||actor==='otherArtisan'?'artisan':actor==='manager'||actor==='viewer'?'manager':'client';
+ const role=actor==='artisan'||actor==='otherArtisan'?'artisan':actor==='manager'||actor==='viewer'||actor==='delegate'?'manager':'client';
  await db.query('insert into auth.users(id,raw_user_meta_data,email,email_confirmed_at) values($1,$2,$3,now())',[ids[actor],JSON.stringify({role,full_name:actor==='artisan'?'Jean QA':actor}),`${actor.toLowerCase()}@example.invalid`]);
 }
 await db.query("update public.profiles set role='admin' where id=$1",[ids.admin]);
@@ -223,8 +223,53 @@ await rejectsCode(overview('viewer',b2b),'42501');
 assert.equal((await as('viewer','select * from public.quote_documents where quote_id=$1',[b2bQuote])).rows.length,0);
 await rejectsCode(download('viewer',b2bDoc.document.id),'P0002');
 const moved=await newJob();const movedQuote=await sendQuote(moved);
+const movedDoc=await generate('artisan',movedQuote);assert.equal(movedDoc.created,true);
+assert.equal((await overview('artisan',moved)).quotes[0].permissions.can_generate,true);
 await as('admin',"select public.reassign_intervention($1,$2,'Réaffectation QA')",[moved,ids.otherArtisan]);
 await rejectsCode(terms('artisan',movedQuote,future),'42501');
 await rejectsCode(overview('artisan',moved),'42501');
+// Historical authorship is never sufficient: the previous artisan can neither generate nor download.
+await rejectsCode(generate('artisan',movedQuote),'42501');
+await rejectsCode(download('artisan',movedDoc.document.id),'P0002');
+assert.equal((await as('artisan','select * from public.quote_documents where quote_id=$1',[movedQuote])).rows.length,0);
+// The new artisan is not the issuer of that quote: no artisan-issued document either; the owner still can.
+await rejectsCode(generate('otherArtisan',movedQuote),'42501');
+assert.equal((await overview('otherArtisan',moved)).quotes[0].permissions.can_generate,false);
+assert.equal((await generate('client',movedQuote)).created,true,'rejected status is a new snapshot for the owner');
+console.log('PASS: after reassignment the previous artisan cannot generate/download/set terms; the new artisan is not the issuer; the owner keeps access');
+// Simulated withdrawal of the assignment on an accepted quote with an amendment (no business path
+// reassigns an accepted job today; the harness simulates it with a service-role update).
+const withdrawn=await propose('artisan',guardedQuote,lines,20,'Avant retrait');
+const withdrawnDoc=await generate('artisan',guardedQuote,withdrawn.id);assert.equal(withdrawnDoc.document.kind,'amendment');
+await db.query('update public.interventions set artisan_id=$2 where id=$1',[guarded,ids.otherArtisan]);
+await rejectsCode(generate('artisan',guardedQuote),'42501');
+await rejectsCode(generate('artisan',guardedQuote,withdrawn.id),'42501');
+await rejectsCode(withdraw('artisan',withdrawn.id),'42501');
+await rejectsCode(download('artisan',withdrawnDoc.document.id),'P0002');
+await rejectsCode(overview('artisan',guarded),'42501');
+await rejectsCode(generate('otherArtisan',guardedQuote),'42501');
+await rejectsCode(generate('otherArtisan',guardedQuote,withdrawn.id),'42501');
+await rejectsCode(withdraw('otherArtisan',withdrawn.id),'42501');
+const otherView=await overview('otherArtisan',guarded);
+assert.equal(otherView.quotes[0].permissions.can_generate,false);assert.equal(otherView.quotes[0].amendments[0].permissions.can_withdraw,false);assert.equal(otherView.quotes[0].amendments[0].permissions.can_generate,false);
+assert.equal((await decide('client',withdrawn.id,'rejected','Artisan changé')).status,'rejected');
+assert.equal((await generate('client',guardedQuote,withdrawn.id)).created,true);
+await db.query('update public.interventions set artisan_id=$2 where id=$1',[guarded,ids.artisan]);
+console.log('PASS: a withdrawn assignment closes quote and amendment generation, withdrawal and downloads for the former author; the owner still decides and documents');
+// Manager with a site write grant, then grant withdrawn by the owner.
+await db.query("insert into public.organization_members(organization_id,user_id,role) values($1,$2,'manager')",[site.organization_id,ids.delegate]);
+await db.query("insert into public.organization_member_site_scopes(organization_id,user_id,scope) values($1,$2,'selected')",[site.organization_id,ids.delegate]);
+await db.query("insert into public.organization_member_site_grants(organization_id,user_id,site_id,can_write) values($1,$2,$3,true)",[site.organization_id,ids.delegate,site.id]);
+const delegateView=await overview('delegate',b2b);assert.equal(delegateView.viewer.can_manage,true);assert.equal(delegateView.quotes[0].permissions.can_generate,true);
+assert.equal((await generate('delegate',b2bQuote)).document.id,b2bDoc.document.id);
+const pendingAmendment=await propose('artisan',b2bQuote,[{label:'Prise',quantity:1,unit_price_cents:1000}]);
+await as('manager',"select public.set_organization_member_site_access($1,$2,'selected','[]'::jsonb)",[site.organization_id,ids.delegate]);
+await rejectsCode(generate('delegate',b2bQuote),'42501');
+await rejectsCode(generate('delegate',b2bQuote,pendingAmendment.id),'42501');
+await rejectsCode(decide('delegate',pendingAmendment.id,'accepted'),'42501');
+await rejectsCode(download('delegate',b2bDoc.document.id),'P0002');
+await rejectsCode(overview('delegate',b2b),'42501');
+assert.equal((await db.query('select status from public.quote_amendments where id=$1',[pendingAmendment.id])).rows[0].status,'proposed');
+console.log('PASS: a manager generates while granted write on the site; after the owner withdraws the grant every read/generate/decide is refused');
 console.log('PASS: site approval thresholds block amendment acceptance explicitly; viewers read but never decide/generate; removed members and reassigned artisans lose every access');
 console.log('PASS: sql-quote-documents-review complete');
