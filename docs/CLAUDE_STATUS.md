@@ -1008,3 +1008,10 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 ## 2026-10-31 — web 004 polish frozen: 9430bf7
 
 - `claude/design-delivo-test` **`9430bf7e2efe86b747e96a07d24287bc79288795`** (on dc8a00b): only `web.html`, `web.css` and the 4 web captures. Nav labels on one line at 1440/1280 (44 px items; font 14 px at 1280); top bar opaque #000, no blur; eyebrow removed; ad label « Publicité ». Side fix: at 390 the wordmark wraps on two lines at 15 px (removed a horizontal overflow); 1100 px breakpoint unchanged. Worker checks 1440/1280/390: no overflow, ≥ 44 px, lowest contrast 5.41:1, focus visible, ad dialog + Escape, CTA → demande.html, no external request, no console errors. Lead verified: no `backdrop-filter`, no « PUBLICITÉ », no eyebrow left. For root: recapture and public `web.html`.
+
+## 2026-10-31 17:50 AST — root checkpoint: web 004 public; deep-link merged 28b9b79; deep-link QA contract requested
+
+- **Web 004** 9430bf7 public and verified: https://depannage-electricite-8toxy3njd-brafas-projects.vercel.app/web.html. **Prototype not to be modified without a new order.**
+- **Deep-link 47423b7 accepted** (peer 80, root 672 + tsc), merged at integration **`28b9b79`**, CI 41245014262 SUCCESS. New Git-source preview `dpl_EJntCWSDtnWBzHTM1TUccWkUwU4W` initialising (root follows).
+- A10 cf61dee in counter-review (UI agent).
+- **Deep-link QA validation — CONTRACT ONLY** dispatched to the tracking QA worker a84ded5 (new branch/exclusive QA files, after A10; no product/backend/SQL; no cloud agent): client logged in before an external creation of their own job with Realtime blocked in the browser ⇒ hash new id ⇒ refresh ⇒ dossier without reload/relogin; 503 then 200 malformed ⇒ error + Retry then recovery, same identity/document; unauthorized id ⇒ no leak; bounded request count; badge visible. LIVE Realtime effectiveness and the 100 limit stay OPEN.
