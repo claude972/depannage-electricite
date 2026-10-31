@@ -71,6 +71,8 @@ export class Fixtures {
       const id = await this.db.createAuthUser({ email, password, fullName, role: metadataRole });
       await this.track("auth_users", id);
       await this.track("profiles", id);
+      // Named in the manifest so a deletion refused by a last-super-admin guard is reported as such.
+      if (role === "admin") await this.track("admin_profiles", id);
       const patch = { role, full_name: fullName };
       if (role === "artisan") patch.artisan_approved = options.approved !== false;
       let updated = await this.db.update("profiles", { id: `eq.${id}` }, patch);
