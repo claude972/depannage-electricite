@@ -127,3 +127,46 @@ Dossier `components/features/quote-documents/` (CSS module local, tokens DESIGN.
 ## Explicitement hors lot
 
 Factures/avoirs et numérotation comptable ; raccordement du règlement des avenants au paiement ; circuit d’approbation B2B des avenants (seulement bloqué, pas livré) ; signature électronique ; envoi e-mail ; stockage objet des PDF ; modification des routes/contrats devis existants ; menus et coques de rôle.
+
+## Amendement 1 — conformité au contrat partagé WEB-SHARED-001 (correction lead sur 0a01147)
+
+Référence : `docs/CLAUDE_WEB_SHARED_CONTRACT.md` (claude/web-shared a29f732). Cet amendement remplace la section « UI — composants feuilles » ci-dessus pour tout ce qui concerne les props, l’accès réseau et les états ; le modèle de données, la migration, les routes et le rendu PDF sont inchangés.
+
+### Ce qui est retiré
+- Le client optionnel `createQuoteDocumentsClient(fetcher?)` et tout appel `fetch` autonome dans un composant feuille : supprimés. La prop `client` est **obligatoire**, construite par le lead sur `api()` existant et bornée par sa garde d’identité (`createRunner`/`runForResult`).
+- Les props `onContractState`, `onChanged`, `onOpenProfile` : supprimées. Le lead calcule `state` avec `contractStateFromError` et passe la navigation par `onNavigate`.
+- Tout import de `components/app/**` ou `components/courant-app` : aucun. Les types du lot vivent dans `lib/features/quote-documents/types.ts` ; les formats (euros, dates, références) dans `lib/features/quote-documents/format.ts`. Primitives communes réutilisées par classes globales (`.unavailable`, `.field-error`, `.tag`), jamais par import.
+
+### Props normalisées de `QuoteDocumentsPanel`
+```
+state: "unknown" | "available" | "missing" | "unavailable"
+unavailableMessage?: string                       // libellé commun fourni par le lead pour state ≠ available
+scope: { userId: string; role: "client"|"artisan"|"manager"|"admin"; organizationId?: string; siteId?: string;
+         authority: { canWrite: boolean; reason?: string } }
+client: QuoteDocumentsClient                      // obligatoire, injecté
+demo?: QuoteDocumentsDemo                         // graines de lib/features/quote-documents/demo.ts, mode démonstration explicite seulement
+onNavigate?(view: string, param?: string): void   // navigation déléguée (hash routing du lead)
+// données propres au lot :
+target: { interventionId: string } | { quoteId: string }   // un dossier complet, ou une seule version (vue `quote-documents`, param = id de devis)
+variant: "artisan" | "client" | "enterprise"      // copie seulement, jamais un droit
+```
+`QuoteDocumentsClient` (`lib/features/quote-documents/types.ts`) :
+```
+load(target): Promise<QuoteDocumentsOverview | null>
+command(body: QuoteDocumentsCommand): Promise<QuoteDocumentsCommandResult | null>
+documentHref(documentId: string, inline?: boolean): string   // URL de la route privée GET /api/quote-documents/[id] ; aucun fetch, lien <a> seulement
+```
+`QuoteDocumentsCommand` = `set_terms` | `generate` | `propose` | `withdraw` | `accept` | `reject` (corps des routes ci-dessus, le lead choisit la route). Un résultat `null` signifie chaîne périmée (identité changée, déconnexion) : **aucun message de succès, aucune mise à jour d’état**, le formulaire reste tel quel sans indicateur d’enregistrement. Toute erreur `{ status, message, code?, missing? }` est rendue telle quelle (message serveur), avec `data-blocker` technique sans nom interne dans la copie.
+
+### Comportements exigés
+- Changement de `scope` (`userId`, `organizationId`, `siteId`) ou de `target` : effacement des formulaires, brouillons locaux, conflits, notices et données chargées, puis rechargement via `client.load` si `state === "available"`.
+- `state ≠ "available"` : aucun appel de `client` ; écran indisponible honnête avec `unavailableMessage` (ou libellé par défaut du lot) et `data-blocker`.
+- `scope.authority.canWrite === false` : contrôles d’écriture (validité, génération, proposition, décision, retrait) absents, raison affichée ; les téléchargements de documents existants restent possibles. Les permissions serveur (`permissions.*` de l’aperçu) restent la vérité fine : un contrôle n’apparaît que si `canWrite` **et** la permission serveur sont vrais ; un refus serveur ultérieur est rendu tel quel.
+- États obligatoires : chargement, erreur avec action « Réessayer », vide (« Aucun devis pour ce dossier »), validation de formulaire près des champs (valeurs conservées après échec), indisponible, lecture seule, conflit 409 avec rechargement explicite, configuration émetteur incomplète (champs listés, lien `onNavigate("artisan-profile")` proposé au lead), double soumission protégée.
+- Démonstration : `demo` fourni → aucun appel `client`, données des graines étiquetées démonstration, commandes rendues comme « non enregistrées en démonstration », liens de téléchargement désactivés.
+
+### Capacité, sonde et vue (section 3 du contrat partagé)
+- Clé `Capabilities` : `quoteDocuments` (exactement). Sonde : `GET /api/quote-documents?quote_id=<id>` **ou** `?intervention_id=<id>` (exactement un des deux) ; la variante `quote_id` résout le dossier du devis sous RLS puis renvoie le même aperçu limité à ce devis. Vue : `quote-documents` (param = id de devis). Aucune vue ni clé supplémentaire demandée.
+- Tests du lot (`tests/documents/*.test.ts`) : un test par état indisponible / lecture seule / refus serveur / résultat `null`, en plus des tests de routes et de PDF.
+
+Historique : 0a01147 contrat initial ; cet amendement est publié avant tout composant.
