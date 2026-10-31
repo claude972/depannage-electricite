@@ -38,3 +38,8 @@ jobs:
         env:
           PGLITE_MODULE: ${{ runner.temp }}/courant-sql/node_modules/@electric-sql/pglite/dist/index.js
         run: node tests/sql-performance-review.mjs
+
+      - name: Verify site-scoped member access and atomic invitations (not live Supabase)
+        env:
+          PGLITE_MODULE: ${{ runner.temp }}/courant-sql/node_modules/@electric-sql/pglite/dist/index.js
+        run: node tests/sql-site-access-review.mjs
