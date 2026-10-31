@@ -35,6 +35,7 @@ import {
   parseReturnParams,
   paymentReturnMessage,
   pickQuote,
+  validateContext,
   type PaymentServerStatus,
 } from "./app/session";
 import type { PublicSession, Session } from "./app/session-types";
@@ -119,8 +120,13 @@ export default function CourantApp() {
   const userId = useRef<string | null>(null);
   const modeRef = useRef<Mode>("public");
   const roleRef = useRef<Role>("client");
+  const activeOrgRef = useRef("");
+  const activeSiteRef = useRef("");
   modeRef.current = mode;
   roleRef.current = role;
+  activeOrgRef.current = activeOrganizationId;
+  activeSiteRef.current = activeSiteId;
+  const [refreshedAt, setRefreshedAt] = useState(0);
 
   const clearSessionState = useCallback(() => {
     seq.current += 1; // any in-flight workspace response is now stale
@@ -177,6 +183,21 @@ export default function CourantApp() {
       setData({ ...EMPTY_WORKSPACE, ...ws });
       setRole(ws.profile.role);
       setMode("live");
+      setRefreshedAt(Date.now());
+      // An organisation or site that vanished from the authorised workspace is no longer a
+      // valid context: drop it (and the professional data loaded for it) immediately.
+      const kept = validateContext(
+        ws.organizations ?? [],
+        ws.sites ?? [],
+        activeOrgRef.current,
+        activeSiteRef.current,
+      );
+      if (kept.organizationDropped) {
+        setActiveOrganizationId("");
+        setActiveSiteId("");
+        setProfessional(EMPTY_PROFESSIONAL);
+        setNotice("L’organisation active n’est plus accessible depuis votre compte. Le périmètre a été réinitialisé.");
+      } else if (kept.siteId !== activeSiteRef.current) setActiveSiteId("");
     } catch (e) {
       if (my !== seq.current) return;
       if (e instanceof ApiRequestError && e.status === 401) {
@@ -199,10 +220,43 @@ export default function CourantApp() {
       setCapabilities((c) => ({ ...c, professional: "available" }));
     } catch (e) {
       if (my !== seq.current) return;
+      if (e instanceof ApiRequestError && e.status === 403) {
+        setProfessional(EMPTY_PROFESSIONAL);
+        setActiveOrganizationId("");
+        setActiveSiteId("");
+        setError("Vos droits sur cet espace ont changé. Le périmètre a été réinitialisé ; rechargez vos données.");
+        return;
+      }
       setCapabilities((c) => ({ ...c, professional: contractStateFromError(e) }));
       setError((e as Error).message);
     }
   }, []);
+
+  // Revalidation when the tab becomes visible or focused again (live only, throttled):
+  // workspace, then professional data for managers. Spaces re-read their scoped views from
+  // the refreshed data (session.refreshedAt changes).
+  const lastRevalidation = useRef(0);
+  const revalidate = useCallback(async () => {
+    if (modeRef.current !== "live") return;
+    const now = Date.now();
+    if (now - lastRevalidation.current < 15000) return;
+    lastRevalidation.current = now;
+    await refresh();
+    if (roleRef.current === "manager") await loadProfessional();
+  }, [refresh, loadProfessional]);
+  useEffect(() => {
+    if (mode !== "live") return;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void revalidate();
+    };
+    const onFocus = () => void revalidate();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [mode, revalidate]);
 
   // Boot: draft, return parameters, existing session, auth listener.
   useEffect(() => {
@@ -758,6 +812,16 @@ export default function CourantApp() {
       return result;
     } catch (e) {
       if (my !== seq.current) return null;
+      if (e instanceof ApiRequestError && (e.status === 403 || e.status === 404)) {
+        // The dossier is no longer readable (access withdrawn or removed): never keep it open.
+        setSelectedId("");
+        setSelectedQuoteId("");
+        setCapabilities((c) => ({ ...c, operations: "available" }));
+        void refresh();
+        setError("Ce dossier n’est plus accessible depuis votre compte. Vos données ont été rechargées.");
+        navigate(homeFor(roleRef.current, "live"));
+        return null;
+      }
       setCapabilities((c) => ({ ...c, operations: contractStateFromError(e) }));
       return null;
     }
@@ -865,6 +929,11 @@ export default function CourantApp() {
       return result;
     } catch (e) {
       if (my !== seq.current) return null;
+      if (e instanceof ApiRequestError && e.status === 403) {
+        void refresh(); // the server role is authoritative; re-derive the space
+        setError("Vos droits d’administration ne sont plus reconnus. Vos données ont été rechargées.");
+        return null;
+      }
       setCapabilities((c) => ({ ...c, adminOverview: contractStateFromError(e) }));
       return null;
     }
@@ -1087,6 +1156,14 @@ export default function CourantApp() {
     });
   }
 
+  // Membership lost or never held: drop every cached view of the organisation.
+  function dropOrganizationContext() {
+    setActiveOrganizationId("");
+    setActiveSiteId("");
+    setProfessional(EMPTY_PROFESSIONAL);
+    void refresh();
+    setError("Vous ne faites plus partie de cette organisation. Les données ont été rechargées.");
+  }
   async function loadOrganization(organizationId: string): Promise<OrganizationOverview | null> {
     if (modeRef.current === "demo") {
       const org = data.organizations.find((o) => o.id === organizationId);
@@ -1128,13 +1205,8 @@ export default function CourantApp() {
       return result;
     } catch (e) {
       if (my !== seq.current) return null;
-      if (e instanceof ApiRequestError && e.status === 403) {
-        // Membership lost: drop every cached view of this organisation.
-        setActiveOrganizationId("");
-        setActiveSiteId("");
-        setProfessional(EMPTY_PROFESSIONAL);
-        void refresh();
-        setError("Vous ne faites plus partie de cette organisation. Les données ont été rechargées.");
+      if (e instanceof ApiRequestError && (e.status === 403 || e.status === 404)) {
+        dropOrganizationContext();
         return null;
       }
       setCapabilities((c) => ({ ...c, organizations: contractStateFromError(e) }));
@@ -1290,6 +1362,10 @@ export default function CourantApp() {
       return result;
     } catch (e) {
       if (my !== seq.current) return null;
+      if (e instanceof ApiRequestError && (e.status === 403 || e.status === 404)) {
+        dropOrganizationContext();
+        return null;
+      }
       setCapabilities((c) => ({ ...c, siteAccess: contractStateFromError(e) }));
       return null;
     }
@@ -1546,6 +1622,7 @@ export default function CourantApp() {
     notice,
     activeOrganizationId,
     activeSiteId,
+    refreshedAt,
     membershipRole: membershipRole(
       data.organization_members,
       activeOrganizationId,

@@ -322,3 +322,17 @@ export const CONNECT_RETURN_MESSAGE: Record<"returned" | "refresh", string> = {
   refresh:
     "Le lien Stripe a expiré avant la fin du parcours. Relancez la configuration pour obtenir un nouveau lien.",
 };
+
+// After a workspace reload, an active organisation or site that the server no longer returns
+// is not a valid context anymore. Returns what must be kept.
+export function validateContext(
+  organizations: { id: string }[],
+  sites: { id: string }[],
+  activeOrganizationId: string,
+  activeSiteId: string,
+): { organizationId: string; siteId: string; organizationDropped: boolean } {
+  const orgOk = !activeOrganizationId || organizations.some((o) => o.id === activeOrganizationId);
+  if (!orgOk) return { organizationId: "", siteId: "", organizationDropped: true };
+  const siteOk = !activeSiteId || sites.some((s) => s.id === activeSiteId);
+  return { organizationId: activeOrganizationId, siteId: siteOk ? activeSiteId : "", organizationDropped: false };
+}
