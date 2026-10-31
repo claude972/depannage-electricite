@@ -2546,3 +2546,8 @@ Migration014protègedernieradmin ; base dédiée n'apasd'adminréelaucheckpointr
 
 ### Recette des lots avancés existants publiée — 2026-10-31T13:55:53-04:00
 QA-DOCUMENTS-B2B004 affectée au même worker B2B disponible, fichiers nouveaux et isolés, contrat/claim requis avant code. Vérification source015/017 : service_role a les droits de nettoyage sur ces tables (à revalider en contrat) ; aucune fixture finance014/admin permanent autorisée. Root seul exécutera après revue. Les preuves SQL343 et planning13 ne sont pas présentées comme preuves UI de ces circuits.
+
+
+## État consolidé lisible — 2026-10-31T13:57:10-04:00
+Point d'entrée courant : docs/ETAT_LIVRAISON_COURANT.md. Rapports M14/M65/credentials/public hero/V5/expiry ajoutés sans effacer l'historique. Planning719 sur606 :13PASS/cleanup33/27portées0/6Auth404, preuve réelle de reprise inline sans reload. PWA31ac :13PASS, deux builds publics locaux, deux PID absents/3020libre, aucune installation OS revendiquée. Ancien f919 :10PASS/1FAIL/2SKIP conservés ; le petit diagnostic simple de réouverture par hash a parfois réussi, donc la causalité same-document n'est pas déclarée déterministe ; le nouveau passage about:blank garantit un document neuf et le scénario réel complet passe. Root n'a modifié aucune auth/démo pour satisfaire le test.
+ART-CREDENTIAL001 VERIFIED8fb, UI111+typecheckPASS et intégrationb13poussée. Public716/253 intégré05195, M14 intégré97d ; M65/8fb intégréb13. C05/C08 en revue sur383, source non fusionnée encore. Expiryda575 ne reçoit toujours pas le feu cloud. Aucun compte d'expiration n'est maintenu, toutes cohortes exécutées terminées/relues absentes.
