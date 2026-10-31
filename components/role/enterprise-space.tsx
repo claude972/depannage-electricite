@@ -91,6 +91,7 @@ import { DossierHelpLink, SupportCenter } from "./support-tickets";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
 import { TrackingAnchor } from "./tracking-anchor";
+import { useDetailPresence } from "./use-detail-presence";
 import { SiteOperationsView } from "../features/site-operations/site-operations-view";
 import { CONTRACT_MESSAGES } from "../app/api";
 import { demoReport } from "../../lib/features/site-operations/demo";
@@ -1452,6 +1453,9 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState("");
   const statusKey = intervention?.status || "";
+  // Deep link to a dossier absent from the cached perimeter: one causal refresh before « introuvable ».
+  // Presence is the active organisation/site perimeter (orgInterventions), never wider.
+  const presence = useDetailPresence(session, "enterprise-dossier", id, Boolean(intervention));
   useEffect(() => {
     if (!intervention) return;
     let active = true;
@@ -1468,6 +1472,18 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, statusKey, reloadKey]);
 
+  if (!intervention) {
+    if (presence.decision === "loading") return <Loader label="Recherche du dossier…" />;
+    if (presence.decision === "error")
+      return (
+        <Unavailable
+          title="Dossier momentanément indisponible"
+          reason="Ce dossier n’a pas pu être vérifié. Vos données n’ont pas été modifiées : réessayez."
+          blocker="deeplink:error"
+          onRetry={presence.retry}
+        />
+      );
+  }
   if (!intervention)
     return (
       <Empty

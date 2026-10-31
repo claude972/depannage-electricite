@@ -13,6 +13,8 @@ import type { PlatformAccess } from "../lib/features/platform-operations/types";
 import { PLATFORM_DEMO } from "../lib/features/platform-operations/demo";
 import { demoNotificationPage } from "../lib/features/notifications/demo";
 import { createRevalidationScheduler } from "./app/revalidate";
+import { createRefreshCoordinator, refreshContextKey, type ReadResult, type RefreshCoordinator } from "./app/workspace-refresh";
+import { createWorkspaceReader } from "./app/workspace-reader";
 import {
   acknowledgeUpload,
   allUploaded,
@@ -217,50 +219,61 @@ export default function CourantApp() {
   }, []);
 
   // Apply a workspace response only if it belongs to the request and user still current.
+  // One workspace read, applied in place; the outcome is explicit so a caller can tell « loaded
+  // and still absent » from « failed » (WEB-DEEPLINK-REFRESH-001). Only the refresh coordinator
+  // calls it, so two reads are never in flight at once.
+  const readWorkspace = useCallback(
+    (): Promise<ReadResult> =>
+      createWorkspaceReader({
+        api: (path) => api<unknown>(path),
+        nextSeq: () => ++seq.current,
+        currentSeq: () => seq.current,
+        expectedUser: () => userId.current,
+        apply: (ws) => {
+          const profileOfWs = ws.profile!; // validated by createWorkspaceReader
+          userId.current = profileOfWs.id;
+          setData({ ...EMPTY_WORKSPACE, ...ws });
+          setRole(profileOfWs.role);
+          setMode("live");
+          setRefreshedAt(Date.now());
+          // An organisation or site that vanished from the authorised workspace is no longer a
+          // valid context: drop it (and the professional data loaded for it) immediately.
+          const kept = validateContext(
+            ws.organizations ?? [],
+            ws.sites ?? [],
+            activeOrgRef.current,
+            activeSiteRef.current,
+          );
+          if (kept.organizationDropped) {
+            setActiveOrganizationId("");
+            setActiveSiteId("");
+            setProfessional(EMPTY_PROFESSIONAL);
+            setNotice("L’organisation active n’est plus accessible depuis votre compte. Le périmètre a été réinitialisé.");
+          } else if (kept.siteId !== activeSiteRef.current) setActiveSiteId("");
+        },
+        signOut: (message) => {
+          clearSessionState();
+          setMode("public");
+          if (message) setError(message);
+        },
+        setError,
+      })(),
+    [clearSessionState],
+  );
+  const readWorkspaceRef = useRef(readWorkspace);
+  readWorkspaceRef.current = readWorkspace;
+  // Single flight with causal freshness for every refresh cause (contract A3/A4).
+  const coordinator = useRef<RefreshCoordinator | null>(null);
+  if (!coordinator.current)
+    coordinator.current = createRefreshCoordinator({
+      read: () => readWorkspaceRef.current(),
+      contextKey: () => refreshContextKey(guard.generation(), roleRef.current, activeOrgRef.current, activeSiteRef.current),
+    });
+  /** Every cause (post-write, « Actualiser », realtime event, focus, deep link) takes a barrier. */
+  const ensureFresh = useCallback((options?: { barrier?: boolean }) => (coordinator.current as RefreshCoordinator).request(options), []);
   const refresh = useCallback(async () => {
-    const my = ++seq.current;
-    const expectedUser = userId.current;
-    setError("");
-    try {
-      const ws = await api<Workspace>("/api/workspace");
-      if (my !== seq.current) return;
-      if (!ws.profile) throw new ApiRequestError(401, "Session invalide.");
-      if (expectedUser && ws.profile.id !== expectedUser) {
-        // Identity changed under us: discard and reset instead of mixing accounts.
-        clearSessionState();
-        setMode("public");
-        return;
-      }
-      userId.current = ws.profile.id;
-      setData({ ...EMPTY_WORKSPACE, ...ws });
-      setRole(ws.profile.role);
-      setMode("live");
-      setRefreshedAt(Date.now());
-      // An organisation or site that vanished from the authorised workspace is no longer a
-      // valid context: drop it (and the professional data loaded for it) immediately.
-      const kept = validateContext(
-        ws.organizations ?? [],
-        ws.sites ?? [],
-        activeOrgRef.current,
-        activeSiteRef.current,
-      );
-      if (kept.organizationDropped) {
-        setActiveOrganizationId("");
-        setActiveSiteId("");
-        setProfessional(EMPTY_PROFESSIONAL);
-        setNotice("L’organisation active n’est plus accessible depuis votre compte. Le périmètre a été réinitialisé.");
-      } else if (kept.siteId !== activeSiteRef.current) setActiveSiteId("");
-    } catch (e) {
-      if (my !== seq.current) return;
-      if (e instanceof ApiRequestError && e.status === 401) {
-        clearSessionState();
-        setMode("public");
-        setError("Votre session a expiré. Reconnectez-vous pour retrouver vos dossiers.");
-        return;
-      }
-      setError((e as Error).message);
-    }
-  }, [clearSessionState]);
+    await ensureFresh();
+  }, [ensureFresh]);
 
   const loadProfessional = useCallback(async () => {
     if (modeRef.current !== "live" || roleRef.current !== "manager") return;
@@ -2400,6 +2413,8 @@ export default function CourantApp() {
     setActiveSite: setActiveSiteId,
     run,
     refresh,
+    ensureFresh,
+    refreshContext: refreshContextKey(guard.generation(), role, activeOrganizationId, activeSiteId),
     loadProfessional,
     action,
     operate,

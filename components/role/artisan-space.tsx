@@ -79,6 +79,7 @@ import { DossierHelpLink, SupportCenter } from "./support-tickets";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
 import { TrackingAnchor } from "./tracking-anchor";
+import { useDetailPresence } from "./use-detail-presence";
 import { ArtisanPlanning } from "../features/planning/artisan-planning";
 import { CONTRACT_MESSAGES } from "../app/api";
 import { demoPlanning } from "../../lib/features/planning/demo";
@@ -1169,6 +1170,20 @@ function MissionView({
   onDeclined: (id: string) => void;
 }) {
   const i = session.data.interventions.find((x) => x.id === id);
+  // Deep link to a mission absent from the cached workspace: one causal refresh before « introuvable ».
+  const presence = useDetailPresence(session, "artisan-mission", id, Boolean(i));
+  if (id && !i) {
+    if (presence.decision === "loading") return <Loader label="Recherche du dossier…" />;
+    if (presence.decision === "error")
+      return (
+        <Unavailable
+          title="Dossier momentanément indisponible"
+          reason="Ce dossier n’a pas pu être vérifié. Vos données n’ont pas été modifiées : réessayez."
+          blocker="deeplink:error"
+          onRetry={presence.retry}
+        />
+      );
+  }
   if (!id || !i)
     return (
       <>
