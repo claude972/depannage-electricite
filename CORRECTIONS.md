@@ -317,3 +317,20 @@ Aucun autre finding bloquant dans le périmètre.
 - Factures, remboursements, payouts, équipes, calendrier : absents et déclarés absents, aucun considéré livré.
 
 Rapport complet également écrit dans `/Users/claudebrafa/.claude/plans/you-are-claude-independent-wobbly-charm.md`.
+
+
+## WEB-PWA-20261030 — nouvelle vérification des fournisseurs
+
+Timestamp: 2026-10-30T22:45:12.613920-04:00 — acteur Codex, coordination.
+
+- L’utilisateur indique Supabase payé et exige Stripe en environnement test. Aucun paiement Stripe réel autorisé.
+- Nouvel appel authentifié de création `depannage-web-pwa`, organisation et région déjà prévues : refus persistant de l’API pour factures échues. Aucun projet créé, aucun projet existant modifié. Le règlement annoncé ne permet pas de déclarer ce blocage levé tant que le fournisseur refuse.
+- Vercel : aucune variable d’environnement configurée pour cette application. Aucun secret Stripe disponible dans le processus.
+- Onglet Stripe ouvert directement sur le dashboard test : redirection vers la connexion. Connexion du titulaire nécessaire ; aucun identifiant demandé dans le chat, aucun secret enregistré dans ce rapport.
+- Suite : reprendre le provisionnement dédié après levée du refus fournisseur et configurer uniquement les secrets test dans l’environnement preview, puis vérifier Checkout/webhook/Connect en sandbox.
+
+## WEB-PWA-20261030 — intégration des droits par site
+
+- Backend revu : c04b7527e089caf5dfface2ead58b17710fea652, intégré et poussé sur integration/web-pwa par 1e2eaed.
+- Revue indépendante : /tmp/depannage-site-access-review.md, empreintes finales vérifiées par l’implémenteur ; SQL sites 8, principaux 29, performance 6 groupes réussis. Pas de nouvelle fuite bloquante dans ce périmètre. Les opérations service-role déjà en vol et la recette cloud restent des limites explicites.
+- Claude UI session b4b555f0 vérifiée active. Message CLI transmis : livrer un checkpoint testé/poussé, intégrer PWA Profil/Aide sans attendre d’approbation supplémentaire, vérifier CL-UI-003/004/006. La nouvelle interface n’est pas encore validée en preview.
