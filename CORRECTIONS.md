@@ -128,3 +128,22 @@ Ce journal ne constitue pas une revue passée ; aucune affectation terminée à 
 - intégration: merge non destructif de 0a01406 dans integration/web-pwa après revue ; première draft PR https://github.com/claude972/depannage-electricite/pull/1 pour CI et revue, aucun merge main/production
 - CLI Claude : approbation normale ponctuelle de lecture git show des nouvelles routes (variable de boucle inspectée), pas de bypass. Réponses techniques envoyées dans même session, pas de duplication.
 - tests navigateur: preview protégé atteint via identifiant automation déjà configuré, aucun changement de protection ; vérification de bootstrap cookie pour worker en cours, aucune installation OS revendiquée
+
+## A1 — Nouvelle consigne et relais programmé
+- timestamp: 2026-10-30T21:54:51-04:00 (America/Martinique)
+- source: instruction directe propriétaire dans ce chat
+- action: automation heartbeat unique créée via outil Codex puis carte de contrôle consultée ; minuit prochain 31 octobre 2026, timezone de ce chat America/Martinique
+- result: ACTIVE, id relais-claude-minuit-d-pannage-web-pwa-puis-mobile ; aucun cron système/sleep-loop ajouté
+- mission: amendment A1 ci-dessus ; tout codage à Claude après minuit (1–10 agents selon besoins), Codex pilote/tests/revues ; iOS/Android après Web/PWA vérifiés
+- next: relayer au lead Claude actif, maintenir missions/branches/corrections et ne pas dupliquer
+
+## Finding PWA-002
+- reviewer: codex / verify_web_pwa
+- assigned agent: codex avant relais minuit ; code implement_pwa
+- reviewed revision: 1638e765a44347d71b32968180e8e6781a7a7da7 (preview)
+- evidence: accès Vercel autorisé cookie-only, SWscript200 mais offlineprefetch credentials omit sans cookie ; worker échoue, registrations vide, controller false, cache vide, aucune notice UI
+- diagnostic: hypothèse initiale header non transmis corrigée ; autre essai automatisation avec set-cookieheader global provoquait boucle307, distinct de la preuve cookie-only
+- expected correction: cookie same-origin uniquement pour asset public statique, URL exacte/nonredirect/markerHTML vérifiés ; signaler installworker redundant + reprise
+- status: fixed_pending_review
+- fix commit: 6aaa1b36b99e64de4e0544780c8234c508cc1fd5
+- recheck evidence: revue indépendante +14 tests comportementaux réussis ; preview patchée à retester, aucune portée privée du cache élargie
