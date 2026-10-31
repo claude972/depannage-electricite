@@ -52,6 +52,7 @@ create table public.notifications (
  intervention_id uuid references public.interventions(id) on delete cascade,
  organization_id uuid references public.organizations(id) on delete cascade,
  site_id uuid references public.sites(id) on delete cascade,
+ support_ticket_id uuid references public.support_tickets(id) on delete cascade,
  actor_id uuid references public.profiles(id) on delete set null,
  payload jsonb not null default '{}'::jsonb check(jsonb_typeof(payload)='object'),
  dedupe_key text not null check(char_length(dedupe_key) between 1 and 200),
@@ -60,6 +61,7 @@ create table public.notifications (
 );
 create index notifications_recipient_page on public.notifications(recipient_id,created_at desc,id desc);
 create index notifications_recipient_unread on public.notifications(recipient_id) where read_at is null;
+create index notifications_support_ticket on public.notifications(support_ticket_id) where support_ticket_id is not null;
 create table public.notification_preferences (
  user_id uuid primary key references public.profiles(id) on delete cascade,
  muted_kinds text[] not null default '{}' check(cardinality(muted_kinds)<=30),
@@ -76,18 +78,20 @@ revoke all on public.artisan_availability_rules,public.artisan_planning_entries,
 grant select on public.artisan_availability_rules,public.artisan_planning_entries,public.notifications,public.notification_preferences to authenticated;
 grant all on public.artisan_availability_rules,public.artisan_planning_entries,public.notifications,public.notification_preferences to service_role;
 
--- A notification stays readable only while its recipient still has access to the linked scope:
--- reassignment, member removal or a reduced site scope hides it at once.
-create function public.notification_scope_visible(p_intervention uuid,p_site uuid,p_organization uuid) returns boolean language sql stable security definer set search_path='' as $$
+-- A notification stays readable only while its recipient still has access to every linked scope
+-- (dossier, site, organization, support ticket via the 011 helper): reassignment, member removal,
+-- a reduced site scope or a withdrawn dossier hides it at once, for reads, counts and marks alike.
+create function public.notification_scope_visible(p_intervention uuid,p_site uuid,p_organization uuid,p_support_ticket uuid default null) returns boolean language sql stable security definer set search_path='' as $$
  select (p_intervention is null or public.can_access_intervention(p_intervention))
   and (p_site is null or public.can_access_site(p_site))
-  and (p_organization is null or public.is_org_member(p_organization));
+  and (p_organization is null or public.is_org_member(p_organization))
+  and (p_support_ticket is null or public.can_access_support_ticket(p_support_ticket));
 $$;
-revoke execute on function public.notification_scope_visible(uuid,uuid,uuid) from public,anon,authenticated;
-grant execute on function public.notification_scope_visible(uuid,uuid,uuid) to authenticated;
+revoke execute on function public.notification_scope_visible(uuid,uuid,uuid,uuid) from public,anon,authenticated;
+grant execute on function public.notification_scope_visible(uuid,uuid,uuid,uuid) to authenticated;
 create policy rules_private_read on public.artisan_availability_rules for select to authenticated using(artisan_id=auth.uid());
 create policy entries_private_read on public.artisan_planning_entries for select to authenticated using(artisan_id=auth.uid());
-create policy notifications_private_read on public.notifications for select to authenticated using(recipient_id=auth.uid() and public.notification_scope_visible(intervention_id,site_id,organization_id));
+create policy notifications_private_read on public.notifications for select to authenticated using(recipient_id=auth.uid() and public.notification_scope_visible(intervention_id,site_id,organization_id,support_ticket_id));
 create policy preferences_private_read on public.notification_preferences for select to authenticated using(user_id=auth.uid());
 
 -- ---------------------------------------------------------------------------------------------
@@ -328,17 +332,17 @@ end; $$;
 -- ---------------------------------------------------------------------------------------------
 -- Notification generation (private) and commands
 -- ---------------------------------------------------------------------------------------------
-create function public.notify(p_recipient uuid,p_kind text,p_title text,p_body text,p_dedupe text,p_intervention uuid default null,p_organization uuid default null,p_site uuid default null,p_actor uuid default null,p_payload jsonb default '{}'::jsonb)
+create function public.notify(p_recipient uuid,p_kind text,p_title text,p_body text,p_dedupe text,p_intervention uuid default null,p_organization uuid default null,p_site uuid default null,p_actor uuid default null,p_payload jsonb default '{}'::jsonb,p_support_ticket uuid default null)
 returns void language plpgsql security definer set search_path='' as $$
 begin
  if p_recipient is null or p_recipient=p_actor then return; end if;
  if not exists(select 1 from public.profiles where id=p_recipient) then return; end if;
  if exists(select 1 from public.notification_preferences where user_id=p_recipient and p_kind=any(muted_kinds)) then return; end if;
- insert into public.notifications(recipient_id,kind,title,body,intervention_id,organization_id,site_id,actor_id,payload,dedupe_key)
- values(p_recipient,p_kind,left(p_title,160),left(p_body,600),p_intervention,p_organization,p_site,p_actor,coalesce(p_payload,'{}'::jsonb),left(p_dedupe,200))
+ insert into public.notifications(recipient_id,kind,title,body,intervention_id,organization_id,site_id,support_ticket_id,actor_id,payload,dedupe_key)
+ values(p_recipient,p_kind,left(p_title,160),left(p_body,600),p_intervention,p_organization,p_site,p_support_ticket,p_actor,coalesce(p_payload,'{}'::jsonb),left(p_dedupe,200))
  on conflict(recipient_id,dedupe_key) do nothing;
 end; $$;
-revoke execute on function public.notify(uuid,text,text,text,text,uuid,uuid,uuid,uuid,jsonb) from public,anon,authenticated;
+revoke execute on function public.notify(uuid,text,text,text,text,uuid,uuid,uuid,uuid,jsonb,uuid) from public,anon,authenticated;
 
 create function public.notify_intervention_transition() returns trigger language plpgsql security definer set search_path='' as $$
 declare ref text; actor uuid=auth.uid(); quote_id uuid; payload jsonb;
@@ -450,7 +454,8 @@ declare ticket public.support_tickets;
 begin
  if new.author_kind<>'admin' then return new; end if;
  select * into ticket from public.support_tickets where id=new.ticket_id;
- perform public.notify(ticket.creator_id,'support_replied','Réponse de l’assistance','L’assistance a répondu à votre demande « '||left(ticket.subject,80)||' ».','support:'||new.id,null,null,null,new.author_id,jsonb_build_object('ticket_id',ticket.id));
+ -- The subject is copied for display: the ticket link keeps it under the current 011 access predicate.
+ perform public.notify(ticket.creator_id,'support_replied','Réponse de l’assistance','L’assistance a répondu à votre demande « '||left(ticket.subject,80)||' ».','support:'||new.id,null,null,null,new.author_id,jsonb_build_object('ticket_id',ticket.id),ticket.id);
  return new;
 end; $$;
 create trigger support_reply_notifications after insert on public.support_messages for each row execute function public.notify_support_reply();
@@ -459,7 +464,7 @@ begin
  if new.status is distinct from old.status and public.is_admin() then
   perform public.notify(new.creator_id,'support_status_changed','Demande d’assistance mise à jour','Votre demande « '||left(new.subject,80)||' » est maintenant : '||
    case new.status when 'open' then 'ouverte' when 'in_progress' then 'en cours de traitement' when 'awaiting_user' then 'en attente de votre réponse' else 'résolue' end||'.',
-   'support:'||new.id||':'||new.status||':'||new.version,null,null,null,auth.uid(),jsonb_build_object('ticket_id',new.id,'status',new.status));
+   'support:'||new.id||':'||new.status||':'||new.version,null,null,null,auth.uid(),jsonb_build_object('ticket_id',new.id,'status',new.status),new.id);
  end if;
  return new;
 end; $$;
@@ -484,7 +489,7 @@ revoke execute on function public.notify_intervention_transition(),public.notify
 
 create function public.notification_summary() returns jsonb language sql stable security definer set search_path='' as $$
  select jsonb_build_object('unread_count',count(*) filter(where read_at is null),'latest_created_at',max(created_at))
- from public.notifications where recipient_id=auth.uid() and auth.uid() is not null and public.notification_scope_visible(intervention_id,site_id,organization_id);
+ from public.notifications where recipient_id=auth.uid() and auth.uid() is not null and public.notification_scope_visible(intervention_id,site_id,organization_id,support_ticket_id);
 $$;
 create function public.mark_notifications(p_action text,p_ids uuid[] default null,p_before timestamptz default null) returns jsonb language plpgsql security definer set search_path='' as $$
 declare updated integer; cutoff timestamptz;
@@ -497,12 +502,12 @@ begin
  if not isfinite(cutoff) then raise invalid_parameter_value; end if;
  perform public.consume_action('notifications',60);
  update public.notifications set read_at=case when p_action='unread' then null else coalesce(read_at,now()) end
- where recipient_id=auth.uid() and public.notification_scope_visible(intervention_id,site_id,organization_id)
+ where recipient_id=auth.uid() and public.notification_scope_visible(intervention_id,site_id,organization_id,support_ticket_id)
   and ((p_action='read_all' and read_at is null and created_at<=cutoff)
    or (p_action='read' and read_at is null and id=any(p_ids))
    or (p_action='unread' and read_at is not null and id=any(p_ids)));
  get diagnostics updated=row_count;
- return jsonb_build_object('updated',updated,'unread_count',(select count(*) from public.notifications where recipient_id=auth.uid() and read_at is null and public.notification_scope_visible(intervention_id,site_id,organization_id)));
+ return jsonb_build_object('updated',updated,'unread_count',(select count(*) from public.notifications where recipient_id=auth.uid() and read_at is null and public.notification_scope_visible(intervention_id,site_id,organization_id,support_ticket_id)));
 end; $$;
 create function public.save_notification_preferences(p_muted_kinds text[],p_email boolean,p_sms boolean,p_push boolean,p_expected_version integer) returns jsonb language plpgsql security definer set search_path='' as $$
 declare prefs public.notification_preferences; current_version integer; kinds text[];
@@ -511,14 +516,21 @@ begin
  if p_muted_kinds is null or p_email is null or p_sms is null or p_push is null or p_expected_version is null or p_expected_version<0 or cardinality(p_muted_kinds)>30 then raise invalid_parameter_value; end if;
  select coalesce(array_agg(distinct k order by k),'{}') into kinds from unnest(p_muted_kinds) k;
  if exists(select 1 from unnest(kinds) k where k is null or k not in ('mission_assigned','mission_received','mission_reassigned','quote_received','quote_rejected','quote_accepted','work_started','work_completed','payment_confirmed','mission_cancelled','appointment_saved','message_received','account_approved','account_suspended','approval_requested','approval_decided','support_replied','support_status_changed','member_joined','membership_removed')) then raise invalid_parameter_value; end if;
+ -- Serialize the caller's saves BEFORE the read: a first save has no row to lock, so two concurrent
+ -- "expected_version 0" writers would otherwise both see "absent". This lock is the only lock of
+ -- this function (no table row lock precedes it), so it cannot take part in a cycle.
+ perform pg_advisory_xact_lock(hashtext('notification_preferences'),hashtext(auth.uid()::text));
  select * into prefs from public.notification_preferences where user_id=auth.uid() for update;
  current_version=coalesce(prefs.version,0);
  if current_version<>p_expected_version or current_version=2147483647 then raise exception 'Preferences revision changed' using errcode='P0001'; end if;
  perform public.consume_action('notifications',60);
+ -- Compare-and-set on the version as a second barrier: the update applies only to the revision read.
  insert into public.notification_preferences(user_id,muted_kinds,email_enabled,sms_enabled,push_enabled,version)
  values(auth.uid(),kinds,p_email,p_sms,p_push,current_version+1)
  on conflict(user_id) do update set muted_kinds=excluded.muted_kinds,email_enabled=excluded.email_enabled,sms_enabled=excluded.sms_enabled,push_enabled=excluded.push_enabled,version=excluded.version,updated_at=now()
+ where public.notification_preferences.version=p_expected_version
  returning * into prefs;
+ if prefs.user_id is null then raise exception 'Preferences revision changed' using errcode='P0001'; end if;
  return jsonb_build_object('preferences',to_jsonb(prefs));
 end; $$;
 
