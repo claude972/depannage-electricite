@@ -4,7 +4,7 @@
 import { useCallback, useState, type ReactNode } from "react";
 import type { ContractState, Dispute, DisputeOutcome, FinanceConfig, FinanceReport, Invoice, InvoiceReadiness, LedgerEntry, Page, PlatformAccess, PlatformClient, PlatformViewScope, RefundRequest } from "../../../lib/features/platform-operations/types";
 import { COMMISSION_NOT_CONFIGURED, REFUND_EXECUTION_MESSAGE } from "../../../lib/features/platform-operations/config";
-import { UUID_RE, disputeActions, refundActions, refundStatusLabel, validateAmountCents, validateDisputeDecision, validateRefundDecision, validateText } from "../../../lib/features/platform-operations/state-machines";
+import { EMPTY_READINESS, UUID_RE, disputeActions, readinessFingerprint, readinessReduce, refundActions, refundStatusLabel, validateAmountCents, validateDisputeDecision, validateRefundDecision, validateText, type ReadinessTarget } from "../../../lib/features/platform-operations/state-machines";
 import type { PlatformDemo } from "../../../lib/features/platform-operations/demo";
 import { EmptyState, ErrorBox, Field, Gate, Loading, Pager, Panel, ReadOnly, dateTime, errorText, money, newRequestId, scopeKey, shortId, useLoad } from "./shared";
 import styles from "./platform-operations.module.css";
@@ -16,7 +16,7 @@ const DEMO_NOTE = "Mode démonstration : aucune action n’est envoyée.";
 const KIND_LABEL: Record<LedgerEntry["entry_kind"], string> = { payment_settled: "Encaissement confirmé", commission_estimated: "Commission estimée (non prélevée)", commission_withheld: "Commission prélevée (confirmée)", refund_settled: "Remboursement confirmé" };
 const MISSING_LABEL: Record<string, string> = { billing_contact: "coordonnées de facturation manquantes", payment_not_settled: "paiement non confirmé", quote_not_accepted: "devis non accepté", already_issued: "facture déjà émise pour ce paiement", artisan_company_name: "raison sociale de l’artisan manquante", artisan_siret: "SIRET de l’artisan manquant", artisan_legal_status: "forme juridique de l’artisan manquante", artisan_address: "adresse de l’artisan manquante", artisan_identity: "identité légale de l’artisan incomplète", platform_issuer: "émetteur plateforme non configuré", platform_commission_vat_rate: "taux de TVA de commission non configuré", commission_not_confirmed: "commission non confirmée par le fournisseur de paiement" };
 
-type Ctx = { client: PlatformClient; demo?: PlatformDemo; canWrite: boolean; superAdmin: boolean; notify: (m: { kind: "ok" | "error"; text: string } | null) => void; busy: boolean; act: (work: () => Promise<unknown | null>, done: string, after?: () => void) => Promise<void> };
+type Ctx = { client: PlatformClient; demo?: PlatformDemo; canWrite: boolean; superAdmin: boolean; notify: (m: { kind: "ok" | "error"; text: string } | null) => void; busy: boolean; act: (work: () => Promise<unknown | null>, done: string, after?: () => void) => Promise<void>; scopeKey: string };
 
 export function PlatformFinanceView(props: PlatformFinanceViewProps) {
   return <Gate state={props.state} unavailableMessage={props.unavailableMessage} title="Finance plateforme"><Inner key={scopeKey(props.scope)} {...props} /></Gate>;
@@ -36,7 +36,7 @@ function Inner({ scope, client, demo }: PlatformFinanceViewProps) {
   if (me.loading && !me.data) return <Loading label="Chargement des droits…" />;
   if (me.error && !me.data) return <ErrorBox message={me.error} onRetry={me.reload} />;
   if (!me.data?.capabilities.finance) return <div className="forbidden"><strong>Cet espace nécessite le scope finance.</strong><p>Demandez l’habilitation à un super administrateur.</p></div>;
-  const ctx: Ctx = { client, demo, canWrite: scope.authority.canWrite && !demo && (me.data.super_admin || me.data.scopes.includes("finance_write")), superAdmin: !demo && scope.authority.canWrite && me.data.super_admin, notify, busy, act };
+  const ctx: Ctx = { client, demo, canWrite: scope.authority.canWrite && !demo && (me.data.super_admin || me.data.scopes.includes("finance_write")), superAdmin: !demo && scope.authority.canWrite && me.data.super_admin, notify, busy, act, scopeKey: scopeKey(scope) };
   return (
     <div className={styles.view}>
       <div className={styles.head}><div><h2>Finance plateforme</h2><p>Ledger en centimes, rapprochement avec les paiements confirmés et suivi documentaire. Aucune action réelle auprès du fournisseur de paiement n’est disponible dans cette version.</p></div></div>
@@ -144,18 +144,31 @@ function Invoices({ ctx }: { ctx: Ctx }) {
   );
 }
 function IssueForm({ ctx, onIssued }: { ctx: Ctx; onIssued: () => void }) {
-  const [basis, setBasis] = useState<"service" | "platform_commission">("service"); const [paymentId, setPaymentId] = useState(""); const [error, setError] = useState(""); const [readiness, setReadiness] = useState<InvoiceReadiness | null>(null); const [requestId, setRequestId] = useState(newRequestId);
-  const check = () => { if (!UUID_RE.test(paymentId.trim())) { setError("Identifiant de paiement invalide."); return; } setError(""); setReadiness(null); void ctx.act(async () => { const r = await ctx.client.command.invoiceReadiness({ basis, payment_id: paymentId.trim().toLowerCase() }); if (r) setReadiness(r); return r; }, "Conditions vérifiées."); };
+  const [basis, setBasis] = useState<"service" | "platform_commission">("service"); const [paymentId, setPaymentId] = useState(""); const [error, setError] = useState(""); const [requestId, setRequestId] = useState(newRequestId);
+  // Readiness is bound to the exact target it was requested for (payment, basis, scope); a late result for another target is discarded.
+  const [model, setModel] = useState(EMPTY_READINESS);
+  const target = (): ReadinessTarget => ({ payment_id: paymentId.trim().toLowerCase(), basis, scope_key: ctx.scopeKey });
+  const onInput = (next: { basis?: typeof basis; paymentId?: string }) => { const b = next.basis ?? basis, p = next.paymentId ?? paymentId; if (next.basis) setBasis(next.basis); if (next.paymentId !== undefined) setPaymentId(next.paymentId); setModel((m) => readinessReduce(m, { type: "input", target: { payment_id: p.trim().toLowerCase(), basis: b, scope_key: ctx.scopeKey } })); };
+  const check = () => {
+    if (!UUID_RE.test(paymentId.trim())) { setError("Identifiant de paiement invalide."); return; }
+    setError(""); const t = target(), fingerprint = readinessFingerprint(t);
+    setModel((m) => readinessReduce(m, { type: "check", target: t }));
+    void ctx.act(async () => {
+      try { const r: InvoiceReadiness | null = await ctx.client.command.invoiceReadiness({ basis: t.basis, payment_id: t.payment_id }); if (r) setModel((m) => readinessReduce(m, { type: "result", fingerprint, readiness: r })); else setModel((m) => readinessReduce(m, { type: "fail", fingerprint })); return r; }
+      catch (e) { setModel((m) => readinessReduce(m, { type: "fail", fingerprint })); throw e; }
+    }, "Conditions vérifiées.");
+  };
+  const readiness = model.readiness, bound = model.target, stale = readinessFingerprint(target()) !== model.current;
   return (
     <Panel title="Émettre une facture" intro="Vérifiez d’abord les conditions ; rien n’est substitué aux données manquantes.">
       <form className={styles.form} noValidate onSubmit={(e) => { e.preventDefault(); check(); }}>
-        <Field label="Base"><select value={basis} onChange={(e) => { setBasis(e.target.value as typeof basis); setReadiness(null); }}><option value="service">Prestation (émetteur : artisan)</option><option value="platform_commission">Commission (émetteur : plateforme)</option></select></Field>
-        <Field label="Identifiant du paiement" error={error}><input value={paymentId} onChange={(e) => { setPaymentId(e.target.value); setReadiness(null); }} autoComplete="off" aria-invalid={Boolean(error)} /></Field>
-        <div className={`${styles.actions} ${styles.full}`}><button type="submit" className={styles.button} disabled={ctx.busy}>Vérifier les conditions</button></div>
+        <Field label="Base"><select value={basis} disabled={ctx.busy} onChange={(e) => onInput({ basis: e.target.value as typeof basis })}><option value="service">Prestation (émetteur : artisan)</option><option value="platform_commission">Commission (émetteur : plateforme)</option></select></Field>
+        <Field label="Identifiant du paiement" error={error}><input value={paymentId} disabled={ctx.busy} onChange={(e) => onInput({ paymentId: e.target.value })} autoComplete="off" aria-invalid={Boolean(error)} /></Field>
+        <div className={`${styles.actions} ${styles.full}`}><button type="submit" className={styles.button} disabled={ctx.busy}>{model.pending ? "Vérification…" : "Vérifier les conditions"}</button></div>
       </form>
-      {readiness && (readiness.ready
-        ? <div className={styles.card}><strong>Conditions réunies</strong><dl className={styles.kv}><dt>TTC</dt><dd>{money(readiness.preview.total_cents ?? 0)}</dd><dt>TVA</dt><dd>{money(readiness.preview.tax_cents ?? 0)}</dd><dt>HT</dt><dd>{money(readiness.preview.subtotal_cents ?? 0)}</dd></dl>
-          <div className={styles.actions}><button type="button" className={`${styles.button} ${styles.primary}`} disabled={ctx.busy} onClick={() => ctx.act(() => ctx.client.command.issueInvoice({ request_id: requestId, basis, payment_id: paymentId.trim().toLowerCase() }), "Facture émise et auditée.", () => { setReadiness(null); setRequestId(newRequestId()); onIssued(); })}>Émettre</button></div></div>
+      {readiness && bound && !stale && (readiness.ready
+        ? <div className={styles.card}><strong>Conditions réunies pour le paiement <span className={styles.mono}>{shortId(bound.payment_id)}</span></strong><dl className={styles.kv}><dt>TTC</dt><dd>{money(readiness.preview.total_cents ?? 0)}</dd><dt>TVA</dt><dd>{money(readiness.preview.tax_cents ?? 0)}</dd><dt>HT</dt><dd>{money(readiness.preview.subtotal_cents ?? 0)}</dd></dl>
+          <div className={styles.actions}><button type="button" className={`${styles.button} ${styles.primary}`} disabled={ctx.busy} onClick={() => ctx.act(() => ctx.client.command.issueInvoice({ request_id: requestId, basis: bound.basis, payment_id: bound.payment_id }), "Facture émise et auditée.", () => { setModel(EMPTY_READINESS); setRequestId(newRequestId()); onIssued(); })}>Émettre</button></div></div>
         : <div className={styles.danger} role="alert"><strong>Émission impossible</strong><ul>{readiness.missing.map((m) => <li key={m}>{MISSING_LABEL[m] ?? m}</li>)}</ul></div>)}
     </Panel>
   );

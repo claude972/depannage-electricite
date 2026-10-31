@@ -643,7 +643,7 @@ begin
 end; $$;
 create function public.platform_issue_credit_note(p_request_id uuid,p_invoice_id uuid,p_amount_cents integer,p_reason text) returns jsonb language plpgsql security definer set search_path='' as $$
 #variable_conflict use_variable
-declare invoice public.platform_invoices; row public.platform_invoices; reason text; credited bigint; tax integer; fingerprint text;
+declare invoice public.platform_invoices; row public.platform_invoices; reason text; credited bigint; credited_tax bigint; tax integer; fingerprint text;
 begin
  if not public.has_platform_scope('finance_write') then raise insufficient_privilege; end if;
  reason=regexp_replace(p_reason,'^[[:space:]]+|[[:space:]]+$','','g');
@@ -659,10 +659,13 @@ begin
  if invoice.kind<>'invoice' then raise exception 'A credit note references an invoice' using errcode='P0001'; end if;
  -- Serialize credit notes of one invoice on its payment row.
  perform 1 from public.payments where id=invoice.payment_id for update;
- select coalesce(sum(total_cents),0) into credited from public.platform_invoices where related_invoice_id=p_invoice_id and kind='credit_note';
+ select coalesce(sum(total_cents),0),coalesce(sum(tax_cents),0) into credited,credited_tax from public.platform_invoices where related_invoice_id=p_invoice_id and kind='credit_note';
  if credited+p_amount_cents>invoice.total_cents then raise exception 'Credit notes exceed the invoice total' using errcode='P0001'; end if;
  perform public.consume_action('platform_invoices',20);
- tax=round(p_amount_cents::numeric*invoice.tax_cents/invoice.total_cents);
+ -- Cumulative VAT delta under the payment lock: the sum of credited VAT never exceeds the invoice VAT,
+ -- and the last split credit note absorbs the rounding instead of each note rounding independently.
+ tax=round((credited+p_amount_cents)::numeric*invoice.tax_cents/invoice.total_cents)-credited_tax;
+ tax=least(greatest(tax,0),invoice.tax_cents-credited_tax,p_amount_cents);
  insert into public.platform_invoices(request_id,kind,basis,number,issuer_key,issuer,recipient,payment_id,quote_id,intervention_id,related_invoice_id,lines,subtotal_cents,tax_rate,tax_cents,total_cents,currency,reason,content_fingerprint,issued_by)
  values(p_request_id,'credit_note',invoice.basis,public.platform_next_invoice_number(invoice.issuer_key,'credit_note'),invoice.issuer_key,invoice.issuer,invoice.recipient,invoice.payment_id,invoice.quote_id,invoice.intervention_id,p_invoice_id,
   jsonb_build_array(jsonb_build_object('label','Avoir sur facture '||invoice.number,'quantity',1,'unit_price_cents',p_amount_cents-tax)),p_amount_cents-tax,invoice.tax_rate,tax,p_amount_cents,invoice.currency,reason,fingerprint,auth.uid()) returning * into row;
