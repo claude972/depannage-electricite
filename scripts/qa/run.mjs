@@ -6,7 +6,9 @@
 // Guarantees (QA-003): every console line and the final crash path go through the redactor;
 // stdout/stderr are also teed to <out>/run.log (0600); result.json / summary.md are rewritten
 // after EACH scenario and events.ndjson is appended per step; cleanup runs exactly once, on
-// completion, on a suite crash, on an unhandled rejection and on an uncaught exception.
+// completion, on a suite crash, on an unhandled rejection and on an uncaught exception. The
+// finalisation first raises a stop signal (every fixture helper refuses its next insert), drains
+// the creations still in flight (their ids reach the manifest) and only then deletes.
 import { appendFileSync, mkdirSync, openSync, writeSync, closeSync, chmodSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -17,7 +19,7 @@ import { createRedactor } from "./lib/redact.mjs";
 import { createCohort } from "./lib/cohort.mjs";
 import { CLEANUP_STEPS, runCleanup } from "./lib/cleanup.mjs";
 import { createReport, exitCode, renderSummary, classify } from "./lib/report.mjs";
-import { createLifecycle, fatalExitCode } from "./lib/lifecycle.mjs";
+import { createLifecycle, createStopGate, fatalExitCode } from "./lib/lifecycle.mjs";
 import { createServiceClient } from "./lib/supabase.mjs";
 import { Fixtures } from "./lib/fixtures.mjs";
 import { loadPlaywright, launchBrowser, configureBrowser, stopBrowser } from "./lib/browser.mjs";
@@ -128,7 +130,9 @@ async function main(argv) {
     log(`run ${cohort.runId} → ${outDir}`);
     log(`target ${context.base_url} (${target}); sha ${options.sha.slice(0, 12)} ${sha.verified ? "verified" : "declared"}; project ${context.project}; timeout ${options.timeoutMs} ms`);
     const db = credentials ? createServiceClient({ url: credentials.supabase.url, serviceKey: credentials.supabase.serviceKey, redactor, timeoutMs: options.timeoutMs }) : null;
-    const fixtures = db ? new Fixtures({ db, cohort, manifestPath: path.join(outDir, "manifest.json"), context: { sha: options.sha, project: context.project, base_url: context.base_url }, redactor }) : null;
+    // One stop gate shared by the lifecycle (raises it, drains it) and the fixtures (check it before every write).
+    const gate = createStopGate();
+    const fixtures = db ? new Fixtures({ db, cohort, manifestPath: path.join(outDir, "manifest.json"), context: { sha: options.sha, project: context.project, base_url: context.base_url }, redactor, gate }) : null;
     const eventsFile = path.join(outDir, "events.ndjson");
     const appendEvent = (event) => {
       try {
@@ -136,6 +140,7 @@ async function main(argv) {
       } catch {}
     };
     let cleanupResult = null;
+    let drainResult = null;
     let fatalInfo = null;
     const report = createReport(context, redactor, {
       onEvent: appendEvent,
@@ -150,6 +155,7 @@ async function main(argv) {
       fatal: fatalInfo,
       scenarios: report.scenarios,
       cleanup: cleanupResult ? { ok: cleanupResult.ok, steps: cleanupResult.steps?.length ?? 0, failed: (cleanupResult.steps || []).filter((s) => s.status === "fail").length, error: cleanupResult.error || null } : null,
+      drain: drainResult,
       manifest: fixtures ? fixtures.manifestPath : null,
     });
     async function persist() {
@@ -161,6 +167,8 @@ async function main(argv) {
     const lifecycle = createLifecycle({
       keepFixtures: options.keepFixtures,
       log,
+      gate,
+      drainTimeoutMs: options.timeoutMs, // a Supabase call never outlives --timeout-ms (AbortSignal.timeout)
       cleanup: fixtures
         ? async () => {
             // Browser drained and stopped BEFORE any deletion: no late route callback can fire.
@@ -176,8 +184,9 @@ async function main(argv) {
             return result;
           }
         : null,
-      writeResults: async ({ cleanup, fatal, reason }) => {
+      writeResults: async ({ cleanup, fatal, reason, drain }) => {
         cleanupResult = cleanup;
+        drainResult = drain;
         if (fatal) fatalInfo = { origin: fatal.origin, error: redactor.redactError(fatal.error) };
         context.finished_at = new Date().toISOString();
         context.finish_reason = reason;
@@ -205,6 +214,11 @@ async function main(argv) {
     try {
       browser = await launchBrowser(playwright, { headless: options.headless, chromiumPath: options.chromiumPath });
       for (const suite of suites) {
+        if (lifecycle.stopping) {
+          // A FATAL is being finalised: no further suite may seed fixtures or drive the browser.
+          log(`suite ${suite.name} skipped: run stopping (${gate.reason})`);
+          break;
+        }
         log(`suite ${suite.name}: ${suite.description}`);
         if (suite.needsCredentials && !fixtures) {
           await report.scenario(suite.name, "preconditions", async () => {
@@ -220,6 +234,7 @@ async function main(argv) {
             throw error;
           });
           log(`suite ${suite.name} aborted: ${classify(error)} ${redactor.redactString(error.message)}`);
+          if (lifecycle.stopping) break; // StopRequestedError or a crash already finalising: stop seeding
         }
       }
     } finally {

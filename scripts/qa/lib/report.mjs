@@ -138,6 +138,7 @@ export function renderSummary(result) {
   lines.push(`- scenarios: ${result.summary.total}, PASS ${result.summary.pass}, FAIL ${result.summary.fail}, ANOMALY ${result.summary.anomaly}`);
   if (result.fatal) lines.push(`- FATAL: ${result.fatal.origin} — ${result.fatal.error?.name}: ${result.fatal.error?.message} (run aborted; remaining scenarios not executed)`);
   lines.push(`- cleanup: ${result.cleanup ? (result.cleanup.ok ? "complete (readback 0)" : "INCOMPLETE — manual intervention required, see cleanup.json") : result.context.finished_at ? "skipped (--keep-fixtures or nothing created)" : "pending"}`);
+  if (result.drain && (result.drain.pending > 0 || result.drain.timedOut)) lines.push(`- drain before cleanup: ${result.drain.pending} fixture creation(s) still pending after ${result.drain.waitedMs} ms — ids may be missing from manifest.json, verify the cohort manually`);
   lines.push("", "| Suite | Scenario | Status | Evidence |", "| --- | --- | --- | --- |");
   for (const s of result.scenarios)
     lines.push(`| ${s.suite} | ${s.name} | ${s.status} | ${s.evidence.map((e) => e.path.split("/").pop()).join(", ") || "—"} |`);

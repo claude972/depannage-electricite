@@ -22,7 +22,7 @@ export const suite = {
     "viewer",
     "approved artisan",
     "organization with sites A and B, approval rule on A",
-    "dossier A (quoted, one sent quote, pending approval) and dossier B",
+    "dossier A (quoted, one sent quote, pending approval queued by the DB trigger and reused) and dossier B",
   ],
   async run(ctx) {
     const { base, projectRef, fixtures, db, browser, cohort, out, report, redactor, credentials, timeoutMs } = ctx;
@@ -43,7 +43,10 @@ export const suite = {
     const jobA = await fixtures.createIntervention({ client: owner, artisan, site: siteA, description: "dossier du site A", status: "quoted" });
     const jobB = await fixtures.createIntervention({ client: owner, site: siteB, description: "dossier du site B", status: "requested" });
     const quoteA = await fixtures.createQuote({ intervention: jobA, artisan });
-    const approval = await fixtures.createApproval({ quote: quoteA, site: siteA });
+    // The rule on A is enabled with threshold 0: inserting the quote fires the DB trigger
+    // `quote_approval_queue`, which already queues the approval (UNIQUE quote_id). Reuse it.
+    const approval = await fixtures.ensureApproval({ quote: quoteA, site: siteA });
+    assert.equal(approval.status, "pending", `approval ${approval.id} is ${approval.status}, expected pending`);
 
     const budgetSection = (page) => page.locator('section[aria-labelledby="site-budget"]');
     const ruleSection = (page) => page.locator('section[aria-labelledby="site-rule"]');

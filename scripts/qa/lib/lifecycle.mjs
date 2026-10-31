@@ -1,27 +1,113 @@
-// Run lifecycle: ONE idempotent finalisation (cleanup unless kept, then results) that runs on
-// normal completion, on a suite crash, on an unhandled rejection and on an uncaught exception.
+// Run lifecycle: ONE idempotent finalisation (stop signal → drain of in-flight fixture creations →
+// cleanup unless kept → results) that runs on normal completion, on a suite crash, on an unhandled
+// rejection and on an uncaught exception.
 // Pure enough to be unit-tested with fakes; nothing here knows Playwright or Supabase.
-export function createLifecycle({ cleanup, writeResults, keepFixtures = false, log = () => {} }) {
+
+/** Thrown by fixture helpers when a creation is attempted after the stop signal. */
+export class StopRequestedError extends Error {
+  constructor(reason) {
+    super(`fixture creation refused: the run is stopping (${reason || "finalising"})`);
+    this.name = "StopRequestedError";
+    this.code = "QA_STOP_REQUESTED";
+  }
+}
+
+/**
+ * Stop gate shared by the lifecycle and the fixture registry (QA-003). `stop(reason)` aborts the
+ * signal so that every fixture-creation helper refuses its next insert; `register(promise)`
+ * records an in-flight creation; `drain(timeoutMs)` waits for every in-flight creation to settle
+ * (success or failure) so that ids created while the signal was raised are in the manifest
+ * BEFORE the cleanup deletion starts. A creation that is still pending after the timeout is
+ * reported (`timedOut: true`, `pending`), never silently forgotten.
+ */
+export function createStopGate() {
+  const controller = new AbortController();
+  const inFlight = new Set();
+  let stopReason = null;
+  const gate = {
+    get signal() {
+      return controller.signal;
+    },
+    get stopping() {
+      return controller.signal.aborted;
+    },
+    get reason() {
+      return stopReason;
+    },
+    get pending() {
+      return inFlight.size;
+    },
+    /** Throws StopRequestedError once the signal is raised; call before every insert. */
+    check() {
+      if (controller.signal.aborted) throw new StopRequestedError(stopReason);
+    },
+    stop(reason = "stop") {
+      if (controller.signal.aborted) return false;
+      stopReason = String(reason);
+      controller.abort(new StopRequestedError(stopReason));
+      return true;
+    },
+    register(promise) {
+      const tracked = Promise.resolve(promise);
+      inFlight.add(tracked);
+      // `then(done, done)` never rejects: a failing creation is the caller's to handle, not a leak.
+      const done = () => inFlight.delete(tracked);
+      tracked.then(done, done);
+      return promise;
+    },
+    async drain(timeoutMs = 0) {
+      const started = Date.now();
+      const count = inFlight.size;
+      if (!count) return { pending: 0, settled: 0, timedOut: false, waitedMs: 0 };
+      let timer = null;
+      const timeout = new Promise((resolve) => {
+        timer = setTimeout(() => resolve("timeout"), Math.max(0, timeoutMs));
+        if (typeof timer.unref === "function") timer.unref();
+      });
+      const settled = Promise.allSettled([...inFlight]).then(() => "settled");
+      const outcome = await Promise.race([settled, timeout]);
+      clearTimeout(timer);
+      return { pending: inFlight.size, settled: count - inFlight.size, timedOut: outcome === "timeout", waitedMs: Date.now() - started };
+    },
+  };
+  return gate;
+}
+
+export function createLifecycle({ cleanup, writeResults, keepFixtures = false, log = () => {}, gate = createStopGate(), drainTimeoutMs = 90000 }) {
   let finalizing = null;
   let cleanupResult = null;
+  let drainResult = null;
   let fatal = null;
 
   async function finalize(reason = "completed") {
     if (finalizing) return finalizing;
     finalizing = (async () => {
+      // 1. Stop signal: from now on every fixture helper refuses to insert (StopRequestedError).
+      gate.stop(reason);
+      // 2. Drain: creations already in flight settle and record their ids in the manifest first.
+      try {
+        drainResult = await gate.drain(drainTimeoutMs);
+      } catch (error) {
+        drainResult = { pending: gate.pending, settled: 0, timedOut: false, error: String(error?.message || error) };
+      }
+      if (drainResult.pending > 0) log(`drain: ${drainResult.pending} fixture creation(s) still pending after ${drainResult.waitedMs ?? drainTimeoutMs} ms; cleanup proceeds with the manifest as written`);
+      // 3. Cleanup (unless kept), then 4. results — both unconditional, never thrown through.
       if (!keepFixtures && cleanup) {
         try {
           cleanupResult = await cleanup();
         } catch (error) {
           cleanupResult = { ok: false, steps: [], error: String(error?.message || error) };
         }
+        if (cleanupResult && drainResult.pending > 0) {
+          cleanupResult = { ...cleanupResult, ok: false, drain: drainResult, error: cleanupResult.error || `${drainResult.pending} fixture creation(s) did not settle before cleanup: ids may be missing from the manifest` };
+        }
       }
       try {
-        await writeResults({ cleanup: cleanupResult, fatal, reason });
+        await writeResults({ cleanup: cleanupResult, fatal, reason, drain: drainResult });
       } catch (error) {
         log(`writing results failed: ${String(error?.message || error)}`);
       }
-      return { cleanup: cleanupResult, fatal, reason };
+      return { cleanup: cleanupResult, fatal, reason, drain: drainResult };
     })();
     return finalizing;
   }
@@ -32,8 +118,9 @@ export function createLifecycle({ cleanup, writeResults, keepFixtures = false, l
   }
 
   /**
-   * Installs process-level crash handlers. The first crash records a FATAL, finalises (cleanup +
-   * results) and exits via `exit(code)`; `codeFor(fatal, cleanupResult)` decides 1 or 3.
+   * Installs process-level crash handlers. The first crash records a FATAL, raises the stop
+   * signal, finalises (drain + cleanup + results) and exits via `exit(code)`;
+   * `codeFor(fatal, cleanupResult)` decides 1 or 3.
    */
   function installCrashHandlers(proc, { onFatal, codeFor, exit }) {
     let handling = false;
@@ -42,6 +129,7 @@ export function createLifecycle({ cleanup, writeResults, keepFixtures = false, l
       handling = true;
       const error = reason instanceof Error ? reason : new Error(String(reason));
       recordFatal(error, origin);
+      gate.stop(`fatal:${origin}`); // raised before any reporting: no new insert can start meanwhile
       (async () => {
         let result = null;
         try {
@@ -74,6 +162,10 @@ export function createLifecycle({ cleanup, writeResults, keepFixtures = false, l
     finalize,
     recordFatal,
     installCrashHandlers,
+    gate,
+    get stopping() {
+      return gate.stopping;
+    },
     get fatal() {
       return fatal;
     },
