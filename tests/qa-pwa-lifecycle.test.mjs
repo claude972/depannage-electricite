@@ -12,7 +12,7 @@ import { createServerController } from "../scripts/qa-pwa-lifecycle/servers.mjs"
 import { createStopGate, createLifecycle, StopRequestedError } from "../scripts/qa/lib/lifecycle.mjs";
 
 /** Fake spawner: children exit asynchronously on SIGTERM (or never, when `ignoreSigterm`). */
-function fakeSpawner({ ignoreSigterm = false, exitDelayMs = 10 } = {}) {
+function fakeSpawner({ ignoreSigterm = false, ignoreSigkill = false, exitDelayMs = 10 } = {}) {
   const spawned = [];
   const listening = new Set();
   let nextPid = 1000;
@@ -24,6 +24,7 @@ function fakeSpawner({ ignoreSigterm = false, exitDelayMs = 10 } = {}) {
     child.kill = (signal) => {
       if (!child.alive) return;
       if (signal === "SIGTERM" && ignoreSigterm) return;
+      if (signal === "SIGKILL" && ignoreSigkill) return;
       setTimeout(() => {
         child.alive = false;
         listening.delete(child.pid);
@@ -189,6 +190,47 @@ test("REV-003: a pageerror is ALWAYS a FAIL (offline phase included); only attri
   assert.deepEqual(split.failing.map((r) => r.text), ["TypeError: cannot read properties of undefined", "Refused to execute inline script"]);
   // Without an origin rule, a pageerror in the offline phase still fails.
   assert.equal(splitConsoleRecords([{ phase: "offline", kind: "pageerror", text: "TypeError" }]).failing.length, 1);
+});
+
+test("REV-004: stopAll with an already-exited OLD child and an active NEW child stops new, reads the port back ONCE at the end, ok=true", async () => {
+  const gate = createStopGate();
+  const fake = fakeSpawner({ exitDelayMs: 5 });
+  const controller = createServerController({ spawn: fake.spawn, probe: async () => true, portListening: fake.portListening, gate, port: 3020, timeoutMs: 2000, graceMs: 100, killMs: 100, sleep: (ms) => new Promise((r) => setTimeout(r, Math.min(ms, 5))) });
+  const old = await controller.start("old", { dir: "/tmp/old" });
+  await controller.stop(old); // the switch: old exited and port read back while no other child existed
+  assert.equal(old.proven_stopped, true);
+  const fresh = await controller.start("new", { dir: "/tmp/new" });
+  assert.deepEqual(fake.alive(), [fresh.pid], "new child active, old exited");
+  const result = await controller.stopAll();
+  assert.equal(result.ok, true, `old exited earlier must not be blamed for the port held by new: ${JSON.stringify(result)}`);
+  assert.equal(result.port_released, true);
+  assert.deepEqual(result.steps.map((s) => [s.label, s.exited, s.stopped]), [["old", true, true], ["new", true, true]]);
+  assert.deepEqual(fake.alive(), []);
+  assert.equal(old.proven_stopped, true);
+  assert.equal(fresh.proven_stopped, true);
+});
+
+test("REV-004: NEW child refusing SIGTERM → SIGKILL → ok only when the port is released; a child that never exits keeps ok=false", async () => {
+  const gate = createStopGate();
+  const fake = fakeSpawner({ ignoreSigterm: true, exitDelayMs: 5 });
+  const logs = [];
+  const controller = createServerController({ spawn: fake.spawn, probe: async () => true, portListening: fake.portListening, gate, port: 3020, timeoutMs: 2000, graceMs: 30, killMs: 100, sleep: (ms) => new Promise((r) => setTimeout(r, Math.min(ms, 5))), log: (m) => logs.push(m) });
+  const old = await controller.start("old", { dir: "/tmp/old" });
+  await controller.stop(old);
+  await controller.start("new", { dir: "/tmp/new" });
+  const result = await controller.stopAll();
+  assert.ok(logs.some((l) => /new server pid \d+ ignored SIGTERM: SIGKILL/.test(l)));
+  assert.equal(result.ok, true);
+  assert.equal(result.port_released, true);
+  assert.deepEqual(fake.alive(), []);
+  // Negative: a child that ignores SIGKILL too never exits and keeps the port: never ok.
+  const stuck = fakeSpawner({ ignoreSigterm: true, ignoreSigkill: true });
+  const controller2 = createServerController({ spawn: stuck.spawn, probe: async () => true, portListening: stuck.portListening, gate: createStopGate(), port: 3020, timeoutMs: 2000, graceMs: 20, killMs: 20, sleep: (ms) => new Promise((r) => setTimeout(r, Math.min(ms, 2))) });
+  await controller2.start("new", { dir: "/tmp/new" });
+  const bad = await controller2.stopAll();
+  assert.equal(bad.ok, false);
+  assert.equal(bad.port_released, false);
+  assert.deepEqual(bad.steps.map((s) => [s.label, s.exited, s.stopped]), [["new", false, false]]);
 });
 
 test("servedBuildIdMarkers: the served HTML names exactly the build it comes from", () => {

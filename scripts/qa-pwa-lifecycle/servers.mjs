@@ -11,22 +11,33 @@ export function createServerController({ spawn, probe, portListening, gate, port
   /** Public, serialisable view of the registry (no child handles). */
   const snapshot = () => entries.map(({ child, ...rest }) => ({ ...rest }));
 
-  async function stop(entry) {
-    if (!entry) return { stopped: true, portReleased: !(await portListening(port)) };
-    if (!entry.stopped) {
-      const exited = new Promise((resolve) => (entry.stopped ? resolve(true) : entry.child.once("exit", () => resolve(true))));
-      entry.child.kill("SIGTERM");
-      const graceful = await Promise.race([exited, sleep(Math.min(graceMs, timeoutMs)).then(() => false)]);
-      if (!graceful) {
-        log(`${entry.label} server pid ${entry.pid} ignored SIGTERM: SIGKILL`);
-        entry.child.kill("SIGKILL");
-        await Promise.race([exited, sleep(killMs).then(() => false)]);
-      }
+  /** Per-child verdict only: SIGTERM, bounded wait, SIGKILL, bounded wait. Returns whether it exited. */
+  async function terminate(entry) {
+    if (entry.stopped) return true;
+    const exited = new Promise((resolve) => (entry.stopped ? resolve(true) : entry.child.once("exit", () => resolve(true))));
+    entry.child.kill("SIGTERM");
+    const graceful = await Promise.race([exited, sleep(Math.min(graceMs, timeoutMs)).then(() => false)]);
+    if (!graceful) {
+      log(`${entry.label} server pid ${entry.pid} ignored SIGTERM: SIGKILL`);
+      entry.child.kill("SIGKILL");
+      await Promise.race([exited, sleep(killMs).then(() => false)]);
     }
+    return Boolean(entry.stopped);
+  }
+
+  /** Waits (bounded) for the shared port to be released; ONE readback for the whole registry. */
+  async function awaitPortReleased() {
     for (let i = 0; i < 20 && (await portListening(port)); i++) await sleep(250);
-    const portReleased = !(await portListening(port));
+    return !(await portListening(port));
+  }
+
+  /** Stops ONE child and reads the port back: only valid when no other registered child is meant to keep the port. */
+  async function stop(entry) {
+    if (!entry) return { stopped: true, portReleased: await awaitPortReleased() };
+    const exited = await terminate(entry);
+    const portReleased = await awaitPortReleased();
     entry.port_released = portReleased;
-    entry.proven_stopped = Boolean(entry.stopped && portReleased);
+    entry.proven_stopped = Boolean(exited && portReleased);
     return { stopped: entry.proven_stopped, portReleased };
   }
 
@@ -70,15 +81,25 @@ export function createServerController({ spawn, probe, portListening, gate, port
     throw new Error(`${label} server not ready within ${timeoutMs} ms`);
   }
 
-  /** Drains the whole registry; `ok` only when every child exited AND the port is released. */
+  /**
+   * Drains the whole registry (pilot REV-004): every child is terminated FIRST (per-child verdict =
+   * exited), then the shared port is read back ONCE at the end — an already-exited old child must
+   * never be blamed for the port still held by the new child that is stopped right after it.
+   * `ok` only when every child exited AND the port is released.
+   */
   async function stopAll() {
-    const steps = [];
-    for (const entry of entries) {
-      const outcome = await stop(entry);
-      steps.push({ label: entry.label, pid: entry.pid, stopped: outcome.stopped, port_released: outcome.portReleased, exit: entry.exit });
-    }
-    const portFree = !(await portListening(port));
-    return { ok: steps.every((s) => s.stopped) && portFree, port_released: portFree, steps };
+    const exitedByPid = new Map();
+    for (const entry of entries) exitedByPid.set(entry.pid, await terminate(entry));
+    const portFree = await awaitPortReleased();
+    const steps = entries.map((entry) => {
+      // Verdict = exited by the END of the drain: a child whose exit landed during the global port
+      // readback (after its own bounded SIGTERM/SIGKILL wait) is exited, not an orphan.
+      const exited = exitedByPid.get(entry.pid) === true || entry.stopped === true;
+      entry.port_released = portFree;
+      entry.proven_stopped = exited && portFree;
+      return { label: entry.label, pid: entry.pid, exited, stopped: entry.proven_stopped, port_released: portFree, exit: entry.exit };
+    });
+    return { ok: steps.every((s) => s.exited) && portFree, port_released: portFree, steps };
   }
 
   return { start, stop, stopAll, snapshot, get entries() { return entries; } };
