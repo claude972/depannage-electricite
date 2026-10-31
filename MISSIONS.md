@@ -175,7 +175,7 @@ Depuis le31octobre00h America/Martinique, l’affectation Codex devient pilotage
 
 ## Mission NATIVE-DOCUMENT-GATEWAY-001 — backend partagé hors Vercel
 - agent: claude
-- status: pending
+- status: in_progress
 - branch: claude/web-pwa-backend
 - base revision: 309ed9f2815c855f5e99ecad6368e2fe96f58975
 - worktree: /Users/claudebrafa/.codex/worktrees/depannage-claude-backend
@@ -190,7 +190,7 @@ Depuis le31octobre00h America/Martinique, l’affectation Codex devient pilotage
 
 ## Mission WEB-ACCEPTANCE-TESTS-001 — scripts de recette pilotables
 - agent: claude
-- status: pending
+- status: in_progress
 - branch: claude/web-pwa-qa
 - base revision: 309ed9f2815c855f5e99ecad6368e2fe96f58975
 - worktree: /Users/claudebrafa/.codex/worktrees/depannage-claude-qa
