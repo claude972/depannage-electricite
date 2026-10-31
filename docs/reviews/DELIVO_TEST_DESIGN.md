@@ -139,3 +139,18 @@
   ni conseil de bricolage. Contraste minimal hors héros 5,41:1 dans les deux thèmes ; 8 cas sans débordement, cibles
   ≥ 44 px, aucune requête externe, console propre. Crédits : héros (Fatih Yurtman, ranjeet) sous le héros ; toutes les
   photos en pied de page (dont Ksenia Chernaya, Pexels 5691599).
+
+## DESIGN-DELIVO-WEB-TEST-008 — « Conseils et formation » jaune, bannière de recrutement (plan court, base e2226d0)
+
+- Fichiers : `prototypes/delivo-test/web-network.html` (copie de la page 007, mêmes feuilles + `web-network.css`),
+  `web-network.css`, `web-network.js` (+ ce rapport). 007/006 et plus anciennes : immuables.
+- Bloc blog renommé « Conseils et formation », panneau jaune `.advice` #F4D649 : texte #141414 (12,77:1), secondaire
+  #343434 (8,63:1), pastilles vert sombre #0E3B26 / texte #F4D649 (8,71:1) ; identique dans les deux thèmes (le panneau
+  garde son texte sombre en thème sombre) ; focus #141414 sur le jaune.
+- Bannière recrutement après le bloc conseils, avant le pied de page : fond vert #18794E (texte blanc 5,41:1), texte à
+  gauche « Rejoignez notre réseau d’électriciens » / « Présentez votre activité et votre zone d’intervention », photo
+  existante au centre (`section-real-panel.jpg`, recadrage CSS seulement), bouton « Nous rejoindre » à droite (fond noir,
+  texte blanc) ; empilée sur mobile. Aucune promesse de revenu ni chiffre ; aucun logo ou casquette repris de la référence.
+- « Nous rejoindre » ouvre un dialogue local de candidature factice (nom, métier, zone — rien n’est envoyé, pas
+  d’authentification), Échap ferme, focus rendu au bouton.
+- Vérif : 1440/1280/390/360 × 2 thèmes, AA, ≥ 44 px, focus, aucune requête externe, console propre.
