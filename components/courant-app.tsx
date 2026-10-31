@@ -76,6 +76,10 @@ import {
   type ProfessionalData,
   type Profile,
   type Quote,
+  type QuoteDraft,
+  type QuoteDraftCommand,
+  type QuoteDraftEnvelope,
+  type QuoteDraftResult,
   type RequestValues,
   type ReturnContext,
   type Role,
@@ -515,6 +519,7 @@ export default function CourantApp() {
       payments: "available",
       siteAccess: "available",
       adminLists: "available",
+      quoteDraft: "available",
     });
     guard.bump();
     runner.reset();
@@ -1333,6 +1338,143 @@ export default function CourantApp() {
       return null;
     }
   }
+  // ---- Quote draft (contract QUOTE-DRAFT-001). Demo: one private draft per dossier in the
+  // browser; live: dedicated route, unavailable until the backend checkpoint is integrated.
+  const demoDrafts = () =>
+    readDemo<Record<string, { draft: QuoteDraft | null; version: number }>>(
+      DEMO_KEYS.quoteDrafts,
+      {},
+      (v) => !!v && typeof v === "object",
+    );
+  function demoDraftEnvelope(interventionId: string): QuoteDraftEnvelope {
+    const entry = demoDrafts()[interventionId] || { draft: null, version: 0 };
+    const current = data.quotes.find(
+      (q) => q.intervention_id === interventionId && q.status === "sent",
+    );
+    return {
+      draft: entry.draft,
+      version: entry.version,
+      assignment_token: `demo-assignment-${interventionId}`,
+      current_quote_id: current?.id ?? null,
+    };
+  }
+  async function loadQuoteDraft(interventionId: string): Promise<QuoteDraftEnvelope | null> {
+    if (modeRef.current === "demo") return demoDraftEnvelope(interventionId);
+    const my = seq.current;
+    try {
+      const result = await api<QuoteDraftEnvelope>(`/api/interventions/${interventionId}/quote-draft`);
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, quoteDraft: "available" }));
+      return result;
+    } catch (e) {
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, quoteDraft: contractStateFromError(e) }));
+      return null;
+    }
+  }
+  async function quoteDraftCommand(
+    interventionId: string,
+    body: QuoteDraftCommand,
+  ): Promise<QuoteDraftResult> {
+    let outcome: QuoteDraftResult = { ok: false, conflict: false, message: "Action interrompue." };
+    await run(async (ctx) => {
+      if (modeRef.current === "demo") {
+        const all = demoDrafts();
+        const envelope = demoDraftEnvelope(interventionId);
+        if (body.expected_version !== envelope.version || body.assignment_token !== envelope.assignment_token) {
+          outcome = {
+            ok: false,
+            conflict: true,
+            message: "Le brouillon a changé depuis votre dernière lecture. Rechargez-le ; votre saisie est conservée.",
+          };
+          return;
+        }
+        if (body.action === "save") {
+          if (body.base_quote_id !== envelope.current_quote_id) {
+            outcome = {
+              ok: false,
+              conflict: true,
+              message: "Un devis a été publié entre-temps sur ce dossier. Rechargez avant d’enregistrer.",
+            };
+            return;
+          }
+          const draft: QuoteDraft = {
+            intervention_id: interventionId,
+            artisan_id: DEMO_IDS.artisan,
+            version: envelope.version + 1,
+            assignment_token: envelope.assignment_token,
+            base_quote_id: body.base_quote_id,
+            lines: body.lines,
+            tax_rate: body.tax_rate,
+            updated_at: new Date().toISOString(),
+          };
+          all[interventionId] = { draft, version: draft.version };
+          writeDemo(DEMO_KEYS.quoteDrafts, all);
+          outcome = { ok: true, envelope: { ...envelope, draft, version: draft.version } };
+          ctx.notice("Brouillon enregistré dans la démonstration (non envoyé au client).");
+          return;
+        }
+        if (!envelope.draft) {
+          outcome = { ok: false, conflict: true, message: "Aucun brouillon actif à traiter. Rechargez le dossier." };
+          return;
+        }
+        if (body.action === "discard") {
+          all[interventionId] = { draft: null, version: envelope.version + 1 };
+          writeDemo(DEMO_KEYS.quoteDrafts, all);
+          outcome = { ok: true, envelope: { ...envelope, draft: null, version: envelope.version + 1 } };
+          ctx.notice("Brouillon abandonné.");
+          return;
+        }
+        // send: publish through the existing demo action; the draft is consumed only on success.
+        const draft = envelope.draft;
+        if (draft.tax_rate === null || !draft.lines.length || draft.lines.some((l) => !l.label.trim()))
+          throw new Error("Le brouillon n’est pas publiable : lignes nommées et taux de TVA requis.");
+        const beforeIds = new Set(data.quotes.map((q) => q.id));
+        const ok = await action(interventionId, "send_quote", { lines: draft.lines, tax_rate: draft.tax_rate });
+        if (!ok) {
+          outcome = { ok: false, conflict: false, message: "Le devis n’a pas pu être publié ; le brouillon est conservé." };
+          return;
+        }
+        all[interventionId] = { draft: null, version: envelope.version + 1 };
+        writeDemo(DEMO_KEYS.quoteDrafts, all);
+        outcome = {
+          ok: true,
+          envelope: {
+            ...envelope,
+            draft: null,
+            version: envelope.version + 1,
+            // The exact quote created by this publication is read back after the state update.
+            quote_id: data.quotes.find((q) => !beforeIds.has(q.id))?.id,
+          },
+        };
+        return;
+      }
+      try {
+        const result = await api<QuoteDraftEnvelope>(`/api/interventions/${interventionId}/quote-draft`, body);
+        ctx.when(setCapabilities)((c) => ({ ...c, quoteDraft: "available" }));
+        outcome = { ok: true, envelope: result };
+        if (body.action === "send") {
+          if (ctx.alive()) await refresh();
+          ctx.notice("Devis envoyé au client.");
+        } else
+          ctx.notice(
+            body.action === "save"
+              ? "Brouillon enregistré. Il n’est pas envoyé au client tant que vous ne publiez pas."
+              : "Brouillon abandonné.",
+          );
+      } catch (e) {
+        if (e instanceof ApiRequestError && e.status === 409) {
+          outcome = { ok: false, conflict: true, message: e.message };
+          return; // not an error banner: the editor shows the conflict and keeps the input
+        }
+        if (contractStateFromError(e) === "missing")
+          ctx.when(setCapabilities)((c) => ({ ...c, quoteDraft: "missing" }));
+        outcome = { ok: false, conflict: false, message: (e as Error).message };
+        throw e;
+      }
+    });
+    return outcome;
+  }
   // Membership lost or never held: drop every cached view of the organisation.
   function dropOrganizationContext() {
     setActiveOrganizationId("");
@@ -1846,6 +1988,8 @@ export default function CourantApp() {
     loadAdminOverview,
     loadAdminInterventions,
     loadAdminIntervention,
+    loadQuoteDraft,
+    quoteDraftCommand,
     loadOrganization,
     organizationCommand,
     acceptInvitation,

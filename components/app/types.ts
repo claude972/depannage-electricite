@@ -498,6 +498,7 @@ export type Capabilities = {
   payments: ContractState;
   siteAccess: ContractState;
   adminLists: ContractState;
+  quoteDraft: ContractState;
 };
 export const UNKNOWN_CAPABILITIES: Capabilities = {
   operations: "unknown",
@@ -509,6 +510,7 @@ export const UNKNOWN_CAPABILITIES: Capabilities = {
   payments: "unknown",
   siteAccess: "unknown",
   adminLists: "unknown",
+  quoteDraft: "unknown",
 };
 export type ReturnContext =
   | { kind: "payment"; state: "pending" | "cancelled"; interventionId: string }
@@ -612,3 +614,40 @@ export type AdminInterventionDetail = {
   quotes_limit: number;
   quotes_limited: boolean;
 };
+
+// Contract WEB-PWA-QUOTE-DRAFT-001 (published before implementation): private persistent quote
+// draft of the assigned artisan, optimistic version and assignment token. Saving is never sending.
+export type QuoteDraft = {
+  intervention_id: string;
+  artisan_id: string;
+  version: number;
+  assignment_token: string;
+  base_quote_id: string | null;
+  lines: Line[];
+  tax_rate: number | null;
+  updated_at: string;
+};
+export type QuoteDraftEnvelope = {
+  draft: QuoteDraft | null;
+  version: number;
+  assignment_token: string;
+  current_quote_id: string | null;
+  /** Present only in the answer of a successful send. */
+  quote_id?: string;
+  intervention?: Intervention;
+};
+export type QuoteDraftCommand =
+  | {
+      action: "save";
+      expected_version: number;
+      assignment_token: string;
+      base_quote_id: string | null;
+      lines: Line[];
+      tax_rate: number | null;
+    }
+  | { action: "discard"; expected_version: number; assignment_token: string }
+  | { action: "send"; expected_version: number; assignment_token: string };
+export type QuoteDraftResult =
+  | { ok: true; envelope: QuoteDraftEnvelope }
+  | { ok: false; conflict: true; message: string }
+  | { ok: false; conflict: false; message: string };

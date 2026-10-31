@@ -22,6 +22,9 @@ import type {
   PaymentStatusReport,
   ProfessionalData,
   Profile,
+  QuoteDraftCommand,
+  QuoteDraftEnvelope,
+  QuoteDraftResult,
   RequestValues,
   ReturnContext,
   Role,
@@ -122,6 +125,13 @@ export interface Session {
   loadAdminInterventions(params: AdminListFilters & { limit?: number; cursor?: string | null }): Promise<AdminInterventionsPage | null>;
   /** Admin detail of any dossier (not limited to the 100 loaded in workspace), with bounded quotes. */
   loadAdminIntervention(id: string): Promise<AdminInterventionDetail | null>;
+  /** Quote draft envelope of the assigned artisan (contract QUOTE-DRAFT-001); null when unavailable. */
+  loadQuoteDraft(interventionId: string): Promise<QuoteDraftEnvelope | null>;
+  /**
+   * save / discard / send on the draft. A 409 is returned as a conflict (the caller keeps the
+   * typed lines and offers a reload); a successful send returns the exact created quote_id.
+   */
+  quoteDraftCommand(interventionId: string, body: QuoteDraftCommand): Promise<QuoteDraftResult>;
   /** Organisation membership read model (GET /api/organizations?organization_id=). */
   loadOrganization(organizationId: string): Promise<OrganizationOverview | null>;
   /** Owner-only member commands; create_invitation resolves with the one-time code. */
