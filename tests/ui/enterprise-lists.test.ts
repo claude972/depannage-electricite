@@ -250,3 +250,40 @@ test("budget par site : engagé = devis acceptés du site, taux réel ou null sa
   assert.deepEqual(bars[0], { id: "s1", name: "Siège", committed: 150000, budget: 100000, ratio: 150, width: 100, over: true }, "taux réel non plafonné, barre plafonnée");
   assert.deepEqual(bars[1], { id: "s2", name: "Annexe", committed: 5000, budget: 0, ratio: null, width: 0, over: false }, "sans budget : aucun taux déduit");
 });
+
+import { FIGURE_PLACEHOLDER, dashboardFigures, figureState, overviewSubtitle } from "../../components/role/enterprise-lists";
+
+test("chiffres professionnels du tableau de bord : jamais un 0 tant que le contrat n’est pas réellement chargé", () => {
+  const isOpen = ((s: string) => !["paid", "cancelled"].includes(s)) as never;
+  const scope = { interventions: [{ status: "requested", urgency: "urgent" }], compliance: [], approvals: [], quotes: [] } as never;
+  for (const state of ["unknown", "unavailable", "missing"] as const) {
+    const f = dashboardFigures(state, scope, "2026-11-01", isOpen);
+    assert.equal(f.deadlines30, null, `${state}: échéances non chiffrées`);
+    assert.equal(f.approvalsPending, null, `${state}: approbations non chiffrées`);
+    assert.equal(f.committedCents, null, `${state}: budget non chiffré`);
+    assert.notEqual(typeof f.deadlines30, "number");
+    assert.equal(f.open, 1, "les dossiers de l’espace de travail restent chiffrés");
+    assert.equal(f.urgent, 1);
+    assert.equal(f.professional, state === "unknown" ? "checking" : "unverified");
+    assert.ok(FIGURE_PLACEHOLDER[f.professional as "checking" | "unverified"]);
+  }
+  const loaded = dashboardFigures("available", scope, "2026-11-01", isOpen);
+  assert.deepEqual([loaded.deadlines30, loaded.approvalsPending, loaded.committedCents, loaded.professional], [0, 0, 0, "loaded"], "chargé et vide : 0 qualifié");
+  const full = dashboardFigures(
+    "available",
+    { interventions: [], compliance: [{ status: "pending", due_on: "2026-11-15" }], approvals: [{ status: "pending" }, { status: "approved" }], quotes: [{ status: "accepted", total_cents: 500 }, { status: "sent", total_cents: 999 }] } as never,
+    "2026-11-01",
+    isOpen,
+  );
+  assert.deepEqual([full.deadlines30, full.approvalsPending, full.committedCents], [1, 1, 500]);
+  assert.equal(figureState("unknown"), "checking");
+  assert.equal(figureState("missing"), "unverified");
+});
+test("sous-titre du tableau de bord : « parmi les données chargées » seulement quand elles le sont", () => {
+  const note = "Données chargées (100 derniers dossiers)";
+  assert.equal(overviewSubtitle("available", "Maison & lieux", note), "Maison & lieux · parmi les données chargées (100 derniers dossiers)");
+  assert.match(overviewSubtitle("unknown", "Maison & lieux", note), /vérification des données professionnelles en cours/);
+  assert.doesNotMatch(overviewSubtitle("unknown", "Maison & lieux", note), /données chargées/i);
+  assert.match(overviewSubtitle("unavailable", "Maison & lieux", note), /non vérifiées/);
+  assert.doesNotMatch(overviewSubtitle("missing", "Maison & lieux", note), /chargées/);
+});

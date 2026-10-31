@@ -1007,3 +1007,17 @@ d’acteur). Comportements inchangés : commandes professionnelles, décision d�
 (`SiteOperationsView` / `FeatureUnavailable`), ancrages notifications / documents / plateforme. Fichiers touchés :
 `components/role/enterprise-space.tsx`, `enterprise.module.css`, `enterprise-lists.ts`, `tests/ui/enterprise-lists.test.ts`,
 cette section, `docs/visual-fidelity/enterprise-*`.
+
+### Correction ENTERPRISE-FIGURES-001 (revue racine de e83d359, V5-C05)
+
+Les indicateurs dépendant des données professionnelles (échéances à 30 jours, devis à approuver, budget engagé)
+affichaient 0 sur un état de contrat `unknown` / `unavailable` tandis que le sous-titre annonçait « Données
+chargées ». Correction : `dashboardFigures(state, …)` (règle de `siteAlertSummary`) renvoie `null` pour ces trois
+chiffres tant que `capabilities.professional` n’est pas `available` ; l’interface affiche alors « Vérification… » ou
+« Non vérifié » avec la note « Données professionnelles non chiffrables » (jamais un 0) et le panneau « Budget par
+site » n’est rendu qu’avec des données chargées. Sous-titre via `overviewSubtitle` : « parmi les données chargées
+(100 derniers dossiers) » seulement une fois chargées, sinon « vérification … en cours » / « non vérifiées ». Tests :
+unknown / unavailable / missing → non chiffré (pas un nombre), available vide → 0 qualifié, libellés du sous-titre.
+Captures : état chargé `enterprise-overview-{360,1280}-after.jpg` remplacées ; l’état `unknown` / `unavailable`
+n’est pas capturable en démonstration (capacités câblées `available` dans `components/courant-app.tsx` et
+`components/app/demo.ts`) : couvert par les tests et le code source (`FIGURE_PLACEHOLDER`, `data-professional`).

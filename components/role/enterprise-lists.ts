@@ -197,3 +197,55 @@ export function siteBudgetBars(
     return { id: site.id, name: site.name, committed, budget, ...budgetFigures(committed, budget) };
   });
 }
+
+/** Lisibilité d’un chiffre dépendant des données professionnelles (même règle que `siteAlertSummary`). */
+export type FigureState = "checking" | "unverified" | "loaded";
+export const figureState = (state: ContractState): FigureState =>
+  state === "unknown" ? "checking" : state === "available" ? "loaded" : "unverified";
+
+/**
+ * Chiffres du tableau de bord V5-C05 dépendant du contrat professionnel : échéances à 30 jours,
+ * approbations en attente et budget engagé ne sont des nombres que lorsque les données sont
+ * réellement chargées ; sinon `null` (vérification en cours ou non vérifié), jamais un 0.
+ * Les interventions ouvertes et les urgences viennent de l’espace de travail et restent chiffrées.
+ */
+export function dashboardFigures(
+  state: ContractState,
+  scope: {
+    interventions: Pick<Intervention, "status" | "urgency">[];
+    compliance: Pick<ComplianceRecord, "status" | "due_on">[];
+    approvals: Pick<Approval, "status">[];
+    quotes: Pick<Quote, "status" | "total_cents">[];
+  },
+  today: string,
+  isOpen: (status: Intervention["status"]) => boolean,
+) {
+  const base = overviewFigures(scope, today, isOpen);
+  const professional = figureState(state);
+  const loaded = professional === "loaded";
+  return {
+    open: base.open,
+    urgent: base.urgent,
+    professional,
+    deadlines30: loaded ? base.deadlines30 : null,
+    approvalsPending: loaded ? scope.approvals.filter((a) => a.status === "pending").length : null,
+    committedCents: loaded ? scope.quotes.filter((q) => q.status === "accepted").reduce((sum, q) => sum + q.total_cents, 0) : null,
+  };
+}
+
+/** Libellé d’un chiffre non chiffrable : l’état est dit, jamais remplacé par une valeur. */
+export const FIGURE_PLACEHOLDER: Record<Exclude<FigureState, "loaded">, string> = {
+  checking: "Vérification…",
+  unverified: "Non vérifié",
+};
+
+/**
+ * Sous-titre du tableau de bord : « parmi les données chargées » seulement quand les données
+ * professionnelles le sont réellement ; sinon l’état de vérification est annoncé.
+ */
+export function overviewSubtitle(state: ContractState, organizationName: string, loadedNote: string): string {
+  const figure = figureState(state);
+  if (figure === "loaded") return `${organizationName} · parmi les ${loadedNote.charAt(0).toLowerCase()}${loadedNote.slice(1)}`;
+  if (figure === "checking") return `${organizationName} · vérification des données professionnelles en cours`;
+  return `${organizationName} · données professionnelles non vérifiées (service indisponible)`;
+}
