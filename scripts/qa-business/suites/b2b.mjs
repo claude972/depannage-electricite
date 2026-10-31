@@ -311,7 +311,7 @@ export const suite = {
       const h = await ctx.openPage(s, {});
       try {
         await s.step("login read-only member", () => login(h, base, reader, projectRef));
-        const readerWindow = await settledBaseline(h, { driverMutations: 0 });
+        const readerWindow = await settledBaseline(h, { driverMutations: 0, origin: base });
         await s.step("site A1: operations readable, read-only block with the reason, owner's equipment listed", async () => {
           await openOps(h.page, siteA1);
           await tab(h.page, "Équipements");
@@ -403,7 +403,7 @@ export const suite = {
           assert.equal(b1.status, 200);
           assert.equal(b1.body?.snapshot?.site?.id, siteB1.id);
           assert.equal(await db.count("site_equipment", { site_id: `eq.${siteA1.id}` }), 1);
-          window = await settledBaseline(h, { since: beforeProbes, driverMutations: 1 });
+          window = await settledBaseline(h, { since: beforeProbes, driverMutations: 1, origin: base });
           return { a1: a1.status, post: refusedPost.status, b1: b1.status, ui_window_from: window.index };
         });
         await s.step("UI: #site/<A1> shows nothing of A1; own site B1 shows its operations", async () => {

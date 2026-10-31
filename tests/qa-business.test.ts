@@ -1083,35 +1083,92 @@ test("§19 clock barrier through main: slow public fetch ⇒ exit 2, BLOCKED 're
   assert.deepEqual((await readdir(out)).sort(), ["result.json", "summary.md"], "no manifest, no fixture, no run log");
 });
 
-// ---------------------------------------------------------------- §20 bounded UI observation window (run d467d88c7206)
-test("§20 driver POST 403 before the window is allowed; a UI POST during the window FAILS whatever its status", async () => {
+// ---------------------------------------------------------------- §20 / §20 bis bounded UI window (runs d467d88c7206, review b943b45)
+import { EventEmitter } from "node:events";
+const ORIGIN = "http://localhost:3017";
+/** Page handle shaped like scripts/qa/lib/browser.mjs newPage: an emitter page + a response log. */
+function fakeHandle(initial: Row[] = []) {
+  const page = new EventEmitter();
+  const h = { page, network: [...initial] as Row[] };
+  const request = (method: string, path: string, origin = ORIGIN) => ({ method: () => method, url: () => `${origin}${path}` });
+  /** Emission now; the response is recorded later (deferred) like the real response event. */
+  const emit = (method: string, path: string, origin = ORIGIN) => {
+    const req = request(method, path, origin);
+    page.emit("request", req);
+    return { respond: (status: number) => h.network.push({ method, path, status }) };
+  };
+  return { h, emit };
+}
+test("§20 bis driver POST 403 before the window ⇒ PASS; UI POST with response PENDING ⇒ FAIL; UI 403 ⇒ FAIL; UI 200 ⇒ FAIL", async () => {
   const net = await lib("network");
-  const fresh = () => ({ network: [{ method: "GET", path: "/api/workspace", status: 200 }] as Row[] });
-  // Third-party shape: the driver's deliberate generate probe answered 403, then UI navigation (GETs only).
-  const h = fresh();
+  const { h, emit } = fakeHandle([{ method: "GET", path: "/api/workspace", status: 200 }]);
   const before = h.network.length;
-  h.network.push({ method: "GET", path: "/api/quote-documents", status: 403 }, { method: "POST", path: "/api/quote-documents", status: 403 });
-  const window = await net.settledBaseline(h, { since: before, driverMutations: 1 });
-  h.network.push({ method: "GET", path: "/api/workspace", status: 200 });
-  assert.deepEqual(net.assertNoUiWrites(h, window), { window_from: 3, observed: 1 }, "driver 403 before the window: PASS");
-  // A UI POST answered 403 inside the window is a FAIL (no status filter).
-  h.network.push({ method: "POST", path: "/api/quote-documents", status: 403 });
-  assert.throws(() => net.assertNoUiWrites(h, window), (e: Error) => e.name === "AssertionError" && /1 write request/.test(e.message));
-  // A UI POST answered 200 inside the window is a FAIL.
-  const h2 = fresh();
-  const w2 = await net.settledBaseline(h2, { driverMutations: 0 });
-  h2.network.push({ method: "PATCH", path: "/api/site-operations", status: 200 });
-  assert.throws(() => net.assertNoUiWrites(h2, w2), (e: Error) => e.name === "AssertionError");
-  assert.equal(Object.isFrozen(window), true, "baseline immutable");
+  emit("POST", "/api/quote-documents").respond(403); // driver probe, before the window
+  const window = await net.openUiWindow(h, { since: before, driverMutations: 1, origin: ORIGIN });
+  emit("GET", "/api/workspace").respond(200);
+  assert.equal(net.assertNoUiWrites(h, window).emitted_writes, 0, "driver 403 before the window: PASS");
+  const pending = emit("POST", "/api/site-operations"); // UI write emitted, no response yet
+  assert.throws(() => net.assertNoUiWrites(h, window), (e: Error) => e.name === "AssertionError" && /emitted/.test(e.message), "pending response must already FAIL");
+  pending.respond(403);
+  assert.throws(() => net.assertNoUiWrites(h, window), (e: Error) => e.name === "AssertionError", "UI 403 FAIL");
+  const second = fakeHandle();
+  const w2 = await net.openUiWindow(second.h, { origin: ORIGIN });
+  second.emit("PATCH", "/api/site-operations").respond(200);
+  assert.throws(() => net.assertNoUiWrites(second.h, w2), (e: Error) => e.name === "AssertionError", "UI 200 FAIL");
+  const third = fakeHandle();
+  const w3 = await net.openUiWindow(third.h, { origin: ORIGIN });
+  third.emit("POST", "/api/x", "https://other.example"); // newPage records only same-origin responses
+  third.emit("POST", "/auth/v1/token").respond(200);
+  assert.equal(net.assertNoUiWrites(third.h, w3).emitted_writes, 0, "other origins and non-/api/ paths are outside the assertion");
+  net.closeUiWindow(third.h, w3);
+  third.emit("POST", "/api/after-close");
+  assert.equal(third.h.page.listenerCount("request"), 0, "listener detached on close");
 });
-test("§20 baseline waits for a driver response recorded late, and an extra write during the probes is a FAIL", async () => {
+test("§20 bis baseline is opaque and bound: foreign handle, forged {}, malformed or out-of-range ⇒ harness error, never PASS (root repro ported)", async () => {
   const net = await lib("network");
-  const h = { network: [] as Row[] };
-  setTimeout(() => h.network.push({ method: "POST", path: "/api/site-operations", status: 403 }), 40); // response event after the probe resolved
-  const w = await net.settledBaseline(h, { since: 0, driverMutations: 1, timeoutMs: 1000 });
-  assert.equal(w.index, 1, "the late driver POST is before the window, not in it");
-  assert.deepEqual(net.assertNoUiWrites(h, w).observed, 0);
-  const extra = { network: [{ method: "POST", path: "/api/site-operations", status: 403 }, { method: "POST", path: "/api/quote-documents", status: 200 }] as Row[] };
-  await assert.rejects(() => net.settledBaseline(extra, { since: 0, driverMutations: 1 }), (e: Error) => e.name === "AssertionError");
-  await assert.rejects(() => net.settledBaseline({ network: [] }, { driverMutations: 1, timeoutMs: 60 }), (e: Error) => e.name === "Error" && /driver mutation/.test(e.message), "missing observation is a harness anomaly, not a PASS");
+  const first = fakeHandle(Array.from({ length: 3 }, () => ({ method: "GET", path: "/api/workspace", status: 200 })));
+  const other = fakeHandle([{ method: "POST", path: "/api/site-operations", status: 200 }]);
+  const w = await net.openUiWindow(first.h, { origin: ORIGIN });
+  for (const [label, run] of [
+    ["window of another handle", () => net.assertNoUiWrites(other.h, w)],
+    ["forged {}", () => net.assertNoUiWrites({ page: new EventEmitter(), network: [] }, {})],
+    ["null", () => net.assertNoUiWrites(first.h, null)],
+    ["plain object with an index", () => net.assertNoUiWrites(first.h, Object.freeze({ index: 0 }))],
+  ] as const)
+    assert.throws(run, (e: Error) => e.name === "UiWindowError", label);
+  first.h.network.length = 1; // log shrunk below the baseline: out of range
+  assert.throws(() => net.assertNoUiWrites(first.h, w), (e: Error) => e.name === "UiWindowError" && /out of range/.test(e.message));
+  assert.ok(Object.isFrozen(w));
+  assert.deepEqual(Object.keys(w), [], "nothing readable or forgeable on the token");
+  await assert.rejects(() => net.openUiWindow({ network: [] }, {}), (e: Error) => e.name === "UiWindowError", "handle without page");
+  await assert.rejects(() => net.openUiWindow(fakeHandle().h, { since: 5 }), (e: Error) => e.name === "UiWindowError", "since beyond the log");
+});
+test("§20 baseline waits for a driver response recorded late; an extra write during the probes FAILS; never observed ⇒ anomaly", async () => {
+  const net = await lib("network");
+  const late = fakeHandle();
+  const probe = late.emit("POST", "/api/site-operations"); // emitted before the window opens
+  setTimeout(() => probe.respond(403), 40);
+  const w = await net.openUiWindow(late.h, { since: 0, driverMutations: 1, timeoutMs: 1000, origin: ORIGIN });
+  assert.equal(net.assertNoUiWrites(late.h, w).emitted_writes, 0, "the driver POST is before the window, not in it");
+  const extra = fakeHandle([{ method: "POST", path: "/api/site-operations", status: 403 }, { method: "POST", path: "/api/quote-documents", status: 200 }]);
+  await assert.rejects(() => net.openUiWindow(extra.h, { since: 0, driverMutations: 1 }), (e: Error) => e.name === "AssertionError");
+  await assert.rejects(() => net.openUiWindow(fakeHandle().h, { driverMutations: 1, timeoutMs: 60 }), (e: Error) => e.name === "Error" && /driver mutation/.test(e.message));
+});
+test("§20 bis root repro ported with the REAL shared newPage handle: UI POST started without response ⇒ FAIL, then 403 ⇒ FAIL", async () => {
+  const net = await lib("network");
+  const browserLib = await qaLib("browser");
+  const page = new EventEmitter();
+  const context = { setDefaultTimeout() {}, setDefaultNavigationTimeout() {}, newPage: async () => page };
+  const h = await browserLib.newPage({ newContext: async () => context }, { baseUrl: "https://example.invalid" });
+  const window = await net.openUiWindow(h, { driverMutations: 0, origin: "https://example.invalid" });
+  const req = { url: () => "https://example.invalid/api/site-operations", method: () => "POST" };
+  page.emit("request", req);
+  assert.throws(() => net.assertNoUiWrites(h, window), (e: Error) => e.name === "AssertionError", "emitted, response pending: FAIL (was PASS in b943b45)");
+  page.emit("response", { url: req.url, request: () => req, status: () => 403 });
+  assert.throws(() => net.assertNoUiWrites(h, window), (e: Error) => e.name === "AssertionError", "after 403: FAIL");
+  const first = await browserLib.newPage({ newContext: async () => ({ ...context, newPage: async () => new EventEmitter() }) }, { baseUrl: "https://example.invalid" });
+  first.network.push(...Array.from({ length: 3 }, () => ({ method: "GET", path: "/api/workspace", status: 200 })));
+  const foreign = await net.openUiWindow(first, { origin: "https://example.invalid" });
+  assert.throws(() => net.assertNoUiWrites(h, foreign), (e: Error) => e.name === "UiWindowError", "wrong context: harness error, not PASS");
+  assert.throws(() => net.assertNoUiWrites({ page: new EventEmitter(), network: [] }, {}), (e: Error) => e.name === "UiWindowError", "missing baseline: harness error");
 });

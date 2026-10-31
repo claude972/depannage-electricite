@@ -171,7 +171,7 @@ export const suite = {
       const h = await ctx.openPage(s, { width: 360, height: 780 });
       try {
         await s.step("login client", () => login(h, base, client, projectRef));
-        const readingWindow = await settledBaseline(h, { driverMutations: 0 });
+        const readingWindow = await settledBaseline(h, { driverMutations: 0, origin: base });
         await s.step("documents section of the dossier", async () => {
           const section = await openClientQuote(h.page, base, d1, q1);
           await expectVisible(section.getByRole("heading", { name: "Document du devis et avenants", exact: true }), "client documents title");
@@ -327,7 +327,7 @@ export const suite = {
           const events = await db.select("quote_document_events", { intervention_id: `eq.${d1.id}`, actor_id: `eq.${tiers.id}` }, "id");
           assert.equal(events.length, 0, "no event recorded for the third party");
           // UI window starts here: the single driver POST (generate, 403) is before the baseline.
-          window = await settledBaseline(h, { since: beforeProbes, driverMutations: 1 });
+          window = await settledBaseline(h, { since: beforeProbes, driverMutations: 1, origin: base });
           return { overview: overview.status, download: download.status(), generate: generate.status, ui_window_from: window.index };
         });
         await s.step("UI: the dossier content is not visible to the third party", async () => {
