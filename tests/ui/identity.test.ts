@@ -11,102 +11,151 @@ const deferred = <T,>() => {
   });
   return { promise, resolve };
 };
+// Mirrors the controller: userId ref, clearSessionState bumps + resets, listener adoption,
+// refresh gated so that interleavings can be driven explicitly.
 function controllerLike() {
   const guard = createGuard();
-  const state = { busy: false, error: "", notice: "", userId: null as string | null, views: [] as View[], refreshes: 0, clears: 0 };
+  const state = {
+    busy: false,
+    error: "",
+    notice: "",
+    userId: null as string | null,
+    sdkUser: null as string | null,
+    views: [] as View[],
+    refreshes: [] as (string | null)[],
+    clears: 0,
+  };
   const runner = createRunner(guard, {
-    setBusy: (v) => {
-      state.busy = v;
-    },
-    setError: (m) => {
-      state.error = m;
-    },
-    setNotice: (m) => {
-      state.notice = m;
-    },
+    setBusy: (v) => void (state.busy = v),
+    setError: (m) => void (state.error = m),
+    setNotice: (m) => void (state.notice = m),
   });
-  // Same shape as the controller: clearing state bumps the generation and resets the runner.
   const clearSessionState = () => {
     state.clears += 1;
     guard.bump();
     runner.reset();
     state.userId = null;
   };
-  const refreshGate = deferred<void>();
-  const deps: IdentityDeps = {
-    clearSessionState,
-    setUserId: (id) => {
+  // What the auth listener does on SIGNED_IN for another user.
+  const listenerSignedIn = (id: string) => {
+    state.sdkUser = id;
+    if (id !== state.userId) {
+      clearSessionState();
       state.userId = id;
-    },
+      state.refreshes.push(id);
+    }
+  };
+  const refreshGate = deferred<void>();
+  const refreshStarted = deferred<void>();
+  const deps: IdentityDeps = {
+    currentUserId: async () => state.sdkUser,
+    loadedUserId: () => state.userId,
+    clearSessionState,
+    setUserId: (id) => void (state.userId = id),
     refresh: async () => {
-      state.refreshes += 1;
+      state.refreshes.push(state.userId);
+      refreshStarted.resolve();
       await refreshGate.promise;
     },
-    navigate: (v) => {
-      state.views.push(v);
-    },
+    navigate: (v) => void state.views.push(v),
     setPendingDraft: () => {},
     homeView: () => "overview",
   };
-  return { guard, runner, state, deps, refreshGate, clearSessionState };
+  return { guard, runner, state, deps, refreshGate, refreshStarted, clearSessionState, listenerSignedIn };
 }
+const login = (userId: string) => ({ userId });
 
-test("login chain clears the old session, adopts the new identity, refreshes once and navigates", async () => {
-  const { runner, state, deps, refreshGate } = controllerLike();
-  const chain = runner.run(async (ctx) => {
-    await adoptIdentity(ctx, "user-B", null, deps);
+test("promise before event: the chain clears the anonymous state, adopts A and navigates", async () => {
+  const h = controllerLike();
+  const chain = h.runner.run(async (ctx) => {
+    h.state.sdkUser = "A"; // SDK holds A once signInWithPassword resolved
+    const outcome = await adoptIdentity(ctx, login("A").userId, null, h.deps);
+    assert.equal(outcome, "adopted");
   });
-  refreshGate.resolve();
-  assert.equal(await chain, true, "chain completes as the new identity");
-  assert.equal(state.clears, 1);
-  assert.equal(state.userId, "user-B");
-  assert.equal(state.refreshes, 1);
-  assert.deepEqual(state.views, ["overview"]);
-  assert.equal(state.busy, false, "busy released after adoption");
+  h.refreshGate.resolve();
+  assert.equal(await chain, true);
+  assert.equal(h.state.clears, 1);
+  assert.equal(h.state.userId, "A");
+  assert.deepEqual(h.state.views, ["overview"]);
+  // A late SIGNED_IN for the same user is a no-op in the listener.
+  h.listenerSignedIn("A");
+  assert.equal(h.state.clears, 1);
 });
-test("a draft kept before login is restored after the new identity is loaded", async () => {
-  const { runner, state, deps, refreshGate } = controllerLike();
-  const draft = { category: "panel" as const, description: "x".repeat(20), address: "1 rue", postal_code: "97200", city: "FDF", urgency: "scheduled" as const };
-  const chain = runner.run(async (ctx) => {
-    await adoptIdentity(ctx, "user-B", draft, deps);
+test("event before promise: the listener already adopted A; the chain does not clear again and still navigates", async () => {
+  const h = controllerLike();
+  const chain = h.runner.run(async (ctx) => {
+    h.listenerSignedIn("A"); // SIGNED_IN fired during signInWithPassword, before it resolved
+    const outcome = await adoptIdentity(ctx, "A", null, h.deps);
+    assert.equal(outcome, "adopted");
   });
-  refreshGate.resolve();
+  h.refreshGate.resolve();
+  assert.equal(await chain, true, "own legitimate login is not rejected");
+  assert.equal(h.state.clears, 1, "no second reset of the freshly loaded A");
+  assert.equal(h.state.userId, "A");
+  assert.deepEqual(h.state.views, ["overview"]);
+  assert.equal(h.state.busy, false);
+});
+test("delayed login A resolving after B took over the browser is superseded: B is untouched", async () => {
+  const h = controllerLike();
+  const chain = h.runner.run(async (ctx) => {
+    h.listenerSignedIn("A");
+    h.listenerSignedIn("B"); // another tab / later login replaced A before A's promise resolved
+    const outcome = await adoptIdentity(ctx, "A", null, h.deps);
+    assert.equal(outcome, "superseded");
+  });
+  h.refreshGate.resolve();
   await chain;
-  assert.deepEqual(state.views, ["new"]);
+  assert.equal(h.state.userId, "B", "B stays the loaded identity");
+  assert.equal(h.state.clears, 2, "no extra reset caused by A's late completion");
+  assert.deepEqual(h.state.views, [], "no navigation on behalf of A");
+  assert.deepEqual(h.state.refreshes, ["A", "B"], "no workspace load attributed to A after B");
 });
-test("logout during the login refresh drops the navigation and the late effects", async () => {
-  const { runner, state, deps, refreshGate, clearSessionState } = controllerLike();
-  const chain = runner.run(async (ctx) => {
-    await adoptIdentity(ctx, "user-B", null, deps);
-    ctx.notice("Bienvenue B");
+test("logout during the login refresh drops navigation and late effects", async () => {
+  const h = controllerLike();
+  const chain = h.runner.run(async (ctx) => {
+    h.state.sdkUser = "A";
+    const outcome = await adoptIdentity(ctx, "A", null, h.deps);
+    assert.equal(outcome, "interrupted");
+    ctx.notice("Bienvenue A");
   });
-  // Another identity change happens while the workspace of B is loading.
-  clearSessionState();
-  refreshGate.resolve();
+  await h.refreshStarted.promise; // A's workspace request is in flight…
+  h.clearSessionState(); // …when the user logs out
+  h.refreshGate.resolve();
   assert.equal(await chain, false);
-  assert.deepEqual(state.views, [], "no navigation into a session that no longer exists");
-  assert.equal(state.notice, "");
-  assert.equal(state.busy, false);
+  assert.deepEqual(h.state.views, []);
+  assert.equal(h.state.notice, "");
+  assert.equal(h.state.busy, false);
 });
-test("a stale chain of account A finishing after B's login still publishes nothing", async () => {
-  const { runner, state, deps, refreshGate, guard } = controllerLike();
+test("a stale mutation chain of A finishing after B's login publishes nothing", async () => {
+  const h = controllerLike();
   const gateA = deferred<void>();
-  const chainA = runner.run(async (ctx) => {
+  const chainA = h.runner.run(async (ctx) => {
     await gateA.promise;
     ctx.notice("A terminé");
-    ctx.when((v: View) => state.views.push(v))("detail");
+    ctx.when((v: View) => h.state.views.push(v))("detail");
   });
-  // A logs out, B logs in through the adoption sequence.
-  guard.bump();
-  runner.reset();
-  const chainB = runner.run(async (ctx) => {
-    await adoptIdentity(ctx, "user-B", null, deps);
+  h.guard.bump();
+  h.runner.reset();
+  const chainB = h.runner.run(async (ctx) => {
+    h.state.sdkUser = "B";
+    await adoptIdentity(ctx, "B", null, h.deps);
   });
-  refreshGate.resolve();
+  h.refreshGate.resolve();
   gateA.resolve();
   assert.equal(await chainA, false);
   assert.equal(await chainB, true);
-  assert.deepEqual(state.views, ["overview"], "only B's navigation happened");
-  assert.equal(state.notice, "");
-  assert.equal(state.userId, "user-B");
+  assert.deepEqual(h.state.views, ["overview"]);
+  assert.equal(h.state.notice, "");
+  assert.equal(h.state.userId, "B");
+});
+test("a kept draft is restored after adoption", async () => {
+  const h = controllerLike();
+  const draft = { category: "panel" as const, description: "x".repeat(20), address: "1 rue", postal_code: "97200", city: "FDF", urgency: "scheduled" as const };
+  const chain = h.runner.run(async (ctx) => {
+    h.state.sdkUser = "A";
+    await adoptIdentity(ctx, "A", draft, h.deps);
+  });
+  h.refreshGate.resolve();
+  await chain;
+  assert.deepEqual(h.state.views, ["new"]);
 });

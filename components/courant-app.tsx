@@ -1500,6 +1500,15 @@ export default function CourantApp() {
 
   // Dependencies of the identity adoption sequence (login / signup with session).
   const identityDeps = {
+    async currentUserId() {
+      try {
+        const { data } = await createClient().auth.getUser();
+        return data.user?.id ?? null;
+      } catch {
+        return null;
+      }
+    },
+    loadedUserId: () => userId.current,
     clearSessionState,
     setUserId(id: string | null) {
       userId.current = id;
@@ -1562,7 +1571,11 @@ export default function CourantApp() {
           throw new Error(
             "Connexion impossible. Vérifiez votre email, votre mot de passe et la confirmation de votre compte.",
           );
-        await adoptIdentity(ctx, result.data.user?.id ?? null, pendingDraft, identityDeps);
+        const outcome = await adoptIdentity(ctx, result.data.user?.id ?? null, pendingDraft, identityDeps);
+        if (outcome === "superseded")
+          throw new Error(
+            "Une autre connexion a été établie entre-temps dans ce navigateur. Rechargez la page pour continuer avec le compte actif.",
+          );
       });
     },
     async signUp(values) {
@@ -1575,7 +1588,11 @@ export default function CourantApp() {
         });
         if (result.error) throw result.error;
         if (result.data.session) {
-          await adoptIdentity(ctx, result.data.user?.id ?? null, pendingDraft, identityDeps);
+          const outcome = await adoptIdentity(ctx, result.data.user?.id ?? null, pendingDraft, identityDeps);
+          if (outcome === "superseded")
+            throw new Error(
+              "Une autre connexion a été établie entre-temps dans ce navigateur. Rechargez la page pour continuer avec le compte actif.",
+            );
         } else
           ctx.notice(
             "Votre compte a été créé. Consultez votre email pour confirmer votre inscription avant de vous connecter.",
