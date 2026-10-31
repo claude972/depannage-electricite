@@ -492,13 +492,24 @@ test("interruption: the first signal aborts the running phase (cleanup still run
 });
 test("the orchestrator wires discovery-first cleanup into every exit path", async () => {
   const source = await readFile(new URL("../scripts/qa-gateway/run.mjs", import.meta.url), "utf8");
-  assert.match(source, /interruptGuard\(\(event, handler\) => process\.on\(event, handler\)/);
+  // Signal wiring is injected (deps.on → process.on in defaultDeps) so the runner tests can run main().
+  assert.match(source, /interruptGuard\(deps\.on, \{/);
+  assert.match(source, /on: \(event, handler\) => process\.on\(event, handler\)/);
   assert.match(source, /AbortSignal\.any\(\[active\.signal, AbortSignal\.timeout\(TIMEOUT_MS\)\]\)/);
-  assert.match(source, /\} finally \{\n\s+if \(mode !== "dry-run"\) \{\n\s+try \{\n\s+await cleanup\(\);/);
+  // skipCleanup is set only by expiry-prepare (account kept on purpose, lease written) and by a
+  // too-early expiry-verify (nothing touched); every other path reaches the cleanup.
+  assert.match(source, /\} finally \{\n\s+if \(mode !== "dry-run" && !skipCleanup\) \{\n\s+try \{\n\s+await cleanup\(\);/);
+  assert.match(source, /let skipCleanup = false;/);
+  assert.equal((source.match(/skipCleanup = /g) || []).length, 6, "skipCleanup assigned only at its declaration, expiry prepare (prepared AND no failed step), expiry verify (too early), the pre-write UsageError refusal (nothing recorded), revoke prepare (prepared AND no failed step, or refused before any write) and revoke live (refused)");
+  assert.match(source, /if \(error instanceof UsageError && created\.userIds\.length === 0\) \{\n\s+\/\/[^\n]*\n\s+refusedBeforeWrite = true;\n\s+skipCleanup = true;/);
   assert.match(source, /async function cleanup\(\) \{\n[^]*?active = new AbortController\(\);\n[^]*?await runCleanup\(client, created, \{/);
   assert.match(source, /saveManifest: \(nextCreated, unknown\) => saveManifest\(nextCreated, unknown\)/);
-  assert.match(source, /reconcile: interrupted \|\| mode === "cleanup-manifest" \? RECONCILE : undefined/);
-  assert.match(source, /\} catch \(error\) \{\n\s+interrupted = true;/);
+  // Reconcile timings are injected (deps.reconcile → RECONCILE in defaultDeps) so tests run fast.
+  assert.match(source, /reconcile: interrupted \|\| mode === "cleanup-manifest" \? deps\.reconcile : undefined/);
+  assert.match(source, /reconcile: RECONCILE,/);
+  // The catch first handles a UsageError raised before any write (refusal, exit 2), then every other
+  // error marks the run interrupted (late reconcile before cleanup).
+  assert.match(source, /\} catch \(error\) \{\n\s+if \(error instanceof UsageError && created\.userIds\.length === 0\) \{[^]*?\} else \{\n\s+interrupted = true;/);
   assert.match(source, /parseStorageListing\(r\.json\)/);
   assert.doesNotMatch(source, /\.map\(\(o\) => o\?\.name\)\.filter/);
   assert.doesNotMatch(source, /process\.exit\(\)/);
