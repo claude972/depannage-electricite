@@ -41,10 +41,15 @@ import {
   interruptGuard,
   unknownLeftover,
   cleanupRerunMessage,
+  parseStorageListing,
 } from "./lib.ts";
 
 const BUCKET = "intervention-documents";
 const TIMEOUT_MS = 30000;
+// Late reconciliation window after an aborted/timed-out phase (and on --cleanup-manifest):
+// 2 s, 4 s, 8 s, 16 s between re-discoveries, i.e. up to 30 s — the HTTP timeout — for a
+// request whose outcome was unknown to settle remotely.
+const RECONCILE = { attempts: 4, baseDelayMs: 2000, sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) };
 
 async function main(argv) {
   let args;
@@ -100,6 +105,9 @@ async function main(argv) {
   };
   let created = emptyCreated();
   let manifestUnknown = [];
+  // Set when the run phase ended abnormally (timeout, abort/signal, thrown error): a request
+  // whose outcome is unknown may still settle remotely, so cleanup reconciles late.
+  let interrupted = false;
   // The manifest keeps the cohort's original run id when cleaning from a manifest.
   let manifestRunId = id;
   // One abort controller per phase: a signal aborts the phase in flight, never the process,
@@ -171,7 +179,10 @@ async function main(argv) {
       const body = { prefix, limit, offset, sortBy: { column: "name", order: "asc" }, ...(search ? { search } : {}) };
       const r = await http(`${credentials.url}/storage/v1/object/list/${BUCKET}`, { method: "POST", headers: serviceHeaders({ "Content-Type": "application/json" }), body: JSON.stringify(body) });
       if (r.status !== 200 || !Array.isArray(r.json)) return { ok: false, detail: `HTTP ${r.status} ${summarize(r)}` };
-      return { ok: true, items: r.json.map((o) => o?.name).filter((n) => typeof n === "string"), total: null, detail: `HTTP ${r.status}` };
+      // Rows without a string `name` (or of any other shape) are reported as malformed: discovery
+      // marks them unknown and refuses to delete — never "absent".
+      const { items, malformed } = parseStorageListing(r.json);
+      return { ok: true, items, total: null, detail: `HTTP ${r.status}`, malformed };
     },
     deleteObjects: async (paths) => {
       const r = await http(`${credentials.url}/storage/v1/object/${BUCKET}`, { method: "DELETE", headers: serviceHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ prefixes: paths }) });
@@ -219,7 +230,8 @@ async function main(argv) {
       }
     }
   } catch (error) {
-    await log("fail", "interruption", error instanceof Error ? error.message : String(error));
+    interrupted = true;
+    await log("fail", "interruption", `${error instanceof Error ? error.message : String(error)} — l’issue distante de la requête en cours est inconnue : réconciliation tardive avant nettoyage`);
   } finally {
     if (mode !== "dry-run") {
       try {
@@ -355,7 +367,7 @@ async function main(argv) {
         if (leftover) result.leftovers.push(leftover);
         await log(entry.ok ? "pass" : "fail", `nettoyage : ${entry.label}`, `${entry.detail}${entry.remaining === null ? "" : ` ; restant ${entry.remaining}`}`);
       },
-    }, { manifestPath });
+    }, { manifestPath, reconcile: interrupted || mode === "cleanup-manifest" ? RECONCILE : undefined });
     if (!outcome.discovery.complete) {
       for (const u of outcome.discovery.unknown) result.leftovers.push(unknownLeftover(u));
     }

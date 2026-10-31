@@ -29,6 +29,7 @@ import {
   interruptGuard,
   cleanupRerunMessage,
   unknownLeftover,
+  parseStorageListing,
   type CleanupClient,
   type CleanupEntry,
   type Created,
@@ -492,6 +493,133 @@ test("the orchestrator wires discovery-first cleanup into every exit path", asyn
   assert.match(source, /\} finally \{\n\s+if \(mode !== "dry-run"\) \{\n\s+try \{\n\s+await cleanup\(\);/);
   assert.match(source, /async function cleanup\(\) \{\n[^]*?active = new AbortController\(\);\n[^]*?await runCleanup\(client, created, \{/);
   assert.match(source, /saveManifest: \(nextCreated, unknown\) => saveManifest\(nextCreated, unknown\)/);
+  assert.match(source, /reconcile: interrupted \|\| mode === "cleanup-manifest" \? RECONCILE : undefined/);
+  assert.match(source, /\} catch \(error\) \{\n\s+interrupted = true;/);
+  assert.match(source, /parseStorageListing\(r\.json\)/);
+  assert.doesNotMatch(source, /\.map\(\(o\) => o\?\.name\)\.filter/);
   assert.doesNotMatch(source, /process\.exit\(\)/);
   assert.doesNotMatch(source, /cleanupPlan/);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Pilot follow-ups on 981aec3: malformed Storage rows are unknown; late reconciliation after an
+// aborted/timed-out phase.
+// ---------------------------------------------------------------------------------------------
+test("storage listing: a row without a name (or of any other shape) is malformed, never absent", () => {
+  const parsed = parseStorageListing([{ name: D1, id: "x" }, { id: "y", metadata: null }, null, "str", { name: "" }]);
+  assert.deepEqual(parsed.items, [D1]);
+  assert.equal(parsed.malformed.length, 4);
+  assert.match(parsed.malformed[0], /entrée 1 sans name/);
+  assert.match(parsed.malformed[1], /entrée 2 sans name \(object\)/);
+  assert.deepEqual(parseStorageListing({}).items, []);
+  assert.equal(parseStorageListing({}).malformed.length, 1);
+  assert.deepEqual(parseStorageListing([]), { items: [], malformed: [] });
+});
+test("cleanup: a nameless Storage row is persisted as unknown, forbids every deletion and fails with the re-run message", async () => {
+  const state = committedUpload();
+  const calls: string[] = [];
+  const h = hooks(calls);
+  const client = fakeClient(state, calls, { listObjects: async () => ({ ok: true, items: [D1], total: null, detail: "HTTP 200", malformed: ["entrée 1 sans name (clés id,metadata)"] }) });
+  const outcome = await runCleanup(client, manifestAfterTimeout(), h.hooks, { manifestPath: "/p/out/manifest.json" });
+  assert.equal(outcome.clean, false);
+  assert.ok(calls.every((c) => !c.startsWith("delete:")));
+  assert.deepEqual(outcome.created.objectPaths, [`${U1}/${D1}`], "the well-formed name is still merged");
+  assert.equal(h.manifests[0].unknown.length, 1);
+  assert.equal(h.manifests[0].unknown[0].scope, `Storage ${U1}/`);
+  assert.match(h.manifests[0].unknown[0].detail, /forme inattendue dans le listage : entrée 1 sans name/);
+  assert.match(h.notes[0].detail, /--cleanup-manifest \/p\/out\/manifest\.json/);
+  assert.deepEqual(state, committedUpload());
+  // Same shape during the post-delete readback: the readback is unknown, never "gone".
+  const state2 = committedUpload();
+  const calls2: string[] = [];
+  const h2 = hooks(calls2);
+  let listings = 0;
+  const base = fakeClient(state2, calls2);
+  const flaky = { ...base, listObjects: async (prefix: string, o: { limit: number; offset: number; search?: string }) => { const page = await base.listObjects(prefix, o); return o.search && ++listings ? { ...page, malformed: ["entrée 0 sans name (clés id)"] } : page; } };
+  const outcome2 = await runCleanup(flaky, manifestAfterTimeout(), h2.hooks);
+  assert.equal(outcome2.clean, false);
+  const storage = outcome2.entries.find((e) => e.label === "objets Storage de la cohorte");
+  assert.equal(storage?.ok, false);
+  assert.equal(storage?.remaining, null);
+});
+const reconcile = (delays: number[], onSleep?: (attempt: number) => void) => ({ attempts: 3, baseDelayMs: 10, sleep: async (ms: number) => { delays.push(ms); onSleep?.(delays.length); } });
+test("cleanup: after an aborted phase the late reconcile finds the settled upload, manifests it and deletes it", async () => {
+  const state: FakeState = { rows: [], objects: [], users: [U1] };
+  const calls: string[] = [];
+  const delays: number[] = [];
+  const h = hooks(calls);
+  // The upload/finalization that timed out settles remotely during the first backoff.
+  const outcome = await runCleanup(fakeClient(state, calls), manifestAfterTimeout(), h.hooks, { manifestPath: "/p/out/manifest.json", reconcile: reconcile(delays, (attempt) => { if (attempt === 1) { state.rows.push({ id: D1, owner_id: U1, intervention_id: I1, path: `${U1}/${D1}` }); state.objects.push(`${U1}/${D1}`); } }) });
+  assert.deepEqual(delays, [10, 20], "settle found at attempt 1, stability confirmed at attempt 2");
+  assert.equal(outcome.clean, true);
+  assert.deepEqual(outcome.created.documentIds, [D1]);
+  assert.deepEqual(outcome.created.objectPaths, [`${U1}/${D1}`]);
+  const settledManifest = h.manifests.findIndex((m) => m.created.objectPaths.includes(`${U1}/${D1}`));
+  assert.ok(settledManifest >= 0);
+  const manifestCall = calls.map((c, i) => [c, i] as const).filter(([c]) => c === "manifest")[settledManifest][1];
+  assert.ok(manifestCall < calls.findIndex((c) => c.startsWith("delete:")), "settled object manifested before any deletion");
+  assert.ok(calls.indexOf(`delete:storage:${U1}/${D1}`) < calls.findIndex((c) => c.startsWith("delete:rows:documents:")));
+  assert.deepEqual(state, { rows: [], objects: [], users: [] });
+  assert.ok(h.notes.some((n) => /règlement tardif détecté/.test(n.step)));
+  assert.ok(h.notes.some((n) => n.status === "pass" && /cohorte stable/.test(n.step)));
+  assert.ok(h.notes.some((n) => n.status === "pass" && /réconciliation finale/.test(n.step)));
+  // No reconcile requested: no sleep, single discovery (unchanged nominal behaviour).
+  const calls2: string[] = [];
+  await runCleanup(fakeClient(committedUpload(), calls2), manifestAfterTimeout(), hooks(calls2).hooks);
+  assert.equal(calls2.filter((c) => c.startsWith(`list:storage:${U1}:1000:0`) && !c.includes(`:${D1}`)).length, 1);
+});
+test("cleanup: a late reconcile whose reads keep failing exhausts the window, deletes nothing and fails with the re-run message", async () => {
+  const state = committedUpload();
+  const calls: string[] = [];
+  const delays: number[] = [];
+  const h = hooks(calls);
+  const base = fakeClient(state, calls);
+  let discoveries = 0;
+  const client = { ...base, listObjects: async (prefix: string, o: { limit: number; offset: number; search?: string }) => (o.offset === 0 && !o.search && ++discoveries > 1 ? { ok: false as const, detail: "HTTP 503 storage unavailable" } : base.listObjects(prefix, o)) };
+  const outcome = await runCleanup(client, manifestAfterTimeout(), h.hooks, { manifestPath: "/p/out/manifest.json", reconcile: reconcile(delays) });
+  assert.deepEqual(delays, [10, 20, 40]);
+  assert.equal(outcome.clean, false);
+  assert.ok(calls.every((c) => !c.startsWith("delete:")));
+  assert.deepEqual(state, committedUpload());
+  const last = h.manifests.at(-1)!;
+  assert.equal(last.unknown.length, 1);
+  assert.match(last.unknown[0].detail, /HTTP 503/);
+  assert.deepEqual(last.created.objectPaths, [`${U1}/${D1}`], "the first discovery stays merged");
+  const fail = h.notes.find((n) => n.status === "fail");
+  assert.match(fail?.step ?? "", /réconciliation tardive incomplète/);
+  assert.match(fail?.detail ?? "", /--cleanup-manifest \/p\/out\/manifest\.json/);
+  assert.deepEqual(outcome.leftovers, [unknownLeftover(last.unknown[0])]);
+});
+test("cleanup: a cohort that keeps settling inside the window is not stable: no deletion, fail", async () => {
+  const state: FakeState = { rows: [], objects: [], users: [U1] };
+  const calls: string[] = [];
+  const delays: number[] = [];
+  const h = hooks(calls);
+  const ids = [D1, D2, D3];
+  const outcome = await runCleanup(fakeClient(state, calls), manifestAfterTimeout(), h.hooks, { reconcile: reconcile(delays, (attempt) => state.objects.push(`${U1}/${ids[attempt - 1]}`)) });
+  assert.deepEqual(delays, [10, 20, 40]);
+  assert.equal(outcome.clean, false);
+  assert.ok(calls.every((c) => !c.startsWith("delete:")));
+  assert.equal(outcome.created.objectPaths.length, 3, "everything seen is manifested");
+  assert.match(h.manifests.at(-1)!.unknown[0].detail, /non stabilisée après 3 tentative/);
+});
+test("cleanup: a settle that lands after the deletion pass is caught by the final reconcile and reported for re-run", async () => {
+  const state = committedUpload();
+  const calls: string[] = [];
+  const delays: number[] = [];
+  const h = hooks(calls);
+  const base = fakeClient(state, calls);
+  const client = { ...base, deleteUser: async (userId: string) => { state.objects.push(`${U1}/${D2}`); return base.deleteUser(userId); } };
+  const outcome = await runCleanup(client, manifestAfterTimeout(), h.hooks, { manifestPath: "/p/out/manifest.json", reconcile: reconcile(delays) });
+  assert.deepEqual(delays, [10]);
+  assert.equal(outcome.clean, false);
+  assert.ok(outcome.created.objectPaths.includes(`${U1}/${D2}`));
+  assert.ok(h.manifests.at(-1)!.created.objectPaths.includes(`${U1}/${D2}`));
+  assert.match(h.manifests.at(-1)!.unknown[0].detail, /règlement tardif après nettoyage/);
+  const fail = h.notes.find((n) => /réconciliation finale/.test(n.step));
+  assert.equal(fail?.status, "fail");
+  assert.match(fail?.detail ?? "", /--cleanup-manifest \/p\/out\/manifest\.json/);
+  assert.ok(outcome.leftovers.some((l) => /règlement tardif après nettoyage/.test(l)));
+  // Nominal path with reconcile: nothing settles, two sleeps at most? No: stable at attempt 1.
+  assert.ok(calls.filter((c) => c.startsWith("delete:")).length > 0, "the known cohort was still deleted before the final check");
 });

@@ -257,7 +257,22 @@ export function parseManifest(raw: unknown, project: string): Manifest {
 // with explicit pagination. Every read that fails, truncates or cannot be confirmed is an
 // `Unknown`; the caller must never claim a clean cleanup while one exists.
 // ---------------------------------------------------------------------------------------------
-export type Page<T> = { ok: true; items: T[]; total: number | null; detail: string } | { ok: false; detail: string };
+// `malformed`: entries the client could not read as T (e.g. a Storage row without `name`).
+// They are never dropped silently: discovery records each one as an unknown.
+export type Page<T> = { ok: true; items: T[]; total: number | null; detail: string; malformed?: string[] } | { ok: false; detail: string };
+// Storage list API body -> names + malformed descriptions. Any row that is not an object with
+// a string `name` is malformed (an unknown shape), never "absent".
+export function parseStorageListing(json: unknown): { items: string[]; malformed: string[] } {
+  const items: string[] = [];
+  const malformed: string[] = [];
+  if (!Array.isArray(json)) return { items, malformed: ["réponse de listage non tabulaire"] };
+  json.forEach((row, index) => {
+    const r = row && typeof row === "object" && !Array.isArray(row) ? (row as Record<string, unknown>) : null;
+    if (r && typeof r.name === "string" && r.name.length > 0) items.push(r.name);
+    else malformed.push(`entrée ${index} sans name (${r ? `clés ${Object.keys(r).slice(0, 5).join(",") || "aucune"}` : typeof row})`);
+  });
+  return { items, malformed };
+}
 export type DocumentRow = { id?: unknown; owner_id?: unknown; intervention_id?: unknown; path?: unknown };
 export type ListObjectsOptions = { limit: number; offset: number; search?: string };
 export type CleanupClient = {
@@ -365,8 +380,10 @@ export async function discoverCohort(client: Pick<CleanupClient, "listDocuments"
         if (OBJECT_PATH.test(p)) addObject(p);
         else unknown.push({ scope, detail: `objet hors convention <uid>/<id> (${String(name).slice(0, 40)}) : suppression manuelle requise` });
       }
-      if (page.items.length < pageSize) return;
-      offset += page.items.length;
+      for (const m of page.malformed ?? []) unknown.push({ scope, detail: `forme inattendue dans le listage : ${m}` });
+      const received = page.items.length + (page.malformed?.length ?? 0);
+      if (received < pageSize) return;
+      offset += received;
     }
   };
   if (merged.userIds.length) await scanRows("documents par owner_id", inFilter("owner_id", merged.userIds));
@@ -389,26 +406,69 @@ export function cleanupRerunMessage(manifestPath: string): string {
 export function unknownLeftover(u: Unknown): string {
   return `inconnu : ${u.scope} — ${u.detail}`;
 }
-// Always: discover -> persist merged manifest -> (only if every read is known) delete in FK
-// order, Storage objects first. A single unknown read forbids any deletion and the clean verdict.
-export async function runCleanup(client: CleanupClient, created: Created, hooks: CleanupHooks, options: DiscoveryOptions & { manifestPath?: string } = {}): Promise<CleanupOutcome> {
-  let discovery: Discovery;
+// Late reconciliation after an aborted/timed-out phase: a request that timed out or was aborted
+// does not prove the remote side did not settle. Discovery is repeated with exponential backoff
+// (baseDelayMs, x2 each attempt, at most `attempts`) until one complete pass finds nothing new;
+// read errors retry inside the window; exhausting it forbids deletion and the clean verdict.
+export type ReconcileOptions = { attempts: number; baseDelayMs: number; sleep: (ms: number) => Promise<void> };
+export type CleanupOptions = DiscoveryOptions & { manifestPath?: string; reconcile?: ReconcileOptions };
+const safeDiscover = async (client: CleanupClient, created: Created, options: DiscoveryOptions): Promise<Discovery> => {
   try {
-    discovery = await discoverCohort(client, created, options);
+    return await discoverCohort(client, created, options);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    discovery = { created: cloneCreated(created), added: { documentIds: [], objectPaths: [] }, unknown: [{ scope: "découverte de cohorte", detail }], complete: false };
+    return { created: cloneCreated(created), added: { documentIds: [], objectPaths: [] }, unknown: [{ scope: "découverte de cohorte", detail }], complete: false };
   }
+};
+const describeUnknown = (unknown: Unknown[]) => `${unknown.length} lecture(s) inconnue(s) : ${unknown.map((u) => `${u.scope} (${u.detail})`).join(" ; ")}`;
+const addedCounts = (d: Discovery) => `${d.added.documentIds.length} ligne(s) documents et ${d.added.objectPaths.length} objet(s) Storage ajoutés au manifeste`;
+// Always: discover -> persist merged manifest -> (only if every read is known, and stable after
+// the reconcile window when one is requested) delete in FK order, Storage objects first -> final
+// re-discovery when reconciling. A single unknown read forbids any deletion and the clean verdict.
+export async function runCleanup(client: CleanupClient, created: Created, hooks: CleanupHooks, options: CleanupOptions = {}): Promise<CleanupOutcome> {
+  const rerun = cleanupRerunMessage(options.manifestPath ?? "<manifest.json>");
+  let discovery = await safeDiscover(client, created, options);
   await hooks.saveManifest(discovery.created, discovery.unknown);
   const entries: CleanupEntry[] = [];
   const leftovers: string[] = [];
-  const counts = `${discovery.added.documentIds.length} ligne(s) documents et ${discovery.added.objectPaths.length} objet(s) Storage ajoutés au manifeste`;
-  if (!discovery.complete) {
-    for (const u of discovery.unknown) leftovers.push(unknownLeftover(u));
-    await hooks.note("fail", "découverte de cohorte incomplète avant nettoyage", `${counts} ; ${discovery.unknown.length} lecture(s) inconnue(s) : ${discovery.unknown.map((u) => `${u.scope} (${u.detail})`).join(" ; ")} — ${cleanupRerunMessage(options.manifestPath ?? "<manifest.json>")}`);
+  const failWithout = async (step: string, detail: string, unknown: Unknown[]): Promise<CleanupOutcome> => {
+    for (const u of unknown) leftovers.push(unknownLeftover(u));
+    await hooks.note("fail", step, `${detail} — ${rerun}`);
     return { created: discovery.created, discovery, entries, leftovers, clean: false };
+  };
+  if (!discovery.complete) return failWithout("découverte de cohorte incomplète avant nettoyage", `${addedCounts(discovery)} ; ${describeUnknown(discovery.unknown)}`, discovery.unknown);
+  await hooks.note("pass", "découverte de cohorte avant nettoyage", `${addedCounts(discovery)} ; lectures complètes`);
+  const reconcile = options.reconcile;
+  if (reconcile) {
+    let stable = false;
+    let lastUnknown: Unknown[] = [];
+    let found = { documentIds: 0, objectPaths: 0 };
+    for (let attempt = 1; attempt <= Math.max(1, reconcile.attempts); attempt++) {
+      await reconcile.sleep(reconcile.baseDelayMs * 2 ** (attempt - 1));
+      const again = await safeDiscover(client, discovery.created, options);
+      if (!again.complete) {
+        lastUnknown = again.unknown;
+        await hooks.note("info", `réconciliation tardive ${attempt}/${reconcile.attempts} : lecture inconnue, nouvelle tentative`, describeUnknown(again.unknown));
+        continue;
+      }
+      lastUnknown = [];
+      if (again.added.documentIds.length === 0 && again.added.objectPaths.length === 0) {
+        stable = true;
+        await hooks.note("pass", `réconciliation tardive ${attempt}/${reconcile.attempts} : cohorte stable`, `${found.documentIds} ligne(s) et ${found.objectPaths} objet(s) réglés tardivement ajoutés au manifeste`);
+        break;
+      }
+      found = { documentIds: found.documentIds + again.added.documentIds.length, objectPaths: found.objectPaths + again.added.objectPaths.length };
+      discovery = { created: again.created, added: { documentIds: [...discovery.added.documentIds, ...again.added.documentIds], objectPaths: [...discovery.added.objectPaths, ...again.added.objectPaths] }, unknown: [], complete: true };
+      await hooks.saveManifest(discovery.created, []);
+      await hooks.note("info", `réconciliation tardive ${attempt}/${reconcile.attempts} : règlement tardif détecté`, addedCounts(again));
+    }
+    if (!stable) {
+      const unknown: Unknown[] = lastUnknown.length ? lastUnknown : [{ scope: "réconciliation tardive", detail: `cohorte non stabilisée après ${reconcile.attempts} tentative(s) (nouveaux règlements à chaque lecture)` }];
+      discovery = { ...discovery, unknown, complete: false };
+      await hooks.saveManifest(discovery.created, unknown);
+      return failWithout("réconciliation tardive incomplète avant nettoyage", describeUnknown(unknown), unknown);
+    }
   }
-  await hooks.note("pass", "découverte de cohorte avant nettoyage", `${counts} ; lectures complètes`);
   for (const step of cleanupPlan(discovery.created)) {
     const entry: CleanupEntry = { label: step.label, ok: false, remaining: null, detail: "" };
     let leftover: string | null = null;
@@ -420,7 +480,7 @@ export async function runCleanup(client: CleanupClient, created: Created, hooks:
         for (const p of step.paths) {
           const [prefix, name] = p.split("/");
           const listing = await client.listObjects(prefix, { limit: 1000, offset: 0, search: name });
-          if (!listing.ok) readbackFailed = true;
+          if (!listing.ok || listing.malformed?.length) readbackFailed = true;
           else if (listing.items.includes(name)) remaining++;
         }
         entry.remaining = readbackFailed ? null : remaining;
@@ -449,6 +509,20 @@ export async function runCleanup(client: CleanupClient, created: Created, hooks:
     entries.push(entry);
     if (leftover) leftovers.push(leftover);
     await hooks.step(entry, leftover);
+  }
+  if (reconcile) {
+    // A settle that landed after the pre-deletion window is caught here: merged into the manifest
+    // and reported for a --cleanup-manifest re-run (never claimed clean).
+    const final = await safeDiscover(client, discovery.created, options);
+    if (!final.complete || final.added.documentIds.length || final.added.objectPaths.length) {
+      const unknown: Unknown[] = final.complete ? [{ scope: "réconciliation finale", detail: `règlement tardif après nettoyage : ${addedCounts(final)}` }] : final.unknown;
+      discovery = { created: final.created, added: { documentIds: [...discovery.added.documentIds, ...final.added.documentIds], objectPaths: [...discovery.added.objectPaths, ...final.added.objectPaths] }, unknown, complete: false };
+      await hooks.saveManifest(discovery.created, unknown);
+      for (const u of unknown) leftovers.push(unknownLeftover(u));
+      await hooks.note("fail", "réconciliation finale après nettoyage", `${describeUnknown(unknown)} — relancer « --cleanup-manifest ${options.manifestPath ?? "<manifest.json>"} »`);
+      return { created: discovery.created, discovery, entries, leftovers, clean: false };
+    }
+    await hooks.note("pass", "réconciliation finale après nettoyage", "aucune ligne ni objet réglé tardivement ; lectures complètes");
   }
   return { created: discovery.created, discovery, entries, leftovers, clean: leftovers.length === 0 && entries.every((e) => e.ok) };
 }
