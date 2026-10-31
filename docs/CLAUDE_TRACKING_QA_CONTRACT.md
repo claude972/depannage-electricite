@@ -358,3 +358,39 @@ cascade ; budget jamais modifié. Exécution cloud par ROOT uniquement ; aucune 
   typé (même convention que `scripts/qa`) ; il est exécuté par `tsx`.
 - Écart signalé : T17 (géocodage) est couvert par la preuve fournisseur optionnelle `provider-geocode`, pas par un scénario T17 séparé.
 - Aucune exécution cloud, aucun fichier d'identifiants lu par Claude ; l'exécution réelle est réservée à ROOT.
+
+## Corrections de la revue ROOT de 8aa5a78 (P2-a, P2-b, addendum a/b)
+
+- **P2-a — classification des mutations** (`lib/guard.mjs` `classifyMutation`) : 2xx entièrement lu ⇒ `done` ; 400/401/403/404/409/
+  422/429 entièrement lus ⇒ `refused` ; erreur de transport, délai, 5xx, tout autre statut ou réponse non entièrement lue ⇒
+  **inconnu** : l'intention reste ouverte avec une relecture (`lib/reconcile.mjs`, preuves monotones uniquement : session observée
+  active, seq observée appliquée, session close, `destination_version` avancée, statut d'intervention atteint ; les appels fournisseur
+  ne sont prouvés que par la relecture des leases = 0 après cascade). Relecture tentée immédiatement puis après le drain ; sans preuve
+  ⇒ INCOMPLETE (exit 3). Les écritures service (cohorte, réaffectation simulée, suspension, grants) ont aussi leur relecture.
+- **P2-b — drain** : chaque POST du harnais (`createTrackingApi.post`) et chaque mutation déclenchée par le navigateur
+  (`trackBrowserMutations`, interception de route sur `/api/**` de même origine) est enregistrée dans la porte d'arrêt ; une fois la
+  porte levée, une mutation navigateur est bloquée **avant émission** (jamais annoncée, jamais envoyée). Chaque scénario en cours et
+  chaque ouverture de session sont aussi enregistrés (motif `mutation`/`mutatingClick` repris du harnais métier 4bd9e76, copié, pas
+  importé).
+- **Addendum (a) — garde de nettoyage propre au lot** (`lib/finalize.mjs`) : si un producteur reste non drainé au début du nettoyage,
+  **aucune suppression ni lecture Auth**, manifest et intentions intacts sur disque, exit 3 avec la commande de reprise
+  `--cleanup-manifest`. Le cycle de vie partagé `scripts/qa` n'est pas modifié.
+- **Addendum (b) — attente puis émission** : `gate.check()` est refait immédiatement avant chaque émission qui suit une attente
+  (ouverture de session : après la création de page, avant la pose de la barrière et avant la connexion ; écritures service : avant
+  l'annonce, puis dans `mutation()`). Audit : `createTrackingApi.post` n'a aucune attente avant l'émission ; les écritures service
+  passent par `guardWrites` (contrôle à chaque appel) ; les clics passent par `act()` et, surtout, par la barrière de route.
+- **Constat réel** : Chromium relance **une fois** un POST si une connexion keep-alive réutilisée tombe avant la réponse (observé :
+  2 POST reçus par le serveur). Le serveur doit donc tolérer un doublon (c'est le cas : tuple de point identique accepté) ; côté
+  harnais, l'issue reste inconnue jusqu'à la relecture.
+- **Sélecteurs** revérifiés contre `origin/claude/web-shared-a5` 8bcee45 : `TrackingAnchor` monté dans `#mission/<id>` (artisan, si
+  statut accepted/in_progress), `#detail/<id>` (particulier et entreprise) ; titres « Partage de ma position » / « Suivi de l’artisan »
+  et libellés inchangés ; « Recalculer » peut porter un suffixe en attente de position (non utilisé comme sélecteur exact).
+
+| Repro exigée par ROOT | Test |
+| --- | --- |
+| 503 différé ⇒ inconnu + réconciliation | `tests/qa-tracking-barrier.test.ts` « repro 1 » (serveur local réel + Chromium) |
+| Commit puis réponse perdue ⇒ inconnu, relecture prouve | « repro 2 » |
+| SIGINT avec un POST harnais et une mutation navigateur en attente : barrière, drain, nettoyage strictement après | « repro 3 » (horodatages ordonnés) |
+| Drain expiré avec producteur en attente ⇒ zéro suppression, manifest intact, exit 3 | « repro 4 » + unité « guarded cleanup and exit codes » |
+| SIGINT pendant l'attente qui précède l'émission ⇒ jamais émis | « repro 5 » |
+| Classification 4xx/5xx/non lu et preuves monotones | `tests/qa-tracking.test.ts` « outcome classification and readback proofs », « intents » |

@@ -11,50 +11,81 @@ import { UI, VIEWS, PUBLIC_POINTS, NOMINAL_ACCURACY_M, REJECTED_ACCURACY_M, CONS
 import { snapshotEvidence } from "./lib/position-redact.mjs";
 import { recordTrackingRequests, actions, queryViolations, restartViolations, publicView } from "./lib/requests.mjs";
 import { classifyRoute, classifyGeocode } from "./lib/provider-proof.mjs";
-import { act, gatedWait } from "./lib/guard.mjs";
+import { act, gatedWait, createMutationGuard, trackBrowserMutations } from "./lib/guard.mjs";
 import { assertUnknownIs404 } from "./lib/preflight.mjs";
 
 const POSITION_KEYS = ["latitude", "longitude", "position", "geometry", "destination"];
 
-/** Fixtures wrapped with durable intents (announced BEFORE each write, settled after). */
+/**
+ * Fixtures wrapped with durable intents. Each service write is: gate check (no intent when already
+ * stopping) → intent announced → emission inside `mutation()` (synchronous re-check, registered in
+ * the drain). An unknown outcome keeps the intent OPEN with a readback able to prove the state.
+ */
 export class TrackingFixtures {
-  constructor({ fixtures, intents, cohort }) {
+  constructor({ fixtures, intents, cohort, gate, auth = null }) {
     this.f = fixtures;
     this.intents = intents;
     this.cohort = cohort;
+    this.gate = gate;
+    this.auth = auth;
+    this.guard = createMutationGuard(gate);
   }
   get db() {
-    return this.f.db; // guarded by the shared stop gate
+    return this.f.db; // writes guarded by the shared stop gate; reads are plain
+  }
+  write(op, target, key, fn, reconcile) {
+    this.gate.check();
+    return this.guard.mutation(() => this.intents.wrap(op, target, key, fn, { reconcile, kind: "service" }));
   }
   createUser(label, role, options) {
-    return this.intents.wrap("createAuthUser", "auth.users", this.cohort.email(label), () => this.f.createUser(label, role, options));
+    const email = this.cohort.email(label);
+    return this.write("createAuthUser", "auth.users", email, () => this.f.createUser(label, role, options), async () => {
+      if (!this.auth) return { proven: false };
+      const id = await this.auth.findByEmail(email, this.cohort.runId);
+      if (!id) return { proven: true, note: "account absent" };
+      await this.f.track("auth_users", id);
+      await this.f.track("profiles", id);
+      return { proven: true, note: "account exists, recorded for deletion" };
+    });
   }
   createOrganization(owner, label) {
-    return this.intents.wrap("insert", "organizations", label, () => this.f.createOrganization(owner, label));
+    return this.write("insert", "organizations", label, () => this.f.createOrganization(owner, label), async () => {
+      const rows = await this.f.db.select("organizations", { owner_id: `eq.${owner.id}`, name: `eq.${this.cohort.name(label)}` }, "id");
+      if (rows.length) await this.f.track("organizations", ...rows.map((r) => r.id));
+      return { proven: true, note: rows.length ? "organization exists, recorded" : "organization absent" };
+    });
   }
   addMember(org, user, role) {
-    return this.intents.wrap("insert", "organization_members", `${org.id}:${user.id}`, () => this.f.addMember(org, user, role));
+    return this.write("insert", "organization_members", `${org.id}:${user.id}`, () => this.f.addMember(org, user, role), async () => ({ proven: true, note: `${(await this.f.db.select("organization_members", { organization_id: `eq.${org.id}`, user_id: `eq.${user.id}` }, "user_id")).length} row(s), removed with the organization` }));
   }
   createSite(org, label) {
-    return this.intents.wrap("insert", "sites", label, () => this.f.createSite(org, label));
+    return this.write("insert", "sites", label, () => this.f.createSite(org, label), async () => {
+      const rows = await this.f.db.select("sites", { organization_id: `eq.${org.id}`, name: `eq.${this.cohort.name(label)}` }, "id");
+      if (rows.length) await this.f.track("sites", ...rows.map((r) => r.id));
+      return { proven: true, note: rows.length ? "site exists, recorded" : "site absent" };
+    });
   }
   setSiteScope(org, user, scope, grants) {
-    return this.intents.wrap("upsert", "organization_member_site_scopes", `${org.id}:${user.id}`, () => this.f.setSiteScope(org, user, scope, grants));
+    return this.write("upsert", "organization_member_site_scopes", `${org.id}:${user.id}`, () => this.f.setSiteScope(org, user, scope, grants), async () => ({ proven: true, note: "scope rows removed with the organization" }));
   }
   createIntervention(spec) {
-    return this.intents.wrap("insert", "interventions", spec.description || "dossier", () => this.f.createIntervention(spec));
+    // The id is generated and written to the manifest BEFORE the insert: deleting it by id is exact.
+    return this.write("insert", "interventions", spec.description || "dossier", () => this.f.createIntervention(spec), async () => ({ proven: true, note: "id recorded before the insert" }));
   }
+  /** Update proven only when every patched field is observed on the row (by id). */
   update(table, filters, patch, key) {
-    return this.intents.wrap("update", table, key, async () => {
-      const rows = await this.f.db.update(table, filters, patch);
-      return rows;
+    const id = String(filters.id || "").replace(/^eq\./, "");
+    return this.write("update", table, key, () => this.f.db.update(table, filters, patch), async () => {
+      if (!id) return { proven: false };
+      const [row] = await this.f.db.select(table, { id: `eq.${id}` }, Object.keys(patch).join(","));
+      return row && Object.entries(patch).every(([k, v]) => row[k] === v) ? { proven: true, note: "patch observed" } : { proven: false };
     });
   }
   remove(table, filters, key) {
-    return this.intents.wrap("delete", table, key, () => this.f.db.delete(table, filters));
+    return this.write("delete", table, key, () => this.f.db.delete(table, filters), async () => ((await this.f.db.count(table, filters)) === 0 ? { proven: true, note: "rows absent" } : { proven: false }));
   }
-  insert(table, rows, key) {
-    return this.intents.wrap("insert", table, key, () => this.f.db.insert(table, rows));
+  insert(table, rows, key, filters) {
+    return this.write("insert", table, key, () => this.f.db.insert(table, rows), async () => (filters && (await this.f.db.count(table, filters)) > 0 ? { proven: true, note: "row observed" } : { proven: false }));
   }
 }
 
@@ -465,7 +496,7 @@ export const SCENARIO_RUNNERS = {
     const after = await snap(ctx, viewer.page, site);
     assert.equal(after.status, 404, `viewer after revocation answered ${after.status}`);
     noPositionIn(after.body, "viewer after revocation");
-    await ctx.tf.insert("organization_member_site_grants", [{ organization_id: ctx.org.id, user_id: ctx.users.viewer.id, site_id: ctx.site.id, can_write: false }], "viewer grant S1 restore");
+    await ctx.tf.insert("organization_member_site_grants", [{ organization_id: ctx.org.id, user_id: ctx.users.viewer.id, site_id: ctx.site.id, can_write: false }], "viewer grant S1 restore", { organization_id: `eq.${ctx.org.id}`, user_id: `eq.${ctx.users.viewer.id}`, site_id: `eq.${ctx.site.id}` });
     assert.equal((await snap(ctx, viewer.page, site)).status, 200, "viewer reads after restoring the grant");
   },
 
@@ -619,8 +650,8 @@ export const SCENARIO_RUNNERS = {
     const h = await ctx.freshSession("switch", ctx.users.client);
     await openHash(h.page, ctx.base, VIEWS.client(ctx.jobs.main.id));
     await expectVisible(card(h.page), `client card « ${UI.clientCardTitle} » before the switch`);
-    await logout(h.page);
-    await login(h, ctx.base, ctx.users.outsider, ctx.projectRef, { sameDocument: true });
+    await act(ctx.gate, () => logout(h.page));
+    await act(ctx.gate, () => login(h, ctx.base, ctx.users.outsider, ctx.projectRef, { sameDocument: true }));
     await waitForWorkspace(h.page, ctx.users.outsider.id);
     await goHash(h.page, VIEWS.client(ctx.jobs.main.id));
     await gatedWait(ctx.gate, 2000);
@@ -703,16 +734,34 @@ export const PROVIDER_RUNNERS = {
   },
 };
 
-/** Session pool: one browser context per user label (login once), plus fresh contexts. */
-export function createSessionPool({ browser, base, projectRef, redactor, gate }) {
+/**
+ * Session pool: one browser context per user label (login once), plus fresh contexts. Opening a
+ * session awaits the page creation, then re-checks the gate IMMEDIATELY before the first emission
+ * (login), and the whole opening is registered in the drain. Every page gets the browser mutation
+ * barrier before any navigation. `deps` are injectable for offline tests.
+ */
+export function createSessionPool({ browser, base, projectRef, redactor, gate, intents, reconcile = null, onEvent = () => {}, deps = {} }) {
+  const { newPageFn = newPage, loginFn = login, waitFn = waitForWorkspace, trackFn = trackBrowserMutations } = deps;
   const handles = new Map();
-  async function open(label, user) {
+  const origin = new URL(base).origin;
+  function open(label, user) {
     gate.check();
-    const handle = await newPage(browser, { baseUrl: base, redactor });
-    await login(handle, base, user, projectRef);
-    await waitForWorkspace(handle.page, user.id);
-    handles.set(label, handle);
-    return handle;
+    const opening = (async () => {
+      const handle = await newPageFn(browser, { baseUrl: base, redactor });
+      try {
+        gate.check(); // after the await, before the barrier and the login emission
+        handle.mutations = await trackFn(handle.page, { gate, intents, reconcile, origin, onEvent });
+        gate.check(); // after the await, immediately before the login submission
+        await loginFn(handle, base, user, projectRef);
+        await waitFn(handle.page, user.id);
+      } catch (error) {
+        await handle.close?.().catch(() => {});
+        throw error;
+      }
+      handles.set(label, handle);
+      return handle;
+    })();
+    return gate.register(opening);
   }
   return {
     async session(label, user) {

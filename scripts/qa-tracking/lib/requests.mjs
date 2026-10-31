@@ -37,6 +37,7 @@ export function recordTrackingRequests(page) {
   const list = [];
   page.on("request", (request) => {
     try {
+      if (request.headers()["x-qa-harness"] === "1") return; // harness-issued: tracked by createTrackingApi
       const entry = summarizeTrackingRequest(request.method(), request.url(), request.postData());
       if (entry) list.push({ ...entry, at: Date.now(), _request: request });
     } catch {}

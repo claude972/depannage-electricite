@@ -30,6 +30,8 @@ import { proveOwnership, readOwnership } from "./lib/ownership.mjs";
 import { createAuthAdmin } from "./lib/auth-admin.mjs";
 import { runTrackingCleanup, cleanupOrder } from "./lib/cleanup.mjs";
 import { createTrackingApi } from "./lib/guard.mjs";
+import { createReconciler } from "./lib/reconcile.mjs";
+import { createGuardedCleanup, recoveryCommand, exitCodeFor } from "./lib/finalize.mjs";
 import { TrackingFixtures, setupCohort, SCENARIO_RUNNERS, PROVIDER_RUNNERS, createSessionPool } from "./scenarios.mjs";
 
 function installTee(outDir, redactor) {
@@ -62,6 +64,8 @@ function installTee(outDir, redactor) {
  * stays INCOMPLETE: an outcome that was unknown is never reported as clean.
  */
 export async function cleanupWithProof({ db, auth, manifest, intents, runId, log }) {
+  // Unknown outcomes first: readbacks may prove them now that every producer has settled.
+  await intents.reconcileOpen(log);
   const verdict = intentsVerdict(intents);
   const recovered = [];
   for (const open of verdict.open.filter((o) => o.op === "createAuthUser" && o.key)) {
@@ -78,8 +82,12 @@ export async function cleanupWithProof({ db, auth, manifest, intents, runId, log
   const remote = await readOwnership(db, auth, manifest);
   const { manifest: proven, unproven } = proveOwnership({ manifest, runId, ...remote });
   const cleanup = await runTrackingCleanup(db, proven, (e) => log(`cleanup ${String(e.status).padEnd(4)} ${e.table}${e.column ? ` by ${e.column}` : ""}: requested ${e.requested}, remaining ${e.remaining}${e.error ? ` — ${e.error}` : ""}`));
-  const ok = cleanup.ok && unproven.length === 0 && verdict.open.length === 0;
-  return { ok, steps: cleanup.steps, unproven, open_intents: verdict.open, recovered, error: ok ? null : [!cleanup.ok && "deletion step failed", unproven.length && `${unproven.length} id(s) not proven to belong to the run`, verdict.open.length && `${verdict.open.length} write(s) with unknown outcome`].filter(Boolean).join("; ") };
+  // Provider calls only leave lease rows: the post-cascade lease readback (0) proves their state.
+  const leaseCheck = cleanup.steps.find((st) => st.table === "tracking_provider_leases");
+  if (!leaseCheck || leaseCheck.status === "pass") for (const e of intents.open()) if (e.kind === "provider") intents.settle(e.id, "reconciled", { note: "lease-only side effect, lease readback 0" });
+  const final = intentsVerdict(intents);
+  const ok = cleanup.ok && unproven.length === 0 && final.open.length === 0;
+  return { ok, steps: cleanup.steps, unproven, open_intents: final.open, recovered, error: ok ? null : [!cleanup.ok && "deletion step failed", unproven.length && `${unproven.length} id(s) not proven to belong to the run`, final.open.length && `${final.open.length} write(s) with unknown outcome`].filter(Boolean).join("; ") };
 }
 
 async function main(argv) {
@@ -157,8 +165,10 @@ async function main(argv) {
     const gate = createStopGate();
     const intents = new IntentLog(path.join(outDir, "intents.json"));
     const fixtures = new Fixtures({ db, cohort, manifestPath: path.join(outDir, "manifest.json"), context: { sha: options.sha, project: options.project, base_url: base }, redactor, gate });
-    const tf = new TrackingFixtures({ fixtures, intents, cohort });
     const auth = createAuthAdmin({ url: credentials.supabase.url, serviceKey: credentials.supabase.serviceKey, timeoutMs: options.timeoutMs });
+    const tf = new TrackingFixtures({ fixtures, intents, cohort, gate, auth });
+    const reconcile = createReconciler(db);
+    const recovery = recoveryCommand({ outDir, project: options.project });
     const eventsFile = path.join(outDir, "events.ndjson");
     const appendEvent = (event) => {
       try {
@@ -171,7 +181,7 @@ async function main(argv) {
       log(`${entry.status.padEnd(7)} ${entry.suite} / ${entry.name} (${entry.durationMs} ms)`);
       await persist();
     } });
-    const buildResult = () => ({ context, summary: report.summary(), fatal: fatalInfo, scenarios: report.scenarios, cleanup: cleanupResult ? { ok: cleanupResult.ok, error: cleanupResult.error, unproven: cleanupResult.unproven?.length ?? 0, open_intents: cleanupResult.open_intents?.length ?? 0, recovered: cleanupResult.recovered?.length ?? 0 } : null, manifest: fixtures.manifestPath, intents: intents.file });
+    const buildResult = () => ({ context, summary: report.summary(), fatal: fatalInfo, scenarios: report.scenarios, cleanup: cleanupResult ? { ok: cleanupResult.ok, error: cleanupResult.error, refused: Boolean(cleanupResult.refused), recovery: cleanupResult.recovery || null, unproven: cleanupResult.unproven?.length ?? 0, open_intents: cleanupResult.open_intents?.length ?? 0, recovered: cleanupResult.recovered?.length ?? 0 } : null, manifest: fixtures.manifestPath, intents: intents.file });
     async function persist() {
       const result = redactor.redact(buildResult());
       await writeFile(path.join(outDir, "result.json"), JSON.stringify(result, null, 2) + "\n", { mode: 0o600 });
@@ -184,24 +194,32 @@ async function main(argv) {
       log,
       gate,
       drainTimeoutMs: options.timeoutMs,
-      cleanup: async () => {
-        // Browser closed BEFORE any deletion: no watch callback or late route can fire.
-        try {
-          await pool?.closeAll();
-        } catch {}
-        await stopBrowser(browser);
-        browser = null;
-        try {
-          await fixtures.collectIndirect();
-        } catch (error) {
-          log(`indirect collection failed: ${error.message}`);
-        }
-        const result = await cleanupWithProof({ db, auth, manifest: fixtures.manifest, intents, runId: cohort.runId, log });
-        await writeFile(path.join(outDir, "cleanup.json"), JSON.stringify(redactor.redact(result), null, 2) + "\n", { mode: 0o600 });
-        return result;
-      },
+      // Harness-owned guard: undrained producer ⇒ zero deletion, zero Auth read, manifest/intents untouched.
+      cleanup: createGuardedCleanup({
+        gate,
+        recovery,
+        log,
+        onEvent: appendEvent,
+        stopProducers: async () => {
+          try {
+            await pool?.closeAll();
+          } catch {}
+          await stopBrowser(browser);
+          browser = null;
+        },
+        proveAndClean: async () => {
+          try {
+            await fixtures.collectIndirect();
+          } catch (error) {
+            log(`indirect collection failed: ${error.message}`);
+          }
+          return cleanupWithProof({ db, auth, manifest: fixtures.manifest, intents, runId: cohort.runId, log });
+        },
+      }),
       writeResults: async ({ cleanup, fatal, reason }) => {
         cleanupResult = cleanup;
+        if (cleanup) await writeFile(path.join(outDir, "cleanup.json"), JSON.stringify(redactor.redact(cleanup), null, 2) + "\n", { mode: 0o600 });
+        if (cleanup && cleanup.ok === false) log(`cleanup INCOMPLETE: ${cleanup.error}. Recover with: ${recovery}`);
         if (fatal) fatalInfo = { origin: fatal.origin, error: redactor.redactError(fatal.error) };
         context.finished_at = new Date().toISOString();
         context.finish_reason = reason;
@@ -211,7 +229,7 @@ async function main(argv) {
     const uninstall = lifecycle.installCrashHandlers(process, {
       onFatal: (error, origin) => appendEvent({ at: new Date().toISOString(), type: "fatal", origin, error: redactor.redactError(error) }),
       codeFor: (fatal, cleanup) => {
-        const code = cleanup && cleanup.ok === false ? 3 : report.summary().fail > 0 ? 1 : fatalExitCode(fatal, cleanup);
+        const code = exitCodeFor({ cleanup, fail: report.summary().fail, fatalCode: fatalExitCode(fatal, cleanup) });
         restoreTee();
         return code;
       },
@@ -227,7 +245,7 @@ async function main(argv) {
         restoreTee();
       },
       codeFor: (signal, cleanup) => {
-        const code = cleanup && cleanup.ok === false ? 3 : 130;
+        const code = exitCodeFor({ cleanup, signal: true });
         restoreTee();
         return code;
       },
@@ -237,24 +255,26 @@ async function main(argv) {
     let preflightLate = null;
     try {
       browser = await launchBrowser(playwright, { headless: !options.headed, chromiumPath: options.chromiumPath });
-      pool = createSessionPool({ browser, base, projectRef: options.project, redactor, gate });
-      const ctx = { base, projectRef: options.project, out: outDir, gate, intents, tf, fixtures, cohort, redactor, log, state: {}, api: createTrackingApi({ gate, intents }), ...bindPool(pool) };
-      const setup = await report.scenario("setup", "cohort + authenticated 404 preflight", async (s) => {
-        try {
-          s.note(JSON.stringify(await setupCohort(ctx)));
-        } catch (error) {
-          if (error instanceof PreflightError) preflightLate = error;
-          throw error;
-        }
-      });
+      pool = createSessionPool({ browser, base, projectRef: options.project, redactor, gate, intents, reconcile, onEvent: appendEvent });
+      const ctx = { base, projectRef: options.project, out: outDir, gate, intents, tf, fixtures, cohort, redactor, log, state: {}, api: createTrackingApi({ gate, intents, reconcile }), ...bindPool(pool) };
+      const setup = await gate.register(
+        report.scenario("setup", "cohort + authenticated 404 preflight", async (s) => {
+          try {
+            s.note(JSON.stringify(await setupCohort(ctx)));
+          } catch (error) {
+            if (error instanceof PreflightError) preflightLate = error;
+            throw error;
+          }
+        }),
+      );
       if (setup.status === "PASS") {
         for (const name of options.scenarios) {
           if (lifecycle.stopping) break;
-          await runOne(report, "tracking", name, (s) => SCENARIO_RUNNERS[name](ctx, s), persist);
+          await runOne(report, "tracking", name, (s) => SCENARIO_RUNNERS[name](ctx, s), persist, gate);
         }
         for (const name of providers) {
           if (lifecycle.stopping) break;
-          await runOne(report, "provider", name, (s) => PROVIDER_RUNNERS[name](ctx, s), persist);
+          await runOne(report, "provider", name, (s) => PROVIDER_RUNNERS[name](ctx, s), persist, gate);
         }
       }
     } finally {
@@ -262,9 +282,7 @@ async function main(argv) {
       uninstall();
       uninstallSignals();
       const summary = report.summary();
-      let code = exitCode(summary, cleanup ? cleanup.ok : true, lifecycle.fatal);
-      if (preflightLate) code = 2;
-      if (cleanup && cleanup.ok === false) code = 3;
+      const code = exitCodeFor({ cleanup, preflight: Boolean(preflightLate), fatalCode: exitCode(summary, true, lifecycle.fatal) });
       log(`done: ${JSON.stringify(summary)}; cleanup ${cleanup ? (cleanup.ok ? "complete" : "INCOMPLETE") : "skipped (kept)"}; exit ${code}`);
       if (options.json) process.stdout.write(JSON.stringify({ ...summary, exit: code, out: outDir }) + "\n");
       restoreTee();
@@ -287,9 +305,10 @@ function bindPool(pool) {
 }
 
 /** A precondition refused by a guard (e.g. reassignment simulation) is BLOCKED, never PASS. */
-export async function runOne(report, suite, name, fn, persist = async () => {}) {
+export async function runOne(report, suite, name, fn, persist = async () => {}, gate = null) {
+  if (gate?.stopping) return null; // never START a scenario once the run is stopping
   let blocked = null;
-  const entry = await report.scenario(suite, name, async (s) => {
+  const scenarioRun = report.scenario(suite, name, async (s) => {
     try {
       await fn(s);
     } catch (error) {
@@ -300,6 +319,8 @@ export async function runOne(report, suite, name, fn, persist = async () => {}) 
       throw error;
     }
   });
+  // The running scenario is part of the drain: cleanup never starts while it still drives anything.
+  const entry = await (gate ? gate.register(scenarioRun) : scenarioRun);
   if (blocked) {
     entry.status = "BLOCKED";
     entry.note = blocked;

@@ -15,7 +15,9 @@ import { classifyRoute, classifyGeocode } from "../scripts/qa-tracking/lib/provi
 import { checkAnonymous, checkBuildId, checkTrackingTable, assertUnknownIs404 } from "../scripts/qa-tracking/lib/preflight.mjs";
 import { canonicalEmailPattern, assertCanonicalEmail, proveOwnership } from "../scripts/qa-tracking/lib/ownership.mjs";
 import { cleanupOrder, runTrackingCleanup, NEVER_TOUCHED, TRACKING_PRE_STEPS } from "../scripts/qa-tracking/lib/cleanup.mjs";
-import { createTrackingApi, act, gatedWait } from "../scripts/qa-tracking/lib/guard.mjs";
+import { createTrackingApi, act, gatedWait, classifyMutation } from "../scripts/qa-tracking/lib/guard.mjs";
+import { proveTracking, proveAction, describeMutation } from "../scripts/qa-tracking/lib/reconcile.mjs";
+import { createGuardedCleanup, exitCodeFor } from "../scripts/qa-tracking/lib/finalize.mjs";
 import { POSITION_SOURCE, SCENARIOS, PROVIDER_SCENARIOS, UI, PUBLIC_POINTS } from "../scripts/qa-tracking/lib/constants.mjs";
 import { cleanupWithProof, runOne } from "../scripts/qa-tracking/run.mjs";
 import { createStopGate, StopRequestedError } from "../scripts/qa/lib/lifecycle.mjs";
@@ -51,11 +53,13 @@ test("intents: announced before, settled after; definitive refusals settle; unkn
   log.settle(id, "done");
   await assert.rejects(log.wrap("insert", "sites", "S1", async () => { throw Object.assign(new Error("409"), { status: 409 }); }));
   await assert.rejects(log.wrap("insert", "sites", "S2", async () => { throw new Error("socket hang up"); }));
+  await assert.rejects(log.wrap("insert", "sites", "S3", async () => { throw Object.assign(new Error("503"), { status: 503 }); }));
+  await assert.rejects(log.wrap("insert", "sites", "S4", async () => { throw Object.assign(new Error("stopped"), { notSentBeforeStart: true }); }));
   const verdict = intentsVerdict(log);
   assert.equal(verdict.ok, false);
-  assert.deepEqual(verdict.open.map((o) => o.key), ["S2"]);
-  assert.equal(defaultDefinitive({ status: 408 }), false);
-  assert.equal(defaultDefinitive({ status: 403 }), true);
+  assert.deepEqual(verdict.open.map((o) => o.key), ["S2", "S3"], "transport error and 5xx stay open; a stop before emission is not-sent");
+  for (const status of [400, 401, 403, 404, 409, 422, 429]) assert.equal(defaultDefinitive({ status }), true, String(status));
+  for (const status of [408, 500, 502, 503, 504, undefined]) assert.equal(defaultDefinitive({ status }), false, String(status));
 });
 
 test("position redaction: coordinates, pairs, geometry and labels never survive; integers and secrets handled", () => {
@@ -204,6 +208,13 @@ test("cleanupWithProof: an open intent is recovered by canonical e-mail but keep
   assert.ok(manifest.created.auth_users.includes(user), "recovered account added for deletion");
   assert.equal(result.ok, false, "an unknown outcome is never reported as clean");
   assert.equal(result.open_intents.length, 1);
+  // With an in-memory readback (normal run), the same open intent is PROVEN and the run can be clean.
+  const proven = new IntentLog(path.join(dir, "proven.json"));
+  const pid = proven.begin("createAuthUser", "auth.users", `qa-${RUN}-artisan-b@qa.invalid`);
+  proven.attach(pid, async () => ({ proven: true, note: "account absent" }));
+  const provenResult = await cleanupWithProof({ db: fakeDb(), auth, manifest: { created: { ...manifest.created, auth_users: [], profiles: [] } }, intents: proven, runId: RUN, log: () => {} });
+  assert.equal(provenResult.ok, true);
+  assert.equal(proven.entries[0].outcome, "reconciled");
   const clean = new IntentLog(path.join(dir, "clean.json"));
   const ok = await cleanupWithProof({ db: fakeDb(), auth, manifest: { created: { ...manifest.created, auth_users: [], profiles: [] } }, intents: clean, runId: RUN, log: () => {} });
   assert.equal(ok.ok, true);
@@ -214,7 +225,7 @@ test("stop gate: after a signal the harness refuses tracking POSTs, clicks and w
   const intents = new IntentLog(path.join(tmp(), "intents.json"));
   const trackingApi = createTrackingApi({ gate, intents });
   gate.stop("SIGINT");
-  await assert.rejects(trackingApi.post({} as never, "/api/interventions/x/tracking", { action: "point" }), StopRequestedError);
+  assert.throws(() => trackingApi.post({} as never, "/api/interventions/x/tracking", { action: "point" }), StopRequestedError);
   await assert.rejects(trackingApi.get({} as never, "/api/interventions/x/tracking"), StopRequestedError);
   assert.equal(intents.entries.length, 0, "no intent opened (nothing sent)");
   let clicked = false;
@@ -248,3 +259,42 @@ test("constants and sources: emulated position label, T12 only as simulation, no
     assert.equal(/(insert|upsert|update)\(\s*"intervention_tracking"/.test(src), false, `${file} writes intervention_tracking directly`);
   }
 });
+
+test("outcome classification and readback proofs: only definitive 4xx refuse, only monotonic evidence proves", () => {
+  assert.equal(classifyMutation({ status: 200, complete: true }), "done");
+  for (const status of [400, 401, 403, 404, 409, 422, 429]) assert.equal(classifyMutation({ status, complete: true }), "refused");
+  for (const status of [500, 502, 503, 504, 408, 301]) assert.equal(classifyMutation({ status, complete: true }), "unknown", String(status));
+  assert.equal(classifyMutation({ status: 200, complete: false }), "unknown", "body not fully read");
+  assert.equal(classifyMutation({ transportError: true }), "unknown");
+  const id = randomUUID(), sid = randomUUID();
+  const point = describeMutation(`/api/interventions/${id}/tracking`, { action: "point", expected_version: 1, payload: { session_id: sid, seq: 4, latitude: 1, longitude: 2 } });
+  assert.deepEqual([point.kind, point.action, point.seq], ["tracking", "point", 4]);
+  assert.equal(proveTracking(point, { session_id: sid, last_seq: 4 }).proven, true);
+  assert.equal(proveTracking(point, { session_id: sid, last_seq: 3 }).proven, false);
+  assert.equal(proveTracking({ ...point, action: "start" }, { session_id: sid }).proven, true);
+  assert.equal(proveTracking({ ...point, action: "start" }, null).proven, false, "absence is not proof for a start");
+  assert.equal(proveTracking({ ...point, action: "stop" }, { session_id: null }).proven, true, "a closed session is final");
+  assert.equal(proveTracking({ ...point, action: "stop" }, { session_id: sid }).proven, false);
+  assert.equal(proveTracking({ ...point, action: "destination", before: 2 }, { destination_version: 3 }).proven, true);
+  assert.equal(proveTracking({ ...point, action: "destination", before: null }, { destination_version: 3 }).proven, false);
+  assert.equal(proveAction({ action: "complete" }, { status: "completed" }).proven, true);
+  assert.equal(proveAction({ action: "complete" }, { status: "in_progress" }).proven, false);
+  assert.equal(describeMutation(`/api/interventions/${id}/tracking/route`, {}).kind, "provider");
+});
+
+test("guarded cleanup and exit codes: undrained producer ⇒ no deletion, recovery command, exit 3", async () => {
+  let cleaned = 0, stopped = 0;
+  const gate = { pending: 2 };
+  const refused = await createGuardedCleanup({ gate, recovery: "node scripts/qa-tracking/run.mjs --cleanup-manifest m.json", stopProducers: async () => { stopped++; }, proveAndClean: async () => { cleaned++; return { ok: true }; } })();
+  assert.equal(cleaned, 0);
+  assert.equal(stopped, 1, "producers are still stopped");
+  assert.equal(refused.ok, false);
+  assert.equal(refused.deletes, 0);
+  assert.match(refused.recovery, /--cleanup-manifest/);
+  assert.equal(exitCodeFor({ cleanup: refused, signal: true }), 3);
+  assert.equal(exitCodeFor({ cleanup: { ok: true }, signal: true }), 130);
+  assert.equal(exitCodeFor({ cleanup: { ok: true }, fail: 1 }), 1);
+  assert.equal(exitCodeFor({ cleanup: { ok: false }, fail: 1 }), 3, "an incomplete cleanup wins over a FAIL");
+  assert.equal(exitCodeFor({ cleanup: null, preflight: true }), 2);
+});
+
