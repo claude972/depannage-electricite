@@ -69,3 +69,17 @@ test("autorité plateforme : écriture par super-admin ou capacité, sinon lectu
   assert.equal(platformAuthority(null, "platform-moderation").canWrite, false);
   assert.match(platformAuthority(null, "platform-moderation").reason ?? "", /non vérifiés/);
 });
+
+// ---- Opérateur limité : coques artisan et particulier, garde de rôle réel ---------------------
+import { canAccess } from "../../components/app/session";
+
+test("opérateur limité : un artisan ou un particulier habilité voit ses sections, jamais sans réponse", () => {
+  for (const role of ["artisan", "client", "manager"] as const) {
+    const guard = (v: "platform-operators" | "platform-finance" | "platform-moderation") => canAccess(v, role, "live");
+    assert.deepEqual(platformEntries(null, guard), [], `${role} sans réponse`);
+    assert.deepEqual(platformEntries(access({ capabilities: { finance: true } }), guard).map((e) => e.view), ["platform-finance"], `${role} finance`);
+    assert.deepEqual(platformEntries(access({ super_admin: true }), guard).length, 3, `${role} super-admin`);
+  }
+  // Mode public : aucun rôle → aucune entrée quelle que soit la réponse.
+  assert.deepEqual(platformEntries(access({ super_admin: true }), (v) => canAccess(v, null, "public")), []);
+});

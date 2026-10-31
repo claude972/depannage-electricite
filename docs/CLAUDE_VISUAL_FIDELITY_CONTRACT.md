@@ -320,3 +320,22 @@ Vérifié (démo, script hors dépôt) : cloche visible 44 × 44 et active dans 
   lien direct `#platform-finance` → « Accès non vérifié » sans donnée ; console sans erreur. Captures
   `anchors-platform-{operators,finance,moderation}-admin-{360,1280}.jpg`, `anchors-platform-unverified-client-1280.jpg`.
   Tests : `platformEntries`, `platformAuthority` ; suite UI 86/86.
+
+### Corrections de la revue des ancrages (ANCHOR-REV-001 à 003, branche `claude/web-design-admin`)
+
+- ANCHOR-REV-001 — particulier sur mobile : carte « Opérateur de plateforme » dans la vue Profil (atteignable par l’onglet
+  Profil à 360), liste des sections ouvertes par la plateforme, même garde fail-closed `platformEntries` que la barre
+  latérale ; aucune carte sans réponse serveur ; onglets bas inchangés.
+- ANCHOR-REV-002 — artisan : `secondaryNav` ajoute les sections du back-office ouvertes à ce compte (barre latérale,
+  tiroir, liens du profil) et les vues `platform-*` rendent `PlatformPage` ; sans droit, « Accès non vérifié » au lieu de
+  l’écran « ne fait pas partie de votre espace » ; aucune promotion de rôle, aucune restriction inventée.
+- ANCHOR-REV-003 — entreprise : textes hérités re-cadrés sur le lot livré — équipements critiques (restaurant) renvoient
+  à « Opérations du site » (état déclaré, aucune télémesure) ; bloc générique « Équipements » retiré ; « Respect des SLA »
+  du rapport consolidé devient « (consolidé) » : suivi site par site dans la fiche, consolidé multi-sites non livré,
+  aucune conformité attestée.
+- Vérifié (démo, 360 et 1280) : `#demo/artisan-platform-finance` → « Accès non vérifié » ; aucune entrée artisan/particulier
+  sans `platformAccess` ; fiche site-2 et rapport avec les nouveaux libellés ; console sans erreur. Captures
+  `anchors-rev-artisan-platform-unverified-{360,1280}.jpg`, `anchors-rev-client-profile-{360,1280}.jpg`,
+  `anchors-rev-reports-sla-1280.jpg`. Tests : visibilité opérateur limité pour artisan / particulier / entreprise par le
+  garde `canAccess` réel, mode public sans entrée ; suite UI 89/89. Limite : la démo ne fournit `platformAccess` qu’au
+  rôle Super Admin, la présence des entrées pour un opérateur limité est prouvée par les tests, pas par capture.

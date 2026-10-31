@@ -82,7 +82,8 @@ import { ArtisanPlanning } from "../features/planning/artisan-planning";
 import { CONTRACT_MESSAGES } from "../app/api";
 import { demoPlanning } from "../../lib/features/planning/demo";
 import { PLANNING_TIME_ZONE } from "../../lib/features/planning/types";
-import { anchorEntryVisible, leafScope } from "./anchors";
+import { anchorEntryVisible, leafScope, platformEntries } from "./anchors";
+import { PlatformPage } from "./platform-anchor";
 import {
   appointmentSlotState,
   demoPlanningRange,
@@ -114,11 +115,17 @@ const SECONDARY_NAV: NavItem[] = [
   { view: "help", label: "Aide", icon: "help" },
   { view: "support", label: "Assistance", icon: "shield" },
 ];
-/** Entrées secondaires réellement proposées : le planning dépend de la capacité serveur (jamais un menu sans action). */
+/**
+ * Entrées secondaires réellement proposées : le planning dépend de la capacité serveur (jamais un
+ * menu sans action) ; les sections du back-office n’apparaissent que si la plateforme a ouvert un
+ * droit d’opérateur à ce compte (`platformEntries`, fail-closed), sans promotion de rôle.
+ */
 function secondaryNav(session: Session): NavItem[] {
-  return SECONDARY_NAV.filter((item) =>
+  const base = SECONDARY_NAV.filter((item) =>
     item.view === "planning" ? anchorEntryVisible(canAccess("planning", session.role, session.mode), session.capabilities.planning) : true,
   );
+  const platform = platformEntries(session.platformAccess, (v) => canAccess(v, session.role, session.mode));
+  return [...base, ...platform];
 }
 const DRAWER_ID = "artisan-drawer";
 
@@ -465,6 +472,11 @@ export function ArtisanSpace({ session }: { session: Session }) {
         break;
       case "planning":
         content = <PlanningView session={session} dossier={dossier} />;
+        break;
+      case "platform-operators":
+      case "platform-finance":
+      case "platform-moderation":
+        content = <PlatformPage session={session} view={session.view} />;
         break;
       case "documents":
         content = (
