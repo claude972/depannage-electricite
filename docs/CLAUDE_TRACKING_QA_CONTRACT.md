@@ -660,3 +660,14 @@ Le comportement d'authentification du produit (déconnexion globale) est inchang
 `--only` existe déjà : `--only T6` (ou `--only T6,T9,T16`) exécute le seed complet de `setupCohort`, puis seulement les scénarios demandés, dans l'ordre du §6. La session `client` est donc ouverte avant le seed, exactement comme dans le run 4e8bc1a68a89 : la condition suspectée est reproduite, pas masquée. Les diagnostics du §1 sont toujours actifs, sans option. Le `--dry-run` affiche `order` et `diagnostics`.
 
 Exemple ROOT : `node scripts/qa-tracking/run.mjs --mode remote … --only T6`. Sans `--provider-proof`, aucun appel fournisseur n'est fait.
+
+### 8. Corrections de la revue ROOT de 18039eb (diagnostics, avant code)
+
+**a) `reason` en ensemble fermé.** Une `reason` de forme snake_case n'est plus acceptée telle quelle : seules les raisons connues du suivi sont conservées.
+- `ROUTE_REASONS` : `position_unavailable`, `destination_required`, `provider_quota`, `provider_timeout`, `provider_unavailable`, `route_unavailable`, `invalid_provider_response`, `server_configuration`. Ce sont les raisons 503 de `lib/features/tracking/http.ts` et `provider.ts`, reprises par le modèle UI.
+- `tracking_changed` (409).
+- `application_quota` (429).
+
+Toute autre valeur, y compris une chaîne snake_case valide inconnue (par exemple `private_token_from_upstream`), est enregistrée comme la constante `"other"`. Un corps illisible ou sans `reason` donne `null`. Jamais un texte venant de l'amont. Test de reproduction : une raison snake_case inconnue n'est pas persistée.
+
+**b) Arrêt pendant la capture.** La porte d'arrêt est revérifiée avant chaque opération de capture (capture d'écran, lecture DOM, écriture) et après chaque `await`, avant l'opération suivante. Dès qu'elle est levée, plus aucune opération n'est lancée. La capture en cours est notée `truncated: "stopping"` et les pages restantes ne sont pas visitées. Le fichier JSON de la page en cours est écrit seulement s'il reste dans les bornes, avec ce qui a déjà été lu : c'est une écriture locale, pas une opération de page. Le verdict reste inchangé. Test de reproduction : un arrêt pendant la capture d'écran ⇒ aucun `evaluate` lancé, capture `truncated`, verdict du scénario inchangé.
