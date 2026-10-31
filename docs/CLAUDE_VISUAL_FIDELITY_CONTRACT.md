@@ -796,3 +796,6 @@ dimensions intrinsèques déclarées (pas de décalage de mise en page). Contras
   `public-home-360-after.jpg`, `public-home-1280-after.jpg`.
 - Écart assumé : silhouette illustrative (M41) au lieu de la photographie de M11 (visage et badge « qualifiés et assurés » exclus par la
   consigne) ; la légende dit explicitement qu’il ne s’agit pas d’un artisan de la plateforme.
+- Revue pilote (P3) : la légende visible est réduite à « Illustration » et l’alternative textuelle à « Illustration : électricien devant un
+  tableau électrique » ; la provenance complète (M41 vol. 3 p10, SHA-256, « pas un artisan de la plateforme ») reste documentée ici
+  uniquement. Captures `public-home-{360,1280}-after.jpg` régénérées après hydratation ; `tsc` au vert, suite UI 106/106.

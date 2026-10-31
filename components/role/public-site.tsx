@@ -233,8 +233,8 @@ function HomeView({ gated, onLogin, onNew, onDemo, onProfessional }: { gated: bo
           {/* PUBLIC-HERO-001: illustration derived from reference mockup M41 (vol. 3 p10), no face,
               no badge, no brand; not an artisan of the platform (traceability in the contract). */}
           <figure className={styles.heroFigure}>
-            <img src="/images/public-hero-m41.jpg" width={346} height={306} alt="Illustration : un électricien devant un tableau électrique." loading="eager" decoding="async" />
-            <figcaption>Illustration issue des maquettes de référence — pas un artisan de la plateforme.</figcaption>
+            <img src="/images/public-hero-m41.jpg" width={346} height={306} alt="Illustration : électricien devant un tableau électrique" loading="eager" decoding="async" />
+            <figcaption>Illustration</figcaption>
           </figure>
         </div>
       </section>
