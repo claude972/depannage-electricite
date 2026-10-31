@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 import { api, ApiRequestError, contractStateFromError } from "./app/api";
 import { createGuard, createRunner, type RunContext, type Runner } from "./app/guard";
+import { adoptIdentity } from "./app/identity";
 import {
   DEMO_IDS,
   DEMO_KEYS,
@@ -1421,6 +1422,18 @@ export default function CourantApp() {
     }
   }
 
+  // Dependencies of the identity adoption sequence (login / signup with session).
+  const identityDeps = {
+    clearSessionState,
+    setUserId(id: string | null) {
+      userId.current = id;
+    },
+    refresh,
+    navigate,
+    setPendingDraft,
+    homeView: () => homeFor(roleRef.current, "live"),
+  };
+
   // ---- Public (unauthenticated) session -------------------------------------------------
   const publicSession: PublicSession = {
     view,
@@ -1473,14 +1486,7 @@ export default function CourantApp() {
           throw new Error(
             "Connexion impossible. Vérifiez votre email, votre mot de passe et la confirmation de votre compte.",
           );
-        clearSessionState();
-        userId.current = result.data.user?.id ?? null;
-        const keepDraft = pendingDraft;
-        if (ctx.alive()) await refresh();
-        if (keepDraft) {
-          ctx.when(setPendingDraft)(keepDraft);
-          ctx.when(navigate)("new");
-        } else ctx.when(navigate)(homeFor(roleRef.current, "live"));
+        await adoptIdentity(ctx, result.data.user?.id ?? null, pendingDraft, identityDeps);
       });
     },
     async signUp(values) {
@@ -1493,14 +1499,7 @@ export default function CourantApp() {
         });
         if (result.error) throw result.error;
         if (result.data.session) {
-          const keepDraft = pendingDraft;
-          clearSessionState();
-          userId.current = result.data.user?.id ?? null;
-          if (ctx.alive()) await refresh();
-          if (keepDraft) {
-            ctx.when(setPendingDraft)(keepDraft);
-            ctx.when(navigate)("new");
-          } else ctx.when(navigate)(homeFor(roleRef.current, "live"));
+          await adoptIdentity(ctx, result.data.user?.id ?? null, pendingDraft, identityDeps);
         } else
           ctx.notice(
             "Votre compte a été créé. Consultez votre email pour confirmer votre inscription avant de vous connecter.",
