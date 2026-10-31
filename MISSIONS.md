@@ -131,3 +131,18 @@ Cross-verification: Codex examine les preuves de Claude et fait corriger les fin
 - dependencies: pagination interventions déjà revue d85, backend Supabase dédié actif ; UI Claude branchera après contrat vérifié. Relais à Claude à00h si lot inachevé.
 - verification report: CORRECTIONS.md / WEB-PWA-ADMIN-DIRECTORIES-001 et rapport complémentaire exactSHA.
 - preview: intégration après revue, pas de production.
+
+
+## Mission WEB-PWA-SUPPORT-001 — assistance privée persistante
+- agent: codex
+- status: in_progress
+- branch: codex/web-pwa-backend
+- base revision: 254d497e92b2e6e6286dbb59254660dc39aa27f3
+- objective: remplacer l’absence de circuit d’assistance par des demandes privées suivies, sans lecture supplémentaire des conversations personnelles ni promesse de rappel/SLA.
+- owned files: migration011 additive support tickets, nouvelles routes app/api/support/route.ts et app/api/support/[id]/route.ts si utile, tests ciblés et étape CI SQL isolée coordonnée, docs/WEB_PWA_SUPPORT_CONTRACT.md et docs/CODEX_SUPPORT_VERIFICATION.md. Aucun frontend/ancienne migration/paiement.
+- deliverables: plan/contrat prépubliés avant code ; utilisateur authentifié crée/lit/répond à ses tickets, administration plateforme lit/répond/traite avec historique append-only ; listes serveur paginées et détail ; états/transition/limites stricts documentés. Notifications uniquement dans l’app, aucun e-mail/SMS/appel envoyé, aucun délai inventé.
+- privacy: ticket visible uniquement créateur et admin ; si rattaché à un dossier, lecture/écriture utilisateur exigent encore l’accès courant au dossier (retrait/portée site respectés). Aucun autre membre/artisan ne gagne de lecture par simple appartenance, aucun ticket anonyme ni élargissement messages. Le lien à un dossier ne donne aucun droit d’action sur ce dossier.
+- acceptance: autorité côté serveur/RLS, enums/transitions validées, avis internes admin jamais renvoyés au client si retenus (préférer premier lot sans notes internes), auteur serveur et historique immuable, filtres/curseur/total cohérents, bornes de texte/pagination/rate limit, refus intercomptes/orgs/retrait, aucun statut succès simulé. Tests SQL/API ciblés plus revue Claude et recette preview après application autorisée.
+- dependencies: helpers009, projet dédié ; frontend Claude branchera le contrat après publication. Ce lot ne remplit pas seul contact/rappel public, chat/SLA ou séparation des opérateurs finance/support. Relais à Claude à00h si inachevé.
+- verification report: CORRECTIONS.md / WEB-PWA-SUPPORT-001 et rapport exactSHA complémentaire.
+- preview: intégration après revue, pas de production.
