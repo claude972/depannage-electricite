@@ -33,3 +33,27 @@ Status: contract only. No code before root reads this document.
 
 - Changing the revalidation scheduler, realtime subscriptions, or the T6 harness order.
 - Any tracking leaf change (the card renders correctly once the dossier is present — T19 with a fresh client PASSED).
+
+## Amendment A1 (root review of cd2b8d3) — required before code
+
+Source fact: `refresh()` (`components/courant-app.tsx` ~220) is `Promise<void>`; a non-401 failure is swallowed into the shell error banner, a superseded call (`seq`) returns silently, a 401 resets the session. A caller therefore CANNOT infer « loaded and still absent » from a resolved `void`. Consequences below.
+
+1. **Explicit outcome, never `not_found` after a failure.** Add a controller method (e.g. `refreshWorkspace(): Promise<RefreshOutcome>`) returning
+   `{ kind: "loaded", generation, contextKey, at }` | `{ kind: "superseded" }` | `{ kind: "failed", status }` (503/5xx/0 transport/invalid body) | `{ kind: "signed_out" }`.
+   The existing `refresh()` keeps its signature and behaviour (wraps the new method). The detail view shows « introuvable » ONLY after a `loaded` outcome for the CURRENT generation and context in which the id is still absent within the visible perimeter. `failed` ⇒ bounded error state with an explicit retry; `superseded` ⇒ wait for the current flight; `signed_out` ⇒ existing session handling.
+2. **Keyed by identity AND active context.** The per-id memory (attempted / in-flight) is keyed by (identity generation, role, active organisation, active site, view, id). It is reset on identity change, on active org/site change and on access revocation (`validateContext` dropping the context). A result whose generation or context key differs from the current one is ignored (never applied, never counted as an attempt).
+3. **True single-flight + bounded memory.** One workspace refresh in flight at a time for the whole shell: concurrent callers (deep link, realtime debounce, focus scheduler, manual « Actualiser ») share the SAME promise (a ref holding the in-flight promise, cleared in `finally`) — never two `/api/workspace` calls because a view re-rendered. The per-id attempt memory is a bounded Map (e.g. 32 entries, LRU eviction) so arbitrary ids cannot grow it without limit.
+4. **Presence = visible perimeter of the role, same as `DetailView`.** « Present » uses exactly the list the view renders from (client: own interventions; artisan: missions in its workspace; enterprise: dossiers of the active organisation/site perimeter). The refresh never widens rights and never reads a dossier outside that perimeter; an id present in the workspace but outside the active perimeter stays « introuvable sur ce périmètre » (existing enterprise wording).
+5. **Tests beyond the pure decision function:**
+   - controller-level integration with injected `api` and deferred promises: concurrency (deep link + realtime + focus at once ⇒ exactly one `/api/workspace` call), 503 ⇒ `failed` (never not_found), transport 0 ⇒ `failed`, 401 ⇒ `signed_out`, superseded call ⇒ no decision from it;
+   - identity/context change during the flight ⇒ result ignored and memory reset;
+   - per-id bound: re-renders of the same id ⇒ one refresh; Map bounded with eviction;
+   - explicit retry after `failed` is user-triggered, bounded (one call per click, disabled while in flight), no automatic storm or timer.
+   If no React renderer is available, the hook's logic lives in a pure/controller module that the views actually call, tested through the same sequences.
+
+## Amendment A2 — honest live badge (root authorised, no owner question)
+
+- While Realtime effectiveness is not proven, the client badge reads **« Connecté »** when the channel status is `SUBSCRIBED` (instead of « En direct »), and the manual **« Actualiser »** action stays visible in every state. No other status claim. Applies to every shell that shows the badge (client today; check artisan/enterprise/admin for the same string).
+- No SQL, no migration, no RLS change from the lead for LIVE-WORKSPACE-001 without a confirmed cause.
+
+Code only after root's GO on this amendment. Owner of the code: lead (shells/session/shared); no worker.

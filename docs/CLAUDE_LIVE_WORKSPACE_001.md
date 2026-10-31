@@ -51,3 +51,10 @@ A client session opened BEFORE an intervention was created for it (external crea
 3. Optional, only if 1 and 2 are clean: the Realtime project setting « Postgres changes » / RLS enforcement status as shown in the dashboard.
 
 The defensive deep-link refresh (contract `cd2b8d3`) is independent of the result and stays proposed.
+
+## Root live read-only facts (2026-10-31 21:14:08.811977 UTC, DB read-only via CLI, linked project)
+
+- Publication `supabase_realtime` EXISTS; public tables EXACTLY `interventions`, `messages`, `quotes`; `payments` ABSENT.
+- `has_function_privilege('authenticated', 'public.can_access_intervention(uuid)', 'execute')` = TRUE.
+- ⇒ Cause 1 (interventions not published) and the grant part of cause 3 are EXCLUDED live. Still UNKNOWN: realtime socket role (anon vs authenticated) and Realtime RLS evaluation. CLI gives no Realtime logs. No cohort, no data modified. Private proof `/tmp/depannage-live-workspace-readonly-2115-private.json` (root).
+- Next: a normal run may record PASSIVE WebSocket join metadata only (role, auth uid match, binding, error code; never the JWT payload) — contract before code if pursued.
