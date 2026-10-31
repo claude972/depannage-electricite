@@ -15,6 +15,11 @@ import {
   project,
   unproject,
   type ShareStatus,
+  DESTINATION_STOP_WARNING,
+  destinationStopsSharing,
+  isTrackingChanged,
+  mayRequestRoute,
+  routeKey,
 } from "../../components/features/tracking/model";
 import type { TrackingCommand, TrackingRoute, TrackingSnapshot } from "../../lib/features/tracking/types";
 
@@ -245,4 +250,75 @@ test("permission refusée : watch coupé, message de réglage ; 409 sur un point
   await conflict.fire(conflict.pos(14.6));
   assert.equal(conflict.watches.size, 0);
   assert.equal(conflict.statuses.at(-1)?.kind, "error");
+});
+
+test("reprise après rechargement : stop de l’ancienne session, puis consentement, puis start avec une nouvelle session", async () => {
+  const h = harness();
+  const live = snap({ shared: true, session_id: "old-session", control_version: 5 });
+  assert.equal(h.calls.length, 0, "rien n’est envoyé avant le clic");
+  await h.ctrl.closeStaleSession(live, async () => live);
+  assert.deepEqual(h.calls.map((c) => c.action), ["stop"]);
+  assert.deepEqual(h.calls[0], { action: "stop", expected_version: 5, payload: { session_id: "old-session" } });
+  assert.equal(h.statuses.at(-1)?.kind, "consent");
+  assert.equal(h.watches.size, 0);
+  await h.ctrl.start(snap({ shared: false, session_id: null, control_version: 6 }));
+  assert.deepEqual(h.calls.map((c) => c.action), ["stop", "start"]);
+  assert.notEqual((h.calls[1].payload as { session_id: string }).session_id, "old-session");
+  assert.equal(h.watches.size, 1);
+});
+
+test("reprise : stop refusé (409) → relecture du snapshot, aucun start, aucune nouvelle tentative", async () => {
+  let reloads = 0;
+  const h = harness({ command: async (c) => (c.action === "stop" ? Promise.reject(Object.assign(new Error("Version dépassée."), { status: 409 })) : snap()) });
+  await h.ctrl.closeStaleSession(snap({ shared: true, session_id: "old" }), async () => {
+    reloads++;
+    return snap({ shared: false, session_id: null, position_state: "stopped" });
+  });
+  assert.equal(reloads, 1);
+  assert.deepEqual(h.calls.map((c) => c.action), ["stop"]);
+  assert.equal(h.statuses.at(-1)?.kind, "error");
+  // Sans session active ou sans droit : rien n’est envoyé.
+  const idle = harness();
+  await idle.ctrl.closeStaleSession(snap({ shared: false }), async () => null);
+  await idle.ctrl.closeStaleSession(snap({ shared: true }, { can_share: false, can_confirm_destination: false }), async () => null);
+  assert.equal(idle.calls.length, 0);
+});
+
+test("P3-3 : confirmer/retirer une destination arrête le partage — dit avant ; côté artisan, nouveau consentement + start", async () => {
+  assert.equal(destinationStopsSharing(snap({ shared: true })), true);
+  assert.equal(destinationStopsSharing(snap({ shared: false })), false);
+  assert.match(DESTINATION_STOP_WARNING, /arrêté/);
+  // Serveur : la session a été arrêtée par la destination → le prochain point reçoit 409.
+  let stopped = false;
+  const h = harness({
+    command: async (c) => {
+      if (c.action === "point" && stopped) throw Object.assign(new Error("Session arrêtée."), { status: 409 });
+      return snap({ session_id: "11111111-1111-4111-8111-111111111111", last_seq: c.action === "point" ? c.payload.seq : 0 });
+    },
+  });
+  await h.ctrl.start(snap());
+  stopped = true;
+  await h.fire(h.pos(14.6));
+  assert.equal(h.watches.size, 0);
+  const err = h.statuses.at(-1) as Extract<ShareStatus, { kind: "error" }>;
+  assert.equal(err.kind, "error");
+  assert.equal(err.retryable, true);
+  h.ctrl.askConsent();
+  assert.equal(h.statuses.at(-1)?.kind, "consent");
+  await h.ctrl.start(snap({ shared: false, session_id: null }));
+  assert.equal(h.calls.filter((c) => c.action === "start").length, 2);
+  assert.equal(h.watches.size, 1);
+});
+
+test("P3-4 : route 409 → relecture ; nouvelle demande au plus une fois par nouvel état, jamais pour le même", () => {
+  const s1 = snap({ last_seq: 7 });
+  assert.equal(isTrackingChanged(failureOf({ status: 409, message: "x", reason: "tracking_changed" })), true);
+  assert.equal(isTrackingChanged(failureOf({ status: 503, message: "x", reason: "route_unavailable" })), false);
+  const blocked = routeKey(s1);
+  assert.equal(mayRequestRoute(s1, blocked), false, "même état : aucune nouvelle demande");
+  assert.equal(mayRequestRoute(snap({ last_seq: 8 }), blocked), true, "nouvel état : une demande");
+  assert.equal(mayRequestRoute(snap({ destination_version: 3 }), blocked), true);
+  assert.equal(mayRequestRoute(null, null), false);
+  // Pendant ce temps, l’ancienne route n’est jamais affichée.
+  assert.equal(routeMatches(route({ point_seq: 7 }), snap({ last_seq: 8 }), trackingDisplay(snap({ last_seq: 8 }), NOW)), false);
 });

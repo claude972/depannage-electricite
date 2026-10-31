@@ -186,3 +186,22 @@ ni interceptées ni mises en cache par le Service Worker ; aucune modification n
 Inchangé : adaptation M7/M44/M67/V8-C07, réponse `null` (chaîne d’identité périmée) ⇒ aucune transition ni succès, aucune
 nouvelle dépendance. Types : tant que `lib/features/tracking/types.ts` n’est pas poussé par Codex, un miroir local
 `components/features/tracking/types.ts` marqué **TEMPORAIRE** est utilisé et remplacé par l’import Codex dès réception du SHA.
+
+## Amendement lead — reprise après rechargement (backend 8366c05 refuse un start sur session active)
+
+Remplace « nouveau démarrage, nouveau `session_id` » du §3 et du point 2 de l’amendement ROOT. Après rechargement, si le
+snapshot indique `shared=true` avec un `session_id` et que le lecteur a `can_share`, le bouton explicite « Reprendre le
+partage » : (1) envoie `stop` avec ce `session_id` et `expected_version = control_version` du snapshot ; (2) si l’arrêt
+réussit, réaffiche l’écran de consentement ; `start` avec un **nouveau** `session_id` n’est envoyé qu’après confirmation ;
+`watchPosition` ensuite seulement. Jamais de `start` isolé suivi d’un 409, aucune nouvelle tentative automatique, aucune
+reprise cachée. Échec du `stop` (409/403/404…) : relecture du snapshot, affichage de l’état serveur et du message, aucun
+`start`. Rien n’est envoyé avant le clic. Testé (`tests/ui/tracking-model.test.ts`).
+
+## Revue croisée Codex 8366c05 (P3-3, P3-4)
+
+- P3-3 : confirmer ou retirer une destination arrête la session de partage côté serveur. Avant confirmation, si un
+  partage est actif : « Le partage de position en cours sera arrêté ; l’artisan devra le relancer. » Côté artisan, le
+  point suivant reçoit 409 : watch coupé, message d’arrêt, et seul chemin de reprise = nouveau consentement + `start`.
+- P3-4 : une route qui répond 409 (`tracking_changed`) déclenche une relecture du snapshot ; une nouvelle demande n’est
+  faite qu’une fois par nouvel état (`session/control_version/last_seq/destination_version`), jamais pour le même, sans
+  boucle ni minuterie de nouvelle tentative ; l’ancienne route n’est jamais affichée entre-temps.

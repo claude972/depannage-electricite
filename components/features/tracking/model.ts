@@ -413,6 +413,34 @@ export class ShareController {
     }
   }
 
+  /**
+   * « Reprendre le partage » après rechargement (le serveur partage encore, aucun watch local) : le serveur refuse un
+   * nouveau start (409) tant que l’ancienne session est active. Sur clic explicite : `stop` avec le `session_id` du
+   * snapshot, puis — seulement si réussi — retour à l’écran de consentement ; le `start` (nouvelle session) n’est envoyé
+   * qu’après confirmation via `start()`. Échec du stop : relecture du snapshot et affichage de l’état serveur, aucun start,
+   * aucune nouvelle tentative automatique.
+   */
+  async closeStaleSession(snapshot: TrackingSnapshot, reload: () => Promise<TrackingSnapshot | null>) {
+    if (this.disposed || this.watchId !== null) return;
+    const t = snapshot.tracking;
+    if (!t.shared || !t.session_id || !snapshot.permissions.can_share) return;
+    const gen = ++this.generation;
+    this.deps.onStatus({ kind: "starting" });
+    try {
+      const next = await this.deps.command({ action: "stop", expected_version: t.control_version, payload: { session_id: t.session_id } });
+      if (gen !== this.generation || this.disposed || next === null) return;
+      this.deps.onSnapshot(next);
+      this.deps.onStatus({ kind: "consent" });
+    } catch (error) {
+      if (gen !== this.generation || this.disposed) return;
+      const f = failureOf(error);
+      const fresh = await reload().catch(() => null);
+      if (gen !== this.generation || this.disposed) return;
+      if (fresh) this.deps.onSnapshot(fresh);
+      this.deps.onStatus({ kind: "error", message: f.message, retryable: false });
+    }
+  }
+
   /** Page masquée, déconnexion : arrêt local + arrêt serveur au mieux ; reprise uniquement explicite. */
   interrupt(reason: string) {
     if (this.watchId === null && !this.sessionId) return;
@@ -436,3 +464,17 @@ export const needsExplicitRestart = (snapshot: TrackingSnapshot | null, watching
 
 export const relativeAge = (seconds: number) =>
   seconds < 60 ? `il y a ${seconds} s` : seconds < 3600 ? `il y a ${Math.round(seconds / 60)} min` : `il y a ${Math.round(seconds / 3600)} h`;
+
+// ---- Route : 409 tracking_changed (revue P3-4) -----------------------------------------------------
+/** Clé de l’état serveur dont dépend une route. */
+export const routeKey = (s: TrackingSnapshot | null) =>
+  s ? `${s.tracking.session_id}|${s.tracking.control_version}|${s.tracking.last_seq}|${s.tracking.destination_version}` : "";
+/** 409 reçu pendant le calcul : relire le snapshot ; nouvelle demande au plus une fois par nouvel état, jamais en boucle. */
+export const isTrackingChanged = (f: TrackingFailure) => f.status === 409;
+export const mayRequestRoute = (snapshot: TrackingSnapshot | null, blockedKey: string | null) =>
+  Boolean(snapshot) && routeKey(snapshot) !== blockedKey;
+
+// ---- Destination : arrêt du partage (revue P3-3) ---------------------------------------------------
+/** Confirmer ou retirer une destination arrête le partage en cours côté serveur : à dire avant confirmation. */
+export const destinationStopsSharing = (s: TrackingSnapshot) => s.tracking.shared;
+export const DESTINATION_STOP_WARNING = "Le partage de position en cours sera arrêté ; l’artisan devra le relancer.";
