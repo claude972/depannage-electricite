@@ -497,6 +497,7 @@ export type Capabilities = {
   performance: ContractState;
   payments: ContractState;
   siteAccess: ContractState;
+  adminLists: ContractState;
 };
 export const UNKNOWN_CAPABILITIES: Capabilities = {
   operations: "unknown",
@@ -507,6 +508,7 @@ export const UNKNOWN_CAPABILITIES: Capabilities = {
   performance: "unknown",
   payments: "unknown",
   siteAccess: "unknown",
+  adminLists: "unknown",
 };
 export type ReturnContext =
   | { kind: "payment"; state: "pending" | "cancelled"; interventionId: string }
@@ -557,3 +559,53 @@ export type View =
   | "admin-messages"
   | "admin-settings"
   | "admin-warranty";
+
+// Photos selected with a request are uploaded one by one AFTER the dossier exists; failures
+// stay in the queue for an explicit retry that never recreates the dossier.
+export type UploadItem = {
+  key: string;
+  file: File;
+  status: "pending" | "uploading" | "done" | "failed";
+  error?: string;
+  documentId?: string;
+};
+export type UploadQueue = {
+  interventionId: string;
+  items: UploadItem[];
+};
+
+// Contract WEB-PWA-ADMIN-LISTS-001 (published before implementation).
+export type AdminListFilters = {
+  status?: Status;
+  category?: Category;
+  urgency?: Urgency;
+  site_id?: string;
+  artisan_id?: string;
+  created_from?: string;
+  created_to?: string;
+  q?: string;
+};
+export type AdminInterventionRow = {
+  id: string;
+  client_id: string;
+  artisan_id: string | null;
+  site_id: string | null;
+  category: Category;
+  city: string;
+  postal_code: string;
+  urgency: Urgency;
+  status: Status;
+  created_at: string;
+  updated_at: string;
+};
+export type AdminInterventionsPage = {
+  interventions: AdminInterventionRow[];
+  page: { limit: number; has_more: boolean; next_cursor: string | null; total: number };
+  filters: AdminListFilters;
+};
+export type AdminInterventionDetail = {
+  intervention: Intervention;
+  quotes: Quote[];
+  quotes_limit: number;
+  quotes_limited: boolean;
+};

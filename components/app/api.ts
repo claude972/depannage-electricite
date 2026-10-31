@@ -88,3 +88,42 @@ export const CONTRACT_MESSAGES: Record<Exclude<ContractState, "available">, stri
   unavailable:
     "Le service est momentanément indisponible. Réessayez dans quelques instants ; si le problème persiste, contactez l’assistance.",
 };
+
+export const UPLOAD_MAX_BYTES = 4194304;
+export const UPLOAD_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+export const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+// Client-side pre-check mirrors the server limits so a doomed upload never starts.
+export function validateUpload(file: { size: number; type: string }, types = UPLOAD_TYPES): string | null {
+  if (file.size < 1) return "Le fichier est vide.";
+  if (file.size > UPLOAD_MAX_BYTES) return "Choisissez un fichier de moins de 4 Mo.";
+  if (!types.includes(file.type))
+    return types === PHOTO_TYPES ? "Formats de photo autorisés : JPEG, PNG et WebP." : "Formats autorisés : PDF, JPEG, PNG et WebP.";
+  return null;
+}
+// Uploads one private document (optionally bound to a dossier). Authentication is the
+// server's: there is no anonymous upload path.
+export async function uploadDocument(
+  file: File,
+  interventionId: string | null,
+  fetcher: Fetcher = (input, init) => fetch(input, init),
+): Promise<{ id: string; name: string; mime_type: string; created_at: string }> {
+  const invalid = validateUpload(file);
+  if (invalid) throw new ApiRequestError(422, invalid);
+  const form = new FormData();
+  form.append("file", file);
+  if (interventionId) form.append("intervention_id", interventionId);
+  let response: Response;
+  try {
+    response = await fetcher("/api/documents", { method: "POST", body: form, cache: "no-store" });
+  } catch {
+    throw new ApiRequestError(
+      0,
+      "La connexion a été interrompue pendant l’envoi. Le fichier a pu être enregistré : rechargez les documents avant de réessayer.",
+    );
+  }
+  const text = await response.text().catch(() => "");
+  const { data } = parseApiBody(response.status, response.ok, text);
+  const doc = (data as { document?: { id: string; name: string; mime_type: string; created_at: string } }).document;
+  if (!doc?.id) throw new ApiRequestError(502, "Le service n’a pas confirmé l’enregistrement du fichier. Rechargez les documents avant de réessayer.");
+  return doc;
+}

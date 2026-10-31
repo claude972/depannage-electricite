@@ -4,7 +4,7 @@
 // counterpart). Role spaces under components/role render the screens.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "../lib/supabase/client";
-import { api, ApiRequestError, contractStateFromError } from "./app/api";
+import { api, ApiRequestError, contractStateFromError, uploadDocument } from "./app/api";
 import { createGuard, createRunner, type RunContext, type Runner } from "./app/guard";
 import { adoptIdentity } from "./app/identity";
 import {
@@ -43,6 +43,9 @@ import {
   EMPTY_PROFESSIONAL,
   EMPTY_WORKSPACE,
   UNKNOWN_CAPABILITIES,
+  type AdminInterventionDetail,
+  type AdminInterventionsPage,
+  type AdminListFilters,
   type AdminOverview,
   type ArtisanCommand,
   type ArtisanDossier,
@@ -53,6 +56,7 @@ import {
   type PaymentStatusReport,
   type SiteAccessCommand,
   type SiteAccessOverview,
+  type UploadQueue,
   type Capabilities,
   type Category,
   type Intervention,
@@ -106,6 +110,7 @@ export default function CourantApp() {
   const [categoryId, setCategoryId] = useState<Category>("panel");
   const [pendingDraft, setPendingDraft] = useState<RequestValues | null>(null);
   const [pendingInvitation, setPendingInvitation] = useState<string | null>(null);
+  const [uploads, setUploads] = useState<UploadQueue | null>(null);
   // Incremented on every identity change: forces role spaces to remount with fresh local state.
   const [sessionKey, setSessionKey] = useState(0);
 
@@ -145,6 +150,7 @@ export default function CourantApp() {
     setError("");
     setNotice("");
     setPendingDraft(null);
+    setUploads(null);
     try {
       sessionStorage.removeItem(DRAFT_KEY);
     } catch {}
@@ -499,6 +505,7 @@ export default function CourantApp() {
       performance: "available",
       payments: "available",
       siteAccess: "available",
+      adminLists: "available",
     });
     guard.bump();
     runner.reset();
@@ -939,7 +946,44 @@ export default function CourantApp() {
     }
   }
 
-  async function createIntervention(values: RequestValues) {
+  // Uploads the queue items one by one; each result is recorded, failures stay retryable.
+  async function processUploads(ctx: RunContext, queue: UploadQueue): Promise<UploadQueue> {
+    let current = queue;
+    for (const item of queue.items) {
+      if (item.status === "done") continue;
+      if (!ctx.alive()) return current;
+      current = {
+        ...current,
+        items: current.items.map((x) => (x.key === item.key ? { ...x, status: "uploading", error: undefined } : x)),
+      };
+      ctx.when(setUploads)(current);
+      try {
+        const doc = await uploadDocument(item.file, queue.interventionId);
+        current = {
+          ...current,
+          items: current.items.map((x) =>
+            x.key === item.key ? { ...x, status: "done", documentId: doc.id } : x,
+          ),
+        };
+      } catch (e) {
+        current = {
+          ...current,
+          items: current.items.map((x) =>
+            x.key === item.key ? { ...x, status: "failed", error: (e as Error).message } : x,
+          ),
+        };
+      }
+      ctx.when(setUploads)(current);
+    }
+    return current;
+  }
+  function uploadSummary(queue: UploadQueue): string {
+    const done = queue.items.filter((i) => i.status === "done").length;
+    const failed = queue.items.filter((i) => i.status === "failed").length;
+    if (!failed) return `${done} photo${done > 1 ? "s" : ""} enregistrée${done > 1 ? "s" : ""} dans le dossier.`;
+    return `${done} photo${done > 1 ? "s" : ""} enregistrée${done > 1 ? "s" : ""}, ${failed} en échec. La demande est bien créée : réessayez l’envoi des photos restantes depuis le dossier.`;
+  }
+  async function createIntervention(values: RequestValues, photos: File[] = []) {
     return run(async (ctx) => {
       if (modeRef.current === "demo") {
         const c = category(values.category);
@@ -960,20 +1004,52 @@ export default function CourantApp() {
         } catch {}
         ctx.when(setSelectedId)(intervention.id);
         ctx.when(navigate)("detail", intervention.id);
-        ctx.notice("Demande enregistrée dans la démonstration, sans envoi à un artisan réel.");
+        ctx.notice(
+          photos.length
+            ? "Demande enregistrée dans la démonstration ; les photos ne sont pas envoyées en démonstration."
+            : "Demande enregistrée dans la démonstration, sans envoi à un artisan réel.",
+        );
         return;
       }
+      // 1. Create the dossier exactly once.
       const result = await api<{ intervention: Intervention }>("/api/interventions", values);
       if (ctx.alive()) await refresh();
       ctx.when(setPendingDraft)(null);
       try {
         sessionStorage.removeItem(DRAFT_KEY);
       } catch {}
-      if (result.intervention?.id) {
-        ctx.when(setSelectedId)(result.intervention.id);
-        ctx.when(navigate)("detail", result.intervention.id);
+      const id = result.intervention?.id;
+      if (id) {
+        ctx.when(setSelectedId)(id);
+        ctx.when(navigate)("detail", id);
       } else ctx.when(navigate)("requests");
-      ctx.notice("Votre demande a été enregistrée.");
+      if (!id || !photos.length) {
+        ctx.notice("Votre demande a été enregistrée.");
+        return;
+      }
+      // 2. Then upload the photos; a failure never recreates the dossier.
+      const queue: UploadQueue = {
+        interventionId: id,
+        items: photos.map((file, index) => ({ key: `${index}-${file.name}-${file.size}`, file, status: "pending" })),
+      };
+      ctx.when(setUploads)(queue);
+      const finished = await processUploads(ctx, queue);
+      if (!ctx.alive()) return;
+      await refresh();
+      if (finished.items.every((i) => i.status === "done")) ctx.when(setUploads)(null);
+      ctx.notice(`Votre demande a été enregistrée. ${uploadSummary(finished)}`);
+    });
+  }
+  async function retryUploads() {
+    return run(async (ctx) => {
+      if (!uploads || modeRef.current !== "live") return;
+      const finished = await processUploads(ctx, uploads);
+      if (!ctx.alive()) return;
+      await refresh();
+      if (finished.items.every((i) => i.status === "done")) {
+        ctx.when(setUploads)(null);
+        ctx.notice("Toutes les photos sont enregistrées dans le dossier.");
+      } else ctx.error(uploadSummary(finished));
     });
   }
   async function sendMessage(interventionId: string, body: string) {
@@ -1156,6 +1232,103 @@ export default function CourantApp() {
     });
   }
 
+  async function loadAdminInterventions(
+    params: AdminListFilters & { limit?: number; cursor?: string | null },
+  ): Promise<AdminInterventionsPage | null> {
+    const limit = Math.min(100, Math.max(1, params.limit ?? 25));
+    if (modeRef.current === "demo") {
+      const rows = data.interventions
+        .filter(
+          (i) =>
+            (!params.status || i.status === params.status) &&
+            (!params.category || i.category === params.category) &&
+            (!params.urgency || i.urgency === params.urgency) &&
+            (!params.site_id || i.site_id === params.site_id) &&
+            (!params.artisan_id || i.artisan_id === params.artisan_id) &&
+            (!params.q ||
+              `${i.description} ${i.city} ${i.postal_code}`.toLowerCase().includes(params.q.toLowerCase())),
+        )
+        .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id.localeCompare(a.id));
+      const start = params.cursor ? Number(params.cursor) || 0 : 0;
+      const slice = rows.slice(start, start + limit);
+      return {
+        interventions: slice.map((i) => ({
+          id: i.id,
+          client_id: i.client_id || "",
+          artisan_id: i.artisan_id ?? null,
+          site_id: i.site_id ?? null,
+          category: i.category,
+          city: i.city,
+          postal_code: i.postal_code,
+          urgency: i.urgency,
+          status: i.status,
+          created_at: i.created_at,
+          updated_at: i.updated_at || i.created_at,
+        })),
+        page: {
+          limit,
+          has_more: start + limit < rows.length,
+          next_cursor: start + limit < rows.length ? String(start + limit) : null,
+          total: rows.length,
+        },
+        filters: params,
+      };
+    }
+    const my = seq.current;
+    try {
+      const q = new URLSearchParams();
+      q.set("limit", String(limit));
+      if (params.cursor) q.set("cursor", params.cursor);
+      for (const key of ["status", "category", "urgency", "site_id", "artisan_id", "created_from", "created_to", "q"] as const) {
+        const value = params[key];
+        if (value) q.set(key, String(value));
+      }
+      const result = await api<AdminInterventionsPage>(`/api/admin/interventions?${q}`);
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, adminLists: "available" }));
+      return result;
+    } catch (e) {
+      if (my !== seq.current) return null;
+      if (e instanceof ApiRequestError && e.status === 422) {
+        setError(e.message);
+        return null;
+      }
+      if (e instanceof ApiRequestError && e.status === 403) {
+        void refresh();
+        setError("Vos droits d’administration ne sont plus reconnus. Vos données ont été rechargées.");
+        return null;
+      }
+      setCapabilities((c) => ({ ...c, adminLists: contractStateFromError(e) }));
+      return null;
+    }
+  }
+  async function loadAdminIntervention(id: string): Promise<AdminInterventionDetail | null> {
+    if (modeRef.current === "demo") {
+      const intervention = data.interventions.find((i) => i.id === id);
+      if (!intervention) return null;
+      const quotes = data.quotes
+        .filter((q) => q.intervention_id === id)
+        .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+      return { intervention, quotes: quotes.slice(0, 50), quotes_limit: 50, quotes_limited: quotes.length > 50 };
+    }
+    const my = seq.current;
+    try {
+      const result = await api<AdminInterventionDetail>(
+        `/api/admin/interventions?id=${encodeURIComponent(id)}`,
+      );
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, adminLists: "available" }));
+      return result;
+    } catch (e) {
+      if (my !== seq.current) return null;
+      if (e instanceof ApiRequestError && e.status === 404) {
+        setError("Ce dossier est introuvable.");
+        return null;
+      }
+      setCapabilities((c) => ({ ...c, adminLists: contractStateFromError(e) }));
+      return null;
+    }
+  }
   // Membership lost or never held: drop every cached view of the organisation.
   function dropOrganizationContext() {
     setActiveOrganizationId("");
@@ -1667,6 +1840,8 @@ export default function CourantApp() {
     loadArtisanDossier,
     artisanCommand,
     loadAdminOverview,
+    loadAdminInterventions,
+    loadAdminIntervention,
     loadOrganization,
     organizationCommand,
     acceptInvitation,
@@ -1675,6 +1850,11 @@ export default function CourantApp() {
     loadArtisanPerformance,
     loadPaymentStatus,
     createIntervention,
+    uploads,
+    retryUploads,
+    dismissUploads() {
+      setUploads(null);
+    },
     sendMessage,
     submitReview,
     createSite,

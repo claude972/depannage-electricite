@@ -54,6 +54,7 @@ import type {
   View,
 } from "../app/types";
 import styles from "./client.module.css";
+import { UploadQueuePanel } from "../app/upload-queue";
 
 const CLIENT_VIEWS: readonly View[] = [
   "overview",
@@ -212,8 +213,8 @@ export function ClientSpace({ session }: { session: Session }) {
             mode={session.mode}
             busy={session.busy}
             onBack={() => session.go("requests")}
-            onSubmit={async (values) => {
-              await session.createIntervention(values);
+            onSubmit={async (values, photos) => {
+              await session.createIntervention(values, photos);
             }}
             onDemo={() => {}}
           />
@@ -287,13 +288,15 @@ export function ClientSpace({ session }: { session: Session }) {
                 <Icon name={n.icon} size={18} />
                 <span>{n.label}</span>
                 {n.id === "requests" && activeCount > 0 && (
-                  <span className={styles.sideCount} aria-label={`${activeCount} en cours`}>
-                    {activeCount}
+                  <span className={styles.sideCount}>
+                    <span aria-hidden="true">{activeCount}</span>
+                    <span className="sr-only">{`${activeCount} demandes en cours`}</span>
                   </span>
                 )}
                 {n.id === "messages" && received > 0 && (
-                  <span className={styles.sideCount} aria-label={`${received} messages reçus`}>
-                    {received}
+                  <span className={styles.sideCount}>
+                    <span aria-hidden="true">{received}</span>
+                    <span className="sr-only">{`${received} messages reçus`}</span>
                   </span>
                 )}
               </button>
@@ -444,8 +447,9 @@ export function ClientSpace({ session }: { session: Session }) {
               <Icon name={n.icon} size={22} />
               {n.label}
               {n.id === "messages" && received > 0 && (
-                <span className={styles.navCount} aria-label={`${received} messages reçus`}>
-                  {received}
+                <span className={styles.navCount}>
+                  <span aria-hidden="true">{received}</span>
+                  <span className="sr-only">{`${received} messages reçus`}</span>
                 </span>
               )}
             </button>
@@ -1388,6 +1392,7 @@ function DetailView({
           <WarrantyPanel interventionId={i.id} demo={demo} role={session.role} />
         </>
       )}
+      <UploadQueuePanel session={session} interventionId={i.id} />
     </>
   );
 }

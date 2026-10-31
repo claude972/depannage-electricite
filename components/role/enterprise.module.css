@@ -178,7 +178,7 @@
   font-size: 13px;
 }
 .demoActions select {
-  min-height: 36px;
+  min-height: 44px;
   padding: 6px 8px;
   border: 1px solid #e3cf8f;
   border-radius: 6px;
@@ -190,7 +190,7 @@
   display: inline-flex;
 }
 .demoReset {
-  min-height: 36px;
+  min-height: 44px;
   padding: 6px 10px;
   color: #6b4c05;
   font-weight: 650;
