@@ -13,6 +13,7 @@ import { recordTrackingRequests, actions, queryViolations, restartViolations, pu
 import { classifyRoute, classifyGeocode } from "./lib/provider-proof.mjs";
 import { act, gatedWait, createMutationGuard, trackBrowserMutations } from "./lib/guard.mjs";
 import { assertUnknownIs404 } from "./lib/preflight.mjs";
+import { observeTrackingNetwork, DIAG_LIMITS } from "./lib/diagnostics.mjs";
 
 const POSITION_KEYS = ["latitude", "longitude", "position", "geometry", "destination"];
 
@@ -173,6 +174,21 @@ function evidence(s, label, snapshot) {
 }
 const panel = (page) => page.locator("section").filter({ has: page.getByRole("heading", { name: UI.artisanPanelTitle, exact: true }) }).first();
 const card = (page) => page.locator("section").filter({ has: page.getByRole("heading", { name: UI.clientCardTitle, exact: true }) }).first();
+const escapeRe = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/**
+ * A8 §2: the sentence is rendered INSIDE a longer <p role="status"> (« … de la page. L’arrêt côté
+ * service est tenté ; … 60 s. »), so an exact text match can never succeed. Equally strict: the
+ * status element of the artisan panel containing the WHOLE sentence (case-sensitive), exactly one
+ * (Playwright strict mode), AND the « Reprendre le partage » button of that panel visible.
+ */
+export const reloadInterruptedStatus = (page) => panel(page).getByRole("status").filter({ hasText: new RegExp(escapeRe(UI.reloadInterrupted)) });
+export async function expectReloadInterrupted(page) {
+  const status = reloadInterruptedStatus(page);
+  await expectVisible(status, `status « ${UI.reloadInterrupted} »`);
+  const count = await status.count();
+  if (count !== 1) throw new AppDefect(`expected exactly one status « ${UI.reloadInterrupted} », found ${count}`);
+  await expectVisible(panel(page).getByRole("button", { name: UI.resume, exact: true }), `« ${UI.resume} »`);
+}
 async function emulate(handle, base, where = PUBLIC_POINTS.savane, accuracy = NOMINAL_ACCURACY_M) {
   await handle.context.grantPermissions(["geolocation"], { origin: new URL(base).origin });
   await handle.context.setGeolocation({ latitude: where.latitude, longitude: where.longitude, accuracy });
@@ -405,7 +421,7 @@ export const SCENARIO_RUNNERS = {
     reqs = recordTrackingRequests(h.page);
     const p = panel(h.page);
     await expectVisible(p, "artisan panel after reload");
-    await expectVisible(h.page.getByText(UI.reloadInterrupted, { exact: true }), `« ${UI.reloadInterrupted} »`);
+    await expectReloadInterrupted(h.page);
     await gatedWait(ctx.gate, 10000);
     assert.equal(reqs.filter((r) => r.method === "POST").length, 0, "a POST was sent after reload without a click");
     await capture(h, ctx.out, "t8-reload-interrupted-1280", s);
@@ -435,7 +451,7 @@ export const SCENARIO_RUNNERS = {
     await waitFor(ctx, async () => actions(reqs, "point").some((r) => r.status === 200), "a point before reload");
     await act(ctx.gate, () => h.page.reload({ waitUntil: "domcontentloaded" }));
     reqs = recordTrackingRequests(h.page);
-    await expectVisible(h.page.getByText(UI.reloadInterrupted, { exact: true }), `« ${UI.reloadInterrupted} »`);
+    await expectReloadInterrupted(h.page);
     await simulateReassignment(ctx, s, job, ctx.users.artisanA, ctx.users.artisanB);
     await act(ctx.gate, () => panel(h.page).getByRole("button", { name: UI.resume, exact: true }).click());
     await waitFor(ctx, async () => actions(reqs, "stop").some((r) => r.status !== null), "the stop answer");
@@ -661,8 +677,10 @@ export const SCENARIO_RUNNERS = {
     await openHash(h.page, ctx.base, VIEWS.client(ctx.jobs.main.id));
     await expectVisible(card(h.page), `client card « ${UI.clientCardTitle} » before the switch`);
     await act(ctx.gate, () => logout(h.page));
+    ctx.revokeUser(ctx.users.client.id); // the app logout is global: every pooled client session is now revoked
     await act(ctx.gate, () => login(h, ctx.base, ctx.users.outsider, ctx.projectRef, { sameDocument: true }));
     await waitForWorkspace(h.page, ctx.users.outsider.id);
+    ctx.rebind("switch", ctx.users.outsider);
     await goHash(h.page, VIEWS.client(ctx.jobs.main.id));
     await gatedWait(ctx.gate, 2000);
     if (await card(h.page).count()) throw new AppDefect("the tracking card of the previous identity is still rendered");
@@ -761,16 +779,28 @@ export const PROVIDER_RUNNERS = {
  * (login), and the whole opening is registered in the drain. Every page gets the browser mutation
  * barrier before any navigation. `deps` are injectable for offline tests.
  */
+/** Reusing a session revoked by a global logout is BLOCKED, never a silent relogin (A8 §6). */
+export function revokedSession(label) {
+  const error = new Error(`session « ${label} » révoquée par une déconnexion globale : réutilisation refusée`);
+  error.blocked = true;
+  return error;
+}
+
 export function createSessionPool({ browser, base, projectRef, redactor, gate, intents, reconcile = null, onEvent = () => {}, deps = {} }) {
-  const { newPageFn = newPage, loginFn = login, waitFn = waitForWorkspace, trackFn = trackBrowserMutations } = deps;
+  const { newPageFn = newPage, loginFn = login, waitFn = waitForWorkspace, trackFn = trackBrowserMutations, observeFn = observeTrackingNetwork } = deps;
   const handles = new Map();
   const origin = new URL(base).origin;
+  let used = []; // labels used by the running scenario (A8 §1 diagnostics), most recent last
+  const use = (label) => {
+    used = [...used.filter((l) => l !== label), label];
+  };
   function open(label, user) {
     gate.check();
     const opening = (async () => {
       const handle = await newPageFn(browser, { baseUrl: base, redactor });
       try {
         gate.check(); // after the await, before the barrier and the login emission
+        handle.network = observeFn(handle.page); // passive observer, before the first request (A8 §1)
         handle.mutations = await trackFn(handle.page, { gate, intents, reconcile, origin, onEvent });
         gate.check(); // after the await, immediately before the login submission
         await loginFn(handle, base, user, projectRef);
@@ -779,6 +809,9 @@ export function createSessionPool({ browser, base, projectRef, redactor, gate, i
         await handle.close?.().catch(() => {});
         throw error;
       }
+      handle.label = label;
+      handle.userId = user.id;
+      handle.revoked = false;
       handles.set(label, handle);
       return handle;
     })();
@@ -786,9 +819,13 @@ export function createSessionPool({ browser, base, projectRef, redactor, gate, i
   }
   return {
     async session(label, user) {
-      return handles.get(label) || open(label, user);
+      use(label);
+      const existing = handles.get(label);
+      if (existing?.revoked) throw revokedSession(label);
+      return existing || open(label, user);
     },
     async freshSession(label, user) {
+      use(label);
       if (handles.has(label)) await this.closeSession(label);
       return open(label, user);
     },
@@ -796,6 +833,23 @@ export function createSessionPool({ browser, base, projectRef, redactor, gate, i
       const h = handles.get(label);
       handles.delete(label);
       if (h) await h.close();
+    },
+    /** A8 §1: start of a scenario (resets the pages it used). */
+    beginScenario() {
+      used = [];
+    },
+    /** A8 §1: pages the running scenario used and that are still open (most recent first). */
+    diagnosticHandles(limit = DIAG_LIMITS.pages) {
+      return [...used].reverse().map((l) => handles.get(l)).filter((h) => h && !(h.page?.isClosed?.() ?? false)).slice(0, limit);
+    },
+    /** A8 §5d/§6: the app logout is GLOBAL — every pooled session of that user is revoked. */
+    revokeUser(userId) {
+      for (const h of handles.values()) if (h.userId === userId) h.revoked = true;
+    },
+    /** The handle now belongs to `user` (same-document login after a logout, T19). */
+    rebind(label, user) {
+      const h = handles.get(label);
+      if (h) Object.assign(h, { userId: user.id, revoked: false });
     },
     async closeAll() {
       for (const label of [...handles.keys()]) await this.closeSession(label);

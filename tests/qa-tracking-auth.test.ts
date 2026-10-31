@@ -24,7 +24,8 @@ const json = (status, body, headers = {}) => new Response(typeof body === "strin
 const other = (n) => ({ id: randomUUID(), email: `someone-${n}@example.org` });
 
 /** Fake Auth admin endpoint: `users(id)` answers GET by id; `pages(attempt, page)` answers list pages. */
-function fakeAuth({ byId = () => json(404, { msg: "User not found" }), pages = () => json(200, { users: [] }) } = {}) {
+const NOT_FOUND = Object.freeze({ code: 404, error_code: "user_not_found", msg: "User not found" });
+function fakeAuth({ byId = () => json(404, NOT_FOUND), pages = () => json(200, { users: [] }) } = {}) {
   let clock = 0;
   const calls = { byId: 0, list: [] };
   const attemptOf = { n: 0 };
@@ -81,7 +82,15 @@ test("P2-c — a 200 with a malformed body is UNKNOWN (never absent) and ownersh
   assert.equal(db.deletes.some((d) => d.filters.includes(id)), false, "an id not proven owned is never deleted");
   assert.equal(exitCodeFor({ cleanup: result }), 3);
   // Only a REAL 404 proves absence.
-  assert.equal((await fakeAuth({ byId: () => json(404, {}) }).auth.readUser(id)).state, "absent");
+  assert.equal((await fakeAuth({ byId: () => json(404, NOT_FOUND) }).auth.readUser(id)).state, "absent");
+  // A8 §5e: only the exact LEGACY body observed by ROOT proves absence; every other 404 is UNKNOWN.
+  for (const body of [{}, { ...NOT_FOUND, extra: 1 }, { ...NOT_FOUND, error_code: "not_found" }, { ...NOT_FOUND, msg: "" }, { code: "user_not_found", message: "User not found" }, { code: "404", error_code: "user_not_found", msg: "x" }, null, []]) {
+    assert.equal((await fakeAuth({ byId: () => json(404, body) }).auth.readUser(id)).state, "unknown", JSON.stringify(body));
+  }
+  assert.equal((await fakeAuth({ byId: () => new Response("<html>Not Found</html>", { status: 404 }) }).auth.readUser(id)).state, "unknown");
+  assert.equal((await fakeAuth({ byId: () => new Response("", { status: 404 }) }).auth.readUser(id)).state, "unknown");
+  assert.equal((await fakeAuth({ byId: () => json(500, NOT_FOUND) }).auth.readUser(id)).state, "unknown");
+  assert.equal((await fakeAuth({ byId: () => json(200, NOT_FOUND) }).auth.readUser(id)).state, "unknown");
   assert.equal((await fakeAuth({ byId: () => json(500, {}) }).auth.readUser(id)).state, "unknown");
 });
 
@@ -125,7 +134,7 @@ test("P2-d — lost create, the user appears on the 2nd re-read ⇒ found, recor
   const id = randomUUID();
   const email = cohort.email("artisan-b");
   const { auth, calls } = fakeAuth({
-    byId: (asked) => (asked === id ? json(200, { id, email }) : json(404, {})),
+    byId: (asked) => (asked === id ? json(200, { id, email }) : json(404, NOT_FOUND)),
     pages: (attempt) => json(200, { users: attempt >= 2 ? [{ id, email }] : [] }),
   });
   const { intents, manifest } = await lostCreate(auth);
@@ -142,7 +151,7 @@ test("P2-d — lost create, the user is on page 3 of the listing ⇒ found", asy
   const id = randomUUID();
   const email = cohort.email("artisan-b");
   const { auth, calls } = fakeAuth({
-    byId: (asked) => (asked === id ? json(200, { id, email }) : json(404, {})),
+    byId: (asked) => (asked === id ? json(200, { id, email }) : json(404, NOT_FOUND)),
     pages: (attempt, page) => json(200, { users: page === 1 ? [other(1), other(2)] : page === 2 ? [other(3), other(4)] : [{ id, email }] }),
   });
   const found = await auth.searchByEmail(email, RUN);
@@ -291,7 +300,7 @@ function diskCheckingDb(manifestPath, uid) {
 }
 function recoveringAuth(uid) {
   const email = cohort.email("artisan-b");
-  return fakeAuth({ byId: (asked) => (asked === uid ? json(200, { id: uid, email }) : json(404, {})), pages: () => json(200, { users: [{ id: uid, email }] }) }).auth;
+  return fakeAuth({ byId: (asked) => (asked === uid ? json(200, { id: uid, email }) : json(404, NOT_FOUND)), pages: () => json(200, { users: [{ id: uid, email }] }) }).auth;
 }
 function crashedRun(dir) {
   // State left by a run that crashed after announcing a create whose response was lost: manifest
