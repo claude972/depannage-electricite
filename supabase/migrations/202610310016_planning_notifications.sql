@@ -145,12 +145,13 @@ end; $$;
 revoke execute on function public.artisan_available_multirange(uuid,timestamptz,timestamptz),public.artisan_busy_multirange(uuid,timestamptz,timestamptz,uuid),public.assert_artisan_slot_free(uuid,timestamptz,timestamptz,uuid,uuid) from public,anon,authenticated;
 
 -- Existing appointment writer (003/009) is not edited: the guard runs before every row write made
--- under a user identity. Service-role/superuser maintenance writes (auth.uid() null) already bypass
--- RLS by design and are not re-validated here.
+-- through the API user role (PostgREST sets role authenticated; SECURITY DEFINER does not change
+-- that GUC). Service-role/superuser maintenance writes already bypass RLS by design and are not
+-- re-validated here.
 create function public.guard_appointment_double_booking() returns trigger language plpgsql security definer set search_path='' as $$
 declare artisan uuid;
 begin
- if auth.uid() is null then return new; end if;
+ if auth.uid() is null or coalesce(current_setting('role',true),'none')<>'authenticated' then return new; end if;
  select artisan_id into artisan from public.interventions where id=new.intervention_id;
  if artisan is not null then perform public.assert_artisan_slot_free(artisan,new.starts_at,new.ends_at,null,new.intervention_id); end if;
  return new;

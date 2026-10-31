@@ -13,6 +13,8 @@ const require = createRequire(import.meta.url);
 export const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 export type Row = Record<string, unknown>;
 const SERVER = path.join(ROOT, "lib/supabase/server.ts");
+// CSS modules become their class names; esbuild interop reads __esModule/default.
+const cssStub: Record<string, unknown> = new Proxy({}, { get: (_, key) => (key === "__esModule" ? undefined : key === "default" ? cssStub : typeof key === "symbol" ? undefined : String(key)) });
 export const uuid = (n: number, prefix = "50000000") => `${prefix}-0000-4000-8000-${String(n).padStart(12, "0")}`;
 export const micros = (s: string) => BigInt(Date.parse(s)) * 1000n + BigInt((/\.(\d{1,6})/.exec(s)?.[1] ?? "").slice(3).padEnd(3, "0") || "0");
 function split(value: string) { const parts: string[] = []; let depth = 0, quote = false, start = 0; for (let i = 0; i < value.length; i++) { const c = value[i]; if (c === '"') quote = !quote; if (quote) continue; if (c === "(") depth++; else if (c === ")") depth--; else if (c === "," && !depth) { parts.push(value.slice(start, i)); start = i + 1; } } parts.push(value.slice(start)); return parts; }
@@ -84,8 +86,9 @@ export function harness(options: HarnessOptions = {}) {
   function compile(file: string): Record<string, unknown> {
     const cached = cache.get(file); if (cached) return cached;
     const module: { exports: Record<string, unknown> } = { exports: {} }; cache.set(file, module.exports);
-    const code = transformSync(readFileSync(file, "utf8"), { loader: file.endsWith(".tsx") ? "tsx" : "ts", format: "cjs", target: "es2022" }).code;
+    const code = transformSync(readFileSync(file, "utf8"), { loader: file.endsWith(".tsx") ? "tsx" : "ts", jsx: "automatic", format: "cjs", target: "es2022" }).code;
     vm.runInNewContext(code, { module, exports: module.exports, process, Buffer, URL, URLSearchParams, Request, Response, Headers, SyntaxError, Intl, Date, Math, Number, JSON, Map, Set, RangeError, Error, console, require: (name: string) => {
+      if (name.endsWith(".css")) return cssStub;
       const target = name === "@/lib/supabase/server" ? SERVER : resolve(file, name);
       if (target === SERVER) return helpers;
       return target ? compile(target) : require(name);
