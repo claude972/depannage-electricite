@@ -60,3 +60,5 @@ Décision du 30 octobre 2026, prise dans le cadre de la réalisation autonome au
 
 ## Archives de code complémentaires
 Quatre archives sources sont conservées sans modification dans `references/code-archives/`. Lire `docs/audit/ARCHIVES_CODE.md` et son manifeste avant toute reprise. Elles contiennent 12 composants de base et des styles, aucun backend ni Super Admin. Ne pas exécuter ou intégrer leur code sur la seule base de leur réception pendant l’audit.
+
+Cinquième archive : `1-CODES_CSS_ANIMATIONS.tar.gz`, variante visuelle décrite dans la même annexe. Ne pas écraser les versions précédentes ; respecter l’interdiction des animations décoratives permanentes et prévoir la réduction du mouvement.

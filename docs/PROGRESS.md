@@ -59,3 +59,7 @@
 - Originaux conservés dans references/code-archives ; SHA-256 et membres dans docs/audit/INVENTAIRE_ARCHIVES_CODE.json.
 - Interfaces de base, sans backend, Stripe ou Super Admin ; aucune capacité intégrée déclarée terminée par ces apports. Corpus PDF et matrice de 76 points inchangés.
 - Audit et plan enrichis ; aucun code joint exécuté, aucun code applicatif, secret, service ou déploiement modifié.
+
+## Archive CSS et animations
+
+Lecture intégrale et comparaison SHA-256 de la cinquième archive : 17 membres, 14 identiques, deux variantes et un fichier nouveau. Originaux et manifeste conservés ; cumul de 61 occurrences et 19 contenus distincts. Audit et plan enrichis sur les animations permanentes, réduction du mouvement, délais de fade et collisions CSS. Aucun code fourni exécuté ni code applicatif, service ou déploiement modifié.

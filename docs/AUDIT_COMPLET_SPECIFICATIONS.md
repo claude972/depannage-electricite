@@ -251,3 +251,5 @@ Aucun code applicatif, PDF source, secret, service distant ou déploiement n’a
 ## Archives de code reçues après les PDF
 
 [Audit des quatre archives](audit/ARCHIVES_CODE.md) : 44 occurrences de fichiers, 16 fichiers distincts dont 12 composants JSX. Les archives 1/2/4 sont des sous-ensembles exacts de la troisième. Elles apportent des bases de composition, sans serveur, Stripe ou Super Admin. Aucun manque de la matrice n’est déclaré résolu ; les comptes PDF et les 76 capacités restent inchangés. Les originaux et empreintes sont conservés séparément.
+
+Cinquième archive analysée : `CODES_CSS_ANIMATIONS`, 17 membres dont 14 identiques, HomePage/styles modifiés et animations.css nouveau. Cumul : 61 occurrences, 17 chemins et 19 contenus distincts. Aucun écran métier supplémentaire ; matrice inchangée. Risques de mouvement et de collisions CSS consignés dans [l’annexe](audit/ARCHIVES_CODE.md).

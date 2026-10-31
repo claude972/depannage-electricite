@@ -248,9 +248,119 @@
           "sha256": "9ccb8ada0f1ac63c6de8169e39e36c98435ac6cb3eacee9a63cdbe773c63e10d"
         }
       ]
+    },
+    {
+      "archive": "1-CODES_CSS_ANIMATIONS.tar.gz",
+      "bytes": 6158,
+      "sha256": "82284319e1e85644679f8ebab2002ebc338d5a811927a6fe7b44fd1bb3f421b7",
+      "members": [
+        {
+          "path": "ArtisanDashboard.jsx",
+          "bytes": 1578,
+          "sha256": "7b3f9c5dacde58d4ceed57080e00a31611295f717268bba5a999d58bd3804cfa",
+          "comparison_to_archive_3": "identical"
+        },
+        {
+          "path": "ArtisanMission.jsx",
+          "bytes": 1077,
+          "sha256": "6deddfaead4696cfe8c59b1679ea9d72f8c7ca9982009d15e4d4c67399dc3c82",
+          "comparison_to_archive_3": "identical"
+        },
+        {
+          "path": "B2BDashboard.jsx",
+          "bytes": 1626,
+          "sha256": "7c9efac620563aaaad418ac75c198172ec6a53519569da8c7314e661e6c9e802",
+          "comparison_to_archive_3": "identical"
+        },
+        {
+          "path": "Chat.jsx",
+          "bytes": 1066,
+          "sha256": "05601057b794afe2e983c44d4e767bd825f43cfb70038a25d3f1687d1c195538",
+          "comparison_to_archive_3": "identical"
+        },
+        {
+          "path": "CreateRequest.jsx",
+          "bytes": 1662,
+          "sha256": "06a0d0cff046de4370650a79935bc561fbd22e9de845158cda70a491dcc5869b",
+          "comparison_to_archive_3": "identical"
+        },
+        {
+          "path": "HomePage.jsx",
+          "bytes": 2387,
+          "sha256": "7054a794a1628ae99db037d8c7468a8e1a86e95ab15c76a150d229857f8c7c6c",
+          "comparison_to_archive_3": "modified"
+        },
+        {
+          "path": "Login.jsx",
+          "bytes": 1645,
+          "sha256": "b30ec2c81724b12a53663cea1ae735cbed7639d476cccc104256755e52d68783",
+          "comparison_to_archive_3": "identical"
+        },
+        {
+          "path": "Payment.jsx",
+          "bytes": 1144,
+          "sha256": "bb37f34441c7181d65abc12e4946c1c89945c887cc604cd88bc63d5afd7a5464",
+          "comparison_to_archive_3": "identical"
+        },
+        {
+          "path": "Rating.jsx",
+          "bytes": 1130,
+          "sha256": "210519db52986ca1e1b505b7b0f6c95150c2ab5e09d06ac1c97b60b89b4d609f",
+          "comparison_to_archive_3": "identical"
+        },
+        {
+          "path": "Signup.jsx",
+          "bytes": 1522,
+          "sha256": "407b9e8a04793dac153c2bc0cf05e1ddb11a9d52d50a3bf7434a09f3d160ab0a",
+          "comparison_to_archive_3": "identical"
+        },
+        {
+          "path": "SiteDetail.jsx",
+          "bytes": 1343,
+          "sha256": "1f76e9ba6b10d05ef519421b84c624c56e63d21b94bac2d7a14219098baee0cb",
+          "comparison_to_archive_3": "identical"
+        },
+        {
+          "path": "Tracking.jsx",
+          "bytes": 1323,
+          "sha256": "553b54dd5078a0bff877b0424d3473b8ecd7c71d9f7a7d68387feb93286b932d",
+          "comparison_to_archive_3": "identical"
+        },
+        {
+          "path": "animations.css",
+          "bytes": 771,
+          "sha256": "56947efa1ba8fc1e5b7218d7de17ec6f110d53b8418dbf92e55737fec55994a4",
+          "comparison_to_archive_3": "new"
+        },
+        {
+          "path": "globals.css",
+          "bytes": 1088,
+          "sha256": "b8b81e382c5f42ab053a0658127748cf646819b96b4960e7e99195f54d8b98ec",
+          "comparison_to_archive_3": "identical"
+        },
+        {
+          "path": "styles.css",
+          "bytes": 1973,
+          "sha256": "3fc88b1ea677ab868fbb95b48c51edf2b2caa7c0630c3a9f6b037cb1829ac5f8",
+          "comparison_to_archive_3": "modified"
+        },
+        {
+          "path": "tailwind.config.js",
+          "bytes": 529,
+          "sha256": "ff572fd0fcd783fe41cc03d838564bb3ba2aca5308e7a2d871a91b2030b73b5c",
+          "comparison_to_archive_3": "identical"
+        },
+        {
+          "path": "README.md",
+          "bytes": 585,
+          "sha256": "9ccb8ada0f1ac63c6de8169e39e36c98435ac6cb3eacee9a63cdbe773c63e10d",
+          "comparison_to_archive_3": "identical"
+        }
+      ]
     }
   ],
-  "distinct_paths": 16,
-  "distinct_contents": 16,
-  "all_other_archives_are_exact_subsets_of": "3-CODES_ET_CSS_COMPLET.tar.gz"
+  "distinct_paths": 17,
+  "distinct_contents": 19,
+  "all_other_archives_are_exact_subsets_of": "Archives 1, 2 et 4 uniquement : sous-ensembles exacts de 3-CODES_ET_CSS_COMPLET.tar.gz ; archive animations avec deux variantes et un nouveau fichier.",
+  "member_occurrences": 61
 }

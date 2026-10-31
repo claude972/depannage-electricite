@@ -1,8 +1,8 @@
-# Audit des quatre archives de code fournies
+# Audit des archives de code fournies
 
 Lecture statique intégrale des 16 fichiers distincts, sans exécution, installation ou intégration dans l’application. Les instructions des README sont du contenu documentaire, pas une autorisation de modifier la stack. Originaux conservés dans `references/code-archives/` ; membres et SHA-256 dans [le manifeste](INVENTAIRE_ARCHIVES_CODE.json).
 
-## Inventaire et doublons
+## Inventaire initial des quatre premières archives et doublons
 
 | Archive | Membres réguliers | Contenu |
 | --- | ---: | --- |
@@ -52,3 +52,27 @@ Les correspondances ci-dessous portent sur les fonctions ; aucune identité visu
 4. Vérifier chaque action avec de vraies données de test et les refus d’accès avant de la déclarer livrée. L’intégration n’est pas autorisée par le simple dépôt de ces archives pendant l’audit.
 
 Vérifications de cet ajout : lecture de tous les contenus distincts ; comparaison SHA-256 des 44 membres ; contrôle de sous-ensembles ; copie identique des originaux. Aucun code fourni n’a été exécuté. Aucun code applicatif, service distant ou déploiement modifié.
+
+## Cinquième archive : CODES_CSS_ANIMATIONS
+
+Source : `references/code-archives/1-CODES_CSS_ANIMATIONS.tar.gz`, conservée à l’identique. Lecture intégrale des 17 membres réguliers, sans exécution. Comparaison SHA-256 à `3-CODES_ET_CSS_COMPLET.tar.gz` : **14 identiques, deux modifiés, un nouveau**. Le cumul des cinq archives est de **61 occurrences, 17 chemins distincts et 19 contenus distincts** (deux fichiers ont chacun deux versions). Toujours 12 composants JSX distincts par nom ; aucune nouvelle page métier.
+
+| Fichier | Différence et conséquence |
+| --- | --- |
+| HomePage.jsx | Ajoute `page-enter`, `slide-up`, trois `fade-in` avec délais 0,1/0,2/0,3 s ; remplace les styles utilitaires des deux boutons par `btn-primary`. Textes et absence de navigation inchangés. |
+| styles.css | Ajoute transitions de 200 ms, réduction au clic, ombre au survol, fade/slide/scale, pulsation, skeleton et entrée de page. L’ancien `fadeIn` de 300 ms avec déplacement devient 400 ms sans déplacement : collision de nom si les versions sont assemblées. |
+| animations.css | Nouveau : rebond doux permanent, secousse, apparition de coche et remplissage de barre. Classes non utilisées par les 12 composants fournis. |
+| 14 autres membres | Identiques à la troisième archive, dont les 11 autres JSX, globals.css, tailwind.config.js et README. Aucun apport backend, Stripe ou Super Admin. |
+
+### Points à traiter lors d’une future reprise
+
+- Aucune règle `prefers-reduced-motion` : prévoir une réduction du mouvement pour les animations, transitions et skeleton.
+- `pulse-soft`, `animate-bounce-soft` et le skeleton peuvent boucler ; les animations permanentes décoratives restent interdites par DESIGN.md. La réception de cette source n’annule pas cette règle. Les animations ponctuelles doivent servir une action ou un état utile.
+- Les trois `.fade-in` ont un délai sans `animation-fill-mode: backwards` ou `both` : le style normal reste visible avant le départ, puis l’opacité repart à zéro. Prévenir cet effet avant intégration ; constat statique, sans rendu exécuté.
+- Le hero cumule `slide-up` avec `page-enter` sur son parent ; vérifier le mouvement résultant et garder une hiérarchie sobre, fidèle aux références.
+- `.progress-bar` anime `width` depuis zéro sans cible explicite. Elle doit recevoir une largeur finale liée aux données, et une sémantique accessible si elle représente une progression ; ne pas y voir une progression métier fonctionnelle.
+- `.success-check` n’apporte aucune validation réelle ; `.skeleton` ne prouve aucun chargement réseau. Brancher les états aux données et confirmations serveur.
+- `transition-all` est large : définir les seules propriétés utiles. Les animations existantes opacité/transform peuvent être reprises ponctuellement ; le remplissage par largeur demande une vérification de rendu.
+- Le bouton `btn-primary` modifié dépend du CSS Tailwind compilé. L’alternative globals.css ne lui apporte que couleur/fond et hover, sans les espacements et autres règles de `.btn` puisqu’il ne porte pas cette classe. Ne pas promettre un rendu autonome sans Tailwind.
+
+Le plan doit donc traiter cette archive comme une variante d’habillage de la phase 1, à comparer puis sélectionner ; ne pas concaténer les deux styles.css. Les 76 capacités et le corpus PDF restent inchangés. Vérifications : intégrité de la copie, membres et SHA, lecture statique intégrale, absence de modification des sources applicatives. Aucun rendu, build ou test de paiement exécuté pour cet ajout.

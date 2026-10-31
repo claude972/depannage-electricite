@@ -180,3 +180,5 @@ Cette préparation et cet audit ne modifient que la documentation et ajoutent la
 ## Sources JSX/CSS complémentaires
 
 Lire [l’audit des archives](audit/ARCHIVES_CODE.md) en phase 0 puis en phase 1. Les 12 composants donnent des bases de composition ; choisir leur correspondance PDF et conserver les besoins détaillés des back-offices. Vérifier la frontière client et la stratégie CSS lors d’une future intégration. Aucun backend ou Stripe n’est livré par ces fichiers ; aucune phase métier n’est accomplie par leur réception.
+
+La cinquième archive `CODES_CSS_ANIMATIONS` fournit une variante HomePage/styles et un animations.css, sans nouvelle page métier. En phase 1, sélectionner une version CSS, traiter les délais de fade, réduire le mouvement et exclure les boucles décoratives ; aucune intégration lancée pendant l’audit. Détails dans la même annexe.
