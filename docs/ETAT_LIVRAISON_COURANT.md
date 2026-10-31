@@ -1,12 +1,12 @@
 # État courant de livraison
 
-Mis à jour le 2026-10-31T14:15:00-04:00 (America/Martinique). Les preuves ci-dessous sont bornées à leur SHA et à leur environnement. L'application complète des 76 capacités n'est pas déclarée terminée.
+Mis à jour le 2026-10-31T14:14:48-04:00 (America/Martinique). Les preuves ci-dessous sont bornées à leur SHA et à leur environnement. L'application complète des 76 capacités n'est pas déclarée terminée.
 
 ## Version et environnements
 
 | Élément | État vérifié |
 | --- | --- |
-| Source intégrée et poussée | `integration/web-pwa`, `be17b24adbc0035d1ba82347c09f9045bac03d71` ; 115 tests UI et typecheck strict passent. |
+| Source intégrée et poussée | `integration/web-pwa`, `0f57d964c537ed989569fbe68bf216263a838b65` ; harnais planning719 revu et fusionné (16 tests ciblés PASS). Code applicatif inchangé depuis be17b24 : 115 tests UI et typecheck strict y passent. CI nouveau merge à vérifier. |
 | Serveur de recette local | `be17b24adbc0035d1ba82347c09f9045bac03d71`, build webpack réussi, port3017, HTTP200 vérifié ; inclut les derniers visuels artisan, entreprise et illustration. |
 | Backend dédié | Supabase `kcpyjzndybfdlnhvscbs`, actif ; migrations001–017 appliquées et historique relu. |
 | Transfert photo Edge | `native-document-upload`, version1, `verify_jwt=true`, source `d7abd8c` ; neuf scénarios réels passent. |
@@ -30,7 +30,7 @@ Entreprise V5 : C01 est revu sans nouveau P1/P2 ; C08 conserve les permissions e
 ## Travail en cours et gates ouverts
 
 1. Dernier assemblage visuel be17b24 compilé et servi ; poursuivre les recettes connectées sur cet assemblage. CI deux jobs PASS, run41227086308.
-2. Fusionner les harnais après leurs dernières revues. Le harnais Codex `719ba46` est accepté par la revue croisée Claude ; ses limites (certaines courses rendez-vous et critères HTTP) restent explicites. L'ancien fixture admin doit être refusé avant seeding sur un schéma protégé par014 (mission QA-ADMIN-PREFLIGHT-001).
+2. Harnais Codex `719ba46` accepté par revue croisée Claude et intégré dans0f57d96 ; harnais Claude PWA/core attend encore la garde admin et sa revue. Le planning conserve ses limites : ses limites (certaines courses rendez-vous et critères HTTP) restent explicites. L'ancien fixture admin doit être refusé avant seeding sur un schéma protégé par014 (mission QA-ADMIN-PREFLIGHT-001).
 3. **Expiration JWT** : correctif `6466b8a` revu, 57 tests purs PASS. Préparation réelle faite : UN client QA volontairement conservé, zéro document/objet. Verdict PREPARED, pas preuve d’expiration. Expiration15:05:23 Martinique ; vérification root après15:06:23 et avant16:05:22, avec checkout épinglé6466 et bail privé. Aucun token publié, TTL inchangé. Les cohortes antérieures sont nettoyées ; ce bail est la seule exception attendue.
 4. **Révocation pendant upload** : protocole sous verrou de la seule cohorte à amender/revoir avant code et exécution ; pas de hook Edge, d'admin fictif permanent ni de nouvelle migration.
 5. **Documents et B2B** : nouvelle recette UI/API isolée demandée au worker B2B existant (QA-DOCUMENTS-B2B-004), contrat avant code ; aucune fixture finance immuable.
