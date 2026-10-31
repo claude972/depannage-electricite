@@ -6,8 +6,9 @@ import path from 'node:path';
 import os from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { EventEmitter } from 'node:events';
 // Node24 can require this synchronous ESM module; the runtime import does not execute a runner.
-const {parseArgs,preflight,definiteMissingRow,planningOwnershipRefused,uncertainResponse,exactCount,Registry,emptyManifest,validateManifest,Gate,mutate,cleanup,cleanupPlan,assertRace,finalCode}=createRequire(import.meta.url)('../scripts/qa-advanced/core.mjs');
+const {parseArgs,preflight,definiteMissingRow,planningOwnershipRefused,withoutPlaywrightSignals,installInterruptHandlers,uncertainResponse,exactCount,Registry,emptyManifest,validateManifest,Gate,mutate,cleanup,cleanupPlan,assertRace,finalCode}=createRequire(import.meta.url)('../scripts/qa-advanced/core.mjs');
 const REF='abcdefghijklmnopqrst',SHA='a'.repeat(40),U='10000000-0000-4000-8000-000000000001',T='10000000-0000-4000-8000-000000000002';
 const base=['--base-url','http://localhost:3017','--sha',SHA,'--app-dir','/unused','--project',REF,'--credentials','/unused/private.json','--out','/unused/evidence'];
 const exec=promisify(execFile);
@@ -85,7 +86,8 @@ test('mutation 5xx responses remain transport-uncertain, not a definite rollback
 test('structured SQL P0002 at HTTP500 is a definite rollback and a valid foreign-row refusal, preserving the actual status',()=>{
   const body={code:'P0002',details:null,hint:null,message:'no_data_found'};
   const endpoint='/rest/v1/rpc/delete_availability_rule';const response={status:500,body,endpoint};assert.equal(definiteMissingRow(body),true);assert.equal(uncertainResponse('POST',500,body,endpoint),false);assert.equal(planningOwnershipRefused(response),true);assert.equal(response.status,500);
-  assert.equal(planningOwnershipRefused({status:403,body:null}),true);assert.equal(planningOwnershipRefused({status:404,body:null}),true);
+  assert.equal(planningOwnershipRefused({status:403,body:null}),true);assert.equal(planningOwnershipRefused({status:404,body:null,endpoint:'/api/planning'}),true);
+  assert.equal(planningOwnershipRefused({status:404,body:{code:'PGRST202'},endpoint}),false);assert.equal(planningOwnershipRefused({status:404,body:null}),false);
   for(const malformed of [null,'P0002',[],[body],{}, {code:'P0002'}, {code:'P0002',message:''}, {code:'P0002',message:123}, {code:'XX000',message:'P0002'}, {message:'P0002'}]) {
     assert.equal(definiteMissingRow(malformed),false);assert.equal(uncertainResponse('POST',500,malformed,endpoint),true);assert.equal(planningOwnershipRefused({status:500,body:malformed,endpoint}),false);
   }
@@ -93,6 +95,20 @@ test('structured SQL P0002 at HTTP500 is a definite rollback and a valid foreign
   for(const nonPostgrest of ['', '/auth/v1/admin/users','/auth/v1/token?grant_type=password','/api/planning','/storage/v1/object/list/private','https://other.invalid/rest/v1/rpc/delete_availability_rule','/rest/v1/../auth']) {
     assert.equal(uncertainResponse('POST',500,body,nonPostgrest),true);assert.equal(planningOwnershipRefused({status:500,body,endpoint:nonPostgrest}),false);
   }
+});
+test('older shared launchers cannot restore Playwright process-exit signal handlers',async()=>{
+  let observed:unknown;const pw={chromium:{launch:async(options:unknown)=>{observed=options;return 'browser';}}};
+  const wrapped=withoutPlaywrightSignals(pw);
+  assert.equal(await wrapped.chromium.launch({headless:true,timeout:1000,executablePath:'/fake/chromium',handleSIGINT:true}),'browser');
+  assert.deepEqual(observed,{headless:true,timeout:1000,executablePath:'/fake/chromium',handleSIGINT:false,handleSIGTERM:false,handleSIGHUP:false});
+});
+test('SIGINT immediately stops new writes and starts one draining finalizer, even if SIGTERM follows',async()=>{
+  const proc=new EventEmitter(),gate=new Gate();let release!:()=>void;const hold=new Promise<void>(resolve=>{release=resolve;});
+  const pending=gate.run(()=>hold);let finished=false,calls=0,interrupted=false,errors=0;
+  const remove=installInterruptHandlers(proc,{stop:()=>gate.stop(),finish:async()=>{calls++;assert.equal(await gate.drain(1000),true);finished=true;},onInterrupted:()=>{interrupted=true;},onError:()=>{errors++;}});
+  proc.emit('SIGINT');assert.equal(gate.stopped,true);assert.equal(interrupted,true);assert.throws(()=>gate.run(()=>Promise.resolve()));
+  proc.emit('SIGTERM');await Promise.resolve();assert.equal(calls,1);assert.equal(finished,false);
+  release();await pending;await new Promise(resolve=>setImmediate(resolve));assert.equal(finished,true);assert.equal(errors,0);remove();assert.equal(proc.listenerCount('SIGINT'),0);assert.equal(proc.listenerCount('SIGTERM'),0);
 });
 test('the actual CLI dry-run exits before cloud/browser work and never prints fixture keys',async()=>temporary(async dir=>{
   const app=path.join(dir,'app');await mkdir(app);await exec('git',['init','-q',app]);await exec('git',['-C',app,'-c','user.name=QA','-c','user.email=qa@qa.invalid','commit','--allow-empty','-qm','fixture']);

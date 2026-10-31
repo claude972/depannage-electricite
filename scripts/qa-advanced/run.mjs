@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { createRedactor } from '../qa/lib/redact.mjs';
 import { createCohort, newPassword, newRunId } from '../qa/lib/cohort.mjs';
-import { parseArgs,preflight,gitSha,uncertainResponse,atomicJson,exactCount,Registry,emptyManifest,validateManifest,Gate,mutate,cleanup,finalCode } from './core.mjs';
+import { parseArgs,preflight,gitSha,uncertainResponse,installInterruptHandlers,atomicJson,exactCount,Registry,emptyManifest,validateManifest,Gate,mutate,cleanup,finalCode } from './core.mjs';
 
 const usage='node scripts/qa-advanced/run.mjs --base-url <origin> --sha <40hex> --app-dir <served-checkout> --project <ref> --credentials <private0600.json> --out <outside-git> [--suite api|browser|all] [--dry-run]\ncleanup: --cleanup-manifest <manifest.json> --project <ref> --credentials <private0600.json> --out <outside-git>';
 async function main() {
@@ -25,7 +25,7 @@ async function main() {
   m.harness_sha??=harnessSha;
   const registry=new Registry(path.join(o.out,'manifest.json'),m);await registry.save();
   const gate=new Gate(),cohort=createCohort(m.runId);
-  const result={sha:m.sha,harness_sha:harnessSha,manifest_harness_sha:m.harness_sha,project:o.project,target:o.target||'cleanup-only',mode:o.cleanupManifest?'cleanup':'run',suite:o.suite,started_at:new Date().toISOString(),steps:[],requests:[],interrupted:false,cleanup:null,non_proofs:['No Vercel deployment, Stripe, OS PWA or native device test.','RPC races use concurrent real HTTP requests; PGlite is not used.','Support notifications are service-seeded fixtures with actor_id null. This tests access/revocation, not operator-trigger generation. No admin profile is created.']};
+  const result={sha:m.sha,harness_sha:harnessSha,manifest_harness_sha:m.harness_sha,project:o.project,target:o.target||'cleanup-only',mode:o.cleanupManifest?'cleanup':'run',suite:o.suite,started_at:new Date().toISOString(),steps:[],requests:[],interrupted:false,cleanup:null,non_proofs:['No Vercel deployment, Stripe, OS PWA or native device test.','RPC races use concurrent real HTTP requests; PGlite is not used.','No appointment-vs-busy or appointment-vs-appointment race, nor current_setting(role) observation inside the appointment trigger.','The api suite authenticates Supabase RPC/REST only. Its sole Next API probe is anonymous401; authenticated Next routes require browser execution.','HTTP Next slot403, cursor/filter422, foreign mark and stale-preference409 criteria are not exercised by this runner.','Support notifications are service-seeded fixtures with actor_id null. This tests access/revocation, not operator-trigger generation. No admin profile is created.']};
   let finalizing=null,browser=null,activeStep='startup';
   const save=()=>atomicJson(path.join(o.out,'result.json'),redactor.redact(result));
   const record=async(name,status,detail='')=>{result.steps.push({name,status,detail:redactor.redactString(detail)});console.log(`${status}: ${name}`);await save();};
@@ -78,10 +78,10 @@ async function main() {
       return result.exit_code;
     })();return finalizing;
   }
-  const interrupt=()=>{result.interrupted=true;gate.stop();};
   const fatal=(error)=>{result.interrupted=true;gate.stop();result.steps.push({name:'fatal:'+activeStep,status:'FAIL',detail:redactor.redactError(error).message});void finish().then(code=>{process.exitCode=code;}).catch(()=>{process.exitCode=3;});};
-  process.on('SIGINT',interrupt);process.on('SIGTERM',interrupt);process.on('unhandledRejection',fatal);process.on('uncaughtException',fatal);
-  const step=async(name,fn)=>{gate.check();activeStep=name;await fn();await record(name,'PASS');};
+  const removeSignals=installInterruptHandlers(process,{stop:()=>gate.stop(),finish:()=>finish().then(code=>{process.exitCode=code;}),onInterrupted:()=>{result.interrupted=true;},onError:()=>{process.exitCode=3;}});
+  process.on('unhandledRejection',fatal);process.on('uncaughtException',fatal);
+  const step=async(name,fn)=>{activeStep=name;gate.check();await fn();await record(name,'PASS');};
   async function user(label,role){
     const password=newPassword(),email=cohort.email(label);redactor.add(password);
     const u=await mutate(gate,registry,'Auth create '+email,async()=>{const r=await request('service','POST','/auth/v1/admin/users',{email,password,email_confirm:true,user_metadata:{full_name:cohort.fullName(label),role}});const b=[200,201].includes(r.status)?r.body:ok(r);if(!b?.id){const e=Error('Auth creation missing ID');e.remoteUnknown=true;throw e;}await registry.track('users',b.id);return {id:b.id,email,password,role,label};});
@@ -95,13 +95,13 @@ async function main() {
     if(!o.cleanupManifest){
       await step('preflight: API anonymous refused / migration016 available',async()=>{assert.equal((await request(null,'GET','/api/planning')).status,401);await db.count('artisan_planning_entries',{artisan_id:'eq.00000000-0000-4000-8000-000000000000'});});
       await step('seed isolated cohort (no admin role)',async()=>{for(const [label,role] of [['artisan','artisan'],['other','artisan'],['client','client'],['owner','manager'],['delegate','manager'],['fresh','client']])users[label]=await user(label,role);});
-      const ctx={o,sb,registry,gate,cohort,users,rpc,request,change,ok,db,token,step,setBrowser:b=>{browser=b;},redactor};
+      const ctx={o,sb,registry,gate,cohort,users,rpc,request,change,ok,db,token,step,skip:(name,reason)=>record(name,'SKIPPED',reason),setBrowser:b=>{browser=b;},redactor};
       if(o.suite!=='browser')await (await import('./scenarios.mjs')).apiScenarios(ctx);
       if(o.suite!=='api')await (await import('./scenarios.mjs')).browserScenarios(ctx);
     }
   }catch(e){await record(activeStep,'FAIL',redactor.redactError(e).message);}
   finally {
-    const code=await finish();process.off('SIGINT',interrupt);process.off('SIGTERM',interrupt);process.off('unhandledRejection',fatal);process.off('uncaughtException',fatal);return code;
+    const code=await finish();removeSignals();process.off('unhandledRejection',fatal);process.off('uncaughtException',fatal);return code;
   }
 }
 main().then(code=>{process.exitCode=code;}).catch(()=>{console.error('Runner failed; preserve the private manifest and run --cleanup-manifest after checking unknown operations.');process.exitCode=3;});

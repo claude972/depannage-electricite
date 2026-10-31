@@ -13,7 +13,16 @@ export async function gitSha(dir) {const {stdout}=await exec('git',['-C',dir,'re
 export function definiteMissingRow(body) { return Boolean(body && typeof body==='object' && !Array.isArray(body) && body.code==='P0002' && typeof body.message==='string' && body.message.length>0); }
 export function isPostgrestEndpoint(endpoint) { return typeof endpoint==='string' && /^\/rest\/v1\/(?:rpc\/[a-z][a-z0-9_]*|[a-z][a-z0-9_]*)(?:\?[^#]*)?$/.test(endpoint); }
 export function uncertainResponse(method,status,body=null,endpoint='') { return !['GET','HEAD','OPTIONS'].includes(method) && status>=500 && !(status===500 && isPostgrestEndpoint(endpoint) && definiteMissingRow(body)); }
-export function planningOwnershipRefused(result) { return [403,404].includes(result.status) || (result.status===500 && isPostgrestEndpoint(result.endpoint) && definiteMissingRow(result.body)); }
+export function planningOwnershipRefused(result) { return result.status===403 || (result.status===404 && /^\/api\/planning(?:[/?]|$)/.test(result.endpoint||'')) || (result.status===500 && isPostgrestEndpoint(result.endpoint) && definiteMissingRow(result.body)); }
+// Keep the shared launcher and its configured executable/timeout, but prevent an older
+// launcher from letting Playwright exit the process before our stop/drain/cleanup.
+export function withoutPlaywrightSignals(pw) {return {chromium:{launch:options=>pw.chromium.launch({...options,handleSIGINT:false,handleSIGTERM:false,handleSIGHUP:false})}};}
+export function installInterruptHandlers(proc,{stop,finish,onInterrupted,onError}) {
+  let requested=false;
+  const handler=()=>{onInterrupted();stop();if(requested)return;requested=true;void Promise.resolve().then(finish).catch(onError);};
+  proc.on('SIGINT',handler);proc.on('SIGTERM',handler);
+  return ()=>{proc.off('SIGINT',handler);proc.off('SIGTERM',handler);};
+}
 export function parseArgs(argv) {
   const o = { suite: 'all', timeoutMs: 120000, allowed: [] };
   const flags = { '--base-url':'baseUrl', '--sha':'sha', '--app-dir':'appDir', '--project':'project', '--credentials':'credentials', '--out':'out', '--suite':'suite', '--playwright-path':'playwrightPath', '--chromium-path':'chromiumPath', '--cleanup-manifest':'cleanupManifest', '--timeout-ms':'timeoutMs' };

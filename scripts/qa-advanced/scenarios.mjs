@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { assertRace, mutate, uncertainResponse, planningOwnershipRefused } from './core.mjs';
+import { assertRace, mutate, uncertainResponse, planningOwnershipRefused, withoutPlaywrightSignals } from './core.mjs';
 
 export async function apiScenarios(ctx) {
   const {users:u,rpc,ok,request,change,registry,cohort,db,token,step}=ctx;
@@ -90,7 +90,7 @@ const mKey=r=>r.m.runId;
 export async function browserScenarios(ctx) {
   const {o,users:u,step,redactor,change,ok}=ctx;
   const b=await import('../qa/lib/browser.mjs');b.configureBrowser({timeoutMs:o.timeoutMs});
-  const pw=await b.loadPlaywright(o.playwrightPath||process.env.QA_PLAYWRIGHT_PATH);const browser=await b.launchBrowser(pw,{headless:true,chromiumPath:o.chromiumPath});ctx.setBrowser(browser);
+  const pw=await b.loadPlaywright(o.playwrightPath||process.env.QA_PLAYWRIGHT_PATH);const browser=await b.launchBrowser(withoutPlaywrightSignals(pw),{headless:true,chromiumPath:o.chromiumPath});ctx.setBrowser(browser);
   const handle=await b.newPage(browser,{baseUrl:o.baseUrl,redactor});const {page}=handle;
   const app=async(method,route,body)=>{
     const invoke=()=>page.evaluate(async({method,route,body,timeout})=>{const r=await fetch(route,{method,headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(timeout)});return {status:r.status,body:await r.json().catch(()=>null)};},{method,route,body,timeout:o.timeoutMs});
@@ -110,6 +110,7 @@ export async function browserScenarios(ctx) {
   });
   await step('browser: actual planning form commits exactly one private entry',async()=>{
     await b.openHash(page,o.baseUrl,'planning');
+    await page.getByRole('button',{name:'Ajouter une entrée ponctuelle',exact:true}).click();
     const form=page.locator('form').filter({has:page.getByRole('heading',{name:'Nouvelle entrée ponctuelle',exact:true})});
     await form.getByRole('combobox',{name:'Nature',exact:true}).selectOption('busy');
     // Time inputs have no implicit textbox role; use their actual label association.
@@ -125,9 +126,9 @@ export async function browserScenarios(ctx) {
   });
   await step('browser: server suspension reflected as read-only planning',async()=>{
     ok(await change('suspend browser cohort artisan','service','PATCH',`/rest/v1/artisan_profiles?user_id=eq.${u.artisan.id}`,{application_status:'suspended'}),204);
-    await b.openHash(page,o.baseUrl,'planning');await page.getByText('Votre compte est suspendu',{exact:false}).first().waitFor();
+    await b.openHash(page,o.baseUrl,'planning');await page.getByRole('note').filter({hasText:'Votre compte est suspendu'}).first().waitFor();
     const r=await app('POST','/api/planning',{action:'save_entry',request_id:randomUUID(),kind:'busy',starts_at:new Date(Date.now()+86400000).toISOString(),ends_at:new Date(Date.now()+90000000).toISOString(),title:'refused',note:''});assert.equal(r.status,403);
-    assert.equal(await page.getByRole('heading',{name:'Nouvelle entrée ponctuelle',exact:true}).count(),0);
+    assert.equal(await page.getByRole('button',{name:'Ajouter une entrée ponctuelle',exact:true}).count(),0);
     ok(await change('restore browser cohort artisan','service','PATCH',`/rest/v1/artisan_profiles?user_id=eq.${u.artisan.id}`,{application_status:'approved'}),204);
   });
   await step('browser: deterministic GET failure surfaces retry, then recovers',async()=>{
@@ -153,6 +154,7 @@ export async function browserScenarios(ctx) {
     }
     finally {await h.close();}
   });
+  else await ctx.skip('browser: notification HTTP list/count/mark obey linked-ticket revocation','Requires linked/personal fixtures from --suite all; not exercised by browser-only.');
   await step('browser: client cannot read private artisan planning API',async()=>{
     const h=await b.newPage(browser,{baseUrl:o.baseUrl,redactor});
     try {await b.login(h,o.baseUrl,u.client,o.project,{timeout:o.timeoutMs});assert.equal((await b.api(h.page,'/api/planning')).status,403);}
