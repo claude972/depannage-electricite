@@ -1,6 +1,6 @@
 # WEB-PWA-ADMIN-LISTS-001 — contrat des dossiers administrateur
 
-Base : f132f6a. Branche : codex/web-pwa-backend. **Contrat publié avant implémentation ; route non encore disponible à cette révision.** Aucune migration SQL prévue : utiliser les politiques RLS et les lectures utilisateur existantes, sans service-role.
+Base : f132f6a. Branche : codex/web-pwa-backend. **Contrat publié avant implémentation dans d910eec ; route désormais implémentée et vérifiée localement, en attente de revue et de recette en ligne.** Aucune migration SQL prévue : utiliser les politiques RLS et les lectures utilisateur existantes, sans service-role.
 
 ## Autorisation et données
 
@@ -28,7 +28,7 @@ Réponse :
 ```
 `total` est un COUNT exact sous RLS, sur **tous les filtres et avant le curseur**, jamais le nombre de lignes de la page. Le COUNT et la page sont deux lectures : en présence de modifications concurrentes, ils ne constituent pas un snapshot transactionnel commun. Les lignes et filtres reflètent leurs lectures serveur respectives.
 
-Tri : `created_at DESC, id DESC`, identifiants comme départage stable des dates égales ; un élément supplémentaire détermine has_more. Le curseur conserve le timestamp PostgreSQL exact (microsecondes incluses), l’UUID et une empreinte des filtres normalisés ; format/version/valeurs/empreinte invalides donnent422. Ce curseur n’est ni un jeton de permission ni une signature : les contrôles admin/RLS restent obligatoires à chaque page. Pas de doublons/omissions sur un jeu inchangé ; les nouvelles insertions/modifications entre pages nécessitent une actualisation pour une vue courante complète.
+Tri : `created_at DESC, id DESC`, identifiants comme départage stable des dates égales ; un élément supplémentaire et le COUNT restant côté serveur déterminent has_more, même si le fournisseur impose une limite inférieure. Le curseur conserve le timestamp PostgreSQL exact (microsecondes incluses), l’UUID et une empreinte des filtres normalisés ; format/version/valeurs/empreinte invalides donnent422. Ce curseur n’est ni un jeton de permission ni une signature : les contrôles admin/RLS restent obligatoires à chaque page. Pas de doublons/omissions sur un jeu inchangé ; les nouvelles insertions/modifications entre pages nécessitent une actualisation pour une vue courante complète.
 
 ## Détail d’un dossier ancien
 
