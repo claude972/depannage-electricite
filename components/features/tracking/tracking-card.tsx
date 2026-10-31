@@ -1,11 +1,11 @@
 "use client";
 // Suivi côté client / entreprise / admin en lecture (M7, V8-C07 ; contrat UI §4 + amendements). Coordonnées et route
 // effacées dès que le serveur ne donne plus de position fraîche ; arrivée seulement depuis une route IGN valide.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader, Tag, Unavailable } from "../../app/ui";
 import { Icon } from "../../app/icons";
 import type { TrackingRoute, TrackingSnapshot } from "../../../lib/features/tracking/types";
-import { ROUTE_REFRESH_MS, arrivalEstimate, failureOf, haversineM, isTrackingChanged, mayRequestRoute, relativeAge, routeFailureMessage, routeKey, routeMatches, trackingDisplay } from "./model";
+import { RouteGate, arrivalEstimate, failureOf, haversineM, isTrackingChanged, relativeAge, routeContextKey, routeFailureMessage, routeMatches, trackingDisplay } from "./model";
 import { trackingKey, type TrackingLeafProps } from "./props";
 import { TrackingMap, type MapPoint } from "./tracking-map";
 import { DestinationPicker } from "./destination-picker";
@@ -29,8 +29,9 @@ function CardBody({ state, unavailableMessage, scope, client, demo, onNavigate, 
   const [loadError, setLoadError] = useState("");
   const [routing, setRouting] = useState(false);
   const [draft, setDraft] = useState<MapPoint | null>(null);
-  /** État serveur pour lequel la route a répondu 409 : aucune nouvelle demande tant qu’il n’a pas changé. */
-  const [blockedKey, setBlockedKey] = useState<string | null>(null);
+  /** Porte d’itinéraire (≥ 30 s, Retry-After, 409 par état) ; `gateVersion` réarme l’unique minuterie. */
+  const gate = useRef(new RouteGate());
+  const [gateVersion, setGateVersion] = useState(0);
   const [, setTick] = useState(0);
   const available = state === "available";
 
@@ -63,32 +64,37 @@ function CardBody({ state, unavailableMessage, scope, client, demo, onNavigate, 
     if (route && !shownRoute) setRoute(null);
   }, [route, shownRoute]);
 
+  // Clé de contexte stable : l’effet ne dépend jamais de l’identité d’un snapshot re-sondé.
+  const contextKey = routeContextKey(snapshot, display?.kind);
+  const canRoute = contextKey !== "";
+  const live = useRef({ client, load, contextKey });
+  live.current = { client, load, contextKey };
+
   const recompute = useCallback(async () => {
-    if (demo || !mayRequestRoute(snapshot, blockedKey)) return;
-    const asked = routeKey(snapshot);
+    const { client: routeClient, load: reload, contextKey: key } = live.current;
+    const now = Date.now();
+    if (demo || !gate.current.canRequest(now, key)) return;
+    gate.current.onRequest(now);
     setRouting(true);
     setRouteError("");
     try {
-      const r = await client.route();
-      if (r === null) return;
-      setRoute(r);
+      const r = await routeClient.route();
+      if (r !== null) setRoute(r);
     } catch (error) {
       const f = failureOf(error);
       setRoute(null);
+      gate.current.onFailure(Date.now(), key, f);
       if (isTrackingChanged(f)) {
-        // Le suivi a changé pendant le calcul : relecture, nouvelle demande seulement pour un nouvel état (pas de boucle).
-        setBlockedKey(asked);
-        void load();
-        return;
-      }
-      setRouteError(routeFailureMessage(f));
+        // Suivi changé pendant le calcul : une relecture ; nouvelle demande seulement pour un nouvel état.
+        void reload();
+      } else setRouteError(routeFailureMessage(f));
     } finally {
       setRouting(false);
+      setGateVersion((n) => n + 1);
     }
-  }, [client, demo, snapshot, blockedKey, load]);
+  }, [demo]);
 
-  // Rafraîchissement : snapshot toutes les 15 s ; itinéraire au plus toutes les 30 s, seulement avec position fraîche + destination.
-  const canRoute = display?.kind === "fresh" && Boolean(snapshot?.tracking.destination);
+  // Snapshot relu toutes les 15 s (pas d’itinéraire) ; itinéraire : une seule minuterie armée sur le temps restant de la porte.
   useEffect(() => {
     if (!available || demo) return;
     const id = window.setInterval(() => void load(), 15_000);
@@ -96,10 +102,11 @@ function CardBody({ state, unavailableMessage, scope, client, demo, onNavigate, 
   }, [available, demo, load]);
   useEffect(() => {
     if (!available || demo || !canRoute) return;
-    void recompute();
-    const id = window.setInterval(() => void recompute(), ROUTE_REFRESH_MS);
-    return () => window.clearInterval(id);
-  }, [available, demo, canRoute, snapshot?.tracking.last_seq, snapshot?.tracking.destination_version, recompute]);
+    const wait = gate.current.waitMs(Date.now(), contextKey);
+    if (!Number.isFinite(wait)) return;
+    const id = window.setTimeout(() => void recompute(), wait);
+    return () => window.clearTimeout(id);
+  }, [available, demo, canRoute, contextKey, gateVersion, recompute]);
   useEffect(() => {
     const id = window.setInterval(() => setTick((n) => n + 1), 10_000);
     return () => window.clearInterval(id);
@@ -191,6 +198,14 @@ function CardBody({ state, unavailableMessage, scope, client, demo, onNavigate, 
               <dt>Source</dt>
               <dd>Position déclarée par le navigateur de l’artisan (non certifiée)</dd>
             </div>
+            {dest && (
+              <div>
+                <dt>Destination</dt>
+                <dd>
+                  {dest.label} ({dest.latitude.toFixed(5)}, {dest.longitude.toFixed(5)})
+                </dd>
+              </div>
+            )}
             {shownRoute && dest && snapGap > 0 && (
               <div>
                 <dt>Fin de l’itinéraire</dt>
@@ -200,12 +215,16 @@ function CardBody({ state, unavailableMessage, scope, client, demo, onNavigate, 
           </dl>
 
           <div className={styles.actions}>
-            {canRoute && !demo && (
-              <button type="button" className="button outline" onClick={() => void recompute()} disabled={routing}>
-                <Icon name="refresh" size={17} />
-                {routing ? "Calcul…" : "Recalculer"}
-              </button>
-            )}
+            {canRoute && !demo && (() => {
+              const wait = gate.current.waitMs(Date.now(), contextKey);
+              const blocked = routing || wait > 0;
+              return (
+                <button type="button" className="button outline" onClick={() => void recompute()} disabled={blocked}>
+                  <Icon name="refresh" size={17} />
+                  {routing ? "Calcul…" : wait > 0 && Number.isFinite(wait) ? `Recalculer (dans ${Math.ceil(wait / 1000)} s)` : wait === Infinity ? "Recalculer (en attente d’une nouvelle position)" : "Recalculer"}
+                </button>
+              );
+            })()}
             {dest && (
               <a
                 className="button outline"

@@ -20,6 +20,8 @@ import {
   isTrackingChanged,
   mayRequestRoute,
   routeKey,
+  overlayInsets,
+  toScreenPoint,
 } from "../../components/features/tracking/model";
 import type { TrackingCommand, TrackingRoute, TrackingSnapshot } from "../../lib/features/tracking/types";
 
@@ -321,4 +323,29 @@ test("P3-4 : route 409 → relecture ; nouvelle demande au plus une fois par nou
   assert.equal(mayRequestRoute(null, null), false);
   // Pendant ce temps, l’ancienne route n’est jamais affichée.
   assert.equal(routeMatches(route({ point_seq: 7 }), snap({ last_seq: 8 }), trackingDisplay(snap({ last_seq: 8 }), NOW)), false);
+});
+
+test("cadrage avec marges : un marqueur au bord droit reste hors de la zone des contrôles à 360 et 1280", () => {
+  for (const [W, H] of [[322, 201], [651, 407]] as const) {
+    const frame = { left: 0, top: 0, right: W, bottom: H };
+    // Boîte des contrôles telle que mesurée (colonne 44 px, 3 boutons + écarts, à 8 px du bord haut/droit).
+    const controls = { left: W - 8 - 44, top: 8, right: W - 8, bottom: 8 + 44 * 3 + 6 * 2 };
+    const ins = overlayInsets(frame, [controls]);
+    assert.ok(ins.right >= 52 + 16, `marge droite ${ins.right}`);
+    // Position à l’ouest, destination tout à l’est (bord droit du contenu).
+    const pts: [number, number][] = [[-61.068, 14.6035], [-61.0032, 14.5911]];
+    const view = fitView(pts, W, H, ins)!;
+    for (const [lon, lat] of pts) {
+      const p = toScreenPoint(view, W, H, lon, lat);
+      const pinTop = p.y - 26;
+      const insideControls = p.x + 9 >= controls.left && p.x - 9 <= controls.right && p.y >= controls.top && pinTop <= controls.bottom;
+      assert.equal(insideControls, false, `${W}px : marqueur (${Math.round(p.x)}, ${Math.round(p.y)}) sous les contrôles`);
+      assert.ok(p.x <= W - ins.right + 0.5 && p.x >= ins.left - 0.5, "dans la zone utile");
+    }
+    assert.ok(view.zoom >= 11 && view.zoom <= 17);
+  }
+  // Point unique : zoom de quartier (15 au plus), centré dans la zone utile.
+  const one = fitView([[-61.0032, 14.5911]], 322, 201, overlayInsets({ left: 0, top: 0, right: 322, bottom: 201 }, [{ left: 270, top: 8, right: 314, bottom: 152 }]))!;
+  assert.equal(one.zoom, 15);
+  assert.ok(toScreenPoint(one, 322, 201, -61.0032, 14.5911).x < 270);
 });

@@ -163,8 +163,12 @@ export const geocodeQueryValid = (q: string) => q.trim().length >= 2 && q.trim()
 // ---- Carte : Web Mercator et tuiles visibles ------------------------------------------------------
 export const TILE_SIZE = 256;
 export const MIN_ZOOM = 11;
+/** Plancher du cadrage automatique : assez bas pour un trajet à l’échelle de la Martinique (≈ 70 km) sur 288 px. */
+export const FIT_MIN_ZOOM = 8;
 export const MAX_ZOOM = 17;
-export const clampZoom = (z: number) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.round(z)));
+export const clampZoom = (z: number, minZoom = MIN_ZOOM) => Math.max(minZoom, Math.min(MAX_ZOOM, Math.round(z)));
+/** Zoom minimal offert à l’utilisateur : jamais au-dessus du zoom de cadrage (dézoom possible jusqu’à tout voir). */
+export const userMinZoom = (fittedZoom: number | null) => Math.max(FIT_MIN_ZOOM, Math.min(MIN_ZOOM, fittedZoom ?? MIN_ZOOM));
 /** Pixel monde (non borné) au zoom z. */
 export function project(lon: number, lat: number, z: number): { x: number; y: number } {
   const scale = TILE_SIZE * 2 ** z;
@@ -177,19 +181,65 @@ export function unproject(x: number, y: number, z: number): { lon: number; lat: 
   const n = Math.PI - (2 * Math.PI * y) / scale;
   return { lon, lat: (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n))) };
 }
-/** Zoom le plus fort qui fait tenir les points dans le cadre (marge), borné MIN..MAX. */
-export function fitView(points: [number, number][], width: number, height: number, padding = 40) {
+export type Insets = { top: number; right: number; bottom: number; left: number };
+export type Rect = { left: number; top: number; right: number; bottom: number };
+/** Marge des marqueurs (épingle 26 px au-dessus du point, halo) en plus des zones de contrôle. */
+export const MARKER_MARGIN = 32;
+
+/**
+ * Marges réservées à partir des boîtes réellement mesurées des surcouches (contrôles +/−/recentrer, mention de fond) :
+ * une surcouche collée au bord droit réserve toute sa largeur à droite, etc. Aucun chiffre figé.
+ */
+export function overlayInsets(frame: Rect, overlays: Rect[], margin = MARKER_MARGIN): Insets {
+  const ins: Insets = { top: margin, right: margin, bottom: margin, left: margin };
+  const w = frame.right - frame.left;
+  const h = frame.bottom - frame.top;
+  for (const o of overlays) {
+    const l = o.left - frame.left;
+    const r = frame.right - o.right;
+    const t = o.top - frame.top;
+    const b = frame.bottom - o.bottom;
+    const ow = o.right - o.left;
+    const oh = o.bottom - o.top;
+    // Bande verticale (plus haute que large) : réserve à gauche ou à droite ; sinon bande horizontale haut/bas.
+    if (oh >= ow) {
+      if (r <= l) ins.right = Math.max(ins.right, w - l + margin / 2);
+      else ins.left = Math.max(ins.left, l + ow + margin / 2);
+    } else if (t <= b) ins.top = Math.max(ins.top, t + oh + margin / 2);
+    else ins.bottom = Math.max(ins.bottom, h - t + margin / 2);
+  }
+  return ins;
+}
+
+/**
+ * Cadrage : zoom le plus fort (borné, 15 au plus pour un point unique) tel que tous les points tiennent dans le cadre
+ * moins les marges ; le centre est décalé pour que le contenu soit centré dans la zone utile, hors des contrôles.
+ */
+export function fitView(points: [number, number][], width: number, height: number, insets: Insets | number = 40, singleZoom = 15) {
   if (!points.length) return null;
-  for (let z = MAX_ZOOM; z >= MIN_ZOOM; z--) {
+  const ins = typeof insets === "number" ? { top: insets, right: insets, bottom: insets, left: insets } : insets;
+  const usableW = Math.max(1, width - ins.left - ins.right);
+  const usableH = Math.max(1, height - ins.top - ins.bottom);
+  const single = points.every((p) => p[0] === points[0][0] && p[1] === points[0][1]);
+  for (let z = single ? Math.min(singleZoom, MAX_ZOOM) : MAX_ZOOM; z >= FIT_MIN_ZOOM; z--) {
     const p = points.map(([lon, lat]) => project(lon, lat, z));
     const xs = p.map((q) => q.x);
     const ys = p.map((q) => q.y);
     const w = Math.max(...xs) - Math.min(...xs);
     const h = Math.max(...ys) - Math.min(...ys);
-    if (w <= width - 2 * padding && h <= height - 2 * padding || z === MIN_ZOOM)
-      return { zoom: z, center: { x: (Math.max(...xs) + Math.min(...xs)) / 2, y: (Math.max(...ys) + Math.min(...ys)) / 2 } };
+    const fits = w <= usableW && h <= usableH;
+    if (fits || z === FIT_MIN_ZOOM) {
+      const cx = (Math.max(...xs) + Math.min(...xs)) / 2;
+      const cy = (Math.max(...ys) + Math.min(...ys)) / 2;
+      return { zoom: z, center: { x: cx - (ins.left - ins.right) / 2, y: cy - (ins.top - ins.bottom) / 2 }, fits };
+    }
   }
   return null;
+}
+/** Position écran d’un point pour une vue donnée (cadre width × height). */
+export function toScreenPoint(view: { zoom: number; center: { x: number; y: number } }, width: number, height: number, lon: number, lat: number) {
+  const p = project(lon, lat, view.zoom);
+  return { x: p.x - view.center.x + width / 2, y: p.y - view.center.y + height / 2 };
 }
 export type Tile = { z: number; x: number; y: number; left: number; top: number; url: string };
 /** Seulement les tuiles qui recoupent le cadre ; jamais de chargement en masse. */
@@ -245,6 +295,8 @@ export class ShareController {
   private lastSentAt = 0;
   private sending = false;
   private disposed = false;
+  /** Démarrage en attente de réponse serveur (pour l’interruption et la compensation). */
+  private pendingStart = false;
   constructor(private deps: ShareDeps) {}
 
   get watching() {
@@ -271,23 +323,38 @@ export class ShareController {
       this.deps.onStatus({ kind: "error", message: "La localisation n’est pas disponible dans ce navigateur.", retryable: false });
       return;
     }
+    if (this.pendingStart) return;
     const gen = ++this.generation;
     const sessionId = this.deps.uuid();
+    // Client lié capturé au démarrage : seule voie pour une éventuelle compensation (même acteur).
+    const command = this.deps.command;
+    this.pendingStart = true;
     this.deps.onStatus({ kind: "starting" });
     let next: TrackingSnapshot | null;
     try {
-      next = await this.deps.command({
+      next = await command({
         action: "start",
         expected_version: snapshot.tracking.control_version,
         payload: { session_id: sessionId, consent: true, consent_policy: CONSENT_POLICY },
       });
     } catch (error) {
+      if (gen === this.generation) this.pendingStart = false;
       if (gen !== this.generation) return;
       this.deps.onStatus({ kind: "error", message: failureOf(error).message, retryable: true });
       return;
     }
-    if (gen !== this.generation || this.disposed) return;
-    if (next === null) return; // chaîne périmée : aucune transition
+    if (gen !== this.generation || this.disposed) {
+      // Interrompu pendant le démarrage. Si le serveur partage maintenant cette session abandonnée : UN arrêt
+      // compensatoire au mieux, par le même client lié, pour cette session exacte. `null` (identité périmée) : rien.
+      if (next !== null && next.tracking.session_id === sessionId && next.tracking.shared)
+        void command({ action: "stop", expected_version: next.tracking.control_version, payload: { session_id: sessionId } }).catch(() => undefined);
+      return;
+    }
+    this.pendingStart = false;
+    if (next === null) {
+      this.deps.onStatus({ kind: "idle" });
+      return; // chaîne périmée : aucune transition vers le partage
+    }
     this.sessionId = sessionId;
     this.version = next.tracking.control_version;
     this.seq = next.tracking.last_seq;
@@ -376,9 +443,10 @@ export class ShareController {
     });
   }
 
-  /** Arrêt local immédiat : clearWatch + nouvelle génération, sans appel serveur. */
+  /** Arrêt local immédiat : clearWatch + nouvelle génération (invalide aussi start/point/stop en attente), sans appel serveur. */
   private halt() {
     this.generation++;
+    this.pendingStart = false;
     if (this.watchId !== null) this.deps.geolocation?.clearWatch(this.watchId);
     this.watchId = null;
     this.sending = false;
@@ -443,8 +511,10 @@ export class ShareController {
 
   /** Page masquée, déconnexion : arrêt local + arrêt serveur au mieux ; reprise uniquement explicite. */
   interrupt(reason: string) {
-    if (this.watchId === null && !this.sessionId) return;
+    const active = this.watchId !== null || Boolean(this.sessionId) || this.pendingStart;
+    // Toujours invalider la génération, y compris pour un démarrage ou un point en attente.
     this.halt();
+    if (!active) return;
     this.bestEffortStop();
     if (!this.disposed) this.deps.onStatus({ kind: "interrupted", reason });
   }
@@ -478,3 +548,46 @@ export const mayRequestRoute = (snapshot: TrackingSnapshot | null, blockedKey: s
 /** Confirmer ou retirer une destination arrête le partage en cours côté serveur : à dire avant confirmation. */
 export const destinationStopsSharing = (s: TrackingSnapshot) => s.tracking.shared;
 export const DESTINATION_STOP_WARNING = "Le partage de position en cours sera arrêté ; l’artisan devra le relancer.";
+
+/** Points de cadrage d’une position avec son halo de précision (± accuracy_m en latitude et longitude). */
+export function haloPoints(lon: number, lat: number, accuracyM: number): [number, number][] {
+  const dLat = accuracyM / 111_320;
+  const dLon = accuracyM / (111_320 * Math.max(0.1, Math.cos((lat * Math.PI) / 180)));
+  return [[lon, lat], [lon - dLon, lat - dLat], [lon + dLon, lat + dLat]];
+}
+
+// ---- P2-2 : régulation des demandes d’itinéraire ---------------------------------------------------
+/** Clé de contexte stable d’une route (jamais l’identité de l’objet snapshot re-sondé). */
+export function routeContextKey(snapshot: TrackingSnapshot | null, freshKind: string | undefined): string {
+  if (!snapshot || freshKind !== "fresh" || !snapshot.tracking.destination) return "";
+  const t = snapshot.tracking;
+  return `${t.session_id}|${t.control_version}|${t.last_seq}|${t.position?.sampled_at ?? ""}|${t.destination_version}`;
+}
+
+/**
+ * Porte d’itinéraire : au plus une demande par `intervalMs` (≥ 30 s), jamais avant la fin d’un Retry-After serveur,
+ * jamais pour un état bloqué par un 409 (une relecture, puis seulement pour un nouvel état). Les demandes manuelles
+ * passent par la même porte.
+ */
+export class RouteGate {
+  private lastRequestAt: number | null = null;
+  private notBefore = 0;
+  private blockedKey: string | null = null;
+  constructor(private intervalMs = ROUTE_REFRESH_MS) {}
+  canRequest(now: number, key: string): boolean {
+    return this.waitMs(now, key) === 0;
+  }
+  /** Temps restant avant qu’une demande soit permise (Infinity si l’état est bloqué ou vide). */
+  waitMs(now: number, key: string): number {
+    if (!key || key === this.blockedKey) return Infinity;
+    const byInterval = this.lastRequestAt === null ? 0 : this.lastRequestAt + this.intervalMs - now;
+    return Math.max(0, byInterval, this.notBefore - now);
+  }
+  onRequest(now: number) {
+    this.lastRequestAt = now;
+  }
+  onFailure(now: number, key: string, f: TrackingFailure) {
+    if (f.retryAfterS !== undefined) this.notBefore = Math.max(this.notBefore, now + f.retryAfterS * 1000);
+    if (f.status === 409) this.blockedKey = key;
+  }
+}

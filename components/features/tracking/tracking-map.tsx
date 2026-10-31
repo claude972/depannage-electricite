@@ -4,7 +4,7 @@
 // seules données serveur. Attributions toujours visibles. Échec des tuiles : fond neutre déclaré, tracé libellé schéma.
 import { useEffect, useId, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Icon } from "../../app/icons";
-import { MAX_ZOOM, MIN_ZOOM, clampZoom, fitView, project, unproject, visibleTiles } from "./model";
+import { MAX_ZOOM, clampZoom, fitView, haloPoints, overlayInsets, project, unproject, userMinZoom, visibleTiles, type Insets } from "./model";
 import styles from "./tracking.module.css";
 
 export type MapPoint = { latitude: number; longitude: number };
@@ -25,6 +25,8 @@ const DEFAULT_CENTER: [number, number] = [-61.07, 14.62]; // Martinique, utilis�
 
 export function TrackingMap({ position, destination, draft, snappedEnd, route, routeAttribution, description, onPick }: TrackingMapProps) {
   const frame = useRef<HTMLDivElement>(null);
+  const controls = useRef<HTMLDivElement>(null);
+  const notice = useRef<HTMLParagraphElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [view, setView] = useState<{ zoom: number; center: { x: number; y: number } } | null>(null);
   const [failed, setFailed] = useState(0);
@@ -33,7 +35,7 @@ export function TrackingMap({ position, destination, draft, snappedEnd, route, r
 
   const points = useMemo(() => {
     const list: [number, number][] = [];
-    if (position) list.push([position.longitude, position.latitude]);
+    if (position) list.push(...haloPoints(position.longitude, position.latitude, position.accuracyM));
     if (destination) list.push([destination.longitude, destination.latitude]);
     if (route) list.push(...route);
     return list;
@@ -50,16 +52,30 @@ export function TrackingMap({ position, destination, draft, snappedEnd, route, r
     return () => ro.disconnect();
   }, []);
 
+  /** Marges mesurées sur les surcouches réelles (contrôles, mention de fond) : les marqueurs cadrés restent hors d’elles. */
+  const measuredInsets = (): Insets | number => {
+    const f = frame.current?.getBoundingClientRect();
+    if (!f) return 40;
+    const overlays = [controls.current, notice.current].filter((e): e is HTMLDivElement | HTMLParagraphElement => Boolean(e)).map((e) => e.getBoundingClientRect());
+    return overlayInsets(f, overlays);
+  };
+  const [fit, setFit] = useState<{ zoom: number; fits: boolean } | null>(null);
+  const frameView = () => {
+    if (!size.width || !size.height) return null;
+    if (!points.length) return { zoom: 12, center: project(DEFAULT_CENTER[0], DEFAULT_CENTER[1], 12), fits: true };
+    return fitView(points, size.width, size.height, measuredInsets());
+  };
+  const applyFrame = () => {
+    const v = frameView();
+    if (!v) return;
+    setView({ zoom: v.zoom, center: v.center });
+    setFit({ zoom: v.zoom, fits: v.fits });
+  };
+  const minZoom = userMinZoom(fit?.zoom ?? null);
+
   // Recadrage sur les données serveur (position / destination / tracé) ; jamais sur une donnée effacée.
   useEffect(() => {
-    if (!size.width || !size.height) return;
-    const fit = fitView(points.length ? points : [DEFAULT_CENTER], size.width, size.height);
-    // Un seul point (ou points confondus) : zoom de quartier, pas le maximum.
-    const single = points.length > 0 && points.every((p) => p[0] === points[0][0] && p[1] === points[0][1]);
-    if (fit && single) {
-      const z = 15;
-      setView({ zoom: z, center: project(points[0][0], points[0][1], z) });
-    } else if (fit) setView({ zoom: points.length ? fit.zoom : 12, center: points.length ? fit.center : project(DEFAULT_CENTER[0], DEFAULT_CENTER[1], 12) });
+    applyFrame();
     setFailed(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fitKey, size.width, size.height]);
@@ -73,15 +89,12 @@ export function TrackingMap({ position, destination, draft, snappedEnd, route, r
   const zoomBy = (delta: number) =>
     setView((v) => {
       if (!v) return v;
-      const z = clampZoom(v.zoom + delta);
+      const z = clampZoom(v.zoom + delta, minZoom);
       if (z === v.zoom) return v;
       const c = unproject(v.center.x, v.center.y, v.zoom);
       return { zoom: z, center: project(c.lon, c.lat, z) };
     });
-  const recenter = () => {
-    const fit = fitView(points.length ? points : [DEFAULT_CENTER], size.width, size.height);
-    if (fit) setView(fit);
-  };
+  const recenter = () => applyFrame(); // même cadrage avec marges que l’affichage initial
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (!view || e.button !== 0) return;
@@ -176,13 +189,14 @@ export function TrackingMap({ position, destination, draft, snappedEnd, route, r
             )}
           </svg>
         )}
-        {tilesDown && <p className={styles.mapNotice}>Fond de carte indisponible — tracé affiché comme schéma.</p>}
+        {fit && !fit.fits && <p className={styles.mapNotice} role="note">Trajet trop étendu pour la carte : informations complètes ci-contre en texte.</p>}
+        {tilesDown && <p ref={notice} className={styles.mapNotice}>Fond de carte indisponible — tracé affiché comme schéma.</p>}
       </div>
-      <div className={styles.mapControls}>
+      <div ref={controls} className={styles.mapControls}>
         <button type="button" onClick={() => zoomBy(1)} disabled={!view || view.zoom >= MAX_ZOOM} aria-label="Zoomer">
           <Icon name="plus" size={18} />
         </button>
-        <button type="button" onClick={() => zoomBy(-1)} disabled={!view || view.zoom <= MIN_ZOOM} aria-label="Dézoomer">
+        <button type="button" onClick={() => zoomBy(-1)} disabled={!view || view.zoom <= minZoom} aria-label="Dézoomer">
           <span aria-hidden="true" className={styles.minus}>−</span>
         </button>
         <button type="button" onClick={recenter} disabled={!view} aria-label="Recentrer la carte">
