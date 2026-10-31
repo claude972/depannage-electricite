@@ -469,3 +469,11 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - Closed by root: pending START (P2-1), mobile fit (P2-3), cadence/backoff (P2-2 part).
 - **Open P2 single-flight** on real CardBody effects: route pending at t0, poll with new seq at t15, second route at t30 ⇒ 2 unresolved requests (root repro `/tmp/depannage-tracking-8b-inflight-repro.cjs`). Required: synchronous in-flight guard shared by auto and manual paths, token-safe reset in `finally`, safe context change, real barrier test through the code CardBody runs (not only async `routing` state). 63 tests + tsc pass but the gate stays open. Dispatched to design worker a2ddf36.
 - Root: reads aa14b23, applies 020 after a dry-run alone, then real cron proof; **no other cloud writer allowed in parallel**.
+
+## 2026-10-31 — expiry 6466 qualified OBSERVED in the harness: 685bd20
+
+- `claude/web-pwa-backend` **`685bd20b92e0336a36ca99db17ed02fbc824690a`** (on §2 revoke 83fdad9, expiry path only; no cloud, no cohort, no lease, no credentials or proof file read).
+- Contract §1.4 bis records: verify 19:06:31 UTC, Auth exact and active before the call, original expired JWT ⇒ 401 `UNAUTHORIZED_ASYMMETRIC_JWT` with no leak; root's JWKS proof (kid, ES256, exp + 60 s) cited by path; cleanup 8 PASS, postflight 19:07:38 Auth 404 and zero rows/objects; lease consumed. **Verdict OBSERVED.**
+- `lib.ts`: the code is stored as a fact in `OBSERVED_EXPIRED_PLATFORM_CODES`, NOT in `EXPIRED_PLATFORM_CODES` (can never PASS). `classifyExpiredProbe`: 401 + `UNAUTHORIZED_*` ⇒ OBSERVED (code recorded); 401 `NO_AUTH_HEADER`/`INVALID_JWT_FORMAT` ⇒ FAIL; 422 or 2xx ⇒ FAIL; network/5xx ⇒ INCOMPLETE; function's own error envelope ⇒ PASS (unchanged).
+- Behaviour change: network failure on the verify call now INCOMPLETE (exit 1) instead of interruption FAIL; account still recorded and cleaned, lease not consumed.
+- Tests: `tests/*.test.ts` 172/172 (`qa-gateway*` 76/76), tsc 0, node --check 0. §2 revoke 83fdad9 unchanged, awaiting root review.
