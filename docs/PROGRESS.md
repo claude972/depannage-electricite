@@ -15,7 +15,10 @@
 - `npm run check` : TypeScript strict, 11 tests métier et build de production réussis, confirmé par l'agent principal avant autorisation de commit.
 - Harnais PostgreSQL isolé : 13 groupes de contrôles réussis sur les deux migrations ; aucune connexion à un projet Supabase existant.
 - Revue indépendante : contrats interface/API et contrôles SQL corrigés ; `git diff --check` réussi et scan de secrets sans constat avant commit.
-- Déploiement Vercel : instantané figé en cours de déploiement au moment de ce commit ; résultat et vérification navigateur à reporter dans le prochain lot de documentation. Les essais échoués/interrompus précédents ne constituent pas une preview validée.
+- Déploiement Vercel : application accessible sur https://depannage-electricite-seven.vercel.app . `999b355`, `706d380` et `1db2a0d` contrôlés `READY` ; ce dernier contient les formulaires remplaçant les dialogues natifs. Les essais échoués ou bloqués précédents ne constituent pas une preview validée.
+- Navigateur CUA : cycle complet client/artisan/devis (150 € HT, 180 € TTC)/règlement simulé/avis réussi sur `999b355`. Mobile 360 × 800 sans débordement horizontal, menu fonctionnel ; création de contrat desktop 1440 px réussie. Sur `1db2a0d`, approbation via note intégrée, budget de 5 000 € à 5 500 € et réclamation de garantie fictive résolue par l’administrateur de démonstration ont réussi. La demande et le contrat persistent après rechargement puis retour en démonstration ; les références des dossiers sont distinctes.
+- CI GitHub : contrôles réussis sur `e5d4577`, `999b355`, `706d380` et `1db2a0d` ; dernier run `41151552077` terminé avec succès (installation propre, types, 11 tests et build).
+- Blocage initial de déploiement résolu par attribution des nouveaux commits à l’identité GitHub vérifiée ; aucune réécriture d’historique ni modification des protections Vercel.
 
 ## Dépendances bloquantes et limites
 - Base Supabase dédiée : création refusée par le fournisseur pour factures en retard dans les organisations du compte. Aucun projet existant modifié. Aucune vraie persistance, confirmation email, Storage ou RLS distante déclarée vérifiée.
@@ -24,6 +27,6 @@
 - Conditions commerciales, garantie, fiscalité, zone de service, coordonnées et marque finale à renseigner avant ouverture à de vrais clients.
 
 ## Suite
-1. Consigner l'URL du déploiement final et le commit poussé après résultat vérifié.
-2. Terminer la vérification navigateur de la preview et enregistrer ses limites dans QA.
-3. Après résolution de la facturation Supabase et configuration Stripe via les canaux de secrets : appliquer les migrations à la seule base dédiée, vérifier les comptes/permissions distants et exécuter le paiement de test complet.
+1. Après résolution de la facturation Supabase, créer la base dédiée et appliquer uniquement à celle-ci les deux migrations versionnées.
+2. Configurer les accès Stripe par les canaux de secrets, vérifier les comptes et permissions distants, puis exécuter le paiement de test complet et les reprises webhook.
+3. Compléter les conditions commerciales et les fonctions encore non livrées avant toute ouverture à de vrais clients. Les preuves de démonstration ne valent pas une mise en exploitation commerciale.

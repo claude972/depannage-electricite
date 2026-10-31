@@ -1,6 +1,6 @@
 # Vérification indépendante
 
-Revue du code et du PostgreSQL isolé terminée — 30 octobre 2026. Vérification navigateur en attente de la preview finale. Ce rapport distingue le code livré, les comportements vérifiés et les services externes non configurés. Une API implémentée ne vaut pas une validation de production.
+Revue du code, du PostgreSQL isolé et des réponses HTTP terminée — 30 octobre 2026. Parcours principal, responsive et formulaires professionnels vérifiés dans le navigateur en mode démonstration. Ce rapport distingue le code livré, les comportements vérifiés et les services externes non configurés. Une API implémentée ne vaut pas une validation de production.
 
 ## Contrôles réalisés
 
@@ -77,8 +77,52 @@ Le dépôt de garantie est interdit dans la base tant que le réglage commercial
 
 ## Conclusion de revue
 
-Les règles métier et les frontières SQL exercées dans le harnais passent leurs contrôles. Les écarts de contrat identifiés ont été corrigés par les agents responsables ; aucune validation de production n'est donnée. L'autorisation de livrer une démonstration doit être fondée également sur le build final et la vérification de la preview. L'ouverture à de vrais clients et l'encaissement réel restent bloqués par les accès et validations externes mentionnés ci-dessus.
+Les règles métier et les frontières SQL exercées dans le harnais passent leurs contrôles. Les écarts de contrat identifiés ont été corrigés par les agents responsables ; aucune validation de production n'est donnée. La démonstration a également passé le build cloud et les contrôles de preview documentés ci-dessous. L'ouverture à de vrais clients et l'encaissement réel restent bloqués par les accès et validations externes mentionnés ci-dessus.
 
 ## Attribution des déploiements Vercel
 
-La compilation de l'instantané final n'a pas démarré : l'API Vercel retourne `BLOCKED` / `TEAM_ACCESS_REQUIRED`, car l'auteur du commit initial utilise une adresse locale sans attribution reconnue. L'ancienne CLI affichait cet état comme `UNKNOWN`. L'identité GitHub connectée a été vérifiée (`claude972`, identifiant 65830944) ; les nouveaux commits utilisent son adresse noreply canonique dans la configuration Git locale du dépôt. Aucun historique n'est réécrit et aucun droit d'accès Vercel n'est modifié. Le nouveau déploiement automatique doit être contrôlé séparément avant d'annoncer une preview disponible.
+Les premiers déploiements n'ont pas démarré : l'API Vercel retournait `BLOCKED` / `TEAM_ACCESS_REQUIRED`, car l'auteur des commits initiaux utilisait une adresse locale sans attribution reconnue. L'ancienne CLI affichait cet état comme `UNKNOWN`. L'identité GitHub connectée a été vérifiée (`claude972`, identifiant 65830944) ; les nouveaux commits utilisent son adresse noreply canonique dans la configuration Git locale du dépôt. Aucun historique n'est réécrit et aucun droit d'accès Vercel n'est modifié. Les déploiements automatiques suivants ont ensuite été contrôlés disponibles, comme indiqué ci-dessous.
+
+## Déploiement final et vérifications HTTP
+
+L'attribution Git corrigée a permis au déploiement automatique du commit `999b355` de compiler et de passer à l'état Vercel `READY` (`dpl_ByTFFtkzzFDHxtekEaVWzssj9oyc`). La compilation cloud a terminé en 15 secondes, avec 18 routes générées ou disponibles. La résolution des imports `lib/supabase/*` confirme que la correction du filtre de déploiement est effective.
+
+Domaine canonique retourné par le fournisseur et vérifié : https://depannage-electricite-seven.vercel.app . Les URL techniques de preview et d'équipe restent protégées par le SSO Vercel ; aucune protection n'a été désactivée.
+
+| Requête publique | Résultat observé |
+| --- | --- |
+| `GET /` | 200 ; titre « Courant — Dépannage électrique » |
+| `GET /api/workspace` | 503 ; comptes en cours de configuration, démonstration disponible |
+| `GET /api/professional` | 503 ; indisponibilité explicite de la connexion aux comptes |
+| `GET /api/reports` | 503 ; indisponibilité explicite de la connexion aux comptes |
+| `POST /api/payments/checkout` | 503 ; indisponibilité explicite, aucun faux paiement réussi |
+| `POST /api/payments/webhook` | 503 ; Stripe non configuré et aucun débit annoncé |
+| `GET /AGENTS.md` | 404 ; instructions de travail non exposées comme fichier statique |
+
+Ces réponses prouvent la disponibilité de l'interface et le comportement contrôlé des API sans configuration. Elles ne valident pas les transactions, les comptes ou le stockage distants. Les contrôles interactifs consignés ci-dessous complètent ces réponses HTTP ; ils restent distincts de toute validation bancaire ou Supabase distante.
+
+## Vérification navigateur de la démonstration
+
+Contrôles exécutés par l'agent principal via CUA sur le domaine canonique, au commit `999b355` :
+
+- Parcours complet : création d'une demande, bascule vers l'artisan, acceptation de mission, création du devis à 150 € HT / 180 € TTC, bascule client, acceptation du devis, démarrage et fin de l'intervention côté artisan, simulation explicite du règlement puis dépôt d'un avis. Toutes les étapes ont abouti dans la démonstration ; aucun paiement bancaire ni contact avec un artisan réel.
+- Vue mobile 360 × 800 : contenu lisible, largeur de défilement mesurée à 360 px, absence de débordement horizontal et fonctionnement du menu de navigation.
+- Vue desktop 1440 px : création d'un contrat de démonstration réussie. Le champ date a été rempli via son sélecteur natif puis confirmé avec Entrée ; la tentative de remplissage direct par locator n'avait pas fonctionné.
+- Les références des trois dossiers fictifs étaient insuffisamment distinctes ; correction livrée dans `706d380`.
+- Les boîtes `window.prompt` ne produisaient pas d'interaction utilisable dans le navigateur intégré. Elles ont été remplacées, avec les confirmations natives, par des formulaires et confirmations intégrés à l'interface dans `1db2a0d`, afin de rendre ces actions visibles et révisables.
+
+Le déploiement automatique de `1db2a0d` a été contrôlé à l'état `READY` (`dpl_J7KnBWGqUSyTjrv5j5ZwBo2YRmDp`, cible production). Le contrôle CI GitHub correspondant, `41151552077`, est terminé avec succès : installation propre `npm ci` puis `npm run check` (types, 11 tests et build). La vérification ciblée des nouveaux formulaires d'approbation, de budget et de garantie a réussi dans le navigateur, comme détaillé ci-dessous.
+
+Les réponses HTTP du domaine canonique ont été revérifiées après `1db2a0d` : accueil 200, workspace/checkout 503, webhook 503 et AGENTS.md 404, sans changement des limites externes.
+
+## Contrôles ciblés après remplacement des dialogues
+
+Contrôles exécutés par l'agent principal via CUA sur la version `1db2a0d` du domaine canonique :
+
+- Approbation professionnelle : saisie d'une note dans le formulaire intégré, validation et état « Approuvé » visible.
+- Budget du site : modification de 5 000 € à 5 500 €, valeur enregistrée et affichée dans la démonstration.
+- Garantie : création d'une réclamation fictive sur une intervention réglée, puis traitement depuis l'espace administrateur de démonstration ; passage à « Résolue » après saisie d'une réponse d'au moins dix caractères, réponse affichée dans le dossier. Aucun rôle administrateur réel n'est attribué et aucune garantie commerciale réelle n'est activée.
+- Persistance de démonstration : après rechargement du navigateur puis retour par l'entrée de démonstration, la demande et le contrat créés précédemment sont retrouvés. Les références distinctes des dossiers fictifs sont visibles.
+- Le sélecteur de date natif, validé avec Entrée, fonctionne pour créer le contrat. Pour le sélecteur d'approbation, l'automatisation devait cibler le rôle `combobox` plutôt qu'un label exact encapsulant l'option ; ce dernier écart de ciblage ne constitue pas un défaut applicatif.
+
+Ces résultats valident les parcours de démonstration examinés. Ils ne remplacent pas les tests de vrais comptes, de stockage ou de paiement distant, toujours bloqués par Supabase et les clés Stripe manquantes. Les capacités non livrées restent listées dans la matrice et les limites fonctionnelles ci-dessus.
