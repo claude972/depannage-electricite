@@ -308,3 +308,37 @@ de l'état serveur (plus de contrôle de partage) ; aucun nouvel essai.
 
 Rapport : un `start` seul suivi de 409, un `start` réutilisant S1, un `stop` envoyé sans clic ou une requête répétée automatiquement
 ⇒ `ANOMALY: restart-after-reload`. Toujours aucun code avant le GO de ROOT.
+
+## Amendement A5 — revue ROOT (GO code sous ces conditions)
+
+1. **Préflight sans compte de cohorte** (remplace §2.5) : avant toute fixture, `GET /api/interventions/<uuid aléatoire>/tracking`
+   **anonyme** ⇒ **401** JSON avec `Cache-Control: private, no-store` ; puis `HEAD` service sur `intervention_tracking`
+   (`select … head:true`) ⇒ table présente (migration 019). Ensuite seulement, le premier compte technique est **manifesté**
+   (intention durable écrite sur disque) **avant** sa création et son authentification ; puis, authentifié, `GET` sur un UUID inconnu
+   ⇒ **404** (preuve RLS). Échec de l'un de ces points ⇒ exit 2 (préflight), après nettoyage de ce qui a été manifesté.
+2. **Reprise après rechargement** : A4 inchangé ; libellé confirmé par l'UI `origin/claude/web-tracking-ui` 22dd419 :
+   `button` « Reprendre le partage » ; message « Partage interrompu par le rechargement de la page. ». Séquence exigée : `stop(S1)`
+   → relecture du snapshot → consentement → `start(S2 ≠ S1)` ; jamais un `start` seul en 409.
+3. **T1 permission refusée** : attendu = **zéro** `POST point`, `position:null`, `shared:false` et le message UI « Localisation
+   refusée par le navigateur : autorisez-la dans les réglages du site pour partager votre position. ». Après un `start` puis `stop`,
+   **pas** d'exigence `no_position` (le backend peut répondre `stopped`) : seulement `shared:false` et `position:null`.
+4. **SIGINT/SIGTERM** : la porte d'arrêt bloque **les scénarios suivants et tous les mutateurs DB et API** (fixtures service, appels
+   `POST` de l'API tracking émis par le harnais, clics navigateur pilotés) ; fermeture du navigateur ; puis drain et nettoyage ; aucune
+   continuation de scénario après le signal. Toute intention non réglée ⇒ `INCOMPLETE`, **exit 3**. Avant le nettoyage, **validation
+   distante de la propriété** de chaque identifiant (relecture service : e-mail canonique `qa-<run>-<slug>@qa.invalid` validé par
+   expression avant toute recherche, dossiers dont le client/artisan appartient à la cohorte) ; un identifiant non prouvé n'est jamais
+   supprimé et rend le nettoyage `INCOMPLETE`.
+5. **Pas d'ANOMALY de contournement** : tout écart de l'UI au contrat (y compris sélecteur manquant ou renommé) ⇒ **FAIL** (exit 1),
+   sauf élément marqué explicitement « informatif » dans ce contrat (aucun à ce jour). `ANOMALY` est réservé aux constats hors
+   assertion (ex. erreur de route Playwright consignée) et ne rend jamais un scénario vert. Les mentions `ANOMALY: selector` et
+   `ANOMALY: restart-after-reload` de A1/A4 deviennent **FAIL**.
+
+Libellés UI 22dd419 liés (en plus de A1) : « Partager ma position », « Autoriser et démarrer », « Annuler », « Je suis arrivé »,
+« Arrêter le partage », « Reprendre le partage », « Recalculer », « Retirer la destination », « Rechercher une adresse »,
+« Confirmer cette destination » ; carte `role="img"`, boutons « Zoomer », « Dézoomer », « Recentrer la carte » ; attribution
+« © OpenStreetMap contributors » ; « Position déclarée par le navigateur (non certifiée) » ; « Suivi actif » ; « Aucune position
+récente : l'arrivée ne peut pas être estimée. » ; « Position trop imprécise (± N m) : non envoyée. ».
+
+Validé tel quel par ROOT : `T12-sim`, preuve 429 sans rafale. Merge de travail de `codex/gps-eta` autorisé pour les types ; aucune
+modification des fichiers backend, 019 ou 020. Nettoyage : lignes tracking avant interventions/profils ; leases relus = 0 après
+cascade ; budget jamais modifié. Exécution cloud par ROOT uniquement ; aucune géolocalisation présentée comme GPS physique.
