@@ -8,6 +8,9 @@
 // creds.json: {"url":"https://<ref>.supabase.co","publishable_key":"…","service_role_key":"…"}
 // Never prints tokens or headers; summary.md / result.json are redacted; run.log and
 // manifest.json are 0600. Any failed step (scenario, readback, cleanup) fails the run.
+// Cleanup (every path: normal end, HTTP timeout, SIGINT/SIGTERM, unhandled error,
+// --cleanup-manifest) first discovers the cohort's `documents` rows and Storage objects, merges
+// them into the manifest, and deletes nothing while any read is unknown (GW-HARNESS-003).
 import { mkdir, chmod, writeFile, readFile, appendFile, rename } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
@@ -25,7 +28,6 @@ import {
   cohortPassword,
   makeRedactor,
   emptyCreated,
-  cleanupPlan,
   manifestJson,
   parseManifest,
   scenarioPlan,
@@ -34,6 +36,11 @@ import {
   summaryMarkdown,
   computeVerdict,
   parseContentRangeTotal,
+  discoverCohort,
+  runCleanup,
+  interruptGuard,
+  unknownLeftover,
+  cleanupRerunMessage,
 } from "./lib.ts";
 
 const BUCKET = "intervention-documents";
@@ -92,6 +99,17 @@ async function main(argv) {
     verdict: "incomplete",
   };
   let created = emptyCreated();
+  let manifestUnknown = [];
+  // The manifest keeps the cohort's original run id when cleaning from a manifest.
+  let manifestRunId = id;
+  // One abort controller per phase: a signal aborts the phase in flight, never the process,
+  // so the `finally` below always reaches discovery + cleanup (second signal aborts cleanup
+  // requests; the manifest is kept; third signal exits 130).
+  let active = new AbortController();
+  interruptGuard((event, handler) => process.on(event, handler), {
+    abort: (reason) => active.abort(reason),
+    exit: (code) => process.exit(code),
+  });
   const persist = async () => {
     result.verdict = computeVerdict(result, result.finishedAt !== null);
     await writePrivate(path.join(args.out, "result.json"), redact(JSON.stringify(result, null, 2)));
@@ -105,13 +123,18 @@ async function main(argv) {
     await persist();
   };
   // Durable manifest: rewritten (atomically, 0600) after every creation, before any further call.
+  const saveManifest = async (nextCreated = created, unknown = manifestUnknown) => {
+    created = nextCreated;
+    manifestUnknown = unknown;
+    await writePrivate(manifestPath, manifestJson(manifestRunId, args.project, created, new Date(), manifestUnknown));
+  };
   const record = async (kind, value) => {
     if (!created[kind].includes(value)) created[kind].push(value);
-    await writePrivate(manifestPath, manifestJson(id, args.project, created, new Date()));
+    await saveManifest();
   };
 
   const http = async (url, init = {}) => {
-    const response = await fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) });
+    const response = await fetch(url, { ...init, signal: AbortSignal.any([active.signal, AbortSignal.timeout(TIMEOUT_MS)]) });
     const text = await response.text();
     let json = null;
     try {
@@ -136,23 +159,50 @@ async function main(argv) {
     if (r.status !== 200 || !Array.isArray(r.json)) return { ok: false, rows: [], detail: `HTTP ${r.status} ${summarize(r)}` };
     return { ok: true, rows: r.json, detail: `HTTP ${r.status}` };
   };
-  const listObjects = async (prefix, search) => {
-    const r = await http(`${credentials.url}/storage/v1/object/list/${BUCKET}`, { method: "POST", headers: serviceHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ prefix, limit: 1000, offset: 0, ...(search ? { search } : {}) }) });
-    if (r.status !== 200 || !Array.isArray(r.json)) return { ok: false, names: [], detail: `HTTP ${r.status} ${summarize(r)}` };
-    return { ok: true, names: r.json.map((o) => o?.name).filter((n) => typeof n === "string"), detail: `HTTP ${r.status}` };
-  };
-  const countRows = async (table, filter) => {
-    const r = await rest(`${table}?${filter}&select=*`, { method: "HEAD" }, serviceHeaders({ Prefer: "count=exact", Range: "0-0", "Range-Unit": "items" }));
-    if (r.status !== 200 && r.status !== 206) return null;
-    return parseContentRangeTotal(r.headers.get("content-range"));
+  // Fetch-backed CleanupClient (lib.ts drives discovery and cleanup through it). Every read
+  // answers {ok:false} on any HTTP/shape error so discovery records it as unknown, never empty.
+  const client = {
+    listDocuments: async (filter, from, to) => {
+      const r = await rest(`documents?${filter}&select=id,owner_id,intervention_id,path&order=id.asc`, {}, serviceHeaders({ Prefer: "count=exact", Range: `${from}-${to}`, "Range-Unit": "items" }));
+      if ((r.status !== 200 && r.status !== 206) || !Array.isArray(r.json)) return { ok: false, detail: `HTTP ${r.status} ${summarize(r)}` };
+      return { ok: true, items: r.json, total: parseContentRangeTotal(r.headers.get("content-range")), detail: `HTTP ${r.status}` };
+    },
+    listObjects: async (prefix, { limit, offset, search }) => {
+      const body = { prefix, limit, offset, sortBy: { column: "name", order: "asc" }, ...(search ? { search } : {}) };
+      const r = await http(`${credentials.url}/storage/v1/object/list/${BUCKET}`, { method: "POST", headers: serviceHeaders({ "Content-Type": "application/json" }), body: JSON.stringify(body) });
+      if (r.status !== 200 || !Array.isArray(r.json)) return { ok: false, detail: `HTTP ${r.status} ${summarize(r)}` };
+      return { ok: true, items: r.json.map((o) => o?.name).filter((n) => typeof n === "string"), total: null, detail: `HTTP ${r.status}` };
+    },
+    deleteObjects: async (paths) => {
+      const r = await http(`${credentials.url}/storage/v1/object/${BUCKET}`, { method: "DELETE", headers: serviceHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ prefixes: paths }) });
+      return { status: r.status, detail: summarize(r) };
+    },
+    deleteRows: async (table, filter) => {
+      const r = await rest(`${table}?${filter}`, { method: "DELETE" }, serviceHeaders({ Prefer: "return=minimal" }));
+      return { status: r.status, detail: summarize(r) };
+    },
+    countRows: async (table, filter) => {
+      const r = await rest(`${table}?${filter}&select=*`, { method: "HEAD" }, serviceHeaders({ Prefer: "count=exact", Range: "0-0", "Range-Unit": "items" }));
+      if (r.status !== 200 && r.status !== 206) return null;
+      return parseContentRangeTotal(r.headers.get("content-range"));
+    },
+    deleteUser: async (userId) => {
+      const r = await http(`${credentials.url}/auth/v1/admin/users/${userId}`, { method: "DELETE", headers: serviceHeaders() });
+      return { status: r.status };
+    },
+    userRemaining: async (userId) => {
+      const r = await http(`${credentials.url}/auth/v1/admin/users/${userId}`, { headers: serviceHeaders() });
+      return r.status === 404 ? 0 : r.status === 200 ? 1 : null;
+    },
   };
 
   try {
     await log("info", "démarrage", `run ${id}, projet ${args.project}, mode ${mode}`);
     if (mode === "cleanup-manifest") {
       const manifest = parseManifest(JSON.parse(await readFile(args.cleanupManifest, "utf8")), args.project);
-      created = manifest.created;
-      await log("info", "manifeste chargé", `run d’origine ${manifest.runId} (${manifest.updatedAt}) : ${Object.entries(created).map(([k, v]) => `${k}=${v.length}`).join(", ")}`);
+      manifestRunId = manifest.runId;
+      await saveManifest(manifest.created, manifest.unknown);
+      await log("info", "manifeste chargé", `run d’origine ${manifest.runId} (${manifest.updatedAt}) : ${Object.entries(created).map(([k, v]) => `${k}=${v.length}`).join(", ")}${manifest.unknown.length ? ` ; ${manifest.unknown.length} lecture(s) inconnue(s) à re-vérifier par la découverte` : ""}`);
     } else {
       // Read-only preflight (also the whole of a dry run).
       const health = await http(`${credentials.url}/auth/v1/health`, { headers: { apikey: credentials.publishableKey } });
@@ -171,7 +221,15 @@ async function main(argv) {
   } catch (error) {
     await log("fail", "interruption", error instanceof Error ? error.message : String(error));
   } finally {
-    if (mode !== "dry-run") await cleanup();
+    if (mode !== "dry-run") {
+      try {
+        await cleanup();
+      } catch (error) {
+        // A crash inside cleanup still ends with the manifest on disk and a failed verdict.
+        result.leftovers.push(`nettoyage interrompu : ${error instanceof Error ? error.message : String(error)}`);
+        await log("fail", "nettoyage interrompu", `${error instanceof Error ? error.message : String(error)} — ${cleanupRerunMessage(manifestPath)}`);
+      }
+    }
     result.finishedAt = new Date().toISOString();
     await persist();
     console.log(`verdict : ${result.verdict} — rapport ${path.join(args.out, "summary.md")}`);
@@ -262,9 +320,9 @@ async function main(argv) {
           if (stored.path !== objectPath) verdict.reasons.push("chemin inattendu");
           if (stored.mime_type !== "image/jpeg") verdict.reasons.push("mime inattendu");
         }
-        const listing = await listObjects(owner, document.id);
+        const listing = await client.listObjects(owner, { limit: 1000, offset: 0, search: document.id });
         if (!listing.ok) verdict.reasons.push(`listage Storage en erreur : ${listing.detail}`);
-        else if (!listing.names.includes(document.id)) verdict.reasons.push("objet Storage absent après 201");
+        else if (!listing.items.includes(document.id)) verdict.reasons.push("objet Storage absent après 201");
         verdict.pass = verdict.reasons.length === 0;
       }
       rec.status = r.status;
@@ -272,67 +330,36 @@ async function main(argv) {
       rec.reasons = verdict.reasons;
       await log(verdict.pass ? "pass" : "fail", `scénario : ${scenario.name}`, `HTTP ${r.status}${verdict.reasons.length ? ` — ${verdict.reasons.join(" ; ")}` : ""}`);
     }
-    // Refused attempts must not have left metadata or objects behind.
-    const stray = await readRows(`documents?owner_id=in.(${created.userIds.join(",")})&select=id`);
-    if (!stray.ok) await log("fail", "relecture des métadonnées de la cohorte", stray.detail);
-    else {
-      const unexpected = stray.rows.map((d) => d.id).filter((x) => !created.documentIds.includes(x));
-      for (const docId of unexpected) await record("documentIds", docId);
-      await log(unexpected.length === 0 ? "pass" : "fail", "aucune métadonnée créée par les tentatives refusées", `${unexpected.length} ligne(s) inattendue(s)`);
-    }
-    for (const userId of created.userIds) {
-      const listing = await listObjects(userId);
-      if (!listing.ok) {
-        await log("fail", `listage Storage du préfixe ${userId}`, listing.detail);
-        continue;
-      }
-      const orphans = listing.names.map((n) => `${userId}/${n}`).filter((p) => !created.objectPaths.includes(p));
-      for (const p of orphans) await record("objectPaths", p);
-      await log(orphans.length === 0 ? "pass" : "fail", `aucun objet Storage orphelin sous ${userId}`, `${orphans.length} orphelin(s)`);
-    }
+    // Refused attempts must not have left metadata or objects behind. Same paginated discovery
+    // as the cleanup; anything found is merged into the manifest, any unknown read is a FAIL.
+    const found = await discoverCohort(client, created);
+    await saveManifest(found.created, found.unknown);
+    for (const u of found.unknown) await log("fail", `découverte de cohorte : ${u.scope}`, u.detail);
+    if (found.unknown.every((u) => !u.scope.startsWith("documents")))
+      await log(found.added.documentIds.length === 0 ? "pass" : "fail", "aucune métadonnée créée par les tentatives refusées", `${found.added.documentIds.length} ligne(s) inattendue(s)`);
+    if (found.unknown.every((u) => !u.scope.startsWith("Storage")))
+      await log(found.added.objectPaths.length === 0 ? "pass" : "fail", "aucun objet Storage orphelin sous les préfixes de la cohorte", `${found.added.objectPaths.length} orphelin(s)`);
   }
 
+  // Runs on every path (normal end, timeout, signal, unhandled error, --cleanup-manifest):
+  // discovery of the cohort's rows and objects, merged manifest persisted, then deletion in FK
+  // order (objects first) — or no deletion at all while any read is unknown (exit 1).
   async function cleanup() {
-    for (const step of cleanupPlan(created)) {
-      const entry = { label: step.label, ok: false, remaining: null, detail: "" };
-      try {
-        if (step.kind === "storage") {
-          const r = await http(`${credentials.url}/storage/v1/object/${BUCKET}`, { method: "DELETE", headers: serviceHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ prefixes: step.paths }) });
-          let remaining = 0;
-          let readbackFailed = false;
-          for (const p of step.paths) {
-            const [prefix, name] = p.split("/");
-            const listing = await listObjects(prefix, name);
-            if (!listing.ok) readbackFailed = true;
-            else if (listing.names.includes(name)) remaining++;
-          }
-          entry.remaining = readbackFailed ? null : remaining;
-          entry.ok = r.status < 300 && !readbackFailed && remaining === 0;
-          entry.detail = `HTTP ${r.status}${readbackFailed ? " ; relecture Storage en erreur" : ""}`;
-          if (!entry.ok) result.leftovers.push(`objets Storage : ${readbackFailed ? "relecture impossible" : `${remaining} restant(s)`}`);
-        } else if (step.kind === "rest") {
-          const r = await rest(`${step.table}?${step.filter}`, { method: "DELETE" }, serviceHeaders({ Prefer: "return=minimal" }));
-          const remaining = await countRows(step.table, step.filter);
-          entry.remaining = remaining;
-          entry.ok = r.status < 300 && remaining === 0;
-          entry.detail = `HTTP ${r.status}${r.status >= 300 ? ` ${summarize(r)}` : ""}${remaining === null ? " ; relecture en erreur" : ""}`;
-          if (!entry.ok) result.leftovers.push(`${step.table} (${step.filter}) : ${remaining ?? "relecture impossible"}`);
-        } else {
-          const r = await http(`${credentials.url}/auth/v1/admin/users/${step.userId}`, { method: "DELETE", headers: serviceHeaders() });
-          const check = await http(`${credentials.url}/auth/v1/admin/users/${step.userId}`, { headers: serviceHeaders() });
-          entry.remaining = check.status === 404 ? 0 : check.status === 200 ? 1 : null;
-          entry.ok = r.status < 300 && check.status === 404;
-          entry.detail = `HTTP ${r.status}, relecture ${check.status}`;
-          if (!entry.ok) result.leftovers.push(`auth user ${step.userId}`);
-        }
-      } catch (error) {
-        entry.detail = error instanceof Error ? error.message : String(error);
-        result.leftovers.push(step.label);
-      }
-      result.cleanup.push(entry);
-      await log(entry.ok ? "pass" : "fail", `nettoyage : ${step.label}`, `${entry.detail}${entry.remaining === null ? "" : ` ; restant ${entry.remaining}`}`);
+    // A signal during the run aborted the previous controller; cleanup gets its own.
+    active = new AbortController();
+    const outcome = await runCleanup(client, created, {
+      saveManifest: (nextCreated, unknown) => saveManifest(nextCreated, unknown),
+      note: (status, step, detail) => log(status, step, detail),
+      step: async (entry, leftover) => {
+        result.cleanup.push(entry);
+        if (leftover) result.leftovers.push(leftover);
+        await log(entry.ok ? "pass" : "fail", `nettoyage : ${entry.label}`, `${entry.detail}${entry.remaining === null ? "" : ` ; restant ${entry.remaining}`}`);
+      },
+    }, { manifestPath });
+    if (!outcome.discovery.complete) {
+      for (const u of outcome.discovery.unknown) result.leftovers.push(unknownLeftover(u));
     }
-    if (result.leftovers.length) await log("info", "manifeste conservé pour --cleanup-manifest", manifestPath);
+    if (!outcome.clean) await log("info", "manifeste conservé pour --cleanup-manifest", `${manifestPath} (${manifestUnknown.length} lecture(s) inconnue(s) marquée(s))`);
   }
 }
 async function writePrivate(target, content) {

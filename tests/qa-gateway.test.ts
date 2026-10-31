@@ -24,7 +24,17 @@ import {
   runId,
   scenarioPlan,
   summaryMarkdown,
+  discoverCohort,
+  runCleanup,
+  interruptGuard,
+  cleanupRerunMessage,
+  unknownLeftover,
+  type CleanupClient,
+  type CleanupEntry,
+  type Created,
   type RunResult,
+  type StepStatus,
+  type Unknown,
 } from "../scripts/qa-gateway/lib.ts";
 import { detectType, MAX_DOCUMENT_BYTES } from "../lib/shared/document-policy";
 
@@ -224,4 +234,264 @@ test("the orchestrator never logs headers or tokens and uses scheduled urgency",
   assert.match(source, /mode: 0o600/);
   assert.match(source, /mode: 0o700/);
   assert.doesNotMatch(source, /from ["'](@supabase|npm:)/);
+});
+
+// ---------------------------------------------------------------------------------------------
+// GW-HARNESS-003: cleanup discovery with an injected fake Storage/DB client.
+// ---------------------------------------------------------------------------------------------
+const I1 = "22222222-2222-4222-8222-222222222222";
+const D2 = "11111111-1111-4111-8111-111111111112";
+const D3 = "11111111-1111-4111-8111-111111111113";
+type Row = { id: string; owner_id: string; intervention_id: string | null; path: string };
+type FakeState = { rows: Row[]; objects: string[]; users: string[] };
+const inIds = (filter: string): [keyof Row, string[]] => {
+  const m = /^(\w+)=in\.\((.*)\)$/.exec(filter);
+  assert.ok(m, `filtre inattendu ${filter}`);
+  return [m[1] as keyof Row, m[2] ? m[2].split(",") : []];
+};
+function fakeClient(state: FakeState, calls: string[], overrides: Partial<CleanupClient> = {}): CleanupClient {
+  const base: CleanupClient = {
+    async listDocuments(filter, from, to) {
+      calls.push(`list:documents:${filter}:${from}-${to}`);
+      const [column, ids] = inIds(filter);
+      const rows = state.rows.filter((r) => ids.includes(String(r[column]))).sort((a, b) => a.id.localeCompare(b.id));
+      return { ok: true, items: rows.slice(from, to + 1), total: rows.length, detail: "HTTP 200" };
+    },
+    async listObjects(prefix, { limit, offset, search }) {
+      calls.push(`list:storage:${prefix}:${limit}:${offset}${search ? `:${search}` : ""}`);
+      const names = state.objects.filter((o) => o.startsWith(`${prefix}/`)).map((o) => o.slice(prefix.length + 1)).filter((n) => !search || n.includes(search)).sort();
+      return { ok: true, items: names.slice(offset, offset + limit), total: null, detail: "HTTP 200" };
+    },
+    async deleteObjects(paths) {
+      calls.push(`delete:storage:${paths.join(",")}`);
+      state.objects = state.objects.filter((o) => !paths.includes(o));
+      return { status: 200, detail: "" };
+    },
+    async deleteRows(table, filter) {
+      calls.push(`delete:rows:${table}:${filter}`);
+      if (table === "documents") {
+        const [column, ids] = inIds(filter);
+        state.rows = state.rows.filter((r) => !ids.includes(String(r[column])));
+      }
+      return { status: 204, detail: "" };
+    },
+    async countRows(table, filter) {
+      calls.push(`count:${table}:${filter}`);
+      if (table !== "documents") return 0;
+      const [column, ids] = inIds(filter);
+      return state.rows.filter((r) => ids.includes(String(r[column]))).length;
+    },
+    async deleteUser(userId) {
+      calls.push(`delete:user:${userId}`);
+      state.users = state.users.filter((u) => u !== userId);
+      return { status: 200 };
+    },
+    async userRemaining(userId) {
+      calls.push(`check:user:${userId}`);
+      return state.users.includes(userId) ? 1 : 0;
+    },
+  };
+  return { ...base, ...overrides };
+}
+type Hooked = { manifests: { created: Created; unknown: Unknown[] }[]; notes: { status: StepStatus; step: string; detail: string }[]; entries: CleanupEntry[]; leftovers: string[] };
+function hooks(calls: string[]): Hooked & { hooks: Parameters<typeof runCleanup>[2] } {
+  const h: Hooked = { manifests: [], notes: [], entries: [], leftovers: [] };
+  return {
+    ...h,
+    hooks: {
+      async saveManifest(created, unknown) {
+        calls.push("manifest");
+        h.manifests.push({ created: structuredClone(created), unknown: structuredClone(unknown) });
+      },
+      async note(status, step, detail) {
+        h.notes.push({ status, step, detail });
+      },
+      async step(entry, leftover) {
+        h.entries.push(entry);
+        if (leftover) h.leftovers.push(leftover);
+      },
+    },
+  };
+}
+const committedUpload = (): FakeState => ({ rows: [{ id: D1, owner_id: U1, intervention_id: I1, path: `${U1}/${D1}` }], objects: [`${U1}/${D1}`], users: [U1] });
+const manifestAfterTimeout = (): Created => {
+  // The upload was committed server-side but the HTTP call timed out before record("documentIds").
+  const created = emptyCreated();
+  created.userIds.push(U1);
+  created.interventionIds.push(I1);
+  return created;
+};
+
+test("cleanup: an upload committed before an HTTP timeout is discovered, manifested before any deletion, and deleted objects-first", async () => {
+  const state = committedUpload();
+  const calls: string[] = [];
+  const h = hooks(calls);
+  const outcome = await runCleanup(fakeClient(state, calls), manifestAfterTimeout(), h.hooks, { manifestPath: "/p/out/manifest.json" });
+  assert.equal(outcome.clean, true);
+  assert.deepEqual(outcome.leftovers, []);
+  assert.deepEqual(outcome.discovery.added, { documentIds: [D1], objectPaths: [`${U1}/${D1}`] });
+  assert.equal(h.manifests.length, 1);
+  assert.deepEqual(h.manifests[0].created.documentIds, [D1]);
+  assert.deepEqual(h.manifests[0].created.objectPaths, [`${U1}/${D1}`]);
+  assert.deepEqual(h.manifests[0].unknown, []);
+  const firstDelete = calls.findIndex((c) => c.startsWith("delete:"));
+  assert.ok(firstDelete > calls.indexOf("manifest"), "manifeste écrit avant toute suppression");
+  assert.ok(calls.slice(0, firstDelete).every((c) => c.startsWith("list:") || c === "manifest"), "aucune écriture avant la fin de la découverte");
+  const storageDelete = calls.indexOf(`delete:storage:${U1}/${D1}`);
+  const rowDelete = calls.findIndex((c) => c.startsWith("delete:rows:documents:"));
+  assert.ok(storageDelete >= 0 && storageDelete < rowDelete, "objets Storage supprimés avant les lignes documents");
+  assert.ok(calls.indexOf(`delete:user:${U1}`) > rowDelete);
+  assert.deepEqual(state, { rows: [], objects: [], users: [] });
+  assert.ok(outcome.entries.length > 0 && outcome.entries.every((e) => e.ok));
+  assert.equal(h.notes[0].status, "pass");
+  assert.match(h.notes[0].detail, /1 ligne\(s\) documents et 1 objet\(s\) Storage/);
+});
+test("cleanup: discovery also covers rows reached by intervention id and objects never written to the manifest", async () => {
+  const state: FakeState = {
+    rows: [{ id: D1, owner_id: U1, intervention_id: I1, path: `${U1}/${D1}` }, { id: D2, owner_id: U2, intervention_id: I1, path: `${U2}/${D2}` }],
+    objects: [`${U1}/${D1}`, `${U2}/${D2}`, `${U1}/${D3}`],
+    users: [U1],
+  };
+  const calls: string[] = [];
+  const h = hooks(calls);
+  const outcome = await runCleanup(fakeClient(state, calls), manifestAfterTimeout(), h.hooks);
+  assert.equal(outcome.clean, true);
+  assert.deepEqual([...outcome.created.documentIds].sort(), [D1, D2]);
+  assert.deepEqual([...outcome.created.objectPaths].sort(), [`${U1}/${D1}`, `${U1}/${D3}`, `${U2}/${D2}`]);
+  assert.deepEqual(state.rows, []);
+  assert.deepEqual(state.objects, []);
+});
+test("cleanup: a failed Storage listing forbids every deletion and the clean verdict, and tells the pilot what to re-run", async () => {
+  const state = committedUpload();
+  const calls: string[] = [];
+  const h = hooks(calls);
+  const client = fakeClient(state, calls, { listObjects: async () => ({ ok: false, detail: "HTTP 403 bucket access denied" }) });
+  const outcome = await runCleanup(client, manifestAfterTimeout(), h.hooks, { manifestPath: "/p/out/manifest.json" });
+  assert.equal(outcome.clean, false);
+  assert.equal(outcome.discovery.complete, false);
+  assert.ok(calls.every((c) => !c.startsWith("delete:")), "aucune suppression quand une lecture est inconnue");
+  assert.deepEqual(outcome.entries, []);
+  assert.deepEqual(state, committedUpload());
+  assert.equal(h.manifests.length, 1);
+  assert.deepEqual(h.manifests[0].created.documentIds, [D1], "les lignes lues sont tout de même fusionnées");
+  assert.equal(h.manifests[0].unknown.length, 1);
+  assert.match(h.manifests[0].unknown[0].scope, new RegExp(`^Storage ${U1}/`));
+  assert.match(h.manifests[0].unknown[0].detail, /HTTP 403/);
+  assert.deepEqual(outcome.leftovers, [unknownLeftover(h.manifests[0].unknown[0])]);
+  assert.equal(h.notes[0].status, "fail");
+  assert.match(h.notes[0].detail, /aucune suppression effectuée/);
+  assert.match(h.notes[0].detail, /--cleanup-manifest \/p\/out\/manifest\.json/);
+  assert.equal(cleanupRerunMessage("/x/m.json").includes("--cleanup-manifest /x/m.json"), true);
+});
+test("cleanup: a documents read that throws, times out or has no exact count is unknown, never empty", async () => {
+  for (const listDocuments of [
+    async () => { throw new Error("The operation was aborted due to timeout"); },
+    async () => ({ ok: false as const, detail: "HTTP 500" }),
+    async () => ({ ok: true as const, items: [], total: null, detail: "HTTP 200" }),
+  ]) {
+    const state = committedUpload();
+    const calls: string[] = [];
+    const h = hooks(calls);
+    const outcome = await runCleanup(fakeClient(state, calls, { listDocuments }), manifestAfterTimeout(), h.hooks);
+    assert.equal(outcome.clean, false);
+    assert.ok(calls.every((c) => !c.startsWith("delete:")));
+    assert.ok(outcome.discovery.unknown.length >= 1);
+    assert.ok(outcome.discovery.unknown.every((u) => u.scope.startsWith("documents par ")));
+    assert.deepEqual(state, committedUpload());
+  }
+});
+test("discovery: pagination merges every page and reports truncation or short pages as unknown", async () => {
+  const objects = [D1, D2, D3, "11111111-1111-4111-8111-111111111114", "11111111-1111-4111-8111-111111111115"].map((d) => `${U1}/${d}`);
+  const rows: Row[] = [D1, D2, D3].map((id) => ({ id, owner_id: U1, intervention_id: null, path: `${U1}/${id}` }));
+  const calls: string[] = [];
+  const found = await discoverCohort(fakeClient({ rows, objects, users: [U1] }, calls), manifestAfterTimeout(), { pageSize: 2 });
+  assert.equal(found.complete, true);
+  assert.deepEqual([...found.created.objectPaths].sort(), [...objects].sort());
+  assert.deepEqual([...found.created.documentIds].sort(), [D1, D2, D3]);
+  assert.equal(calls.filter((c) => c.startsWith(`list:storage:${U1}:2:`)).length, 3);
+  assert.equal(calls.filter((c) => c.startsWith("list:documents:owner_id")).length, 2);
+  // Endless pages: the cap turns into an explicit unknown instead of a silent partial listing.
+  const endless = fakeClient({ rows: [], objects: [], users: [] }, [], { listObjects: async () => ({ ok: true, items: [D1], total: null, detail: "" }) });
+  const truncated = await discoverCohort(endless, manifestAfterTimeout(), { pageSize: 1, maxPages: 3 });
+  assert.equal(truncated.complete, false);
+  assert.match(truncated.unknown[0].detail, /pagination tronquée après 3 page/);
+  // A total of 3 with an empty page is a contradiction: unknown.
+  const short = fakeClient({ rows: [], objects: [], users: [] }, [], { listDocuments: async () => ({ ok: true, items: [], total: 3, detail: "" }) });
+  const contradiction = await discoverCohort(short, manifestAfterTimeout());
+  assert.equal(contradiction.complete, false);
+  assert.match(contradiction.unknown[0].detail, /page vide avant le total annoncé/);
+});
+test("discovery: rows or objects outside the <uid>/<id> convention are unknown and block deletion", async () => {
+  const calls: string[] = [];
+  const h = hooks(calls);
+  const state: FakeState = { rows: [{ id: D1, owner_id: U1, intervention_id: null, path: "legacy/photo.jpg" }], objects: [`${U1}/.emptyFolderPlaceholder`], users: [U1] };
+  const outcome = await runCleanup(fakeClient(state, calls), manifestAfterTimeout(), h.hooks);
+  assert.equal(outcome.clean, false);
+  assert.deepEqual(outcome.created.documentIds, [D1]);
+  assert.deepEqual(outcome.created.objectPaths, []);
+  assert.equal(outcome.discovery.unknown.length, 2);
+  assert.match(outcome.discovery.unknown.map((u) => u.detail).join(), /hors convention/);
+  assert.ok(calls.every((c) => !c.startsWith("delete:")));
+});
+test("cleanup: nothing to discover when the manifest is empty; a failed readback after deletion still fails the cleanup", async () => {
+  const calls: string[] = [];
+  const h = hooks(calls);
+  const empty = await runCleanup(fakeClient({ rows: [], objects: [], users: [] }, calls), emptyCreated(), h.hooks);
+  assert.equal(empty.clean, true);
+  assert.deepEqual(calls, ["manifest"]);
+  assert.deepEqual(empty.entries, []);
+  const state = committedUpload();
+  const calls2: string[] = [];
+  const h2 = hooks(calls2);
+  const client = fakeClient(state, calls2, { countRows: async () => null });
+  const outcome = await runCleanup(client, manifestAfterTimeout(), h2.hooks);
+  assert.equal(outcome.clean, false);
+  assert.ok(outcome.entries.some((e) => !e.ok && e.remaining === null));
+  assert.ok(outcome.leftovers.some((l) => /relecture impossible/.test(l)));
+});
+test("manifest: unknown reads round-trip and malformed entries are refused", () => {
+  const created = emptyCreated();
+  created.userIds.push(U1);
+  const unknown: Unknown[] = [{ scope: `Storage ${U1}/`, detail: "listage en erreur : HTTP 500" }];
+  const json = manifestJson("run1", REF, created, new Date("2026-10-31T06:00:00Z"), unknown);
+  const parsed = parseManifest(JSON.parse(json), REF);
+  assert.deepEqual(parsed.unknown, unknown);
+  assert.deepEqual(parseManifest({ version: 1, runId: "x", project: REF, created: {} }, REF).unknown, []);
+  assert.throws(() => parseManifest({ version: 1, runId: "x", project: REF, created: {}, unknown: "nope" }, REF), UsageError);
+  assert.throws(() => parseManifest({ version: 1, runId: "x", project: REF, created: {}, unknown: [{ scope: 1 }] }, REF), UsageError);
+});
+test("interruption: the first signal aborts the running phase (cleanup still runs), the second aborts cleanup, the third exits 130", async () => {
+  const handlers: Record<string, () => void> = {};
+  const aborts: string[] = [];
+  const exits: number[] = [];
+  const active = new AbortController();
+  const guard = interruptGuard((event, handler) => { handlers[event] = handler; }, { abort: (reason) => { aborts.push(reason.message); active.abort(reason); }, exit: (code) => exits.push(code) });
+  assert.deepEqual(Object.keys(handlers).sort(), ["SIGINT", "SIGTERM"]);
+  handlers.SIGINT();
+  assert.equal(active.signal.aborted, true);
+  assert.match(aborts[0], /découverte de cohorte puis nettoyage/);
+  assert.deepEqual(exits, []);
+  // The aborted run phase does not prevent discovery: cleanup uses the injected client directly.
+  const state = committedUpload();
+  const calls: string[] = [];
+  const h = hooks(calls);
+  const outcome = await runCleanup(fakeClient(state, calls), manifestAfterTimeout(), h.hooks);
+  assert.equal(outcome.clean, true);
+  assert.deepEqual(h.manifests[0].created.objectPaths, [`${U1}/${D1}`]);
+  handlers.SIGTERM();
+  assert.match(aborts[1], /manifeste conservé/);
+  assert.deepEqual(exits, []);
+  handlers.SIGINT();
+  assert.deepEqual(exits, [130]);
+  assert.equal(guard.count(), 3);
+});
+test("the orchestrator wires discovery-first cleanup into every exit path", async () => {
+  const source = await readFile(new URL("../scripts/qa-gateway/run.mjs", import.meta.url), "utf8");
+  assert.match(source, /interruptGuard\(\(event, handler\) => process\.on\(event, handler\)/);
+  assert.match(source, /AbortSignal\.any\(\[active\.signal, AbortSignal\.timeout\(TIMEOUT_MS\)\]\)/);
+  assert.match(source, /\} finally \{\n\s+if \(mode !== "dry-run"\) \{\n\s+try \{\n\s+await cleanup\(\);/);
+  assert.match(source, /async function cleanup\(\) \{\n[^]*?active = new AbortController\(\);\n[^]*?await runCleanup\(client, created, \{/);
+  assert.match(source, /saveManifest: \(nextCreated, unknown\) => saveManifest\(nextCreated, unknown\)/);
+  assert.doesNotMatch(source, /process\.exit\(\)/);
+  assert.doesNotMatch(source, /cleanupPlan/);
 });

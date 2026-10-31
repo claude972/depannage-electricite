@@ -207,12 +207,14 @@ export function cleanupPlan(created: Created): CleanupStep[] {
   return steps;
 }
 
-// Durable manifest of everything the run created, rewritten after each creation.
-export type Manifest = { version: 1; runId: string; project: string; updatedAt: string; created: Created };
+// Durable manifest of everything the run created, rewritten after each creation and again by the
+// cleanup discovery (merged cohort rows/objects, plus every read that stayed unknown).
+export type Unknown = { scope: string; detail: string };
+export type Manifest = { version: 1; runId: string; project: string; updatedAt: string; created: Created; unknown: Unknown[] };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const OBJECT_PATH = /^[0-9a-f-]{36}\/[0-9a-f-]{36}$/i;
-export function manifestJson(runId: string, project: string, created: Created, now: Date): string {
-  const manifest: Manifest = { version: 1, runId, project, updatedAt: now.toISOString(), created };
+export function manifestJson(runId: string, project: string, created: Created, now: Date, unknown: Unknown[] = []): string {
+  const manifest: Manifest = { version: 1, runId, project, updatedAt: now.toISOString(), created, unknown };
   return JSON.stringify(manifest, null, 2);
 }
 export function parseManifest(raw: unknown, project: string): Manifest {
@@ -233,7 +235,243 @@ export function parseManifest(raw: unknown, project: string): Manifest {
       created[key].push(value);
     }
   }
-  return { version: 1, runId: m.runId, project: m.project, updatedAt: String(m.updatedAt ?? ""), created };
+  const unknown: Unknown[] = [];
+  if (m.unknown !== undefined) {
+    if (!Array.isArray(m.unknown)) throw new UsageError("Manifeste invalide (unknown).");
+    for (const item of m.unknown) {
+      const u = item as Record<string, unknown> | null;
+      if (!u || typeof u !== "object" || typeof u.scope !== "string" || typeof u.detail !== "string")
+        throw new UsageError("Manifeste invalide : unknown contient une valeur inattendue.");
+      unknown.push({ scope: u.scope, detail: u.detail });
+    }
+  }
+  return { version: 1, runId: m.runId, project: m.project, updatedAt: String(m.updatedAt ?? ""), created, unknown };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Cohort discovery and cleanup (GW-HARNESS-003). Pure orchestration over an injected client so
+// node:test can drive it with fakes; run.mjs provides the fetch-backed client.
+//
+// Discovery lists the `documents` rows of the cohort (by owner ids and by intervention ids held
+// in the durable manifest) and every Storage object under each cohort owner prefix `<uid>/`,
+// with explicit pagination. Every read that fails, truncates or cannot be confirmed is an
+// `Unknown`; the caller must never claim a clean cleanup while one exists.
+// ---------------------------------------------------------------------------------------------
+export type Page<T> = { ok: true; items: T[]; total: number | null; detail: string } | { ok: false; detail: string };
+export type DocumentRow = { id?: unknown; owner_id?: unknown; intervention_id?: unknown; path?: unknown };
+export type ListObjectsOptions = { limit: number; offset: number; search?: string };
+export type CleanupClient = {
+  // PostgREST read of `documents` with `Prefer: count=exact` and `Range: from-to` (inclusive);
+  // `total` comes from Content-Range and must be exact (null = unknown).
+  listDocuments(filter: string, from: number, to: number): Promise<Page<DocumentRow>>;
+  // Storage list API under `<prefix>/`; names are relative to the prefix; stable name order.
+  listObjects(prefix: string, options: ListObjectsOptions): Promise<Page<string>>;
+  deleteObjects(paths: string[]): Promise<{ status: number; detail: string }>;
+  deleteRows(table: string, filter: string): Promise<{ status: number; detail: string }>;
+  countRows(table: string, filter: string): Promise<number | null>;
+  deleteUser(userId: string): Promise<{ status: number }>;
+  // 0 = gone, 1 = still there, null = unknown.
+  userRemaining(userId: string): Promise<0 | 1 | null>;
+};
+export type Discovery = {
+  created: Created;
+  added: { documentIds: string[]; objectPaths: string[] };
+  unknown: Unknown[];
+  complete: boolean;
+};
+export type DiscoveryOptions = { pageSize?: number; maxPages?: number };
+const inFilter = (column: string, ids: string[]) => `${column}=${inList(ids)}`;
+function cloneCreated(created: Created): Created {
+  const out = emptyCreated();
+  for (const key of Object.keys(out) as CreatedKind[]) out[key] = [...created[key]];
+  return out;
+}
+export async function discoverCohort(client: Pick<CleanupClient, "listDocuments" | "listObjects">, created: Created, options: DiscoveryOptions = {}): Promise<Discovery> {
+  const pageSize = Math.max(1, options.pageSize ?? 1000);
+  const maxPages = Math.max(1, options.maxPages ?? 100);
+  const merged = cloneCreated(created);
+  const added = { documentIds: [] as string[], objectPaths: [] as string[] };
+  const unknown: Unknown[] = [];
+  const addDocument = (id: string) => {
+    if (merged.documentIds.includes(id)) return;
+    merged.documentIds.push(id);
+    added.documentIds.push(id);
+  };
+  const addObject = (p: string) => {
+    if (merged.objectPaths.includes(p)) return;
+    merged.objectPaths.push(p);
+    added.objectPaths.push(p);
+  };
+  const scanRows = async (scope: string, filter: string) => {
+    let from = 0;
+    for (let pageIndex = 0; ; pageIndex++) {
+      if (pageIndex >= maxPages) {
+        unknown.push({ scope, detail: `pagination tronquée après ${maxPages} page(s) de ${pageSize}` });
+        return;
+      }
+      let page: Page<DocumentRow>;
+      try {
+        page = await client.listDocuments(filter, from, from + pageSize - 1);
+      } catch (error) {
+        page = { ok: false, detail: error instanceof Error ? error.message : String(error) };
+      }
+      if (!page.ok) {
+        unknown.push({ scope, detail: `lecture en erreur : ${page.detail}` });
+        return;
+      }
+      if (page.total === null) {
+        unknown.push({ scope, detail: "compte exact indisponible (Content-Range)" });
+        return;
+      }
+      for (const row of page.items) {
+        const id = typeof row?.id === "string" && UUID.test(row.id) ? row.id : null;
+        if (!id) {
+          unknown.push({ scope, detail: "ligne documents sans id UUID" });
+          continue;
+        }
+        addDocument(id);
+        const p = typeof row.path === "string" ? row.path : "";
+        if (OBJECT_PATH.test(p)) addObject(p);
+        else unknown.push({ scope: `documents ${id}`, detail: "chemin Storage hors convention <uid>/<id> : objet non identifiable" });
+      }
+      from += page.items.length;
+      if (from >= page.total) return;
+      if (page.items.length === 0) {
+        unknown.push({ scope, detail: `page vide avant le total annoncé (${from}/${page.total})` });
+        return;
+      }
+    }
+  };
+  const scanObjects = async (userId: string) => {
+    const scope = `Storage ${userId}/`;
+    let offset = 0;
+    for (let pageIndex = 0; ; pageIndex++) {
+      if (pageIndex >= maxPages) {
+        unknown.push({ scope, detail: `pagination tronquée après ${maxPages} page(s) de ${pageSize}` });
+        return;
+      }
+      let page: Page<string>;
+      try {
+        page = await client.listObjects(userId, { limit: pageSize, offset });
+      } catch (error) {
+        page = { ok: false, detail: error instanceof Error ? error.message : String(error) };
+      }
+      if (!page.ok) {
+        unknown.push({ scope, detail: `listage en erreur : ${page.detail}` });
+        return;
+      }
+      for (const name of page.items) {
+        const p = `${userId}/${name}`;
+        if (OBJECT_PATH.test(p)) addObject(p);
+        else unknown.push({ scope, detail: `objet hors convention <uid>/<id> (${String(name).slice(0, 40)}) : suppression manuelle requise` });
+      }
+      if (page.items.length < pageSize) return;
+      offset += page.items.length;
+    }
+  };
+  if (merged.userIds.length) await scanRows("documents par owner_id", inFilter("owner_id", merged.userIds));
+  if (merged.interventionIds.length) await scanRows("documents par intervention_id", inFilter("intervention_id", merged.interventionIds));
+  for (const userId of merged.userIds) await scanObjects(userId);
+  return { created: merged, added, unknown, complete: unknown.length === 0 };
+}
+
+export type CleanupEntry = { label: string; ok: boolean; remaining: number | null; detail: string };
+export type CleanupHooks = {
+  // Called once with the merged manifest BEFORE any deletion (must persist atomically).
+  saveManifest(created: Created, unknown: Unknown[]): Promise<void>;
+  note(status: StepStatus, step: string, detail: string): Promise<void>;
+  step(entry: CleanupEntry, leftover: string | null): Promise<void>;
+};
+export type CleanupOutcome = { created: Created; discovery: Discovery; entries: CleanupEntry[]; leftovers: string[]; clean: boolean };
+export function cleanupRerunMessage(manifestPath: string): string {
+  return `aucune suppression effectuée ; relancer « --cleanup-manifest ${manifestPath} » quand les lectures répondent`;
+}
+export function unknownLeftover(u: Unknown): string {
+  return `inconnu : ${u.scope} — ${u.detail}`;
+}
+// Always: discover -> persist merged manifest -> (only if every read is known) delete in FK
+// order, Storage objects first. A single unknown read forbids any deletion and the clean verdict.
+export async function runCleanup(client: CleanupClient, created: Created, hooks: CleanupHooks, options: DiscoveryOptions & { manifestPath?: string } = {}): Promise<CleanupOutcome> {
+  let discovery: Discovery;
+  try {
+    discovery = await discoverCohort(client, created, options);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    discovery = { created: cloneCreated(created), added: { documentIds: [], objectPaths: [] }, unknown: [{ scope: "découverte de cohorte", detail }], complete: false };
+  }
+  await hooks.saveManifest(discovery.created, discovery.unknown);
+  const entries: CleanupEntry[] = [];
+  const leftovers: string[] = [];
+  const counts = `${discovery.added.documentIds.length} ligne(s) documents et ${discovery.added.objectPaths.length} objet(s) Storage ajoutés au manifeste`;
+  if (!discovery.complete) {
+    for (const u of discovery.unknown) leftovers.push(unknownLeftover(u));
+    await hooks.note("fail", "découverte de cohorte incomplète avant nettoyage", `${counts} ; ${discovery.unknown.length} lecture(s) inconnue(s) : ${discovery.unknown.map((u) => `${u.scope} (${u.detail})`).join(" ; ")} — ${cleanupRerunMessage(options.manifestPath ?? "<manifest.json>")}`);
+    return { created: discovery.created, discovery, entries, leftovers, clean: false };
+  }
+  await hooks.note("pass", "découverte de cohorte avant nettoyage", `${counts} ; lectures complètes`);
+  for (const step of cleanupPlan(discovery.created)) {
+    const entry: CleanupEntry = { label: step.label, ok: false, remaining: null, detail: "" };
+    let leftover: string | null = null;
+    try {
+      if (step.kind === "storage") {
+        const r = await client.deleteObjects(step.paths);
+        let remaining = 0;
+        let readbackFailed = false;
+        for (const p of step.paths) {
+          const [prefix, name] = p.split("/");
+          const listing = await client.listObjects(prefix, { limit: 1000, offset: 0, search: name });
+          if (!listing.ok) readbackFailed = true;
+          else if (listing.items.includes(name)) remaining++;
+        }
+        entry.remaining = readbackFailed ? null : remaining;
+        entry.ok = r.status < 300 && !readbackFailed && remaining === 0;
+        entry.detail = `HTTP ${r.status}${readbackFailed ? " ; relecture Storage en erreur" : ""}`;
+        if (!entry.ok) leftover = `objets Storage : ${readbackFailed ? "relecture impossible" : `${remaining} restant(s)`}`;
+      } else if (step.kind === "rest") {
+        const r = await client.deleteRows(step.table, step.filter);
+        const remaining = await client.countRows(step.table, step.filter);
+        entry.remaining = remaining;
+        entry.ok = r.status < 300 && remaining === 0;
+        entry.detail = `HTTP ${r.status}${r.status >= 300 ? ` ${r.detail}` : ""}${remaining === null ? " ; relecture en erreur" : ""}`;
+        if (!entry.ok) leftover = `${step.table} (${step.filter}) : ${remaining ?? "relecture impossible"}`;
+      } else {
+        const r = await client.deleteUser(step.userId);
+        const remaining = await client.userRemaining(step.userId);
+        entry.remaining = remaining;
+        entry.ok = r.status < 300 && remaining === 0;
+        entry.detail = `HTTP ${r.status}, relecture ${remaining === null ? "en erreur" : remaining === 0 ? "absent" : "présent"}`;
+        if (!entry.ok) leftover = `auth user ${step.userId}`;
+      }
+    } catch (error) {
+      entry.detail = error instanceof Error ? error.message : String(error);
+      leftover = step.label;
+    }
+    entries.push(entry);
+    if (leftover) leftovers.push(leftover);
+    await hooks.step(entry, leftover);
+  }
+  return { created: discovery.created, discovery, entries, leftovers, clean: leftovers.length === 0 && entries.every((e) => e.ok) };
+}
+
+// SIGINT/SIGTERM never skip cleanup: the first signal aborts the running phase (the run's
+// `finally` then performs discovery + cleanup), the second aborts the cleanup requests in flight
+// (manifest kept for --cleanup-manifest), the third exits immediately with 130.
+export function interruptGuard(
+  on: (event: string, handler: () => void) => void,
+  actions: { abort: (reason: Error) => void; exit: (code: number) => void },
+  signals: string[] = ["SIGINT", "SIGTERM"],
+): { count: () => number } {
+  let count = 0;
+  for (const signal of signals)
+    on(signal, () => {
+      count++;
+      if (count >= 3) {
+        actions.exit(130);
+        return;
+      }
+      actions.abort(new Error(count === 1 ? `interruption par ${signal} : découverte de cohorte puis nettoyage avant sortie` : `second ${signal} : nettoyage interrompu, manifeste conservé pour --cleanup-manifest`));
+    });
+  return { count: () => count };
 }
 
 export type Scenario = {
