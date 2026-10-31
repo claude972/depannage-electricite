@@ -61,7 +61,7 @@ Prouve : sur la vraie fonction déployée, un jeton réel accepté avant `exp` e
 ### 2.1 Objectif
 Prouver, sur la fonction déployée, qu’une révocation **validée après le pré-contrôle et avant la finalisation** d’un upload réel aboutit à un **403 avec compensation de l’objet** (GW-REV-001/002), puis relectures `documents`/objet absentes — et non seulement le refus d’un jeton déjà révoqué. Un ordre non prouvé, une issue incertaine (503) ou une fenêtre non exercée ⇒ **FAIL / non-preuve**, jamais PASS théorique.
 
-### 2.2 Contraintes d’exécution (v3 — revues pilote 46f6cf5 et root `GATEWAY_REVOKE_CONTRACT_46F6CF5.md`)
+### 2.2 Contraintes d’exécution (v4 — revues pilote 46f6cf5, root `GATEWAY_REVOKE_CONTRACT_46F6CF5.md` et blocage root sur v3 : rôles de la table de mesures)
 - **Ni psql ni libpq** : le pilote exécute du SQL par `supabase db query --file` (Management API), qui envoie un **lot**. Un `begin` ne peut pas s’étendre sur deux appels CLI : verrou, pause, révocation, `commit` et relecture post-commit tiennent **dans un seul lot**. Le lot ne présume **pas** que la CLI renvoie plusieurs jeux de résultats : toutes les mesures sont accumulées dans une table temporaire de session et le lot se termine par **une seule ligne structurée** (jsonb) qui les contient toutes.
 - Aucun horodatage local (retour CLI, mtime, ordre d’écriture de fichiers) n’est une heure de `commit`. Les seules horloges de preuve sont des `clock_timestamp()` **de la base**, renvoyés dans la ligne finale ; `t_after_commit` est une **borne supérieure**, pas l’instant du commit.
 - `finalize_document_upload` (013) prend d’abord `lock_intervention_organization(p_intervention_id)` = `select … for update of o` sur **l’organisation** du dossier (puis `for share` sur le dossier). Le pré-contrôle (`can_access_intervention`) et l’upload Storage **ne sont pas bloqués** ; la finalisation l’est tant que le lot tient le verrou. 009 vérifie le propriétaire et sérialise sur l’organisation ; 013 verrouille cette même organisation puis relit `owns_intervention`.
@@ -86,18 +86,24 @@ do $$ … $$;
 select 1 from public.organizations o where o.id = '<org QA>' for update of o;
 insert into qa_rv values('t_lock', to_jsonb(clock_timestamp()));
 select pg_sleep(3);
-set local role authenticated;
+-- Claims posés et mesure prise SOUS LE RÔLE RACINE (propriétaire de qa_rv) ; aucun GRANT sur la table temporaire.
 select set_config('request.jwt.claim.sub', '<propriétaire QA>', true), set_config('request.jwt.claims', '{"sub":"<propriétaire QA>","role":"authenticated","aud":"authenticated"}', true);
 insert into qa_rv values('t_before_revoke', to_jsonb(clock_timestamp()));
+-- SEULE instruction exécutée sous authenticated : le vrai RPC, sous l'identité du propriétaire QA.
+set local role authenticated;
 select public.set_organization_member_site_access('<org QA>', '<gestionnaire QA>', 'selected', '[]'::jsonb);
-insert into qa_rv values('t_revoked', to_jsonb(clock_timestamp())), ('rpc_ok', 'true');
 reset role;
+-- Mesures reprises sous le rôle racine : t_revoked est une borne supérieure de la fin du RPC ; rpc_ok n'existe
+-- que si le RPC a retourné (sinon le lot est déjà avorté).
+insert into qa_rv values('t_revoked', to_jsonb(clock_timestamp())), ('rpc_ok', 'true');
 commit;
 -- Après commit : relecture autoritaire de la révocation (portée et grants du membre), puis borne supérieure.
 insert into qa_rv select 'readback', jsonb_build_object('scope', (select scope from public.organization_member_site_scopes where organization_id='<org QA>' and user_id='<gestionnaire QA>'), 'grants', (select count(*) from public.organization_member_site_grants where organization_id='<org QA>' and user_id='<gestionnaire QA>'));
 insert into qa_rv values('t_after_commit', to_jsonb(clock_timestamp()));
 select jsonb_object_agg(k, v) as result from qa_rv;   -- LA ligne finale unique
 ```
+**Rôles et table de mesures (v4, blocage root sur v3)** : `qa_rv` est créée par le rôle racine ; sous `set local role authenticated`, un `insert` dans cette table serait refusé (`permission denied`) et ferait avorter tout le lot. Option retenue : **aucun GRANT** — toutes les écritures de mesures (`t_begin`, `batch_pid`, `t_lock`, `t_before_revoke`, `t_revoked`, `rpc_ok`, `readback`, `t_after_commit`) et les `set_config` des claims sont exécutés **sous le rôle racine**, et la section `set local role authenticated … reset role` ne contient **que** l’appel du RPC (l’acteur du RPC reste le propriétaire QA via les claims locales, posées avant le changement de rôle et valables pour la transaction). Pourquoi cela n’élargit rien : aucun privilège n’est accordé à `authenticated` (ni sur `qa_rv`, ni ailleurs) ; `qa_rv` est une table **temporaire** de session, propriété du rôle racine, détruite à la fin de la session et vide après rollback ; aucun objet persistant n’est créé ; la ligne finale unique est inchangée. Conséquence sur les mesures : `t_before_revoke` précède le `set local role` (écart négligeable) et `t_revoked` suit le `reset role` : c’est une **borne supérieure** de la fin du RPC, ce qui reste suffisant pour `t_observed ≤ t_before_revoke ≤ t_revoked < t_after_commit`.
+
 Si la garde, `lock_timeout`, `statement_timeout` ou le RPC lève, la transaction est annulée (`rollback` implicite) : **non-preuve** ; aucune nouvelle mutation n’est envoyée après un arrêt ; la fermeture du processus CLI ne signifie pas que la transaction est terminée. Une seule exécution par run ; la **source exacte** (UUID substitués, garde complète) est relue par root avant toute tentative.
 
 ### 2.5 L’observation unique (lecture seule, second appel CLI pendant la pause)
