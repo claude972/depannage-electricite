@@ -1,0 +1,148 @@
+# ADV-PLATFORM-FINANCE-001 — contrat super back-office et finance préparée
+
+Branche `claude/web-platform`, base 9b3dae0. Propriétaire : Claude (fichiers `app/api/platform-operations/**`, `lib/features/platform-operations/**`, `components/features/platform-operations/**`, `tests/platform-operations/**`, `tests/sql-platform-operations-review.mjs`, migration `202610310014_platform_operators.sql`). Codex pilote, revoit et intègre ; le lead raccorde les composants feuilles dans la coque admin. Ce contrat précède le code ; ce qui n’y figure pas n’est pas livré.
+
+## 1. Modèle de permissions
+
+### Trois natures d’acteurs, jamais confondues
+| Acteur | Source de vérité | Portée |
+| --- | --- | --- |
+| Super administrateur | `profiles.role = 'admin'` (existant, `public.is_admin()`) | Tout, y compris la gestion des opérateurs. |
+| Opérateur de plateforme | ligne active dans `public.platform_operator_grants(user_id, scope)` | Uniquement les scopes accordés. |
+| Owner / manager B2B | `organization_members` (existant) | Son organisation ; aucune permission plateforme. |
+
+Un opérateur limité ne reçoit **jamais** `profile.role='admin'`. Un super administrateur ne reçoit aucun grant (refus explicite : il détient tout implicitement) ; la promotion d’un compte en super administrateur révoque ses grants, avec audit.
+
+### Scopes explicites (table `platform_operator_grants.scope`)
+| Scope | Autorise (côté serveur) |
+| --- | --- |
+| `finance_read` | Lecture ledger, rapport de rapprochement, factures/avoirs, demandes de remboursement, litiges, paramètre émetteur. |
+| `finance_write` | Rapprochement, émission facture/avoir, création/décision de demandes de remboursement, litiges. Jamais d’action fournisseur de paiement. |
+| `reviews_moderate` | Lecture des avis avec état de modération, masquage/rétablissement, décision des contestations. |
+| `audit_read` | Lecture du journal `platform_audit`. |
+
+Hors périmètre de ce lot : un scope « support » n’est **pas** déclaré, car les routes et RPC d’assistance (`mutate_support_ticket`, `can_access_support_ticket`, `app/api/support/**`) vérifient `is_admin()` et appartiennent à un autre propriétaire. Intégration future documentée au §8.
+
+### Fonctions serveur (migration 014, `security definer`, `search_path=''`)
+- `public.has_platform_scope(p_scope text) → boolean` : `auth.uid()` non nul et (`is_admin()` ou grant actif). Utilisée par toutes les RLS et RPC du lot.
+- `public.platform_access() → jsonb` : `{super_admin, scopes[], super_admin_count}` du compte appelant. Tout utilisateur authentifié peut l’appeler ; elle ne révèle rien d’autrui.
+- `public.platform_grant_scope(p_user_id, p_scope, p_note) → jsonb {grant, replayed}` : super admin seul ; cible existante et non admin ; idempotent sur (user, scope) actif ; audit `operator_scope_granted`.
+- `public.platform_revoke_scope(p_grant_id, p_note) → jsonb {grant, replayed}` : super admin seul ; la ligne reste (historique) avec `status='revoked'`, `revoked_by`, `revoked_at` ; audit `operator_scope_revoked`.
+- `public.platform_set_super_admin(p_user_id, p_enabled, p_restore_role, p_note) → jsonb {profile_id, role, replayed}` : super admin seul ; auto-modification refusée (`P0001`) ; verrouillage de toutes les lignes admin avant décision ; promotion ⇒ révocation des grants actifs ; rétrogradation vers `p_restore_role ∈ {client, manager}` (artisan refusé, ce rôle relève de l’approbation artisan) ; audit `super_admin_granted` / `super_admin_revoked`.
+- Protection du dernier super administrateur : trigger `profiles_last_super_admin` (`before update of role or delete`) qui lève `P0001` si la ligne est le dernier `role='admin'`. Il s’applique aussi au `service_role` et à la cascade `auth.users` → `profiles`.
+- Mutations directes : aucun `insert/update/delete` accordé à `authenticated` ; `delete` interdit par trigger ; `update` d’un grant limité à la seule transition `active → revoked` (trigger `platform_operator_grants_guard`).
+- Limites : `consume_action('platform_operators', 30/min)`, `consume_action('platform_admin', 10/min)`.
+
+## 2. Audit immuable
+Table `public.platform_audit(id identity, actor_id, action, target_kind, target_id, details jsonb, created_at = now())`. Horodatage serveur uniquement. `update`, `delete` et `truncate` sont refusés par trigger pour tous les rôles, `update/delete` révoqués de `service_role`. Lecture : `has_platform_scope('audit_read')`. Chaque RPC du lot écrit une entrée dans la même transaction ; un échec annule l’action et l’audit ensemble.
+
+`target_kind ∈ {operator, super_admin, setting, reconciliation, ledger, invoice, refund_request, dispute, review}` ; `details` porte `from/to`, `version`, montants, scope, taux utilisé, etc.
+
+## 3. Paramètres persistants
+Table `public.platform_settings(key, value jsonb, version, updated_by, updated_at)`, clés autorisées : `invoice_issuer` seulement. Écriture : `public.platform_set_setting(p_key, p_value, p_expected_version)` super admin, validation stricte, audit `setting_updated` avec ancienne/nouvelle valeur. Lecture : `finance_read`.
+
+`invoice_issuer` = `{legal_name (1..160), siret (14 chiffres), address (5..500), vat_number (null | ^[A-Z]{2}[0-9A-Z]{2,13}$), commission_vat_rate (null | 0 | 5.5 | 10 | 20)}`. Aucune valeur par défaut : tant que la clé est absente, l’émetteur plateforme est « non configuré » et aucune facture de commission n’est possible. Les valeurs sont saisies par un super administrateur sous sa responsabilité ; le code ne les invente ni ne les vérifie auprès d’un registre.
+
+La commission n’est **pas** stockée en base : la seule source est `PLATFORM_FEE_BPS` (déjà lue par le checkout). Si elle est absente ou invalide, l’API répond `commission: {configured:false, bps:null}` et l’interface affiche « non configuré » ; aucun taux n’est proposé.
+
+## 4. Ledger et rapprochement
+Table `public.platform_ledger_entries` (immuable par trigger, lecture `finance_read`) :
+`id, request_id uuid unique, entry_kind ∈ {payment_settled, commission_expected, refund_settled}, direction ∈ {credit, debit}, amount_cents integer > 0, currency = 'eur', payment_id → payments, external_event_id, basis jsonb, recorded_by, created_at`.
+Idempotence : index uniques partiels `(payment_id) where entry_kind='payment_settled'`, `(payment_id) where entry_kind='commission_expected'`, `(entry_kind, external_event_id)`.
+
+Sémantique (relative au règlement de la prestation) : `payment_settled` = montant encaissé confirmé par l’événement fournisseur signé (`payments.status='paid'`, posé uniquement par `confirm_stripe_payment`) ; `commission_expected` = commission attendue calculée au taux configuré au moment du rapprochement (`round(total × bps / 10000)`, même formule que le checkout), jamais présentée comme perçue ; `refund_settled` = remboursement confirmé par événement fournisseur (voir §5, inatteignable sans Stripe).
+
+- `public.platform_reconcile(p_commission_bps, p_limit) → jsonb` (`finance_write`) : insère les `payment_settled` manquants depuis `payments` (`external_event_id = session_id`) puis, si `p_commission_bps` non nul, les `commission_expected` manquants ; retourne `{settled_added, commission_added, commission_bps, remaining_unsettled}` ; audit `reconciliation_run`.
+- `public.platform_finance_report() → jsonb` (`finance_read`, stable) : `payments {paid_count, paid_cents, pending_count, failed_attempts}`, `ledger {settled_count, settled_cents, missing_settlement, amount_mismatches, commission_count, commission_cents}`, `refund_requests` par statut (count, cents), `disputes` par statut, `invoices {invoice_count, credit_note_count}`. Comptes exacts, pas d’estimation.
+
+Fonctions pures TypeScript testées (`lib/features/platform-operations/ledger.ts`) : `commissionCents`, `reconcile(payments, entries)`, `paymentNet(entries)`, `refundableCents`.
+
+## 5. Remboursements et litiges — « demandé ≠ effectué »
+Table `public.platform_refund_requests` : `id, request_id unique, payment_id, amount_cents > 0, currency, reason (10..2000), status, version, requested_by, created_at, updated_at, decided_by, decided_at, decision_note, provider_reference, settled_event_id, settled_at`.
+
+Machine d’états :
+```
+requested ──approve──▶ approved ──(service_role + événement fournisseur)──▶ settled
+    │                     │
+    ├──reject──▶ rejected └──cancel──▶ cancelled
+    └──cancel──▶ cancelled
+```
+- Création (`platform_request_refund`, `finance_write`) : paiement `paid`, somme des demandes non rejetées/annulées + montant ≤ `payments.total_cents`, idempotente par `request_id`.
+- Décisions (`platform_decide_refund`, `finance_write`) : `approve | reject | cancel` avec `p_expected_version` ; note obligatoire pour `reject`.
+- `settled` n’est atteignable que par `public.platform_settle_refund(p_id, p_event_id, p_event_type ∈ {charge.refunded, refund.updated}, p_provider_reference, p_amount_cents)` réservée à `service_role`, qui inscrit `stripe_events`, le ledger `refund_settled` et l’audit dans la même transaction. Aucune route HTTP de ce lot ne l’appelle : le webhook appartient au code paiement existant, non modifié. Tant que Stripe n’est pas configuré, l’interface affiche sur toute demande approuvée : « Exécution indisponible : fournisseur de paiement non configuré ». Aucun bouton n’exécute un remboursement.
+
+Table `public.platform_disputes` : `id, request_id unique, payment_id, intervention_id, origin ∈ {client, artisan, platform}, subject, description, status ∈ {open, under_review, resolved, closed}, outcome ∈ {none, refund_requested, no_refund, other}, refund_request_id, version, opened_by, created_at, updated_at, resolved_by, resolved_at, resolution_note`.
+Transitions : `open → under_review | closed`, `under_review → resolved | closed`. `resolved` exige `outcome ≠ none` et une note ≥ 10 ; `outcome = refund_requested` exige un `refund_request_id` du même paiement. Les contestations fournisseur (chargebacks) ne sont pas simulées.
+
+## 6. Factures et avoirs
+Table `public.platform_invoices` : `id, request_id unique, kind ∈ {invoice, credit_note}, basis ∈ {service, platform_commission}, number unique par émetteur, issuer_key, issuer jsonb, recipient jsonb, payment_id, quote_id, intervention_id, related_invoice_id, lines jsonb, subtotal_cents, tax_rate, tax_cents, total_cents, currency, reason, issued_by, issued_at`. Immuable (trigger) ; une facture n’est jamais supprimée, elle est corrigée par avoir. Numérotation continue par `(issuer_key, kind, année)` via `platform_invoice_counters` verrouillé.
+
+Conditions réelles exigées, sans substitution :
+- `basis = service` : paiement `paid` ; devis accepté ; émetteur = artisan du devis d’après `artisan_profiles` (`company_name`, `siret` 14 chiffres, `legal_status`, `address` requis) ; destinataire = demandeur (`full_name`) et adresse de l’intervention, organisation du site si présente ; lignes, taux et montants = ceux du devis accepté. Une facture `service` par paiement.
+- `basis = platform_commission` : paramètre `invoice_issuer` complet avec `commission_vat_rate` non nul ; entrée `commission_expected` existante pour le paiement (sinon « commission non rapprochée ») ; destinataire = artisan (`artisan_profiles`) ; une ligne au montant de la commission ; TVA au taux configuré par le super administrateur.
+- Avoir : référence une facture, `amount_cents ≤ total − avoirs existants`, motif 10..1000 ; TVA répartie au prorata (`round(amount × tax/total)`).
+- `public.platform_invoice_readiness(p_basis, p_payment_id) → jsonb {ready, missing[], preview}` permet à l’interface d’afficher précisément ce qui manque avant toute émission ; `platform_issue_invoice` et `platform_issue_credit_note` lèvent `P0001` en cas de course.
+
+Interface attendue de ADV-DOCUMENTS-001 (branche `claude/web-documents`) pour le rendu PDF — déclarée dans `lib/features/platform-operations/invoice-document.ts`, non implémentée ici :
+```ts
+export type InvoiceDocumentInput = {
+  kind: "invoice" | "credit_note"; number: string; issued_at: string; currency: "eur";
+  issuer: { legal_name: string; siret: string; address: string; vat_number: string | null; legal_status?: string };
+  recipient: { name: string; address: string; organization?: string | null };
+  lines: { label: string; quantity: number; unit_price_cents: number }[];
+  subtotal_cents: number; tax_rate: number; tax_cents: number; total_cents: number;
+  related_number: string | null; reason: string; quote_reference: string; intervention_id: string;
+};
+export interface InvoiceDocumentRenderer { render(input: InvoiceDocumentInput): Promise<{ bytes: Uint8Array; mime: "application/pdf" }>; }
+```
+Le lot plateforme fournit `invoiceDocumentInput(row)` ; le lot documents fournit le renderer et le stockage privé. Aucune mention légale n’est ajoutée par le rendu au-delà des données présentes.
+
+## 7. Modération et contestation des avis
+- `public.platform_review_moderation(review_id pk, state ∈ {visible, hidden}, version, note, updated_by, updated_at)` ; `public.platform_review_contestations(id, request_id unique, review_id, contested_by, reason, status ∈ {open, upheld, dismissed}, version, created_at, decided_by, decided_at, decision_note)` ; une seule contestation ouverte par avis.
+- `platform_moderate_review(p_review_id, p_action ∈ {hide, restore}, p_note, p_expected_version)` (`reviews_moderate`) ; `platform_contest_review(p_request_id, p_review_id, p_reason)` réservée à l’artisan attributaire de l’intervention notée ; `platform_decide_contestation(p_id, p_decision ∈ {upheld, dismissed}, p_note, p_expected_version)` (`reviews_moderate`), `upheld` masque l’avis.
+- Un avis n’est jamais supprimé ni modifié : une policy **restrictive** sur `public.reviews` (`reviews_moderation_visibility`) retire les avis `hidden` de la lecture, sauf pour l’auteur et les modérateurs. Chaque transition est auditée (`review_hidden`, `review_restored`, `review_contested`, `contestation_decided`).
+
+## 8. API `app/api/platform-operations/**`
+Conventions communes : `authenticatedClient`, `assertOrigin` sur mutations, zod `.strict()`, `Cache-Control: private, no-store`, erreurs `{error}` en français sans nom interne ; 401 non connecté, 403 scope absent (vérifié par `platform_access()` puis refusé de nouveau par RLS/RPC), 409 conflit de version/transition, 422 saisie, 429 limite, 503 indisponible (dont « fournisseur de paiement non configuré »). Listes : curseur `base64url` lié à l’empreinte des filtres, `page {limit, total, has_more, next_cursor}` avec comptage exact.
+
+| Méthode et chemin | Scope | Corps / réponse |
+| --- | --- | --- |
+| `GET /access` | connecté | `{super_admin, scopes[], super_admin_count, capabilities{operators, audit, finance, reviews_moderation, refund_execution:false, invoice_rendering:false}, config{commission{configured,bps}, payment_provider{configured, mode:test\|live\|null, live_enabled}, invoice_issuer{configured}}}` |
+| `GET /operators` | super admin | `{grants[{id,user_id,full_name,scope,status,note,granted_at,granted_by,revoked_at}], page}` filtres `status`, `scope`, `user_id` |
+| `POST /operators` | super admin | `{action:'grant', user_id, scope, note}` → `{grant, replayed}` ; `{action:'revoke', grant_id, note}` → `{grant, replayed}` |
+| `POST /super-admins` | super admin | `{user_id, enabled, restore_role?, note}` → `{profile_id, role, replayed}` ; refus 409 si dernier super admin ou auto-modification |
+| `GET /audit` | `audit_read` | `{entries[], page}` curseur sur `id desc`, filtres `target_kind`, `target_id`, `actor_id` |
+| `GET /settings` | `finance_read` | `{invoice_issuer: {value, version} \| null}` |
+| `PUT /settings` | super admin | `{key:'invoice_issuer', value, expected_version}` → `{setting}` |
+| `GET /finance` | `finance_read` | `{report, config}` (rapport §4 + config §3) |
+| `POST /finance` | `finance_write` | `{action:'reconcile', limit?}` → résultat §4 ; le taux provient du serveur (`PLATFORM_FEE_BPS`), jamais du client |
+| `GET /finance/ledger` | `finance_read` | `{entries[], page}` filtres `entry_kind`, `payment_id` |
+| `GET /finance/invoices` | `finance_read` | `{invoices[], page}` filtres `kind`, `basis`, `payment_id` |
+| `POST /finance/invoices` | `finance_write` | `{action:'readiness', basis, payment_id}` → readiness ; `{action:'issue', request_id, basis, payment_id}` ; `{action:'credit_note', request_id, invoice_id, amount_cents, reason}` |
+| `GET /finance/invoices/[id]` | `finance_read` | `{invoice, credit_notes[], document: InvoiceDocumentInput}` |
+| `GET /finance/refund-requests` | `finance_read` | `{requests[], page}` filtres `status`, `payment_id` |
+| `POST /finance/refund-requests` | `finance_write` | `{request_id, payment_id, amount_cents, reason}` → `{request, replayed}` |
+| `POST /finance/refund-requests/[id]` | `finance_write` | `{action: approve\|reject\|cancel, expected_version, note}` → `{request}` ; `execute` n’existe pas |
+| `GET /finance/disputes`, `POST` | `finance_read` / `finance_write` | liste ; création `{request_id, payment_id, origin, subject, description}` |
+| `POST /finance/disputes/[id]` | `finance_write` | `{action: review\|resolve\|close, expected_version, outcome?, refund_request_id?, note}` |
+| `GET /reviews` | `reviews_moderate` | `{reviews[{…, moderation, contestations[]}], page}` filtres `state`, `contested` |
+| `POST /reviews/[id]` | voir action | `{action:'hide'\|'restore', expected_version, note}` (`reviews_moderate`) ; `{action:'contest', request_id, reason}` (artisan attributaire) ; `{action:'decide', contestation_id, decision, expected_version, note}` (`reviews_moderate`) |
+
+## 9. Interface et raccordement (pour le lead, session b4b555f0)
+- Clés `Capabilities` proposées pour `components/app/types.ts` : `platformAccess: ContractState` (route `/access`), `platformFinance: ContractState`, `platformReviews: ContractState`. Les menus n’apparaissent que si `access.super_admin` ou le scope correspondant est présent dans la réponse serveur ; le menu ne crée aucun droit.
+- Composants feuilles (`components/features/platform-operations/`, CSS module propre, primitives `Empty/Loader/Unavailable/Field/Tag` de `components/app/ui`) : tous reçoivent `client: PlatformClient` (`{ request<T>(path, body?, method?) }`, le lead passe `api` de `components/app/api.ts`) et `access: PlatformAccess | null` (null = chargement) ; `state?: ContractState` pour l’état de contrat.
+  - `OperatorAccessPanel` — vue admin « Opérateurs » : grants, formulaire d’attribution (user_id + scope + note), révocation avec confirmation, gestion super administrateurs avec confirmation explicite et refus du dernier.
+  - `PlatformAuditLog` — vue « Journal plateforme ».
+  - `FinanceOverview` — vue « Finance » : rapport, états « non configuré » commission/fournisseur/émetteur, bouton de rapprochement (`finance_write`).
+  - `LedgerList`, `InvoiceRegister` (readiness avant émission, avoir), `RefundRequests` (création, décision, bandeau « exécution indisponible »), `DisputeBoard`.
+  - `ReviewModeration` — vue « Avis » : masquer/rétablir, contestations à trancher.
+  - `usePlatformAccess(client)` — hook renvoyant `{access, state, reload}` pour le menu.
+- Aucun composant n’écrit dans `components/app/**`, `components/role/**`, `app/globals.css`.
+
+## 10. Vérification
+- `npx tsc --noEmit`, `npx tsx --test tests/platform-operations/*.test.ts`, `npx tsx --test tests/*.test.ts`.
+- `tests/sql-platform-operations-review.mjs` (PGlite isolé, recette QA.md) : migrations 001–014 ; refus de rôle/scope pour client/artisan/manager/opérateur hors scope ; grant/revoke idempotents et historisés ; refus de grant à un admin ; dernier super admin indémotable/insupprimable y compris par `service_role` ; audit non modifiable/non supprimable ; ledger idempotent (rejeu de rapprochement sans doublon, montant et devise exacts) ; readiness/émission facture refusée sans émetteur réel ; avoir plafonné ; transitions remboursement/litige valides et invalides, versions obsolètes ; `settled` impossible hors `service_role` ; contestation réservée à l’artisan attributaire ; avis masqué invisible aux tiers, visible à l’auteur et au modérateur, jamais supprimé.
+- Codex : exécuter la revue SQL sur base dédiée, matrice de refus, lecture de l’audit ; ne pas appliquer la migration en production.
+
+## 11. Non fait, explicitement
+Aucun appel Stripe (remboursement, facturation, commission réelle) ; aucun webhook ajouté ; aucun PDF (interface déclarée §6) ; pas de scope support ; pas de modification d’`admin_overview()` ni des routes admin existantes ; aucune donnée commerciale ou réglementaire inventée.
