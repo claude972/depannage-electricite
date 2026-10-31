@@ -71,6 +71,15 @@ import {
   type PaymentStatusReport,
   type SiteAccessCommand,
   type SiteAccessOverview,
+  type SupportCommand,
+  type SupportCommandResult,
+  type SupportCreateResult,
+  type SupportDetail,
+  type SupportEvent,
+  type SupportListFilters,
+  type SupportListPage,
+  type SupportMessage,
+  type SupportTicket,
   type UploadQueue,
   type Capabilities,
   type Category,
@@ -526,6 +535,7 @@ export default function CourantApp() {
       adminLists: "available",
       quoteDraft: "available",
       adminDirectory: "available",
+      support: "available",
     });
     guard.bump();
     runner.reset();
@@ -1587,6 +1597,191 @@ export default function CourantApp() {
     });
     return outcome;
   }
+  // ---- Assistance tickets (contract SUPPORT-001). Demo: browser-only tickets; live: dedicated
+  // routes, honest unavailable state until the backend checkpoint is integrated.
+  type DemoSupportStore = Record<string, { ticket: SupportTicket; messages: SupportMessage[]; events: SupportEvent[]; request_id?: string }>;
+  const demoSupport = () =>
+    readDemo<DemoSupportStore>(DEMO_KEYS.support, {}, (v) => !!v && typeof v === "object");
+  const demoActor = () => `demo-${roleRef.current}`;
+  async function loadSupportTickets(filters: SupportListFilters): Promise<SupportListPage | null> {
+    const limit = Math.min(100, Math.max(1, filters.limit ?? 25));
+    if (modeRef.current === "demo") {
+      const me = demoActor();
+      const all = Object.values(demoSupport())
+        .map((e) => e.ticket)
+        .filter((t) => (roleRef.current === "admin" && filters.scope !== "mine") || t.creator_id === me)
+        .filter((t) => !filters.status || t.status === filters.status)
+        .filter((t) => !filters.intervention_id || t.intervention_id === filters.intervention_id)
+        .filter((t) => !filters.q || t.subject.toLowerCase().includes(filters.q.toLowerCase()))
+        .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id.localeCompare(a.id));
+      const start = filters.cursor ? Number(filters.cursor) || 0 : 0;
+      return {
+        tickets: all.slice(start, start + limit),
+        page: { limit, total: all.length, has_more: start + limit < all.length, next_cursor: start + limit < all.length ? String(start + limit) : null },
+        filters: { scope: filters.scope ?? (roleRef.current === "admin" ? "all" : "mine"), status: filters.status ?? null, intervention_id: filters.intervention_id ?? null, q: filters.q ?? null },
+      };
+    }
+    const my = seq.current;
+    try {
+      const q = new URLSearchParams({ limit: String(limit) });
+      if (filters.cursor) q.set("cursor", filters.cursor);
+      if (filters.scope) q.set("scope", filters.scope);
+      if (filters.status) q.set("status", filters.status);
+      if (filters.intervention_id) q.set("intervention_id", filters.intervention_id);
+      if (filters.q) q.set("q", filters.q);
+      const result = await api<SupportListPage>(`/api/support?${q}`);
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, support: "available" }));
+      return result;
+    } catch (e) {
+      if (my !== seq.current) return null;
+      if (e instanceof ApiRequestError && e.status === 422) {
+        setError(e.message);
+        return null;
+      }
+      setCapabilities((c) => ({ ...c, support: contractStateFromError(e) }));
+      return null;
+    }
+  }
+  async function loadSupportTicket(id: string, page: { limit?: number; after_version?: number } = {}): Promise<SupportDetail | null> {
+    const limit = Math.min(100, Math.max(1, page.limit ?? 50));
+    const after = Math.max(0, page.after_version ?? 0);
+    if (modeRef.current === "demo") {
+      const entry = demoSupport()[id];
+      if (!entry) return null;
+      const me = demoActor();
+      if (roleRef.current !== "admin" && entry.ticket.creator_id !== me) return null;
+      const events = entry.events.filter((e) => e.version > after).sort((a, b) => a.version - b.version).slice(0, limit);
+      const versions = new Set(events.map((e) => e.version));
+      return {
+        ticket: entry.ticket,
+        messages: entry.messages.filter((m) => versions.has(m.version)),
+        events,
+        permissions: { can_reply: true, can_set_status: roleRef.current === "admin" },
+        page: {
+          limit,
+          after_version: after,
+          next_after_version: events.length === limit ? events[events.length - 1].version : null,
+          has_more: entry.events.some((e) => e.version > (events[events.length - 1]?.version ?? after)),
+          total_events: entry.events.length,
+          total_messages: entry.messages.length,
+        },
+      };
+    }
+    const my = seq.current;
+    try {
+      const result = await api<SupportDetail>(
+        `/api/support/${encodeURIComponent(id)}?limit=${limit}&after_version=${after}`,
+      );
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, support: "available" }));
+      return result;
+    } catch (e) {
+      if (my !== seq.current) return null;
+      if (e instanceof ApiRequestError && (e.status === 404 || e.status === 403)) {
+        setError("Cette demande d’assistance n’est pas accessible depuis votre compte.");
+        return null;
+      }
+      setCapabilities((c) => ({ ...c, support: contractStateFromError(e) }));
+      return null;
+    }
+  }
+  async function createSupportTicket(values: { request_id: string; subject: string; body: string; intervention_id: string | null }): Promise<SupportCreateResult | null> {
+    let created: SupportCreateResult | null = null;
+    await run(async (ctx) => {
+      if (modeRef.current === "demo") {
+        const store = demoSupport();
+        const existing = Object.values(store).find((e) => e.request_id === values.request_id);
+        if (existing) {
+          created = { ticket: existing.ticket, initial_message: existing.messages[0], replayed: true };
+          return;
+        }
+        const now = new Date().toISOString();
+        const id = uid();
+        const message: SupportMessage = { id: uid(), ticket_id: id, author_id: demoActor(), author_kind: "user", version: 1, body: values.body.trim(), created_at: now };
+        const ticket: SupportTicket = { id, creator_id: demoActor(), intervention_id: values.intervention_id, subject: values.subject.trim(), status: "open", version: 1, created_at: now, updated_at: now, last_message_at: now };
+        const event: SupportEvent = { id: uid(), ticket_id: id, actor_id: demoActor(), kind: "ticket_created", from_status: null, to_status: "open", version: 1, message_id: message.id, created_at: now };
+        store[id] = { ticket, messages: [message], events: [event], request_id: values.request_id };
+        writeDemo(DEMO_KEYS.support, store);
+        created = { ticket, initial_message: message, replayed: false };
+        ctx.notice("Demande d’assistance enregistrée dans la démonstration ; aucun opérateur réel n’est prévenu.");
+        return;
+      }
+      try {
+        created = await api<SupportCreateResult>("/api/support", values);
+        ctx.when(setCapabilities)((c) => ({ ...c, support: "available" }));
+        ctx.notice(
+          created.replayed
+            ? "Votre demande avait déjà été enregistrée ; aucun doublon créé."
+            : "Demande d’assistance enregistrée. Les réponses s’afficheront ici à l’actualisation.",
+        );
+      } catch (e) {
+        if (contractStateFromError(e) === "missing") ctx.when(setCapabilities)((c) => ({ ...c, support: "missing" }));
+        throw e;
+      }
+    });
+    return created;
+  }
+  async function supportCommand(id: string, body: SupportCommand): Promise<SupportCommandResult> {
+    let outcome: SupportCommandResult = { ok: false, conflict: false, message: "Action interrompue." };
+    await run(async (ctx) => {
+      if (modeRef.current === "demo") {
+        const store = demoSupport();
+        const entry = store[id];
+        if (!entry) throw new Error("Demande d’assistance introuvable.");
+        if (entry.ticket.version !== body.expected_version) {
+          outcome = { ok: false, conflict: true, message: "La demande a évolué depuis votre lecture. Relisez-la ; votre texte est conservé." };
+          return;
+        }
+        const isAdmin = roleRef.current === "admin";
+        const now = new Date().toISOString();
+        const version = entry.ticket.version + 1;
+        let status = entry.ticket.status;
+        let message: SupportMessage | null = null;
+        if (body.action === "set_status") {
+          if (!isAdmin) throw new Error("Seule l’administration peut changer l’état d’une demande.");
+          const allowed: Record<string, string[]> = { open: ["in_progress", "awaiting_user", "resolved"], in_progress: ["awaiting_user", "resolved"], awaiting_user: ["in_progress", "resolved"], resolved: ["in_progress"] };
+          if (!allowed[status]?.includes(body.status)) {
+            outcome = { ok: false, conflict: true, message: "Ce changement d’état n’est pas possible depuis l’état actuel." };
+            return;
+          }
+          status = body.status;
+        } else {
+          if (isAdmin && status === "resolved") {
+            outcome = { ok: false, conflict: true, message: "Réouvrez la demande avant d’y répondre." };
+            return;
+          }
+          if (!isAdmin && (status === "awaiting_user" || status === "resolved")) status = "open";
+          message = { id: uid(), ticket_id: id, author_id: demoActor(), author_kind: isAdmin ? "admin" : "user", version, body: body.body.trim(), created_at: now };
+        }
+        const event: SupportEvent = { id: uid(), ticket_id: id, actor_id: demoActor(), kind: body.action === "reply" ? "replied" : "status_changed", from_status: entry.ticket.status, to_status: status, version, message_id: message?.id ?? null, created_at: now };
+        entry.ticket = { ...entry.ticket, status, version, updated_at: now, last_message_at: message ? now : entry.ticket.last_message_at };
+        if (message) entry.messages.push(message);
+        entry.events.push(event);
+        writeDemo(DEMO_KEYS.support, store);
+        outcome = { ok: true, ticket: entry.ticket, message, event };
+        ctx.notice("Enregistré dans la démonstration.");
+        return;
+      }
+      try {
+        const result = await api<{ ticket: SupportTicket; message: SupportMessage | null; event: SupportEvent }>(
+          `/api/support/${encodeURIComponent(id)}`,
+          body,
+        );
+        ctx.when(setCapabilities)((c) => ({ ...c, support: "available" }));
+        outcome = { ok: true, ...result };
+        ctx.notice(body.action === "reply" ? "Réponse enregistrée." : "État de la demande mis à jour.");
+      } catch (e) {
+        if (e instanceof ApiRequestError && e.status === 409) {
+          outcome = { ok: false, conflict: true, message: e.message };
+          return;
+        }
+        if (contractStateFromError(e) === "missing") ctx.when(setCapabilities)((c) => ({ ...c, support: "missing" }));
+        outcome = { ok: false, conflict: false, message: (e as Error).message };
+      }
+    });
+    return outcome;
+  }
   // Membership lost or never held: drop every cached view of the organisation.
   function dropOrganizationContext() {
     setActiveOrganizationId("");
@@ -2107,6 +2302,10 @@ export default function CourantApp() {
     loadAdminIntervention,
     loadQuoteDraft,
     quoteDraftCommand,
+    loadSupportTickets,
+    loadSupportTicket,
+    createSupportTicket,
+    supportCommand,
     loadOrganization,
     organizationCommand,
     acceptInvitation,

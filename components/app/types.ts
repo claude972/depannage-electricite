@@ -500,6 +500,7 @@ export type Capabilities = {
   adminLists: ContractState;
   quoteDraft: ContractState;
   adminDirectory: ContractState;
+  support: ContractState;
 };
 export const UNKNOWN_CAPABILITIES: Capabilities = {
   operations: "unknown",
@@ -513,6 +514,7 @@ export const UNKNOWN_CAPABILITIES: Capabilities = {
   adminLists: "unknown",
   quoteDraft: "unknown",
   adminDirectory: "unknown",
+  support: "unknown",
 };
 export type ReturnContext =
   | { kind: "payment"; state: "pending" | "cancelled"; interventionId: string }
@@ -686,3 +688,72 @@ export type DirectoryPage<K extends DirectoryKind = DirectoryKind> = {
   page: { limit: number; has_more: boolean; next_cursor: string | null; total: number };
   filters: { q: string | null; approved: boolean | null; role: string | null; owner_id: string | null };
 };
+
+// Contract WEB-PWA-SUPPORT-001 (published before implementation): private persistent assistance
+// tickets. No phone, email, SMS, push or SLA is promised; replies are read by refreshing.
+export type SupportStatus = "open" | "in_progress" | "awaiting_user" | "resolved";
+export type SupportTicket = {
+  id: string;
+  creator_id: string;
+  intervention_id: string | null;
+  subject: string;
+  status: SupportStatus;
+  version: number;
+  created_at: string;
+  updated_at: string;
+  last_message_at: string;
+};
+export type SupportMessage = {
+  id: string;
+  ticket_id: string;
+  author_id: string;
+  author_kind: "user" | "admin";
+  version: number;
+  body: string;
+  created_at: string;
+};
+export type SupportEvent = {
+  id: string;
+  ticket_id: string;
+  actor_id: string;
+  kind: "ticket_created" | "replied" | "status_changed";
+  from_status: SupportStatus | null;
+  to_status: SupportStatus;
+  version: number;
+  message_id: string | null;
+  created_at: string;
+};
+export type SupportListFilters = {
+  scope?: "mine" | "all";
+  status?: SupportStatus;
+  intervention_id?: string;
+  q?: string;
+  limit?: number;
+  cursor?: string | null;
+};
+export type SupportListPage = {
+  tickets: SupportTicket[];
+  page: { limit: number; total: number; has_more: boolean; next_cursor: string | null };
+  filters: { scope: string; status: string | null; intervention_id: string | null; q: string | null };
+};
+export type SupportDetail = {
+  ticket: SupportTicket;
+  messages: SupportMessage[];
+  events: SupportEvent[];
+  permissions: { can_reply: boolean; can_set_status: boolean };
+  page: {
+    limit: number;
+    after_version: number;
+    next_after_version: number | null;
+    has_more: boolean;
+    total_events: number;
+    total_messages: number;
+  };
+};
+export type SupportCreateResult = { ticket: SupportTicket; initial_message: SupportMessage; replayed: boolean };
+export type SupportCommand =
+  | { action: "reply"; expected_version: number; body: string }
+  | { action: "set_status"; expected_version: number; status: SupportStatus };
+export type SupportCommandResult =
+  | { ok: true; ticket: SupportTicket; message: SupportMessage | null; event: SupportEvent }
+  | { ok: false; conflict: boolean; message: string };

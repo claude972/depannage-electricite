@@ -34,6 +34,12 @@ import type {
   Role,
   SiteAccessCommand,
   SiteAccessOverview,
+  SupportCommand,
+  SupportCommandResult,
+  SupportCreateResult,
+  SupportDetail,
+  SupportListFilters,
+  SupportListPage,
   UploadQueue,
   View,
   Workspace,
@@ -143,6 +149,16 @@ export interface Session {
    * typed lines and offers a reload); a successful send returns the exact created quote_id.
    */
   quoteDraftCommand(interventionId: string, body: QuoteDraftCommand): Promise<QuoteDraftResult>;
+  /** Assistance tickets (contract SUPPORT-001); null when unavailable. */
+  loadSupportTickets(filters: SupportListFilters): Promise<SupportListPage | null>;
+  loadSupportTicket(id: string, page?: { limit?: number; after_version?: number }): Promise<SupportDetail | null>;
+  /**
+   * Creates a ticket. `requestId` is an idempotency key the caller generates ONCE per form
+   * submission and keeps until success, so a retry after an uncertain outcome never duplicates.
+   */
+  createSupportTicket(values: { request_id: string; subject: string; body: string; intervention_id: string | null }): Promise<SupportCreateResult | null>;
+  /** Reply or (admin) status change with the exact expected version; 409 is returned as a conflict. */
+  supportCommand(id: string, body: SupportCommand): Promise<SupportCommandResult>;
   /** Organisation membership read model (GET /api/organizations?organization_id=). */
   loadOrganization(organizationId: string): Promise<OrganizationOverview | null>;
   /** Owner-only member commands; create_invitation resolves with the one-time code. */
