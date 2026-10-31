@@ -35,3 +35,12 @@ Le test pgTAP de la base est adapté à l’éligibilité explicite ; il n’a p
 ## Revue croisée attendue
 
 Claude : connecter les contrats exacts, ne pas assimiler rejet d’approbation au rejet devis, reprendre les statuts de candidature et disponibilité ; garder les listes bornées honnêtes et la performance réelle distincte de la démo. Codex pilote : revue des fonctions SECURITY DEFINER/EXECUTE, retrait B2B, wrapper legacy, conditions de reassign et JSON rapport ; preview combinée avec PWA, retours Auth/Stripe, gardes frontend et confidentialité offline. Aucun statut done avant revue croisée et contrôles d’intégration applicables.
+
+## Checkpoint 2 — tentatives et échecs Checkout
+
+- Migration004 et handlers pour expired/async_payment_failed : référence session/devis/montant/devise contrôlée, signature brute préservée, traitement service-only idempotent. Aucun événement tardif ne rétrograde un paiement réglé ou la tentative courante remplacée. Deux succès distincts pour la même session ne dupliquent plus l’effet métier/audit.
+- payment_attempts conserve les tentatives sous RLS ; GET /api/payments/status renvoie l’état et 50 tentatives maximum, avec indicateur de troncature, sans URL Checkout ni carte.
+- Reprise : session ouverte réutilisée ; remplacement uniquement après lecture Stripe confirmant expired ; écriture conditionnelle et garde SQL empêchent de remplacer paid. Session complète non payée reste en attente ou en échec nécessitant contrôle, sans nouvelle charge automatique.
+- Documentation officielle relue : https://docs.stripe.com/api/events/types et https://docs.stripe.com/api/checkout/sessions/object ; types Stripe 23.1.0 locaux cjs/resources/Events.d.ts et Checkout/Sessions.d.ts.
+- Vérifié : npm run check réussi (23 tests, TypeScript, build) ; 21 groupes SQL isolés passent, dont échec/rejeu, mismatch rollback, événement ancien après nouvelle tentative, succès doublé, paiement payé non rétrogradable, historique et refus tiers.
+- Pas de remboursement/litige/payout/fiscalité ajouté ni de Stripe distant testé. Les succès tardifs d’une ancienne session remplacée restent refusés pour référence différente et nécessitent rapprochement opérateur ; ils ne sont jamais affectés silencieusement à une nouvelle tentative.
