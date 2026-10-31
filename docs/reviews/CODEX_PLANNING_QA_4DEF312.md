@@ -71,8 +71,36 @@ Convention déclarée par le contrat Codex (« interruption jamais transformée 
 5. Résultat incertain simulé (coupure réseau pendant une mutation) : exit 3, aucun `DELETE` émis (`result.json.requests` sans `DELETE`), manifeste conservé ; puis procédure de réconciliation (P2-5) et `--cleanup-manifest` → code 0.
 6. Après raccordement UI : les sélecteurs de `scenarios.mjs:100-158` contre les coques finales (`#planning`, `#notifications`, bouton « Préférences », `article` nommé par le titre, note de lecture seule avec la raison serveur `canEdit(scope, view)`).
 
+## 3 bis. Addendum — réconciliation avec l'exécution réelle du pilote
+
+Faits transmis par le pilote (non observés par le réviseur) : anonyme → 401 OK ; semis de 6 comptes sans admin OK ; `save_availability_rule` 200 puis rejeu `replayed:true` OK ; lecture étrangère 0 ligne OK ; client `artisan_planning` / `save_availability_rule` → 403 OK ; **arrêt** sur `delete_availability_rule` par un tiers (`scenarios.mjs:20`) : PostgREST a répondu **HTTP 500** avec un corps `P0002` (`no_data_found` levé par la RPC, 016 l.227 ; la route Next, elle, le remappe en 404). Le harnais l'a classé « inconnu » et a refusé le nettoyage (exit 3, manifeste conservé) : **fail-closed correct, classification fausse**. Aucune course concurrente n'a été atteinte, aucun PASS complet, aucun admin persistant.
+
+### P2-6 — Classification transport/refus : statut seul, sans lecture du corps PostgREST
+`core.mjs:10` `uncertainResponse(method, status)` ne regarde que la méthode et `status >= 500` ; `run.mjs:40-44` (`request()`) lève `remoteUnknown` pour tout non-GET en 5xx avant même d'analyser le corps, et `mutate` (`core.mjs:84`) marque alors l'intention `uncertain` → `cleanup()` refuse toute suppression (`core.mjs:103`). Or une réponse PostgREST `5xx` portant un corps JSON `{code, message, details, hint}` avec un SQLSTATE levé **par la fonction** (`P0002`, comme `P0001`/`42501`/`22023` en 4xx) signifie que l'instruction a échoué : transaction annulée, **aucun commit** — c'est un refus définitif, pas une incertitude. Le helper ne distingue pas ce cas d'une vraie panne (`PGRST000` connexion, `PGRST5xx` pool, classes SQLSTATE `08`/`53`/`57`/`58`/`XX`, 5xx Auth `/auth/v1/`, 5xx Next `/api/`), qui doivent rester « inconnu ». Règle recommandée (conforme au correctif annoncé par Codex, en l'élargissant prudemment) : définitif **seulement si** (a) la requête vise `sb.url` + `/rest/v1/` (jamais `/auth/v1/`, jamais `/api/`), (b) le corps est un objet JSON avec `code` au format SQLSTATE `^[0-9A-Z]{5}$` et `message` chaîne, (c) la classe du code n'est pas `08`, `53`, `57`, `58`, `XX` ni un code `PGRST*` ; tout le reste reste `remoteUnknown`. Couvrir par un test unitaire (`P0002` → définitif ; `PGRST000` 503 → inconnu ; corps non JSON 500 → inconnu ; Auth 500 → inconnu).
+
+### Appels des suites pouvant légitimement produire P0001 / P0002 / 42501 (PostgREST direct)
+Correspondance statut PostgREST : `42501` → 403, `P0001` → 400, `22023` (`invalid_parameter_value`) → 400, **`P0002` → 500** (non mappé par PostgREST).
+
+| Appel | Fichier:ligne | SQLSTATE possible (source) | Statut HTTP | Lecture actuelle |
+| --- | --- | --- | --- | --- |
+| `delete_availability_rule` par `u.other` (id d'autrui) | `scenarios.mjs:20` | `P0002` (016 l.227 : ligne absente pour cet artisan) | **500** | **mal classé « inconnu »** (arrêt réel) ; de plus l'attente `[403,404]` ne couvre pas 500 : après correction du classement, asserter `status===500 && body.code==='P0002'` (ou accepter `P0002` explicitement) |
+| `delete_planning_entry` par `u.other` (entrée d'autrui) | `scenarios.mjs:32` | `P0002` (016 l.280) | **500** | **même défaut**, même correction |
+| `save_availability_rule` version périmée | `scenarios.mjs:22` | `P0001` (016 l.214) | 400 | correct (`body.code==='P0001'`) |
+| courses `save_planning_entry` busy / `save_notification_preferences` | `scenarios.mjs:29,48` | `P0001` (016 l.146, l.525/533) | 400 | correct (`assertRace` : `400` + `P0001` ou `409`) |
+| `artisan_planning` client, `save_availability_rule` client | `scenarios.mjs:18-19` | `42501` (016 l.293 ; 008 l.15) | 403 | correct |
+| `save_planning_entry` artisan suspendu | `scenarios.mjs:41` | `42501` (008 l.17) | 403 | correct |
+| `intervention_free_slots` tiers / délégué révoqué | `scenarios.mjs:61,81` | `42501` (016 l.320) | 403 | correct ; `P0001` « No assigned artisan » (l.324) non atteint car dossier `assigned` (`:58`) |
+| `create_support_ticket` délégué | `scenarios.mjs:64` | `42501` si dossier inaccessible (011 l.13) ; `P0001` conflit de clé (l.21-23) | 403 / 400 | non attendus (délégué autorisé, clés fraîches) ; seraient lus comme FAIL définitifs, correct |
+| `set_organization_member_site_access` owner | `scenarios.mjs:76` | `42501` non-owner (009 l.5-6) ; `P0002` membre absent (009 l.8) | 403 / **500** | non attendus (owner réel, délégué membre) ; un `P0002` serait **mal classé** |
+| `mark_notifications`, `notification_summary` | `scenarios.mjs:75,80,82,83` | `42501` anonyme seulement (016 l.497) | 403 | non atteint |
+| `create_intervention` délégué | `scenarios.mjs:56` | `42501` (009 portée) | 403 | non attendu ; lecture définitive correcte |
+
+Aucun appel RPC des suites ne peut produire un `P0002` légitime **hors** des deux `delete_*` par un tiers (et, théoriquement, `set_organization_member_site_access` sur un non-membre). Les routes Next (`/api/planning`, `/api/notifications`) ne sont pas concernées : elles remappent en 404/4xx ; un 500 Next doit rester « inconnu ».
+
 ## 4. Verdict
 
-**Acceptable pour l'exécution API-first par le pilote** (`--suite api`), sous réserve que le rapport Codex déclare explicitement les non-preuves P2-3 et P2-4 : propriété des fichiers respectée, aucun helper partagé modifié, imports compatibles avec `c0fc095`, tests 13/13 et `node --check` reproduits, concurrence réelle avec chevauchement mesuré, sondes sous JWT propre, révocation support conforme à `b26bc45`, zéro admin, nettoyage fail-closed par identifiants exacts avec readback, manifeste atomique 0600/0700, secrets jamais exposés au navigateur ni à la CLI.
+**Borné par l'exécution réelle** : préflight, semis sans admin, idempotence, RLS étrangère et refus client confirmés en direct ; **la concurrence réelle n'a pas été atteinte, aucun PASS complet**, le fail-closed a fonctionné (exit 3, manifeste conservé, aucune suppression), aucun admin persistant. La reprise dépend de P2-6 (classification des corps PostgREST) et de la correction des attentes `scenarios.mjs:20,32`.
+
+**Acceptable pour l'exécution API-first par le pilote** (`--suite api`) une fois P2-6 corrigé, sous réserve que le rapport Codex déclare explicitement les non-preuves P2-3 et P2-4 : propriété des fichiers respectée, aucun helper partagé modifié, imports compatibles avec `c0fc095`, tests 13/13 et `node --check` reproduits, concurrence réelle avec chevauchement mesuré, sondes sous JWT propre, révocation support conforme à `b26bc45`, zéro admin, nettoyage fail-closed par identifiants exacts avec readback, manifeste atomique 0600/0700, secrets jamais exposés au navigateur ni à la CLI.
 
 **Suite navigateur : non prête** tant que P2-1 (formulaire fermé par défaut → fausse FAIL, assertion vide) et P2-2 (SIGINT Playwright à la base `c92f4de`) ne sont pas traités. Aucun P1. Rien dans cette revue ne constitue une preuve cloud : aucune exécution réelle par le réviseur.
