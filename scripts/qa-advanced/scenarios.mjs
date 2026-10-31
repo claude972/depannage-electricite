@@ -154,7 +154,7 @@ export async function browserScenarios(ctx) {
       const response=page.waitForResponse(r=>{const url=new URL(r.url());return url.pathname==='/api/planning' && url.searchParams.has('from') && r.request().method()==='GET';}).catch(()=>null);
       await page.getByRole('button',{name:'Recharger la semaine',exact:true}).click();
       const failed=await response;assert.ok(failed,'refresh must request planning');assert.equal(failed.status(),503);
-      const blocked=page.locator('[data-blocker="capability:planning"][role="note"]').filter({hasText:'Le service est momentanément indisponible'});
+      const blocked=page.locator('[data-blocker="planning:unavailable"][role="note"]').filter({hasText:'Le service est momentanément indisponible'});
       await blocked.waitFor();
       assert.equal(await page.getByRole('button',{name:'Ajouter une entrée ponctuelle',exact:true}).count(),0);
       assert.equal(await page.getByRole('heading',{name:'Disponibilités habituelles',exact:true}).count(),0);
@@ -162,7 +162,7 @@ export async function browserScenarios(ctx) {
     }
     finally {await page.unroute('**/api/planning?*',inject503);}
     // Scope the recovery control to this capability, never the PWA banner.
-    const blocked=page.locator('[data-blocker="capability:planning"][role="note"]');
+    const blocked=page.locator('[data-blocker="planning:unavailable"][role="note"]');
     const response=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/planning' && r.request().method()==='GET').catch(()=>null);
     await blocked.getByRole('button',{name:'Réessayer',exact:true}).click();
     const recovered=await response;assert.ok(recovered,'inline retry must request planning');assert.equal(recovered.status(),200);
