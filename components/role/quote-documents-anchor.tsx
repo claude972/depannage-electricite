@@ -4,7 +4,7 @@
 // est fournie par la coque appelante (vrai pour client/artisan, autorité entreprise fail-closed).
 import { QuoteDocumentsPanel } from "../features/quote-documents";
 import { CONTRACT_MESSAGES } from "../app/api";
-import { FeatureUnavailable } from "./feature-unavailable";
+import { FeatureUnavailable, useProbeWhenUnknown } from "./feature-unavailable";
 import type { Session } from "../app/session-types";
 import type { QuoteDocumentsTarget } from "../../lib/features/quote-documents/types";
 import { quoteDocumentsDemo } from "../../lib/features/quote-documents/demo";
@@ -26,6 +26,7 @@ export function QuoteDocumentsAnchor({
   siteId?: string;
 }) {
   const state = session.capabilities.quoteDocuments;
+  useProbeWhenUnknown(session, "quoteDocuments", "quoteId" in target ? { quoteId: target.quoteId } : { interventionId: target.interventionId });
   if (state === "unavailable")
     return (
       <FeatureUnavailable
