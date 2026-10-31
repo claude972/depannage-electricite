@@ -2307,3 +2307,12 @@ Missions/worktrees/branches avancés et findings f697164 ont été poussés AVAN
 Revue visuelle e7aaef7 finalisée :49 tests UI existants PASS, quatre planches inspectées et source relue sans édition/WIP ni cloud. Rapport complet docs/reviews/DESIGN_E7AAEF7.md. Les quatre P2 du lot VIS-REV-002 restent ouverts avant acceptation ; aucune fuite/extension Auth serveur n’a été établie par cette revue. Amélioration de composition M13/M4/M66 constatée, pas de validation globale des autres rôles. L’intégration demeure9b3dae0 jusqu’aux corrections/revues utiles ; pas de preview nouvelle annoncée.
 
 L’automation existante a été actualisée pour suivre exactement1235 viaCLI, pas de natif/EAS dans cette tranche, nouveaux contrats et migrations014–017 réservées à leurs propriétaires ; pas de doublon. Le propriétaire conserve le suivi terminal avec claude attach b4b555f0 ; les traces récentes sont consultables par claude logs b4b555f0. Les confirmations de travail/code/push restent liées aux preuves réelles.
+
+
+## A3 — constat de démarrage CLI, 31 octobre 2026 10:51 America/Martinique — Codex
+
+Session lead conservée : `b4b555f0`, branche `claude/web-pwa-ui`. Les sept lancements de sous-agents Claude ont une confirmation effective entre 10:46:49 et 10:49:19 AST : harnais QA, harnais gateway, corrections visuelles, documents, planning/notifications, opérations B2B, plateforme/finance. Le lead possède le raccordement partagé, soit huit agents Claude pour cette mission. Le worker Desktop demeure sans nouvelle mission ; aucun doublon lancé par Codex.
+
+Contrat partagé publié avant code : `claude/web-shared` / `a29f732`, `docs/CLAUDE_WEB_SHARED_CONTRACT.md`. Revue Codex : propriété unique des globaux, composants feuilles injectés, garde de session, migrations 014–017 indépendantes et ordre de revue explicites. Point transmis au lead : les tests futurs sous `tests/<lot>/*.test.ts` ne sont pas découverts par le script actuel `npm test`; les inclure dans check/CI sous sa propriété package unique, en plus de leur exécution ciblée.
+
+Le worktree QA contient des corrections en cours, non commitées, des fixtures et du cycle de nettoyage ; préservées. Aucun correctif n’est déclaré livré ni aucune nouvelle recette live déclenchée avant checkpoint poussé et revu. Les quatre contrats avancés sont encore attendus ; la confirmation de lancement ne vaut pas validation fonctionnelle. Vercel/Stripe restent différés ; aucune intégration sur main, publication stores ni migration supplémentaire appliquée.
