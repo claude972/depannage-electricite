@@ -7,6 +7,7 @@
 import assert from "node:assert/strict";
 import { login, openHash, api, capture, bodyText, expectVisible, expectAbsentOrDisabled, postsTo, waitForApi, sleep, safeRoute, sessionAccessToken, noHorizontalOverflow } from "../../qa/lib/browser.mjs";
 import { userRpc } from "../../qa/lib/supabase.mjs";
+import { assertNoUiWrites, settledBaseline } from "../lib/network.mjs";
 
 const OPS = 'section[aria-labelledby="site-operations"]';
 const TABS = ["Équipements", "Maintenance", "Budget", "Grilles", "Délais", "Contrôles ERP", "Historique"];
@@ -156,27 +157,29 @@ export const suite = {
           await section.getByLabel("Intitulé", { exact: true }).fill(cohort.name("vérification semestrielle").slice(0, 160));
           await section.getByLabel("Périodicité", { exact: true }).selectOption("months");
           await section.getByLabel("Valeur N", { exact: true }).fill("6");
-          await section.getByLabel("Prochaine échéance (facultatif)", { exact: true }).fill(isoPlusDays(10));
+          const dueOn = isoPlusDays(10); // one reading, reused for the fill and the readback
+          await section.getByLabel("Prochaine échéance (facultatif)", { exact: true }).fill(dueOn);
           const status = await submitAndWait(h.page, "Enregistrer");
           assert.equal(status, 200, `save_maintenance_plan answered ${status}`);
           await expectVisible(section.getByText("Plan ajouté.", { exact: true }), "plan notice");
           const plans = await db.select("site_maintenance_plans", { site_id: `eq.${siteA1.id}` }, "id,frequency_kind,frequency_value,next_due_on,last_done_on,version");
           assert.equal(plans.length, 1);
-          assert.deepEqual({ kind: plans[0].frequency_kind, value: plans[0].frequency_value, next: plans[0].next_due_on, last: plans[0].last_done_on }, { kind: "months", value: 6, next: isoPlusDays(10), last: null });
+          assert.deepEqual({ kind: plans[0].frequency_kind, value: plans[0].frequency_value, next: plans[0].next_due_on, last: plans[0].last_done_on }, { kind: "months", value: 6, next: dueOn, last: null });
           state.planId = plans[0].id;
           return { plan_id: plans[0].id };
         });
         await s.step("visit recorded today → last_done_on today, next_due_on = today + 6 months (server), visits_total 1", async () => {
           const section = opsSection(h.page);
           await section.getByRole("button", { name: "Enregistrer une visite", exact: true }).click();
-          await section.getByLabel("Date de la visite", { exact: true }).fill(isoToday());
+          const visitOn = isoToday(); // one reading: a midnight crossing cannot split fill and readback
+          await section.getByLabel("Date de la visite", { exact: true }).fill(visitOn);
           await section.getByLabel("Compte rendu (facultatif)", { exact: true }).fill(cohort.description("visite de recette"));
           const status = await submitAndWait(h.page, "Enregistrer la visite");
           assert.equal(status, 200, `record_maintenance_visit answered ${status}`);
           await expectVisible(section.getByText("Visite enregistrée.", { exact: true }), "visit notice");
           const [plan] = await db.select("site_maintenance_plans", { id: `eq.${state.planId}` }, "next_due_on,last_done_on,version");
-          assert.equal(plan.last_done_on, isoToday());
-          assert.equal(plan.next_due_on, addMonthsLikePostgres(isoToday(), 6), "next due recomputed from the configured periodicity");
+          assert.equal(plan.last_done_on, visitOn);
+          assert.equal(plan.next_due_on, addMonthsLikePostgres(visitOn, 6), "next due recomputed from the configured periodicity");
           assert.equal(plan.version, 2);
           const report017 = await api(h.page, `/api/site-operations?site_id=${siteA1.id}`);
           const shown = report017.body?.snapshot?.maintenance_plans?.find((p) => p.id === state.planId);
@@ -308,6 +311,7 @@ export const suite = {
       const h = await ctx.openPage(s, {});
       try {
         await s.step("login read-only member", () => login(h, base, reader, projectRef));
+        const readerWindow = await settledBaseline(h, { driverMutations: 0, origin: base });
         await s.step("site A1: operations readable, read-only block with the reason, owner's equipment listed", async () => {
           await openOps(h.page, siteA1);
           await tab(h.page, "Équipements");
@@ -329,9 +333,7 @@ export const suite = {
           return seen;
         });
         await s.step("browser: no POST /api/* issued", () => {
-          const posts = postsTo(h.network);
-          assert.deepEqual(posts, [], `interface issued ${posts.length} write request(s): ${JSON.stringify(posts)}`);
-          return { apiRequests: h.network.length };
+          return assertNoUiWrites(h, readerWindow);
         });
         await s.step("server: save_equipment / save_fiscal_year / save_erp_checklist refused (403) through the application route", async () => {
           const attempts = [
@@ -390,6 +392,8 @@ export const suite = {
       const h = await ctx.openPage(s, {});
       try {
         await s.step("login third party", () => login(h, base, outsider, projectRef));
+        const beforeProbes = h.network.length;
+        let window = null;
         await s.step("server: A1 refused (GET 403, POST 403), B1 readable (200)", async () => {
           const a1 = await api(h.page, `/api/site-operations?site_id=${siteA1.id}`);
           assert.equal(a1.status, 403);
@@ -399,7 +403,8 @@ export const suite = {
           assert.equal(b1.status, 200);
           assert.equal(b1.body?.snapshot?.site?.id, siteB1.id);
           assert.equal(await db.count("site_equipment", { site_id: `eq.${siteA1.id}` }), 1);
-          return { a1: a1.status, post: refusedPost.status, b1: b1.status };
+          window = await settledBaseline(h, { since: beforeProbes, driverMutations: 1, origin: base });
+          return { a1: a1.status, post: refusedPost.status, b1: b1.status, ui_window_from: window.index };
         });
         await s.step("UI: #site/<A1> shows nothing of A1; own site B1 shows its operations", async () => {
           await openHash(h.page, base, `site/${siteA1.id}`);
@@ -411,10 +416,7 @@ export const suite = {
           await expectVisible(opsSection(h.page).getByRole("heading", { name: "Aucun équipement", exact: true }), "B1 empty state");
           await capture(h, out, "b2b-tiers-b1-1280", s);
         });
-        await s.step("browser: no POST issued by the interface", () => {
-          const posts = postsTo(h.network).filter((n) => n.status !== 403);
-          assert.deepEqual(posts, [], `interface issued ${posts.length} write request(s)`);
-        });
+        await s.step("browser: no write issued by the interface during the UI navigation (window after the driver probes, no status filter)", () => assertNoUiWrites(h, window));
         s.network(h.network);
       } finally {
         await h.close();

@@ -19,6 +19,13 @@ const STRING_FLAGS = new Map([
   ["--app-dir", "appDir"],
   ["--cleanup-manifest", "cleanupManifest"],
   ["--timeout-ms", "timeoutMs"],
+  // Remote mode (contract §19): root's explicit deployment configuration.
+  ["--deployment-receipt", "deploymentReceipt"],
+  ["--vercel-project", "vercelProject"],
+  ["--vercel-team", "vercelTeam"],
+  ["--vercel-deployment", "vercelDeployment"],
+  ["--github-repo-id", "githubRepoId"],
+  ["--expected-build-id", "expectedBuildId"],
 ]);
 const LIST_FLAGS = new Map([
   ["--suite", "suites"],
@@ -46,6 +53,12 @@ export function defaultOptions(env = {}) {
     appDir: "",
     cleanupManifest: "",
     timeoutMs: String(DEFAULT_TIMEOUT_MS),
+    deploymentReceipt: "",
+    vercelProject: "",
+    vercelTeam: "",
+    vercelDeployment: "",
+    githubRepoId: "",
+    expectedBuildId: "",
     suites: [],
     allowBaseUrls: [],
     headless: true,
@@ -119,6 +132,19 @@ function validate(options) {
   if (!options.project) errors.push("--project is required");
   else if (!PROJECT_REF.test(options.project)) errors.push("--project must be a Supabase project ref (lowercase letters and digits)");
   if (!options.credentials && !options.dryRun) errors.push("--credentials is required (except with --dry-run)");
+  const remoteFlags = { deploymentReceipt: "--deployment-receipt", vercelProject: "--vercel-project", vercelTeam: "--vercel-team", vercelDeployment: "--vercel-deployment", githubRepoId: "--github-repo-id", expectedBuildId: "--expected-build-id" };
+  let local = true;
+  try {
+    local = isLocalOrigin(options.baseUrl);
+  } catch {}
+  if (options.baseUrl && !local) {
+    for (const [key, flag] of Object.entries(remoteFlags)) if (!options[key]) errors.push(`${flag} is required for a remote --base-url (contract §19)`);
+    if (options.deploymentReceipt && !options.deploymentReceipt.startsWith("/")) errors.push("--deployment-receipt must be an absolute path");
+    if (options.githubRepoId && !/^[1-9][0-9]{0,15}$/.test(options.githubRepoId)) errors.push("--github-repo-id must be a positive integer");
+    if (options.expectedBuildId && !/^[A-Za-z0-9_-]{4,64}$/.test(options.expectedBuildId)) errors.push("--expected-build-id is not a build id");
+  } else if (options.baseUrl) {
+    for (const [key, flag] of Object.entries(remoteFlags)) if (options[key]) errors.push(`${flag} is only for a remote --base-url; local mode checks .next/BUILD_ID`);
+  }
   for (const suite of options.suites) if (!SUITE_NAMES.includes(suite)) errors.push(`unknown suite ${suite}; known: ${SUITE_NAMES.join(", ")}, all`);
   if (new Set(options.suites).size !== options.suites.length) errors.push("duplicate --suite");
   return errors;
@@ -129,6 +155,9 @@ export const HELP = `Usage: node scripts/qa-business/run.mjs --base-url <origin>
                                         [--playwright-path <dir>] [--chromium-path <bin>] [--allow-base-url <origin>]...
                                         [--timeout-ms <ms, default ${DEFAULT_TIMEOUT_MS}>] [--headless|--no-headless]
                                         [--keep-fixtures] [--dry-run] [--json]
+       remote mode (non-local --base-url): add --deployment-receipt <abs path, 0600, outside Git>
+                                        --vercel-project <prj_…> --vercel-team <team_…> --vercel-deployment <dpl_…>
+                                        --github-repo-id <int> --expected-build-id <id>
        node scripts/qa-business/run.mjs --cleanup-manifest <manifest.json> --credentials <json> --project <ref>
 
 Suites: ${SUITE_NAMES.join(", ")} (default: all)

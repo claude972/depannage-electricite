@@ -202,3 +202,50 @@ Défaut confirmé (run sur 4c) : le préflight imposait au déploiement distant 
 - `servedBuildIdentity` renvoie `{ id: null, source: "invalid", … }` dès que `invalid > 0` : jamais d’identifiant extrait à côté d’un push malformé (non attribuable) ;
 - inchangés : pages Flight valides (identifiant de la ligne racine `0:` clé `b`), Flight fragmenté sur plusieurs pushes, forme statique/legacy, plusieurs identifiants ⇒ `ambiguous`.
 Il s’agit d’un analyseur strict de données reçues, pas d’une interface. Le HTML public complet de 4c n’est pas disponible localement (la sonde de root n’enregistre que l’identité `W1T6udg45nuoEg3XO7IGT`) : le test « page 4c valide » utilise cet identifiant dans une page de forme Next 16, étiquetée comme telle.
+
+## 19. Contrat de raccordement du mode distant (aide Codex `4a1d148`, documentation seule — aucun code avant GO après revues)
+
+**Source lue :** `scripts/qa/lib/deployment-proof.mjs` sur `codex/qa-deployment-proof` à `4a1d1484877c9cd269c98b4d161197a08c783c6a` (propriété exclusive Codex, importé en **lecture seule**, jamais copié ni modifié). Il importe lui-même `BUILD_ID_RE`, `flightPushes`, `servedBuildIdentity` de `scripts/qa-business/lib/preflight.mjs` (ce lot, 38702cf) : un seul analyseur.
+
+**Appels exacts (dans `scripts/qa-business/run.mjs` et un module propre `scripts/qa-business/lib/remote.mjs`) :**
+1. `loadDeploymentProof({ receiptPath, expected, nowMs })` → reçu figé validé (fichier absolu, hors de tout dépôt Git, régulier, propriétaire courant, mode `0600`, `nlink 1`, ≤ 16 Kio, inchangé pendant la lecture, JSON UTF-8 exact ; schéma `{schemaVersion:1, origin, projectId, teamId, deploymentId, readyState:"READY", target:"preview"|null, gitSource:{type:"github", repoId, ref, sha}, servedBuildId, capturedAt}` ; âge ≤ 15 min, futur ≤ 30 s). Refus ⇒ `Error` dont `code` ∈ `PATH, IN_GIT, GIT_CHECK, FILE_TYPE, OWNER, MODE, SIZE, CHANGED, JSON, FILE_READ, EXPECTED, CLOCK, SCHEMA, STATE, IDENTITY, MISMATCH, DATE, EXPIRED`.
+2. Récupération du HTML brut de `GET <origin>/` (même requête que le mode local, sans requête, sans redirection suivie, contexte navigateur vierge).
+3. `verifyRemoteDeployment({ proof, html, expected, nowMs })` → preuve courte figée `{ mode:"remote", origin, sha, deploymentId, servedBuildId, capturedAt, provenance:"root-receipt+served-flight" }` ; refus `HTML`, `FLIGHT_INVALID`, `SERVED_BUILD` (ou ceux de la validation du reçu).
+
+**`expected` vient UNIQUEMENT de la configuration CLI explicite de root**, jamais de la page ni du reçu seul : `{ origin: --base-url, projectId: --vercel-project, teamId: --vercel-team, deploymentId: --vercel-deployment, repoId: --github-repo-id (entier), ref: "integration/web-pwa" (constante imposée par l’aide), sha: --sha, servedBuildId: --expected-build-id }`. Nouveaux drapeaux : `--deployment-receipt <chemin absolu>`, `--vercel-project`, `--vercel-team`, `--vercel-deployment`, `--github-repo-id`, `--expected-build-id`. Ils sont tous requis ensemble dès que `--base-url` n’est pas local ; tous interdits en mode local (refus d’arguments, code 2). `--app-dir` en mode distant ne sert qu’à vérifier `HEAD = --sha` ; son `.next/BUILD_ID` n’est jamais lu.
+
+**Quand :** au préflight, après les contrôles d’arguments/credentials/projet/URL et **avant** toute création de fixture, tout intent, toute écriture, tout lancement de suite. Ordre : `loadDeploymentProof` → fetch → `verifyRemoteDeployment`. Le résultat remplace, en mode distant, la vérification locale du BUILD_ID.
+
+**Correspondance des issues :**
+- succès ⇒ `build_identity = { mode:"remote", attributable:true, sha_verified:true, build_id_verified:true, build_id_served:<servedBuildId>, deployment_id, captured_at, provenance }` dans `result.json` et `summary.md` ;
+- tout refus (codes ci-dessus, ou échec réseau du fetch) ⇒ **aucune fixture, aucun intent, aucune écriture** ; scénario `preflight / deployment provenance` enregistré `BLOCKED` avec le seul code de refus ; `build_identity.attributable=false` ; sortie **non nulle : code 2** (refus de préflight) ; aucun nettoyage nécessaire (manifeste vide, non créé).
+- **Journaux :** uniquement la preuve courte (champs ci-dessus) ou le code de refus ; ni contenu du reçu (au-delà de la preuve courte), ni HTML, ni extrait de page, ni chemin du HTML privé.
+
+**Mode local inchangé et strict :** `--base-url` local ⇒ analyseur Flight strict sur la page servie comparé au `.next/BUILD_ID` du même `--app-dir` (§13, §18) ; écart = FAIL ; invalide/ambigu/absent = non attribuable. Aucun `.next/BUILD_ID` falsifié, ni en test ni en run.
+
+**Obtention de l’aide :** fusion de travail contrôlée de `origin/integration/web-pwa` dans `claude/web-qa-business` une fois l’aide acceptée et intégrée (aucun cherry-pick, aucune copie) ; import `../../qa/lib/deployment-proof.mjs` en lecture seule ; si l’aide est absente au chargement, le mode distant refuse (code 2) au lieu de retomber sur la vérification locale.
+
+**Plan de tests (hors ligne, `tests/qa-business.test.ts`) :**
+- arguments : drapeaux distants requis ensemble hors local, interdits en local, `--github-repo-id` entier, `--deployment-receipt` absolu ; `expected` construit exactement depuis la CLI (test pur de la fonction de construction) ;
+- ordre : faux `loadDeploymentProof`/fetch/`verifyRemoteDeployment` injectés ⇒ refus à chaque étape ⇒ zéro appel de fixture/Auth/écriture, scénario `BLOCKED`, code 2, journal sans contenu reçu ; succès ⇒ preuve courte dans `build_identity`, suites démarrées ensuite ;
+- réel avec l’aide importée : reçu `0600` écrit dans un répertoire temporaire hors Git, horloge injectée, HTML Flight synthétique ⇒ preuve ; reçu `0644`, dans un dépôt Git, expiré, discordant ⇒ refus ;
+- **page 4c réelle** : chemin fourni par `QA_BUSINESS_4C_HTML` (ou option de test) vers `/tmp/depannage-public-4c-home-private.html`, lu en lecture seule ; `servedBuildIdentity` ⇒ `W1T6udg45nuoEg3XO7IGT`, `flightPushes(...).invalid === 0`, et `verifyRemoteDeployment` avec un reçu synthétique cohérent ⇒ succès ; **test SKIPPED si le chemin est absent** ; aucun HTML ni extrait copié dans le dépôt, dans les journaux ou dans les sorties de test (seuls l’identifiant et des compteurs sont affirmés) ;
+- mode local : tests existants inchangés (Flight strict vs `.next/BUILD_ID`, invalides/ambigus).
+
+### §19 — livraison du raccordement
+
+`scripts/qa-business/lib/remote.mjs` (`buildExpected`, `fetchPublicHtml`, `remotePreflight`), drapeaux dans `lib/args.mjs`, raccordement dans `run.mjs` (avant Playwright, toute fixture, tout intent, toute écriture ; refus ⇒ `writeRemoteBlocked` : `result.json`/`summary.md` 0600 seuls, scénario `BLOCKED` avec étape et code, code 2 ; succès ⇒ preuve courte dans `build_identity`, scénario local « served build matches --app-dir build » non exécuté en distant). Mode local inchangé. Commande pilote distante : `node scripts/qa-business/run.mjs --suite all --base-url <origine Vercel> --allow-base-url <même origine> --sha <40 hex> --project <ref> --credentials <…> --deployment-receipt <reçu 0600 hors Git, < 15 min> --vercel-project <prj_…> --vercel-team <team_…> --vercel-deployment <dpl_…> --github-repo-id <entier> --expected-build-id <id> --out <hors dépôt>`. Test réel 4c : `QA_BUSINESS_4C_HTML=/tmp/depannage-public-4c-home-private.html npx tsx --test tests/qa-business.test.ts` (ignoré sans la variable).
+
+### §19 ter — horloge non figée (revue root de e6fbcbd)
+
+`remotePreflight` reçoit une **fonction** d’horloge (défaut `Date.now`) lue juste avant chaque contrôle d’âge : à l’appel de `loadDeploymentProof`, puis à nouveau à `verifyRemoteDeployment` **après** la fin du fetch ; un `nowMs` figé est refusé. Un reçu de 890 s dont la vérification survient après un fetch de 20 s est donc refusé `EXPIRED` (BLOCKED, code 2, rien créé). Audit des autres horodatages : aucun autre contrôle d’âge ; les dates saisies puis relues dans la suite b2b sont désormais lues une seule fois par étape (passage de minuit sans faux FAIL).
+
+## 20. Fenêtre d’observation UI bornée (cause confirmée du FAIL tiers du run d467d88c7206)
+
+Le FAIL historique reste enregistré. Cause (source) : le scénario tiers émet volontairement, par le pilote, `POST /api/quote-documents {generate}` et attend 403 ; l’assertion « aucun POST » qui suit parcourait **tout** `h.network` et comptait cette sonde. Aucune fuite prouvée (403/404, 0 événement, contenu masqué).
+Règle : chaque contrôle « l’interface n’émet aucune écriture » s’applique à une **fenêtre** : index de référence immuable de `h.network` relevé juste **après** les sondes serveur (403 et « 0 événement » assertés, inchangés) et **avant** la navigation UI observée ; dans la fenêtre, **zéro** requête mutante (méthode ≠ GET/HEAD) vers `/api/` — quel que soit son statut (une écriture UI répondue 403 ou 200 est un FAIL). Aucun filtrage global des 403 (le filtre `status !== 403` du scénario tiers b2b est supprimé au profit de la même fenêtre). Même mécanisme pour les lectures client/lecteur, la fenêtre commençant après la connexion.
+
+### §20 bis — émission prouvée et fenêtre opaque (revue root de b943b45)
+
+- **Émission, pas réponse.** La fenêtre écoute `page.on("request")` (méthode + chemin seulement, ni en-têtes ni corps), attachée de façon synchrone à l’ouverture de la fenêtre, **avant** la navigation UI : toute requête mutante (≠ GET/HEAD) vers `/api/` de l’origine testée est comptée **au moment de son émission**, sans attendre de réponse. L’assertion échoue si le journal d’émission OU le journal de réponses (`h.network` après la référence) contient une écriture — quel que soit le statut, y compris réponse encore en attente.
+- **Référence opaque et liée.** La fenêtre est un objet opaque créé uniquement par l’aide (`openUiWindow`, alias `settledBaseline`), enregistré dans une `WeakMap` interne avec la poignée (`h`) qui l’a créé, son index figé (0 ≤ index ≤ longueur du journal au moment de l’ouverture, monotone) et son écouteur. Une référence étrangère (autre poignée), fabriquée (`{}`), malformée ou dont l’index dépasse le journal ⇒ **exception de harnais** (jamais PASS). `closeUiWindow` détache l’écouteur.

@@ -10,6 +10,7 @@ import path from "node:path";
 import { login, openHash, api, capture, bodyText, expectVisible, expectAbsentOrDisabled, postsTo, waitForApi, sleep, noHorizontalOverflow } from "../../qa/lib/browser.mjs";
 import { AppDefect } from "../../qa/lib/report.mjs";
 import { euroDigits, expectedEtag, inspectPdf, quoteReference } from "../lib/pdf.mjs";
+import { assertNoUiWrites, settledBaseline } from "../lib/network.mjs";
 import { acceptedStatusShown, isId, scenarioWhen, snapshotValidUntil } from "../lib/prerequisites.mjs";
 
 const PANEL = 'section[aria-labelledby="quote-documents-title"]';
@@ -47,10 +48,6 @@ async function openClientQuote(page, base, job, quote) {
   assert.equal(hash, `#quote/${quote.id}`, `the client button opened ${hash}, expected the exact quote version`);
   return page.locator('section[aria-label="Documents du devis et avenants"]');
 }
-const noPosts = (h, prefix = "/api/") => {
-  const posts = postsTo(h.network, prefix);
-  assert.deepEqual(posts, [], `interface issued ${posts.length} write request(s): ${JSON.stringify(posts)}`);
-};
 const noPayments = (h) => assert.deepEqual(h.network.filter((n) => n.path.startsWith("/api/payments")), [], "a payment route was called");
 
 export const suite = {
@@ -174,6 +171,7 @@ export const suite = {
       const h = await ctx.openPage(s, { width: 360, height: 780 });
       try {
         await s.step("login client", () => login(h, base, client, projectRef));
+        const readingWindow = await settledBaseline(h, { driverMutations: 0, origin: base });
         await s.step("documents section of the dossier", async () => {
           const section = await openClientQuote(h.page, base, d1, q1);
           await expectVisible(section.getByRole("heading", { name: "Document du devis et avenants", exact: true }), "client documents title");
@@ -203,7 +201,7 @@ export const suite = {
           await noHorizontalOverflow(h.page, 360);
           await capture(h, out, "docs-client-360", s);
         });
-        await s.step("browser: no POST during the client's reading", () => noPosts(h));
+        await s.step("browser: no write during the client's reading", () => assertNoUiWrites(h, readingWindow));
         s.network(h.network);
       } finally {
         await h.close();
@@ -315,6 +313,8 @@ export const suite = {
       const h = await ctx.openPage(s, {});
       try {
         await s.step("login third party", () => login(h, base, tiers, projectRef));
+        const beforeProbes = h.network.length;
+        let window = null;
         await s.step("server refusals from the third party's session", async () => {
           const overview = await api(h.page, `/api/quote-documents?intervention_id=${d1.id}`);
           assert.equal(overview.status, 403, `overview answered ${overview.status}`);
@@ -326,7 +326,9 @@ export const suite = {
           assert.equal(generate.status, 403);
           const events = await db.select("quote_document_events", { intervention_id: `eq.${d1.id}`, actor_id: `eq.${tiers.id}` }, "id");
           assert.equal(events.length, 0, "no event recorded for the third party");
-          return { overview: overview.status, download: download.status(), generate: generate.status };
+          // UI window starts here: the single driver POST (generate, 403) is before the baseline.
+          window = await settledBaseline(h, { since: beforeProbes, driverMutations: 1, origin: base });
+          return { overview: overview.status, download: download.status(), generate: generate.status, ui_window_from: window.index };
         });
         await s.step("UI: the dossier content is not visible to the third party", async () => {
           await openHash(h.page, base, `detail/${d1.id}`);
@@ -341,7 +343,7 @@ export const suite = {
           assert.equal(await h.page.locator('section[aria-label="Documents du devis et avenants"]').count(), 0, "documents panel rendered for a third party");
           await capture(h, out, "docs-tiers-1280", s);
         });
-        await s.step("browser: no POST issued", () => noPosts(h));
+        await s.step("browser: no write issued by the interface during the UI navigation (window after the driver probes)", () => assertNoUiWrites(h, window));
         s.network(h.network);
       } finally {
         await h.close();

@@ -24,6 +24,8 @@ import { CLEANUP_STEPS, finalizeCleanup } from "./lib/cleanup.mjs";
 import { BusinessFixtures } from "./lib/fixtures.mjs";
 import { createAdminAuth } from "./lib/auth.mjs";
 import { readLocalBuildId, servedBuildIdentity, compareBuildIds } from "./lib/preflight.mjs";
+import { buildExpected, remotePreflight } from "./lib/remote.mjs";
+import { isLocalOrigin } from "./lib/args.mjs";
 import { orchestrate, NOT_EXERCISED, guardReport, createDiagnose, createMutationGuard } from "./lib/orchestrate.mjs";
 import { guardWrites } from "../qa/lib/fixtures.mjs";
 import { chmod } from "node:fs/promises";
@@ -73,7 +75,7 @@ export function buildPlan(context, suites, localBuildId) {
   };
 }
 
-async function main(argv) {
+export async function main(argv) {
   const { options, errors } = parseArgs(argv, process.env);
   if (options.help) {
     process.stdout.write(HELP);
@@ -98,12 +100,15 @@ async function main(argv) {
     } else if (!options.dryRun) throw new PreflightError("--credentials is required");
     const target = assertBaseUrl(options.baseUrl, [options.allowBaseUrls, credentials?.allowedBaseUrls || []]);
     const sha = await verifySha(options.sha, options.appDir);
-    const localBuildId = await readLocalBuildId(options.appDir);
+    const remote = !isLocalOrigin(options.baseUrl);
+    // Remote mode never reads nor compares the local .next/BUILD_ID (a remote build has its own id).
+    const localBuildId = remote ? null : await readLocalBuildId(options.appDir);
     const cohort = createCohort();
     const outDir = await assertOutOutsideRepo(options.out || defaultOutDir(options.sha, cohort.runId));
     const suites = options.suites.map(suiteByName);
     const context = {
       run_id: cohort.runId,
+      mode: remote ? "remote" : "local",
       sha: options.sha,
       sha_verified: sha.verified,
       build_id: localBuildId,
@@ -120,8 +125,19 @@ async function main(argv) {
       finished_at: null,
     };
     if (options.dryRun) {
-      process.stdout.write(JSON.stringify(buildPlan({ ...context, credentials: options.credentials ? "shape validated, project matched" : "not provided" }, suites, localBuildId), null, 2) + "\n");
+      const plan = buildPlan({ ...context, credentials: options.credentials ? "shape validated, project matched" : "not provided" }, suites, localBuildId);
+      if (remote) Object.assign(plan, { build_id_check: "remote: root receipt + unique Flight build id of the public page via scripts/qa/lib/deployment-proof.mjs, before any fixture (receipt not read in dry-run)", remote_expected: buildExpected(options) });
+      process.stdout.write(JSON.stringify(plan, null, 2) + "\n");
       return 0;
+    }
+    if (remote) {
+      // Contract §19: receipt → public page → verification, BEFORE any fixture, intent, write or browser.
+      const verdict = await remotePreflight({ options, timeoutMs: Math.min(options.timeoutMs, 30000) });
+      if (!verdict.ok) return writeRemoteBlocked({ context, outDir, verdict, log });
+      context.remote_proof = verdict.proof;
+      context.build_id_served = verdict.proof.servedBuildId;
+      context.build_id_verified = true;
+      log(`deployment provenance verified: ${JSON.stringify(verdict.proof)}`);
     }
     let playwright;
     try {
@@ -243,7 +259,7 @@ async function main(argv) {
     try {
       browser = await launchBrowser(playwright, { headless: options.headless, chromiumPath: options.chromiumPath });
       // Build identity: the served document must reference the build of --app-dir (contract §2).
-      await report.scenario("preflight", "served build matches --app-dir build", async (s) => {
+      if (!remote) await report.scenario("preflight", "served build matches --app-dir build", async (s) => {
         const h = await newPage(browser, { baseUrl: context.base_url, redactor });
         try {
           const verdict = await s.step("read the served build id", async () => {
@@ -377,8 +393,41 @@ export function makeRunCleanup({ gate = null, project = "", fixtures, db, auth, 
   };
 }
 
+/**
+ * Remote provenance refused: nothing was created (no fixture, intent, write, browser). Writes a
+ * private result with one BLOCKED preflight scenario carrying ONLY the refusal code and stage.
+ * Exit 2 (preflight refusal).
+ */
+export async function writeRemoteBlocked({ context, outDir, verdict, log = () => {} }) {
+  mkdirSync(outDir, { recursive: true, mode: 0o700 });
+  chmodSync(outDir, 0o700);
+  const finished = { ...context, finished_at: new Date().toISOString(), finish_reason: "remote provenance refused" };
+  const scenario = { suite: "preflight", name: "deployment provenance (root receipt + served Flight build id)", status: "BLOCKED", steps: [], evidence: [], network: [], routeErrors: [], error: null, note: `refused at ${verdict.stage}: ${verdict.code}` };
+  const result = { context: finished, summary: { total: 1, pass: 0, fail: 0, anomaly: 0, blocked: 1 }, build_identity: buildIdentity(finished), scenarios: [scenario], cleanup: null, manifest: null, not_exercised: NOT_EXERCISED };
+  await writeFile(path.join(outDir, "result.json"), JSON.stringify(result, null, 2) + "\n", { mode: 0o600 });
+  await writeFile(path.join(outDir, "summary.md"), renderSummary(result) + renderIdentityAndCleanup(result), { mode: 0o600 });
+  log(`deployment provenance refused at ${verdict.stage}: ${verdict.code}; nothing created; exit 2`);
+  return 2;
+}
+
 /** Explicit build identity for result.json: results are attributable to --sha only when both are verified. */
 export function buildIdentity(context) {
+  if (context.mode === "remote") {
+    const proof = context.remote_proof ?? null;
+    return {
+      mode: "remote",
+      sha: context.sha,
+      sha_verified: !!proof && proof.sha === context.sha,
+      build_id_local: null,
+      build_id_served: proof?.servedBuildId ?? null,
+      build_id_verified: !!proof,
+      deployment_id: proof?.deploymentId ?? null,
+      captured_at: proof?.capturedAt ?? null,
+      provenance: proof?.provenance ?? null,
+      attributable: !!proof && proof.sha === context.sha,
+      note: proof ? "remote: root receipt + served Flight build id verified (deployment-proof helper)" : "NOT VERIFIED: remote provenance refused or absent; results must not be attributed to --sha",
+    };
+  }
   const verified = context.sha_verified === true && context.build_id_verified === true;
   return {
     sha: context.sha,
