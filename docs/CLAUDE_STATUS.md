@@ -913,3 +913,8 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - Root reviewed and deployed **`c246067f6767ac102c39b8e6b59fd9e7426dd59f`** as a separate static PUBLIC preview: deployment `dpl_C8BVtyGbwMwEvfiz6Yk4FocmkH9s`, https://depannage-electricite-aoiz0recn-brafas-projects.vercel.app/galerie.html — 4 pages anonymous 200, fresh browser at 390 with 0 cookies, no overflow, no JS errors, no API; 3 dialogs Escape PASS. Source byte-equal except the provider's opt-in feedback suffix (first raw byte check FAIL preserved, corrected; no new product code). Owner shown the 3 real full captures.
 - **DESIGN-DELIVO-TEST-002 DONE (bounded).** No adoption / app redesign; first prototype fd13ce6 and app 4c unchanged; prototype 002 not to be widened without a new owner order.
 - Next in parallel on own branches: LIVE-WORKSPACE-001 (lead, `claude/web-deeplink-refresh`, acc6c0b + contract cd2b8d3) and QA A9 (tracking, 82c2d52) — both awaiting root's read/GO. No QA cohort active (after T6 d79, root 42 PASS).
+
+## 2026-10-31 — A9 82c2d52 GO code; LIVE-WORKSPACE-001 source-only investigation
+
+- Root read A9 `82c2d52`: GO code — preflight 404 in a dedicated context closed in try/finally (refusal included), then no scenario session before the complete seed; T6/T9/T14/T16 unchanged; no relogin at failure; diagnostics kept; T19/provider order unchanged; LIVE-WORKSPACE-001 stays OPEN. Dispatched to a84ded5 (scenarios/tests/contract only); independent root review before cloud.
+- LIVE-WORKSPACE-001: lead investigation from SOURCE only — no SQL, no backend, no cloud agent; cloud facts (publication/RLS/Realtime) only through precise bounded reads requested from root.
