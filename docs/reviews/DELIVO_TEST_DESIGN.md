@@ -133,3 +133,9 @@
      ouverture d’un dialogue local (Échap) ; aucun conseil de bricolage dangereux.
 - Pas de doublon du bloc 4 services ; crédits photo en pied de page. Vérif : 1440/1280/390/360 × 2 thèmes, onglets
   clic + clavier, dialogue, AA, ≥ 44 px, aucune requête externe, console propre.
+- Livré 007 : `web-sections.html/.css/.js` + 4 photos (copies identiques). Héros 006 et bascule de thème repris tels quels.
+  `#interventions` 8 cartes (3 colonnes) + CTA, `#catalogue` 5 onglets ARIA (clic, ←/→, Début/Fin, tabindex itinérant
+  vérifiés), `#blog` à la une + 4 vignettes (dialogue local, Échap vérifié). Aucun prix, badge « populaire », date réelle
+  ni conseil de bricolage. Contraste minimal hors héros 5,41:1 dans les deux thèmes ; 8 cas sans débordement, cibles
+  ≥ 44 px, aucune requête externe, console propre. Crédits : héros (Fatih Yurtman, ranjeet) sous le héros ; toutes les
+  photos en pied de page (dont Ksenia Chernaya, Pexels 5691599).
