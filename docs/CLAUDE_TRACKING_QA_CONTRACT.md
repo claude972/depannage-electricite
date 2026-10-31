@@ -636,13 +636,11 @@ Règles à coder :
 
 Décision ROOT : la déconnexion globale actuelle du produit est conservée pour cette tranche, et l'authentification n'est pas modifiée pour la QA. C'est l'ordre et l'isolation du harnais qui s'adaptent. Ce correctif d'ordre QA ne demande aucune question au propriétaire.
 
-**e) Format des 404 Auth admin (postflight ROOT).** Le harnais actuel (`auth-admin.mjs` l. 85, `readUser`) considère TOUT statut 404 comme `absent`, quel que soit le corps. Ce comportement est trop large et sera corrigé. Seuls deux corps seront acceptés comme `absent` sur un `GET /auth/v1/admin/users/<id>` en statut 404 :
-- le format historique, objet exact `{code: 404, error_code: "user_not_found", msg: <chaîne>}` ;
-- le format actuel, objet exact `{code: "user_not_found", message: <chaîne>}` (aligné sur la relecture v2 de ROOT, forme exacte à confirmer par ROOT avant le code).
+**e) Format des 404 Auth admin (postflight ROOT).** Le harnais actuel (`auth-admin.mjs` l. 85, `readUser`) considère TOUT statut 404 comme `absent`, quel que soit le corps. Ce comportement est trop large et sera corrigé. Seul le corps historique, réellement observé par ROOT, sera accepté comme `absent` sur un `GET /auth/v1/admin/users/<id>` en statut HTTP 404 : objet JSON exact `{code: 404, error_code: "user_not_found", msg: <chaîne non vide>}`, sans aucune autre clé. Aucune autre forme n'est déclarée « actuelle » : elle ne serait ajoutée qu'avec une preuve officielle ou de transport, par un amendement séparé.
 
 Tout autre cas reste `unknown` et n'est jamais `absent` : 404 avec un autre corps ou sans corps, JSON invalide, clés en plus ou en moins, autre `error_code`.
 
-Ces règles ne changent rien d'autre : l'absence ne ferme toujours aucune intention (P2-2/P2-d), et la recherche paginée par e-mail garde sa preuve de fin. Le `UNKNOWN` d'origine du run 4e8bc1a68a89 reste tel quel. Tests prévus : chaque format accepté, ainsi qu'un 404 nu, un 404 HTML, un 404 avec un champ en plus et un 404 avec un autre `error_code`, tous `unknown`.
+Ces règles ne changent rien d'autre : l'absence ne ferme toujours aucune intention (P2-2/P2-d), et la recherche paginée par e-mail garde sa preuve de fin. Le `UNKNOWN` d'origine du run 4e8bc1a68a89 reste tel quel. Tests prévus : le corps historique exact est `absent`. Sont `unknown` : un 404 nu, un 404 HTML, un 404 avec un champ en plus, un 404 avec un autre `error_code`, un `msg` vide, la forme `{code: \"user_not_found\", message}`, et un statut 200 ou 500 portant le corps historique.
 
 ### 6. Ordre T19 / déconnexion (GO ROOT sur 7502e28, avant le code)
 
@@ -655,4 +653,4 @@ Ainsi, aucun scénario ultérieur ne peut réutiliser une session de `users.clie
 
 En défense supplémentaire, toute déconnexion faite par un scénario marque comme révoquées toutes les sessions du pool appartenant au même utilisateur. Un `session()` ultérieur pour cet utilisateur échoue en BLOCKED (« session révoquée par une déconnexion globale »), sans reconnexion silencieuse.
 
-Le comportement d'authentification du produit (déconnexion globale) est inchangé. Le format des 404 Auth (§5 e) attend la confirmation de la forme actuelle par ROOT et n'entre pas dans ce lot de code.
+Le comportement d'authentification du produit (déconnexion globale) est inchangé. Précision ROOT (§5 e) : seule la forme historique exacte prouve l'absence, et ce resserrement entre dans ce lot de code.
