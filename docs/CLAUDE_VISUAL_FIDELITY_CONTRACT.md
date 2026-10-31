@@ -416,3 +416,23 @@ bleu `#1457d9` 5,4:1 sur blanc) ; statut jamais porté par la couleur seule (pas
 Captures : `admin-dashboard-{360,1280}-after.jpg` (avant : `admin-dashboard-{360,1280}-before.jpg`). Tests :
 `tests/ui/admin-lists.test.ts` (`adminKpis` sans période ni tendance, `dashboardRows`) ; suite UI 91/91 ; `tsc` au vert ;
 console sans erreur.
+
+### Résultat du checkpoint 2 — listes (cibles 44 px, densité)
+
+| Constat | Fait |
+| --- | --- |
+| Liens de référence « INT-DEMO-00x » (Devis & Factures, Avis & Notes) à 32 px par style en ligne ; « Ouvrir le dossier » (Messages), liens d’assistance (`.subjectLink`, `.inlineLink`) à 32 px | Styles en ligne retirés ; règles à 44 px. |
+| Vue Messages : débordement horizontal à 360 (groupe de segments `flex: 0 0 auto` non réductible) | Groupe de segments réductible et passant à la ligne (`flex: 1 1 auto; min-width: 0`). |
+| Actions de ligne « Examiner » / « Ouvrir » (Artisans, Interventions) à 40 px | 44 px depuis le checkpoint 1 (`.rowAction`). |
+
+Vérifié (démo, 360 et 1280) : 0 élément interactif < 44 px et aucun débordement sur Artisans, Interventions, Devis &
+Factures, Clients, Avis & Notes, Messages, Paramètres, Garantie ; console sans erreur. Captures `admin-artisans-1280-after.jpg`,
+`admin-quotes-360-after.jpg`, `admin-messages-360-after.jpg` (avant : `admin-artisans-1280-before.jpg`,
+`admin-quotes-360-before.jpg`). Filtres, pagination réelle des annuaires et pieds « parmi les N derniers chargés » inchangés.
+
+### Bilan Super Admin (checkpoints 1–2)
+
+Présentation seulement : aucune route, commande ni donnée nouvelle ; totaux serveur et bornes de liste inchangés ;
+entrées du back-office toujours gardées par `platformEntries` (présentes en démo Super Admin, absentes sinon).
+Écarts assumés consolidés : pas de sélecteur de période, de tendance, de CA HT, d’e-mail, de catégorie, de compteur de
+documents ni d’échéance ; entrées Garantie et back-office en plus de M43 (fonctions réelles).

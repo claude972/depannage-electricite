@@ -665,7 +665,7 @@ export function AdminSpace({ session }: { session: Session }) {
                   const i = interventionOf(q.intervention_id);
                   return (
                     <span className={styles.cellStack}>
-                      <button type="button" className={styles.link} style={{ minHeight: 32 }} onClick={() => openDossier(q.intervention_id)}>
+                      <button type="button" className={styles.link} onClick={() => openDossier(q.intervention_id)}>
                         {shortId(q.intervention_id)}
                       </button>
                       <small>{i ? category(i.category).label : "Dossier non chargé"}</small>
@@ -776,7 +776,7 @@ export function AdminSpace({ session }: { session: Session }) {
                   const i = interventionOf(r.intervention_id);
                   return (
                     <span className={styles.cellStack}>
-                      <button type="button" className={styles.link} style={{ minHeight: 32 }} onClick={() => openDossier(r.intervention_id)}>
+                      <button type="button" className={styles.link} onClick={() => openDossier(r.intervention_id)}>
                         {shortId(r.intervention_id)}
                       </button>
                       <small>{i ? `${category(i.category).label} · ${i.city}` : "Dossier non chargé"}</small>
