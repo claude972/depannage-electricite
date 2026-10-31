@@ -133,6 +133,9 @@
   gap: 8px;
 }
 .mobileHeader > button:first-child {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   padding: 0;
   text-align: left;
 }
@@ -334,7 +337,8 @@
   border-radius: 12px;
   background: var(--blue);
   color: #fff;
-  font-size: 17px;
+  /* M61 : libellé sur une seule ligne dès 360 px (15,5 px), 17 px à partir de ~400 px. */
+  font-size: clamp(14px, 4.3vw, 17px);
   font-weight: 650;
   text-align: left;
 }
@@ -353,6 +357,9 @@
 }
 .ctaButton > span:nth-child(2) {
   flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .sectionRow {
   display: flex;
@@ -459,6 +466,30 @@
   margin-top: 4px;
   font-size: 13px;
   color: var(--muted);
+}
+/* M61 : état à gauche sur une ligne, date alignée à droite sur la même rangée. */
+.recentMeta {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+.recentMeta :global(.badge) {
+  white-space: nowrap;
+}
+.recentMeta time {
+  flex: none;
+  white-space: nowrap;
+  margin-left: auto;
+}
+.recentBody strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Cibles ≥ 44 px pour les liens texte du tableau de bord desktop (classes globales à 25 px). */
+.space .desktopOnly .linkTarget {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
 }
 
 /* ---- Vue d’ensemble desktop ------------------------------------------------------- */

@@ -439,3 +439,13 @@ compteurs de messages reçus. Les absences restent explicites (« Carte non disp
 1. Accueil M61 + cibles desktop — captures `client-overview-{360,1280}-after.jpg`.
 2. Devis V8-C06 — captures `client-quote-{360,1280}-after.jpg`.
 3. Détail V8-C07 — captures `client-detail-{360,1280}-after.jpg`.
+
+### Résultat du checkpoint 1 — accueil M61 (client)
+
+Captures `docs/visual-fidelity/client-overview-{360,1280}-after.jpg`. Lignes récentes : état sur une ligne et date
+alignée à droite sur la même rangée (la date passe sous l’état seulement quand le libellé d’état est trop long à
+360 px, sans troncature) ; CTA sur une ligne à 360 (`clamp(14px, 4.3vw, 17px)`) ; marque mobile et liens texte du
+tableau de bord desktop portés à 44 px via des classes du module (`globals.css` intouché). Logique pure
+`components/role/client-lists.ts` (`recentRowDescriptor`, `quoteLineCells`, `quoteDecisionState`, `CLIENT_STEPS`,
+`currentStepIndex`, `detailHistory`) couverte par `tests/ui/client-lists.test.ts`. Mesures automatisées à 360 et
+1280 : 0 cible interactive visible < 44 px, aucun débordement horizontal, console vide. Desktop inchangé hors cibles.

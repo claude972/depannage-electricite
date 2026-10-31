@@ -54,6 +54,7 @@ import type {
   View,
 } from "../app/types";
 import styles from "./client.module.css";
+import { recentRowDescriptor } from "./client-lists";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
 import { PlatformPage } from "./platform-anchor";
@@ -574,29 +575,30 @@ function OverviewView({ session, rows }: { session: Session; rows: Intervention[
         </div>
         {recent.length ? (
           <div className={styles.recentList}>
-            {recent.map((i) => (
-              <button
-                type="button"
-                key={i.id}
-                className={styles.recentRow}
-                onClick={() => session.openIntervention(i.id)}
-              >
-                <span>
-                  <Icon name={category(i.category).icon} size={22} />
-                </span>
-                <span className={styles.recentBody}>
-                  <strong>{category(i.category).label}</strong>
+            {recent.map((i) => {
+              const row = recentRowDescriptor(i, (id) => category(id).label);
+              return (
+                <button
+                  type="button"
+                  key={i.id}
+                  className={styles.recentRow}
+                  onClick={() => session.openIntervention(i.id)}
+                >
                   <span>
-                    {i.address}, {i.postal_code} {i.city}
+                    <Icon name={category(i.category).icon} size={22} />
                   </span>
-                  <span className={styles.recentMeta}>
-                    <Badge status={i.status} />
-                    <span>{date(i.created_at)}</span>
+                  <span className={styles.recentBody}>
+                    <strong>{row.title}</strong>
+                    <span>{row.address}</span>
+                    <span className={styles.recentMeta}>
+                      <Badge status={row.status} />
+                      <time dateTime={row.createdAt}>{date(row.createdAt)}</time>
+                    </span>
                   </span>
-                </span>
-                <Icon name="arrow" size={18} />
-              </button>
-            ))}
+                  <Icon name="arrow" size={18} />
+                </button>
+              );
+            })}
           </div>
         ) : (
           <section className="panel">{emptyList}</section>
@@ -731,7 +733,7 @@ function OverviewView({ session, rows }: { session: Session; rows: Intervention[
                 L’estimation est indicative. Avant de commencer, votre artisan vous propose un
                 devis détaillé à accepter.
               </p>
-              <button type="button" className="text-button" onClick={() => session.go("help")}>
+              <button type="button" className={`text-button ${styles.linkTarget}`} onClick={() => session.go("help")}>
                 Comprendre les étapes <Icon name="arrow" size={15} />
               </button>
             </section>
@@ -753,7 +755,7 @@ function OverviewView({ session, rows }: { session: Session; rows: Intervention[
               </span>
               <section>
                 <strong>Une question sur le parcours ?</strong>
-                <button type="button" onClick={() => session.go("help")}>
+                <button type="button" className={styles.linkTarget} onClick={() => session.go("help")}>
                   Consulter l’aide
                 </button>
               </section>
