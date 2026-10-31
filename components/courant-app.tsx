@@ -2332,10 +2332,10 @@ export default function CourantApp() {
   const reprobeFeature = useCallback(
     async (key: FeatureKey, hint?: ReprobeHint) => {
       const bundle = features;
-      const generation = guard.generation();
-      // Alive = same identity generation, still live, and the bundle handed to the leaves is still
-      // this one (rebuilt on identity/profile change). Checked at entry and after every await.
-      const alive = () => modeRef.current === "live" && generation === guard.generation() && featuresRef.current === bundle;
+      // Alive = the bundle's OWNER generation (captured when the bundle was built, never at
+      // invocation) is still the current one, mode still live, and the bundle handed to the leaves
+      // is still this one. A guard bump before the next render already makes it false.
+      const alive = () => modeRef.current === "live" && bundle.owner === guard.generation() && featuresRef.current === bundle;
       await reprobe(key, hint, {
         bundle,
         alive,

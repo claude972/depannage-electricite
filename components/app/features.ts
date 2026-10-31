@@ -44,8 +44,10 @@ export type ReprobeContext = {
   /** True while the identity, mode and bundle that started this re-probe are still current. */
   alive(): boolean;
   setState(key: FeatureKey, state: ContractState): void;
-  setUnread(count: number): void;
-  setAccess(access: PlatformAccess): void;
+  /** null = the count is no longer known (current failure). */
+  setUnread(count: number | null): void;
+  /** null = the access reply is withdrawn (current refusal/failure): the shells close the gate. */
+  setAccess(access: PlatformAccess | null): void;
   /** Active enterprise site when the hint carries none. */
   activeSiteId?: string;
 };
@@ -61,15 +63,30 @@ export async function reprobe(key: FeatureKey, hint: ReprobeHint | undefined, ct
   if (!ctx.alive()) return;
   ctx.setState(key, "unknown");
   const swallow = () => null;
+  // Three outcomes per read: a value (apply), null (stale chain: no effect at all), an exception
+  // (CURRENT failure or refusal: withdraw the derived data under the same guard, never keep stale
+  // rights alive — e.g. /me answering 401/403 after the rights were valid closes the gate).
   switch (key) {
     case "notifications": {
-      const summary = await ctx.bundle.notifications.summary().catch(swallow);
+      let summary: Awaited<ReturnType<typeof ctx.bundle.notifications.summary>>;
+      try {
+        summary = await ctx.bundle.notifications.summary();
+      } catch {
+        if (ctx.alive()) ctx.setUnread(null);
+        return;
+      }
       if (!ctx.alive() || summary === null) return;
       ctx.setUnread(summary.unread_count);
       return;
     }
     case "platformOperations": {
-      const access = await ctx.bundle.platform.load.me().catch(swallow);
+      let access: Awaited<ReturnType<typeof ctx.bundle.platform.load.me>>;
+      try {
+        access = await ctx.bundle.platform.load.me();
+      } catch {
+        if (ctx.alive()) ctx.setAccess(null);
+        return;
+      }
       if (!ctx.alive() || access === null) return;
       ctx.setAccess(access);
       return;
@@ -313,6 +330,8 @@ export type FeatureClients = {
   platform: PlatformClient;
   /** True when every client above operates on demonstration seeds only (no network). */
   demo: boolean;
+  /** Identity generation that owns this bundle, captured at construction (never at invocation). */
+  owner: number;
 };
 
 export function createFeatureClients(input: FeatureDeps): FeatureClients {
@@ -324,6 +343,7 @@ export function createFeatureClients(input: FeatureDeps): FeatureClients {
     quoteDocuments: createQuoteDocumentsClient(deps),
     platform: createPlatformClient(deps),
     demo: false,
+    owner: deps.owner as number,
   };
 }
 
@@ -392,5 +412,6 @@ export function createDemoFeatureClients(role: Role): FeatureClients {
       },
     },
     demo: true,
+    owner: -1, // demonstration bundles never re-probe
   };
 }

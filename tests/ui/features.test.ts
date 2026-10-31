@@ -295,8 +295,8 @@ test("reprobe: nominal path applies the reply; a null (stale) reply is not a fai
   const base = {
     alive: () => true,
     setState: (k: string, s: string) => effects.push(`state:${k}:${s}`),
-    setUnread: (n: number) => effects.push(`unread:${n}`),
-    setAccess: (a: { super_admin: boolean }) => effects.push(`access:${a.super_admin}`),
+    setUnread: (n: number | null) => effects.push(`unread:${n}`),
+    setAccess: (a: { super_admin: boolean } | null) => effects.push(`access:${a === null ? "null" : a.super_admin}`),
   };
   const live = { ...base, bundle: { notifications: { summary: async () => ({ unread_count: 2, latest_created_at: null }) }, platform: { load: { me: async () => ({ super_admin: true }) } } } as never };
   await reprobe("notifications", undefined, live);
@@ -307,4 +307,34 @@ test("reprobe: nominal path applies the reply; a null (stale) reply is not a fai
   await reprobe("notifications", undefined, stale);
   await reprobe("platformOperations", undefined, stale);
   assert.deepEqual(effects, ["state:notifications:unknown", "state:platformOperations:unknown"], "null never clears the unread count or the access reply");
+});
+
+test("reprobe: a CURRENT /me refusal withdraws the access (gate closes), a stale null keeps nothing alive either way", async () => {
+  const { reprobe } = await import("../../components/app/features");
+  const effects: string[] = [];
+  const base = {
+    alive: () => true,
+    setState: (k: string, s: string) => effects.push(`state:${k}:${s}`),
+    setUnread: (n: number | null) => effects.push(`unread:${n}`),
+    setAccess: (a: { super_admin: boolean } | null) => effects.push(`access:${a === null ? "null" : a.super_admin}`),
+  };
+  const refusing = { ...base, bundle: { platform: { load: { me: async () => { throw new ApiRequestError(401, "Session expirée"); } } }, notifications: { summary: async () => { throw new ApiRequestError(403, "refus"); } } } as never };
+  await reprobe("platformOperations", undefined, refusing);
+  await reprobe("notifications", undefined, refusing);
+  assert.deepEqual(effects, ["state:platformOperations:unknown", "access:null", "state:notifications:unknown", "unread:null"], "a current exception withdraws the derived rights/data");
+  // Same exception but the chain died meanwhile: nothing applied.
+  effects.length = 0;
+  let aliveNow = true;
+  const dying = { ...refusing, alive: () => aliveNow, bundle: { platform: { load: { me: async () => { aliveNow = false; throw new ApiRequestError(401, "x"); } } } } as never };
+  await reprobe("platformOperations", undefined, dying);
+  assert.deepEqual(effects, ["state:platformOperations:unknown"]);
+});
+
+test("bundle owner is captured at construction, not at invocation", async () => {
+  const h = harness(() => Promise.resolve({ ok: 1 }));
+  const bundle = createFeatureClients(h.deps);
+  assert.equal(bundle.owner, 1);
+  h.bump();
+  assert.equal(bundle.owner, 1, "unchanged by later identity changes");
+  assert.equal(createFeatureClients(h.deps).owner, 2);
 });
