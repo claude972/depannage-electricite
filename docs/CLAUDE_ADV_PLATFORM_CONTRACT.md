@@ -146,3 +146,37 @@ Conventions communes : `authenticatedClient`, `assertOrigin` sur mutations, zod 
 
 ## 11. Non fait, explicitement
 Aucun appel Stripe (remboursement, facturation, commission réelle) ; aucun webhook ajouté ; aucun PDF (interface déclarée §6) ; pas de scope support ; pas de modification d’`admin_overview()` ni des routes admin existantes ; aucune donnée commerciale ou réglementaire inventée.
+
+---
+
+## Amendement A1 — correction pilote P1 sur 5634b79 (avant tout code)
+Le texte ci-dessus reste l’historique ; en cas de divergence, cet amendement prévaut.
+
+### A1.1 Taux de commission : valeur serveur de confiance, jamais un argument opérateur
+- `platform_reconcile(p_limit integer)` ne prend **plus** de taux. Le taux est lu dans la base au moment du rapprochement depuis `platform_settings` clé `commission_bps` (`{bps: 0..10000}`), écrite uniquement par un super administrateur via `platform_set_setting` (versionnée, auditée). Absente ⇒ aucune estimation n’est créée et la réponse porte `commission_bps: null` (« non configuré »).
+- Chaque entrée porte un **instantané historique** dans `basis` : `{rate_source:'platform_setting', bps, setting_version, gross_cents}`. Un changement ultérieur du taux ne modifie jamais une entrée (ledger immuable).
+- Deux natures distinctes, jamais confondues dans les données ni dans l’interface :
+  - `commission_estimated` (débit) — estimation au taux configuré, libellée « estimation au taux configuré, non prélevée » ;
+  - `commission_withheld` (débit) — commission réellement retenue, connue uniquement par un événement fournisseur confirmé ; inscrite par `public.platform_record_commission_withheld(p_payment_id, p_event_id, p_event_type, p_amount_cents, p_currency)` réservée à `service_role` (événement inédit dans `stripe_events`, unique par paiement). Aucune route de ce lot ne l’appelle : déclarée pour le code paiement existant.
+- Le rapport expose `ledger.commission_estimated_{count,cents}` et `ledger.commission_withheld_{count,cents}` séparément. Le checkout continue de lire `PLATFORM_FEE_BPS` (code non modifié) ; la route `GET /finance` expose `config.commission = {setting_bps, setting_version, checkout_bps, aligned}` et l’interface signale un écart sans le résoudre.
+- Facture `platform_commission` : exige désormais une entrée `commission_withheld` (montant confirmé), jamais l’estimation. Sans fournisseur configuré, l’état « commission non confirmée par le fournisseur de paiement » est affiché et l’émission reste impossible.
+
+### A1.2 Raccordement aligné sur `docs/CLAUDE_WEB_SHARED_CONTRACT.md` (remplace le §9)
+- Clé `Capabilities` : `platformOperations` ; route sonde `GET /api/platform-operations/me` (remplace `/access`, même réponse) ; vues `platform-operators`, `platform-finance`, `platform-moderation`.
+- Les composants feuilles n’importent rien de `components/app/**` ni `components/courant-app` ; types propres dans `lib/features/platform-operations/types.ts` ; primitives via les classes globales (`.tag`, `.stat`, `.unavailable`, `.field-error`, `.empty-state`, `.page-loader`) et un CSS module du lot.
+- Props exactes de chaque composant (`PlatformOperatorsView`, `PlatformFinanceView`, `PlatformModerationView`) :
+  - `state: "unknown" | "available" | "missing" | "unavailable"` et `unavailableMessage: string` ;
+  - `scope: { userId, role, organizationId?, siteId?, authority: { canWrite: boolean; reason?: string } }` — aucun droit déduit ; contrôles d’écriture masqués avec la raison quand `authority.canWrite` est faux ; tout refus serveur rendu tel quel ;
+  - `client: PlatformClient` (obligatoire, injecté par le lead sur `api()`), typé `{ load: { me, operators, audit, finance, ledger, invoices, invoice, refundRequests, disputes, reviews }, command: { grant, revoke, setSuperAdmin, setSetting, reconcile, invoiceReadiness, issueInvoice, issueCreditNote, requestRefund, decideRefund, openDispute, decideDispute, moderateReview, contestReview, decideContestation } }` ; chaque `command` renvoie `T | null`, `null` = chaîne périmée : aucun message de succès, aucune mise à jour d’état ; les `load` renvoient `T | null` de même ;
+  - `demo?: PlatformDemo` (graines dans `lib/features/platform-operations/demo.ts`, jamais mélangées) : en démo aucun appel `client` n’est émis ;
+  - `onNavigate?(view, param?)`.
+- Changement de `scope.userId`/`role` ⇒ remise à zéro des formulaires et données chargées (clé de montage).
+- La réponse `/me` reste la seule source des scopes ; le menu ne crée aucun droit.
+
+### A1.3 Opérateurs support : non livré
+Aucun scope support n’est défini dans ce lot. Un compte support ne reçoit **jamais** un rôle admin général à la place ; l’éventuel scope sera ajouté par le propriétaire des routes d’assistance avec `has_platform_scope('support')` dans une migration ultérieure.
+
+### A1.4 Durcissement
+- Demandes de remboursement, litiges, factures et avoirs : clé `request_id` unique **et** `content_fingerprint` (md5 du contenu canonique : paiement, montant, devise, motif/facture) stocké ; un rejeu avec le même `request_id` et un contenu différent est refusé (`P0001`), un rejeu identique renvoie `replayed:true`. Toute écriture finance d’un paiement s’exécute sous `select … from payments where id=… for update` (verrou ligne, ordre de verrouillage : paiement puis entité) ; les plafonds (somme des demandes, avoirs cumulés) sont recalculés sous ce verrou.
+- Dernier super administrateur : trigger `before update of role or delete` sur `profiles` qui prend `pg_advisory_xact_lock(hashtext('profiles_super_admin'))` puis compte les autres admins (sérialisation des décisions concurrentes), couvrant mises à jour directes, `service_role` et la cascade `auth.users`. L’RPC ajoute le même verrou ; aucune voie applicative ne contourne le trigger.
+- Avis masqués exclus de **tous** les agrégats, y compris SECURITY DEFINER : `artisan_performance` (007) est renommée `artisan_performance_before_review_moderation` et réécrite avec la même signature pour ne compter que les avis visibles ; `platform_finance_report` et `platform_access` ne touchent pas aux avis ; aucune autre fonction existante n’agrège `reviews` (vérifié par grep des migrations 001–013). La revue SQL teste : avis masqué absent de `artisan_performance`, invisible aux participants non auteurs, visible à l’auteur et au modérateur, jamais supprimé.
