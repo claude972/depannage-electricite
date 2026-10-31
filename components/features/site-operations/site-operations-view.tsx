@@ -146,7 +146,7 @@ function Content({ scope, client, demo, onNavigate, siteId }: SiteOperationsView
       {loading && !report && <Loading label="Chargement des opérations du site…" />}
       {context && (
         <>
-          <div className="tabs" role="tablist" aria-label="Sections des opérations du site">
+          <div className={`tabs ${styles.tablist}`} role="tablist" aria-label="Sections des opérations du site">
             {TABS.map((t) => (
               <button key={t.id} type="button" role="tab" id={`so-tab-${t.id}`} aria-selected={tab === t.id} aria-controls={`so-panel-${t.id}`} className={tab === t.id ? "active" : ""} onClick={() => setTab(t.id)}>
                 {t.label}

@@ -32,6 +32,15 @@
   font-size: 13px;
   font-weight: 400;
 }
+/* Tabs: dense but ≥ 44 px targets (DESIGN.md); the global .tabs wraps, so nothing overflows at 360. */
+.tablist {
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.tablist > button {
+  min-height: 44px;
+  padding: 8px 12px;
+}
 .panel {
   display: grid;
   gap: 16px;
