@@ -10,7 +10,7 @@ import path from "node:path";
 import { login, openHash, api, capture, bodyText, expectVisible, expectAbsentOrDisabled, postsTo, waitForApi, sleep, noHorizontalOverflow } from "../../qa/lib/browser.mjs";
 import { AppDefect } from "../../qa/lib/report.mjs";
 import { euroDigits, expectedEtag, inspectPdf, quoteReference } from "../lib/pdf.mjs";
-import { assertNoUiWrites, settledBaseline } from "../lib/network.mjs";
+import { assertNoUiWrites, settledBaseline, windowStart } from "../lib/network.mjs";
 import { acceptedStatusShown, isId, scenarioWhen, snapshotValidUntil } from "../lib/prerequisites.mjs";
 
 const PANEL = 'section[aria-labelledby="quote-documents-title"]';
@@ -328,7 +328,7 @@ export const suite = {
           assert.equal(events.length, 0, "no event recorded for the third party");
           // UI window starts here: the single driver POST (generate, 403) is before the baseline.
           window = await settledBaseline(h, { since: beforeProbes, driverMutations: 1, origin: base });
-          return { overview: overview.status, download: download.status(), generate: generate.status, ui_window_from: window.index };
+          return { overview: overview.status, download: download.status(), generate: generate.status, ui_window_from: windowStart(h, window) };
         });
         await s.step("UI: the dossier content is not visible to the third party", async () => {
           await openHash(h.page, base, `detail/${d1.id}`);

@@ -87,3 +87,7 @@ export function closeUiWindow(h, token) {
     if (typeof h.page.off === "function") h.page.off("request", state.listener);
   }
 }
+/** Window start for traces (read from the internal registry; the token itself exposes nothing). */
+export function windowStart(h, token) {
+  return stateOf(h, token).index;
+}

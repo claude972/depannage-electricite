@@ -1172,3 +1172,14 @@ test("§20 bis root repro ported with the REAL shared newPage handle: UI POST st
   assert.throws(() => net.assertNoUiWrites(h, foreign), (e: Error) => e.name === "UiWindowError", "wrong context: harness error, not PASS");
   assert.throws(() => net.assertNoUiWrites({ page: new EventEmitter(), network: [] }, {}), (e: Error) => e.name === "UiWindowError", "missing baseline: harness error");
 });
+test("§20 P3 trace: windowStart (used for ui_window_from) equals the asserted window start; the token still exposes nothing", async () => {
+  const net = await lib("network");
+  const { h, emit } = fakeHandle([{ method: "GET", path: "/api/workspace", status: 200 }]);
+  emit("POST", "/api/quote-documents").respond(403);
+  const window = await net.openUiWindow(h, { since: 1, driverMutations: 1, origin: ORIGIN });
+  const traced = net.windowStart(h, window);
+  assert.equal(traced, 2);
+  assert.equal(traced, net.assertNoUiWrites(h, window).window_from);
+  assert.equal((window as Row).index, undefined);
+  assert.throws(() => net.windowStart(fakeHandle().h, window), (e: Error) => e.name === "UiWindowError");
+});

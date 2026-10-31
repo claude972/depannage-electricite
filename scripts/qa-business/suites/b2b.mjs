@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { login, openHash, api, capture, bodyText, expectVisible, expectAbsentOrDisabled, postsTo, waitForApi, sleep, safeRoute, sessionAccessToken, noHorizontalOverflow } from "../../qa/lib/browser.mjs";
 import { userRpc } from "../../qa/lib/supabase.mjs";
-import { assertNoUiWrites, settledBaseline } from "../lib/network.mjs";
+import { assertNoUiWrites, settledBaseline, windowStart } from "../lib/network.mjs";
 
 const OPS = 'section[aria-labelledby="site-operations"]';
 const TABS = ["Équipements", "Maintenance", "Budget", "Grilles", "Délais", "Contrôles ERP", "Historique"];
@@ -404,7 +404,7 @@ export const suite = {
           assert.equal(b1.body?.snapshot?.site?.id, siteB1.id);
           assert.equal(await db.count("site_equipment", { site_id: `eq.${siteA1.id}` }), 1);
           window = await settledBaseline(h, { since: beforeProbes, driverMutations: 1, origin: base });
-          return { a1: a1.status, post: refusedPost.status, b1: b1.status, ui_window_from: window.index };
+          return { a1: a1.status, post: refusedPost.status, b1: b1.status, ui_window_from: windowStart(h, window) };
         });
         await s.step("UI: #site/<A1> shows nothing of A1; own site B1 shows its operations", async () => {
           await openHash(h.page, base, `site/${siteA1.id}`);
