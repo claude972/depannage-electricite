@@ -1,28 +1,54 @@
-# DETAIL-READ — lecture ponctuelle autorisée d’un dossier hors des 100 récents (proposition, aucun code)
+# DETAIL-READ — lecture ponctuelle autorisée d’un dossier hors des fenêtres du workspace (proposition, aucun code)
 
-Base `58b76414` ; branche `claude/web-remaining-contracts`. **Docs seulement** ; revue root avant tout code. Aucune modification de la recette 28b ni des fichiers UI réservés au lead (layout, globals, thème).
+Base `58b76414` ; branche `claude/web-remaining-contracts`. **Docs seulement** ; revue root puis contre-revue avant tout code (backend Codex, consommateur lead). Aucune modification de la recette 28b ni des fichiers UI réservés au lead (layout, globals, thème). Rapport de revue intégré : DETAIL-CONTRACT-2F9-001/002/003.
 
 ## 1. Constat
-`app/api/workspace/route.ts` lit `interventions` `order(created_at desc).limit(100)` (plus au plus 100 offres artisan via `available_missions`), mais **aussi** `sites` (100), `organizations` (50), `quotes` (200), `messages` (500), `documents` (100), `payments` (100). Un dossier hors fenêtre peut donc aussi manquer de **son site, son organisation, ses devis** dans l’instantané. Une vue `#detail/<id>` / `#mission/<id>` d’un dossier plus ancien que les 100 plus récents visibles reste « introuvable » après le rafraîchissement causal (`docs/CLAUDE_DEEPLINK_TRUNCATION.md`), alors que le dossier existe et est lisible sous RLS.
+`app/api/workspace/route.ts` (58b) lit : `interventions` 100 (`created_at desc`) + au plus 100 offres (`available_missions`, artisans), `quotes` 200, `sites` 100, `organizations` 50, `messages` 500, `documents` 100, `payments` 100, `organization_members` 500, `intervention_appointments` 200 (seul signal existant : `appointments_limited`). Un dossier hors fenêtre — ou son site, son organisation, ses devis — peut manquer de l’instantané ; `#detail/<id>` affiche alors « introuvable » à tort. Aucun endpoint ne renvoie aujourd’hui le dossier complet (`GET /api/interventions/[id]/operations` n’est qu’un modèle de structure).
 
-## 2. Contrat
-- **Route** : `GET /api/interventions/<id>` (nouveau fichier `app/api/interventions/[id]/route.ts` ; il n’existe aujourd’hui **aucun** endpoint renvoyant le dossier complet — `GET /api/interventions/[id]/operations` sert de **modèle** de structure seulement), utilisée **seulement** quand l’id est absent d’un instantané **limité**. Une requête par id ; pas de liste, pas de recherche.
-- **Autorisation** : client utilisateur `authenticatedClient()` existant (jeton de session, aucune clé serveur) ; lecture **sous RLS** uniquement : `interventions_read` = `can_access_intervention(id)`, qui couvre déjà client direct (`client_id`, dossier sans site), artisan attribué (`artisan_id`), périmètre organisation/site (`can_access_site`) et admin. **Aucun élargissement** : une offre non attribuée reste invisible ici (elle n’existe que via `available_missions`, sans adresse) ; aucun `security definer` nouveau, aucune policy modifiée.
-- **Résolution par id, projection explicite** (jamais `select *`) : la ligne `interventions` de cet id (liste de colonnes explicite, identique à celles que la vue de détail consomme aujourd’hui) puis **uniquement les dépendances liées dont cet id a besoin**, chacune lue par identifiant et sous RLS : son **site** (`site_id` du dossier, si non nul), l’**organisation** de ce site, ses **devis** (`quotes.intervention_id = id`), et, filtrés par `intervention_id`, `messages` (≤ 500), `documents` (`id,intervention_id,owner_id,name,mime_type,created_at`), `payments` des devis de ce dossier (`id,quote_id,total_cents,currency,status,created_at,paid_at`), `intervention_appointments` (colonnes du workspace, ≤ 200). Une dépendance non visible sous RLS est renvoyée `null`/vide, jamais lue autrement ; aucun champ nouveau, aucune finance nouvelle, aucun taux.
-- **Jamais** de clé serveur / `service_role`, **jamais** d’offre non attribuée (pas d’appel à `available_missions` ; une offre n’est pas lisible par `interventions_read`).
-- **Réponses** :
-  - `200` + enregistrement validé ;
-  - `404` « introuvable » **sans divulgation** : uniquement quand la lecture **a réussi** et ne renvoie aucune ligne sous RLS (id inexistant ou non visible), ou id non UUID — cas **indiscernables** (même corps, même code) ;
-  - `401` session absente/expirée (comme les autres routes) ;
-  - `503` + `Retry-After` court pour une erreur de transport/base (`dbError` existant) : **distinct** de 404, le consommateur peut réessayer une fois ; jamais converti en « introuvable ».
-  - `Cache-Control: private, no-store`.
-- **Débit** : aucune nouvelle limite/compteur ; une lecture par id demandé et par génération (voir §3).
+## 2. Déclencheur — signal de troncature (DETAIL-CONTRACT-2F9-001)
+- **À ajouter (backend, propriétaire Codex)** à l’enveloppe du workspace, sans inventer d’autre indicateur : `limits: { interventions: { limit: 100, limited: boolean }, quotes: { limit: 200, limited }, sites: { limit: 100, limited }, organizations: { limit: 50, limited } }`, où `limited` est **vrai si la lecture a renvoyé exactement `limit` lignes** (lecture `limit + 1`, ligne surnuméraire non exposée, ou `count: "exact"`) — jamais estimé.
+- Le consommateur appelle la lecture ponctuelle **seulement si** l’id demandé est absent **et** `limits.interventions.limited = true` (ou, pour un dossier présent dont le site/l’organisation/les devis manquent, si la collection correspondante est `limited`).
+- **Sans signal** (enveloppe d’une version qui ne le porte pas, ou `limits` absent/illisible) : aucune lecture ponctuelle automatique ; la vue affiche « Ce dossier n’apparaît pas parmi les dossiers chargés » avec une action explicite « Ouvrir quand même » qui déclenche **une** lecture ponctuelle à la demande de l’utilisateur ; jamais « introuvable » affirmé sans lecture.
 
-## 3. Consommateur et réponses périmées
-- **Fichiers séparés** : backend `app/api/interventions/[id]/route.ts` ; types/validation `lib/features/workspace/detail-read.ts` (schéma de la réponse, même validation que les éléments du workspace) ; consommateur front `lib/features/workspace/use-detail-read.ts` (hook sans UI) ; câblage dans la vue par le lead.
-- **Contexte / génération** : chaque demande porte `(identité, rôle, organisation, site, id, generation)` ; la génération est incrémentée à chaque changement d’identité (session/profil), de rôle, d’organisation ou de site actifs, et à chaque nouvelle demande pour l’id. Une réponse arrivant pour une génération ou un profil antérieurs est **ignorée** (périmée) ; une seule requête en vol par `(profileId, id)` ; annulation (`AbortController`) au démontage ou au changement de hash.
-- **Cache de détail indépendant** de la liste des 100 : un 200 est stocké dans un cache de détail propre (clé `(identité, rôle, organisation, site, id)`), **non fusionné** dans la liste (le signal « limité » reste exact) — sinon le rafraîchissement suivant du workspace l’effacerait. Il alimente uniquement la vue de détail de cet id ; il est invalidé par un événement realtime sur ce dossier, un rafraîchissement explicite de la vue ou un changement de génération.
-- **États UI** (texte au lead) : chargement ; 404 ⇒ « introuvable ou non accessible » ; 503 ⇒ « momentanément indisponible, réessayer » ; 401 ⇒ reconnexion.
+## 3. Route et autorisation
+- `GET /api/interventions/<id>` — nouveau fichier `app/api/interventions/[id]/route.ts` ; client de session `authenticatedClient()` existant ; **jamais** de clé serveur / `service_role` ; lectures **sous RLS uniquement** ; aucune policy, aucun `security definer` nouveau ; pas de nouveau taux, pas de finance nouvelle.
+- **Périmètres** (via `interventions_read` = `can_access_intervention(id)`) : client direct, y compris **le dossier d’un client propriétaire sans artisan attribué** (il est accessible au client et doit être servi) ; artisan **attribué** ; membres du périmètre organisation/site ; admin.
+- **« Offre non attribuée »** signifie un dossier **non accessible à l’artisan** demandeur (proposé via `available_missions`, sans adresse) : la route n’appelle jamais `available_missions` et n’élargit rien ; pour un artisan non attribué, la lecture RLS renvoie 0 ligne ⇒ 404.
 
-## 4. Tests attendus (avant toute recette)
-Unitaires de la route avec faux client : 200 pour client direct, artisan attribué, membre d’organisation/site, avec site/organisation/devis résolus par id même hors des fenêtres 100/50/200 ; dépendance non visible ⇒ `null`/vide sans erreur ; 404 identique pour inexistant, non UUID, autre client, ancien artisan après réaffectation, membre retiré, offre non attribuée ; 503 sur erreur base ou transport (jamais 404) ; projection : aucune colonne hors liste, aucun `select *`, aucune clé serveur ; consommateur : cache de détail conservé après un rafraîchissement du workspace, réponse périmée ignorée (identité/rôle/organisation/site/id), une requête en vol, annulation. Revue SQL non requise (aucun SQL).
+## 4. Enveloppe 200 (DETAIL-CONTRACT-2F9-002)
+```
+{
+  "intervention": { <projection explicite, mêmes colonnes que celles consommées par la vue de détail> },
+  "site":         { "status": "ok", "value": { id, organization_id, name, type, address, budget_cents, created_at } } | { "status": "none" } | { "status": "hidden" } | { "status": "error" },
+  "organization": { "status": "ok", "value": { id, name, owner_id, created_at } } | { "status": "none" } | { "status": "hidden" } | { "status": "error" },
+  "quotes":       { "status": "ok", "items": [ <colonnes explicites>, ≤ 20 ], "limited": boolean } | { "status": "error" },
+  "payments":     { "status": "ok", "items": [ { id, quote_id, total_cents, currency, status, created_at, paid_at }, ≤ 20 ], "limited": boolean } | { "status": "error" },
+  "messages":     { "status": "ok", "items": [ <colonnes explicites>, ≤ 200, plus récents ], "limited": boolean } | { "status": "error" },
+  "documents":    { "status": "ok", "items": [ { id, intervention_id, owner_id, name, mime_type, created_at }, ≤ 50 ], "limited": boolean } | { "status": "error" },
+  "appointments": { "status": "ok", "items": [ { intervention_id, starts_at, ends_at, note, updated_by, updated_at }, ≤ 50 ], "limited": boolean } | { "status": "error" },
+  "generated_at": "<ISO>"
+}
+```
+- Chaque dépendance est lue **par identifiant** sous RLS : site par `intervention.site_id`, organisation par `site.organization_id`, devis par `intervention_id`, paiements par `quote_id ∈ devis lus`, messages/documents/rendez-vous par `intervention_id` — **hors** des listes du workspace (aucune dépendance aux fenêtres 100/50/200).
+- **Absence ≠ erreur** pour chaque élément lié : `none` = le dossier n’a pas de site (`site_id` nul) ; `hidden` = lecture réussie, 0 ligne sous RLS ; `error` = lecture en échec (transport/base) — la vue affiche alors « momentanément indisponible » pour cet élément, jamais « aucun ». Les listes portent `limited` (vrai si le plafond est atteint, même règle que §2).
+- Projections fermées : aucune colonne hors liste, aucun `select *`. Les colonnes exactes de `intervention`, `quotes` et `messages` sont figées dans le fichier de types (`detail-read.ts`) à partir de ce que la vue consomme, revues avec le backend avant code.
+
+## 5. Erreurs et en-têtes
+- `404` « introuvable » sans divulgation : la lecture du dossier **a réussi** et ne renvoie aucune ligne sous RLS (inexistant ou non visible), ou id non UUID — indiscernables (même corps, même code).
+- `401` session absente/expirée.
+- `503` pour toute erreur de base/transport sur la lecture **du dossier** : corps `{"error":"…"}`, en-tête **`Retry-After: 2`** ; jamais converti en 404. Une erreur sur une **dépendance** ne fait pas échouer la réponse : statut `error` de l’élément (§4).
+- **Toutes** les réponses (200/401/404/503) portent **explicitement** `Cache-Control: private, no-store` (le `dbError`/`apiError` actuel ne l’ajoute pas : la route le pose elle-même, y compris dans le `catch`).
+
+## 6. Cache de détail (DETAIL-CONTRACT-2F9-003)
+- **Indépendant** de la liste des 100 (jamais fusionné ; le signal `limited` reste exact ; un rafraîchissement du workspace ne l’efface pas).
+- **Clé** = contexte complet `(génération d’identité, rôle, organisation active, site actif, id)` **+ génération de demande**.
+- **Borné** : au plus 20 entrées (LRU) et **TTL 60 s** ; une entrée expirée est relue avant affichage.
+- **Purge** : changement de session, de profil, de rôle, d’organisation/site actifs ou de droits connus (retrait de membre, réaffectation, changement de grant reçu par le workspace) ⇒ purge totale ; déconnexion ⇒ purge totale.
+- **Revalidation indépendante de Realtime** : au focus/visibilité (même seuil que le workspace, ≥ 15 s), à l’ouverture de la vue et à l’expiration du TTL ; un événement realtime sur ce dossier peut en plus invalider l’entrée, mais n’est jamais requis.
+- Réponses périmées : une réponse dont la clé de contexte ou la génération ne correspond plus est ignorée ; une seule requête en vol par clé ; `AbortController` au démontage/changement de hash.
+
+## 7. Fichiers (séparés)
+Backend `app/api/interventions/[id]/route.ts` (Codex) ; types/validation `lib/features/workspace/detail-read.ts` (schéma de l’enveloppe §4, statuts d’éléments) ; consommateur `lib/features/workspace/use-detail-read.ts` (hook sans UI : déclencheur §2, cache §6) ; câblage de la vue et textes par le lead ; ajout de `limits` au workspace (Codex).
+
+## 8. Tests attendus (avant toute recette)
+Route (faux client) : 200 pour client direct (y compris dossier sans artisan), artisan attribué, membre d’organisation/site, avec site/organisation/devis résolus par id hors des fenêtres 100/50/200 ; `none`/`hidden`/`error` distincts par dépendance ; plafonds et `limited` ; 404 identique pour inexistant, non UUID, autre client, ancien artisan après réaffectation, membre retiré, offre non accessible à l’artisan ; 503 + `Retry-After` sur erreur base/transport du dossier ; `Cache-Control: private, no-store` sur 200/401/404/503 ; aucune colonne hors liste, aucune clé serveur. Workspace : `limits.*.limited` exact (lecture `limit + 1`). Consommateur : pas d’appel sans signal hors action explicite ; cache borné (taille, TTL), purge sur changement de contexte/droits, revalidation sans Realtime, réponse périmée ignorée, une requête en vol, annulation.
