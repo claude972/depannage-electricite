@@ -584,7 +584,7 @@ export default function CourantApp() {
         };
         const allowed: Record<string, Status[]> = {
           accept_mission: ["requested"],
-          send_quote: ["assigned"],
+          send_quote: ["assigned", "quoted"],
           accept_quote: ["quoted"],
           start: ["accepted"],
           complete: ["in_progress"],
@@ -620,8 +620,12 @@ export default function CourantApp() {
             (n, l) => n + Math.round(l.quantity * l.unit_price_cents),
             0,
           );
+          // A revision replaces the previously sent (not accepted) version, as the server does.
+          qs = qs.map((q) =>
+            q.intervention_id === id && q.status === "sent" ? { ...q, status: "rejected" } : q,
+          );
           const quote: Quote = {
-            id: uid(),
+            id: typeof extra?.quote_id === "string" ? extra.quote_id : uid(),
             intervention_id: id,
             artisan_id: DEMO_IDS.artisan,
             lines,
@@ -1534,8 +1538,12 @@ export default function CourantApp() {
         const draft = envelope.draft;
         if (draft.tax_rate === null || !draft.lines.length || draft.lines.some((l) => !l.label.trim()))
           throw new Error("Le brouillon n’est pas publiable : lignes nommées et taux de TVA requis.");
-        const beforeIds = new Set(data.quotes.map((q) => q.id));
-        const ok = await action(interventionId, "send_quote", { lines: draft.lines, tax_rate: draft.tax_rate });
+        const newQuoteId = uid();
+        const ok = await action(interventionId, "send_quote", {
+          lines: draft.lines,
+          tax_rate: draft.tax_rate,
+          quote_id: newQuoteId,
+        });
         if (!ok) {
           outcome = { ok: false, conflict: false, message: "Le devis n’a pas pu être publié ; le brouillon est conservé." };
           return;
@@ -1548,8 +1556,7 @@ export default function CourantApp() {
             ...envelope,
             draft: null,
             version: envelope.version + 1,
-            // The exact quote created by this publication is read back after the state update.
-            quote_id: data.quotes.find((q) => !beforeIds.has(q.id))?.id,
+            quote_id: newQuoteId,
           },
         };
         return;
@@ -1574,8 +1581,8 @@ export default function CourantApp() {
         }
         if (contractStateFromError(e) === "missing")
           ctx.when(setCapabilities)((c) => ({ ...c, quoteDraft: "missing" }));
+        // Reported inline by the editor; no duplicate banner.
         outcome = { ok: false, conflict: false, message: (e as Error).message };
-        throw e;
       }
     });
     return outcome;

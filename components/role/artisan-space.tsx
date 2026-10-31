@@ -50,12 +50,7 @@ import {
   Tag,
   Unavailable,
 } from "../app/ui";
-import {
-  DocumentManager,
-  MessageCenter,
-  ProfileForm,
-  QuoteEditor,
-} from "../app/forms";
+import { DocumentManager, MessageCenter, ProfileForm } from "../app/forms";
 import {
   ARTISAN_STATUS,
   CATEGORIES,
@@ -79,6 +74,7 @@ import {
   type Performance,
 } from "../app/session";
 import styles from "./artisan.module.css";
+import { QuoteDraftEditor } from "./artisan-quote-draft";
 
 // ---- Static definitions ---------------------------------------------------------------
 type Tone = "neutral" | "blue" | "green" | "amber" | "red" | "violet";
@@ -1434,6 +1430,7 @@ function WorkDossier({ session, intervention: i }: { session: Session; intervent
             versions={versions}
             current={current}
             onView={setViewQuoteId}
+            onPublished={(quoteId) => setViewQuoteId(quoteId ?? "")}
           />
           {canReport && (
             <ReportPanel
@@ -1684,21 +1681,23 @@ function QuotePanel({
   versions,
   current,
   onView,
+  onPublished,
 }: {
   session: Session;
   intervention: Intervention;
   versions: Quote[];
   current: Quote | undefined;
   onView: (id: string) => void;
+  /** Publication from the draft editor: exact quote id, or undefined (newest sent is shown). */
+  onPublished: (quoteId: string | undefined) => void;
 }) {
+  // Contract QUOTE-DRAFT-001: the draft editor is available while the dossier is assigned
+  // (first quote) or quoted (revision replacing the sent quote). The sent quote stays shown.
+  const sentQuote = [...versions].reverse().find((q) => q.status === "sent");
   if (i.status === "assigned")
     return (
       <>
-        <QuoteEditor
-          busy={session.busy}
-          demo={session.mode === "demo"}
-          onSubmit={(values) => void session.action(i.id, "send_quote", values)}
-        />
+        <QuoteDraftEditor session={session} interventionId={i.id} onPublished={onPublished} />
         {versions.length > 0 && (
           <section className="panel" aria-labelledby="dossier-previous-quotes">
             <h2 id="dossier-previous-quotes">Versions précédentes</h2>
@@ -1718,66 +1717,76 @@ function QuotePanel({
       </>
     );
   return (
-    <section className="panel" aria-labelledby="dossier-quote">
-      <h2 id="dossier-quote">Devis</h2>
-      {!current ? (
-        <p>Aucun devis pour ce dossier.</p>
-      ) : (
-        <>
-          <div className={styles.quoteHead}>
-            <strong>{quoteRef(current.id)}</strong>
-            <Tag tone={quoteStatus(current.status).tone}>
-              {quoteStatus(current.status).label}
-              {current.status === "accepted" && current.accepted_at
-                ? ` le ${date(current.accepted_at)}`
-                : ""}
-            </Tag>
-          </div>
-          {versions.length > 1 && (
-            <div className={styles.versionList} role="group" aria-label="Versions du devis">
-              {versions.map((q, index) => (
-                <button
-                  key={q.id}
-                  type="button"
-                  className={styles.versionButton}
-                  aria-pressed={q.id === current.id}
-                  onClick={() => onView(q.id)}
-                >
-                  Version {index + 1} — {dateTime(q.created_at)}
-                </button>
+    <>
+      <section className="panel" aria-labelledby="dossier-quote">
+        <h2 id="dossier-quote">Devis</h2>
+        {!current ? (
+          <p>Aucun devis pour ce dossier.</p>
+        ) : (
+          <>
+            <div className={styles.quoteHead}>
+              <strong>{quoteRef(current.id)}</strong>
+              <Tag tone={quoteStatus(current.status).tone}>
+                {quoteStatus(current.status).label}
+                {current.status === "accepted" && current.accepted_at
+                  ? ` le ${date(current.accepted_at)}`
+                  : ""}
+              </Tag>
+            </div>
+            {versions.length > 1 && (
+              <div className={styles.versionList} role="group" aria-label="Versions du devis">
+                {versions.map((q, index) => (
+                  <button
+                    key={q.id}
+                    type="button"
+                    className={styles.versionButton}
+                    aria-pressed={q.id === current.id}
+                    onClick={() => onView(q.id)}
+                  >
+                    Version {index + 1} — {dateTime(q.created_at)}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className={styles.quoteLines}>
+              {current.lines.map((l, index) => (
+                <div key={index} className={styles.quoteLine}>
+                  <div>
+                    {l.label}
+                    <span>
+                      {l.quantity} × {money(l.unit_price_cents)} HT
+                    </span>
+                  </div>
+                  <strong>{money(Math.round(l.quantity * l.unit_price_cents))}</strong>
+                </div>
               ))}
             </div>
-          )}
-          <div className={styles.quoteLines}>
-            {current.lines.map((l, index) => (
-              <div key={index} className={styles.quoteLine}>
-                <div>
-                  {l.label}
-                  <span>
-                    {l.quantity} × {money(l.unit_price_cents)} HT
-                  </span>
-                </div>
-                <strong>{money(Math.round(l.quantity * l.unit_price_cents))}</strong>
+            <div className={styles.quoteTotals}>
+              <div>
+                <span>Total HT</span>
+                <span>{money(current.subtotal_cents)}</span>
               </div>
-            ))}
-          </div>
-          <div className={styles.quoteTotals}>
-            <div>
-              <span>Total HT</span>
-              <span>{money(current.subtotal_cents)}</span>
+              <div>
+                <span>TVA ({current.tax_rate} %)</span>
+                <span>{money(current.tax_cents)}</span>
+              </div>
+              <div className={styles.quoteTotal}>
+                <span>Total TTC</span>
+                <span>{money(current.total_cents)}</span>
+              </div>
             </div>
-            <div>
-              <span>TVA ({current.tax_rate} %)</span>
-              <span>{money(current.tax_cents)}</span>
-            </div>
-            <div className={styles.quoteTotal}>
-              <span>Total TTC</span>
-              <span>{money(current.total_cents)}</span>
-            </div>
-          </div>
-        </>
+          </>
+        )}
+      </section>
+      {i.status === "quoted" && (
+        <QuoteDraftEditor
+          session={session}
+          interventionId={i.id}
+          replaces={sentQuote}
+          onPublished={onPublished}
+        />
       )}
-    </section>
+    </>
   );
 }
 function ReportPanel({
