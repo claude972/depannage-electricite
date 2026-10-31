@@ -460,3 +460,22 @@ décision Accepter / Refuser (empilée à 360, côte à côte à 1280) → secti
 (PDF) » retiré (le lot documents fournit le PDF ; en démonstration, le panneau indique lui-même l’indisponibilité).
 État de décision calculé par `quoteDecisionState` (testé). Mesures 360 / 1280 : 0 cible < 44 px, aucun débordement,
 console vide. Acceptation, refus (motif), téléchargement du récapitulatif : commandes `session` inchangées.
+
+### Résultat du checkpoint 3 — détail V8-C07 (client)
+
+Captures `docs/visual-fidelity/client-detail-{360,1280}-after.jpg` (`#demo/client-detail.demo-003`, dossier réglé ;
+`demo-001`, devis à valider, vérifié sans capture versionnée). Stepper et chronologie désormais calculés par
+`CLIENT_STEPS`, `currentStepIndex` et `detailHistory` (logique pure testée : dates enregistrées seulement, « — »
+sinon, « À venir » après l’étape courante, deux entrées pour une annulation) ; bloc « Carte non disponible » compact
+(titre et raison sur une ligne à 1280, empilés à 360) sans modifier la primitive ; annulation en bouton contour
+44 px rouge discret (confirmation et commande `cancel` inchangées) ; montants de « Devis & résumé » sur une ligne.
+Mesures 360 / 1280 sur `demo-003` et `demo-001` : 0 cible < 44 px, aucun débordement, console vide.
+
+### Bilan client (checkpoints 1–3)
+
+Trois vues alignées sur M61 / V8-C06 / V8-C07 en structure, ordre et hiérarchie ; aucune donnée fabriquée (pas de
+note, certification, expérience, carte, vignettes, garanties ni promesses d’annulation) ; comportements inchangés
+(devis, règlement, rendez-vous, téléversements, assistance, ancrages notifications / documents / plateforme) ;
+fichiers touchés : `components/role/client-space.tsx`, `client.module.css`, `client-lists.ts`,
+`tests/ui/client-lists.test.ts`, cette section, `docs/visual-fidelity/client-*`. Restent déclarés comme écarts
+assumés : bleu action au lieu du vert/rouge pleins, 5 étapes réelles, pas de partage ni de « ⋯ », pas de carte.

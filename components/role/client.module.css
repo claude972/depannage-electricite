@@ -744,6 +744,32 @@
   gap: 12px;
   font-size: 14px;
 }
+/* V8-C07 : libellé repliable, montant sur une ligne. */
+.lines > div > span:last-child {
+  white-space: nowrap;
+}
+/* Bloc « indisponible » compact (carte) : titre et raison sur une ligne quand la place existe. */
+.compactUnavailable :global(.unavailable) {
+  padding: 10px 12px;
+  align-items: center;
+}
+.compactUnavailable :global(.unavailable) > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+}
+.compactUnavailable :global(.unavailable) p {
+  margin-top: 0;
+}
+.cancelButton {
+  color: var(--red);
+  border-color: #f0c4c0;
+}
+.cancelButton:hover {
+  background: #fff4f3;
+  border-color: var(--red);
+}
 .lines > div > span:first-child {
   color: var(--text);
 }

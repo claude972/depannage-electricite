@@ -54,7 +54,7 @@ import type {
   View,
 } from "../app/types";
 import styles from "./client.module.css";
-import { quoteDecisionState, quoteLineCells, recentRowDescriptor } from "./client-lists";
+import { CLIENT_STEPS, currentStepIndex, detailHistory, quoteDecisionState, quoteLineCells, recentRowDescriptor } from "./client-lists";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
 import { PlatformPage } from "./platform-anchor";
@@ -105,22 +105,6 @@ const BOTTOM_NAV: { id: View; label: string; icon: string; also: View[] }[] = [
   { id: "requests", label: "Demandes", icon: "list", also: ["new", "detail", "quote"] },
   { id: "messages", label: "Messages", icon: "message", also: [] },
   { id: "profile", label: "Profil", icon: "person", also: ["help", "documents", "support"] },
-];
-const PROGRESS: Status[] = [
-  "requested",
-  "assigned",
-  "quoted",
-  "accepted",
-  "in_progress",
-  "completed",
-  "paid",
-];
-const STEPS: { label: string; reachedAt: Status }[] = [
-  { label: "Demandée", reachedAt: "requested" },
-  { label: "Artisan", reachedAt: "assigned" },
-  { label: "Devis", reachedAt: "quoted" },
-  { label: "Intervention", reachedAt: "in_progress" },
-  { label: "Terminée", reachedAt: "paid" },
 ];
 const FAQ: [string, string][] = [
   [
@@ -944,38 +928,16 @@ function DetailView({
   const photos = session.data.documents.filter(
     (d) => d.intervention_id === i.id && d.mime_type.startsWith("image/"),
   );
-  const progressIndex = PROGRESS.indexOf(i.status);
-  const stepIndex = STEPS.reduce(
-    (acc, step, index) =>
-      progressIndex >= PROGRESS.indexOf(step.reachedAt) ? index : acc,
-    -1,
-  );
+  const stepIndex = currentStepIndex(i.status);
   const canSchedule = ["assigned", "quoted", "accepted"].includes(i.status);
   const travelStage = ops?.travel_stage || i.travel_stage || "planned";
   const opsState = session.capabilities.operations;
 
-  const history: { label: string; when: string; state: "done" | "current" | "upcoming" }[] =
-    i.status === "cancelled"
-      ? [
-          { label: "Demande créée", when: dateTime(i.created_at), state: "done" },
-          { label: "Demande annulée", when: "—", state: "done" },
-        ]
-      : [
-          ["Demande créée", dateTime(i.created_at)],
-          ["Artisan attribué", "—"],
-          ["Devis reçu", shown ? dateTime(shown.created_at) : "—"],
-          ["Devis accepté", accepted?.accepted_at ? dateTime(accepted.accepted_at) : "—"],
-          [
-            "Intervention",
-            ops?.appointment ? `Créneau ${dateTime(ops.appointment.starts_at)}` : "—",
-          ],
-          ["Intervention terminée", i.completed_at ? dateTime(i.completed_at) : "—"],
-          ["Règlement", i.paid_at ? dateTime(i.paid_at) : "—"],
-        ].map(([label, when], index) => ({
-          label,
-          when: index > progressIndex ? "À venir" : when,
-          state: index < progressIndex ? "done" : index === progressIndex ? "current" : "upcoming",
-        }));
+  const history = detailHistory(
+    i,
+    { quoteReceivedAt: shown?.created_at, quoteAcceptedAt: accepted?.accepted_at, appointmentStartsAt: ops?.appointment?.starts_at },
+    dateTime,
+  );
 
   const primary = (() => {
     if (i.status === "quoted" && shown)
@@ -1043,7 +1005,7 @@ function DetailView({
           <p className={styles.description}>Cette demande a été annulée. Aucune étape n’est à venir.</p>
         ) : (
           <ol className={styles.stepper} aria-label="Avancement">
-            {STEPS.map((step, index) => {
+            {CLIENT_STEPS.map((step, index) => {
               const state = index < stepIndex ? "done" : index === stepIndex ? "current" : "";
               return (
                 <li key={step.label} className={state ? styles[state] : ""}>
@@ -1116,11 +1078,13 @@ function DetailView({
           <br />
           {i.postal_code} {i.city}
         </address>
-        <Unavailable
-          title="Carte non disponible"
-          reason="Aucun fournisseur de cartographie n’a été choisi."
-          blocker="CLI-05"
-        />
+        <div className={styles.compactUnavailable}>
+          <Unavailable
+            title="Carte non disponible"
+            reason="Aucun fournisseur de cartographie n’a été choisi."
+            blocker="CLI-05"
+          />
+        </div>
       </section>
 
       <div className={styles.cardHead}>
@@ -1427,6 +1391,7 @@ function DetailView({
             confirmLabel="Confirmer l’annulation"
             busy={session.busy}
             danger
+            className={`button outline ${styles.cancelButton}`}
             onConfirm={() => session.action(i.id, "cancel")}
           />
         ) : (
