@@ -789,3 +789,9 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - Root: very strong lead = stale client workspace created before the seed (T6/T9/T16), DOM proof still required before a fix. Provider 401 after T19 logout.
 - **Lead finding (source):** the app logout calls `createClient().auth.signOut()` without scope (`components/courant-app.tsx` ~576) ⇒ supabase-js default **global** scope revokes every session of that user ⇒ later scenarios reusing `ctx.session(client)` get 401. Likely harness ordering cause; FAIL kept. **Product question for root/owner:** « Se déconnecter » currently logs the user out on all devices; switching to `{ scope: "local" }` would log out this device only — not changed without decision.
 - A8 not yet pushed; addendum sent to tracking worker a84ded5 (diagnostics, selector audit, T6/T9/T16 decision path with post-evidence harness fix candidates, logout isolation). Business 9f32421: root integrates after the run, combined tests, fresh root receipt, then public recette after independent readback 0.
+
+## 2026-10-31 — root decision: global logout kept; business 9f integrated 2f9a773
+
+- **Logout: current product behaviour (global) kept for this tranche**; auth not modified to make QA pass. Harness must isolate the logout identity or run the logout scenario LAST after all provider proofs, never reusing a revoked session. No owner question needed. Forwarded to the tracking worker for A8 (and Auth 404 « absent » formats to state explicitly; anything else UNKNOWN).
+- Root postflight: 1 Auth UNKNOWN only due to the legacy body format `{code:404, error_code:"user_not_found", msg}`; 32 REST/Storage PASS; v2 strict readback adapted to the CURRENT format reviewed/in progress; original UNKNOWN preserved.
+- **Business 9f32421 integrated** by root at `2f9a7732995bc7bf4c964183237e24676f460413` — 623 npm tests + tsc PASS; push in progress; business cloud recette after readback 42 PASS. Public app 4c unchanged.
