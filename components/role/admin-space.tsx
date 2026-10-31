@@ -1,25 +1,33 @@
 "use client";
 // Platform Super Admin space (reference M43). The operator of the platform, not the owner of a
 // client organisation. Every figure comes from session.loadAdminOverview() (global counts,
-// lists bounded to capabilities.list_limit) or from session.data; every mutation goes through
-// session.* or the shared forms that already carry their own confirmation.
+// lists bounded to capabilities.list_limit), from the server-paginated dossier list
+// (session.loadAdminInterventions / loadAdminIntervention, contract WEB-PWA-ADMIN-LISTS-001) or
+// from session.data; every mutation goes through session.* or the shared forms that already
+// carry their own confirmation.
 import {
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
+  type FormEvent,
   type ReactNode,
 } from "react";
 import type { Session } from "../app/session-types";
 import type {
+  AdminInterventionDetail,
+  AdminInterventionRow,
+  AdminInterventionsPage,
   AdminOverview,
   ArtisanApplicationStatus,
   ArtisanDossier,
+  Category,
   CredentialKind,
   Intervention,
   Message,
   Operations,
+  Quote,
   Role,
   Status,
   Urgency,
@@ -345,12 +353,27 @@ export function AdminSpace({ session }: { session: Session }) {
 
   // Off-canvas navigation (mobile).
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isNarrow, setIsNarrow] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
   const firstNav = useRef<HTMLButtonElement>(null);
+  const restoreMenuFocus = useRef(false);
   const closeMenu = useCallback(() => {
+    restoreMenuFocus.current = true;
     setMenuOpen(false);
-    menuButton.current?.focus();
   }, []);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 900px)");
+    const update = () => setIsNarrow(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  useEffect(() => {
+    // Focus goes back to the toggle once the main column is no longer inert.
+    if (menuOpen || !restoreMenuFocus.current) return;
+    restoreMenuFocus.current = false;
+    menuButton.current?.focus();
+  }, [menuOpen]);
   useEffect(() => {
     if (!menuOpen) return;
     firstNav.current?.focus();
@@ -420,7 +443,7 @@ export function AdminSpace({ session }: { session: Session }) {
           subtitle: "Examen d’une candidature artisan",
         };
       case "admin-interventions":
-        return { title: "Interventions", subtitle: "Tous les dossiers de la plateforme" };
+        return { title: "Interventions", subtitle: "Recherche et pagination sur l’ensemble des dossiers" };
       case "detail":
       case "quote":
         return { title: `Dossier ${shortId(session.param || "")}`, subtitle: "Lecture administrateur d’une intervention" };
@@ -624,8 +647,18 @@ export function AdminSpace({ session }: { session: Session }) {
     );
   };
 
-  const renderInterventions = (o: AdminOverview) => (
-    <InterventionsView overview={o} limitNote={limitNote} artisanName={artisanName} onOpen={openDossier} />
+  // Server-paginated list: does not depend on the overview (only artisan names come from it).
+  const renderInterventions = () => (
+    <InterventionsView
+      session={session}
+      overview={overview}
+      overviewFailed={overviewFailed}
+      limitNote={limitNote}
+      artisanName={artisanName}
+      onOpen={openDossier}
+      onReloadOverview={() => void load()}
+      reloadingOverview={reloading}
+    />
   );
 
   const renderDossier = (interventionId: string) => (
@@ -958,7 +991,7 @@ export function AdminSpace({ session }: { session: Session }) {
         content = withOverview(renderArtisan);
         break;
       case "admin-interventions":
-        content = withOverview(renderInterventions);
+        content = renderInterventions();
         break;
       case "detail":
         content = renderDossier(session.param);
@@ -1006,6 +1039,7 @@ export function AdminSpace({ session }: { session: Session }) {
         id="admin-sidebar"
         className={`${styles.sidebar} ${menuOpen ? styles.open : ""}`}
         aria-label="Navigation Super Admin"
+        inert={isNarrow && !menuOpen}
       >
         <div className={styles.sidebarTop}>
           <Brand compact />
@@ -1026,8 +1060,9 @@ export function AdminSpace({ session }: { session: Session }) {
               <Icon name={item.icon} size={18} />
               {item.label}
               {item.view === "admin-artisans" && pendingCount > 0 && (
-                <span className={styles.navCount} aria-label={`${pendingCount} candidatures à examiner`}>
-                  {pendingCount}
+                <span className={styles.navCount}>
+                  <span aria-hidden="true">{pendingCount}</span>
+                  <span className="sr-only">{`${pendingCount} candidatures à examiner`}</span>
                 </span>
               )}
             </button>
@@ -1060,7 +1095,7 @@ export function AdminSpace({ session }: { session: Session }) {
         </div>
       </aside>
       {menuOpen && <div className={styles.overlay} onClick={closeMenu} aria-hidden="true" />}
-      <div className={styles.main}>
+      <div className={styles.main} inert={isNarrow && menuOpen}>
         {demo && (
           <div className={styles.demoBanner}>
             <span>
@@ -1380,29 +1415,443 @@ function ArtisansView({
 }
 
 // ---- Interventions -------------------------------------------------------------------------
-function InterventionsView({
-  overview,
-  limitNote,
+const PAGE_SIZES = [25, 50, 100] as const;
+type PageSize = (typeof PAGE_SIZES)[number];
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Contract rule for the search text: Unicode letters (accents included), digits, spaces, hyphens
+// and apostrophes, 2 to 80 characters once whitespace is collapsed. Built from a string so the
+// compiler target does not matter; every current browser supports Unicode property escapes.
+const SEARCH_RE = new RegExp("^[\\p{L}\\p{M}\\p{N} '’-]+$", "u");
+type SearchCheck = { ok: true; value: string } | { ok: false; error: string };
+function checkSearch(raw: string): SearchCheck {
+  const trimmed = raw.trim();
+  if (!trimmed) return { ok: true, value: "" };
+  // A full dossier identifier is sent untouched: it is read as an exact reference.
+  if (UUID_RE.test(trimmed)) return { ok: true, value: trimmed };
+  const value = trimmed.replace(/\s+/g, " ");
+  if (value.length < 2) return { ok: false, error: "Saisissez au moins 2 caractères." };
+  if (value.length > 80) return { ok: false, error: "La recherche est limitée à 80 caractères." };
+  if (!SEARCH_RE.test(value))
+    return {
+      ok: false,
+      error: "Seuls les lettres, chiffres, espaces, tirets et apostrophes sont acceptés.",
+    };
+  return { ok: true, value };
+}
+type ListFilters = { status: "" | Status; category: "" | Category; urgency: "" | Urgency; q: string };
+const NO_FILTERS: ListFilters = { status: "", category: "", urgency: "", q: "" };
+// A visited page: the cursor that produced it and how many rows preceded it.
+type PagePosition = { cursor: string | null; offset: number };
+const FIRST_PAGE: PagePosition = { cursor: null, offset: 0 };
+const SEARCH_HELP =
+  "2 à 80 caractères : lettres, chiffres, espaces, tirets et apostrophes. Un identifiant complet de dossier ouvre cette référence exacte.";
+
+// Row shape shared by the server list and the bounded overview list.
+type RowLike = Pick<AdminInterventionRow, "id" | "category" | "urgency" | "city" | "postal_code" | "status" | "created_at"> & {
+  artisan_id?: string | null;
+};
+function DossierTable<T extends RowLike>({
+  rows,
+  caption,
   artisanName,
   onOpen,
 }: {
-  overview: AdminOverview;
+  rows: T[];
+  caption: string;
+  artisanName: (id: string | null | undefined) => string | undefined;
+  onOpen: (id: string) => void;
+}) {
+  return (
+    <DataTable
+      caption={caption}
+      rows={rows}
+      keyOf={(i) => i.id}
+      columns={[
+        { key: "ref", label: "Référence", render: (i) => <span className={styles.mono}>{shortId(i.id)}</span> },
+        {
+          key: "type",
+          label: "Type",
+          wide: true,
+          render: (i) => (
+            <span className={styles.cellStack}>
+              {category(i.category).label}
+              <small>{i.urgency === "urgent" ? "Demande urgente" : "À planifier"}</small>
+            </span>
+          ),
+        },
+        { key: "place", label: "Lieu", render: (i) => `${i.city} (${i.postal_code})` },
+        { key: "status", label: "Statut", render: (i) => <Badge status={i.status} /> },
+        {
+          key: "artisan",
+          label: "Artisan",
+          render: (i) => (i.artisan_id ? artisanName(i.artisan_id) || "Attribué" : <span className={styles.muted}>Non attribué</span>),
+        },
+        { key: "created", label: "Créée", render: (i) => date(i.created_at) },
+        {
+          key: "actions",
+          label: "Actions",
+          render: (i) => (
+            <button type="button" className={styles.rowAction} onClick={() => onOpen(i.id)}>
+              <Icon name="eye" size={15} />
+              Ouvrir
+            </button>
+          ),
+        },
+      ]}
+      empty={null}
+    />
+  );
+}
+
+// Server-paginated dossier list (contract WEB-PWA-ADMIN-LISTS-001). Filters restart from the
+// first page; "Précédent" replays the cursors kept client-side; the total is the server count.
+function InterventionsView({
+  session,
+  overview,
+  overviewFailed,
+  limitNote,
+  artisanName,
+  onOpen,
+  onReloadOverview,
+  reloadingOverview,
+}: {
+  session: Session;
+  overview: AdminOverview | null;
+  overviewFailed: boolean;
   limitNote: string;
   artisanName: (id: string | null | undefined) => string | undefined;
   onOpen: (id: string) => void;
+  onReloadOverview: () => void;
+  reloadingOverview: boolean;
+}) {
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  const [filters, setFilters] = useState<ListFilters>(NO_FILTERS);
+  const [limit, setLimit] = useState<PageSize>(25);
+  const [position, setPosition] = useState<PagePosition>(FIRST_PAGE);
+  const [previous, setPrevious] = useState<PagePosition[]>([]);
+  const [search, setSearch] = useState("");
+  const [searchError, setSearchError] = useState("");
+  // undefined = loading, null = unavailable (capabilities.adminLists tells why).
+  const [page, setPage] = useState<AdminInterventionsPage | null | undefined>(undefined);
+  const [attempt, setAttempt] = useState(0);
+  const [showBounded, setShowBounded] = useState(false);
+  const requestId = useRef(0);
+
+  useEffect(() => {
+    const my = ++requestId.current;
+    setPage(undefined);
+    void sessionRef.current
+      .loadAdminInterventions({
+        status: filters.status || undefined,
+        category: filters.category || undefined,
+        urgency: filters.urgency || undefined,
+        q: filters.q || undefined,
+        limit,
+        cursor: position.cursor,
+      })
+      .then((result) => {
+        if (my === requestId.current) setPage(result);
+      });
+  }, [filters, limit, position, attempt, session.data]);
+
+  // Any filter change invalidates the cursor (its fingerprint covers the filters): restart.
+  const restart = (next: Partial<ListFilters>) => {
+    setFilters((f) => ({ ...f, ...next }));
+    setPosition(FIRST_PAGE);
+    setPrevious([]);
+  };
+  // The page size does not change the filters, but the loaded range is only exact from page 1.
+  const changeLimit = (next: PageSize) => {
+    setLimit(next);
+    setPosition(FIRST_PAGE);
+    setPrevious([]);
+  };
+  const reset = () => {
+    setSearch("");
+    setSearchError("");
+    setLimit(25);
+    restart(NO_FILTERS);
+  };
+  const submitSearch = (event: FormEvent) => {
+    event.preventDefault();
+    const check = checkSearch(search);
+    if (!check.ok) {
+      setSearchError(check.error);
+      return;
+    }
+    setSearchError("");
+    setSearch(check.value);
+    if (check.value !== filters.q) restart({ q: check.value });
+  };
+  const goNext = () => {
+    if (!page?.page.next_cursor) return;
+    setPrevious((stack) => [...stack, position]);
+    setPosition({ cursor: page.page.next_cursor, offset: position.offset + page.interventions.length });
+  };
+  const goPrevious = () => {
+    const last = previous[previous.length - 1];
+    if (!last) return;
+    setPrevious((stack) => stack.slice(0, -1));
+    setPosition(last);
+  };
+
+  const filtering = Boolean(filters.status || filters.category || filters.urgency || filters.q);
+  const boundedLabel = `${overview?.capabilities.list_limit ?? 100} derniers dossiers chargés`;
+  const rows = page?.interventions ?? [];
+  const total = page?.page.total;
+  const from = position.offset + 1;
+  const to = position.offset + rows.length;
+
+  let body: ReactNode;
+  if (page === undefined) {
+    body = <Loader label="Chargement des dossiers…" />;
+  } else if (page === null) {
+    const state = session.capabilities.adminLists;
+    body = (
+      <div className={styles.panelBody}>
+        <Unavailable
+          title="Liste des dossiers indisponible"
+          state={state}
+          reason={
+            state === "available"
+              ? "La liste n’a pas pu être chargée. Vérifiez les filtres ou réessayez dans un instant."
+              : undefined
+          }
+        >
+          <div className={styles.actions} style={{ marginTop: 12 }}>
+            <button type="button" className="button outline" onClick={() => setAttempt((n) => n + 1)}>
+              <Icon name="refresh" size={16} />
+              Réessayer
+            </button>
+            <button type="button" className="button outline" onClick={() => setShowBounded(true)} aria-pressed={showBounded}>
+              <Icon name="list" size={16} />
+              Afficher les {boundedLabel}
+            </button>
+          </div>
+        </Unavailable>
+      </div>
+    );
+  } else if (!rows.length) {
+    body =
+      position.offset > 0 ? (
+        <Empty
+          icon="list"
+          title="Cette page ne contient plus de dossier"
+          action={
+            <button type="button" className="button outline" onClick={reset}>
+              Revenir au début de la liste
+            </button>
+          }
+        >
+          Des dossiers ont changé depuis le chargement de la page précédente.
+        </Empty>
+      ) : filtering ? (
+        <Empty
+          icon="search"
+          title="Aucun dossier ne correspond"
+          action={
+            <button type="button" className="button outline" onClick={reset}>
+              Réinitialiser les filtres
+            </button>
+          }
+        >
+          Modifiez les filtres ou la recherche.
+        </Empty>
+      ) : (
+        <Empty icon="list" title="Aucun dossier enregistré">
+          Les demandes des clients apparaîtront ici.
+        </Empty>
+      );
+  } else {
+    body = <DossierTable rows={rows} caption="Dossiers de la plateforme" artisanName={artisanName} onOpen={onOpen} />;
+  }
+
+  return (
+    <>
+      <Panel title="Dossiers" count={total}>
+        <form className={styles.filters} onSubmit={submitSearch} noValidate>
+          <label className={styles.filter} htmlFor="admin-dossier-search">
+            Recherche (description, ville, code postal ou identifiant complet)
+            <input
+              id="admin-dossier-search"
+              type="search"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                if (searchError) setSearchError("");
+              }}
+              placeholder="Ville, code postal ou mot de la description"
+              maxLength={120}
+              aria-invalid={searchError ? true : undefined}
+              aria-describedby="admin-dossier-search-help"
+            />
+          </label>
+          <button type="submit" className="button outline">
+            <Icon name="search" size={16} />
+            Rechercher
+          </button>
+          <label className={styles.filter}>
+            Statut
+            <select value={filters.status} onChange={(e) => restart({ status: e.target.value as ListFilters["status"] })}>
+              <option value="">Tous les statuts</option>
+              {(Object.keys(STATUS) as Status[]).map((s) => (
+                <option key={s} value={s}>
+                  {STATUS[s]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={styles.filter}>
+            Catégorie
+            <select value={filters.category} onChange={(e) => restart({ category: e.target.value as ListFilters["category"] })}>
+              <option value="">Toutes les catégories</option>
+              {CATEGORIES.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Segments
+            label="Urgence"
+            value={filters.urgency}
+            options={[
+              ["", "Toutes"],
+              ["urgent", "Urgentes"],
+              ["scheduled", "Planifiées"],
+            ]}
+            onChange={(urgency) => restart({ urgency })}
+          />
+          <label className={styles.filter}>
+            Dossiers par page
+            <select value={limit} onChange={(e) => changeLimit(Number(e.target.value) as PageSize)}>
+              {PAGE_SIZES.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="button" className={styles.link} onClick={reset}>
+            <Icon name="refresh" size={15} />
+            Réinitialiser
+          </button>
+          <p id="admin-dossier-search-help" className={styles.searchHelp} data-error={searchError ? "true" : undefined} role={searchError ? "alert" : undefined}>
+            {searchError || SEARCH_HELP}
+          </p>
+        </form>
+        {body}
+        {page && (
+          <div className={styles.pager}>
+            <p className={styles.pagerInfo} role="status">
+              <strong>
+                {total} {total === 1 ? "dossier correspondant" : "dossiers correspondants"}
+              </strong>
+              {rows.length ? ` · dossiers ${from} à ${to} affichés` : ""}
+              {` · ${page.page.has_more ? "d’autres dossiers suivent" : "fin de la liste"}`}
+            </p>
+            <div className={styles.pagerButtons}>
+              <button type="button" className="button outline" onClick={goPrevious} disabled={!previous.length}>
+                <Icon name="back" size={16} />
+                Précédent
+              </button>
+              <button type="button" className="button outline" onClick={goNext} disabled={!page.page.has_more || !page.page.next_cursor}>
+                Suivant
+              </button>
+            </div>
+          </div>
+        )}
+        <Basis>
+          Nombre total compté sur l’ensemble des dossiers accessibles selon les filtres, pas seulement sur la page affichée. Les dossiers créés ou modifiés pendant la consultation n’apparaissent qu’après une actualisation.
+        </Basis>
+      </Panel>
+      {showBounded && (
+        <BoundedInterventionsView
+          overview={overview}
+          overviewFailed={overviewFailed}
+          overviewState={session.capabilities.adminOverview}
+          limitNote={limitNote}
+          label={boundedLabel}
+          artisanName={artisanName}
+          onOpen={onOpen}
+          onHide={() => setShowBounded(false)}
+          onReload={onReloadOverview}
+          reloading={reloadingOverview}
+        />
+      )}
+    </>
+  );
+}
+
+// Fallback when the paginated list is unavailable: the bounded overview list, filtered in the
+// browser and labelled as such. Never presented as the complete list.
+function BoundedInterventionsView({
+  overview,
+  overviewFailed,
+  overviewState,
+  limitNote,
+  label,
+  artisanName,
+  onOpen,
+  onHide,
+  onReload,
+  reloading,
+}: {
+  overview: AdminOverview | null;
+  overviewFailed: boolean;
+  overviewState: Session["capabilities"]["adminOverview"];
+  limitNote: string;
+  label: string;
+  artisanName: (id: string | null | undefined) => string | undefined;
+  onOpen: (id: string) => void;
+  onHide: () => void;
+  onReload: () => void;
+  reloading: boolean;
 }) {
   const [status, setStatus] = useState<"all" | Status>("all");
   const [urgency, setUrgency] = useState<"all" | Urgency>("all");
   const [search, setSearch] = useState("");
+  const interventions = overview?.interventions;
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return overview.interventions
+    return (interventions || [])
       .filter((i) => (status === "all" || i.status === status) && (urgency === "all" || i.urgency === urgency))
       .filter((i) => !q || shortId(i.id).toLowerCase().includes(q) || i.city.toLowerCase().includes(q) || i.postal_code.includes(q))
       .sort(byNewest);
-  }, [overview.interventions, status, urgency, search]);
+  }, [interventions, status, urgency, search]);
+  const hide = (
+    <button type="button" className={styles.link} onClick={onHide}>
+      Masquer cette liste
+    </button>
+  );
+  if (!overview) {
+    return (
+      <Panel title={label} action={hide}>
+        {overviewFailed ? (
+          <div className={styles.panelBody}>
+            <Unavailable title="Derniers dossiers chargés indisponibles" state={overviewState}>
+              <div className={styles.actions} style={{ marginTop: 12 }}>
+                <button type="button" className="button outline" onClick={onReload} disabled={reloading}>
+                  <Icon name="refresh" size={16} />
+                  {reloading ? "Actualisation…" : "Réessayer"}
+                </button>
+              </div>
+            </Unavailable>
+          </div>
+        ) : (
+          <Loader label="Chargement des derniers dossiers…" />
+        )}
+      </Panel>
+    );
+  }
   return (
-    <Panel title="Interventions" count={overview.counts.interventions}>
+    <Panel
+      title={label}
+      count={overview.interventions.length}
+      action={hide}
+      intro={`Liste de secours : les ${overview.capabilities.list_limit} derniers dossiers chargés au plus, filtrés dans le navigateur. Elle n’est pas exhaustive et n’affiche aucun total.`}
+    >
       <div className={styles.filters}>
         <label className={styles.filter}>
           Recherche (référence, ville ou code postal)
@@ -1430,50 +1879,17 @@ function InterventionsView({
           onChange={setUrgency}
         />
       </div>
-      <DataTable
-        caption="Interventions"
-        rows={rows}
-        keyOf={(i) => i.id}
-        columns={[
-          { key: "ref", label: "Référence", render: (i) => <span className={styles.mono}>{shortId(i.id)}</span> },
-          {
-            key: "type",
-            label: "Type",
-            wide: true,
-            render: (i) => (
-              <span className={styles.cellStack}>
-                {category(i.category).label}
-                <small>{i.urgency === "urgent" ? "Demande urgente" : "À planifier"}</small>
-              </span>
-            ),
-          },
-          { key: "place", label: "Lieu", render: (i) => `${i.city} (${i.postal_code})` },
-          { key: "status", label: "Statut", render: (i) => <Badge status={i.status} /> },
-          { key: "artisan", label: "Artisan", render: (i) => (i.artisan_id ? artisanName(i.artisan_id) || "Attribué" : <span className={styles.muted}>Non attribué</span>) },
-          { key: "created", label: "Créée", render: (i) => date(i.created_at) },
-          {
-            key: "actions",
-            label: "Actions",
-            render: (i) => (
-              <button type="button" className={styles.rowAction} onClick={() => onOpen(i.id)}>
-                <Icon name="eye" size={15} />
-                Ouvrir
-              </button>
-            ),
-          },
-        ]}
-        empty={
-          overview.interventions.length ? (
-            <Empty icon="search" title="Aucune intervention ne correspond">
-              Modifiez les filtres ou la recherche.
-            </Empty>
-          ) : (
-            <Empty icon="list" title="Aucune intervention enregistrée">
-              Les demandes des clients apparaîtront ici.
-            </Empty>
-          )
-        }
-      />
+      {rows.length ? (
+        <DossierTable rows={rows} caption={label} artisanName={artisanName} onOpen={onOpen} />
+      ) : overview.interventions.length ? (
+        <Empty icon="search" title="Aucun dossier chargé ne correspond">
+          Modifiez les filtres ou la recherche ; seuls les derniers dossiers chargés sont parcourus.
+        </Empty>
+      ) : (
+        <Empty icon="list" title="Aucun dossier chargé">
+          La vue d’ensemble n’a transmis aucun dossier.
+        </Empty>
+      )}
       <Basis>{limitNote}</Basis>
     </Panel>
   );
@@ -1602,10 +2018,36 @@ function DossierView({
   artisanName: (id: string | null | undefined) => string | undefined;
 }) {
   const demo = session.mode === "demo";
-  const intervention =
-    overview?.interventions.find((i) => i.id === id) || session.data.interventions.find((i) => i.id === id);
   const sessionRef = useRef(session);
   sessionRef.current = session;
+  // Server detail first (any dossier, not only the bounded lists); overview/workspace otherwise.
+  // undefined = loading, null = unavailable. A failed re-read keeps the previous detail, flagged.
+  const [detail, setDetail] = useState<AdminInterventionDetail | null | undefined>(undefined);
+  const [detailStale, setDetailStale] = useState(false);
+  const [detailAttempt, setDetailAttempt] = useState(0);
+  const lastDetail = useRef<AdminInterventionDetail | null>(null);
+  useEffect(() => {
+    let active = true;
+    void sessionRef.current.loadAdminIntervention(id).then((result) => {
+      if (!active) return;
+      if (result) {
+        lastDetail.current = result;
+        setDetail(result);
+        setDetailStale(false);
+      } else if (lastDetail.current) {
+        setDetailStale(true);
+      } else {
+        setDetail(null);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [id, detailAttempt, session.data]);
+  const intervention =
+    detail?.intervention ||
+    overview?.interventions.find((i) => i.id === id) ||
+    session.data.interventions.find((i) => i.id === id);
   const [operations, setOperations] = useState<Operations | null>(null);
   const [operationsLoading, setOperationsLoading] = useState(true);
   useEffect(() => {
@@ -1628,24 +2070,39 @@ function DossierView({
     </button>
   );
   if (!intervention) {
-    if (!overview && !overviewFailed && !session.data.interventions.length)
+    if (detail === undefined)
       return (
         <>
           {back}
           <Loader label="Chargement du dossier…" />
         </>
       );
+    const state = session.capabilities.adminLists;
     return (
       <>
         {back}
-        <Empty icon="list" title="Dossier introuvable">
-          Cet identifiant ne figure ni dans la vue d’ensemble ni dans l’espace de travail chargé. Actualisez les données ou revenez à la liste.
-        </Empty>
+        <Unavailable
+          title="Dossier indisponible"
+          state={state}
+          reason={
+            state === "available"
+              ? "Ce dossier n’a pas pu être lu : il est introuvable ou n’est plus accessible avec vos droits."
+              : undefined
+          }
+        >
+          <div className={styles.actions} style={{ marginTop: 12 }}>
+            <button type="button" className="button outline" onClick={() => setDetailAttempt((n) => n + 1)}>
+              <Icon name="refresh" size={16} />
+              Réessayer
+            </button>
+          </div>
+        </Unavailable>
       </>
     );
   }
   const c = category(intervention.category);
-  const quotes = quoteVersions(session.data.quotes, id);
+  // Server quotes when the detail is available (bounded to quotes_limit), workspace otherwise.
+  const quotes = [...(detail ? detail.quotes : quoteVersions(session.data.quotes, id))].sort(byNewest);
   const messages = session.data.messages.filter((m) => m.intervention_id === id).sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
   const reached = STEP_ORDER.indexOf(intervention.status);
   const caps = overview?.capabilities;
@@ -1746,32 +2203,26 @@ function DossierView({
             )}
           </Panel>
 
-          <Panel title="Devis" count={quotes.length} intro="Versions successives transmises par l’artisan. L’acceptation reste une action du client.">
-            <DataTable
-              caption="Versions du devis"
-              rows={quotes}
-              keyOf={(q) => q.id}
-              columns={[
-                { key: "ref", label: "Référence", render: (q) => <span className={styles.mono}>{quoteRef(q.id)}</span> },
-                { key: "ht", label: "Total HT", render: (q) => <span className={styles.mono}>{money(q.subtotal_cents)}</span> },
-                { key: "tax", label: "TVA", render: (q) => <span className={styles.mono}>{money(q.tax_cents)} ({String(q.tax_rate).replace(".", ",")} %)</span> },
-                { key: "ttc", label: "Total TTC", render: (q) => <strong className={styles.mono}>{money(q.total_cents)}</strong> },
-                {
-                  key: "status",
-                  label: "Statut",
-                  render: (q) => {
-                    const s = QUOTE_STATUS[q.status];
-                    return <Tag tone={s?.tone || "neutral"}>{s?.label || q.status}</Tag>;
-                  },
-                },
-                { key: "date", label: "Envoyé", render: (q) => dateTime(q.created_at) },
-              ]}
-              empty={
-                <div className={styles.panelBody}>
-                  <p className={styles.muted}>Devis non chargés dans cette vue : l’espace de travail administrateur ne contient aucun devis pour ce dossier.</p>
-                </div>
-              }
-            />
+          <Panel
+            title="Devis"
+            count={detail === undefined ? undefined : quotes.length}
+            intro="Versions successives transmises par l’artisan, de la plus récente à la plus ancienne. L’acceptation reste une action du client."
+          >
+            {detail === undefined ? (
+              <Loader label="Lecture des devis du dossier…" />
+            ) : (
+              <>
+                <QuoteList quotes={quotes} />
+                <Basis>
+                  {detail
+                    ? detail.quotes_limited
+                      ? `${detail.quotes_limit} derniers devis affichés ; les versions plus anciennes ne sont pas transmises.`
+                      : `Devis lus directement sur le dossier : ${quotes.length} au total.`
+                    : "Devis présents dans l’espace de travail chargé ; la lecture complète du dossier est indisponible."}
+                  {detailStale ? " La dernière lecture a échoué : devis issus de la lecture précédente." : ""}
+                </Basis>
+              </>
+            )}
           </Panel>
 
           <Panel title="Opérations">
@@ -1886,6 +2337,84 @@ function DossierView({
         </aside>
       </div>
     </>
+  );
+}
+
+// Quotes of a dossier, each expandable to its lines. Reference = quoteRef, full id in the detail.
+function QuoteList({ quotes }: { quotes: Quote[] }) {
+  if (!quotes.length)
+    return (
+      <div className={styles.panelBody}>
+        <p className={styles.muted}>Aucun devis transmis pour ce dossier.</p>
+      </div>
+    );
+  return (
+    <ul className={styles.quoteList}>
+      {quotes.map((q) => {
+        const s = QUOTE_STATUS[q.status];
+        return (
+          <li key={q.id}>
+            <details className={styles.quote}>
+              <summary>
+                <span className={styles.mono}>{quoteRef(q.id)}</span>
+                <span>{dateTime(q.created_at)}</span>
+                <Tag tone={s?.tone || "neutral"}>{s?.label || q.status}</Tag>
+                <strong className={styles.mono}>{money(q.total_cents)} TTC</strong>
+                <span className={styles.quoteToggle} aria-hidden="true" />
+              </summary>
+              <div className={styles.quoteBody}>
+                {q.lines.length ? (
+                  <div className={styles.quoteLinesWrap}>
+                    <table className={styles.quoteLines}>
+                      <caption className="sr-only">Lignes du devis {quoteRef(q.id)}</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">Désignation</th>
+                          <th scope="col">Quantité</th>
+                          <th scope="col">Prix unitaire HT</th>
+                          <th scope="col">Total ligne HT</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {q.lines.map((line, index) => (
+                          <tr key={`${line.label}-${index}`}>
+                            <td>{line.label}</td>
+                            <td className={styles.mono}>{line.quantity}</td>
+                            <td className={styles.mono}>{money(line.unit_price_cents)}</td>
+                            <td className={styles.mono}>{money(line.quantity * line.unit_price_cents)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className={styles.muted}>Aucune ligne transmise pour ce devis.</p>
+                )}
+                <dl className={styles.quoteTotals}>
+                  <dt>Total HT</dt>
+                  <dd className={styles.mono}>{money(q.subtotal_cents)}</dd>
+                  <dt>TVA ({String(q.tax_rate).replace(".", ",")} %)</dt>
+                  <dd className={styles.mono}>{money(q.tax_cents)}</dd>
+                  <dt>Total TTC</dt>
+                  <dd className={styles.mono}>
+                    <strong>{money(q.total_cents)}</strong>
+                  </dd>
+                  {q.accepted_at && (
+                    <>
+                      <dt>Accepté le</dt>
+                      <dd>{dateTime(q.accepted_at)}</dd>
+                    </>
+                  )}
+                </dl>
+                <p className={styles.quoteId}>
+                  Identifiant complet : <span className={styles.mono}>{q.id}</span>
+                </p>
+              </div>
+            </details>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
