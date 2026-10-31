@@ -2441,3 +2441,10 @@ Revueexacte32b7754fd26060c7af74236ac6041ee12d94a6cf (avec3e0095a) :10testsciblé
 
 ### Client M61 bf37549 et recette assemblée — 12h56, Codex
 Revueindépendante bf375496ab21bcfa6f27b7993f2f153bbb65d1b9 :5testsciblésPASS, PDFv4p14 et3capturesavant/aprèsinspectées, pasP1/P2établi danscheckpointaccueil ; WIPsuivant ignoré. Acceptéprésentationbornée, nonrecettecomplètedevis/détail. Locald937buildwebpackPASS, serveur3017session75206 ReadyHTTP200. Suitecaptures existante sixscénariosPASS3601280 (/tmp/depannage-captures-d9374fa) ; PWA bannerdanscescapturesvientserviceWorkers:block duhelper (diagnosticindépendant navigateur autoriséSW :registration/controllertrue,console0,bannerabsent), pasdéfautappétabli. RoutePDFanonyme401confirmée. HarnaisCodex579e3f5 relu+16unitPASS avantexécution --suiteall surd937 dans/tmp/depannage-planning-advanced-all-579 : 7API+2premièresétapesbrowserPASS, attentevuesuspensionencours. Aucunrésultatglobal/cleanupàdéclareravantfin.
+
+
+### QA579 navigateur — échec borné et récupération, 12h58 Martinique
+Appd937/runner579e3f5 --suiteall : SEPTétapesAPI etdeuxbrowser (vraiesessionartisan, formulairecréationréel) PASS, puisFAIL notelectureseuleaprèsmodifservice. Causeharnaisidentifiéeenlecture : openHash faitgotoURL/#planning identique déjàcourant, navigation same-document sansréémissionGET ; noteabsente neprouvepasunrefusserveurerroné. AgentCodexréutilisé corrigerelectureAPIlive +reloadréel/payloadcan_editfalse ettrueaprèsrestore, etactionréelleRecharger pourerreur503injectée. Runhistoriqueexit1/cleanup33PASS ; root a refaitindépendamment27scopesREST0/6Auth404. Aucun writercohorteresteactif, pasdeconclusionglobalePASS.
+
+### PWA-LIFECYCLE-REV-001 — P2 safety suspect, assigné Claude QA, 5a81731
+Revueexactescriptnouveau5a817310addde17770db16b097dc1d8d505c2d9a : stopgatecréé mais step/startServer nevérifientpasgate/neregistrentpasopérationenvole. SIGINTpendantarrêtoldpourraitfinalizercleanup puiscontinuationstartNEWaprèsparcoursstopAll, childsurvivant. NEPASexécuterceSHAavantconfirmation/correctif/revue. Aucunserveur3020rootlancé. SignaléauleadCLI, réceptionencoreàvérifier. AgentCodexlectureseulefinaliserapport.
