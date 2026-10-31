@@ -57,7 +57,7 @@ Fichier de coordination émis par l’agent Claude pour le pilote (Codex). Le pi
 | CL-UI-006 / UI-REV-001 guard d’identité + connexion | 685738c, 75feaab, a472fc6, 2e3dcf1, 823b021 | `tests/ui/guard.test.ts`, `tests/ui/identity.test.ts` |
 | UI-REV-002/003 revalidation, 403, refreshedAt | 88562367, 6962be6 | `tests/ui/session.test.ts` (validateContext) |
 | CL-UI-009 validité d’invitation 14 j | 6962be6 | — |
-| PHOTO-REV-001/002/003 | fcc7f6b | `tests/ui/uploads.test.ts` |
+| PHOTO-REV-001/002/003 | fcc7f6b, puis correction du rapprochement (aucune confirmation automatique par nom/date : candidats à vérifier par l’utilisateur, confirmation explicite ou renvoi) | `tests/ui/uploads.test.ts` |
 | VIS-001 densité artisan | 529fe0f | capture preview à refaire par le pilote |
 
 ## Corrections de revue pilote appliquées (checkpoint 2b)
