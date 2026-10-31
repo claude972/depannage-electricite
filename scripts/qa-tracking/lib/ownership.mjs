@@ -29,7 +29,7 @@ export function proveOwnership({ manifest, runId, emails, interventions = [], or
     const email = emails.get(id);
     if (isUuid(id) && typeof email === "string" && pattern.test(email)) users.add(id);
     else if (email === null) users.add(id); // already deleted remotely: nothing left to prove or delete
-    else unproven.push({ key: "profiles", id, why: email === undefined ? "e-mail not read" : "e-mail is not a canonical QA e-mail of this run" });
+    else unproven.push({ key: "profiles", id, why: email === undefined ? "Auth read unknown (error or malformed body)" : "e-mail is not a canonical QA e-mail of this run" });
   }
   for (const id of created.auth_users || []) if (users.has(id)) keep("auth_users", id);
   for (const id of created.profiles || []) if (users.has(id)) keep("profiles", id);
@@ -67,7 +67,11 @@ export function proveOwnership({ manifest, runId, emails, interventions = [], or
 export async function readOwnership(db, auth, manifest) {
   const created = manifest?.created || {};
   const emails = new Map();
-  for (const id of new Set([...(created.auth_users || []), ...(created.profiles || [])])) emails.set(id, isUuid(id) ? await auth.emailOf(id) : undefined);
+  // found ⇒ e-mail from a schema-valid body; real 404 ⇒ null (absent); anything else ⇒ undefined (unknown, never owned).
+  for (const id of new Set([...(created.auth_users || []), ...(created.profiles || [])])) {
+    const read = isUuid(id) ? await auth.readUser(id) : { state: "unknown" };
+    emails.set(id, read.state === "found" ? read.email : read.state === "absent" ? null : undefined);
+  }
   const byIds = async (table, ids, columns) => (ids?.length ? db.select(table, { id: `in.(${ids.filter(isUuid).join(",")})` }, columns) : []);
   return {
     emails,

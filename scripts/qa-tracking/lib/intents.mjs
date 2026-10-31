@@ -5,8 +5,8 @@
 // time means the outcome is unknown: the run is INCOMPLETE (exit 3), never "clean".
 // Reconcilers (readback functions) live in memory only: a later --cleanup-manifest process has
 // none, so every intent left open by a crash stays open there too (fail closed).
-import { writeFileSync, chmodSync } from "node:fs";
 import { randomUUID } from "node:crypto";
+import { atomicWriteJsonSync } from "./durable.mjs";
 
 export class IntentLog {
   constructor(file, { now = () => new Date().toISOString(), persist = true } = {}) {
@@ -19,8 +19,7 @@ export class IntentLog {
   }
   save() {
     if (!this.persist) return;
-    writeFileSync(this.file, JSON.stringify({ version: 2, intents: this.entries }, null, 2) + "\n", { mode: 0o600 });
-    chmodSync(this.file, 0o600);
+    atomicWriteJsonSync(this.file, { version: 2, intents: this.entries });
   }
   /** Announces a write. `key`/`kind` must never contain coordinates. */
   begin(op, target, key = null, kind = null) {

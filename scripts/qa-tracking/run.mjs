@@ -31,6 +31,7 @@ import { createAuthAdmin } from "./lib/auth-admin.mjs";
 import { runTrackingCleanup, cleanupOrder } from "./lib/cleanup.mjs";
 import { createTrackingApi } from "./lib/guard.mjs";
 import { createReconciler } from "./lib/reconcile.mjs";
+import { makeManifestDurable } from "./lib/durable.mjs";
 import { createGuardedCleanup, recoveryCommand, exitCodeFor } from "./lib/finalize.mjs";
 import { TrackingFixtures, setupCohort, SCENARIO_RUNNERS, PROVIDER_RUNNERS, createSessionPool } from "./scenarios.mjs";
 
@@ -70,11 +71,12 @@ export async function cleanupWithProof({ db, auth, manifest, intents, runId, log
   const recovered = [];
   for (const open of verdict.open.filter((o) => o.op === "createAuthUser" && o.key)) {
     try {
-      const id = await auth.findByEmail(open.key, runId);
-      if (id) {
-        for (const key of ["auth_users", "profiles"]) if (!manifest.created[key].includes(id)) manifest.created[key].push(id);
-        recovered.push({ email_slug: open.key.split("@")[0], id });
-      }
+      const found = await auth.searchByEmail(open.key, runId);
+      if (found.state === "found") {
+        // Recorded for deletion; ownership is re-proven below from a schema-valid read by id.
+        for (const key of ["auth_users", "profiles"]) if (!manifest.created[key].includes(found.id)) manifest.created[key].push(found.id);
+        recovered.push({ email_slug: open.key.split("@")[0], id: found.id });
+      } else recovered.push({ email_slug: open.key.split("@")[0], id: null, search: found.state });
     } catch (error) {
       log(`intent recovery refused/failed: ${String(error?.message || error)}`);
     }
@@ -165,6 +167,8 @@ async function main(argv) {
     const gate = createStopGate();
     const intents = new IntentLog(path.join(outDir, "intents.json"));
     const fixtures = new Fixtures({ db, cohort, manifestPath: path.join(outDir, "manifest.json"), context: { sha: options.sha, project: options.project, base_url: base }, redactor, gate });
+    // Manifest (and intents, above) durable on disk BEFORE any creation or lookup (P2-2).
+    makeManifestDurable(fixtures);
     const auth = createAuthAdmin({ url: credentials.supabase.url, serviceKey: credentials.supabase.serviceKey, timeoutMs: options.timeoutMs });
     const tf = new TrackingFixtures({ fixtures, intents, cohort, gate, auth });
     const reconcile = createReconciler(db);

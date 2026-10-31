@@ -109,12 +109,15 @@ test("provider classification: valid route, documented 503/429 are 'unavailable'
   assert.equal(classifyRoute({ status: 200, body: { ...good, point_seq: 1 } }, snapshot).verdict, "fail");
   assert.equal(classifyRoute({ status: 200, body: { ...good, traffic: "live" } }, snapshot).verdict, "fail");
   assert.equal(classifyRoute({ status: 200, body: { ...good, geometry: { type: "LineString", coordinates: [[1, 2]] } } }, snapshot).verdict, "fail");
-  assert.deepEqual(classifyRoute({ status: 503, body: { reason: "provider_timeout" } }, snapshot), { verdict: "unavailable", reason: "provider_timeout" });
-  assert.equal(classifyRoute({ status: 503, body: { reason: "provider_quota" } }, snapshot).verdict, "fail", "quota needs retry_after_s");
+  assert.deepEqual(classifyRoute({ status: 503, body: { reason: "provider_timeout" } }, snapshot), { verdict: "unavailable", reason: "provider_timeout", note: null });
+  assert.equal(classifyRoute({ status: 503, body: { reason: "provider_quota" } }, snapshot).verdict, "unavailable", "any 503 is non-proof");
   assert.equal(classifyRoute({ status: 503, body: { reason: "provider_quota", retry_after_s: 12 } }, snapshot).verdict, "unavailable");
   assert.equal(classifyRoute({ status: 503, body: { reason: "position_unavailable", duration_s: 300 } }, snapshot).verdict, "fail", "no ETA in a 503");
-  assert.equal(classifyRoute({ status: 503, body: { reason: "boom" } }, snapshot).verdict, "fail");
-  assert.equal(classifyRoute({ status: 429, body: { reason: "application_quota" }, retryAfter: null }, snapshot).verdict, "fail");
+  assert.equal(classifyRoute({ status: 503, body: { reason: "boom" } }, snapshot).verdict, "unavailable");
+  assert.equal(classifyRoute({ status: 429, body: { reason: "application_quota" }, retryAfter: null }, snapshot).verdict, "unavailable");
+  assert.equal(classifyRoute({ status: null, body: null }, snapshot).verdict, "unavailable", "timeout/transport");
+  assert.equal(classifyRoute({ status: 504, body: null }, snapshot).verdict, "unavailable");
+  assert.equal(classifyRoute({ status: 500, body: {} }, snapshot).verdict, "fail");
   assert.equal(classifyRoute({ status: 429, body: { reason: "application_quota" }, retryAfter: "5" }, snapshot).verdict, "unavailable");
   assert.equal(classifyGeocode({ status: 200, body: { source: "IGN / BAN", candidates: [{ latitude: 14.6, longitude: -61, label: "Savane", score: 0.8, type: "locality" }] } }).verdict, "available");
   assert.equal(classifyGeocode({ status: 200, body: { source: "IGN / BAN", candidates: [{ latitude: 14.6, longitude: -61, label: "x", score: 2, type: "street" }] } }).verdict, "fail");
@@ -202,7 +205,7 @@ test("cleanupWithProof: an open intent is recovered by canonical e-mail but keep
   intents.begin("createAuthUser", "auth.users", `qa-${RUN}-artisan-b@qa.invalid`);
   const manifest = { created: { auth_users: [], profiles: [], interventions: [], organizations: [], sites: [], quotes: [], approvals: [], documents: [], storage_paths: [], support_tickets: [], admin_profiles: [] } };
   const looked: string[] = [];
-  const auth = { async findByEmail(email: string, run: string) { assertCanonicalEmail(email, run); looked.push(email); return user; }, async emailOf() { return `qa-${RUN}-artisan-b@qa.invalid`; } };
+  const auth = { async searchByEmail(email: string, run: string) { assertCanonicalEmail(email, run); looked.push(email); return { state: "found", id: user }; }, async readUser() { return { state: "found", email: `qa-${RUN}-artisan-b@qa.invalid` }; } };
   const result = await cleanupWithProof({ db: fakeDb(), auth, manifest, intents, runId: RUN, log: () => {} });
   assert.deepEqual(looked, [`qa-${RUN}-artisan-b@qa.invalid`]);
   assert.ok(manifest.created.auth_users.includes(user), "recovered account added for deletion");

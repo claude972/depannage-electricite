@@ -394,3 +394,34 @@ cascade ; budget jamais modifié. Exécution cloud par ROOT uniquement ; aucune 
 | Drain expiré avec producteur en attente ⇒ zéro suppression, manifest intact, exit 3 | « repro 4 » + unité « guarded cleanup and exit codes » |
 | SIGINT pendant l'attente qui précède l'émission ⇒ jamais émis | « repro 5 » |
 | Classification 4xx/5xx/non lu et preuves monotones | `tests/qa-tracking.test.ts` « outcome classification and readback proofs », « intents » |
+
+## Corrections de la revue ROOT de 8a8441d (P2-1/P2-c, P2-2/P2-d, P2-3)
+
+- **P2-1 — lectures Auth admin** (`lib/auth-admin.mjs`) : `readUser(id)` valide un schéma exact (id UUID **égal** à l'id demandé,
+  e-mail chaîne) ; un 200 non JSON, partiel ou incohérent ⇒ **inconnu** (jamais « absent », jamais « possédé ») ; seul un vrai 404
+  prouve l'absence. La propriété exige l'e-mail canonique `qa-<run>-<slug>@qa.invalid` relu dans un corps valide ; sinon l'id n'est
+  pas supprimé et le nettoyage est INCOMPLETE (3).
+- **P2-2 / P2-d — création perdue** : le manifest est écrit sur disque **avant** toute création ou recherche, et manifest + intentions
+  sont écrits de façon atomique (fichier temporaire, fsync, rename, fsync du dossier, 0600 — `lib/durable.mjs` ; la méthode
+  d'écriture du manifest est remplacée sur l'instance du harnais, le fichier partagé `scripts/qa/lib/fixtures.mjs` reste intact).
+  Recherche par e-mail canonique (validé avant toute recherche) sur **toutes** les pages, exhaustive seulement si la fin est prouvée
+  (page plus courte que `per_page` ou total `x-total-count` présent atteint ; un en-tête absent n'est jamais « 0 ») ; toute erreur ou
+  page mal formée ⇒ inconnu ; relectures espacées jusqu'à une échéance déclarée. Une absence — même exhaustive après l'échéance
+  (« not-found-exhaustive ») — **ne ferme jamais** l'intention : exit 3. Même règle pour les autres écritures service : seule une
+  observation positive (ligne vue) prouve ; une absence ne prouve rien.
+- **P2-3 — fournisseur indisponible** : tout 503 (quelle que soit la raison), 429, 502/504/408, délai ou transport inconnu ⇒
+  `unavailable` ⇒ scénario **BLOCKED** (jamais PASS) pour `provider-route` et `provider-geocode` ; la session de partage est arrêtée
+  avant ; un 503 portant des chiffres d'ETA ou un 500 restent FAIL.
+- Défaut partagé signalé (non corrigé ici) : `scripts/qa/lib/fixtures.mjs` écrit le manifest avec un `writeFile` non atomique et
+  seulement après la première création.
+
+| Défaut ROOT (reproduit sur 8a8441d) | Test (passe après correction) |
+| --- | --- |
+| P2-1 : 200 non JSON ⇒ id accepté comme possédé | `tests/qa-tracking-auth.test.ts` « P2-c — a 200 with a malformed body… » (dont `"{not json"`) |
+| 200 avec id / e-mail incohérent | « P2-c — a 200 with a mismatched id… » |
+| P2-2 : création perdue + une seule absence ⇒ intention fermée ; manifest absent | « P2-2 — manifest and intent are durable on disk BEFORE the creation… » (vraies `Fixtures`, dossier temporaire, crash injecté au point de création) |
+| Utilisateur apparu à la 2ᵉ relecture ⇒ trouvé et nettoyé | « P2-d — lost create, the user appears on the 2nd re-read… » |
+| Utilisateur en page 3 ⇒ trouvé | « P2-d — lost create, the user is on page 3… » (a révélé le défaut « en-tête total absent lu comme 0 ») |
+| Page 2 en erreur / mal formée ⇒ inconnu, exit 3 | « P2-d — page 2 errors or is malformed… » |
+| Jamais trouvé après l'échéance ⇒ intention gardée, exit 3 | « P2-d — never found after the deadline… » |
+| P2-3 : 503 `provider_unavailable` ⇒ PASS 1 / blocked 0 | « P2-3 — provider 503/429/timeout through the REAL runners, runOne and createReport ⇒ BLOCKED » |

@@ -7,19 +7,22 @@ import { ROUTE_REASONS } from "./constants.mjs";
 const finite = (n) => typeof n === "number" && Number.isFinite(n);
 const iso = (s) => typeof s === "string" && !Number.isNaN(Date.parse(s));
 
-export function classifyRoute({ status, body, retryAfter = null }, snapshot) {
+/** Non-proof answers (root P2-3): any 503, 429, gateway errors, timeouts and transport unknowns. */
+export function unavailability({ status, body, retryAfter = null }) {
+  if (!Number.isInteger(status)) return { verdict: "unavailable", reason: "transport_or_timeout" };
   if (status === 503) {
-    const reason = body?.reason;
-    if (!ROUTE_REASONS.includes(reason)) return { verdict: "fail", why: `503 without a documented reason (${String(reason)})` };
     if (body && ("duration_s" in body || "distance_m" in body || "geometry" in body)) return { verdict: "fail", why: "503 carries ETA figures or geometry" };
-    if (reason === "provider_quota" && !(Number.isInteger(body.retry_after_s) && body.retry_after_s >= 1 && body.retry_after_s <= 60)) return { verdict: "fail", why: "provider_quota without a bounded retry_after_s" };
-    return { verdict: "unavailable", reason };
+    const reason = ROUTE_REASONS.includes(body?.reason) ? body.reason : `undocumented:${String(body?.reason).slice(0, 40)}`;
+    return { verdict: "unavailable", reason, note: reason === "provider_quota" && !(Number.isInteger(body?.retry_after_s) && body.retry_after_s >= 1 && body.retry_after_s <= 60) ? "provider_quota without a bounded retry_after_s" : null };
   }
-  if (status === 429) {
-    if (body?.reason !== "application_quota") return { verdict: "fail", why: `429 with reason ${String(body?.reason)}` };
-    if (!retryAfter) return { verdict: "fail", why: "429 without Retry-After" };
-    return { verdict: "unavailable", reason: "application_quota" };
-  }
+  if (status === 429) return { verdict: "unavailable", reason: body?.reason === "application_quota" ? "application_quota" : `429:${String(body?.reason).slice(0, 40)}`, note: retryAfter ? null : "429 without Retry-After" };
+  if (status === 502 || status === 504 || status === 408) return { verdict: "unavailable", reason: `gateway_${status}` };
+  return null;
+}
+
+export function classifyRoute({ status, body, retryAfter = null }, snapshot) {
+  const unavailable = unavailability({ status, body, retryAfter });
+  if (unavailable) return unavailable;
   if (status !== 200) return { verdict: "fail", why: `unexpected status ${status}` };
   const b = body || {};
   const problems = [];
@@ -45,9 +48,9 @@ export function classifyRoute({ status, body, retryAfter = null }, snapshot) {
   return problems.length ? { verdict: "fail", why: `route answer invalid: ${problems.join(", ")}` } : { verdict: "available", evidence: { distance_bucket_km: Math.round(b.distance_m / 1000), duration_min: Math.round(b.duration_s / 60), points: coords.length, resource_version_present: typeof b.resource_version === "string" } };
 }
 
-export function classifyGeocode({ status, body }) {
-  if (status === 503) return ROUTE_REASONS.includes(body?.reason) ? { verdict: "unavailable", reason: body.reason } : { verdict: "fail", why: "503 without a documented reason" };
-  if (status === 429) return body?.reason === "application_quota" ? { verdict: "unavailable", reason: "application_quota" } : { verdict: "fail", why: "429 with an undocumented reason" };
+export function classifyGeocode({ status, body, retryAfter = null }) {
+  const unavailable = unavailability({ status, body, retryAfter });
+  if (unavailable) return unavailable;
   if (status !== 200) return { verdict: "fail", why: `unexpected status ${status}` };
   const c = body?.candidates;
   if (body?.source !== "IGN / BAN" || !Array.isArray(c) || c.length > 5) return { verdict: "fail", why: "geocode envelope invalid" };

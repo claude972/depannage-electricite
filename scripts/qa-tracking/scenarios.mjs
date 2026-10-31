@@ -41,36 +41,46 @@ export class TrackingFixtures {
     const email = this.cohort.email(label);
     return this.write("createAuthUser", "auth.users", email, () => this.f.createUser(label, role, options), async () => {
       if (!this.auth) return { proven: false };
-      const id = await this.auth.findByEmail(email, this.cohort.runId);
-      if (!id) return { proven: true, note: "account absent" };
-      await this.f.track("auth_users", id);
-      await this.f.track("profiles", id);
+      // Bounded exhaustive search (P2-d): only "found" proves the state; an absence — even after
+      // every scan was exhaustive and the deadline passed — keeps the intent OPEN (exit 3).
+      const found = await this.auth.searchByEmail(email, this.cohort.runId);
+      if (found.state !== "found") return { proven: false, note: found.state };
+      await this.f.track("auth_users", found.id);
+      await this.f.track("profiles", found.id);
       return { proven: true, note: "account exists, recorded for deletion" };
     });
   }
   createOrganization(owner, label) {
     return this.write("insert", "organizations", label, () => this.f.createOrganization(owner, label), async () => {
       const rows = await this.f.db.select("organizations", { owner_id: `eq.${owner.id}`, name: `eq.${this.cohort.name(label)}` }, "id");
-      if (rows.length) await this.f.track("organizations", ...rows.map((r) => r.id));
-      return { proven: true, note: rows.length ? "organization exists, recorded" : "organization absent" };
+      if (!rows.length) return { proven: false, note: "absent at readback (absence alone never closes an intent)" };
+      await this.f.track("organizations", ...rows.map((r) => r.id));
+      return { proven: true, note: "organization exists, recorded" };
     });
   }
   addMember(org, user, role) {
-    return this.write("insert", "organization_members", `${org.id}:${user.id}`, () => this.f.addMember(org, user, role), async () => ({ proven: true, note: `${(await this.f.db.select("organization_members", { organization_id: `eq.${org.id}`, user_id: `eq.${user.id}` }, "user_id")).length} row(s), removed with the organization` }));
+    return this.write("insert", "organization_members", `${org.id}:${user.id}`, () => this.f.addMember(org, user, role), async () => ((await this.f.db.select("organization_members", { organization_id: `eq.${org.id}`, user_id: `eq.${user.id}` }, "user_id")).length ? { proven: true, note: "membership exists, removed with the organization" } : { proven: false, note: "absent at readback" }));
   }
   createSite(org, label) {
     return this.write("insert", "sites", label, () => this.f.createSite(org, label), async () => {
       const rows = await this.f.db.select("sites", { organization_id: `eq.${org.id}`, name: `eq.${this.cohort.name(label)}` }, "id");
-      if (rows.length) await this.f.track("sites", ...rows.map((r) => r.id));
-      return { proven: true, note: rows.length ? "site exists, recorded" : "site absent" };
+      if (!rows.length) return { proven: false, note: "absent at readback (absence alone never closes an intent)" };
+      await this.f.track("sites", ...rows.map((r) => r.id));
+      return { proven: true, note: "site exists, recorded" };
     });
   }
   setSiteScope(org, user, scope, grants) {
-    return this.write("upsert", "organization_member_site_scopes", `${org.id}:${user.id}`, () => this.f.setSiteScope(org, user, scope, grants), async () => ({ proven: true, note: "scope rows removed with the organization" }));
+    return this.write("upsert", "organization_member_site_scopes", `${org.id}:${user.id}`, () => this.f.setSiteScope(org, user, scope, grants), async () => ((await this.f.db.select("organization_member_site_scopes", { organization_id: `eq.${org.id}`, user_id: `eq.${user.id}`, scope: `eq.${scope}` }, "user_id")).length ? { proven: true, note: "scope observed, removed with the organization" } : { proven: false, note: "absent at readback" }));
   }
   createIntervention(spec) {
     // The id is generated and written to the manifest BEFORE the insert: deleting it by id is exact.
-    return this.write("insert", "interventions", spec.description || "dossier", () => this.f.createIntervention(spec), async () => ({ proven: true, note: "id recorded before the insert" }));
+    // Proven only when the row is OBSERVED (its id is already in the manifest for deletion).
+    const index = this.f.manifest.created.interventions.length; // this call's id lands at this index (tracked before the insert)
+    return this.write("insert", "interventions", spec.description || "dossier", () => this.f.createIntervention(spec), async () => {
+      const id = this.f.manifest.created.interventions[index];
+      const rows = id ? await this.f.db.select("interventions", { id: `eq.${id}` }, "id") : [];
+      return rows.length ? { proven: true, note: "row observed, id recorded before the insert" } : { proven: false, note: "absent at readback" };
+    });
   }
   /** Update proven only when every patched field is observed on the row (by id). */
   update(table, filters, patch, key) {
@@ -691,7 +701,13 @@ export async function simulateReassignment(ctx, s, job, from, to) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Provider proof (opt-in, ONE real call each; never a burst, never a retry).
+// Provider proof (opt-in, ONE real call each; never a burst, never a retry). An unavailable
+// provider (any 503, 429, gateway error, timeout, unknown transport) is NOT a proof: BLOCKED.
+export function providerBlocked(what, verdict) {
+  const error = new Error(`provider ${what} unavailable (${verdict.reason}${verdict.note ? `; ${verdict.note}` : ""}): not a proof`);
+  error.blocked = true;
+  return error;
+}
 export const PROVIDER_RUNNERS = {
   async "provider-route"(ctx, s) {
     const a = await ctx.session("artisanA-api", ctx.users.artisanA);
@@ -709,7 +725,11 @@ export const PROVIDER_RUNNERS = {
     const answer = await ctx.api.post(c.page, routePath(job), {}, `route:${job}`);
     const verdict = classifyRoute({ status: answer.status, body: answer.body, retryAfter: answer.status === 429 ? "present" : null }, snapshot);
     s.note(`provider route (real IGN call, fixed public coordinates): ${JSON.stringify(verdict)}`);
-    if (verdict.verdict === "fail") throw new AppDefect(verdict.why);
+    if (verdict.verdict !== "available") {
+      await command(ctx, a.page, job, "stop", v, { session_id: sessionId }); // never leave the session open
+      if (verdict.verdict === "fail") throw new AppDefect(verdict.why);
+      throw providerBlocked("route", verdict);
+    }
     const budget = await ctx.tf.db.select("tracking_provider_budget", { id: "eq.ign" }, "backoff_until");
     s.note(`budget read-only: backoff ${budget[0] && Date.parse(budget[0].backoff_until) > Date.now() ? "active" : "inactive"}`);
     if (verdict.verdict === "available") {
@@ -723,14 +743,15 @@ export const PROVIDER_RUNNERS = {
   async "provider-geocode"(ctx, s) {
     const c = await ctx.session("client", ctx.users.client);
     const answer = await ctx.api.post(c.page, geocodePath(ctx.jobs.isoB.id), { query: "Place de la Savane 97200 Fort-de-France" }, `geocode:${ctx.jobs.isoB.id}`);
-    const verdict = classifyGeocode({ status: answer.status, body: answer.body });
+    const verdict = classifyGeocode({ status: answer.status, body: answer.body, retryAfter: answer.status === 429 ? "present" : null });
     s.note(`provider geocode (real IGN/BAN call, public query): ${JSON.stringify(verdict)}`);
-    if (verdict.verdict === "fail") throw new AppDefect(verdict.why);
-    const after = await okSnap(ctx, c.page, ctx.jobs.isoB.id, "geocode");
-    void after; // no target is stored without an explicit destination command
+    // The viewer refusal happens before any provider call: checked whatever the provider state.
     const v = await ctx.session("viewer", ctx.users.viewer);
     const denied = await ctx.api.post(v.page, geocodePath(ctx.jobs.site.id), { query: "Place de la Savane 97200" }, `geocode:${ctx.jobs.site.id}`);
     assert.equal(denied.status, 403, `viewer geocode answered ${denied.status}`);
+    if (verdict.verdict === "fail") throw new AppDefect(verdict.why);
+    if (verdict.verdict !== "available") throw providerBlocked("geocode", verdict);
+    await okSnap(ctx, c.page, ctx.jobs.isoB.id, "geocode"); // no target is stored without an explicit destination command
   },
 };
 
