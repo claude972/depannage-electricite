@@ -38,7 +38,7 @@ La clé serveur sert exclusivement aux fixtures/lectures de contrôle/nettoyage,
 
 - ArtisanA/B/tiers/client : règles et entrées privées, écriture client/non propriétaire refusée, disponibilité récurrente + exception + créneau occupé, version périmée409 et idempotence même clé sans doublon. Suspension posée seulement sur le compte technique de cohorte : lecture conservée/écriture refusée ; restauration de ce compte.
 - Deux créneaux `busy` qui se chevauchent envoyés simultanément sous deux sessions du même artisan : un succès, un conflit, une ligne. Deux premières sauvegardes de préférences `expected_version:0` sous deux sessions : un succès, un conflit, version1 et contenu du gagnant conservé.
-- Ticket d'un manager de cohorte lié à un dossier de site ; réponse et statut opérateur via vrais RPC ; notifications du seul créateur. Retrait de portée de site via commande propriétaire : ticket, notifications/listes/comptes/marquage refusés/masqués selon contrat. Ticket personnel sans dossier contraste : lisible/notifiable après ce retrait. Historique support conservé jusqu'au cleanup, pas de suppression pour simuler la révocation.
+- Tickets d'un manager de cohorte, lié à un dossier de site et personnel sans lien : créations par leurs vrais RPC utilisateur. Notifications **techniques semées** par service_role, avec `support_ticket_id` réel, `actor_id:null` et clé de déduplication QA : cette recette teste RLS/liste/compte/marquage, **pas la génération des triggers opérateur**. Aucun profil admin de cohorte n'est créé (protection du dernier SuperAdmin après014). Retrait de portée de site via commande propriétaire : ticket et notification liés deviennent illisibles/non marquables ; ticket et notification personnels restent accessibles. Historique support conservé jusqu'au cleanup, pas de suppression pour simuler la révocation. La génération reply/status reste la preuve SQL isolée de Claude, pas une preuve live apportée ici.
 - Les sondes intercomptes utilisent le JWT propre de l'acteur. Le chemin HTTP doit refuser l'anonyme ; les commandes utilisateur critiques sont exercées sous RLS/RPC et par HTTP via navigateur si disponible.
 
 ## Navigateur
@@ -58,3 +58,46 @@ Sorties : `manifest.json`, `result.json`, `summary.md`, `cleanup.json`, traces e
 Tests unitaires significatifs sans réseau : refus projet/origine/SHA, manifeste borné/atomique, ordre et reprise cleanup, résultat inconnu non assimilé à absence, stop/drain et finalisation unique/signal, classification concurrence et idempotence. Commande : `node --test tests/qa-advanced*.test.ts` (Node24) ou binaire tsx existant.
 
 Les recettes cloud/navigateur ne sont pas exécutées par cet agent. Aucun résultat PGlite ne vaut preuve de concurrence réseau. Les timers ne prouvent pas la fin d'un travail distant ; une mutation transport-incertaine conserve le manifeste et nécessite réconciliation. Vercel/Stripe et plateformes natives sont hors mission.
+
+## Livraison à relire — code4be763abcf02fac040846164536f6a5255205763
+
+Fichiers livrés : `scripts/qa-advanced/{core,run,scenarios}.mjs`, `tests/qa-advanced.test.ts`. Aucun helper historique, fichier applicatif, migration, package, verrou de dernier admin ou configuration fournisseur modifié.
+
+Exécuté sans réseau :
+
+- `node --test tests/qa-advanced.test.ts` : **13/13 PASS**, dont vraie exécution CLI `--dry-run` avec credentials factices et dépôt Git temporaire ; aucune clé imprimée.
+- `node --check` des trois scripts : PASS.
+- Vérification TypeScript ciblée des tests avec le compilateur déjà disponible, `--noEmit --skipLibCheck --target ES2022 --module ESNext --moduleResolution Bundler --types node --typeRoots <cache-existant>/@types` : PASS. Premier essai ad hoc NodeNext refusait `import.meta` en CommonJS ; commande corrigée pour correspondre au modeESNext/Bundler du dépôt, aucune dépendance/configuration changée.
+- `git diff --check` : PASS. Node24 émet une note `MODULE_TYPELESS_PACKAGE_JSON` sur le fichier de test TS ; elle est non bloquante et ne justifie aucune édition du package hors propriété.
+
+Préconditions d'exécution pilote : migration016 corrigée et revue (`b26bc45` ou descendant), application servie au SHA réellement vérifié, credentials0600 conformes au contrat. Les autres migrations peuvent être présentes : le harnais ne crée aucun admin et ne touche aucune facture/transaction/ledger/audit financier immuable.
+
+### Exécution API/RPC d'abord, sans attendre les coques
+
+```
+node scripts/qa-advanced/run.mjs --base-url http://localhost:3017 \
+  --sha <SHA-complet-servi> --app-dir <checkout-servi> \
+  --project kcpyjzndybfdlnhvscbs --credentials <json0600> \
+  --out <dossier-temporaire-hors-git> --suite api --dry-run
+```
+
+Après revue, retirer `--dry-run` pour la recette réelle. `--suite api` n'importe/lance pas Playwright et ne prétend pas tester le navigateur. Elle vérifie l'anonyme sur Next, puis les RPC/lectures sous les vrais JWT de la cohorte. Les deux races exigent un succès et un conflit ET un chevauchement mesuré des fenêtres HTTP ; une paire séquentielle échoue comme critère non exercé. Les traces conservent seulement méthode/chemin sans query/rôle technique/date/status, aucun corps/en-tête/session.
+
+### Après assemblage UI seulement
+
+Même commande avec `--suite all --playwright-path <module-playwright-existant>` (et `--chromium-path` si nécessaire). Le préflight vérifie l'import de Playwright avant toute création. `--suite browser` est un sous-ensemble séparé : crée sa cohorte et teste les vues/états/planning, mais la comparaison notifications liées/personnelles et son marquage nécessitent les fixtures de `--suite all`. Aucun sous-ensemble ne vaut exécution des critères omis.
+
+Parcours navigateur écrits, **non exécutés** : login formulaire et vérification projet, GET privés, validation422, création d'une entrée par le vrai formulaire et contrôle serveur, captures360/1280, préférences/canaux indisponibles, suspension403 et lecture seule, panneGET injectée/réessai, refus client de planning privé ; en `all`, notifications après révocation et bouton de marquage de la notification personnelle. Les sélecteurs suivent les composants feuilles de `b26bc45` ; leur compatibilité avec les coques finales doit être constatée, pas déduite des tests purs.
+
+### Résultats et reprise
+
+`result.json` contient SHA application et SHA propre du harnais, suite/cible, étapes, temps/statuts des requêtes et non-preuves ; `summary.md`, `cleanup.json` et manifeste atomique0600 restent hors Git. Toutes les créations sont arrêtées avant le drain, puis les seuls enfants de la cohorte sont découverts avant suppression/readback. Les sources cleanup utilisent les vrais `actor_id`/`user_id` et les comptes exacts (une erreur/compte inconnu n'est jamais zéro).
+
+```
+node scripts/qa-advanced/run.mjs --cleanup-manifest <run>/manifest.json \
+  --project kcpyjzndybfdlnhvscbs --credentials <json0600> --out <nouveau-dossier>
+```
+
+Si un résultat de mutation est inconnu (transport, réponse5xx, succès malformé) ou une intention ne s'est pas terminée, **aucune suppression n'est lancée** et exit3 conserve les identifiants/intention pour réconciliation du pilote. Ce mode ne prétend pas lever automatiquement une incertitude distante par un délai ; ne pas effacer les marqueurs d'incertitude sans contrôle opérateur. Un arrêt normal avec erreurs/scénarios refusés de manière certaine conserve une reprise idempotente du cleanup.
+
+**Statut : prêt pour revue et exécution pilote, pas accepté cloud/navigateur.** Aucun déploiement, publication, email réel ni opération financière effectué par cet agent.
