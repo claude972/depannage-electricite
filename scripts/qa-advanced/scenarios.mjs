@@ -144,8 +144,12 @@ export async function browserScenarios(ctx) {
     ok(await change('restore browser cohort artisan','service','PATCH',`/rest/v1/artisan_profiles?user_id=eq.${u.artisan.id}`,{application_status:'approved'}),204);
     await reloadPlanning(true);await page.getByRole('button',{name:'Ajouter une entrée ponctuelle',exact:true}).waitFor();
   });
-  await step('browser: GET503 blocks planning writes; document reload recovers (inline recovery unverified)',async()=>{
-    await page.route('**/api/planning?*',async route=>{await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Panne technique injectée pour la recette.'})});});
+  await step('browser: GET503 blocks planning writes; scoped inline retry recovers without document reload',async()=>{
+    const identityBefore=await b.waitForWorkspace(page,u.artisan.id,o.timeoutMs);
+    const documentMarker=randomUUID();
+    const timeOrigin=await page.evaluate(marker=>{document.documentElement.dataset.qaPlanningRetry=marker;return performance.timeOrigin;},documentMarker);
+    const inject503=async route=>{await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Panne technique injectée pour la recette.'})});};
+    await page.route('**/api/planning?*',inject503);
     try {
       const response=page.waitForResponse(r=>{const url=new URL(r.url());return url.pathname==='/api/planning' && url.searchParams.has('from') && r.request().method()==='GET';}).catch(()=>null);
       await page.getByRole('button',{name:'Recharger la semaine',exact:true}).click();
@@ -156,9 +160,21 @@ export async function browserScenarios(ctx) {
       assert.equal(await page.getByRole('heading',{name:'Disponibilités habituelles',exact:true}).count(),0);
       await page.screenshot({path:path.join(o.out,'planning-error.png'),fullPage:true});
     }
-    finally {await page.unrouteAll({behavior:'wait'});}
-    await reloadPlanning(true);await page.getByRole('heading',{name:'Disponibilités habituelles',exact:true}).waitFor();
+    finally {await page.unroute('**/api/planning?*',inject503);}
+    // Scope the recovery control to this capability, never the PWA banner.
+    const blocked=page.locator('[data-blocker="capability:planning"][role="note"]');
+    const response=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/planning' && r.request().method()==='GET').catch(()=>null);
+    await blocked.getByRole('button',{name:'Réessayer',exact:true}).click();
+    const recovered=await response;assert.ok(recovered,'inline retry must request planning');assert.equal(recovered.status(),200);
+    assert.equal((await recovered.json())?.permissions?.can_edit,true);
+    await page.getByRole('heading',{name:'Disponibilités habituelles',exact:true}).waitFor();
     await page.getByRole('button',{name:'Ajouter une entrée ponctuelle',exact:true}).waitFor();
+    assert.equal(await blocked.count(),0,'planning blocker must disappear after recovery');
+    const identityAfter=await b.waitForWorkspace(page,u.artisan.id,o.timeoutMs);
+    assert.equal(identityAfter.profile.id,identityBefore.profile.id,'retry must preserve workspace identity');
+    const documentAfter=await page.evaluate(()=>({marker:document.documentElement.dataset.qaPlanningRetry,timeOrigin:performance.timeOrigin}));
+    assert.equal(documentAfter.marker,documentMarker,'inline retry must preserve the document marker');
+    assert.equal(documentAfter.timeOrigin,timeOrigin,'inline retry must not navigate or reload the document');
   });
   if(ctx.support)await step('browser: notification HTTP list/count/mark obey linked-ticket revocation',async()=>{
     await handle.close();const h=await b.newPage(browser,{baseUrl:o.baseUrl,redactor});
