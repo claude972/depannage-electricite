@@ -35,12 +35,12 @@ Une tranche = un propriétaire, un worktree isolé, une branche ; pas d’éditi
 1. **Tokens deux thèmes (lead).** Variables CSS sémantiques dans `globals.css` (`--color-bg/surface/card/line/text/
    text-muted/action/action-text/accent/focus/error`, `--advice-*`, rayons 12/14/18/22/28, espacements 4–64) pour
    `[data-theme="dark"]` et `[data-theme="light"]`, valeurs DESIGN.md ; Plus Jakarta Sans via `next/font/local` (fichiers
-   de la maquette, licence OFL à confirmer par le propriétaire) ; anciennes variables `--blue`/`--navy` **aliasées** vers les
+   de la maquette, provenance et licence à vérifier et à conserver par l’agent dans les assets avant intégration, sans redemande au propriétaire pour une vérification documentaire) ; anciennes variables `--blue`/`--navy` **aliasées** vers les
    tokens le temps de la migration (aucune page cassée) ; primitives `.button/.panel/.tag/.field/.alert/.unavailable`
    recalées ; script de thème inline dans `layout.tsx` (voir risques) + bouton de bascule exposé par le shell.
 2. **Accueil client réel (`public-site`).** Composition 6bc0cab : diaporama photo manuel plein écran sans publicité,
    cartes d’interventions, catalogue à onglets, conseils jaunes, bannière « Nous rejoindre » — chaque action reliée au vrai
-   parcours (`#new`, connexion, assistance) ou à un état « indisponible » explicite ; textes provisoires gardés tels.
+   parcours existants (`session.go("new")`, connexion, assistance), en utilisant les callbacks du routeur plutôt que des liens de maquette ou à un état « indisponible » explicite ; textes provisoires gardés tels.
 3. **Espace client** : demande, estimation, suivi (lot GPS), devis, documents, paiement — références M61, V8-C06/C07,
    M7 ; mêmes composants, pas de mise en page publique.
 4. **Espace artisan** : M35/M34/M36/M14/M65 (fidélité déjà établie, seulement re-thémée), planning, devis.
@@ -64,7 +64,7 @@ Chaque tranche : thème seulement d’abord (tokens), puis compositions ; aucune
 - **Flash de thème / SSR** : `<html>` rendu sans thème côté serveur ⇒ script inline minimal en tête (lecture
   `localStorage` sous try/catch, repli `prefers-color-scheme`), `suppressHydrationWarning` sur `<html>` seulement,
   `color-scheme` CSS ; clé unique (ex. `courant-theme`), aucune donnée personnelle ; fonctionnement sans stockage.
-- **Contrastes** : le vert action ne sert jamais de texte courant sur fond sombre ; accent clair `#0F5C3A` ; jaune réservé
+- **Contrastes** : le vert action ne sert jamais de texte courant sur fond sombre ; accent `#5BD49A` sur fond sombre et `#0F5C3A` sur fond clair ; jaune réservé
   au bloc conseils ; mesure automatisée par tranche.
 - **États existants** : lecture seule, indisponible (`Unavailable`), chargement/vide/erreur/reprise, refus serveur rendus
   tels quels — à re-thémer sans les retirer ; permissions, gardes de rôle et parcours réels inchangés (aucune action
@@ -80,3 +80,7 @@ Chaque tranche : thème seulement d’abord (tokens), puis compositions ; aucune
 - Captures **2 thèmes × 1440/1280/390/360** (démo + compte réel quand disponible) : nominal, chargement, vide, erreur,
   lecture seule ; clavier/focus ; contrastes mesurés ; aucune requête externe nouvelle ; console propre.
 - Une **preview par tranche**, bornée au SHA testé ; previews historiques et prototypes conservés.
+
+## Revue ROOT avant implémentation
+
+Plan retenu comme séquence, pas comme preuve de migration. Les fichiers du thème ont un propriétaire unique ; les callbacks et gardes de session sont conservés. La vérification des licences et leur conservation relèvent de l’agent, sans bloquer sur une approbation utilisateur supposée. Le bloc jaune ne modifie pas les couleurs sémantiques des alertes métier. Les anciens bleus codés en dur sont inventoriés par module avant migration ; aucun remplacement global ne vaut vérification. La tranche1 nécessite une mission et un contrat de composants explicites avant code, après le checkpoint fonctionnel B2.
