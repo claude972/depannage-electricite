@@ -8,6 +8,9 @@ import { readFile } from "node:fs/promises";
 import {
   REVOKE_DISCOVERY_MS,
   cleanupPlan,
+  listAllUserEmails,
+  parseTotalHeader,
+  type UserPage,
   REVOKE_RESULT_WAIT_MS,
   UsageError,
   emptyCreated,
@@ -512,4 +515,55 @@ test("runner maps unverified entities to exit code 3 and a leftover diagnostic",
   const source = await readFile(new URL("../scripts/qa-gateway/run.mjs", import.meta.url), "utf8");
   assert.match(source, /if \(result\.revoke\?\.unverifiedEntities\?\.length\) return 3;/);
   assert.match(source, /entités non prouvées non nettoyées/);
+});
+
+// ---- Root review of 13b68c3: Auth listing exhaustiveness only on a proven end -----------------------
+const pages = (sizes: number[], total: number | null = null, prefix = "u") => async (page: number): Promise<UserPage> => {
+  const n = sizes[page - 1] ?? 0;
+  return { status: 200, users: Array.from({ length: n }, (_, k) => ({ email: `${prefix}${page}-${k}@example.com` })), total, detail: "" };
+};
+test("Auth listing: a short final page proves the end; a full page at the bound, an inconsistent total or an error is UNKNOWN", async () => {
+  const short = await listAllUserEmails(pages([3, 3, 1]), { perPage: 3, maxPages: 5 });
+  assert.equal(short.ok, true);
+  assert.equal(short.emails.length, 7);
+  const empty = await listAllUserEmails(pages([0]), { perPage: 3 });
+  assert.equal(empty.ok, true, "an empty first page is a proven end");
+  const exactMultiple = await listAllUserEmails(pages([3, 3, 0]), { perPage: 3, maxPages: 5 });
+  assert.equal(exactMultiple.ok, true, "full pages followed by an empty page: end proven by reading the next page");
+  const fullAtBound = await listAllUserEmails(pages([3, 3, 3]), { perPage: 3, maxPages: 3 });
+  assert.equal(fullAtBound.ok, false);
+  assert.match(fullAtBound.detail, /pleine\(s\) sans fin prouvée \(borne atteinte\)/);
+  assert.deepEqual(fullAtBound.emails, [], "no partial list is ever returned as exhaustive");
+  const singleFull = await listAllUserEmails(pages([3, 3]), { perPage: 3, maxPages: 1 });
+  assert.equal(singleFull.ok, false, "one full page without the next one read → unknown");
+  const byTotal = await listAllUserEmails(pages([3, 3], 6), { perPage: 3, maxPages: 2 });
+  assert.equal(byTotal.ok, true, "a consistent announced total proves the end even on a full page");
+  assert.equal((await listAllUserEmails(pages([3, 1], 9), { perPage: 3, maxPages: 5 })).ok, false, "short page but total says more");
+  assert.equal((await listAllUserEmails(pages([3, 3], 4), { perPage: 3, maxPages: 5 })).ok, false, "more read than the total");
+  assert.equal((await listAllUserEmails(async () => ({ status: 500, users: null, total: null, detail: "boom" }))).ok, false);
+  assert.equal((await listAllUserEmails(async () => { throw new TypeError("fetch failed"); })).ok, false);
+  assert.equal((await listAllUserEmails(async () => ({ status: 200, users: Array(4).fill({}), total: null, detail: "" }), { perPage: 3 })).ok, false, "oversized page");
+  assert.equal(parseTotalHeader("12"), 12);
+  assert.equal(parseTotalHeader("abc"), null);
+  assert.equal(parseTotalHeader(null), null);
+});
+
+test("other-writer guard refuses on an UNKNOWN Auth listing (prepare creates nothing, live records nothing)", async () => {
+  const c = cloud();
+  const unknownListing = async () => ({ ok: false, emails: [], detail: "listage Auth inconnu : 50 page(s) pleine(s) sans fin prouvée (borne atteinte)" });
+  const p = await revokePrepare(await deps(c, { listUserEmails: unknownListing }));
+  assert.equal(p.outcome, "refused");
+  assert.ok(!c.calls.some((k) => k.startsWith("createUser")));
+  assert.ok(c.logs.some((l) => /listage Auth impossible/.test(l.step) && /sans fin prouvée/.test(l.detail)));
+  const { c: c2, state } = await liveWorld();
+  const out = await revokeLive(state, await deps(c2, { listUserEmails: unknownListing }), files);
+  assert.equal(out.outcome, "refused");
+  assert.equal(out.cleanup, false);
+  assert.ok(!c2.calls.some((k) => k.startsWith("recordValidated") || k === "upload"));
+});
+
+test("runner uses the exhaustive listing helper (no inline pagination that trusts a full page)", async () => {
+  const source = await readFile(new URL("../scripts/qa-gateway/run.mjs", import.meta.url), "utf8");
+  assert.match(source, /listUserEmails: \(\) => listAllUserEmails\(/);
+  assert.doesNotMatch(source, /for \(let page = 1; page <= 5; page\+\+\)/);
 });

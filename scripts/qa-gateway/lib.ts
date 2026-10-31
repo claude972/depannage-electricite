@@ -1262,6 +1262,43 @@ export function isRevokeCohortEmail(email: unknown, runId: string, role: "owner"
 export function otherWriters(emails: string[], runId: string): string[] {
   return emails.filter((e) => typeof e === "string" && /^qa-gw-/i.test(e) && !e.includes(`-${runId}-`) && !e.includes(`-${runId}@`));
 }
+// Exhaustive Auth admin user listing (root review of 13b68c3): absence/exhaustiveness is inferred ONLY
+// from a proven end — a short page (< perPage) or a response `total` consistent with what was read.
+// A full last page at the page bound, an inconsistent total, an error or a malformed page ⇒ UNKNOWN
+// (ok:false): the other-writer guard refuses and no "clean" verdict can rely on it.
+export type UserPage = { status: number; users: unknown[] | null; total: number | null; detail: string };
+export async function listAllUserEmails(fetchPage: (page: number, perPage: number) => Promise<UserPage>, options: { perPage?: number; maxPages?: number } = {}): Promise<{ ok: boolean; emails: string[]; detail: string }> {
+  const perPage = Math.max(1, options.perPage ?? 1000);
+  const maxPages = Math.max(1, options.maxPages ?? 50);
+  const emails: string[] = [];
+  let seen = 0;
+  for (let page = 1; page <= maxPages; page++) {
+    let r: UserPage;
+    try {
+      r = await fetchPage(page, perPage);
+    } catch (error) {
+      return { ok: false, emails: [], detail: `listage Auth inconnu : ${error instanceof Error ? error.message : String(error)}` };
+    }
+    if (r.status !== 200 || !Array.isArray(r.users)) return { ok: false, emails: [], detail: `listage Auth inconnu : HTTP ${r.status} ${r.detail}` };
+    if (r.users.length > perPage) return { ok: false, emails: [], detail: `listage Auth inconnu : page ${page} de ${r.users.length} > ${perPage}` };
+    for (const u of r.users) {
+      const email = u && typeof u === "object" ? (u as Record<string, unknown>).email : undefined;
+      if (typeof email === "string") emails.push(email);
+    }
+    seen += r.users.length;
+    if (r.total !== null && seen > r.total) return { ok: false, emails: [], detail: `listage Auth inconnu : ${seen} lus > total annoncé ${r.total}` };
+    if (r.users.length < perPage) {
+      if (r.total !== null && r.total !== seen) return { ok: false, emails: [], detail: `listage Auth inconnu : fin de liste à ${seen} ≠ total annoncé ${r.total}` };
+      return { ok: true, emails, detail: `${seen} compte(s), fin prouvée (page ${page} courte)` };
+    }
+    if (r.total !== null && r.total === seen) return { ok: true, emails, detail: `${seen} compte(s), fin prouvée (total annoncé ${r.total})` };
+  }
+  return { ok: false, emails: [], detail: `listage Auth inconnu : ${maxPages} page(s) pleine(s) sans fin prouvée (borne atteinte)` };
+}
+export function parseTotalHeader(value: string | null): number | null {
+  if (!value || !/^\d+$/.test(value.trim())) return null;
+  return Number(value.trim());
+}
 export type RevokeIds = { RUN: string; PROJECT: string; ORG: string; SITE: string; DOSSIER: string; OWNER: string; MANAGER: string };
 // Renders a SQL template: every {{KEY}} replaced by a validated value; unknown placeholders refused.
 export function renderSqlTemplate(template: string, ids: RevokeIds): string {

@@ -52,6 +52,8 @@ import {
   revokePrepare,
   revokeLive,
   parseRevokeState,
+  listAllUserEmails,
+  parseTotalHeader,
 } from "./lib.ts";
 
 const BUCKET = "intervention-documents";
@@ -359,17 +361,13 @@ export async function main(argv, deps = defaultDeps()) {
       liveCommand,
       templates,
       randomPassword: () => cohortPassword(randomBytes(32)),
-      listUserEmails: async () => {
-        const emails = [];
-        for (let page = 1; page <= 5; page++) {
-          const r = await http(`${credentials.url}/auth/v1/admin/users?page=${page}&per_page=1000`, { headers: serviceHeaders() });
-          const users = Array.isArray(r.json?.users) ? r.json.users : Array.isArray(r.json) ? r.json : null;
-          if (r.status !== 200 || !users) return { ok: false, emails: [], detail: `HTTP ${r.status} ${summarize(r)}` };
-          for (const u of users) if (typeof u?.email === "string") emails.push(u.email);
-          if (users.length < 1000) break;
-        }
-        return { ok: true, emails, detail: `${emails.length} compte(s)` };
-      },
+      // Exhaustive only on a proven end (short page or consistent total); a full last page is UNKNOWN.
+      listUserEmails: () => listAllUserEmails(async (page, perPage) => {
+        const r = await http(`${credentials.url}/auth/v1/admin/users?page=${page}&per_page=${perPage}`, { headers: serviceHeaders() });
+        const users = Array.isArray(r.json?.users) ? r.json.users : Array.isArray(r.json) ? r.json : null;
+        const total = typeof r.json?.total === "number" ? r.json.total : parseTotalHeader(r.headers?.get?.("x-total-count") ?? null);
+        return { status: r.status, users, total, detail: summarize(r) };
+      }, { perPage: 1000, maxPages: 50 }),
       createUser: async (email, password, role) => {
         const r = await http(`${credentials.url}/auth/v1/admin/users`, { method: "POST", headers: serviceHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { role, full_name: `QA révocation ${id}` } }) });
         return { status: r.status, id: typeof r.json?.id === "string" ? r.json.id : null, detail: summarize(r) };
