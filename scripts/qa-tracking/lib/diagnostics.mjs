@@ -9,12 +9,13 @@ import { mkdirSync, chmodSync } from "node:fs";
 import path from "node:path";
 import { atomicWriteJsonSync } from "./durable.mjs";
 import { parseTrackingUrl } from "./requests.mjs";
-import { UI } from "./constants.mjs";
+import { UI, ROUTE_REASONS } from "./constants.mjs";
 
 export const DIAG_LIMITS = Object.freeze({ pages: 3, opMs: 5000, totalMs: 20000, panelChars: 4000, blockers: 20, blockerChars: 200, headings: 20, headingChars: 120, statuses: 20, statusChars: 400, requests: 50, reasonBytes: 4096 });
 /** The only POST actions recorded by name (tracking_command, lib/features/tracking/state.ts). */
 export const TRACKING_ACTIONS = Object.freeze(["start", "point", "stop", "arrived", "destination"]);
-const REASON_RE = /^[a-z_]{1,64}$/;
+/** A8 §8a: CLOSED set of known tracking reasons; anything else is "other", never upstream text. */
+export const KNOWN_REASONS = Object.freeze([...ROUTE_REASONS, "tracking_changed", "application_quota"]);
 
 /** POST body → allowlisted action name, "other" for anything else, never the body text itself. */
 export function allowlistedAction(method, kind, postData) {
@@ -27,12 +28,13 @@ export function allowlistedAction(method, kind, postData) {
   }
 }
 
-/** Server `reason` of an error answer: a short snake_case string only, else null. */
+/** Server `reason` of an error answer: a KNOWN reason, "other" for any other value, null when absent. */
 export function boundedReason(text) {
   if (typeof text !== "string" || !text.length || Buffer.byteLength(text) > DIAG_LIMITS.reasonBytes) return null;
   try {
-    const reason = JSON.parse(text)?.reason;
-    return typeof reason === "string" && REASON_RE.test(reason) ? reason : null;
+    const body = JSON.parse(text);
+    if (!body || typeof body !== "object" || !("reason" in body) || body.reason === null || body.reason === undefined) return null;
+    return KNOWN_REASONS.includes(body.reason) ? body.reason : "other";
   } catch {
     return null;
   }
@@ -145,9 +147,11 @@ export async function captureDiagnostics({ scenario, handles, out, redactor, gat
   }
   const selected = (handles || []).filter((h) => h?.page && !(h.page.isClosed?.() ?? false));
   if (selected.length > limits.pages) truncated = true;
+  const stopped = () => Boolean(gate?.stopping);
   for (const handle of selected.slice(0, limits.pages)) {
-    if (gate?.stopping) {
-      truncated = true;
+    // A8 §8b: the gate is re-checked BEFORE each operation and AFTER each await.
+    if (stopped()) {
+      truncated = "stopping";
       break;
     }
     if (left() === 0) {
@@ -155,7 +159,7 @@ export async function captureDiagnostics({ scenario, handles, out, redactor, gat
       break;
     }
     const label = safeName(handle.label);
-    const record = { scenario: String(scenario), page: String(handle.label), captured_at: new Date(now()).toISOString(), identity: "same session, no relogin/reload/navigation", url: urlWithoutQuery(handle.page.url()), screenshot: null, dom: null, requests: handle.network ? handle.network.summary() : [], errors: [] };
+    const record = { scenario: String(scenario), page: String(handle.label), captured_at: new Date(now()).toISOString(), identity: "same session, no relogin/reload/navigation", url: urlWithoutQuery(handle.page.url()), screenshot: null, dom: null, requests: handle.network ? handle.network.summary() : [], truncated: null, errors: [] };
     try {
       const png = path.join(dir, `${label}.png`);
       await bounded(handle.page.screenshot({ path: png, fullPage: false, timeout: left() || 1 }), left() || 1);
@@ -165,15 +169,18 @@ export async function captureDiagnostics({ scenario, handles, out, redactor, gat
     } catch (error) {
       record.errors.push(codeOf(error, "SCREENSHOT"));
     }
-    if (left() === 0) {
+    if (stopped()) {
+      record.truncated = truncated = "stopping";
+    } else if (left() === 0) {
       truncated = true;
-      record.errors.push("DOM:SKIPPED_TIME_CAP");
+      record.truncated = "time_cap";
     } else {
       try {
         record.dom = await bounded(handle.page.evaluate(readDomExpression({ ...limits, panelTitle: UI.artisanPanelTitle, cardTitle: UI.clientCardTitle })), left() || 1);
       } catch (error) {
         record.errors.push(codeOf(error, "DOM"));
       }
+      if (stopped()) record.truncated = truncated = "stopping";
     }
     try {
       const json = path.join(dir, `${label}.json`);
@@ -183,6 +190,7 @@ export async function captureDiagnostics({ scenario, handles, out, redactor, gat
       errors.push("WRITE:ERROR");
     }
     errors.push(...record.errors.map((c) => `${label}:${c}`));
+    if (truncated === "stopping") break;
   }
   return { dir, files, truncated, errors };
 }

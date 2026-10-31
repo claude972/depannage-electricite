@@ -11,7 +11,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, statSync, rmSync } 
 import { tmpdir, homedir } from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { allowlistedAction, boundedReason, urlWithoutQuery, observeTrackingNetwork, captureDiagnostics, TRACKING_ACTIONS, DIAG_LIMITS } from "../scripts/qa-tracking/lib/diagnostics.mjs";
+import { allowlistedAction, boundedReason, urlWithoutQuery, observeTrackingNetwork, captureDiagnostics, TRACKING_ACTIONS, DIAG_LIMITS, KNOWN_REASONS } from "../scripts/qa-tracking/lib/diagnostics.mjs";
 import { createSessionPool, expectReloadInterrupted, revokedSession } from "../scripts/qa-tracking/scenarios.mjs";
 import { runOne, scenarioOrder } from "../scripts/qa-tracking/run.mjs";
 import { UI, SCENARIOS } from "../scripts/qa-tracking/lib/constants.mjs";
@@ -41,8 +41,12 @@ test("pure: POST action allowlist, bounded server reason, URL without query", ()
   assert.equal(allowlistedAction("POST", "tracking", "not json"), "other");
   assert.equal(allowlistedAction("POST", "geocode", JSON.stringify({ query: "12 rue secrète" })), null, "geocode bodies are never read");
   assert.equal(allowlistedAction("GET", "tracking", null), null);
-  assert.equal(boundedReason(JSON.stringify({ reason: "version_conflict", latitude: 14.61234 })), "version_conflict");
-  for (const bad of [JSON.stringify({ reason: "Rue Secrète 12" }), JSON.stringify({ reason: "x".repeat(65) }), JSON.stringify({ reason: 3 }), "<html>", "", JSON.stringify({ reason: "ok", pad: "x".repeat(DIAG_LIMITS.reasonBytes) })]) assert.equal(boundedReason(bad), null);
+  for (const known of KNOWN_REASONS) assert.equal(boundedReason(JSON.stringify({ reason: known, latitude: 14.61234 })), known);
+  assert.deepEqual([...KNOWN_REASONS].sort(), ["application_quota", "destination_required", "invalid_provider_response", "position_unavailable", "provider_quota", "provider_timeout", "provider_unavailable", "route_unavailable", "server_configuration", "tracking_changed"]);
+  // A8 §8a repro: an unknown snake_case reason is NEVER persisted (closed set ⇒ "other").
+  assert.equal(boundedReason(JSON.stringify({ reason: "private_token_from_upstream" })), "other");
+  for (const other of [JSON.stringify({ reason: "Rue Secrète 12" }), JSON.stringify({ reason: "x".repeat(65) }), JSON.stringify({ reason: 3 })]) assert.equal(boundedReason(other), "other");
+  for (const none of ["<html>", "", JSON.stringify({ error: "x" }), JSON.stringify({ reason: null }), JSON.stringify({ reason: "tracking_changed", pad: "x".repeat(DIAG_LIMITS.reasonBytes) })]) assert.equal(boundedReason(none), null);
   assert.equal(urlWithoutQuery("https://a.test/app?token=SECRET#mission/1"), "/app#mission/1");
   assert.equal(urlWithoutQuery("nope"), null);
 });
@@ -121,6 +125,30 @@ test("captureDiagnostics bounds: skipped once stopping, at most 3 pages, errors 
   assert.ok(h.errors.some((e) => e.includes("TIMEOUT")));
 });
 
+test("A8 §8b repro — stop raised during the screenshot ⇒ no evaluate, capture truncated, next pages skipped, verdict unchanged", async (t) => {
+  const out = tmp(t);
+  const gate = createStopGate();
+  const calls = { screenshot: 0, evaluate: 0 };
+  const stopping = { label: "client", page: { ...fakePage(), screenshot: async () => { calls.screenshot++; gate.stop("SIGINT"); }, evaluate: async () => { calls.evaluate++; return {}; } } };
+  const next = { label: "artisan", page: { ...fakePage(), screenshot: async () => { calls.screenshot++; }, evaluate: async () => { calls.evaluate++; return {}; } } };
+  const d = await captureDiagnostics({ scenario: "T6", handles: [stopping, next], out, redactor: null, gate });
+  assert.deepEqual(calls, { screenshot: 1, evaluate: 0 }, "no DOM read after the stop, second page never touched");
+  assert.equal(d.truncated, "stopping");
+  assert.equal(JSON.parse(readFileSync(path.join(out, "diagnostics", "T6", "client.json"), "utf8")).truncated, "stopping");
+  assert.equal(existsSync(path.join(out, "diagnostics", "T6", "artisan.json")), false);
+  // Stop during the DOM read: recorded as truncated too.
+  const gate2 = createStopGate();
+  const domStop = { label: "c2", page: { ...fakePage(), screenshot: async () => {}, evaluate: async () => { gate2.stop("SIGTERM"); return {}; } } };
+  assert.equal((await captureDiagnostics({ scenario: "T9", handles: [domStop, next], out, redactor: null, gate: gate2 })).truncated, "stopping");
+  // Verdict unchanged through runOne with the real capture.
+  const gate3 = createStopGate();
+  const report = createReport({}, createRedactor());
+  const page3 = { label: "client", page: { ...fakePage(), screenshot: async () => { gate3.stop("SIGINT"); }, evaluate: async () => { calls.evaluate++; return {}; } } };
+  const entry = await runOne(report, "tracking", "T6", async () => { throw new AppDefect("card missing"); }, async () => {}, null, () => captureDiagnostics({ scenario: "T6b", handles: [page3], out, redactor: null, gate: gate3 }));
+  assert.equal(entry.status, "FAIL");
+  assert.equal(calls.evaluate, 0);
+});
+
 // ---------------------------------------------------------------------------------------------
 // Real Chromium against a local server mimicking the panel markup of the 4c source.
 const JOB = randomUUID();
@@ -136,7 +164,7 @@ function startServer(body) {
     req.on("end", () => {
       hits.push(`${req.method} ${req.url}`);
       if (req.url.startsWith("/api/")) {
-        if (req.method === "POST") return res.writeHead(409, { "content-type": "application/json" }).end(JSON.stringify({ reason: "version_conflict", latitude: 14.61234, label: "12 rue secrète" }));
+        if (req.method === "POST") return res.writeHead(409, { "content-type": "application/json" }).end(JSON.stringify(req.url.endsWith("/geocode") ? { reason: "private_token_from_upstream" } : { reason: "tracking_changed", latitude: 14.61234, label: "12 rue secrète" }));
         return res.writeHead(200, { "content-type": "application/json", "cache-control": "private, no-store" }).end(JSON.stringify({ tracking: { position: { latitude: 14.61234 } } }));
       }
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(`<!doctype html><meta charset="utf-8"><body>${body}</body>`);
@@ -192,12 +220,13 @@ test("real Chromium — capture under the same page: no request, no navigation, 
     assert.equal(rec.dom.client_card.present, false);
     const byKind = Object.fromEntries(rec.requests.map((e) => [`${e.method} ${e.path.endsWith("geocode") ? "geocode" : "tracking"}`, e]));
     assert.equal(byKind["POST tracking"].action, "destination");
-    assert.equal(byKind["POST tracking"].reason, "version_conflict");
+    assert.equal(byKind["POST tracking"].reason, "tracking_changed");
+    assert.equal(byKind["POST geocode"].reason, "other", "unknown upstream reason replaced by the constant");
     assert.equal(byKind["POST tracking"].status, 409);
     assert.equal(byKind["POST geocode"].action, null);
     assert.equal(byKind["GET tracking"].status, 200);
     assert.equal(byKind["GET tracking"].source, "ui");
-    for (const leak of ["SECRET-TOKEN-123", "Authorization", "authorization", "SECRET-QUERY", "12 rue secrète", "14.61234", "61.01234"]) assert.ok(!text.includes(leak), `no ${leak} in the diagnostics`);
+    for (const leak of ["private_token_from_upstream", "SECRET-TOKEN-123", "Authorization", "authorization", "SECRET-QUERY", "12 rue secrète", "14.61234", "61.01234"]) assert.ok(!text.includes(leak), `no ${leak} in the diagnostics`);
   });
 });
 
