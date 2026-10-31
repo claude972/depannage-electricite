@@ -531,3 +531,9 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - Preview f8 READY `mh0ttyp8u`, Vercel-protected; new URL given to the user with Vercel login required; not main, not production.
 - App 557 build `UN3j_PEcrQn-l9kzidHfx` local 3017, session 68346, HTTP 200. Business cohort 78a5f871aaba still active: no other cohort before its cleanup.
 - **Gateway: 2 FAIL** — 201, race lost. Cleanup 37 PASS + root 12 scopes 0 / 2 Auth 404 / 2 Storage 0. No new race before an aligned protocol; **security not claimed complete**.
+
+## 2026-10-31 — root confirms BudgetPanel bug; 503 proof boundary; preview tracking 503
+
+- **Root confirms the BudgetPanel real bug** (select shows 2026, budget body absent, `year` undefined after creating the first year). Fix by the leaf owner (b2b worker a96ae75) under its contract, valid user choice kept; React-level or model barrier test of « mount 0 years → create first year → refreshed report ».
+- **503 FAIL = integration harness boundary**: diagnostic shows the PARENT block « Opérations du site momentanément indisponibles » + « Réessayer » (lead FeatureUnavailable anchor when capability `unavailable`), no stale data, not the leaf `[data-blocker=site-operations-load]`. Harness to accept either real boundary, each asserted precisely; retry, same identity/no reload and permissions not weakened; no product change to force a QA text. Dispatched to a96ae75.
+- Business run cleanup next. **Preview**: new HTTP tracking anonymous answers 503 — backend env absent on preview; Codex reviewer inspects preview env read-only; root configures public/dedicated server env on preview only after review. Not production.
