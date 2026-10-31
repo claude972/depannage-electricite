@@ -446,3 +446,9 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - **Real UI state:** the three UI P2s are fixed — design `7b3cd18` merged into `claude/web-shared-a5` **`8bcee45513a7f4f87c66b34935314ec0ed8fceb3`** (468/468, tsc clean, no build/browser run). Root should re-review at 8bcee45 (not 0778532).
 - **Real QA state:** tracking harness `8aa5a78b9e48f4b7da64a65141010ab6078d5244` (offline only); business `c97a018` in root review; QA reviews f2f5f68 (c8ca4cc), 81957d3 (282edc1).
 - PWA f5: uninstall OK but INCOMPLETE (target timeout before OS proof), bounded Chrome metadata cleanup in progress on root side — not blocking fixes.
+
+## 2026-10-31 — root reviews: tracking QA 8aa5a78 and business c97a018 blocked (no cloud before closure)
+
+- **Tracking QA 8aa5a78** (to a84ded5): P2-a `guard.mjs` `createTrackingApi.post` treats every non-2xx as refused — required: definitive 4xx ⇒ refused; transport/timeout/5xx/unfinished response ⇒ unknown ⇒ reconcile, INCOMPLETE 3. P2-b API POSTs and mutating browser actions not tracked by `gate.run`/`track`, so drain ignores them — required: track all mutations, cleanup only after settlement or declared timeout. Plus the business rules below (drain timeout ⇒ no cleanup via a tracking-owned wrapper; `gate.check()` after every await before emission). Real-behaviour tests (deferred 503, commit-then-lost-response, SIGINT barrier with ordered log).
+- **Business c97a018** (to a96ae75): P2-1 shared `createLifecycle` cleans up even when `gate.drain` times out with pending > 0 (repro `cleanupWhilePending=1`) — required: Business-owned wrapper preserving manifest and refusing deletions while a producer is undrained, exit 3, global lifecycle untouched. P2-2 direct RPC `b2b.mjs:360` after `await sessionAccessToken` must re-check the gate before emission and be tracked in the drain; audit all await-then-emit gaps.
+- 020 fix a658087 cross-review marked urgent to af69ab8 (critical path for root's apply).
