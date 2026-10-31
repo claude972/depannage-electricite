@@ -1480,7 +1480,7 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
                 </div>
                 {payment?.status === "failed" && (
                   <p className={cx("alert error")} role="alert">
-                    Le dernier paiement a échoué selon Stripe ; aucun montant n’a été prélevé.
+                    Le dernier paiement n’a pas abouti selon Stripe. Le règlement reste à effectuer ; vérifiez auprès de votre banque avant de recommencer.
                   </p>
                 )}
                 {demo ? (

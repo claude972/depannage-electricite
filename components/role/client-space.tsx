@@ -1353,7 +1353,7 @@ function DetailView({
             {payment.status === "paid"
               ? `Règlement de ${money(payment.total_cents)} confirmé par la plateforme${payment.paid_at ? ` le ${dateTime(payment.paid_at)}` : ""}.`
               : payment.status === "failed"
-                ? "Le paiement a échoué selon Stripe. Aucun montant n’a été prélevé ; vous pouvez réessayer."
+                ? "Le paiement n’a pas abouti selon Stripe. Le règlement reste à effectuer ; vérifiez auprès de votre banque avant de recommencer."
                 : "Paiement en attente de confirmation Stripe. Rien n’est considéré comme réglé tant que la plateforme ne l’a pas confirmé."}
           </span>
         </p>

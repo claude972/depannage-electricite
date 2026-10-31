@@ -2011,7 +2011,7 @@ function PaymentPanel({ session, intervention: i }: { session: Session; interven
     text = "Une session de paiement est ouverte côté client ; la confirmation arrive par Stripe.";
   } else if (payment?.status === "failed") {
     tag = <Tag tone="red">Paiement échoué</Tag>;
-    text = "Le dernier paiement a échoué selon Stripe. Le client peut réessayer ; aucun montant n’a été prélevé.";
+    text = "Le dernier paiement n’a pas abouti selon Stripe. Le règlement reste attendu ; aucune nouvelle tentative n’est lancée automatiquement.";
   } else {
     tag = <Tag tone="neutral">Règlement attendu du client</Tag>;
     text = "Le client est invité à régler le devis accepté. Le règlement est déclenché par le client, jamais depuis cet espace.";
