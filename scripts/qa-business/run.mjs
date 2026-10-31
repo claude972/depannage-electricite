@@ -24,7 +24,9 @@ import { CLEANUP_STEPS, finalizeCleanup } from "./lib/cleanup.mjs";
 import { BusinessFixtures } from "./lib/fixtures.mjs";
 import { createAdminAuth } from "./lib/auth.mjs";
 import { readLocalBuildId, servedBuildIdentity, compareBuildIds } from "./lib/preflight.mjs";
-import { orchestrate, NOT_EXERCISED } from "./lib/orchestrate.mjs";
+import { orchestrate, NOT_EXERCISED, guardReport, createDiagnose } from "./lib/orchestrate.mjs";
+import { guardWrites } from "../qa/lib/fixtures.mjs";
+import { chmod } from "node:fs/promises";
 import { SUITES, suiteByName } from "./suites/index.mjs";
 
 export const defaultOutDir = (sha, runId) => path.join(os.tmpdir(), "depannage-qa-business", `${sha.slice(0, 12)}-${runId}`);
@@ -260,8 +262,32 @@ async function main(argv) {
           await h.close();
         }
       });
-      const ctx = { base: context.base_url, target, projectRef: context.project, fixtures, db, browser, cohort, out: outDir, report, redactor, log, credentials, timeoutMs: options.timeoutMs };
-      result = await orchestrate({ suites, ctx, lifecycle, report, stopBrowser: async () => { await stopBrowser(browser); browser = null; }, log, PreflightError });
+      // Suites see a gate-bound report (no scenario starts once stopping, every step checks the
+      // gate, running scenarios are drained before cleanup, diagnostics on first failure), a
+      // write-guarded service client and pages registered to their scenario.
+      const diagnose = createDiagnose({ out: outDir, redactor, writeFile, chmod, join: path.join });
+      const guarded = guardReport(report, gate, { log, diagnose });
+      const ctx = {
+        base: context.base_url,
+        target,
+        projectRef: context.project,
+        fixtures,
+        db: guardWrites(db, gate),
+        gate,
+        browser,
+        cohort,
+        out: outDir,
+        report: guarded,
+        redactor,
+        log,
+        credentials,
+        timeoutMs: options.timeoutMs,
+        openPage: async (s, opts = {}) => {
+          gate.check();
+          return s.track(await newPage(browser, { baseUrl: context.base_url, redactor, ...opts }));
+        },
+      };
+      result = await orchestrate({ suites, ctx, lifecycle, report: guarded, stopBrowser: async () => { await stopBrowser(browser); browser = null; }, log, PreflightError });
     } finally {
       uninstall();
       uninstallSignals();

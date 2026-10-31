@@ -617,3 +617,99 @@ test("--cleanup-manifest with an edited intent email: exit 3, manifest kept, zer
   assert.ok(!kept.created.auth_users.includes(REAL));
   assert.equal(kept.intents[0].email, "real-user@example.com", "manifest kept as found for manual review");
 });
+
+// ---------------------------------------------------------------- stop race and diagnostics (root run of 947e299)
+test("stop during a scenario: the running scenario ends at its next step, no mutating call after stop, no later scenario starts, drain waits before cleanup", async () => {
+  const events: string[] = [];
+  const gate = lifecycleModule.createStopGate();
+  const redactor = redactModule.createRedactor();
+  const report = reportModule.createReport({ run_id: "x" }, redactor);
+  const guarded = orchestrateModule.guardReport(report, gate, { log: (l: string) => events.push(l) });
+  let mutations = 0;
+  const post = async () => {
+    gate.check();
+    mutations++;
+  };
+  let release: () => void = () => {};
+  const inFlight = new Promise<void>((resolve) => (release = resolve));
+  const lifecycle = lifecycleModule.createLifecycle({ gate, cleanup: async () => { events.push("cleanup"); return { ok: true, steps: [] }; }, writeResults: async () => {}, drainTimeoutMs: 5000 });
+  const suiteA = {
+    name: "docs",
+    description: "first",
+    needsCredentials: false,
+    async run({ report: r }: { report: Row }) {
+      const scenario = r.scenario as (a: string, b: string, c: (s: Row) => Promise<void>) => Promise<unknown>;
+      await scenario("docs", "scenario 1", async (s) => {
+        const step = s.step as (l: string, t: () => Promise<unknown>) => Promise<unknown>;
+        await step("slow read in flight when the signal arrives", async () => {
+          await inFlight;
+          events.push("step 1 settled");
+        });
+        await step("mutating step after the signal", async () => post());
+      });
+      await scenario("docs", "scenario 2 (third party)", async () => {
+        events.push("scenario 2 ran");
+        await post();
+      });
+    },
+  };
+  const suiteB = { name: "b2b", description: "second", needsCredentials: false, async run() { events.push("suite b2b ran"); } };
+  const running = orchestrateModule.orchestrate({ suites: [suiteA, suiteB], ctx: { fixtures: {}, report: guarded }, lifecycle, report: guarded, log: (l: string) => events.push(l) });
+  await new Promise((r) => setTimeout(r, 10));
+  // Simulated SIGINT: the signal handler raises the gate then finalises (drain → cleanup).
+  gate.stop("signal:SIGINT");
+  const finalizing = lifecycle.finalize("signal:SIGINT");
+  await new Promise((r) => setTimeout(r, 20));
+  assert.ok(!events.includes("cleanup"), "cleanup must wait for the running scenario");
+  release();
+  await finalizing;
+  const result = await running;
+  assert.equal(mutations, 0, "no mutating call after the stop");
+  assert.ok(!events.includes("scenario 2 ran") && !events.includes("suite b2b ran"));
+  assert.ok(events.indexOf("step 1 settled") < events.indexOf("cleanup"), "drain waited for the in-flight step");
+  assert.equal(events.filter((e) => e === "cleanup").length, 1, "single finalisation");
+  assert.deepEqual(report.scenarios.map((x: Row) => [x.name, x.status]), [["scenario 1", "ANOMALY"]], "only the interrupted scenario is recorded, as an anomaly (stop), never PASS");
+  assert.equal((report.scenarios[0].error as Row).name, "StopRequestedError");
+  assert.deepEqual(guarded.skipped.map((x: Row) => x.name), ["scenario 2 (third party)"]);
+  assert.equal(result.code, 0);
+});
+test("diagnostics on the first failing step: private screenshot + main-region text (redacted) + network summary; the FAIL stays FAIL", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "qa-business-diag-"));
+  const { writeFile: wf, chmod, stat } = await import("node:fs/promises");
+  const redactor = redactModule.createRedactor();
+  const report = reportModule.createReport({ run_id: "x" }, redactor);
+  const gate = lifecycleModule.createStopGate();
+  const diagnose = orchestrateModule.createDiagnose({ out: dir, redactor, writeFile: wf, chmod, join: path.join });
+  const guarded = orchestrateModule.guardReport(report, gate, { diagnose });
+  const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJxYSJ9.c2lnbmF0dXJlLXFh";
+  const fakePage = {
+    url: () => "http://localhost:3017/?token=secret#quote/abc",
+    locator: (sel: string) => ({ count: async () => (sel === "main" ? 1 : 0), first: () => ({ innerText: async () => `Devis introuvable ${jwt}` }), innerText: async () => "body" }),
+    screenshot: async ({ path: file }: { path: string }) => { await wf(file, "png"); },
+  };
+  const handle = { page: fakePage, network: [{ method: "GET", path: "/api/quote-documents", status: 403, headers: { authorization: "x" } }], pageErrors: [] };
+  let calls = 0;
+  await guarded.scenario("docs", "client reads the quote", async (s: Row) => {
+    (s.track as (h: unknown) => unknown)(handle);
+    const step = s.step as (l: string, t: () => Promise<unknown>) => Promise<unknown>;
+    try {
+      await step("documents panel visible", async () => assert.fail("expected visible: documents panel"));
+    } catch (e) {
+      await step("second failure", async () => { calls++; throw new Error("x"); }).catch(() => {});
+      throw e;
+    }
+  });
+  const entry = report.scenarios[0];
+  assert.equal(entry.status, "FAIL", "diagnostics never change the verdict");
+  const json = path.join(dir, "diag-docs-client-reads-the-quote-1.json");
+  const png = path.join(dir, "diag-docs-client-reads-the-quote-1.png");
+  assert.equal((await stat(json)).mode & 0o777, 0o600);
+  assert.equal((await stat(png)).mode & 0o777, 0o600);
+  const record = JSON.parse(await readFile(json, "utf8"));
+  assert.equal(record.failed_step, "documents panel visible");
+  assert.equal(record.location, "/#quote/abc", "no query string recorded");
+  assert.ok(record.main_text.startsWith("Devis introuvable") && !record.main_text.includes(jwt), "text captured and redacted");
+  assert.deepEqual(record.network, [{ method: "GET", path: "/api/quote-documents", status: 403 }], "method/path/status only");
+  assert.deepEqual(entry.evidence.map((e: Row) => e.kind), ["diagnostic", "diagnostic"], "diagnostics captured once (first failure)");
+  assert.equal(calls, 1);
+});

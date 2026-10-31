@@ -2,11 +2,12 @@
 // through the existing client flow, amendment prepared/accepted without any payment action,
 // third party and former artisan refused, expired quote refused server-side.
 // Markup reference (b13b43a): components/features/quote-documents/*.tsx, components/role/
-// artisan-space.tsx (#mission/<id>), client-space.tsx (#detail/<id>, "Accepter le devis").
+// artisan-space.tsx (#mission/<id> → WorkDossier → QuotePanel), client-space.tsx (#detail/<id> →
+// « Consulter le devis » / « Voir le devis » → QuoteView #quote/<quoteId>, documents panel and « Accepter le devis »).
 import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import { newPage, login, openHash, api, capture, bodyText, expectVisible, expectAbsentOrDisabled, postsTo, waitForApi, sleep, noHorizontalOverflow } from "../../qa/lib/browser.mjs";
+import { login, openHash, api, capture, bodyText, expectVisible, expectAbsentOrDisabled, postsTo, waitForApi, sleep, noHorizontalOverflow } from "../../qa/lib/browser.mjs";
 import { AppDefect } from "../../qa/lib/report.mjs";
 import { euroDigits, expectedEtag, inspectPdf, quoteReference } from "../lib/pdf.mjs";
 
@@ -29,6 +30,22 @@ async function download(handle, out, name, href, expect, s) {
   }
   return verdict;
 }
+
+/**
+ * Client path to the documents panel, as a user does it: the dossier (#detail/<id>) then the real
+ * « Consulter le devis » (quoted) or « Voir le devis » (accepted) button, which must land on
+ * QuoteView for the EXACT quote version (#quote/<quoteId>). A different version is a FAIL.
+ */
+async function openClientQuote(page, base, job, quote) {
+  await openHash(page, base, `detail/${job.id}`);
+  const button = page.getByRole("button", { name: /^(Consulter le devis|Voir le devis)$/ }).first();
+  await expectVisible(button, "« Consulter le devis » / « Voir le devis » on the client dossier");
+  await button.click();
+  await page.waitForFunction((id) => window.location.hash === `#quote/${id}`, quote.id, { timeout: 15000 }).catch(() => null);
+  const hash = await page.evaluate(() => window.location.hash);
+  assert.equal(hash, `#quote/${quote.id}`, `the client button opened ${hash}, expected the exact quote version`);
+  return page.locator('section[aria-label="Documents du devis et avenants"]');
+}
 const noPosts = (h, prefix = "/api/") => {
   const posts = postsTo(h.network, prefix);
   assert.deepEqual(posts, [], `interface issued ${posts.length} write request(s): ${JSON.stringify(posts)}`);
@@ -45,6 +62,11 @@ export const suite = {
     "dossier D2 quoted + quote Q2 sent + quote_terms.valid_until = yesterday (synthetic, service role, labelled QA)",
   ],
   async run(ctx) {
+    /** Every application write probe checks the stop gate first. */
+    const post = (page, route, body) => {
+      ctx.gate.check();
+      return api(page, route, body);
+    };
     const { base, projectRef, fixtures, db, browser, cohort, out, report, redactor } = ctx;
     const client = await fixtures.createUser("client", "client");
     const artisan = await fixtures.createUser("artisan", "artisan");
@@ -60,7 +82,7 @@ export const suite = {
     const state = { documentId: null, etag: null, bytes: 0, amendmentId: null };
 
     await report.scenario(suite.name, "artisan: explicit validity through the UI, past date refused without POST", async (s) => {
-      const h = await newPage(browser, { baseUrl: base, redactor });
+      const h = await ctx.openPage(s, {});
       try {
         await s.step("login artisan", () => login(h, base, artisan, projectRef));
         await s.step("open the mission and the documents panel", async () => {
@@ -78,6 +100,7 @@ export const suite = {
         });
         await s.step("valid date saved: POST 200, label updated, quote_terms readback", async () => {
           await h.page.locator(PANEL).getByLabel("Valable jusqu’au (inclus)", { exact: true }).fill(validUntil);
+          ctx.gate.check(); // no mutating click once the run is stopping
           const wait = waitForApi(h.page, "/api/quote-documents", { method: "POST" });
           await h.page.locator(PANEL).getByRole("button", { name: "Enregistrer la validité", exact: true }).click();
           const response = await wait;
@@ -98,13 +121,14 @@ export const suite = {
     });
 
     await report.scenario(suite.name, "artisan: real PDF of the quote, private download, idempotent regeneration", async (s) => {
-      const h = await newPage(browser, { baseUrl: base, redactor });
+      const h = await ctx.openPage(s, {});
       try {
         await s.step("login artisan", () => login(h, base, artisan, projectRef));
         await s.step("generate: POST 201, one document revision 1", async () => {
           await openHash(h.page, base, `mission/${d1.id}`);
           const button = h.page.locator(PANEL).getByRole("button", { name: "Générer le PDF du devis", exact: true });
           await expectVisible(button, "'Générer le PDF du devis'");
+          ctx.gate.check(); // no mutating click once the run is stopping
           const wait = waitForApi(h.page, "/api/quote-documents", { method: "POST" });
           await button.click();
           const response = await wait;
@@ -137,7 +161,7 @@ export const suite = {
           return verdict;
         });
         await s.step("second generation: 200 created=false, still one revision", async () => {
-          const r = await api(h.page, "/api/quote-documents", { action: "generate", quote_id: q1.id, amendment_id: null });
+          const r = await post(h.page, "/api/quote-documents", { action: "generate", quote_id: q1.id, amendment_id: null });
           assert.equal(r.status, 200);
           assert.equal(r.body?.created, false);
           assert.equal(await db.count("quote_documents", { quote_id: `eq.${q1.id}` }), 1);
@@ -150,12 +174,11 @@ export const suite = {
     });
 
     await report.scenario(suite.name, "client: reads the right version and amounts, downloads the same PDF, no issuer control, no POST", async (s) => {
-      const h = await newPage(browser, { baseUrl: base, width: 360, height: 780, redactor });
+      const h = await ctx.openPage(s, { width: 360, height: 780 });
       try {
         await s.step("login client", () => login(h, base, client, projectRef));
         await s.step("documents section of the dossier", async () => {
-          await openHash(h.page, base, `detail/${d1.id}`);
-          const section = h.page.locator('section[aria-label="Documents du devis et avenants"]');
+          const section = await openClientQuote(h.page, base, d1, q1);
           await expectVisible(section.getByRole("heading", { name: "Document du devis et avenants", exact: true }), "client documents title");
           await expectVisible(section.getByRole("heading", { name: `Devis ${ref1}`, exact: true }), "quote card");
           await expectVisible(section.getByText(`${euroDigits(q1.total_cents)}`, { exact: false }).first(), "TTC amount");
@@ -184,17 +207,18 @@ export const suite = {
     });
 
     await report.scenario(suite.name, "client accepts the quote (existing flow), artisan prepares an amendment, client accepts it: distinct from any payment", async (s) => {
-      const hc = await newPage(browser, { baseUrl: base, redactor });
-      const ha = await newPage(browser, { baseUrl: base, redactor });
+      const hc = await ctx.openPage(s, {});
+      const ha = await ctx.openPage(s, {});
       try {
         await s.step("login client and artisan", async () => {
           await login(hc, base, client, projectRef);
           await login(ha, base, artisan, projectRef);
         });
-        await s.step("client: 'Accepter le devis' → actions 200, quote accepted, no payment route", async () => {
-          await openHash(hc.page, base, `detail/${d1.id}`);
+        await s.step("client: 'Accepter le devis' on QuoteView → actions 200, quote accepted, no payment route", async () => {
+          await openClientQuote(hc.page, base, d1, q1);
           const button = hc.page.getByRole("button", { name: "Accepter le devis", exact: true });
           await expectVisible(button, "'Accepter le devis'");
+          ctx.gate.check(); // no mutating click once the run is stopping
           const wait = waitForApi(hc.page, `/api/interventions/${d1.id}/actions`, { method: "POST" });
           await button.click();
           const response = await wait;
@@ -219,6 +243,7 @@ export const suite = {
           await panel.getByLabel("Prix unitaire HT (€)", { exact: true }).fill("25");
           await panel.getByLabel("TVA", { exact: true }).selectOption("20");
           await panel.getByLabel("Motif de l’avenant", { exact: true }).fill(cohort.description("avenant de recette : prestation complémentaire"));
+          ctx.gate.check(); // no mutating click once the run is stopping
           const wait = waitForApi(ha.page, "/api/quote-amendments", { method: "POST" });
           await panel.getByRole("button", { name: "Proposer l’avenant", exact: true }).click();
           const response = await wait;
@@ -232,13 +257,13 @@ export const suite = {
           return { amendment_id: state.amendmentId };
         });
         await s.step("client: accept the amendment with confirmation → 200, status accepted, nothing paid, no payment route", async () => {
-          await openHash(hc.page, base, `detail/${d1.id}`);
-          const section = hc.page.locator('section[aria-label="Documents du devis et avenants"]');
+          const section = await openClientQuote(hc.page, base, d1, q1);
           const accept = section.getByRole("button", { name: "Accepter l’avenant", exact: true });
           await expectVisible(accept, "'Accepter l’avenant' for the client");
           await accept.click();
           const confirm = section.getByRole("button", { name: "Confirmer l’acceptation", exact: true });
           await expectVisible(confirm, "'Confirmer l’acceptation'");
+          ctx.gate.check(); // no mutating click once the run is stopping
           const wait = waitForApi(hc.page, "/api/quote-amendments", { method: "POST" });
           await confirm.click();
           const response = await wait;
@@ -257,7 +282,7 @@ export const suite = {
           return { status: am.status };
         });
         await s.step("server: a second acceptance of the same amendment is refused (409)", async () => {
-          const r = await api(hc.page, "/api/quote-amendments", { action: "accept", amendment_id: state.amendmentId });
+          const r = await post(hc.page, "/api/quote-amendments", { action: "accept", amendment_id: state.amendmentId });
           assert.equal(r.status, 409, `second acceptance answered ${r.status}`);
           return { status: r.status, error: r.body?.error };
         });
@@ -266,6 +291,7 @@ export const suite = {
           const panel = ha.page.locator(PANEL);
           const button = panel.getByRole("button", { name: "Générer le PDF de l’avenant", exact: true });
           await expectVisible(button, "'Générer le PDF de l’avenant'");
+          ctx.gate.check(); // no mutating click once the run is stopping
           const wait = waitForApi(ha.page, "/api/quote-documents", { method: "POST" });
           await button.click();
           assert.equal((await wait).status(), 201);
@@ -286,7 +312,7 @@ export const suite = {
     });
 
     await report.scenario(suite.name, "third party: overview 403, download 404, dossier not shown, no POST", async (s) => {
-      const h = await newPage(browser, { baseUrl: base, redactor });
+      const h = await ctx.openPage(s, {});
       try {
         await s.step("login third party", () => login(h, base, tiers, projectRef));
         await s.step("server refusals from the third party's session", async () => {
@@ -296,7 +322,7 @@ export const suite = {
           assert.ok([403, 404].includes(byQuote.status), `overview by quote answered ${byQuote.status}`);
           const download = await h.context.request.get(`${base}/api/quote-documents/${state.documentId}`);
           assert.equal(download.status(), 404, `download answered ${download.status()} (no existence oracle)`);
-          const generate = await api(h.page, "/api/quote-documents", { action: "generate", quote_id: q1.id, amendment_id: null });
+          const generate = await post(h.page, "/api/quote-documents", { action: "generate", quote_id: q1.id, amendment_id: null });
           assert.equal(generate.status, 403);
           const events = await db.select("quote_document_events", { intervention_id: `eq.${d1.id}`, actor_id: `eq.${tiers.id}` }, "id");
           assert.equal(events.length, 0, "no event recorded for the third party");
@@ -308,6 +334,11 @@ export const suite = {
           const text = await bodyText(h.page);
           assert.ok(!text.includes(d1.description), "dossier description visible to a third party");
           assert.ok(!text.includes(ref1), "quote reference visible to a third party");
+          await openHash(h.page, base, `quote/${q1.id}`);
+          await sleep(1500);
+          const quoteText = await bodyText(h.page);
+          assert.ok(!quoteText.includes(ref1) && !quoteText.includes(euroDigits(q1.total_cents)), "QuoteView of D1 rendered content for a third party");
+          assert.equal(await h.page.locator('section[aria-label="Documents du devis et avenants"]').count(), 0, "documents panel rendered for a third party");
           await capture(h, out, "docs-tiers-1280", s);
         });
         await s.step("browser: no POST issued", () => noPosts(h));
@@ -318,7 +349,7 @@ export const suite = {
     });
 
     await report.scenario(suite.name, "former artisan after reassignment (synthetic, service role): overview 403, download 404, generate/propose 403", async (s) => {
-      const h = await newPage(browser, { baseUrl: base, redactor });
+      const h = await ctx.openPage(s, {});
       try {
         await s.step("login the original artisan, then reassign D1 to the replacement (service role, labelled QA)", async () => {
           await login(h, base, artisan, projectRef);
@@ -331,16 +362,16 @@ export const suite = {
           assert.equal(overview.status, 403, `overview answered ${overview.status}`);
           const download = await h.context.request.get(`${base}/api/quote-documents/${state.documentId}`);
           assert.equal(download.status(), 404, `download answered ${download.status()}`);
-          const generate = await api(h.page, "/api/quote-documents", { action: "generate", quote_id: q1.id, amendment_id: null });
+          const generate = await post(h.page, "/api/quote-documents", { action: "generate", quote_id: q1.id, amendment_id: null });
           assert.equal(generate.status, 403);
-          const propose = await api(h.page, "/api/quote-amendments", { action: "propose", base_quote_id: q1.id, lines: [{ label: "QA refus attendu", quantity: 1, unit_price_cents: 100 }], tax_rate: 20, reason: cohort.description("refus attendu"), valid_until: null });
+          const propose = await post(h.page, "/api/quote-amendments", { action: "propose", base_quote_id: q1.id, lines: [{ label: "QA refus attendu", quantity: 1, unit_price_cents: 100 }], tax_rate: 20, reason: cohort.description("refus attendu"), valid_until: null });
           assert.equal(propose.status, 403);
           assert.equal(await db.count("quote_document_events", { intervention_id: `eq.${d1.id}` }), before, "no event added by the former artisan");
           assert.equal(await db.count("quote_documents", { quote_id: `eq.${q1.id}` }), 2, "no new document (quote r1 + amendment r1 only)");
           return { overview: overview.status, download: download.status(), generate: generate.status, propose: propose.status, synthetic: "QA: état simulé par service_role, non produit par le circuit utilisateur" };
         });
         await s.step("replacement artisan: overview readable, but not the issuer of Q1 (can_generate=false)", async () => {
-          const h2 = await newPage(browser, { baseUrl: base, redactor });
+          const h2 = await ctx.openPage(s, {});
           try {
             await login(h2, base, artisan2, projectRef);
             const overview = await api(h2.page, `/api/quote-documents?intervention_id=${d1.id}`);
@@ -361,12 +392,11 @@ export const suite = {
     });
 
     await report.scenario(suite.name, "expired quote (synthetic validity in the past): client sees the expiry and the server refuses acceptance (409)", async (s) => {
-      const h = await newPage(browser, { baseUrl: base, redactor });
+      const h = await ctx.openPage(s, {});
       try {
         await s.step("login client", () => login(h, base, client, projectRef));
         await s.step("UI: validity expired and acceptance impossible stated", async () => {
-          await openHash(h.page, base, `detail/${d2.id}`);
-          const section = h.page.locator('section[aria-label="Documents du devis et avenants"]');
+          const section = await openClientQuote(h.page, base, d2, q2);
           await expectVisible(section.getByText(/^Validité dépassée depuis le /), "expired validity label");
           await expectVisible(section.getByText("Ce devis ne peut plus être accepté : sa validité est dépassée. L’artisan peut en envoyer une nouvelle version.", { exact: true }), "expiry explanation");
           await capture(h, out, "docs-client-expired-1280", s);
@@ -375,6 +405,7 @@ export const suite = {
         await s.step("'Accepter le devis' (circuit exposed) → server 409, quote still sent, dossier still quoted", async () => {
           const button = h.page.getByRole("button", { name: "Accepter le devis", exact: true });
           if (!(await button.count())) throw new AppDefect("'Accepter le devis' not exposed on an expired sent quote: the server-side refusal could not be exercised through the UI");
+          ctx.gate.check(); // no mutating click once the run is stopping
           const wait = waitForApi(h.page, `/api/interventions/${d2.id}/actions`, { method: "POST" });
           await button.click();
           const response = await wait;

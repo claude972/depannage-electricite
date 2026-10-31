@@ -5,7 +5,7 @@
 // Markup reference (b13b43a): components/role/enterprise-space.tsx (#site/<id>, section
 // aria-labelledby="site-operations"), components/features/site-operations/*.tsx.
 import assert from "node:assert/strict";
-import { newPage, login, openHash, api, capture, bodyText, expectVisible, expectAbsentOrDisabled, postsTo, waitForApi, sleep, safeRoute, sessionAccessToken, noHorizontalOverflow } from "../../qa/lib/browser.mjs";
+import { login, openHash, api, capture, bodyText, expectVisible, expectAbsentOrDisabled, postsTo, waitForApi, sleep, safeRoute, sessionAccessToken, noHorizontalOverflow } from "../../qa/lib/browser.mjs";
 import { userRpc } from "../../qa/lib/supabase.mjs";
 
 const OPS = 'section[aria-labelledby="site-operations"]';
@@ -39,6 +39,11 @@ export const suite = {
     "organisation A with sites A1 and A2 (erp), organisation B with site B1",
   ],
   async run(ctx) {
+    /** Every application write probe checks the stop gate first. */
+    const post = (page, route, body) => {
+      ctx.gate.check();
+      return api(page, route, body);
+    };
     const { base, projectRef, fixtures, db, browser, cohort, out, report, redactor, credentials, timeoutMs } = ctx;
     const owner = await fixtures.createUser("owner", "manager");
     const reader = await fixtures.createUser("lecteur", "manager");
@@ -65,13 +70,14 @@ export const suite = {
       await sleep(200);
     };
     const submitAndWait = async (page, buttonName) => {
+      ctx.gate.check(); // no mutating click once the run is stopping
       const wait = waitForApi(page, "/api/site-operations", { method: "POST" });
       await opsSection(page).getByRole("button", { name: buttonName, exact: true }).click();
       return (await wait).status();
     };
 
     await report.scenario(suite.name, "owner: equipment created through the UI, readback, edited to version 2, stale version refused by the server", async (s) => {
-      const h = await newPage(browser, { baseUrl: base, redactor });
+      const h = await ctx.openPage(s, {});
       try {
         await s.step("login owner", () => login(h, base, owner, projectRef));
         await s.step("site A1: operations section, empty equipment state, add form", async () => {
@@ -116,7 +122,7 @@ export const suite = {
           assert.equal(events.filter((e) => e.action === "updated" && e.version === 2).length, 1);
         });
         await s.step("server: stale expected_version (1 while the row is 2) → 409, row unchanged", async () => {
-          const r = await api(h.page, "/api/site-operations", { action: "save_equipment", site_id: siteA1.id, payload: { ...equipmentPayload(equipmentName), status: "retired" }, id: state.equipmentId, expected_version: 1 });
+          const r = await post(h.page, "/api/site-operations", { action: "save_equipment", site_id: siteA1.id, payload: { ...equipmentPayload(equipmentName), status: "retired" }, id: state.equipmentId, expected_version: 1 });
           assert.equal(r.status, 409, `stale version answered ${r.status}`);
           const [row] = await db.select("site_equipment", { id: `eq.${state.equipmentId}` }, "status,version");
           assert.deepEqual(row, { status: "degraded", version: 2 }, "row changed by a stale command");
@@ -141,7 +147,7 @@ export const suite = {
     });
 
     await report.scenario(suite.name, "owner: maintenance plan and visit (next due computed from the configured periodicity only)", async (s) => {
-      const h = await newPage(browser, { baseUrl: base, redactor });
+      const h = await ctx.openPage(s, {});
       try {
         await s.step("login owner and open Maintenance", async () => {
           await login(h, base, owner, projectRef);
@@ -189,7 +195,7 @@ export const suite = {
     });
 
     await report.scenario(suite.name, "owner: fiscal year and budget line as entered; consumption from the server only", async (s) => {
-      const h = await newPage(browser, { baseUrl: base, redactor });
+      const h = await ctx.openPage(s, {});
       try {
         await s.step("login owner and open Budget", async () => {
           await login(h, base, owner, projectRef);
@@ -237,7 +243,7 @@ export const suite = {
     });
 
     await report.scenario(suite.name, "owner: declarative ERP checklist with an open reserve; SLA rule without calendar stays not measurable", async (s) => {
-      const h = await newPage(browser, { baseUrl: base, redactor });
+      const h = await ctx.openPage(s, {});
       try {
         await s.step("login owner and open Contrôles ERP", async () => {
           await login(h, base, owner, projectRef);
@@ -300,7 +306,7 @@ export const suite = {
     });
 
     await report.scenario(suite.name, "read-only member: facts visible, no write control on any tab, no POST, direct commands refused", async (s) => {
-      const h = await newPage(browser, { baseUrl: base, redactor });
+      const h = await ctx.openPage(s, {});
       try {
         await s.step("login read-only member", () => login(h, base, reader, projectRef));
         await s.step("site A1: operations readable, read-only block with the reason, owner's equipment listed", async () => {
@@ -336,7 +342,7 @@ export const suite = {
           ];
           const results = {};
           for (const [name, body] of attempts) {
-            const r = await api(h.page, "/api/site-operations", body);
+            const r = await post(h.page, "/api/site-operations", body);
             results[name] = r.status;
             assert.equal(r.status, 403, `${name} answered ${r.status} for the read-only member`);
           }
@@ -369,10 +375,10 @@ export const suite = {
           const ws = await api(h.page, "/api/workspace");
           assert.equal(ws.status, 200);
           assert.ok(!(ws.body?.sites ?? []).some((x) => x.id === siteA1.id), "workspace still lists A1 after revocation");
-          const post = await api(h.page, "/api/site-operations", { action: "save_equipment", site_id: siteA1.id, payload: equipmentPayload("QA refus après retrait") });
-          assert.equal(post.status, 403);
+          const refusedPost = await post(h.page, "/api/site-operations", { action: "save_equipment", site_id: siteA1.id, payload: equipmentPayload("QA refus après retrait") });
+          assert.equal(refusedPost.status, 403);
           await capture(h, out, "b2b-reader-revoked-1280", s);
-          return { get: r.status, post: post.status, unavailable_block_shown: unavailable > 0, note: unavailable > 0 ? "operations view shows the unavailable state with Réessayer" : "shell hides the site sheet after revocation (no stale content)" };
+          return { get: r.status, post: refusedPost.status, unavailable_block_shown: unavailable > 0, note: unavailable > 0 ? "operations view shows the unavailable state with Réessayer" : "shell hides the site sheet after revocation (no stale content)" };
         });
         s.network(h.network);
       } finally {
@@ -381,19 +387,19 @@ export const suite = {
     });
 
     await report.scenario(suite.name, "third party (owner of organisation B): A1 refused, own site readable, no POST", async (s) => {
-      const h = await newPage(browser, { baseUrl: base, redactor });
+      const h = await ctx.openPage(s, {});
       try {
         await s.step("login third party", () => login(h, base, outsider, projectRef));
         await s.step("server: A1 refused (GET 403, POST 403), B1 readable (200)", async () => {
           const a1 = await api(h.page, `/api/site-operations?site_id=${siteA1.id}`);
           assert.equal(a1.status, 403);
-          const post = await api(h.page, "/api/site-operations", { action: "save_equipment", site_id: siteA1.id, payload: equipmentPayload("QA refus inter-organisations") });
-          assert.equal(post.status, 403);
+          const refusedPost = await post(h.page, "/api/site-operations", { action: "save_equipment", site_id: siteA1.id, payload: equipmentPayload("QA refus inter-organisations") });
+          assert.equal(refusedPost.status, 403);
           const b1 = await api(h.page, `/api/site-operations?site_id=${siteB1.id}`);
           assert.equal(b1.status, 200);
           assert.equal(b1.body?.snapshot?.site?.id, siteB1.id);
           assert.equal(await db.count("site_equipment", { site_id: `eq.${siteA1.id}` }), 1);
-          return { a1: a1.status, post: post.status, b1: b1.status };
+          return { a1: a1.status, post: refusedPost.status, b1: b1.status };
         });
         await s.step("UI: #site/<A1> shows nothing of A1; own site B1 shows its operations", async () => {
           await openHash(h.page, base, `site/${siteA1.id}`);
@@ -416,7 +422,7 @@ export const suite = {
     });
 
     await report.scenario(suite.name, "owner: error state on a 503 (browser interception) then retry restores the real data; 360 px capture", async (s) => {
-      const h = await newPage(browser, { baseUrl: base, width: 360, height: 780, redactor });
+      const h = await ctx.openPage(s, { width: 360, height: 780 });
       try {
         await s.step("login owner", () => login(h, base, owner, projectRef));
         await s.step("operations at 360 px without horizontal overflow", async () => {
