@@ -239,7 +239,8 @@ assert.equal(consumption.accepted_cents,12000);assert.equal(consumption.paid_cen
 assert.equal(snap.budget_consumption.find(x=>x.fiscal_year_id===fy2.id).accepted_cents,0,'other site quote not counted');
 assert.equal(snap.contract_grids,null,'selected-scope member: grids not readable, flagged not hidden');
 assert.equal(snap.limits.contract_grids_readable,false);assert.equal(snap.limits.can_write_site,true);assert.equal(snap.limits.can_write_organization,false);
-assert.equal(snap.sla_calendars.length,1);assert.equal(snap.sla_policies.length,2);assert.equal(snap.sla_cases.length,1);assert.equal(snap.sla_cases[0].pauses.length,1);
+assert.equal(snap.sla_calendars.length,1);assert.equal(snap.sla_policies.length,2);assert.equal(snap.sla_cases.length,1);assert.equal(snap.sla_cases[0].pauses.length,1);assert.equal(snap.sla_cases[0].pauses_total,1);
+assert.equal(snap.maintenance_plans.find(p=>p.id===plan.id).visits_total,1);
 assert.equal(snap.erp_checklists.length,1);assert.ok(snap.events.length>=10);assert.ok(!snap.events.some(e=>e.snapshot),'event list carries no snapshot payload');
 const ownerSnap=await scalar('owner','select public.site_operations_snapshot($1) v',[a]);
 assert.equal(ownerSnap.contract_grids.length,2);assert.equal(ownerSnap.limits.can_write_organization,true);
@@ -252,6 +253,19 @@ await assert.rejects(()=>as('writer','select public.site_operations_snapshot($1)
 await assert.rejects(()=>as('writer','select public.site_operations_snapshot($1)',['00000000-0000-4000-8000-000000000002']));
 await assert.rejects(()=>as(null,'select public.site_operations_snapshot($1)',[a]));
 console.log('PASS: snapshot is one RLS-scoped read with budget consumption per fiscal year, contract grids null when not readable, write flags per actor, foreign/unknown/anonymous refused');
+
+// ---------------------------------------------------------------- pauses are never truncated: 55 pauses, the open one last
+const manyCase=await rpc('writer','save_sla_case',{p_site_id:a,p_payload:{...casePayload,reference:'QA-MANY',opened_at:'2026-01-05T08:00:00Z'}});
+for(let i=0;i<54;i++)await db.query("insert into public.site_sla_pauses(case_id,site_id,started_at,ended_at,reason,created_by) values($1,$2,$3::timestamptz,$3::timestamptz+interval '10 minutes','QA closed pause',$4)",[manyCase.id,a,new Date(Date.UTC(2026,0,6+Math.floor(i/4),9+(i%4)*2)).toISOString(),ids.writer]);
+await db.query("insert into public.site_sla_pauses(case_id,site_id,started_at,ended_at,reason,created_by) values($1,$2,'2026-02-10T09:00:00Z',null,'QA open pause',$3)",[manyCase.id,a,ids.writer]);
+const manySnap=await scalar('writer','select public.site_operations_snapshot($1) v',[a]);
+const many=manySnap.sla_cases.find(c=>c.id===manyCase.id);
+assert.equal(many.pauses_total,55);assert.equal(many.pauses.length,55,'all pauses returned, no limit');
+assert.equal(many.pauses[54].ended_at,null,'the open pause is last and present');
+assert.equal(many.pauses.filter(p=>p.ended_at===null).length,1);
+for(let i=1;i<many.pauses.length;i++)assert.ok(many.pauses[i-1].started_at<=many.pauses[i].started_at,'chronological order');
+await db.query("delete from public.site_sla_pauses where case_id=$1",[manyCase.id]);
+console.log('PASS: every pause of a case is returned with its total (55 incl. the open one), so no SLA state can be computed on a truncated list');
 
 // ---------------------------------------------------------------- private entry points and anonymous access
 for(const fn of ['so_keys(jsonb,text[])','so_text(jsonb,text,integer,integer)','so_int(jsonb,text,integer,integer,boolean)','so_enum(jsonb,text,text[],boolean)','so_date(jsonb,text,boolean)','so_ts(jsonb,text,boolean)','so_uuid(jsonb,text,boolean)','so_lock_organization(uuid)','so_site_organization(uuid)','so_version(integer,integer)','so_log(uuid,uuid,text,uuid,text,integer,jsonb)','so_grid_lines(jsonb)','so_calendar_windows(jsonb)','so_closed_dates(jsonb)','so_checklist_items(jsonb)']){

@@ -8,7 +8,8 @@ import type { CalendarWindow, NotMeasurableReason, SlaEvaluation, SlaTrack } fro
 export type CalendarInput = { timezone: string; windows: CalendarWindow[]; closed_dates: string[] };
 export type PolicyInput = { response_target_minutes: number | null; resolution_target_minutes: number | null };
 export type PauseInput = { started_at: string; ended_at: string | null };
-export type CaseFacts = { opened_at: string; responded_at: string | null; resolved_at: string | null; pauses: PauseInput[] };
+/** `pauses_total`, when provided, must equal `pauses.length`; otherwise nothing is measured. */
+export type CaseFacts = { opened_at: string; responded_at: string | null; resolved_at: string | null; pauses: PauseInput[]; pauses_total?: number };
 type Interval = { start: number; end: number };
 
 const MINUTE = 60_000;
@@ -199,6 +200,11 @@ export function evaluateSlaCase(
 ): SlaEvaluation {
   const nowMs = Date.parse(now);
   const openedMs = Date.parse(facts.opened_at);
+  if (facts.pauses_total !== undefined && facts.pauses_total !== facts.pauses.length) {
+    // Incomplete pause list (a missing pause, possibly the open one, would produce a wrong state).
+    const incomplete = { response: unmeasurable(policy.response_target_minutes, "pauses_incomplete"), resolution: unmeasurable(policy.resolution_target_minutes, "pauses_incomplete") };
+    return { case_id: ids.case_id, policy_id: ids.policy_id, measurable: false, reasons: ["pauses_incomplete"], paused_now: false, ...incomplete };
+  }
   const holes = pauseIntervals(facts.pauses, nowMs);
   const pausedNow = facts.resolved_at === null && facts.pauses.some((p) => p.ended_at === null && Date.parse(p.started_at) <= nowMs);
   const response = track(calendar, policy.response_target_minutes, openedMs, facts.responded_at, nowMs, holes);

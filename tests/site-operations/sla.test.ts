@@ -114,3 +114,22 @@ test("resolution tracks independently of response and a calendar too sparse is u
   assert.equal(unreachable.response.reason, "calendar_unreachable");
   assert.equal(businessMillisBetween(QA_CALENDAR, 10, 5, []), 0);
 });
+test("an incomplete pause list refuses to measure instead of announcing a wrong state", () => {
+  const opened = paris(2026, 10, 2, 16, 0);
+  const pauses = [{ started_at: paris(2026, 10, 5, 8, 0), ended_at: paris(2026, 10, 5, 8, 30) }];
+  const incomplete = evaluateSlaCase(ids, QA_CALENDAR, policy(120, 480), { ...facts(opened, null, null, pauses), pauses_total: 2 }, paris(2026, 10, 5, 8, 45));
+  assert.equal(incomplete.measurable, false);
+  assert.deepEqual(incomplete.reasons, ["pauses_incomplete"]);
+  assert.equal(incomplete.response.status, "not_measurable");
+  assert.equal(incomplete.response.reason, "pauses_incomplete");
+  assert.equal(incomplete.response.deadline_at, null);
+  assert.equal(incomplete.resolution.status, "not_measurable");
+  assert.equal(incomplete.paused_now, false, "no claim about a pause state either");
+  const complete = evaluateSlaCase(ids, QA_CALENDAR, policy(120, 480), { ...facts(opened, null, null, pauses), pauses_total: 1 }, paris(2026, 10, 5, 8, 45));
+  assert.equal(complete.measurable, true);
+  assert.equal(complete.response.status, "pending");
+  assert.equal(complete.response.elapsed_minutes, 75, "1h Friday + 15 min Monday after the 30 min pause");
+  assert.equal(complete.response.deadline_at, paris(2026, 10, 5, 9, 30));
+  const untold = evaluateSlaCase(ids, QA_CALENDAR, policy(120), facts(opened, null, null, pauses), paris(2026, 10, 5, 8, 45));
+  assert.equal(untold.response.elapsed_minutes, 75, "without a total the list is taken as complete");
+});

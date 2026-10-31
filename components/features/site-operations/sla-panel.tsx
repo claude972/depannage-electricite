@@ -71,8 +71,9 @@ export function SlaPanel({ context }: { context: PanelContext }) {
         </div>
       </header>
       {!canWrite && <ReadOnly reason={context.readOnlyReason} />}
+      {limits.sla_cases_limited && <p className={styles.truncated}>Synthèse partielle : seuls les {cases.length} dossiers les plus récents sont comptés ; d’autres dossiers existent et ne sont pas évalués ici.</p>}
       <div className={styles.statRow} aria-label="Synthèse des délais">
-        <div><span>Dossiers suivis</span><strong>{summary.cases}</strong><small>{summary.measurable} mesurable{summary.measurable > 1 ? "s" : ""}</small></div>
+        <div><span>Dossiers suivis</span><strong>{summary.cases}</strong><small>{limits.sla_cases_limited ? "affichés (liste tronquée)" : `${summary.measurable} mesurable${summary.measurable > 1 ? "s" : ""}`}</small></div>
         <div><span>Dépassés</span><strong>{summary.measurable ? summary.breached : "—"}</strong><small>{summary.measurable ? "parmi les dossiers mesurables" : "aucun dossier mesurable"}</small></div>
         <div><span>En cours</span><strong>{summary.measurable ? summary.pending : "—"}</strong><small>délai non échu</small></div>
         <div><span>Non mesurables</span><strong>{summary.not_measurable}</strong><small>calendrier ou cible manquants</small></div>
@@ -202,7 +203,7 @@ export function SlaPanel({ context }: { context: PanelContext }) {
                   <div><dt>Ouvert</dt><dd>{dateTime(c.opened_at)}</dd></div>
                   <div><dt>Réponse</dt><dd>{dateTime(c.responded_at)}</dd></div>
                   <div><dt>Résolution</dt><dd>{dateTime(c.resolved_at)}</dd></div>
-                  <div><dt>Pauses</dt><dd>{c.pauses.length}</dd></div>
+                  <div><dt>Pauses</dt><dd>{c.pauses_total}{c.pauses_total !== c.pauses.length ? ` (${c.pauses.length} reçues)` : ""}</dd></div>
                 </dl>
                 {e && (
                   <div className={styles.tracks}>

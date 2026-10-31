@@ -63,6 +63,16 @@ test("truncation flags surface in completeness and summary counts breached befor
   ]);
   assert.deepEqual(summary, { cases: 4, measurable: 3, not_measurable: 1, breached: 1, pending: 1, met: 1 });
 });
+test("a case whose pauses do not match the server total is reported not measurable with its reason", () => {
+  const seed = demoSnapshot();
+  seed.sla_cases[0].pauses_total = 3;
+  const report = buildReport("site", seed, NOW);
+  const evaluated = report.sla.cases.find((c) => c.case_id === seed.sla_cases[0].id)!;
+  assert.equal(evaluated.measurable, false);
+  assert.deepEqual(evaluated.reasons, ["pauses_incomplete"]);
+  assert.equal(report.sla.summary.not_measurable, 2);
+  assert.equal(report.sla.summary.measurable, 0);
+});
 test("the demo client never reaches the network: it serves the seed and refuses commands honestly", async () => {
   const client = demoClient();
   assert.equal((await client.load(DEMO_SITE_ID))?.site_id, DEMO_SITE_ID);

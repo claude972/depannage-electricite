@@ -15,7 +15,7 @@ export function evaluateCases(snapshot: SiteOperationsSnapshot, now: string): Sl
       { case_id: c.id, policy_id: c.policy_id },
       calendar ? { timezone: calendar.timezone, windows: calendar.windows, closed_dates: calendar.closed_dates } : null,
       { response_target_minutes: policy?.response_target_minutes ?? null, resolution_target_minutes: policy?.resolution_target_minutes ?? null },
-      { opened_at: c.opened_at, responded_at: c.responded_at, resolved_at: c.resolved_at, pauses: c.pauses },
+      { opened_at: c.opened_at, responded_at: c.responded_at, resolved_at: c.resolved_at, pauses: c.pauses, pauses_total: c.pauses_total },
       now,
     );
   });

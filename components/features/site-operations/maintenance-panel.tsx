@@ -147,7 +147,7 @@ export function MaintenancePanel({ context }: { context: PanelContext }) {
                   <div><dt>Équipement</dt><dd>{plan.equipment_id ? equipment.get(plan.equipment_id) ?? "Équipement non affiché" : "Tout le site"}</dd></div>
                   <div><dt>Périodicité</dt><dd>{plan.frequency_kind === "none" ? "Sans périodicité" : `${FREQUENCY_KIND[plan.frequency_kind].replace("N", String(plan.frequency_value))}`}</dd></div>
                   <div><dt>Dernière réalisation</dt><dd>{date(plan.last_done_on)}</dd></div>
-                  <div><dt>Visites enregistrées</dt><dd>{plan.visits.length}{plan.visits.length >= 20 ? " (20 dernières)" : ""}</dd></div>
+                  <div><dt>Visites enregistrées</dt><dd>{plan.visits_total}{plan.visits_total > plan.visits.length ? ` (${plan.visits.length} dernières affichées)` : ""}</dd></div>
                 </dl>
                 {plan.visits.length > 0 && (
                   <details className={styles.details}>
