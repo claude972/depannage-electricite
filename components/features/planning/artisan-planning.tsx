@@ -127,7 +127,10 @@ function WeekGrid({ view, days, todayKey, timeZone, writable, client, onChanged,
         const blocks = blocksFor(key);
         return (
           <li key={key} className={`${styles.day} ${key === todayKey ? styles.dayToday : ""}`}>
-            <div className={styles.dayHead}><strong>{labelDate(instantFromKey(key, 720, timeZone) ?? new Date(), timeZone)}</strong>{key === todayKey && <span>Aujourd’hui</span>}</div>
+            <div className={styles.dayHead}>
+              <strong>{labelDate(instantFromKey(key, 720, timeZone) ?? new Date(), timeZone)}</strong>
+              {key === todayKey && <span className={styles.today}>Aujourd’hui</span>}
+            </div>
             {blocks.length === 0 && <p className={styles.dayEmpty}>—</p>}
             {blocks.map((b) => (
               <div key={b.key} className={`${styles.block} ${b.kind === "free" ? styles.blockFree : b.kind === "appointment" ? styles.blockAppointment : b.kind === "busy" ? styles.blockBusy : b.kind === "unavailable" ? styles.blockUnavailable : styles.blockAvailable}`}>
