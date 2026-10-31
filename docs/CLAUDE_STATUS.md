@@ -143,6 +143,11 @@ Reste à faire côté UI (par ordre) :
 - Suivis pilote appliqués dans ce checkpoint : contenu privé d’assistance en attente effacé à la déconnexion/changement d’identité (rechargement même utilisateur conservé) ; toute chaîne non terminée sous l’identité courante neutralise aussi les issues « conflit » des commandes brouillon/assistance.
 - Scan d’erreurs d’exécution (CDP, navigateur headless, serveur de développement) : 49 vues (9 publiques, 8 particulier, 9 artisan, 12 entreprise, 11 Super Admin) en démonstration sans exception, erreur console ni réponse 4xx/5xx même origine (script `console-scan.mjs` via Chrome DevTools Protocol sur le serveur de développement, 04347d7). Ce scan prouve l’absence d’erreur d’exécution au rendu, pas les parcours interactifs : ceux-ci relèvent de WEB-ACCEPTANCE-TESTS-001.
 
+## Retours de revue en cours de correction (01h10)
+
+- **GW-REV-001 (gateway, P1, ne pas déployer 5f5f3dc)** : compensation uniquement sur erreur RPC définitive (code PG = transaction annulée) ; tout résultat de transport inconnu (exception fetch, timeout, 5xx sans code PG) conserve l’objet Storage et renvoie une réponse explicitement incertaine ; une relecture « ligne absente » ne vaut pas preuve d’annulation ; test « finalisation levée sans métadonnée = 503 compensé » corrigé en « transport inconnu = 503 incertain, objet conservé » + test « erreur définitive = compensation ». Confié au même agent backend ; SHA de correction à venir.
+- **QA-001 / QA-002 (harnais bfb2d4d)** : assertion de sélection de la version publiée rendue obligatoire ; ajout d’un gestionnaire à portée `selected` avec site visible mais `can_write=false` (contrôles masqués + refus serveur des commandes budget/règle/approbation/demande). Confié au même agent QA ; SHA à venir.
+
 ## Relais de minuit (effectif, missions/web-pwa 3e24796)
 
 - Tout le code applicatif et de tests est désormais produit par Claude ; Codex pilote, revoit, exécute, intègre. Session lead unique inchangée (b4b555f0).
