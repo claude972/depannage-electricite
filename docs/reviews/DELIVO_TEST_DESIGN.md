@@ -84,3 +84,24 @@
   blanc du héros mesuré sur les pixels rendus de la zone titre + paragraphe (bords anti-crénelés des lettres inclus, donc
   mesure pessimiste) : 99e centile ≈ 4,6:1 (1440), 4,4:1 (1280), 4,0:1 (390) ; titre ≥ 30 px (grand texte, seuil 3:1).
   Carrousel manuel vérifié (flèches, indicateurs, clavier, pas de lecture automatique), 1440/1280/390 sans débordement.
+
+## DESIGN-DELIVO-WEB-TEST-006 — diapositive plein écran, sans publicité, thème clair/sombre (plan court, base e39b458)
+
+- Fichiers : `prototypes/delivo-test/web-full.html`, `web-full.css`, `web-full.js` (+ ce rapport). 005, `web.html` et
+  écrans mobiles inchangés. Photos et ligne de crédit réutilisées.
+- Héros : deux photos `<img>` `object-fit: cover` sur **toute la largeur de la fenêtre** (aucune largeur max, marge ni
+  arrondi), hauteur `100svh` moins la barre haute ; voile noir plus dense que 005 sous le texte (texte blanc ≥ 4,5:1 visé à
+  1440/1280/390/360, mesuré sur les pixels rendus, dans les deux thèmes — le héros reste sombre dans les deux thèmes) ;
+  CTA « Décrire ma panne » → `demande.html`. Flèches et indicateurs ≥ 44 px, flèches clavier, aria comme 005, pas de
+  lecture automatique, mouvement réduit respecté.
+- Aucune publicité ni emplacement publicitaire sur cette page.
+- Thème : bouton bascule clair/sombre (`aria-pressed`, libellé explicite, 44 px, focus visible). Thème initial =
+  `prefers-color-scheme` ; choix enregistré dans `localStorage` sous la seule clé `delivo-test-theme` (try/catch, sans
+  stockage le thème fonctionne pour la session) ; appliqué avant le premier rendu par un petit script en tête (pas de flash).
+  - Sombre = thème Delivo actuel (vert/noir/Jakarta, mêmes cartes et boutons).
+  - Clair : fond `#FFFFFF` / `#F4F6F5`, texte `#111111` (18,88:1), texte secondaire `#4B5563` (7,56:1 sur blanc, 6,96:1
+    sur gris), vert texte/liens `#0F5C3A` (8,04:1 sur blanc, 7,41:1 sur gris), boutons `#18794E` avec texte blanc (5,41:1),
+    pastilles `#E3F1E9` (texte `#0F5C3A` 6,90:1). `#18794E` n’est pas utilisé comme texte sur gris (4,98:1 seulement… ≥ 4,5
+    mais marge faible : texte vert = `#0F5C3A`).
+- Vérif : 1440/1280/390/360 × 2 thèmes, persistance après rechargement, préférence système, diapositives, focus, pas de
+  débordement, aucune requête externe, console propre.
