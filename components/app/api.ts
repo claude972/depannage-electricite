@@ -1,11 +1,17 @@
 import type { ContractState } from "./types";
 
 export class ApiRequestError extends Error {
+  /** Optional machine code and field list carried by the server body (e.g. issuer_incomplete). */
+  code?: string;
+  missing?: string[];
   constructor(
     public status: number,
     message: string,
+    details?: { code?: string; missing?: string[] },
   ) {
     super(message);
+    if (details?.code) this.code = details.code;
+    if (details?.missing) this.missing = details.missing;
   }
 }
 type Fetcher = (input: string, init: RequestInit) => Promise<Response>;
@@ -35,7 +41,11 @@ export function parseApiBody(
           : status === 401
             ? "Connectez-vous pour accéder à cet espace."
             : "L’action n’a pas pu être réalisée. Réessayez.";
-    throw new ApiRequestError(status, message);
+    const body = valid ? (parsed as { code?: unknown; missing?: unknown }) : {};
+    throw new ApiRequestError(status, message, {
+      code: typeof body.code === "string" ? body.code : undefined,
+      missing: Array.isArray(body.missing) && body.missing.every((m) => typeof m === "string") ? (body.missing as string[]) : undefined,
+    });
   }
   if (!valid)
     throw new ApiRequestError(
