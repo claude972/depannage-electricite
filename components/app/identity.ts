@@ -32,15 +32,20 @@ export async function adoptIdentity(
   //    the browser must not reset that account's session.
   const authoritative = await deps.currentUserId();
   if (!expectedUserId || authoritative !== expectedUserId) return "superseded";
-  // 2. The auth event may already have adopted this very identity: do not clear it again,
+  // 2. Ownership is re-checked after the await: if, meanwhile, the auth listener adopted a
+  //    different identity (another account signed in, even with a stale verification reply),
+  //    this attempt is superseded and must never reset that newer session.
+  const loaded = deps.loadedUserId();
+  if (loaded !== null && loaded !== expectedUserId) return "superseded";
+  // 3. The listener may already have adopted this very identity: do not clear it again,
   //    simply continue the chain as that identity.
-  if (deps.loadedUserId() !== expectedUserId) {
+  if (loaded !== expectedUserId) {
     deps.clearSessionState();
     deps.setUserId(expectedUserId);
   }
   ctx.rebind();
   await deps.refresh();
-  // 3. Logged out or replaced while loading: nothing more.
+  // 4. Logged out or replaced while loading: nothing more.
   if (!ctx.alive() || deps.loadedUserId() !== expectedUserId) return "interrupted";
   if (keepDraft) {
     deps.setPendingDraft(keepDraft);
