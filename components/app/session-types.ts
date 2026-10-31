@@ -84,6 +84,8 @@ export interface Session {
   activeSiteId: string;
   /** Authority in the active organisation from the membership table, never the global role. */
   membershipRole: "owner" | "manager" | "viewer" | null;
+  /** Timestamp of the last successful workspace load; spaces re-read scoped views when it changes. */
+  refreshedAt: number;
 
   go(view: View, param?: string): void;
   openIntervention(id: string, quoteId?: string): void;

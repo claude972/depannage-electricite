@@ -118,3 +118,12 @@ test("demo deep link and public views stay reachable without a session; join/dem
   assert.deepEqual(parseHash("#demo/artisan-missions"), { view: "demo", param: "artisan-missions" });
   assert.deepEqual(parseHash("#demo/artisan/extra"), { view: "demo", param: "" }, "slashes are not identifiers");
 });
+test("a reloaded workspace drops an organisation or site the server no longer returns", async () => {
+  const { validateContext } = await import("../../components/app/session");
+  const orgs = [{ id: "o1" }];
+  const sites = [{ id: "s1" }];
+  assert.deepEqual(validateContext(orgs, sites, "o1", "s1"), { organizationId: "o1", siteId: "s1", organizationDropped: false });
+  assert.deepEqual(validateContext(orgs, sites, "o2", "s1"), { organizationId: "", siteId: "", organizationDropped: true });
+  assert.deepEqual(validateContext(orgs, sites, "o1", "s9"), { organizationId: "o1", siteId: "", organizationDropped: false });
+  assert.deepEqual(validateContext([], [], "", ""), { organizationId: "", siteId: "", organizationDropped: false });
+});
