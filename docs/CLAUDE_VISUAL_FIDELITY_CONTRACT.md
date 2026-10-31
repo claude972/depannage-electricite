@@ -47,7 +47,7 @@ Stockées hors dépôt puis copiées dans `docs/visual-fidelity/` avec les captu
 | Tableau de bord entreprise | M66 (shell) + M13 (syndic) / V5-C05 (bureaux) | À auditer |
 | Fiche de site | V5-C01 / M50 | À auditer |
 | Approbation | V5-C08 | À auditer |
-| Artisan | M35, M34, M36, M14, M65 | À auditer |
+| Artisan | M35 (shell + tableau de bord), M34 (devis), M36 (profil) | Addendum ci-dessous (base f3fd9c6) ; M14/M65 (documents, candidature) hors de ce lot |
 | Super Admin | M43 (volume 3 p12) | À auditer |
 | Pages publiques | M11 + variantes cataloguées | À auditer |
 
@@ -93,3 +93,92 @@ Captures « après » de ce checkpoint (démo, données fictives ; le site « Lo
 `interventions-1280-filter-reset-global-site.jpg`, `interventions-1280-filter-reset-all-sites.jpg`, `interventions-360-after-review.jpg`.
 
 Vérifications : `npx tsc --noEmit` au vert ; `tests/ui` 58 tests (49 existants + 9 nouveaux) au vert ; aucune erreur ni avertissement console pendant les captures.
+
+## Addendum — espace artisan (VISUAL-FIDELITY-001, base `f3fd9c6`)
+
+Publié **avant** toute modification de code de l’espace artisan. Références maîtresses : **M35** (volume 3 p4,
+`/tmp/courant-audit/pdf-images/v3-p4.jpeg`) pour la coque et le tableau de bord ; **M34** (vol. 3 p3) pour l’éditeur
+de devis ; **M36** (vol. 3 p5) pour le profil. Captures « avant » prises sur la démo locale (`next dev`,
+`#demo/artisan…`, 360 et 1280) : `docs/visual-fidelity/artisan-overview-360-before.jpg`,
+`artisan-overview-1280-before.jpg`, `artisan-profile-360-before.jpg`, `artisan-quote-360-before.jpg`.
+Fichiers du lot : `components/role/artisan-space.tsx`, `artisan-quote-draft.tsx`, `artisan.module.css`,
+`artisan-quote-draft.module.css`, `tests/ui/**`, cette page, `docs/visual-fidelity/**`. Logique pure testable
+extraite dans `components/role/artisan-lists.ts` (créé au premier checkpoint). Présentation seulement : éditeur de
+devis (contrat QUOTE-DRAFT-001), missions, performance, téléversements et commandes artisan conservés à l’identique.
+
+### Règle sur les données
+
+Les chiffres des références (4,7/5, 128 avis, 4 850 €, +12 %, 96 %, 98 %, 245 missions, 2,1 ans, « 3/3 assurances
+validées », horaires, villes) sont des **exemples**. Seules les valeurs calculées par `artisanPerformance` sur les
+dossiers chargés (note moyenne et nombre d’avis, CA du mois = règlements Stripe payés du mois, interventions réglées,
+ancienneté depuis `created_at` du compte) sont affichées. **Jamais fabriqué** : taux de satisfaction, ponctualité /
+« dans les délais », évolution mensuelle, distance, SLA, note qualité distincte, nombre de documents « validés »,
+compteur de notifications. Ces absences restent des états explicites (`Unavailable`, « Aucun avis encore »).
+
+### M35 — coque et tableau de bord (`#demo/artisan`)
+
+| Élément de la référence | Composant / section existant | Écart constaté (f3fd9c6) | Correction prévue |
+| --- | --- | --- | --- |
+| Barre haute : menu, logo + « Bonjour, Artisan Électricien », cloche | `.topbar` (bouton menu, `.greeting`, cloche → Messages) | Conforme en structure ; pas de logo rond dans la barre (marque dans le tiroir et la barre latérale). | Conservé. **Écart assumé** : pas de point de notification (aucun compteur serveur). |
+| Bandeau marine « Tableau de bord / Vue d’ensemble » + illustration tableau électrique | `.banner`, `.bannerKicker`, `PanelArt` | Illustration masquée sous 420 px alors que la référence la montre sur mobile. | Illustration conservée à 360 (taille réduite, `aria-hidden`), masquée seulement sous 340 px. |
+| « Missions d’aujourd’hui » + « Voir tout » | `.sectionHead` + `session.go("missions")` | Conforme. | — |
+| Ligne de mission : tuile icône teintée, titre, adresse + pastille, « Aujourd’hui 10:00 – 12:00 », chevron | `MissionRow` + `appointmentSlot` (rendez-vous réel, sinon « Horaire à fixer ») | Titre tronqué à 360 (« Tableau électri… ») ; colonne droite bornée à 96 px. | Titre sur deux lignes maximum (`line-clamp`) à ≤ 480 px ; adresse sur une ligne avec ellipse (inchangé) ; pastille à droite de l’adresse quand la place existe. **Écart assumé** : catégorie de dossier affichée à la place de la pastille « À réaliser / Dépannage / Préventif » (pas de type préventif/curatif dans le modèle). |
+| « Comment ces missions sont choisies » (ajout projet) | `details.basisFlat` | `summary` 36 px. | `summary` ≥ 44 px. |
+| Bloc Performance : étoile Note moyenne, € CA du mois, pied « En hausse de 12 % » | `PerformanceSummary` + `details` « Base de calcul » | Conforme pour les deux chiffres réels ; `summary` 40 px. | `summary` ≥ 44 px. **Écart assumé** : pas de tendance mensuelle (historique non chargé), remplacée par la base de calcul. |
+| CTA bleu pleine largeur « Voir missions disponibles → » | `.cta` + compteur d’offres | Pas de flèche ; compteur à la place. | Flèche ajoutée à droite, compteur conservé (donnée réelle). |
+| 5 onglets bas Tableau de bord / Missions / Devis / Messages / Profil | `.bottomNav` / `PRIMARY_NAV` | **360** : « Tableau de bord » passe sur 2 lignes, tous les onglets font 81 px. **1280** : onglets bas et bouton menu restent visibles à côté de la barre latérale (règles `.bottomNav` / `.iconButton` déclarées après la media query 1024 px, même spécificité) — visible sur `artisan-overview-1280-before.jpg`. | Libellés sur une ligne (12 px, sans retour), hauteur 60 px ; au-dessus de 1024 px, onglets bas et bouton menu masqués (règles replacées après les déclarations de base). |
+| Liste Missions (cible de « Voir tout ») : segments Disponibles / En cours / Terminées | `Missions` + `Segments` (primitive partagée, 40 px) | Segments 40 px (< 44) ; titre d’offre tronqué. | Hauteur ≥ 44 px via le wrapper `.segmentsWrap` (primitive partagée non modifiée) ; même clamp de titre. |
+
+### M34 — devis (`#demo/artisan-mission.demo-001`, dossier au statut « devis envoyé » → « Réviser le devis »)
+
+| Élément de la référence | Composant / section existant | Écart constaté | Correction prévue |
+| --- | --- | --- | --- |
+| Barre « ← Créer un devis ⋯ » puis H1 + sous-titre | `PageTitle` du dossier (retour Missions) + `.head` h2 « Établir / Réviser le devis » + `.lead` | Conforme ; pas de menu « ⋯ » (aucune action). | — |
+| Carte « LIGNES DU DEVIS / Prix HT » : lignes icône + libellé + sous-libellé + prix + chevron | `.rows` > `.row` (champs Prestation, Quantité, Prix unitaire HT, bouton supprimer) | Formulaire empilé : 3 champs + bouton par ligne, très long à 360 ; pas d’en-tête de carte ; pas de total de ligne. | Chaque ligne devient une carte : libellé sur la première rangée, « Quantité × Prix unitaire HT » et **total HT de la ligne** (calcul d’affichage, comme les totaux existants) sur la seconde, bouton supprimer 44 px ; en-tête de carte « Lignes du devis / Prix HT ». Champs, validation, erreurs près du champ, brouillon, conflit et envoi inchangés. **Écart assumé** : lignes éditables en place (pas de sous-écran), pas d’icône par type de ligne (aucun type de ligne dans le contrat). |
+| « + Ajouter une ligne » | bouton `text-button` existant | 44 px, conforme. | Style de rangée aligné sur la carte. |
+| Totaux : Sous-total HT, TVA (20 %), TOTAL TTC mis en avant | `.tax` (taux réel choisi) + `.totals` / `.total` + mention « estimation d’affichage » | Totaux en simple liste ; TTC peu distingué. | Carte de totaux : Sous-total HT, TVA (taux choisi ou « taux à choisir »), Total TTC sur fond bleu pâle. **Écart assumé** : pas de fond orange (orange réservé aux alertes, DESIGN.md). |
+| « PHOTOS / DOCUMENTS — Ajouter une photo » | aucun dans l’éditeur ; documents du dossier via le panneau Documents existant | Absent. | **Écart assumé** : le contrat de brouillon n’a pas de pièce jointe ; aucun faux sélecteur. Rien d’ajouté. |
+| CTA marine « Envoyer le devis au client » | `.actions` : « Enregistrer le brouillon » (outline) + « Envoyer le devis au client » (primary) | Conforme ; couleur bleu action. | Bouton d’envoi pleine largeur sur mobile. **Écart assumé** : bleu action (token) au lieu de marine. |
+
+### M36 — profil (`#demo/artisan-profile`)
+
+| Élément de la référence | Composant / section existant | Écart constaté | Correction prévue |
+| --- | --- | --- | --- |
+| Barre « ← Profil Artisan 🔔 » | `PageTitle` « Profil artisan » | Conforme. | — |
+| En-tête teinté : avatar, « Artisan Bâti & Co », étoiles 4,6 (128 avis), « Artisan vérifié » | `.profileHead` : initiales, raison sociale, nom, note réelle, `Tag` « Artisan vérifié » (si `artisan_approved`) ou état de candidature | Pas de fond teinté ; une icône étoile + valeur. | Bandeau bleu pâle pleine largeur ; note affichée « 5 / 5 (1 avis) » (réel). **Écart assumé** : pas de rangée de 5 étoiles décoratives. |
+| Carte « Documents & Assurances / Assurances validées / 3/3 ✓ / Voir les documents » | `.docCard` : compte des justificatifs transmis `/3`, « examinés par l’opérateur », lien Documents | Conforme en structure. | **Écart assumé** : « validées » et coche verte non affichées (pas de statut de validation par document) ; compteur = justificatifs transmis. |
+| « Performance » 3 × 2 : satisfaction %, qualité /5, dans les délais %, missions réalisées, ancienneté, note moyenne | `PerfGrid` : 2 tuiles `Unavailable` (satisfaction, ponctualité) + 4 tuiles réelles | 360 : une colonne, page très longue ; tuiles indisponibles volumineuses. | Grille 2 colonnes dès 360 (3 à ≥ 761 px), tuiles compactes ; `Unavailable` compact (icône, titre, raison courte) sans changer la primitive. **Écart assumé** : les 2 indicateurs sans source restent « indisponibles », pas de valeur. |
+| Bouton bleu « Modifier le profil » puis outline « Voir les statistiques détaillées » | `.profileActions` : « Modifier le profil » (primary, ouvre le formulaire) ; « Voir le détail » (lien texte dans l’en-tête de section) ; « Configurer mes règlements Stripe » (outline) | Lien texte au lieu du bouton outline. | Bouton outline « Voir les statistiques détaillées » sous « Modifier le profil » ; lien texte retiré de l’en-tête (une seule entrée vers Performance). Stripe conservé en dessous (fonction réelle). |
+| Onglets bas Accueil / Missions / Profil / Messages / Plus | `PRIMARY_NAV` M35 | Jeu d’onglets différent entre M35 et M36. | **Écart assumé** : M35 reste maître pour la coque (Devis plutôt que Plus ; le « Plus » est le tiroir). |
+| Hors référence : Disponibilité, liens Dossier et aide, Installer l’application, Déconnexion | sections existantes | — | Conservés sous le profil (fonctions réelles). |
+
+### Règles responsive
+
+- **360** : une colonne ; barre haute collante, onglets bas fixes (60 px + zone sûre) ; bandeau avec illustration réduite ;
+  lignes de mission sur 2 rangées (titre / adresse + état) avec colonne droite ≤ 96 px ; grille performance 2 colonnes ;
+  cartes de ligne de devis empilées, totaux en carte, CTA pleine largeur ; aucun défilement horizontal de page.
+- **760** : mêmes composants, performance 2 colonnes jusqu’à 760 px puis 3 ; ligne de devis sur une rangée
+  (libellé | quantité | prix | supprimer) à partir de 641 px (règle existante) ; tiroir pour la navigation secondaire.
+- **1280** : barre latérale 240 px (inchangée), contenu ≤ 1180 px, onglets bas et bouton menu masqués (correction),
+  bandeau avec illustration pleine taille, performance 3 colonnes.
+
+### Accessibilité ciblée
+
+- Cibles ≥ 44 × 44 : onglets bas (60 px), segments (44 via wrapper), `summary` (44), suppression de ligne (44 déjà),
+  boutons de ligne/tuile, CTA (52). Mesure automatisée des éléments interactifs visibles < 44 px à 360 : objectif 0.
+- Focus visible : anneau global 3 px (`globals.css`) ; vérification clavier sur onglets bas, lignes, segments, éditeur.
+- Contraste (vérifié sur les tokens utilisés) : blanc sur marine `#102a43` 14,6:1 ; blanc sur bleu `#1457d9` 5,4:1 ;
+  `#526178` sur blanc 6,3:1 ; onglet inactif `#5b6b82` sur blanc 5,2:1 ; état jamais porté par la couleur seule
+  (pastilles textuelles, « indisponible » en toutes lettres).
+
+### Vérification : par test ou par capture
+
+| Par test (`tests/ui/artisan-lists.test.ts`, logique pure dans `artisan-lists.ts`) | Par capture (démo 360 / 1280, script Playwright hors dépôt) |
+| --- | --- |
+| État d’horaire d’une mission (lecture / indisponible / à fixer / aujourd’hui / date) ; descripteurs des tuiles de performance (valeur réelle vs indisponible avec raison, jamais de valeur inventée) ; libellés et compteurs des segments de missions ; total HT d’une ligne et des totaux du brouillon (quantité × prix, TVA au taux choisi, « taux à choisir ») ; compte des justificatifs transmis. | Composition M35 / M34 / M36 côte à côte ; onglets bas sur une ligne à 360 et absents à 1280 ; 0 élément interactif < 44 px ; focus clavier ; absence de débordement horizontal ; console sans erreur ; libellés courts et longs (titre de mission, nom de société). |
+
+### Checkpoints prévus
+
+1. Coque + tableau de bord M35 (+ segments de la liste Missions) — captures `artisan-overview-{360,1280}-after.jpg`.
+2. Profil M36 — captures `artisan-profile-{360,1280}-after.jpg`.
+3. Éditeur de devis M34 — captures `artisan-quote-{360,1280}-after.jpg`.
