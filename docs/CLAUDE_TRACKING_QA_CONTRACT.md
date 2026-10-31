@@ -184,3 +184,63 @@ Ajustements de scénarios induits par le contrat UI (le volet API reste celui du
 Captures 360/1280 (après hydratation complète) : artisan — non partagé, consentement, en partage, refus, hors ligne, reload ;
 client — `fresh`, `stale`, `stopped`, arrivée estimée ou message 503. Les coordonnées visibles sont uniquement les points publics
 simulés. Toujours aucun code ni exécution avant le GO de ROOT.
+
+## Amendement A2 — contrôle contre le backend livré `origin/codex/gps-eta` 8366c05
+
+Lecture seule par `git show` (migration `202610310019_intervention_tracking.sql`, `app/api/interventions/[id]/tracking/**`,
+`lib/features/tracking/{http,state,types,provider}.ts`). **Aucun merge** dans `claude/web-qa-tracking` à ce stade : la branche ne
+contient que ce contrat ; le merge de travail (import des types) sera fait au début du code, après le GO de ROOT, sans copier ni
+modifier un fichier backend. Rien de ce qui suit n'implique une acceptation de 8366c05.
+
+**Question 2 (leases) — résolue par la source.** `tracking_provider_leases.intervention_id … references interventions(id) on delete
+cascade` et `intervention_tracking.intervention_id … on delete cascade`. En revanche `intervention_tracking.artisan_id` et
+`confirmed_by` référencent `profiles(id)` **sans** cascade. Nettoyage retenu :
+1. `intervention_tracking` par `intervention_id` (cohorte) — étape explicite avant `interventions` (inchangé ; obligatoire avant
+   `profiles` à cause des deux FK sans cascade) ;
+2. aucune étape pour `tracking_provider_leases` : supprimés par la cascade de `interventions` ; relecture après nettoyage = 0 ligne
+   pour les interventions du manifeste, sinon exit 3 ;
+3. `tracking_provider_budget` (singleton `id='ign'`) : jamais lu en écriture, jamais supprimé ; seule une lecture `next_allowed_at`
+   est autorisée dans le rapport fournisseur.
+
+**Routes et codes réels (remplacent les attentes génériques du §6 là où elles diffèrent).**
+
+| Cas | Réponse livrée |
+| --- | --- |
+| GET snapshot non autorisé (`42501`) | **404** « Ce suivi est introuvable. » |
+| POST commande par un compte sans droit (tiers, viewer en `point`/`start`, artisan non attribué, destination par viewer/artisan) | **403** (via `dbError` 42501) |
+| Paramètre de requête sur une route tracking | **422** (`checkedId` refuse toute query string) — vérifié en T10 |
+| Format / bornes (`22023`) | **422** |
+| Version, session ou ordre (`P0001`) | **409** |
+| Point plus d'1 / 5 s (`53300`) ou quota d'action (`consume_action` 30/min) | **429**, `Retry-After` présent (5 s par défaut) |
+| Route sans point frais / sans destination | **503** `reason: position_unavailable` / `destination_required` |
+| Quota applicatif fournisseur | **429** `reason: application_quota`, `retry_after_s` 1–60 + `Retry-After` |
+| Contexte changé pendant le calcul | **409** `reason: tracking_changed` |
+| Erreurs fournisseur | **503** `reason` ∈ `provider_quota` (+ `retry_after_s`), `provider_timeout`, `provider_unavailable`, `route_unavailable`, `invalid_provider_response`, `server_configuration` |
+| Géocodage sans `can_confirm_destination` | **403** (avant ou après l'appel fournisseur) |
+
+**Écarts de sémantique à prendre en compte (attentes corrigées).**
+- **T14 — stop répété** : un second `stop` (session déjà invalidée) renvoie **409** « Tracking session changed » et ne modifie
+  rien ; c'est l'attendu (pas un succès idempotent).
+- **T3 — rejeu de start** : même `session_id` pendant le partage ⇒ 200 avec le même snapshot ; `session_id` différent pendant le
+  partage ⇒ **409** « A tracking session is already active ».
+- **T6 — fraîcheur** : `position_state` vaut `stale` tant que `shared` et `last_seq > 0` sans point frais, `stopped` dès que
+  `shared=false`, `fresh` seulement si `travel_stage='en_route'` et artisan toujours éligible ; un GET purge physiquement le point
+  expiré de ce dossier (constat attendu, pas un effet de bord).
+- **T16 — destination** : toute confirmation ou `clear` invalide aussi la session (`shared=false`, point effacé, `control_version`
+  +1, `destination_version` +1) ; `can_confirm_destination` = `owns_intervention` (client particulier ou owner/manager avec
+  `can_manage_site`) ou admin, et faux après `completed/paid/cancelled`.
+- **T13 — suspension** : les déclencheurs `tracking_profile_invalidation` (`artisan_approved`, `role`) et
+  `tracking_dossier_invalidation` (`application_status`) purgent la ligne et les leases ; la mise à jour de colonnes profil par la
+  clé service, déjà admise par les fixtures existantes, exerce bien ces déclencheurs.
+- **T12 — réaffectation** : reste `skipped: needs-root-actor` (consigne lead). Information pour ROOT : le déclencheur
+  `tracking_intervention_invalidation` réagit à **toute** mise à jour de `interventions.artisan_id` ; une variante « réaffectation
+  simulée par la clé service » exercerait la purge sans `reassign_intervention`, mais elle n'est pas activée sans accord ROOT.
+
+**Incohérence inter-contrats signalée (UI a7a1fed ↔ backend 8366c05) — à arbitrer par le lead, pas corrigée ici.** Le contrat UI
+prévoit, après rechargement avec `shared=true`, un « nouveau démarrage, nouveau `session_id` ». Le backend refuse un `start` avec un
+autre `session_id` tant que `shared=true` (409). Une reprise conforme doit donc envoyer d'abord `stop` avec le `session_id` lu dans
+le snapshot, puis `start` avec un nouvel identifiant. **T8** attend cette séquence ; un `start` seul suivi d'un 409 sera rapporté
+comme `ANOMALY: restart-after-reload` (défaut de raccordement), pas masqué par un nouvel essai.
+
+**Inchangé** : pas de code ni d'exécution avant le GO de ROOT ; sélecteurs de l'amendement A1 ; position simulée étiquetée ;
+preuve fournisseur séparée et optionnelle ; redaction des coordonnées ; codes de sortie.
