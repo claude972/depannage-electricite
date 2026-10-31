@@ -555,3 +555,11 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - **Expiry** code 685bd20 source read by root: coherent, OBSERVED kept; tests to be replayed later.
 - **Cron concurrency REAL PASS (77765)**: A 78447 held the row 19:27:53.397–19:28:05.410; B 78451 NOWAIT busy + pg_sleep 19:28:02.357; cron run 15 succeeded, cleared the other point and kept the locked one; cron run 16 succeeded 19:29, cleared it after release. Cleanup 10 scopes 0; independent postflight in preparation. ⇒ **GPS P2-2 two-connection concurrency closed live.**
 - **Business run 78a5f871aaba finished: 8 PASS, 6 FAIL, 1 ANOMALY.** Cleanup complete; root 48 scopes PASS, 7 Auth 404, 14 Storage 0 (v2 fixed 5 wrong stable-head 404 names on root side; first UNKNOWN preserved). No other cohort known active.
+
+## 2026-10-31 — root review of tracking QA 8a8441d: 3 P2 confirmed (no cloud on 8a8441d)
+
+- P2-1 Auth admin HTTP 200 non-JSON ⇒ `emailOf` null ⇒ ownership authorises the id — required UNKNOWN, delete refused.
+- P2-2 first createUser lost response + instantaneous lookup absent closes the intent « reconciled » while `manifest.json` does not exist yet — required durable manifest/intent before any creation/lookup; one-off absence ≠ remote cancelled; UNKNOWN/INCOMPLETE until proven.
+- P2-3 real `PROVIDER_RUNNERS` `provider-geocode` + `runOne` + `createReport`: 503 `provider_unavailable` ⇒ PASS 1 / blocked 0 — required BLOCKED/UNAVAILABLE non-proof (same check for route).
+- Dispatched to a84ded5 with real-path repro tests (fail on 8a8441d, pass after).
+- **Preview**: app source functional on preview Git f8 `aw01` READY; anonymous tracking 401 real ⇒ branch env inherited after Git source, no variable change. At the user's explicit request (phone access), root creates a **deployment-only shareable link expiring in 7 days** via the official API — project protection not disabled, not main; secret URL kept out of Git/binaries. **Old `mh0ttyp8u` demo (503) must no longer be given.**
