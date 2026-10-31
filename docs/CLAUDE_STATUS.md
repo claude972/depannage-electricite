@@ -812,3 +812,8 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 
 - Root read `d04726f` and `5dc89ec`: **GO confirmed** for A8 ordering (providers before T19), revoked pool ⇒ BLOCKED without relogin, Auth 404 legacy strict only (no other format whitelisted); 7502e28 diagnostics/T8 already GO. Worker a84ded5: small pushed SHAs, units + real Chrome, no cloud; asked to support a targeted scenario subset (e.g. T6 only) with diagnostics, for root's next GPS diagnostic run under the same identity (not a blind replay of all 22).
 - **Business run d467d88c7206 now in cleanup:** budget, maintenance, ERP/SLA, read-only, B2B third party, retry 503 PASS; only FAIL = docs third-party `noPosts` (driver attribution cause confirmed; fix with a96ae75). App/integration/active harness untouched.
+
+## 2026-10-31 — business §20 a815881 GO code; business run d467 finished 13/14
+
+- Root read §20 `a815881`: **GO code** — bounded immutable UI window after driver probes + remove the b2b `status != 403` filter (UI 403 must FAIL); server 403/404 and 0-event asserts kept; tests driver 403 before baseline allowed, UI 403/200 after baseline FAIL. Public rerun only after SHA review and root's independent cleanup. Forwarded to a96ae75.
+- **Business run d467d88c7206 finished:** 14 total, 13 PASS, 1 FAIL (docs third-party `noPosts`, harness attribution), 0 ANOMALY, 0 BLOCKED, exit 1; cleanup complete, drain pending 0, timed out false, open incomplete 0; root independent postflight (48) being prepared by an existing agent before any new cloud. App unchanged.
