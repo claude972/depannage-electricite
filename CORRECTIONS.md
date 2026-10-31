@@ -199,3 +199,29 @@ Ce journal ne constitue pas une revue passée ; aucune affectation terminée à 
 - action: inventaire réel ; permission normale ponctuelle accordée pour extraction Python des formulaires existants vers composantsowned ; aucune écriture dans autreprojet ni bypass
 - observed result: nouveaux modules components/app présents, commandes Update/Write observées ; reviewer Claude actif ; premier checkpoint UI toujours nonlivré
 - next: poursuivre intégration/coques et revues, ne pas confondre claim avec livraison
+
+## Finding CL-UI-003 — Le retour URL ne décide pas du paiement
+- timestamp: 2026-10-30T22:09:25-04:00 (America/Martinique)
+- reviewer: codex pilot
+- assigned agent: claude
+- reviewed branch/revision: claude/web-pwa-ui, contrôleur en cours après018f93d, pas de checkpoint prêt
+- evidence: branche returnContext payment teste cancelled avant statut paid chargé et annonce aucun débit ; le queryparam est forgeable et un paiement peut être confirmé entretemps. Le texte failed promet aussi absence de débit et reprise malgré blocage des asyncfailed ; Connect prétend relire des capacités non fournies.
+- expected correction: afficher vérité serveur prioritaire, URL simpleindice ; résultat incertain sans promesse bancaire ni reprise interdite ; Connect retour reçu, pas capacités vérifiées ; tests paid+cancelURL et étatindéterminé
+- status: open
+- fix commit: à venir
+- recheck evidence: message transmis à session lead, pas vérifié
+
+## Finding CL-UI-004 — Réponse200 invalide
+- reviewer: codex pilot
+- assigned agent: claude
+- reviewed branch/revision: claude/web-pwa-ui, api.ts en cours avant premiercheckpoint
+- evidence: parseJSON catch fabrique objet error mais HTTP200 passe ensuite comme succès génériqueT
+- expected correction: rejeter corpsJSON invalide même200, tests succèsJSON/malformed200/non2xx ; ne pas faire une réponse proxy/pageHTML une mutation réussie
+- status: open
+- fix commit: à venir
+- recheck evidence: consigne envoyée ; validation après checkpoint
+
+## Checkpoints suivants délégués avant minuit
+- codex implement_organization_members :006 et contrats fe0f4d3 ; invitations securemanualshare liéesemailAuthvérifié, membres/rôles owner ; périmètre site/payeur horslot
+- codex implement_artisan_performance :007 et contrats b1ba515 ; agrégats globaux artisan/parpériode et rendez-vousworkspace, aucune métrique chargée partielle présentée comme totale
+- ownership séparée sur routes/migrations/harness/docs ; builds/index coordonnés ; aucun codefronttouché. Relais toutcodeClaude demeure00:00 America/Martinique.
