@@ -1,6 +1,28 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { disputeActions, moderationAction, nextDisputeStatus, nextRefundStatus, refundActions, refundStatusLabel, validateAmountCents, validateDisputeDecision, validateModeration, validateRefundDecision } from "../../lib/features/platform-operations/state-machines";
+import { EMPTY_READINESS, disputeActions, moderationAction, nextDisputeStatus, nextRefundStatus, readinessFingerprint, readinessReduce, refundActions, refundStatusLabel, validateAmountCents, validateDisputeDecision, validateModeration, validateRefundDecision } from "../../lib/features/platform-operations/state-machines";
+test("invoice readiness is bound to its exact target: a late result for payment A never confirms payment B", () => {
+  const A = { payment_id: "A", basis: "service" as const, scope_key: "u|admin||" }, B = { ...A, payment_id: "B" };
+  const ready = { ready: true, missing: [], preview: { total_cents: 30000 } };
+  let m = readinessReduce(EMPTY_READINESS, { type: "check", target: A });
+  assert.equal(m.pending, readinessFingerprint(A)); assert.deepEqual(m.target, A);
+  m = readinessReduce(m, { type: "input", target: B });            // operator switches to B while A is in flight
+  assert.equal(m.readiness, null); assert.equal(m.pending, null); assert.equal(m.target, null);
+  const stale = readinessReduce(m, { type: "result", fingerprint: readinessFingerprint(A), readiness: ready });
+  assert.equal(stale, m);                                           // ignored: no amount, no "Émettre" for B
+  m = readinessReduce(m, { type: "check", target: B });
+  m = readinessReduce(m, { type: "result", fingerprint: readinessFingerprint(A), readiness: ready });
+  assert.equal(m.readiness, null);                                  // still ignored while B is pending
+  m = readinessReduce(m, { type: "result", fingerprint: readinessFingerprint(B), readiness: ready });
+  assert.deepEqual(m.readiness, ready); assert.deepEqual(m.target, B); assert.equal(m.pending, null);
+  assert.equal(readinessReduce(m, { type: "result", fingerprint: readinessFingerprint(B), readiness: { ...ready, ready: false } }).readiness, ready); // nothing pending: ignored
+  assert.equal(readinessReduce(m, { type: "input", target: B }), m);                                // unchanged input keeps the result
+  assert.equal(readinessReduce(m, { type: "input", target: { ...B, basis: "platform_commission" } }).readiness, null);
+  assert.equal(readinessReduce(m, { type: "input", target: { ...B, scope_key: "other" } }).readiness, null);
+  const failed = readinessReduce(readinessReduce(m, { type: "check", target: B }), { type: "fail", fingerprint: readinessFingerprint(B) });
+  assert.equal(failed.pending, null); assert.equal(failed.readiness, null);
+  assert.equal(readinessFingerprint({ ...A, payment_id: "  a " }), readinessFingerprint(A).replace("A", "a"));
+});
 test("refund requests: settled is never reachable by an operator action and wording never claims a refund", () => {
   assert.deepEqual(refundActions("requested"), ["approve", "reject", "cancel"]);
   assert.deepEqual(refundActions("approved"), ["cancel"]);

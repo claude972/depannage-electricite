@@ -1,4 +1,23 @@
-import type { DisputeOutcome, DisputeStatus, ModerationState, RefundStatus } from "./types";
+import type { DisputeOutcome, DisputeStatus, InvoiceReadiness, ModerationState, RefundStatus } from "./types";
+
+/** Readiness check bound to its exact target: a result for another payment/basis/scope is discarded, any input change resets. */
+export type ReadinessTarget = { payment_id: string; basis: "service" | "platform_commission"; scope_key: string };
+export type ReadinessModel = { current: string; pending: string | null; target: ReadinessTarget | null; readiness: InvoiceReadiness | null };
+export type ReadinessAction =
+  | { type: "input"; target: ReadinessTarget }
+  | { type: "check"; target: ReadinessTarget }
+  | { type: "result"; fingerprint: string; readiness: InvoiceReadiness }
+  | { type: "fail"; fingerprint: string };
+export function readinessFingerprint(target: ReadinessTarget): string { return `${target.scope_key}|${target.basis}|${target.payment_id.trim().toLowerCase()}`; }
+export const EMPTY_READINESS: ReadinessModel = { current: "", pending: null, target: null, readiness: null };
+export function readinessReduce(model: ReadinessModel, action: ReadinessAction): ReadinessModel {
+  switch (action.type) {
+    case "input": { const fp = readinessFingerprint(action.target); return fp === model.current ? model : { current: fp, pending: null, target: null, readiness: null }; }
+    case "check": { const fp = readinessFingerprint(action.target); return { current: fp, pending: fp, target: action.target, readiness: null }; }
+    case "result": return action.fingerprint === model.current && action.fingerprint === model.pending ? { ...model, pending: null, readiness: action.readiness } : model;
+    case "fail": return action.fingerprint === model.pending ? { ...model, pending: null } : model;
+  }
+}
 export type RefundAction = "approve" | "reject" | "cancel";
 export type DisputeAction = "review" | "resolve" | "close";
 /** Mirrors platform_decide_refund: settled is reachable only by the service function with a provider event. */

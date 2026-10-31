@@ -18,10 +18,18 @@ test("VAT is extracted from a withheld tax-inclusive amount, never added on top"
   for (const rate of [0, 5.5, 10, 20]) for (const total of [1, 7, 99, 12345, 999999]) { const v = extractVat(total, rate); assert.equal(v.subtotal_cents + v.tax_cents, total); assert.ok(v.tax_cents >= 0); }
   assert.throws(() => extractVat(3000, 19.6));
 });
-test("credit note VAT share is pro rata and capped by the invoice, remaining is tracked", () => {
+test("credit note VAT is a cumulative delta: split notes credit exactly the invoice VAT, never more", () => {
   assert.deepEqual(creditNoteSplit(12000, { tax_cents: 5000, total_cents: 30000 }), { subtotal_cents: 10000, tax_cents: 2000, total_cents: 12000 });
   assert.deepEqual(creditNoteSplit(1, { tax_cents: 5000, total_cents: 30000 }), { subtotal_cents: 1, tax_cents: 0, total_cents: 1 });
   assert.throws(() => creditNoteSplit(30001, { tax_cents: 5000, total_cents: 30000 }));
+  const invoice = { tax_cents: 17, total_cents: 100 }; const credited = { total_cents: 0, tax_cents: 0 }; const taxes: number[] = [];
+  for (const amount of [33, 33, 34]) { const note = creditNoteSplit(amount, invoice, credited); taxes.push(note.tax_cents); credited.total_cents += note.total_cents; credited.tax_cents += note.tax_cents; }
+  assert.deepEqual(taxes, [6, 5, 6]); assert.equal(credited.tax_cents, 17);
+  assert.throws(() => creditNoteSplit(1, invoice, credited));
+  const tiny = { total_cents: 0, tax_cents: 0 };
+  for (let i = 0; i < 100; i++) { const note = creditNoteSplit(1, invoice, tiny); assert.ok(note.tax_cents >= 0 && note.tax_cents <= 1 && note.subtotal_cents >= 0); tiny.total_cents += 1; tiny.tax_cents += note.tax_cents; assert.ok(tiny.tax_cents <= 17); }
+  assert.equal(tiny.tax_cents, 17);
+  assert.deepEqual(creditNoteSplit(5, { tax_cents: 17, total_cents: 100 }, { total_cents: 95, tax_cents: 17 }), { subtotal_cents: 5, tax_cents: 0, total_cents: 5 });
   assert.equal(remainingCreditable({ total_cents: 30000 }, [{ total_cents: 12000 }, { total_cents: 18000 }]), 0);
   assert.equal(remainingCreditable({ total_cents: 30000 }, []), 30000);
 });

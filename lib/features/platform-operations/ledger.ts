@@ -17,11 +17,12 @@ export function extractVat(totalCents: number, rate: number): { subtotal_cents: 
   const tax = totalCents - Math.round(totalCents / (1 + rate / 100));
   return { subtotal_cents: totalCents - tax, tax_cents: tax, total_cents: totalCents };
 }
-/** Credit note VAT share, pro rata of the invoice: round(amount × tax / total). */
-export function creditNoteSplit(amountCents: number, invoice: { tax_cents: number; total_cents: number }): { subtotal_cents: number; tax_cents: number; total_cents: number } {
+/** Credit note VAT as a cumulative delta (same rule as the database): credited VAT never exceeds the invoice VAT, the last split absorbs rounding. */
+export function creditNoteSplit(amountCents: number, invoice: { tax_cents: number; total_cents: number }, credited: { total_cents: number; tax_cents: number } = { total_cents: 0, tax_cents: 0 }): { subtotal_cents: number; tax_cents: number; total_cents: number } {
   cents(amountCents, "Le montant");
-  if (invoice.total_cents < 1 || amountCents > invoice.total_cents) throw new Error("L’avoir dépasse la facture.");
-  const tax = Math.round((amountCents * invoice.tax_cents) / invoice.total_cents);
+  if (invoice.total_cents < 1 || credited.total_cents + amountCents > invoice.total_cents) throw new Error("L’avoir dépasse la facture.");
+  const cumulative = Math.round(((credited.total_cents + amountCents) * invoice.tax_cents) / invoice.total_cents) - credited.tax_cents;
+  const tax = Math.min(Math.max(cumulative, 0), invoice.tax_cents - credited.tax_cents, amountCents);
   return { subtotal_cents: amountCents - tax, tax_cents: tax, total_cents: amountCents };
 }
 export function remainingCreditable(invoice: { total_cents: number }, creditNotes: { total_cents: number }[]): number {

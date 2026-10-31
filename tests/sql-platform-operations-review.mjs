@@ -101,16 +101,16 @@ for(const actor of['artisan','otherArtisan']){
  await as(actor,"select public.save_artisan_profile('Électricité QA','12345678901234','EI',0,'12 rue du Test, 97200 Fort-de-France',array['97200'],array['panel'])");
  await as(actor,'select public.submit_artisan_application()');await as('admin','select public.approve_artisan($1,true)',[ids[actor]]);await as(actor,'select public.set_artisan_availability(true)');
 }
-async function settledJob(actor,n){
+async function settledJob(actor,n,lines=[{label:'Remplacement disjoncteur',quantity:1,unit_price_cents:15000},{label:'Main d’œuvre',quantity:2,unit_price_cents:5000}]){
  const job=(await as(actor,"select * from public.create_intervention('panel','Panne électrique du tableau principal.','12 rue du Test','97200','Fort-de-France','urgent',null)")).rows[0];
  await as('artisan',"select public.intervention_action($1,'accept_mission')",[job.id]);
- await as('artisan',"select public.intervention_action($1,'send_quote',$2,20)",[job.id,JSON.stringify([{label:'Remplacement disjoncteur',quantity:1,unit_price_cents:15000},{label:'Main d’œuvre',quantity:2,unit_price_cents:5000}])]);
+ await as('artisan',"select public.intervention_action($1,'send_quote',$2,20)",[job.id,JSON.stringify(lines)]);
  const quote=(await db.query("select * from public.quotes where intervention_id=$1 and status='sent'",[job.id])).rows[0];
  await as(actor,"select public.intervention_action($1,'accept_quote',null,20,$2)",[job.id,quote.id]);
  await as('artisan',"select public.intervention_action($1,'start')",[job.id]);await as('artisan',"select public.intervention_action($1,'complete')",[job.id]);
  await service("insert into public.payments(quote_id,session_id,total_cents,currency,status) values($1,$2,$3,'eur','pending')",[quote.id,`cs_test_${n}`,quote.total_cents]);
  assert.equal((await service('select public.confirm_stripe_payment($1,$2,$3,$4,$5,$6) v',[`evt_${n}`,'checkout.session.completed',`cs_test_${n}`,quote.id,quote.total_cents,'eur'])).rows[0].v,true);
- const payment=(await db.query('select * from public.payments where quote_id=$1',[quote.id])).rows[0];assert.equal(payment.status,'paid');assert.equal(payment.total_cents,30000);
+ const payment=(await db.query('select * from public.payments where quote_id=$1',[quote.id])).rows[0];assert.equal(payment.status,'paid');assert.equal(payment.total_cents,quote.total_cents);
  return {job,quote,payment};
 }
 const a=await settledJob('client',1), b=await settledJob('other',2);
@@ -237,10 +237,23 @@ await denied(as('finWrite',credit,[uuid(30),inv.invoice.id,12001,'Remise commerc
 await denied(as('finWrite',credit,[uuid(31),inv.invoice.id,18001,'Dépasse le solde restant.']),'P0001');
 await denied(as('finWrite',credit,[uuid(32),cn.invoice.id,100,'Avoir sur un avoir refusé.']),'P0001');
 await scalar('finWrite',credit,[uuid(33),inv.invoice.id,18000,'Solde intégral annulé.']);
+// Split credit notes: invoice 100 cents / VAT 17 → 33 + 33 + 34 must credit exactly 17 of VAT (6, 5, 6), never 18.
+const jobC=await settledJob('client',3,[{label:'Fourniture',quantity:1,unit_price_cents:83}]);assert.equal(jobC.quote.total_cents,100);assert.equal(jobC.quote.tax_cents,17);
+const small=await scalar('finWrite',issue,[uuid(24),'service',jobC.payment.id]);assert.equal(small.invoice.total_cents,100);assert.equal(small.invoice.tax_cents,17);
+const splits=[];for(const [n,amount] of[[34,33],[35,33],[36,34]])splits.push((await scalar('finWrite',credit,[uuid(n),small.invoice.id,amount,'Avoir fractionné de contrôle.'])).invoice);
+assert.deepEqual(splits.map(x=>[x.total_cents,x.tax_cents,x.subtotal_cents]),[[33,6,27],[33,5,28],[34,6,28]]);
+assert.equal(splits.reduce((t,x)=>t+x.tax_cents,0),17);
+await denied(as('finWrite',credit,[uuid(37),small.invoice.id,1,'Facture entièrement créditée.']),'P0001');
+// Cap: many tiny credit notes never push the credited VAT above the invoice VAT and never go negative.
+const jobD=await settledJob('client',4,[{label:'Fourniture',quantity:1,unit_price_cents:83}]);
+const tiny=await scalar('finWrite',issue,[uuid(25),'service',jobD.payment.id]);let creditedTax=0;
+for(let k=0;k<5;k++){const note=(await scalar('finWrite',credit,[uuid(40+k),tiny.invoice.id,1,'Avoir unitaire de contrôle.'])).invoice;assert.ok(note.tax_cents>=0&&note.subtotal_cents>=0&&note.tax_cents<=1);creditedTax+=note.tax_cents;assert.ok(creditedTax<=17);}
+const rest=(await scalar('finWrite',credit,[uuid(45),tiny.invoice.id,95,'Solde du contrôle.'])).invoice;creditedTax+=rest.tax_cents;assert.equal(creditedTax,17);assert.equal(rest.subtotal_cents+rest.tax_cents,95);
+assert.equal((await db.query('select sum(tax_cents)::int s,sum(total_cents)::int t from public.platform_invoices where related_invoice_id=$1',[tiny.invoice.id])).rows[0].s,17);
 for(const actor of['finWrite','admin']){await denied(as(actor,'update public.platform_invoices set total_cents=1'),'42501');await denied(as(actor,'delete from public.platform_invoices'),'42501');}
 await denied(db.query('delete from public.platform_invoices'),'P0001');await denied(db.query('update public.platform_invoices set total_cents=1'),'P0001');
 assert.equal(await scalar('finRead','select count(*)::int v from public.platform_invoices'),0);
-assert.equal(await scalar('finWrite','select count(*)::int v from public.platform_invoices'),4);
+assert.equal(await scalar('finWrite','select count(*)::int v from public.platform_invoices'),15);
 console.log('PASS: invoices require a real issuer, billing contact and settled payment; commission invoices need a confirmed withheld amount with VAT extracted; credit notes are capped and immutable');
 
 // ---- 11. Review moderation and contestation ------------------------------------------------
