@@ -186,3 +186,17 @@ Depuis le31octobre00h America/Martinique, l’affectation Codex devient pilotage
 - acceptance: anonyme/token invalide/tiers/rôle lecture seule/droits révoqués refusés avant métadonnées ; authentifié autorisé réussi ; retrait concurrent avant finalisation ne crée pas un document accessible ; aucun effacement d’objet d’une autre tentative ; pas d’élargissement des helpers/RLS existants ni de cache privé. Exécuter tests significatifs + revue indépendante et recette contrôlée dans le seul projet dédié avant clôture. Déploiement Edge de test par pilote après revue, pas d’achat/production client.
 - dependencies: backend012 actif, contrat Web documents existant, futur natif utilise SDK Supabase/RPC non-paiement plutôt qu’un secret de bypass Vercel. Préserver le parcours de pièces artisan sans dossier intervention.
 - verification report: CORRECTIONS.md / NATIVE-DOCUMENT-GATEWAY-001 et rapport exactSHA complémentaire.
+
+
+## Mission WEB-ACCEPTANCE-TESTS-001 — scripts de recette pilotables
+- agent: claude
+- status: pending
+- branch: claude/web-pwa-qa
+- base revision: 309ed9f2815c855f5e99ecad6368e2fe96f58975
+- worktree: /Users/claudebrafa/.codex/worktrees/depannage-claude-qa
+- objective: fournir des tests de recette navigateur réutilisables et un nettoyage sûr, pour que Codex exécute sans écrire/modifier de code de test après minuit.
+- owned files: scripts/qa/** et docs/CLAUDE_WEB_ACCEPTANCE_CONTRACT.md/rapport ; aucun fichier applicatif, package, migration ou secret. Dépendances existantes injectées depuis les caches internes, jamais chemins personnels figés dans le code publié.
+- deliverables: contrat/plan puis scripts CLI configurables base-url/sha/projet attendu/chemin de credentials privé, auteurs Claude ; scénarios viewer/manager/site-grant/owner, réponses tardives supportA→B, création support commit+réponse perdue+remount/rechargement, véritable éditeur de brouillon save/reload/409/send, photos reprise, annuaires anciens et captures M35/M43/M66. Réutiliser les anciens scripts temporaires pré-minuit comme référence sans transformer leurs résultats en nouvelle preuve.
+- acceptance: aucun token/password/HAR dans les logs, aucune donnée QA dans le bundle ; fixtures identifiées par IDs manifestés et cohorte unique, nettoyage FK ordonné (support events/messages/tickets, drafts, documents/Storage, messages/quotes/jobs/audits/org/profiles/Auth), readback et échec de cleanup signalé. Seul projet dédié explicitement attendu et URL locale/preview autorisée. Ne jamais supprimer d’autres cohortes/utilisateurs. Les anomalies de sélecteur/headless sont distinctes des défauts app.
+- dependencies: le lead b4b555f0 délègue un agent Claude test distinct ; Codex relit puis exécute les scripts avec paramètres et secrets fournis seulement à l’exécution. Les tests touchant au cloud ne sont pas lancés par le simple import. Les preuves restent rattachées au SHA testé et à local/cloud, jamais à une supposée nouvelle preview.
+- verification report: CORRECTIONS.md / WEB-ACCEPTANCE-TESTS-001, rapport exactSHA.
