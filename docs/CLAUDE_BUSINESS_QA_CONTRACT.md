@@ -239,3 +239,8 @@ Il s’agit d’un analyseur strict de données reçues, pas d’une interface. 
 ### §19 ter — horloge non figée (revue root de e6fbcbd)
 
 `remotePreflight` reçoit une **fonction** d’horloge (défaut `Date.now`) lue juste avant chaque contrôle d’âge : à l’appel de `loadDeploymentProof`, puis à nouveau à `verifyRemoteDeployment` **après** la fin du fetch ; un `nowMs` figé est refusé. Un reçu de 890 s dont la vérification survient après un fetch de 20 s est donc refusé `EXPIRED` (BLOCKED, code 2, rien créé). Audit des autres horodatages : aucun autre contrôle d’âge ; les dates saisies puis relues dans la suite b2b sont désormais lues une seule fois par étape (passage de minuit sans faux FAIL).
+
+## 20. Fenêtre d’observation UI bornée (cause confirmée du FAIL tiers du run d467d88c7206)
+
+Le FAIL historique reste enregistré. Cause (source) : le scénario tiers émet volontairement, par le pilote, `POST /api/quote-documents {generate}` et attend 403 ; l’assertion « aucun POST » qui suit parcourait **tout** `h.network` et comptait cette sonde. Aucune fuite prouvée (403/404, 0 événement, contenu masqué).
+Règle : chaque contrôle « l’interface n’émet aucune écriture » s’applique à une **fenêtre** : index de référence immuable de `h.network` relevé juste **après** les sondes serveur (403 et « 0 événement » assertés, inchangés) et **avant** la navigation UI observée ; dans la fenêtre, **zéro** requête mutante (méthode ≠ GET/HEAD) vers `/api/` — quel que soit son statut (une écriture UI répondue 403 ou 200 est un FAIL). Aucun filtrage global des 403 (le filtre `status !== 403` du scénario tiers b2b est supprimé au profit de la même fenêtre). Même mécanisme pour les lectures client/lecteur, la fenêtre commençant après la connexion.
