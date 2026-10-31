@@ -30,3 +30,21 @@
   intervention, non disponible ici) ; bouton « Accepter le devis » → dialogue local ; aucun paiement, société ou SIRET.
 - Navigation basse identique (Accueil / Mes demandes / Messages / Profil) ; liens entre écrans dans la galerie et
   l’en-tête (retour). Vérif 390×844, 360, 1280 : pas de débordement, cibles ≥ 44 px, console propre.
+
+## DESIGN-DELIVO-TEST-003 — vert à la place de l’orange, bannière publicitaire (plan compact, base c246067)
+
+- Fichiers : `prototypes/delivo-test/{styles.css,index.html,demande.html,suivi.html,devis.html,galerie.html}` uniquement.
+- Palette (contrastes WCAG mesurés) :
+  - primaire `#18794E` (fonds d’en-tête, boutons, pastilles actives) — texte blanc **5,41:1** ; comme élément d’interface
+    sur noir **3,88:1** (≥ 3:1) ;
+  - accent clair `#5BD49A` (texte/icônes actifs sur fonds sombres : navigation basse active, montants, notes) — sur noir
+    **11,33:1**, sur carte `#1A1A1A` **9,39:1**, sur vert sombre **6,77:1** ;
+  - vert sombre `#0E3B26` (pastilles, fonds teintés, ex-brun) avec bordure `#1F5C3D` — texte blanc **12,56:1** ;
+  - inchangés : noir `#000`, carte `#1A1A1A`, texte atténué `#B5B5B5` (8,49:1 sur carte), rouge d’état `#FF3B30`.
+  - Le vert primaire n’est jamais utilisé comme couleur de texte courant sur fond sombre (3,88:1 < 4,5:1).
+- Accueil : en haut, emplacement **statique** « Publicité » au format fixe 16:9, mention « Votre publicité ici », prêt
+  pour une image future (`<img>` en `object-fit: cover` avec texte alternatif, aucune image fournie) ; clic → dialogue
+  local de démonstration ; aucun annonceur, visuel, prix, promotion, URL, suivi ni carrousel. Adresse, recherche et bouton
+  « Demander un dépannage » restent visibles sous l’emplacement.
+- Demande, Suivi, Devis, Galerie : en-têtes verts, navigation normale, aucune publicité.
+- Vérification : 390/360/1280 sans débordement, cibles ≥ 44 px, focus, Échap, aucune requête externe, console propre.
