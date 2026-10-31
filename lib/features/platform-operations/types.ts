@@ -1,13 +1,13 @@
 // ADV-PLATFORM-FINANCE-001 — own types only; nothing imported from components/app/**.
 export type ContractState = "unknown" | "available" | "missing" | "unavailable";
-export type PlatformScopeKey = "finance_read" | "finance_write" | "reviews_moderate" | "audit_read";
-export const PLATFORM_SCOPES: readonly PlatformScopeKey[] = ["finance_read", "finance_write", "reviews_moderate", "audit_read"];
+export type PlatformScopeKey = "finance_read" | "finance_write" | "reviews_moderate" | "audit_read" | "support_read" | "support_reply" | "support_status";
+export const PLATFORM_SCOPES: readonly PlatformScopeKey[] = ["finance_read", "finance_write", "reviews_moderate", "audit_read", "support_read", "support_reply", "support_status"];
 
 export type PlatformAccess = {
   super_admin: boolean;
   scopes: PlatformScopeKey[];
   super_admin_count: number | null;
-  capabilities: { operators: boolean; audit: boolean; finance: boolean; reviews_moderation: boolean; refund_execution: false; invoice_rendering: boolean };
+  capabilities: { support: boolean; support_reply: boolean; support_status: boolean; operators: boolean; audit: boolean; finance: boolean; reviews_moderation: boolean; refund_execution: false; invoice_rendering: boolean };
   config: FinanceConfig;
 };
 export type FinanceConfig = {

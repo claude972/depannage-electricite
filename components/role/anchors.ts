@@ -50,14 +50,16 @@ export function leafScope(
 }
 
 // ---- Back-office plateforme (ADV-PLATFORM-FINANCE-001) : entrées et autorité fail-closed ----
-import { platformViewAllowed, type PlatformView } from "../app/features";
+import { operatorViewAllowed, platformViewAllowed, type OperatorView, type PlatformView } from "../app/features";
 import type { PlatformAccess } from "../../lib/features/platform-operations/types";
 
-export type PlatformEntry = { view: PlatformView; label: string; icon: string };
+export type PlatformEntry = { view: OperatorView; label: string; icon: string };
 export const PLATFORM_ENTRIES: readonly PlatformEntry[] = [
   { view: "platform-operators", label: "Opérateurs", icon: "users" },
   { view: "platform-finance", label: "Finance", icon: "euro" },
   { view: "platform-moderation", label: "Modération", icon: "flag" },
+  // A5: assistance queue for support operators (capability `support` = support_read or super admin).
+  { view: "support-queue", label: "File d’assistance", icon: "help" },
 ];
 
 /**
@@ -67,9 +69,9 @@ export const PLATFORM_ENTRIES: readonly PlatformEntry[] = [
  */
 export function platformEntries(
   access: PlatformAccess | null | undefined,
-  allowed: (view: PlatformView) => boolean,
+  allowed: (view: OperatorView) => boolean,
 ): PlatformEntry[] {
-  return PLATFORM_ENTRIES.filter((e) => allowed(e.view) && platformViewAllowed(access, e.view));
+  return PLATFORM_ENTRIES.filter((e) => allowed(e.view) && operatorViewAllowed(access, e.view));
 }
 
 /** Écriture : super-administrateur, ou capacité serveur correspondant à la vue ; sinon lecture avec raison. */

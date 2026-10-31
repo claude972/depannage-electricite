@@ -44,7 +44,7 @@ export async function describeAccess(db: Database): Promise<PlatformAccess> {
   }
   return {
     ...access,
-    capabilities: { operators: access.super_admin, audit: hasScope(access, "audit_read"), finance, reviews_moderation: hasScope(access, "reviews_moderate"), refund_execution: false, invoice_rendering: INVOICE_RENDERING_AVAILABLE },
+    capabilities: { support: hasScope(access, "support_read"), support_reply: hasScope(access, "support_read") && hasScope(access, "support_reply"), support_status: hasScope(access, "support_read") && hasScope(access, "support_status"), operators: access.super_admin, audit: hasScope(access, "audit_read"), finance, reviews_moderation: hasScope(access, "reviews_moderate"), refund_execution: false, invoice_rendering: INVOICE_RENDERING_AVAILABLE },
     config: financeConfig(process.env, setting, issuer),
   };
 }

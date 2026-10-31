@@ -298,6 +298,13 @@ export function createPlatformClient(input: FeatureDeps): PlatformClient {
 }
 
 export type PlatformView = "platform-operators" | "platform-finance" | "platform-moderation";
+/** Views opened only by the /me reply: the three back-office views and the A5 assistance queue. */
+export type OperatorView = PlatformView | "support-queue";
+/** Fail-closed gate for every operator view; the assistance queue needs the server capability `support`. */
+export function operatorViewAllowed(access: PlatformAccess | null | undefined, view: OperatorView): boolean {
+  if (view === "support-queue") return !!access && access.capabilities?.support === true;
+  return platformViewAllowed(access, view);
+}
 /**
  * Fail-closed gate for the back-office views: the server reply to /me is the only truth. A limited
  * operator keeps an ordinary profile role (client/manager) and is never promoted; without a reply
