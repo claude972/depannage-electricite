@@ -36,6 +36,12 @@ export type Request = <T>(path: string, body?: unknown, method?: string) => Prom
 export type FeatureDeps = {
   /** Current identity generation (createGuard().generation); bumped on every identity change. */
   generation(): number;
+  /**
+   * Generation that owns this client bundle, captured once at construction. A client kept by an
+   * old callback after an identity change refuses BEFORE sending anything (no request under the
+   * new actor's cookie) and drops any reply that lands after the change.
+   */
+  owner?: number;
   /** Records the observed availability of a contract. */
   setState(key: FeatureKey, state: ContractState): void;
   request?: Request;
@@ -69,7 +75,8 @@ function observe(deps: FeatureDeps, key: FeatureKey, error: unknown): void {
  * returns the value or rethrows the server's error for the leaf to render.
  */
 export async function bound<T>(deps: FeatureDeps, key: FeatureKey, task: () => Promise<T>): Promise<T | null> {
-  const generation = deps.generation();
+  const generation = deps.owner ?? deps.generation();
+  if (generation !== deps.generation()) return null; // stale bundle: nothing is sent
   try {
     const value = await task();
     if (generation !== deps.generation()) return null;
@@ -100,6 +107,8 @@ async function boundResult<T, R>(
 }
 
 const requestOf = (deps: FeatureDeps): Request => deps.request ?? ((path, body, method) => defaultApi(path, body, method));
+/** Pins the bundle to the generation current at construction (idempotent when already pinned). */
+const owned = (deps: FeatureDeps): FeatureDeps => (deps.owner === undefined ? { ...deps, owner: deps.generation() } : deps);
 
 /**
  * Range used by the controller's planning probe: the current week in the planning time zone, as
@@ -110,7 +119,8 @@ export function planningProbeRange(now: Date | number | string = new Date(), zon
   return { from: toIsoWithOffset(week.from, zone), to: toIsoWithOffset(week.to, zone) };
 }
 
-export function createPlanningClient(deps: FeatureDeps): PlanningClient {
+export function createPlanningClient(input: FeatureDeps): PlanningClient {
+  const deps = owned(input);
   const request = requestOf(deps);
   return {
     load: (range) => bound(deps, "planning", () => request<PlanningView>(`/api/planning${query({ from: range.from, to: range.to })}`)),
@@ -125,7 +135,8 @@ export function createPlanningClient(deps: FeatureDeps): PlanningClient {
   };
 }
 
-export function createNotificationsClient(deps: FeatureDeps): NotificationsClient {
+export function createNotificationsClient(input: FeatureDeps): NotificationsClient {
+  const deps = owned(input);
   const request = requestOf(deps);
   const refusal = (error: ApiRequestError) => ({ ok: false as const, conflict: error.status === 409, message: error.message });
   return {
@@ -140,7 +151,8 @@ export function createNotificationsClient(deps: FeatureDeps): NotificationsClien
   };
 }
 
-export function createSiteOperationsClient(deps: FeatureDeps): SiteOperationsClient {
+export function createSiteOperationsClient(input: FeatureDeps): SiteOperationsClient {
+  const deps = owned(input);
   const request = requestOf(deps);
   return {
     load: (siteId: string) => bound(deps, "siteOperations", () => request<SiteOperationsReport>(`/api/site-operations${query({ site_id: siteId })}`)),
@@ -148,7 +160,8 @@ export function createSiteOperationsClient(deps: FeatureDeps): SiteOperationsCli
   };
 }
 
-export function createQuoteDocumentsClient(deps: FeatureDeps): QuoteDocumentsClient {
+export function createQuoteDocumentsClient(input: FeatureDeps): QuoteDocumentsClient {
+  const deps = owned(input);
   const request = requestOf(deps);
   return {
     load: (target: QuoteDocumentsTarget) =>
@@ -168,7 +181,8 @@ export function createQuoteDocumentsClient(deps: FeatureDeps): QuoteDocumentsCli
 const PLATFORM = "/api/platform-operations";
 const listPath = (segment: string, q?: ListQuery) => `${PLATFORM}/${segment}${query((q ?? {}) as Record<string, string | number | null | undefined>)}`;
 
-export function createPlatformClient(deps: FeatureDeps): PlatformClient {
+export function createPlatformClient(input: FeatureDeps): PlatformClient {
+  const deps = owned(input);
   const request = requestOf(deps);
   const key: FeatureKey = "platformOperations";
   const get = <T>(path: string) => bound(deps, key, () => request<T>(path));
@@ -244,7 +258,8 @@ export type FeatureClients = {
   demo: boolean;
 };
 
-export function createFeatureClients(deps: FeatureDeps): FeatureClients {
+export function createFeatureClients(input: FeatureDeps): FeatureClients {
+  const deps = owned(input); // one owner generation for the whole bundle
   return {
     planning: createPlanningClient(deps),
     notifications: createNotificationsClient(deps),

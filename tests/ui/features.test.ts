@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { ApiRequestError, parseApiBody } from "../../components/app/api";
 import {
   bound,
+  createFeatureClients,
   createNotificationsClient,
   createPlanningClient,
   createPlatformClient,
@@ -53,6 +54,25 @@ test("bound: a failure landing after an identity change is swallowed as null (ne
   reject(new ApiRequestError(403, "refus"));
   assert.equal(await pending, null);
   assert.deepEqual(h.states, []);
+});
+
+test("an old client bundle never sends a request after an identity change (nothing under the new actor's cookie)", async () => {
+  const h = harness(() => Promise.resolve({ ok: 1 }));
+  const before = createPlanningClient(h.deps);
+  const bundle = createFeatureClients(h.deps);
+  assert.deepEqual(await before.load({ from: "a", to: "b" }), { ok: 1 });
+  assert.equal(h.calls.length, 1);
+  h.bump(); // logout / login as B / demo switch
+  assert.equal(await before.load({ from: "a", to: "b" }), null);
+  assert.equal(await before.command({ action: "save_rule" } as never), null);
+  assert.equal(await bundle.notifications.summary(), null);
+  assert.equal(await bundle.platform.command.reconcile({ limit: 1 }), null);
+  assert.equal(await bundle.quoteDocuments.load({ quoteId: "q" }), null);
+  assert.equal(h.calls.length, 1, "no request was emitted by the stale bundle");
+  // A bundle built for the new generation works normally.
+  const after = createFeatureClients(h.deps);
+  assert.deepEqual(await after.notifications.summary(), { ok: 1 });
+  assert.equal(h.calls.length, 2);
 });
 
 test("bound: capability truth from the reply (success available, 404 missing, 503 unavailable, 403 present)", async () => {

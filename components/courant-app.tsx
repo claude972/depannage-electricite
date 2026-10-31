@@ -134,6 +134,9 @@ export default function CourantApp() {
   const [activeOrganizationId, setActiveOrganizationId] = useState("");
   const [activeSiteId, setActiveSiteId] = useState("");
   const [platformAccess, setPlatformAccess] = useState<PlatformAccess | null>(null);
+  // Counts identity changes (logout, login as someone else, demo switch) so that the client bundle
+  // handed to the leaves is rebuilt for the new actor; the old bundle refuses to send anything.
+  const [identityEpoch, setIdentityEpoch] = useState(0);
   const [unreadNotifications, setUnreadNotifications] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -170,7 +173,8 @@ export default function CourantApp() {
 
   const clearSessionState = useCallback(() => {
     seq.current += 1; // any in-flight workspace response is now stale
-    guard.bump(); // any in-flight mutation chain is now foreign
+    guard.bump();
+    setIdentityEpoch((e) => e + 1); // any in-flight mutation chain is now foreign
     runner.reset();
     userId.current = null;
     setData(EMPTY_WORKSPACE);
@@ -555,6 +559,7 @@ export default function CourantApp() {
       platformOperations: "available",
     });
     guard.bump();
+    setIdentityEpoch((e) => e + 1);
     runner.reset();
     setMode("demo");
     setRole(nextRole);
@@ -2291,7 +2296,7 @@ export default function CourantApp() {
             generation: () => guard.generation(),
             setState: (key, state) => setCapabilities((c) => (c[key] === state ? c : { ...c, [key]: state })),
           }),
-    [mode, role, guard],
+    [mode, role, guard, identityEpoch, profile?.id],
   );
   // Capability probes after each successful workspace load: cheap reads whose reply alone decides
   // availability (404 missing, 503 unavailable, 403 present). Nothing here grants anything: the
@@ -2412,6 +2417,7 @@ export default function CourantApp() {
     setDemoRole(next) {
       if (modeRef.current !== "demo") return;
       guard.bump();
+    setIdentityEpoch((e) => e + 1);
       runner.reset();
       setRole(next);
       setSelectedId("");
