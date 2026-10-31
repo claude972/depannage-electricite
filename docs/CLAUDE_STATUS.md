@@ -143,6 +143,10 @@ Reste à faire côté UI (par ordre) :
 - Suivis pilote appliqués dans ce checkpoint : contenu privé d’assistance en attente effacé à la déconnexion/changement d’identité (rechargement même utilisateur conservé) ; toute chaîne non terminée sous l’identité courante neutralise aussi les issues « conflit » des commandes brouillon/assistance.
 - Scan d’erreurs d’exécution (CDP, navigateur headless, serveur de développement) : 49 vues (9 publiques, 8 particulier, 9 artisan, 12 entreprise, 11 Super Admin) en démonstration sans exception, erreur console ni réponse 4xx/5xx même origine (script `console-scan.mjs` via Chrome DevTools Protocol sur le serveur de développement, 04347d7). Ce scan prouve l’absence d’erreur d’exécution au rendu, pas les parcours interactifs : ceux-ci relèvent de WEB-ACCEPTANCE-TESTS-001.
 
+## Plan de livraison actualisé (missions/web-pwa 0847fe3) — position de cette session
+
+Ordre retenu : fidélité visuelle par rôle (Claude Desktop, branche design — je n’y touche pas, y compris la correction signalée `enterprise-space.tsx:2034` « Aucune » sur listes partielles) → revue/QA-001..004 et recette combinée (harnais 07d7332 livré, exécution pilote) → checkpoint Web/PWA honnête hors Stripe/Vercel (rapport `docs/CLAUDE_DELIVERY_WEB.md` ajouté) → gateway (7fa4e95 livré, revue/déploiement de test pilote) → fondation/client/artisan/EAS natifs après le feu. Les deux agents QA et backend sont livrés et disponibles pour les retours de revue ; aucun doublon.
+
 ## Reprise 31/10 10:20 AST (après coupure de quota 01h35 → 03h50 et reconnexion du bon compte)
 
 - Échéance 08:00 : non tenue pour la clôture de la porte Web ; état honnête : UI 9386d05 (check vert au dernier code applicatif 04347d7, intégration 9b3dae0 CI verte), gateway 071a963 (GW-REV-001 vérifié, GW-REV-002 et harnais cloud en cours), harnais QA bfb2d4d (QA-001/002/003/004 en cours), migrations 001–013 appliquées, Edge non déployée, Vercel/Stripe différés.
