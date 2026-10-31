@@ -1033,6 +1033,12 @@
   gap: 14px;
   align-content: start;
 }
+.asideLinks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
 .asideCard {
   background: #fff;
   border: 1px solid var(--line);

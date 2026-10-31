@@ -2542,7 +2542,7 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
         {vertical === "restaurant" && (
           <Unavailable
             title="Équipements critiques (cuisine, froid, éclairage)"
-            reason="Aucun équipement de site n’est modélisé ; l’état des systèmes ne peut pas être affiché."
+            reason="Les équipements, leur criticité et leur état se gèrent dans « Opérations du site » ci-dessus. Aucune télémesure ni alerte automatique n’est raccordée : l’état affiché est celui déclaré."
             blocker="ENT-07"
           />
         )}
@@ -2577,9 +2577,6 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
         )}
 
         <Unavailable title="Contacts du site" reason="Aucun contact de site n’est modélisé." blocker="ENT-04" />
-        {vertical !== "restaurant" && (
-          <Unavailable title="Équipements" reason="Aucun équipement de site n’est modélisé." blocker="ENT-07" />
-        )}
 
         <section className="panel" aria-labelledby="site-docs">
           <h2 id="site-docs">Documents</h2>
@@ -3046,7 +3043,11 @@ function ReportsView({ c }: { c: Ctx }) {
       <div className={styles.threeCol}>
         <Unavailable title="Consommation d’énergie" reason="Aucune source énergétique n’est raccordée." blocker="ENT-09" />
         <Unavailable title="Assemblées générales & appels de fonds" reason="Non modélisés pour les copropriétés." blocker="ENT-05" />
-        <Unavailable title="Respect des SLA" reason="Aucun SLA contractuel ni mesure de délai n’existe côté serveur." blocker="ENT-11" />
+        <Unavailable
+          title="Respect des SLA (consolidé)"
+          reason="Les délais et calendriers se suivent site par site dans la fiche de site (« Opérations du site »). Le consolidé multi-sites n’est pas livré ; aucune conformité contractuelle ou réglementaire n’est attestée ici."
+          blocker="ENT-11"
+        />
       </div>
     </>
   );

@@ -1930,6 +1930,23 @@ function ProfileView({ session }: { session: Session }) {
               Consulter l’aide
             </button>
           </section>
+          {/* Opérateur limité : accès au back-office aussi sur mobile (barre latérale masquée < 1024 px),
+              même garde fail-closed que la barre latérale ; aucune entrée sans réponse serveur. */}
+          {platformEntries(session.platformAccess, (v) => canAccess(v, session.role, session.mode)).length > 0 && (
+            <section className={styles.asideCard} aria-labelledby="profile-platform">
+              <Icon name="settings" size={26} />
+              <h3 id="profile-platform">Opérateur de plateforme</h3>
+              <p>Sections du back-office ouvertes par la plateforme pour votre compte.</p>
+              <div className={styles.asideLinks}>
+                {platformEntries(session.platformAccess, (v) => canAccess(v, session.role, session.mode)).map((n) => (
+                  <button key={n.view} type="button" className="button outline full" onClick={() => session.go(n.view)}>
+                    <Icon name={n.icon} size={17} />
+                    {n.label}
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
           <button
             type="button"
             className="button outline full"
