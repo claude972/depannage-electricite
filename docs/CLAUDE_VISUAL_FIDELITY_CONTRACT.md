@@ -468,3 +468,34 @@ logo non répété dans la carte (le composant partagé n’expose pas ces optio
 1. Accueil + en-tête/pied + `public-lists.ts` et tests — captures `public-home-{360,1280}-after.jpg`.
 2. Aide, Tarifs, Vous êtes artisan — captures correspondantes.
 3. À propos, Confidentialité, Mentions légales, Entrée compte — captures correspondantes, bilan.
+
+### Résultat — pages publiques (checkpoints 1 à 3 livrés ensemble)
+
+Présentation seulement : `session` (`go`, `setAuthMode`, `startDemo`, `saveDraft`, `keepInvitation`, `signIn/Up`, `resetPassword`),
+`RequestForm`, `AuthForm`, `InstallPanel`, `Brand`, `PageTitle`, `Unavailable` et le routage par hash sont inchangés ; textes des FAQ,
+du dossier artisan, des données enregistrées et des mentions conservés mot pour mot (listes dans `components/role/public-lists.ts`).
+
+| Page | Fait | Reste / écart assumé |
+| --- | --- | --- |
+| Accueil (M11, M51) | Bande hero teintée pleine largeur, pastille, H1 avec second énoncé bleu, CTA avec flèche, lien démo ; carte blanche des 3 étapes (badge numéroté, icône ronde, flèches) chevauchant la bande ; bandeau de 4 faits du produit ; catégories en cartes (tuile 44 px, titre, description, flèche) 5 / 3 / 2 colonnes ; bandeau professionnel en carte. En-tête : « Se connecter » avec icône, bouton de menu 44 × 44. | Pas de photo ni d’illustration, pas de pastille « qualifiés et assurés », pas de téléphone/rappel, pas de phrase de confiance chiffrée. |
+| Aide (M46, M70, M42) | Pastille + titre « Comment ça marche » ; carte « Le parcours en quatre étapes » (4 → 1 colonnes) ; FAQ en accordéons bordés (tuile icône, chevron, réponse encadrée, `summary` 56 px) ; pied « Vous ne trouvez pas votre réponse ? » (assistance dans l’espace, aucun canal promis) ; colonne CTA / contact à publier / installation PWA conservée. | Pas de formulaire de contact, de coordonnées ni d’illustration. |
+| Tarifs (M38) | Titre avec accent bleu + `Unavailable` barème à droite (emplacement de l’encart M38) ; tableau pleine largeur en premier (tuile icône + nom + description, fourchette 17 px à droite, lignes empilées ≤ 760) ; « Trois montants » en 3 colonnes ; CTA. | Pas de mention TTC, pas d’encart « exemple », pas de bandeau de promesses. |
+| Vous êtes artisan (M60) | Titre avec accent, 3 faits du produit, 4 tuiles « Ce que l’espace permet », carte à coches « Ce que contient le dossier », examen conservé, CTA bleu pleine largeur avec flèche + démo outline ; `Unavailable` commission conservé. | Pas de photo, de compteurs, de témoignage, de « zéro abonnement ». |
+| À propos (V8-C03) | Bande titre + accroche + filet bleu ; colonnes « Ce que fait l’application » (texte + encart « Besoin d’un électricien ? ») et « Ce qui guide le service » (3 cartes) ; `Unavailable` exploitant/équipe/histoire ; CTA. | Aucune équipe, histoire, photo ni bandeau de confiance. |
+| Confidentialité (V8-C05) | Fil d’Ariane, document étroit, 4 sections numérotées en bleu avec filets, données en liste « libellé : texte », carte de pied avec bouclier. | Pas de date de mise à jour ni d’adresse de contact. |
+| Mentions légales (M63) | Fil d’Ariane, sections numérotées en bleu, lignes « Libellé : À renseigner par l’exploitant » (ambre), `Unavailable` conservé. | Pas de date ni de section responsabilité. |
+| Entrée compte (M49) | Carte centrée seule (≤ 480 px), texte d’accompagnement global masqué sur cette page, liens « Mot de passe oublié ? » / « Créer un compte » portés à 44 px par règle du module. | Icônes de champs, séparateur « ou », logo dans la carte : non exposés par le formulaire partagé. |
+
+Mesures « après » (script hors dépôt, 360 / 760 / 1280, huit routes) : **0** élément interactif visible < 44 px (y compris les liens du
+formulaire partagé), aucun débordement horizontal, console sans erreur ni avertissement. Parcours vérifiés à 360 : menu mobile
+(ouverture, liens, fermeture par navigation), « Tarifs » → `#pricing`, accordéon FAQ, contrôle d’installation présent dans l’aide,
+`#join-organization/<code 64 hex>` (bouton « Se connecter pour accepter ») et code invalide (alerte), bascule connexion → création de
+compte, hash protégé `#sites` → bandeau « Connectez-vous », `#demo/client` → vue d’ensemble avec bandeau démo, `#demo/artisan` →
+accueil artisan, `#demo/manager-sites` → Sites & contrats, `#demo/admin` → tableau de bord ; CTA « Demander une intervention »,
+carte de catégorie et CTA de l’aide → formulaire de demande (`#new`). Observation hors périmètre : un rechargement direct sur `#new`
+affiche le bandeau de connexion (comportement du contrôleur, inchangé).
+
+Captures : `docs/visual-fidelity/public-{home,help,pricing,join,about,privacy,legal,auth}-{360,1280}-after.jpg` (avant : `…-before.jpg`).
+Tests : `tests/ui/public-lists.test.ts` (4 tests : aucune expression bannie dans les textes publics et détection des exemples des
+références ; unicité/tailles des listes ; lignes de tarifs issues des catégories du domaine ; numérotation et champs légaux) ; suite UI
+93/93 ; `npx tsc --noEmit` au vert. Aucun fichier hors périmètre modifié (`app/globals.css`, `components/app/**`, autres coques intacts).
