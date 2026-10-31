@@ -171,3 +171,31 @@ Ce journal ne constitue pas une revue passée ; aucune affectation terminée à 
 - checks: exportexactSHA,22 groupesSQL et3testsStripeclassifier ; ancienshelpers/RPCfinancières anon-auth refusés, nouvelle signatureseule et mutationdirectetentativesinterdite
 - result: aucun findingbloquantnouveau danspérimètre ; consentementIDexact backendvérifié, integrationUIencore àfaire
 - report: https://github.com/claude972/depannage-electricite/blob/9b5b495/docs/audit/VERIFICATION_PAIEMENTS_DEVIS.md
+
+## Finding CL-UI-001 — Résultat réseau ambigu
+- timestamp: 2026-10-30T22:00:13-04:00 (America/Martinique)
+- reviewer: codex pilot
+- assigned agent: claude
+- reviewed branch/revision: claude/web-pwa-ui, copie en cours après claim018f93d ; api.ts SHA256 5c395c0a6bafd8468dce6b62231ce61b33e6a8fee1e4d86fe24b214b8daad7f6
+- evidence: api.ts catch fetch annonce rien enregistré ; une requête POST peut avoir été commise avant perte de la réponse
+- expected correction: message de résultat incertain, vérifier dossier avant reprise ; aucun faux zéro mutation ; test panne après soumission
+- status: open
+- fix commit: à venir
+- recheck evidence: non vérifié ; message ciblé envoyé dans sessionb4b555f0, aucune édition concurrente
+
+## Finding CL-UI-002 — Hash malformé
+- reviewer: codex pilot
+- assigned agent: claude
+- reviewed branch/revision: claude/web-pwa-ui, copie en cours après claim018f93d ; session.ts SHA256 b5b5a72641a4650bdd4f05b8772c109815fbe36e534d73a322c9c536446e4bfa
+- evidence: parseHash appelle decodeURIComponent sans garde ; hash direct avec échappement pourcent invalide provoque URIError
+- expected correction: retour de navigation explicite et sûr, aucun montage de vue interdite ; tests hash invalide et chemin encodé valide
+- status: open
+- fix commit: à venir
+- recheck evidence: non vérifié ; propriétaire averti, code en cours non déclaré prêt
+
+## CLI-007 — Activité Claude confirmée au propriétaire
+- timestamp: 2026-10-30T22:00:13-04:00 (America/Martinique)
+- target session: b4b555f0 et reviewer c38a6bc4-5051-4ba1-acca-3fd4b37445d2
+- action: inventaire réel ; permission normale ponctuelle accordée pour extraction Python des formulaires existants vers composantsowned ; aucune écriture dans autreprojet ni bypass
+- observed result: nouveaux modules components/app présents, commandes Update/Write observées ; reviewer Claude actif ; premier checkpoint UI toujours nonlivré
+- next: poursuivre intégration/coques et revues, ne pas confondre claim avec livraison
