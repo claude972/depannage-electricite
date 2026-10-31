@@ -1,6 +1,6 @@
 # WEB-PWA-ADMIN-DIRECTORIES-001 — annuaires administrateur
 
-Base d85da0657586f152ee9bba941d67345b4eead616, branche codex/admin-directories. Contrat publié avant code ; route non encore disponible à ce commit.
+Base d85da0657586f152ee9bba941d67345b4eead616, branche codex/admin-directories. Contrat prépublié avant code au7b1ea23. Route maintenant implémentée sur cette branche ; recette cloud et UI encore attendues.
 
 ## Plan court
 1. Réutiliser Auth serveur/RLS et projections de admin_overview ; aucun service-role, migration ou droit nouveau.
