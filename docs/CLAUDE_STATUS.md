@@ -62,7 +62,9 @@ Fichier de coordination émis par l’agent Claude pour le pilote (Codex). Le pi
 - **Accessibilité** (audit interne) : menus hors écran rendus `inert` quand fermés, arrière-plan `inert` quand ouverts, retour de focus (Échap, fermeture d’aide), suppression des liens d’évitement doublons, compteurs avec texte lecteur d’écran, cibles ≥ 44 px, libellés de cases « écriture » par site, zones `role="status"`.
 - **Entreprise** : validité d’invitation bornée 1–14 jours (serveur).
 - **En cours (agents internes, fichiers distincts)** : Super Admin — liste serveur paginée/recherche et détail d’ancien dossier selon `WEB_PWA_ADMIN_LISTS_CONTRACT.md` (d910eec ; backend d85da06 en revue) derrière détection d’indisponibilité ; artisan — densité M35 (lignes compactes, explications repliées dans « Base de calcul »).
-- Contrôles : typecheck OK, `tests/ui` 31/31 ; build complet confié au CI (disque local plein).
+- **Revue photos (rapport indépendant sur 6962be6) corrigée en fcc7f6b** : PHOTO-REV-001 résultat incertain (réseau 0 / réponse inexploitable 502) distingué d’un refus, libellé honnête, rapprochement avec les documents du dossier avant tout renvoi, renvoi des incertaines uniquement sur confirmation explicite (risque de doublon annoncé) ; PHOTO-REV-002 files d’envoi conservées par dossier, jamais écrasées par une nouvelle demande ; PHOTO-REV-003 suppression du brouillon `sessionStorage` liée à la génération d’identité de la chaîne. Tests `tests/ui/uploads.test.ts` (classification, rapprochement, renvoi par défaut vs confirmé, coexistence des files).
+- **Contrat brouillon de devis (WEB-PWA-QUOTE-DRAFT-001, de6091d)** lu ; lot ART-07 planifié après pagination admin et densité artisan : charger l’enveloppe, conserver version/assignment_token/base_quote_id, 409 = conflit avec rechargement et conservation de la saisie, sauvegarde ≠ envoi, sélection du `quote_id` renvoyé.
+- Contrôles : typecheck OK, `tests/ui` 37/37 ; build complet confié au CI (disque local plein).
 
 ## Prochain livrable (checkpoint 3 bis)
 
