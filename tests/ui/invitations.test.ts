@@ -34,3 +34,11 @@ test("performance periods are contiguous calendar months with exclusive end", ()
   const days = (Date.parse(p.current_end) - Date.parse(p.current_start)) / 86400000;
   assert.ok(days >= 28 && days <= 31);
 });
+test("the sole organisation is the membership context without an explicit selection; several require a choice", async () => {
+  const { enterpriseContext } = await import("../../components/app/session");
+  const members = [{ organization_id: "o1", user_id: "u1", role: "owner" }];
+  const sole = enterpriseContext([{ id: "o1" }], [], [], "", "").organizationId;
+  assert.equal(membershipRole(members, sole, "u1"), "owner");
+  const several = enterpriseContext([{ id: "o1" }, { id: "o2" }], [], [], "", "").organizationId;
+  assert.equal(membershipRole(members, several, "u1"), null, "no authority until the user chooses");
+});

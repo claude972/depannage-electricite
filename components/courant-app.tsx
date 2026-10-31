@@ -7,6 +7,7 @@ import { createClient } from "../lib/supabase/client";
 import { api, ApiRequestError, contractStateFromError, uploadDocument } from "./app/api";
 import { createGuard, createRunner, type RunContext, type Runner } from "./app/guard";
 import { adoptIdentity } from "./app/identity";
+import { createRevalidationScheduler } from "./app/revalidate";
 import {
   acknowledgeUpload,
   allUploaded,
@@ -36,6 +37,7 @@ import {
   CONNECT_RETURN_MESSAGE,
   INVITE_TOKEN,
   buildHash,
+  enterpriseContext,
   canAccess,
   homeFor,
   membershipRole,
@@ -256,31 +258,29 @@ export default function CourantApp() {
     }
   }, []);
 
-  // Revalidation when the tab becomes visible or focused again (live only, throttled):
-  // workspace, then professional data for managers. Spaces re-read their scoped views from
-  // the refreshed data (session.refreshedAt changes).
-  const lastRevalidation = useRef(0);
-  const revalidate = useCallback(async () => {
+  // Revalidation when the tab becomes visible or focused again (live only). Signals are never
+  // dropped: a run in progress gets one trailing run, a recent run delays the next to the end
+  // of the quiet window (CL-UI-008). Workspace, then professional data for managers.
+  const revalidateNow = useCallback(async () => {
     if (modeRef.current !== "live") return;
-    const now = Date.now();
-    if (now - lastRevalidation.current < 15000) return;
-    lastRevalidation.current = now;
     await refresh();
     if (roleRef.current === "manager") await loadProfessional();
   }, [refresh, loadProfessional]);
   useEffect(() => {
     if (mode !== "live") return;
+    const scheduler = createRevalidationScheduler(revalidateNow, { minIntervalMs: 15000 });
     const onVisible = () => {
-      if (document.visibilityState === "visible") void revalidate();
+      if (document.visibilityState === "visible") scheduler.signal();
     };
-    const onFocus = () => void revalidate();
+    const onFocus = () => scheduler.signal();
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onFocus);
     return () => {
+      scheduler.cancel();
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onFocus);
     };
-  }, [mode, revalidate]);
+  }, [mode, revalidateNow]);
 
   // Boot: draft, return parameters, existing session, auth listener.
   useEffect(() => {
@@ -2064,9 +2064,12 @@ export default function CourantApp() {
     activeOrganizationId,
     activeSiteId,
     refreshedAt,
+    // Same rule as the enterprise space: a sole organisation is the implicit context, several
+    // organisations require an explicit choice (never organizations[0]).
     membershipRole: membershipRole(
       data.organization_members,
-      activeOrganizationId,
+      enterpriseContext(data.organizations, data.sites, [], activeOrganizationId, activeSiteId)
+        .organizationId,
       mode === "live" ? profile?.id || "" : `demo-${role}`,
     ),
     go: navigate,
