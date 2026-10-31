@@ -47,7 +47,7 @@ test("scenario bookkeeping records steps, evidence and status; secrets are redac
     });
   });
   assert.deepEqual(seen, ["PASS", "FAIL", "ANOMALY"]);
-  assert.deepEqual(report.summary(), { total: 3, pass: 1, fail: 1, anomaly: 1 });
+  assert.deepEqual(report.summary(), { total: 3, pass: 1, fail: 1, anomaly: 1, blocked: 0 });
   const first = report.scenarios[0];
   assert.deepEqual(first.steps[0].detail, { password: "[REDACTED]", note: "uses [REDACTED]" });
   assert.deepEqual(first.network, [{ method: "GET", path: "/api/workspace", status: 200 }]);

@@ -2,6 +2,7 @@
 // the oldest one page by page; opening it shows the detail read by id.
 import assert from "node:assert/strict";
 import { newPage, login, openHash, capture, expectVisible, sleep, waitForApi } from "../lib/browser.mjs";
+import { adminPreflight } from "../lib/admin-preflight.mjs";
 
 const shortId = (id) => `INT-${id.replaceAll("-", "").slice(0, 6).toUpperCase()}`;
 const ROWS = 120;
@@ -11,9 +12,20 @@ export const suite = {
   name: "admin-old-dossiers",
   description: "Admin paginated dossier list (>100 rows) reaches an old dossier and opens its detail",
   needsCredentials: true,
-  plan: ["cohort admin (profiles.role=admin set by service role, deleted at cleanup)", "client F", `${ROWS} interventions of F with distinct created_at`],
+  plan: ["admin-preflight: >= 1 real super admin (cohort excluded) or the suite is BLOCKED, nothing created", "cohort admin (profiles.role=admin set by service role, deleted at cleanup while the real super admin remains)", "client F", `${ROWS} interventions of F with distinct created_at`],
   async run(ctx) {
-    const { base, projectRef, fixtures, browser, cohort, out, report, redactor } = ctx;
+    const { base, projectRef, fixtures, db, browser, cohort, out, report, redactor } = ctx;
+    // Migration 014 (last-super-admin guard): the QA admin may only be created when a REAL super
+    // admin exists, otherwise its deletion at cleanup would be refused. Read-only count, cohort ids
+    // excluded; no non-cohort account is ever read, modified, banned or deleted.
+    const pre = await adminPreflight(db, fixtures.manifest);
+    if (!pre.ok) {
+      await report.blocked(suite.name, "admin-preflight", `${pre.reason} (real admins counted: ${pre.realAdmins})`);
+      return;
+    }
+    await report.scenario(suite.name, "admin-preflight: at least one real super admin exists (cohort excluded), QA admin deletable at cleanup", async (s) => {
+      await s.step("count real super admins (service key, HEAD count, cohort excluded)", async () => ({ server: true, realAdmins: pre.realAdmins }));
+    });
     const admin = await fixtures.createUser("admin-listes", "admin");
     const f = await fixtures.createUser("client-listes", "client");
     const now = Date.now();

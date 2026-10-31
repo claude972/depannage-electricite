@@ -112,9 +112,23 @@ export function createReport(context, redactor, hooks = {}) {
       } catch {}
       return entry;
     },
+    /**
+     * A suite that cannot run in this environment (missing precondition, e.g. no real super admin
+     * before the 014 guard): recorded as BLOCKED with its reason, never PASS, nothing created, no
+     * effect on the exit code (the other suites decide it).
+     */
+    async blocked(suite, name, reason) {
+      const entry = { suite, name, status: "BLOCKED", startedAt: new Date().toISOString(), durationMs: 0, steps: [], evidence: [], network: [], routeErrors: [], error: null, note: redactor.redactString(String(reason)) };
+      scenarios.push(entry);
+      emit({ type: "scenario-blocked", suite, name, reason: entry.note });
+      try {
+        await onScenario(entry);
+      } catch {}
+      return entry;
+    },
     summary() {
       const count = (status) => scenarios.filter((s) => s.status === status).length;
-      return { total: scenarios.length, pass: count("PASS"), fail: count("FAIL"), anomaly: count("ANOMALY") };
+      return { total: scenarios.length, pass: count("PASS"), fail: count("FAIL"), anomaly: count("ANOMALY"), blocked: count("BLOCKED") };
     },
   };
   return report;
@@ -135,7 +149,7 @@ export function renderSummary(result) {
   lines.push(`- sha: ${result.context.sha} (${result.context.sha_verified ? "verified against --app-dir" : "declared by pilot, not verified"})`);
   lines.push(`- project: ${result.context.project}`);
   lines.push(`- started: ${result.context.started_at}; finished: ${result.context.finished_at || "(in progress)"}`);
-  lines.push(`- scenarios: ${result.summary.total}, PASS ${result.summary.pass}, FAIL ${result.summary.fail}, ANOMALY ${result.summary.anomaly}`);
+  lines.push(`- scenarios: ${result.summary.total}, PASS ${result.summary.pass}, FAIL ${result.summary.fail}, ANOMALY ${result.summary.anomaly}, BLOCKED ${result.summary.blocked || 0}`);
   if (result.fatal) lines.push(`- FATAL: ${result.fatal.origin} — ${result.fatal.error?.name}: ${result.fatal.error?.message} (run aborted; remaining scenarios not executed)`);
   lines.push(`- cleanup: ${result.cleanup ? (result.cleanup.ok ? "complete (readback 0)" : "INCOMPLETE — manual intervention required, see cleanup.json") : result.context.finished_at ? "skipped (--keep-fixtures or nothing created)" : "pending"}`);
   if (result.drain && (result.drain.pending > 0 || result.drain.timedOut)) lines.push(`- drain before cleanup: ${result.drain.pending} fixture creation(s) still pending after ${result.drain.waitedMs} ms — ids may be missing from manifest.json, verify the cohort manually`);
@@ -147,7 +161,7 @@ export function renderSummary(result) {
     lines.push("", "## Non-passing scenarios", "");
     for (const s of failed) {
       lines.push(`### ${s.suite} / ${s.name} — ${s.status}`);
-      lines.push(s.status === "ANOMALY" ? "Harness/selector/headless anomaly: verify manually; not evidence of an application defect." : "Assertion on expected application behaviour failed: application defect candidate.");
+      lines.push(s.status === "ANOMALY" ? "Harness/selector/headless anomaly: verify manually; not evidence of an application defect." : s.status === "BLOCKED" ? `Suite not executable in this environment (precondition missing, nothing created): ${s.note}` : "Assertion on expected application behaviour failed: application defect candidate.");
       if (s.error) lines.push("", "```", `${s.error.name}: ${s.error.message}`, "```");
       const lastStep = s.steps[s.steps.length - 1];
       if (lastStep) lines.push(`Last step: ${lastStep.label} (${lastStep.status})`);
