@@ -303,7 +303,7 @@ test("a suite that throws an assertion is recorded as FAIL, cleanup runs exactly
   const failing = { name: "fail", description: "throws", needsCredentials: false, async run() { assert.equal(1, 2, "injected assertion"); } };
   const result = await orchestrateModule.orchestrate({ suites: [failing, ok], ctx: { fixtures: {}, report }, lifecycle, report });
   assert.equal(result.code, 1);
-  assert.deepEqual(result.summary, { total: 2, pass: 1, fail: 1, anomaly: 0 });
+  assert.deepEqual(result.summary, { total: 2, pass: 1, fail: 1, anomaly: 0, blocked: 0 });
   assert.deepEqual(counts(), { cleanups: 1, written: 1 });
   assert.equal(report.scenarios[0].name, "suite setup");
   await lifecycle.finalize("again");
@@ -314,7 +314,7 @@ test("a harness crash (non-assertion) is an ANOMALY, not a FAIL: exit 0 with the
   const crashing = { name: "crash", description: "timeout", needsCredentials: false, async run() { throw Object.assign(new Error("Timeout 90000ms exceeded"), { name: "TimeoutError" }); } };
   const result = await orchestrateModule.orchestrate({ suites: [crashing], ctx: { fixtures: {}, report }, lifecycle, report });
   assert.equal(result.code, 0);
-  assert.deepEqual(result.summary, { total: 1, pass: 0, fail: 0, anomaly: 1 });
+  assert.deepEqual(result.summary, { total: 1, pass: 0, fail: 0, anomaly: 1, blocked: 0 });
   assert.equal(counts().cleanups, 1);
 });
 test("an unknown cleanup outcome yields exit 3 even when every scenario passed; a cleanup crash is contained", async () => {
@@ -498,7 +498,7 @@ async function realRun(options: { auth: Row; collectFails?: boolean; created?: (
 }
 test("real finalizer: an Auth intent of unknown fate makes the run exit 3 with the manifest kept on disk, even with every scenario PASS", async () => {
   const { result, manifestPath, dir, events } = await realRun({ auth: fakeAuth([], { getUser: true }) });
-  assert.deepEqual(result.summary, { total: 1, pass: 1, fail: 0, anomaly: 0 });
+  assert.deepEqual(result.summary, { total: 1, pass: 1, fail: 0, anomaly: 0, blocked: 0 });
   assert.equal(result.code, 3);
   assert.equal(result.cleanup.ok, false);
   const kept = JSON.parse(await readFile(manifestPath, "utf8"));
