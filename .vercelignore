@@ -4,7 +4,6 @@ node_modules
 *.pdf
 docs/
 tests/
-supabase/
 .env*
 !.env.example
 *.tsbuildinfo

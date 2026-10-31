@@ -1,7 +1,7 @@
 // Isolated PostgreSQL verification. Install @electric-sql/pglite@0.5.13 into a
 // temporary directory, then set PGLITE_MODULE to its dist/index.js absolute path.
 // Supabase auth/storage are explicit stubs; this is not a live Supabase test.
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const { PGlite } = await import(process.env.PGLITE_MODULE || '@electric-sql/pglite');
 const db = new PGlite();
@@ -19,10 +19,13 @@ create table storage.buckets(id text primary key,name text,public boolean,file_s
 create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text);
 alter table storage.objects enable row level security;
 `);
-let migration = await readFile(new URL('../supabase/migrations/202610310001_initial.sql', import.meta.url),'utf8');
-// PGlite ships PostgreSQL gen_random_uuid; pgcrypto extension is not bundled.
-migration = migration.replace('create extension if not exists pgcrypto;', '-- pgcrypto omitted only in this isolated harness');
-await db.exec(migration);
+const migrationDir = new URL('../supabase/migrations/', import.meta.url);
+for (const file of (await readdir(migrationDir)).filter(name=>name.endsWith('.sql')).sort()) {
+ let migration=await readFile(new URL(file,migrationDir),'utf8');
+ // PGlite ships PostgreSQL gen_random_uuid; pgcrypto extension is not bundled.
+ migration=migration.replace('create extension if not exists pgcrypto;','-- pgcrypto omitted only in this isolated harness');
+ await db.exec(migration);
+}
 console.log('PASS: entire migration executes under isolated PostgreSQL with auth/storage stubs');
 const ids = Object.fromEntries(['client1','client2','artisan1','artisan2','manager','admin'].map((name,i)=>[name,`00000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`]));
 for (const [name,id] of Object.entries(ids)) {
@@ -91,4 +94,51 @@ assert.equal((await as('client2','select * from public.interventions where id=$1
 await assert.rejects(as('client2',"select public.send_message($1,'Un viewer ne doit pas écrire.')",[siteJob.id]));
 await as('manager',"select public.send_message($1,'Message du gestionnaire autorisé.')",[siteJob.id]);
 console.log('PASS: organization viewer can read but cannot send messages; manager can write');
+const manager2='00000000-0000-4000-8000-000000000007';
+ids.manager2=manager2;
+await db.query('insert into auth.users(id,raw_user_meta_data) values($1,$2)',[manager2,JSON.stringify({role:'manager',full_name:'manager2'})]);
+await db.query("insert into public.organization_members(organization_id,user_id,role) values($1,$2,'manager')",[site.organization_id,manager2]);
+await assert.rejects(as('manager2',"select public.set_approval_rule($1,10000,'owner',true)",[site.id]));
+await as('manager',"select public.set_approval_rule($1,10000,'owner',true)",[site.id]);
+await as('artisan1',"select public.intervention_action($1,'send_quote',$2,20)",[siteJob.id,lines]);
+const siteQuote=(await as('manager','select * from public.quotes where intervention_id=$1',[siteJob.id])).rows[0];
+const approval=(await as('manager','select * from public.approvals where quote_id=$1',[siteQuote.id])).rows[0];
+assert.ok(approval);assert.equal(approval.status,'pending');
+await assert.rejects(as('manager',"select public.intervention_action($1,'accept_quote')",[siteJob.id]));
+await assert.rejects(as('manager2',"select public.decide_approval($1,'approved','Non propriétaire')",[approval.id]));
+await assert.rejects(as('client2',"select public.decide_approval($1,'approved','Viewer')",[approval.id]));
+await as('manager',"select public.decide_approval($1,'approved','Budget contrôlé par le propriétaire')",[approval.id]);
+await as('manager2',"select public.intervention_action($1,'accept_quote')",[siteJob.id]);
+console.log('PASS: owner-only rule configuration, threshold queues approval, required owner decision unlocks quote');
+const contract=(await as('manager',"select * from public.save_contract($1,'Contrat test','REF-001','2026-10-01','2027-10-01','Conditions de test','draft',null)",[site.organization_id])).rows[0];
+assert.equal((await as('client1','select * from public.contracts where id=$1',[contract.id])).rows.length,0);
+await assert.rejects(as('client1',"select public.save_contract($1,'Contrat interdit','','2026-10-01',null,'','draft',null)",[site.organization_id]));
+await assert.rejects(as('client2',"select public.save_contract($1,'Contrat viewer','','2026-10-01',null,'','draft',null)",[site.organization_id]));
+const record=(await as('manager',"select * from public.save_compliance($1,'Vérification tableau','audit','2026-12-01','scheduled','Note de suivi',null)",[site.id])).rows[0];
+assert.equal((await as('client1','select * from public.compliance_records where id=$1',[record.id])).rows.length,0);
+await assert.rejects(as('client2',"select public.save_compliance($1,'Interdit','audit','2026-12-01','pending','',null)",[site.id]));
+await assert.rejects(as('manager',"delete from public.professional_audit where organization_id=$1",[site.organization_id]));
+assert.ok((await as('manager','select * from public.professional_audit')).rows.length>=4);
+console.log('PASS: contract/site follow-up isolation, viewer write rejection and append-only professional audit');
+// A request estimate is not a financial commitment; the paid and accepted invoices are.
+await as('manager',"select * from public.create_intervention('panel','Demande sans devis pour le rapport.','12 rue des bureaux','97200','Fort-de-France','urgent',$1)",[site.id]);
+await db.query('update public.interventions set site_id=$1 where id=$2',[site.id,job.id]);
+const report=(await as('manager','select * from public.professional_report($1)',[site.id])).rows[0];
+assert.equal(Number(report.paid_cents),24000);
+assert.equal(Number(report.committed_cents),24000);
+assert.equal(Number(report.interventions),3);
+assert.equal((await as('client1','select * from public.professional_report($1)',[site.id])).rows.length,0);
+console.log('PASS: report aggregates paid/accepted quotes, excludes estimates, and respects site RLS');
+await assert.rejects(as('client1',"select public.request_warranty($1,'Le problème électrique est revenu après intervention.')",[job.id]));
+await assert.rejects(as('client1',"update public.app_settings set value='true' where key='warranty_requests_enabled'"));
+await db.exec("update public.app_settings set value='true' where key='warranty_requests_enabled'");
+await assert.rejects(as('client2',"select public.request_warranty($1,'Je ne suis pas le client propriétaire de ce dossier.')",[job.id]));
+await db.query("update public.interventions set completed_at=now()-interval '1 year 1 day' where id=$1",[job.id]);
+await assert.rejects(as('client1',"select public.request_warranty($1,'Cette intervention est hors de la fenêtre annuelle.')",[job.id]));
+await db.query("update public.interventions set completed_at=now()-interval '1 day' where id=$1",[job.id]);
+const warranty=(await as('client1',"select * from public.request_warranty($1,'Le problème électrique est revenu après intervention.')",[job.id])).rows[0];
+await assert.rejects(as('client1',"select public.request_warranty($1,'Une seconde réclamation concurrente doit être refusée.')",[job.id]));
+await assert.rejects(as('artisan1',"select public.resolve_warranty($1,'resolved','Résolution non autorisée par artisan')",[warranty.id]));
+await as('admin',"select public.resolve_warranty($1,'reviewing','Réclamation reçue et en cours de contrôle.')",[warranty.id]);
+console.log('PASS: warranty gate cannot be bypassed, only owner within year may request, one open case, admin-only resolution');
 await db.close();
