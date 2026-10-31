@@ -355,12 +355,16 @@ export type EnterpriseAuthority = {
   /** Short reason shown next to a disabled control. */
   readOnlyReason: string | null;
 };
+// Fail closed: a manager whose site scope could not be read gets NO write control until the
+// scope is known; only the canonical owner always has every site.
 export function enterpriseAuthority(
   role: "owner" | "manager" | "viewer" | null,
   scope: MemberScope | null | undefined,
 ): EnterpriseAuthority {
-  const effectiveScope: MemberScope = role === "owner" ? { scope: "all", grants: [] } : scope ?? { scope: "all", grants: [] };
-  const writer = role === "owner" || role === "manager";
+  const scopeKnown = role === "owner" || !!scope;
+  const effectiveScope: MemberScope =
+    role === "owner" ? { scope: "all", grants: [] } : scope ?? { scope: "selected", grants: [] };
+  const writer = (role === "owner" || role === "manager") && scopeKnown;
   const canWriteOrganization = writer && effectiveScope.scope === "all";
   const canReadSite = (siteId: string | null | undefined) =>
     !!role && (effectiveScope.scope === "all" || !siteId || effectiveScope.grants.some((g) => g.site_id === siteId));
@@ -375,8 +379,10 @@ export function enterpriseAuthority(
       ? "Vous n’êtes pas membre de cette organisation."
       : role === "viewer"
         ? "Votre rôle est en lecture seule dans cette organisation."
-        : effectiveScope.scope === "selected"
-          ? "Vos droits d’écriture sont limités à certains sites."
-          : null;
+        : !scopeKnown
+          ? "Vos droits par site n’ont pas pu être vérifiés : les modifications sont désactivées jusqu’à la prochaine actualisation."
+          : effectiveScope.scope === "selected"
+            ? "Vos droits d’écriture sont limités à certains sites."
+            : null;
   return { role, canWriteOrganization, canWriteSite, canReadSite, readOnlyReason };
 }

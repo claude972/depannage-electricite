@@ -1512,7 +1512,7 @@ export default function CourantApp() {
     body: QuoteDraftCommand,
   ): Promise<QuoteDraftResult> {
     let outcome: QuoteDraftResult = { ok: false, conflict: false, message: "Action interrompue." };
-    await run(async (ctx) => {
+    const completed = await run(async (ctx) => {
       if (modeRef.current === "demo") {
         const all = demoDrafts();
         const envelope = demoDraftEnvelope(interventionId);
@@ -1589,6 +1589,7 @@ export default function CourantApp() {
       }
       try {
         const result = await api<QuoteDraftEnvelope>(`/api/interventions/${interventionId}/quote-draft`, body);
+        if (!ctx.alive()) return;
         ctx.when(setCapabilities)((c) => ({ ...c, quoteDraft: "available" }));
         outcome = { ok: true, envelope: result };
         if (body.action === "send") {
@@ -1611,6 +1612,8 @@ export default function CourantApp() {
         outcome = { ok: false, conflict: false, message: (e as Error).message };
       }
     });
+    // A chain that ended stale (identity changed) never reports success or a conflict.
+    if (!completed && outcome.ok) return { ok: false, conflict: false, message: "Action interrompue." };
     return outcome;
   }
   // ---- Assistance tickets (contract SUPPORT-001). Demo: browser-only tickets; live: dedicated
@@ -1704,7 +1707,7 @@ export default function CourantApp() {
   }
   async function createSupportTicket(values: { request_id: string; subject: string; body: string; intervention_id: string | null }): Promise<SupportCreateResult | null> {
     let created: SupportCreateResult | null = null;
-    await run(async (ctx) => {
+    const completed = await run(async (ctx) => {
       if (modeRef.current === "demo") {
         const store = demoSupport();
         const existing = Object.values(store).find((e) => e.request_id === values.request_id);
@@ -1724,10 +1727,12 @@ export default function CourantApp() {
         return;
       }
       try {
-        created = await api<SupportCreateResult>("/api/support", values);
+        const result = await api<SupportCreateResult>("/api/support", values);
+        if (!ctx.alive()) return; // stale chain: the caller must not navigate or announce anything
+        created = result;
         ctx.when(setCapabilities)((c) => ({ ...c, support: "available" }));
         ctx.notice(
-          created.replayed
+          result.replayed
             ? "Votre demande avait déjà été enregistrée ; aucun doublon créé."
             : "Demande d’assistance enregistrée. Les réponses s’afficheront ici à l’actualisation.",
         );
@@ -1736,11 +1741,11 @@ export default function CourantApp() {
         throw e;
       }
     });
-    return created;
+    return completed ? created : null;
   }
   async function supportCommand(id: string, body: SupportCommand): Promise<SupportCommandResult> {
     let outcome: SupportCommandResult = { ok: false, conflict: false, message: "Action interrompue." };
-    await run(async (ctx) => {
+    const completed = await run(async (ctx) => {
       if (modeRef.current === "demo") {
         const store = demoSupport();
         const entry = store[id];
@@ -1784,6 +1789,7 @@ export default function CourantApp() {
           `/api/support/${encodeURIComponent(id)}`,
           body,
         );
+        if (!ctx.alive()) return;
         ctx.when(setCapabilities)((c) => ({ ...c, support: "available" }));
         outcome = { ok: true, ...result };
         ctx.notice(body.action === "reply" ? "Réponse enregistrée." : "État de la demande mis à jour.");
@@ -1796,6 +1802,7 @@ export default function CourantApp() {
         outcome = { ok: false, conflict: false, message: (e as Error).message };
       }
     });
+    if (!completed && outcome.ok) return { ok: false, conflict: false, message: "Action interrompue." };
     return outcome;
   }
   // Membership lost or never held: drop every cached view of the organisation.
@@ -1879,6 +1886,7 @@ export default function CourantApp() {
             invitation,
             ...invitations.filter((i) => i.email !== body.email || i.status !== "pending"),
           ]);
+          if (!ctx.alive()) return;
           created = {
             invitation,
             invitation_code: code,
@@ -1947,7 +1955,8 @@ export default function CourantApp() {
           : "Modification enregistrée.",
       );
     });
-    return created ?? ok;
+    if (!ok) return false; // failed or stale: no one-time code may leak into another session
+    return created ?? true;
   }
   async function acceptInvitation(token: string) {
     return run(async (ctx) => {

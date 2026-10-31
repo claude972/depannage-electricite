@@ -64,4 +64,10 @@ test("write authority combines membership role and site grants; global manager r
   const none = enterpriseAuthority(null, null);
   assert.equal(none.canReadSite("s1"), false);
   assert.equal(none.canWriteOrganization, false);
+  // Fail closed: a manager with an unknown scope has no write control until the scope is read.
+  const unknown = enterpriseAuthority("manager", null);
+  assert.equal(unknown.canWriteOrganization, false);
+  assert.equal(unknown.canWriteSite("s1"), false);
+  assert.match(unknown.readOnlyReason ?? "", /n’ont pas pu être vérifiés/);
+  assert.equal(enterpriseAuthority("owner", null).canWriteSite("s1"), true, "owner is the only exception");
 });
