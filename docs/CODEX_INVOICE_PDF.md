@@ -59,3 +59,17 @@ Les tests exécutent le vrai renderer et de vrais clients Supabase JS avec trans
 Le renderer contrôle les parties nécessaires et les centimes, conserve la TVA exacte de l'avoir, distingue service HT et commission TTC, réutilise les métriques/encodages/échappements du writer canonique. L'avoir ne vaut pas confirmation d'un remboursement. Pas de signature électronique, conditions de paiement, assurance, TVA intracommunautaire ou mention réglementaire inventées. Les polices du writer sont WinAnsi : les accents français sont couverts ; les caractères hors de cet alphabet suivent le remplacement existant `?` (pas de nouvelle promesse multilingue).
 
 À revoir indépendamment par Claude et le pilote : exactSHA604935e, routes et validation d'instantanés, relation avoir/facture, refus finance, exemples visuels. À vérifier après raccordement par le propriétaire de la coque : lien visible selon droits, facture et avoir sélectionnés exacts, ouverture privée, révocation réelle, erreurs/configuration. Aucun build lourd, nouveau déploiement, modification de production, provider Stripe ou natif exécuté dans ce lot.
+
+## Suivi de revue Claude/pilote - référence de dossier
+
+Revue Claude de604935e enregistrée par le lead dans `docs/reviews/CODEX_INVOICE_PDF_604935E.md` (c7aa7ff) : aucun bloquant, tests et rendu visuel vérifiés. Le pilote confirme que le mapper `invoiceDocumentInput(invoice, related)` est déjà dans le `try` interne de la route (ligne36 au SHA604935e) : son échec est converti en503 ; aucun changement inutile de route.
+
+Le P3 visuel demandé est corrigé : le PDF imprime `Dossier : INT-<8 premiers caractères de l'identifiant en majuscules>`, référence applicative courte cohérente avec les vues existantes, jamais un numéro légal. L'UUID interne complet n'est plus imprimé. Le test de rendu affirme la présence de `INT-10000000` et l'absence de l'UUID complet. Les13 tests PDF ciblés et le typecheck ont été relancés : PASS ; pas de répétition inutile de la suite70 déjà verte.
+
+Les3 exemples ont été régénérés dans `/tmp/depannage-invoice-pdf-qa-ZwovQo` et relus par `pypdf` strict (3/1/1pages, référence courte présente et UUID complet absent), puis rendus Poppler100dpi et inspectés sans défaut de mise en page. Nouvelles empreintes SHA256 :
+
+- `facture-multipage-qa.pdf` : `6f26d257c130c667675e8afc8d2ce34e3ca4a8c65c56612cb3bc64b5d6ac927b`.
+- `avoir-arrondi-qa.pdf` : `20bb66a959f614c7fc680d4a765c42db25efe4173103011dc681b4c366e228cf`.
+- `facture-commission-qa.pdf` : `ee8f78e0098326d50818147350c99939e50be54afd5607f4bdcfb3c2898b4423`.
+
+Propriété A4 conservée : Codex ne possède que le nouveau renderer, la nouvelle routePDF, les deux nouveaux testsPDF et ce rapport ; le writer canonique, le mapper existant, la migration014, les capacités et le lien dans la coque restent propriété Claude. Le lead assure l'amendement du contrat plateforme ; aucune modification à ces fichiers hors mission n'a été faite ici.
