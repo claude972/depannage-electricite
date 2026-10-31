@@ -205,3 +205,23 @@ reprise cachée. Échec du `stop` (409/403/404…) : relecture du snapshot, affi
 - P3-4 : une route qui répond 409 (`tracking_changed`) déclenche une relecture du snapshot ; une nouvelle demande n’est
   faite qu’une fois par nouvel état (`session/control_version/last_seq/destination_version`), jamais pour le même, sans
   boucle ni minuterie de nouvelle tentative ; l’ancienne route n’est jamais affichée entre-temps.
+
+## Revue ROOT de 0778532 (P2-1, P2-2, P2-3) et correctif 360
+
+- **P2-1** : toute sortie (interruption, arrêt, démontage, refus, 409) invalide la génération, y compris un `start`/point
+  en attente. Une réponse arrivée après coup n’ouvre jamais de watch. Si un `start` en attente réussit après interruption,
+  **un** `stop` compensatoire au mieux est envoyé pour cette session et la `control_version` retournée, par le client capturé
+  au démarrage ; réponse `null` (identité périmée) : rien. Aucune nouvelle tentative.
+- **P2-2** : `RouteGate` — au plus une demande d’itinéraire par 30 s, jamais avant la fin d’un Retry-After (429, 503
+  `provider_quota`), état bloqué après 409 (une relecture, puis une demande seulement pour un nouvel état). Les effets
+  dépendent d’une clé de contexte stable (`session_id | control_version | last_seq | sampled_at | destination_version`,
+  position fraîche + destination), jamais de l’identité du snapshot re-sondé. Une seule minuterie, armée sur le temps
+  restant ; le bouton « Recalculer » passe par la même porte et indique l’attente.
+- **P2-3** : le cadrage descend sous 11 si nécessaire jusqu’au plancher **8** (trajet à l’échelle de la Martinique sur
+  288 px) ; le dézoom utilisateur atteint au moins le zoom de cadrage (`min(11, cadrage)`). Halo de précision inclus dans
+  le cadrage. Au plancher sans tenir : mention « Trajet trop étendu pour la carte », informations textuelles complètes.
+- **360** : marges de cadrage calculées sur les boîtes mesurées des surcouches (contrôles, mention de fond), recentrage
+  identique ; destination (libellé + coordonnées), heure et précision de la position restent visibles en texte.
+- Non couvert par test d’effet React (pas de moteur de rendu de test dans les dépendances, aucun ajout) : la logique des
+  effets est extraite dans `ShareController` et `RouteGate`, testés de façon déterministe ; le câblage est vérifié par
+  captures (harnais temporaire non commité).
