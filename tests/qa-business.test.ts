@@ -385,15 +385,46 @@ test("dry-run plan lists fixtures, the full cleanup order, the unknown-outcome r
 });
 
 // ---------------------------------------------------------------- build id and PDF checks
-test("build id: served document parsed, compared with the local build, mismatch is a defect", () => {
-  const html = '<html><script src="/_next/static/chunks/main-app.js"></script><script src="/_next/static/AbC123xyz/_buildManifest.js"></script><script src="/_next/static/AbC123xyz/_ssgManifest.js"></script></html>';
-  assert.equal(preflight.servedBuildId(html), "AbC123xyz");
-  assert.equal(preflight.servedBuildId("<html>no next</html>"), null);
+// Representative fixture SHAPED like Next 16 App Router output (not a captured page): the Flight
+// payload is pushed as JSON string chunks; the root row `0:` carries the build id under `b`.
+// To be replaced by a public HTML excerpt from root's served page when provided.
+function nextFlightHtml(rows: string[], options: { split?: boolean; staticId?: string; decoy?: boolean } = {}) {
+  const flight = rows.join("\n") + "\n";
+  const chunks = options.split ? [flight.slice(0, 25), flight.slice(25)] : [flight];
+  const pushes = chunks.map((c) => `<script>self.__next_f.push(${JSON.stringify([1, c])})</script>`).join("");
+  const legacy = options.staticId ? `<script src="/_next/static/${options.staticId}/_buildManifest.js" async></script>` : "";
+  const decoy = options.decoy ? '<a href="/?b=QueryIdNotTrusted&buildId=AlsoIgnored">x</a><script>window.x={"b":"LooseSubstring"}</script>' : "";
+  return `<!DOCTYPE html><html lang="fr"><head><link rel="stylesheet" href="/_next/static/css/app.css"/><script src="/_next/static/chunks/webpack-1a2b.js" async></script>${legacy}</head><body>${decoy}<script>(self.__next_f=self.__next_f||[]).push([0])</script>${pushes}</body></html>`;
+}
+const root = (id: string) => `0:${JSON.stringify({ P: null, b: id, p: "", c: ["", ""], i: false, f: [[["", { children: ["__PAGE__", {}] }, "$undefined", "$undefined", true]]], m: "$undefined", G: ["$2", []], s: false, S: true })}`;
+const otherRows = ['1:"$Sreact.fragment"', '2:I[61234,["/_next/static/chunks/app/layout-9f.js"],"default"]', `3:${JSON.stringify({ b: "NotTheRootRow123" })}`];
+test("build id from the Next 16 Flight root row: match verified, mismatch FAIL, split chunks, decoys ignored", () => {
+  const id = "Aw8cMtqXjVJ3P-OZovGFa";
+  const html = nextFlightHtml([...otherRows.slice(0, 2), root(id), otherRows[2]], { decoy: true });
+  assert.deepEqual(preflight.servedBuildIdentity(html), { id, source: "flight", candidates: [id], ambiguous: false });
+  assert.deepEqual(preflight.compareBuildIds(id, preflight.servedBuildId(html)), { verified: true, reason: "" });
+  const mismatch = preflight.compareBuildIds("LocalBuild0000", preflight.servedBuildId(html));
+  assert.equal(mismatch.mismatch, true, "mismatch with the local .next/BUILD_ID is a FAIL");
+  assert.equal(preflight.servedBuildIdentity(nextFlightHtml([root(id), ...otherRows], { split: true })).id, id, "a row split across pushes is reassembled");
+  assert.equal(preflight.servedBuildIdentity(nextFlightHtml([root("bad id with spaces")])).id, null, "value outside the build-id charset ignored");
+});
+test("build id: two different ids are ambiguous, none is unverified, the static manifest path is the fallback", () => {
+  const two = nextFlightHtml([root("BuildIdOne111")], { staticId: "BuildIdTwo222" });
+  const amb = preflight.servedBuildIdentity(two);
+  assert.equal(amb.ambiguous, true);
+  assert.equal(amb.id, null);
+  const verdict = preflight.compareBuildIds("BuildIdOne111", amb.id, amb);
+  assert.equal(verdict.verified, false);
+  assert.equal(verdict.ambiguous, true);
+  const none = preflight.servedBuildIdentity(nextFlightHtml(otherRows, { decoy: true }));
+  assert.deepEqual(none, { id: null, source: "none", candidates: [], ambiguous: false }, "query params and loose substrings never count");
+  assert.equal(preflight.compareBuildIds("X1234", none.id, none).verified, false);
+  const legacy = '<script src="/_next/static/chunks/main-app.js"></script><script src="/_next/static/AbC123xyz/_buildManifest.js"></script><script src="/_next/static/AbC123xyz/_ssgManifest.js"></script>';
+  assert.deepEqual(preflight.servedBuildIdentity(legacy), { id: "AbC123xyz", source: "static", candidates: ["AbC123xyz"], ambiguous: false });
   assert.equal(preflight.servedBuildId('<link href="/_next/static/css/app.css"><script src="/_next/static/chunks/x.js">'), null);
-  assert.deepEqual(preflight.compareBuildIds("AbC123xyz", "AbC123xyz"), { verified: true, reason: "" });
-  assert.equal(preflight.compareBuildIds("AbC123xyz", "other").mismatch, true);
+  const malformed = '<script>self.__next_f.push([1,"0:{\\"b\\":\\"Abcd1234\\""])</script>';
+  assert.equal(preflight.servedBuildIdentity(malformed).id, null, "a truncated root row is not trusted");
   assert.equal(preflight.compareBuildIds(null, "AbC123xyz").verified, false);
-  assert.equal(preflight.compareBuildIds("AbC123xyz", null).verified, false);
 });
 test("PDF inspection on bytes from the CANONICAL writer: decoded text literals (octal ° and accents), EOF required", () => {
   const quoteId = "1a2b3c4d-0000-4000-8000-000000000000";

@@ -23,7 +23,7 @@ import { loadPlaywright, launchBrowser, configureBrowser, stopBrowser, newPage }
 import { CLEANUP_STEPS, finalizeCleanup } from "./lib/cleanup.mjs";
 import { BusinessFixtures } from "./lib/fixtures.mjs";
 import { createAdminAuth } from "./lib/auth.mjs";
-import { readLocalBuildId, servedBuildId, compareBuildIds } from "./lib/preflight.mjs";
+import { readLocalBuildId, servedBuildIdentity, compareBuildIds } from "./lib/preflight.mjs";
 import { orchestrate, NOT_EXERCISED } from "./lib/orchestrate.mjs";
 import { SUITES, suiteByName } from "./suites/index.mjs";
 
@@ -243,13 +243,17 @@ async function main(argv) {
         const h = await newPage(browser, { baseUrl: context.base_url, redactor });
         try {
           const verdict = await s.step("read the served build id", async () => {
-            await h.page.goto(`${context.base_url}/`, { waitUntil: "domcontentloaded", timeout: options.timeoutMs });
-            const served = servedBuildId(await h.page.content());
-            const v = compareBuildIds(localBuildId, served);
+            // Raw server HTML of the root document (not the hydrated DOM); no query string is read.
+            const response = await h.context.request.get(`${context.base_url}/`, { timeout: options.timeoutMs, maxRedirects: 0 });
+            const identity = servedBuildIdentity(await response.text());
+            const served = identity.id;
+            const v = compareBuildIds(localBuildId, served, identity);
             context.build_id_served = served;
+            context.build_id_source = identity.source;
+            context.build_id_candidates = identity.candidates;
             context.build_id_verified = v.verified;
             if (v.mismatch) throw new AppDefect(v.reason);
-            return { local: localBuildId, served, ...v };
+            return { local: localBuildId, served, source: identity.source, candidates: identity.candidates, http_status: response.status(), ...v };
           });
           s.note(verdict.verified ? "build identity verified" : verdict.reason);
         } finally {
