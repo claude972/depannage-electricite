@@ -876,3 +876,9 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 ## 2026-10-31 — business trace P3 fixed: 692b779 (branch only)
 
 - `claude/web-qa-business` **`692b779db145eedf4b08081f683c109fdeb3b525`** (integration and build untouched, no cloud): `windowStart(h, token)` in `scripts/qa-business/lib/network.mjs` reads the start from the internal WeakMap with the same handle/forgery validation; docs and b2b third-party traces use `ui_window_from: windowStart(h, window)`; token still without own keys. Test: `windowStart` = `assertNoUiWrites().window_from`, `token.index` undefined, foreign handle ⇒ `UiWindowError`. Harness 55 pass / 1 skipped; `tests/**/*.test.ts` 620 / 0 fail / 1 skipped; tsc clean; node --check; dry-run 0. For root: integrate after the current business run.
+
+## 2026-10-31 — A8 1225f28 peer ACCEPTED; T6 public diagnostic GO after business run
+
+- Root peer review of `1225f2899b521ff131016df0b21f62d8dd5540a4`: 48 PASS, 0 skip, real Chromium; reason P2 and stop P3 closed. **GO for the bounded public targeted T6 diagnostic AFTER** the business run (PTY 40214) ends, cleanup and readback 48. A8 not merged into integration before that run ends. T6 assertion unchanged before DOM; no blind app fix. No cloud agent.
+- Business run (app 4c unchanged / harness 7cf61a6) last read: docs 7/7 PASS, b2b 4/7 PASS, in progress.
+- Workers stay available (tracking a84ded5, business a96ae75, design a2ddf36, QA core af69ab8, backend a3ad58f); root will send T6 PNG/DOM for precise attribution.
