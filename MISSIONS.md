@@ -150,3 +150,17 @@ Cross-verification: Codex examine les preuves de Claude et fait corriger les fin
 - dependencies: helpers009, projet dédié ; frontend Claude branchera le contrat après publication. Ce lot ne remplit pas seul contact/rappel public, chat/SLA ou séparation des opérateurs finance/support. Relais à Claude à00h si inachevé.
 - verification report: CORRECTIONS.md / WEB-PWA-SUPPORT-001 et rapport exactSHA complémentaire.
 - preview: intégration après revue, pas de production.
+
+
+## Correction CL-BE-001 — dossier artisan et missions actives
+- agent: codex
+- status: in_progress
+- branch: codex/web-pwa-backend
+- base revision: fface1af11d62b19522cc5266b6f2b6b536209c0
+- objective: empêcher qu’une modification du dossier professionnel révoque l’approbation de l’artisan et bloque ses missions déjà attribuées (finding Claude précédent).
+- decision technique: refuser la modification self-service du dossier quand des missions sont assigned/quoted/accepted/in_progress ; conserver la possibilité de gérer la disponibilité et le profil de contact séparément, sans relâcher l’approbation ni la suspension explicite admin. Une fois missions clôturées/annulées, le dossier peut être modifié et repasse normalement en examen.
+- owned files: migration012 additive uniquement, tests SQL/API ciblés et étape CI si utile, docs/CODEX_ARTISAN_ACTIVE_GUARD_CONTRACT.md et docs/CODEX_ARTISAN_ACTIVE_GUARD_VERIFICATION.md. Pas de frontend, paiement ni modification001–011.
+- deliverables: contrat/plan prépubliés avant code ; garde serveur et message de conflit ; sérialisation des attributions accept_mission ET admin reassign avec l’édition du profil, pour ne pas laisser la course recréer un artisan non approuvé avec mission active. Conserver toutes les vérifications d’éligibilité/role/montants existantes et rendre privés les anciens helpers.
+- acceptance: édition refusée conserve dossier/approbation ; édition après clôture autorisée ; suspension toujours prioritaire ; refus interrôles ; concurrence claim/édition examinée sous ordre org→dossier→profil→dossierartisan, sans verrouiller les interventions depuis la garde profil (éviter cycle). Les opérations courantes ne gagnent pas d’exception d’approbation. Tests et revue exacte puis QA réelle bornée sur base dédiée après application autorisée. Aucun compteur de tests isolé ne prouve la concurrence réseau.
+- dependencies: règles003/008/009/010 ; RPCs existantes permettent la recette sur la preview déjà prête, sans attendre un nouvel HTTP déployé. Relais à Claude à00h si lot inachevé.
+- verification report: CORRECTIONS.md / CL-BE-001 et rapport complémentaire exactSHA.

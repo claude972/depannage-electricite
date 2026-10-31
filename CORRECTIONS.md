@@ -1345,3 +1345,10 @@ La configuration Vercel opt-out des branches de travail est propagée : coordina
 b8a277a combine les derniers correctifs UI jusqu’au34e998c : garde Auth823, revalidation6667, photosfcc/dbd/34e, densité529, pagination UI interventionsc279, branchement de contrats quote/directory. Le déploiement nouveau est bloqué par quota. Fallback de test explicitement local : /tmp/depannage-web-pwa-local-qa sur stockage interne, source exacteb8, Next webpack127.0.0.1:3017, dépendances épinglées partagées et fichier .env.local privé/ignoré. Aucun résultat local ne sera nommé preview déployée. Origine de test browser localhost pour correspondre à request.url Next dev ; premier essai127 a donné403 sans créer de demande, historique conservé.
 
 Supportfface1a intégré pour compilation e36b7be, reviewer Claude repris sur branche isolée claude/review-support-011, cible exactfface1a. Processus46162 en cours, rapport attendu ; aucune011 appliquée. Le backend support est prêt à revue, frontend assistance n’a qu’un branchement de session à ce stade.
+
+
+## Préparation native — sans scaffold prématuré
+Plan read-only enregistré : docs/NATIVE_READINESS_PLAN.md, découverte des API existantes et recherche primaire Expo/npm. Préparation uniquement ; Web/PWA vérifié reste le prérequis. L’Auth actuelle repose sur cookies, templates e-mail web et preview Vercel protégée ; aucun secret de bypass ne sera embarqué dans une app. Compte/EAS non configurés ni projet créé, aucun build natif déclaré. Les versions proposées seront relues au démarrage réel du lot, pas adoptées sur seule mémoire.
+
+## CL-BE-001 — correction opérationnelle assignée
+Le finding Claude sur l’édition du dossier qui retire l’approbation pendant une mission est traité par un blocage conservateur de cette édition, pas par un relâchement des droits terrain. Voir mission ci-dessus : sérialiser aussi acceptation/réaffectation afin d’éviter une course. Code réservé à012, plan/contrat avant implémentation ; ancienne mission Support011 demeure en revue indépendante, aucune011/012 appliquée à ce stade.
