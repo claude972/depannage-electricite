@@ -84,6 +84,7 @@ import {
   shortId,
 } from "../app/format";
 import styles from "./admin.module.css";
+import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 
 type Tone = "neutral" | "blue" | "green" | "amber" | "red" | "violet";
 type OverviewArtisan = AdminOverview["artisans"][number];
@@ -472,6 +473,8 @@ export function AdminSpace({ session }: { session: Session }) {
       case "admin-messages":
       case "messages":
         return { title: "Messages", subtitle: "Assistance et messages des dossiers" };
+      case "notifications":
+        return { title: "Notifications", subtitle: "Événements enregistrés par la plateforme pour votre compte" };
       case "admin-settings":
         return { title: "Paramètres", subtitle: "Réglages de la plateforme, fonctions activées et journal d’audit" };
       case "admin-warranty":
@@ -989,6 +992,9 @@ export function AdminSpace({ session }: { session: Session }) {
       case "messages":
         content = renderMessages();
         break;
+      case "notifications":
+        content = <NotificationsPage session={session} withTitle={false} />;
+        break;
       case "admin-settings":
         content = withOverview(renderSettings);
         break;
@@ -1103,6 +1109,7 @@ export function AdminSpace({ session }: { session: Session }) {
             <p>{heading.subtitle}</p>
           </div>
           <div className={styles.tools}>
+            <HeaderBell session={session} />
             <span className={styles.chip} role="status">
               <Icon name="clock" size={16} />
               {loadedAt ? `Données au ${dateTime(loadedAt.toISOString())}` : reloading ? "Lecture des données…" : "Données non chargées"}

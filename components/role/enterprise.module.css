@@ -66,6 +66,18 @@
   line-height: 1.3;
   padding-top: 4px;
 }
+/* Cloche des notifications (composant du lot) posée sur la barre bleu roi : icône blanche, filet translucide. */
+.topbarBell > button {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #fff;
+}
+.topbarBell > button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+.topbarBell > button:disabled {
+  color: rgba(255, 255, 255, 0.6);
+}
 .topbarActions {
   margin-left: auto;
   display: flex;

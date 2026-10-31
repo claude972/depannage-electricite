@@ -75,6 +75,7 @@ import {
 import styles from "./artisan.module.css";
 import { QuoteDraftEditor } from "./artisan-quote-draft";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
+import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import {
   appointmentSlotState,
   fmtRating,
@@ -443,6 +444,9 @@ export function ArtisanSpace({ session }: { session: Session }) {
       case "messages":
         content = <Messages session={session} />;
         break;
+      case "notifications":
+        content = <NotificationsPage session={session} />;
+        break;
       case "documents":
         content = (
           <Documents
@@ -514,14 +518,7 @@ export function ArtisanSpace({ session }: { session: Session }) {
             <span>Bonjour,</span>
             <strong>{firstName(session.displayName)}</strong>
           </div>
-          <button
-            type="button"
-            className={styles.iconButton}
-            aria-label="Messages"
-            onClick={() => navigate("messages")}
-          >
-            <Icon name="bell" />
-          </button>
+          <HeaderBell session={session} />
         </header>
         <main id="main" className={styles.main} tabIndex={-1}>
           <Alerts

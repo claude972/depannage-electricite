@@ -82,6 +82,7 @@ import {
   type ListContext,
 } from "./enterprise-lists";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
+import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import type {
   Approval,
   ApprovalRule,
@@ -452,6 +453,14 @@ export function EnterpriseSpace({ session }: { session: Session }) {
           return <MembersView c={c} />;
         case "messages":
           return <MessagesView c={c} />;
+        case "notifications":
+          return (
+            <NotificationsPage
+              session={session}
+              organizationId={c.organization?.id}
+              siteId={c.activeSite?.id}
+            />
+          );
         case "documents":
           return <DocumentsView c={c} />;
         case "profile":
@@ -496,6 +505,9 @@ export function EnterpriseSpace({ session }: { session: Session }) {
           <span className={styles.brandSub}>Portail entreprise</span>
         </button>
         <div className={styles.topbarActions}>
+          <span className={styles.topbarBell}>
+            <HeaderBell session={session} />
+          </span>
           <button
             type="button"
             className={styles.iconButton}
@@ -507,7 +519,7 @@ export function EnterpriseSpace({ session }: { session: Session }) {
             title="Messages"
             onClick={() => go("messages")}
           >
-            <Icon name="bell" />
+            <Icon name="message" />
             {receivedMessages > 0 && (
               <span className={styles.iconCount} aria-hidden="true">
                 {receivedMessages}

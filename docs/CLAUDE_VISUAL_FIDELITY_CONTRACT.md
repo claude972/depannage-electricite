@@ -234,3 +234,24 @@ téléversements) ni primitive partagée modifiés ; `app/globals.css` intact. L
 Écarts assumés consolidés : onglet bas « Accueil » (libellé court), pas de tendance mensuelle ni d’indicateur sans
 source, pas d’étoiles décoratives, pas de statut « validé » par document, pas de pièce jointe au devis, bleu action
 pour les CTA, grille performance 2 colonnes sur téléphone. M14 (documents) et M65 (candidature) restent à auditer.
+
+## Ancrages des lots avancés (branche `claude/web-anchors`, base `claude/web-shared` ee767b6)
+
+Règle commune : aucune entrée ni cloche ne confère un droit ; une entrée n’apparaît que si `ACCESS` admet le rôle et
+que la capacité n’est pas absente (`anchorEntryVisible`, `components/role/anchors.ts`, testé) ; capacité
+`missing`/`unavailable` → état honnête `Unavailable` avec le libellé commun ; refus serveur rendus tels quels ; démo
+isolée fournie par la session uniquement.
+
+### Ancrage 1 — notifications (quatre coques)
+
+| Coque | Cloche | Vue `notifications` |
+| --- | --- | --- |
+| Artisan | `NotificationBell` remplace la cloche « Messages » de l’en-tête (état `capabilities.notifications`, compteur serveur `unreadNotifications`). | `NotificationsPage` (`components/role/notifications-anchor.tsx`) : `NotificationCenter` avec `CONTRACT_MESSAGES[state]`, portée `{ userId, role, authority.canWrite:true }`, client `session.features.notifications`, démo `demoNotificationPage`/`demoPreferences` en mode démonstration seulement, « Ouvrir le dossier » → `openIntervention`. |
+| Particulier | Cloche ajoutée dans les deux en-têtes (bureau et mobile) ; l’ancienne cloche Messages garde sa fonction avec l’icône message. Vue ajoutée à l’allowlist locale `CLIENT_VIEWS`. | Idem. |
+| Entreprise | Cloche ajoutée dans la barre bleu roi (teinte locale `.topbarBell`), icône message pour les messages. | Idem, portée enrichie de l’organisation et du site actifs. |
+| Super Admin | Cloche ajoutée dans les outils d’en-tête ; titre/sous-titre de vue dans l’en-tête de la coque. | Idem sans `PageTitle` (titre porté par l’en-tête). |
+
+Vérifié (démo, script hors dépôt) : cloche visible 44 × 44 et active dans les quatre coques à 360 et 1280 (« Notifications,
+2 non lues », compteur serveur de la démo), clic → `#notifications` et centre rendu ; console sans erreur. Captures :
+`docs/visual-fidelity/anchors-notifications-{artisan,client,manager,admin}-{360,1280}.jpg`. Tests : `tests/ui/anchors.test.ts`
+(visibilité d’entrée selon accès + capacité, portée de feuille) ; suite UI 80/80.

@@ -54,6 +54,7 @@ import type {
   View,
 } from "../app/types";
 import styles from "./client.module.css";
+import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { UploadQueuePanel } from "../app/upload-queue";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
 
@@ -64,6 +65,7 @@ const CLIENT_VIEWS: readonly View[] = [
   "detail",
   "quote",
   "messages",
+  "notifications",
   "documents",
   "profile",
   "help",
@@ -76,6 +78,7 @@ const VIEW_NAMES: Partial<Record<View, string>> = {
   detail: "Intervention",
   quote: "Devis",
   messages: "Messages",
+  notifications: "Notifications",
   documents: "Documents",
   profile: "Mon profil",
   help: "Aide",
@@ -244,6 +247,8 @@ export function ClientSpace({ session }: { session: Session }) {
             />
           </>
         );
+      case "notifications":
+        return <NotificationsPage session={session} />;
       case "documents":
         return <DocumentsView session={session} rows={rows} />;
       case "profile":
@@ -360,13 +365,14 @@ export function ClientSpace({ session }: { session: Session }) {
                 {session.connection === "SUBSCRIBED" ? "En direct" : "Actualiser"}
               </button>
             )}
+            <HeaderBell session={session} />
             <button
               type="button"
               className={styles.bellButton}
               aria-label={received ? `Messages (${received} reçus)` : "Messages"}
               onClick={goMessages}
             >
-              <Icon name="bell" size={20} />
+              <Icon name="message" size={20} />
               {received > 0 && <span className={styles.bellDot} aria-hidden="true" />}
             </button>
             <button
@@ -391,15 +397,18 @@ export function ClientSpace({ session }: { session: Session }) {
           >
             <Brand compact />
           </button>
-          <button
-            type="button"
-            className={styles.bellButton}
-            aria-label={received ? `Messages (${received} reçus)` : "Messages"}
-            onClick={goMessages}
-          >
-            <Icon name="bell" size={22} />
-            {received > 0 && <span className={styles.bellDot} aria-hidden="true" />}
-          </button>
+          <div className={styles.mobileHeaderTools}>
+            <HeaderBell session={session} />
+            <button
+              type="button"
+              className={styles.bellButton}
+              aria-label={received ? `Messages (${received} reçus)` : "Messages"}
+              onClick={goMessages}
+            >
+              <Icon name="message" size={22} />
+              {received > 0 && <span className={styles.bellDot} aria-hidden="true" />}
+            </button>
+          </div>
         </header>
 
         {demo && (
