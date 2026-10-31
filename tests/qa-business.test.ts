@@ -896,3 +896,129 @@ test("§18 preserved: 4c-shaped valid page → W1T6udg45nuoEg3XO7IGT, fragmented
   const two = nextFlightHtml([root("BuildIdOne111")], { staticId: "BuildIdTwo222" });
   assert.equal(preflight.servedBuildIdentity(two).source, "ambiguous");
 });
+
+// ---------------------------------------------------------------- §19 remote mode (Codex helper deployment-proof.mjs, read-only)
+const REMOTE_ORIGIN = "https://depannage-electricite-rb28derhl-brafas-projects.vercel.app";
+const remoteArgs = (extra: string[] = []) => [
+  "--base-url", REMOTE_ORIGIN, "--sha", "b".repeat(40), "--project", "qaproject12345678", "--allow-base-url", REMOTE_ORIGIN,
+  "--deployment-receipt", "/tmp/none.json", "--vercel-project", "prj_Test1", "--vercel-team", "team_Test1", "--vercel-deployment", "dpl_Test1",
+  "--github-repo-id", "42", "--expected-build-id", "W1T6udg45nuoEg3XO7IGT", ...extra,
+];
+function receiptFor(expected: Row, nowMs: number) {
+  return { schemaVersion: 1, origin: expected.origin, projectId: expected.projectId, teamId: expected.teamId, deploymentId: expected.deploymentId, readyState: "READY", target: "preview", gitSource: { type: "github", repoId: expected.repoId, ref: expected.ref, sha: expected.sha }, servedBuildId: expected.servedBuildId, capturedAt: new Date(nowMs).toISOString() };
+}
+async function privateReceipt(content: unknown, mode = 0o600) {
+  const dir = await mkdtemp(path.join(tmpdir(), "qa-business-receipt-"));
+  const file = path.join(dir, "receipt.json");
+  await writeFile(file, JSON.stringify(content), { mode });
+  const { chmod } = await import("node:fs/promises");
+  await chmod(file, mode);
+  return file;
+}
+test("§19 args: remote flags required together for a remote origin, refused in local mode, typed", async () => {
+  assert.deepEqual(args.parseArgs([...remoteArgs(), "--dry-run"]).errors, []);
+  const missing = args.parseArgs(["--base-url", REMOTE_ORIGIN, "--sha", "b".repeat(40), "--project", "qaproject12345678", "--dry-run"]).errors;
+  for (const flag of ["--deployment-receipt", "--vercel-project", "--vercel-team", "--vercel-deployment", "--github-repo-id", "--expected-build-id"]) assert.ok(missing.some((e: string) => e.startsWith(flag)), flag);
+  const local = args.parseArgs(["--base-url", "http://localhost:3017", "--sha", "b".repeat(40), "--project", "qaproject12345678", "--dry-run", "--vercel-project", "prj_x"]).errors;
+  assert.ok(local.some((e: string) => /--vercel-project is only for a remote/.test(e)));
+  const bad = args.parseArgs(remoteArgs(["--github-repo-id", "x"]).map((a, i, all) => (all[i - 1] === "--deployment-receipt" ? "relative.json" : a)).concat("--dry-run")).errors;
+  assert.ok(bad.some((e: string) => /absolute path/.test(e)));
+  assert.ok(bad.some((e: string) => /positive integer/.test(e)));
+});
+test("§19 expected comes only from the CLI (8 fields, ref constant), never from page or receipt", async () => {
+  const remote = await lib("remote");
+  const { options } = args.parseArgs([...remoteArgs(), "--dry-run"]);
+  assert.deepEqual(remote.buildExpected(options), { origin: REMOTE_ORIGIN, projectId: "prj_Test1", teamId: "team_Test1", deploymentId: "dpl_Test1", repoId: 42, ref: "integration/web-pwa", sha: "b".repeat(40), servedBuildId: "W1T6udg45nuoEg3XO7IGT" });
+});
+test("§19 ordered preflight with fakes: receipt refusal ⇒ no fetch; fetch failure ⇒ no verify; codes only, no content", async () => {
+  const remote = await lib("remote");
+  const { options } = args.parseArgs([...remoteArgs(), "--dry-run"]);
+  const calls: string[] = [];
+  const secretHtml = "<html>PRIVATE PAGE CONTENT</html>";
+  const r1 = await remote.remotePreflight({ options, load: async () => { calls.push("load"); throw Object.assign(new Error("Deployment provenance refused: EXPIRED"), { code: "EXPIRED" }); }, fetchHtml: async () => { calls.push("fetch"); return secretHtml; }, verify: () => { calls.push("verify"); } });
+  assert.deepEqual(r1, { ok: false, stage: "receipt", code: "EXPIRED" });
+  assert.deepEqual(calls, ["load"]);
+  calls.length = 0;
+  const r2 = await remote.remotePreflight({ options, load: async () => ({ receipt: "x" }), fetchHtml: async () => { calls.push("fetch"); throw new Error("ECONNRESET details"); }, verify: () => { calls.push("verify"); } });
+  assert.deepEqual(r2, { ok: false, stage: "fetch", code: "FETCH" });
+  assert.deepEqual(calls, ["fetch"]);
+  const r3 = await remote.remotePreflight({ options, load: async () => ({}), fetchHtml: async () => secretHtml, verify: () => { throw Object.assign(new Error("x"), { code: "SERVED_BUILD" }); } });
+  assert.deepEqual(r3, { ok: false, stage: "verify", code: "SERVED_BUILD" });
+  assert.ok(!JSON.stringify([r1, r2, r3]).includes("PRIVATE"), "no page content in the verdict");
+  const statusFail = await remote.fetchPublicHtml(REMOTE_ORIGIN, { fetchImpl: async (url: string, init: Row) => { assert.equal(url, `${REMOTE_ORIGIN}/`); assert.equal(init.redirect, "manual"); return new Response("", { status: 307 }); } }).catch((e: Row) => e.code);
+  assert.equal(statusFail, "FETCH_STATUS", "a redirect is not followed and is refused");
+});
+test("§19 real helper: fresh 0600 receipt outside Git + matching Flight page ⇒ short proof; 0644 / expired / mismatching build ⇒ refused", async () => {
+  const remote = await lib("remote");
+  const { options: base } = args.parseArgs([...remoteArgs(), "--dry-run"]);
+  const nowMs = Date.parse("2026-10-31T20:00:00.000Z");
+  const expected = remote.buildExpected(base);
+  const page = nextFlightHtml([root("W1T6udg45nuoEg3XO7IGT")]);
+  const good = await privateReceipt(receiptFor(expected, nowMs));
+  const ok = await remote.remotePreflight({ options: { ...base, deploymentReceipt: good }, nowMs, fetchHtml: async () => page });
+  assert.equal(ok.ok, true);
+  assert.deepEqual(Object.keys(ok.proof).sort(), ["capturedAt", "deploymentId", "mode", "origin", "provenance", "servedBuildId", "sha"]);
+  assert.equal(ok.proof.servedBuildId, "W1T6udg45nuoEg3XO7IGT");
+  const worldReadable = await privateReceipt(receiptFor(expected, nowMs), 0o644);
+  assert.equal((await remote.remotePreflight({ options: { ...base, deploymentReceipt: worldReadable }, nowMs, fetchHtml: async () => page })).code, "MODE");
+  const stale = await privateReceipt(receiptFor(expected, nowMs - 16 * 60 * 1000));
+  assert.equal((await remote.remotePreflight({ options: { ...base, deploymentReceipt: stale }, nowMs, fetchHtml: async () => page })).code, "EXPIRED", "receipt older than 15 min");
+  const otherBuild = nextFlightHtml([root("SomeOtherBuild1")]);
+  assert.equal((await remote.remotePreflight({ options: { ...base, deploymentReceipt: good }, nowMs, fetchHtml: async () => otherBuild })).code, "SERVED_BUILD");
+  const malformed = page + "<script>self.__next_f.push(null)</script>";
+  assert.equal((await remote.remotePreflight({ options: { ...base, deploymentReceipt: good }, nowMs, fetchHtml: async () => malformed })).code, "FLIGHT_INVALID");
+});
+test("§19 main: a refused remote provenance creates nothing, writes a private BLOCKED result and exits 2, without network to Supabase", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "qa-business-remote-main-"));
+  const creds = path.join(dir, "credentials.json");
+  await writeFile(creds, JSON.stringify({ supabase: { url: "https://qaproject12345678.supabase.co", project_ref: "qaproject12345678", service_role_key: "service-role-key-for-tests-only-xxxx" }, allowed_base_urls: [REMOTE_ORIGIN] }), { mode: 0o600 });
+  const out = path.join(dir, "out");
+  const originalFetch = globalThis.fetch;
+  const fetched: string[] = [];
+  globalThis.fetch = (async (input: string) => {
+    fetched.push(String(input));
+    throw new Error("network forbidden in this test");
+  }) as typeof fetch;
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  const logged: string[] = [];
+  process.stdout.write = ((chunk: string) => (logged.push(String(chunk)), true)) as typeof process.stdout.write;
+  let code: number;
+  try {
+    code = await runModule.main([...remoteArgs(), "--credentials", creds, "--out", out].map((a, i, all) => (all[i - 1] === "--deployment-receipt" ? path.join(dir, "missing-receipt.json") : a)));
+  } finally {
+    process.stdout.write = originalWrite;
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(code, 2);
+  assert.deepEqual(fetched, [], "receipt refused before any request (page or Supabase)");
+  const result = JSON.parse(await readFile(path.join(out, "result.json"), "utf8"));
+  assert.equal(result.scenarios[0].status, "BLOCKED");
+  assert.match(result.scenarios[0].note, /^refused at receipt: (FILE_READ|PATH)$/);
+  assert.equal(result.build_identity.attributable, false);
+  assert.equal(result.build_identity.build_id_local, null, "local BUILD_ID never used in remote mode");
+  const { stat, readdir } = await import("node:fs/promises");
+  assert.equal((await stat(path.join(out, "result.json"))).mode & 0o777, 0o600);
+  assert.deepEqual((await readdir(out)).sort(), ["result.json", "summary.md"], "no manifest, no run log, nothing created");
+  assert.ok(logged.join("").includes("deployment provenance refused at receipt"));
+});
+const REAL_4C = process.env.QA_BUSINESS_4C_HTML || "";
+test("§19 real public 4c HTML (path from QA_BUSINESS_4C_HTML; skipped if absent; never copied into the repo)", { skip: REAL_4C ? false : "QA_BUSINESS_4C_HTML not set" }, async (t) => {
+  let html: string;
+  try {
+    html = await readFile(REAL_4C, "utf8");
+  } catch {
+    t.skip(`${REAL_4C} not readable`);
+    return;
+  }
+  const remote = await lib("remote");
+  assert.equal(preflight.flightPushes(html).invalid, 0, "real page: no malformed push");
+  const identity = preflight.servedBuildIdentity(html);
+  assert.equal(identity.source, "flight");
+  assert.equal(identity.id, "W1T6udg45nuoEg3XO7IGT");
+  const { options: base } = args.parseArgs([...remoteArgs(), "--dry-run"]);
+  const nowMs = Date.parse("2026-10-31T20:00:00.000Z");
+  const receipt = await privateReceipt(receiptFor(remote.buildExpected(base), nowMs));
+  const ok = await remote.remotePreflight({ options: { ...base, deploymentReceipt: receipt }, nowMs, fetchHtml: async () => html });
+  assert.equal(ok.ok, true, JSON.stringify({ code: ok.code, stage: ok.stage }));
+  assert.equal(ok.proof.servedBuildId, "W1T6udg45nuoEg3XO7IGT");
+});
