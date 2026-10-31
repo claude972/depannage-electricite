@@ -11,8 +11,9 @@ export async function gitSha(dir) {const {stdout}=await exec('git',['-C',dir,'re
 // failure, this structured SQL error proves the transaction was rolled back.
 // Keep this allowlist narrow: do not infer rollback from a plain "500" or message text.
 export function definiteMissingRow(body) { return Boolean(body && typeof body==='object' && !Array.isArray(body) && body.code==='P0002' && typeof body.message==='string' && body.message.length>0); }
-export function uncertainResponse(method,status,body=null) { return !['GET','HEAD','OPTIONS'].includes(method) && status>=500 && !(status===500 && definiteMissingRow(body)); }
-export function planningOwnershipRefused(result) { return [403,404].includes(result.status) || (result.status===500 && definiteMissingRow(result.body)); }
+export function isPostgrestEndpoint(endpoint) { return typeof endpoint==='string' && /^\/rest\/v1\/(?:rpc\/[a-z][a-z0-9_]*|[a-z][a-z0-9_]*)(?:\?[^#]*)?$/.test(endpoint); }
+export function uncertainResponse(method,status,body=null,endpoint='') { return !['GET','HEAD','OPTIONS'].includes(method) && status>=500 && !(status===500 && isPostgrestEndpoint(endpoint) && definiteMissingRow(body)); }
+export function planningOwnershipRefused(result) { return [403,404].includes(result.status) || (result.status===500 && isPostgrestEndpoint(result.endpoint) && definiteMissingRow(result.body)); }
 export function parseArgs(argv) {
   const o = { suite: 'all', timeoutMs: 120000, allowed: [] };
   const flags = { '--base-url':'baseUrl', '--sha':'sha', '--app-dir':'appDir', '--project':'project', '--credentials':'credentials', '--out':'out', '--suite':'suite', '--playwright-path':'playwrightPath', '--chromium-path':'chromiumPath', '--cleanup-manifest':'cleanupManifest', '--timeout-ms':'timeoutMs' };

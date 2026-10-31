@@ -93,7 +93,7 @@ export async function browserScenarios(ctx) {
   const handle=await b.newPage(browser,{baseUrl:o.baseUrl,redactor});const {page}=handle;
   const app=async(method,route,body)=>{
     const invoke=()=>page.evaluate(async({method,route,body,timeout})=>{const r=await fetch(route,{method,headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(timeout)});return {status:r.status,body:await r.json().catch(()=>null)};},{method,route,body,timeout:o.timeoutMs});
-    if(method==='GET')return invoke();return mutate(ctx.gate,ctx.registry,'browser '+route,async()=>{try{const r=await invoke();if(uncertainResponse(method,r.status,r.body))throw Error('upstream failure');return r;}catch{const e=Error('browser mutation outcome unknown');e.remoteUnknown=true;throw e;}});
+    if(method==='GET')return invoke();return mutate(ctx.gate,ctx.registry,'browser '+route,async()=>{try{const r=await invoke();if(uncertainResponse(method,r.status,r.body,route))throw Error('upstream failure');return r;}catch{const e=Error('browser mutation outcome unknown');e.remoteUnknown=true;throw e;}});
   };
   await step('browser: real artisan session, planning and notifications contracts',async()=>{
     await b.login(handle,o.baseUrl,u.artisan,o.project,{timeout:o.timeoutMs});

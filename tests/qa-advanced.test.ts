@@ -84,12 +84,15 @@ test('mutation 5xx responses remain transport-uncertain, not a definite rollback
 });
 test('structured SQL P0002 at HTTP500 is a definite rollback and a valid foreign-row refusal, preserving the actual status',()=>{
   const body={code:'P0002',details:null,hint:null,message:'no_data_found'};
-  const response={status:500,body};assert.equal(definiteMissingRow(body),true);assert.equal(uncertainResponse('POST',500,body),false);assert.equal(planningOwnershipRefused(response),true);assert.equal(response.status,500);
+  const endpoint='/rest/v1/rpc/delete_availability_rule';const response={status:500,body,endpoint};assert.equal(definiteMissingRow(body),true);assert.equal(uncertainResponse('POST',500,body,endpoint),false);assert.equal(planningOwnershipRefused(response),true);assert.equal(response.status,500);
   assert.equal(planningOwnershipRefused({status:403,body:null}),true);assert.equal(planningOwnershipRefused({status:404,body:null}),true);
   for(const malformed of [null,'P0002',[],[body],{}, {code:'P0002'}, {code:'P0002',message:''}, {code:'P0002',message:123}, {code:'XX000',message:'P0002'}, {message:'P0002'}]) {
-    assert.equal(definiteMissingRow(malformed),false);assert.equal(uncertainResponse('POST',500,malformed),true);assert.equal(planningOwnershipRefused({status:500,body:malformed}),false);
+    assert.equal(definiteMissingRow(malformed),false);assert.equal(uncertainResponse('POST',500,malformed,endpoint),true);assert.equal(planningOwnershipRefused({status:500,body:malformed,endpoint}),false);
   }
   for(const status of [501,502,503,504])assert.equal(uncertainResponse('POST',status,body),true);
+  for(const nonPostgrest of ['', '/auth/v1/admin/users','/auth/v1/token?grant_type=password','/api/planning','/storage/v1/object/list/private','https://other.invalid/rest/v1/rpc/delete_availability_rule','/rest/v1/../auth']) {
+    assert.equal(uncertainResponse('POST',500,body,nonPostgrest),true);assert.equal(planningOwnershipRefused({status:500,body,endpoint:nonPostgrest}),false);
+  }
 });
 test('the actual CLI dry-run exits before cloud/browser work and never prints fixture keys',async()=>temporary(async dir=>{
   const app=path.join(dir,'app');await mkdir(app);await exec('git',['init','-q',app]);await exec('git',['-C',app,'-c','user.name=QA','-c','user.email=qa@qa.invalid','commit','--allow-empty','-qm','fixture']);
