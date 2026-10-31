@@ -640,7 +640,7 @@ Décision ROOT : la déconnexion globale actuelle du produit est conservée pour
 
 Tout autre cas reste `unknown` et n'est jamais `absent` : 404 avec un autre corps ou sans corps, JSON invalide, clés en plus ou en moins, autre `error_code`.
 
-Ces règles ne changent rien d'autre : l'absence ne ferme toujours aucune intention (P2-2/P2-d), et la recherche paginée par e-mail garde sa preuve de fin. Le `UNKNOWN` d'origine du run 4e8bc1a68a89 reste tel quel. Tests prévus : le corps historique exact est `absent`. Sont `unknown` : un 404 nu, un 404 HTML, un 404 avec un champ en plus, un 404 avec un autre `error_code`, un `msg` vide, la forme `{code: \"user_not_found\", message}`, et un statut 200 ou 500 portant le corps historique.
+Ces règles ne changent rien d'autre : l'absence ne ferme toujours aucune intention (P2-2/P2-d), et la recherche paginée par e-mail garde sa preuve de fin. Le `UNKNOWN` d'origine du run 4e8bc1a68a89 reste tel quel. Tests prévus : le corps historique exact est `absent`. Sont `unknown` : un 404 nu, un 404 HTML, un 404 avec un champ en plus, un 404 avec un autre `error_code`, un `msg` vide, la forme `{code: "user_not_found", message}`, et un statut 200 ou 500 portant le corps historique.
 
 ### 6. Ordre T19 / déconnexion (GO ROOT sur 7502e28, avant le code)
 

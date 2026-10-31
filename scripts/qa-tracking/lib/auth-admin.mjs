@@ -15,6 +15,17 @@ import { UUID } from "../../qa/lib/cohort.mjs";
 export const AUTH_SEARCH_DEFAULTS = Object.freeze({ perPage: 200, maxPages: 50, attempts: 4, intervalMs: 3000, deadlineMs: 15000 });
 
 /** Exact schema of a GET /auth/v1/admin/users/{id} body. */
+/**
+ * A8 §5e: the ONLY body proving the absence of a user by id is the LEGACY GoTrue shape observed by
+ * ROOT, exactly {code:404, error_code:"user_not_found", msg:<non-empty string>} with HTTP 404.
+ * Any other 404 body (empty, HTML, extra key, other error_code, other shape) stays UNKNOWN.
+ */
+export function isLegacyUserNotFound(body) {
+  return body !== null && typeof body === "object" && !Array.isArray(body) &&
+    Object.keys(body).length === 3 && body.code === 404 && body.error_code === "user_not_found" &&
+    typeof body.msg === "string" && body.msg.length > 0;
+}
+
 export function parseUserBody(body, expectedId) {
   if (!body || typeof body !== "object" || Array.isArray(body)) return { ok: false, why: "body is not an object" };
   if (typeof body.id !== "string" || !UUID.test(body.id)) return { ok: false, why: "id missing or not a UUID" };
@@ -74,7 +85,7 @@ export function createAuthAdmin({ url, serviceKey, timeoutMs = 90000, fetchFn = 
   }
 
   return {
-    /** {state:"found", email} | {state:"absent"} (real 404 only) | {state:"unknown", why}. */
+    /** {state:"found", email} | {state:"absent"} (HTTP 404 + exact legacy body only) | {state:"unknown", why}. */
     async readUser(id) {
       let response;
       try {
@@ -82,7 +93,10 @@ export function createAuthAdmin({ url, serviceKey, timeoutMs = 90000, fetchFn = 
       } catch (error) {
         return { state: "unknown", why: String(error?.name || "transport error") };
       }
-      if (response.status === 404) return { state: "absent" };
+      if (response.status === 404) {
+        const notFound = await readJson(response);
+        return notFound.ok && isLegacyUserNotFound(notFound.body) ? { state: "absent" } : { state: "unknown", why: "404 without the recognised user_not_found body" };
+      }
       if (response.status !== 200) return { state: "unknown", why: `status ${response.status}` };
       const json = await readJson(response);
       const parsed = json.ok ? parseUserBody(json.body, id) : { ok: false, why: "body not JSON" };
