@@ -13,7 +13,7 @@ import { recordTrackingRequests, actions, queryViolations, restartViolations, pu
 import { classifyRoute, classifyGeocode } from "./lib/provider-proof.mjs";
 import { act, gatedWait, createMutationGuard, trackBrowserMutations } from "./lib/guard.mjs";
 import { assertUnknownIs404 } from "./lib/preflight.mjs";
-import { observeTrackingNetwork, DIAG_LIMITS } from "./lib/diagnostics.mjs";
+import { observeTrackingNetwork, DIAG_LIMITS, KNOWN_REASONS } from "./lib/diagnostics.mjs";
 
 const POSITION_KEYS = ["latitude", "longitude", "position", "geometry", "destination"];
 
@@ -174,6 +174,43 @@ async function start(ctx, page, id, sessionId = randomUUID()) {
   assert.equal(a.status, 200, `start answered ${a.status}`);
   return { sessionId, snapshot: a.body };
 }
+/**
+ * A10: precondition « dossier not shared » before opening a panel. Not shared ⇒ nothing sent.
+ * Shared ⇒ stop with CAS (current control_version + current session id, same identity, durable
+ * intent through ctx.api), 200 required, then READ BACK shared=false. Otherwise BLOCKED.
+ */
+export function preconditionBlocked(message) {
+  const error = new Error(`precondition: ${message}`);
+  error.blocked = true;
+  return error;
+}
+/** UNKNOWN (never PASS): a read or a write whose shape/outcome cannot be proven. */
+export function preconditionUnknown(message) {
+  const error = new Error(`UNKNOWN precondition: ${message}`);
+  error.blocked = true;
+  error.unknown = true;
+  return error;
+}
+const shareShape = (body) => {
+  const t = body?.tracking;
+  if (!t || typeof t !== "object" || typeof t.shared !== "boolean" || !Number.isInteger(t.control_version)) return null;
+  if (t.shared && (typeof t.session_id !== "string" || !t.session_id)) return null;
+  return t;
+};
+export async function ensureUnshared(ctx, page, id, what) {
+  const before = shareShape(await okSnap(ctx, page, id, `${what} precondition`));
+  if (!before) throw preconditionUnknown(`${what}: snapshot without a recognised tracking shape`);
+  if (!before.shared) return { stopped: false };
+  const r = await command(ctx, page, id, "stop", before.control_version, { session_id: before.session_id });
+  if (r.outcome === "unknown") throw preconditionUnknown(`${what}: stop outcome unknown (status ${r.status}); the intent stays open`);
+  if (r.status !== 200) throw preconditionBlocked(`${what}: inherited share could not be stopped (status ${r.status}${KNOWN_REASONS.includes(r.body?.reason) ? `, ${r.body.reason}` : ""})`);
+  const after = shareShape(await okSnap(ctx, page, id, `${what} precondition readback`));
+  if (!after) throw preconditionUnknown(`${what}: readback without a recognised tracking shape`);
+  if (after.shared !== false) throw preconditionBlocked(`${what}: still shared after the stop (readback)`);
+  return { stopped: true };
+}
+/** A10: the MAIN dossier, same artisan A identity as the T14 page. */
+export const ensureUnsharedMain = (ctx, page) => ensureUnshared(ctx, page, ctx.jobs.main.id, "T14 main");
 function noPositionIn(body, what) {
   const text = JSON.stringify(body ?? null);
   for (const key of POSITION_KEYS) if (new RegExp(`"${key}"\\s*:\\s*[\\[{0-9-]`).test(text)) throw new AppDefect(`${what}: refusal body exposes "${key}"`);
@@ -594,15 +631,11 @@ export const SCENARIO_RUNNERS = {
     assert.equal(again.status, 409, `repeated stop answered ${again.status}`);
     const late = await command(ctx, h.page, job, "point", stopped.tracking.control_version, pointPayload(sid, 99));
     assert.equal(late.status, 409, `point after stop answered ${late.status}`);
-    // Arrived on the main dossier (UI button).
+    // Arrived on the main dossier (UI button). A10: MAIN may be inherited shared (T9 API session):
+    // normalise it (CAS stop + readback) BEFORE opening its panel; no catch, no late retry.
+    await ensureUnsharedMain(ctx, h.page);
     const reqs2 = recordTrackingRequests(h.page);
-    const p2 = await uiStart(ctx, h, ctx.jobs.main.id, s).catch(async (error) => {
-      // main may still be shared by the API session: stop it first, then retry once explicitly.
-      const m = await okSnap(ctx, h.page, ctx.jobs.main.id, "T14 main");
-      if (!m.tracking.shared) throw error;
-      await command(ctx, h.page, ctx.jobs.main.id, "stop", m.tracking.control_version, { session_id: m.tracking.session_id });
-      return uiStart(ctx, h, ctx.jobs.main.id, s);
-    });
+    const p2 = await uiStart(ctx, h, ctx.jobs.main.id, s);
     await waitFor(ctx, async () => actions(reqs2, "point").some((r) => r.status === 200), "a point before arrival");
     await act(ctx.gate, () => p2.getByRole("button", { name: UI.arrived, exact: true }).click());
     await waitFor(ctx, async () => actions(reqs2, "arrived").some((r) => r.status === 200), "arrived accepted");
