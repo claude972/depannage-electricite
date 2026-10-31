@@ -50,3 +50,9 @@ Claude CLI lead unique `b4b555f0` ; commande terminal `claude attach b4b555f0`. 
 ## Actualisation ROOT31oct16h27AST
 
 Public4c rb28derhl inchangé etsansVercelauth. Integration286ab1f poussée615testsPASS/0skip ;CI54fPASS,CI286encours. CallerTrackingREMOTEa67revue40PASS etrunconnecté4e8bc1a68a89 ENCOURS /tmp/depannage-tracking-a67-4c-public-real-2 :setup404/T1–T5PASS, pasverdictfinal ni cleanupencore. Positionsémulées. Cohortevolontaireactiveàsurveillerjusqu'àcleanup/readbackindépendant. BusinessP2horlogee6fermé9f324revue51PASS ;intégrationetrecettepubliquerestentàfaireAPRÈSfinTracking, pasnouveaucumulcohortes. Owneradmin/StripeetphysiqueiPhoneencoredifférés/nonvérifiés.
+
+
+## ÉtatprioritaireROOT31oct16h48AST
+
+Applicationpubliqueapp4c rb28derhl inchangée ;prototypeDelivo7xo6v93eo séparé livré/testseulepasrefonte. Integration2f9a773 poussée623tests+tsc/CI2jobsPASS, pasappnouvelle. RecetteGPSréelleharness286/app4c4e8 :14PASS7FAIL1ANOMALY,cleanup29PASS+42indépendants0/10Auth404/10Storage0. PasGPScomplet ;diagA8/T8/ordonnanceprovidersAVANTT19global/sessionrévoquéelespistesclientworkspaceavantseedàprouver. Auth4048dpeer40PASSseulement ;futurA8WIPnonvalidé.
+RecetteBusinessréelleharness2f9/app4cd467 :13PASS1FAIL0ANOMALY ;50cleanupPASS+48indépendants0/7Auth404/7Storage0. FAILnoPostscomptePOSTdriver403préalable, correctifb943review53PASSmais2P2requêteUIencoreenvolinvisibleetbaselineautrehandle/forgéeacceptée. Pasmerge/rejeucloudupetestavantfixpeer. AUCUNEcohorteQAconnueactiveaprèscesreadbacks. Resteappnoncomplète,owneradmin/Stripeexplicitementdifférés, passtores/natif. Rapportsdétaillésdocs/reviews/TRACKING_286_4C_HOSTED_REAL.md etBUSINESS_2F9_4C_HOSTED_REAL.md.
