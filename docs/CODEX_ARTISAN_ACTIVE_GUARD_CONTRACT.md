@@ -1,6 +1,6 @@
 # CL-BE-001 — dossier professionnel et travail actif
 
-Base fface1af11d62b19522cc5266b6f2b6b536209c0 ; branche codex/web-pwa-backend. **Plan et contrat publiés avant code ;012 non encore implémentée à cette révision.**
+Base fface1af11d62b19522cc5266b6f2b6b536209c0 ; branche codex/web-pwa-backend. **Plan/contrat publiés avant code dans47e7b13 puis renforcés dans1951782 pour les règlements ;012 implémentée/testée localement, revue et QA distante encore requises.**
 
 ## Plan court
 
@@ -10,7 +10,7 @@ Base fface1af11d62b19522cc5266b6f2b6b536209c0 ; branche codex/web-pwa-backend. *
 
 ## Contrats publics inchangés
 
-`POST /api/artisan` action save_profile conserve ses champs/signature. Nouveau **409** si l’artisan possède au moins une intervention assigned, quoted, accepted, in_progress ou completed : le dossier et artisan_approved restent exactement inchangés. Message utilisateur attendu : terminer les missions et leur règlement, ou obtenir leur annulation/réaffectation selon les commandes permises, avant de modifier le dossier professionnel. Ne pas faire disparaître le formulaire ni prétendre avoir sauvegardé après ce conflit.
+`POST /api/artisan` action save_profile conserve ses champs/signature. Nouveau **409** si l’artisan possède au moins une intervention assigned, quoted, accepted, in_progress ou completed : le dossier et artisan_approved restent exactement inchangés. La RPC porte une raison française explicite ; le handler HTTP existant conserve sa traduction générique409. Le frontend doit contextualiser ce409 pour save_profile. Message utilisateur attendu : terminer les missions et leur règlement, ou obtenir leur annulation/réaffectation selon les commandes permises, avant de modifier le dossier professionnel. Ne pas faire disparaître le formulaire ni prétendre avoir sauvegardé après ce conflit.
 
 Suspension existante reste prioritaire :403 et aucun retour à draft/submitted. Les comptes non-artisan ne gagnent aucun droit. Une fois toutes les missions sorties de ces cinq états, une modification autorisée garde le comportement actuel : dossier draft, disponibilité désactivée et approbation retirée, puis nouveau dépôt/examen. Seuls paid/cancelled libèrent les obligations pour ce contrôle ; completed encore non réglé reste bloquant.
 
