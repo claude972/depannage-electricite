@@ -872,3 +872,7 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - Stop: gate checked before each page, after the screenshot and after the DOM read; once raised, no further page operation, capture `truncated: "stopping"`, remaining pages skipped; current page JSON still written locally. Repro: stop during screenshot ⇒ 1 screenshot, 0 DOM reads, second page untouched; stop during DOM read truncated; verdict stays FAIL through `runOne`.
 - Checks: tsc 0; `tests/qa-tracking*` 48/48; `tests/*.test.ts` 324/324; `tests/ui` 166/166; `scripts/qa/tests` 92/92; node --check; `--dry-run --only T6` 0.
 - For root: peer review 1225f28, then the targeted T6 public diagnostic run.
+
+## 2026-10-31 — business trace P3 fixed: 692b779 (branch only)
+
+- `claude/web-qa-business` **`692b779db145eedf4b08081f683c109fdeb3b525`** (integration and build untouched, no cloud): `windowStart(h, token)` in `scripts/qa-business/lib/network.mjs` reads the start from the internal WeakMap with the same handle/forgery validation; docs and b2b third-party traces use `ui_window_from: windowStart(h, window)`; token still without own keys. Test: `windowStart` = `assertNoUiWrites().window_from`, `token.index` undefined, foreign handle ⇒ `UiWindowError`. Harness 55 pass / 1 skipped; `tests/**/*.test.ts` 620 / 0 fail / 1 skipped; tsc clean; node --check; dry-run 0. For root: integrate after the current business run.
