@@ -181,27 +181,42 @@ export async function runCleanup(db, manifest, log = () => {}, steps = CLEANUP_S
 }
 
 /**
- * Intents (users whose Auth creation was requested with a pre-generated id). A pending intent is
- * resolved only when `GET admin/users/<id>` returns a user carrying exactly the intent email; it is
- * then added to the manifest lists. Nothing is searched by pattern.
+ * Intents (users whose Auth creation was requested with a pre-generated id). Precondition NOT
+ * assumed: that Auth honours the requested id. A pending intent is therefore established by TWO
+ * exact reads: `GET admin/users/<intent id>` and an exhaustive listing filtered on the exact intent
+ * email (cohort-unique `qa-<runId>-<label>@qa.invalid`).
+ *  - resolved : exactly one account carries the intent email (its id, pre-generated or not, is
+ *               added to the manifest lists) and no other account holds the intent id;
+ *  - absent   : the id answers 404 AND the exhaustive email listing finds nothing;
+ *  - mismatch : the intent id belongs to an account with another email (never claimed);
+ *  - unknown  : any read failed, the listing was not exhausted, or several accounts match.
+ * Only `resolved` and `absent` are definite; anything else makes the cleanup incomplete.
  */
 export async function resolveIntents(auth, manifest, log = () => {}) {
   const intents = Array.isArray(manifest?.intents) ? manifest.intents : [];
   const resolved = [];
   for (const intent of intents) {
     if (intent.status === "resolved") continue;
-    const entry = { id: intent.id, label: intent.label, status: "unresolved", error: null };
+    const entry = { id: intent.id, label: intent.label, status: "unknown", account_id: null, error: null };
     try {
-      const user = await auth.getUser(intent.id);
-      if (user && user.email === intent.email) {
-        if (!manifest.created.auth_users.includes(intent.id)) manifest.created.auth_users.push(intent.id);
-        if (!manifest.created.profiles.includes(intent.id)) manifest.created.profiles.push(intent.id);
-        intent.status = "resolved";
-        entry.status = "resolved";
-      } else if (user) {
+      const byId = await auth.getUser(intent.id);
+      const byEmail = await auth.findUsersByEmail(intent.email);
+      if (byId && byId.email !== intent.email) {
         entry.status = "mismatch";
-        entry.error = "an account exists with this id but not the intent email: left untouched";
-      } else entry.status = "absent";
+        entry.error = "an account holds the intent id with another email: left untouched";
+      } else if (byEmail.length > 1) {
+        entry.error = `${byEmail.length} accounts carry the intent email: ambiguous`;
+      } else if (byEmail.length === 1 && (!byId || byId.id === byEmail[0].id)) {
+        const accountId = byEmail[0].id;
+        for (const key of ["auth_users", "profiles"]) if (!manifest.created[key].includes(accountId)) manifest.created[key].push(accountId);
+        intent.status = "resolved";
+        intent.server_id = accountId;
+        entry.status = "resolved";
+        entry.account_id = accountId;
+      } else if (!byId && byEmail.length === 0) {
+        intent.status = "absent";
+        entry.status = "absent";
+      } else entry.error = "id and email reads disagree";
     } catch (error) {
       entry.status = "unknown";
       entry.error = String(error?.message || error);
@@ -210,4 +225,39 @@ export async function resolveIntents(auth, manifest, log = () => {}) {
     resolved.push(entry);
   }
   return resolved;
+}
+
+/**
+ * The only cleanup path (normal run, crash, signal and --cleanup-manifest):
+ * 1. indirect collection (optional): a failure makes the outcome of indirect rows UNKNOWN;
+ * 2. intent resolution; resolved ids are written to the manifest and the manifest is SAVED
+ *    before any deletion they newly authorise;
+ * 3. id-only deletion plan (runCleanup).
+ * `ok` is true only when every step passed AND no intent is unknown/mismatch AND the collection
+ * succeeded. Anything else is INCOMPLETE (exit 3) with the reasons listed; the manifest is kept.
+ */
+export async function finalizeCleanup({ db, auth, manifest, collect = null, save = async () => {}, log = () => {} }) {
+  const incomplete = [];
+  if (collect) {
+    try {
+      await collect();
+    } catch (error) {
+      incomplete.push(`indirect collection failed (rows created by the application may be missing from the manifest): ${String(error?.message || error)}`);
+    }
+  }
+  let intents = [];
+  try {
+    intents = await resolveIntents(auth, manifest, log);
+  } catch (error) {
+    incomplete.push(`intent resolution failed: ${String(error?.message || error)}`);
+  }
+  for (const entry of intents) if (entry.status === "unknown" || entry.status === "mismatch") incomplete.push(`intent ${entry.label} (${entry.id}) ${entry.status}${entry.error ? `: ${entry.error}` : ""}`);
+  try {
+    await save(manifest);
+  } catch (error) {
+    // Without a durable manifest no newly resolved id may be deleted.
+    return { ok: false, halted: "manifest save", incomplete: [...incomplete, `manifest could not be saved before deletion: ${String(error?.message || error)}`], intents, steps: [] };
+  }
+  const result = await runCleanup(db, manifest, log);
+  return { ...result, ok: result.ok && incomplete.length === 0, incomplete, intents };
 }

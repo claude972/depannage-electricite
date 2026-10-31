@@ -20,7 +20,7 @@ import { createReport, renderSummary, AppDefect } from "../qa/lib/report.mjs";
 import { createLifecycle, createStopGate, fatalExitCode } from "../qa/lib/lifecycle.mjs";
 import { createServiceClient } from "../qa/lib/supabase.mjs";
 import { loadPlaywright, launchBrowser, configureBrowser, stopBrowser, newPage } from "../qa/lib/browser.mjs";
-import { CLEANUP_STEPS, runCleanup, resolveIntents } from "./lib/cleanup.mjs";
+import { CLEANUP_STEPS, finalizeCleanup } from "./lib/cleanup.mjs";
 import { BusinessFixtures } from "./lib/fixtures.mjs";
 import { createAdminAuth } from "./lib/auth.mjs";
 import { readLocalBuildId, servedBuildId, compareBuildIds } from "./lib/preflight.mjs";
@@ -161,7 +161,8 @@ async function main(argv) {
       summary: report.summary(),
       fatal: fatalInfo,
       scenarios: report.scenarios,
-      cleanup: cleanupResult ? { ok: cleanupResult.ok, halted: cleanupResult.halted ?? null, steps: cleanupResult.steps?.length ?? 0, failed: (cleanupResult.steps || []).filter((s) => s.status !== "pass" && s.status !== "skipped").length, error: cleanupResult.error || null } : null,
+      build_identity: buildIdentity(context),
+      cleanup: cleanupResult ? { ok: cleanupResult.ok, halted: cleanupResult.halted ?? null, incomplete: cleanupResult.incomplete ?? [], steps: cleanupResult.steps?.length ?? 0, failed: (cleanupResult.steps || []).filter((s) => s.status !== "pass" && s.status !== "skipped").length, error: cleanupResult.error || null } : null,
       drain: drainResult,
       manifest: fixtures.manifestPath,
       not_exercised: NOT_EXERCISED,
@@ -169,7 +170,7 @@ async function main(argv) {
     async function persist() {
       const result = redactor.redact(buildResult());
       await writeFile(path.join(outDir, "result.json"), JSON.stringify(result, null, 2) + "\n", { mode: 0o600 });
-      await writeFile(path.join(outDir, "summary.md"), renderSummary(result) + "\n## Not exercised by this lot (contract §8)\n\n" + NOT_EXERCISED.map((l) => `- ${l}`).join("\n") + "\n", { mode: 0o600 });
+      await writeFile(path.join(outDir, "summary.md"), renderSummary(result) + renderIdentityAndCleanup(result) + "\n## Not exercised by this lot (contract §8)\n\n" + NOT_EXERCISED.map((l) => `- ${l}`).join("\n") + "\n", { mode: 0o600 });
     }
     let browser = null;
     const lifecycle = createLifecycle({
@@ -177,24 +178,18 @@ async function main(argv) {
       log,
       gate,
       drainTimeoutMs: options.timeoutMs,
-      cleanup: async () => {
-        await stopBrowser(browser);
-        browser = null;
-        try {
-          await fixtures.collectIndirect();
-        } catch (error) {
-          log(`indirect fixture collection failed: ${redactor.redactString(error.message)}`);
-        }
-        try {
-          await resolveIntents(auth, fixtures.manifest, (entry) => log(`intent ${entry.status.padEnd(10)} ${entry.label}${entry.error ? ` — ${entry.error}` : ""}`));
-          await fixtures.save();
-        } catch (error) {
-          log(`intent resolution failed: ${redactor.redactString(error.message)}`);
-        }
-        const result = await runCleanup(db, fixtures.manifest, (entry) => log(`cleanup ${entry.status.padEnd(15)} ${entry.table}${entry.column ? ` by ${entry.column}` : ""}: requested ${entry.requested}, remaining ${entry.remaining}${entry.error ? ` — ${entry.error}` : ""}`));
-        await writeFile(path.join(outDir, "cleanup.json"), JSON.stringify(redactor.redact(result), null, 2) + "\n", { mode: 0o600 });
-        return result;
-      },
+      cleanup: makeRunCleanup({
+        fixtures,
+        db,
+        auth,
+        outDir,
+        redactor,
+        log,
+        stopBrowser: async () => {
+          await stopBrowser(browser);
+          browser = null;
+        },
+      }),
       writeResults: async ({ cleanup, fatal, reason, drain }) => {
         cleanupResult = cleanup;
         drainResult = drain;
@@ -287,16 +282,65 @@ async function cleanupOnly(options, redactor, log) {
   const credentials = await loadCredentials(options.credentials);
   redactor.add(credentials.supabase.serviceKey);
   assertProject(options.project, credentials);
-  const manifest = JSON.parse(await readFile(options.cleanupManifest, "utf8"));
-  if (manifest.project && manifest.project !== options.project) throw new PreflightError(`manifest was created for project ${manifest.project}, not ${options.project}`);
   const db = createServiceClient({ url: credentials.supabase.url, serviceKey: credentials.supabase.serviceKey, redactor, timeoutMs: options.timeoutMs });
   const auth = createAdminAuth({ url: credentials.supabase.url, serviceKey: credentials.supabase.serviceKey, redactor, timeoutMs: options.timeoutMs });
-  await resolveIntents(auth, manifest, (entry) => log(`intent ${entry.status.padEnd(10)} ${entry.label}${entry.error ? ` — ${entry.error}` : ""}`));
-  const cleanup = await runCleanup(db, manifest, (entry) => log(`cleanup ${entry.status.padEnd(15)} ${entry.table}${entry.column ? ` by ${entry.column}` : ""}: requested ${entry.requested}, remaining ${entry.remaining}${entry.error ? ` — ${entry.error}` : ""}`));
-  const target = path.join(path.dirname(path.resolve(options.cleanupManifest)), "cleanup.json");
+  return runCleanupOnly({ manifestPath: options.cleanupManifest, project: options.project, db, auth, redactor, log });
+}
+
+/** --cleanup-manifest body, injectable: same fail-closed finalizer; 0 only when complete, else 3. */
+export async function runCleanupOnly({ manifestPath, project, db, auth, redactor, log = () => {} }) {
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  if (manifest.project && manifest.project !== project) throw new PreflightError(`manifest was created for project ${manifest.project}, not ${project}`);
+  if (!manifest.created) throw new PreflightError("manifest has no `created` section");
+  const cleanup = await finalizeCleanup({
+    db,
+    auth,
+    manifest,
+    save: async (m) => writeFile(manifestPath, JSON.stringify({ ...m, updated_at: new Date().toISOString() }, null, 2) + "\n", { mode: 0o600 }),
+    log: (entry) => log(cleanupLine(entry)),
+  });
+  const target = path.join(path.dirname(path.resolve(manifestPath)), "cleanup.json");
   await writeFile(target, JSON.stringify(redactor.redact(cleanup), null, 2) + "\n", { mode: 0o600 });
+  for (const reason of cleanup.incomplete ?? []) log(`INCOMPLETE: ${reason}`);
   log(`cleanup ${cleanup.ok ? "complete" : "INCOMPLETE"} → ${target}`);
   return cleanup.ok ? 0 : 3;
+}
+
+const cleanupLine = (entry) =>
+  "table" in entry
+    ? `cleanup ${String(entry.status).padEnd(15)} ${entry.table}${entry.column ? ` by ${entry.column}` : ""}: requested ${entry.requested}, remaining ${entry.remaining}${entry.error ? ` — ${entry.error}` : ""}`
+    : `intent ${String(entry.status).padEnd(10)} ${entry.label}${entry.error ? ` — ${entry.error}` : ""}`;
+
+/** Cleanup used by the lifecycle (normal end, crash, signal): browser stopped first, then the fail-closed finalizer. */
+export function makeRunCleanup({ fixtures, db, auth, outDir, redactor, log = () => {}, stopBrowser = async () => {} }) {
+  return async () => {
+    await stopBrowser();
+    const result = await finalizeCleanup({ db, auth, manifest: fixtures.manifest, collect: () => fixtures.collectIndirect(), save: () => fixtures.save(), log: (entry) => log(cleanupLine(entry)) });
+    for (const reason of result.incomplete ?? []) log(`INCOMPLETE: ${reason}`);
+    await writeFile(path.join(outDir, "cleanup.json"), JSON.stringify(redactor.redact(result), null, 2) + "\n", { mode: 0o600 });
+    return result;
+  };
+}
+
+/** Explicit build identity for result.json: results are attributable to --sha only when both are verified. */
+export function buildIdentity(context) {
+  const verified = context.sha_verified === true && context.build_id_verified === true;
+  return {
+    sha: context.sha,
+    sha_verified: context.sha_verified === true,
+    build_id_local: context.build_id ?? null,
+    build_id_served: context.build_id_served ?? null,
+    build_id_verified: context.build_id_verified === true,
+    attributable: verified,
+    note: verified ? "served build = --app-dir build at --sha" : "NOT VERIFIED: results must not be attributed to --sha (missing local BUILD_ID, missing served marker or no --app-dir)",
+  };
+}
+export function renderIdentityAndCleanup(result) {
+  const id = result.build_identity ?? buildIdentity(result.context ?? {});
+  const lines = ["", "## Build identity", "", `- sha_verified: ${id.sha_verified}; build_id_verified: ${id.build_id_verified} (local ${id.build_id_local ?? "none"}, served ${id.build_id_served ?? "none"})`, `- attributable to --sha: ${id.attributable ? "yes" : "NO"} — ${id.note}`];
+  const reasons = result.cleanup?.incomplete ?? [];
+  if (reasons.length) lines.push("", "## Cleanup incomplete — manifest kept, rerun with --cleanup-manifest", "", ...reasons.map((r) => `- ${r}`));
+  return lines.join("\n") + "\n";
 }
 
 export { SUITES };

@@ -7,6 +7,11 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { writeFile } from "node:fs/promises";
+import { PdfDocument } from "../lib/features/quote-documents/pdf-writer";
+import { renderQuoteDocumentPdf } from "../lib/features/quote-documents/pdf";
+import { parseSnapshot } from "../lib/features/quote-documents/snapshot";
+import { sampleSnapshot } from "./documents/harness";
 
 // Dynamic imports keep the ESM harness modules untyped for tsc (the harness is plain Node ESM).
 const lib = (name: string) => import(new URL(`../scripts/qa-business/lib/${name}.mjs`, import.meta.url).href);
@@ -130,21 +135,74 @@ test("a readback with an unknown outcome also halts; a definite refusal (4xx) re
   assert.equal(complete.ok, true);
   assert.equal(complete.steps.at(-1).table, "auth.users");
 });
-test("intents are resolved only when the Auth account carries exactly the intent email", async () => {
-  const manifest = cleanup.emptyManifest({});
-  manifest.intents.push({ id: uuid(1, "c0000000"), label: "a", email: "qa-x-a@qa.invalid", status: "pending" }, { id: uuid(2, "c0000000"), label: "b", email: "qa-x-b@qa.invalid", status: "pending" }, { id: uuid(3, "c0000000"), label: "c", email: "qa-x-c@qa.invalid", status: "pending" });
-  const auth = {
+/** Fake admin Auth: accounts by id; `fail` makes the named read throw (outcome unknown). */
+function fakeAuth(accounts: { id: string; email: string }[], fail: { getUser?: boolean; list?: boolean } = {}) {
+  return {
     async getUser(id: string) {
-      if (id === uuid(1, "c0000000")) return { id, email: "qa-x-a@qa.invalid" };
-      if (id === uuid(2, "c0000000")) return { id, email: "someone-else@example.invalid" };
-      return null;
+      if (fail.getUser) throw Object.assign(new Error("getAuthUser: no answer within 10 ms"), { name: "TimeoutError" });
+      return accounts.find((a) => a.id === id) ?? null;
     },
+    async findUsersByEmail(email: string) {
+      if (fail.list) throw new Error("listAuthUsers: listing not exhausted");
+      return accounts.filter((a) => a.email.toLowerCase() === email.toLowerCase());
+    },
+    async deleteAuthUser() {},
   };
+}
+const intent = (n: number, label: string) => ({ id: uuid(n, "c0000000"), label, email: `qa-x-${label}@qa.invalid`, status: "pending" });
+test("intents: resolved by exact email (even if Auth ignored the pre-id), absent only after id 404 AND exhaustive email listing, else mismatch/unknown", async () => {
+  const manifest = cleanup.emptyManifest({});
+  manifest.intents.push(intent(1, "a"), intent(2, "b"), intent(3, "c"), intent(4, "d"), intent(5, "e"));
+  const otherId = uuid(99, "c0000000");
+  const auth = fakeAuth([
+    { id: uuid(1, "c0000000"), email: "qa-x-a@qa.invalid" },
+    { id: uuid(2, "c0000000"), email: "someone-else@example.invalid" },
+    { id: otherId, email: "qa-x-d@qa.invalid" }, // Auth assigned another id than requested
+    { id: uuid(98, "c0000000"), email: "qa-x-e@qa.invalid" },
+    { id: uuid(97, "c0000000"), email: "QA-X-E@qa.invalid" }, // two accounts: ambiguous
+  ]);
   const entries = await cleanup.resolveIntents(auth, manifest);
-  assert.deepEqual(entries.map((e: Row) => e.status), ["resolved", "mismatch", "absent"]);
-  assert.deepEqual(manifest.created.auth_users, [uuid(1, "c0000000")]);
-  assert.deepEqual(manifest.created.profiles, [uuid(1, "c0000000")]);
+  assert.deepEqual(entries.map((e: Row) => e.status), ["resolved", "mismatch", "absent", "resolved", "unknown"]);
+  assert.deepEqual(manifest.created.auth_users, [uuid(1, "c0000000"), otherId], "the account found by exact email is tracked, never the pre-id guess");
   assert.equal(manifest.intents[1].status, "pending", "a mismatching account is never claimed");
+  assert.equal(manifest.intents[3].server_id, otherId);
+  const unreachable = cleanup.emptyManifest({});
+  unreachable.intents.push(intent(6, "f"));
+  const [timedOut] = await cleanup.resolveIntents(fakeAuth([], { getUser: true }), unreachable);
+  assert.equal(timedOut.status, "unknown", "a 404 cannot be inferred from a timeout");
+  const [partial] = await cleanup.resolveIntents(fakeAuth([], { list: true }), unreachable);
+  assert.equal(partial.status, "unknown", "an id 404 without an exhausted email listing is not proof of absence");
+});
+test("finalizeCleanup: an unknown intent with an empty `created` list is INCOMPLETE (never ok:true, steps:0); manifest saved before deletion", async () => {
+  const manifest = cleanup.emptyManifest({});
+  manifest.intents.push(intent(7, "timeout"));
+  const order: string[] = [];
+  const db = fakeDb();
+  const result = await cleanup.finalizeCleanup({ db, auth: fakeAuth([], { getUser: true }), manifest, save: async () => order.push("save") });
+  assert.equal(result.ok, false);
+  assert.equal(result.steps.length, 0);
+  assert.ok(result.incomplete.some((r: string) => /intent timeout .* unknown/.test(r)));
+  assert.deepEqual(order, ["save"]);
+  // A resolved id is written to the manifest and saved BEFORE its deletion.
+  const resolvedManifest = cleanup.emptyManifest({});
+  resolvedManifest.intents.push(intent(8, "late"));
+  const seen: string[] = [];
+  const trackingDb = { ...fakeDb(), async deleteAuthUser(id: string) { seen.push(`delete:${id}`); }, async authUserExists() { return false; }, async delete(table: string) { seen.push(`delete:${table}`); } };
+  const done = await cleanup.finalizeCleanup({
+    db: trackingDb,
+    auth: fakeAuth([{ id: uuid(8, "c0000000"), email: "qa-x-late@qa.invalid" }]),
+    manifest: resolvedManifest,
+    save: async (m: Row) => seen.push(`save:${JSON.stringify((m.created as Row).auth_users)}`),
+  });
+  assert.equal(done.ok, true);
+  assert.equal(seen[0], `save:["${uuid(8, "c0000000")}"]`, "manifest saved with the resolved id first");
+  assert.ok(seen.includes(`delete:${uuid(8, "c0000000")}`));
+  const failingSave = await cleanup.finalizeCleanup({ db: trackingDb, auth: fakeAuth([]), manifest: cleanup.emptyManifest({}), save: async () => { throw new Error("ENOSPC"); } });
+  assert.equal(failingSave.ok, false);
+  assert.equal(failingSave.halted, "manifest save");
+  const collectFails = await cleanup.finalizeCleanup({ db: fakeDb(), auth: fakeAuth([]), manifest: manifestWith(), collect: async () => { throw new Error("select timed out"); } });
+  assert.equal(collectFails.ok, false, "an unknown indirect collection forbids a complete verdict");
+  assert.ok(collectFails.incomplete.some((r: string) => /indirect collection failed/.test(r)));
 });
 
 // ---------------------------------------------------------------- durable intents before Auth
@@ -334,26 +392,138 @@ test("build id: served document parsed, compared with the local build, mismatch 
   assert.equal(preflight.compareBuildIds(null, "AbC123xyz").verified, false);
   assert.equal(preflight.compareBuildIds("AbC123xyz", null).verified, false);
 });
-test("PDF inspection: real bytes only — header, length, reference and amounts; the overview JSON is never enough", () => {
+test("PDF inspection on bytes from the CANONICAL writer: decoded text literals (octal ° and accents), EOF required", () => {
   const quoteId = "1a2b3c4d-0000-4000-8000-000000000000";
   assert.equal(pdf.quoteReference(quoteId), "DEV-1A2B3C");
   assert.equal(pdf.quoteReference(quoteId, 2), "AV-2-DEV-1A2B3C");
   assert.equal(pdf.euroDigits(12000), "120,00");
-  assert.equal(pdf.euroDigits(6005), "60,05");
-  const bytes = Buffer.from("%PDF-1.4\n1 0 obj (DEVIS DEV-1A2B3C) Tj (Total TTC 120,00) Tj endobj\n%%EOF", "latin1");
-  const good = pdf.inspectPdf(bytes, { status: 200, contentType: "application/pdf", contentLength: String(bytes.length), expect: ["DEVIS", "DEV-1A2B3C", "120,00"] });
-  assert.equal(good.ok, true);
-  assert.deepEqual(good.missing, []);
-  assert.equal(pdf.inspectPdf(bytes, { status: 200, contentType: "application/pdf", contentLength: String(bytes.length), expect: ["999,99"] }).ok, false, "a wrong amount fails");
+  const doc = new PdfDocument();
+  const page = doc.addPage();
+  page.text(40, 800, "AVENANT N° 1 AU DEVIS DEV-1A2B3C", { font: "bold" });
+  page.text(40, 780, "Validité non renseignée par l’émetteur (état « QA »)");
+  page.text(40, 760, "Total TTC 60,00 € (parenthèses \\ échappées)");
+  const bytes = Buffer.from(doc.build({ title: "Avenant — QA" }));
+  assert.ok(!bytes.toString("latin1").includes("N° 1"), "the writer octal-escapes °: raw-byte search would miss it");
+  const verdict = pdf.inspectPdf(bytes, { status: 200, contentType: "application/pdf", contentLength: String(bytes.length), expect: ["AVENANT N° 1 AU DEVIS DEV-1A2B3C", "Validité non renseignée par l’émetteur", "60,00 €", "(parenthèses \\ échappées)"] });
+  assert.deepEqual(verdict.missing, []);
+  assert.equal(verdict.ok, true);
+  assert.equal(verdict.has_eof, true);
+  assert.equal(pdf.inspectPdf(bytes, { status: 200, contentType: "application/pdf", expect: ["999,99"] }).ok, false, "a wrong amount fails");
+  const truncated = bytes.subarray(0, bytes.length - 8);
+  const cut = pdf.inspectPdf(truncated, { status: 200, contentType: "application/pdf", expect: [] });
+  assert.equal(cut.has_eof, false);
+  assert.equal(cut.ok, false, "a truncated PDF without %%EOF is refused");
   assert.equal(pdf.inspectPdf(bytes, { status: 200, contentType: "application/pdf", contentLength: "5", expect: [] }).ok, false, "length mismatch fails");
   assert.equal(pdf.inspectPdf(Buffer.alloc(0), { status: 200, contentType: "application/pdf", expect: [] }).ok, false, "empty body fails");
   assert.equal(pdf.inspectPdf(Buffer.from('{"document":{"reference":"DEV-1A2B3C"}}'), { status: 200, contentType: "application/json", expect: ["DEV-1A2B3C"] }).ok, false, "JSON is not a PDF");
   assert.equal(pdf.inspectPdf(bytes, { status: 404, contentType: "application/pdf", expect: [] }).ok, false);
   assert.equal(pdf.expectedEtag({ snapshot_sha256: "f".repeat(64), revision: 3 }), `"${"f".repeat(32)}-r3"`);
 });
+test("PDF inspection on a full amendment rendered by the application's renderer (renderQuoteDocumentPdf)", () => {
+  const snapshot = parseSnapshot(sampleSnapshot({ kind: "amendment", lineCount: 3 }));
+  const bytes = Buffer.from(renderQuoteDocumentPdf(snapshot, { revision: 1, generated_at: "2026-10-31T14:05:00Z", snapshot_sha256: "ab".repeat(32) }));
+  const verdict = pdf.inspectPdf(bytes, {
+    status: 200,
+    contentType: "application/pdf",
+    contentLength: String(bytes.length),
+    expect: ["AVENANT N° 3 AU DEVIS DEV-100000", "Validité non renseignée par l’émetteur", "Total TTC des avenants acceptés antérieurs : 50,00 €."],
+  });
+  assert.deepEqual(verdict.missing, []);
+  assert.equal(verdict.ok, true);
+});
 test("Postgres month arithmetic helper matches date + interval semantics (day clamped to month end)", async () => {
   const b2b = await import(new URL("../scripts/qa-business/suites/b2b.mjs", import.meta.url).href);
   assert.equal(b2b.addMonthsLikePostgres("2026-01-31", 1), "2026-02-28");
   assert.equal(b2b.addMonthsLikePostgres("2026-08-31", 6), "2027-02-28");
   assert.equal(b2b.addMonthsLikePostgres("2026-10-10", 6), "2027-04-10");
+});
+
+// ---------------------------------------------------------------- real finalizer path (makeRunCleanup / runCleanupOnly)
+async function realRun(options: { auth: Row; collectFails?: boolean; created?: (m: Row) => void }) {
+  const dir = await mkdtemp(path.join(tmpdir(), "qa-business-final-"));
+  const manifestPath = path.join(dir, "manifest.json");
+  const redactor = redactModule.createRedactor();
+  const cohort = cohortModule.createCohort("0123456789ab");
+  const noop = async () => [];
+  const db = { ...fakeDb(), select: noop, insert: noop, upsert: noop, update: noop };
+  const fixtures = new fixturesModule.BusinessFixtures({ db, auth: options.auth, cohort, manifestPath, context: { project: "qaproject12345678" }, redactor });
+  fixtures.manifest.intents.push(intent(20, "auth-timeout"));
+  options.created?.(fixtures.manifest);
+  if (options.collectFails) fixtures.collectIndirect = async () => { throw new Error("collect: no answer within 10 ms"); };
+  await fixtures.save();
+  const events: string[] = [];
+  const report = reportModule.createReport({ run_id: "x" }, redactor);
+  const lifecycle = lifecycleModule.createLifecycle({
+    cleanup: runModule.makeRunCleanup({ fixtures, db, auth: options.auth, outDir: dir, redactor, log: (l: string) => events.push(l), stopBrowser: async () => { events.push("browser stopped"); } }),
+    writeResults: async () => { events.push("results written"); },
+    drainTimeoutMs: 100,
+  });
+  const passing = { name: "ok", description: "passes", needsCredentials: false, async run({ report: r }: { report: Row }) { await (r.scenario as (a: string, b: string, c: () => Promise<void>) => Promise<void>)("ok", "fine", async () => {}); } };
+  const result = await orchestrateModule.orchestrate({ suites: [passing], ctx: { fixtures, report }, lifecycle, report });
+  return { result, dir, manifestPath, events };
+}
+test("real finalizer: an Auth intent of unknown fate makes the run exit 3 with the manifest kept on disk, even with every scenario PASS", async () => {
+  const { result, manifestPath, dir, events } = await realRun({ auth: fakeAuth([], { getUser: true }) });
+  assert.deepEqual(result.summary, { total: 1, pass: 1, fail: 0, anomaly: 0 });
+  assert.equal(result.code, 3);
+  assert.equal(result.cleanup.ok, false);
+  const kept = JSON.parse(await readFile(manifestPath, "utf8"));
+  assert.equal(kept.intents[0].status, "pending", "the unresolved intent stays actionable in the manifest");
+  const written = JSON.parse(await readFile(path.join(dir, "cleanup.json"), "utf8"));
+  assert.equal(written.ok, false);
+  assert.ok(events.some((e) => /^INCOMPLETE: intent auth-timeout/.test(e)));
+  assert.ok(events.indexOf("browser stopped") < events.indexOf("results written"), "browser stopped before results/cleanup");
+});
+test("real finalizer: a failed indirect collection is INCOMPLETE (exit 3); a fully resolved run is complete (exit 0)", async () => {
+  const collect = await realRun({ auth: fakeAuth([]), collectFails: true });
+  assert.equal(collect.result.code, 3);
+  assert.ok(collect.result.cleanup.incomplete.some((r: string) => /indirect collection failed/.test(r)));
+  const clean = await realRun({ auth: fakeAuth([]) });
+  assert.equal(clean.result.code, 0, "id 404 + exhausted email listing = absent: complete");
+  assert.equal(clean.result.cleanup.ok, true);
+});
+test("--cleanup-manifest path: unknown intent → 3 and manifest rewritten with resolved ids before deletion; complete → 0; wrong project refused", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "qa-business-only-"));
+  const manifestPath = path.join(dir, "manifest.json");
+  const redactor = redactModule.createRedactor();
+  const write = async (intents: Row[]) => {
+    const m = cleanup.emptyManifest({ project: "qaproject12345678" });
+    m.intents.push(...intents);
+    await writeFile(manifestPath, JSON.stringify(m));
+  };
+  await write([intent(30, "unknown")]);
+  assert.equal(await runModule.runCleanupOnly({ manifestPath, project: "qaproject12345678", db: fakeDb(), auth: fakeAuth([], { list: true }), redactor }), 3);
+  await write([intent(31, "found")]);
+  const deleted: string[] = [];
+  const db = { ...fakeDb(), async deleteAuthUser(id: string) { const saved = JSON.parse(await readFile(manifestPath, "utf8")); deleted.push(saved.created.auth_users.includes(id) ? "saved-first" : "not-saved"); }, async authUserExists() { return false; } };
+  assert.equal(await runModule.runCleanupOnly({ manifestPath, project: "qaproject12345678", db, auth: fakeAuth([{ id: uuid(31, "c0000000"), email: "qa-x-found@qa.invalid" }]), redactor }), 0);
+  assert.deepEqual(deleted, ["saved-first"]);
+  await assert.rejects(() => runModule.runCleanupOnly({ manifestPath, project: "otherproject123456", db: fakeDb(), auth: fakeAuth([]), redactor }), /created for project/);
+});
+test("build identity is explicit: attributable only when SHA and served BUILD_ID are both verified", () => {
+  assert.equal(runModule.buildIdentity({ sha: "a", sha_verified: true, build_id: "B", build_id_served: "B", build_id_verified: true }).attributable, true);
+  for (const ctx of [{ sha_verified: true, build_id: null, build_id_verified: false }, { sha_verified: false, build_id: "B", build_id_verified: true }, { sha_verified: true, build_id: "B", build_id_served: null, build_id_verified: false }]) {
+    const id = runModule.buildIdentity(ctx);
+    assert.equal(id.attributable, false);
+    assert.match(id.note, /NOT VERIFIED/);
+  }
+  const md = runModule.renderIdentityAndCleanup({ context: { sha_verified: true, build_id_verified: false }, cleanup: { incomplete: ["intent x unknown"] } });
+  assert.match(md, /attributable to --sha: NO/);
+  assert.match(md, /Cleanup incomplete — manifest kept/);
+});
+test("admin auth email discovery: exact email only, pages until exhausted, unexhausted listing throws (unknown)", async () => {
+  const pages: Record<number, { id: string; email: string }[]> = {
+    1: [{ id: uuid(1, "e0000000"), email: "qa-x-a@qa.invalid" }, { id: uuid(2, "e0000000"), email: "qa-x-ab@qa.invalid" }],
+    2: [{ id: uuid(3, "e0000000"), email: "QA-X-A@qa.invalid" }],
+  };
+  const fetchImpl = async (url: string) => {
+    const page = Number(new URL(url).searchParams.get("page"));
+    return new Response(JSON.stringify({ users: pages[page] ?? [] }), { status: 200 });
+  };
+  const auth = authModule.createAdminAuth({ url: "https://qaproject12345678.supabase.co", serviceKey: "service-key-xxxxxxxxxxxxxxxxxxxx", fetchImpl, timeoutMs: 1000 });
+  const found = await auth.findUsersByEmail("qa-x-a@qa.invalid", { perPage: 2 });
+  assert.deepEqual(found.map((u: Row) => u.id), [uuid(1, "e0000000"), uuid(3, "e0000000")], "prefix-similar email excluded, case-insensitive exact match kept");
+  const full = async () => new Response(JSON.stringify({ users: [{ id: "x", email: "z@qa.invalid" }, { id: "y", email: "w@qa.invalid" }] }), { status: 200 });
+  const endless = authModule.createAdminAuth({ url: "https://qaproject12345678.supabase.co", serviceKey: "service-key-xxxxxxxxxxxxxxxxxxxx", fetchImpl: full, timeoutMs: 1000 });
+  await assert.rejects(() => endless.findUsersByEmail("qa-x-a@qa.invalid", { perPage: 2, maxPages: 3 }), /not exhausted/);
 });

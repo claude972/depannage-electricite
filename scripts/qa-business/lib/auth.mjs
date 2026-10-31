@@ -28,6 +28,23 @@ export function createAdminAuth({ url, serviceKey, redactor, timeoutMs = 90000, 
       if (!user?.id) throw new Error("createAuthUser: no id returned");
       return user.id;
     },
+    /**
+     * Exact discovery by email: pages through `GET /auth/v1/admin/users` (per_page 1000) and keeps
+     * only accounts whose email equals `email` exactly (case-insensitive, as Auth stores it). If the
+     * listing is not exhausted within `maxPages`, throws: the outcome is then unknown, never "absent".
+     */
+    async findUsersByEmail(email, { perPage = 1000, maxPages = 50 } = {}) {
+      const wanted = String(email).toLowerCase();
+      const matches = [];
+      for (let page = 1; page <= maxPages; page++) {
+        const body = await call(`/auth/v1/admin/users?page=${page}&per_page=${perPage}`, { method: "GET" }, "listAuthUsers");
+        const users = Array.isArray(body?.users) ? body.users : null;
+        if (!users) throw new Error("listAuthUsers: unexpected response shape");
+        for (const u of users) if (typeof u?.email === "string" && u.email.toLowerCase() === wanted) matches.push({ id: u.id, email: u.email });
+        if (users.length < perPage) return matches;
+      }
+      throw new Error(`listAuthUsers: more than ${maxPages * perPage} accounts, listing not exhausted`);
+    },
     /** {id, email} or null when absent (404). */
     async getUser(id) {
       try {
