@@ -717,3 +717,33 @@ Cela confirme la piste du §4 : cause HARNAIS.
 - Contrôle de source : aucun `catch` ni reprise dans T14, et les assertions listées ci-dessus sont présentes.
 
 ROOT vérifiera ensuite avec la sélection `--only T9,T14`, sans rejouer les scénarios fournisseur.
+
+## B1 — extraction of `cleanupWithProof` (mission QA-CLEANUP-EXTRACT-B1-001, coordination 1b3b81d; deep-link contract f4021ac §A3)
+
+Owner: Claude, the tracking worker; A10 is frozen. The claim is published BEFORE the code.
+
+**Scope (only these files):**
+- `scripts/qa-tracking/run.mjs`;
+- NEW `scripts/qa-tracking/lib/cleanup-proof.mjs`;
+- `tests/qa-tracking-auth.test.ts`;
+- the cleanup parts of `tests/qa-tracking.test.ts`;
+- NEW `tests/qa-tracking-cleanup-proof.test.ts`;
+- this note.
+
+No change to `scripts/qa/**`, `scenarios.mjs`, the other `scripts/qa-tracking/**` files or `scripts/qa-business/**`.
+
+**API.** `cleanupWithProof({ db, auth, manifest, intents, runId, log, persist, runCleanupFn, settleSideEffects })`:
+- `runCleanupFn(db, proven, log)` is REQUIRED; without it, an error is raised before any read.
+- `settleSideEffects({ intents, cleanup })` defaults to a no-op. It runs only AFTER the cleanup.
+- Tracking passes `runTrackingCleanup` and its existing settlement of the provider intents, done only if the lease readback is 0.
+- An error in the hook is never PASS: the result is INCOMPLETE, the intents stay open, exit 3.
+- `run.mjs` re-exports `cleanupWithProof` already bound to these tracking parameters. Its callers (normal mode and `--cleanup-manifest`) are unchanged.
+
+**Invariance:**
+- Same order: reconcileOpen ⇒ persist ⇒ recovery by canonical e-mail ⇒ persist ⇒ ownership proof ⇒ `cleanup_attempt` persisted BEFORE DELETE ⇒ cleanup ⇒ settlement ⇒ result persisted.
+- Same manifest schema, verdicts and exit codes.
+
+**Tests:**
+- The existing assertions are not weakened.
+- The new adapter test checks: the required function; the hook after the cleanup; the no-op hook leaving provider intents open; a hook error giving INCOMPLETE.
+- Real tests with injected Auth in BOTH modes (normal and `--cleanup-manifest`): a lost creation reply (UID recovered and then persisted before the DELETE), UNKNOWN, an exhaustive absence (intent stays open), and an interruption between recovery and DELETE.
