@@ -53,3 +53,16 @@ test("memory: bounded LRU — arbitrary ids never grow it past the limit, the ol
   for (let i = 0; i < 100; i++) m.set(detailAttemptKey("c", "v", `x${i}`), { state: "pending" });
   assert.equal(m.size, 3);
 });
+
+test("memory: true LRU — a hot id read repeatedly is kept, cold entries are evicted first", () => {
+  const m = new DetailAttemptMemory(32);
+  m.useContext("c");
+  const hot = detailAttemptKey("c", "v", "hot");
+  m.set(hot, { state: "loaded" });
+  for (let i = 0; i < 31; i++) m.set(detailAttemptKey("c", "v", `cold${i}`), { state: "loaded" });
+  for (let round = 0; round < 10; round++) m.get(hot); // read 10 times ⇒ most recent
+  m.set(detailAttemptKey("c", "v", "new33"), { state: "pending" }); // 33rd entry
+  assert.equal(m.size, 32);
+  assert.ok(m.get(hot), "the hot id survives the 33rd insertion");
+  assert.equal(m.get(detailAttemptKey("c", "v", "cold0")), undefined, "the coldest entry is evicted");
+});

@@ -382,8 +382,7 @@ export function ClientSpace({ session }: { session: Session }) {
                 title="Actualiser les données"
               >
                 <span />
-                Connexion temps réel :{" "}
-                {session.connection === "SUBSCRIBED" ? "Connecté" : "Actualiser"}
+                Connexion temps réel : {session.connection === "SUBSCRIBED" ? "Connecté" : "non connectée"} · Actualiser
               </button>
             )}
             <HeaderBell session={session} />

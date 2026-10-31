@@ -30,8 +30,14 @@ export class DetailAttemptMemory {
     this.context = contextKey;
     this.entries.clear();
   }
+  /** A read promotes the entry (true LRU): a hot id is never evicted before cold ones. */
   get(key: string): DetailAttempt | undefined {
-    return this.entries.get(key);
+    const value = this.entries.get(key);
+    if (value !== undefined) {
+      this.entries.delete(key);
+      this.entries.set(key, value);
+    }
+    return value;
   }
   set(key: string, attempt: DetailAttempt) {
     this.entries.delete(key); // re-insert ⇒ most recent

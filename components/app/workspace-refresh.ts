@@ -13,14 +13,14 @@
 /** What one workspace read observed. `superseded` = its result was not applied (newer read / reset). */
 export type ReadResult =
   | { kind: "loaded" }
-  | { kind: "failed"; status: number }
+  | { kind: "failed"; status: number; reason?: "invalid_response" }
   | { kind: "signed_out" }
   | { kind: "superseded" };
 
 /** What a waiter learns. `loaded` is the only outcome that proves the CURRENT state of its context. */
 export type RefreshOutcome =
   | { kind: "loaded"; checkpoint: number; contextKey: string }
-  | { kind: "failed"; status: number }
+  | { kind: "failed"; status: number; reason?: "invalid_response" }
   | { kind: "signed_out" }
   | { kind: "superseded" };
 

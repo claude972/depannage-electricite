@@ -1,0 +1,105 @@
+// Workspace reader (WEB-DEEPLINK-REFRESH-001, contract A5). The shell calls this module; it is
+// testable with an injected `api` and observed setters.
+//
+// A reply is validated against the canonical shape of GET /api/workspace BEFORE anything is
+// applied: defaults (EMPTY_WORKSPACE) never stand in for collections the server did not send.
+// An invalid 2xx is a failure — nothing applied, no sign-out, never « introuvable ». Only a real
+// 401 or a foreign identity touches the session.
+import { ApiRequestError } from "./api";
+import type { Role, Workspace } from "./types";
+import type { ReadResult } from "./workspace-refresh";
+
+const ROLES: readonly Role[] = ["client", "artisan", "manager", "admin"];
+const COLLECTIONS = [
+  "interventions",
+  "quotes",
+  "sites",
+  "organizations",
+  "messages",
+  "documents",
+  "reviews",
+  "payments",
+  "organization_members",
+  "appointments",
+] as const;
+
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+const hasString = (v: Record<string, unknown>, key: string) => typeof v[key] === "string" && (v[key] as string).length > 0;
+const everyRecord = (list: unknown[], keys: string[]) => list.every((r) => isObject(r) && keys.every((k) => hasString(r, k)));
+
+/** Essential ids per collection; optional fields are deliberately not validated. */
+const ESSENTIAL: Partial<Record<(typeof COLLECTIONS)[number], string[]>> = {
+  interventions: ["id", "status"],
+  quotes: ["id", "intervention_id"],
+  sites: ["id"],
+  organizations: ["id"],
+  messages: ["id"],
+};
+
+export type WorkspaceValidation = { ok: true; workspace: Workspace } | { ok: false; reason: string };
+
+export function validateWorkspace(raw: unknown): WorkspaceValidation {
+  if (!isObject(raw)) return { ok: false, reason: "body" };
+  const profile = raw.profile;
+  if (!isObject(profile) || !hasString(profile, "id") || !ROLES.includes(profile.role as Role)) return { ok: false, reason: "profile" };
+  for (const key of COLLECTIONS) {
+    const list = raw[key];
+    if (!Array.isArray(list)) return { ok: false, reason: key };
+    const keys = ESSENTIAL[key];
+    if (keys && !everyRecord(list, keys)) return { ok: false, reason: key };
+  }
+  if (raw.artisan_profile !== null && !isObject(raw.artisan_profile)) return { ok: false, reason: "artisan_profile" };
+  return { ok: true, workspace: raw as unknown as Workspace };
+}
+
+export const INVALID_WORKSPACE_MESSAGE =
+  "Le service a répondu sans données exploitables. Vos dossiers n’ont pas été modifiés : réessayez dans un instant.";
+
+export type WorkspaceReaderDeps = {
+  api(path: string): Promise<unknown>;
+  /** Starts a read: returns its sequence number. */
+  nextSeq(): number;
+  /** Current sequence number: a different value means this read was superseded. */
+  currentSeq(): number;
+  /** Id of the user currently loaded (null before the first load). */
+  expectedUser(): string | null;
+  /** Applies a VALIDATED workspace (data, role, mode, context checks). */
+  apply(workspace: Workspace): void;
+  /** Real 401 or foreign identity: reset the session (optional message for the banner). */
+  signOut(message?: string): void;
+  setError(message: string): void;
+};
+
+export function createWorkspaceReader(deps: WorkspaceReaderDeps): () => Promise<ReadResult> {
+  return async () => {
+    const my = deps.nextSeq();
+    const expectedUser = deps.expectedUser();
+    deps.setError("");
+    let raw: unknown;
+    try {
+      raw = await deps.api("/api/workspace");
+    } catch (e) {
+      if (my !== deps.currentSeq()) return { kind: "superseded" };
+      if (e instanceof ApiRequestError && e.status === 401) {
+        deps.signOut("Votre session a expiré. Reconnectez-vous pour retrouver vos dossiers.");
+        return { kind: "signed_out" };
+      }
+      deps.setError((e as Error).message || INVALID_WORKSPACE_MESSAGE);
+      return { kind: "failed", status: e instanceof ApiRequestError ? e.status : 0 };
+    }
+    if (my !== deps.currentSeq()) return { kind: "superseded" };
+    const checked = validateWorkspace(raw);
+    if (!checked.ok) {
+      // Nothing applied, session kept: an unusable 2xx proves nothing about the account.
+      deps.setError(INVALID_WORKSPACE_MESSAGE);
+      return { kind: "failed", status: 200, reason: "invalid_response" };
+    }
+    if (expectedUser && checked.workspace.profile!.id !== expectedUser) {
+      // Identity changed under us: discard and reset instead of mixing accounts.
+      deps.signOut();
+      return { kind: "signed_out" };
+    }
+    deps.apply(checked.workspace);
+    return { kind: "loaded" };
+  };
+}
