@@ -31,6 +31,7 @@ export type Notification = {
   intervention_id: string | null;
   organization_id: string | null;
   site_id: string | null;
+  support_ticket_id?: string | null;
   payload: Record<string, unknown>;
   read_at: string | null;
   created_at: string;

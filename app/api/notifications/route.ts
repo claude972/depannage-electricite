@@ -8,7 +8,7 @@ import { cursorSchema, markSchema } from "@/lib/features/notifications/schemas";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 const privateHeaders = { "Cache-Control": "private, no-store" };
-const fields = "id,kind,title,body,intervention_id,organization_id,site_id,payload,read_at,created_at";
+const fields = "id,kind,title,body,intervention_id,organization_id,site_id,support_ticket_id,payload,read_at,created_at";
 function invalid(): never { throw new ApiError(422, "Vérifiez les filtres ou rechargez les notifications sans leur ancien curseur."); }
 function failed(error: unknown) { const response = apiError(error); response.headers.set("Cache-Control", "private, no-store"); return response; }
 function count(value: number | null): number { if (value === null || !Number.isSafeInteger(value) || value < 0) throw new ApiError(503, "Le comptage des notifications est indisponible."); return value; }
