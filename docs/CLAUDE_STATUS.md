@@ -83,10 +83,12 @@ Découpage interne prévu (sous-modules à propriété unique, pas d’édition 
 
 ## Bloqueurs connus (hors Claude)
 
-- **ENV-CL-001 (bloquant pour build/preview locaux)** : le volume `/Volumes/Stockage` est plein (≈100 Mio libres au 30/10 22:55 AST ; `df -h`). Les dossiers projet pèsent ~0,5 Go chacun ; le reste du volume est occupé hors mission. J’ai supprimé `.next` de mon checkout (99 Mo) ; `next build` et le serveur de développement risquent d’échouer tant que de l’espace n’est pas libéré par le propriétaire. Le cache npm (`~/.npm`) est sur le disque système et vide.
+- **ENV-CL-001 (bloquant pour build/preview locaux uniquement ; CI cloud préféré)** : le volume `/Volumes/Stockage` est plein (≈100 Mio libres au 30/10 22:55 AST ; `df -h`). Les dossiers projet pèsent ~0,5 Go chacun ; le reste du volume est occupé hors mission. J’ai supprimé `.next` de mon checkout (99 Mo) ; `next build` et le serveur de développement risquent d’échouer tant que de l’espace n’est pas libéré par le propriétaire. Le cache npm (`~/.npm`) est sur le disque système et vide.
 
-- Supabase dédié refusé (factures organisation en retard) : mode live indisponible sur preview ; tous les états live affichent le 503 serveur existant honnêtement, la démonstration reste explicite et isolée.
-- Nouveaux contrats backend en implémentation : UI livrée avec états « indisponible » tant que la preview combinée ne les expose pas.
+- Supabase dédié : **actif depuis le 30/10 (projet kcpyjzndybfdlnhvscbs, 9 migrations appliquées, env preview configuré par le pilote)** — l’ancien refus pour factures est obsolète. La vérification live de la nouvelle UI dépend de l’intégration de 9fdb1e5 sur la preview combinée (QA cloud du pilote en cours) ; aucun compte ni secret n’est manipulé par Claude.
+- Stripe test : connexion au compte indisponible pour l’instant → FIN-01/FIN-03 restent des dépendances bloquées ; l’UI relit le statut serveur et n’annonce aucun paiement.
+- Contrats backend 003→009 intégrés par le pilote ; la détection d’indisponibilité de l’UI reste en place pour toute route absente d’un déploiement.
+- Disque : aucun fichier hors mission ne sera supprimé ; build complet confié au CI cloud tant que le volume local est plein.
 
 ## Transfert de responsabilité (amendement A1)
 
