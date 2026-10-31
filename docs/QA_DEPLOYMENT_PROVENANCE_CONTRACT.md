@@ -2,6 +2,8 @@
 
 Statut : contrat avant implémentation. Base4c398e8393026598c5b629d3912cf80285acc2f5. Propriété exclusive confirmée par ROOT pilote, lead informé avant code : scripts/qa/lib/deployment-proof.mjs ; scripts/qa/tests/deployment-proof.test.mjs ; ce document docs/QA_DEPLOYMENT_PROVENANCE_CONTRACT.md. Les workers Business et Tracking gardent leurs runners/configs ; aucun changement de fixture, navigateur, produit, secret ou API cloud par ce module.
 
+Implémentation autorisée après publication du contrat1e5f808 et réservation A7f629d49. Module prêt pour revue ; raccordement des runners et exécution distante restent à leurs propriétaires et ROOT.
+
 ## Problème et périmètre
 
 Deux builds du même SHA peuvent avoir des BUILD_ID différents. En REMOTE, attribuer la page à un BUILD_ID local est incorrect. Une recherche html.includes sur du Flight échappé est également incorrecte. La preuve distante combine une attestation privée root capturée depuis les métadonnées Vercel et une identité de build réellement extraite du document reçu par le runner. LOCAL conserve ses contrôles actuels sans modification implicite.
@@ -29,6 +31,12 @@ Réutilisation : import lecture seule de servedBuildIdentity depuis ../../qa-bus
 Tests Node existants/ciblés sans cloud : receipt nominal ; chaque champ nul/manquant/supplémentaire/mal typé ; divergence de chaque valeur attendue ; refmain/production/URL personnalisée/port/query/credentials ; expiration/futur/date non finie ; fichier symlink/mode/UID/non régulier/taille excessive ; Flight réel échappé, chunks fragmentés, mauvais BUILD_ID, ambiguïté et absence ; preuve expirée au moment du verify. Les tests doivent utiliser le vrai parseur importé, pas le remplacer par un stub.
 
 Les workers raccordent explicitement REMOTE avant leurs premières fixtures, conservent LOCAL existant et publient leurs tests/revue séparés. Un PASS du module ne prouve ni métier, ni permissions, ni build reproducible, ni scheduler, ni GPS physique. L’attestation root est une entrée de confiance opérateur à durée bornée, pas une signature du déploiement. Root exécutera la recette distante réelle après revue au SHA exact.
+
+## Livraison et vérification ciblée
+
+Commande : `node --test scripts/qa/tests/deployment-proof.test.mjs` ; syntaxe : `node --check scripts/qa/lib/deployment-proof.mjs` et `node --check scripts/qa/tests/deployment-proof.test.mjs`. Les tests utilisent le parseur Business réel, y compris le HTML public4c capturé par ROOT dans son fichier privé hors Git (test optionnel explicitement SKIP si absent ailleurs). Aucun HTML complet n’est copié dans le dépôt. La vérification UID simule uniquement une identité runtime différente pour exercer le refus, sans chown ni accès à des fichiers utilisateurs. Les tests de fichiers créent uniquement leurs propres répertoires temporaires puis les nettoient.
+
+Le reçu hors Git est vérifié via son parent canonique et `git rev-parse --show-toplevel`, avec locale C et refus sur toute erreur autre que « not a git repository ». L’ouverture finale refuse les symlinks et les fichiers non réguliers ; une lecture bornée et les statistiques fd avant/après détectent les modifications observables. Cette protection ne prétend pas résister à un opérateur malveillant disposant du même UID. Le module refuse aussi les appels Flight syntaxiquement mal formés au lieu de les ignorer quand un autre appel serait valide.
 
 
 ## Revue et propriété ROOT
