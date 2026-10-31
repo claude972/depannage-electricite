@@ -267,8 +267,9 @@
 .kpi {
   display: flex;
   gap: 14px;
-  align-items: flex-start;
-  padding: 18px;
+  align-items: center;
+  padding: 16px 18px;
+  min-height: 92px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -319,6 +320,48 @@
 }
 .kpiNote {
   font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Base de calcul des indicateurs : une ligne repliée sous la rangée (M43 : notes courtes sur les cartes). */
+.kpiBasis {
+  margin: -12px 0 24px;
+}
+.kpiBasis summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--navy);
+  list-style: none;
+}
+.kpiBasis summary::-webkit-details-marker {
+  display: none;
+}
+.kpiBasis summary::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: rotate(-45deg);
+  margin: 0 4px 0 2px;
+  flex-shrink: 0;
+}
+.kpiBasis[open] summary::before {
+  transform: rotate(45deg);
+  margin-top: -3px;
+}
+.kpiBasis ul {
+  margin: 0 0 4px;
+  padding-left: 20px;
+  font-size: 13px;
   line-height: 1.6;
   color: var(--muted);
 }
@@ -435,8 +478,11 @@
   font-size: 14px;
   font-weight: 400;
 }
+/* Le groupe de segments peut se réduire et passer à la ligne (aucun débordement à 360 px). */
 .filters :global(.tabs) {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 .filters :global(.tabs) > button {
   font-size: 13px;
@@ -455,7 +501,7 @@
 }
 .table th {
   text-align: left;
-  padding: 10px 20px;
+  padding: 10px 14px;
   background: #f8fafd;
   color: var(--muted);
   font-size: 12px;
@@ -464,10 +510,38 @@
   white-space: nowrap;
 }
 .table td {
-  padding: 12px 20px;
+  padding: 12px 14px;
   border-bottom: 1px solid #edf0f5;
   vertical-align: middle;
   color: var(--text);
+}
+.table td.nowrap,
+.table th.nowrap {
+  white-space: nowrap;
+}
+.table td.actions,
+.table th.actions {
+  text-align: right;
+  white-space: nowrap;
+}
+.table td.wide {
+  width: 100%;
+}
+/* Sous 1400 px (panneau de validations étroit) : l’action garde son nom accessible, l’icône seule est visible. */
+@media (max-width: 1400px) {
+  .rowAction .rowActionLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .table td.actions .rowAction {
+    min-width: 44px;
+    padding: 6px 10px;
+    justify-content: center;
+  }
 }
 .table tr:last-child td {
   border-bottom: 0;
@@ -492,10 +566,11 @@
   color: var(--muted);
 }
 .rowAction {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 40px;
+  min-height: 44px;
   padding: 6px 12px;
   border: 1px solid var(--line);
   border-radius: 7px;
@@ -564,6 +639,8 @@ button.row:hover {
 .rowBody span {
   font-size: 13px;
   color: var(--muted);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .rowMeta {
   display: flex;
@@ -710,8 +787,8 @@ button.row:hover {
   overflow-wrap: anywhere;
 }
 .message .link {
-  min-height: 32px;
-  margin-top: 4px;
+  min-height: 44px;
+  margin-top: 2px;
 }
 .checks {
   list-style: none;
@@ -1131,7 +1208,31 @@ button.row:hover {
 }
 @media (max-width: 600px) {
   .kpis {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .kpi {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px;
+    min-height: 0;
+  }
+  .kpiIcon {
+    width: 36px;
+    height: 36px;
+  }
+  .kpiValue {
+    font-size: 24px;
+  }
+  .kpiNote {
+    white-space: normal;
+  }
+  .table td.actions {
+    justify-content: flex-end;
+  }
+  .table td.actions::before {
+    margin-right: auto;
   }
   .tableWrap {
     overflow: visible;
@@ -1241,7 +1342,7 @@ button.row:hover {
 
 /* ---- Assistance (contract WEB-PWA-SUPPORT-001) ------------------------------------------- */
 .subjectLink {
-  min-height: 32px;
+  min-height: 44px;
   text-align: left;
   font-weight: 650;
   color: var(--navy);
@@ -1251,7 +1352,7 @@ button.row:hover {
   color: var(--blue);
 }
 .inlineLink {
-  min-height: 32px;
+  min-height: 44px;
   padding: 0;
 }
 .ticketHead {

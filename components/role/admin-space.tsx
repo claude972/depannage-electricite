@@ -86,6 +86,7 @@ import {
 import styles from "./admin.module.css";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { PLATFORM_TITLES, PlatformPage } from "./platform-anchor";
+import { adminKpis, dashboardRows, loadedNote } from "./admin-lists";
 import { platformEntries } from "./anchors";
 
 type Tone = "neutral" | "blue" | "green" | "amber" | "red" | "violet";
@@ -126,7 +127,6 @@ const STEP_ORDER: Status[] = [
   "completed",
   "paid",
 ];
-const ACTIVE_STATUSES: Status[] = ["requested", "assigned", "quoted", "accepted", "in_progress", "completed"];
 const REASSIGNABLE: Status[] = ["requested", "assigned", "quoted"];
 const QUOTE_STATUS: Record<string, { label: string; tone: Tone }> = {
   sent: { label: "Envoyé", tone: "blue" },
@@ -152,7 +152,6 @@ const CHECK_RESULT = {
 
 const byNewest = <T extends { created_at: string }>(a: T, b: T) =>
   Date.parse(b.created_at) - Date.parse(a.created_at);
-const isPendingApplication = (a: OverviewArtisan) => a.application_status === "submitted";
 const isApprovedArtisan = (a: OverviewArtisan) =>
   Boolean(a.artisan_approved) && a.application_status === "approved";
 const clientKind = (role: Role) =>
@@ -240,7 +239,7 @@ function Panel({
     </section>
   );
 }
-type Column<T> = { key: string; label: string; render: (row: T) => ReactNode; wide?: boolean };
+type Column<T> = { key: string; label: string; render: (row: T) => ReactNode; wide?: boolean; className?: string };
 function DataTable<T>({
   columns,
   rows,
@@ -262,7 +261,7 @@ function DataTable<T>({
         <thead>
           <tr>
             {columns.map((c) => (
-              <th scope="col" key={c.key}>
+              <th scope="col" key={c.key} className={c.className}>
                 {c.label}
               </th>
             ))}
@@ -272,7 +271,7 @@ function DataTable<T>({
           {rows.map((row) => (
             <tr key={keyOf(row)}>
               {columns.map((c) => (
-                <td key={c.key} data-label={c.label} className={c.wide ? "wide" : undefined}>
+                <td key={c.key} data-label={c.label} className={[c.wide ? "wide" : "", c.className || ""].filter(Boolean).join(" ") || undefined}>
                   {c.render(row)}
                 </td>
               ))}
@@ -315,10 +314,9 @@ function InterventionRow({
       <span className={styles.rowBody}>
         <strong>{c.label}</strong>
         <span>
-          {shortId(intervention.id)} · Client ·{" "}
-          {intervention.artisan_id ? artisanName || "Artisan attribué" : "Non attribué"} ·{" "}
-          {intervention.city}
+          {shortId(intervention.id)} · {intervention.city}
         </span>
+        <span>Artisan : {intervention.artisan_id ? artisanName || "Artisan attribué" : "Non attribué"}</span>
       </span>
       <span className={styles.rowMeta}>
         <Badge status={intervention.status} />
@@ -496,31 +494,23 @@ export function AdminSpace({ session }: { session: Session }) {
 
   // ---- Views -------------------------------------------------------------------------------
   const renderDashboard = (o: AdminOverview) => {
-    const pending = o.artisans.filter(isPendingApplication).sort(byNewest as never);
-    const active = o.interventions
-      .filter((i) => ACTIVE_STATUSES.includes(i.status))
-      .sort(byNewest)
-      .slice(0, 6);
+    const { pending, active } = dashboardRows(o);
+    const kpis = adminKpis(o);
     return (
       <>
         <div className={styles.kpis}>
-          <Kpi icon="list" tone="blue" label="Interventions" value={o.counts.interventions} note="Total plateforme, tous statuts confondus (compteur global)." />
-          <Kpi icon="clock" tone="amber" label="Interventions en cours" value={o.counts.active_interventions} note="Dossiers non clos, décompte global de la plateforme." />
-          <Kpi
-            icon="euro"
-            tone="green"
-            label="Prestations payées TTC"
-            value={money(o.financial.paid_service_cents)}
-            note={
-              <>
-                {o.financial.note}
-                <br />
-                Revenu plateforme : non calculé.
-              </>
-            }
-          />
-          <Kpi icon="shield" tone="navy" label="Candidatures à examiner" value={o.counts.pending_applications} note="Dossiers artisans soumis, en attente d’une décision." />
+          {kpis.map((k) => (
+            <Kpi key={k.id} icon={k.icon} tone={k.tone} label={k.label} value={k.value} note={k.note} />
+          ))}
         </div>
+        <details className={styles.kpiBasis}>
+          <summary>Base de calcul des indicateurs</summary>
+          <ul>
+            {kpis.map((k) => (
+              <li key={k.id}>{k.basis}</li>
+            ))}
+          </ul>
+        </details>
         <div className={styles.columns}>
           <Panel
             title="Validations artisans en attente"
@@ -536,17 +526,27 @@ export function AdminSpace({ session }: { session: Session }) {
               rows={pending}
               keyOf={(a) => a.id}
               columns={[
-                { key: "name", label: "Artisan", wide: true, render: (a) => <Person name={a.full_name} /> },
-                { key: "company", label: "Société", render: (a) => a.company_name || "—" },
+                {
+                  key: "name",
+                  label: "Artisan",
+                  wide: true,
+                  render: (a) => <Person name={a.full_name} sub={a.company_name || "Société non renseignée"} />,
+                },
                 { key: "status", label: "Dossier", render: (a) => applicationTag(a.application_status) },
-                { key: "date", label: "Date", render: (a) => (a.created_at ? date(a.created_at) : "—") },
+                { key: "date", label: "Date de demande", className: styles.nowrap, render: (a) => (a.created_at ? date(a.created_at) : "—") },
                 {
                   key: "actions",
                   label: "Actions",
+                  className: styles.actions,
                   render: (a) => (
-                    <button type="button" className={styles.rowAction} onClick={() => go("admin-artisan", a.id)}>
+                    <button
+                      type="button"
+                      className={styles.rowAction}
+                      aria-label={`Examiner la candidature de ${a.full_name}`}
+                      onClick={() => go("admin-artisan", a.id)}
+                    >
                       <Icon name="eye" size={15} />
-                      Examiner
+                      <span className={styles.rowActionLabel}>Examiner</span>
                     </button>
                   ),
                 },
@@ -557,7 +557,7 @@ export function AdminSpace({ session }: { session: Session }) {
                 </Empty>
               }
             />
-            <Basis>Dossiers au statut « soumis » parmi les {o.capabilities.list_limit} derniers artisans ; le compteur est global.</Basis>
+            <Basis>Dossiers au statut « soumis » {loadedNote(o.capabilities.list_limit).replace("chargés", "artisans chargés")} ; le compteur est global.</Basis>
           </Panel>
           <Panel
             title="Interventions en cours"
@@ -579,7 +579,7 @@ export function AdminSpace({ session }: { session: Session }) {
                 Les dossiers actifs apparaîtront ici dès qu’une demande sera enregistrée.
               </Empty>
             )}
-            <Basis>Six dossiers non clos les plus récents parmi les {o.capabilities.list_limit} derniers chargés. Les noms des clients ne sont pas transmis dans cette vue.</Basis>
+            <Basis>Six dossiers non clos les plus récents {loadedNote(o.capabilities.list_limit)}. Les noms des clients ne sont pas transmis dans cette vue.</Basis>
           </Panel>
         </div>
       </>
@@ -665,7 +665,7 @@ export function AdminSpace({ session }: { session: Session }) {
                   const i = interventionOf(q.intervention_id);
                   return (
                     <span className={styles.cellStack}>
-                      <button type="button" className={styles.link} style={{ minHeight: 32 }} onClick={() => openDossier(q.intervention_id)}>
+                      <button type="button" className={styles.link} onClick={() => openDossier(q.intervention_id)}>
                         {shortId(q.intervention_id)}
                       </button>
                       <small>{i ? category(i.category).label : "Dossier non chargé"}</small>
@@ -776,7 +776,7 @@ export function AdminSpace({ session }: { session: Session }) {
                   const i = interventionOf(r.intervention_id);
                   return (
                     <span className={styles.cellStack}>
-                      <button type="button" className={styles.link} style={{ minHeight: 32 }} onClick={() => openDossier(r.intervention_id)}>
+                      <button type="button" className={styles.link} onClick={() => openDossier(r.intervention_id)}>
                         {shortId(r.intervention_id)}
                       </button>
                       <small>{i ? `${category(i.category).label} · ${i.city}` : "Dossier non chargé"}</small>
