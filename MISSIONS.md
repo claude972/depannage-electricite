@@ -90,7 +90,7 @@ Cross-verification: Codex examine les preuves de Claude et fait corriger les fin
 
 ## Mission WEB-PWA-ADMIN-LISTS-001 — dossiers admin paginés
 - agent: codex
-- status: in_progress
+- status: done
 - branch: codex/web-pwa-backend
 - base revision: f132f6a (intégration de référence8cdf5af)
 - objective: permettre au Super Admin de retrouver les anciens dossiers au-delà des fenêtres100 sans élargir les projections ou autorisations.
@@ -102,6 +102,8 @@ Cross-verification: Codex examine les preuves de Claude et fait corriger les fin
 - preview: integration/web-pwa après revue, pas de production
 
 
+
+- implementation revision: d85da0657586f152ee9bba941d67345b4eead616, revue Claude sans finding et recette Auth/PostgREST réelle fe4, rapports publiés CORRECTIONS.md. Fermeture du lot serveur uniquement ; UI admin reste à intégrer/tester.
 ## Mission WEB-PWA-QUOTE-DRAFT-001 — brouillons privés de devis
 - agent: codex
 - status: in_progress

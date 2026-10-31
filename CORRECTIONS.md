@@ -876,3 +876,188 @@ These are deterministic tests of exact helper/runner with mirrored relevant cont
 - CL-UI-009 : fixed_pending_review au6962be6 ; source valide1–14, contrôle navigateur à venir.
 - CL-PHOTO-001/002/003 : open, assignés Claude sessionb4b555f0, même checkpoint6962. Rapport canonique : 001 résultat incertain,002 file singleton,003 effet storage non gardé. Les deux premiers numéros courts du premier message pilote étaient inversés ; cette correspondance prévaut, aucune correction perdue.
 - de6091d publie le contrat quote drafts avant code. CLI lead informé de ce contrat, avec priorités : finir correctifs photo, admin paginé et densité visuelle avant branchement brouillons.
+
+
+## WEB-PWA-REVIEW-001 — Claude, rapport réel admin009 d85da06
+
+# Rapport de revue croisée Claude — WEB-PWA-REVIEW-001 (checkpoint admin / 009)
+
+Même reviewer, même session, lecture seule. Aucun code ni fichier de coordination modifié, aucune autre session Claude contactée. Affectation revendiquée : uniquement la revue. Le lien symbolique node_modules n'a pas été touché.
+
+**SHA revu :** `d85da0657586f152ee9bba941d67345b4eead616`. Cinq commits depuis 1d93445.
+
+## Sources lues
+MISSIONS.md et CORRECTIONS.md distants, migration 009, route admin interventions, route site-access, diff de la route organizations, diffs next.config, package.json et CI, les deux contrats et les deux rapports de vérification Codex, les tests admin-interventions et le harness SQL site-access, plus l'inventaire des RPC appelées par l'application.
+
+## Contrôles réellement exécutés
+
+| Contrôle | Résultat |
+|---|---|
+| `npm test` | 38/38, dont 8 tests de la route admin |
+| `npm run typecheck` | passe |
+| `node tests/sql-site-access-review.mjs` avec PGlite, migrations 001 à 009, stubs Auth/Storage | 8 groupes PASS |
+| `node tests/sql-review.mjs` | 29 groupes PASS |
+| Build, `npm run check`, Supabase réel, preview, UI | non exécutés |
+
+Les contrôles cloud consignés dans CORRECTIONS sont des preuves du pilote, pas les miennes.
+
+## Route admin `GET /api/admin/interventions`
+- **Admin vérifié avant toute lecture.** Session serveur puis rôle admin lu sous RLS. Les rôles null, client, artisan, manager, owner et viewer reçoivent 401 ou 403 sans aucune requête interventions ou devis. Pas de service-role.
+- **Filtres PostgREST sûrs.** Clés inconnues et doublons refusés. La recherche est normalisée NFKC, bornée à 80 caractères, limitée à un alphabet littéral sans délimiteurs ni wildcards. Un UUID complet devient un `eq` sur l'identifiant. Aucune expression construite par le navigateur n'atteint `.or()`.
+- **Curseur contraint.** Base64url strict avec aller-retour, JSON strict versionné, timestamp validé par regex avec fraction de 1 à 6 chiffres, UUID validé, empreinte SHA-256 des filtres exigée. Les valeurs insérées dans l'expression `or` sont donc bornées.
+- **Stabilité des tuples.** Tri created_at puis id décroissants, condition keyset citant le timestamp complet avec microsecondes, recherche et curseur combinés dans un seul arbre logique explicite.
+- **Total avant curseur.** COUNT exact en HEAD sur les filtres sans curseur. `has_more` repose sur le COUNT restant plus une ligne supplémentaire, robuste à un plafond fournisseur. COUNT absent ou page incohérente donne 503. Non transactionnel avec la page, et documenté comme tel.
+- **Projection privée.** La liste exclut description, adresse et contacts. Le détail n'admet que `id`, renvoie les champs opérateur et les 50 derniers devis avec IDs exacts et indicateur de troncature. Les erreurs sont aussi en `private, no-store`.
+
+## Migration 009 : accès par site
+- Portée `all` par défaut, `selected` avec attributions par site. Les clés étrangères composites garantissent un site de la même organisation et la cascade au retrait du membre.
+- Les helpers dérivent `auth.uid()`. L'owner canonique reste toujours `all`. L'écriture est bornée au rôle courant, un viewer n'écrit jamais même avec une attribution obsolète.
+- `can_access_intervention` et `owns_intervention` sont remplacés en place. Toutes les politiques dépendantes héritent du périmètre site. Les politiques sites, règles, approbations et conformité sont réécrites sur le site, contrats et journal professionnel sur la portée organisation.
+- Validation des attributions stricte : schéma, maximum 100, unicité, sites de l'organisation, tableau vide si `all`, pas d'écriture pour viewer.
+- Invitations : portée validée à la création et réappliquée dans la transaction d'acceptation. Un site supprimé fait échouer l'acceptation entière, confirmé par le harness. Les invariants de la migration 006 sont conservés via la fonction renommée privée.
+- Verrous : organisation avant site, membre ou invitation. Les RPC B2B verrouillent l'organisation avant le contrôle. Pas de cycle avec la réaffectation admin.
+- EXECUTE : 17 fonctions renommées ou internes révoquées. Aucune référence aux anciens noms dans l'application. Toutes les RPC appelées existent sous leur nom public.
+
+## Config et CI
+`agentRules:false` est accepté par le type NextConfig installé. Le script `test:ui` entre dans `check` et une étape CI pour le harness site est ajoutée. Ce checkout n'a pas de `tests/ui`, donc `npm run check` n'y est ni exécutable ni revendiqué.
+
+## Findings
+Aucun finding actionnable dans le périmètre revu.
+
+Observations sans action requise :
+- Sur la branche backend seule, `npm run check` échouerait faute de `tests/ui`. Attendu jusqu'à l'intégration, déjà documenté.
+- Le COUNT exact admin évalue la politique RLS ligne par ligne sur toute la table. Acceptable à l'échelle actuelle, coût croissant avec le volume.
+- La course entre un upload en cours et une révocation est une limite préexistante reconnue par Codex, hors de ce lot.
+
+## Limites
+Pas de Supabase, PostgREST, Auth ou Storage réels, pas de concurrence multi-connexion, pas de build, de preview ni d'UI vérifiés par ce reviewer. Le fournisseur HTTP des tests admin est un modèle, pas PostgREST. Les preuves cloud de CORRECTIONS restent celles du pilote.
+
+Rapport également écrit dans `/Users/claudebrafa/.claude/plans/you-are-claude-independent-wobbly-charm.md`.
+
+## WEB-PWA-ADMIN-LISTS-001 — recette réelle combinée
+
+# Independent real-browser login and administrator API provider review
+
+Mission WEB-PWA-20261030. Reviewer: Codex verify_web_pwa. No repository application edits, no library installation for this follow-up, no production or Stripe operation.
+
+## Exact target
+
+- Integration fe4c9c984e997675a7421100c89c7ddbff195065.
+- Unique Vercel Preview https://depannage-electricite-ia1k2f0d6-brafas-projects.vercel.app .
+- Vercel deployment metadata independently confirmed READY, exact githubCommitSha and integration/web-pwa ref before testing. Older preview was not used for new API.
+- Contains login correction2e3 and new admin interventions API d85, according to integration history/mission; read actual route at exact integration.
+- Dedicated Supabase kcpyjzndybfdlnhvscbs only. Existing private0600 keys/access files read without emitting values. Existing Vercel authorization cookie bootstrapped once, then automation headers cleared in isolated browser.
+
+## Fixtures and containment
+
+Three uniquely named temporary confirmed QA accounts created using admin.createUser, without email: clients A/B and synthetic administrator. Only the synthetic admin's newly created profile was elevated via service role; no existing profile/role/settings changed.
+
+120 explicit tracked intervention UUIDs inserted by service for client A only:117 rows bearing unique literal search/city marker, plus3 tracked decoys with a different marker. Some timestamps intentionally tied in groups of three, statuses requested/cancelled and categories outage/panel. No quote, payment, organization, email or storage object created. IDs persisted in0600 fixtures.json for recovery/cleanup; no passwords/tokens in that registry.
+
+Administrator browser used actual password Auth through public form, but all automatic app API reads except /api/admin/interventions were blocked by test routing to avoid unfiltered workspace/overview retrieval. Only explicitly q-filtered fixture API/detail requests were permitted; every returned list row was asserted against tracked IDs. Thus no adminUI/global-list completion claim.
+
+## Results
+
+**19/19 actual browser/provider checks PASS;10/10 cleanup/readback controls PASS; zero page errors.**
+
+### Normal client UI, not SDK-only proof
+
+1. Client A logs in through normal public password form and enters live client interface. API session identity equals A, profile form contains exact A name, no demo banner. Workspace's old100-row window excludes oldest fixture as expected.
+2. Client A cannot read administrator endpoint:403/private-no-store.
+3. Actual visible logout control returns workspace401.
+4. Client B logs in through same normal UI/browser after A logout; API identity/profile name equal B, zero interventions, no A name or unique fixture marker displayed.
+5. Separate fresh unauthenticated browser receives401/private-no-store from admin endpoint.
+
+This independently verifies UI-REV001's normal client sign-in/logout/switch-identity correction at this exact SHA. It does not close the separately tracked stale public draft issue or every possible delayed-response race.
+
+### Administrator API against actual provider
+
+6. Synthetic administrator gets valid browser Auth cookie; first q-filtered API request200 returns exact117-row total; automatic global reads remain blocked.
+7. q pagination returns117 unique rows over three40-row pages (40/40/37), consistent total117, exact expected created_at DESC/id DESC order including timestamp ties, no repeated/foreign/decoy row.
+8. q AND status=requested with cursor returns59 rows over three25-row pages, total59 on each, exact order and no decoy/unrequested row.
+9. q whitespace normalization plus category=outage yields exact30 rows.
+10. Oldest fixture, absent from old100-row client workspace window, is retrieved by administrator detail ID200 with expected description and zero quotes.
+11. Uppercase UUID q normalized to exactly one expected fixture.
+12. Unique absent q returns0 rows/total, null next cursor.
+13. Malformed cursor returns422/private-no-store.
+14. Reusing cursor with changed q filters returns422/private-no-store.
+15. Unsupported limit101 returns422/private-no-store.
+16. Wildcard/filter-expression injection attempt in q returns422/private-no-store.
+17. Mixing detail id and list filters returns422/private-no-store.
+
+The remaining two checks establish fixture prerequisites (3 isolated accounts, exactly120 inserted tracked jobs). Nineteen checks total are recorded individually in result.json; counts above separate five client checks and twelve admin-session/API checks from two prerequisites.
+
+## Cleanup and readback
+
+- Delete audit rows only for tracked intervention IDs or QA actor IDs.
+- Delete only120 explicitly tracked intervention IDs.
+- Delete each of3 temporary Auth users and independently verify each is absent.
+- Read back tracked job IDs, all3 profiles and QA actor audit records: absent.
+- Separate provider readback for audit entries by all120 intervention IDs:0.
+
+Ten cleanup controls all pass. No pre-existing row or setting changed or deleted. The fixture registry contains only run marker/UUIDs, not credentials.
+
+## Evidence
+
+- fe4c9c984e99/auth-admin/result.json —19 successful checks,10 cleanup controls and zero page errors.
+- fe4c9c984e99/auth-admin/fixtures.json — scoped IDs for cleanup audit,0600.
+- client-a-live-profile.png and client-b-live-profile.png — screenshots after successful normal UI login, no password/hash/token content; B screenshot visually opened.
+- Runner auth-admin-smoke.mjs and independent readback-admin-cleanup.mjs under task temp directory only.
+
+## Remaining limits
+
+- Administrator UI was not evaluated for integration of new pagination API: only actual authorized endpoint/provider behavior tested. No claim that all Super Admin menus/actions are complete.
+- Stale public draft/UI-REV002 and VIS-001 remain separately assigned; this run does not exercise or close them.
+- No normal browser signup with actual email receipt, artisan/organization live journey, Stripe checkout/webhook/payout, actual-device PWA installation or production release.
+- Synthetic admin's expected blocked automatic fetches are test setup, not an application failure. This runner records page errors, not a blanket zero-console assertion for the intentionally blocked admin workspace.
+- No secrets, tokens, passwords, raw credential-bearing URLs or HAR in outputs.
+
+
+## WEB-PWA-20261030 — Auth SSR navigateur
+
+# Independent hosted Auth SSR and recovery browser check
+
+Mission WEB-PWA-20261030; explicitly authorized by pilot. Integration SHA0017b48a7a12d918d5c3c759f8da94d1971df727; unique preview https://depannage-electricite-1ng8kugh5-brafas-projects.vercel.app ; dedicated project kcpyjzndybfdlnhvscbs only.
+
+## Method and scope
+
+Read app/auth/confirm/route.ts, reset-password/page.tsx, lib/supabase/client.ts and installed auth-js GenerateLinkParams types. Official generateLink and verifyOtp documentation consulted:
+- https://supabase.com/docs/reference/javascript/auth-admin-generatelink
+- https://supabase.com/docs/reference/javascript/auth-verifyotp
+
+Supabase JS2.118.0 installed only in /tmp/depannage-web-pwa-qa. Private service/anon keys read from existing0600 task file without logging values. One tracked temporary client account generated per attempt using admin.generateLink(signup), with a new unique reserved-domain email and random password. No email transport invoked. Generated hashed tokens passed only to actual /auth/confirm routes in isolated browser; token/password/credential values redacted from all errors and never written to report/HAR. Existing Vercel cookie bootstrapped once, automation headers then cleared.
+
+First diagnostic attempt had three harness errors, not application findings: final client URL intentionally removes ?auth= after handling, and Next route announcer adds another role=alert. Runner now observes actual /auth/confirm redirect response and scopes the expired-error alert. Its temporary account was deleted and Auth/profile absence verified before rerun. The second attempt uses another unique user and generates signup hash once.
+
+## Results
+
+**12/12 checks PASS;3/3 final cleanup checks PASS; zero page errors.**
+
+1. Admin generates tracked signup hash; no email sent.
+2. Actual SSR /auth/confirm consumes hash, sends browser cookies, and /api/workspace returns200 with exact temporary client identity and private/no-store.
+3. Main application renders the real authenticated client without demo banner.
+4. Separate fresh browser has no app session and workspace returns401.
+5. Reused confirmation hash redirects to recoverable auth=expired; separate browser stays401.
+6. Invalid hash redirects to auth=expired; no false success.
+7. Admin generates recovery hash for same tracked user; no email sent.
+8. Actual recovery /auth/confirm redirects to /auth/reset-password and authorized reset form appears.
+9. Mismatched password confirmation remains rejected with visible error.
+10. Browser form successfully changes tracked account password; success screenshot captured.
+11. Previous password rejected; new password authenticates only tracked user through Auth SDK, then SDK session signed out.
+12. Unauthenticated reset page displays expired-state guidance and hides password inputs.
+
+Cleanup: delete temporary user ccc6c13c-9b80-4390-bf69-6bf4472156e3; confirm Auth user absent; confirm profiles cascade row absent. First harness-diagnostic user5bbbfaa7-7a50-439d-b6b4-70d134794100 was also deleted with same absence checks. No other account or service modified.
+
+Evidence: 0017b48a7a12/auth-ssr/result.json ; recovery-success.png visually opened; harness-diagnostics.json preserves initial attempt including its successful cleanup. Script auth-ssr-smoke.mjs contains no embedded key/password/token values.
+
+## Limits
+
+- This verifies hosted Auth/SSR confirmation and recovery route behavior and browser password form. It does NOT verify real email delivery or clicking an actually received message; admin.generateLink does not send email.
+- Known UI-REV001 explicit login controller bug remains outside this closure; successful SSR confirmation initialization is not proof the sign-in button flow is fixed.
+- No artisan/enterprise/admin live-role journey, multi-organization permission test or Storage test in this report; separate cloudQA scope applies.
+- No Stripe transaction, payout, production release or OS/mobile PWA install.
+- App reset main has no id=main while global skip link targets it (pre-existing accessibility item); recovery functionality passes, but full keyboard/accessibility certification is not claimed.
+- All application files remained read-only for this verifier.
+
+
+Le reviewer Claude c38a6bc4 a terminé réellement sa revue, exit0 et rapport reçu ; aucun finding actionnable dans le périmètre d85. La mission backend ADMIN-LISTS peut être close pour la route, ses filtres, droits et recette en ligne ; le branchement frontend reste dans l’affectation Claude in_progress. Photos6962 en preview5650 pour recette corrective, trois P2 ouverts.
