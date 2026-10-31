@@ -157,3 +157,21 @@ test("documents : libellé de date issu de expires_on uniquement", () => {
   assert.equal(credentialDateLabel({ key: "valid", credential: { created_at: "2026-10-01T00:00:00Z", expires_on: "2027-06-15" } }), `Valide jusqu’au ${formatDate("2027-06-15")}`);
   assert.equal(credentialDateLabel({ key: "expired", credential: { created_at: "2026-10-01T00:00:00Z", expires_on: "2024-05-10" } }), `Expiré le ${formatDate("2024-05-10")}`);
 });
+
+// ---- Candidature M65 ----------------------------------------------------------------------------
+import { applicationSteps, stepsSummary } from "../../components/role/artisan-lists";
+
+const blank = { personalDone: false, companyName: "", siret: "", legalStatus: "", address: "", postalCodes: [], categories: [], credentialsComplete: false, hasProfile: false };
+
+test("candidature : sections renseignées seulement d’après les valeurs et pièces réelles", () => {
+  const empty = applicationSteps(blank);
+  assert.deepEqual(empty.map((s) => s.n), [1, 2, 3, 4, 5]);
+  assert.ok(empty.every((s) => !s.done));
+  assert.equal(stepsSummary(empty), "0 section sur 5 renseignée");
+  const full = applicationSteps({ personalDone: true, companyName: "Martin Élec", siret: "12345678901234", legalStatus: "EURL", address: "3 rue des Ateliers", postalCodes: ["97200"], categories: ["panel"], credentialsComplete: true, hasProfile: true });
+  assert.ok(full.every((s) => s.done));
+  assert.equal(stepsSummary(full), "5 sections sur 5 renseignées");
+  // Société incomplète (SIRET de 13 chiffres) → section 2 à compléter, les autres inchangées.
+  const partial = applicationSteps({ ...blank, personalDone: true, companyName: "Martin Élec", siret: "1234567890123", legalStatus: "EURL", address: "3 rue des Ateliers" });
+  assert.deepEqual(partial.map((s) => s.done), [true, false, false, false, false]);
+});

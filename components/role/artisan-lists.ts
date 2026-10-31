@@ -191,3 +191,35 @@ export function credentialDateLabel(state: CredentialLike): string | null {
   if (!until) return "Sans date d’expiration renseignée";
   return state.key === "expired" ? `Expiré le ${formatDate(until)}` : `Valide jusqu’au ${formatDate(until)}`;
 }
+
+// ---- Candidature (M65) : état des cinq sections, déduit des valeurs et pièces réelles -----------
+export type ApplicationStepInput = {
+  personalDone: boolean;
+  companyName: string;
+  siret: string;
+  legalStatus: string;
+  address: string;
+  postalCodes: readonly string[];
+  categories: readonly string[];
+  credentialsComplete: boolean;
+  hasProfile: boolean;
+};
+export type ApplicationStep = { n: 1 | 2 | 3 | 4 | 5; label: string; done: boolean };
+
+/** Cinq sections M65 ; « renseignée » vient uniquement des valeurs saisies et des pièces transmises. */
+export function applicationSteps(i: ApplicationStepInput): ApplicationStep[] {
+  return [
+    { n: 1, label: "Informations personnelles", done: i.personalDone },
+    {
+      n: 2,
+      label: "Société",
+      done: i.companyName.trim().length >= 2 && /^\d{14}$/.test(i.siret) && Boolean(i.legalStatus) && i.address.trim().length >= 5,
+    },
+    { n: 3, label: "Pièces justificatives", done: i.credentialsComplete },
+    { n: 4, label: "Zones et compétences", done: i.postalCodes.length > 0 && i.categories.length > 0 },
+    { n: 5, label: "Disponibilité", done: i.hasProfile },
+  ];
+}
+
+export const stepsSummary = (steps: readonly ApplicationStep[]) =>
+  `${steps.filter((s) => s.done).length} section${steps.filter((s) => s.done).length > 1 ? "s" : ""} sur ${steps.length} renseignée${steps.filter((s) => s.done).length > 1 ? "s" : ""}`;

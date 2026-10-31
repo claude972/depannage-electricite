@@ -1237,29 +1237,73 @@
   font-size: 14px;
   margin: 0;
 }
+/* M65 : barre d’étapes avec connecteurs entre les pastilles ; état « fait » en vert. */
 .appSteps {
   list-style: none;
   padding: 0;
-  margin: 0 0 16px;
+  margin: 0 0 6px;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 6px;
-}
-@media (max-width: 760px) {
-  .appSteps {
-    grid-template-columns: 1fr;
-  }
+  gap: 0;
 }
 .appSteps li {
+  position: relative;
   display: flex;
   gap: 10px;
   align-items: center;
-  padding: 10px 12px;
-  background: #fff;
-  border: 1px solid var(--a-line);
-  border-radius: 8px;
+  padding: 10px 12px 10px 0;
+  min-height: 44px;
   font-size: 13px;
   color: var(--a-navy);
+}
+.appSteps li + li::before {
+  content: "";
+  position: absolute;
+  left: -14px;
+  top: 23px;
+  width: 14px;
+  height: 1px;
+  background: var(--a-line);
+}
+.stepsSummary {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--a-muted);
+}
+/* Deux colonnes M65 ≥ 1024 px : 1 · 2 · 4 | 3 · 5 · soumission ; une colonne en dessous. */
+.appColumns {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0 20px;
+  align-items: start;
+}
+@media (min-width: 1024px) {
+  .appColumns {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+@media (max-width: 760px) {
+  .appSteps {
+    display: flex;
+    gap: 0;
+  }
+  .appSteps li {
+    flex: 1 1 0;
+    justify-content: center;
+    padding: 10px 0;
+  }
+  .appSteps li + li::before {
+    left: calc(-50% + 13px);
+    width: calc(100% - 26px);
+  }
+  .stepLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
 }
 .appSteps li span:first-child {
   display: inline-flex;
@@ -1333,8 +1377,8 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 0 4px 0 12px;
-  min-height: 36px;
+  padding: 0 0 0 12px;
+  min-height: 44px;
   border-radius: 999px;
   background: #eaf1ff;
   color: var(--a-blue);
@@ -1345,8 +1389,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   color: inherit;
 }
@@ -1365,8 +1409,16 @@
 .checkGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 6px 16px;
+  gap: 0 16px;
   margin-bottom: 8px;
+}
+/* Ligne de case à cocher cliquable sur 44 px (la case native reste 16 px, le libellé porte la cible). */
+.checkGrid :global(.checkbox-field) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  cursor: pointer;
 }
 .switchRow {
   display: flex;

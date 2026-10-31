@@ -878,3 +878,16 @@ compteur 500 caractères (limite serveur 2 000 conservée). Les montants restent
 
 Captures : `artisan-documents-{360,1280}-after.jpg` (avant : `artisan-documents-{360,1280}-before.jpg`). Tests :
 `credentialSummary`, `credentialDateLabel` (suite UI 93/93) ; `tsc` au vert.
+
+### Résultat du checkpoint 2 (A) — M65 candidature
+
+| Ligne de l’addendum | Fait | Reste / écart |
+| --- | --- | --- |
+| Stepper | Barre d’étapes avec connecteurs, numéro ou coche « fait » (`applicationSteps`, états déduits des valeurs saisies et pièces transmises) ; résumé visible « N sections sur 5 renseignées » (`stepsSummary`) ; ≤ 760 px : cinq pastilles sur une ligne, libellés en lecteur d’écran. | — |
+| Deux colonnes | ≥ 1024 px : 1 Informations personnelles · 2 Société · 4 Zones et compétences à gauche ; 3 Pièces · 5 Disponibilité · enregistrement / soumission à droite (M65). | **Écart assumé** : l’ordre DOM suit M65 (1, 2, 4, 3, 5), donc l’ordre de lecture sur une colonne (≤ 1023 px) est 1, 2, 4, 3, 5 ; les numéros de section restent affichés. |
+| Champs obligatoires | « (obligatoire) » sur Nom de la société, SIRET, Statut juridique, Adresse du siège ; liste des manques conservée. | — |
+| Cibles | « Retirer » 44 × 44, puces 44 px, lignes de cases à cocher 44 px (libellé cliquable), étapes 44 px ; 0 élément interactif < 44 px à 360 et 1280 ; aucun débordement ; console sans erreur. | — |
+
+Captures : `artisan-application-{360,1280}-after.jpg` (avant : `artisan-application-{360,1280}-before.jpg`). Tests :
+`applicationSteps`, `stepsSummary` (suite UI 104/104) ; `tsc` au vert. Les checkpoints V5-C01 / C05 / C08 sont transférés
+par le lead à un autre propriétaire (enterprise) ; aucun code entreprise n’a été commencé ici.
