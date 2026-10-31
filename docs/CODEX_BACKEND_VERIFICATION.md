@@ -63,6 +63,6 @@ Findings distants lus depuis `origin/missions/web-pwa:CORRECTIONS.md` après la 
 
 ### Preuves fraîches du correctif008
 
-- `npm run check` : TypeScript, 32 tests (zéro échec) et build Next réussis.
+- `npm run check` : TypeScript, 30 tests (zéro échec) et build Next réussis.
 - Harness SQL principal :29 groupes PASS, dont nouveaux scénarios CL-001/CL-002 ; harness performance :6 groupes PASS. Tous exécutent les huit migrations avec stubs Auth/Storage déclarés.
 - `git diff --check` propre ; aucune modification de la migration003 ou des chemins frontend. Pas de tests cloud ni de concurrence réelle revendiqués.
