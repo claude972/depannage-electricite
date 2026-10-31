@@ -58,3 +58,17 @@ The defensive deep-link refresh (contract `cd2b8d3`) is independent of the resul
 - `has_function_privilege('authenticated', 'public.can_access_intervention(uuid)', 'execute')` = TRUE.
 - ⇒ Cause 1 (interventions not published) and the grant part of cause 3 are EXCLUDED live. Still UNKNOWN: realtime socket role (anon vs authenticated) and Realtime RLS evaluation. CLI gives no Realtime logs. No cohort, no data modified. Private proof `/tmp/depannage-live-workspace-readonly-2115-private.json` (root).
 - Next: a normal run may record PASSIVE WebSocket join metadata only (role, auth uid match, binding, error code; never the JWT payload) — contract before code if pursued.
+
+## Update — new source-level candidate: unpublished `payments` binding + ignored `system` errors (lead, read-only)
+
+- QA login goes through the UI (`scripts/qa/lib/browser.mjs` `login`, password form) ⇒ browser `signInWithPassword` on the same `@supabase/ssr` singleton ⇒ `SIGNED_IN` ⇒ `realtime.setAuth(user token)` (supabase-js 2.118 `_handleTokenChanged`). Note: `_getAccessToken` falls back to the publishable key when no session is readable — anon joins remain possible only if the session were unreadable at join; less likely for a UI login.
+- realtime-js 2.118 `RealtimeChannel.subscribe`: the join reply `ok` immediately yields `SUBSCRIBED` (our badge). Server-side `postgres_changes` subscription setup happens after; per Supabase Realtime behaviour a binding it cannot subscribe (e.g. a table NOT in the publication) is reported asynchronously as a channel **`system` message with status `error`** (« Unable to subscribe to changes with given parameters… »). The app registers no `system` handler ⇒ the error is invisible and the badge stays « En direct ».
+- Our channel binds FOUR tables in one channel, including **`payments`, which root confirmed is NOT in the live publication**. If the server rejects the channel's postgres subscriptions as a whole for that binding, `interventions` events never arrive either — exactly the observed symptom.
+- realtime-js 2.118 also supports `config.postgres_changes_options: { wait: true, timeout }`, which makes the join wait for the server's subscription result, so a rejected binding surfaces as `CHANNEL_ERROR` instead of a false `SUBSCRIBED`.
+- **Status: strong candidate, NOT proven** (I could not confirm from the server source whether one bad binding fails the whole set). Cheapest proof, read-only and passive on the next normal run: record the channel's `system` messages (status + message text only, no payload, no token) on one QA client page; or Realtime logs for the join.
+
+## Functional contract proposal update (code only after root GO; lead-owned shell)
+
+- **D1 (shell):** subscribe only to published tables (drop `payments` from the channel, or split one channel per table so one bad binding cannot silence the others); listen to `system` messages and map an error to a non-live status; consider `postgres_changes_options.wait` so a rejected subscription is never shown as live. Badge per A2 (« Connecté » / « Actualiser »).
+- **D2 (Codex, only if payments live updates are wanted):** a reviewed migration adding `public.payments` to `supabase_realtime` (RLS `payments_read` already exists). Not required for this finding.
+- Acceptance: QA scenario « a session opened before an external creation receives the dossier without reload » (separate from T6's normal precondition).
