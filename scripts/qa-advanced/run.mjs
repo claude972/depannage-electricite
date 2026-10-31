@@ -51,7 +51,12 @@ async function main() {
     const q=new URLSearchParams({select:columns,...filters,limit:'1000'});
     // Exact count distinguishes an empty result from truncation or malformed provider output.
     const r=await fetch(sb.url+'/rest/v1/'+table+'?'+q,{headers:{apikey:sb.service_role_key,Authorization:`Bearer ${sb.service_role_key}`,Prefer:'count=exact'},signal:AbortSignal.timeout(o.timeoutMs)});
-    const rows=await r.json();const total=exactCount(r.status,r.headers.get('content-range'));
+    const rows=await r.json().catch(()=>null);
+    if(!r.ok) {
+      const code=rows && !Array.isArray(rows) && typeof rows.code==='string' && /^[A-Z0-9]{5,12}$/.test(rows.code)?rows.code:'unavailable';
+      throw Error(`cohort read refused: ${table} (HTTP ${r.status}; code ${code})`);
+    }
+    const total=exactCount(r.status,r.headers.get('content-range'));
     if(!Array.isArray(rows) || total!==rows.length)throw Error('cohort read unavailable or truncated: '+table);return rows;
   };
   const db={select,async count(table,filters){

@@ -42,7 +42,7 @@ export async function apiScenarios(ctx) {
     ok(await change('restore cohort artisan','service','PATCH',`/rest/v1/artisan_profiles?user_id=eq.${u.artisan.id}`,{application_status:'approved'}),204);
   });
   await step('notifications: two concurrent FIRST preference saves, winner retained',async()=>{
-    assert.equal((await db.select('notification_preferences',{user_id:`eq.${u.fresh.id}`})).length,0);
+    assert.equal((await db.select('notification_preferences',{user_id:`eq.${u.fresh.id}`},'user_id')).length,0);
     const second=await token({...u.fresh});
     const choices=[{p_muted_kinds:['message_received'],p_email:false,p_sms:false,p_push:false,p_expected_version:0},{p_muted_kinds:['work_started'],p_email:false,p_sms:false,p_push:false,p_expected_version:0}];
     const results=await Promise.all([rpc(u.fresh,'save_notification_preferences',choices[0]),rpc(second,'save_notification_preferences',choices[1])]);const winner=assertRace(results,{requireOverlap:true});
