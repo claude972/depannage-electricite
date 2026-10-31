@@ -868,3 +868,14 @@ compteur 500 caractères (limite serveur 2 000 conservée). Les montants restent
 1. V5-C01 fiche de site — `enterprise-site-office-{360,1280}-after.jpg`.
 2. V5-C05 tableau de bord — `enterprise-overview-{360,1280}-after.jpg`.
 3. V5-C08 approbation — `enterprise-approval-{360,1280}-after.jpg`.
+
+### Résultat du checkpoint 1 (entreprise) — V5-C01 fiche de site
+
+Captures `docs/visual-fidelity/enterprise-site-office-{360,1280}-after.jpg` (`#demo/manager-site.site-3`). Surtitre
+« Fiche de site » ; pastille « Site actif » retirée (aucun statut d’activité dans le modèle) ; bloc « Identité du
+site » limité aux faits enregistrés (type, adresse, budget de référence) ; historique des interventions daté (date |
+catégorie + référence | état) ; sélecteur de contexte, segments (wrapper, primitive partagée intouchée), « Marquer
+terminé », bouton de menu et fermeture du tiroir à 44 px ; lignes de liste repliables à 360 (titre pleine largeur,
+état et action dessous). Bloc « Opérations du site » et ancrages non modifiés. Mesures 360 / 1280 : 0 cible < 44 px,
+aucun débordement, console vide. Écarts assumés : pas de photo, surface, année, étages, occupant, conformité,
+certification, consommation, projection, date de mise à jour.

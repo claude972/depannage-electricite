@@ -27,8 +27,11 @@
   display: none;
   align-items: center;
   justify-content: center;
+  flex: none;
   width: 44px;
+  min-width: 44px;
   height: 44px;
+  min-height: 44px;
   border-radius: 8px;
   color: #fff;
 }
@@ -420,7 +423,7 @@
 }
 .contextControls select,
 .select {
-  min-height: 40px;
+  min-height: 44px;
   padding: 8px 10px;
   border: 1px solid #ccd7e5;
   border-radius: 7px;
@@ -742,7 +745,7 @@
   color: #1457d9;
 }
 .rowAction {
-  min-height: 40px;
+  min-height: 44px;
   padding: 7px 12px;
   font-size: 13px;
 }
@@ -1166,6 +1169,63 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+}
+/* V5-C01 : surtitre « Fiche de site » et faits réels sous l’en-tête. */
+.kicker {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #526178;
+  margin-bottom: 4px;
+}
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 12px 0 0;
+}
+.facts > div {
+  min-width: 0;
+}
+.facts dt {
+  font-size: 12px;
+  color: #526178;
+}
+.facts dd {
+  margin: 2px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #102a43;
+}
+/* Segments de la primitive partagée portés à 44 px sans la modifier. */
+.segmentsWrap button {
+  min-height: 44px;
+}
+/* Historique daté (V5-C01) : date à gauche, titre, état. */
+.datedRow > time {
+  flex: none;
+  width: 92px;
+  font-size: 13px;
+  color: #526178;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 480px) {
+  .datedRow {
+    flex-wrap: wrap;
+  }
+  .datedRow > time {
+    width: 100%;
+  }
+  /* Lignes de liste à 360 : titre sur toute la largeur, état et action sur la rangée suivante. */
+  .listRow {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .listRow > section {
+    flex: 1 1 100%;
+  }
 }
 .sheetHeader p {
   display: flex;
@@ -1725,8 +1785,11 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex: none;
     width: 44px;
+    min-width: 44px;
     height: 44px;
+    min-height: 44px;
     margin: 0 0 8px auto;
     border-radius: 8px;
     color: #102a43;

@@ -2289,15 +2289,30 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
       </button>
       <div className={styles.sheetHeader}>
         <div>
+          <span className={styles.kicker}>Fiche de site</span>
           <h1>
             {site.name}
             <Tag tone="blue">{(vertical && SITE_TYPES[vertical]) || "Site"}</Tag>
-            <Tag tone="green">Site actif</Tag>
           </h1>
           <p>
             <Icon name="location" size={15} />
             {site.address}
           </p>
+          {/* V5-C01 « Présentation du bâtiment » : seuls les faits enregistrés (type, adresse, budget). */}
+          <dl className={styles.facts} aria-label="Identité du site">
+            <div>
+              <dt>Type de site</dt>
+              <dd>{(vertical && SITE_TYPES[vertical]) || "Non renseigné"}</dd>
+            </div>
+            <div>
+              <dt>Adresse</dt>
+              <dd>{site.address}</dd>
+            </div>
+            <div>
+              <dt>Budget de référence</dt>
+              <dd>{f.budget > 0 ? money(f.budget) : "Non renseigné"}</dd>
+            </div>
+          </dl>
         </div>
         <div className={styles.sheetActions}>
           {canWrite ? (
@@ -2348,24 +2363,27 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
         <section className="panel" aria-labelledby="site-interventions">
           <div className={styles.panelTitle}>
             <h2 id="site-interventions">Interventions</h2>
-            <Segments
-              label="Filtre des interventions du site"
-              value={tab}
-              options={[
-                ["open", `En cours (${open.length})`],
-                ["past", `Passées (${past.length})`],
-              ]}
-              onChange={setTab}
-            />
+            <div className={styles.segmentsWrap}>
+              <Segments
+                label="Filtre des interventions du site"
+                value={tab}
+                options={[
+                  ["open", `En cours (${open.length})`],
+                  ["past", `Passées (${past.length})`],
+                ]}
+                onChange={setTab}
+              />
+            </div>
           </div>
           {shown.length ? (
             shown.map((i) => (
               <button
                 key={i.id}
                 type="button"
-                className={cx(styles.listRow, styles.listRowButton)}
+                className={cx(styles.listRow, styles.listRowButton, styles.datedRow)}
                 onClick={() => session.openIntervention(i.id)}
               >
+                <time dateTime={i.created_at}>{date(i.created_at)}</time>
                 <section>
                   <strong>{category(i.category).label}</strong>
                   <small>
