@@ -137,22 +137,28 @@ export async function browserScenarios(ctx) {
   });
   await step('browser: server suspension reflected as read-only planning',async()=>{
     ok(await change('suspend browser cohort artisan','service','PATCH',`/rest/v1/artisan_profiles?user_id=eq.${u.artisan.id}`,{application_status:'suspended'}),204);
-    await reloadPlanning(false);await page.getByRole('note').filter({hasText:'Votre compte est suspendu'}).first().waitFor();
+    // The assembled shell may supply its own current suspension reason ahead of SQL's copy.
+    await reloadPlanning(false);await page.getByRole('note').filter({hasText:/Lecture seule/i}).filter({hasText:/suspendu/i}).first().waitFor();
     const r=await app('POST','/api/planning',{action:'save_entry',request_id:randomUUID(),kind:'busy',starts_at:new Date(Date.now()+86400000).toISOString(),ends_at:new Date(Date.now()+90000000).toISOString(),title:'refused',note:''});assert.equal(r.status,403);
     assert.equal(await page.getByRole('button',{name:'Ajouter une entrée ponctuelle',exact:true}).count(),0);
     ok(await change('restore browser cohort artisan','service','PATCH',`/rest/v1/artisan_profiles?user_id=eq.${u.artisan.id}`,{application_status:'approved'}),204);
     await reloadPlanning(true);await page.getByRole('button',{name:'Ajouter une entrée ponctuelle',exact:true}).waitFor();
   });
-  await step('browser: deterministic GET failure surfaces retry, then recovers',async()=>{
+  await step('browser: GET503 blocks planning writes; document reload recovers (inline recovery unverified)',async()=>{
     await page.route('**/api/planning?*',async route=>{await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Panne technique injectée pour la recette.'})});});
     try {
-      const response=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/planning' && r.request().method()==='GET').catch(()=>null);
+      const response=page.waitForResponse(r=>{const url=new URL(r.url());return url.pathname==='/api/planning' && url.searchParams.has('from') && r.request().method()==='GET';}).catch(()=>null);
       await page.getByRole('button',{name:'Recharger la semaine',exact:true}).click();
       const failed=await response;assert.ok(failed,'refresh must request planning');assert.equal(failed.status(),503);
-      await page.getByRole('button',{name:'Réessayer',exact:true}).first().waitFor();await page.screenshot({path:path.join(o.out,'planning-error.png'),fullPage:true});
+      const blocked=page.locator('[data-blocker="capability:planning"][role="note"]').filter({hasText:'Le service est momentanément indisponible'});
+      await blocked.waitFor();
+      assert.equal(await page.getByRole('button',{name:'Ajouter une entrée ponctuelle',exact:true}).count(),0);
+      assert.equal(await page.getByRole('heading',{name:'Disponibilités habituelles',exact:true}).count(),0);
+      await page.screenshot({path:path.join(o.out,'planning-error.png'),fullPage:true});
     }
     finally {await page.unrouteAll({behavior:'wait'});}
-    await page.getByRole('button',{name:'Réessayer',exact:true}).first().click();await page.getByRole('heading',{name:'Disponibilités habituelles',exact:true}).waitFor();
+    await reloadPlanning(true);await page.getByRole('heading',{name:'Disponibilités habituelles',exact:true}).waitFor();
+    await page.getByRole('button',{name:'Ajouter une entrée ponctuelle',exact:true}).waitFor();
   });
   if(ctx.support)await step('browser: notification HTTP list/count/mark obey linked-ticket revocation',async()=>{
     await handle.close();const h=await b.newPage(browser,{baseUrl:o.baseUrl,redactor});
