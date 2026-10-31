@@ -129,7 +129,7 @@ test("lists paginate with exact totals and filter-bound cursors; malformed param
 test("/me reflects server scopes and configuration states without exposing secrets", async () => {
   const h = harness("finRead", { STRIPE_SECRET_KEY: "sk_test_secretvalue", PLATFORM_FEE_BPS: "1000" });
   const body = await (await h.route("me").GET(h.request("/me"))).json();
-  assert.deepEqual(body.scopes, ["finance_read"]); assert.equal(body.capabilities.finance, true); assert.equal(body.capabilities.operators, false); assert.equal(body.capabilities.refund_execution, false);
+  assert.deepEqual(body.scopes, ["finance_read"]); assert.equal(body.capabilities.finance, true); assert.equal(body.capabilities.operators, false); assert.equal(body.capabilities.refund_execution, false); assert.equal(body.capabilities.invoice_rendering, true);
   assert.deepEqual(body.config.commission, { setting_bps: 1500, setting_version: 2, checkout_bps: 1000, aligned: false });
   assert.deepEqual(body.config.payment_provider, { configured: true, mode: "test", live_enabled: false });
   assert.ok(!JSON.stringify(body).includes("secretvalue"));

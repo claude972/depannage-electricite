@@ -6,6 +6,7 @@ import type { ContractState, Dispute, DisputeOutcome, FinanceConfig, FinanceRepo
 import { COMMISSION_NOT_CONFIGURED, REFUND_EXECUTION_MESSAGE } from "../../../lib/features/platform-operations/config";
 import { EMPTY_READINESS, UUID_RE, disputeActions, readinessFingerprint, readinessReduce, refundActions, refundStatusLabel, validateAmountCents, validateDisputeDecision, validateRefundDecision, validateText, type ReadinessTarget } from "../../../lib/features/platform-operations/state-machines";
 import type { PlatformDemo } from "../../../lib/features/platform-operations/demo";
+import { invoiceDocumentLinks } from "../../../lib/features/platform-operations/invoice-links";
 import { EmptyState, ErrorBox, Field, Gate, Loading, Pager, Panel, ReadOnly, dateTime, errorText, money, newRequestId, scopeKey, shortId, useLoad } from "./shared";
 import styles from "./platform-operations.module.css";
 
@@ -16,7 +17,7 @@ const DEMO_NOTE = "Mode démonstration : aucune action n’est envoyée.";
 const KIND_LABEL: Record<LedgerEntry["entry_kind"], string> = { payment_settled: "Encaissement confirmé", commission_estimated: "Commission estimée (non prélevée)", commission_withheld: "Commission prélevée (confirmée)", refund_settled: "Remboursement confirmé" };
 const MISSING_LABEL: Record<string, string> = { billing_contact: "coordonnées de facturation manquantes", payment_not_settled: "paiement non confirmé", quote_not_accepted: "devis non accepté", already_issued: "facture déjà émise pour ce paiement", artisan_company_name: "raison sociale de l’artisan manquante", artisan_siret: "SIRET de l’artisan manquant", artisan_legal_status: "forme juridique de l’artisan manquante", artisan_address: "adresse de l’artisan manquante", artisan_identity: "identité légale de l’artisan incomplète", platform_issuer: "émetteur plateforme non configuré", platform_commission_vat_rate: "taux de TVA de commission non configuré", commission_not_confirmed: "commission non confirmée par le fournisseur de paiement" };
 
-type Ctx = { client: PlatformClient; demo?: PlatformDemo; canWrite: boolean; superAdmin: boolean; notify: (m: { kind: "ok" | "error"; text: string } | null) => void; busy: boolean; act: (work: () => Promise<unknown | null>, done: string, after?: () => void) => Promise<void>; scopeKey: string };
+type Ctx = { client: PlatformClient; demo?: PlatformDemo; canWrite: boolean; superAdmin: boolean; notify: (m: { kind: "ok" | "error"; text: string } | null) => void; busy: boolean; act: (work: () => Promise<unknown | null>, done: string, after?: () => void) => Promise<void>; scopeKey: string; rendering: boolean };
 
 export function PlatformFinanceView(props: PlatformFinanceViewProps) {
   return <Gate state={props.state} unavailableMessage={props.unavailableMessage} title="Finance plateforme"><Inner key={scopeKey(props.scope)} {...props} /></Gate>;
@@ -36,7 +37,7 @@ function Inner({ scope, client, demo }: PlatformFinanceViewProps) {
   if (me.loading && !me.data) return <Loading label="Chargement des droits…" />;
   if (me.error && !me.data) return <ErrorBox message={me.error} onRetry={me.reload} />;
   if (!me.data?.capabilities.finance) return <div className="forbidden"><strong>Cet espace nécessite le scope finance.</strong><p>Demandez l’habilitation à un super administrateur.</p></div>;
-  const ctx: Ctx = { client, demo, canWrite: scope.authority.canWrite && !demo && (me.data.super_admin || me.data.scopes.includes("finance_write")), superAdmin: !demo && scope.authority.canWrite && me.data.super_admin, notify, busy, act, scopeKey: scopeKey(scope) };
+  const ctx: Ctx = { client, demo, canWrite: scope.authority.canWrite && !demo && (me.data.super_admin || me.data.scopes.includes("finance_write")), superAdmin: !demo && scope.authority.canWrite && me.data.super_admin, notify, busy, act, scopeKey: scopeKey(scope), rendering: me.data.capabilities.invoice_rendering === true };
   return (
     <div className={styles.view}>
       <div className={styles.head}><div><h2>Finance plateforme</h2><p>Ledger en centimes, rapprochement avec les paiements confirmés et suivi documentaire. Aucune action réelle auprès du fournisseur de paiement n’est disponible dans cette version.</p></div></div>
@@ -124,22 +125,52 @@ function Ledger({ ctx }: { ctx: Ctx }) {
 }
 
 // ---- Invoices ------------------------------------------------------------------------------
+function DocumentLinks({ ctx, invoiceId }: { ctx: Ctx; invoiceId: string }) {
+  const links = invoiceDocumentLinks({ invoiceId, rendering: ctx.rendering, demo: Boolean(ctx.demo) });
+  if (links.state === "unavailable") return <span className={styles.hint}>{links.note}</span>;
+  if (links.state === "demo") return <span className={styles.actions}><span role="link" aria-disabled="true" className={styles.disabledLink}>Ouvrir le PDF</span><span role="link" aria-disabled="true" className={styles.disabledLink}>Télécharger</span><span className={styles.hint}>{links.note}</span></span>;
+  return <span className={styles.actions}><a className={styles.link} href={links.open} target="_blank" rel="noopener">Ouvrir le PDF</a><a className={styles.link} href={links.download}>Télécharger</a></span>;
+}
+function InvoiceDetail({ ctx, id, onClose }: { ctx: Ctx; id: string; onClose: () => void }) {
+  const detail = useLoad(() => (ctx.demo ? Promise.resolve({ invoice: ctx.demo.invoices.find((i) => i.id === id) as Invoice, credit_notes: [] as Invoice[], document: null }) : ctx.client.load.invoice(id)), [ctx.demo, id]);
+  return (
+    <Panel title="Détail du document" action={<button type="button" className={styles.button} onClick={onClose}>Fermer</button>}>
+      {detail.loading && !detail.data ? <Loading /> : detail.error && !detail.data ? <ErrorBox message={detail.error} onRetry={detail.reload} /> : !detail.data?.invoice ? <EmptyState title="Document introuvable" /> : (
+        <>
+          <dl className={styles.kv}>
+            <dt>Numéro</dt><dd className={styles.mono}>{detail.data.invoice.number}</dd>
+            <dt>Type</dt><dd>{detail.data.invoice.kind === "invoice" ? "Facture" : "Avoir"} · {detail.data.invoice.basis === "service" ? "prestation" : "commission"} · émis le {dateTime(detail.data.invoice.issued_at)}</dd>
+            <dt>Émetteur</dt><dd>{detail.data.invoice.issuer.legal_name}{detail.data.invoice.issuer.siret && ` · SIRET ${detail.data.invoice.issuer.siret}`}<br />{detail.data.invoice.issuer.address}</dd>
+            <dt>Destinataire</dt><dd>{detail.data.invoice.recipient.name ?? detail.data.invoice.recipient.legal_name}<br />{detail.data.invoice.recipient.address}</dd>
+            <dt>Montants</dt><dd>HT {money(detail.data.invoice.subtotal_cents)} · TVA {money(detail.data.invoice.tax_cents)} ({Number(detail.data.invoice.tax_rate)} %) · TTC {money(detail.data.invoice.total_cents)}</dd>
+            {detail.data.invoice.reason && <><dt>Motif</dt><dd>{detail.data.invoice.reason}</dd></>}
+            <dt>Document</dt><dd><DocumentLinks ctx={ctx} invoiceId={detail.data.invoice.id} /></dd>
+          </dl>
+          <div className={styles.tableWrap}><table className={styles.table}><caption className={styles.srOnly}>Lignes du document</caption><thead><tr><th>Libellé</th><th className={styles.num}>Qté</th><th className={styles.num}>PU HT</th></tr></thead><tbody>{detail.data.invoice.lines.map((l, i) => <tr key={i}><td>{l.label}</td><td className={styles.num}>{l.quantity}</td><td className={styles.num}>{money(l.unit_price_cents)}</td></tr>)}</tbody></table></div>
+          {detail.data.credit_notes.length > 0 && <ul className={styles.list}>{detail.data.credit_notes.map((n) => <li key={n.id} className={styles.card}><div className={styles.panelHead}><span>Avoir <span className={styles.mono}>{n.number}</span> · {money(n.total_cents)} · {dateTime(n.issued_at)}</span><DocumentLinks ctx={ctx} invoiceId={n.id} /></div>{n.reason && <span className={styles.hint}>{n.reason}</span>}</li>)}</ul>}
+        </>
+      )}
+    </Panel>
+  );
+}
 function Invoices({ ctx }: { ctx: Ctx }) {
   const list = useList(ctx, (cursor) => ctx.client.load.invoices({ cursor, limit: 25 }), { invoices: ctx.demo?.invoices ?? [], page: demoPage(ctx.demo?.invoices.length ?? 0) }, []);
+  const [selected, setSelected] = useState<string | null>(null);
   return (
     <>
       <Panel title="Registre" intro="Documents émis uniquement à partir d’un émetteur réel, d’un paiement confirmé et de coordonnées de facturation renseignées. Un document ne se supprime pas : il se corrige par avoir.">
         {list.loading && !list.data ? <Loading /> : list.error && !list.data ? <ErrorBox message={list.error} onRetry={list.reload} /> : !list.data?.invoices.length ? <EmptyState title="Aucun document">Vérifiez d’abord les conditions d’émission pour un paiement confirmé.</EmptyState> : (
           <div className={styles.tableWrap}><table className={styles.table}><caption className={styles.srOnly}>Factures et avoirs</caption>
-            <thead><tr><th>Numéro</th><th>Type</th><th>Émetteur</th><th>Destinataire</th><th className={styles.num}>HT</th><th className={styles.num}>TVA</th><th className={styles.num}>TTC</th><th>Émis</th></tr></thead>
-            <tbody>{list.data.invoices.map((i) => <tr key={i.id}><td className={styles.mono}>{i.number}{i.related_invoice_id && <div>sur {shortId(i.related_invoice_id)}</div>}</td><td>{i.kind === "invoice" ? "Facture" : "Avoir"} · {i.basis === "service" ? "prestation" : "commission"}</td><td>{i.issuer.legal_name}</td><td>{i.recipient.name ?? i.recipient.legal_name}</td><td className={styles.num}>{money(i.subtotal_cents)}</td><td className={styles.num}>{money(i.tax_cents)} ({Number(i.tax_rate)} %)</td><td className={styles.num}>{money(i.total_cents)}</td><td>{dateTime(i.issued_at)}</td></tr>)}</tbody></table></div>
+            <thead><tr><th>Numéro</th><th>Type</th><th>Émetteur</th><th>Destinataire</th><th className={styles.num}>HT</th><th className={styles.num}>TVA</th><th className={styles.num}>TTC</th><th>Émis</th><th>Document</th></tr></thead>
+            <tbody>{list.data.invoices.map((i) => <tr key={i.id}><td className={styles.mono}><button type="button" className="text-button" onClick={() => setSelected(i.id)}>{i.number}</button>{i.related_invoice_id && <div>sur {shortId(i.related_invoice_id)}</div>}</td><td>{i.kind === "invoice" ? "Facture" : "Avoir"} · {i.basis === "service" ? "prestation" : "commission"}</td><td>{i.issuer.legal_name}</td><td>{i.recipient.name ?? i.recipient.legal_name}</td><td className={styles.num}>{money(i.subtotal_cents)}</td><td className={styles.num}>{money(i.tax_cents)} ({Number(i.tax_rate)} %)</td><td className={styles.num}>{money(i.total_cents)}</td><td>{dateTime(i.issued_at)}</td><td><DocumentLinks ctx={ctx} invoiceId={i.id} /></td></tr>)}</tbody></table></div>
         )}
         {list.data && list.pager(list.data.page)}
       </Panel>
+      {selected && <InvoiceDetail key={selected} ctx={ctx} id={selected} onClose={() => setSelected(null)} />}
       {ctx.canWrite && <IssueForm ctx={ctx} onIssued={list.reload} />}
       {ctx.canWrite && <CreditNoteForm ctx={ctx} onIssued={list.reload} />}
       {ctx.canWrite && <BillingContactForm ctx={ctx} />}
-      <Message>Le rendu PDF des documents est fourni par le lot documents ; ce registre expose les données exactes du document.</Message>
+      <Message>{ctx.rendering ? "Les PDF sont rendus à partir de l’instantané immuable du registre ; chaque lien est privé et réservé au scope finance." : "Rendu PDF non disponible sur ce service ; ce registre expose les données exactes du document."}</Message>
     </>
   );
 }

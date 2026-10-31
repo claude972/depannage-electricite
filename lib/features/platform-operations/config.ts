@@ -1,4 +1,7 @@
 import type { FinanceConfig } from "./types";
+/** True only in a build that ships the private PDF route app/api/platform-operations/finance/invoices/[id]/pdf/route.ts
+ * (CODEX-INVOICE-PDF-001). Flip to false if that route is ever removed from the build; /me and the links follow it. */
+export const INVOICE_RENDERING_AVAILABLE = true;
 /** Reads process-level configuration without ever exposing a secret. Pure for tests. */
 export function checkoutCommissionBps(env: Record<string, string | undefined>): number | null {
   const raw = env.PLATFORM_FEE_BPS;

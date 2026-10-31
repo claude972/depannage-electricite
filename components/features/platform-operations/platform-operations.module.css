@@ -50,4 +50,7 @@
 .kv dd { margin: 0; overflow-wrap: anywhere; }
 .list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .card { border: 1px solid var(--line, #dce4ee); border-radius: 8px; padding: 12px; display: grid; gap: 8px; }
+.link { color: var(--blue, #1457d9); font-weight: 550; text-decoration: underline; text-underline-offset: 3px; min-height: 44px; display: inline-flex; align-items: center; }
+.link:focus-visible { outline: 2px solid var(--blue, #1457d9); outline-offset: 2px; border-radius: 4px; }
+.disabledLink { color: var(--muted, #586b80); text-decoration: underline dotted; min-height: 44px; display: inline-flex; align-items: center; cursor: not-allowed; }
 .srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
