@@ -3,7 +3,7 @@
 ## Primary goal
 Livrer une plateforme de dépannage électrique où client, artisan, entreprise cliente et exploitant accomplissent leurs tâches dans des espaces distincts et fidèles aux références, avec données privées persistantes et cycle demande → devis → intervention → paiement Stripe démontré en ligne.
 
-**Statut : préparation uniquement.** Ce plan remplace l’ordre précédent ; aucune application, migration, configuration distante ou livraison n’est exécutée par sa rédaction. Lire [l’audit consolidé](audit/REAUDIT_CONSOLIDE.md), la [matrice des 76 capacités](AUDIT_COMPLET_SPECIFICATIONS.md) et le [registre des décisions](SPECIFICATIONS_A_COMPLETER.md).
+**Statut courant : réalisation Web/PWA autorisée, en cours.** La rédaction initiale était une préparation ; le propriétaire a ensuite autorisé l’exécution autonome split et demandé iOS/Android après le Web/PWA. Ce plan conserve ses critères ; [WEB_PWA_DELIVERY.md](WEB_PWA_DELIVERY.md) décrit les checkpoints, preuves, blocages et le relais Claude de minuit. Lire [l’audit consolidé](audit/REAUDIT_CONSOLIDE.md), la [matrice des 76 capacités](AUDIT_COMPLET_SPECIFICATIONS.md) et le [registre des décisions](SPECIFICATIONS_A_COMPLETER.md).
 
 ## Périmètre, ordre et méthode
 
