@@ -114,3 +114,22 @@
   survol/focus des flèches fond #0E3B26 + flèche blanche. Thème : `prefers-color-scheme`, clé unique `delivo-test-theme`
   (try/catch, repli session vérifié), appliqué avant rendu. Aucune publicité. 8 cas sans débordement, cibles ≥ 44 px,
   héros pleine largeur (left 0, largeur = fenêtre, hauteur ≥ fenêtre − barre, contenu jamais coupé), console propre.
+
+## DESIGN-DELIVO-WEB-TEST-007 — sections sous le héros (plan court, base 1ab7eb8)
+
+- Fichiers : `prototypes/delivo-test/web-sections.html` (charge `web.css` + `web-slide.css` + `web-full.css` +
+  `web-sections.css`, réutilise `web-slide.js`, `web-full.js`, `dialog.js`), `web-sections.css`, `web-sections.js`,
+  photos copiées sans retouche (recadrage CSS seulement) : `section-panel.jpg`, `section-tech.jpg` (Pexels, Bulat
+  34054464 / 34054474), `section-socket.jpg` (Pexels, Anastasia Shuraeva 7647233), `section-outlet.jpg` (Pexels 5691599,
+  Ksenia Chernaya). Pages précédentes immuables.
+- Héros 006 plein écran (sans publicité) + bascule clair/sombre, thème identique. Dessous, compositions des 3 références
+  (structure seulement) :
+  1. `#interventions` — 8 cartes compactes (vignette + étiquette « Électricité » + titre + « estimation à confirmer »)
+     en 3 colonnes + bouton « Décrire ma panne » ; aucune fourchette chiffrée, aucun badge « populaire ». Photos prise →
+     cartes prise ; tableau/technicien/héros → cartes tableau.
+  2. `#catalogue` — 5 onglets réels (`tablist`/`tab`/`tabpanel`, `aria-selected`, tabindex itinérant, ←/→/Début/Fin)
+     et liens en 3 colonnes vers `demande.html`.
+  3. `#blog` — 2 colonnes : un article à la une (grande photo) + 4 vignettes ; « texte provisoire », « date à venir » ;
+     ouverture d’un dialogue local (Échap) ; aucun conseil de bricolage dangereux.
+- Pas de doublon du bloc 4 services ; crédits photo en pied de page. Vérif : 1440/1280/390/360 × 2 thèmes, onglets
+  clic + clavier, dialogue, AA, ≥ 44 px, aucune requête externe, console propre.
