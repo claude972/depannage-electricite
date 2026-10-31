@@ -18,7 +18,7 @@ import {
   quoteRef,
   shortId,
 } from "../app/format";
-import { pickQuote, quoteVersions } from "../app/session";
+import { canAccess, pickQuote, quoteVersions } from "../app/session";
 import { Icon } from "../app/icons";
 import { InstallPanel } from "../app/install-panel";
 import {
@@ -54,6 +54,10 @@ import type {
   View,
 } from "../app/types";
 import styles from "./client.module.css";
+import { HeaderBell, NotificationsPage } from "./notifications-anchor";
+import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
+import { PlatformPage } from "./platform-anchor";
+import { platformEntries } from "./anchors";
 import { UploadQueuePanel } from "../app/upload-queue";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
 
@@ -64,6 +68,10 @@ const CLIENT_VIEWS: readonly View[] = [
   "detail",
   "quote",
   "messages",
+  "notifications",
+  "platform-operators",
+  "platform-finance",
+  "platform-moderation",
   "documents",
   "profile",
   "help",
@@ -76,6 +84,10 @@ const VIEW_NAMES: Partial<Record<View, string>> = {
   detail: "Intervention",
   quote: "Devis",
   messages: "Messages",
+  notifications: "Notifications",
+  "platform-operators": "Opérateurs de plateforme",
+  "platform-finance": "Finance plateforme",
+  "platform-moderation": "Modération des avis",
   documents: "Documents",
   profile: "Mon profil",
   help: "Aide",
@@ -244,6 +256,12 @@ export function ClientSpace({ session }: { session: Session }) {
             />
           </>
         );
+      case "notifications":
+        return <NotificationsPage session={session} />;
+      case "platform-operators":
+      case "platform-finance":
+      case "platform-moderation":
+        return <PlatformPage session={session} view={view} />;
       case "documents":
         return <DocumentsView session={session} rows={rows} />;
       case "profile":
@@ -308,6 +326,24 @@ export function ClientSpace({ session }: { session: Session }) {
             );
           })}
         </nav>
+        {platformEntries(session.platformAccess, (v) => canAccess(v, session.role, session.mode)).length > 0 && (
+          <>
+            <span className={styles.navCaption}>Opérateur de plateforme</span>
+            <nav className={styles.sideNav} aria-label="Back-office de la plateforme">
+              {platformEntries(session.platformAccess, (v) => canAccess(v, session.role, session.mode)).map((n) => (
+                <button
+                  type="button"
+                  key={n.view}
+                  aria-current={view === n.view ? "page" : undefined}
+                  onClick={() => session.go(n.view)}
+                >
+                  <Icon name={n.icon} size={18} />
+                  <span>{n.label}</span>
+                </button>
+              ))}
+            </nav>
+          </>
+        )}
         <div className={styles.sidebarBottom}>
           <button
             type="button"
@@ -360,13 +396,14 @@ export function ClientSpace({ session }: { session: Session }) {
                 {session.connection === "SUBSCRIBED" ? "En direct" : "Actualiser"}
               </button>
             )}
+            <HeaderBell session={session} />
             <button
               type="button"
               className={styles.bellButton}
               aria-label={received ? `Messages (${received} reçus)` : "Messages"}
               onClick={goMessages}
             >
-              <Icon name="bell" size={20} />
+              <Icon name="message" size={20} />
               {received > 0 && <span className={styles.bellDot} aria-hidden="true" />}
             </button>
             <button
@@ -391,15 +428,18 @@ export function ClientSpace({ session }: { session: Session }) {
           >
             <Brand compact />
           </button>
-          <button
-            type="button"
-            className={styles.bellButton}
-            aria-label={received ? `Messages (${received} reçus)` : "Messages"}
-            onClick={goMessages}
-          >
-            <Icon name="bell" size={22} />
-            {received > 0 && <span className={styles.bellDot} aria-hidden="true" />}
-          </button>
+          <div className={styles.mobileHeaderTools}>
+            <HeaderBell session={session} />
+            <button
+              type="button"
+              className={styles.bellButton}
+              aria-label={received ? `Messages (${received} reçus)` : "Messages"}
+              onClick={goMessages}
+            >
+              <Icon name="message" size={22} />
+              {received > 0 && <span className={styles.bellDot} aria-hidden="true" />}
+            </button>
+          </div>
         </header>
 
         {demo && (
@@ -1602,6 +1642,13 @@ function QuoteView({
         </tfoot>
       </table>
       {demo && <DemoNote>Montants et taux de TVA de démonstration, sans valeur contractuelle.</DemoNote>}
+
+      <QuoteDocumentsAnchor
+        session={session}
+        variant="client"
+        target={{ quoteId: quote.id }}
+        authority={{ canWrite: true }}
+      />
 
       <section className={styles.card} style={{ marginTop: 14 }}>
         <div className={styles.artisanRow}>

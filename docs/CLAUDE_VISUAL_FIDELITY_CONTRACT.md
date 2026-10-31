@@ -234,3 +234,89 @@ téléversements) ni primitive partagée modifiés ; `app/globals.css` intact. L
 Écarts assumés consolidés : onglet bas « Accueil » (libellé court), pas de tendance mensuelle ni d’indicateur sans
 source, pas d’étoiles décoratives, pas de statut « validé » par document, pas de pièce jointe au devis, bleu action
 pour les CTA, grille performance 2 colonnes sur téléphone. M14 (documents) et M65 (candidature) restent à auditer.
+
+## Ancrages des lots avancés (branche `claude/web-anchors`, base `claude/web-shared` ee767b6)
+
+Règle commune : aucune entrée ni cloche ne confère un droit ; une entrée n’apparaît que si `ACCESS` admet le rôle et
+que la capacité n’est pas absente (`anchorEntryVisible`, `components/role/anchors.ts`, testé) ; capacité
+`missing`/`unavailable` → état honnête `Unavailable` avec le libellé commun ; refus serveur rendus tels quels ; démo
+isolée fournie par la session uniquement.
+
+### Ancrage 1 — notifications (quatre coques)
+
+| Coque | Cloche | Vue `notifications` |
+| --- | --- | --- |
+| Artisan | `NotificationBell` remplace la cloche « Messages » de l’en-tête (état `capabilities.notifications`, compteur serveur `unreadNotifications`). | `NotificationsPage` (`components/role/notifications-anchor.tsx`) : `NotificationCenter` avec `CONTRACT_MESSAGES[state]`, portée `{ userId, role, authority.canWrite:true }`, client `session.features.notifications`, démo `demoNotificationPage`/`demoPreferences` en mode démonstration seulement, « Ouvrir le dossier » → `openIntervention`. |
+| Particulier | Cloche ajoutée dans les deux en-têtes (bureau et mobile) ; l’ancienne cloche Messages garde sa fonction avec l’icône message. Vue ajoutée à l’allowlist locale `CLIENT_VIEWS`. | Idem. |
+| Entreprise | Cloche ajoutée dans la barre bleu roi (teinte locale `.topbarBell`), icône message pour les messages. | Idem, portée enrichie de l’organisation et du site actifs. |
+| Super Admin | Cloche ajoutée dans les outils d’en-tête ; titre/sous-titre de vue dans l’en-tête de la coque. | Idem sans `PageTitle` (titre porté par l’en-tête). |
+
+Vérifié (démo, script hors dépôt) : cloche visible 44 × 44 et active dans les quatre coques à 360 et 1280 (« Notifications,
+2 non lues », compteur serveur de la démo), clic → `#notifications` et centre rendu ; console sans erreur. Captures :
+`docs/visual-fidelity/anchors-notifications-{artisan,client,manager,admin}-{360,1280}.jpg`. Tests : `tests/ui/anchors.test.ts`
+(visibilité d’entrée selon accès + capacité, portée de feuille) ; suite UI 80/80.
+
+### Ancrage 2 — planning artisan
+
+- Entrée secondaire « Planning » (icône `calendar`) proposée seulement si `canAccess("planning")` admet le rôle et que la
+  capacité `planning` n’est pas absente (`secondaryNav(session)` → `anchorEntryVisible`) ; le même filtre s’applique à la
+  barre latérale, au tiroir et aux liens du profil.
+- Vue `planning` : `ArtisanPlanning` avec `CONTRACT_MESSAGES[state]`, client `session.features.planning`, démo
+  `demoPlanning(demoPlanningRange(now, "America/Martinique"))` en mode démonstration seulement, fuseau
+  `America/Martinique`, « Ouvrir le dossier » → vue `mission`.
+- Droit d’écriture : `planningAuthority(mode, artisan_approved, application_status)` — lecture seule avec raison pour un
+  artisan suspendu, ou non activé en mode réel (même source que les alertes de candidature de la coque) ; le serveur
+  reste l’autorité.
+- Vérifié (démo) : accès par le tiroir à 360 et la barre latérale à 1280 → `#planning` rendu (semaine, légende,
+  disponibilités habituelles), 0 élément interactif < 44 px, aucun débordement ; `#demo/client-planning` → écran « ne
+  fait pas partie de votre espace » sans entrée ; console sans erreur. Captures `anchors-planning-artisan-{360,1280}.jpg`.
+  Tests : `planningAuthority`, `demoPlanningRange` ; suite UI 82/82.
+- Observation hors périmètre (CSS du lot) : à 1280 l’en-tête du jour courant « sam. 31 oct. · Aujourd’hui » passe sur
+  trois lignes dans la colonne de 120 px.
+
+### Ancrage 3 — documents, validité et avenants de devis
+
+- `QuoteDocumentsAnchor` (`components/role/quote-documents-anchor.tsx`) : `QuoteDocumentsPanel` avec l’état
+  `capabilities.quoteDocuments`, `CONTRACT_MESSAGES[state]`, portée `leafScope(profileId, rôle, autorité, org/site)`,
+  client `session.features.quoteDocuments`, démo `{ overview: quoteDocumentsDemo(rôle) }` en démonstration seulement,
+  `onNavigate("artisan-profile")` → vue `profile`.
+- Artisan : sous le devis courant du dossier (`variant="artisan"`, cible `{ interventionId }`, écriture vraie) ; l’éditeur
+  de révision reste en dessous. Particulier : sous le tableau du devis (`variant="client"`, cible `{ quoteId }`, écriture
+  vraie). Entreprise : après « Détails du devis » dans l’approbation (`variant="enterprise"`, cible `{ quoteId }`,
+  écriture = `canWriteSite(site du devis)` du helper fail-closed, sinon `readOnlyReason`) ; l’ancien bloc
+  « Validité du devis — règle à fixer » est retiré, la validité étant désormais portée par le lot.
+- Vérifié (démo, 360 et 1280) : panneau présent dans les trois variantes (`#demo/artisan-mission.demo-001`,
+  `#demo/client-quote.quote-demo-1`, `#demo/manager-approval.approval-demo`), 0 élément interactif < 44 px dans le
+  panneau, aucun débordement, console sans erreur. Captures `anchors-quote-documents-{artisan,client,manager}-{360,1280}.jpg`.
+
+### Ancrage 4 — opérations du site (entreprise)
+
+- Fiche de site (`SiteSheet`) : panneau « Opérations du site » après la règle d’approbation, pleine largeur de la grille,
+  rendant `SiteOperationsView` avec l’état `capabilities.siteOperations`, `CONTRACT_MESSAGES[state]`, portée
+  `leafScope(profileId, rôle, écriture, { organizationId, siteId })` où l’écriture = `enterpriseAuthority(...).canWriteSite(site)`
+  (fail-closed) avec `readOnlyReason`, client `session.features.siteOperations`, démo `demoReport()` en démonstration
+  seulement (client de démonstration injecté par la session, jamais importé ici), « intervention » → `openIntervention`.
+- Onglets du lot relevés à 44 px par une règle locale du panneau (composant du lot non modifié).
+- Vérifié (démo `#demo/manager-site.site-1`, 360 et 1280) : panneau présent avec le rapport de démonstration et ses
+  sept onglets (44 px), 0 élément interactif < 44 px, aucun débordement, console sans erreur. Captures
+  `anchors-site-operations-manager-{360,1280}.jpg`.
+
+### Ancrage 5 — back-office plateforme (Opérateurs, Finance, Modération)
+
+- Entrées : `platformEntries(platformAccess, canAccess)` (`components/role/anchors.ts`, testé) — une entrée n’existe que si
+  `canAccess` admet le rôle **et** `platformViewAllowed(platformAccess, vue)` est vrai ; sans réponse serveur (`null`)
+  aucune entrée. Super Admin : les trois entrées après la navigation existante ; particulier et entreprise : section
+  « Opérateur de plateforme » dans la barre latérale, seulement si le serveur a ouvert au moins une vue (opérateur limité).
+- Vues `platform-operators` / `platform-finance` / `platform-moderation` : `PlatformPage` (`components/role/platform-anchor.tsx`)
+  rend la vue du lot avec l’état `capabilities.platformOperations`, `CONTRACT_MESSAGES[state]`, portée
+  `{ userId, role, authority: platformAuthority(platformAccess, vue) }` (écriture = super-admin ou capacité de la vue,
+  sinon lecture avec raison), client `session.features.platform`, démo `PLATFORM_DEMO` en démonstration seulement ;
+  sinon écran « Accès non vérifié » (`Unavailable`, raison : service indisponible, droit absent ou droits non vérifiés),
+  aucune donnée chargée. Les vues sont ajoutées à l’allowlist locale `CLIENT_VIEWS`.
+- En-tête Super Admin à ≤ 600 px : outils en deux lignes (puce de fraîcheur, puis cloche et « Actualiser ») pour
+  supprimer le débordement horizontal constaté à 360 (préexistant, aggravé par la cloche).
+- Vérifié (démo) : Super Admin → trois entrées à 1280 (barre latérale) et 360 (menu), chaque vue rendue sous son hash,
+  0 élément interactif < 44 px, aucun débordement ; particulier et entreprise (sans `platformAccess`) → aucune entrée,
+  lien direct `#platform-finance` → « Accès non vérifié » sans donnée ; console sans erreur. Captures
+  `anchors-platform-{operators,finance,moderation}-admin-{360,1280}.jpg`, `anchors-platform-unverified-client-1280.jpg`.
+  Tests : `platformEntries`, `platformAuthority` ; suite UI 86/86.

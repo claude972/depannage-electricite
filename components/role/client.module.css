@@ -127,6 +127,11 @@
   padding: 14px 16px 6px;
   background: var(--bg);
 }
+.mobileHeaderTools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .mobileHeader > button:first-child {
   padding: 0;
   text-align: left;

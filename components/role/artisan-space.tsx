@@ -66,6 +66,7 @@ import {
   time,
 } from "../app/format";
 import {
+  canAccess,
   artisanMissions,
   artisanPerformance,
   pickQuote,
@@ -75,11 +76,20 @@ import {
 import styles from "./artisan.module.css";
 import { QuoteDraftEditor } from "./artisan-quote-draft";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
+import { HeaderBell, NotificationsPage } from "./notifications-anchor";
+import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
+import { ArtisanPlanning } from "../features/planning/artisan-planning";
+import { CONTRACT_MESSAGES } from "../app/api";
+import { demoPlanning } from "../../lib/features/planning/demo";
+import { PLANNING_TIME_ZONE } from "../../lib/features/planning/types";
+import { anchorEntryVisible, leafScope } from "./anchors";
 import {
   appointmentSlotState,
+  demoPlanningRange,
   fmtRating,
   missionSegmentOptions,
   perfTiles,
+  planningAuthority,
   type AppointmentEntry,
   type MissionSegment,
 } from "./artisan-lists";
@@ -97,12 +107,19 @@ const PRIMARY_NAV: NavItem[] = [
   { view: "profile", label: "Profil", icon: "person" },
 ];
 const SECONDARY_NAV: NavItem[] = [
+  { view: "planning", label: "Planning", icon: "calendar" },
   { view: "documents", label: "Documents", icon: "document" },
   { view: "application", label: "Dossier de candidature", icon: "badge" },
   { view: "performance", label: "Performance", icon: "chart" },
   { view: "help", label: "Aide", icon: "help" },
   { view: "support", label: "Assistance", icon: "shield" },
 ];
+/** Entrées secondaires réellement proposées : le planning dépend de la capacité serveur (jamais un menu sans action). */
+function secondaryNav(session: Session): NavItem[] {
+  return SECONDARY_NAV.filter((item) =>
+    item.view === "planning" ? anchorEntryVisible(canAccess("planning", session.role, session.mode), session.capabilities.planning) : true,
+  );
+}
 const DRAWER_ID = "artisan-drawer";
 
 const APPLICATION_STATUS: Record<
@@ -443,6 +460,12 @@ export function ArtisanSpace({ session }: { session: Session }) {
       case "messages":
         content = <Messages session={session} />;
         break;
+      case "notifications":
+        content = <NotificationsPage session={session} />;
+        break;
+      case "planning":
+        content = <PlanningView session={session} dossier={dossier} />;
+        break;
       case "documents":
         content = (
           <Documents
@@ -514,14 +537,7 @@ export function ArtisanSpace({ session }: { session: Session }) {
             <span>Bonjour,</span>
             <strong>{firstName(session.displayName)}</strong>
           </div>
-          <button
-            type="button"
-            className={styles.iconButton}
-            aria-label="Messages"
-            onClick={() => navigate("messages")}
-          >
-            <Icon name="bell" />
-          </button>
+          <HeaderBell session={session} />
         </header>
         <main id="main" className={styles.main} tabIndex={-1}>
           <Alerts
@@ -623,7 +639,7 @@ function Sidebar({
       </nav>
       <span className={styles.sideCaption}>Dossier et aide</span>
       <nav className={styles.sideNav} aria-label="Navigation secondaire">
-        <NavButtons items={SECONDARY_NAV} current={current} onNavigate={onNavigate} />
+        <NavButtons items={secondaryNav(session)} current={current} onNavigate={onNavigate} />
       </nav>
       <div className={styles.sideFoot}>
         <div className={styles.sideUser}>
@@ -702,7 +718,7 @@ function Drawer({
         </nav>
         <span className={styles.sideCaption}>Dossier et aide</span>
         <nav className={styles.sideNav} aria-label="Menu secondaire">
-          <NavButtons items={SECONDARY_NAV} current={current} onNavigate={onNavigate} />
+          <NavButtons items={secondaryNav(session)} current={current} onNavigate={onNavigate} />
         </nav>
         <div className={styles.sideFoot}>
           <button
@@ -1791,6 +1807,14 @@ function QuotePanel({
           </>
         )}
       </section>
+      {current && (
+        <QuoteDocumentsAnchor
+          session={session}
+          variant="artisan"
+          target={{ interventionId: i.id }}
+          authority={{ canWrite: true }}
+        />
+      )}
       {i.status === "quoted" && (
         <QuoteDraftEditor
           session={session}
@@ -3201,7 +3225,7 @@ function Profile({
         )}
       </section>
       <section className={`panel ${styles.accountLinks}`} aria-label="Mon compte">
-        {SECONDARY_NAV.map((item) => (
+        {secondaryNav(session).map((item) => (
           <button key={item.view} type="button" className={styles.accountLink} onClick={() => session.go(item.view)}>
             <Icon name={item.icon} size={18} />
             {item.label}
@@ -3283,6 +3307,35 @@ function PerformanceView({ session }: { session: Session }) {
       {session.mode === "demo" && (
         <DemoNote>Indicateurs calculés sur les données de démonstration.</DemoNote>
       )}
+    </>
+  );
+}
+
+// ---- Planning (ADV-PLANNING-NOTIFICATIONS-001) --------------------------------------------------
+function PlanningView({ session, dossier }: { session: Session; dossier: ArtisanDossier | null }) {
+  const state = session.capabilities.planning;
+  const authority = planningAuthority(
+    session.mode,
+    session.profile?.artisan_approved,
+    dossier?.artisan_profile?.application_status,
+  );
+  return (
+    <>
+      <PageTitle
+        title="Planning"
+        subtitle="Vos disponibilités hebdomadaires et vos rendez-vous, heure de Martinique."
+      />
+      <ArtisanPlanning
+        state={state}
+        unavailableMessage={state === "available" ? "" : CONTRACT_MESSAGES[state]}
+        scope={leafScope(session.profileId, session.role, authority)}
+        client={session.features.planning}
+        demo={session.mode === "demo" ? demoPlanning(demoPlanningRange(new Date(), PLANNING_TIME_ZONE)) : undefined}
+        timeZone={PLANNING_TIME_ZONE}
+        onNavigate={(view, param) => {
+          if (view === "intervention" && param) session.go("mission", param);
+        }}
+      />
     </>
   );
 }

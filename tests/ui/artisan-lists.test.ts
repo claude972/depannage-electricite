@@ -109,3 +109,29 @@ test("devis : sans taux de TVA, TVA et TTC restent inconnus ; sans ligne, zéro"
   assert.deepEqual(quoteTotals([{ quantity: 1, unit_price_cents: 8000 }], null), { subtotal: 8000, tax: null, total: null });
   assert.deepEqual(quoteTotals([], 20), { subtotal: 0, tax: 0, total: 0 });
 });
+
+// ---- Planning : lecture seule honnête, semaine de démonstration --------------------------------
+import { demoPlanningRange, planningAuthority } from "../../components/role/artisan-lists";
+
+test("planning : suspendu ou non activé en réel → lecture seule avec raison ; sinon écriture", () => {
+  assert.equal(planningAuthority("live", true, "approved").canWrite, true);
+  assert.equal(planningAuthority("demo", undefined, undefined).canWrite, true);
+  const suspended = planningAuthority("live", true, "suspended");
+  assert.equal(suspended.canWrite, false);
+  assert.match(suspended.reason ?? "", /suspendu/);
+  const notApproved = planningAuthority("live", false, "submitted");
+  assert.equal(notApproved.canWrite, false);
+  assert.match(notApproved.reason ?? "", /pas encore activé/);
+  // En démonstration, l’approbation inconnue n’interdit rien (la feuille est de toute façon en lecture seule).
+  assert.equal(planningAuthority("demo", false, "submitted").canWrite, true);
+});
+
+test("planning : la semaine de démonstration commence le lundi du fuseau Martinique", () => {
+  // Samedi 31 octobre 2026 12:00 UTC = 08:00 en Martinique → lundi 26 octobre.
+  assert.deepEqual(demoPlanningRange(new Date("2026-10-31T12:00:00Z"), "America/Martinique"), {
+    from: "2026-10-26T00:00:00",
+    to: "2026-11-02T00:00:00",
+  });
+  // Lundi 02:00 UTC = dimanche 22:00 en Martinique → encore la semaine précédente.
+  assert.deepEqual(demoPlanningRange(new Date("2026-11-02T02:00:00Z"), "America/Martinique").from, "2026-10-26T00:00:00");
+});

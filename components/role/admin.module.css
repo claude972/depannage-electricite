@@ -1371,3 +1371,19 @@ button.row:hover {
     width: 100%;
   }
 }
+
+/* En-tête à 360 px : la puce de fraîcheur prend sa ligne, cloche et « Actualiser » en dessous (aucun débordement). */
+@media (max-width: 600px) {
+  .tools {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .tools .chip {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .tools .chip,
+  .tools :global(.button) {
+    max-width: 100%;
+  }
+}

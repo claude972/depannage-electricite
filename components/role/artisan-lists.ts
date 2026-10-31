@@ -136,3 +136,35 @@ export function quoteTotals(
   const tax = Math.round((subtotal * taxRate) / 100);
   return { subtotal, tax, total: subtotal + tax };
 }
+
+// ---- Planning (ADV-PLANNING-NOTIFICATIONS-001) : droit d’écriture et semaine de démonstration ----
+import { dateKey, isoWeekday } from "../../lib/features/planning/time";
+import type { ArtisanApplicationStatus, Mode } from "../app/types";
+
+/**
+ * Droit d’écriture du planning tel que la coque le connaît déjà : un artisan suspendu, ou non
+ * approuvé en mode réel, voit son planning en lecture seule avec la raison. Le serveur reste
+ * l’autorité (`permissions.can_edit`) ; l’interface n’élargit jamais.
+ */
+export function planningAuthority(
+  mode: Mode,
+  artisanApproved: boolean | undefined,
+  status: ArtisanApplicationStatus | undefined,
+): { canWrite: boolean; reason?: string } {
+  if (status === "suspended")
+    return { canWrite: false, reason: "Votre accès est suspendu par l’opérateur : le planning reste consultable, sans modification." };
+  if (mode === "live" && artisanApproved === false)
+    return { canWrite: false, reason: "Votre compte artisan n’est pas encore activé : le planning reste consultable, sans modification." };
+  return { canWrite: true };
+}
+
+/** Semaine courante (lundi 00:00 → lundi suivant) dans le fuseau du planning, pour la démo. */
+export function demoPlanningRange(now: Date, zone: string): { from: string; to: string } {
+  const key = dateKey(now, zone); // AAAA-MM-JJ local
+  const weekday = isoWeekday(now, zone); // 1 = lundi
+  const localMidnight = new Date(`${key}T00:00:00Z`);
+  const monday = new Date(localMidnight.getTime() - (weekday - 1) * 86400000);
+  const next = new Date(monday.getTime() + 7 * 86400000);
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  return { from: `${iso(monday)}T00:00:00`, to: `${iso(next)}T00:00:00` };
+}
