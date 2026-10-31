@@ -51,3 +51,6 @@ Approbations avancées, fiches de site complètes, contrats cadres, reporting co
 - Créer et maintenir les skills réutilisables dans `~/.agents/skills` sauf instruction contraire.
 - Lier les mêmes dossiers dans `~/.claude/skills` ; garder une seule copie canonique.
 - Résoudre chemins et règles depuis le workspace actif ; ne pas coder en dur le chemin de ce projet dans un skill réutilisable.
+
+## Stack retenue
+Décision du 30 octobre 2026, prise dans le cadre de la réalisation autonome autorisée : application web responsive Next.js App Router / React, TypeScript strict, Supabase Postgres/Auth sous RLS, Stripe Checkout/Connect, hébergement Vercel. Versions épinglées dans package.json et package-lock.json.

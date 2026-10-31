@@ -74,11 +74,11 @@ CP-SCR07-1 : « Ajoutez un premier site pour organiser vos interventions. »
 Formules globales : chargement « Chargement de vos données… » ; erreur « Impossible de charger les données. Réessayer » ; vide avec action métier contextuelle ; confirmation explicite après mutation réussie.
 
 ## Architecture et données (Architecture)
-AD-1 : zéro lecture inter-client/inter-organisation dans la matrice de tests de permissions.
-AD-2 : une seule attribution gagnante pour deux acceptations concurrentes.
-AD-3 : zéro paiement acquitté depuis une simple redirection ; un seul traitement métier pour les retries d'un événement Stripe.
+AD-1 : 0 lecture inter-client/inter-organisation dans la matrice de tests de permissions.
+AD-2 : 1 seule attribution gagnante pour 2 acceptations concurrentes.
+AD-3 : 0 paiement acquitté depuis une simple redirection ; un seul traitement métier pour les retries d'un événement Stripe.
 AD-4 : parcours utilisable à 360 px et 1440 px, cibles tactiles 44 px, contraste AA.
-AD-5 : chaque fonctionnalité importante a un commit poussé et une preview Vercel vérifiable.
+AD-5 : chaque fonctionnalité importante a 1 commit poussé et une preview Vercel vérifiable.
 Non-drivers : microservices, multi-région active-active, milliards d'événements et applications natives à cette étape.
 Style : monolithe modulaire préféré aux microservices pour AD-1/2/3 (transactions et frontière serveur uniques) ; SPA pure rejetée pour l'accès aux secrets et les mutations financières. Les microservices offriraient des déploiements indépendants mais multiplieraient les contrats distribués. Réexamen après mesure de charge ou équipes indépendantes.
 Modules : `lib/domain` règles pures ; `lib/supabase` accès par requête ; `app/api` validation/auth/commandes ; `components` interfaces ; `supabase/migrations` schéma/RPC/RLS.
@@ -91,7 +91,7 @@ Configuration : `.env.example` sans valeur sensible ; `.env.local` ignoré. Conf
 Fitness functions : TypeScript strict ; tests sur transitions et centimes ; tests SQL RLS et concurrence ; contrôle recherche de secrets ; tests parcours critiques en preview. Les modules client n'importent pas les clients à clé de service.
 
 ## Stack et conventions (Tech Stack)
-| Composant | Choix | Raison / alternative et coût | Preuve |
+| Composant | Choix | Raison / Runner-up et coût | Preuve |
 | --- | --- | --- | --- |
 | Web | Next.js App Router + React | AD-3/5 ; Expo différerait le web public | [VERIFIED — S-01, 2026-10-30] |
 | Langage | TypeScript strict | AD-1/3 ; JS seul perdrait les contrôles statiques | [ASSUMED — choix technique] |
@@ -292,5 +292,5 @@ S-05 https://docs.stripe.com/webhooks et https://docs.stripe.com/api/checkout/se
 S-06 https://www.mesdepanneurs.fr/electricite — benchmark ciblé estimation/devis, même date.
 Sources métier locales : les quatre PDF nommés dans AGENTS.md, lus comme documents de besoins.
 
-## Annexe de reprise (Appendix)
+## Annexe de reprise (Appendix — Session Prompts)
 Prompt de session : « Lis AGENTS.md, DESIGN.md, docs/BLUEPRINT.md, docs/PROGRESS.md et docs/DECISIONS.md. Reprends la première phase non vérifiée, conserve les sources et prouve les critères avant push. »

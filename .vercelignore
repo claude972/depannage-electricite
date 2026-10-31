@@ -1,0 +1,13 @@
+.git
+node_modules
+.next
+*.pdf
+docs/
+tests/
+supabase/
+.env*
+!.env.example
+*.tsbuildinfo
+AGENTS.md
+CLAUDE.md
+DESIGN.md
