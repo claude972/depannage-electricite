@@ -200,3 +200,41 @@ Depuis le31octobre00h America/Martinique, l’affectation Codex devient pilotage
 - acceptance: aucun token/password/HAR dans les logs, aucune donnée QA dans le bundle ; fixtures identifiées par IDs manifestés et cohorte unique, nettoyage FK ordonné (support events/messages/tickets, drafts, documents/Storage, messages/quotes/jobs/audits/org/profiles/Auth), readback et échec de cleanup signalé. Seul projet dédié explicitement attendu et URL locale/preview autorisée. Ne jamais supprimer d’autres cohortes/utilisateurs. Les anomalies de sélecteur/headless sont distinctes des défauts app.
 - dependencies: le lead b4b555f0 délègue un agent Claude test distinct ; Codex relit puis exécute les scripts avec paramètres et secrets fournis seulement à l’exécution. Les tests touchant au cloud ne sont pas lancés par le simple import. Les preuves restent rattachées au SHA testé et à local/cloud, jamais à une supposée nouvelle preview.
 - verification report: CORRECTIONS.md / WEB-ACCEPTANCE-TESTS-001, rapport exactSHA.
+
+
+## Natif — missions préparées, porte Web encore fermée (01h20 AST)
+Ces entrées préparent le relais ; elles N’AUTORISENT PAS encore de scaffold, projet EAS ou build. Dépendance commune : Codex consigne un checkpoint fonctionnel Web/PWA réel, hors Vercel/Stripe différés. Base proposée actuelle62b1f7fca7532cb37fbad338607dea472a691733, à actualiser explicitement au SHA de ce checkpoint avant claim. Le lead Claude b4b555f0 reste unique et délègue dans la limite1–10 agents réels ; pas de doublons. Lire docs/NATIVE_READINESS_PLAN.md et docs/NATIVE_BUILD_PREFLIGHT.md. Ne pas importer les versions React/Next du Web dans Expo ; lire expo-overview puis les skills Expo/EAS adaptés, vérifier les docs officielles du SDK retenu.
+
+### NATIVE-FOUNDATION-001
+- agent: claude
+- status: pending
+- branch: claude/native-foundation
+- scope: apps/mobile/package*.json, configuration Expo/TypeScript, routes racines et (auth), src/core/**, thème et composants partagés natifs. Seul propriétaire des dépendances, session et navigation racine. Checkout sur disque interne à préparer après gate ; Web inchangé.
+- deliverables: vrai package Expo/React Native, contrat session/données/navigation publié avant code fonctionnel ; SDK/versions verrouillés ; SecureStore, hydratation, logout/A→B et revalidation AppState ; Auth Supabase réelle et lectures/RPC sous JWT/RLS. Pas de WebView, service key ou secret bypass. Liens natifs PKCE à coordonner avec serveur et régression SSR Web ; aucune clé/token dans URL ou logs.
+- acceptance: typecheck/expo-doctor/export, connexion réelle et rôle serveur, erreurs/offline honnêtes, session tardive sans effet sur nouveau compte, stockage sécurisé vérifié ; première livraison commune avant missions Client/Artisan.
+
+### NATIVE-CLIENT-001
+- agent: claude
+- status: pending
+- branch: claude/native-client
+- scope: apps/mobile/src/app/(client)/**, src/screens/client/**, src/features/client/** uniquement. Base contractuelle = premier checkpoint Fondation, SHA à consigner avant départ.
+- deliverables: demande électrique, estimation distincte du devis, photos, liste/détail dossiers, devis exact et acceptation, messages, profil ; interactions natives et références mobiles. Gateway upload attend correction/revue/recette cloud ; reprise incertaine sans renvoi automatique ni confirmation nom/date.
+- acceptance: nominal/erreurs/vide/chargement, validation/double soumission, refus intercomptes et session A→B, photos <=4MiB, données réelles autorisées et aucun paiement simulé ; captures et parcours exécutés sur iOS/Android.
+
+### NATIVE-ARTISAN-001
+- agent: claude
+- status: pending
+- branch: claude/native-artisan
+- scope: apps/mobile/src/app/(artisan)/**, src/screens/artisan/**, src/features/artisan/** uniquement ; dépendances/session/racine à Fondation. Base contractuelle = premier checkpoint Fondation exact.
+- deliverables: offres anonymisées/acceptation atomique/refus, missions et devis brouillon (version/conflit/envoi exact), rendez-vous/rapport, disponibilité et pièces ; pas de contournement approbation/suspension.
+- acceptance: vrais RPC/RLS, concurrence acceptation, conflits sans écrasement, état payé lu du serveur seulement, pièces privées et sessions isolées ; parcours sur les deux plateformes.
+
+### NATIVE-EAS-QA-001
+- agent: claude
+- status: pending
+- branch: claude/native-delivery
+- scope: apps/mobile/eas.json, scripts/recette natifs, rapports. extra.eas.projectId transféré par Fondation explicitement, aucune édition concurrente config/manifeste.
+- deliverables: contrôler compte/owner/quota puis projet EAS exact ; iOS simulateur et Android APK interne cloud, installation et recette des vrais artefacts. Codex revoit, lance et intègre ; code de scripts écrit par Claude. Aucun achat, soumission publique store ou production.
+- acceptance: chaque artefact porte SHA/buildID/plateforme et preuve de lancement/parcours ; binaire simulateur distinct d’IPA iPhone ; scans secrets et tests Auth froid/chaud/recovery, permissions, erreurs et fidélité mobile. Pas d’annonce de livraison sur seul lancement de build. OTA seulement avec binaire compatible vérifié.
+
+Entreprise cliente et Super Admin restent actuellement livrés/recettés Web ; le périmètre natif ci-dessus client/artisan est explicite dans ce plan et ne retire aucun back-office du produit. Les capacités non implémentées restent listées, pas annoncées complètes à l’échéance.
