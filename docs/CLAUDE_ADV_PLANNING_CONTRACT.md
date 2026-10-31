@@ -174,3 +174,47 @@ Régressions : scripts `tests/sql-*.mjs` existants et `npx tsx --test tests/*.te
 - Les notifications ne sont pas poussées en temps réel ; le bouton cloche relit `summary` à l’ouverture/au rafraîchissement du workspace.
 - Pas d’envoi externe, pas de file, pas de rappel automatique, pas de calendrier partagé, pas d’import/export iCal.
 - Les membres d’organisation ne sont pas tous notifiés d’un événement de site : seuls le créateur du dossier et, pour les approbations, le propriétaire de l’organisation.
+
+## Amendement A1 — conformité au contrat partagé WEB-SHARED-001 (correction lead sur 2035abe)
+
+Référence : `docs/CLAUDE_WEB_SHARED_CONTRACT.md` sur `claude/web-shared` (a29f732). Cet amendement remplace la section « Composants feuilles » et le paragraphe « Interface d’intégration proposée au lead » ci-dessus là où ils diffèrent ; le reste du contrat (modèle, RLS, RPC, matrice, API) est inchangé.
+
+### Props normalisées (reprises telles quelles)
+
+Chaque composant feuille reçoit exactement :
+
+- `state: "unknown" | "available" | "missing" | "unavailable"` et `unavailableMessage: string` (libellé commun fourni par le lead). Quand `state ≠ "available"`, la feuille rend l’état indisponible avec ce libellé et n’appelle aucune commande ; aucune donnée de remplacement n’est inventée.
+- `scope: { userId: string; role: "client" | "artisan" | "manager" | "admin"; organizationId?: string; siteId?: string; authority: { canWrite: boolean; reason?: string } }` — contexte déjà validé par le lead. La feuille n’en déduit aucun droit : `authority.canWrite=false` (artisan suspendu ou non approuvé, viewer, grant retiré) masque ou désactive tous les contrôles d’écriture et affiche `reason`. Tout refus serveur (403/409/422/429) est rendu tel quel, sans reformulation ni retentative automatique.
+- `client` — **obligatoire, injecté par le lead**, construit sur `api()` existant ; la feuille n’appelle jamais `fetch`. Signature par lot :
+  - planning : `{ load(range: { from: string; to: string }): Promise<PlanningView | null>; command(body: PlanningCommand): Promise<PlanningCommandResult | null> }`.
+  - notifications : `{ list(params: NotificationListParams): Promise<NotificationPage | null>; summary(): Promise<NotificationSummary | null>; mark(body: NotificationMarkCommand): Promise<NotificationMarkResult | null>; loadPreferences(): Promise<PreferencesView | null>; savePreferences(body: PreferencesCommand): Promise<PreferencesSaveResult | null> }`.
+  - cloche : `NotificationBell` ne possède pas de client ; elle reçoit `unreadCount: number | null` et `state`.
+- `demo?` — graines de démonstration du lot (`lib/features/planning/demo.ts`, `lib/features/notifications/demo.ts`), fournies par le lead uniquement en démonstration explicite ; jamais mélangées à des données réelles.
+- `onNavigate?(view: string, param?: string)` — navigation déléguée ; aucune écriture de `location.hash` dans une feuille.
+- Props de données propres au lot : `timeZone?: string` (planning, défaut `America/Martinique`).
+
+### Règle du résultat `null` (chaîne périmée)
+
+Toute fonction de `client` peut résoudre `null` lorsque la chaîne d’identité est périmée (changement d’utilisateur, déconnexion, contexte invalidé par `runForResult`). Dans ce cas la feuille : n’affiche aucun message de succès, ne met à jour aucun état local, ne vide aucun formulaire, ne marque rien comme lu, ne recharge rien. Cette règle s’applique aussi aux préférences de notification et aux marquages lu/non lu.
+
+### Changement de `scope`
+
+À tout changement de `scope.userId`, `scope.organizationId` ou `scope.siteId`, la feuille réinitialise ses formulaires, brouillons (`request_id` compris), filtres, curseurs et données chargées avant tout rechargement : le planning ou les notifications de A ne sont jamais affichés à B, même un instant. Mise en œuvre : clé de montage interne dérivée du scope + effet d’annulation des chargements en vol (drapeau `active`).
+
+### Lecture seule et interdictions explicites
+
+| Situation | Source | Rendu |
+| --- | --- | --- |
+| Artisan suspendu / non approuvé | `scope.authority.canWrite=false` + `permissions.can_edit=false` serveur | formulaires absents, bouton « Ajouter » absent, bandeau avec la raison ; lecture conservée |
+| Membre viewer / grant retiré (sélecteur de créneaux côté site, hors de ce lot) | `scope.authority` | aucun contrôle d’écriture |
+| Refus serveur 403 | message serveur | rendu tel quel près de l’action |
+| Conflit 409 (version, créneau occupé, clé rejouée divergente) | message serveur | rendu près du créneau, valeurs saisies conservées, action « Recharger » explicite |
+| Contrat `missing`/`unavailable` | `state` | `Unavailable` avec `unavailableMessage`, aucun appel |
+
+### Clés et vues (table partagée §3)
+
+`Capabilities.planning` (sonde `GET /api/planning`), `Capabilities.notifications` (sonde `GET /api/notifications`) ; vues `planning` (artisan) et `notifications` (tous rôles connectés). Aucune autre clé ni vue demandée.
+
+### Tests ajoutés par cet amendement
+
+Dans `tests/planning/*.test.ts` et `tests/notifications/*.test.ts` : un test par état indisponible (`state` ≠ available → aucun appel `client`), lecture seule (`canWrite=false` → aucun contrôle d’écriture rendu), refus serveur rendu tel quel, résultat `null` → aucun message de succès ni état mis à jour, changement de scope → données et brouillons effacés. Les tests de rendu utilisent `react-dom/server` déjà présent (aucune dépendance nouvelle).
