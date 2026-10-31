@@ -463,3 +463,9 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - Runs: retention review 3 PASS blocks (incl. non-superuser SELECT-only installer, different cron owner, real RLS where the old `LOCK` fails 42501 as it did live); `sql-tracking-review.mjs` PASS (20 migrations, rollback counts unchanged); tracking tests 15/15; tsc clean.
 - **Verdict: no P1. Root can apply 020 as `postgres`.** P2 (unchanged): root live proof — real job, a `cron.job_run_details` row `succeeded`, expired QA point cleared while a fresh one survives — plus two-connection concurrency. P3-1 cross-owner name uniqueness not guaranteed; P3-2 cooperative lock (declared); P3-3 `localhost`/port assumptions checked live (mismatch fails cleanly); `job_run_details` growth and fixed batch remain. (Pg_cron enabling as « owner decision » is withdrawn per root ruling: covered by the owner's autonomy order.)
 - Not proven: hosted `postgres` privileges after `create extension` (grant may no-op ⇒ clean 42501), recorded `nodename`/`nodeport`, real scheduled run, two-connection SKIP LOCKED, cloud.
+
+## 2026-10-31 — root independent UI review 8bcee45: one P2 left (route single-flight)
+
+- Closed by root: pending START (P2-1), mobile fit (P2-3), cadence/backoff (P2-2 part).
+- **Open P2 single-flight** on real CardBody effects: route pending at t0, poll with new seq at t15, second route at t30 ⇒ 2 unresolved requests (root repro `/tmp/depannage-tracking-8b-inflight-repro.cjs`). Required: synchronous in-flight guard shared by auto and manual paths, token-safe reset in `finally`, safe context change, real barrier test through the code CardBody runs (not only async `routing` state). 63 tests + tsc pass but the gate stays open. Dispatched to design worker a2ddf36.
+- Root: reads aa14b23, applies 020 after a dry-run alone, then real cron proof; **no other cloud writer allowed in parallel**.
