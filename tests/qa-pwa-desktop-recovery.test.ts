@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 // @ts-ignore Pure exported guards; no filesystem/process/browser calls in these tests.
-import {SOURCE,validateRecovery,recoveryEffectAllowed,validateAdoption,folderPlanAllowed} from '../scripts/qa-pwa-desktop/recovery.mjs';
+import {SOURCE,validateRecovery,recoveryEffectAllowed,validateAdoption,folderPlanAllowed,inspectSingletonLock,assertSameLock} from '../scripts/qa-pwa-desktop/recovery.mjs';
 // @ts-ignore Production attribution guards used by runner.
 import {hash,attributable,uniqueDefault,canUninstall,parseArgs} from '../scripts/qa-pwa-desktop/lib.mjs';
 
@@ -9,7 +9,7 @@ const root=`/private/tmp/${SOURCE.basename}`;
 const id={appId:SOURCE.appId,manifestId:'http://127.0.0.1:3017/',startUrl:'http://127.0.0.1:3017/',browserBundleId:'com.google.chrome.for.testing'};
 const registry=()=>({profile:{info_cache:{Default:{}}},app_shims:{[id.appId]:{installed_profiles:['Default'],last_active_profiles:['Default']}}});
 const bundle=()=>({path:'/Users/unit/Applications/Chromium Apps.localized/Courant.app',inode:9,executable:'/Users/unit/Applications/Chromium Apps.localized/Courant.app/Contents/MacOS/app_mode_loader',plist:{CrAppModeShortcutID:id.appId,CrAppModeShortcutURL:id.startUrl,CrBundleIdentifier:id.browserBundleId,CFBundleIdentifier:`${id.browserBundleId}.app.${id.appId}`,CrAppModeUserDataDir:`${root}/-/Web Applications/_crx_${id.appId}`}});
-const source=()=>({runId:SOURCE.runId,harnessSha:SOURCE.sha,status:'INCOMPLETE',startedAt:1000,profileRoot:root,identity:id,installIntent:{at:3000,runId:SOURCE.runId,appId:id.appId,manifestId:id.manifestId},proofs:{installed:true},cleanup:{ok:false},baseline:[]});
+const source=()=>({runId:SOURCE.runId,harnessSha:SOURCE.sha,browserPid:SOURCE.browserPid,status:'INCOMPLETE',startedAt:1000,profileRoot:root,identity:id,installIntent:{at:3000,runId:SOURCE.runId,appId:id.appId,manifestId:id.manifestId},proofs:{installed:true},cleanup:{ok:false},baseline:[]});
 test('multi-profile placeholder is attributable only with the exact sole Default registry',()=>{
   assert.equal(attributable(bundle(),id,root,[],registry()),true);
   assert.equal(attributable(bundle(),id,root,[]),false);
@@ -58,4 +58,31 @@ test('CLI requires source hash and limits continue-proof to recovery',()=>{
   const base=['--app-dir','/tmp/app','--app-sha','a'.repeat(40),'--build-id','build-12345','--origin','http://127.0.0.1:3017','--chromium-path','/tmp/cft','--playwright-path','/tmp/pw','--out','/tmp/out'];
   assert.throws(()=>parseArgs([...base,'--continue-proof']));assert.throws(()=>parseArgs([...base,'--recover-manifest','/tmp/source']));
   const o=parseArgs([...base,'--recover-manifest','/tmp/source','--recover-sha256','a'.repeat(64),'--continue-proof']);assert.equal(o.continueProof,true);assert.equal(o.execute,false);
+});
+function lockFixture(){
+  const calls:string[]=[];
+  const args={root,sourcePid:5318,hostname:'mac-mini-de-claude.home',lookupProcess:async(pid:number)=>{calls.push(`ps:${pid}`);return null;},lstatFn:async(p:string)=>{calls.push(`lstat:${p}`);return {isSymbolicLink:()=>true,ino:10,mtimeMs:100};},readlinkFn:async(p:string)=>{calls.push(`readlink:${p}`);return 'mac-mini-de-claude.home-5318';}};
+  return {args,calls};
+}
+test('stale SingletonLock is read without following or deleting; same host and exact absent source PID only',async()=>{
+  const f=lockFixture();const lock=await inspectSingletonLock(f.args);
+  assert.equal(lock.pid,5318);assert.equal(lock.stale,true);assert.ok(f.calls.includes('ps:5318'));
+  assert.ok(f.calls.every(c=>c.startsWith('lstat:')||c.startsWith('readlink:')||c.startsWith('ps:')));
+});
+test('absent lock is allowed without process lookup or any deletion',async()=>{
+  const f=lockFixture();f.args.lstatFn=async()=>{throw Object.assign(new Error('missing'),{code:'ENOENT'});};
+  assert.equal(await inspectSingletonLock(f.args),null);assert.deepEqual(f.calls,[]);assert.equal(assertSameLock(null,null),true);
+});
+test('live or reused source PID, foreign host, other PID and plain lock file block recovery',async()=>{
+  const f=lockFixture();
+  await assert.rejects(inspectSingletonLock({...f.args,lookupProcess:async()=>({pid:5318,command:'personal app',started:'new time'})}),/alive or reused/);
+  for(const target of ['other-host-5318','mac-mini-de-claude.home-9999','/tmp/5318','mac-mini-de-claude.home-05318'])await assert.rejects(inspectSingletonLock({...f.args,readlinkFn:async()=>target}));
+  await assert.rejects(inspectSingletonLock({...f.args,lstatFn:async()=>({isSymbolicLink:()=>false})}),/not a symlink/);
+});
+test('lock replacement during reads or between preflight and spawn blocks; no unlink API is used',async()=>{
+  const f=lockFixture();let reads=0;
+  await assert.rejects(inspectSingletonLock({...f.args,lstatFn:async()=>({isSymbolicLink:()=>true,ino:++reads,mtimeMs:100})}),/changed/);
+  const lock=await inspectSingletonLock(f.args);
+  for(const changed of [null,{...lock,inode:11},{...lock,target:'host-9999'},{...lock,mtimeMs:101}])assert.throws(()=>assertSameLock(lock,changed),/changed/);
+  assert.throws(()=>assertSameLock(null,lock),/changed/);
 });

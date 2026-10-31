@@ -1,19 +1,40 @@
-import {readFile,lstat,realpath,readdir,unlink,rmdir} from 'node:fs/promises';
+import {readFile,lstat,readlink,realpath,readdir,unlink,rmdir} from 'node:fs/promises';
 import path from 'node:path';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {hash,Blocked,uniqueDefault} from './lib.mjs';
 
 // One explicit recovery lease approved by root. No generic browser-profile adoption.
-export const SOURCE={runId:'badffa11-c02f-4c07-ad88-199162fa53ac',sha:'be7791728d373576dbaf2b661b315938529a47f3',basename:'depannage-pwa-os-rrDlEC',appId:'mflagdbdnhheocmiajkbgeklnokffeie'};
+export const SOURCE={runId:'badffa11-c02f-4c07-ad88-199162fa53ac',sha:'be7791728d373576dbaf2b661b315938529a47f3',basename:'depannage-pwa-os-rrDlEC',appId:'mflagdbdnhheocmiajkbgeklnokffeie',browserPid:5318};
 const exec=promisify(execFile);
 async function attributeHash(file){return hash((await exec('/usr/bin/xattr',['-l',file],{timeout:3000,maxBuffer:1024*1024})).stdout);}
 export function validateRecovery(source,bytes,expectedHash) {
+  if(source?.browserPid!==SOURCE.browserPid)throw new Blocked('unapproved source browser PID');
   if(!source||!Number.isFinite(source.startedAt)||!Number.isFinite(source.installIntent?.at)||source.installIntent.at<source.startedAt||typeof source.profileRoot!=='string'||!path.isAbsolute(source.profileRoot))throw new Blocked('invalid recovery source timestamps/path');
   if(hash(bytes)!==expectedHash||source.runId!==SOURCE.runId||source.harnessSha!==SOURCE.sha||source.status!=='INCOMPLETE'||source.proofs?.installed!==true||source.cleanup?.ok!==false||path.basename(source.profileRoot||'')!==SOURCE.basename||source.identity?.appId!==SOURCE.appId||source.installIntent?.runId!==source.runId||source.installIntent?.appId!==source.identity.appId||source.installIntent?.manifestId!==source.identity.manifestId||!Array.isArray(source.baseline)||source.baseline.some(b=>b.plist?.CrAppModeShortcutID===SOURCE.appId))throw new Blocked('source recovery manifest/hash/intent not approved');
   return source;
 }
 export function recoveryEffectAllowed(kind,recovering) {return !recovering||!['install','create-profile'].includes(kind);}
+export async function inspectSingletonLock({root,sourcePid,hostname,lookupProcess,lstatFn=lstat,readlinkFn=readlink}) {
+  try{
+  const file=path.join(root,'SingletonLock');
+  let st;
+  try{st=await lstatFn(file);}catch(e){if(e.code==='ENOENT')return null;throw e;}
+  if(!st.isSymbolicLink())throw new Blocked('SingletonLock is not a symlink');
+  const target=await readlinkFn(file);
+  const m=/^([^/\r\n]+)-([1-9][0-9]*)$/.exec(target);
+  if(!m||m[1]!==hostname||!Number.isSafeInteger(sourcePid)||sourcePid!==SOURCE.browserPid||Number(m[2])!==sourcePid)throw new Blocked('SingletonLock hostname or source PID differs');
+  if(await lookupProcess(sourcePid))throw new Blocked('SingletonLock PID is alive or reused');
+  const again=await lstatFn(file);
+  if(!again.isSymbolicLink()||again.ino!==st.ino||again.mtimeMs!==st.mtimeMs||await readlinkFn(file)!==target)throw new Blocked('SingletonLock changed while inspected');
+  return {inode:st.ino,mtimeMs:st.mtimeMs,target,pid:sourcePid,hostname,stale:true};
+  }catch(error){if(error instanceof Blocked)throw error;throw new Blocked(`SingletonLock inspection unavailable: ${error.message}`);}
+}
+export function assertSameLock(before,after) {
+  if(before===null&&after===null)return true;
+  if(!before||!after||before.inode!==after.inode||before.mtimeMs!==after.mtimeMs||before.target!==after.target)throw new Blocked('SingletonLock changed since preflight');
+  return true;
+}
 export async function plainStat(file,dir=false) {
   const st=await lstat(file);
   if(st.isSymbolicLink()||(dir?!st.isDirectory():!st.isFile())||await realpath(file)!==path.resolve(file))throw new Blocked('recovery path not plain');

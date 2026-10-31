@@ -9,7 +9,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { HELP, Blocked, hash, bounded, parseArgs, verifyBuild, identity, chromeAppId, collision, attributable, baselineUnchanged, absentRegistry, canUninstall, proofMatches, resultStatus, createGate, onceAsync, sameProcess, profileRemovalAllowed } from './lib.mjs';
 import {createPipeClient,unavailablePwa,bindPwaChannel} from './pipe.mjs';
-import {validateRecovery,recoveryEffectAllowed,readRegistry,validateAdoption,adoptFolder,removeAdoptedFolder} from './recovery.mjs';
+import {validateRecovery,recoveryEffectAllowed,readRegistry,validateAdoption,adoptFolder,removeAdoptedFolder,inspectSingletonLock,assertSameLock} from './recovery.mjs';
 
 const exec = promisify(execFile);
 const pause = ms => new Promise(r => setTimeout(r,ms));
@@ -88,11 +88,11 @@ async function preflight(o,recovery) {
   const pw = await import(pathToFileURL(path.join(pwDir,'index.mjs')).href);
   if (!pw.chromium?.connectOverCDP) throw new Blocked('existing Playwright CDP API unavailable');
   const baseline = await snapshot();
-  let registryState,adoption,folderAdoption;
+  let registryState,adoption,folderAdoption,lockAdoption;
   if(recovery){
     if(recovery.app.sha!==head.trim()||recovery.app.buildId!==diskBuildId||recovery.app.origin!==o.origin||recovery.app.manifestHash!==hash(rawManifest)||recovery.binary!==binary||recovery.browserBundleId!==info.CFBundleIdentifier||recovery.identity.manifestId!==id.manifestId||recovery.identity.appId!==id.appId)throw new Blocked('recovery product/binary identity changed');
     const st=await plain(recovery.profileRoot,true);adoption=validateAdoption(st,recovery,await realpath(os.tmpdir()),process.getuid());
-    if(await present(path.join(recovery.profileRoot,'SingletonLock')))throw new Blocked('recovery profile is locked; never remove lock');
+    lockAdoption=await inspectSingletonLock({root:recovery.profileRoot,sourcePid:recovery.browserPid,hostname:os.hostname(),lookupProcess:processFact});
     const processes=(await exec('/bin/ps',['-axo','command='],{timeout:5000,maxBuffer:4*1024*1024})).stdout.split('\n');
     if(processes.some(command=>command.includes(`--user-data-dir=${recovery.profileRoot}`)))throw new Blocked('existing process uses recovery profile');
     registryState=await readRegistry(recovery.profileRoot,id.appId);
@@ -102,7 +102,7 @@ async function preflight(o,recovery) {
     if(folder!==path.join(os.homedir(),'Applications','Chromium Apps.localized'))throw new Blocked('unapproved recovery shim folder');
     folderAdoption=await adoptFolder(folder,recovery);
   }else if(baseline.some(b => collision(b,id)))throw new Blocked('pre-existing app identity/origin collision');
-  return {appDir,head:head.trim(),diskBuildId,manifestUrl,manifestHash:hash(rawManifest),identity:id,binary,binaryVersion:info.CFBundleShortVersionString,browserBundleId:info.CFBundleIdentifier,baseline:recovery?recovery.baseline:baseline,pw,registryState,adoption,folderAdoption};
+  return {appDir,head:head.trim(),diskBuildId,manifestUrl,manifestHash:hash(rawManifest),identity:id,binary,binaryVersion:info.CFBundleShortVersionString,browserBundleId:info.CFBundleIdentifier,baseline:recovery?recovery.baseline:baseline,pw,registryState,adoption,folderAdoption,lockAdoption};
 }
 async function processFact(pid) {
   try {
@@ -139,7 +139,7 @@ async function main(argv) {
   await mkdir(out,{mode:0o700});
   const harnessSha=(await exec('git',['-C',path.dirname(new URL(import.meta.url).pathname),'rev-parse','HEAD'],{timeout:3000})).stdout.trim();
   const state = {schema:1,runId:randomUUID(),startedAt:Date.now(),phase:'preflight',status:'PREFLIGHT_ONLY',harnessSha,app:{dir:pf.appDir,sha:pf.head,buildId:pf.diskBuildId,origin:o.origin,manifestHash:pf.manifestHash},identity:pf.identity,binary:pf.binary,binaryVersion:pf.binaryVersion,browserBundleId:pf.browserBundleId,baseline:pf.baseline,proofs:{},intents:[],cleanup:null};
-  if(recovery){state.recovery={sourceRunId:recovery.runId,sourceHash:o.recoverSha256,sourceHashVerified:true,sourceManifest:path.resolve(o.recoverManifest),continueProof:!!o.continueProof,adoption:pf.adoption,folder:pf.folderAdoption};state.profileRoot=recovery.profileRoot;state.installIntent=recovery.installIntent;state.proofs.installed=true;}
+  if(recovery){state.recovery={sourceRunId:recovery.runId,sourceHash:o.recoverSha256,sourceHashVerified:true,sourceManifest:path.resolve(o.recoverManifest),continueProof:!!o.continueProof,adoption:pf.adoption,folder:pf.folderAdoption,lock:pf.lockAdoption};state.profileRoot=recovery.profileRoot;state.installIntent=recovery.installIntent;state.proofs.installed=true;}
   let writeQueue = Promise.resolve();
   function save() {
     const json = JSON.stringify(state,null,2); // snapshot now, serialize writes in invocation order
@@ -258,6 +258,7 @@ async function main(argv) {
     const oldEndpoint=await readFile(path.join(state.profileRoot,'DevToolsActivePort')).then(hash,e=>{if(e.code==='ENOENT')return null;throw e;});gate.check();
     const args=[`--user-data-dir=${state.profileRoot}`,...(recovery?['--profile-directory=Default']:[]),'--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--remote-debugging-pipe','--enable-automation','--no-first-run','--no-default-browser-check','--disable-sync','about:blank'];
     child=await mutation('spawn',async()=>{
+      if(recovery){const lockNow=await inspectSingletonLock({root:state.profileRoot,sourcePid:recovery.browserPid,hostname:os.hostname(),lookupProcess:processFact});assertSameLock(pf.lockAdoption,lockNow);gate.check();}
       const c=spawn(pf.binary,args,{stdio:['ignore','ignore','ignore','pipe','pipe'],env:{HOME:os.homedir(),PATH:'/usr/bin:/bin:/usr/sbin:/sbin',TMPDIR:os.tmpdir(),LANG:'fr_FR.UTF-8'}});
       child=c; c.on('error',e=>{state.spawnError=e.message;});state.browserPid=c.pid;
       pipe=createPipeClient(c.stdio[3],c.stdio[4]);
