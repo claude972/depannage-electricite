@@ -1,8 +1,55 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CLEANUP_STEPS, orderViolations, planCleanup, emptyManifest, runCleanup, MANIFEST_KEYS } from "../lib/cleanup.mjs";
+import { CLEANUP_STEPS, orderViolations, planCleanup, emptyManifest, runCleanup, MANIFEST_KEYS, adminAccountsIn } from "../lib/cleanup.mjs";
 
 const uuid = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+
+test("a QA admin whose deletion is refused (last-super-admin guard) is never reported clean: INCOMPLETE, exact error kept, account named", async () => {
+  const admin = uuid(21);
+  const client = uuid(22);
+  const guardMessage = 'deleteAuthUser: 500 {"message":"cannot delete the last super admin"}';
+  const db = {
+    async delete(table, filters) {
+      if (table === "profiles" && String(filters.id).includes(admin)) throw new Error(`DELETE profiles: 409 last super admin protected (P0001)`);
+    },
+    async count(table, filters) {
+      return table === "profiles" && String(filters.id).includes(admin) ? 1 : 0;
+    },
+    async storageRemove() {},
+    async storageList() {
+      return [];
+    },
+    async deleteAuthUser(id) {
+      if (id === admin) throw new Error(guardMessage);
+    },
+    async authUserExists() {
+      return false;
+    },
+  };
+  const manifest = emptyManifest();
+  manifest.created.profiles = [admin, client];
+  manifest.created.auth_users = [admin, client];
+  manifest.created.admin_profiles = [admin];
+  assert.equal(CLEANUP_STEPS.some((s) => s.ids === "admin_profiles"), false, "admin_profiles is a marker, not a deletion step");
+  const result = await runCleanup(db, manifest);
+  assert.equal(result.ok, false);
+  const profiles = result.steps.find((s) => s.table === "profiles");
+  assert.equal(profiles.status, "fail");
+  assert.match(profiles.error, /last super admin protected/);
+  assert.match(profiles.error, /1 QA admin account\(s\) among the requested ids/);
+  assert.deepEqual(profiles.admin_accounts, [admin]);
+  const auth = result.steps.find((s) => s.kind === "auth");
+  assert.equal(auth.status, "fail");
+  assert.ok(auth.error.startsWith(guardMessage), "the server's exact error text comes first");
+  assert.match(auth.error, /migration 014/);
+  assert.deepEqual(auth.admin_accounts, [admin]);
+  // Without an admin in the manifest, a failure is reported as before, with no admin annotation.
+  manifest.created.admin_profiles = [];
+  const plain = await runCleanup(db, manifest);
+  assert.equal(plain.ok, false);
+  assert.equal(plain.steps.find((s) => s.kind === "auth").admin_accounts, undefined);
+  assert.deepEqual(adminAccountsIn({ created: { admin_profiles: [admin] } }, { kind: "table", table: "sites", values: [admin] }), []);
+});
 
 test("the cleanup order deletes children before parents and auth users last", () => {
   assert.deepEqual(orderViolations(CLEANUP_STEPS), []);

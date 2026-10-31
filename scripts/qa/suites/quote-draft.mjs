@@ -4,7 +4,12 @@
 // "Versions du devis" control is only rendered by the UI when more than one version exists, and
 // the selection of the exact published version is then asserted as MANDATORY (QA-001).
 import assert from "node:assert/strict";
-import { newPage, login, openHash, api, capture, bodyText, expectVisible, pollUntil } from "../lib/browser.mjs";
+import { newPage, login, openHash, api, capture, bodyText, expectVisible, pollUntil, waitForApi } from "../lib/browser.mjs";
+// QA-QUOTE-001: every mutation click is paired with the REAL response of that click (exact
+// method + path + status, armed before the click) and its typed envelope is asserted from THAT
+// response before any UI or GET assertion. UI status text that was already on screen is never
+// taken as proof: the previous text is captured and a change (or the explicit UI transition that
+// the response triggers) is awaited.
 
 const quoteRef = (id) => `DEV-${id.replaceAll("-", "").slice(0, 6).toUpperCase()}`;
 
@@ -32,6 +37,7 @@ export const suite = {
         const price = (i) => editor().getByRole("spinbutton", { name: "Prix unitaire HT (€)", exact: true }).nth(i);
         const tax = () => editor().getByRole("combobox", { name: "Taux de TVA (%)", exact: true });
         const status = () => editor().locator('[role="status"]');
+        let assignmentToken = null;
 
         await s.step("mission detail shows the revision editor and the prior sent quote", async () => {
           await openHash(h.page, base, `mission/${job.id}`);
@@ -50,7 +56,12 @@ export const suite = {
           await price(0).fill("120");
           await price(1).fill("80");
           await tax().selectOption("20");
+          const saved = waitForApi(h.page, route, { method: "POST", status: 200 });
           await editor().getByRole("button", { name: "Enregistrer le brouillon", exact: true }).click();
+          const savedBody = await (await saved).json();
+          assert.equal(savedBody.version, 1, `first save response version ${savedBody.version}, expected 1`);
+          assignmentToken = savedBody.assignment_token;
+          assert.ok(assignmentToken, "save response carries no assignment_token");
           await expectVisible(status().filter({ hasText: /Brouillon enregistré le/ }), "saved status");
           const envelope = await api(h.page, route);
           assert.equal(envelope.body.version, 1);
@@ -72,6 +83,7 @@ export const suite = {
         let concurrentVersion;
         await s.step("a concurrent save (other tab simulated) advances the server version", async () => {
           const envelope = (await api(h.page, route)).body;
+          assert.equal(envelope.assignment_token, assignmentToken, "assignment_token changed between the first save and the GET");
           const saved = await api(h.page, route, {
             action: "save",
             expected_version: envelope.version,
@@ -85,10 +97,12 @@ export const suite = {
           assert.equal(concurrentVersion, envelope.version + 1);
           return { version: concurrentVersion };
         });
-        await s.step("saving the stale UI draft → conflict alert, typed lines kept, explicit reload, keep mine", async () => {
+        await s.step("saving the stale UI draft → real 409 of that click, typed lines kept, explicit reload, keep mine → real 200 of that click (version 3, same token)", async () => {
           const typed = cohort.name("Diagnostic modifié").slice(0, 160);
           await label1().fill(typed);
+          const conflict = waitForApi(h.page, route, { method: "POST", status: 409 });
           await editor().getByRole("button", { name: "Enregistrer le brouillon", exact: true }).click();
+          await conflict; // the stale save really answered 409 before any UI assertion
           const alert = editor().locator('[role="alert"]').filter({ hasText: /Brouillon modifié depuis votre dernière lecture/ });
           await expectVisible(alert, "409 conflict alert");
           assert.equal(await label1().inputValue(), typed, "typed label lost on conflict");
@@ -99,16 +113,40 @@ export const suite = {
           await expectVisible(editor().getByRole("heading", { name: "Votre saisie", exact: true }), "typed version panel");
           assert.match(await editor().innerText(), /Autre onglet/, "server draft not shown in the comparison");
           await capture(h, out, "quote-draft-compare", s);
+          // The status text "Brouillon enregistré le …" is ALREADY on screen from the previous save:
+          // capture it so it is never taken as proof of the keep-mine save.
+          const statusBefore = (await status().innerText().catch(() => "")).trim();
+          const kept = waitForApi(h.page, route, { method: "POST", status: 200 });
           await editor().getByRole("button", { name: "Conserver ma saisie", exact: true }).click();
-          await expectVisible(status().filter({ hasText: /Brouillon enregistré le/ }), "saved after keep-mine");
+          const keptBody = await (await kept).json();
+          assert.equal(keptBody.version, concurrentVersion + 1, `keep-mine response version ${keptBody.version}, expected ${concurrentVersion + 1}`);
+          assert.equal(keptBody.assignment_token, assignmentToken, "keep-mine response assignment_token differs");
+          assert.equal(keptBody.draft?.lines?.[0]?.label, typed, "keep-mine response does not carry the typed label");
+          // UI transition triggered by THAT response: the comparison closes, then the status shows the
+          // new timestamp. The stamp has minute resolution: a change is required only when the response's
+          // updated_at falls in a different minute than the text already on screen.
+          await editor().getByRole("heading", { name: "Version enregistrée", exact: true }).waitFor({ state: "hidden" });
+          const newStamp = await h.page.evaluate((iso) => new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(iso)), keptBody.draft.updated_at);
+          const stampAlreadyShown = statusBefore.includes(newStamp);
+          const statusAfter = (await pollUntil(async () => {
+            const text = (await status().innerText().catch(() => "")).trim();
+            return /Brouillon enregistré le/.test(text) && (text !== statusBefore || stampAlreadyShown) ? text : null;
+          })) ?? "";
+          assert.match(statusAfter, /Brouillon enregistré le/, "saved status after keep-mine");
+          assert.ok(statusAfter.includes(newStamp), `status "${statusAfter}" does not show the keep-mine timestamp ${newStamp}`);
+          if (!stampAlreadyShown) assert.notEqual(statusAfter, statusBefore, "status text did not change after keep-mine");
           const envelope = (await api(h.page, route)).body;
-          assert.equal(envelope.version, concurrentVersion + 1);
+          assert.equal(envelope.version, concurrentVersion + 1, `GET after keep-mine version ${envelope.version}`);
           assert.equal(envelope.draft.lines[0].label, typed);
-          return { version: envelope.version };
+          assert.equal(envelope.assignment_token, assignmentToken);
+          return { version: envelope.version, responseVersion: keptBody.version, statusChanged: statusAfter !== statusBefore, stampAlreadyShown };
         });
         let published;
-        await s.step("send → one new quote, prior quote rejected, draft consumed", async () => {
+        await s.step("send → real 200 of that click, then one new quote, prior quote rejected, draft consumed", async () => {
+          const sent = waitForApi(h.page, route, { method: "POST", status: 200 });
           await editor().getByRole("button", { name: "Envoyer le devis au client", exact: true }).click();
+          const sentBody = await (await sent).json();
+          assert.ok(sentBody && typeof sentBody === "object", "send response is not a JSON envelope");
           const quotes = (await pollUntil(async () => {
             const rows = await db.select("quotes", { intervention_id: `eq.${job.id}` }, "id,status,total_cents,created_at");
             return rows.length >= 2 ? rows : null;

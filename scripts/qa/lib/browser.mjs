@@ -289,19 +289,31 @@ export async function expectAbsentOrDisabled(locator, what) {
   }
 }
 
-/** Waits for a response whose pathname matches; never records headers. */
-export function waitForApi(page, pathname, { method = "GET", query = null } = {}) {
-  return page.waitForResponse(
-    (r) => {
-      try {
-        const u = new URL(r.url());
-        return u.pathname === pathname && r.request().method() === method && (query === null || u.search.includes(query));
-      } catch {
-        return false;
-      }
-    },
-    { timeout: runtime.timeoutMs },
-  );
+/**
+ * Pure matcher for ONE API response: exact pathname, exact method, optional exact status and query
+ * substring. `info` = { url, method, status }. Used by waitForApi; unit-tested without Playwright.
+ */
+export function apiResponseMatches(info, { pathname, method = "GET", status = null, query = null }) {
+  try {
+    const u = new URL(info.url);
+    if (u.pathname !== pathname) return false;
+    if (String(info.method).toUpperCase() !== String(method).toUpperCase()) return false;
+    if (status !== null && Number(info.status) !== Number(status)) return false;
+    if (query !== null && !u.search.includes(query)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Waits for the REAL response of a given request (exact path + method, optional exact status +
+ * query substring); never records headers. Arm it BEFORE the click that triggers the request, then
+ * await it before any UI or GET assertion (QA-QUOTE-001: never assert on text that was already on
+ * screen, never GET before the mutation settled).
+ */
+export function waitForApi(page, pathname, { method = "GET", query = null, status = null } = {}) {
+  return page.waitForResponse((r) => apiResponseMatches({ url: r.url(), method: r.request().method(), status: r.status() }, { pathname, method, status, query }), { timeout: runtime.timeoutMs });
 }
 
 export async function capture(handle, out, name, s) {
