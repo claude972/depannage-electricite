@@ -2746,3 +2746,7 @@ Run6a6a50c9cd4f app4c/harnais7b05 : setup+T9+T14 =3/3PASS0FAIL0ANOMALY0BLOCKED,e
 
 ## WEB-DEEPLINK-QA-001 — revuecontrat6fb ROOT18h13
 Rapportindépendant docs/reviews/DEEPLINK_QA_CONTRACT_6FB_REVIEW.md :4P2contractuelsavantGO (preuveinterceptionWS,fenetresémissions/causesfocus,casabsentpersistantD4,récupérationAuthorphelins). AucunP1 ni défautproduitnouveaudéclaré. TransmisCLIlead69172avecamendementdemandéAVANTcode ; ROOTnepasGOavantlectureSHAamendé. Aucuncloudagent/cohorteactive.
+
+
+## WEB-DEEPLINK-QA-001 — contrat914 contre-revue et choixROOT
+DeuxP2restent :pageWebSocketclose/codeindisponibles avecroutePlaywright1.64 (reproLOCAL sanscloud),timerfocuspréalablepasdrainéparquiet1s. Rapportdocs/reviews/DEEPLINK_QA_CONTRACT_914_REVIEW.md. ROOTtransmislead69172 :handlerhit+closeawaitrésolupasconnectToServer,contrôlenatiflocal4000,pageeventoptionnel ;attendrebornerafraîchissementdifféré≥15sdepuisdernierfocus avantfenêtre+drain/gate. OptionBROOTchoisieexplicitement : B1extractiontrackingrun/libcleanup-proof.mjs/testsdupérimètre,contrat/amendementownershipetmissionpubliéeavantcode,SHA/revueAVANTB2deeplink. AucunGOcodeglobalni cloudagent. UI007autonomeenparallèle, autreownership.
