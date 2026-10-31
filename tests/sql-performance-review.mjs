@@ -1,3 +1,4 @@
+import { isolatedMigrationSql } from './sql-isolated-migrations.mjs';
 // Isolated PostgreSQL verification, not live Supabase: Auth and Storage are explicit stubs.
 // Install pinned @electric-sql/pglite@0.5.13 outside the app; PGLITE_MODULE selects its dist/index.js.
 import { readFile, readdir } from 'node:fs/promises';
@@ -18,7 +19,7 @@ alter table storage.objects enable row level security;
 `);
 const dir = new URL('../supabase/migrations/', import.meta.url);
 for (const file of (await readdir(dir)).filter((name) => name.endsWith('.sql')).sort()) {
-  const sql = (await readFile(new URL(file,dir),'utf8')).replace('create extension if not exists pgcrypto;','-- pgcrypto omitted in isolated stub harness only');
+  const sql = (await isolatedMigrationSql(db, file, await readFile(new URL(file,dir),'utf8'))).replace('create extension if not exists pgcrypto;','-- pgcrypto omitted in isolated stub harness only');
   await db.exec(sql);
 }
 console.log('PASS: all migrations execute in isolated PostgreSQL with explicit Auth/Storage stubs');

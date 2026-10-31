@@ -1,3 +1,4 @@
+import { isolatedMigrationSql } from './sql-isolated-migrations.mjs';
 process.on('uncaughtException',error=>{console.error(error.message,error.query||'',error.detail||'',(error.stack||'').split('\n').find(l=>l.includes('sql-planning-review'))||'');process.exit(1)});
 // Isolated PostgreSQL (PGlite) with explicit Auth/Storage stubs: a single connection, so the
 // double-booking guard is proven sequentially plus by advisory-lock inspection, not by a real race.
@@ -11,7 +12,7 @@ create schema storage;create table storage.buckets(id text primary key,name text
 create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text);alter table storage.objects enable row level security;`);
 const dir=new URL('../supabase/migrations/',import.meta.url);
 const names=(await readdir(dir)).filter(n=>n.endsWith('.sql')).sort();
-for(const name of names)await db.exec((await readFile(new URL(name,dir),'utf8')).replace('create extension if not exists pgcrypto;','-- extension omitted only in local harness'));
+for(const name of names)await db.exec((await isolatedMigrationSql(db, name, await readFile(new URL(name,dir),'utf8'))).replace('create extension if not exists pgcrypto;','-- extension omitted only in local harness'));
 assert.ok(names.includes('202610310016_planning_notifications.sql'));
 console.log(`PASS: ${names.length} migrations execute under isolated PostgreSQL/Auth/Storage stubs`);
 const ids={};let n=1;

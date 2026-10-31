@@ -1,3 +1,4 @@
+import { isolatedMigrationSql } from './sql-isolated-migrations.mjs';
 process.on('uncaughtException',error=>{console.error(error.message,error.query||'',error.detail||'');process.exit(1)});
 // Isolated PostgreSQL with explicit Auth/Storage stubs, never a live Supabase claim.
 import { readFile,readdir } from 'node:fs/promises';
@@ -10,7 +11,7 @@ grant usage on schema auth to authenticated,anon,service_role;grant execute on f
 create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
 create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text);alter table storage.objects enable row level security;`);
 const dir=new URL('../supabase/migrations/',import.meta.url);
-for(const name of(await readdir(dir)).filter(n=>n.endsWith('.sql')).sort())await db.exec((await readFile(new URL(name,dir),'utf8')).replace('create extension if not exists pgcrypto;','-- extension omitted only in local harness'));
+for(const name of(await readdir(dir)).filter(n=>n.endsWith('.sql')).sort())await db.exec((await isolatedMigrationSql(db, name, await readFile(new URL(name,dir),'utf8'))).replace('create extension if not exists pgcrypto;','-- extension omitted only in local harness'));
 console.log('PASS: all eleven migrations execute under isolated PostgreSQL/Auth/Storage stubs');
 const ids={};let i=1;
 for(const actor of['client','other','manager','delegate','artisan','otherArtisan','admin']){

@@ -1,3 +1,4 @@
+import { isolatedMigrationSql } from './sql-isolated-migrations.mjs';
 // Isolated PostgreSQL verification. Install @electric-sql/pglite@0.5.13 into a
 // temporary directory, then set PGLITE_MODULE to its dist/index.js absolute path.
 // Supabase auth/storage are explicit stubs; this is not a live Supabase test.
@@ -24,7 +25,7 @@ grant select on storage.objects to authenticated;
 `);
 const migrationDir = new URL('../supabase/migrations/', import.meta.url);
 for (const file of (await readdir(migrationDir)).filter(name=>name.endsWith('.sql')).sort()) {
- let migration=await readFile(new URL(file,migrationDir),'utf8');
+ let migration=await isolatedMigrationSql(db, file, await readFile(new URL(file,migrationDir),'utf8'));
  // PGlite ships PostgreSQL gen_random_uuid; pgcrypto extension is not bundled.
  migration=migration.replace('create extension if not exists pgcrypto;','-- pgcrypto omitted only in this isolated harness');
  await db.exec(migration);
