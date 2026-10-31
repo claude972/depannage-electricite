@@ -600,3 +600,38 @@ Les diagnostics (texte du panneau, boutons visibles via les titres et le texte, 
 - Le verdict n'est pas modifié quand le diagnostic échoue.
 - Le diagnostic est sauté une fois la porte d'arrêt levée.
 - Le sélecteur T8 correspond au markup réel du panneau (rendu statique de la branche `stale`) et refuse l'ancienne forme exacte.
+
+### 5. Compléments A8 après le résultat final ROOT de 4e8bc1a68a89
+
+Résultat final ROOT (exit 1) : 22 scénarios, 14 PASS, 7 FAIL, 1 ANOMALY. Nettoyage : 29 PASS ; drain 0, intentions ouvertes 0, ids non prouvés 0.
+
+| Scénario | Verdict | Cause relevée par ROOT |
+| --- | --- | --- |
+| T6, T8, T8-fail, T9 | FAIL | voir §2 et §3 |
+| T16 | FAIL | bouton « Retirer la destination » absent |
+| provider-route, provider-geocode | FAIL | 401 |
+| T14 | ANOMALY | clic de partage |
+| T19 | PASS | carte client avec session fraîche et changement d'identité |
+
+Le §1 (diagnostics) et l'audit des sélecteurs du §2 sont inchangés : seules les lignes 408 et 438 posent un défaut de texte exact ; T14 n'en a pas (§4).
+
+**c) T6, T9 et T16 : une seule décision.** La piste ROOT est un espace de travail client périmé. T6, T9 et T16 utilisent la session `client` du pool, ouverte au l. 109 avant le seed. T19, qui a une session client fraîche, passe. Les diagnostics du §1 trancheront selon le tableau du §3 :
+- carte ou dossier absents de l'espace, sans requête `GET …/tracking` pour le dossier ⇒ espace périmé ;
+- `data-blocker="capability:tracking"` avec le texte « en cours de vérification » ⇒ capacité `unknown` ;
+- `tracking:unavailable` ⇒ capacité `unavailable`.
+
+Pour T16, il faudra en plus le texte du panneau destination : boutons visibles et `permissions.can_confirm_destination` déjà lisible dans l'instantané.
+
+Deux correctifs du harnais seront évalués APRÈS la preuve DOM seulement, sans modifier aucune assertion :
+- ouvrir la session client APRÈS le seed (le 404 de préflight sur UUID inconnu reste exécuté juste après la création du premier compte, avec une session dédiée fermée ensuite) ;
+- ou forcer le rafraîchissement de l'espace de travail par le chemin de rafraîchissement propre à l'app, s'il existe et une fois identifié dans la source.
+
+Jamais par une nouvelle connexion, qui masquerait la cause. Si la preuve montre un défaut de rafraîchissement de l'app, le FAIL reste et il est signalé au lead.
+
+**d) Isolation des déconnexions.** Constat source : la déconnexion de l'app appelle `createClient().auth.signOut()` sans `scope` (`components/courant-app.tsx` l. 576). La portée par défaut de supabase-js est globale, ce qui révoque toutes les sessions de l'utilisateur. T19 déconnecte `users.client` (session `switch`). Les scénarios fournisseur réutilisent ensuite `ctx.session("client")`, ce qui est cohérent avec leur 401. Les deux FAIL fournisseur restent des FAIL pour ce run ; aucune requalification en PASS.
+
+Règles à coder :
+- Un scénario qui se déconnecte utilise une identité dédiée, créée pour lui et non partagée, ou passe en dernier, après les scénarios fournisseur.
+- Après une déconnexion, toute session du pool appartenant au même utilisateur est marquée révoquée. Une réutilisation ultérieure est refusée : BLOCKED « session révoquée par une déconnexion globale », jamais une reconnexion silencieuse.
+
+Le caractère global de la déconnexion est un comportement produit à signaler au lead. La QA ne le modifie pas.
