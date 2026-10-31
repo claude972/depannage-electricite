@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Maquette test — Accueil dépannage électrique</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="home-header">
+      <div class="header-top">
+        <span class="avatar" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="26" height="26"><circle cx="12" cy="9" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4.5 20c1.4-3.6 4.2-5.2 7.5-5.2s6.1 1.6 7.5 5.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </span>
+        <button class="location" type="button" data-open="Adresse d’intervention">
+          <span class="location-label">Adresse d’intervention
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </span>
+          <span class="location-value">
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="9.5" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+            À renseigner
+          </span>
+        </button>
+        <button class="bell" type="button" aria-label="Notifications" data-open="Notifications">
+          <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 20a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+        </button>
+      </div>
+      <p class="test-tag">Maquette test — aucune donnée réelle</p>
+      <h1>De quel dépannage électrique avez-vous besoin ?</h1>
+      <form class="search" role="search" onsubmit="event.preventDefault(); openDialog('Recherche');">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20 20l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <label class="sr-only" for="q">Décrire la panne</label>
+        <input id="q" type="search" placeholder="Décrire la panne…" autocomplete="off" />
+        <button class="filter" type="button" aria-label="Filtres" data-open="Filtres">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="17" r="2" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        </button>
+      </form>
+    </header>
+
+    <main class="content">
+      <section aria-labelledby="cat-title">
+        <h2 id="cat-title" class="section-title">Catégories</h2>
+        <div class="categories" role="group" aria-label="Catégories de dépannage">
+          <button class="category active" type="button" data-open="Toutes les catégories">Toutes</button>
+          <button class="category" type="button" data-open="Panne de courant">
+            <span class="cat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M13 2L5 14h6l-1 8 8-12h-6l1-8z" fill="currentColor"/></svg></span>Panne de courant
+          </button>
+          <button class="category" type="button" data-open="Prise ou interrupteur">
+            <span class="cat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18"><rect x="4" y="4" width="16" height="16" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9.5" cy="12" r="1.4" fill="currentColor"/><circle cx="14.5" cy="12" r="1.4" fill="currentColor"/></svg></span>Prise / interrupteur
+          </button>
+          <button class="category" type="button" data-open="Tableau électrique">
+            <span class="cat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18"><rect x="4" y="3" width="16" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 8v3M12 8v3M16 8v3M8 15h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>Tableau électrique
+          </button>
+          <button class="category" type="button" data-open="Éclairage">
+            <span class="cat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>Éclairage
+          </button>
+        </div>
+      </section>
+
+      <section aria-labelledby="needs-title">
+        <div class="section-head">
+          <h2 id="needs-title" class="section-title">Besoins fréquents ⚡</h2>
+          <button class="see-all" type="button" data-open="Tous les besoins">Tout voir</button>
+        </div>
+        <div class="cards">
+          <article class="card">
+            <div class="card-media">
+              <img src="assets/electricite.jpg" alt="Intervention sur une installation électrique (illustration)" width="640" height="360" />
+              <span class="card-badge">Urgent</span>
+            </div>
+            <div class="card-body">
+              <h3>Plus de courant dans le logement</h3>
+              <p>Disjoncteur qui saute, coupure totale ou partielle.</p>
+              <button class="btn-primary" type="button" data-open="Panne de courant">Décrire ma panne</button>
+            </div>
+          </article>
+          <article class="card">
+            <div class="card-media">
+              <img src="assets/electricite.jpg" alt="" width="640" height="360" />
+              <span class="card-badge">À planifier</span>
+            </div>
+            <div class="card-body">
+              <h3>Prise ou interrupteur hors service</h3>
+              <p>Prise qui ne fonctionne plus, interrupteur abîmé.</p>
+              <button class="btn-primary" type="button" data-open="Prise ou interrupteur">Décrire ma panne</button>
+            </div>
+          </article>
+          <article class="card">
+            <div class="card-media">
+              <img src="assets/electricite.jpg" alt="" width="640" height="360" />
+              <span class="card-badge">À planifier</span>
+            </div>
+            <div class="card-body">
+              <h3>Éclairage à remplacer</h3>
+              <p>Point lumineux, luminaire ou circuit d’éclairage.</p>
+              <button class="btn-primary" type="button" data-open="Éclairage">Décrire ma panne</button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="promo" aria-labelledby="promo-title">
+        <div>
+          <h2 id="promo-title">Une panne électrique ?</h2>
+          <p>Décrivez-la en quelques étapes. L’estimation et la mise en relation seront affichées dans l’application réelle.</p>
+        </div>
+        <button class="btn-dark" type="button" data-open="Demander un dépannage">Demander un dépannage</button>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Navigation principale">
+      <a class="nav-item active" href="#" aria-current="page">
+        <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M4 10.5L12 4l8 6.5V20h-5v-6h-6v6H4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        Accueil
+      </a>
+      <a class="nav-item" href="#" data-open="Mes demandes">
+        <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><rect x="6" y="4" width="12" height="17" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 4h6v3H9z" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+        Mes demandes
+      </a>
+      <a class="nav-item" href="#" data-open="Messages">
+        <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        Messages
+      </a>
+      <a class="nav-item" href="#" data-open="Profil">
+        <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.8" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c1.3-3.6 4-5.2 7-5.2s5.7 1.6 7 5.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        Profil
+      </a>
+    </nav>
+  </div>
+
+  <dialog id="test-dialog" aria-labelledby="dialog-title" aria-describedby="dialog-text">
+    <h2 id="dialog-title">Maquette test</h2>
+    <p id="dialog-text">« <span id="dialog-subject"></span> » ouvrirait l’écran correspondant dans l’application. Rien n’est envoyé : cette page est une maquette isolée.</p>
+    <form method="dialog"><button class="btn-primary" value="close" autofocus>Fermer</button></form>
+  </dialog>
+
+  <script>
+    // Maquette test : dialogue local uniquement (Échap ferme nativement, le focus revient au déclencheur).
+    const dialog = document.getElementById("test-dialog");
+    let opener = null;
+    function openDialog(subject) {
+      document.getElementById("dialog-subject").textContent = subject;
+      opener = document.activeElement;
+      dialog.showModal();
+    }
+    dialog.addEventListener("close", () => opener && opener.focus());
+    document.querySelectorAll("[data-open]").forEach((el) =>
+      el.addEventListener("click", (e) => { e.preventDefault(); openDialog(el.getAttribute("data-open")); }),
+    );
+  </script>
+</body>
+</html>
