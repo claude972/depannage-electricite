@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Maquette test — Galerie</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="home-header page-header">
+      <div class="header-top">
+        <a class="round-btn" href="index.html" aria-label="Retour à l’accueil"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+        <span class="header-title">Galerie</span>
+        <a class="round-btn" href="galerie.html" aria-label="Galerie des écrans"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="13" y="4" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="4" y="13" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="13" y="13" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></a>
+      </div>
+      <p class="test-tag">Démonstration — maquette test, aucune donnée réelle</p>
+      <h1>Quatre écrans de la maquette test</h1>
+      <p class="header-sub">Style du modèle Delivo adapté au dépannage électrique.</p>
+    </header>
+    <main class="content">
+      <nav aria-label="Écrans de la maquette">
+        <ul class="gallery">
+          <li><a class="gallery-card" href="index.html"><strong>Accueil</strong><span class="hint">Catégories, besoins fréquents et demande de dépannage.</span></a></li>
+          <li><a class="gallery-card" href="demande.html"><strong>Demande</strong><span class="hint">Type de panne, urgence, description et photos (désactivées).</span></a></li>
+          <li><a class="gallery-card" href="suivi.html"><strong>Suivi artisan</strong><span class="hint">Étapes de l’intervention et carte schématique.</span></a></li>
+          <li><a class="gallery-card" href="devis.html"><strong>Devis</strong><span class="hint">Lignes sans montant inventé, accepter n’est pas payer.</span></a></li>
+        </ul>
+      </nav>
+    </main>
+    <nav class="bottom-nav" aria-label="Navigation principale">
+      <a class="nav-item active" href="index.html" aria-current="page"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M4 10.5L12 4l8 6.5V20h-5v-6h-6v6H4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>Accueil</a>
+      <a class="nav-item" href="suivi.html"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><rect x="6" y="4" width="12" height="17" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 4h6v3H9z" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>Mes demandes</a>
+      <a class="nav-item" href="#" data-open="Messages"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>Messages</a>
+      <a class="nav-item" href="#" data-open="Profil"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.8" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c1.3-3.6 4-5.2 7-5.2s5.7 1.6 7 5.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Profil</a>
+    </nav>
+  </div>
+  <dialog id="test-dialog" aria-labelledby="dialog-title" aria-describedby="dialog-text">
+    <h2 id="dialog-title">Maquette test</h2>
+    <p id="dialog-text">« <span id="dialog-subject"></span> » : dans l’application réelle, cette action serait traitée par le service. Ici, rien n’est envoyé.</p>
+    <form method="dialog"><button class="btn-primary" value="close" autofocus>Fermer</button></form>
+  </dialog>
+  <script src="dialog.js"></script>
+</body>
+</html>
