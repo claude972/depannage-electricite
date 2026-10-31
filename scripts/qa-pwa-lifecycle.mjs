@@ -11,7 +11,7 @@ import net from "node:net";
 import path from "node:path";
 import assert from "node:assert/strict";
 import { pathToFileURL } from "node:url";
-import { parseArgs, HELP, extractSwVersion, scanEnvKeyNames, classifyCacheEntries, compareStageEvidence, childEnv, buildServerArgs, readinessUrls, exitCodeFor, splitConsoleRecords, servedBuildIdMarkers, EXPECTED_PROBE, EXPECTED_OFFLINE, SW_PATH, OFFLINE_PATH, DEMO_HASH } from "./qa-pwa-lifecycle/lib.mjs";
+import { parseArgs, HELP, extractSwVersion, scanEnvKeyNames, classifyCacheEntries, compareStageEvidence, childEnv, buildServerArgs, readinessUrls, exitCodeFor, splitConsoleRecords, servedBuildIdMarkers, classifyOnlineRecovery, EXPECTED_PROBE, EXPECTED_OFFLINE, SW_PATH, OFFLINE_PATH, DEMO_HASH } from "./qa-pwa-lifecycle/lib.mjs";
 import { createServerController } from "./qa-pwa-lifecycle/servers.mjs";
 import { createRedactor } from "./qa/lib/redact.mjs";
 import { assertOutOutsideRepo, PreflightError } from "./qa/lib/config.mjs";
@@ -556,10 +556,30 @@ async function main(argv) {
       await screenshot(tabs.a, "offline-v3");
       await ctx.setOffline(false);
       phase = "online";
+      // Online recovery = the PUBLIC landing (the demo is memory-only and is legitimately gone after a
+      // reload): a real navigation response 200/HTML with the landing markers and NO offline heading.
+      const navigation = tabs.a.waitForResponse((r) => r.request().isNavigationRequest() && r.request().frame() === tabs.a.mainFrame(), { timeout: options.timeoutMs });
       await tabs.a.reload({ waitUntil: "domcontentloaded", timeout: options.timeoutMs });
-      await tabs.a.getByRole("textbox", { name: FORM_LABEL }).first().waitFor({ state: "visible", timeout: options.timeoutMs });
+      const response = await navigation;
+      await tabs.a.waitForLoadState("load", { timeout: options.timeoutMs }).catch(() => {});
+      await sleep(500);
+      const recovery = {
+        status: response.status(),
+        contentType: response.headers()["content-type"] || null,
+        fromServiceWorker: response.fromServiceWorker(),
+        title: await tabs.a.title(),
+        bodyText: await tabs.a.locator("body").innerText().catch(() => ""),
+        offlineHeadingCount: await tabs.a.getByRole("heading", { name: OFFLINE_TITLE, exact: true }).count(),
+      };
+      const verdict = classifyOnlineRecovery(recovery);
       await screenshot(tabs.a, "online-again-v3");
-      return { offlineTitle: OFFLINE_TITLE, offlineCaches, recovered: true };
+      assert.ok(verdict.ok, `online recovery is not the valid public landing: ${verdict.reasons.join("; ")}`);
+      // The demo is re-opened EXPLICITLY for the UI comparisons that follow (steps 11/12).
+      await tabs.a.goto(`${origin}/`, { waitUntil: "domcontentloaded", timeout: options.timeoutMs });
+      await tabs.a.goto(demoUrl, { waitUntil: "domcontentloaded", timeout: options.timeoutMs });
+      await tabs.a.getByRole("textbox", { name: FORM_LABEL }).first().waitFor({ state: "visible", timeout: options.timeoutMs });
+      await screenshot(tabs.a, "demo-reopened-v3");
+      return { offlineTitle: OFFLINE_TITLE, offlineCaches, recovery: { status: recovery.status, contentType: recovery.contentType, fromServiceWorker: recovery.fromServiceWorker, title: recovery.title, offlineHeadingCount: recovery.offlineHeadingCount }, publicLanding: true, demoReopened: true };
     });
 
     await step("11 nothing private cached on v3 after the single anonymous /api/workspace probe (401)", async () => {

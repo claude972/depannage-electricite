@@ -152,6 +152,27 @@ export function servedBuildIdMarkers(html, candidates) {
   return found;
 }
 
+/** Markers of the public landing of the app (no account): what a reload must come back to. */
+export const PUBLIC_LANDING = { offlineTitle: "La connexion est indisponible", titlePattern: /Courant/, bodyPattern: /Connectez-vous|Se connecter/ };
+
+/**
+ * Phase 10 online recovery (pilot diagnosis): the demo (`#demo/client-new`) lives in MEMORY only,
+ * so a reload after offline → online legitimately comes back to the PUBLIC landing, not to the
+ * demo form. PASS requires: a real navigation response 200 with HTML, the app's public landing
+ * markers, and the offline heading ABSENT. A demo textbox is NOT required here; the demo is
+ * re-opened explicitly afterwards for the UI comparisons.
+ */
+export function classifyOnlineRecovery({ status, contentType, title, bodyText, offlineHeadingCount }, landing = PUBLIC_LANDING) {
+  const reasons = [];
+  if (Number(status) !== 200) reasons.push(`navigation status ${status}, expected 200`);
+  if (!/text\/html/i.test(String(contentType || ""))) reasons.push(`content-type ${contentType || "(none)"}, expected text/html`);
+  if (!landing.titlePattern.test(String(title || ""))) reasons.push(`document title "${title}" does not name the app`);
+  if (!landing.bodyPattern.test(String(bodyText || ""))) reasons.push("public landing markers (sign-in call to action) absent from the body");
+  if (Number(offlineHeadingCount) > 0) reasons.push(`offline heading "${landing.offlineTitle}" still present after the online reload`);
+  if (String(bodyText || "").includes(landing.offlineTitle)) reasons.push("offline notice text still present after the online reload");
+  return { ok: reasons.length === 0, reasons };
+}
+
 /** The only console line a private-cache probe may legitimately produce (contract §4, steps 4/11). */
 export const EXPECTED_PROBE = { path: "/api/workspace", status: 401, phases: ["probe-v2", "probe-v3"], maxPerPhase: 1 };
 

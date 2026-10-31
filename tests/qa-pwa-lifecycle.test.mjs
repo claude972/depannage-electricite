@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { EventEmitter } from "node:events";
-import { parseArgs, extractSwVersion, scanEnvKeyNames, classifyCacheEntries, compareStageEvidence, childEnv, buildServerArgs, readinessUrls, exitCodeFor, splitConsoleRecords, isExpectedProbeRecord, isExpectedOfflineRecord, servedBuildIdMarkers, EXPECTED_PROBE, EXPECTED_OFFLINE, DEFAULT_PORT } from "../scripts/qa-pwa-lifecycle/lib.mjs";
+import { parseArgs, extractSwVersion, scanEnvKeyNames, classifyCacheEntries, compareStageEvidence, childEnv, buildServerArgs, readinessUrls, exitCodeFor, splitConsoleRecords, isExpectedProbeRecord, isExpectedOfflineRecord, servedBuildIdMarkers, classifyOnlineRecovery, EXPECTED_PROBE, EXPECTED_OFFLINE, DEFAULT_PORT } from "../scripts/qa-pwa-lifecycle/lib.mjs";
 import { createServerController } from "../scripts/qa-pwa-lifecycle/servers.mjs";
 import { createStopGate, createLifecycle, StopRequestedError } from "../scripts/qa/lib/lifecycle.mjs";
 
@@ -231,6 +231,21 @@ test("REV-004: NEW child refusing SIGTERM → SIGKILL → ok only when the port 
   assert.equal(bad.ok, false);
   assert.equal(bad.port_released, false);
   assert.deepEqual(bad.steps.map((s) => [s.label, s.exited, s.stopped]), [["new", false, false]]);
+});
+
+test("phase 10 classifier: the public landing after the online reload is a PASS; the offline heading is a FAIL; no demo textbox required", () => {
+  const landing = { status: 200, contentType: "text/html; charset=utf-8", title: "Courant — Dépannage électrique", bodyText: "Courant\nDépannage électrique\nConnectez-vous pour accéder à vos dossiers", offlineHeadingCount: 0 };
+  assert.deepEqual(classifyOnlineRecovery(landing), { ok: true, reasons: [] });
+  assert.equal(classifyOnlineRecovery({ ...landing, bodyText: "Courant\nSe connecter" }).ok, true, "either sign-in wording");
+  const offline = classifyOnlineRecovery({ ...landing, offlineHeadingCount: 1, bodyText: "Courant\nLa connexion est indisponible\nRéessayer" });
+  assert.equal(offline.ok, false);
+  assert.ok(offline.reasons.some((r) => /offline heading/.test(r)) && offline.reasons.some((r) => /markers .* absent/.test(r)));
+  assert.equal(classifyOnlineRecovery({ ...landing, status: 503 }).ok, false);
+  assert.equal(classifyOnlineRecovery({ ...landing, contentType: "text/plain" }).ok, false);
+  assert.equal(classifyOnlineRecovery({ ...landing, title: "Untitled" }).ok, false);
+  assert.equal(classifyOnlineRecovery({ ...landing, bodyText: "Courant" }).ok, false, "a landing without the sign-in call to action is not valid");
+  // The demo form is not part of the recovery verdict: a landing body with no "Décrivez le problème" passes.
+  assert.ok(!JSON.stringify(classifyOnlineRecovery(landing)).includes("Décrivez"));
 });
 
 test("servedBuildIdMarkers: the served HTML names exactly the build it comes from", () => {
