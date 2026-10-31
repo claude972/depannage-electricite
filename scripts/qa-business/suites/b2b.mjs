@@ -7,6 +7,7 @@
 import assert from "node:assert/strict";
 import { login, openHash, api, capture, bodyText, expectVisible, expectAbsentOrDisabled, postsTo, waitForApi, sleep, safeRoute, sessionAccessToken, noHorizontalOverflow } from "../../qa/lib/browser.mjs";
 import { userRpc } from "../../qa/lib/supabase.mjs";
+import { assertNoUiWrites, settledBaseline } from "../lib/network.mjs";
 
 const OPS = 'section[aria-labelledby="site-operations"]';
 const TABS = ["Équipements", "Maintenance", "Budget", "Grilles", "Délais", "Contrôles ERP", "Historique"];
@@ -310,6 +311,7 @@ export const suite = {
       const h = await ctx.openPage(s, {});
       try {
         await s.step("login read-only member", () => login(h, base, reader, projectRef));
+        const readerWindow = await settledBaseline(h, { driverMutations: 0, origin: base });
         await s.step("site A1: operations readable, read-only block with the reason, owner's equipment listed", async () => {
           await openOps(h.page, siteA1);
           await tab(h.page, "Équipements");
@@ -331,9 +333,7 @@ export const suite = {
           return seen;
         });
         await s.step("browser: no POST /api/* issued", () => {
-          const posts = postsTo(h.network);
-          assert.deepEqual(posts, [], `interface issued ${posts.length} write request(s): ${JSON.stringify(posts)}`);
-          return { apiRequests: h.network.length };
+          return assertNoUiWrites(h, readerWindow);
         });
         await s.step("server: save_equipment / save_fiscal_year / save_erp_checklist refused (403) through the application route", async () => {
           const attempts = [
@@ -392,6 +392,8 @@ export const suite = {
       const h = await ctx.openPage(s, {});
       try {
         await s.step("login third party", () => login(h, base, outsider, projectRef));
+        const beforeProbes = h.network.length;
+        let window = null;
         await s.step("server: A1 refused (GET 403, POST 403), B1 readable (200)", async () => {
           const a1 = await api(h.page, `/api/site-operations?site_id=${siteA1.id}`);
           assert.equal(a1.status, 403);
@@ -401,7 +403,8 @@ export const suite = {
           assert.equal(b1.status, 200);
           assert.equal(b1.body?.snapshot?.site?.id, siteB1.id);
           assert.equal(await db.count("site_equipment", { site_id: `eq.${siteA1.id}` }), 1);
-          return { a1: a1.status, post: refusedPost.status, b1: b1.status };
+          window = await settledBaseline(h, { since: beforeProbes, driverMutations: 1, origin: base });
+          return { a1: a1.status, post: refusedPost.status, b1: b1.status, ui_window_from: window.index };
         });
         await s.step("UI: #site/<A1> shows nothing of A1; own site B1 shows its operations", async () => {
           await openHash(h.page, base, `site/${siteA1.id}`);
@@ -413,10 +416,7 @@ export const suite = {
           await expectVisible(opsSection(h.page).getByRole("heading", { name: "Aucun équipement", exact: true }), "B1 empty state");
           await capture(h, out, "b2b-tiers-b1-1280", s);
         });
-        await s.step("browser: no POST issued by the interface", () => {
-          const posts = postsTo(h.network).filter((n) => n.status !== 403);
-          assert.deepEqual(posts, [], `interface issued ${posts.length} write request(s)`);
-        });
+        await s.step("browser: no write issued by the interface during the UI navigation (window after the driver probes, no status filter)", () => assertNoUiWrites(h, window));
         s.network(h.network);
       } finally {
         await h.close();
