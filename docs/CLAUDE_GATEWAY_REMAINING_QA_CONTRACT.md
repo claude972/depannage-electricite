@@ -156,6 +156,18 @@ La garde de cohorte du lot SQL ne protège ni les erreurs avant le lot ni la pha
 **Exhaustivité du listage Auth (revue root de 13b68c3)** : partout où le harnais liste les comptes Auth (garde autre rédacteur de `revoke-prepare`/`revoke-live`), l’absence n’est déduite que d’une **fin prouvée** : page courte (< taille de page) ou `total` annoncé cohérent avec ce qui a été lu (`listAllUserEmails`, pages de 1000, au plus 50 pages). Dernière page pleine sans page suivante lue, borne atteinte, `total` incohérent, page surdimensionnée, erreur ou exception ⇒ **inconnu** : la garde refuse (rien créé, rien enregistré) et aucun verdict « propre » ne s’appuie dessus. Les autres contrôles d’absence du harnais (découverte de cohorte, relectures après suppression) restent fondés sur des lectures par identifiant/préfixe exacts avec compte exact (GW-HARNESS-003), jamais sur ce listage.
 Préflight : projet, URL de fonction, SHA/source du gateway déployé exacts ; aucun autre rédacteur ni manifeste non réconcilié (le pilote coche `--no-other-writer` après vérification) ; le lot refuse (`raise`) s’il existe un `auth.users` `qa-gw-%` hors `<run>` — garde **conservatrice**, pas une preuve qu’aucun rédacteur n’existe. Un bail d’expiration (§1) en attente peut faire refuser ce garde : il n’est **jamais effacé pour passer** ; on attend son verify ou son nettoyage. Le nettoyage du run précédent doit être terminé (0 reliquat).
 
+### 2.7 bis Résultats réels (recette root, harnais `revoke-live` 13b68c3 → 83fdad9) — synchronisation du rapport source
+Exécutions réalisées **par root** sur le projet dédié (aucune par cet agent). Les échecs antérieurs sont conservés tels quels ; ils ne sont pas réinterprétés par la réussite suivante.
+
+| Tentative | Verdict root | Cause / preuve | Nettoyage |
+|---|---|---|---|
+| 1 | **FAIL — non-preuve** | Observation SQL : **0 ligne** (finalisation non vue bloquée par le lot pendant la pause) ⇒ condition (a) non établie, « fenêtre non exercée » | selon rapport root |
+| 2 | **FAIL — course perdue** | Réponse **201** : la finalisation a abouti avant la révocation (fait documenté, ligne créée nettoyée) | selon rapport root |
+| 3 | **FAIL — course perdue** | Réponse **201** (même cause que 2) | selon rapport root |
+| 4 | **PASS réel sur (a)–(g)** | Fenêtre de course observée avec preuve DB : finalisation bloquée par le PID du lot, objet exact unique sous l’UID du gestionnaire, horodatages DB ordonnés, RPC réussi et révocation commitée (relecture), preuve d’acteur, 403 enveloppe gateway sans fuite, objet absent et aucune ligne `documents` | **35 étapes PASS** + **12 contrôles indépendants à 0**, Auth **404**, Storage **0** |
+
+Horodatages exacts, PID et lignes de résultat : ceux du rapport root (non recopiés ici faute de les détenir ; aucun horodatage n’est reconstitué). Aucune nouvelle cohorte gateway n’est prévue. Portée de la preuve : un ordonnancement réel unique sur le projet dédié, variante site (retrait de grant par le propriétaire QA) ; ne prouve ni la concurrence multi-sessions générale, ni la variante client sans site, ni un timeout PostgREST différent.
+
 ### 2.8 Hors périmètre / interdits
 Aucun trigger, hook ou point d’injection ajouté à l’Edge ; aucune modification de l’Auth globale, de la production ou d’une table utilisateur hors cohorte ; pas de garantie « par timeout » codée comme preuve : seule la séquence observée §2.5 vaut preuve.
 
