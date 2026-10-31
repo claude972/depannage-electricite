@@ -155,3 +155,34 @@ automatique, `canWrite=false` → contrôles absents. Projection Web Mercator et
 Captures 360/1280 en démo (snapshot de démonstration explicite) et, après raccordement lead, recette ROOT avec géolocalisation
 **simulée explicitement** ; aucune preuve GPS matériel revendiquée. Hors périmètre : suivi natif/arrière-plan, historique de
 parcours, trafic temps réel, saisie manuelle de coordonnées, choix d’un autre fond de carte, tout package.
+
+## Amendement ROOT avant code (lecture de a7a1fed)
+
+Accord ROOT : carte OSM interactive sans dépendance (§5). Vérifié en lecture seule : `public/sw.js` n’intercepte pas les
+autres origines (`url.origin !== self.location.origin` → passage réseau), donc les tuiles `tile.openstreetmap.org` ne sont
+ni interceptées ni mises en cache par le Service Worker ; aucune modification nécessaire.
+
+1. **Effacement de l’affichage.** Dès qu’un snapshot donne `position = null`, `position_state` `stale` / `stopped` /
+   `no_position`, ou qu’un droit est perdu (404/403, `can_share`/lecture retirés, changement d’identité/dossier), les
+   coordonnées, le halo, le marqueur position **et** la géométrie de route sont **retirés de la mémoire affichée** : aucun
+   marqueur grisé, aucune ancienne position conservée côté client. Seuls restent l’heure connue (`sampled_at` quand le
+   serveur la transmet, sinon « heure inconnue ») et la raison (« position périmée », « partage arrêté », « aucune position »,
+   « accès retiré »). La destination confirmée reste affichée seulement si le snapshot la renvoie. Une route n’est affichée
+   qu’en même temps qu’une position `fresh` dont les `session_id/control_version/point_seq/destination_version` correspondent à
+   la réponse `route()` ; sinon elle est effacée. Remplace la mention « marqueur grisé » du §4.
+2. **Arrière-plan / veille / fermeture.** Libellé : « Sur le web, le partage **peut être interrompu** si la page est fermée,
+   mise en arrière-plan ou en veille ; aucune continuité n’est garantie. » Jamais d’affirmation d’un arrêt serveur garanti à la
+   fermeture. À `visibilitychange` → `hidden` et à la déconnexion : `clearWatch` + incrément de génération immédiats ; un
+   `stop` serveur est tenté **au mieux** (`command` non attendu, aucun message de succès, aucune confirmation affichée), ce qui
+   est dit explicitement (« l’arrêt côté service est tenté ; s’il n’aboutit pas, la position cesse d’être affichée après 60 s »).
+   Au retour visible : aucune reprise automatique ; l’état « Partage interrompu » propose un nouveau démarrage explicite.
+3. **Destination manuelle.** Pour une adresse introuvable ou ambiguë, l’utilisateur habilité peut (a) choisir un point sur la
+   carte, puis confirmer, ou (b) ouvrir un panneau secondaire « Saisir des coordonnées » (latitude [-90, 90], longitude
+   [-180, 180], libellé 1–200 caractères, validés avant envoi). Dans les deux cas : `source:"manual"`, **rien n’est envoyé avant
+   le clic « Confirmer cette destination »** ; le point choisi est un brouillon local affiché comme tel (« non confirmé »). En
+   lecture seule (`can_confirm_destination=false` ou `canWrite=false`), le sélecteur n’est jamais éditable : clic carte sans
+   effet, champs et boutons absents, raison affichée.
+
+Inchangé : adaptation M7/M44/M67/V8-C07, réponse `null` (chaîne d’identité périmée) ⇒ aucune transition ni succès, aucune
+nouvelle dépendance. Types : tant que `lib/features/tracking/types.ts` n’est pas poussé par Codex, un miroir local
+`components/features/tracking/types.ts` marqué **TEMPORAIRE** est utilisé et remplacé par l’import Codex dès réception du SHA.
