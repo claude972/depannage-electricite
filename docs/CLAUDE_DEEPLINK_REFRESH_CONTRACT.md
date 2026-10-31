@@ -87,3 +87,12 @@ Code only after root's GO on this amendment. Owner of the code: lead (shells/ses
 - EDIT `components/role/client-space.tsx` (DetailView + badge « Connecté »/« Actualiser »), `components/role/artisan-space.tsx` (mission detail), `components/role/enterprise-space.tsx` (DossierView) — use the hook before rendering « introuvable »; badge string in any other shell where « En direct » appears.
 - NEW tests `tests/ui/workspace-refresh.test.ts` (scenarios 1–6) and `tests/ui/detail-resolution.test.ts` (decision branches, LRU bound, context reset).
 No API, backend, SQL, dependency or tracking-leaf change.
+
+## Amendment A4 (root GO for A3, corrections f383a90) — causal freshness for ALL triggers
+
+- `Session.refresh()` keeps its signature (no argument) but **takes a freshness barrier BY DEFAULT**: post-write refreshes, manual « Actualiser », realtime events and focus/visibility revalidation are all causes that a read started BEFORE them cannot satisfy (an event committed during read A is not « handled » by A's older snapshot).
+- Only passive reads (render-time and the first bootstrap) may join the current flight without a barrier.
+- Causes registered before the API call actually starts are batched into that call (the start is deferred to a microtask so same-tick causes share one checkpoint); a cause arriving after the call started ⇒ ONE pending trailing read (coalesced); never two concurrent requests, never an unbounded queue.
+- Tests add: read A returns old data, then a post-write / realtime event / manual need registered during A ⇒ trailing B returns new data; an old context is never applied; B failure ⇒ error, never not_found.
+- No Realtime code change, no RLS/migration here; LIVE-WORKSPACE-001 effectiveness stays OPEN; badge « Connecté » + « Actualiser » permitted (A2).
+- Files and ownership exactly as A3 (lead only; prototype worker 003 isolated).
