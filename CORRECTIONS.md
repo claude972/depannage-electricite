@@ -334,3 +334,14 @@ Timestamp: 2026-10-30T22:45:12.613920-04:00 — acteur Codex, coordination.
 - Backend revu : c04b7527e089caf5dfface2ead58b17710fea652, intégré et poussé sur integration/web-pwa par 1e2eaed.
 - Revue indépendante : /tmp/depannage-site-access-review.md, empreintes finales vérifiées par l’implémenteur ; SQL sites 8, principaux 29, performance 6 groupes réussis. Pas de nouvelle fuite bloquante dans ce périmètre. Les opérations service-role déjà en vol et la recette cloud restent des limites explicites.
 - Claude UI session b4b555f0 vérifiée active. Message CLI transmis : livrer un checkpoint testé/poussé, intégrer PWA Profil/Aide sans attendre d’approbation supplémentaire, vérifier CL-UI-003/004/006. La nouvelle interface n’est pas encore validée en preview.
+
+
+## WEB-PWA-20261030 — Supabase débloqué et provisionné
+
+2026-10-30T22:51:36.296608-04:00 — Codex, après confirmation du règlement par l’utilisateur.
+
+- Création dédiée réussie : depannage-web-pwa, ref kcpyjzndybfdlnhvscbs, eu-west-3, ACTIVE_HEALTHY. Aucun autre projet modifié.
+- Dry-run neuf puis application distante réussie des neuf migrations 001 à 009, code intégré 1e2eaed. Aucun seed de démonstration chargé.
+- Variables Supabase public/serveur et adresse de retour configurées uniquement pour Vercel preview, branche integration/web-pwa. Clé de service stockée comme sensible ; aucun secret dans Git. STRIPE_LIVE_PAYMENTS_ENABLED=false.
+- Redéploiement preview lancé. Parcours Auth/RLS/Storage cloud à vérifier ensuite ; appliquer les migrations ne constitue pas une recette complète.
+- Stripe test reste à connecter : onglet de connexion ouvert, aucun secret test encore configuré ; aucun paiement réel autorisé.
