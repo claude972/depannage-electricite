@@ -365,3 +365,7 @@ agent: claude ;status: pending. Réutiliserworkerpublicexistant/worktreeplanning
 
 ### CODEX-PLANNING-QA-001 — amendement recette reprise intégrée —2026-10-31T13:29:17-04:00
 MêmeagentCodex/branchecodexplanningQA/fichiersexclusifsdéjàautorisésA4. Sourcef0appd937a13PASSconservés ; nouvelshared18fbfce clôtureSHARED006avecactionreprisevalidée41tests/source ; recetterlenouveauraccordementaprèsbuildroot. ContratQAàactualiseravantcode (docs/CODEX_PLANNING_QA.md) : scénario503browser/alldoitcliquervraiRéessayerDANSbloc[data-blocker=capability:planning]après503injecté, enleverroutepuisobservernouvelleGET200can_edittrueetretourcontenu/bouton, pasreloaddocument. Marqueurdocumentavant→aprèsdoitrester, identitéworkspaceinchangée. Strictdroits/nofuitepréservés ; nepasconfondreboutonPWAinstallationauhautdepageavecretryplanning. Sourceappoldf0capturaitdéfautmaintenantcorrigé ; conserverhistFAILs/limitesprécédentes, nepasrefairepreuveréelleavantrootrun. PasétendrefichiersClaude niAPI/SQL ; ownerCodeXactuelréutilisé, testsunit/syntaxesiginfiants,push/revueClaudefinale579→nouveauencoredueavantmerge.
+
+
+### QA-ADMIN-PREFLIGHT-001 —2026-10-31T13:52:14-04:00
+agent: claude ; status: pending. WorkerQAexistant/claudewebpwaQA,fichiersexclusifsrun/libconfigouhelpernouveaurefusQA/tests/READMEcontrat. Petitgardeinteropavantfixturespournepascréercourtadminimpossibleàretireraprès014. VoirCORRECTIONS, aucunchangementapp/SQL/RLS/production/compteréel. Contrataddendumavantcode, testsrefus0seed,typecheck/syntax,push/revue,pascloudparworker.
