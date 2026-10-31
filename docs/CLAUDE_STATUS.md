@@ -825,3 +825,9 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - Applied: docs third party (baseline after overview 403 / download 404 / driver generate 403 / 0-event asserts, unchanged, then UI navigation), docs client reading (window after login), b2b reader (window after login, before its driver probes), b2b third party (baseline after GET 403 / driver POST 403 / B1 200; `status !== 403` filter removed). Old whole-log `noPosts` deleted.
 - Tests: driver POST 403 before baseline PASS; UI POST 403 in window FAIL; UI PATCH 200 FAIL; late driver response before window; extra write during probes FAIL; driver never observed ⇒ anomaly. Harness 52 pass / 1 skipped; `tests/**/*.test.ts` 617 / 0 fail / 1 skipped; tsc clean; node --check 14/14; dry-run 0.
 - For root: review b943b45, then public rerun after independent cleanup.
+
+## 2026-10-31 — root peer review b943b45: 2 P2 reproduced (emission proof, forgeable baseline)
+
+- Peer review 53 PASS but **2 P2 reproduced** (repro `/tmp/depannage-business-b943-network-repro.mjs`): (1) helper observes `h.network` (response/requestfailed) ⇒ a UI POST emitted after baseline WITHOUT response yet passes (observed 0); required zero-emission proof via `page.on("request")` (method/path only) attached from window opening, before UI, without waiting for responses, in the local `scripts/qa-business/lib/network.mjs` (shared browser lib read-only). (2) baseline from another handle (index 3 vs UI log length 1 ⇒ PASS observed −2) and `{}` (PASS NaN) — required opaque validated baseline BOUND to the handle, bounded/monotone index, immutable snapshot, foreign/forged baseline refused.
+- Dispatched to b2b worker a96ae75: amend §20 BEFORE code, tests request-pending / UI 403 / UI 200 / foreign baseline / malformed. No cloud, no integration of b943b45 before the reviewed fix.
+- Old business run 13 PASS / 1 FAIL, readback 48 PASS, cleaned; **no active cohort**.
