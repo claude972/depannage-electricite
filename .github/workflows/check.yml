@@ -53,3 +53,8 @@ jobs:
         env:
           PGLITE_MODULE: ${{ runner.temp }}/courant-sql/node_modules/@electric-sql/pglite/dist/index.js
         run: node tests/sql-support-review.mjs
+
+      - name: Verify artisan work and pending-settlement dossier guard (not live Supabase)
+        env:
+          PGLITE_MODULE: ${{ runner.temp }}/courant-sql/node_modules/@electric-sql/pglite/dist/index.js
+        run: node tests/sql-artisan-active-guard-review.mjs
