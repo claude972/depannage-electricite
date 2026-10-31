@@ -58,3 +58,31 @@ Avant minuit, les affectations split en cours restent valables. Après minuit, t
 Après la livraison Web/PWA vérifiée, réaliser les applications **iOS et Android** : lot mobile désormais demandé, plus simple option conditionnelle. Préserver le backend partagé et les références client/artisan ; définir le périmètre exact des comptes mobiles et auth/retours natifs. Proposition technique à confirmer par découverte : Expo/React Native avec builds de test EAS, skills expo-overview puis structure/router/UI/data/auth/build appropriés. Aucun scaffold mobile avant le checkpoint Web/PWA de livraison. Pas de publication stores/production/débit réel implicite.
 
 Relais unique créé dans le chat courant : automation `relais-claude-minuit-d-pannage-web-pwa-puis-mobile`, active, minuit prochain, une occurrence. Le relais lit ces fichiers et l’inventaire réel des sessions avant toute attribution.
+
+## Mission: Revue croisée Claude du backend et de la PWA
+Mission ID: WEB-PWA-REVIEW-001
+Coordination branch: missions/web-pwa
+Base revision: 6aaa1b36b99e64de4e0544780c8234c508cc1fd5
+Corrections: CORRECTIONS.md
+Objective: revue indépendante Claude du code Codex exact (003/004/005, API, droits, paiements, consentement devis et PWA). Aucun doublon de l’implémentation frontend ; aucun code modifié par le reviewer.
+Shared contracts/dependencies: lire mission WEB-PWA-20261030 et rapports ; verdict borné au SHA exact, findings sourcés et tests effectivement exécutés ; Supabase/Stripe distants non disponibles, ne pas les déclarer passés.
+### Claude review assignment
+- agent: claude
+- status: pending
+- branch: claude/web-pwa-review
+- worktree: /Volumes/Stockage/Projets/depannage-web-pwa-review
+- deliverables: rapport de revue exactSHA, problèmes concrets ou absence de finding dans périmètre, résultats des contrôles et limites
+- owned files: aucun code ; rapport final CLI transmis au pilote pour CORRECTIONS.md
+- acceptance criteria: lire migrations/droits/routes et PWA ; vérifier refus accès, idempotence, consentement exact, protection cache et installation ; signaler critères non testables ; ne pas confondre revue avec recette cloud
+- verification report: CORRECTIONS.md / WEB-PWA-REVIEW-001 / claude, attendu après revue
+- implementation revision: 6aaa1b36b99e64de4e0544780c8234c508cc1fd5, cible de revue seulement
+- preview: https://depannage-electricite-hloqx4c89-brafas-projects.vercel.app (intégration b0fa1df, nouvelle UI pas encore intégrée)
+- blockers: pas de services Supabase/Stripe réels, pas d’accès secrets donné au reviewer
+### Codex coordination assignment
+- agent: codex
+- status: in_progress
+- branch: missions/web-pwa
+- deliverables: publier rapport, traiter findings avec propriétaire et vérifier corrections/intégration
+- owned files: MISSIONS.md/CORRECTIONS.md uniquement pour cette sous-mission
+- acceptance criteria: rapport réellement reçu et appliqué au SHA exact, aucun statut done sans revue croisée/preview requise
+Cross-verification: Codex examine les preuves de Claude et fait corriger les findings ; le rapport fait partie de la revue obligatoire de l’affectation principale, sans supprimer les limites d’intégration.
