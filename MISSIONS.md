@@ -260,3 +260,68 @@ Entreprise cliente et Super Admin restent actuellement livrés/recettés Web ; l
 - acceptance: captures comparées côte à côte référence/rendu à taille compatible, écarts restants explicites ; pas de validation de fidélité sur seuls mots bleu/blanc ou zéro overflow. Respect des contrôles de lecture seule, erreurs/vide/chargement, formulaires et données réelles sous droits ; pas de faux chiffres/SLA/certifications/légendes commerciales inventés pour imiter une image. Les identités/chiffres des maquettes restent exemples. Pas de cadres téléphone/navigateur simulés, animations décoratives permanentes, ou contenu essentiel tronqué.
 - dependencies: QA001/002/003/004 et GW002 poursuivis par leurs agents/worktrees existants sous le lead, sans doublon et sans écraser les brouillons. Le design ne doit pas régresser la session, les permissions, brouillons, photos et support déjà recettés. Checkpoint fonctionnel ET visuel Web avant natif.
 - reporting: CORRECTIONS.md au SHA exact, captures/limitations, CI et preview seulement réellement vérifiées. Vercel/Stripe restent différés selon consigne actuelle ; pas de production ni changement de l’ancien site public implicite. Toute preview locale est nommée locale.
+
+
+## Amendement A3 — exécution autonome des lots1,2,3,5 via Claude CLI
+Le propriétaire ordonne explicitement les lots1(fidé­lité),2(recette),3(Web/PWA),5(fonctions avancées) du plan présenté dans le chat. Les développements V2/V3 correspondants ne sont plus seulement « à prévoir » : leur exécution indépendante est autorisée, sans inventer les données commerciales/réglementaires ni prétendre les services différés actifs. Pas de natif/EAS dans cette tranche ; Vercel/Stripe restent différés, aucune production/store/transaction réelle. Tout code et tests Claude, Codex pilote/revoit/exécute/intègre. Le lead CLI b4b555f0 répartit entre1–10 agents Claude effectifs, propriétaires uniques et worktrees isolés, avec contrats avant code et checkpoints courts poussés.
+
+### Transfert du chantier visuel vers les sous-agents CLI
+Le worker Desktop16d349f9 est idle et a livré e7aaef7 ; sa branche/worktree est le point de reprise, pas une nouvelle copie de rendu. La suite de VISUAL-FIDELITY-001 revient à un seul sous-agent du lead CLI sur claude/web-pwa-design. Ne pas relancer Desktop en parallèle ; conserver son historique et ses images. Périmètre : corrections de revue entreprise puis autres acteurs/références du contrat. Les nouvelles features ci-dessous livrent des composants feuilles, sans éditer les coques des rôles possédées par cet agent.
+
+### WEB-SHARED-001 — raccordements communs, propriétaire unique
+- agent: claude
+- status: pending
+- owner: lead CLI b4b555f0, pas de sous-agent concurrent sur fichiers globaux.
+- branch: claude/web-shared
+- worktree: /Users/claudebrafa/.codex/worktrees/depannage-claude-shared
+- base revision: 9b3dae03e1a413ffe89b34e0db7553ddc1b3ade9
+- owned files: types/session/controller/navigation communs components/app/types.ts, session.ts, courant-app.tsx, app/globals.css si nécessaire et package/lock seulement après dépendance justifiée. Ne pas modifier les coques role/*.tsx possédées par design sans transfert explicite.
+- objective: contrats partagés stables, raccordement des composants avancés et menus aux capacités serveur réelles ; intégrer leurs branches revues dans cette branche de préparation avant transfert final Codex. Ne pas modifier integration/web-pwa possédée par Codex, ni main.
+- acceptance: pas de menus sans action, session/rôle/site restent serveur, typecheck/check/tests de refus après chaque raccordement, captures selon maquette ; aucun droit par seule visibilité du menu.
+
+### ADV-DOCUMENTS-001 — devis enrichis et documents
+- agent: claude
+- status: pending
+- branch: claude/web-documents
+- worktree: /Users/claudebrafa/.codex/worktrees/depannage-claude-documents
+- base revision: 9b3dae03e1a413ffe89b34e0db7553ddc1b3ade9
+- owned files: nouvelles routes app/api/quote-documents/** et app/api/quote-amendments/**, lib/features/quote-documents/**, components/features/quote-documents/**, tests/documents ciblés ; migration015 réservée. Aucun changement direct aux routes/contrats devis existants sans accord lead ; pas de fichiers globaux/role shells/package concurrents.
+- objective: PDF de devis à partir de données réelles, informations émetteur/validité et avenants versionnés liés au devis accepté, téléchargement privé et historique. Contrat produit/données/API/états à pousser avant code. Les factures/avoirs relèvent du lot plateforme ; coordonner une interface de rendu PDF, pas deux sources de vérité.
+- invariants: devis accepté immuable, nouvel avenant explicitement accepté, montants calculés serveur, documents exacts à la version sélectionnée ; pas d’émetteur/SIRET/TVA/mentions fictifs. Si données nécessaires absentes : erreur/configuration explicite, pas de PDF mensonger. Anciennes validités non renseignées restent explicites, pas de rétro-expiration silencieuse.
+- acceptance: PDF réel lisible inspecté et relecture du montant/version/TVA ; refus tiers/site retiré ; conflit de version et double envoi ; audit, génération contrôlée et URLs privées. Aucune signature certifiée inventée.
+
+### ADV-PLANNING-NOTIFICATIONS-001 — planning artisan et notifications internes
+- agent: claude
+- status: pending
+- branch: claude/web-planning
+- worktree: /Users/claudebrafa/.codex/worktrees/depannage-claude-planning
+- base revision: 9b3dae03e1a413ffe89b34e0db7553ddc1b3ade9
+- owned files: app/api/planning/**, app/api/notifications/**, lib/features/planning/** et notifications/**, components/features/planning/** et notifications/**, tests ciblés ; migration016 réservée. Aucun controller/types/globals/role shells modifié directement.
+- objective: planning personnel, disponibilités/plages récurrentes et rendez-vous cohérents, détection chevauchement/concurrence, centre de notifications métier persistant lu/nonlu et préférences. Événements réels idempotents liés aux opérations serveur ; contrat avant code. Un modèle d’employeur/techniciens est distinct : ne pas rebaptiser organisation cliente en société prestataire.
+- invariants: pas de double réservation ni d’accès aux plannings privés d’autrui ; approbation/suspension et attribution restent effectives ; aucune notification d’un autre compte/site ; pas de promesse SMS/email/push externe sans fournisseur configuré. Préparer les adaptateurs/configuration et signaler indisponibilité, pas de faux envoi.
+- acceptance: nominal/erreur/vide, dates/fuseaux, récurrence/exception, concurrence, mutation idempotente, notification liée au bon événement/acteur, marquage lu/nonlu et révocation des accès ; tests serveur/RLS et captures de composants raccordables.
+
+### ADV-B2B-OPERATIONS-001 — équipements, maintenance, SLA et ERP
+- agent: claude
+- status: pending
+- branch: claude/web-b2b
+- worktree: /Users/claudebrafa/.codex/worktrees/depannage-claude-b2b
+- base revision: 9b3dae03e1a413ffe89b34e0db7553ddc1b3ade9
+- owned files: app/api/site-operations/**, lib/features/site-operations/**, components/features/site-operations/**, tests ciblés ; migration017 réservée. Ne pas modifier enterprise-space/CSS en concurrence avec design ; proposer composants feuilles et contrat de raccordement au lead.
+- objective: fiches équipements/criticité, plans maintenance/interventions, budgets par exercice et données contractuelles/grilles versionnées, suivi de délais SLA configurables et contrôles/audits/réserves ERP. ERP signifie ici établissement recevant du public ; aucune intégration à un ERP comptable tiers choisie arbitrairement.
+- invariants: RLS organisation/site/grant can_write, retrait et portée courante ; aucune donnée énergétique/calendrier/SLA/conformité inventée. Un délai ou calendrier non configuré reste non mesurable ; une checklist déclarative n’est pas une certification réglementaire. Relire les sources officielles pour toute affirmation réglementaire, sans figer une obligation non validée.
+- acceptance: CRUD privé, historique/audit, configuration et calcul serveur testés avec données synthétiques explicitement QA, fenêtres calendaires/pauses/reprise/échéances, accès intersites/org/viewer refusés et révocation ; pas d’alerte globale « aucune » sur données partielles.
+
+### ADV-PLATFORM-FINANCE-001 — super back-office et finance préparée
+- agent: claude
+- status: pending
+- branch: claude/web-platform
+- worktree: /Users/claudebrafa/.codex/worktrees/depannage-claude-platform
+- base revision: 9b3dae03e1a413ffe89b34e0db7553ddc1b3ade9
+- owned files: app/api/platform-operations/**, lib/features/platform-operations/**, components/features/platform-operations/**, tests ciblés ; migration014 réservée (fondation droits opérateurs). Aucun autre numéro partagé ; si dépendance commune requise, publier et synchroniser avant code.
+- objective: permissions opérateur/support/finance distinctes de SuperAdmin et des owners B2B, paramètres persistants, audit, modération/contestation des avis, suivi de factures/avoirs/commissions/remboursements/litiges et rapprochement. Lire les contrats Stripe existants et docs officielles actuelles avant adaptateur, pas de nouveau taux commercial par défaut.
+- invariants: ne jamais donner profile.role=admin à un opérateur limité en prétendant le restreindre par un menu ; permissions serveur explicites et RLS, plus petit périmètre, révocations, protection du dernier superadmin. Aucun élargissement réel de compte utilisateur sans besoin de recette synthétique bornée. Les actions financières réelles restent inactives sans Stripe test/config et événement de confirmation serveur ; une demande de remboursement ne vaut jamais remboursement accompli. Ledger idempotent, centimes/devise et audit inviolable pour utilisateurs ordinaires.
+- acceptance: refus rôle/périmètre/CAS, audit horodaté serveur, transitions et montants testés, messages indisponibles explicites, factures/avoirs basés sur émetteur et conditions réels uniquement. Connexion fournisseur et débit réel non prétendus testés ; aucun achat/transaction réelle/prod.
+
+### Contrats et synchronisation des nouveaux lots
+Chaque agent lit les missions distantes, claim sa seule entrée et pousse un contrat docs/CLAUDE_<LOT>_CONTRACT.md avant code. La base commune est9b3dae0 ; les composants/API nouveaux évitent les fichiers globaux, les numéros014–017 sont réservés par lot, une migration ne dépend pas d’une fonction d’un numéro ultérieur. Le lead valide l’ordre et les interfaces partagées avant branches dépendantes. Les fichiers globaux et menus sont raccordés par leur propriétaire unique après checkpoint des composants. Réutiliser les caches/dépendances épinglés disponibles, pas quatre installations/builds lourds simultanés sur disque limité. Rapports exactSHA, tests significatifs et captures ; Codex fait revues/intégration et applique séquentiellement uniquement les migrations revues. Ces missions sont des travaux autorisés, pas des livraisons annoncées.
