@@ -43,3 +43,8 @@ jobs:
         env:
           PGLITE_MODULE: ${{ runner.temp }}/courant-sql/node_modules/@electric-sql/pglite/dist/index.js
         run: node tests/sql-site-access-review.mjs
+
+      - name: Verify private quotation drafts and publication rollback (not live Supabase)
+        env:
+          PGLITE_MODULE: ${{ runner.temp }}/courant-sql/node_modules/@electric-sql/pglite/dist/index.js
+        run: node tests/sql-quote-draft-review.mjs
