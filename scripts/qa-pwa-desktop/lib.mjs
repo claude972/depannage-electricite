@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 
-export const HELP = 'node scripts/qa-pwa-desktop/run.mjs --app-dir DIR --app-sha SHA --build-id ID --origin http://127.0.0.1:3017 --chromium-path EXE --playwright-path MODULE --out NEW_DIR [--execute] [--proof-timeout-ms 180000]';
+export const HELP = 'node scripts/qa-pwa-desktop/run.mjs --app-dir DIR --app-sha SHA --build-id ID --origin http://127.0.0.1:3017 --chromium-path EXE --playwright-path MODULE --out NEW_DIR [--execute] [--proof-timeout-ms 180000] [--recover-manifest FILE --recover-sha256 HASH [--continue-proof]]';
 export class Blocked extends Error {}
 export const hash = value => createHash('sha256').update(value).digest('hex');
 export async function bounded(promise, ms, label='operation') {
@@ -11,7 +11,7 @@ export async function bounded(promise, ms, label='operation') {
 }
 export function parseArgs(args) {
   const o = { execute: false, proofTimeoutMs: 180000 };
-  const keys = { '--app-dir':'appDir', '--app-sha':'appSha', '--build-id':'buildId', '--origin':'origin', '--chromium-path':'chromiumPath', '--playwright-path':'playwrightPath', '--out':'out', '--proof-timeout-ms':'proofTimeoutMs' };
+  const keys = { '--app-dir':'appDir', '--app-sha':'appSha', '--build-id':'buildId', '--origin':'origin', '--chromium-path':'chromiumPath', '--playwright-path':'playwrightPath', '--out':'out', '--proof-timeout-ms':'proofTimeoutMs', '--recover-manifest':'recoverManifest','--recover-sha256':'recoverSha256' };
   const seen = new Set();
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -19,10 +19,12 @@ export function parseArgs(args) {
     if (seen.has(a)) throw new Blocked(`duplicate ${a}`);
     seen.add(a);
     if (a === '--execute') o.execute = true;
+    else if(a==='--continue-proof')o.continueProof=true;
     else if (keys[a] && args[i+1] && !args[i+1].startsWith('--')) o[keys[a]] = args[++i];
     else throw new Blocked(`unknown or incomplete option ${a}`);
   }
-  for (const k of Object.values(keys).filter(k => k !== 'proofTimeoutMs')) if (!o[k]) throw new Blocked(`${k} required`);
+  for (const k of ['appDir','appSha','buildId','origin','chromiumPath','playwrightPath','out']) if (!o[k]) throw new Blocked(`${k} required`);
+  if(!!o.recoverManifest!==!!o.recoverSha256 || (o.recoverSha256&&!/^[a-f0-9]{64}$/.test(o.recoverSha256)) || (o.continueProof&&!o.recoverManifest))throw new Blocked('recovery needs source manifest and SHA256; continue-proof only in recovery');
   if (!/^[a-f0-9]{40}$/.test(o.appSha)) throw new Blocked('full app SHA required');
   if (!/^[A-Za-z0-9_-]{8,200}$/.test(o.buildId)) throw new Blocked('invalid build ID');
   const u = new URL(o.origin);
@@ -61,10 +63,17 @@ export function collision(bundle, id) {
   if (p.CrAppModeShortcutID === id.appId) return true;
   try { return new URL(p.CrAppModeShortcutURL).origin === new URL(id.manifestId).origin; } catch { return false; }
 }
-export function attributable(bundle, id, profileRoot, baseline) {
+export function uniqueDefault(local,id) {
+  const profiles=local?.profile?.info_cache,apps=local?.app_shims,entry=apps?.[id];
+  return !!profiles&&Object.keys(profiles).length===1&&Object.hasOwn(profiles,'Default')&&!!apps&&Object.keys(apps).length===1&&Object.hasOwn(apps,id)&&Array.isArray(entry?.installed_profiles)&&entry.installed_profiles.length===1&&entry.installed_profiles[0]==='Default'&&(entry.last_active_profiles===undefined||(Array.isArray(entry.last_active_profiles)&&entry.last_active_profiles.every(p=>p==='Default')));
+}
+export function attributable(bundle, id, profileRoot, baseline, localState) {
   if (!bundle || bundle.symlink || baseline.some(b => b.path === bundle.path) || !bundle.executable || !bundle.inode) return false;
   const p = bundle.plist;
-  return p.CrAppModeShortcutID === id.appId && typeof p.CFBundleIdentifier === 'string' && [`.app.${id.appId}`,`.app.Default-${id.appId}`].some(suffix => p.CFBundleIdentifier.endsWith(suffix)) && p.CrAppModeShortcutURL === id.startUrl && fullProfile(p) === path.join(profileRoot,'Default');
+  if(p.CrAppModeShortcutID!==id.appId||p.CrAppModeShortcutURL!==id.startUrl)return false;
+  const mono=typeof p.CFBundleIdentifier==='string'&&[`.app.${id.appId}`,`.app.Default-${id.appId}`].some(suffix=>p.CFBundleIdentifier.endsWith(suffix))&&fullProfile(p)===path.join(profileRoot,'Default');
+  const multi=!Object.hasOwn(p,'CrAppModeProfileDir')&&!!id.browserBundleId&&p.CrBundleIdentifier===id.browserBundleId&&p.CFBundleIdentifier===`${id.browserBundleId}.app.${id.appId}`&&p.CrAppModeUserDataDir===path.join(profileRoot,'-','Web Applications',`_crx_${id.appId}`)&&uniqueDefault(localState,id.appId);
+  return mono||multi;
 }
 export function baselineUnchanged(before, after) {
   return before.every(b => after.some(a => a.path === b.path && a.inode === b.inode && a.digest === b.digest));
@@ -73,7 +82,9 @@ export function absentRegistry(error) {
   return /Unknown web-app manifest id https?:\/\//.test(String(error?.message)) && !/closed|disconnect|timeout|method.*not found/i.test(String(error?.message));
 }
 export function canUninstall(state, current) {
-  return !!state.installIntent && state.installIntent.runId === state.runId && state.installIntent.manifestId === state.identity.manifestId && state.installIntent.appId === state.identity.appId && current.ownedProcess && current.profileRoot === state.profileRoot && current.registryPresent && attributable(current.bundle,state.identity,state.profileRoot,state.baseline);
+  const intent=state.installIntent;
+  const runMatches=intent?.runId===state.runId || (state.recovery?.sourceRunId===intent?.runId&&state.recovery?.sourceHashVerified===true);
+  return !!intent && runMatches && intent.manifestId === state.identity.manifestId && intent.appId === state.identity.appId && current.ownedProcess && current.profileRoot === state.profileRoot && current.registryPresent && attributable(current.bundle,state.identity,state.profileRoot,state.baseline,current.localState);
 }
 export function proofMatches(proof, expected, bytes) {
   return proof?.kind === 'macos-visible-window' && ['runId','appId','windowId','browserPid','nonce'].every(k => proof[k] === expected[k]) && typeof proof.observedAt === 'string' && Date.parse(proof.observedAt) >= expected.startedAt && Date.parse(proof.observedAt) <= Date.now() + 5000 && proof.sha256 === hash(bytes) && bytes.length > 100 && bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]));

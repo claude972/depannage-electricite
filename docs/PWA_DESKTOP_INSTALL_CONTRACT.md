@@ -205,3 +205,24 @@ Par défaut récupération **cleanup-only** : après confirmation du registre PW
 Le baseline original démontre son absence. Son contenu observé en lecture seule : le seul bundle du test, `.localized/fr.strings`, `Icon\r` (fichier vide avec métadonnées). Aucun autre bundle. La récupération pourra adopter **ce dossier exact uniquement**, enregistré par inode/naissance/parent et hashes de ces deux fichiers ; vérifier naissance pendant le run et parent Applications identique au baseline. Après uninstall confirmé et absence de processus : si le dossier ne contient plus que ces métadonnées générées et inchangées, retirer par unlink les seuls fichiers explicitement journalisés, puis `rmdir` .localized et `rmdir` ce dossier exactement. Aucune suppression récursive, glob ou parent Applications. Toute entrée supplémentaire, hash/inode changé, symlink ou erreur conserve le dossier et INCOMPLETE. Ne pas toucher Chrome Apps.localized préexistant ni son app Twilio. Aucune opération globale LaunchServices ; traces système non observables restent une limite explicitée.
 
 Tests purs à prévoir après revue : placeholder multi-profil exact positif avec registre unique Default ; absence de registre/second profil/ID ou URL ou root voisin/normalisation `..`/ProfileDir contradictoire refusés ; ancien chemin mono-profil préservé ; recovery refuse manifeste sans intent, hash/source changé, profil hors tmp, inode nouveau ou process existant ; chemin récupération ne peut jamais installer ni créer un profil ; cleanup des seuls fichiers parent générés échoue fermé devant un fichier étranger. Revue root du nouveau SHA avant toute reprise réelle. **A2 ne modifie pour l’instant que ce contrat : aucune récupération, installation, suppression ou nouveau navigateur exécuté par l’agent.**
+
+### Livraison A2 après feu code root
+
+Mode ajouté : `--recover-manifest <original0600> --recover-sha256 <SHA256-original>` ; `--continue-proof` facultatif, `--execute` toujours indispensable. Sans execute : préflight seulement. La récupération est bornée par le code au runID et SHA be779 ci-dessus et au basename rrDlEC ; elle ne constitue pas un outil générique d’adoption d’un profil personnel. Elle exige registre unique Default, naissance/UID/mode/root tmp, absence de SingletonLock/process réutilisant ce root, attribution du seul shim et baseline initial intact. Le manifeste neuf lie sourceHash/sourceRunId et adoption actuelle d’inode. Enregistrement d’effets refuse `create-profile` et `install` en recovery, indépendamment des branches de contrôle.
+
+Le profil est repris avec Default explicite ; un ancien DevToolsActivePort conservé n’est pas utilisé : attendre son contenu renouvelé après le nouveau spawn puis vérifier à nouveau versions et PID pipe. Avant uninstall, registre disk et shim sont relus. Après fermeture : attente bornée8s des helpers connus/shim, vérification du flush app_shims absent, puis retrait des seuls fichiers de localisation/icône dont inode/hash/contenu/attributs étendus correspondent à l’adoption ; unlink ciblé puis rmdir nonrécursifs, jamais retrait du bundle par filesystem. Inode des dossiers revérifié après journalisation. Tout contenu étranger ou changement conserve les artefacts et INCOMPLETE.
+
+Le mode cleanup-only émet **RECOVERED_CLEAN** si tout a été retiré et relu, pas PASS installation/fenêtre. Avec continue-proof, les preuves OS/relance et le nettoyage restent tous requis pour PASS ; l’installation est explicitement issue du run historique lié. Ancien rapport INCOMPLETE inchangé.
+
+Commande root après revue, compléter les arguments déjà validés du même build et module/binaire :
+
+```text
+node scripts/qa-pwa-desktop/run.mjs [arguments app-dir/app-sha/build-id/origin/chromium-path/playwright-path/out validés]
+  --recover-manifest /private/tmp/depannage-pwa-os-be779-live/manifest.json
+  --recover-sha256 <sha256 recalculé du manifeste historique>
+  --execute
+```
+
+Root ajoute seulement s’il le choisit `--continue-proof --proof-timeout-ms 300000` pour constater la vraie fenêtre puis relance avant uninstall. Aucun nouvel essai normal avant cette récupération.
+
+**39 tests purs PASS** :31 précédents +8 attribution/récupération (registre Default, placeholder strict, source/hash/intent, interdiction des nouveaux effets, adoption actuelle, uninstall lié, plan de dossier sans entrée étrangère, optionsCLI). Syntaxe et diff-check PASS. Ces tests n’exécutent ni navigateur, ni reprise, ni suppression OS, ni procédure filesystem réelle de retrait du dossier : cette dernière reste soumise à revue source puis recette root. Aucun appel préflight HTTP/serveur/navigateur/installation/suppression de profil ou de shim effectué par l’agent pour A2.

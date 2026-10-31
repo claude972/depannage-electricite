@@ -9,6 +9,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { HELP, Blocked, hash, bounded, parseArgs, verifyBuild, identity, chromeAppId, collision, attributable, baselineUnchanged, absentRegistry, canUninstall, proofMatches, resultStatus, createGate, onceAsync, sameProcess, profileRemovalAllowed } from './lib.mjs';
 import {createPipeClient,unavailablePwa,bindPwaChannel} from './pipe.mjs';
+import {validateRecovery,recoveryEffectAllowed,readRegistry,validateAdoption,adoptFolder,removeAdoptedFolder} from './recovery.mjs';
 
 const exec = promisify(execFile);
 const pause = ms => new Promise(r => setTimeout(r,ms));
@@ -64,7 +65,7 @@ async function snapshot() {
   }
   return entries;
 }
-async function preflight(o) {
+async function preflight(o,recovery) {
   if (process.platform !== 'darwin') throw new Blocked('macOS required');
   const appDir = await realpath(o.appDir);
   const {stdout:head} = await exec('git',['-C',appDir,'rev-parse','HEAD'],{timeout:5000});
@@ -80,14 +81,28 @@ async function preflight(o) {
   if (!binary.includes('/Google Chrome for Testing.app/Contents/MacOS/')) throw new Blocked('full Chrome for Testing required');
   await plain(binary);
   const info = await plist(path.resolve(binary,'../../Info.plist'));
+  id.browserBundleId=info.CFBundleIdentifier;
   if (!String(info.CFBundleShortVersionString).startsWith('156.')) throw new Blocked('CfT 156 required');
   const pwDir = await realpath(o.playwrightPath);
   await plain(path.join(pwDir,'index.mjs'));
   const pw = await import(pathToFileURL(path.join(pwDir,'index.mjs')).href);
   if (!pw.chromium?.connectOverCDP) throw new Blocked('existing Playwright CDP API unavailable');
   const baseline = await snapshot();
-  if (baseline.some(b => collision(b,id))) throw new Blocked('pre-existing app identity/origin collision');
-  return {appDir,head:head.trim(),diskBuildId,manifestUrl,manifestHash:hash(rawManifest),identity:id,binary,binaryVersion:info.CFBundleShortVersionString,browserBundleId:info.CFBundleIdentifier,baseline,pw};
+  let registryState,adoption,folderAdoption;
+  if(recovery){
+    if(recovery.app.sha!==head.trim()||recovery.app.buildId!==diskBuildId||recovery.app.origin!==o.origin||recovery.app.manifestHash!==hash(rawManifest)||recovery.binary!==binary||recovery.browserBundleId!==info.CFBundleIdentifier||recovery.identity.manifestId!==id.manifestId||recovery.identity.appId!==id.appId)throw new Blocked('recovery product/binary identity changed');
+    const st=await plain(recovery.profileRoot,true);adoption=validateAdoption(st,recovery,await realpath(os.tmpdir()),process.getuid());
+    if(await present(path.join(recovery.profileRoot,'SingletonLock')))throw new Blocked('recovery profile is locked; never remove lock');
+    const processes=(await exec('/bin/ps',['-axo','command='],{timeout:5000,maxBuffer:4*1024*1024})).stdout.split('\n');
+    if(processes.some(command=>command.includes(`--user-data-dir=${recovery.profileRoot}`)))throw new Blocked('existing process uses recovery profile');
+    registryState=await readRegistry(recovery.profileRoot,id.appId);
+    const ownedBundles=baseline.filter(b=>attributable(b,id,recovery.profileRoot,recovery.baseline,registryState));
+    if(ownedBundles.length!==1||baseline.filter(b=>collision(b,id)).length!==1||!baselineUnchanged(recovery.baseline,baseline))throw new Blocked('recovery shim/original baseline attribution failed');
+    const folder=path.dirname(ownedBundles[0].path);
+    if(folder!==path.join(os.homedir(),'Applications','Chromium Apps.localized'))throw new Blocked('unapproved recovery shim folder');
+    folderAdoption=await adoptFolder(folder,recovery);
+  }else if(baseline.some(b => collision(b,id)))throw new Blocked('pre-existing app identity/origin collision');
+  return {appDir,head:head.trim(),diskBuildId,manifestUrl,manifestHash:hash(rawManifest),identity:id,binary,binaryVersion:info.CFBundleShortVersionString,browserBundleId:info.CFBundleIdentifier,baseline:recovery?recovery.baseline:baseline,pw,registryState,adoption,folderAdoption};
 }
 async function processFact(pid) {
   try {
@@ -113,7 +128,9 @@ async function pendingShimProcesses(bundles) {
 }
 async function main(argv) {
   const o = parseArgs(argv); if (o.help) { console.log(HELP); return 0; }
-  const pf = await preflight(o);
+  let recovery=null;
+  if(o.recoverManifest){const source=path.resolve(o.recoverManifest);const st=await plain(source);if((st.mode&0o777)!==0o600||st.uid!==process.getuid())throw new Blocked('recovery manifest must be owned0600');const bytes=await readFile(source);recovery=validateRecovery(JSON.parse(bytes.toString()),bytes,o.recoverSha256);}
+  const pf = await preflight(o,recovery);
   // Output must be NEW, outside all git worktrees, with a plain existing parent.
   const out = path.resolve(o.out); const parent = await realpath(path.dirname(out));
   if (parent !== path.dirname(out)) throw new Blocked('output parent symlink');
@@ -122,6 +139,7 @@ async function main(argv) {
   await mkdir(out,{mode:0o700});
   const harnessSha=(await exec('git',['-C',path.dirname(new URL(import.meta.url).pathname),'rev-parse','HEAD'],{timeout:3000})).stdout.trim();
   const state = {schema:1,runId:randomUUID(),startedAt:Date.now(),phase:'preflight',status:'PREFLIGHT_ONLY',harnessSha,app:{dir:pf.appDir,sha:pf.head,buildId:pf.diskBuildId,origin:o.origin,manifestHash:pf.manifestHash},identity:pf.identity,binary:pf.binary,binaryVersion:pf.binaryVersion,browserBundleId:pf.browserBundleId,baseline:pf.baseline,proofs:{},intents:[],cleanup:null};
+  if(recovery){state.recovery={sourceRunId:recovery.runId,sourceHash:o.recoverSha256,sourceHashVerified:true,sourceManifest:path.resolve(o.recoverManifest),continueProof:!!o.continueProof,adoption:pf.adoption,folder:pf.folderAdoption};state.profileRoot=recovery.profileRoot;state.installIntent=recovery.installIntent;state.proofs.installed=true;}
   let writeQueue = Promise.resolve();
   function save() {
     const json = JSON.stringify(state,null,2); // snapshot now, serialize writes in invocation order
@@ -133,6 +151,7 @@ async function main(argv) {
   const gate = createGate(); let child, browser, cdp, pipe, pwa, page, profileStat, childFact;
   const owned = async () => !!child && child.exitCode === null && child.signalCode === null && sameProcess(childFact,await processFact(child.pid));
   const record = async (kind,details = {}) => {
+    if(!recoveryEffectAllowed(kind,!!recovery))throw new Blocked('recovery forbids installation/profile creation');
     const intent={kind,at:Date.now(),...details};
     if(kind==='install') state.installIntent={...intent,runId:state.runId,manifestId:state.identity.manifestId,appId:state.identity.appId};
     state.intents.push(intent); await save();
@@ -168,12 +187,13 @@ async function main(argv) {
     const pending = await gate.drain(10000); cleanup.pending=pending;
     let newBundles=[];
     try {
-      const now=await snapshot(); newBundles=now.filter(b => attributable(b,state.identity,state.profileRoot,state.baseline));
+      const now=await snapshot();const localState=state.installIntent?await readRegistry(state.profileRoot,state.identity.appId).catch(e=>{throw new Error(`installed profile registry not proved: ${e.message}`);}):null;
+      newBundles=now.filter(b => attributable(b,state.identity,state.profileRoot,state.baseline,localState));
       if (state.installIntent && pending === 0 && pwa && await owned()) {
         const installed=await registry();
         if (installed) {
           const currentProfile=await plain(state.profileRoot,true);
-          if (currentProfile.ino!==profileStat.ino || newBundles.length !== 1 || newBundles[0].plist.CrBundleIdentifier!==state.browserBundleId || !canUninstall(state,{ownedProcess:true,profileRoot:state.profileRoot,registryPresent:true,bundle:newBundles[0]})) throw new Error('uninstall identity/ownership not proved; preserved');
+          if (currentProfile.ino!==profileStat.ino || newBundles.length !== 1 || newBundles[0].plist.CrBundleIdentifier!==state.browserBundleId || !canUninstall(state,{ownedProcess:true,profileRoot:state.profileRoot,registryPresent:true,bundle:newBundles[0],localState})) throw new Error('uninstall identity/ownership not proved; preserved');
           await record('uninstall',{manifestId:state.identity.manifestId,bundle:newBundles[0].path});
           // bounded transport, but no assumption of cancellation if this times out
           let timer;
@@ -190,6 +210,22 @@ async function main(argv) {
     try{pipe?.close();}catch(e){cleanup.errors.push(e.message);}
     // After owned process exit, no late browser installation/window can materialize.
     try {
+      await waitFor(async()=>{
+        const shimPids=await pendingShimProcesses(newBundles);
+        const helperPids=[];for(const helper of state.ownedHelpers||[])if(sameProcess(helper,await processFact(helper.pid)))helperPids.push(helper.pid);
+        return shimPids.length===0&&helperPids.length===0;
+      },8000,{stopping:true}).catch(()=>{});
+      if(recovery&&cleanup.registryAbsent&&cleanup.browserExited&&!pending){
+        const local=JSON.parse(await readFile(path.join(state.profileRoot,'Local State'),'utf8'));
+        cleanup.diskRegistryAbsent=!Object.hasOwn(local.app_shims||{},state.identity.appId);
+        if(!cleanup.diskRegistryAbsent)throw new Error('app_shims registry remains after browser flush');
+        const current=await snapshot();
+        if(current.some(b=>collision(b,state.identity)))throw new Error('shim still present; shared folder preserved');
+        if(!baselineUnchanged(state.baseline,current))throw new Error('preexisting baseline changed; shared folder preserved');
+        if((await pendingShimProcesses(newBundles)).length)throw new Error('shim process still live; shared folder preserved');
+        for(const helper of state.ownedHelpers||[])if(sameProcess(helper,await processFact(helper.pid)))throw new Error('helper still live; shared folder preserved');
+        await removeAdoptedFolder(pf.folderAdoption,record);cleanup.sharedFolderRemoved=true;
+      }
       const after=await snapshot(); cleanup.baselineUnchanged=baselineUnchanged(state.baseline,after);
       cleanup.shimsAbsent=!after.some(b => collision(b,state.identity) || (state.profileRoot && String(b.plist.CrAppModeUserDataDir).startsWith(`${state.profileRoot}/`)));
       cleanup.shimPids=await pendingShimProcesses(newBundles);
@@ -206,19 +242,21 @@ async function main(argv) {
         await rm(state.profileRoot,{recursive:true}); cleanup.profileRemoved=true;
       }
     } catch(e) { cleanup.ok=false;cleanup.errors.push(e.message); }
-    state.phase='finished';state.status=resultStatus(state);await save();
+    state.phase='finished';state.status=resultStatus(state);if(recovery&&!o.continueProof&&cleanup.ok&&!state.error)state.status='RECOVERED_CLEAN';await save();
     await writeFile(path.join(out,'report.json'),JSON.stringify(state,null,2),{mode:0o600});
     await writeFile(path.join(out,'report.md'),`# PWA desktop installation\n\nStatus: **${state.status}**\n\nApp ${state.app.sha}, build ${state.app.buildId}, origin ${o.origin}.\n\nProofs: ${JSON.stringify(state.proofs)}\n\nCleanup: ${JSON.stringify(cleanup)}\n\nNo claim of manual installer dialog, OS reboot persistence, production, iOS or Android.\n`,{mode:0o600});
     console.log(`${state.status} ${out}`);
-    return state.status==='PASS'?0:state.status==='INCOMPLETE'?3:2;
+    return ['PASS','RECOVERED_CLEAN'].includes(state.status)?0:state.status==='INCOMPLETE'?3:2;
   });
   let interrupted=false;
   const onSignal=signal=>{interrupted=true;gate.stop();state.error={kind:'Blocked',message:signal};void finalize().then(code=>{process.exitCode=code;}).catch(()=>{process.exitCode=3;});};
   const sigint=()=>onSignal('SIGINT'),sigterm=()=>onSignal('SIGTERM');
   process.on('SIGINT',sigint);process.on('SIGTERM',sigterm);
   try {
-    await mutation('create-profile',async()=>{state.profileRoot=await mkdtemp(path.join(await realpath(os.tmpdir()),'depannage-pwa-os-'));await chmod(state.profileRoot,0o700);profileStat=await plain(state.profileRoot,true);await save();});gate.check();
-    const args=[`--user-data-dir=${state.profileRoot}`,'--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--remote-debugging-pipe','--enable-automation','--no-first-run','--no-default-browser-check','--disable-sync','about:blank'];
+    if(recovery){profileStat=await plain(state.profileRoot,true);if(profileStat.ino!==pf.adoption.inode)throw new Blocked('adopted profile changed');await record('adopt-existing-profile',{path:state.profileRoot,...pf.adoption});}
+    else await mutation('create-profile',async()=>{state.profileRoot=await mkdtemp(path.join(await realpath(os.tmpdir()),'depannage-pwa-os-'));await chmod(state.profileRoot,0o700);profileStat=await plain(state.profileRoot,true);state.profileOwnership={inode:profileStat.ino,birthtimeMs:profileStat.birthtimeMs,mode:profileStat.mode,uid:profileStat.uid};await save();});gate.check();
+    const oldEndpoint=await readFile(path.join(state.profileRoot,'DevToolsActivePort')).then(hash,e=>{if(e.code==='ENOENT')return null;throw e;});gate.check();
+    const args=[`--user-data-dir=${state.profileRoot}`,...(recovery?['--profile-directory=Default']:[]),'--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--remote-debugging-pipe','--enable-automation','--no-first-run','--no-default-browser-check','--disable-sync','about:blank'];
     child=await mutation('spawn',async()=>{
       const c=spawn(pf.binary,args,{stdio:['ignore','ignore','ignore','pipe','pipe'],env:{HOME:os.homedir(),PATH:'/usr/bin:/bin:/usr/sbin:/sbin',TMPDIR:os.tmpdir(),LANG:'fr_FR.UTF-8'}});
       child=c; c.on('error',e=>{state.spawnError=e.message;});state.browserPid=c.pid;
@@ -230,9 +268,10 @@ async function main(argv) {
     },{binary:pf.binary,profileRoot:state.profileRoot});
     gate.check();
     if (!childFact.command.includes(pf.binary) || !childFact.command.includes(`--user-data-dir=${state.profileRoot}`) || /--(?:test-type|headless|app=)/.test(childFact.command)) throw new Blocked('actual browser command mismatch');
+    if(recovery&&!childFact.command.includes('--profile-directory=Default'))throw new Blocked('recovery browser did not select Default');
     state.child=childFact;await save();gate.check();
     const endpoint=await waitFor(async()=>{
-      const f=path.join(state.profileRoot,'DevToolsActivePort');if (!await present(f)) return null;await plain(f);const [port,socket]= (await readFile(f,'utf8')).trim().split('\n');
+      const f=path.join(state.profileRoot,'DevToolsActivePort');if (!await present(f)) return null;await plain(f);const bytes=await readFile(f);if(oldEndpoint&&hash(bytes)===oldEndpoint)return null;const [port,socket]=bytes.toString().trim().split('\n');
       if (!/^\d+$/.test(port) || Number(port)<1024 || Number(port)>65535 || !/^\/devtools\/browser\/[a-f0-9-]+$/.test(socket)) throw new Blocked('unsafe owned CDP endpoint');
       return `ws://127.0.0.1:${port}${socket}`;
     });
@@ -248,6 +287,10 @@ async function main(argv) {
     if (response?.status()!==200 || page.url()!==`${o.origin}/`) throw new Blocked('unexpected app page');
     const session=await page.context().newCDPSession(page);gate.check();const manifest=await bounded(session.send('Page.getAppManifest',{manifestId:state.identity.manifestId}),8000,'processed manifest');gate.check();
     if (manifest.url!==pf.manifestUrl || !manifest.data || identity(JSON.parse(manifest.data),manifest.url,o.origin).manifestId!==state.identity.manifestId) throw new Blocked('browser manifest mismatch');
+    if(recovery){
+      await readRegistry(state.profileRoot,state.identity.appId);gate.check();if(!await registry())throw new Blocked('recovered app not in Default CDP registry');gate.check();
+      if(!o.continueProof){await record('cleanup-only-recovery-confirmed');return await finalize();}
+    }else{
     const collisionCheck=await snapshot();gate.check();if (collisionCheck.some(b=>collision(b,state.identity)) || !baselineUnchanged(state.baseline,collisionCheck)) throw new Blocked('pre-install baseline/collision changed');
     // Unsupported domain/transport must not be interpreted as clean absence.
     if (await registry()) throw new Blocked('app already installed in fresh profile');gate.check();
@@ -257,7 +300,8 @@ async function main(argv) {
       await pwa.send('PWA.install',{manifestId:state.identity.manifestId,installUrlOrBundleUrl:state.identity.startUrl});
     },{manifestId:state.identity.manifestId});
     gate.check();state.proofs.installed=await registry();
-    const bundle=await waitFor(async()=>{const all=await snapshot();const b=all.filter(x=>attributable(x,state.identity,state.profileRoot,state.baseline));return b.length===1?b[0]:null;});
+    }
+    const bundle=await waitFor(async()=>{const all=await snapshot();let localState;try{localState=await readRegistry(state.profileRoot,state.identity.appId);}catch{return null;}const b=all.filter(x=>attributable(x,state.identity,state.profileRoot,state.baseline,localState));return b.length===1?b[0]:null;});
     if(bundle.plist.CrBundleIdentifier!==state.browserBundleId)throw new Blocked('shim browser bundle mismatch');
     state.bundle=bundle;state.proofs.shim=true;await save();gate.check();
     await mutation('standalone',()=>pwa.send('PWA.changeAppUserSettings',{manifestId:state.identity.manifestId,displayMode:'standalone'}));
