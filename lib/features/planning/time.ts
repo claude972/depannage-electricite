@@ -135,10 +135,10 @@ export function weekRange(instant: Date | number | string, zone = PLANNING_TIME_
 export function instantFromKey(key: string, minutes: number, zone = PLANNING_TIME_ZONE): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
   if (!match || minutes < 0 || minutes > 1440) return null;
-  const instant = zonedTimeToInstant(
-    { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]), hour: Math.floor(minutes / 60), minute: minutes % 60 },
-    zone,
-  );
+  const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+  const probe = new Date(Date.UTC(year, month - 1, day));
+  if (probe.getUTCFullYear() !== year || probe.getUTCMonth() !== month - 1 || probe.getUTCDate() !== day) return null;
+  const instant = zonedTimeToInstant({ year, month, day, hour: Math.floor(minutes / 60), minute: minutes % 60 }, zone);
   return Number.isNaN(instant.getTime()) ? null : instant;
 }
 /** Clips an interval to a local day; returns local minutes or null when outside the day. */
