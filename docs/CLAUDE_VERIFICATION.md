@@ -51,6 +51,15 @@ Rapport d’implémentation et de vérification de l’agent Claude (branche `cl
 | `admin-1280.png`, `admin-360.png` | M43 (V3 p12) | menus, 4 KPI (compteurs serveur, revenu plateforme non calculé), validations en attente, interventions en cours, menu off-canvas |
 | `home-360.png`, `home-1280.png`, `pricing-360.png`, `join-360.png` | pages publiques | menu mobile, tarifs honnêtes, rejoindre sans promesse |
 
+## Checkpoint 2 et corrections de revue (a5c4faa → b5ccc81)
+
+- Membres (entreprise) : portée par site de chaque membre (contrat 009), éditeur réservé au propriétaire canonique, invitations avec portée, panneau « Votre accès » pour les autres membres ; aucune autorité dérivée du rôle global.
+- Fiche candidature (Super Admin) : lecture du dossier et des pièces d’un artisan (`/api/artisan?user_id=`), SIRET masqué, statuts honnêtes.
+- Installation : `PwaInstallControl` du lot PWA placé dans les quatre profils et l’aide publique ; silencieux quand l’installation n’est pas possible.
+- Copies utilisateur : plus aucun chemin, nom de fonction serveur ou identifiant interne visible ; les bloqueurs restent en attribut de données pour la vérification.
+- Retour paiement : `paymentReturnMessage` (serveur d’abord) ; `parseApiBody` (200 non JSON = résultat incertain).
+- Contrôles : typecheck OK ; `tests/ui` 21/21 ; `next build` non relancé (volume plein, ENV-CL-001) ; captures des nouvelles vues reportées au retour d’espace disque.
+
 ### Écarts, limites et suites
 - Aucune preview en ligne de ce frontend : le pilote déploie la branche d’intégration ; vérification mobile réelle, installation PWA, et retours Stripe restent à prouver en ligne.
 - Les contrats 006 (organisations) et 007 (performance/rendez-vous) sont consommés derrière une détection d’indisponibilité ; tant qu’ils ne sont pas intégrés, l’UI affiche un état indisponible honnête.
