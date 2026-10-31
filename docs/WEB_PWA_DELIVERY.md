@@ -22,3 +22,6 @@ Le 31 octobre 2026 à 00:00 America/Martinique, tout le codage passe à Claude, 
 Après le checkpoint Web/PWA, Claude prépare les lots iOS/Android avec backend partagé, navigation et écrans natifs conformes aux références client/artisan. Choix technique proposé : Expo/React Native et tests/builds EAS ; relire expo-overview puis skills dédiés et versions effectives avant scaffold. Prévoir authentification native, liens de retour Auth/Stripe, permissions médias/localisation, stockage des jetons, erreurs réseau et tests sur iOS/Android. Les back-offices desktop restent Web sauf besoin explicitement défini ; une PWA ne sera pas renommée application native. Aucune publication publique App Store/Google Play dans l’autorisation actuelle de prévisualisation.
 
 Coordination : https://github.com/claude972/depannage-electricite/tree/missions/web-pwa ; draft PR : https://github.com/claude972/depannage-electricite/pull/1.
+
+## Traçabilité par capacité
+[WEB_PWA_TRACKING.csv](WEB_PWA_TRACKING.csv) distingue l’audit initial, l’apport de code déjà vérifié, le frontend en cours et les preuves cloud restantes pour les 76 IDs. Cette grille ne calcule aucun pourcentage et ne transforme pas un sous-lot backend en espace métier livré. Elle est mise à jour aux checkpoints, pas à chaque fichier en cours d’écriture.

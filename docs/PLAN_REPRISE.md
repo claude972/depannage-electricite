@@ -142,7 +142,7 @@ Livrer une plateforme de dépannage électrique où client, artisan, entreprise 
 
 **How this serves the primary goal:** les extensions prévues sont suivies sans compromettre le cycle opérationnel déjà validé.
 
-**À réaliser après décision, en lots distincts.** Entreprise prestataire : dirigeant/planificateur/techniciens, attribution interne et propriété des règlements, si ce modèle est retenu. Abonnements/premium, moyens de paiement supplémentaires, intégrations CRM/ERP/comptabilité/BI, diagnostic photo IA évalué et éventuelle application native. Chaque sous-lot possède fournisseur, coût, données, responsabilité, critères de succès et refus d’accès.
+**À réaliser après décision, en lots distincts.** Entreprise prestataire : dirigeant/planificateur/techniciens, attribution interne et propriété des règlements, si ce modèle est retenu. Abonnements/premium, moyens de paiement supplémentaires, intégrations CRM/ERP/comptabilité/BI, diagnostic photo IA évalué et applications natives iOS/Android demandées après livraison Web/PWA. Chaque sous-lot possède fournisseur, coût, données, responsabilité, critères de succès et refus d’accès.
 
 **Sources.** ART-12, FIN-07/08, SYS-10 ; Q-PDF-02/32–35 ; spécification finale sections 4–5/7 ; M65 et blueprints. Les API externes exactes seront relues dans la documentation du fournisseur retenu et dans les types épinglés avant toute implémentation.
 
