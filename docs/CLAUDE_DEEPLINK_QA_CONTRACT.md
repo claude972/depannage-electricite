@@ -370,3 +370,33 @@ The claim is published BEFORE the code. Base: integration 6901e2a (B1 478a2da pl
 - **Window focus.** Only `focus`/`blur` events whose `target === window` are recorded, plus `visibilitychange` (the app listens to `window` `focus` and `document` `visibilitychange`, `courant-app.tsx` ~315). Focusing an element (clicking a button) is not a window focus.
 - **« Dossier shown »** = the dossier's description (unique per run) visible in the detail view (`client-space.tsx` ~1115), plus no « introuvable » and no « Recherche… » left at the end.
 - **D2 witness:** proven before the stub by the page's own bootstrap reply (boolean id check). It is proven again after #1 and after #2 by a hash navigation to `detail/<witness>`: present in the cache ⇒ shown with **0** requests. Then a return to `detail/<jobLate2>`: the error state again, with « Réessayer ».
+
+## Amendment A4 (ROOT review of 806cfeb, DL-QA-806-002) — D4 (g): a different identity in the SAME document
+
+Finding: D4 (g) reopens the SAME clientA in a fresh document. An attempt memory with no identity key (`memory[id]`) therefore passes, because a new document always starts with an empty memory. Replaced by the following. Code only after the ROOT GO on A4.
+
+1. **Seed.** `setupDeeplink` creates a dedicated identity, `clientC` (role client, owns no dossier), through `TrackingFixtures`: durable intent BEFORE the emission, Auth readback. It is used only by D4 (g).
+2. **Precondition of (g), OUTSIDE any counting window, run only once and never retried.** It comes right after (f), in clientA's D4 page:
+   1. read the document marker `M0`;
+   2. log out through the app (`logout(page)`, shared helper);
+   3. the pool marks EVERY clientA session as revoked (`revokeUser(clientA)`), because the app's logout is global (tracking A8 §6);
+   4. log `clientC` in, in the SAME document (`login(handle, …, { sameDocument: true })`, as in T19);
+   5. `rebind(label, clientC)`;
+   6. identity proven (`waitForWorkspace(page, clientC.id)`, outside the window);
+   7. the marker read again must equal `M0`.
+
+   If the logout or the login fails, or if the marker changed (the app reloaded the document), the precondition is not met ⇒ **BLOCKED**. There is no relogin to rescue a failure. The logout/login is never used after a failed step, only here, as a planned precondition.
+3. **Measurement (g).** Gate (16 s, quiet, nothing in flight). Then `goHash("detail/<never-seeded UUID of (e)>")` must give exactly **1** `GET /api/workspace`, then « Intervention introuvable ». Also required: 0 auth events in the window and the marker unchanged.
+   - An app whose absence memory is not keyed by identity reuses clientA's « loaded » state ⇒ 0 requests ⇒ **FAIL** (« 0 GET … expected 1 »).
+4. **Order.** D4 stays LAST among the scenarios that use clientA (D1 → D2 → D3 → D4), so the global revocation from (g) affects no later scenario.
+   - Any reuse of a revoked clientA session ⇒ BLOCKED, never a silent relogin (`revokedSession` from the tracking pool).
+   - `--only D4` works on its own: `clientC` comes from the common setup.
+5. **Intents and guards unchanged.** Logout and login are browser auth calls, not data mutations.
+   - The observer keeps only the scalar markers `logout` / `password_grant`, never a token, cookie, header or body.
+   - The `sb-*-auth-token` cookie is not read, except for the existing presence check in the shared `login()`.
+6. **Tests (offline, real Chromium, local mini-app).**
+   - Nominal: memory keyed by identity, reset when the identity changes in the same document ⇒ D4 PASS.
+   - Variant `memoryNoIdentity`: memory keyed by id only ⇒ D4 **FAIL** at (g).
+   - Variant `reloadOnLogout` ⇒ D4 **BLOCKED** (marker changed in the precondition).
+   - A failed login during the precondition ⇒ BLOCKED with no new attempt (login call counter = 1).
+   - The identity switch is injectable (`ctx.switchIdentity`), defaulting to the real shared `logout` + `login({ sameDocument: true })`. The mini-app provides its own switch, through the same document.
