@@ -70,6 +70,10 @@ import {
 import type { Session } from "../app/session-types";
 import { UploadQueuePanel } from "../app/upload-queue";
 import {
+  FIGURE_PLACEHOLDER,
+  dashboardFigures,
+  overviewSubtitle,
+  siteBudgetBars,
   NO_FILTERS,
   budgetFigures,
   budgetTone,
@@ -1146,11 +1150,18 @@ function InterventionsTable({
 function OverviewView({ c }: { c: Ctx }) {
   const { scope } = c;
   const list = useInterventionList(c);
-  const open = scope.interventions.filter((i) => OPEN_STATUSES.includes(i.status)).length;
+  // V5-C05 : chiffres réels seulement (ouverts, dont urgentes). Les chiffres qui dépendent des données
+  // professionnelles (échéances, approbations, budget) ne sont affichés que lorsque le contrat est
+  // réellement chargé ; sinon leur état est dit (vérification / non vérifié), jamais un 0.
+  const professionalState = c.session.capabilities.professional;
+  const figures = dashboardFigures(professionalState, scope, new Date().toISOString().slice(0, 10), (status) => OPEN_STATUSES.includes(status));
+  const open = figures.open;
+  const loaded = figures.professional === "loaded";
+  const placeholder = figures.professional === "loaded" ? "" : FIGURE_PLACEHOLDER[figures.professional];
+  const siteBars = loaded ? siteBudgetBars(scope.sites, scope.interventions, scope.quotes) : [];
   const pending = byDateDesc(
     scope.approvals.filter((a) => a.status === "pending").map((a) => ({ ...a, created_at: a.created_at || "" })),
   );
-  const committed = sum(scope.quotes.filter((q) => q.status === "accepted").map((q) => q.total_cents));
   const budget = sum(scope.sites.map((s) => s.budget_cents || 0));
   const deadlines = [...scope.compliance]
     .filter((r) => r.status !== "completed")
@@ -1160,7 +1171,7 @@ function OverviewView({ c }: { c: Ctx }) {
     <>
       <PageTitle
         title="Tableau de bord"
-        subtitle={`${c.organization?.name || "Organisation"} · ${LOADED_NOTE}`}
+        subtitle={overviewSubtitle(professionalState, c.organization?.name || "Organisation", LOADED_NOTE)}
         action={
           c.canCreateRequest ? (
             <button type="button" className="button primary" onClick={() => c.go("new")}>
@@ -1172,15 +1183,39 @@ function OverviewView({ c }: { c: Ctx }) {
           )
         }
       />
-      <div className={cx("stats-strip", styles.kpis)}>
-        <Stat icon="wrench" label="Interventions en cours" value={open} note="Demandes ouvertes, hors terminées et annulées" />
-        <Stat icon="receipt" tone="amber" label="Devis à approuver" value={pending.length} note="Approbations en attente sur le périmètre" />
+      <div className={cx("stats-strip", styles.kpis)} data-professional={figures.professional}>
+        <Stat
+          icon="wrench"
+          label="Interventions en cours"
+          value={open}
+          note={figures.urgent > 0 ? `dont ${figures.urgent} urgente${figures.urgent > 1 ? "s" : ""} · hors terminées et annulées` : "Demandes ouvertes, hors terminées et annulées"}
+        />
+        <Stat
+          icon="receipt"
+          tone="amber"
+          label="Devis à approuver"
+          value={figures.approvalsPending ?? placeholder}
+          note={loaded ? "Approbations en attente parmi les données chargées" : "Données professionnelles non chiffrables"}
+        />
+        <Stat
+          icon="calendar"
+          tone="violet"
+          label="Échéances à 30 jours"
+          value={figures.deadlines30 ?? placeholder}
+          note={loaded ? "Contrôles et maintenances enregistrés, non terminés, parmi les données chargées" : "Données professionnelles non chiffrables"}
+        />
         <Stat
           icon="euro"
           tone="navy"
           label="Budget engagé"
-          value={money(committed)}
-          note={budget > 0 ? `sur ${money(budget)} de budget de référence · ${BASIS}` : `Aucun budget de référence · ${BASIS}`}
+          value={figures.committedCents === null ? placeholder : money(figures.committedCents)}
+          note={
+            !loaded
+              ? "Données professionnelles non chiffrables"
+              : budget > 0
+                ? `sur ${money(budget)} de budget de référence · ${BASIS}`
+                : `Aucun budget de référence · ${BASIS}`
+          }
         />
         <Stat icon="building" tone="green" label="Sites suivis" value={scope.sites.length} note={c.activeSite ? "Site filtré" : "Organisation active"} />
       </div>
@@ -1197,6 +1232,38 @@ function OverviewView({ c }: { c: Ctx }) {
           ) : undefined
         }
       />
+      {siteBars.length > 0 && (
+        <section className="panel" aria-labelledby="site-budgets-title">
+          <div className={styles.panelTitle}>
+            <div>
+              <h2 id="site-budgets-title">Budget par site</h2>
+              <p>Devis acceptés rapportés au budget de référence de chaque site · {BASIS}</p>
+            </div>
+            <button type="button" className={styles.textLink} onClick={() => c.go("sites")}>
+              Sites & contrats
+              <Icon name="arrow" size={15} />
+            </button>
+          </div>
+          <ul className={styles.siteBudgets}>
+            {siteBars.map((b) => (
+              <li key={b.id}>
+                <span className={styles.siteBudgetName}>{b.name}</span>
+                <div
+                  className={cx(styles.budgetBar, b.over && styles.budgetBarOver)}
+                  role="img"
+                  aria-label={b.ratio === null ? `${b.name} : pas de budget de référence` : `${b.name} : ${percent(b.ratio)} du budget engagé${b.over ? ", budget dépassé" : ""}`}
+                >
+                  <span style={{ width: `${b.width}%` }} />
+                </div>
+                <span className={styles.siteBudgetValue}>
+                  <strong>{money(b.committed)}</strong>
+                  {b.ratio === null ? " · pas de budget de référence" : ` · ${percent(b.ratio)} de ${money(b.budget)}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <div className={styles.twoCol}>
         <section className="panel" aria-labelledby="pending-approvals-title">
           <div className={styles.panelTitle}>
@@ -2289,15 +2356,30 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
       </button>
       <div className={styles.sheetHeader}>
         <div>
+          <span className={styles.kicker}>Fiche de site</span>
           <h1>
             {site.name}
             <Tag tone="blue">{(vertical && SITE_TYPES[vertical]) || "Site"}</Tag>
-            <Tag tone="green">Site actif</Tag>
           </h1>
           <p>
             <Icon name="location" size={15} />
             {site.address}
           </p>
+          {/* V5-C01 « Présentation du bâtiment » : seuls les faits enregistrés (type, adresse, budget). */}
+          <dl className={styles.facts} aria-label="Identité du site">
+            <div>
+              <dt>Type de site</dt>
+              <dd>{(vertical && SITE_TYPES[vertical]) || "Non renseigné"}</dd>
+            </div>
+            <div>
+              <dt>Adresse</dt>
+              <dd>{site.address}</dd>
+            </div>
+            <div>
+              <dt>Budget de référence</dt>
+              <dd>{f.budget > 0 ? money(f.budget) : "Non renseigné"}</dd>
+            </div>
+          </dl>
         </div>
         <div className={styles.sheetActions}>
           {canWrite ? (
@@ -2348,24 +2430,27 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
         <section className="panel" aria-labelledby="site-interventions">
           <div className={styles.panelTitle}>
             <h2 id="site-interventions">Interventions</h2>
-            <Segments
-              label="Filtre des interventions du site"
-              value={tab}
-              options={[
-                ["open", `En cours (${open.length})`],
-                ["past", `Passées (${past.length})`],
-              ]}
-              onChange={setTab}
-            />
+            <div className={styles.segmentsWrap}>
+              <Segments
+                label="Filtre des interventions du site"
+                value={tab}
+                options={[
+                  ["open", `En cours (${open.length})`],
+                  ["past", `Passées (${past.length})`],
+                ]}
+                onChange={setTab}
+              />
+            </div>
           </div>
           {shown.length ? (
             shown.map((i) => (
               <button
                 key={i.id}
                 type="button"
-                className={cx(styles.listRow, styles.listRowButton)}
+                className={cx(styles.listRow, styles.listRowButton, styles.datedRow)}
                 onClick={() => session.openIntervention(i.id)}
               >
+                <time dateTime={i.created_at}>{date(i.created_at)}</time>
                 <section>
                   <strong>{category(i.category).label}</strong>
                   <small>
@@ -2825,18 +2910,6 @@ function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
           </div>
         </section>
 
-        <QuoteDocumentsAnchor
-          session={session}
-          variant="enterprise"
-          target={{ quoteId: approval.quote_id }}
-          authority={
-            c.authority.canWriteSite(decisionSiteId)
-              ? { canWrite: true }
-              : { canWrite: false, reason: c.authority.readOnlyReason || "Vos droits d’écriture ne couvrent pas le site de ce devis." }
-          }
-          organizationId={c.organization?.id}
-          siteId={decisionSiteId || undefined}
-        />
 
         <section className="panel" aria-labelledby="approval-decision">
           <h2 id="approval-decision">Votre décision</h2>
@@ -2898,6 +2971,21 @@ function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
         </section>
       </div>
 
+      {/* V5-C08 : documents, validité et avenants sous la décision, pleine largeur (JSX de l’ancrage inchangé). */}
+      <section className={styles.approvalDocuments} aria-label="Documents, validité et avenants du devis">
+        <QuoteDocumentsAnchor
+          session={session}
+          variant="enterprise"
+          target={{ quoteId: approval.quote_id }}
+          authority={
+            c.authority.canWriteSite(decisionSiteId)
+              ? { canWrite: true }
+              : { canWrite: false, reason: c.authority.readOnlyReason || "Vos droits d’écriture ne couvrent pas le site de ce devis." }
+          }
+          organizationId={c.organization?.id}
+          siteId={decisionSiteId || undefined}
+        />
+      </section>
       <section className="panel" aria-labelledby="approval-history">
         <h2 id="approval-history">Historique des statuts</h2>
         <table className={styles.historyTable} style={{ marginTop: 12 }}>

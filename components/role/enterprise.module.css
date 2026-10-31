@@ -27,8 +27,11 @@
   display: none;
   align-items: center;
   justify-content: center;
+  flex: none;
   width: 44px;
+  min-width: 44px;
   height: 44px;
+  min-height: 44px;
   border-radius: 8px;
   color: #fff;
 }
@@ -420,7 +423,7 @@
 }
 .contextControls select,
 .select {
-  min-height: 40px;
+  min-height: 44px;
   padding: 8px 10px;
   border: 1px solid #ccd7e5;
   border-radius: 7px;
@@ -742,7 +745,7 @@
   color: #1457d9;
 }
 .rowAction {
-  min-height: 40px;
+  min-height: 44px;
   padding: 7px 12px;
   font-size: 13px;
 }
@@ -1166,6 +1169,63 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+}
+/* V5-C01 : surtitre « Fiche de site » et faits réels sous l’en-tête. */
+.kicker {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #526178;
+  margin-bottom: 4px;
+}
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 12px 0 0;
+}
+.facts > div {
+  min-width: 0;
+}
+.facts dt {
+  font-size: 12px;
+  color: #526178;
+}
+.facts dd {
+  margin: 2px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #102a43;
+}
+/* Segments de la primitive partagée portés à 44 px sans la modifier. */
+.segmentsWrap button {
+  min-height: 44px;
+}
+/* Historique daté (V5-C01) : date à gauche, titre, état. */
+.datedRow > time {
+  flex: none;
+  width: 92px;
+  font-size: 13px;
+  color: #526178;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 480px) {
+  .datedRow {
+    flex-wrap: wrap;
+  }
+  .datedRow > time {
+    width: 100%;
+  }
+  /* Lignes de liste à 360 : titre sur toute la largeur, état et action sur la rangée suivante. */
+  .listRow {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .listRow > section {
+    flex: 1 1 100%;
+  }
 }
 .sheetHeader p {
   display: flex;
@@ -1725,8 +1785,11 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex: none;
     width: 44px;
+    min-width: 44px;
     height: 44px;
+    min-height: 44px;
     margin: 0 0 8px auto;
     border-radius: 8px;
     color: #102a43;
@@ -2115,4 +2178,90 @@
     width: 100%;
     justify-content: flex-start;
   }
+}
+
+/* V5-C05 : budget par site (barres engagé / budget, données réelles). */
+.siteBudgets {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.siteBudgets li {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px 14px;
+}
+.siteBudgetName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #102a43;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.siteBudgetValue {
+  font-size: 13px;
+  color: #526178;
+  white-space: nowrap;
+}
+.siteBudgetValue strong {
+  color: #102a43;
+}
+@media (max-width: 640px) {
+  .siteBudgets li {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .siteBudgetValue {
+    white-space: normal;
+  }
+}
+/* V5-C05 à 360 / 760 : cinq indicateurs en grille lisible (2 colonnes, puis 1 sous 400 px). */
+@media (max-width: 760px) {
+  .kpis {
+    display: grid;
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    border: 0;
+    background: transparent;
+  }
+  .kpis > div {
+    border: 1px solid #dce4ee;
+    border-radius: 10px;
+    min-width: 0;
+  }
+  /* Le bandeau global masque son 4e indicateur sur mobile ; ici les cinq chiffres réels restent visibles. */
+  .kpis > div:nth-child(4) {
+    display: flex;
+  }
+}
+@media (max-width: 400px) {
+  .kpis {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* V5-C08 : fil d’Ariane cliquable à 44 px ; section documents pleine largeur sous la grille Détails | Décision ;
+   boutons de décision teintés en contour (succès / erreur), pleins une fois choisis. */
+.breadcrumb button {
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.approvalDocuments {
+  margin: 0 0 16px;
+}
+.decisionApprove {
+  color: #167344;
+  border-color: #9fd3b4;
+}
+.decisionReject {
+  color: #b42318;
+  border-color: #f0c4c0;
 }

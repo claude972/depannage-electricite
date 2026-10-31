@@ -1,6 +1,6 @@
 // Logique pure des listes de l’espace entreprise (tableau interventions M4/M66, tableau sites M13).
 // Sans React ni CSS : testée par tests/ui/enterprise-lists.test.ts.
-import type { Approval, ComplianceRecord, ContractState, Intervention, Quote } from "../app/types";
+import type { Approval, ComplianceRecord, ContractState, Intervention, Quote, Site } from "../app/types";
 
 export type InterventionFilters = {
   site: string;
@@ -148,4 +148,104 @@ export function siteAlertSummary(state: ContractState, alerts: SiteAlertCounts):
     pending > 0 && plural(pending, "contrôle à traiter", "contrôles à traiter"),
   ].filter((x): x is string => typeof x === "string");
   return parts.length ? { kind: "alerts", parts, overdue: alerts.overdue > 0 } : { kind: "none" };
+}
+
+/** Date ISO (AAAA-MM-JJ) décalée de `days` jours, en UTC. */
+const shiftDate = (iso: string, days: number) => {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+
+/**
+ * Chiffres du tableau de bord V5-C05, uniquement à partir des dossiers chargés : interventions
+ * ouvertes (selon `isOpen`), dont celles marquées urgentes, et échéances non terminées dues dans
+ * les 30 jours (bornes incluses, dépassées exclues). Aucune consommation, projection ni tendance.
+ */
+export function overviewFigures(
+  scope: { interventions: Pick<Intervention, "status" | "urgency">[]; compliance: Pick<ComplianceRecord, "status" | "due_on">[] },
+  today: string,
+  isOpen: (status: Intervention["status"]) => boolean,
+) {
+  const open = scope.interventions.filter((i) => isOpen(i.status));
+  const horizon = shiftDate(today, 30);
+  const deadlines30 = scope.compliance.filter((r) => r.status !== "completed" && r.due_on >= today && r.due_on <= horizon).length;
+  return { open: open.length, urgent: open.filter((i) => i.urgency === "urgent").length, deadlines30 };
+}
+
+export type SiteBudgetBar = {
+  id: string;
+  name: string;
+  committed: number;
+  budget: number;
+  ratio: number | null;
+  width: number;
+  over: boolean;
+};
+/** « Budget par site » (V5-C05) : engagé = devis acceptés des dossiers du site ; taux réel via `budgetFigures`. */
+export function siteBudgetBars(
+  sites: Pick<Site, "id" | "name" | "budget_cents">[],
+  interventions: Pick<Intervention, "id" | "site_id">[],
+  quotes: Pick<Quote, "intervention_id" | "status" | "total_cents">[],
+): SiteBudgetBar[] {
+  return sites.map((site) => {
+    const ids = new Set(interventions.filter((i) => i.site_id === site.id).map((i) => i.id));
+    const committed = quotes
+      .filter((q) => q.status === "accepted" && ids.has(q.intervention_id))
+      .reduce((sum, q) => sum + q.total_cents, 0);
+    const budget = site.budget_cents || 0;
+    return { id: site.id, name: site.name, committed, budget, ...budgetFigures(committed, budget) };
+  });
+}
+
+/** Lisibilité d’un chiffre dépendant des données professionnelles (même règle que `siteAlertSummary`). */
+export type FigureState = "checking" | "unverified" | "loaded";
+export const figureState = (state: ContractState): FigureState =>
+  state === "unknown" ? "checking" : state === "available" ? "loaded" : "unverified";
+
+/**
+ * Chiffres du tableau de bord V5-C05 dépendant du contrat professionnel : échéances à 30 jours,
+ * approbations en attente et budget engagé ne sont des nombres que lorsque les données sont
+ * réellement chargées ; sinon `null` (vérification en cours ou non vérifié), jamais un 0.
+ * Les interventions ouvertes et les urgences viennent de l’espace de travail et restent chiffrées.
+ */
+export function dashboardFigures(
+  state: ContractState,
+  scope: {
+    interventions: Pick<Intervention, "status" | "urgency">[];
+    compliance: Pick<ComplianceRecord, "status" | "due_on">[];
+    approvals: Pick<Approval, "status">[];
+    quotes: Pick<Quote, "status" | "total_cents">[];
+  },
+  today: string,
+  isOpen: (status: Intervention["status"]) => boolean,
+) {
+  const base = overviewFigures(scope, today, isOpen);
+  const professional = figureState(state);
+  const loaded = professional === "loaded";
+  return {
+    open: base.open,
+    urgent: base.urgent,
+    professional,
+    deadlines30: loaded ? base.deadlines30 : null,
+    approvalsPending: loaded ? scope.approvals.filter((a) => a.status === "pending").length : null,
+    committedCents: loaded ? scope.quotes.filter((q) => q.status === "accepted").reduce((sum, q) => sum + q.total_cents, 0) : null,
+  };
+}
+
+/** Libellé d’un chiffre non chiffrable : l’état est dit, jamais remplacé par une valeur. */
+export const FIGURE_PLACEHOLDER: Record<Exclude<FigureState, "loaded">, string> = {
+  checking: "Vérification…",
+  unverified: "Non vérifié",
+};
+
+/**
+ * Sous-titre du tableau de bord : « parmi les données chargées » seulement quand les données
+ * professionnelles le sont réellement ; sinon l’état de vérification est annoncé.
+ */
+export function overviewSubtitle(state: ContractState, organizationName: string, loadedNote: string): string {
+  const figure = figureState(state);
+  if (figure === "loaded") return `${organizationName} · parmi les ${loadedNote.charAt(0).toLowerCase()}${loadedNote.slice(1)}`;
+  if (figure === "checking") return `${organizationName} · vérification des données professionnelles en cours`;
+  return `${organizationName} · données professionnelles non vérifiées (service indisponible)`;
 }

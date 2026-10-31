@@ -856,6 +856,10 @@ valide).
 
 ## Addendum — entreprise V5-C01, V5-C05, V5-C08 (VISUAL-FIDELITY-001, base `a131ccd`, branche `claude/web-design-artisan-2`)
 
+## Addendum — entreprise V5-C01, V5-C05, V5-C08 (VISUAL-FIDELITY-001)
+
+**CLAIM — Propriété transférée à l’agent client/documents le 2026-11-01, branche `claude/web-design-enterprise`, base `b7a4b10` ; rédaction initiale agent design** (section reprise verbatim de `origin/claude/web-design-artisan-3` b0701a9, où elle visait la base `a131ccd` / branche `claude/web-design-artisan-2` ; captures « avant » reprises telles quelles). Relecture contre les planches `v5-p2`, `v5-p6`, `v5-p9` et les captures « avant » : tableaux d’écarts confirmés sans modification ; seuls la base, la branche et la numérotation des checkpoints sont adaptées ci-dessous. Réservé, jamais modifié par ce lot : bloc « Opérations du site » (`SiteOperationsView` / `FeatureUnavailable`), JSX `QuoteDocumentsAnchor` (seulement déplacé dans la grille, props identiques), `HeaderBell` / `NotificationsPage` / `PlatformPage`, `anchors.ts`, `*-anchor.tsx`, `feature-unavailable.tsx`, fichiers globaux.
+
 Références (inventaire) : **V5-C01** = `MAQUETTES_UNE_PAR_PAGE_VOLUME_5_MANQUANTES.pdf` **p2** (fiche de site bureaux
 « Tour Horizon », `v5-p2.jpeg`) ; **V5-C05** = même volume **p6** (dashboard bureaux « BUREAUX360 », `v5-p6.jpeg`) ;
 **V5-C08** = même volume **p9** (détail d’approbation d’un devis syndic, `v5-p9.jpeg`) ; V6-C01/V6-C05/V7-C01 sont des
@@ -957,3 +961,63 @@ dossier (« Candidature : approuvée / soumise / … »). **Écart assumé** vs 
 modélisée. Tests : pièce ajoutée après approbation → « Transmis » ; pièce expirée → « À renouveler » ; dernière pièce du
 type retenue. Capture (démo, dossier approuvé avec une pièce nouvelle et une pièce expirée injectées dans le stockage du
 navigateur, aucune graine modifiée) : `artisan-documents-{360,1280}-credential.jpg`.
+
+### Checkpoints prévus (branche `claude/web-design-enterprise`)
+
+1. V5-C01 fiche de site — `enterprise-site-office-{360,1280}-after.jpg`.
+2. V5-C05 tableau de bord — `enterprise-overview-{360,1280}-after.jpg`.
+3. V5-C08 approbation — `enterprise-approval-{360,1280}-after.jpg`.
+
+### Résultat du checkpoint 1 (entreprise) — V5-C01 fiche de site
+
+Captures `docs/visual-fidelity/enterprise-site-office-{360,1280}-after.jpg` (`#demo/manager-site.site-3`). Surtitre
+« Fiche de site » ; pastille « Site actif » retirée (aucun statut d’activité dans le modèle) ; bloc « Identité du
+site » limité aux faits enregistrés (type, adresse, budget de référence) ; historique des interventions daté (date |
+catégorie + référence | état) ; sélecteur de contexte, segments (wrapper, primitive partagée intouchée), « Marquer
+terminé », bouton de menu et fermeture du tiroir à 44 px ; lignes de liste repliables à 360 (titre pleine largeur,
+état et action dessous). Bloc « Opérations du site » et ancrages non modifiés. Mesures 360 / 1280 : 0 cible < 44 px,
+aucun débordement, console vide. Écarts assumés : pas de photo, surface, année, étages, occupant, conformité,
+certification, consommation, projection, date de mise à jour.
+
+### Résultat du checkpoint 2 (entreprise) — V5-C05 tableau de bord
+
+Captures `docs/visual-fidelity/enterprise-overview-{360,1280}-after.jpg` (`#demo/manager`). Cinq indicateurs réels :
+interventions en cours « dont N urgentes » (champ `urgency`), devis à approuver, **échéances à 30 jours** (`due_on`
+non terminées, aujourd’hui et J+30 inclus, dépassées exclues), budget engagé, sites suivis — calculés par
+`overviewFigures` (testé). Panneau « Budget par site » : une barre par site via `siteBudgetBars` (`budgetFigures`,
+taux réel non plafonné, « pas de budget de référence » sans budget) avec lien « Sites & contrats ». À 360 / 760 les
+indicateurs passent en grille (2 colonnes puis 1) et le 4e indicateur, masqué par le bandeau global sur mobile, reste
+visible. Écarts assumés : aucune consommation (MWh), tendance, projection ni tableau « Sites & bâtiments » sur le
+tableau de bord (M66 reste maître). Mesures 360 / 1280 : 0 cible < 44 px, aucun débordement, console vide.
+
+### Résultat du checkpoint 3 (entreprise) — V5-C08 approbation
+
+Captures `docs/visual-fidelity/enterprise-approval-{360,1280}-after.jpg` (`#demo/manager-approval.approval-demo`).
+Grille Détails du devis | Votre décision (haut), puis section « Documents, validité et avenants » pleine largeur
+(bloc `QuoteDocumentsAnchor` déplacé **byte-identique**, props inchangées), puis historique des statuts. Boutons
+Approuver / Refuser en contour teinté (succès / erreur), pleins une fois choisis ; compteur 0 / 2000 (limite serveur)
+conservé ; lien de fil d’Ariane « Devis » à 44 × 44 px. Écarts assumés : pas de « fiche fournisseur », pas de colonne
+« Rôle » dans l’historique (rôle non transmis). Mesures 360 / 1280 : 0 cible < 44 px, aucun débordement, console vide.
+
+### Bilan entreprise V5 (checkpoints 1–3)
+
+Trois vues alignées sur V5-C01 / V5-C05 / V5-C08 en structure et hiérarchie, à partir des seules données chargées
+(aucun fait de bâtiment, surface, année, occupant, photo, conformité, consommation, projection, tendance, rôle
+d’acteur). Comportements inchangés : commandes professionnelles, décision d’approbation, opérations du site
+(`SiteOperationsView` / `FeatureUnavailable`), ancrages notifications / documents / plateforme. Fichiers touchés :
+`components/role/enterprise-space.tsx`, `enterprise.module.css`, `enterprise-lists.ts`, `tests/ui/enterprise-lists.test.ts`,
+cette section, `docs/visual-fidelity/enterprise-*`.
+
+### Correction ENTERPRISE-FIGURES-001 (revue racine de e83d359, V5-C05)
+
+Les indicateurs dépendant des données professionnelles (échéances à 30 jours, devis à approuver, budget engagé)
+affichaient 0 sur un état de contrat `unknown` / `unavailable` tandis que le sous-titre annonçait « Données
+chargées ». Correction : `dashboardFigures(state, …)` (règle de `siteAlertSummary`) renvoie `null` pour ces trois
+chiffres tant que `capabilities.professional` n’est pas `available` ; l’interface affiche alors « Vérification… » ou
+« Non vérifié » avec la note « Données professionnelles non chiffrables » (jamais un 0) et le panneau « Budget par
+site » n’est rendu qu’avec des données chargées. Sous-titre via `overviewSubtitle` : « parmi les données chargées
+(100 derniers dossiers) » seulement une fois chargées, sinon « vérification … en cours » / « non vérifiées ». Tests :
+unknown / unavailable / missing → non chiffré (pas un nombre), available vide → 0 qualifié, libellés du sous-titre.
+Captures : état chargé `enterprise-overview-{360,1280}-after.jpg` remplacées ; l’état `unknown` / `unavailable`
+n’est pas capturable en démonstration (capacités câblées `available` dans `components/courant-app.tsx` et
+`components/app/demo.ts`) : couvert par les tests et le code source (`FIGURE_PLACEHOLDER`, `data-professional`).
