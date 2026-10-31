@@ -133,3 +133,11 @@ QA_PLAYWRIGHT_PATH=<dir du module playwright> node scripts/qa-business/run.mjs -
 node scripts/qa-business/run.mjs --cleanup-manifest <out>/manifest.json --credentials <…> --project <ref>
 ```
 Le pilote relit indépendamment l’absence de la cohorte (`count=exact` sur les identifiants du manifeste) après le run.
+
+## 10. Livraison de l’étape 2 (après GO du lead sur ec54ca2)
+
+Précisions du lead intégrées : (a) la validité passée de D2 est un état **simulé par service_role, non produit par le circuit utilisateur** — étiqueté dans la donnée (`synthetic`), dans `result.json` et dans la section « Not exercised » de `summary.md` ; (b) toute assertion PDF provient du **téléchargement privé réel** (`GET /api/quote-documents/<id>` avec les cookies du contexte navigateur : statut 200, `application/pdf`, octets non vides, `%PDF-`, référence et montants lus dans les octets, `ETag`/`Content-Length` cohérents), jamais de l’aperçu JSON seul.
+
+Fichiers : `scripts/qa-business/run.mjs` (entrée, préflight, dry-run, nettoyage seul), `scripts/qa-business/lib/{args,cleanup,auth,fixtures,preflight,pdf,orchestrate}.mjs`, `scripts/qa-business/suites/{docs,b2b,index}.mjs`, `tests/qa-business.test.ts` (17 tests purs : ordre FK 015/016/017, refus sur issue inconnue avec faux client, intents avant Auth, cycle `finally` avec erreurs injectées, codes de sortie, préflight BUILD_ID, inspection PDF). `scripts/qa/lib/*` importés en lecture seule, jamais modifiés.
+
+Contrôles exécutés par le worker (sans réseau) : `node --check` sur les 11 modules ✓ ; `npx tsx --test tests/qa-business.test.ts` 17/17 ✓ ; `npx tsx --test 'tests/**/*.test.ts'` 390/390 ✓ ; `npx tsc --noEmit` ✓ ; `--dry-run --suite all --app-dir <checkout>` → code 0 (SHA vérifié, BUILD_ID « non vérifié » faute de build local) ; arguments invalides, credentials absents, URL distante non autorisée, `--out` dans le dépôt, SHA ≠ HEAD → code 2 ; `--help` → 0. Aucune exécution réelle : seul le pilote exécute, après sa propre revue du contrat.
