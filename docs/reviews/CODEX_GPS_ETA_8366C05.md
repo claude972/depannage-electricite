@@ -63,3 +63,32 @@ Aucun P1.
 ## 7. Verdict (borné)
 
 Checkpoint `8366c05` **conforme au contrat (y compris l'amendement ROOT) et à la propriété** : RLS/droits/verrous/triggers/versions/quota corrects par lecture, routes strictes et fail-closed, fournisseur fixe sans repli ni journalisation, 13/13 unités, SQL isolé 19 migrations PASS avec rollback, `tsc` propre, tous reproduits par le réviseur. **Mergeable côté backend** sous réserve de traiter ou déclarer P2-1 (purge planifiée) et de faire exécuter par root la recette deux connexions (P2-2) et l'appel fournisseur réel. Aucune exécution cloud, fournisseur ou appareil par le réviseur.
+
+## 8. Addendum — correctif `c8ca4cc31c0157f246531769cd9f45cd47b464fe` (re-vérification après l'attente du quota)
+
+Même méthode (worktree détaché au SHA exact, lecture seule, supprimé ensuite). Diff `8366c05..c8ca4cc` : 3 fichiers seulement — `lib/features/tracking/http.ts` (+24/−4), `tests/tracking.test.ts` (+25/−2), `docs/TRACKING_CONTRACT.md` (+8). **Aucun SQL modifié**, propriété inchangée.
+
+Constat :
+- **Route** (`http.ts` `loadRoute`) : après `claim(...)` (qui peut attendre une autre transaction), un **nouveau snapshot sous JWT** est pris ; la clé complète (intervention, lecteur, artisan, session, `control_version`, `last_seq`, `destination_version`, opération) doit être identique à celle d'avant → sinon 409 ; `requireRoute(ready)` exige encore un point frais et une destination → sinon 503 ; l'URL fournisseur est construite depuis `ready` (mêmes coordonnées, puisque la clé inclut `last_seq`). Le contrôle après fournisseur et le chemin cache-hit (sans émission) sont conservés.
+- **Géocodage** (`loadGeocode`) : nouveau `requireGeocodeContext(before, ready)` **avant** `providerJson` — droit `can_confirm_destination` relu (403) et identité de contexte (intervention, artisan, session, `control_version`, `destination_version`) → 409 ; sans exiger de GPS actif (correct : on choisit la destination avant le départ). Même contrôle après le fournisseur.
+- **Pas de nouveau chemin de contournement** : les deux seuls appels `external(...)` sont précédés du re-snapshot ; un cache hit n'émet rien et repasse par le contrôle final ; `claim` reste le seul usage de la clé service.
+- **Fenêtre résiduelle** (déclarée au contrat) : le délai réseau entre la dernière lecture et l'émission HTTP n'est pas fermable sans transaction distribuée ; il est réduit à l'intervalle sans `await` métier entre le snapshot et `fetch`. Acceptable.
+- **Tests** : deux nouveaux cas avec un `claim` suspendu par barrière asynchrone, puis révocation (404) / arrêt (409) / nouveau point (409) pour la route, et révocation (404) / retrait du droit (403) / changement de version (409) pour le géocodage — **`providerCalls === 0`** dans chaque cas. Significatifs : ils échoueraient sur `8366c05` (l'émission précédait la seconde vérification).
+
+Exécuté par le réviseur à `c8ca4cc` : `npx tsx --test tests/tracking*.test.ts` **15/15** ; `tests/sql-tracking-review.mjs` (PGlite 0.5.13) **PASS 19 migrations**, rollback inchangé ; `npx tsc --noEmit` **propre**. Toujours non prouvé : cloud, migration appliquée, deux connexions, fournisseur réel, appareil.
+
+**Le P2 « émission externe avant re-vérification après l'attente du quota » est fermé** (constat de la revue 8366c05 relayé par root). P2-1 et P2-2 de la section 5 restent ouverts.
+
+### P2-1 — options pour une purge planifiée du dernier point expiré (pg_cron non disponible selon le préflight root) — options seulement, aucune décision
+
+Rappel : `public.purge_expired_tracking_points()` (019:50-58) existe, est idempotente, n'efface que les colonnes de point périmé (> 60 s), et n'est exécutable que par `service_role`. Avec une cadence `C`, la rétention physique maximale d'un point devient ≈ 60 s + `C`.
+
+| Option | Ce qu'il faut | Prérequis / risques |
+| --- | --- | --- |
+| A. Appel périodique **service_role** de la RPC existante par un **ordonnanceur de confiance déjà présent** — p. ex. workflow GitHub Actions planifié (`on: schedule`) faisant `POST /rest/v1/rpc/purge_expired_tracking_points` | un fichier de workflow (propriétaire CI), un secret de dépôt contenant la clé service du projet visé, le ref projet ; aucune migration | gestion d'un secret service dans la CI ; cadence minimale ~5 min et non garantie (retards possibles de l'ordonnanceur) ; décision propriétaire sur le stockage du secret |
+| B. Route interne Next appelée par **Vercel Cron** (p. ex. `/api/internal/tracking-purge` protégée par un secret d'en-tête, clé service côté serveur) | une route (propriétaire backend), une entrée `crons` dans `vercel.json`, deux variables d'environnement serveur | dépend d'un déploiement Vercel actif (actuellement différé par le propriétaire) ; cadence selon le plan Vercel ; surface HTTP supplémentaire à protéger |
+| C. **Activer pg_cron** sur le projet Supabase puis une migration `cron.schedule('tracking-purge','* * * * *','select public.purge_expired_tracking_points()')` | décision propriétaire + activation de l'extension (tableau de bord / `create extension`), une migration additive (numéro réservé, propriétaire backend), revue SQL | extension aujourd'hui non activée (préflight root) ; tâches exécutées par `postgres` ; à documenter dans les migrations ; les « Scheduled Functions » Supabase reposent elles aussi sur pg_cron (donc même prérequis) |
+| D. **Purge opportuniste élargie sans ordonnanceur** : dans `tracking_snapshot` / `tracking_command`, purger aussi **toutes** les lignes expirées (pas seulement le dossier courant), avec un index partiel `where latitude is not null` | modification de 019 (ou migration suivante) par le propriétaire backend, revue SQL des verrous (UPDATE multi-lignes hors ordre org→intervention : à vérifier contre le graphe) | aucune garantie en l'absence de trafic ; coût et verrous sur un chemin de lecture ; complexité de verrouillage accrue |
+| E. Accepter et **déclarer** la rétention (masquage RLS seul) | mention au contrat / registre de traitement | la coordonnée la plus récente d'un artisan peut subsister indéfiniment en base ; à confronter à l'objectif « pas d'historique » et au consentement `tracking-v1` |
+
+Le choix appartient au propriétaire et au pilote ; A et B n'exigent aucune modification de 019, C exige une extension et une migration, D modifie le SQL de Codex.
