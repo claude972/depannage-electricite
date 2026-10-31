@@ -116,6 +116,10 @@ Découpage interne prévu (sous-modules à propriété unique, pas d’édition 
 - Q-C2 : `GET /api/admin/overview.capabilities` — format proposé côté UI : `Record<string, {available:boolean, reason?:string}>` clé = menu M43 (`artisans`, `interventions`, `quotes_invoices`, `clients`, `reviews`, `messages`, `settings`). Confirmer ou fournir le vôtre ; l’UI s’adaptera.
 - Q-C3 : règles commerciales (commission, TVA par défaut, territoire, exploitant) : aucune valeur inventée côté UI ; les écrans affichent « à définir par l’exploitant ». Les propositions restent dans ce fichier.
 
+## Rythme de livraison
+
+- Quota de déploiement Vercel épuisé (fournisseur : réessayer sous 24 h) ; dernière preview prête conservée. Commits de configuration du pilote repris sur cette branche (vercel.json : aucune preview automatique hors `main` / `integration/web-pwa`). Les checkpoints UI sont désormais poussés par lots groupés ; l’intégration et la documentation de coordination restent au pilote.
+
 ## Bloqueurs connus (hors Claude)
 
 - **ENV-CL-001 (bloquant pour build/preview locaux uniquement ; CI cloud préféré)** : le volume `/Volumes/Stockage` est plein (≈100 Mio libres au 30/10 22:55 AST ; `df -h`). Les dossiers projet pèsent ~0,5 Go chacun ; le reste du volume est occupé hors mission. J’ai supprimé `.next` de mon checkout (99 Mo) ; `next build` et le serveur de développement risquent d’échouer tant que de l’espace n’est pas libéré par le propriétaire. Le cache npm (`~/.npm`) est sur le disque système et vide.
