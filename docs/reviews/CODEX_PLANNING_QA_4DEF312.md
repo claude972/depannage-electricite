@@ -1,4 +1,4 @@
-# Revue croisée — harnais de recette avancée Codex (`codex/planning-qa`) — revue initiale `4def312`, addendum final `bc25fec8f8ddad4c76b4d55360c2c16743828a1a`
+# Revue croisée — harnais de recette avancée Codex (`codex/planning-qa`) — revue initiale `4def312`, addendum `bc25fec`, **addendum final `719ba469ebf42cca3911c10a8d58a8a01d09d91c` (runs pilote 791/719)**
 
 Revue indépendante par Claude QA (WEB-ACCEPTANCE-TESTS-001), **lecture seule**, sans cloud, sans credentials, sans modification des fichiers Codex. Objet : rapport `4def312` (code `4be763a`, contrat `b20c5c2`, `docs/CODEX_PLANNING_QA.md`), base `c92f4de`. Révisé dans un worktree détaché au SHA exact, `node_modules` lié depuis mon worktree (Node v24.15.0). Référence serveur : `docs/CLAUDE_ADV_PLANNING_CONTRACT.md` et migration 016 sur `origin/claude/web-planning` `b26bc45`. Mes helpers de référence : `scripts/qa/**` à `c0fc095`.
 
@@ -148,3 +148,44 @@ Nouveau constat mineur — **P3-8** : `planningOwnershipRefused` (`core.mjs:16`)
 - **API-first : prouvé en direct par le pilote** sur `bc25fec` (7/7, exit 0, nettoyage 33/33, aucun incertain, deux courses HTTP réelles avec un commit/un conflit, révocation support conforme à `b26bc45`). Le réviseur confirme par lecture que le code exécuté correspond à ces faits et que les deux correctifs (classification P0002, 204 du RPC `void`) sont limités au harnais, stricts, testés, sans modification applicative ni SQL, sans affaiblissement du fail-closed. Non-preuves qui demeurent et doivent rester déclarées : courses rendez-vous et `current_setting('role')` (P2-3), critères HTTP de `b26bc45` l.259 hors navigateur (P2-4), génération des notifications par triggers (déjà dans `non_proofs`).
 - **Navigateur : non prête** — P2-1 et P2-2 sont **inchangés** à `bc25fec` ; une exécution `--suite all` produirait une fausse FAIL sur le formulaire d'entrée et, sans `dc7209d` intégré, un Ctrl-C laisserait la cohorte au seul `--cleanup-manifest`.
 - Aucun P1. Rien dans cet addendum n'est une preuve cloud du réviseur : les faits d'exécution viennent du pilote.
+
+## 6. Addendum final (791/719) — harnais `719ba469ebf42cca3911c10a8d58a8a01d09d91c` (pointe de `origin/codex/planning-qa`)
+
+Identification du commit : le pilote nomme ses runs « 791 » et « 719 » ; ils correspondent aux commits `7914882` (« verify scoped inline planning recovery without reload ») et `719ba46` (« target assembled planning unavailable retry block »), ce dernier étant la pointe de la branche : revue faite **à `719ba46`**, sans ambiguïté. Même méthode, lecture seule : worktree détaché au SHA exact, `node_modules` lié, supprimé en fin de revue ; aucun cloud, aucun credential, aucun fichier Codex modifié. Faits d'exécution transmis par le pilote (**non observés par le réviseur**) : runs 791 puis 719 sur l'application `6061272` — **13/13 étapes PASS, nettoyage 33 étapes, relecture 27 portées / 6 comptes Auth à 0, reprise inline SHARED-006 close en direct** ; run 791 arrêté au locator 503 obsolète (`capability:planning` → `planning:unavailable`), corrigé en `719ba46`.
+
+### 6.1 Vérifié à `719ba46`
+
+| Point | Constat |
+| --- | --- |
+| Propriété | `git diff --stat c92f4de 719ba46` : toujours exactement les 5 fichiers (`docs/CODEX_PLANNING_QA.md`, `scripts/qa-advanced/{core,run,scenarios}.mjs`, `tests/qa-advanced.test.ts`, +778). `git diff c92f4de 719ba46 -- scripts/qa` **vide**. Le `browser.mjs` de la branche ne contient toujours pas `dc7209d` (`handleSIGINT` absent) : Codex l'a traité côté harnais (voir P2-2). |
+| `node --check` | `core.mjs`, `run.mjs`, `scenarios.mjs` : OK. |
+| Tests unitaires | `node --test tests/qa-advanced*.test.ts` : **16 tests, 16 réussis, 0 échec, code 0** (conforme au rapport Codex). |
+| Reprise inline (SHARED-006) | `scenarios.mjs:150-177` : 503 provoqué par le **vrai** bouton « Recharger la semaine » avec `page.route` ciblé, réponse 503 exigée, bloc `[data-blocker="planning:unavailable"][role="note"]` + message strict, commandes planning absentes ; retrait du seul handler injecté (`page.unroute(..., inject503)`), clic du « Réessayer » **scopé au bloc** (jamais la bannière PWA), nouvelle `GET /api/planning` 200 avec `permissions.can_edit:true`, disponibilités et commande d'ajout rendues, bloc disparu, identité du workspace identique, marqueur de document et `performance.timeOrigin` inchangés (preuve d'absence de rechargement). Lecture cohérente avec le contrat Codex `b990e81` et avec l'assemblage `artisan-space.tsx`/`feature-unavailable.tsx` décrits dans leur rapport. |
+| Relecture réelle après changement externe | `scenarios.mjs:99-108` `reloadPlanning(expected)` : GET live authentifié d'abord (`can_edit` attendu), puis `page.reload` réel exigeant une nouvelle réponse GET 200 portant la même valeur, workspace de la bonne identité, planning rendu ; la note de suspension est localisée comme **une seule** `role=note` contenant « Lecture seule » et « suspendu » (`:140`), plus absence du bouton d'ajout et POST 403 ; restauration → bouton de retour (`:143`). |
+
+### 6.2 État de mes constats à `719ba46`
+
+| Constat | État | Référence |
+| --- | --- | --- |
+| P2-1 formulaire d'entrée fermé par défaut | **Corrigé** — clic « Ajouter une entrée ponctuelle » avant le formulaire ; suspension = note `role=note` + absence du bouton d'ouverture (plus d'assertion vide) | `scenarios.mjs:124`, `:140-142` |
+| P2-2 SIGINT pendant la suite navigateur (Playwright sortait en 130) | **Corrigé côté harnais** — `withoutPlaywrightSignals(pw)` force `handleSIGINT/SIGTERM/SIGHUP:false` autour de `launchBrowser` même avec l'ancien helper ; `installInterruptHandlers` : premier signal → porte levée + un seul `finish()` (stop/fermeture/drain/cleanup), second signal rejoint ; test à faux processus (SIGINT puis SIGTERM → une seule finalisation, drain de la mutation admise, listeners retirés). Convention de sortie 1 (ou 3) conservée, différente du 130 de `scripts/qa` : documentée | `core.mjs:19-25`, `scenarios.mjs:93`, `run.mjs:83-84`, test `tests/qa-advanced.test.ts:99-112` |
+| P2-3 courses rendez-vous / `current_setting('role')` | **Déclaré non prouvé** dans `result.json.non_proofs` (pas exercé) | `run.mjs:28` |
+| P2-4 couverture HTTP de `--suite api` | **Déclaré non prouvé** (401 anonyme seule requête Next ; slots 403 / curseur 422 / marquage étranger / préférences 409 non exercés) | `run.mjs:28` |
+| P2-5 levée des marqueurs d'incertitude | **Procédure manuelle documentée** (copie 0600 du manifeste, preuve individuelle par intention, jamais de levée en bloc, `--cleanup-manifest` sur la copie) ; pas d'outillage — acceptable, reste une limite opérationnelle | rapport Codex §« Réconciliation manuelle » |
+| P2-6 classification P0002 | Corrigé (bc25fec), inchangé | `core.mjs:13-15` |
+| P3-1 raison du refus de préflight avalée | Reste (déclaré comme limite) | `run.mjs:19` |
+| P3-2 nom d'étape erroné après SIGINT ; arrêt au premier défaut | **Attribution corrigée** (`activeStep=name` avant `gate.check()`) ; arrêt au premier défaut reste (déclaré) | `run.mjs:84` |
+| P3-3 `--suite browser` seul : révocation ignorée en silence | **Corrigé** — étape `SKIPPED` motivée via `ctx.skip` | `run.mjs:98`, `scenarios.mjs:196` |
+| P3-4 jetons traités comme mutations à réconcilier | Reste (déclaré conservateur) | `run.mjs:92` |
+| P3-5 convention de sortie 1 vs 130 | Reste, documentée | `core.mjs:155` |
+| P3-6 signal/finish non testé | **Partiellement corrigé** — gestionnaires extraits dans `core.mjs` et testés ; `finish()` reste inline | `core.mjs:20-25`, `run.mjs:62-80` |
+| P3-7 console non recopiée | Reste (déclaré : rediriger vers un fichier privé) | `run.mjs:32` |
+| P3-8 404 accepté comme refus PostgREST | **Corrigé** — 404 accepté seulement pour une route Next `/api/planning` ; un 404 PostgREST (fonction absente, `PGRST202`) n'est plus un refus de propriété ; tests de non-régression | `core.mjs:16`, test `:89-90` |
+
+Aucun nouveau constat P2. Observations mineures : le glob `**/api/planning?*` de l'injection 503 ne couvre que les URL avec paramètres (c'est le cas du GET planning `from=`/`to=`) — cohérent ; `app('GET', '/api/planning')` passe par le `fetch` de la page (cookies de la session réelle) — cohérent avec « sondes sous l'identité de l'acteur ».
+
+### 6.3 Verdict actualisé pour la fusion du harnais (le verdict de l'addendum `bc25fec` est obsolète)
+
+- **Harnais `719ba46` : mergeable** comme harnais de recette (aucun code applicatif, aucune migration, aucun helper partagé modifié ; propriété respectée ; 16/16 tests ; `node --check` OK). Tous mes P2 sont soit corrigés (P2-1, P2-2 côté harnais, P2-6, P3-8, P3-3, attribution P3-2) soit **explicitement déclarés** comme non-preuves ou procédures (P2-3, P2-4, P2-5) ; les P3 restants sont des commodités opérationnelles déclarées, sans effet sur la sûreté (fail-closed, nettoyage par identifiants exacts, aucun secret exposé).
+- **Preuves live** : d'après le pilote, runs 791/719 sur l'application `6061272` — 13/13 PASS, nettoyage 33, readback 27 portées / 6 Auth à 0, reprise inline SHARED-006 close en direct. Par lecture, le code exécuté à `719ba46` correspond à ces faits ; le réviseur n'a rien exécuté en cloud ni en navigateur.
+- **Non-preuves qui demeurent et doivent rester déclarées** : courses rendez-vous↔busy / rendez-vous↔rendez-vous et `current_setting('role')` du trigger (P2-3), critères HTTP Next de `b26bc45` l.259 hors navigateur (P2-4), génération des notifications par triggers (fixtures semées), réconciliation manuelle des intentions incertaines (P2-5). Aucun P1.
