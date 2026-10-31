@@ -1,12 +1,12 @@
 # État courant de livraison
 
-Mis à jour le 2026-10-31T14:14:48-04:00 (America/Martinique). Les preuves ci-dessous sont bornées à leur SHA et à leur environnement. L'application complète des 76 capacités n'est pas déclarée terminée.
+Mis à jour le 2026-10-31T14:38:49-04:00 (America/Martinique). Les preuves ci-dessous sont bornées à leur SHA et à leur environnement. L'application complète des 76 capacités n'est pas déclarée terminée.
 
 ## Version et environnements
 
 | Élément | État vérifié |
 | --- | --- |
-| Source intégrée et poussée | `integration/web-pwa`, `0f57d964c537ed989569fbe68bf216263a838b65` ; harnais planning719 revu et fusionné (16 tests ciblés PASS). Code applicatif inchangé depuis be17b24 : 115 tests UI et typecheck strict y passent. CI nouveau merge à vérifier. |
+| Source intégrée et poussée | `integration/web-pwa`, `6c67644af48b899857256d2211a843cd67efc608` ; harnais planning719 puis QA/PWA95e revus et fusionnés (16 tests planning, 88 tests QA/PWA PASS). Code applicatif inchangé depuis be17b24 : 115 tests UI et typecheck strict y passent. CI6c deux jobs PASS, run41229624334. |
 | Serveur de recette local | `be17b24adbc0035d1ba82347c09f9045bac03d71`, build webpack réussi, port3017, HTTP200 vérifié ; inclut les derniers visuels artisan, entreprise et illustration. |
 | Backend dédié | Supabase `kcpyjzndybfdlnhvscbs`, actif ; migrations001–017 appliquées et historique relu. |
 | Transfert photo Edge | `native-document-upload`, version1, `verify_jwt=true`, source `d7abd8c` ; neuf scénarios réels passent. |
@@ -35,7 +35,9 @@ Entreprise V5 : C01 est revu sans nouveau P1/P2 ; C08 conserve les permissions e
 4. **Révocation pendant upload** : protocole sous verrou de la seule cohorte à amender/revoir avant code et exécution ; pas de hook Edge, d'admin fictif permanent ni de nouvelle migration.
 5. **Documents et B2B** : nouvelle recette UI/API isolée demandée au worker B2B existant (QA-DOCUMENTS-B2B-004), contrat avant code ; aucune fixture finance immuable.
 6. Adresse du premier vrai SuperAdmin confirmée par le propriétaire (gardée hors rapport Git). Recherche Auth exacte : compte absent. Le propriétaire diffère explicitement inscription/confirmation car absent du PC ; activation différée sans bloquer les autres travaux. Confirmation requise avant promotion atomique ; aucune activation annoncée, aucun mot de passe demandé, aucun administrateur fictif permanent créé.
-7. **Support opérateur A5** : propriété backend Codex et réservation018 confirmées par Claude cf53e4c, aucun chevauchement. Worktree codex/support-operators créé depuis be17 ; contrat052ebac poussé, revu par root et feu code donné à l’agent existant. Interface au worker plateforme Claude après contrat ; pas de fonctionnalité A5 livrée à ce stade.
+7. **Support opérateur A5** : backend6062f92 poussé, revu root et Claude ; SQL isolé18 et six unités passent, migration018 non appliquée. Interface Claude181→e2→ab52 ferme deux défauts ; nouveau P2 après changement de statut : relire les permissions pour retirer/rétablir le formulaire. Correctif2a7f1ea en attente de revue, pas de fusion ni de preuve live déclarée.
+8. **GPS/ETA A6**, ajouté par ordre du propriétaire : contrat804a807 publié avant code, backend Codex en cours sur codex/gps-eta, migration019 réservée. UI Claude contrat a7a1fed revu avec amendements, feuilles tracking et QA dédiées ; code UI pas encore livré. IGN public routage et géocodage Martinique répondent200 sur lieux publics ; cela ne prouve pas encore le circuit applicatif. Pas de trafic en temps réel ou GPS arrière-plan garanti.
+9. **Installation PWA desktop** : contrat3a96df0 revu, harnais Codex isolé en cours. Aucun navigateur ni installation lancé ; preuve OS à exécuter seulement après revue du code. Six captures be17, M35/M43/M66 à360/1280, passent ; démo explicitement isolée, pas preuve connectée.
 
 ## Limites du périmètre global
 
