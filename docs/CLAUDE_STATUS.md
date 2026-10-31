@@ -704,3 +704,7 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - **54f877c pushed** by root: 608 npm + 27 QA tests + tsc PASS; CI 41237745126 in progress.
 - **Expiry review aee66b0 accepted** (23 tests, syntax, no P1/P2): generic 401 ⇒ OBSERVED, 5xx/transport ⇒ INCOMPLETE, never PASS. P3 documentary: contract line ~66 still says a platform 401 `UNAUTHORIZED_*` is PASS ⇒ must read OBSERVED consistent with §1.4 bis. Bounded doc fix dispatched to backend agent a3ad58f (no cloud, no new lease). Root report `/tmp/depannage-gateway-expiry-aee66b0-review.md`.
 - REMOTE callers (business, tracking) remain the priority to deliver and review before the public recette.
+
+## 2026-10-31 — expiry contract P3 doc fix: 5b5288f
+
+- `claude/web-pwa-backend` **`5b5288f5352aa4ea6e2d41e69aa5c7ec73e569f8`**, only `docs/CLAUDE_GATEWAY_REMAINING_QA_CONTRACT.md` (lead verified): §1.6 platform 401 `UNAUTHORIZED_*` ⇒ OBSERVED, never PASS (only the function's own envelope is PASS); §1.4 item 3 generic code (e.g. `UNAUTHORIZED_ASYMMETRIC_JWT`) not bound, stays OBSERVED; §1.4 last bullet no HTTP answer / 5xx ⇒ INCOMPLETE (was FAIL); §4 bis planned « bind follow-up » replaced by the actual outcome (`EXPIRED_PLATFORM_CODES` empty, verdict OBSERVED). Grep: no other « UNAUTHORIZED_* … pass » wording. No code, cloud or lease.
