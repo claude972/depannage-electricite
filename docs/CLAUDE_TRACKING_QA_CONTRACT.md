@@ -281,3 +281,30 @@ nouvel essai automatique. Une seule route nominale réelle (et, si `--provider-p
 
 Inchangé : pas de code ni d'exécution avant le GO de ROOT ; incohérence de reprise après rechargement (A2) toujours à arbitrer par
 le lead.
+
+## Amendement A4 — T8 lié à la décision du lead sur « Reprendre le partage »
+
+Décision lead (transmise à l'agent UI) : « Reprendre le partage » = `stop` avec le `session_id` du snapshot courant (seulement si
+`shared=true` et `can_share`), puis écran de consentement à nouveau, puis `start` avec un **nouveau** `session_id` après confirmation ;
+jamais un `start` seul suivi d'un 409, jamais de nouvel essai automatique ; si le `stop` échoue (409/403/404), l'UI relit le
+snapshot et affiche l'état serveur. L'incohérence signalée en A2 est donc close côté contrat.
+
+**T8 — attendu exact (navigateur, réseau observé sans coordonnées) :**
+1. Partage actif (session S1, au moins un point), puis rechargement de la page.
+2. Après hydratation : message « Partage interrompu par le rechargement » ; **zéro** `POST …/tracking` tant qu'aucun clic n'a eu lieu
+   (observation ≥ 10 s) ; aucun `watchPosition` déclenché (aucun POST `point`).
+3. Clic sur « Reprendre le partage » (nom accessible à confirmer à la livraison UI ; changement ⇒ `ANOMALY: selector`) ⇒ exactement un
+   `POST` action `stop` avec `payload.session_id = S1` (lu dans le snapshot), réponse 200, `shared=false`.
+4. L'écran de consentement réapparaît (« Autoriser et démarrer » / « Annuler ») ; aucun `start` avant le clic.
+   Variante 4b : « Annuler » ⇒ aucun `start`, état « Partage arrêté » conservé.
+5. « Autoriser et démarrer » ⇒ exactement un `POST` action `start` avec `session_id = S2 ≠ S1`, `consent:true`,
+   `consent_policy:'tracking-v1'`, réponse 200 ; ensuite seulement des `point` avec `seq` repartant de 1 sur S2.
+6. Ordre strict des requêtes : `stop(S1)` → `start(S2)` → `point…` ; aucun `start` reçu en 409 ; aucune requête répétée
+   automatiquement.
+
+**T8-fail — échec du stop :** l'artisan perd l'attribution entre le reload et le clic (via `T12-sim`, mêmes gardes que A3) ⇒ le
+`stop(S1)` reçoit 403 ; attendus : un seul `POST stop`, aucun `start`, relecture du snapshot (`GET …/tracking`, ici 404) et affichage
+de l'état serveur (plus de contrôle de partage) ; aucun nouvel essai.
+
+Rapport : un `start` seul suivi de 409, un `start` réutilisant S1, un `stop` envoyé sans clic ou une requête répétée automatiquement
+⇒ `ANOMALY: restart-after-reload`. Toujours aucun code avant le GO de ROOT.
