@@ -513,3 +513,12 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 
 - `claude/web-qa-business` **`f8e36d4d45f9f4042aa0256bc065d9b9cf5f1114`**: fast-forwarded to integration 557d599 (already containing 4bd9e76), then ONE commit changing only `tests/qa-business.test.ts` — the three summary expectations (lines 306, 317, 501) now include `blocked: 0` exactly. No contract, harness code or verdict logic changed.
 - On top of 557d599: harness 38/38, `tests/**/*.test.ts` **510/510**, tsc clean. Fast-forwardable for root.
+
+## 2026-10-31 — root real business run 4bd9e76 on app 557d599: docs 5 FAIL (mostly harness); preview f8 READY; PWA 671 PASS
+
+- Run 78a5f871aaba: validity UI PASS, acceptance + amendment UI PASS, B2B equipment/maintenance PASS. **5 docs FAIL preserved.** Private diagnostics `/tmp/depannage-business-4bd-557-real`; root finishing cleanup (no cloud worker).
+- Causes identified by root: (1) `docs.mjs:137` reads `snapshot.terms.valid_until`, schema 015 + `snapshot.ts` store `snapshot.quote.terms.valid_until` ⇒ documentId never set ⇒ `/undefined` 422 cascades (not backend 404 proof); (2) harness expects client generation absent, but SQL 015 `can_generate = can_manage` and `owns_intervention` lets the requesting client generate the canonical server PDF (≠ editing the issuer) — approved contract to be re-read before any product change, no right removed for a test; (3) expired quote: 409 + DB sent/quoted acquired, but `/Devis accepté/i` over the whole body likely matches amendment explanatory text — target the real status/toast.
+- Dispatched to b2b worker a96ae75: contract amendment §16 first, then fix; (2) corrected only if the approved contract allows client generation, otherwise reported to lead as a divergence.
+- Preview f8 READY deployed `mh0ttyp8u`, protected by Vercel login; root HTML 200 via CLI; **not production**.
+- **PWA 671 on 557 PASS**: OS window (computer use), relaunch, independent cleanup.
+- Tracking QA fix (after 8aa5a78) still WIP — SHA pending.
