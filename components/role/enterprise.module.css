@@ -683,6 +683,11 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+.rowOpen:focus-visible {
+  outline: 3px solid #6e9df0;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
 .cellType {
   white-space: nowrap;
 }
@@ -883,6 +888,18 @@
   min-width: 42px;
   text-align: right;
   color: #102a43;
+  font-variant-numeric: tabular-nums;
+}
+.budgetPercentOver {
+  color: #b42318;
+  font-weight: 650;
+}
+.thHint {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: #6b7a90;
+  letter-spacing: 0;
 }
 .budget_normal > span {
   background: #1457d9;
@@ -908,6 +925,15 @@
 }
 .alertRed {
   color: #b42318;
+  font-weight: 550;
+}
+/* Alertes non vérifiées : données professionnelles indisponibles, aucune absence affirmée. */
+.alertUnverified {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #4b5f7a;
+  font-size: 13px;
   font-weight: 550;
 }
 .cellActions {
@@ -1873,12 +1899,18 @@
   .interventionsTable .cellAction {
     display: none;
   }
+  /* L’action de fin de ligne est masquée : le nom du dossier reste la seule cible, donc
+     ≥ 44 px de haut et toute la largeur de la ligne, libellé court ou multiligne. */
   .rowOpen {
     gap: 12px;
-    min-height: 0;
+    width: 100%;
+    min-height: 44px;
   }
   .rowOpen strong {
     font-size: 15px;
+  }
+  .thHint {
+    display: none;
   }
   /* Sites : site pleine largeur, puis en cours | montant, budget, alertes, actions. */
   .sitesTable .cellSite {

@@ -69,12 +69,17 @@ import type { Session } from "../app/session-types";
 import { UploadQueuePanel } from "../app/upload-queue";
 import {
   NO_FILTERS,
+  budgetFigures,
   budgetTone,
   filterInterventions,
   isFiltered,
   pageWindow,
+  reconcileFilters,
+  siteAlertSummary,
   siteAlerts,
+  wholePercent,
   type InterventionFilters,
+  type ListContext,
 } from "./enterprise-lists";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
 import type {
@@ -228,13 +233,16 @@ function siteFigures(site: Site, data: Workspace) {
       .map((p) => p.total_cents),
   );
   const budget = site.budget_cents || 0;
+  // `ratio` est le taux réel (peut dépasser 100), `width` la seule valeur plafonnée (barre).
+  const { ratio, width, over } = budgetFigures(committed, budget);
   return {
     budget,
     committed,
     paid,
     remaining: budget - committed,
-    ratio: budget > 0 ? Math.min(100, (committed / budget) * 100) : 0,
-    over: budget > 0 && committed > budget,
+    ratio,
+    width,
+    over,
     count: mine.length,
     open: mine.filter((i) => OPEN_STATUSES.includes(i.status)).length,
   };
@@ -807,19 +815,36 @@ function useInterventionList(c: Ctx) {
   const { scope } = c;
   const [filters, setFilters] = useState<InterventionFilters>(NO_FILTERS);
   const [page, setPage] = useState(1);
+  // Périmètre global vu au dernier rendu : un changement d’organisation ou de site global
+  // invalide le filtre local de site (sélecteur masqué) et ramène à la première page.
+  const context: ListContext = { organizationId: c.organization?.id || "", siteId: c.activeSite?.id || "" };
+  const [seen, setSeen] = useState(context);
+  const reconciled = reconcileFilters(
+    filters,
+    seen,
+    context,
+    scope.sites.map((s) => s.id),
+  );
+  if (seen.organizationId !== context.organizationId || seen.siteId !== context.siteId) setSeen(context);
+  if (reconciled.reset) {
+    if (reconciled.filters !== filters) setFilters(reconciled.filters);
+    if (page !== 1) setPage(1);
+  }
   const siteName = (id?: string | null) => scope.sites.find((s) => s.id === id)?.name || "";
-  const rows = filterInterventions(scope.interventions, filters, (i) =>
+  // Le prédicat effectif ne croise jamais un site local avec un périmètre incompatible.
+  const effective = reconciled.filters;
+  const rows = filterInterventions(scope.interventions, effective, (i) =>
     [siteName(i.site_id), i.description, shortId(i.id), fullAddress(i), category(i.category).label].join(" "),
   );
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-  const current = Math.min(page, pages);
+  const current = Math.min(reconciled.reset ? 1 : page, pages);
   return {
-    filters,
+    filters: effective,
     rows,
     pageRows: rows.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE),
     current,
     pages,
-    filtered: isFiltered(filters),
+    filtered: isFiltered(effective),
     siteName,
     setPage,
     set: <K extends keyof InterventionFilters>(key: K, value: InterventionFilters[K]) => {
@@ -1914,6 +1939,8 @@ function ProfessionalBlock({ c }: { c: Ctx }) {
 // Sites (M13 « Mes immeubles » + « Interventions récentes ») : tableaux denses, données réelles.
 function SitesView({ c }: { c: Ctx }) {
   const { session, scope } = c;
+  // Disponibilité réelle des approbations/échéances : jamais supposée (VIS-REV-001).
+  const alertsState = session.capabilities.professional;
   const recent = byDateDesc(scope.interventions).slice(0, 5);
   const siteName = (id?: string | null) => scope.sites.find((s) => s.id === id)?.name || "Hors site";
   return (
@@ -1942,17 +1969,33 @@ function SitesView({ c }: { c: Ctx }) {
             Mes sites <span className={styles.countPill}>{scope.sites.length}</span>
           </h2>
         </div>
+        {scope.sites.length && alertsState !== "unknown" && alertsState !== "available" ? (
+          <Unavailable title="Alertes des sites non vérifiées" state={alertsState}>
+            <p>
+              Les devis à approuver et les échéances de contrôle n’ont pas pu être chargés : aucune
+              absence d’alerte n’est affirmée ci-dessous.
+            </p>
+            <button type="button" className="button outline" onClick={() => void session.loadProfessional()}>
+              Réessayer
+            </button>
+          </Unavailable>
+        ) : null}
         {scope.sites.length ? (
           <div className={cx("panel", styles.tablePanel, styles.scrollX)}>
             <table className={cx(styles.table, styles.sitesTable)}>
-              <caption className="sr-only">Sites de l’organisation active</caption>
+              <caption className="sr-only">
+                Sites de l’organisation active ; interventions, budget et alertes {BASIS}
+              </caption>
               <thead>
                 <tr>
                   <th scope="col">Site</th>
                   <th scope="col">Interventions en cours</th>
                   <th scope="col">Budget engagé</th>
                   <th scope="col">Montant</th>
-                  <th scope="col">Alertes</th>
+                  <th scope="col">
+                    Alertes
+                    <span className={styles.thHint}>parmi les données chargées</span>
+                  </th>
                   <th scope="col">
                     <span className="sr-only">Actions</span>
                   </th>
@@ -1961,21 +2004,17 @@ function SitesView({ c }: { c: Ctx }) {
               <tbody>
                 {scope.sites.map((s) => {
                   const f = siteFigures(s, session.data);
-                  const tone = budgetTone(f.ratio, f.over);
-                  const alerts = siteAlerts(
-                    s.id,
-                    scope.approvals,
-                    scope.compliance,
-                    session.data.interventions,
-                    session.data.quotes,
+                  const tone = budgetTone(f.ratio ?? 0, f.over);
+                  const alerts = siteAlertSummary(
+                    alertsState,
+                    siteAlerts(
+                      s.id,
+                      scope.approvals,
+                      scope.compliance,
+                      session.data.interventions,
+                      session.data.quotes,
+                    ),
                   );
-                  const alertParts = [
-                    alerts.approvalsPending &&
-                      `${alerts.approvalsPending} devis à approuver`,
-                    alerts.overdue && `${alerts.overdue} échéance${alerts.overdue > 1 ? "s" : ""} dépassée${alerts.overdue > 1 ? "s" : ""}`,
-                    alerts.complianceOpen - alerts.overdue > 0 &&
-                      `${alerts.complianceOpen - alerts.overdue} contrôle${alerts.complianceOpen - alerts.overdue > 1 ? "s" : ""} à traiter`,
-                  ].filter(Boolean) as string[];
                   const writable = c.authority.canWriteSite(s.id);
                   return (
                     <tr key={s.id}>
@@ -2006,16 +2045,18 @@ function SitesView({ c }: { c: Ctx }) {
                         </span>
                       </td>
                       <td className={styles.cellBudget}>
-                        {f.budget > 0 ? (
+                        {f.ratio !== null ? (
                           <span className={styles.budgetLine}>
                             <span
                               className={cx(styles.budgetBar, styles[`budget_${tone}`])}
                               role="img"
                               aria-label={`${percent(f.ratio)} du budget de référence engagé${f.over ? ", budget dépassé" : ""}`}
                             >
-                              <span style={{ width: `${f.ratio}%` }} />
+                              <span style={{ width: `${f.width}%` }} />
                             </span>
-                            <span className={styles.budgetPercent}>{Math.round(f.ratio)} %</span>
+                            <span className={cx(styles.budgetPercent, f.over && styles.budgetPercentOver)}>
+                              {wholePercent(f.ratio)}
+                            </span>
                           </span>
                         ) : (
                           <span className={styles.muted}>Pas de budget de référence</span>
@@ -2026,12 +2067,21 @@ function SitesView({ c }: { c: Ctx }) {
                         <small>{f.budget > 0 ? `sur ${money(f.budget)}` : "devis acceptés"}</small>
                       </td>
                       <td className={styles.cellAlerts}>
-                        {alertParts.length ? (
+                        {alerts.kind === "alerts" ? (
                           <span className={alerts.overdue ? styles.alertRed : styles.alertAmber}>
-                            {alertParts.join(", ")}
+                            {alerts.parts.join(", ")}
                           </span>
+                        ) : alerts.kind === "none" ? (
+                          <span className={styles.muted}>
+                            Aucune<span className="sr-only"> parmi les données chargées</span>
+                          </span>
+                        ) : alerts.kind === "checking" ? (
+                          <span className={styles.muted}>Vérification…</span>
                         ) : (
-                          <span className={styles.muted}>Aucune</span>
+                          <span className={styles.alertUnverified}>
+                            <Icon name="lock" size={14} />
+                            Non vérifiées
+                          </span>
                         )}
                       </td>
                       <td className={styles.cellActions}>
@@ -2238,7 +2288,13 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
         <div className={styles.tile}>
           <span>Restant</span>
           <strong>{f.budget > 0 ? money(f.remaining) : "—"}</strong>
-          <small>{f.budget > 0 ? (f.over ? "Budget dépassé" : `${percent(f.ratio)} engagé`) : "Budget non défini"}</small>
+          <small>
+            {f.ratio === null
+              ? "Budget non défini"
+              : f.over
+                ? `Budget dépassé · ${percent(f.ratio)} engagé`
+                : `${percent(f.ratio)} engagé`}
+          </small>
         </div>
         <div className={styles.tile}>
           <span>Interventions en cours</span>
@@ -2300,8 +2356,16 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
               {f.budget > 0 ? ` / ${money(f.budget)}` : ""}
             </strong>
           </div>
-          <div className={cx(styles.budgetBar, f.over && styles.budgetBarOver)} role="img" aria-label={f.budget > 0 ? `${percent(f.ratio)} du budget engagé` : "Aucun budget de référence"}>
-            <span style={{ width: `${f.ratio}%` }} />
+          <div
+            className={cx(styles.budgetBar, f.over && styles.budgetBarOver)}
+            role="img"
+            aria-label={
+              f.ratio === null
+                ? "Aucun budget de référence"
+                : `${percent(f.ratio)} du budget engagé${f.over ? ", budget dépassé" : ""}`
+            }
+          >
+            <span style={{ width: `${f.width}%` }} />
           </div>
           <div className={styles.keyValue}>
             <span>Réglé (Stripe confirmé)</span>

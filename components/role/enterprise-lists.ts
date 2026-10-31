@@ -1,6 +1,6 @@
 // Logique pure des listes de l’espace entreprise (tableau interventions M4/M66, tableau sites M13).
 // Sans React ni CSS : testée par tests/ui/enterprise-lists.test.ts.
-import type { Approval, ComplianceRecord, Intervention, Quote } from "../app/types";
+import type { Approval, ComplianceRecord, ContractState, Intervention, Quote } from "../app/types";
 
 export type InterventionFilters = {
   site: string;
@@ -19,6 +19,34 @@ export const NO_FILTERS: InterventionFilters = {
 
 export const isFiltered = (f: InterventionFilters) =>
   Boolean(f.site || f.type || f.status || f.search.trim());
+
+/** Périmètre global (barre de contexte) dont dépend la validité du filtre local de site. */
+export type ListContext = { organizationId: string; siteId: string };
+
+/**
+ * Filtre local de site après un changement de périmètre global (VIS-REV-002).
+ * Le sélecteur local est masqué dès qu’un site global est actif : un site local conservé
+ * produirait une liste vide sans moyen visible de le retirer. Le site local est donc effacé
+ * quand l’organisation ou le site global change, ou quand il n’appartient plus aux sites
+ * du périmètre. Les autres filtres (type, statut, recherche, tri) restent valables.
+ * Retourne le même objet quand rien ne change, pour ne pas provoquer de rendu inutile.
+ */
+export function reconcileFilters(
+  filters: InterventionFilters,
+  previous: ListContext,
+  next: ListContext,
+  siteIds: readonly string[],
+): { filters: InterventionFilters; reset: boolean } {
+  const contextChanged =
+    previous.organizationId !== next.organizationId || previous.siteId !== next.siteId;
+  const orphan = Boolean(filters.site) && !siteIds.includes(filters.site);
+  if (!contextChanged && !orphan) return { filters, reset: false };
+  return {
+    filters: filters.site ? { ...filters, site: "" } : filters,
+    // Le périmètre a changé : la pagination repart de la première page.
+    reset: true,
+  };
+}
 
 /** Filtre puis trie ; `haystack` fournit le texte recherché pour chaque dossier. */
 export function filterInterventions(
@@ -81,3 +109,43 @@ export function siteAlerts(
 /** Teinte de la barre de budget : la couleur porte l’état, jamais la décoration. */
 export const budgetTone = (ratio: number, over: boolean): "normal" | "warning" | "over" =>
   over ? "over" : ratio >= 80 ? "warning" : "normal";
+
+/**
+ * Taux d’engagement d’un budget (VIS-REV-003) : `ratio` est le pourcentage réel, affiché et
+ * annoncé tel quel (150 % pour 150 engagés sur 100) ; `width` est la seule valeur plafonnée
+ * à 100, pour la largeur de la barre. Budget absent ou nul : `ratio` null, rien n’est déduit.
+ */
+export function budgetFigures(committedCents: number, budgetCents: number) {
+  if (!(budgetCents > 0)) return { ratio: null, width: 0, over: false };
+  const ratio = (committedCents / budgetCents) * 100;
+  return { ratio, width: Math.min(100, Math.max(0, ratio)), over: committedCents > budgetCents };
+}
+
+/** Pourcentage entier pour l’affichage (« 150 % ») ; null = budget non renseigné. */
+export const wholePercent = (ratio: number | null) =>
+  ratio === null ? null : `${Math.round(ratio)} %`;
+
+export type SiteAlertCounts = ReturnType<typeof siteAlerts>;
+export type SiteAlertSummary =
+  | { kind: "checking" }
+  | { kind: "unverified" }
+  | { kind: "none" }
+  | { kind: "alerts"; parts: string[]; overdue: boolean };
+
+/**
+ * Cellule « Alertes » d’un site (VIS-REV-001). L’absence d’alerte n’est affirmée que lorsque
+ * les données professionnelles sont réellement chargées ; sinon l’état est explicite
+ * (vérification en cours ou non vérifié). Aucune conformité réglementaire n’est déduite.
+ */
+export function siteAlertSummary(state: ContractState, alerts: SiteAlertCounts): SiteAlertSummary {
+  if (state === "unknown") return { kind: "checking" };
+  if (state !== "available") return { kind: "unverified" };
+  const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : one}`;
+  const pending = alerts.complianceOpen - alerts.overdue;
+  const parts = [
+    alerts.approvalsPending > 0 && plural(alerts.approvalsPending, "devis à approuver", "devis à approuver"),
+    alerts.overdue > 0 && plural(alerts.overdue, "échéance dépassée", "échéances dépassées"),
+    pending > 0 && plural(pending, "contrôle à traiter", "contrôles à traiter"),
+  ].filter((x): x is string => typeof x === "string");
+  return parts.length ? { kind: "alerts", parts, overdue: alerts.overdue > 0 } : { kind: "none" };
+}

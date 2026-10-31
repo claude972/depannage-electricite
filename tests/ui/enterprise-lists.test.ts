@@ -2,11 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   NO_FILTERS,
+  budgetFigures,
   budgetTone,
   filterInterventions,
   isFiltered,
   pageWindow,
+  reconcileFilters,
+  siteAlertSummary,
   siteAlerts,
+  wholePercent,
 } from "../../components/role/enterprise-lists";
 import type { Approval, ComplianceRecord, Intervention, Quote } from "../../components/app/types";
 
@@ -104,4 +108,96 @@ test("teinte du budget portée par l’état", () => {
   assert.equal(budgetTone(10, false), "normal");
   assert.equal(budgetTone(80, false), "warning");
   assert.equal(budgetTone(100, true), "over");
+});
+
+// ---- VIS-REV-003 : taux réel affiché, barre seule plafonnée ------------------------------
+test("budget : le pourcentage réel est conservé, seule la largeur de barre est plafonnée", () => {
+  assert.deepEqual(budgetFigures(0, 10000), { ratio: 0, width: 0, over: false });
+  assert.deepEqual(budgetFigures(4500, 10000), { ratio: 45, width: 45, over: false });
+  assert.deepEqual(budgetFigures(8000, 10000), { ratio: 80, width: 80, over: false });
+  assert.deepEqual(budgetFigures(10000, 10000), { ratio: 100, width: 100, over: false });
+  assert.deepEqual(budgetFigures(15000, 10000), { ratio: 150, width: 100, over: true });
+  assert.equal(wholePercent(150), "150 %");
+  assert.equal(wholePercent(79.6), "80 %");
+  assert.equal(budgetTone(150, true), "over");
+  assert.equal(budgetTone(80, false), "warning");
+  assert.equal(budgetTone(45, false), "normal");
+});
+
+test("budget manquant ou nul : aucun taux déduit", () => {
+  assert.deepEqual(budgetFigures(15000, 0), { ratio: null, width: 0, over: false });
+  assert.deepEqual(budgetFigures(0, 0), { ratio: null, width: 0, over: false });
+  assert.equal(wholePercent(null), null);
+});
+
+// ---- VIS-REV-002 : filtre local de site invalidé par le périmètre global ------------------
+const all = { organizationId: "org-1", siteId: "" };
+const siteB = { organizationId: "org-1", siteId: "s2" };
+const sites = ["s1", "s2"];
+
+test("périmètre inchangé : filtres et référence conservés, pas de remise à zéro", () => {
+  const filters = { ...NO_FILTERS, site: "s1", status: "paid" };
+  const out = reconcileFilters(filters, all, all, sites);
+  assert.equal(out.filters, filters);
+  assert.equal(out.reset, false);
+});
+
+test("site global choisi après un site local : le site local est effacé, la page repart à 1", () => {
+  const filters = { ...NO_FILTERS, site: "s1", status: "paid", search: "prise", sort: "oldest" as const };
+  const out = reconcileFilters(filters, all, siteB, sites);
+  assert.deepEqual(out.filters, { ...NO_FILTERS, site: "", status: "paid", search: "prise", sort: "oldest" });
+  assert.equal(out.reset, true);
+  // Le prédicat effectif ne demande plus s1 (tri « ancien » conservé) : le dossier de s2 reste visible.
+  assert.deepEqual(
+    filterInterventions(rows, { ...out.filters, status: "", search: "" }, text).map((i) => i.id),
+    ["b", "c", "a"],
+  );
+  assert.ok(filterInterventions(rows, { ...out.filters, status: "", search: "" }, text).some((i) => i.site_id === "s2"));
+});
+
+test("retour à « Tous les sites » et changement d’organisation : même invalidation", () => {
+  const filters = { ...NO_FILTERS, site: "s2" };
+  assert.deepEqual(reconcileFilters(filters, siteB, all, sites), { filters: { ...NO_FILTERS, site: "" }, reset: true });
+  assert.deepEqual(
+    reconcileFilters(filters, all, { organizationId: "org-2", siteId: "" }, ["s9"]),
+    { filters: { ...NO_FILTERS, site: "" }, reset: true },
+  );
+});
+
+test("changement de périmètre sans site local : remise à la première page seulement", () => {
+  const filters = { ...NO_FILTERS, status: "paid" };
+  const out = reconcileFilters(filters, all, siteB, sites);
+  assert.equal(out.filters, filters);
+  assert.equal(out.reset, true);
+});
+
+test("site local absent du périmètre courant : effacé même sans transition", () => {
+  const out = reconcileFilters({ ...NO_FILTERS, site: "s-gone" }, all, all, sites);
+  assert.deepEqual(out.filters, NO_FILTERS);
+  assert.equal(out.reset, true);
+});
+
+// ---- VIS-REV-001 : l’absence d’alerte n’est jamais affirmée sans données ------------------
+const none = { approvalsPending: 0, complianceOpen: 0, overdue: 0 };
+
+test("alertes : état explicite tant que les données professionnelles ne sont pas chargées", () => {
+  assert.deepEqual(siteAlertSummary("unknown", none), { kind: "checking" });
+  assert.deepEqual(siteAlertSummary("unavailable", none), { kind: "unverified" });
+  assert.deepEqual(siteAlertSummary("missing", none), { kind: "unverified" });
+  // Des compteurs à zéro en état indisponible ne deviennent jamais « Aucune ».
+  assert.notEqual(siteAlertSummary("unavailable", none).kind, "none");
+});
+
+test("alertes : données chargées, libellés réels avec accord du pluriel", () => {
+  assert.deepEqual(siteAlertSummary("available", none), { kind: "none" });
+  assert.deepEqual(siteAlertSummary("available", { approvalsPending: 1, complianceOpen: 0, overdue: 0 }), {
+    kind: "alerts",
+    parts: ["1 devis à approuver"],
+    overdue: false,
+  });
+  assert.deepEqual(siteAlertSummary("available", { approvalsPending: 2, complianceOpen: 3, overdue: 2 }), {
+    kind: "alerts",
+    parts: ["2 devis à approuver", "2 échéances dépassées", "1 contrôle à traiter"],
+    overdue: true,
+  });
 });
