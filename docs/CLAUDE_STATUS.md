@@ -651,3 +651,7 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - Tracking and business workers asked for **docs amendments now**; wiring in their own files only **after the helper is reviewed**.
 - Cookie preview adapter now useless: public 4c bare URL HTTP 200, mobile 390 without cookies, hydration, anonymous API 401 validated; public link given to the user. Helper not started/integrated; doc/WIP kept.
 - QA core fixtures atomic: contract 2ec7a34 before code (unchanged). GPS d3338e9 P2 closed (33 PASS), held until provenance and fixtures compatibility. Gateway 4 real PASS + cleanup closed. App product code 4c: 573 tests + tsc, CI 41235060343 GREEN, public 4c preview READY.
+
+## 2026-10-31 — business build-id amendment §17: 9ade36a (docs only)
+
+- `claude/web-qa-business` **`9ade36a402c9b2de6868ab1ac828a72736b65b9b`**, `docs/CLAUDE_BUSINESS_QA_CONTRACT.md` §17. Local mode unchanged (strict Flight id of the served page vs the same checkout's `.next/BUILD_ID`; mismatch FAIL; ambiguous/absent ⇒ not attributable). Remote mode: local `.next/BUILD_ID` never used or compared; attribution = root receipt (0600, outside Git, Vercel project/team/deployment, Git source at expected SHA) + unique Flight id of the public page via Codex `deployment-proof.mjs` (contract 1e5f808, reusing the business pure parser read-only); missing/invalid/discordant receipt ⇒ attributable=false, never a FAIL from a local id. No fake `.next/BUILD_ID`. No code; wiring waits for the helper review. Codex files untouched.
