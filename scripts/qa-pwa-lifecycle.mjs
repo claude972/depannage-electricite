@@ -11,7 +11,7 @@ import net from "node:net";
 import path from "node:path";
 import assert from "node:assert/strict";
 import { pathToFileURL } from "node:url";
-import { parseArgs, HELP, extractSwVersion, scanEnvKeyNames, classifyCacheEntries, compareStageEvidence, childEnv, buildServerArgs, readinessUrls, exitCodeFor, splitConsoleRecords, servedBuildIdMarkers, SW_PATH, OFFLINE_PATH, DEMO_HASH } from "./qa-pwa-lifecycle/lib.mjs";
+import { parseArgs, HELP, extractSwVersion, scanEnvKeyNames, classifyCacheEntries, compareStageEvidence, childEnv, buildServerArgs, readinessUrls, exitCodeFor, splitConsoleRecords, servedBuildIdMarkers, EXPECTED_PROBE, EXPECTED_OFFLINE, SW_PATH, OFFLINE_PATH, DEMO_HASH } from "./qa-pwa-lifecycle/lib.mjs";
 import { createServerController } from "./qa-pwa-lifecycle/servers.mjs";
 import { createRedactor } from "./qa/lib/redact.mjs";
 import { assertOutOutsideRepo, PreflightError } from "./qa/lib/config.mjs";
@@ -317,6 +317,15 @@ async function main(argv) {
     });
   };
   const screenshot = (page, name) => page.screenshot({ path: path.join(outDir, `${name}.png`), fullPage: true }).catch(() => null);
+  const WITNESS = { name: "qa-other-cache-preserve", key: "/qa-public-marker", body: "Public QA cache fixture only — created before the v3 activation" };
+  const readWitness = (page) =>
+    page.evaluate(async ({ name, key }) => {
+      const keys = await caches.keys();
+      if (!keys.includes(name)) return { present: false, body: null };
+      const cache = await caches.open(name);
+      const match = await cache.match(key);
+      return { present: Boolean(match), body: match ? await match.text() : null };
+    }, WITNESS);
   const fieldValue = (page) => page.getByRole("textbox", { name: FORM_LABEL }).first().inputValue();
   // ONE deliberate anonymous probe per step: GET /api/workspace, expected 401 (contract §4 steps 4/11).
   // Chromium logs exactly one "Failed to load resource … 401" line for it; the console classifier
@@ -445,7 +454,16 @@ async function main(argv) {
       const states = { a: await swState(tabs.a), b: await swState(tabs.b) };
       for (const [k, s] of Object.entries(states)) assert.equal(s.controllerSameAsInitial, true, `tab ${k} controller changed by the server switch alone`);
       result.versions.new = { disk: diskFacts(pre.next), served: { ...facts.served, pid: newServer.pid } };
-      return { oldPid: oldServer.pid, oldExit: oldServer.exit, newPid: newServer.pid, disk: result.versions.new.disk, served: result.versions.new.served, states };
+      // Third-party cache witness, created BEFORE any update/consent/activation (pilot REV-002): the
+      // v3 activation must purge only the worker's own old cache and leave this key AND its content.
+      await tabs.b.evaluate(async ({ name, key, body }) => {
+        const cache = await caches.open(name);
+        await cache.put(key, new Response(body, { headers: { "Content-Type": "text/plain; charset=utf-8" } }));
+      }, WITNESS);
+      const witnessBefore = await readWitness(tabs.b);
+      assert.equal(witnessBefore.present, true, "witness cache not created before activation");
+      assert.equal(witnessBefore.body, WITNESS.body);
+      return { oldPid: oldServer.pid, oldExit: oldServer.exit, newPid: newServer.pid, disk: result.versions.new.disk, served: result.versions.new.served, states, witnessBefore };
     });
 
     await step("6 new worker WAITING in both tabs without consent: notice + button, no reload, inputs intact", async () => {
@@ -494,20 +512,20 @@ async function main(argv) {
       return { a, b: await swState(tabs.b), bButtonVisible: bButton };
     });
 
-    await step("8 caches observed v2 → v3: old own cache purged, third-party cache preserved, v3 = /offline.html only", async () => {
-      await tabs.b.evaluate(async () => {
-        const cache = await caches.open("qa-other-cache-preserve");
-        await cache.put("/qa-public-marker", new Response("Public QA cache fixture only"));
-      });
+    await step("8 caches observed v2 → v3: old own cache purged, pre-activation third-party witness preserved (key + content), v3 = /offline.html only", async () => {
       const snapshot = await cacheSnapshot(tabs.b);
       assert.ok(snapshot.keys.includes(pre.next.swCacheName), `new cache ${pre.next.swCacheName} absent: ${JSON.stringify(snapshot.keys)}`);
       assert.ok(!snapshot.keys.includes(pre.old.swCacheName), `old cache ${pre.old.swCacheName} still present`);
-      assert.ok(snapshot.keys.includes("qa-other-cache-preserve"), "activation purged a cache it does not own");
+      assert.ok(snapshot.keys.includes(WITNESS.name), "activation purged a cache it does not own (witness created before activation)");
+      const witnessAfter = await readWitness(tabs.b);
+      assert.equal(witnessAfter.present, true, "witness entry missing after activation");
+      assert.equal(witnessAfter.body, WITNESS.body, "witness content changed across activation");
       const own = snapshot.entries.filter((e) => e.cache === pre.next.swCacheName).map((e) => e.path);
       assert.deepEqual(own, [OFFLINE_PATH]);
-      await tabs.b.evaluate(() => caches.delete("qa-other-cache-preserve"));
+      // Delete ONLY the witness the test created.
+      await tabs.b.evaluate(({ name }) => caches.delete(name), WITNESS);
       result.versions.new.served.cache_keys = (await cacheSnapshot(tabs.b)).keys;
-      return { keys: snapshot.keys, entries: snapshot.entries };
+      return { keys: snapshot.keys, entries: snapshot.entries, witnessAfter };
     });
 
     await step("9 explicit consent in stale tab B: reloads, not stuck on « Actualisation… », controlled by v3", async () => {
@@ -554,8 +572,9 @@ async function main(argv) {
       return { probes, keys: snapshot.keys, entries: snapshot.entries };
     }, { critical: false });
 
-    await step("12 console: only the single expected probe line (/api/workspace 401) per probe step; no other error; no overflow at 360/1280", async () => {
-      const split = { a: splitConsoleRecords(consoleRecords.a), b: splitConsoleRecords(consoleRecords.b) };
+    await step("12 console: only the single expected probe line (/api/workspace 401) per probe step and attributable offline network failures; any pageerror or other error fails; no overflow at 360/1280", async () => {
+      const offlineRule = { ...EXPECTED_OFFLINE, origin };
+      const split = { a: splitConsoleRecords(consoleRecords.a, EXPECTED_PROBE, offlineRule), b: splitConsoleRecords(consoleRecords.b, EXPECTED_PROBE, offlineRule) };
       const failing = [...split.a.failing, ...split.b.failing];
       const overflow = {};
       for (const width of [360, 1280]) {
@@ -564,7 +583,7 @@ async function main(argv) {
         overflow[width] = await noHorizontalOverflow(tabs.a, width);
       }
       assert.equal(failing.length, 0, `console errors outside the expected probe line: ${JSON.stringify(failing.slice(0, 5))}`);
-      return { probeExpected: [...split.a.probeExpected, ...split.b.probeExpected].map((r) => ({ phase: r.phase, url: r.url, text: r.text })), offlineExpected: split.a.offlineExpected.length + split.b.offlineExpected.length, overflow };
+      return { probeExpected: [...split.a.probeExpected, ...split.b.probeExpected].map((r) => ({ phase: r.phase, url: r.url, text: r.text })), offlineExpected: [...split.a.offlineExpected, ...split.b.offlineExpected].map((r) => ({ url: r.url, text: r.text })), overflow };
     }, { critical: false });
   } catch (error) {
     result.steps.push({ name: "harness", status: "FAIL", detail: { error: redactor.redactError(error).message } });

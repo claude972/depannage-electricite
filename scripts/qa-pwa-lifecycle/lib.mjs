@@ -175,13 +175,34 @@ export function isExpectedProbeRecord(record, probe = EXPECTED_PROBE) {
   return status === String(probe.status) && /Failed to load resource/.test(String(record.text || ""));
 }
 
+/** Network-failure console lines Chromium emits for a navigation attempted while disconnected. */
+export const EXPECTED_OFFLINE = { phase: "offline", textPattern: /Failed to load resource|ERR_INTERNET_DISCONNECTED|ERR_NETWORK_CHANGED|ERR_NAME_NOT_RESOLVED/, origin: null };
+
 /**
- * Console verdict: `failing` = every error/pageerror outside the offline phase that is not the single
- * expected probe line (at most `maxPerPhase` per probe phase; extra occurrences fail too);
- * `probeExpected` = the accepted probe lines; `offlineExpected` = failures during the offline phase.
- * Nothing else is ever masked.
+ * Strictly attributable offline network failure: a console (never pageerror) error, during the
+ * offline phase, whose text is of the disconnected-network class and whose URL belongs to the
+ * tested origin (when `offline.origin` is given). Anything else is NOT expected (pilot REV-003).
  */
-export function splitConsoleRecords(records, probe = EXPECTED_PROBE) {
+export function isExpectedOfflineRecord(record, offline = EXPECTED_OFFLINE) {
+  if (!record || record.kind !== "console" || record.type !== "error" || record.phase !== offline.phase) return false;
+  if (!offline.textPattern.test(String(record.text || ""))) return false;
+  if (!record.url) return false;
+  try {
+    const url = new URL(record.url, offline.origin || "http://localhost");
+    if (offline.origin && url.origin !== new URL(offline.origin).origin) return false;
+  } catch {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Console verdict: `failing` = every error/pageerror that is neither the single expected probe line
+ * (at most `maxPerPhase` per probe phase; extra occurrences fail too) nor a strictly attributable
+ * offline network failure; `probeExpected` / `offlineExpected` = the accepted lines. A `pageerror`
+ * is ALWAYS failing, whatever the phase. Nothing else is ever masked.
+ */
+export function splitConsoleRecords(records, probe = EXPECTED_PROBE, offline = EXPECTED_OFFLINE) {
   const failing = [];
   const probeExpected = [];
   const offlineExpected = [];
@@ -189,11 +210,11 @@ export function splitConsoleRecords(records, probe = EXPECTED_PROBE) {
   for (const r of records) {
     const isError = r.kind === "pageerror" || r.type === "error";
     if (!isError) continue;
-    if (r.phase === "offline") {
+    if (r.kind !== "pageerror" && isExpectedOfflineRecord(r, offline)) {
       offlineExpected.push(r);
       continue;
     }
-    if (isExpectedProbeRecord(r, probe)) {
+    if (r.kind !== "pageerror" && isExpectedProbeRecord(r, probe)) {
       perPhase[r.phase] = (perPhase[r.phase] || 0) + 1;
       if (perPhase[r.phase] <= probe.maxPerPhase) {
         probeExpected.push(r);

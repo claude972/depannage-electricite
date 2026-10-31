@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { EventEmitter } from "node:events";
-import { parseArgs, extractSwVersion, scanEnvKeyNames, classifyCacheEntries, compareStageEvidence, childEnv, buildServerArgs, readinessUrls, exitCodeFor, splitConsoleRecords, isExpectedProbeRecord, servedBuildIdMarkers, EXPECTED_PROBE, DEFAULT_PORT } from "../scripts/qa-pwa-lifecycle/lib.mjs";
+import { parseArgs, extractSwVersion, scanEnvKeyNames, classifyCacheEntries, compareStageEvidence, childEnv, buildServerArgs, readinessUrls, exitCodeFor, splitConsoleRecords, isExpectedProbeRecord, isExpectedOfflineRecord, servedBuildIdMarkers, EXPECTED_PROBE, EXPECTED_OFFLINE, DEFAULT_PORT } from "../scripts/qa-pwa-lifecycle/lib.mjs";
 import { createServerController } from "../scripts/qa-pwa-lifecycle/servers.mjs";
 import { createStopGate, createLifecycle, StopRequestedError } from "../scripts/qa/lib/lifecycle.mjs";
 
@@ -33,7 +33,7 @@ function fakeSpawner({ ignoreSigterm = false, exitDelayMs = 10 } = {}) {
     spawned.push({ pid: child.pid, dir: build.dir, child });
     return child;
   };
-  return { spawn, spawned, portListening: async () => listening.size > 0, alive: () => spawned.filter((s) => s.child.alive).map((s) => s.pid) };
+  return { spawn, spawned, listening, portListening: async () => listening.size > 0, alive: () => spawned.filter((s) => s.child.alive).map((s) => s.pid) };
 }
 
 test("server controller: start registers the pid before readiness, stop waits for exit and port release, SIGKILL after a bounded grace", async () => {
@@ -122,6 +122,73 @@ test("SIGINT while the OLD server is being stopped: no NEW spawn, no orphan, one
   // A second finalize (the main flow's `finally`) joins the same one: still one cleanup.
   await lc.finalize("completed");
   assert.equal(cleanups, 1);
+});
+
+test("REV-001: SIGINT while the port probe is SUSPENDED before spawn → zero late spawn, one cleanup, exit 130", async () => {
+  const proc = new EventEmitter();
+  const gate = createStopGate();
+  const fake = fakeSpawner({ exitDelayMs: 5 });
+  let releasePort;
+  const held = new Promise((resolve) => (releasePort = resolve));
+  let portCalls = 0;
+  const portListening = async () => {
+    portCalls++;
+    if (portCalls === 1) await held; // the pre-spawn probe hangs while the signal lands
+    return fake.listening.size > 0;
+  };
+  const controller = createServerController({ spawn: fake.spawn, probe: async () => true, portListening, gate, port: 3020, timeoutMs: 2000, sleep: (ms) => new Promise((r) => setTimeout(r, Math.min(ms, 5))) });
+  let cleanups = 0;
+  const lc = createLifecycle({ gate, drainTimeoutMs: 1000, cleanup: async () => { cleanups++; return controller.stopAll(); }, writeResults: async () => {} });
+  const exits = [];
+  const exited = new Promise((resolve) => lc.installSignalHandlers(proc, { exit: (code) => { exits.push(code); resolve(code); } }));
+  const starting = controller.start("new", { dir: "/tmp/new" });
+  await new Promise((r) => setImmediate(r)); // start() is now suspended inside portListening
+  proc.emit("SIGINT");
+  releasePort(); // the probe resolves AFTER the signal
+  await assert.rejects(starting, StopRequestedError);
+  assert.equal(fake.spawned.length, 0, "no spawn after the signal, even though the pre-spawn probe resolved later");
+  assert.equal(await exited, 130);
+  assert.deepEqual(exits, [130]);
+  assert.equal(cleanups, 1);
+  assert.deepEqual(fake.alive(), []);
+});
+
+test("REV-001: SIGINT while the READINESS probe is suspended after spawn → the spawned child is stopped, no orphan, start aborted", async () => {
+  const gate = createStopGate();
+  const fake = fakeSpawner({ exitDelayMs: 5 });
+  let releaseProbe;
+  const held = new Promise((resolve) => (releaseProbe = resolve));
+  const controller = createServerController({ spawn: fake.spawn, probe: async () => { await held; return true; }, portListening: fake.portListening, gate, port: 3020, timeoutMs: 2000, graceMs: 50, killMs: 50, sleep: (ms) => new Promise((r) => setTimeout(r, Math.min(ms, 5))) });
+  const starting = controller.start("new", { dir: "/tmp/new" });
+  await new Promise((r) => setImmediate(r));
+  assert.equal(fake.spawned.length, 1, "spawned before the signal");
+  gate.stop("signal:SIGINT");
+  releaseProbe(); // readiness would have been reported ready — but the gate is re-checked after the await
+  await assert.rejects(starting, StopRequestedError);
+  assert.deepEqual(fake.alive(), [], "the just-spawned child was stopped before any success");
+  assert.equal(controller.entries[0].proven_stopped, true);
+  assert.equal(controller.entries[0].ready_at, null, "never reported ready");
+});
+
+test("REV-003: a pageerror is ALWAYS a FAIL (offline phase included); only attributable offline network failures are expected", () => {
+  const origin = "http://localhost:3020";
+  const offline = { ...EXPECTED_OFFLINE, origin };
+  const netFail = { phase: "offline", kind: "console", type: "error", url: `${origin}/`, text: "Failed to load resource: net::ERR_INTERNET_DISCONNECTED" };
+  assert.equal(isExpectedOfflineRecord(netFail, offline), true);
+  assert.equal(isExpectedOfflineRecord({ ...netFail, kind: "pageerror" }, offline), false, "pageerror never expected");
+  assert.equal(isExpectedOfflineRecord({ ...netFail, phase: "online" }, offline), false);
+  assert.equal(isExpectedOfflineRecord({ ...netFail, text: "Uncaught TypeError: x is not a function" }, offline), false, "app error text");
+  assert.equal(isExpectedOfflineRecord({ ...netFail, url: "https://evil.invalid/x.js" }, offline), false, "foreign origin");
+  assert.equal(isExpectedOfflineRecord({ ...netFail, url: "" }, offline), false, "no URL = not attributable");
+  const split = splitConsoleRecords(
+    [netFail, { phase: "offline", kind: "pageerror", text: "TypeError: cannot read properties of undefined" }, { phase: "offline", kind: "console", type: "error", url: `${origin}/_next/static/x.js`, text: "Failed to load resource: net::ERR_INTERNET_DISCONNECTED" }, { phase: "offline", kind: "console", type: "error", url: `${origin}/`, text: "Refused to execute inline script" }],
+    EXPECTED_PROBE,
+    offline,
+  );
+  assert.equal(split.offlineExpected.length, 2);
+  assert.deepEqual(split.failing.map((r) => r.text), ["TypeError: cannot read properties of undefined", "Refused to execute inline script"]);
+  // Without an origin rule, a pageerror in the offline phase still fails.
+  assert.equal(splitConsoleRecords([{ phase: "offline", kind: "pageerror", text: "TypeError" }]).failing.length, 1);
 });
 
 test("servedBuildIdMarkers: the served HTML names exactly the build it comes from", () => {
@@ -253,7 +320,7 @@ test("splitConsoleRecords: one expected probe line per probe phase, every other 
     { phase: "probe-v3", kind: "console", type: "error", url: "http://localhost:3020/auth/callback", text: PROBE_LINE },
     { phase: "offline", kind: "console", type: "error", url: "http://localhost:3020/", text: "net::ERR_INTERNET_DISCONNECTED" },
   ];
-  const split = splitConsoleRecords(records);
+  const split = splitConsoleRecords(records, EXPECTED_PROBE, { ...EXPECTED_OFFLINE, origin: "http://localhost:3020" });
   assert.deepEqual(split.probeExpected.map((r) => r.phase), ["probe-v2", "probe-v3"]);
   assert.deepEqual(split.failing.map((r) => r.text), ["boom", "TypeError inside probe phase", PROBE_LINE]);
   assert.deepEqual(split.offlineExpected.map((r) => r.text), ["net::ERR_INTERNET_DISCONNECTED"]);
