@@ -63,3 +63,19 @@
   `#141414`/`#1A1A1A`, texte atténué `#B5B5B5` ; `#18794E` jamais en texte courant sur fond sombre.
 - Aucun avis, prix, délai, certification, statistique, nom de société ; aucune requête externe.
 - Vérif : 1440/1280/390 sans débordement, cibles ≥ 44 px, focus visible, Échap, console propre.
+
+## DESIGN-DELIVO-WEB-TEST-005 — accueil web à grande photo et deux diapositives (plan court, base 9430bf7)
+
+- Fichiers : `prototypes/delivo-test/web-slide.html`, `web-slide.css`, `web-slide.js`, `assets/hero-photo-1.jpg`,
+  `assets/hero-photo-2.jpg` (copies non retouchées : Pexels 17842832 par Fatih Yurtman, Pexels 27928762 par ranjeet),
+  captures `captures/web-slide-*.jpg`. `web.html` et les autres maquettes restent intacts.
+- Structure (inspiration de structure seulement, aucun texte, marque, avis, chiffre, prix, délai ni certification
+  repris) : barre haute opaque + emplacement « Publicité » / « Votre publicité ici », grande photo panoramique pleine
+  largeur avec dégradé noir (texte blanc ≥ 4,5:1 mesuré sur la zone de texte), titre, texte, CTA « Décrire ma panne » →
+  `demande.html` ; deux diapositives manuelles (boutons précédent/suivant et indicateurs ≥ 44 px, `aria-roledescription`
+  « carrousel » / « diapositive », `aria-current` sur l’indicateur actif, flèches clavier, aucune lecture automatique,
+  transition désactivée si `prefers-reduced-motion`) ; crédit discret « Photos d’illustration : Fatih Yurtman, ranjeet
+  (Pexels) — ne représentent pas notre équipe ».
+- Dessous : 4 pannes, parcours en 3 étapes (estimation indicative → devis → paiement séparé, sans délai), FAQ en
+  `<details>`, bandeau final, pied de page. Thème vert/noir/Plus Jakarta Sans, mêmes règles AA.
+- Vérif 1440/1280/390 : pas de débordement, cibles ≥ 44 px, focus, aucune requête externe, console propre.
