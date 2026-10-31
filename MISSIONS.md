@@ -86,3 +86,17 @@ Shared contracts/dependencies: lire mission WEB-PWA-20261030 et rapports ; verdi
 - owned files: MISSIONS.md/CORRECTIONS.md uniquement pour cette sous-mission
 - acceptance criteria: rapport réellement reçu et appliqué au SHA exact, aucun statut done sans revue croisée/preview requise
 Cross-verification: Codex examine les preuves de Claude et fait corriger les findings ; le rapport fait partie de la revue obligatoire de l’affectation principale, sans supprimer les limites d’intégration.
+
+
+## Mission WEB-PWA-ADMIN-LISTS-001 — dossiers admin paginés
+- agent: codex
+- status: in_progress
+- branch: codex/web-pwa-backend
+- base revision: f132f6a (intégration de référence8cdf5af)
+- objective: permettre au Super Admin de retrouver les anciens dossiers au-delà des fenêtres100 sans élargir les projections ou autorisations.
+- owned files: nouvelle route app/api/admin/interventions/route.ts et, seulement si nécessaire, migration010 additive dédiée à cette lecture ; tests API/SQL ciblés, docs/WEB_PWA_ADMIN_LISTS_CONTRACT.md et docs/CODEX_ADMIN_LISTS_VERIFICATION.md. Aucun fichier frontend ou paiement, aucune modification des anciennes migrations.
+- deliverables: contrat strict publié avant code, liste admin paginée stable et recherche/filtres documentés, détail via API existante si elle couvre le besoin ; projections minimales et anti-énumération interrôles.
+- acceptance: admin seulement côté serveur/RLS, pagination sans doublons sur jeu déterministe supérieur100, filtres appliqués avant pagination, curseur et limites invalides refusés, tri documenté, aucun total extrapolé des seules lignes, no-store, tests négatifs et rapport exactSHA. Bornage liste existante conservé pour dashboard. Frontend Claude consommera le contrat séparément.
+- dependencies: API server helpers et schéma actuel, Supabase dédié prêt ; pas de Stripe nécessaire. Relais à Claude à00h si lot non terminé.
+- verification report: CORRECTIONS.md / WEB-PWA-ADMIN-LISTS-001, rapport complémentaire docs/CODEX_ADMIN_LISTS_VERIFICATION.md
+- preview: integration/web-pwa après revue, pas de production
