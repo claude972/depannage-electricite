@@ -129,6 +129,24 @@ test("SIGNED_IN B arriving while A's verification is awaited (stale reply says A
   assert.deepEqual(h.state.views, []);
   assert.deepEqual(h.state.refreshes, ["A", "B"]);
 });
+test("logout during verification with a STALE verified-A reply still supersedes the attempt", async () => {
+  const h = controllerLike();
+  h.deps.currentUserId = async () => {
+    h.clearSessionState(); // user logs out while the verification is pending…
+    h.state.sdkUser = null;
+    return "A"; // …but the verification reply was computed before and still says A
+  };
+  const chain = h.runner.run(async (ctx) => {
+    h.listenerSignedIn("A");
+    const outcome = await adoptIdentity(ctx, "A", null, h.deps);
+    assert.equal(outcome, "superseded");
+  });
+  await chain;
+  assert.equal(h.state.userId, null, "anonymous state kept");
+  assert.equal(h.state.clears, 2, "no third reset / re-adoption of A");
+  assert.deepEqual(h.state.views, []);
+  assert.deepEqual(h.state.refreshes, ["A"], "no workspace load after logout");
+});
 test("logout during verification (SDK user null) supersedes the attempt", async () => {
   const h = controllerLike();
   h.deps.currentUserId = async () => {
