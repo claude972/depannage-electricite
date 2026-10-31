@@ -79,3 +79,4 @@
 - Dessous : 4 pannes, parcours en 3 étapes (estimation indicative → devis → paiement séparé, sans délai), FAQ en
   `<details>`, bandeau final, pied de page. Thème vert/noir/Plus Jakarta Sans, mêmes règles AA.
 - Vérif 1440/1280/390 : pas de débordement, cibles ≥ 44 px, focus, aucune requête externe, console propre.
+- Précision propriétaire : rester exactement dans le thème existant — `web-slide.html` charge `web.css` (mêmes boutons, cartes, rayons, espacements, vert/noir/Plus Jakarta Sans) et `web-slide.css` n’ajoute que le héros photo, le carrousel et la FAQ ; mesdepanneurs.fr n’inspire que l’ordre des sections ; aucun fond blanc ni nouveau style.
