@@ -1,0 +1,42 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { disputeActions, moderationAction, nextDisputeStatus, nextRefundStatus, refundActions, refundStatusLabel, validateAmountCents, validateDisputeDecision, validateModeration, validateRefundDecision } from "../../lib/features/platform-operations/state-machines";
+test("refund requests: settled is never reachable by an operator action and wording never claims a refund", () => {
+  assert.deepEqual(refundActions("requested"), ["approve", "reject", "cancel"]);
+  assert.deepEqual(refundActions("approved"), ["cancel"]);
+  for (const s of ["rejected", "cancelled", "settled"] as const) assert.deepEqual(refundActions(s), []);
+  assert.equal(nextRefundStatus("requested", "approve"), "approved");
+  assert.equal(nextRefundStatus("approved", "approve"), null);
+  assert.equal(nextRefundStatus("approved", "reject"), null);
+  assert.match(refundStatusLabel("requested"), /aucun remboursement effectué/);
+  assert.match(refundStatusLabel("approved"), /exécution non réalisée/);
+  assert.match(refundStatusLabel("settled"), /confirmé par le fournisseur/);
+  assert.equal(validateRefundDecision({ action: "reject", note: "court" }), "Un motif d’au moins 10 caractères est requis pour rejeter.");
+  assert.equal(validateRefundDecision({ action: "approve", note: "" }), null);
+});
+test("disputes: transitions and resolution validation mirror the database", () => {
+  assert.deepEqual(disputeActions("open"), ["review", "close"]);
+  assert.deepEqual(disputeActions("under_review"), ["resolve", "close"]);
+  assert.deepEqual(disputeActions("resolved"), []);
+  assert.equal(nextDisputeStatus("open", "resolve"), null);
+  assert.equal(nextDisputeStatus("under_review", "resolve"), "resolved");
+  assert.ok(validateDisputeDecision({ action: "resolve", note: "Longue note valide", outcome: "none" }));
+  assert.ok(validateDisputeDecision({ action: "resolve", note: "Longue note valide", outcome: "refund_requested" }));
+  assert.ok(validateDisputeDecision({ action: "resolve", note: "Longue note valide", outcome: "no_refund", refund_request_id: "x" }));
+  assert.ok(validateDisputeDecision({ action: "resolve", note: "court", outcome: "no_refund" }));
+  assert.equal(validateDisputeDecision({ action: "resolve", note: "Longue note valide", outcome: "refund_requested", refund_request_id: "x" }), null);
+  assert.ok(validateDisputeDecision({ action: "close", note: "", outcome: "other" }));
+  assert.equal(validateDisputeDecision({ action: "review", note: "" }), null);
+});
+test("moderation: hide needs a reason, restore does not; amounts parse to integer cents", () => {
+  assert.equal(moderationAction(null), "hide"); assert.equal(moderationAction("visible"), "hide"); assert.equal(moderationAction("hidden"), "restore");
+  assert.ok(validateModeration({ action: "hide", note: "court" }));
+  assert.equal(validateModeration({ action: "hide", note: "trop court" }), null);
+  assert.equal(validateModeration({ action: "restore", note: "" }), null);
+  assert.deepEqual(validateAmountCents("12,34", 100000), { cents: 1234 });
+  assert.deepEqual(validateAmountCents("0.1", 100000), { cents: 10 });
+  assert.ok("error" in validateAmountCents("0", 100000));
+  assert.ok("error" in validateAmountCents("1.234", 100000));
+  assert.ok("error" in validateAmountCents("10", 999));
+  assert.ok("error" in validateAmountCents("1e3", 100000));
+});
