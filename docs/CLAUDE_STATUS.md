@@ -760,3 +760,10 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 
 - Root verified the Delivo HTML/CSS independently: 390/360/1280 without overflow or JS errors; screenshot `/tmp/depannage-delivo-test-root-proof/accueil-390.png` conforms to the template (orange/black/Jakarta). Plan at `0871681`. Worker asked to commit/push the prototype now and report the SHA. Root prepares a separate prebuilt STATIC preview in the same Vercel project (app and current preview untouched, no secret/env). Not an app redesign.
 - Root QA run 4e8bc1a68a89: T6, T8 and T8-fail FAIL, all UI; other scenarios in progress; cleanup after. Lead diagnosis above (T8 = harness exact-text selector; T6 = to confirm with client-page evidence).
+
+## 2026-10-31 — Delivo test mockup pushed: fd13ce6
+
+- `claude/design-delivo-test` **`fd13ce6ec104cf829f120a10feaa3da70b0ffafb`** on plan `0871681`; commit contains only `prototypes/delivo-test/**` (index.html, styles.css, assets/electricite.jpg, Plus Jakarta Sans 400–700 ttf, captures home-390/360/1280.jpg) — lead verified.
+- Root's a11y fix included: `role="listitem"` removed from the category buttons; container `role="group" aria-label="Catégories de dépannage"` (lead verified in index.html); no visual change; 44 px targets; dialog opens on click, Escape closes, focus returns; no console errors; no overflow at 360/390/1280.
+- Font licence: no licence file for Plus Jakarta Sans in the ZIP; plan notes SIL OFL 1.1 by its author — owner to confirm before any use beyond this prototype.
+- Root: static preview from fd13ce6 (app and current preview untouched).
