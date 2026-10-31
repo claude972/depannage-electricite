@@ -2640,3 +2640,10 @@ Businesscallere6fbcbd revue49testsPASS MAIS P2horloge figée : reçuâge890s+fet
 ## GPS-T6-CLIENT-CARD-001 — ouvert31oct16h28AST
 
 RecetteROOTpublic4c/harness286 run4e8bc1a68a89 : T1–T5PASS,T6FAIL156060ms,T7PASS. T6 valideAPIpositionpérimée=null/stale et route503sansETA, mais carteclient «Suivi de l’artisan» absente90s (scenarios.mjs359, AppDefect). Ne pas conclureGPScomplet. Diagnosticlectureseule demandéleadClaude69172/UIexistant et reviewerUIexistant, aucuneéditionapp/harnaisactif ni assouplissementassertion autorisé. Suitecontinuepuiscleanup/readbackROOT. AgentBusiness9f324 acceptérevu51PASS, intégrationetcloudAPRÈSsuiteTracking.
+
+
+## DESIGN-DELIVO-TEST-001 — livré31oct16h35AST — agent:claude ready_for_review / ROOT revuebornéePASS
+
+Nouvelordreowner «justeune maquette test» respecté : prototypeisolébrancheclaude/design-delivo-test fd13ce6ec104cf829f120a10feaa3da70b0ffafb, plan0871681avantcode, sourceZIPpréservée/noirorange#FD6931/PlusJakarta/headerarrondi/categories/cartes/navbasse ; imageM41existante, aucune donnéeauth/backend. ROOTvues390/360/1280sansoverflow/erreurJS. Rôlelistitemquimasquaitboutoncatégorieretiréavantlivraison ; clicToutes/dialogue/EscapePASS. Pasrefonteapplication/adoptionimplicite.
+PreviewSTATIQUEséparée READY dpl_4XaaMvJrNLtSQgEVavCPFGFoY3BF https://depannage-electricite-7xo6v93eo-brafas-projects.vercel.app ; prebuiltstaticmêmeprojet, sanssecret/env embarqués, aucunemain/prod/app4cmodifiée. ExceptionpubliqueCEseuldéploiement, ROOTGETanon200/browserneuf390cookies0/hydratationnooverflow/noJSerrors/dialogueEscapePASS ; preuveprivée /tmp/depannage-delivo-public-proof.json. Capturepubliqueàmontrerowner, sourcefd13vérifiéepoussée. Lienapplicationréelle4crb28resteinchangé.
+GPSrun4e8toujoursencours séparément : T6/T8/T8-fail/T9FAIL,T1–5/T7/T10–13PASS connus ; aucunverdictfinalni cleanupencore. Préservercohorteactivejusqu'àrecettefinaliséeetreadbacks, pasBusinesscloudavantfin.
