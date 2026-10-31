@@ -87,6 +87,8 @@ import { PlatformPage } from "./platform-anchor";
 import { FeatureUnavailable } from "./feature-unavailable";
 import {
   appointmentSlotState,
+  credentialDateLabel,
+  credentialSummary,
   demoPlanningRange,
   fmtRating,
   missionSegmentOptions,
@@ -2332,7 +2334,7 @@ function Documents({
     ...k,
     state: credentialState(dossier?.credentials ?? [], k.kind, status, today),
   }));
-  const transmitted = states.filter((s) => s.state.key !== "missing").length;
+  const summary = credentialSummary(states.map((s) => s.state));
   return (
     <>
       <PageTitle title="Mes documents" subtitle="Justificatifs obligatoires et pièces de vos dossiers." />
@@ -2346,9 +2348,9 @@ function Documents({
             </p>
           </div>
           {!pending && dossier && (
-            <span className={styles.credCount}>
+            <span className={`${styles.credCount} ${summary.complete ? styles.credCountComplete : ""}`}>
               <Icon name="shield" size={20} />
-              {transmitted}/3 transmis
+              {summary.label}
             </span>
           )}
         </div>
@@ -2445,26 +2447,20 @@ function CredentialCard({
         <Icon name={icon} size={26} />
       </span>
       <div className={styles.credBody}>
-        <div className={styles.credTop}>
-          <div>
-            <div className={styles.credTitle}>{title}</div>
-            <p className={styles.credDesc}>{description}</p>
-          </div>
-          <Tag tone={state.tone}>{state.label}</Tag>
-        </div>
+        <div className={styles.credTitle}>{title}</div>
+        <p className={styles.credDesc}>{description}</p>
         {state.credential && (
           <p className={styles.credMeta}>
             {document ? document.name : "Document lié (nom indisponible dans vos données chargées)"}
-            {" — "}
-            {state.credential.expires_on
-              ? state.key === "expired"
-                ? `expiré le ${date(state.credential.expires_on)}`
-                : `valide jusqu’au ${date(state.credential.expires_on)}`
-              : "sans date d’expiration renseignée"}
             {" — transmis le "}
             {date(state.credential.created_at)}
           </p>
         )}
+      </div>
+      {/* M14 : colonne d’état à droite — pastille réelle et date d’expiration réelle, sinon dit sans date. */}
+      <div className={styles.credStatus}>
+        <Tag tone={state.tone}>{state.label}</Tag>
+        {credentialDateLabel(state) && <small>{credentialDateLabel(state)}</small>}
       </div>
       <div className={styles.credActions}>
         <button type="button" className="button outline" disabled={busy} onClick={onLink}>
