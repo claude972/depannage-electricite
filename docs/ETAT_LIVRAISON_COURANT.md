@@ -1,17 +1,17 @@
 # État courant de livraison
 
-Mis à jour le 2026-10-31T15:13:00-04:00 (America/Martinique). Les preuves ci-dessous sont bornées à leur SHA et à leur environnement. L'application complète des 76 capacités n'est pas déclarée terminée.
+Mis à jour le 2026-10-31T15:33:00-04:00 (America/Martinique). Les preuves ci-dessous sont bornées à leur SHA et à leur environnement. L'application complète des 76 capacités n'est pas déclarée terminée.
 
 ## Version et environnements
 
 | Élément | État vérifié |
 | --- | --- |
-| Source intégrée et poussée | `integration/web-pwa`, `c7c27bf56e89b2fe161193a5ae2a5d59f5264c88` : A5 support, probes initiales documents/siteOps et backend GPS avec correctif de rétention a658. Avant ce dernier correctif, a89 : 433 tests et TypeScript PASS. CI a89 échoue dans le harnais SQL isolé sur le bloc pg_cron ; correction du harnais en revue, CI c7 en cours. |
-| Serveur de recette local | Toujours `be17b24adbc0035d1ba82347c09f9045bac03d71`, build webpack réussi, port3017 ; assemblage récent pas encore rebâti. |
-| Backend dédié | Supabase `kcpyjzndybfdlnhvscbs`, actif ; migrations001–019 appliquées. 020 ancienne version a échoué42501 puis rollback entier confirmé ; correctif a658 intégré, contre-revue Claude et apply réel encore attendus. |
-| Transfert photo Edge | `native-document-upload`, version1, `verify_jwt=true`, source `d7abd8c` ; neuf scénarios réels antérieurs passent. |
-| Site public seven.vercel.app | Ancien déploiement, inchangé. Aucune nouvelle preview Vercel annoncée. |
-| Services différés | Vercel, Stripe et inscription du premier vrai SuperAdmin, sur instruction du propriétaire. Aucun débit réel ni publication production/store. |
+| Source intégrée | `integration/web-pwa`, `9ae1f5ed8ff57febbd22a5a48951949fd6b8cfb0` poussée,569testsPASS ; inclut harnais PWA671. App557/GPS44e4 etA5support intégrés. CI f8 deuxjobsPASS41233943801 ; nouvelleCI9ae à vérifier. |
+| Recette locale | App557d599, build UN3j_PEcrQn-l9kzidHfx webpackPASS, port3017 session68346 HTTP200 ; nouveau build réellement testé PWAOS. |
+| Backend | Supabase dédié actif,001–020 appliquées ; vraie purgecron et concurrence SKIPLOCKEDPASS, cohortes nettoyées et relues. |
+| Preview connectée | Git lié **f8**, READY `https://depannage-electricite-aw01mx58a-brafas-projects.vercel.app` ; loginVercel par défaut, lien temporaire sanscompteVercel livré privément au propriétaire. Hydratation mobile390 et anonyme401/no-store vérifiés. |
+| Anciennes URLs | seven.vercel.app ancienmain inchangé ; mh0ttyp8u premierf8 CLI ne recevait pas envbranche (Auth503), remplacé paraw01. |
+| Différés | Stripe et premier vrai SuperAdmin ; ni débit réel ni main/production/store. Vercel a de nouveau accepté les previews, ce blocage n'est plus actuel. |
 
 ## Preuves fonctionnelles acquises
 
@@ -29,15 +29,14 @@ Entreprise V5 : C01 est revu sans nouveau P1/P2 ; C08 conserve les permissions e
 
 ## Travail en cours et gates ouverts
 
-1. **Assemblage** : support A5 et initial probes intégrés, backend GPS intégré. UI GPS corrigée `8bcee45` en contre-revue avant fusion ; aucune recette connectée du nouveau GPS encore déclarée. Les trois défauts077 (START interrompu, cadence/backoff route, cadrage mobile) ont une livraison Claude7b3 mais restent à fermer par preuve indépendante.
-2. **Rétention GPS** : 019 appliquée ; ancien020 entièrement annulé après42501 LOCKcron.job. Correctif a658 sans ce verrou ni privilèges globaux, advisory coopératif et APIcron.schedule sous propriétaire courant. Revue indépendante et tests isolés PASS ; contre-revue Claude puis apply020 et vraie observation cron.job_run_details avec contraste expiré/frais restent requis. Stub ne vaut pas worker réel.
-3. **Expiration JWT** : exécutée à15:06:31 Martinique avec le même token réellement expiré, Auth exact encore actif avant appel. Réponse401 `UNAUTHORIZED_ASYMMETRIC_JWT`, verdict **OBSERVED** tant que qualification stricte du code générique reste ouverte. Signature vérifiée indépendamment sous JWKS public actuel et claims cohérents. Bail consommé, cleanup8PASS et postflight indépendant Auth404/profil/documents/interventions/audits/Storage0. **Aucun client QA maintenu pour ce bail désormais ; ne pas rejouer le verify.**
-4. **Révocation pendant upload** : harnais83fd accepté après revue74 tests/typecheck ; chaîne de propriété distante avant cleanup et observation objet exact/blockedPID corrigées. Prochaine preuve root : préparer cohorte, relire SQL rendus, vraie course sous pause3s. Aucune course réussie annoncée.
-5. **Documents/B2B** : recette947 réelle surbe17 :1PASS/4FAIL/3ANOMALY, interruption130, cleanup24PASS/drain0 et root14portées0/4Auth404/4Storage0. Défaut app quoteDocuments inconnu jamais chargé corrigé1a77 et intégré, pas encore rebâti. Harnais c97 corrige navigation réelle devis et diagnostics ; revue35PASS mais reste deux P2 : drain expiré ne doit pas démarrer suppression avec producteurs en vol, et RPC après awaittoken doit revérifier stopgate. Corrections demandées au worker existant avant relance.
-6. **QA tracking** : harnais8aa livré, seulement hors ligne. Root relève POST5xx incorrectement marqué refused au lieu d'inconnu et suivi in-flight incomplet ; correctif demandé. Ne pas lancer cloud avant ces fermetures.
-7. **Support opérateur A5** : backend6062 et UI2a7/fa8 intégrés ;018 appliquée, matrice SQL réelle en rollback et contrôle négatif vérifiés, deux postflights11portées0. Aucun opérateur/admin permanent créé. Positif HTTP/UI avec vrai compte et certaines courses interconnexions restent non acquis ; inscription du propriétaire explicitement différée.
-8. **Installation PWA desktop** : installation réellement obtenue mais pas preuve fenêtre OS/relance. Récupération f5 finit INCOMPLETE au timeout de résolution cible tab/page avant phase OSproof ; uninstall et registres absents confirmés. Profil test et deux métadonnées régénérées restent attribués et conservés ; nettoyage ciblé en préparation, pas suppression de profil utilisateur. Aucun résultat OS PASS. Ne pas changer3017 tant que protocole de récupération exige ancien build.
-9. **Admin** : préflight95e réel BLOCKED1/PASS0 avantseed, aucun faux dernier administrateur. Compte propriétaire absent et création explicitement différée ; pas de remplacement ni promotion.
+1. **GPS/ETA** : backend et UI44e4 intégrés ; pendingSTART, cadence/backoff, carte mobile et single-flight fermés par revue/repros. Pas encore recette GPS connectée complète. Harnais8a8441d pas accepté : Auth200malformé assimiléabsence, création inconnue clôturée trop tôt, manifeste initial/récupération non durables et provider503 comptéPASS ; quatre P2 transmisworker existant, pascloud8a.
+2. **Rétention020** : appliquée, vrai cron et contraste expiré/fraisPASS ; deux sessions distinctes/NOWAIT/pointverrouillé conservé puis purge après libérationPASS. Cleanup10portées0 et indépendant Auth/profiles/jobs/tracking0, jobpréservé1. Voir GPS_RETENTION_020_REAL.md.
+3. **PWA OS** : harnais671 surapp557 PASSinstallation/fenêtrenativeCUA/fermeture/relance/uninstall et cleanup indépendant, profiltest/PIDs/bundle/dossier généré absents. PreuveMacdesktop locale, pasOSiOS/Android. Ancienf5 INCOMPLETE conservé.
+4. **Documents/B2B** : recette4bd sur557 =8PASS6FAIL1ANOMALY, cleanup complet/root48checks0 +7Auth404/14Storage0. Corrections harnais documentées21f0249 ; **vrai défautproduit BudgetPanel après premierexercice** en correction. Parent/feuille503 et vrai retry à recetter. Ne pas convertir les échecs historiques enPASS.
+5. **Gatewayrévocation** : deux essais réels83fd FAIL/nonpreuve, l'un403 mais observation0ligne, l'autre201 courseperdue ; nettoyages35/37PASS et readbacks indépendants0. Vraie finalisation bloquée dans la fenêtre3s pas acquise.
+6. **JWTexpiry** : jetonoriginal réellement expiré refusé401, Authactif avantappel, signatureJWKSactuel prouvée ; OBSERVEDcodegénérique, bail consommé/nettoyé, pasPASSexpirationstrict. Qualification685 documente ce résultat sanspin arbitraire.
+7. **SupportA5/Admin** :018source etSQLréel acquis ; opérateurpositifHTTP/UI et certaines courses non acquis. Inscription du propriétaire explicitementdifférée, aucun admin/permanentremplaçant ;95e préflightBLOCKED/PASS0avantseed. Pas redemande maintenant.
+8. **Preview téléphone** : lien partageable privément livré, expire7novembre ; accèsmobile sanscompteVercel et anonyme401 vérifiés. Le token ne doit jamais entrer Git/app/manifeste/binaire. Correctifsbudget/QA suivants demanderont revue, recette et actualisation depreview.
 
 ## Limites du périmètre global
 

@@ -2613,3 +2613,8 @@ Business947 recette interrompue par un SIGINT possédé3162 après échecs panne
 ## Checkpoint ROOT 31 octobre15h13 Martinique
 
 Intégration c7c27bf poussée (backendGPS et correction020 source),019 appliquée/020 absente après rollback42501. CI a89 échoue au harnais SQL pg_cron ; correctif isolé demandé, ne pas annoncer vert. UI8bcee et QA8aa en revue, nouveaux défauts drain/5xx des harnais à fermer avant cloud. Businessc97 revue35PASS mais deux P2 restants ; ancien vrai run947 conserve1PASS4FAIL3ANOMALY et cleanup relu0. Bail expiry6466 consommé et nettoyé,401 observé codegénérique et signature sousJWKSactuel vérifiée, pas de PASS transformé. PWAf5 désinstallée mais OSproof non acquis et métadonnées/profil test à nettoyer selon adoption post-close relue. Voir état courant et nouveaux rapports exactSHA. Aucun nouveau déploiement ni compte propriétaire créé.
+
+
+## Checkpoint ROOT31octobre15h33 Martinique
+
+App557/GPS44e4 intégrée ; sourcef8 CIverte510testsPASS puisPWA671 intégrée9ae569PASS. NouvellepreviewGitliéeaw01READY, backend401réel etlienmobileprivé7jourscrééàdemandeexplicitepropriétaire, hydratation390sansVercelauthPASS. Aucun token dansGit.020réelle+cron2contraste etcron15/16 SKIPLOCKED2sessionsPASS/nettoyageindép0. PWAOS671/557nativeCUA+relaunch+cleanupindépPASS. Business78 =8PASS6FAIL1ANOMALY/nettoyé48checks0/7Auth404/14Storage0, vraiBudgetPanelbugetassertionsharnaisencorrection. QAtracking8a quatreP2encorereproduits, pascloud. DeuxcoursesgatewayréellesNONPROUVÉES/FAILetcohortesnettoyées. ExpiryancienconsomméOBSERVED,aucunbailactif. Voirlesnouveauxrapportsréelsdansdocs/reviews etétatcourant. Pasproduction/paiementréel/natif/store.
