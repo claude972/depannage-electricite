@@ -463,7 +463,7 @@ Objectif :lienclientdetail/artisanmission/entreprisedetailabsentcache=>unevraier
 LIVEcloudROOTREADONLYréel21:14:08.811977UTC :publication supabase_realtimeEXISTEetpublictablesEXACTinterventions/messages/quotes,paymentsABSENT ;authenticatedEXECUTEcan_access_intervention(uuid)=TRUE. DoncabsenceINTERVENTIONS/grantexclusréels ;rôlesocketetengineRLSencoreUNKNOWN,pasaffadissementRLS/newSQLsurhypothèse. Preuveprivée/tmp/depannage-live-workspace-readonly-2115-private.json,aucunecohorteoumodificationDB. LogsRealtimepasexposésCLI ;contratfuturobservationpassivebornéeJWTrole/matchUIDSANSJWTpayloadpersistenceavantcode siunécessaire. AttribuerLIVEetDEEPLINKséparément ;défensivelienn'estpaspreuvemessagesRealtimearrivent.
 
 
-## DESIGN-DELIVO-TEST-003 —31oct17h20AST — agent:claude — pending
+## DESIGN-DELIVO-TEST-003 —31oct17h20AST — agent:claude — done
 
 Ordreowner :«Jeveuxremplaceleorangepar duvert.Labannièrehauteorange doitrecevoirnospub». Interprétationannoncée :touteslesmaquettesenvert ;bannièrehautedel'ACCUEIL devientespacePUBLICITÉpourlesvisuelsdupropriétaire, emplacementneutreenattendantcontenufourni. ToujoursPROTOTYPESEULEMENT(brancheclaude/design-delivo-test/worktree/tmp/depannage-delivo-test-worktreebasec246067f6767ac102c39b8e6b59fd9e7426dd59f),pasrefonteapplicationaucunbackend/adserver/campagneréelle. ClaudeUIworkerprototypeexistantseul,ROOTreview/captures/previewPUBLICstatiqueisolée ;propriétéeprototypes/delivo-test/**+rapportplan.
 
