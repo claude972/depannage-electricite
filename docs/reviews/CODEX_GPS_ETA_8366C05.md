@@ -92,3 +92,62 @@ Rappel : `public.purge_expired_tracking_points()` (019:50-58) existe, est idempo
 | E. Accepter et **déclarer** la rétention (masquage RLS seul) | mention au contrat / registre de traitement | la coordonnée la plus récente d'un artisan peut subsister indéfiniment en base ; à confronter à l'objectif « pas d'historique » et au consentement `tracking-v1` |
 
 Le choix appartient au propriétaire et au pilote ; A et B n'exigent aucune modification de 019, C exige une extension et une migration, D modifie le SQL de Codex.
+
+## 9. Addendum — rétention planifiée `282edc1479b476a2a2662bbc0f322b6d5e38dfa2` (contrat `44cfb15` avant code)
+
+Même méthode : worktree détaché au SHA exact, lecture seule, supprimé ensuite ; aucun cloud, aucun credential, aucun pg_cron réel activé (PGlite + ordonnanceur **stub** déclaré), aucun fichier Codex modifié.
+
+### 9.1 Fichiers touchés (`git diff --stat c8ca4cc 282edc1`)
+
+`docs/TRACKING_CONTRACT.md` (+52), `supabase/migrations/202610310020_tracking_retention.sql` (nouveau, +72), `tests/sql-tracking-retention-review.mjs` (nouveau, +62), `tests/sql-tracking-review.mjs` (+3/−2 : applique 020 avec le stub). **Aucune migration antérieure modifiée** (`git diff --name-only c8ca4cc 282edc1 -- supabase/migrations` → 020 seule) ; aucun fichier applicatif, UI, package.
+
+### 9.2 Purge (`020:8-23`)
+
+| Exigence | Constat |
+| --- | --- |
+| Lot ≤ 1000 | CTE `materialized … limit 1000` (`020:12-16`) ; test : 1001 expirés → 1000, puis 1, puis 0 |
+| `FOR UPDATE SKIP LOCKED` | `for update of t skip locked` (`020:16`) ; une ligne tenue par une commande est laissée au passage suivant, jamais attendue |
+| Index | `tracking_point_expiry_idx` partiel `((least(sampled_at,received_at)),intervention_id) where latitude is not null` (`020:8`), même expression que le prédicat et l'ordre (`020:14-15`) |
+| Prédicat | `latitude is not null and least(sampled_at,received_at) < clock_timestamp()-60 s` : équivalent exact du critère 019 (`sampled_at` OU `received_at` périmé) ; points frais conservés (test : 2 frais survivent) |
+| Effet | met à NULL **uniquement** les 5 champs GPS ; ne touche ni session, consentement, `control_version`, destination, ni quota/leases (test : colonnes métier strictement identiques avant/après) |
+| Idempotence | 2e et 3e appels → 1 puis 0 ; aucune autre écriture |
+| ACL | même signature 019 remplacée (`create or replace`), `security definer set search_path=''`, `revoke … from public,anon,authenticated`, `grant execute … to service_role` ; test : anon/authenticated → 42501 sur la fonction et sur `cron.job` |
+
+### 9.3 pg_cron (`020:25-71`)
+
+- **Un seul job**, nom exact `depannage_tracking_retention_v1`, `* * * * *`, commande constante `select public.purge_expired_tracking_points();` (`020:56-60`).
+- **Collision refusée, jamais écrasée** : `lock table cron.job in share row exclusive mode` sérialise les installateurs concurrents ; `row_security=off` **local** pour voir toutes les lignes de ce nom (refus si la session ne peut pas lire sans RLS) ; 0 ligne → `cron.schedule` ; 1 ligne → vérification stricte (planning, commande, base, `username='postgres'`, `active`, `nodename='localhost'`, `nodeport`) sinon exception sans modification ; > 1 → exception. `cron.schedule(name,…)` (upsert natif) n'est **jamais** appelé quand une ligne existe. Test : chaque dérive (commande, planning, propriétaire, base, nœud, inactif, port) → échec P0001, table `cron.job` inchangée, aucun appel `schedule` supplémentaire ; job étranger `foreign_untouched` intact ; réapplication conforme → aucun nouvel appel.
+- **pg_cron absent** : la migration native lève `P0001 « pg_cron is unavailable »` et toute la transaction 020 est annulée (index et fonction compris) — pas de succès silencieux ; test : `cron.job` reste absent. Le stub n'est substitué que dans les tests, par remplacement explicite du bloc balisé `BEGIN/END PG_CRON INSTALL`, et il ne lance aucune horloge.
+- Accès client : refus si `anon`/`authenticated` ont `USAGE` sur `cron` (test : `grant usage … to authenticated` → 42501, rien modifié) ; aucun droit cron accordé aux rôles applicatifs ; seuls les droits de gestion `postgres` de l'installation officielle Supabase.
+- Rien n'active pg_cron dans les exécutions de revue (PGlite n'a pas l'extension ; le stub est un schéma `cron` factice local).
+
+### 9.4 Verrous et borne de rétention
+
+- La purge ne prend **que** les lignes `intervention_tracking` sélectionnées, sans attendre (SKIP LOCKED), sans verrou d'organisation/intervention/profil et sans trigger sur cette table : **aucun cycle** possible avec les commandes 019 (`org → intervention → profil → dossier → tracking`). Une commande `point/stop/start` peut attendre au plus la durée d'un UPDATE de lot sur sa ligne ; après la purge elle relit la ligne verrouillée (points NULL) et poursuit normalement (pas de faux rejet « obsolète » : `sampled_at` NULL). Pas de famine des commandes ; une ligne verrouillée en permanence serait seulement reportée.
+- Borne : ≈ 60 s (péremption) + ≤ 60 s (cadence) + durée d'exécution ; le contrat dit explicitement « fonctionnement ordinaire, **pas un TTL physique dur** » (panne cron, backlog > 1000/min, lignes verrouillées) et fournit des requêtes de supervision sans coordonnées. Cohérent avec la section 8.
+
+### 9.5 Exécuté par le réviseur à `282edc1`
+
+| Commande | Résultat |
+| --- | --- |
+| `PGLITE_MODULE=/tmp/depannage-web-pwa-sql/…/pglite/dist/index.js node tests/sql-tracking-retention-review.mjs` | **3 blocs PASS** (installation native refusée sans pg_cron ; job créé une fois / réapplication inchangée / job étranger intact ; 7 dérives + accès cron applicatif refusés ; purge service-only 1000 → 1 → 0, 2 frais conservés, champs métier inchangés) |
+| `PGLITE_MODULE=… node tests/sql-tracking-review.mjs` | **PASS 20 migrations** (018 lue depuis `6062f92`, 020 avec stub), rollback inchangé |
+| `npx tsx --test tests/tracking*.test.ts` | **15/15** |
+| `npx tsc --noEmit` | **propre** |
+
+**Non prouvé** : cloud ; application de 020 ; pg_cron réel (chargement, `cron.job` réel, RLS de `cron.job` vs `row_security=off` pour le rôle `postgres` Supabase, `nodename/nodeport` réels) ; une exécution par l'ordonnanceur (`cron.job_run_details.status='succeeded'`) ; SKIP LOCKED et concurrence à deux connexions ; volumétrie.
+
+### 9.6 Constats
+
+Aucun P1.
+
+- **P2-1 (section 5) : fermé côté code**, sous réserve de la preuve opérationnelle root (job réel + au moins un `succeeded` effaçant un point QA expiré, point frais contrasté) — tant qu'elle manque, la rétention reste « masquage RLS + purge à la lecture ».
+- **P2-2 (concurrence deux connexions)** : toujours ouvert ; s'y ajoute purge `SKIP LOCKED` vs `point` concurrent.
+- **P3-1 — L'application de 020 active elle-même pg_cron** (`create extension … with schema pg_catalog`, `020:32`) : c'est une décision propriétaire distincte de « déployer une purge » ; et l'amélioration de la fonction (lot + index) est **couplée** à l'ordonnanceur (pg_cron indisponible ⇒ 020 entière annulée). À confirmer comme voulu (le contrat le décrit) avant l'application.
+- **P3-2 — Hypothèses Supabase à vérifier en direct** : `postgres` lit bien `cron.job` avec `row_security=off` (sinon 020 échoue, fail-closed), `nodename='localhost'` et `nodeport=inet_server_port()` correspondent aux valeurs que `cron.schedule` enregistre ; un écart ferait échouer 020 sans dommage.
+- **P3-3 — `cron.job_run_details` croît sans nettoyage** (déclaré au contrat) : une ligne par minute ; prévoir sa rétention côté exploitation.
+- **P3-4 — Lot fixe 1000/min** : suffisant pour l'usage (un point actif par session) ; au-delà, backlog visible par la requête de supervision fournie.
+
+### 9.7 Verdict (borné)
+
+`282edc1` est **conforme au contrat `44cfb15`** : nouvelle migration seule, purge bornée/non bloquante/limitée aux champs GPS expirés/service-only, job unique à collision refusée, échec explicite sans pg_cron, aucun verrou nouveau sur le graphe 019. **Mergeable côté code**, application conditionnée à la décision propriétaire d'activer pg_cron (P3-1) et à la preuve root (job réel, run `succeeded`, point expiré effacé / frais conservé, deux connexions). Aucune exécution cloud ni pg_cron réel par le réviseur.
