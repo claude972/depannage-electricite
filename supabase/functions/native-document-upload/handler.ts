@@ -37,9 +37,22 @@ export interface GatewayDeps {
     mime: string,
   ): Promise<{ error: { message?: string } | null }>;
   removeObject(path: string): Promise<void>;
-  findDocument(id: string): Promise<DocumentRow | null>;
+  // Server-side readback of the metadata row, used only to report a success whose
+  // RPC response was lost. `error` set means the lookup itself failed. A "no row"
+  // answer never proves a rollback (a transport-failed call may still commit).
+  findDocument(id: string): Promise<{ row: DocumentRow | null; error: DbFailure }>;
   randomUUID(): string;
 }
+// SQL states raised inside finalize_document_upload: the transaction rolled back,
+// so the metadata row is known to be absent even without a readback.
+export function isDefiniteRollback(code: string | undefined): boolean {
+  return (
+    typeof code === "string" &&
+    /^(42501|P0001|P0002|53300|22[0-9A-Z]{3}|23[0-9A-Z]{3})$/.test(code)
+  );
+}
+export const UNCERTAIN_MESSAGE =
+  "L’enregistrement du fichier est incertain. Vérifiez la liste des documents du dossier avant de réessayer.";
 export class GatewayError extends Error {
   constructor(
     public status: number,
@@ -215,10 +228,23 @@ export async function handleNativeDocumentUpload(
     }
     if (finalized.error || !finalized.data) {
       // A lost response after commit must not orphan a referenced object.
-      const existing = await deps.findDocument(id).catch(() => null);
-      if (existing) return jsonResponse({ document: pick(existing) }, 201);
-      await compensate(deps, path);
-      throw mapDbCode(finalized.error?.code);
+      let lookup: { row: DocumentRow | null; error: DbFailure };
+      try {
+        lookup = await deps.findDocument(id);
+      } catch {
+        lookup = { row: null, error: { code: "network" } };
+      }
+      // The readback only confirms a success; it never decides a deletion.
+      if (lookup.row) return jsonResponse({ document: pick(lookup.row) }, 201);
+      if (isDefiniteRollback(finalized.error?.code)) {
+        // The database answered with an error raised inside the function: rolled back.
+        await compensate(deps, path);
+        throw mapDbCode(finalized.error?.code);
+      }
+      // Transport-level unknown (fetch threw, timeout, no PG error body): the
+      // transaction may still commit after this point. Keep the object, never
+      // claim failure; the client must re-check the documents list.
+      return jsonResponse({ error: UNCERTAIN_MESSAGE, uncertain: true }, 503);
     }
     return jsonResponse({ document: pick(finalized.data) }, 201);
   } catch (error) {

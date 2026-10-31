@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import {
+  UNCERTAIN_MESSAGE,
   handleNativeDocumentUpload,
+  isDefiniteRollback,
   mapDbCode,
   type DocumentRow,
   type GatewayDeps,
@@ -37,6 +39,7 @@ type Options = {
   rpc?: Record<string, RpcResult<unknown> | (() => RpcResult<unknown> | Promise<RpcResult<unknown>>)>;
   putError?: boolean | "throw";
   existing?: DocumentRow | null;
+  findError?: boolean | "throw";
 };
 function fake(options: Options = {}): { deps: GatewayDeps; calls: Calls } {
   const calls: Calls = { authenticated: [], selected: [], rpc: [], put: [], removed: [], found: [] };
@@ -73,7 +76,11 @@ function fake(options: Options = {}): { deps: GatewayDeps; calls: Calls } {
     },
     async findDocument(id) {
       calls.found.push(id);
-      return options.existing ?? null;
+      if (options.findError === "throw") throw new Error("readback failed");
+      return {
+        row: options.existing ?? null,
+        error: options.findError ? { code: "PGRST000", message: "connection refused" } : null,
+      };
     },
     randomUUID: () => NEW_ID,
   };
@@ -277,7 +284,7 @@ test("a lost finalization response with committed metadata returns 201 and delet
   assert.deepEqual((await body(response)).document, row);
   assert.equal(calls.removed.length, 0);
 });
-test("a thrown finalization without metadata is 503 and compensated", async () => {
+test("a transport-level finalization failure is 503 uncertain and the object is kept, even when the readback shows no row", async () => {
   const { deps, calls } = fake({
     rpc: {
       finalize_document_upload: () => {
@@ -287,7 +294,81 @@ test("a thrown finalization without metadata is 503 and compensated", async () =
   });
   const response = await handleNativeDocumentUpload(upload(jpeg, "image/jpeg"), deps);
   assert.equal(response.status, 503);
+  const parsed = (await response.json()) as { error: string; uncertain?: boolean };
+  assert.equal(parsed.error, UNCERTAIN_MESSAGE);
+  assert.equal(parsed.uncertain, true);
+  // The transaction may still commit after the readback: a "no row" answer decides nothing.
+  assert.equal(calls.removed.length, 0);
+});
+test("a definitive RPC error whose readback finds a committed row returns 201 and deletes nothing", async () => {
+  const { deps, calls } = fake({
+    rpc: { finalize_document_upload: { data: null, error: { code: "23505" } } },
+    existing: row,
+  });
+  const response = await handleNativeDocumentUpload(upload(jpeg, "image/jpeg"), deps);
+  assert.equal(response.status, 201);
+  assert.deepEqual((await body(response)).document, row);
+  assert.equal(calls.removed.length, 0);
+});
+test("compensation happens only for definitive database errors", async () => {
+  for (const code of ["42501", "P0002", "23505", "22023", "53300"]) {
+    const { deps, calls } = fake({ rpc: { finalize_document_upload: { data: null, error: { code } } } });
+    const response = await handleNativeDocumentUpload(upload(jpeg, "image/jpeg"), deps);
+    assert.ok(response.status >= 400 && response.status !== 503, code);
+    assert.deepEqual(calls.removed, [`${USER}/${NEW_ID}`], code);
+  }
+  for (const code of [undefined, "PGRST000", "PGRST504", "57014", "08006"]) {
+    const { deps, calls } = fake({ rpc: { finalize_document_upload: { data: null, error: { code } } } });
+    const response = await handleNativeDocumentUpload(upload(jpeg, "image/jpeg"), deps);
+    assert.equal(response.status, 503, String(code));
+    assert.equal(((await response.json()) as { uncertain?: boolean }).uncertain, true, String(code));
+    assert.equal(calls.removed.length, 0, String(code));
+  }
+});
+test("finalization outcome unknown AND readback unavailable: object kept, explicit uncertain response", async () => {
+  for (const findError of [true, "throw"] as const) {
+    const { deps, calls } = fake({
+      rpc: {
+        finalize_document_upload: () => {
+          throw new Error("fetch failed");
+        },
+      },
+      findError,
+    });
+    const response = await handleNativeDocumentUpload(upload(jpeg, "image/jpeg", { interventionId: JOB }), deps);
+    assert.equal(response.status, 503);
+    const parsed = (await response.json()) as { error: string; uncertain?: boolean };
+    assert.equal(parsed.error, UNCERTAIN_MESSAGE);
+    assert.equal(parsed.uncertain, true);
+    assert.doesNotMatch(JSON.stringify(parsed), new RegExp(`${USER}/|${NEW_ID}|PGRST|connection refused`));
+    assert.deepEqual(calls.found, [NEW_ID]);
+    assert.equal(calls.removed.length, 0, "object must be kept when absence is not confirmed");
+  }
+});
+test("an indeterminate finalization with a non-SQL error code is treated like a thrown one", async () => {
+  const { deps, calls } = fake({
+    rpc: { finalize_document_upload: { data: null, error: { code: "PGRST504", message: "upstream timeout" } } },
+    findError: true,
+  });
+  const response = await handleNativeDocumentUpload(upload(jpeg, "image/jpeg"), deps);
+  assert.equal(response.status, 503);
+  assert.equal(((await response.json()) as { uncertain?: boolean }).uncertain, true);
+  assert.equal(calls.removed.length, 0);
+});
+test("a definite SQL rollback (42501) is compensated even when the readback fails", async () => {
+  const { deps, calls } = fake({
+    rpc: { finalize_document_upload: { data: null, error: { code: "42501" } } },
+    findError: true,
+  });
+  const response = await handleNativeDocumentUpload(upload(jpeg, "image/jpeg", { interventionId: JOB }), deps);
+  assert.equal(response.status, 403);
   assert.deepEqual(calls.removed, [`${USER}/${NEW_ID}`]);
+});
+test("definite rollback states are exactly the ones finalize_document_upload raises", () => {
+  for (const code of ["42501", "P0001", "P0002", "53300", "22023", "22P02", "23505", "23502", "23514"])
+    assert.equal(isDefiniteRollback(code), true, code);
+  for (const code of [undefined, "network", "PGRST000", "PGRST504", "57014", "08006", "XX000"])
+    assert.equal(isDefiniteRollback(code), false, String(code));
 });
 test("storage upload failure is 503, the attempt path is compensated and finalization is skipped", async () => {
   for (const putError of [true, "throw"] as const) {
@@ -334,6 +415,10 @@ test("the Deno entry point keeps the server key in the environment only", async 
   assert.doesNotMatch(source, /Response\.json\([^)]*serverKey/);
   // Finalization runs under the user's token, never the server key.
   assert.match(source, /userClient\(token\)\.rpc\(fn, args\)/);
+  // The metadata readback propagates its error instead of reporting "absent".
+  const findDocument = /async findDocument\(id\) \{[\s\S]*?\n    \},/.exec(source)?.[0] ?? "";
+  assert.match(findDocument, /const \{ data, error \} = await admin/);
+  assert.match(findDocument, /return \{ row: [^;]*, error \};/);
   const config = await readFile(new URL("../supabase/config.toml", import.meta.url), "utf8");
   assert.doesNotMatch(config, /verify_jwt\s*=\s*false/);
 });

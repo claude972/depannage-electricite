@@ -73,7 +73,16 @@ Pas d’idempotence par nom de fichier ou date : chaque tentative choisit un UUI
 6. Lecture des octets ; `validateDocumentUpload` : `empty` → 422, `too_large` → 413, `type_mismatch` → 415.
 7. `id = crypto.randomUUID()`, `path = <uid>/<id>`. Upload Storage via le client serveur de la fonction (`upsert: false`, `contentType` = type détecté). Erreur → 503 et compensation best-effort du chemin de cette tentative (il peut avoir été écrit malgré une erreur réseau ; personne d’autre ne peut l’avoir créé).
 8. `rpc finalize_document_upload(p_id, p_path, p_name, p_mime, p_intervention_id)` **avec le client utilisateur** (auth.uid() réel, pas la clé serveur). Succès → 201.
-9. Échec de finalisation : le handler relit `documents` par `id` avec le client serveur ; si la ligne existe (réponse RPC perdue après commit), il renvoie 201 sans rien supprimer ; sinon il supprime **uniquement** `path` (objet de cette tentative) puis renvoie le code mappé (42501 → 403, P0002 → 404, 23505/P0001 → 409, 22023/23514/22P02/23502 → 422, 53300 → 429, autre → 503). Aucune suppression par préfixe, par propriétaire ou par nom ; jamais un objet d’une autre tentative.
+9. Échec de finalisation. Règle (revue GW-REV-001) : la suppression de l’objet n’est décidée **que** par une erreur définitive renvoyée par la base — un code SQL levé **dans** la fonction (42501, P0001, P0002, 53300, 22xxx, 23xxx), qui prouve le rollback. Toute incertitude de transport (fetch jeté, délai dépassé, pas de réponse HTTP, 5xx sans code PostgreSQL, code PGRST…) laisse la transaction possiblement en vol : elle peut encore être validée après coup. Dans ce cas l’objet est **conservé** et la réponse est explicitement incertaine. La relecture de `documents` par `id` (client serveur, erreur propagée par `index.ts`) sert **uniquement** à renvoyer 201 quand la ligne existe déjà ; une relecture « aucune ligne » ou en erreur ne décide jamais d’une suppression. Table des issues :
+
+| Finalisation | Relecture | Objet Storage | Réponse |
+|---|---|---|---|
+| succès | — | conservé | 201 |
+| toute erreur/exception, ligne trouvée | trouvée | conservé | 201 (réponse perdue après commit) |
+| code SQL définitif (42501, P0002, 23505, 22xxx, 53300…) | aucune ligne ou relecture en erreur | **supprimé** (ce chemin seul) | 403 / 404 / 409 / 422 / 429 selon le code |
+| incertitude de transport (exception, code absent ou non-SQL : PGRST, 57014, 08006…) | aucune ligne ou relecture en erreur | **conservé** | 503 `{ error: "L’enregistrement du fichier est incertain. Vérifiez la liste des documents du dossier avant de réessayer.", uncertain: true }` |
+
+Dans le cas incertain, le gateway n’affirme jamais l’échec et ne supprime rien : une ligne `documents` a peut-être été, ou sera, validée et référence l’objet. Le client relit la liste des documents (RLS) après un court délai ; s’il ne trouve rien, il recommence avec un nouveau fichier/identifiant. Un objet non référencé reste illisible (policies inchangées) ; son nettoyage relève d’une tâche opérateur ultérieure, hors de ce lot. Aucune suppression par préfixe, par propriétaire ou par nom ; jamais un objet d’une autre tentative.
 
 ## Migration 013 — `finalize_document_upload`
 

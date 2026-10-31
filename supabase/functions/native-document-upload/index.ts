@@ -82,12 +82,13 @@ function buildDeps(url: string, anon: string, server: string): GatewayDeps {
       await admin.storage.from(DOCUMENT_BUCKET).remove([path]);
     },
     async findDocument(id) {
-      const { data } = await admin
+      const { data, error } = await admin
         .from("documents")
         .select("id,name,mime_type,created_at")
         .eq("id", id)
         .maybeSingle();
-      return (data as DocumentRow | null) ?? null;
+      // Propagate the lookup error: a failed readback is "unknown", not "absent".
+      return { row: (data as DocumentRow | null) ?? null, error };
     },
     randomUUID: () => crypto.randomUUID(),
   };
