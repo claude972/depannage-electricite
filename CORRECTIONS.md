@@ -358,3 +358,164 @@ Timestamp: 2026-10-30T22:45:12.613920-04:00 — acteur Codex, coordination.
 - Les trois findings sont transmis via CLI à la session active ; rapport indépendant /tmp/depannage-ui-checkpoint-review.md attendu. Claude poursuit ses corrections de qualité UI, sans écriture concurrente sur ses fichiers.
 - Demandes partagées acceptées : Codex ajoute test:ui au check automatisé et agentRules:false au NextConfig pour préserver AGENTS.md. Fichiers package.json/next.config.ts, branche codex/web-pwa-backend ; revue des changements avant intégration.
 - QA cloud séparée autorisée sur le seul nouveau projet : comptes QA temporaires, scénarios refus intercomptes et Storage puis nettoyage des seules ressources créées. Aucun secret dans les rapports.
+
+
+## WEB-PWA-REVIEW-001 — rapport Claude de relecture du backend 1d93445
+
+# Rapport de revue croisée Claude — WEB-PWA-REVIEW-001 (suite)
+
+Même reviewer, même session, lecture seule, aucun code modifié. Aucune interaction avec la session frontend b4b555f0 ni ses agents de rôle. Affectation revendiquée : uniquement « Claude review assignment ».
+
+**SHA revu :** `1d93445400ca25b7c721d1bc946b6621b9b4a784`. Six commits depuis 6aaa1b3. Les migrations 003, 004 et 005 n'ont aucun diff depuis ma revue précédente.
+
+## Sources lues
+MISSIONS.md et CORRECTIONS.md distants, migrations 006, 007, 008, routes organizations, invitations/accept et artisan/performance, diff workspace et CI, WEB_PWA_CONTRACTS.md, WEB_PWA_PERFORMANCE_CONTRACT.md, CODEX_ORGANIZATION_VERIFICATION.md, CODEX_PERFORMANCE_VERIFICATION.md, CODEX_BACKEND_VERIFICATION.md, tests artisan-performance, sql-performance-review et diff de sql-review.
+
+## Contrôles réellement exécutés
+
+| Contrôle | Résultat |
+|---|---|
+| `npm test` | 30/30 |
+| `npm run typecheck` | passe |
+| `node tests/sql-review.mjs` avec PGlite, 8 migrations, stubs Auth/Storage | 29 groupes PASS |
+| `node tests/sql-performance-review.mjs` | 6 groupes PASS |
+| Build, Supabase/Stripe distants, preview, navigateur | non exécutés |
+
+## Recheck CL-001 et CL-002 : corrigés par la migration 008
+- **CL-001 clos.** Les trois RPC self-service passent par `guard_artisan_self_edit`, qui verrouille profiles puis artisan_profiles et refuse tout si `suspended`. Les anciennes fonctions sont renommées et leur EXECUTE révoqué. Un `approve_artisan(false)` répété conserve `suspended`, et crée un shell suspended pour un compte hérité sans dossier. Un `approve_artisan(true)` exige un dossier complet en submitted, approved ou suspended, et garde la disponibilité à false après suspension. Ordre de verrou identique dans le guard et dans approve_artisan. Vérifié en source et par les groupes SQL CL-001 et legacy que j'ai exécutés.
+- **CL-002 clos.** `available_missions` filtre `status='requested'` et `artisan_id is null` avant `mission_eligible`. Projection anonymisée, ordre et limite inchangés. Vérifié en source et par le groupe SQL CL-002.
+
+## Revue indépendante 006 : organisations et invitations
+Conforme au contrat dans le périmètre réel.
+- Email du destinataire lu dans `auth.users` avec confirmation requise, jamais depuis les métadonnées ni le corps. Comparaison normalisée exacte.
+- Code aléatoire de 32 octets généré côté serveur, seul le SHA-256 est stocké. Aucun grant SELECT sur invitations ni événements, projection expurgée sans hash. Invitations visibles par le seul owner, journal owner ou admin.
+- Acceptation sous verrou organisation puis invitation, statut pending non expiré, usage unique, non-membre. Rejeu refusé. Rôles client et manager seulement, artisan et admin non convertis.
+- Owner canonique exigé pour inviter, révoquer, changer un rôle, retirer, transférer. Pas d'action sur soi, pas de retrait ni dégradation d'un owner. Transfert atomique vers un membre manager à email confirmé, un seul owner conservé, invitations pendantes révoquées. Tout est scopé par organisation.
+- Retrait d'un membre : révocation immédiate des dossiers et documents via les helpers de la migration 003, confirmée par le groupe SQL correspondant.
+
+Rôles par site, payeur délégué, durée d'une URL signée déjà émise et email automatique restent ouverts et sont déclarés comme tels.
+
+## Revue indépendante 007 : performance et rendez-vous
+- `artisan_performance` ne prend aucun paramètre cible et dérive l'artisan de la session. Agrégats SQL sur le périmètre complet, pas sur la fenêtre workspace. Bornes demi-ouvertes, périodes contiguës de 32 jours maximum. Croissance nulle si montant précédent nul, note sur tout l'historique, ponctualité nulle, aucun « net » prétendu, garde d'entier sûr. La route refuse clés inconnues et doublons.
+- Rendez-vous dans workspace : uniquement pour les dossiers déjà chargés, sous la RLS existante, limite 200 signalée. Les offres anonymisées ne sont pas enrichies.
+
+## Nouveaux findings
+Aucun finding actionnable dans le périmètre revu.
+
+Observations sans action requise :
+- `link_artisan_credential` n'est pas sous le guard de suspension. Lier une pièce ne modifie ni statut ni disponibilité.
+- Le shell suspended d'un compte hérité ne se répare que par une action opérateur hors API. Blocage délibéré et documenté.
+- L'échec d'acceptation d'invitation n'est pas throttlé en SQL. L'espace de 256 bits rend l'énumération non pertinente.
+
+## Dépendances d'intégration frontend
+Transmettre `quote_id` à l'acceptation, créer la page d'acceptation d'invitation et nettoyer le fragment d'URL, consommer la route performance pour les chiffres globaux, invalider le contexte organisation sur 403.
+
+## Limites
+Pas de Supabase ni Stripe réels, pas de concurrence à deux sessions, pas de preview ni navigateur par ce reviewer. Nouvelle UI non vérifiée. La vérification en ligne de PWA-002 a été faite par la QA, pas par moi. Build non exécuté.
+
+Rapport également écrit dans `/Users/claudebrafa/.claude/plans/you-are-claude-independent-wobbly-charm.md`.
+
+## WEB-PWA-20261030 — revue indépendante du frontend 9fdb1e5
+
+# Independent frontend checkpoint review
+
+Reviewer: Codex subagent review_ui_checkpoint. Read-only owner worktree review. Reviewed exact pushed frontend `9fdb1e5cb09933e5b7e77d2962023ea386ba5310`; backend comparison integration `1e2eaed` (009). Source inspected via git show, not mutable working copy. AGENTS.md, DESIGN.md and Claude verification report read. No owner source edited.
+
+## Findings
+
+### UI-REV-001 — P1, successful login self-invalidates its controller continuation
+`components/courant-app.tsx:1476` and `:1497` call `clearSessionState()` after successful sign-in or a signup returning a session. Reset bumps identity generation at126. The next `ctx.alive()` is therefore false; refresh and all guarded navigation are skipped. `ctx.rebind()` exists in the guard but has no controller calls at this revision. An auth event may have launched an earlier refresh, but the later reset also invalidates its seq, so this does not reliably rescue login. SDK can be authenticated while UI remains public. Late auth completion also resets a newer identity without checking whether its originating login is still current.
+
+Required fix: handle self-created identity adoption explicitly (with safe rebind/current auth identity reconciliation), then load its workspace and navigate. Cover actual controller auth flow, including normal successful login, signup with session, auth-event ordering, and a stale login response arriving after another identity. Do not weaken stale-chain protection globally.
+
+### UI-REV-002 — P1, membership/scope revocation leaves professional caches visible
+`components/courant-app.tsx:160` refresh replaces workspace but never clears/reloads professional state for membership or site-scope changes. Professional loads only on mode/role change at381–383 or explicit request. No visibility/focus revalidation exists in reviewed components. The only permission-loss invalidation is loadOrganization403 at1130–1137, reached through Members view. loadSiteAccess403 at1290–1293 merely marks capability unavailable. Enterprise root siteAccess effect `components/role/enterprise-space.tsx:290` depends only organizationId/accessKey; role change or same-org grant change does not invalidate this cached overview.
+
+Reproduction: user opens organization contracts/compliance or a site, leaves tab; owner removes/restricts user; user returns. Existing organization/site, professional datasets and authority UI remain until unrelated refresh or Members endpoint is visited. Even an ordinary workspace refresh does not prune professional data. Server RLS continues to reject fresh reads/writes; this is stale UI disclosure/authority presentation, not a demonstrated server authorization bypass or a promise to erase previously seen bytes.
+
+Required fix: revalidate on foreground/focus, and centralized 403 handling plus membership/scope comparison to clear affected cached org/site/detail/professional data immediately. Reload all still-authorized scopes and remount dependent caches when rights change. Test same-account remove, manager→viewer, all→selected and a selected grant removal.
+
+### UI-REV-003 — P2, invitation duration validation contradicts API
+`components/role/enterprise-space.tsx:2942–2943` accepts 1–30days and displays that range (number input also max30). Current `app/api/organizations/route.ts:11` accepts only1–14. Entering15–30 passes form validation then is rejected422; demo would accept a validity impossible live.
+
+Required fix: align client input/validation/copy to1–14days and add boundary checks14accepted/15rejected.
+
+## Verified bounded corrections
+
+- CL-UI-003: paymentReturnMessage prioritizes paid server status over forged cancelled URL; no banking absence claim. Controller rereads payment endpoint, generation-checks async outcome. Stripe Connect return copy explicitly says account capabilities not verified.
+- CL-UI-004: 200 HTML/malformed/primitive/empty JSON throws ApiRequestError502; non2xx safe errors, network mutation outcome uncertain. No fake success found in this path.
+- CL-UI-006: runner itself correctly drops stale completion/error/notice/navigation and protects new identity busy flag; controller normal mutations generally wrap side effects. Login integration defect above remains.
+- Invitation acceptance posts strict token to existing verified-email SQL flow. No recipient email trusted from client; no server auth bypass found within this review.
+- Quote action sends displayed quote_id, consistent backend005 contract.
+
+## Actual checks
+
+- Exported exact revision components/app, tests/ui, lib/domain.ts into `/tmp/depannage-ui-review-9fdb1e5`, using existing read-only node_modules symlink. Ran tsx tests/ui: **21/21 PASS**, exit0. Tests cover pure guard, not controller successful login.
+- Additional minimal reproduction uses reviewed createGuard/createRunner plus exact successful-login reset→alive→navigation order: **reproduced no refresh, no navigation, false result**, exit0. Script `/tmp/depannage-ui-review-9fdb1e5/reproduce-login.ts`. Initial top-level-await harness failed CJS transform; wrapped async main and reran successfully. This is a pure ordering reproduction, not a mounted React/browser login test.
+- No full build, preview, actual Auth, Stripe, browser or visual comparison executed by this reviewer. Volume constrained; these remain pilot/QA checks.
+- No owner code/dependency/source modifications. Temporary reproduction/report only.
+
+Verdict: **changes required** for above concrete findings. Not a complete app audit and no completion claim.
+
+
+## WEB-PWA-20261030 — vérification Supabase réel
+
+# Supabase cloud verification
+
+UTC 2026-10-31T02:54:18.989Z
+
+Dedicated project: depannage-web-pwa (kcpyjzndybfdlnhvscbs). Expected schema: integration 1e2eaed, migrations001–009 already provisioned by pilot. Real hosted Auth, PostgREST and Storage endpoints; no local stubs. No schema/policy edits.
+
+| Check | Result | Detail |
+| --- | --- | --- |
+| Hosted Auth password login a | PASS |  |
+| Hosted Auth password login b | PASS |  |
+| Auth trigger ignores requested admin role | PASS |  |
+| Cross-client profile read filtered | PASS |  |
+| Direct role escalation rejected | PASS |  |
+| Role remains client | PASS |  |
+| Intervention creation derives authenticated owner a | PASS |  |
+| Intervention creation derives authenticated owner b | PASS |  |
+| Own intervention readable | PASS |  |
+| Cross-client intervention read filtered | PASS |  |
+| Anonymous intervention table denied | PASS |  |
+| Cross-client cancel rejected | PASS |  |
+| Denied cancel preserves requested status | PASS |  |
+| Direct status/payment spoof rejected | PASS |  |
+| Storage bucket private and 4MiB cap | PASS |  |
+| Own document metadata readable | PASS |  |
+| Cross-client document metadata filtered | PASS |  |
+| Owner may request short-lived Storage signed URL | PASS |  |
+| Other client cannot sign private object | PASS |  |
+| Anonymous cannot download private object | PASS |  |
+| Public Storage endpoint cannot serve private object | PASS |  |
+| Anonymous mutating RPC denied | PASS |  |
+
+## Cleanup
+
+- Remove QA objects: PASS
+- Remove QA metadata: PASS
+- Remove QA audit rows: PASS
+- Remove QA intervention rows: PASS
+- Remove actor QA audit rows: PASS
+- Delete QA Auth user: PASS
+- Remove actor QA audit rows: PASS
+- Delete QA Auth user: PASS
+
+## Limits
+
+This is bounded client isolation/Auth/Storage smoke verification. No Stripe account/payment, real email delivery, browser UI, organization site scopes, artisan workflow, concurrency or mobile installation tested. Admin-created confirmed QA users exercise login; this does not prove public signup/confirmation mail. Signed URLs and access tokens were never printed or committed. Only explicitly tracked temporary QA users/jobs/documents were removed.
+
+## Independent post-cleanup readback
+
+- No remaining tracked profiles: PASS
+- No remaining tracked interventions: PASS
+- No remaining tracked documents: PASS
+- No remaining tracked Storage objects: PASS
+- QA Auth identity removed: PASS
+- QA Auth identity removed: PASS
+
+
+## WEB-PWA-20261030 — demandes partagées intégrées
+
+Codex f132f6a : test:ui ajouté au check et agentRules:false conforme au type NextConfig installé. Intégration 8cdf5af poussée, CI et build Vercel en cours. Pas de nouveau build local sur volume plein. Claude session b4b555f0 informée via CLI de Supabase actif, de la poursuite autonome et des findings CL-UI-007/008/009. Statut global reste in_progress.
