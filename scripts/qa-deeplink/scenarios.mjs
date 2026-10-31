@@ -4,7 +4,7 @@
 // Mutations are the service seed only (TrackingFixtures: durable intent BEFORE emission, readback).
 import { randomUUID } from "node:crypto";
 import { AppDefect } from "../qa/lib/report.mjs";
-import { newPage, login, goHash, waitForWorkspace, expectVisible } from "../qa/lib/browser.mjs";
+import { newPage, login, logout, goHash, waitForWorkspace, expectVisible } from "../qa/lib/browser.mjs";
 import { createSessionPool } from "../qa-tracking/scenarios.mjs";
 import { gatedWait } from "../qa-tracking/lib/guard.mjs";
 import { trackingPath } from "../qa-tracking/lib/constants.mjs";
@@ -12,7 +12,7 @@ import { assertUnknownIs404 } from "../qa-tracking/lib/preflight.mjs";
 import { UI, VIEWS, SHOW_TIMEOUT_MS, QUIET_WINDOW_MS, REVALIDATE_GUARD_MS, QUIET_MS, GATE_TIMEOUT_MS } from "./lib/constants.mjs";
 import { createRealtimeBlock, installRealtimeBlock } from "./lib/realtime-block.mjs";
 import { observeDeeplinkNetwork } from "./lib/observe.mjs";
-import { installProbe, resetSeen, leakFlags, armLeakLatch, readLeakLatch } from "./lib/probe.mjs";
+import { installProbe, resetSeen, readProbe, leakFlags, armLeakLatch, readLeakLatch } from "./lib/probe.mjs";
 import { openCleanWindow, closeWindow, assertWindow, blocked } from "./lib/window.mjs";
 
 export const PREFLIGHT_SESSION = "dl-preflight";
@@ -59,6 +59,7 @@ export async function setupDeeplink(ctx) {
     await ctx.closeSession(PREFLIGHT_SESSION);
   }
   u.clientB = await tf.createUser("dl-client-b", "client");
+  u.clientC = await tf.createUser("dl-client-c", "client"); // A4: second identity for D4 (g), owns nothing
   u.artisanA = await tf.createUser("dl-artisan-a", "artisan");
   u.artisanB = await tf.createUser("dl-artisan-b", "artisan");
   u.owner = await tf.createUser("dl-owner", "manager");
@@ -332,13 +333,48 @@ export const SCENARIO_RUNNERS = {
       await notFound();
     });
     if (wf.seen.loading) throw new AppDefect("D4 (f): « Recherche du dossier… » shown again for a known absence");
-    const other = await ctx.freshSession("dl-d4g", user); // another session/context: memory not reused
-    await proveRealtimeBlocked(ctx, other, "D4 (g)");
-    await measure(ctx, other, "D4 (g) new context", 1, async () => {
-      await goHash(other.page, VIEWS.client(never));
-      await expectVisible(other.page.getByText(UI.clientNotFound, { exact: true }), "D4 (g): « introuvable »", { timeout: limits(ctx).showMs });
+    await sameIdentity(h, user, "D4 before (g)");
+    // (g) A4: a REALLY different identity in the SAME document. Precondition OUTSIDE any window, run
+    // once, never retried: shared logout (global ⇒ every clientA session revoked) + same-document
+    // login of clientC, identity proven, document marker unchanged. Any failure ⇒ BLOCKED.
+    const switcher = identitySwitch(ctx);
+    // Leave the absent dossier first: after the login the view must not re-resolve it by itself
+    // (that read would land before the window); the window's own navigation is the only cause.
+    await goHash(h.page, VIEWS.requests);
+    const m0 = (await readProbe(h.page))?.marker;
+    if (!m0) throw blocked("D4 (g) precondition: document marker missing");
+    try {
+      await switcher.logout(h);
+    } catch (error) {
+      throw blocked(`D4 (g) precondition: logout failed (${error?.message || error}); no retry`);
+    }
+    ctx.revokeUser(user.id); // the app logout is global: clientA sessions are revoked
+    try {
+      await switcher.login(h, ctx.users.clientC);
+    } catch (error) {
+      throw blocked(`D4 (g) precondition: login of the second identity failed (${error?.message || error}); no retry`);
+    }
+    ctx.rebind("dl-d4", ctx.users.clientC);
+    try {
+      await waitForWorkspace(h.page, ctx.users.clientC.id, 30000);
+    } catch (error) {
+      throw blocked(`D4 (g) precondition: second identity not proven (${error?.message || error})`);
+    }
+    const m1 = (await readProbe(h.page))?.marker;
+    if (m1 !== m0) throw blocked("D4 (g) precondition: the document changed during the identity switch (reload)");
+    await measure(ctx, h, "D4 (g) other identity, same document", 1, async () => {
+      await goHash(h.page, VIEWS.client(never));
+      await notFound();
     });
-    s.note("D4: one read per cause, none in the quiet window, absence memory per context; « Actualiser » visible");
-    await sameIdentity(h, user, "D4");
+    s.note("D4: one read per cause, none in the quiet window, absence memory keyed by identity (same document); « Actualiser » visible");
+    await sameIdentity(h, ctx.users.clientC, "D4 (g)");
   },
 };
+
+/** A4: identity switch, injectable for tests; defaults to the shared logout + same-document login. */
+export function identitySwitch(ctx) {
+  return {
+    logout: ctx.identity?.logout || ((h) => logout(h.page)),
+    login: ctx.identity?.login || ((h, user) => login(h, ctx.base, user, ctx.projectRef, { sameDocument: true })),
+  };
+}

@@ -51,6 +51,7 @@ const role = () => st.data.profile.role;
 const notFound = () => role() === "artisan" ? "<h2>Dossier introuvable</h2>" : role() === "manager" ? "<h2>Dossier introuvable sur ce périmètre</h2>" : "<h2>Intervention introuvable</h2><p>Ce dossier n’existe pas dans votre espace ou son lien n’est plus valide.</p>";
 function attempt(id) { st.memory[id] = "pending"; render(); refresh().then((ok) => { st.memory[id] = ok ? "loaded" : "failed"; render(); }); }
 function render() {
+  if (!st.data) return;
   const [view, id] = location.hash.slice(1).split("/");
   document.getElementById("badge").innerHTML = role() === "client" ? '<button type="button" id="b">Connexion temps réel : ' + (st.connected ? "Connecté" : "non connectée") + " · Actualiser</button>" : "";
   const b = document.getElementById("b"); if (b) b.onclick = () => refresh().then(render);
@@ -74,8 +75,17 @@ function render() {
   }
   m.innerHTML = "<h1>Mes demandes</h1><ul>" + st.data.interventions.map((i) => "<li>" + i.id.slice(0, 8) + "</li>").join("") + "</ul>";
 }
+window.__appLogout = () => {
+  if (VARIANT === "reloadOnLogout") return location.reload();
+  st.data = null; document.getElementById("badge").innerHTML = ""; document.getElementById("m").innerHTML = "<p>Connexion</p>";
+};
+window.__appLogin = () => readWorkspace().then((j) => {
+  st.data = j;
+  if (VARIANT !== "memoryNoIdentity") st.memory = {}; // attempt memory keyed by identity: reset on identity change
+  render();
+});
 (async () => {
-  st.data = await readWorkspace();
+  try { st.data = await readWorkspace(); } catch { return; }
   const ws = new WebSocket("ws://" + location.host + "/realtime/v1/websocket?apikey=SECRET&vsn=1.0.0");
   ws.onopen = () => { st.connected = true; render(); }; ws.onclose = () => { st.connected = false; render(); };
   addEventListener("hashchange", render); render();
@@ -123,7 +133,7 @@ function fakeTf(app, cohort) {
   };
 }
 
-async function runScenarios(variant, names) {
+async function runScenarios(variant, names, { failLogin = false } = {}) {
   configureBrowser({ timeoutMs: 8000 });
   const app = await startApp(variant);
   const { chromium } = createRequire(import.meta.url)(PW);
@@ -133,6 +143,7 @@ async function runScenarios(variant, names) {
   const cohort = createCohort();
   const intents = new IntentLog(path.join(mkdtempSync(path.join(tmpdir(), "qa-dl-")), "intents.json"));
   const state = { watch: new Map(), canaries: [] };
+  const calls = { login: 0 };
   const pool = createDeeplinkPool({
     browser, base: app.base, supabaseOrigin: app.base, projectRef: "p", redactor, gate, intents, state,
     deps: {
@@ -147,9 +158,25 @@ async function runScenarios(variant, names) {
     api: { get: async () => ({ status: 404, cache: "private, no-store" }) },
     limits: { guardMs: 400, quietMs: 250, timeoutMs: 10000, showMs: 4000, quietWindowMs: 600 },
     session: (l, u) => pool.session(l, u), freshSession: (l, u) => pool.freshSession(l, u), closeSession: (l) => pool.closeSession(l),
+    revokeUser: (id) => pool.revokeUser(id), rebind: (l, u) => pool.rebind(l, u),
+    // A4: the mini-app's own identity switch, in the SAME document (no navigation).
+    identity: {
+      logout: async (h) => {
+        await h.context.clearCookies();
+        await h.page.evaluate(() => window.__appLogout());
+      },
+      login: async (h, user) => {
+        calls.login++;
+        if (failLogin) throw new Error("login refused by the test");
+        await h.context.addCookies([{ name: "qa-user", value: user.id, url: app.base }]);
+        await h.page.waitForFunction(() => typeof window.__appLogin === "function");
+        await h.page.evaluate(() => window.__appLogin());
+      },
+    },
   };
   const report = createReport({}, redactor);
   const results = {};
+  results.calls = calls;
   try {
     await setupDeeplink(ctx);
     for (const name of names) {
@@ -189,4 +216,17 @@ test("real Chromium — DL-QA-806-001: a TRANSIENT foreign-id leak (text, data-*
     assert.equal(r.D3.status, "FAIL", `${variant}: ${JSON.stringify(r.D3)}`);
     assert.match(r.D3.error, /foreign dossier id appeared in the DOM .*even transiently/, variant);
   }
+});
+
+test("real Chromium — A4 / DL-QA-806-002: D4 (g) other identity in the SAME document — identity-less memory FAIL, reload BLOCKED, failed login BLOCKED after 1 attempt", { skip: SKIP, timeout: 300000 }, async () => {
+  const noIdentity = await runScenarios("memoryNoIdentity", ["D4"]);
+  assert.equal(noIdentity.D4.status, "FAIL", JSON.stringify(noIdentity.D4));
+  assert.match(noIdentity.D4.error, /D4 \(g\).*0 GET \/api\/workspace in a clean window \(expected 1\)/);
+  const reload = await runScenarios("reloadOnLogout", ["D4"]);
+  assert.equal(reload.D4.status, "BLOCKED", JSON.stringify(reload.D4));
+  assert.match(reload.D4.error, /document changed during the identity switch/);
+  const failed = await runScenarios("ok", ["D4"], { failLogin: true });
+  assert.equal(failed.D4.status, "BLOCKED", JSON.stringify(failed.D4));
+  assert.match(failed.D4.error, /login of the second identity failed.*no retry/);
+  assert.equal(failed.calls.login, 1, "exactly one login attempt");
 });

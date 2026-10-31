@@ -400,3 +400,5 @@ Finding: D4 (g) reopens the SAME clientA in a fresh document. An attempt memory 
    - Variant `reloadOnLogout` ⇒ D4 **BLOCKED** (marker changed in the precondition).
    - A failed login during the precondition ⇒ BLOCKED with no new attempt (login call counter = 1).
    - The identity switch is injectable (`ctx.switchIdentity`), defaulting to the real shared `logout` + `login({ sameDocument: true })`. The mini-app provides its own switch, through the same document.
+
+**A4 implementation note (002 code).** Before step 2.1 (reading the marker), the page leaves the absent dossier: `goHash("requests")`, outside any window. Otherwise the view still showing `detail/<UUID>` would resolve it again on its own right after the login, BEFORE the window, and the window's own navigation would no longer be the only cause. Nothing else in A4 changes.

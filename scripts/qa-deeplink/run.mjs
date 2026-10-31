@@ -56,7 +56,7 @@ function installTee(outDir, redactor) {
   };
 }
 
-const bindPool = (pool) => ({ session: (l, u) => pool.session(l, u), freshSession: (l, u) => pool.freshSession(l, u), closeSession: (l) => pool.closeSession(l) });
+const bindPool = (pool) => ({ session: (l, u) => pool.session(l, u), freshSession: (l, u) => pool.freshSession(l, u), closeSession: (l) => pool.closeSession(l), revokeUser: (id) => pool.revokeUser(id), rebind: (l, u) => pool.rebind(l, u) });
 
 /**
  * `deps` (tests only; defaults are the real modules): loadCredentials, verifySha, loadPlaywright,
