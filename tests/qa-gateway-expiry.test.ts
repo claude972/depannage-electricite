@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import {
   EXPIRED_PLATFORM_CODES,
+  OBSERVED_EXPIRED_PLATFORM_CODES,
+  classifyExpiredProbe,
   EXPIRY_LEASE_MAX_S,
   EXPIRY_VERIFY_MARGIN_S,
   UsageError,
@@ -459,4 +461,40 @@ test("the orchestrator wires the suites without replaying the nine scenarios, ke
   assert.doesNotMatch(source, /console\.log\([^)]*(lease|token)/);
   assert.match(source, /--suite expiry-prepare/);
   assert.match(source, /--suite expiry-verify --lease/);
+});
+
+// ---- Root verify result (2026-10-31 19:06:31 UTC): qualification of the observed behaviour ----------
+test("classification of the expired-token call: observed code stays OBSERVED (not pinned), other 401 codes OBSERVED, 2xx FAIL, network/5xx INCOMPLETE", () => {
+  assert.deepEqual([...OBSERVED_EXPIRED_PLATFORM_CODES], ["UNAUTHORIZED_ASYMMETRIC_JWT"]);
+  assert.ok(!EXPIRED_PLATFORM_CODES.includes("UNAUTHORIZED_ASYMMETRIC_JWT"), "the generic gateway code is recorded, never bound as a PASS criterion");
+  const observed = classifyExpiredProbe({ status: 401, bodyText: '{"code":"UNAUTHORIZED_ASYMMETRIC_JWT","message":"Invalid JWT"}' }, []);
+  assert.equal(observed.outcome, "observed");
+  assert.equal(observed.observedCode, "UNAUTHORIZED_ASYMMETRIC_JWT");
+  const other = classifyExpiredProbe({ status: 401, bodyText: '{"code":"UNAUTHORIZED_SOMETHING_NEW","message":"x"}' }, []);
+  assert.equal(other.outcome, "observed");
+  assert.equal(other.observedCode, "UNAUTHORIZED_SOMETHING_NEW", "an unknown future code is recorded, never PASS");
+  for (const status of [200, 201, 204]) assert.equal(classifyExpiredProbe({ status, bodyText: "{}" }, []).outcome, "fail", `${status} ⇒ FAIL`);
+  assert.equal(classifyExpiredProbe({ status: 422, bodyText: '{"error":"x"}' }, []).outcome, "fail", "token still accepted");
+  assert.equal(classifyExpiredProbe({ error: new TypeError("fetch failed") }, []).outcome, "incomplete");
+  assert.equal(classifyExpiredProbe({ error: "aborted" }, []).outcome, "incomplete");
+  assert.equal(classifyExpiredProbe({ status: 503, bodyText: "" }, []).outcome, "incomplete");
+  assert.equal(classifyExpiredProbe({ status: 401, bodyText: '{"code":"UNAUTHORIZED_INVALID_JWT_FORMAT","message":"Invalid JWT"}' }, []).outcome, "fail", "format code is not an expiry observation");
+  assert.equal(classifyExpiredProbe({ status: 401, bodyText: '{"error":"Connectez-vous"}' }, []).outcome, "pass", "function envelope unchanged");
+});
+
+test("verify with the observed code ends OBSERVED (exit 0, never pass); a network failure on the call ends INCOMPLETE with cleanup permitted", async () => {
+  const w = world(1_800_000_000);
+  const lease = (await expiryPrepare(deps(w))).lease!;
+  w.clock = lease.claimExp + 120;
+  w.probe = () => ({ status: 401, text: '{"code":"UNAUTHORIZED_ASYMMETRIC_JWT","message":"Invalid JWT"}' });
+  const v = await expiryVerify(lease, deps(w));
+  assert.deepEqual(v, { outcome: "observed", observedCode: "UNAUTHORIZED_ASYMMETRIC_JWT", cleanup: true });
+  const w2 = world(1_800_000_000);
+  const lease2 = (await expiryPrepare(deps(w2))).lease!;
+  w2.clock = lease2.claimExp + 120;
+  const d = deps(w2, { probe: async () => { throw new TypeError("fetch failed"); } });
+  const v2 = await expiryVerify(lease2, d);
+  assert.deepEqual(v2, { outcome: "incomplete", observedCode: null, cleanup: true });
+  assert.ok(w2.calls.includes("recordValidated:uid"), "validated uid recorded before the call");
+  assert.ok(!w2.calls.some((k) => k.startsWith("writeLease:original")), "lease not consumed: nothing proven");
 });

@@ -809,7 +809,7 @@ export type ExpiryReport = {
   leasePath: string | null;
   observedCode: string | null;
   verifyCommand: string | null;
-  outcome: "prepared" | "pass" | "observed" | "fail" | "refused" | "too-early" | null;
+  outcome: "prepared" | "pass" | "observed" | "incomplete" | "fail" | "refused" | "too-early" | null;
 };
 // Any failed step (scenario, readback, cleanup) fails the run; later successes never mask it.
 export function computeVerdict(result: Pick<RunResult, "steps" | "scenarios" | "cleanup" | "leftovers" | "mode"> & { expiry?: ExpiryReport; revoke?: RevokeReport }, finished: boolean): RunResult["verdict"] {
@@ -827,6 +827,8 @@ export function computeVerdict(result: Pick<RunResult, "steps" | "scenarios" | "
   if (result.mode === "expiry-verify" && result.expiry?.outcome === "observed") return "observed";
   // A too-early verify proved nothing and touched nothing: never "pass".
   if (result.mode === "expiry-verify" && result.expiry?.outcome === "too-early") return "incomplete";
+  // No HTTP answer / 5xx on the expired-token call: nothing is proven either way.
+  if (result.mode === "expiry-verify" && result.expiry?.outcome === "incomplete") return "incomplete";
   return "pass";
 }
 export function parseContentRangeTotal(header: string | null): number | null {
@@ -1041,7 +1043,21 @@ export async function sha256Hex(text: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
 }
-export type ExpiredVerdict = { outcome: "pass" | "observed" | "fail"; reasons: string[]; observedCode: string | null };
+export type ExpiredVerdict = { outcome: "pass" | "observed" | "incomplete" | "fail"; reasons: string[]; observedCode: string | null };
+// Observed on the dedicated project (root verify 2026-10-31 19:06:31 UTC, harness 6466b8a): the original,
+// genuinely expired JWT (ES256, kid present in the current public JWKS, signature verified, exp + 60 s
+// passed, account exact and active) was refused 401 with code UNAUTHORIZED_ASYMMETRIC_JWT. Recorded as a
+// FACT only: it is a generic gateway code (not expiry-specific), so it is deliberately NOT bound in
+// EXPIRED_PLATFORM_CODES — this code, like any unknown future code, stays OBSERVED, never PASS.
+export const OBSERVED_EXPIRED_PLATFORM_CODES: readonly string[] = ["UNAUTHORIZED_ASYMMETRIC_JWT"];
+// Classification of the expired-token call: 401 with a recognised envelope ⇒ OBSERVED (or PASS only for
+// a strictly bound code / the function envelope); 2xx or 422 (token still accepted) ⇒ FAIL; no HTTP
+// answer (network/transport) or 5xx ⇒ INCOMPLETE (nothing proven either way).
+export function classifyExpiredProbe(result: { status: number; bodyText: string } | { error: unknown }, forbidden: string[]): ExpiredVerdict {
+  if ("error" in result) return { outcome: "incomplete", reasons: [`appel sans réponse HTTP : ${result.error instanceof Error ? result.error.message : String(result.error)}`], observedCode: null };
+  if (result.status >= 500) return { outcome: "incomplete", reasons: [`HTTP ${result.status} : réponse inexploitable, rien n’est prouvé`], observedCode: null };
+  return assertExpiredRefusal(result, forbidden);
+}
 export function assertExpiredRefusal(actual: { status: number; bodyText: string }, forbidden: string[]): ExpiredVerdict {
   const reasons: string[] = [];
   let observedCode: string | null = null;
@@ -1150,7 +1166,7 @@ export async function expiryPrepare(deps: ExpiryDeps): Promise<PrepareOutcome> {
   await deps.log("info", "PREPARED — expiration non encore prouvée", `relancer après ${new Date(lease.verifyNotBefore * 1000).toISOString()} et avant ${new Date(lease.leaseEndsAt * 1000).toISOString()} : ${deps.verifyCommand}`);
   return { outcome: "prepared", userId, lease };
 }
-export type VerifyOutcome = { outcome: "pass" | "observed" | "fail" | "refused" | "too-early"; observedCode: string | null; cleanup: boolean };
+export type VerifyOutcome = { outcome: "pass" | "observed" | "incomplete" | "fail" | "refused" | "too-early"; observedCode: string | null; cleanup: boolean };
 // `cleanup: true` is a PERMISSION to delete lease.userId. It is granted only after the independent
 // cohort proof (Auth admin GET by the exact uid → e-mail of THIS run, equal to lease and manifest).
 // Every mismatch (stale lease, unreadable manifest, uid/hash/claims/e-mail mismatch) refuses WITHOUT
@@ -1230,9 +1246,21 @@ export async function expiryVerify(lease: Lease, deps: ExpiryDeps): Promise<Veri
     await deps.log("fail", "horloge locale avant exp + 60 s", `now ${new Date(now * 1000).toISOString()} < ${new Date((lease.claimExp + EXPIRY_VERIFY_MARGIN_S) * 1000).toISOString()}`);
     return { outcome: "fail", observedCode: null, cleanup: true };
   }
-  const probe = await deps.probe(lease.token);
-  const verdict = assertExpiredRefusal({ status: probe.status, bodyText: probe.text }, deps.forbidden());
-  await deps.log(verdict.outcome === "fail" ? "fail" : verdict.outcome === "observed" ? "info" : "pass", verdict.outcome === "observed" ? "jeton réel expiré refusé 401 sans fuite — code plateforme OBSERVÉ, non lié : pas un PASS" : "jeton réel expiré refusé par la fonction déployée (401 sans fuite)", `HTTP ${probe.status}${verdict.observedCode ? ` — code ${verdict.observedCode}` : ""}${verdict.reasons.length ? ` — ${verdict.reasons.join(" ; ")}` : ""}`);
+  let probeResult: { status: number; bodyText: string } | { error: unknown };
+  try {
+    const probe = await deps.probe(lease.token);
+    probeResult = { status: probe.status, bodyText: probe.text };
+  } catch (error) {
+    probeResult = { error };
+  }
+  const verdict = classifyExpiredProbe(probeResult, deps.forbidden());
+  if (verdict.outcome === "incomplete") {
+    // The validated uid is already recorded: the caller's cleanup still deletes it; the lease is not
+    // consumed because nothing was proven.
+    await deps.log("info", "appel du jeton expiré sans réponse exploitable : INCOMPLETE (ni PASS ni FAIL)", verdict.reasons.join(" ; "));
+    return { outcome: "incomplete", observedCode: null, cleanup: true };
+  }
+  await deps.log(verdict.outcome === "fail" ? "fail" : verdict.outcome === "observed" ? "info" : "pass", verdict.outcome === "observed" ? "jeton réel expiré refusé 401 sans fuite — code plateforme OBSERVÉ, non lié : pas un PASS" : "jeton réel expiré refusé par la fonction déployée (401 sans fuite)", `HTTP ${"status" in probeResult ? probeResult.status : "—"}${verdict.observedCode ? ` — code ${verdict.observedCode}` : ""}${verdict.reasons.length ? ` — ${verdict.reasons.join(" ; ")}` : ""}`);
   const consumed = { ...lease, consumedAt: now };
   await deps.writeLease(consumed, "original");
   await deps.writeLease(consumed, "out");

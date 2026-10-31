@@ -48,6 +48,15 @@ Sans `--suite`, comportement actuel inchangé (9 scénarios). `--suite` et `--cl
 5. Nettoyage : suppression Auth admin de l’UID, relecture **404** ; découverte de cohorte (lignes `documents`/objets sous `<uid>/` : attendus à zéro) ; verdict `pass` seulement si 401 sans fuite avec un corps **lié** (fonction ou code lié) **et** cohérence bail/manifeste **et** 200 actif avant **et** 404 après **et** aucune lecture inconnue ; `observed` si tout est identique sauf le code encore non lié ; `fail` sinon. Le bail est réécrit avec `consumedAt` (jeton conservé tel quel, 0600) ; le pilote supprime le dossier privé.
 6. Erreur/interruption ⇒ nettoyage sûr ou manifeste actionnable (`--cleanup-manifest`), jamais d’abandon muet.
 
+### 1.4 bis Résultat réel (recette root, harnais 6466b8a) — OBSERVED, pas PASS
+- `expiry-prepare` exécuté par le pilote (un compte technique QA conservé à dessein, jeton expirant 15:05:23 AST) ; `expiry-verify` exécuté par root le **2026-10-31 à 19:06:31 UTC** (fenêtre 15:06:23–16:05:22 AST).
+- Juste avant l’appel : compte Auth exact (id/e-mail du bail et du manifeste) et actif. Appel de la fonction déployée avec le **jeton original expiré**, inchangé : **HTTP 401**, corps plateforme avec `code` = **`UNAUTHORIZED_ASYMMETRIC_JWT`**, sans fuite.
+- Vérification indépendante root : la signature du jeton se vérifie sous le **JWKS public actuel** du projet (`kid` correspondant, **ES256**), claims cohérents, `exp + 60 s` dépassé au moment de l’appel ; preuve côté root : `/tmp/depannage-gateway-expiry-6466-verify/independent-postflight.json` (non lue par cet agent).
+- Nettoyage : 8 étapes PASS ; postflight root 19:07:38 UTC : Auth 404, profils/documents/dossiers/audits 0, Storage 0 ; bail consommé.
+- **Qualification** : le comportement observé est « jeton réellement expiré refusé 401 avec un code de gateway ». `UNAUTHORIZED_ASYMMETRIC_JWT` est un code **générique** du gateway (non spécifique à l’expiration) : il est **enregistré comme fait** (`OBSERVED_EXPIRED_PLATFORM_CODES`) et **délibérément non lié** dans `EXPIRED_PLATFORM_CODES`. Verdict : **OBSERVED**, jamais PASS par souhait.
+- Classification en code (`classifyExpiredProbe`) : 401 + ce code ⇒ OBSERVED ; 401 + tout autre code `UNAUTHORIZED_*` ⇒ OBSERVED avec le code enregistré ; `UNAUTHORIZED_NO_AUTH_HEADER`/`UNAUTHORIZED_INVALID_JWT_FORMAT`, 422 ou 2xx ⇒ FAIL ; absence de réponse (réseau/transport) ou 5xx ⇒ **INCOMPLETE** (UID validé déjà enregistré, nettoyé ; bail non consommé). PASS reste réservé à l’enveloppe de la fonction ou à un code expiration strictement lié après revue.
+- Aucune nouvelle cohorte ni nouveau bail pour cette qualification.
+
 ### 1.5 Ce que cela prouve / ne prouve pas
 Prouve : sur la vraie fonction déployée, un jeton réel accepté avant `exp` est refusé 401 après `exp` sans fuite, le compte existant toujours. Ne prouve pas : la révocation de session (voir §2), le comportement de rafraîchissement, le TTL exact (lu, non modifié), ni l’horloge du serveur (seule la relation `now ≥ exp + 60 s` locale est contrôlée).
 

@@ -189,10 +189,11 @@ test("runner: a throw in the probe (Edge call) AFTER the cohort proof still reac
     h.cloud.clock = lease.claimExp + 120;
     h.cloud.throwOnBearerProbe = true;
     const v = await h.verify(p.lease, "exp-2");
-    assert.equal(v.code, 1);
+    assert.equal(v.code, 1, "incomplete is not a pass");
     const r = await h.result(v.out);
-    assert.equal(r.verdict, "fail");
-    assert.ok(r.steps.some((s: { step: string }) => s.step === "interruption"));
+    assert.equal(r.verdict, "incomplete", "network failure on the expired-token call proves nothing either way");
+    assert.equal(r.expiry.outcome, "incomplete");
+    assert.ok(r.steps.some((s: { step: string; detail: string }) => /INCOMPLETE/.test(s.step) && /fetch failed/.test(s.detail)));
     assert.deepEqual(h.cloud.deleted, [lease.userId], "validated uid deleted by the finally cleanup");
     const manifest = JSON.parse(await readFile(path.join(v.out, "manifest.json"), "utf8"));
     assert.deepEqual(manifest.created.userIds, [lease.userId], "uid recorded durably before the probe");
