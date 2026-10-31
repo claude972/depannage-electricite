@@ -4724,3 +4724,74 @@ body {
 .upload-open small {
   color: var(--red);
 }
+
+/* ===== UI-THEME-FOUNDATION-001 — semantic tokens (opt-in) =====================================
+   New namespace only (--ui-*). Historical variables above (--navy, --blue, --text, --bg,
+   --surface…) are NOT remapped: non-migrated roles keep their current colours until their own
+   slice migrates them. The tokens are consumed only inside `.ui-v2` (rendered by ThemeSurface).
+   Values: DESIGN.md « Tokens de la direction retenue ». The theme attribute is set before first
+   paint by the inline script in app/layout.tsx, then owned by ThemeProvider. */
+:root,
+[data-ui-theme="dark"] {
+  --ui-bg: #000000;
+  --ui-surface: #141414;
+  --ui-card: #1a1a1a;
+  --ui-text: #ffffff;
+  --ui-text-muted: #b5b5b5;
+  --ui-border: #2a2a2a;
+  --ui-primary: #18794e; /* actions; white text 5.41:1 — never body text on dark */
+  --ui-on-primary: #ffffff;
+  --ui-accent: #5bd49a; /* text/icons/active items on dark */
+  --ui-focus: #5bd49a;
+  --ui-danger: #ff8a80; /* error text on dark surfaces (≥ 4.5:1 on #000/#141414/#1a1a1a) */
+  --ui-warning: #f5b860;
+  --ui-success: #5bd49a;
+  --ui-scheme: dark;
+}
+[data-ui-theme="light"] {
+  --ui-bg: #ffffff;
+  --ui-surface: #f4f6f5;
+  --ui-card: #ffffff;
+  --ui-text: #111111;
+  --ui-text-muted: #4b5563;
+  --ui-border: #d9dfdc;
+  --ui-primary: #18794e;
+  --ui-on-primary: #ffffff;
+  --ui-accent: #0f5c3a;
+  --ui-focus: #0f5c3a;
+  --ui-danger: #b42318;
+  --ui-warning: #925c00;
+  --ui-success: #0f5c3a;
+  --ui-scheme: light;
+}
+:root {
+  /* « Conseils et formation » only — never an alert or validation colour. */
+  --ui-advice: #f4d649;
+  --ui-on-advice: #141414;
+  --ui-on-advice-muted: #343434;
+  --ui-radius-sm: 8px;
+  --ui-radius-md: 12px;
+  --ui-radius-lg: 16px;
+  --ui-radius-pill: 999px;
+  --ui-space-1: 4px;
+  --ui-space-2: 8px;
+  --ui-space-3: 12px;
+  --ui-space-4: 16px;
+  --ui-space-5: 24px;
+  --ui-space-6: 32px;
+  --ui-space-7: 48px;
+  --ui-space-8: 64px;
+  --ui-font: var(--font-jakarta), "Plus Jakarta Sans", sans-serif;
+}
+.ui-v2 {
+  color-scheme: var(--ui-scheme);
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  font-family: var(--ui-font);
+  font-size: 16px;
+  line-height: 1.55;
+}
+.ui-v2 :focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}

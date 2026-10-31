@@ -10,7 +10,7 @@ Owner: Claude lead (single owner of layout / globals / shared primitives). Base:
 - NEW `components/app/theme-provider.tsx` — `ThemeProvider`, `useUiTheme`, `ThemeSurface` (opt-in wrapper).
 - NEW `components/app/theme-toggle.tsx` + `components/app/theme-toggle.module.css` — accessible toggle.
 - NEW `app/fonts/plus-jakarta-sans-{400,500,600,700}.ttf`, `app/fonts/OFL.txt`, `app/fonts/PROVENANCE.md`.
-- NEW `tests/ui/theme.test.ts`.
+- NEW `tests/ui/theme.test.ts` (pure controller, inline script in a VM, SSR with `react-dom/server`, and a real React StrictMode test in local Chromium — skipped, never passed, when Chromium is absent).
 - NEW this contract.
 Not touched: `components/courant-app.tsx`, session, api, backend, SQL, role modules, previews, app 28b.
 
@@ -25,7 +25,7 @@ Not touched: `components/courant-app.tsx`, session, api, backend, SQL, role modu
 
 - `type ThemeName = "light" | "dark"`; `UI_THEME_STORAGE_KEY = "courant-ui-theme"` (non-sensitive, stores only `light`/`dark`).
 - Initial theme: valid stored choice ⇒ else system `prefers-color-scheme` ⇒ else `dark` (Delivo canonical). Storage access always in `try/catch`; unavailable storage ⇒ theme still works for the session, nothing thrown.
-- `document.documentElement.dataset.uiTheme` is set by a tiny static inline script in `<head>` before first paint (no flash), then owned by the provider. The script is static (no interpolation) so a future CSP can allow it by SHA-256; its hash is pinned by a test and documented here once computed. No CSP exists on pages today; none is weakened.
+- `document.documentElement.dataset.uiTheme` is set by a tiny static inline script in `<head>` before first paint (no flash), then owned by the provider. The script is static (no interpolation) so a future CSP can allow it by SHA-256; its hash is pinned by a test: `'sha256-J2FpBxCekBVrTjaq4TnO+8/vssXIfydhqs7jBwDob8g='` (to be added to `script-src` if a page CSP is introduced). No CSP exists on pages today; none is weakened.
 - `color-scheme` is applied by CSS ONLY inside the opt-in wrapper (`.ui-v2`), so non-migrated roles keep their current form controls.
 - `meta[name="theme-color"]` is updated ONLY while at least one `ThemeSurface` is mounted, and the original value is restored when the last one unmounts (reversible). Non-migrated screens keep `#102a43`.
 - System preference changes are followed only while no explicit user choice is stored; a cross-tab `storage` event with a valid value is applied.
@@ -42,3 +42,9 @@ Not touched: `components/courant-app.tsx`, session, api, backend, SQL, role modu
 Resolution (stored valid / invalid / storage throwing / system dark / system light / no matchMedia), write with throwing storage, toggle persists and updates the attribute, system change ignored once a choice is stored, cross-tab event, meta theme-color set on first surface and restored after the last, inline script evaluated in a VM (stored, system, throwing storage) + pinned SHA-256, SSR render of provider + toggle (`react-dom/server`) with no theme-dependent attribute and no Auth data, strict `tsc`, existing UI suites unchanged. Real browser proof of the toggle comes with the public home slice, before announcing the application theme.
 
 Root exact review before integration; no deployment by the lead; previews and app 28b untouched.
+
+## Delivery notes (code commit)
+
+- Storage events: a valid value for our key is applied; our key removed (`newValue` null) or `storage.clear()` (key null) ⇒ the explicit choice is dropped and the system preference applies again.
+- `ThemeSurface` acquires meta management only once the controller exists; release is idempotent; the original `theme-color` is restored exactly when the last surface unmounts (verified with two surfaces and React StrictMode double mount).
+- No screen opts in yet: `ThemeSurface` and `ThemeToggle` have no consumer in the app in this slice; the real browser proof inside the product comes with the public home slice.

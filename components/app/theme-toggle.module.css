@@ -1,0 +1,53 @@
+/* Theme toggle — uses only --ui-* tokens; meant to be rendered inside a ThemeSurface (.ui-v2). */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.toggle:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+.toggle[data-theme-toggle="pending"] {
+  cursor: default;
+}
+.track {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--ui-border);
+}
+.track[data-on="true"] {
+  background: var(--ui-primary);
+}
+.thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--ui-on-primary);
+}
+.track[data-on="true"] .thumb {
+  left: 18px;
+}
+.label {
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .thumb {
+    transition: left 0.15s ease;
+  }
+}
