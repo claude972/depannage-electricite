@@ -8,15 +8,53 @@ export class ApiRequestError extends Error {
     super(message);
   }
 }
+type Fetcher = (input: string, init: RequestInit) => Promise<Response>;
+// Interprets a server response. A 2xx with a body that is not a JSON object is NOT a success
+// (proxy pages, HTML errors, truncated bodies): the caller must re-read before assuming anything.
+export function parseApiBody(
+  status: number,
+  ok: boolean,
+  text: string,
+): { data: unknown } {
+  let parsed: unknown = undefined;
+  let valid = false;
+  if (text.trim()) {
+    try {
+      parsed = JSON.parse(text);
+      valid = parsed !== null && typeof parsed === "object";
+    } catch {
+      valid = false;
+    }
+  }
+  if (!ok) {
+    const message =
+      valid && typeof (parsed as { error?: unknown }).error === "string"
+        ? (parsed as { error: string }).error
+        : status === 404 || status === 405
+          ? "Cette fonction n’est pas encore activée sur ce service."
+          : status === 401
+            ? "Connectez-vous pour accéder à cet espace."
+            : "L’action n’a pas pu être réalisée. Réessayez.";
+    throw new ApiRequestError(status, message);
+  }
+  if (!valid)
+    throw new ApiRequestError(
+      502,
+      "Le service a répondu sans résultat exploitable. L’action a pu être enregistrée : rechargez les données pour vérifier son état avant de réessayer.",
+    );
+  return { data: parsed };
+}
 export async function api<T>(
   path: string,
   body?: unknown,
   method?: string,
+  fetcher: Fetcher = (input, init) => fetch(input, init),
 ): Promise<T> {
+  const verb = method || (body === undefined ? "GET" : "POST");
   let response: Response;
   try {
-    response = await fetch(path, {
-      method: method || (body === undefined ? "GET" : "POST"),
+    response = await fetcher(path, {
+      method: verb,
       headers:
         body === undefined ? undefined : { "Content-Type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -27,23 +65,13 @@ export async function api<T>(
     // is unknown, so the user is told to re-read before retrying a mutation.
     throw new ApiRequestError(
       0,
-      method === "GET" || (body === undefined && !method)
+      verb === "GET"
         ? "Connexion indisponible. Vérifiez votre réseau puis rechargez les données."
         : "La connexion a été interrompue avant la réponse du serveur. L’action a pu être enregistrée : rechargez le dossier pour vérifier son état avant de réessayer.",
     );
   }
-  const data = await response.json().catch(() => ({
-    error: "Le service n’a pas renvoyé de réponse exploitable.",
-  }));
-  if (!response.ok)
-    throw new ApiRequestError(
-      response.status,
-      data.error ||
-        (response.status === 404
-          ? "Cette fonction n’est pas encore activée sur ce service."
-          : "L’action n’a pas pu être réalisée. Réessayez."),
-    );
-  return data as T;
+  const text = await response.text().catch(() => "");
+  return parseApiBody(response.status, response.ok, text).data as T;
 }
 // Translate a failure of a *new* contract into an honest availability state.
 export function contractStateFromError(error: unknown): ContractState {

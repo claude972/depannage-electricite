@@ -277,3 +277,48 @@ export function membershipRole(
   return m.role === "owner" || m.role === "manager" || m.role === "viewer" ? m.role : null;
 }
 export const INVITE_TOKEN = /^[0-9a-f]{64}$/;
+
+// Wording after a Stripe Checkout return. The URL state is only a hint; the server status
+// (payment status endpoint or workspace payment) decides. Never promises absence of debit,
+// never promises a retry the server may refuse.
+export type PaymentServerStatus = "paid" | "pending" | "failed" | "expired" | "none" | "unknown";
+export function paymentReturnMessage(
+  urlState: "pending" | "cancelled",
+  serverStatus: PaymentServerStatus,
+): { tone: "success" | "error" | "info"; text: string } {
+  if (serverStatus === "paid")
+    return {
+      tone: "success",
+      text: "Règlement confirmé par la plateforme. Le devis accepté est archivé dans vos documents.",
+    };
+  if (serverStatus === "failed")
+    return {
+      tone: "error",
+      text: "Le paiement n’a pas abouti selon Stripe. Le règlement reste à effectuer ; aucune nouvelle tentative n’est lancée automatiquement. Vérifiez auprès de votre banque avant de recommencer.",
+    };
+  if (serverStatus === "expired")
+    return {
+      tone: "error",
+      text: "La page de paiement a expiré sans règlement confirmé. Vous pouvez relancer le paiement depuis ce dossier.",
+    };
+  if (urlState === "cancelled")
+    return {
+      tone: "info",
+      text: "Retour depuis la page de paiement sans confirmation. Aucun règlement n’est confirmé pour l’instant ; si vous aviez validé un paiement, sa confirmation arrivera par Stripe et ce dossier se mettra à jour.",
+    };
+  if (serverStatus === "unknown")
+    return {
+      tone: "info",
+      text: "Retour de paiement reçu, mais l’état n’a pas pu être relu pour le moment. Actualisez ce dossier dans un instant : le statut affiché vient toujours de la plateforme.",
+    };
+  return {
+    tone: "info",
+    text: "Retour de paiement reçu. La confirmation définitive arrive par Stripe ; ce dossier se mettra à jour automatiquement.",
+  };
+}
+export const CONNECT_RETURN_MESSAGE: Record<"returned" | "refresh", string> = {
+  returned:
+    "Retour depuis Stripe enregistré. Cette interface n’a pas vérifié l’état de votre compte de règlement : Stripe peut encore demander des informations avant d’activer les virements.",
+  refresh:
+    "Le lien Stripe a expiré avant la fin du parcours. Relancez la configuration pour obtenir un nouveau lien.",
+};

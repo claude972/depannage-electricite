@@ -23,6 +23,7 @@ import {
 } from "./app/demo";
 import { category, uid } from "./app/format";
 import {
+  CONNECT_RETURN_MESSAGE,
   INVITE_TOKEN,
   buildHash,
   canAccess,
@@ -31,7 +32,9 @@ import {
   monthPeriods,
   parseHash,
   parseReturnParams,
+  paymentReturnMessage,
   pickQuote,
+  type PaymentServerStatus,
 } from "./app/session";
 import type { PublicSession, Session } from "./app/session-types";
 import {
@@ -303,40 +306,33 @@ export default function CourantApp() {
         setSelectedQuoteId(quote?.id || "");
         navigate("detail", job.id);
       }
-      if (back.state === "cancelled") {
-        setNotice(
-          "Paiement annulé : aucun débit n’a été effectué. Vous pouvez reprendre le règlement quand vous le souhaitez.",
-        );
-      } else if (!quote) {
-        setNotice(
-          "Retour de paiement reçu. Le dossier ne contient pas de devis accepté chargé ; l’état sera relu depuis le serveur.",
-        );
-      } else {
-        // The redirect only says "the customer came back". Ask the server what really happened.
-        const g = guard.generation();
-        void (async () => {
+      // The redirect only says "the customer came back". Ask the server what really happened,
+      // whatever the URL claims (a cancel URL can be forged or outrun a confirmation).
+      const g = guard.generation();
+      void (async () => {
+        let status: PaymentServerStatus = "unknown";
+        if (quote) {
           const report = await loadPaymentStatus(quote.id);
           if (!guard.alive(g)) return;
-          const status = report?.payment?.status ?? data.payments.find((p) => p.quote_id === quote.id)?.status;
-          if (status === "paid")
-            setNotice("Règlement confirmé par le serveur. Le devis accepté est archivé dans vos documents.");
-          else if (status === "failed")
-            setError("Le paiement a échoué selon Stripe. Aucun montant n’a été prélevé ; vous pouvez réessayer.");
-          else if (status === "expired")
-            setError("La page de paiement a expiré sans règlement. Vous pouvez relancer le paiement.");
-          else
-            setNotice(
-              "Retour de paiement reçu. La confirmation définitive arrive par Stripe ; cet écran se mettra à jour automatiquement.",
-            );
-        })();
-      }
+          const raw =
+            report?.payment?.status ??
+            (report ? "none" : data.payments.find((p) => p.quote_id === quote.id)?.status);
+          status =
+            raw === "paid" || raw === "pending" || raw === "failed" || raw === "expired"
+              ? raw
+              : raw === "none"
+                ? "none"
+                : job?.status === "paid"
+                  ? "paid"
+                  : "unknown";
+        } else if (job?.status === "paid") status = "paid";
+        const message = paymentReturnMessage(back.state, status);
+        if (message.tone === "error") setError(message.text);
+        else setNotice(message.text);
+      })();
     } else if (returnContext.kind === "connect") {
       navigate("profile");
-      setNotice(
-        returnContext.state === "returned"
-          ? "Retour Stripe Connect enregistré. L’état de votre compte de règlement est relu depuis le serveur ; Stripe peut encore demander des informations."
-          : "Le lien Stripe a expiré. Relancez la configuration pour obtenir un nouveau lien.",
-      );
+      setNotice(CONNECT_RETURN_MESSAGE[returnContext.state]);
     }
     setReturnContext(null);
   }, [returnContext, booting, mode, data, navigate]);

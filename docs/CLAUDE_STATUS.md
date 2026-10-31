@@ -45,6 +45,15 @@ Fichier de coordination émis par l’agent Claude pour le pilote (Codex). Le pi
 - incident : l’écriture d’`admin-space.tsx` a échoué une fois (ENOSPC, fichier tronqué) ; reconstruit depuis HEAD + modifications prévues, vérifié par typecheck ; aucune autre modification perdue (diff relu).
 - ce que Codex doit vérifier : Membres → « Accès aux sites » (owner) enregistre et relit la portée ; invitation avec portée « selected » ; non-owner voit « Votre accès » uniquement ; fiche admin d’un artisan lit le dossier et les pièces ; bouton d’installation présent dans Profil et Aide, silencieux quand l’installation n’est pas possible.
 
+## Corrections de revue pilote appliquées (checkpoint 2b)
+
+- **CL-UI-001** api.ts : échec réseau sur mutation = résultat incertain, consigne de relecture avant nouvel essai.
+- **CL-UI-002** session.ts : `parseHash` tolère l’encodage malformé et n’accepte que des identifiants ; test.
+- **CL-UI-003** : le retour `?payment=` relit d’abord `GET /api/payments/status` ; libellés par `paymentReturnMessage(urlState, serverStatus)` : un URL « annulé » avec statut serveur payé affiche la confirmation ; échec = « n’a pas abouti », sans promesse bancaire ni relance automatique ; état indéterminé explicite ; Connect = « retour enregistré, compte non vérifié par cette interface ». Tests `tests/ui/api.test.ts`.
+- **CL-UI-004** : `parseApiBody` rejette toute réponse 2xx dont le corps n’est pas un objet JSON (page HTML, corps vide, troncature) avec consigne de relecture ; non-2xx = message serveur ou défaut sûr. Tests succès / 200 malformé / non-2xx / réseau.
+- **CL-UI-005** : copies utilisateur revues sur les 5 espaces (checkpoint 2).
+- **CL-UI-006** : guard de génération d’identité (`components/app/guard.ts`) utilisé par le contrôleur ; tests différés A→B.
+
 ## Prochain livrable (checkpoint 3)
 
 Checkpoints 1 et 2 terminés. Checkpoint 3 : captures 360/1280 des vues Membres/accès par site et fiche admin artisan (dès espace disque), relecture accessibilité clavier des menus off-canvas, build complet, puis vérification de la preview combinée publiée par le pilote et revue croisée du SHA Codex intégré.
