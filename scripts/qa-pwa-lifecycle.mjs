@@ -11,7 +11,7 @@ import net from "node:net";
 import path from "node:path";
 import assert from "node:assert/strict";
 import { pathToFileURL } from "node:url";
-import { parseArgs, HELP, extractSwVersion, scanEnvKeyNames, classifyCacheEntries, compareStageEvidence, childEnv, buildServerArgs, readinessUrls, exitCodeFor, splitConsoleRecords, servedBuildIdMarkers, classifyOnlineRecovery, EXPECTED_PROBE, EXPECTED_OFFLINE, SW_PATH, OFFLINE_PATH, DEMO_HASH } from "./qa-pwa-lifecycle/lib.mjs";
+import { parseArgs, HELP, extractSwVersion, scanEnvKeyNames, classifyCacheEntries, compareStageEvidence, childEnv, buildServerArgs, readinessUrls, exitCodeFor, splitConsoleRecords, servedBuildIdMarkers, classifyOnlineRecovery, demoReopenPlan, isRealDocumentReopen, EXPECTED_PROBE, EXPECTED_OFFLINE, SW_PATH, OFFLINE_PATH, DEMO_HASH } from "./qa-pwa-lifecycle/lib.mjs";
 import { createServerController } from "./qa-pwa-lifecycle/servers.mjs";
 import { createRedactor } from "./qa/lib/redact.mjs";
 import { assertOutOutsideRepo, PreflightError } from "./qa/lib/config.mjs";
@@ -130,7 +130,8 @@ async function main(argv) {
     old: { dir: pre.old.dir, sha: pre.old.sha, build_id: pre.old.buildId, sw_sha256: pre.old.swSha256, sw_cache: pre.old.swCacheName, env_names: pre.old.envNames },
     new: { dir: pre.next.dir, sha: pre.next.sha, build_id: pre.next.buildId, sw_sha256: pre.next.swSha256, sw_cache: pre.next.swCacheName, env_names: pre.next.envNames },
     out: pre.outDir,
-    not_proven: ["two LOCAL builds served successively, not two deployed Vercel previews", "no OS-level installation (Chrome install, iOS/Android home screen)", "no push, background sync, offline queue (absent by design)", "no payment flow", "no user account, no Auth cohort, no cloud call required by the scenario"],
+    demo_reopen: demoReopenPlan(origin), // real document load for the demo opt-in: about:blank, then the full demo URL
+    not_proven: ["two LOCAL builds served successively, not two deployed Vercel previews", "no OS-level installation (Chrome install, iOS/Android home screen)", "no push, background sync, offline queue (absent by design)", "no payment flow", "no user account, no Auth cohort, no cloud call required by the scenario", "PWA update/offline proof on the public app without an account — not a private-data recovery proof"],
     started_at: new Date().toISOString(),
     finished_at: null,
   };
@@ -574,12 +575,15 @@ async function main(argv) {
       const verdict = classifyOnlineRecovery(recovery);
       await screenshot(tabs.a, "online-again-v3");
       assert.ok(verdict.ok, `online recovery is not the valid public landing: ${verdict.reasons.join("; ")}`);
-      // The demo is re-opened EXPLICITLY for the UI comparisons that follow (steps 11/12).
-      await tabs.a.goto(`${origin}/`, { waitUntil: "domcontentloaded", timeout: options.timeoutMs });
-      await tabs.a.goto(demoUrl, { waitUntil: "domcontentloaded", timeout: options.timeoutMs });
+      // The demo is re-opened EXPLICITLY for the UI comparisons that follow (steps 11/12). Demo opt-in
+      // only happens on a REAL document load carrying the demo hash: about:blank first, then the full
+      // demo URL — never a same-document hash goto (the app's hash handler never enters demo mode).
+      const plan = demoReopenPlan(origin);
+      assert.ok(isRealDocumentReopen(plan, origin), `demo re-open plan is not a real-document load: ${JSON.stringify(plan)}`);
+      for (const url of plan) await tabs.a.goto(url, { waitUntil: "domcontentloaded", timeout: options.timeoutMs });
       await tabs.a.getByRole("textbox", { name: FORM_LABEL }).first().waitFor({ state: "visible", timeout: options.timeoutMs });
       await screenshot(tabs.a, "demo-reopened-v3");
-      return { offlineTitle: OFFLINE_TITLE, offlineCaches, recovery: { status: recovery.status, contentType: recovery.contentType, fromServiceWorker: recovery.fromServiceWorker, title: recovery.title, offlineHeadingCount: recovery.offlineHeadingCount }, publicLanding: true, demoReopened: true };
+      return { offlineTitle: OFFLINE_TITLE, offlineCaches, recovery: { status: recovery.status, contentType: recovery.contentType, fromServiceWorker: recovery.fromServiceWorker, title: recovery.title, offlineHeadingCount: recovery.offlineHeadingCount }, publicLanding: true, demoReopen: plan, demoReopened: true };
     });
 
     await step("11 nothing private cached on v3 after the single anonymous /api/workspace probe (401)", async () => {

@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { EventEmitter } from "node:events";
-import { parseArgs, extractSwVersion, scanEnvKeyNames, classifyCacheEntries, compareStageEvidence, childEnv, buildServerArgs, readinessUrls, exitCodeFor, splitConsoleRecords, isExpectedProbeRecord, isExpectedOfflineRecord, servedBuildIdMarkers, classifyOnlineRecovery, EXPECTED_PROBE, EXPECTED_OFFLINE, DEFAULT_PORT } from "../scripts/qa-pwa-lifecycle/lib.mjs";
+import { parseArgs, extractSwVersion, scanEnvKeyNames, classifyCacheEntries, compareStageEvidence, childEnv, buildServerArgs, readinessUrls, exitCodeFor, splitConsoleRecords, isExpectedProbeRecord, isExpectedOfflineRecord, servedBuildIdMarkers, classifyOnlineRecovery, demoReopenPlan, isRealDocumentReopen, EXPECTED_PROBE, EXPECTED_OFFLINE, DEFAULT_PORT } from "../scripts/qa-pwa-lifecycle/lib.mjs";
 import { createServerController } from "../scripts/qa-pwa-lifecycle/servers.mjs";
 import { createStopGate, createLifecycle, StopRequestedError } from "../scripts/qa/lib/lifecycle.mjs";
 
@@ -246,6 +246,19 @@ test("phase 10 classifier: the public landing after the online reload is a PASS;
   assert.equal(classifyOnlineRecovery({ ...landing, bodyText: "Courant" }).ok, false, "a landing without the sign-in call to action is not valid");
   // The demo form is not part of the recovery verdict: a landing body with no "Décrivez le problème" passes.
   assert.ok(!JSON.stringify(classifyOnlineRecovery(landing)).includes("Décrivez"));
+});
+
+test("demo re-open is a REAL document load: about:blank then the full demo URL — never a same-document hash goto", () => {
+  const origin = "http://localhost:3020";
+  const plan = demoReopenPlan(origin);
+  assert.deepEqual(plan, ["about:blank", "http://localhost:3020/#demo/client-new"]);
+  assert.equal(isRealDocumentReopen(plan, origin), true);
+  assert.equal(isRealDocumentReopen(["http://localhost:3020/", "http://localhost:3020/#demo/client-new"], origin), false, "/ then /#demo is a same-document hash navigation: the app never enters demo mode");
+  assert.equal(isRealDocumentReopen(["http://localhost:3020/#demo/client-new"], origin), false, "no about:blank first");
+  assert.equal(isRealDocumentReopen(["about:blank", "http://localhost:3020/#new"], origin), false, "wrong hash");
+  assert.equal(isRealDocumentReopen(["about:blank", "http://localhost:3017/#demo/client-new"], origin), false, "wrong origin");
+  assert.equal(isRealDocumentReopen(["about:blank", "http://localhost:3020/?x=1#demo/client-new"], origin), false, "no query");
+  assert.equal(isRealDocumentReopen("about:blank", origin), false);
 });
 
 test("servedBuildIdMarkers: the served HTML names exactly the build it comes from", () => {

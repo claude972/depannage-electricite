@@ -173,6 +173,28 @@ export function classifyOnlineRecovery({ status, contentType, title, bodyText, o
   return { ok: reasons.length === 0, reasons };
 }
 
+/**
+ * Demo opt-in happens ONLY on a real document load carrying the demo hash (courant-app `onHash` at
+ * a2faa02 only re-checks access/view on a hash change and never enters demo mode). Re-opening the
+ * demo therefore always starts from `about:blank` and then loads the full demo URL: never a
+ * same-document hash `goto` (pilot diagnosis on f91928f).
+ */
+export function demoReopenPlan(origin, hash = DEMO_HASH) {
+  return ["about:blank", `${origin}/#${hash}`];
+}
+
+/** True only when the plan is a real-document re-open: first `about:blank`, then one full demo URL. */
+export function isRealDocumentReopen(plan, origin, hash = DEMO_HASH) {
+  if (!Array.isArray(plan) || plan.length !== 2) return false;
+  if (plan[0] !== "about:blank") return false;
+  try {
+    const target = new URL(plan[1]);
+    return target.origin === new URL(origin).origin && target.pathname === "/" && target.search === "" && target.hash === `#${hash}`;
+  } catch {
+    return false;
+  }
+}
+
 /** The only console line a private-cache probe may legitimately produce (contract §4, steps 4/11). */
 export const EXPECTED_PROBE = { path: "/api/workspace", status: 401, phases: ["probe-v2", "probe-v3"], maxPerPhase: 1 };
 
