@@ -15,6 +15,8 @@ import type { Session } from "../app/session-types";
 import type {
   AdminOverview,
   ArtisanApplicationStatus,
+  ArtisanDossier,
+  CredentialKind,
   Intervention,
   Message,
   Operations,
@@ -24,6 +26,7 @@ import type {
   View,
 } from "../app/types";
 import { Icon } from "../app/icons";
+import { InstallPanel } from "../app/install-panel";
 import {
   Alerts,
   Badge,
@@ -46,6 +49,7 @@ import {
 } from "../app/forms";
 import { quoteVersions } from "../app/session";
 import {
+  CATEGORIES,
   ROLE_NAMES,
   SITE_TYPES,
   STATUS,
@@ -110,6 +114,12 @@ const PAYMENT_STATUS: Record<string, { label: string; tone: Tone }> = {
   paid: { label: "Payé", tone: "green" },
   failed: { label: "Échoué", tone: "red" },
 };
+const CREDENTIAL_LABEL: Record<CredentialKind, string> = {
+  registration: "Extrait Kbis ou inscription au registre",
+  liability: "Assurance responsabilité civile professionnelle",
+  qualification: "Diplôme ou qualification en électricité",
+  other: "Autre justificatif",
+};
 const CHECK_RESULT = {
   pass: "Conforme",
   issue: "Point à traiter",
@@ -125,6 +135,17 @@ const clientKind = (role: Role) =>
   role === "client" ? "Particulier" : role === "manager" ? "Entreprise cliente" : ROLE_NAMES[role];
 const shortUser = (id: string | null | undefined) =>
   id ? (id.startsWith("demo-") ? id : `${id.replaceAll("-", "").slice(0, 8)}…`) : "—";
+// SIRET shown to the operator with only the last four digits readable.
+const maskSiret = (siret: string) => {
+  const digits = siret.replace(/\D/g, "");
+  if (!digits) return "Non renseigné";
+  if (digits.length <= 4) return digits;
+  return `${"•".repeat(digits.length - 4)} ${digits.slice(-4)}`;
+};
+const todayIso = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
 
 function applicationTag(status: ArtisanApplicationStatus | null | undefined) {
   if (!status) return <Tag tone="neutral">Aucun dossier</Tag>;
@@ -368,7 +389,7 @@ export function AdminSpace({ session }: { session: Session }) {
         state={state}
         reason={
           state === "available"
-            ? "La vue d’ensemble n’a pas pu être relue depuis le serveur. Actualisez les données."
+            ? "La vue d’ensemble n’a pas pu être chargée. Réessayez dans un instant."
             : undefined
         }
       >
@@ -413,7 +434,7 @@ export function AdminSpace({ session }: { session: Session }) {
       case "messages":
         return { title: "Messages", subtitle: "Support et échanges des dossiers" };
       case "admin-settings":
-        return { title: "Paramètres", subtitle: "Réglages de la plateforme, capacités serveur et journal d’audit" };
+        return { title: "Paramètres", subtitle: "Réglages de la plateforme, fonctions activées et journal d’audit" };
       case "admin-warranty":
         return { title: "Garantie", subtitle: "Suivi après intervention et décisions de garantie" };
       case "documents":
@@ -435,8 +456,8 @@ export function AdminSpace({ session }: { session: Session }) {
     return (
       <>
         <div className={styles.kpis}>
-          <Kpi icon="list" tone="blue" label="Interventions" value={o.counts.interventions} note="Total plateforme, tous statuts confondus (compteur serveur)." />
-          <Kpi icon="clock" tone="amber" label="Interventions en cours" value={o.counts.active_interventions} note="Dossiers non clos selon le décompte serveur." />
+          <Kpi icon="list" tone="blue" label="Interventions" value={o.counts.interventions} note="Total plateforme, tous statuts confondus (compteur global)." />
+          <Kpi icon="clock" tone="amber" label="Interventions en cours" value={o.counts.active_interventions} note="Dossiers non clos, décompte global de la plateforme." />
           <Kpi
             icon="euro"
             tone="green"
@@ -563,21 +584,7 @@ export function AdminSpace({ session }: { session: Session }) {
                 <dd className={styles.mono}>{shortUser(artisan.id)}</dd>
               </dl>
             </Panel>
-            <Panel title="Entreprise et dossier">
-              <dl className={styles.definitions}>
-                <dt>Société</dt>
-                <dd>{artisan.company_name || "Non renseignée"}</dd>
-                <dt>État du dossier</dt>
-                <dd>{applicationTag(artisan.application_status)}</dd>
-              </dl>
-              <div className={styles.panelBody}>
-                <Unavailable
-                  title="Pièces du dossier"
-                  reason="Lecture admin par /api/artisan?user_id non branchée dans l’interface (demander au lead). SIRET, zone, compétences et justificatifs ne sont pas affichés ici."
-                  blocker="ADM-02"
-                />
-              </div>
-            </Panel>
+            <ArtisanDossierPanel session={session} userId={artisan.id} summary={artisan} />
             <Panel title="Règles d’approbation">
               <ul className={styles.rules}>
                 <li>L’approbation exige un dossier soumis par l’artisan (société, SIRET, adresse, zone et compétences).</li>
@@ -676,12 +683,12 @@ export function AdminSpace({ session }: { session: Session }) {
             ]}
             empty={
               <Empty icon="receipt" title="Aucun devis chargé">
-                Les devis apparaissent ici lorsqu’ils sont transmis dans l’espace de travail (selon les droits de lecture du serveur).
+                Les devis apparaissent ici lorsqu’ils sont transmis dans l’espace de travail (selon vos droits de lecture).
               </Empty>
             }
           />
         </Panel>
-        <Panel title="Règlements" count={payments.length} intro="Règlements Stripe confirmés ou en attente, tels que transmis par le serveur.">
+        <Panel title="Règlements" count={payments.length} intro="Règlements Stripe confirmés ou en attente, tels qu’enregistrés sur la plateforme.">
           <DataTable
             caption="Règlements"
             rows={payments}
@@ -711,8 +718,8 @@ export function AdminSpace({ session }: { session: Session }) {
           title="Factures et avoirs"
           reason={
             caps?.invoices
-              ? "Le serveur annonce la capacité « factures » mais aucun contrat d’interface n’est transmis au navigateur."
-              : "Aucune génération de facture ou d’avoir n’existe côté serveur (capacité « invoices » désactivée)."
+              ? "Fonction annoncée mais pas encore activée dans cette interface : attendez son activation. En attendant, les règlements Stripe ci-dessus font foi."
+              : "Pas encore activé sur ce service : aucune facture ni avoir n’est généré. Les règlements Stripe ci-dessus sont la seule pièce disponible."
           }
           blocker="FIN-05"
         />
@@ -720,8 +727,8 @@ export function AdminSpace({ session }: { session: Session }) {
           title="Remboursements et litiges"
           reason={
             caps?.refunds
-              ? "Le serveur annonce la capacité « remboursements » mais aucun contrat d’interface n’est transmis au navigateur."
-              : "Aucun remboursement ni gestion de litige n’existe côté serveur (capacité « refunds » désactivée)."
+              ? "Fonction annoncée mais pas encore activée dans cette interface : attendez son activation."
+              : "Pas encore activé sur ce service : aucun remboursement ni litige ne se traite depuis cette interface. Un remboursement se fait directement dans Stripe."
           }
           blocker="FIN-04"
         />
@@ -785,7 +792,7 @@ export function AdminSpace({ session }: { session: Session }) {
           />
           <Basis>Avis présents dans l’espace de travail administrateur ; aucun avis n’est inventé ni pondéré.</Basis>
         </Panel>
-        <Unavailable title="Modération des avis" reason="Aucune action de masquage, de réponse ou de signalement n’existe côté serveur." blocker="ADM-06" />
+        <Unavailable title="Modération des avis" reason="Pas encore activé sur ce service : les avis sont affichés tels que publiés, sans masquage, réponse ni signalement." blocker="ADM-06" />
       </>
     );
   };
@@ -800,8 +807,8 @@ export function AdminSpace({ session }: { session: Session }) {
           title="Boîte de support"
           reason={
             caps?.support_tickets
-              ? "Le serveur annonce la capacité « tickets support » mais aucun contrat d’interface n’est transmis au navigateur."
-              : "Aucun système de tickets support n’existe côté serveur (capacité « support_tickets » désactivée). Les demandes des utilisateurs ne transitent pas par cette interface."
+              ? "Fonction annoncée mais pas encore activée dans cette interface : attendez son activation."
+              : "Pas encore activé sur ce service : les demandes d’assistance ne transitent pas par cette interface. Les messages des dossiers restent lisibles ci-dessous."
           }
           blocker="ADM-07"
         />
@@ -848,13 +855,13 @@ export function AdminSpace({ session }: { session: Session }) {
             ))}
           </dl>
         </Unavailable>
-        <Panel title="Capacités annoncées par le serveur" intro="Lecture seule : ces indicateurs proviennent de la vue d’ensemble et ne sont pas modifiables ici.">
+        <Panel title="Fonctions activées sur le service" intro="Lecture seule : l’activation de ces fonctions ne se règle pas depuis cette interface.">
           <div className={`${styles.tableWrap} ${styles.capTable}`}>
             <table className={styles.table}>
-              <caption className="sr-only">Capacités serveur</caption>
+              <caption className="sr-only">Fonctions activées</caption>
               <thead>
                 <tr>
-                  <th scope="col">Capacité</th>
+                  <th scope="col">Fonction</th>
                   <th scope="col">Valeur</th>
                 </tr>
               </thead>
@@ -868,19 +875,19 @@ export function AdminSpace({ session }: { session: Session }) {
                   ] as const
                 ).map(([label, value]) => (
                   <tr key={label}>
-                    <td data-label="Capacité">{label}</td>
+                    <td data-label="Fonction">{label}</td>
                     <td data-label="Valeur">{value ? "Oui" : "Non"}</td>
                   </tr>
                 ))}
                 <tr>
-                  <td data-label="Capacité">Taille des listes</td>
+                  <td data-label="Fonction">Taille des listes</td>
                   <td data-label="Valeur">{o.capabilities.list_limit} derniers enregistrements</td>
                 </tr>
               </tbody>
             </table>
           </div>
         </Panel>
-        <Panel title="Journal d’audit" count={audit.length} intro={`${o.capabilities.list_limit} derniers événements au plus, tels qu’enregistrés par le serveur.`}>
+        <Panel title="Journal d’audit" count={audit.length} intro={`${o.capabilities.list_limit} derniers événements au plus, tels qu’enregistrés par la plateforme.`}>
           <DataTable
             caption="Journal d’audit"
             rows={audit}
@@ -915,6 +922,7 @@ export function AdminSpace({ session }: { session: Session }) {
             await session.updateProfile(values);
           }}
         />
+        <InstallPanel />
       </div>
       <aside>
         <Panel title="Rôle Super Admin">
@@ -922,7 +930,7 @@ export function AdminSpace({ session }: { session: Session }) {
             <p>
               Ce compte administre la plateforme : examen des artisans, lecture de tous les dossiers, réaffectation avant acceptation d’un devis et décisions de garantie. Il n’est ni client, ni artisan, ni propriétaire d’une organisation cliente.
             </p>
-            <p className={styles.formNote}>Le rôle est attribué côté serveur et ne se modifie pas depuis ce formulaire.</p>
+            <p className={styles.formNote}>Le rôle est attribué par l’exploitant et ne se modifie pas depuis ce formulaire.</p>
             <div className={styles.actions} style={{ marginTop: 16 }}>
               <button type="button" className="button outline" onClick={() => void session.logout()} disabled={session.busy}>
                 <Icon name="logout" size={16} />
@@ -931,7 +939,6 @@ export function AdminSpace({ session }: { session: Session }) {
             </div>
           </div>
         </Panel>
-        {/* Emplacement PWA : installation et mise à jour sont gérées par components/pwa-registration.tsx (lot Codex). */}
       </aside>
     </div>
   );
@@ -1113,6 +1120,145 @@ export function AdminSpace({ session }: { session: Session }) {
   );
 }
 
+// Read-only artisan dossier for the operator: company, zone, skills and credentials.
+function ArtisanDossierPanel({
+  session,
+  userId,
+  summary,
+}: {
+  session: Session;
+  userId: string;
+  summary: OverviewArtisan;
+}) {
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  const [dossier, setDossier] = useState<ArtisanDossier | null | undefined>(undefined);
+  const [reloadKey, setReloadKey] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setDossier(undefined);
+    void sessionRef.current.loadArtisanDossier(userId).then((result) => {
+      if (active) setDossier(result);
+    });
+    return () => {
+      active = false;
+    };
+  }, [userId, reloadKey, session.data]);
+
+  const profile = dossier?.artisan_profile ?? null;
+  const today = todayIso();
+  const documentName = (documentId: string) =>
+    session.data.documents.find((d) => d.id === documentId)?.name || `Pièce ${shortUser(documentId)}`;
+
+  let body: ReactNode;
+  if (dossier === undefined) {
+    body = (
+      <div className={styles.panelBody}>
+        <Loader label="Lecture du dossier…" />
+      </div>
+    );
+  } else if (dossier === null) {
+    body = (
+      <div className={styles.panelBody}>
+        <Unavailable title="Dossier de l’artisan" state={session.capabilities.artisan}>
+          <div className={styles.actions} style={{ marginTop: 12 }}>
+            <button type="button" className="button outline" onClick={() => setReloadKey((k) => k + 1)}>
+              <Icon name="refresh" size={16} />
+              Réessayer la lecture
+            </button>
+          </div>
+        </Unavailable>
+      </div>
+    );
+  } else if (!profile) {
+    body = (
+      <>
+        <dl className={styles.definitions}>
+          <dt>Société</dt>
+          <dd>{summary.company_name || "Non renseignée"}</dd>
+          <dt>État du dossier</dt>
+          <dd>{applicationTag(summary.application_status)}</dd>
+        </dl>
+        <Empty icon="document" title="Dossier non constitué">
+          L’artisan n’a pas encore enregistré son dossier (société, SIRET, adresse, zone, compétences). Rien n’est à examiner pour l’instant.
+        </Empty>
+      </>
+    );
+  } else {
+    const skills = profile.categories.map((c) => CATEGORIES.find((k) => k.id === c)?.label || c);
+    body = (
+      <>
+        <dl className={styles.definitions}>
+          <dt>Société</dt>
+          <dd>{profile.company_name || "Non renseignée"}</dd>
+          <dt>SIRET</dt>
+          <dd className={styles.mono}>{maskSiret(profile.siret)}</dd>
+          <dt>Statut juridique</dt>
+          <dd>{profile.legal_status || "Non renseigné"}</dd>
+          <dt>Effectif</dt>
+          <dd>{profile.employee_count > 0 ? `${profile.employee_count} personne${profile.employee_count > 1 ? "s" : ""}` : "Non renseigné"}</dd>
+          <dt>Adresse</dt>
+          <dd>{profile.address || "Non renseignée"}</dd>
+          <dt>Zone d’intervention</dt>
+          <dd>{profile.postal_codes.length ? profile.postal_codes.join(", ") : "Aucun code postal déclaré"}</dd>
+          <dt>Compétences</dt>
+          <dd>
+            {skills.length ? (
+              <span className={styles.tagList}>
+                {skills.map((label) => (
+                  <Tag key={label} tone="blue">
+                    {label}
+                  </Tag>
+                ))}
+              </span>
+            ) : (
+              "Aucune compétence déclarée"
+            )}
+          </dd>
+          <dt>Disponibilité</dt>
+          <dd>{profile.available ? <Tag tone="green">Disponible</Tag> : <Tag tone="neutral">Indisponible</Tag>}</dd>
+          <dt>État du dossier</dt>
+          <dd>{applicationTag(profile.application_status)}</dd>
+          <dt>Soumis le</dt>
+          <dd>{profile.submitted_at ? dateTime(profile.submitted_at) : "Pas encore soumis"}</dd>
+        </dl>
+        <div className={styles.panelBody}>
+          <h3 className={styles.subheading}>Justificatifs reliés</h3>
+          {dossier.credentials.length ? (
+            <ul className={styles.credList}>
+              {dossier.credentials.map((c) => {
+                const expired = Boolean(c.expires_on && c.expires_on < today);
+                return (
+                  <li key={c.id} className={styles.credRow}>
+                    <Icon name="document" size={18} />
+                    <div>
+                      <strong>{CREDENTIAL_LABEL[c.kind] || CREDENTIAL_LABEL.other}</strong>
+                      <span>{documentName(c.document_id)}</span>
+                      <span>
+                        {c.expires_on
+                          ? `${expired ? "Expiré le" : "Expire le"} ${date(c.expires_on)}`
+                          : "Sans date d’expiration"}
+                        {" · relié le "}
+                        {date(c.created_at)}
+                      </span>
+                    </div>
+                    {expired ? <Tag tone="amber">Expiré</Tag> : <Tag tone="neutral">Transmis</Tag>}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className={styles.formNote}>Aucun justificatif relié. L’artisan les ajoute depuis son espace « Mes documents ».</p>
+          )}
+          <p className={styles.formNote}>
+            Un justificatif transmis n’est pas validé automatiquement : l’examen des pièces vous revient avant l’approbation.
+          </p>
+        </div>
+      </>
+    );
+  }
+  return <Panel title="Entreprise et dossier">{body}</Panel>;
+}
 function FragmentPair({ term, value }: { term: string; value: string }) {
   return (
     <>
@@ -1722,7 +1868,7 @@ function DossierView({
               </div>
             )}
             <div className={styles.panelBody}>
-              <Unavailable title="Réponse de l’exploitant dans le fil" reason="La publication d’un message par l’administrateur n’est pas une règle opérateur définie ; seule la lecture est possible." blocker="ADM-07" />
+              <Unavailable title="Réponse de l’exploitant dans le fil" reason="Pas encore activé pour l’administration : le fil est en lecture seule." blocker="ADM-07" />
             </div>
           </Panel>
 
@@ -1771,12 +1917,12 @@ function ReassignPanel({
   let body: ReactNode;
   if (capability === null) {
     body = overviewFailed ? (
-      <Unavailable title="Réaffectation" state={session.capabilities.adminOverview} reason="La capacité de réaffectation n’a pas pu être lue (vue d’ensemble indisponible)." />
+      <Unavailable title="Réaffectation" state={session.capabilities.adminOverview} reason="La vue d’ensemble n’a pas pu être chargée ; actualisez les données pour savoir si la réaffectation est possible." />
     ) : (
       <Loader label="Lecture des capacités…" />
     );
   } else if (!capability) {
-    body = <Unavailable title="Réaffectation" reason="Le serveur n’autorise pas la réaffectation avant l’acceptation du devis (capacité « dispatch_before_quote_acceptance » désactivée)." />;
+    body = <Unavailable title="Réaffectation" reason="La réaffectation avant acceptation du devis n’est pas activée sur ce service." />;
   } else if (!eligible) {
     body = (
       <Unavailable

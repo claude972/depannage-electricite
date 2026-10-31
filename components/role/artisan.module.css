@@ -1466,117 +1466,19 @@
   line-height: 1.7;
 }
 
-/* ---- Shared primitives missing from globals.css, scoped to this space ---------------- */
-.space :global(.tag) {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 9px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-  background: #edf2f8;
-  color: #4a607c;
-}
-.space :global(.tag-blue) {
-  background: #edf3ff;
-  color: #255fc0;
-}
-.space :global(.tag-green) {
-  background: #eaf6ee;
-  color: #227146;
-}
-.space :global(.tag-amber) {
-  background: #fff4dd;
-  color: #8a5a00;
-}
-.space :global(.tag-red) {
-  background: #fdeeed;
-  color: #9e2a22;
-}
-.space :global(.tag-violet) {
-  background: #f1edfa;
-  color: #5b3fa6;
-}
+/* ---- Shared primitives live in app/globals.css; only spacing and >=12px sizes are adjusted ---- */
 .space :global(.badge) {
   font-size: 12px;
   padding: 4px 9px;
 }
 .space :global(.unavailable) {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  padding: 14px 16px;
-  border: 1px dashed #c3cfdf;
-  border-radius: 10px;
-  background: #f7f9fc;
   margin: 10px 0;
 }
-.space :global(.unavailable) strong {
-  display: block;
-  font-size: 14px;
-  color: var(--a-navy);
-}
-.space :global(.unavailable) p {
-  font-size: 13px;
-  margin-top: 3px;
-}
-.space :global(.unavailable) small {
-  display: block;
-  font-size: 12px;
-  color: #6f7f94;
-  margin-top: 4px;
-}
-.space :global(.unavailable-icon) {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: #e9eef6;
-  color: #6b7f9c;
-  flex-shrink: 0;
-}
-.space :global(.forbidden) {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 12px;
-  padding: 44px 24px;
-}
-.space :global(.forbidden) p {
-  max-width: 460px;
-}
 .space :global(.demo-note) {
-  display: flex;
-  gap: 6px;
-  align-items: flex-start;
-  font-size: 12px;
-  color: #4b6282;
   margin: 12px 0;
-}
-.space :global(.demo-note) svg {
-  margin-top: 3px;
-  flex-shrink: 0;
-}
-.space :global(.field) > label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--a-navy);
 }
 .space :global(.field) small {
   font-size: 12px;
-}
-.space :global(.field-error) {
-  color: var(--a-red);
-}
-.space :global(.field-invalid) input,
-.space :global(.field-invalid) select,
-.space :global(.field-invalid) textarea {
-  border-color: #e4a8a3;
 }
 .space :global(.form-note),
 .space :global(.inline-note) p,

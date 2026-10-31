@@ -14,6 +14,7 @@ import {
 } from "react";
 import styles from "./enterprise.module.css";
 import { Icon } from "../app/icons";
+import { InstallPanel } from "../app/install-panel";
 import {
   Alerts,
   Badge,
@@ -64,6 +65,7 @@ import type {
   ComplianceRecord,
   Intervention,
   InvitationCreated,
+  MemberSiteAccess,
   Operations,
   Organization,
   OrganizationCommand,
@@ -73,6 +75,9 @@ import type {
   Quote,
   Role,
   Site,
+  SiteAccessOverview,
+  SiteGrant,
+  SiteScope,
   Status,
   StoredDocument,
   View,
@@ -227,6 +232,9 @@ type Ctx = {
   orgInterventions: Intervention[];
   /** Périmètre affiché : organisation + site éventuellement filtré. */
   scope: Scope;
+  /** Portées de sites des membres : undefined = chargement, null = indisponible. */
+  siteAccess: SiteAccessOverview | null | undefined;
+  reloadSiteAccess: () => void;
   go: (view: View, param?: string) => void;
 };
 
@@ -259,6 +267,8 @@ export function EnterpriseSpace({ session }: { session: Session }) {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [siteAccess, setSiteAccess] = useState<SiteAccessOverview | null | undefined>(undefined);
+  const [accessKey, setAccessKey] = useState(0);
   const menuButton = useRef<HTMLButtonElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
   const navId = useId();
@@ -277,6 +287,23 @@ export function EnterpriseSpace({ session }: { session: Session }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [menuOpen]);
 
+  useEffect(() => {
+    if (!ctx.organizationId) {
+      setSiteAccess(undefined);
+      return;
+    }
+    let active = true;
+    setSiteAccess(undefined);
+    void session.loadSiteAccess(ctx.organizationId).then((result) => {
+      if (active) setSiteAccess(result);
+    });
+    return () => {
+      active = false;
+    };
+    // Recharge à chaque changement d’organisation ou sur demande explicite (membres).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctx.organizationId, accessKey]);
+
   const closeMenu = () => {
     setMenuOpen(false);
     menuButton.current?.focus();
@@ -293,6 +320,8 @@ export function EnterpriseSpace({ session }: { session: Session }) {
     orgSites: orgCtx.sites,
     orgInterventions: orgCtx.interventions,
     scope,
+    siteAccess,
+    reloadSiteAccess: () => setAccessKey((k) => k + 1),
     go,
   };
 
@@ -611,6 +640,10 @@ function ContextBar({
 }) {
   const orgId = useId();
   const siteSelectId = useId();
+  const ownAccess =
+    c.session.membershipRole && c.session.membershipRole !== "owner"
+      ? c.siteAccess?.members.find((m) => m.user_id === c.session.profileId)
+      : undefined;
   return (
     <div className={styles.contextBar} aria-label="Périmètre actif">
       <div className={styles.contextNames}>
@@ -618,6 +651,11 @@ function ContextBar({
         <span>
           Organisation active : <strong>{c.organization?.name || "aucune"}</strong> · Site :{" "}
           <strong>{c.activeSite ? c.activeSite.name : "Tous les sites"}</strong>
+          {ownAccess && (
+            <>
+              {" · "}Votre accès : <strong>{scopeText(ownAccess, c.orgSites)}</strong>
+            </>
+          )}
         </span>
       </div>
       <div className={styles.contextControls}>
@@ -2157,10 +2195,10 @@ function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
       .filter((e) => e.subject_id === approval.id)
       .map((e) => ({
         date: e.created_at,
-        status: `Journal serveur : ${e.action}`,
+        status: "Événement du journal",
         tone: "neutral" as const,
         actor: actorName(e.actor_id),
-        comment: "—",
+        comment: e.action.replace(/_/g, " "),
       })),
   ].sort((a, b) => Date.parse(a.date || "") - Date.parse(b.date || ""));
 
@@ -2535,7 +2573,7 @@ function InvoicesView({ c }: { c: Ctx }) {
   );
 }
 
-// ---- Membres (contrat /api/organizations via session) ----------------------------------------
+// ---- Membres et accès aux sites (via session) ------------------------------------------------
 const INVITATION_META: Record<string, { label: string; tone: "amber" | "green" | "red" | "neutral" }> = {
   pending: { label: "En attente", tone: "amber" },
   accepted: { label: "Acceptée", tone: "green" },
@@ -2552,6 +2590,290 @@ const MEMBERSHIP_EVENT: Record<string, string> = {
 };
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** Libellé lisible d’une portée : « Tous les sites » ou la liste des sites avec le droit. */
+function scopeText(access: MemberSiteAccess | null | undefined, sites: Site[]): string {
+  if (!access || access.scope !== "selected") return "Tous les sites";
+  if (!access.grants.length) return "Sites sélectionnés : aucun";
+  const names = access.grants.map((g) => {
+    const name = sites.find((s) => s.id === g.site_id)?.name || "Site inconnu";
+    return `${name} (${g.can_write ? "écriture" : "lecture"})`;
+  });
+  return `Sites sélectionnés : ${names.join(", ")}`;
+}
+/** Portée éventuellement renvoyée avec une invitation (champs optionnels côté serveur). */
+function invitationAccess(inv: object): MemberSiteAccess | null {
+  const raw = inv as { site_scope?: unknown; site_grants?: unknown };
+  if (raw.site_scope !== "selected") return null;
+  const grants = Array.isArray(raw.site_grants)
+    ? raw.site_grants
+        .filter((g): g is SiteGrant => !!g && typeof g === "object" && typeof (g as SiteGrant).site_id === "string")
+        .map((g) => ({ site_id: g.site_id, can_write: Boolean(g.can_write) }))
+    : [];
+  return { user_id: "", scope: "selected", grants };
+}
+
+const SCOPE_NOTE =
+  "Un membre limité à certains sites ne voit plus les dossiers des autres sites, y compris ceux qu’il a lui-même créés ; cette portée ne délègue aucun pouvoir de paiement.";
+
+/** Choix de portée (tous les sites / sites sélectionnés + écriture par site). */
+function SiteScopeControl({
+  legend,
+  sites,
+  scope,
+  grants,
+  writable,
+  disabled,
+  error,
+  onChange,
+}: {
+  legend: string;
+  sites: Site[];
+  scope: SiteScope;
+  grants: SiteGrant[];
+  /** false pour le rôle Lecture : l’écriture reste désactivée. */
+  writable: boolean;
+  disabled?: boolean;
+  error?: string;
+  onChange: (scope: SiteScope, grants: SiteGrant[]) => void;
+}) {
+  const group = useId();
+  const sorted = useMemo(() => [...sites].sort((a, b) => a.name.localeCompare(b.name, "fr")), [sites]);
+  const toggleSite = (siteId: string, checked: boolean) =>
+    onChange(
+      "selected",
+      checked
+        ? [...grants.filter((g) => g.site_id !== siteId), { site_id: siteId, can_write: false }]
+        : grants.filter((g) => g.site_id !== siteId),
+    );
+  const toggleWrite = (siteId: string, checked: boolean) =>
+    onChange(
+      "selected",
+      grants.map((g) => (g.site_id === siteId ? { ...g, can_write: checked } : g)),
+    );
+  return (
+    <fieldset className={styles.scopeControl} disabled={disabled}>
+      <legend>{legend}</legend>
+      <div className={styles.scopeRadios}>
+        <label>
+          <input type="radio" name={group} checked={scope === "all"} onChange={() => onChange("all", [])} />
+          Tous les sites
+        </label>
+        <label>
+          <input
+            type="radio"
+            name={group}
+            checked={scope === "selected"}
+            onChange={() => onChange("selected", grants)}
+          />
+          Sites sélectionnés
+        </label>
+      </div>
+      {scope === "selected" &&
+        (sorted.length ? (
+          <ul className={styles.scopeSites} aria-label="Sites accessibles">
+            {sorted.map((s) => {
+              const grant = grants.find((g) => g.site_id === s.id);
+              const writeOff = !grant || !writable;
+              return (
+                <li key={s.id}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(grant)}
+                      onChange={(e) => toggleSite(s.id, e.target.checked)}
+                    />
+                    <span>{s.name}</span>
+                  </label>
+                  <label className={cx(styles.scopeWrite, writeOff && styles.scopeWriteOff)}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(grant?.can_write) && writable}
+                      disabled={writeOff}
+                      onChange={(e) => toggleWrite(s.id, e.target.checked)}
+                    />
+                    écriture
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className={styles.note}>Aucun site dans cette organisation : ajoutez un site avant de restreindre l’accès.</p>
+        ))}
+      {scope === "selected" && !writable && (
+        <p className={styles.note}>Le rôle Lecture reste en lecture seule : l’écriture ne peut pas lui être accordée.</p>
+      )}
+      {error && (
+        <small className="field-error" role="alert">
+          {error}
+        </small>
+      )}
+      <p className={styles.note}>{SCOPE_NOTE}</p>
+    </fieldset>
+  );
+}
+
+/** Ligne membre : rôle, portée des sites et, pour le propriétaire, l’éditeur « Accès aux sites ». */
+function MemberItem({
+  c,
+  orgId,
+  member,
+  me,
+  manageable,
+  canEditAccess,
+  access,
+  scopeLine,
+  command,
+  onSaved,
+}: {
+  c: Ctx;
+  orgId: string;
+  member: { user_id: string; role: string; full_name: string };
+  me: boolean;
+  manageable: boolean;
+  canEditAccess: boolean;
+  access: MemberSiteAccess | undefined;
+  scopeLine: string;
+  command: (body: OrganizationCommand) => Promise<InvitationCreated | boolean>;
+  onSaved: () => void;
+}) {
+  const { session } = c;
+  const panelId = useId();
+  const [open, setOpen] = useState(false);
+  const [scope, setScope] = useState<SiteScope>(access?.scope || "all");
+  const [grants, setGrants] = useState<SiteGrant[]>(access?.grants || []);
+  const [error, setError] = useState("");
+  const writable = member.role === "manager";
+  useEffect(() => {
+    setScope(access?.scope || "all");
+    setGrants(access?.grants || []);
+  }, [access]);
+
+  function reset() {
+    setScope(access?.scope || "all");
+    setGrants(access?.grants || []);
+    setError("");
+    setOpen(false);
+  }
+  async function save() {
+    if (scope === "selected" && !grants.length) {
+      setError("Sélectionnez au moins un site, ou choisissez « Tous les sites ».");
+      return;
+    }
+    setError("");
+    const ok = await session.setSiteAccess({
+      organization_id: orgId,
+      user_id: member.user_id,
+      scope,
+      grants:
+        scope === "all"
+          ? []
+          : grants.map((g) => ({ site_id: g.site_id, can_write: writable && g.can_write })),
+    });
+    if (ok) {
+      setOpen(false);
+      onSaved();
+    }
+  }
+  return (
+    <div className={styles.memberItem}>
+      <div className={cx(styles.memberRow, me && styles.memberMe)}>
+        <span className="avatar" aria-hidden="true">
+          {initials(member.full_name) || "?"}
+        </span>
+        <section>
+          <strong>
+            {member.full_name}
+            {me ? " (vous)" : ""}
+          </strong>
+          <small>{MEMBER_ROLE[member.role] || member.role}</small>
+          {scopeLine && <small className={styles.memberScope}>{scopeLine}</small>}
+        </section>
+        {manageable ? (
+          <div className={styles.memberActions}>
+            {canEditAccess && (
+              <button
+                type="button"
+                className="button outline"
+                aria-expanded={open}
+                aria-controls={panelId}
+                onClick={() => (open ? reset() : setOpen(true))}
+              >
+                Accès aux sites
+              </button>
+            )}
+            <label className={styles.filterField}>
+              <span className="sr-only">Rôle de {member.full_name}</span>
+              <select
+                value={member.role === "viewer" ? "viewer" : "manager"}
+                disabled={session.busy}
+                onChange={(e) =>
+                  void command({
+                    action: "change_member_role",
+                    organization_id: orgId,
+                    user_id: member.user_id,
+                    role: e.target.value as "manager" | "viewer",
+                  })
+                }
+              >
+                <option value="manager">Gestionnaire</option>
+                <option value="viewer">Lecture</option>
+              </select>
+            </label>
+            <ConfirmAction
+              label="Transférer la propriété"
+              message={`Faire de ${member.full_name} le propriétaire de l’organisation ? Vous deviendrez gestionnaire.`}
+              confirmLabel="Transférer"
+              busy={session.busy}
+              onConfirm={() =>
+                command({ action: "transfer_ownership", organization_id: orgId, user_id: member.user_id })
+              }
+            />
+            <ConfirmAction
+              label="Retirer"
+              message={`Retirer ${member.full_name} de l’organisation ? Cette personne perdra l’accès aux sites et dossiers.`}
+              confirmLabel="Confirmer le retrait"
+              danger
+              busy={session.busy}
+              onConfirm={() =>
+                command({ action: "remove_member", organization_id: orgId, user_id: member.user_id })
+              }
+            />
+          </div>
+        ) : (
+          <Tag tone={member.role === "owner" ? "blue" : "neutral"}>{MEMBER_ROLE[member.role] || member.role}</Tag>
+        )}
+      </div>
+      {open && (
+        <div id={panelId} className={styles.accessPanel}>
+          <SiteScopeControl
+            legend={`Accès aux sites de ${member.full_name}`}
+            sites={c.orgSites}
+            scope={scope}
+            grants={grants}
+            writable={writable}
+            disabled={session.busy}
+            error={error}
+            onChange={(nextScope, nextGrants) => {
+              setScope(nextScope);
+              setGrants(nextGrants);
+              setError("");
+            }}
+          />
+          <div className={styles.actions}>
+            <button type="button" className="button primary" disabled={session.busy} onClick={() => void save()}>
+              {session.busy ? "Enregistrement…" : "Enregistrer l’accès"}
+            </button>
+            <button type="button" className="button outline" disabled={session.busy} onClick={reset}>
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MembersView({ c }: { c: Ctx }) {
   const { session } = c;
   const orgId = c.organization?.id || "";
@@ -2564,7 +2886,13 @@ function MembersView({ c }: { c: Ctx }) {
   const [inviteError, setInviteError] = useState("");
   const [created, setCreated] = useState<InvitationCreated | null>(null);
   const [copied, setCopied] = useState("");
+  const [inviteScope, setInviteScope] = useState<SiteScope>("all");
+  const [inviteGrants, setInviteGrants] = useState<SiteGrant[]>([]);
+  const [inviteScopeError, setInviteScopeError] = useState("");
   const memberList = session.data.organization_members;
+  const siteAccess = c.siteAccess;
+  const accessOf = (userId: string) => siteAccess?.members.find((m) => m.user_id === userId);
+  const selfAccess = accessOf(session.profileId);
   useEffect(() => {
     if (!orgId) {
       setOverview(null);
@@ -2585,8 +2913,13 @@ function MembersView({ c }: { c: Ctx }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgId, reloadKey, memberList]);
 
-  const reload = () => setReloadKey((k) => k + 1);
+  const reload = () => {
+    setReloadKey((k) => k + 1);
+    c.reloadSiteAccess();
+  };
   const canManage = Boolean(overview?.permissions.can_manage);
+  const isOwner = session.membershipRole === "owner";
+  const canEditAccess = canManage && isOwner && Boolean(siteAccess?.can_manage);
   const nameOf = (userId?: string | null) =>
     !userId
       ? "—"
@@ -2610,7 +2943,12 @@ function MembersView({ c }: { c: Ctx }) {
       setInviteError("La validité doit être comprise entre 1 et 30 jours.");
       return;
     }
+    if (inviteScope === "selected" && !inviteGrants.length) {
+      setInviteScopeError("Sélectionnez au moins un site, ou choisissez « Tous les sites ».");
+      return;
+    }
     setInviteError("");
+    setInviteScopeError("");
     setCreated(null);
     setCopied("");
     const result = await command({
@@ -2619,10 +2957,17 @@ function MembersView({ c }: { c: Ctx }) {
       email: email.trim(),
       role: inviteRole,
       expires_in_days: expires,
+      site_scope: inviteScope,
+      site_grants:
+        inviteScope === "all"
+          ? []
+          : inviteGrants.map((g) => ({ site_id: g.site_id, can_write: inviteRole === "manager" && g.can_write })),
     });
     if (result && typeof result === "object") {
       setCreated(result);
       setEmail("");
+      setInviteScope("all");
+      setInviteGrants([]);
     }
   }
   async function copy(text: string, what: string) {
@@ -2665,6 +3010,27 @@ function MembersView({ c }: { c: Ctx }) {
         </Unavailable>
       ) : (
         <>
+          {!isOwner && (
+            <section className={cx("panel", styles.accessSelf)} aria-labelledby="own-access-title">
+              <h2 id="own-access-title">Votre accès</h2>
+              {siteAccess === undefined ? (
+                <Loader label="Chargement de votre accès…" />
+              ) : siteAccess === null ? (
+                <Unavailable title="Portée de vos sites indisponible" state={session.capabilities.siteAccess} />
+              ) : (
+                <>
+                  <p>
+                    <strong>{scopeText(selfAccess, c.orgSites)}</strong>
+                  </p>
+                  <p className={styles.note}>
+                    {selfAccess?.scope === "selected"
+                      ? "Seuls ces sites et leurs dossiers vous sont visibles ; le propriétaire de l’organisation ajuste cette portée."
+                      : "Vous accédez à tous les sites de l’organisation selon votre rôle."}
+                  </p>
+                </>
+              )}
+            </section>
+          )}
           <section className="panel" aria-labelledby="members-title">
             <div className={styles.panelTitle}>
               <div>
@@ -2675,71 +3041,46 @@ function MembersView({ c }: { c: Ctx }) {
                 </p>
               </div>
             </div>
+            {isOwner && siteAccess === null && (
+              <Unavailable title="Accès par site indisponible" state={session.capabilities.siteAccess}>
+                <button type="button" className="button outline" onClick={c.reloadSiteAccess}>
+                  Réessayer
+                </button>
+              </Unavailable>
+            )}
             {overview.members.length ? (
               overview.members.map((m) => {
                 const me = m.user_id === session.profileId;
                 const manageable = canManage && !me && m.role !== "owner";
+                const access = accessOf(m.user_id);
+                const scopeLine =
+                  m.role === "owner"
+                    ? "Tous les sites"
+                    : siteAccess === undefined
+                      ? "Accès aux sites : chargement…"
+                      : access
+                        ? scopeText(access, c.orgSites)
+                        : "";
                 return (
-                  <div key={m.user_id} className={cx(styles.memberRow, me && styles.memberMe)}>
-                    <span className="avatar" aria-hidden="true">
-                      {initials(m.full_name) || "?"}
-                    </span>
-                    <section>
-                      <strong>
-                        {m.full_name}
-                        {me ? " (vous)" : ""}
-                      </strong>
-                      <small>{MEMBER_ROLE[m.role] || m.role}</small>
-                    </section>
-                    {manageable ? (
-                      <div className={styles.memberActions}>
-                        <label className={styles.filterField}>
-                          <span className="sr-only">Rôle de {m.full_name}</span>
-                          <select
-                            value={m.role === "viewer" ? "viewer" : "manager"}
-                            disabled={session.busy}
-                            onChange={(e) =>
-                              void command({
-                                action: "change_member_role",
-                                organization_id: orgId,
-                                user_id: m.user_id,
-                                role: e.target.value as "manager" | "viewer",
-                              })
-                            }
-                          >
-                            <option value="manager">Gestionnaire</option>
-                            <option value="viewer">Lecture</option>
-                          </select>
-                        </label>
-                        <ConfirmAction
-                          label="Transférer la propriété"
-                          message={`Faire de ${m.full_name} le propriétaire de l’organisation ? Vous deviendrez gestionnaire.`}
-                          confirmLabel="Transférer"
-                          busy={session.busy}
-                          onConfirm={() =>
-                            command({ action: "transfer_ownership", organization_id: orgId, user_id: m.user_id })
-                          }
-                        />
-                        <ConfirmAction
-                          label="Retirer"
-                          message={`Retirer ${m.full_name} de l’organisation ? Cette personne perdra l’accès aux sites et dossiers.`}
-                          confirmLabel="Confirmer le retrait"
-                          danger
-                          busy={session.busy}
-                          onConfirm={() =>
-                            command({ action: "remove_member", organization_id: orgId, user_id: m.user_id })
-                          }
-                        />
-                      </div>
-                    ) : (
-                      <Tag tone={m.role === "owner" ? "blue" : "neutral"}>{MEMBER_ROLE[m.role] || m.role}</Tag>
-                    )}
-                  </div>
+                  <MemberItem
+                    key={m.user_id}
+                    c={c}
+                    orgId={orgId}
+                    member={m}
+                    me={me}
+                    manageable={manageable}
+                    canEditAccess={canEditAccess}
+                    access={access}
+                    scopeLine={scopeLine}
+                    command={command}
+                    onSaved={reload}
+                  />
                 );
               })
             ) : (
               <p className={styles.muted}>Aucun membre chargé pour cette organisation.</p>
             )}
+            {canEditAccess && <p className={styles.note}>Le propriétaire conserve toujours tous les sites. {SCOPE_NOTE}</p>}
             {!canManage && (
               <p className={styles.note}>
                 Seul le propriétaire de l’organisation gère les membres et les invitations.
@@ -2772,6 +3113,9 @@ function MembersView({ c }: { c: Ctx }) {
                         <small>
                           {MEMBER_ROLE[inv.role] || inv.role} · créée le {date(inv.created_at)} · expire le {date(inv.expires_at)}
                         </small>
+                        {invitationAccess(inv) && (
+                          <small className={styles.memberScope}>{scopeText(invitationAccess(inv), c.orgSites)}</small>
+                        )}
                       </section>
                       <Tag tone={meta.tone}>{meta.label}</Tag>
                       {canManage && inv.status === "pending" && (
@@ -2827,6 +3171,20 @@ function MembersView({ c }: { c: Ctx }) {
                       />
                     </Field>
                   </div>
+                  <SiteScopeControl
+                    legend="Accès aux sites"
+                    sites={c.orgSites}
+                    scope={inviteScope}
+                    grants={inviteGrants}
+                    writable={inviteRole === "manager"}
+                    disabled={session.busy}
+                    error={inviteScopeError}
+                    onChange={(nextScope, nextGrants) => {
+                      setInviteScope(nextScope);
+                      setInviteGrants(nextGrants);
+                      setInviteScopeError("");
+                    }}
+                  />
                   <button type="submit" className="button primary" disabled={session.busy}>
                     {session.busy ? "Enregistrement…" : "Créer l’invitation"}
                   </button>
@@ -2989,6 +3347,7 @@ function ProfileView({ c }: { c: Ctx }) {
           await session.updateProfile(values);
         }}
       />
+      <InstallPanel />
       <section className="panel" aria-labelledby="profile-role">
         <h2 id="profile-role">Votre rôle</h2>
         <p className={styles.description}>

@@ -755,6 +755,55 @@ button.row:hover {
 .rules li + li {
   margin-top: 6px;
 }
+.subheading {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--navy);
+  margin: 0 0 10px;
+}
+.tagList {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.credList {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.credRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fafd;
+}
+.credRow > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--muted);
+}
+.credRow > div {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.credRow strong {
+  font-size: 14px;
+  color: var(--navy);
+}
+.credRow span {
+  font-size: 13px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
 .formNote {
   font-size: 13px;
   line-height: 1.7;
@@ -778,8 +827,6 @@ button.row:hover {
 }
 .panelBody :global(.field) label {
   font-size: 13px;
-  font-weight: 600;
-  color: var(--navy);
 }
 .panelBody :global(.field) small {
   font-size: 12px;

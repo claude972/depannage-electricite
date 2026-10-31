@@ -20,6 +20,7 @@ import {
 } from "../app/format";
 import { pickQuote, quoteVersions } from "../app/session";
 import { Icon } from "../app/icons";
+import { InstallPanel } from "../app/install-panel";
 import {
   Alerts,
   Badge,
@@ -336,7 +337,7 @@ export function ClientSpace({ session }: { session: Session }) {
                 type="button"
                 className={`${styles.connection} ${session.connection === "SUBSCRIBED" ? styles.live : ""}`}
                 onClick={() => void session.refresh()}
-                title="Relire les données depuis le serveur"
+                title="Actualiser les données"
               >
                 <span />
                 Connexion temps réel :{" "}
@@ -1337,7 +1338,7 @@ function DetailView({
           ))}
         </ol>
         <p className="form-note">
-          Seules les dates enregistrées par le serveur sont affichées ; « — » signifie qu’aucun
+          Seules les dates enregistrées sur la plateforme sont affichées ; « — » signifie qu’aucun
           horodatage n’existe pour cette étape.
         </p>
       </section>
@@ -1350,10 +1351,10 @@ function DetailView({
           <Icon name={payment.status === "paid" ? "check" : payment.status === "failed" ? "warning" : "clock"} size={16} />
           <span>
             {payment.status === "paid"
-              ? `Règlement de ${money(payment.total_cents)} confirmé par le serveur${payment.paid_at ? ` le ${dateTime(payment.paid_at)}` : ""}.`
+              ? `Règlement de ${money(payment.total_cents)} confirmé par la plateforme${payment.paid_at ? ` le ${dateTime(payment.paid_at)}` : ""}.`
               : payment.status === "failed"
                 ? "Le paiement a échoué selon Stripe. Aucun montant n’a été prélevé ; vous pouvez réessayer."
-                : "Paiement en attente de confirmation Stripe. Rien n’est considéré comme réglé tant que le serveur ne l’a pas confirmé."}
+                : "Paiement en attente de confirmation Stripe. Rien n’est considéré comme réglé tant que la plateforme ne l’a pas confirmé."}
           </span>
         </p>
       )}
@@ -1707,7 +1708,7 @@ function QuoteView({
         </button>
         <Unavailable
           title="Télécharger le devis (PDF)"
-          reason="PDF du devis non disponible : la génération de documents n’est pas encore en place."
+          reason="Pas encore activé sur ce service. Utilisez le récapitulatif texte ci-dessus ; le devis détaillé reste consultable dans ce dossier."
           blocker="CLI-07"
         />
       </div>
@@ -1811,20 +1812,19 @@ function ProfileView({ session }: { session: Session }) {
               await session.updateProfile(values);
             }}
           />
+          <InstallPanel />
           <Unavailable
             title="Adresses enregistrées, moyens de paiement et préférences"
-            reason="Ces réglages ne sont pas encore disponibles : aucune adresse multiple, aucun moyen de paiement mémorisé ni préférence de notification n’est stocké. Le règlement se fait au cas par cas via Stripe."
+            reason="Pas encore activé sur ce service : aucune adresse supplémentaire, aucun moyen de paiement mémorisé ni préférence de notification n’est enregistré. Chaque règlement se fait au moment voulu, via Stripe."
             blocker="CLI-09"
           />
-          {/* Emplacement réservé : installation PWA / notifications (lot Codex, composant
-              pwa-registration). Aucun bouton rendu ici tant que le contrat n’est pas exposé. */}
         </div>
         <aside className={styles.aside}>
           <section className={styles.asideCard}>
             <Icon name="shield" size={26} />
             <h2>Un accès adapté à votre rôle</h2>
             <p>
-              Votre espace : {ROLE_NAMES[session.role]}. Les droits sont contrôlés côté serveur ;
+              Votre espace : {ROLE_NAMES[session.role]}. Les droits sont vérifiés à chaque action ;
               vous ne voyez que vos propres dossiers.
             </p>
           </section>

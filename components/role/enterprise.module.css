@@ -463,27 +463,6 @@
 .kpis {
   margin-bottom: 22px;
 }
-.kpis :global(.stat) section > span {
-  font-size: 12px;
-  min-height: 0;
-  max-width: none;
-}
-.kpis :global(.stat) strong {
-  font-size: 24px;
-}
-.kpis :global(.stat) small {
-  font-size: 12px;
-  color: #526178;
-  line-height: 1.5;
-}
-.main :global(.stat-icon.navy) {
-  background: #e8edf4;
-  color: #102a43;
-}
-.main :global(.stat-icon.violet) {
-  background: #eeebfb;
-  color: #4b3fa6;
-}
 
 /* ---- Tableau M66 ----------------------------------------------------------------- */
 .tablePanel {
@@ -1197,100 +1176,114 @@
   font-size: 12px;
   color: #526178;
 }
-
-/* ---- Primitives partagées sans style global (Tag, Unavailable, Forbidden, DemoNote) */
-.shell :global(.tag) {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 9px;
-  border-radius: 5px;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-  background: #edf2f8;
-  color: #475b73;
+.memberItem {
+  border-top: 1px solid #edf0f5;
 }
-.shell :global(.tag-blue) {
-  background: #e8f0fe;
-  color: #1a4fb8;
+.memberItem:first-of-type {
+  border-top: 0;
 }
-.shell :global(.tag-green) {
-  background: #e7f4ec;
-  color: #167344;
+.memberItem .memberRow {
+  border-top: 0;
 }
-.shell :global(.tag-amber) {
-  background: #fff3dd;
-  color: #7d5200;
-}
-.shell :global(.tag-red) {
-  background: #fdecea;
-  color: #a1251b;
-}
-.shell :global(.tag-violet) {
-  background: #eeebfb;
-  color: #4b3fa6;
-}
-.shell :global(.unavailable) {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  padding: 14px 16px;
-  border: 1px dashed #c6d2e2;
-  border-radius: 8px;
-  background: #f8fafd;
-  margin: 12px 0;
-}
-.shell :global(.unavailable-icon) {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  flex-shrink: 0;
-  border-radius: 8px;
-  background: #e8edf4;
-  color: #526178;
-}
-.shell :global(.unavailable strong) {
+.memberScope {
   display: block;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+.accessSelf {
+  margin-bottom: 18px;
+}
+.accessSelf h2 {
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.accessSelf p {
   font-size: 14px;
   color: #102a43;
 }
-.shell :global(.unavailable p) {
-  font-size: 13px;
-  line-height: 1.6;
-  margin-top: 4px;
+.accessPanel {
+  flex-basis: 100%;
+  padding: 14px 16px 16px;
+  margin: 4px 0 12px;
+  border: 1px solid #dce4ee;
+  border-radius: 8px;
+  background: #f8fafd;
 }
-.shell :global(.unavailable small) {
-  display: block;
-  font-size: 12px;
-  color: #526178;
-  margin-top: 6px;
+.accessPanel .actions {
+  margin-top: 12px;
 }
-.shell :global(.forbidden) {
-  max-width: 560px;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 36px 24px;
+.scopeControl {
+  border: 0;
+  padding: 0;
+  margin: 14px 0 0;
+  min-width: 0;
 }
-.shell :global(.forbidden h2) {
-  font-size: 20px;
-}
-.shell :global(.forbidden p) {
+.scopeControl legend {
   font-size: 14px;
-  line-height: 1.7;
+  font-weight: 600;
+  color: #102a43;
+  margin-bottom: 8px;
 }
-.shell :global(.demo-note) {
-  display: flex;
+.scopeControl label {
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
-  color: #526178;
-  margin-top: 10px;
+  min-height: 32px;
+  font-size: 14px;
+  color: #172b4d;
+  cursor: pointer;
+}
+.scopeControl input[type="radio"],
+.scopeControl input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #1457d9;
+  flex-shrink: 0;
+}
+.scopeControl:disabled label {
+  cursor: default;
+  opacity: 0.7;
+}
+.scopeRadios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+}
+.scopeSites {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  border: 1px solid #dce4ee;
+  border-radius: 8px;
+  background: #fff;
+}
+.scopeSites li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 16px;
+  padding: 6px 12px;
+  border-top: 1px solid #edf0f5;
+}
+.scopeSites li:first-child {
+  border-top: 0;
+}
+.scopeSites li > label:first-child {
+  flex: 1;
+  min-width: 160px;
+}
+.scopeWrite {
+  font-size: 13px;
+}
+.scopeWriteOff {
+  color: #6b7a90;
+}
+
+/* Tag, Unavailable, Forbidden et DemoNote : styles globaux (app/globals.css). */
+.shell :global(.unavailable) {
+  margin: 12px 0;
 }
 .shell :global(.badge) {
   font-size: 12px;

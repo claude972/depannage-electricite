@@ -7,6 +7,7 @@ import type { Category, View } from "../app/types";
 import { Alerts, Brand, PageTitle, Unavailable } from "../app/ui";
 import { AuthForm, RequestForm } from "../app/forms";
 import { Icon } from "../app/icons";
+import { InstallPanel } from "../app/install-panel";
 import { CATEGORIES, category, money } from "../app/format";
 import styles from "./public.module.css";
 
@@ -484,6 +485,7 @@ function HelpView({ onNew }: { onNew: () => void }) {
             </p>
             <p>Cette version ne fournit pas de ligne d’urgence.</p>
           </section>
+          <InstallPanel />
         </aside>
       </div>
     </div>
@@ -531,8 +533,8 @@ function PricingView({ onNew }: { onNew: () => void }) {
                   <p>
                     Proposé une fois l’intervention terminée, sur la base du
                     devis accepté. Le règlement est traité avec Stripe ; il
-                    n’est considéré comme encaissé qu’après confirmation du
-                    serveur, jamais sur la seule redirection.
+                    n’est considéré comme encaissé qu’après confirmation de la
+                    plateforme, jamais sur la seule redirection.
                   </p>
                 </div>
               </li>

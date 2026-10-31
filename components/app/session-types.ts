@@ -22,6 +22,8 @@ import type {
   RequestValues,
   ReturnContext,
   Role,
+  SiteAccessCommand,
+  SiteAccessOverview,
   View,
   Workspace,
 } from "./types";
@@ -105,8 +107,8 @@ export interface Session {
   operate(id: string, body: OperationBody): Promise<boolean>;
   /** New contract GET /api/interventions/[id]/operations. null when unavailable (see capabilities). */
   loadOperations(id: string): Promise<Operations | null>;
-  /** New contract /api/artisan. */
-  loadArtisanDossier(): Promise<ArtisanDossier | null>;
+  /** Artisan dossier: own dossier, or another artisan's when the caller is a platform admin. */
+  loadArtisanDossier(userId?: string): Promise<ArtisanDossier | null>;
   artisanCommand(body: ArtisanCommand): Promise<boolean>;
   /** New contract GET /api/admin/overview. */
   loadAdminOverview(): Promise<AdminOverview | null>;
@@ -116,6 +118,10 @@ export interface Session {
   organizationCommand(body: OrganizationCommand): Promise<InvitationCreated | boolean>;
   /** Accept a manually shared invitation code for the logged-in verified recipient. */
   acceptInvitation(token: string): Promise<boolean>;
+  /** Site scopes of members (contract 009): own scope, all scopes for the owner. */
+  loadSiteAccess(organizationId: string): Promise<SiteAccessOverview | null>;
+  /** Owner-only: replace a member's site scope and grants atomically. */
+  setSiteAccess(body: SiteAccessCommand): Promise<boolean>;
   /** Artisan global performance for the current and previous calendar month (browser timezone). */
   loadArtisanPerformance(): Promise<ArtisanPerformanceReport | null>;
   /** Server truth for a quote's payment (status + attempts); the return URL never decides. */

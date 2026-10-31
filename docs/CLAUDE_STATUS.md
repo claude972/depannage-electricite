@@ -33,12 +33,21 @@ Fichier de coordination émis par l’agent Claude pour le pilote (Codex). Le pi
 - **CL-BE-003 (faible)** `reject_intervention_quote` et `reassign_intervention` écrivent le motif dans `messages` (partagé) : conforme au contrat ; l’UI prévient l’auteur que le motif est visible par les participants.
 - **CL-BE-004 (info)** `GET /api/workspace` : `payments` limité à 100 sans indicateur de troncature contrairement à `appointments_limited` ; l’UI mentionne « sur les dossiers chargés ». Suggestion additive : `payments_limited`.
 - **PWA (cf52bcd/6aaa1b3)** : `sw.js` n’intercepte que les navigations GET même origine hors /api et /auth, pas de cache privé, fallback public uniquement ; conforme à la mission. Pas de finding bloquant ; vérification navigateur multi-onglets reste celle du pilote.
+- **CL-BE-005 (info, 70337dc)** webhook : `checkout.session.expired` / `async_payment_failed` passent par `record_stripe_payment_failure` après contrôle quote_id/client_reference_id/devise/montant ; l’UI relit `GET /api/payments/status` au retour et affiche payé/échec/expiré/en attente selon le serveur uniquement (CL-003).
+- **CL-BE-006 (info, 008)** `guard_artisan_self_edit` : un dossier suspendu ne peut plus modifier société/disponibilité ; l’UI artisan affiche le statut « suspendu » avec consigne de contacter l’opérateur et désactive ces formulaires (à vérifier au checkpoint 2).
+- **009 (c04b752 / contrat a10bb3d)** consommé par l’UI : `GET/POST /api/organizations/site-access` via `session.loadSiteAccess` / `setSiteAccess`, `create_invitation` avec `site_scope`/`site_grants` ; forme réelle `{organization_id, can_manage, members[{user_id, role, scope, grants}]}` (lue dans la migration, différente du texte du contrat qui ne la précisait pas).
 - Pas de revue des migrations SQL au-delà de la lecture des contrats utilisés par l’UI (003/004/005/006/007 lues pour les formes de données) ; la recette SQL isolée reste Codex.
 
-## Prochain livrable (checkpoint 2)
+## Checkpoint 2 — livré (SHA dans le journal)
 
-Checkpoint 1 terminé (voir ci-dessus). Checkpoint 2 — intégration et finitions :
-0. Import de `PwaInstallControl` (Profil/Aide), revue des copies utilisateur (CL-UI-005) sur les 5 espaces, uniformisation des tailles de texte ≥ 12 px dans `globals.css`, nettoyage des surcharges locales dupliquées (`.tag`, `.unavailable`) devenues globales, deep link démo avec identifiant, relecture accessibilité clavier des menus off-canvas, captures preview combinée dès disponibilité.
+- contenu : `PwaInstallControl` placé dans les profils des 4 rôles et l’aide publique via `components/app/install-panel.tsx` ; contrat 009 (accès par site) consommé dans Membres (portée par membre, éditeur owner, invitations avec portée, « Votre accès ») ; dossier artisan lisible par l’admin (`/api/artisan?user_id`) dans la fiche candidature ; revue des copies utilisateur CL-UI-005 sur les 5 espaces (aucun chemin API, RPC, fichier ou identifiant de bloqueur visible ; `blocker` conservé en attribut de données) ; suppression des doublons CSS locaux devenus globaux ; relecture du retour paiement par `GET /api/payments/status` (CL-003) ; guard d’identité (CL-UI-006) avec tests.
+- contrôles : `npx tsc --noEmit` OK ; `tests/ui` 16/16 ; **`next build` non relancé pour ce checkpoint : volume plein (ENV-CL-001), 112 Mio libres** — le build du checkpoint 1 (685738c) reste la dernière preuve complète ; à relancer par le pilote sur l’intégration (CI) ou ici dès espace libéré.
+- incident : l’écriture d’`admin-space.tsx` a échoué une fois (ENOSPC, fichier tronqué) ; reconstruit depuis HEAD + modifications prévues, vérifié par typecheck ; aucune autre modification perdue (diff relu).
+- ce que Codex doit vérifier : Membres → « Accès aux sites » (owner) enregistre et relit la portée ; invitation avec portée « selected » ; non-owner voit « Votre accès » uniquement ; fiche admin d’un artisan lit le dossier et les pièces ; bouton d’installation présent dans Profil et Aide, silencieux quand l’installation n’est pas possible.
+
+## Prochain livrable (checkpoint 3)
+
+Checkpoints 1 et 2 terminés. Checkpoint 3 : captures 360/1280 des vues Membres/accès par site et fiche admin artisan (dès espace disque), relecture accessibilité clavier des menus off-canvas, build complet, puis vérification de la preview combinée publiée par le pilote et revue croisée du SHA Codex intégré.
 
 Plan initial (conservé pour trace) :
 
@@ -64,6 +73,8 @@ Découpage interne prévu (sous-modules à propriété unique, pas d’édition 
 - Q-C3 : règles commerciales (commission, TVA par défaut, territoire, exploitant) : aucune valeur inventée côté UI ; les écrans affichent « à définir par l’exploitant ». Les propositions restent dans ce fichier.
 
 ## Bloqueurs connus (hors Claude)
+
+- **ENV-CL-001 (bloquant pour build/preview locaux)** : le volume `/Volumes/Stockage` est plein (≈100 Mio libres au 30/10 22:55 AST ; `df -h`). Les dossiers projet pèsent ~0,5 Go chacun ; le reste du volume est occupé hors mission. J’ai supprimé `.next` de mon checkout (99 Mo) ; `next build` et le serveur de développement risquent d’échouer tant que de l’espace n’est pas libéré par le propriétaire. Le cache npm (`~/.npm`) est sur le disque système et vide.
 
 - Supabase dédié refusé (factures organisation en retard) : mode live indisponible sur preview ; tous les états live affichent le 503 serveur existant honnêtement, la démonstration reste explicite et isolée.
 - Nouveaux contrats backend en implémentation : UI livrée avec états « indisponible » tant que la preview combinée ne les expose pas.

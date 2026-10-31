@@ -113,3 +113,8 @@ test("enterprise context never picks organizations[0] implicitly when several ex
   assert.equal(single.organizationId, "o1");
   assert.deepEqual(single.interventions, [{ site_id: "s1" }]);
 });
+test("demo deep link and public views stay reachable without a session; join/demo params are plain identifiers", () => {
+  assert.equal(canAccess("demo", null, "public"), true);
+  assert.deepEqual(parseHash("#demo/artisan-missions"), { view: "demo", param: "artisan-missions" });
+  assert.deepEqual(parseHash("#demo/artisan/extra"), { view: "demo", param: "" }, "slashes are not identifiers");
+});

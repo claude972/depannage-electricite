@@ -46,6 +46,8 @@ import {
   type OrganizationCommand,
   type OrganizationOverview,
   type PaymentStatusReport,
+  type SiteAccessCommand,
+  type SiteAccessOverview,
   type Capabilities,
   type Category,
   type Intervention,
@@ -445,6 +447,7 @@ export default function CourantApp() {
       organizations: "available",
       performance: "available",
       payments: "available",
+      siteAccess: "available",
     });
     guard.bump();
     runner.reset();
@@ -763,16 +766,21 @@ export default function CourantApp() {
     }
   }
 
-  async function loadArtisanDossier(): Promise<ArtisanDossier | null> {
-    if (modeRef.current === "demo")
+  async function loadArtisanDossier(userId?: string): Promise<ArtisanDossier | null> {
+    if (modeRef.current === "demo") {
+      if (userId && userId !== DEMO_IDS.artisan)
+        return { artisan_profile: null, credentials: [] };
       return readDemo<ArtisanDossier>(
         DEMO_KEYS.artisan,
         artisanSeed(),
         (v) => !!v && typeof v === "object" && "credentials" in (v as object),
       );
+    }
     const my = seq.current;
     try {
-      const result = await api<ArtisanDossier>("/api/artisan");
+      const result = await api<ArtisanDossier>(
+        userId ? `/api/artisan?user_id=${encodeURIComponent(userId)}` : "/api/artisan",
+      );
       if (my !== seq.current) return null;
       setCapabilities((c) => ({ ...c, artisan: "available" }));
       return result;
@@ -1251,6 +1259,69 @@ export default function CourantApp() {
       ctx.when(navigate)(homeFor(roleRef.current, "live"));
     });
   }
+  async function loadSiteAccess(organizationId: string): Promise<SiteAccessOverview | null> {
+    if (modeRef.current === "demo") {
+      const scopes = readDemo<Record<string, { scope: "all" | "selected"; grants: { site_id: string; can_write: boolean }[] }>>(
+        DEMO_KEYS.siteAccess,
+        {},
+        (v) => !!v && typeof v === "object",
+      );
+      const members = data.organization_members
+        .filter((m) => m.organization_id === organizationId)
+        .map((m) => ({
+          user_id: m.user_id,
+          role: m.role,
+          full_name: m.user_id === DEMO_IDS.manager ? DEMO_NAMES.manager : "Membre (démo)",
+          scope: m.role === "owner" ? ("all" as const) : scopes[m.user_id]?.scope || ("all" as const),
+          grants: m.role === "owner" ? [] : scopes[m.user_id]?.grants || [],
+        }));
+      const me = `demo-${roleRef.current}`;
+      const isOwner = members.some((m) => m.user_id === me && m.role === "owner");
+      return {
+        organization_id: organizationId,
+        can_manage: isOwner,
+        members: isOwner ? members : members.filter((m) => m.user_id === me),
+      };
+    }
+    const my = seq.current;
+    try {
+      const result = await api<SiteAccessOverview>(
+        `/api/organizations/site-access?organization_id=${encodeURIComponent(organizationId)}`,
+      );
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, siteAccess: "available" }));
+      return result;
+    } catch (e) {
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, siteAccess: contractStateFromError(e) }));
+      return null;
+    }
+  }
+  async function setSiteAccess(body: SiteAccessCommand) {
+    return run(async (ctx) => {
+      if (body.scope === "all" && body.grants.length)
+        throw new Error("Une portée « tous les sites » ne comporte pas de sites sélectionnés.");
+      if (body.scope === "selected" && !body.grants.length)
+        throw new Error("Sélectionnez au moins un site, ou choisissez « tous les sites ».");
+      if (modeRef.current === "demo") {
+        const scopes = readDemo<Record<string, unknown>>(DEMO_KEYS.siteAccess, {}, (v) => !!v && typeof v === "object");
+        scopes[body.user_id] = { scope: body.scope, grants: body.grants };
+        writeDemo(DEMO_KEYS.siteAccess, scopes);
+        ctx.notice("Portée des sites enregistrée dans la démonstration.");
+        return;
+      }
+      try {
+        await api("/api/organizations/site-access", body);
+        ctx.when(setCapabilities)((c) => ({ ...c, siteAccess: "available" }));
+      } catch (e) {
+        if (contractStateFromError(e) === "missing")
+          ctx.when(setCapabilities)((c) => ({ ...c, siteAccess: "missing" }));
+        throw e;
+      }
+      if (ctx.alive()) await refresh();
+      ctx.notice("Portée des sites enregistrée.");
+    });
+  }
   async function loadArtisanPerformance(): Promise<ArtisanPerformanceReport | null> {
     const periods = monthPeriods(new Date());
     if (modeRef.current === "demo") {
@@ -1510,6 +1581,8 @@ export default function CourantApp() {
     loadOrganization,
     organizationCommand,
     acceptInvitation,
+    loadSiteAccess,
+    setSiteAccess,
     loadArtisanPerformance,
     loadPaymentStatus,
     createIntervention,

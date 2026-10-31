@@ -34,6 +34,7 @@ import type {
   View,
 } from "../app/types";
 import { Icon } from "../app/icons";
+import { InstallPanel } from "../app/install-panel";
 import {
   Alerts,
   Badge,
@@ -125,7 +126,7 @@ const APPLICATION_STATUS: Record<
   suspended: {
     label: "Suspendue",
     tone: "red",
-    text: "Votre accès aux nouvelles missions est suspendu par l’opérateur. Vos dossiers en cours restent accessibles ; aucun canal de réclamation automatisé n’existe dans cette version.",
+    text: "Votre accès aux nouvelles missions est suspendu par l’opérateur. Vos dossiers en cours restent accessibles ; aucun canal de réclamation n’est encore activé sur ce service.",
   },
 };
 const CREDENTIAL_KINDS: { kind: CredentialKind; title: string; description: string }[] = [
@@ -244,7 +245,7 @@ function approvalWording(status: ArtisanApplicationStatus | undefined): string {
     case "changes_requested":
       return "L’opérateur demande des modifications sur votre candidature. Corrigez votre dossier puis soumettez-le à nouveau.";
     case "approved":
-      return "Votre candidature apparaît approuvée mais votre compte n’est pas encore activé pour les missions. L’état est relu depuis le serveur.";
+      return "Votre candidature apparaît approuvée mais votre compte n’est pas encore activé pour les missions. L’activation dépend de l’opérateur ; l’état se met à jour à chaque actualisation de vos données.";
     case "suspended":
       return "Votre accès aux nouvelles missions est suspendu par l’opérateur. Vos dossiers en cours restent accessibles.";
     default:
@@ -1213,7 +1214,7 @@ function OfferView({
         <section className={`panel ${styles.tile}`}>
           <Unavailable
             title="Distance"
-            reason="Non calculée — aucune source de position."
+            reason="Aucune source de mesure de position : la distance n’est pas calculée. Repérez-vous avec l’adresse du dossier."
             blocker="géolocalisation non prévue dans cette version"
           />
         </section>
@@ -1479,7 +1480,7 @@ function NextAction({ session, intervention: i }: { session: Session; interventi
       </>
     );
   else if (s === "completed")
-    body = <p>Intervention terminée. Règlement attendu du client ; l’état est relu depuis le serveur.</p>;
+    body = <p>Intervention terminée. Règlement attendu du client ; l’état se met à jour à l’actualisation.</p>;
   else if (s === "paid") body = <p>Dossier réglé. Aucune action attendue de votre part.</p>;
   else if (s === "cancelled") body = <p>Dossier annulé. Aucune action possible.</p>;
   else body = <p>Ce dossier est en attente d’attribution.</p>;
@@ -1993,7 +1994,7 @@ function ParticipantsPanel({
           </div>
         ))
       ) : (
-        <p>Aucun participant transmis par le serveur.</p>
+        <p>Aucun participant transmis pour ce dossier.</p>
       )}
     </section>
   );
@@ -2004,7 +2005,7 @@ function PaymentPanel({ session, intervention: i }: { session: Session; interven
   let text: string;
   if (i.status === "paid" || payment?.status === "paid") {
     tag = <Tag tone="green">Réglé{payment?.paid_at ? ` le ${date(payment.paid_at)}` : ""}</Tag>;
-    text = "Règlement confirmé par le serveur.";
+    text = "Règlement confirmé par la plateforme.";
   } else if (payment?.status === "pending") {
     tag = <Tag tone="amber">Paiement en cours</Tag>;
     text = "Une session de paiement est ouverte côté client ; la confirmation arrive par Stripe.";
@@ -2947,7 +2948,7 @@ function PerfGrid({ perf, since }: { perf: Performance; since: string | null }) 
       <div className={styles.perfTile}>
         <Unavailable
           title="Taux de satisfaction"
-          reason="Pas de source : aucun questionnaire de satisfaction n’est collecté."
+          reason="Aucune source de mesure : aucun questionnaire de satisfaction n’est collecté auprès des clients."
           blocker="enquête de satisfaction non prévue"
         />
       </div>
@@ -3103,7 +3104,7 @@ function Profile({
         </button>
         <p className={styles.sectionNote}>
           Stripe Connect nécessite un compte artisan réel approuvé. L’état du compte de règlement est
-          relu depuis le serveur à votre retour.
+          actualisé à votre retour.
         </p>
       </div>
       <section className="panel" aria-labelledby="profile-availability">
@@ -3135,7 +3136,7 @@ function Profile({
           </button>
         ))}
       </section>
-      {/* PWA install control slot */}
+      <InstallPanel />
       <div className={styles.profileActions}>
         <button
           type="button"
@@ -3252,7 +3253,7 @@ function HelpView({ session }: { session: Session }) {
           <summary>Comment suis-je réglé ?</summary>
           <p>
             Le client règle le devis accepté via Stripe une fois l’intervention terminée. Cet espace relit
-            l’état confirmé par le serveur. Le versement vers votre compte nécessite la configuration
+            l’état confirmé par la plateforme. Le versement vers votre compte nécessite la configuration
             Stripe Connect depuis votre profil.
           </p>
         </details>
@@ -3275,7 +3276,7 @@ function HelpView({ session }: { session: Session }) {
         </div>
         <Unavailable
           title="Contacter l’opérateur"
-          reason="Aucun canal de support ou de réclamation n’existe dans cette version."
+          reason="Pas encore activé sur ce service. Pour une intervention, utilisez la conversation du dossier ci-dessus."
           blocker="tickets support non prévus"
         />
       </section>

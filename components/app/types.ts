@@ -321,6 +321,8 @@ export type OrganizationInvitation = {
   expires_at: string;
   accepted_at?: string | null;
   revoked_at?: string | null;
+  site_scope?: "all" | "selected";
+  site_grants?: { site_id: string; can_write: boolean }[];
 };
 export type MembershipEvent = {
   id: number | string;
@@ -352,6 +354,28 @@ export type OrganizationOverview = {
     automated_invitation_email: boolean;
   };
 };
+export type SiteGrant = { site_id: string; can_write: boolean };
+export type SiteScope = "all" | "selected";
+export type MemberSiteAccess = {
+  user_id: string;
+  scope: SiteScope;
+  grants: SiteGrant[];
+  full_name?: string;
+  role?: string;
+};
+// Shape of organization_site_access_overview (migration 009): members contains only the
+// caller's own row unless the caller is the owner or a platform admin.
+export type SiteAccessOverview = {
+  organization_id: string;
+  can_manage: boolean;
+  members: MemberSiteAccess[];
+};
+export type SiteAccessCommand = {
+  organization_id: string;
+  user_id: string;
+  scope: SiteScope;
+  grants: SiteGrant[];
+};
 export type OrganizationCommand =
   | {
       action: "create_invitation";
@@ -359,6 +383,8 @@ export type OrganizationCommand =
       email: string;
       role: "manager" | "viewer";
       expires_in_days: number;
+      site_scope?: SiteScope;
+      site_grants?: SiteGrant[];
     }
   | { action: "revoke_invitation"; organization_id: string; invitation_id: string }
   | { action: "change_member_role"; organization_id: string; user_id: string; role: "manager" | "viewer" }
@@ -470,6 +496,7 @@ export type Capabilities = {
   organizations: ContractState;
   performance: ContractState;
   payments: ContractState;
+  siteAccess: ContractState;
 };
 export const UNKNOWN_CAPABILITIES: Capabilities = {
   operations: "unknown",
@@ -479,6 +506,7 @@ export const UNKNOWN_CAPABILITIES: Capabilities = {
   organizations: "unknown",
   performance: "unknown",
   payments: "unknown",
+  siteAccess: "unknown",
 };
 export type ReturnContext =
   | { kind: "payment"; state: "pending" | "cancelled"; interventionId: string }

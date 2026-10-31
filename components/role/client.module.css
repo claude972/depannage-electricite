@@ -1114,88 +1114,9 @@
   margin: -16px 0 24px;
 }
 
-/* ---- Primitives sans style global (Tag, Unavailable, Forbidden, DemoNote) --------- */
-.space :global(.tag) {
-  display: inline-flex;
-  align-items: center;
-  min-height: 26px;
-  padding: 2px 10px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  background: #edf2f8;
-  color: #3f556f;
-}
-.space :global(.tag-blue) {
-  background: #e7efff;
-  color: var(--blue);
-}
-.space :global(.tag-green) {
-  background: #eaf6ee;
-  color: var(--green);
-}
-.space :global(.tag-amber) {
-  background: #fff4dd;
-  color: var(--amber);
-}
-.space :global(.tag-red) {
-  background: #fff2f1;
-  color: var(--red);
-}
+/* ---- Primitives partagées : styles dans app/globals.css, seul l’espacement est ajusté ici ---- */
 .space :global(.unavailable) {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  padding: 12px 14px;
-  border: 1px dashed #c9d6ea;
-  border-radius: 10px;
-  background: #f8fafd;
   margin: 8px 0;
-}
-.space :global(.unavailable-icon) {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: #e9eef6;
-  color: #6b7a90;
-  flex-shrink: 0;
-}
-.space :global(.unavailable strong) {
-  display: block;
-  font-size: 14px;
-  color: var(--navy);
-}
-.space :global(.unavailable p) {
-  font-size: 13px;
-  margin-top: 2px;
-}
-.space :global(.unavailable small) {
-  display: block;
-  font-size: 12px;
-  color: #7a8798;
-  margin-top: 4px;
-}
-.space :global(.forbidden) {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 12px;
-  padding: 40px 20px;
-}
-.space :global(.forbidden p) {
-  max-width: 440px;
-  font-size: 14px;
-}
-.space :global(.demo-note) {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--muted);
 }
 
 /* ---- Lisibilité : relèvement des tailles trop petites des classes globales réutilisées */
