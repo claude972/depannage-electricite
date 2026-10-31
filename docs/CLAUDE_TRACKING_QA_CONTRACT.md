@@ -425,3 +425,21 @@ cascade ; budget jamais modifié. Exécution cloud par ROOT uniquement ; aucune 
 | Page 2 en erreur / mal formée ⇒ inconnu, exit 3 | « P2-d — page 2 errors or is malformed… » |
 | Jamais trouvé après l'échéance ⇒ intention gardée, exit 3 | « P2-d — never found after the deadline… » |
 | P2-3 : 503 `provider_unavailable` ⇒ PASS 1 / blocked 0 | « P2-3 — provider 503/429/timeout through the REAL runners, runOne and createReport ⇒ BLOCKED » |
+
+## Correction de la revue ROOT de 4b57800 — durabilité des UID récupérés
+
+- `cleanupWithProof` exige un crochet `persist()` durable (écriture atomique `lib/durable.mjs` ; normal : `fixtures.save()`, mode
+  `--cleanup-manifest` : réécriture atomique du fichier manifest). Il est appelé après la réconciliation, **immédiatement après chaque
+  UID récupéré par e-mail** (avec une entrée `recovered[]`), puis après la preuve de propriété (`cleanup_attempt` : prouvés / non
+  prouvés) **avant la première suppression**, et enfin avec le résultat. Le manifest ne retire jamais un id : il enregistre ce qui a
+  été supprimé après preuve.
+- Défaut supplémentaire trouvé par le test d'interruption : un échec d'écriture du manifest pendant la récupération était avalé par le
+  `try/catch` de la recherche et le nettoyage continuait vers les suppressions. Corrigé : seul l'échec de la recherche est capturé ;
+  un échec de `persist()` interrompt le nettoyage avant toute suppression.
+- Reproduit sur 4b57800 : à la première suppression `{memory:true, disk:false}` et UID toujours absent du disque après le nettoyage.
+
+| Repro ROOT | Test (`tests/qa-tracking-auth.test.ts`) |
+| --- | --- |
+| Mode normal : UID récupéré présent sur disque à la première suppression, conservé après | « durability — normal mode… » (vraies `Fixtures` + écriture durable, contrôle disque injecté à la 1ʳᵉ suppression) |
+| Mode `--cleanup-manifest` : idem | « durability — --cleanup-manifest mode… » (vrai `cleanupOnly`, clients injectés) |
+| Interruption entre récupération et suppression ⇒ UID sur disque, intention ouverte ; reprise `--cleanup-manifest` le retrouve et le supprime ; état disque cohérent | « durability — interruption between recovery and DELETE… » |

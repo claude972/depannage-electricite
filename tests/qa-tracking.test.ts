@@ -206,7 +206,7 @@ test("cleanupWithProof: an open intent is recovered by canonical e-mail but keep
   const manifest = { created: { auth_users: [], profiles: [], interventions: [], organizations: [], sites: [], quotes: [], approvals: [], documents: [], storage_paths: [], support_tickets: [], admin_profiles: [] } };
   const looked: string[] = [];
   const auth = { async searchByEmail(email: string, run: string) { assertCanonicalEmail(email, run); looked.push(email); return { state: "found", id: user }; }, async readUser() { return { state: "found", email: `qa-${RUN}-artisan-b@qa.invalid` }; } };
-  const result = await cleanupWithProof({ db: fakeDb(), auth, manifest, intents, runId: RUN, log: () => {} });
+  const result = await cleanupWithProof({ db: fakeDb(), auth, manifest, intents, runId: RUN, log: () => {}, persist: async () => {} });
   assert.deepEqual(looked, [`qa-${RUN}-artisan-b@qa.invalid`]);
   assert.ok(manifest.created.auth_users.includes(user), "recovered account added for deletion");
   assert.equal(result.ok, false, "an unknown outcome is never reported as clean");
@@ -215,11 +215,11 @@ test("cleanupWithProof: an open intent is recovered by canonical e-mail but keep
   const proven = new IntentLog(path.join(dir, "proven.json"));
   const pid = proven.begin("createAuthUser", "auth.users", `qa-${RUN}-artisan-b@qa.invalid`);
   proven.attach(pid, async () => ({ proven: true, note: "account absent" }));
-  const provenResult = await cleanupWithProof({ db: fakeDb(), auth, manifest: { created: { ...manifest.created, auth_users: [], profiles: [] } }, intents: proven, runId: RUN, log: () => {} });
+  const provenResult = await cleanupWithProof({ db: fakeDb(), auth, manifest: { created: { ...manifest.created, auth_users: [], profiles: [] } }, intents: proven, runId: RUN, log: () => {}, persist: async () => {} });
   assert.equal(provenResult.ok, true);
   assert.equal(proven.entries[0].outcome, "reconciled");
   const clean = new IntentLog(path.join(dir, "clean.json"));
-  const ok = await cleanupWithProof({ db: fakeDb(), auth, manifest: { created: { ...manifest.created, auth_users: [], profiles: [] } }, intents: clean, runId: RUN, log: () => {} });
+  const ok = await cleanupWithProof({ db: fakeDb(), auth, manifest: { created: { ...manifest.created, auth_users: [], profiles: [] } }, intents: clean, runId: RUN, log: () => {}, persist: async () => {} });
   assert.equal(ok.ok, true);
 });
 

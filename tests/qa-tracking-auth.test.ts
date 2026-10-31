@@ -76,7 +76,7 @@ test("P2-c — a 200 with a malformed body is UNKNOWN (never absent) and ownersh
   assert.deepEqual(proven.created.profiles, []);
   assert.equal(unproven[0].why, "Auth read unknown (error or malformed body)");
   const db = fakeDb();
-  const result = await cleanupWithProof({ db, auth, manifest, intents: new IntentLog(path.join(tmp(), "i.json")), runId: RUN, log: () => {} });
+  const result = await cleanupWithProof({ db, auth, manifest, intents: new IntentLog(path.join(tmp(), "i.json")), runId: RUN, log: () => {}, persist: async () => {} });
   assert.equal(result.ok, false);
   assert.equal(db.deletes.some((d) => d.filters.includes(id)), false, "an id not proven owned is never deleted");
   assert.equal(exitCodeFor({ cleanup: result }), 3);
@@ -130,7 +130,7 @@ test("P2-d — lost create, the user appears on the 2nd re-read ⇒ found, recor
   });
   const { intents, manifest } = await lostCreate(auth);
   const db = fakeDb();
-  const result = await cleanupWithProof({ db, auth, manifest, intents, runId: RUN, log: () => {} });
+  const result = await cleanupWithProof({ db, auth, manifest, intents, runId: RUN, log: () => {}, persist: async () => {} });
   assert.ok(calls.list.some((c) => c.attempt === 2), "a second spaced scan happened");
   assert.deepEqual(manifest.created.auth_users, [id]);
   assert.equal(intents.entries[0].outcome, "reconciled");
@@ -156,7 +156,7 @@ test("P2-d — page 2 errors or is malformed ⇒ UNKNOWN, intent kept open, exit
     assert.equal((await auth.searchByEmail(cohort.email("artisan-b"), RUN)).state, "unknown");
     const { intents, manifest } = await lostCreate(auth);
     const db = fakeDb();
-    const result = await cleanupWithProof({ db, auth, manifest, intents, runId: RUN, log: () => {} });
+    const result = await cleanupWithProof({ db, auth, manifest, intents, runId: RUN, log: () => {}, persist: async () => {} });
     assert.equal(intentsVerdict(intents).ok, false);
     assert.equal(result.ok, false);
     assert.equal(exitCodeFor({ cleanup: result, signal: true }), 3);
@@ -172,7 +172,7 @@ test("P2-d — never found after the deadline with exhaustive scans ⇒ 'not-fou
   assert.ok(new Set(calls.list.map((c) => c.attempt)).size >= 3);
   const { intents, manifest } = await lostCreate(auth);
   const db = fakeDb();
-  const result = await cleanupWithProof({ db, auth, manifest, intents, runId: RUN, log: () => {} });
+  const result = await cleanupWithProof({ db, auth, manifest, intents, runId: RUN, log: () => {}, persist: async () => {} });
   assert.equal(intents.open().length, 1, "absence is not proof of non-creation");
   assert.equal(result.ok, false);
   assert.equal(exitCodeFor({ cleanup: result }), 3);
@@ -187,7 +187,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { Fixtures } from "../scripts/qa/lib/fixtures.mjs";
 import { createRedactor } from "../scripts/qa/lib/redact.mjs";
 import { createReport } from "../scripts/qa/lib/report.mjs";
-import { makeManifestDurable } from "../scripts/qa-tracking/lib/durable.mjs";
+import { makeManifestDurable, atomicWriteJsonSync as atomicWriteJsonForTest } from "../scripts/qa-tracking/lib/durable.mjs";
 import { PROVIDER_RUNNERS } from "../scripts/qa-tracking/scenarios.mjs";
 import { runOne } from "../scripts/qa-tracking/run.mjs";
 
@@ -218,7 +218,7 @@ test("P2-2 — manifest and intent are durable on disk BEFORE the creation; a cr
   await intents.reconcileOpen();
   const onDisk = JSON.parse(readFileSync(intents.file, "utf8")).intents;
   assert.equal(onDisk[0].state, "open", "absence after the bounded search never closes it (never 'reconciled')");
-  const result = await cleanupWithProof({ db: fakeDb(), auth, manifest: fixtures.manifest, intents, runId: RUN, log: () => {} });
+  const result = await cleanupWithProof({ db: fakeDb(), auth, manifest: fixtures.manifest, intents, runId: RUN, log: () => {}, persist: async () => {} });
   assert.equal(result.ok, false);
   assert.equal(exitCodeFor({ cleanup: result }), 3);
 });
@@ -267,4 +267,97 @@ test("P2-3 — provider 503/429/timeout through the REAL runners, runOne and cre
     assert.equal(summary.blocked, 1);
     if (name === "provider-route") assert.ok(posts.some((p) => p.action === "stop"), "the sharing session is stopped even when blocked");
   }
+});
+
+// ---------------------------------------------------------------- root recheck of 4b57800: recovered UID durability
+import { writeFileSync } from "node:fs";
+import { cleanupOnly } from "../scripts/qa-tracking/run.mjs";
+
+const PROJECT = "abcdefghijklmnopqrst";
+/** Cleanup db whose FIRST delete asserts that `uid` is already in the manifest ON DISK. */
+function diskCheckingDb(manifestPath, uid) {
+  const db = fakeDb();
+  const seen = { firstDeleteChecked: false, diskHadUidAtFirstDelete: null };
+  const check = () => {
+    if (seen.firstDeleteChecked) return;
+    seen.firstDeleteChecked = true;
+    const disk = JSON.parse(readFileSync(manifestPath, "utf8"));
+    seen.diskHadUidAtFirstDelete = disk.created.auth_users.includes(uid) && disk.created.profiles.includes(uid);
+  };
+  const del = db.delete.bind(db), delAuth = db.deleteAuthUser.bind(db);
+  db.delete = async (table, filters) => { check(); return del(table, filters); };
+  db.deleteAuthUser = async (id) => { check(); return delAuth(id); };
+  return { db, seen };
+}
+function recoveringAuth(uid) {
+  const email = cohort.email("artisan-b");
+  return fakeAuth({ byId: (asked) => (asked === uid ? json(200, { id: uid, email }) : json(404, {})), pages: () => json(200, { users: [{ id: uid, email }] }) }).auth;
+}
+function crashedRun(dir) {
+  // State left by a run that crashed after announcing a create whose response was lost: manifest
+  // (durable, without the uid) and intents.json with the create intent OPEN.
+  const manifestPath = path.join(dir, "manifest.json");
+  writeFileSync(manifestPath, JSON.stringify({ version: 1, run_id: RUN, project: PROJECT, created: { auth_users: [], profiles: [], admin_profiles: [], interventions: [], organizations: [], sites: [], quotes: [], approvals: [], documents: [], storage_paths: [], support_tickets: [] } }), { mode: 0o600 });
+  const intents = new IntentLog(path.join(dir, "intents.json"));
+  intents.begin("createAuthUser", "auth.users", cohort.email("artisan-b"), "service");
+  const credentials = path.join(dir, "credentials.json");
+  writeFileSync(credentials, JSON.stringify({ supabase: { url: `https://${PROJECT}.supabase.co`, project_ref: PROJECT, service_role_key: "k".repeat(40) } }), { mode: 0o600 });
+  return { manifestPath, intents, credentials };
+}
+
+test("durability — normal mode: a UID recovered by e-mail is on disk BEFORE the first DELETE and stays recorded after cleanup", async () => {
+  const dir = tmp();
+  const uid = randomUUID();
+  const fixtures = makeManifestDurable(new Fixtures({ db: {}, cohort, manifestPath: path.join(dir, "manifest.json"), context: { sha: "x", project: PROJECT, base_url: "http://x" }, redactor: createRedactor(), gate: createStopGate() }));
+  const intents = new IntentLog(path.join(dir, "intents.json"));
+  intents.begin("createAuthUser", "auth.users", cohort.email("artisan-b"), "service"); // open, no reconciler (recovery path)
+  const { db, seen } = diskCheckingDb(fixtures.manifestPath, uid);
+  const result = await cleanupWithProof({ db, auth: recoveringAuth(uid), manifest: fixtures.manifest, intents, runId: RUN, log: () => {}, persist: () => fixtures.save() });
+  assert.equal(seen.firstDeleteChecked, true);
+  assert.equal(seen.diskHadUidAtFirstDelete, true, "memoryUID=true ⇒ diskUID=true at the first DELETE");
+  const disk = JSON.parse(readFileSync(fixtures.manifestPath, "utf8"));
+  assert.ok(disk.created.auth_users.includes(uid), "never dropped after cleanup");
+  assert.equal(disk.recovered[0].id, uid);
+  assert.ok(disk.cleanup_attempt.completed_at, "cleanup outcome recorded on disk");
+  assert.ok(db.deletes.some((d) => d.table === "auth.users" && d.filters === uid), "proven-owned recovered account deleted");
+  assert.equal(result.ok, false, "the recovered create intent stays open ⇒ INCOMPLETE");
+});
+
+test("durability — --cleanup-manifest mode: the recovered UID is written to the manifest file BEFORE the first DELETE", async () => {
+  const dir = tmp();
+  const uid = randomUUID();
+  const { manifestPath, credentials } = crashedRun(dir);
+  const { db, seen } = diskCheckingDb(manifestPath, uid);
+  const code = await cleanupOnly({ credentials, project: PROJECT, cleanupManifest: manifestPath, timeoutMs: 5000 }, createRedactor(), () => {}, { makeDb: () => db, makeAuth: () => recoveringAuth(uid) });
+  assert.equal(seen.diskHadUidAtFirstDelete, true, "diskUID=true at the first DELETE in cleanup-only mode");
+  const disk = JSON.parse(readFileSync(manifestPath, "utf8"));
+  assert.ok(disk.created.auth_users.includes(uid));
+  assert.ok(disk.cleanup_attempt.completed_at);
+  assert.equal(code, 3, "the create intent is still open: INCOMPLETE");
+});
+
+test("durability — interruption between recovery and DELETE: the UID is on disk with the intent open; a --cleanup-manifest restart finds and deletes it", async () => {
+  const dir = tmp();
+  const uid = randomUUID();
+  const { manifestPath, intents, credentials } = crashedRun(dir);
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  const { db: firstDb } = diskCheckingDb(manifestPath, uid);
+  // Real durable writer; the process is interrupted right after the recovery was persisted.
+  const persist = () => {
+    atomicWriteJsonForTest(manifestPath, manifest);
+    if (manifest.recovered && !manifest.cleanup_attempt) throw Object.assign(new Error("SIGINT between recovery and delete"), { name: "Interrupted" });
+  };
+  await assert.rejects(cleanupWithProof({ db: firstDb, auth: recoveringAuth(uid), manifest, intents, runId: RUN, log: () => {}, persist }), /SIGINT/);
+  assert.equal(firstDb.deletes.length, 0, "interrupted before any DELETE");
+  const onDisk = JSON.parse(readFileSync(manifestPath, "utf8"));
+  assert.ok(onDisk.created.auth_users.includes(uid), "the UID survived the interruption on disk");
+  assert.equal(JSON.parse(readFileSync(intents.file, "utf8")).intents[0].state, "open", "intent still open on disk");
+  // Restart with --cleanup-manifest (fresh process state: no reconcilers, everything read from disk).
+  const { db, seen } = diskCheckingDb(manifestPath, uid);
+  const code = await cleanupOnly({ credentials, project: PROJECT, cleanupManifest: manifestPath, timeoutMs: 5000 }, createRedactor(), () => {}, { makeDb: () => db, makeAuth: () => recoveringAuth(uid) });
+  assert.equal(seen.diskHadUidAtFirstDelete, true);
+  assert.ok(db.deletes.some((d) => d.table === "auth.users" && d.filters === uid), "the restart deletes the recovered, proven-owned account");
+  const after = JSON.parse(readFileSync(manifestPath, "utf8"));
+  assert.ok(after.created.auth_users.includes(uid) && after.cleanup_attempt.completed_at, "consistent disk state after cleanup");
+  assert.equal(code, 3);
 });
