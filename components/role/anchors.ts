@@ -9,6 +9,9 @@ import type { LeafScope } from "../../lib/features/planning/leaf";
  * encore en vérification. Capacité `missing`/`unavailable` : l’entrée reste visible seulement si
  * elle mène à l’écran d’indisponibilité honnête (`leadsToHonestState`), jamais à un menu sans action.
  */
+/** Transient failure → the shell offers a bounded "Réessayer" (re-probe); missing → honest state only. */
+export { retryableState } from "../app/features";
+
 export function anchorEntryVisible(
   allowed: boolean,
   capability: ContractState,

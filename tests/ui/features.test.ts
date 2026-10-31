@@ -251,3 +251,11 @@ test("planning probe range passes the real API validation (full ISO instants wit
   // A bare calendar date is exactly what the API refuses (the previous probe shape).
   assert.equal(isoInstant.safeParse("2026-10-31").success, false);
 });
+
+test("retryable state: only a transient unavailable contract offers a retry (missing/unknown/available do not)", async () => {
+  const { retryableState } = await import("../../components/app/features");
+  assert.equal(retryableState("unavailable"), true);
+  assert.equal(retryableState("missing"), false);
+  assert.equal(retryableState("unknown"), false);
+  assert.equal(retryableState("available"), false);
+});

@@ -40,7 +40,13 @@ export function PlatformPage({
     return (
       <>
         {title}
-        <Unavailable title="Accès non vérifié" reason={reason} state={state === "available" ? undefined : state} blocker={`platform:${view}:${state}`} />
+        <Unavailable
+          title="Accès non vérifié"
+          reason={reason}
+          state={state === "available" ? undefined : state}
+          blocker={`platform:${view}:${state}`}
+          onRetry={state === "unavailable" || (state === "available" && !access) ? () => session.reprobeFeature("platformOperations") : undefined}
+        />
       </>
     );
   }

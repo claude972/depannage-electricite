@@ -5,6 +5,7 @@
 import { NotificationBell } from "../features/notifications/notification-bell";
 import { NotificationCenter } from "../features/notifications/notification-center";
 import { CONTRACT_MESSAGES } from "../app/api";
+import { FeatureUnavailable } from "./feature-unavailable";
 import { PageTitle } from "../app/ui";
 import type { Session } from "../app/session-types";
 import { demoNotificationPage, demoPreferences } from "../../lib/features/notifications/demo";
@@ -43,6 +44,9 @@ export function NotificationsPage({
           subtitle="Événements de vos dossiers, enregistrés par la plateforme ; aucun envoi externe."
         />
       )}
+      {state === "unavailable" ? (
+        <FeatureUnavailable session={session} featureKey="notifications" title="Notifications momentanément indisponibles" />
+      ) : (
       <NotificationCenter
         state={state}
         unavailableMessage={state === "available" ? "" : CONTRACT_MESSAGES[state]}
@@ -57,6 +61,7 @@ export function NotificationsPage({
           if (view === "intervention" && param) session.openIntervention(param);
         }}
       />
+      )}
     </>
   );
 }

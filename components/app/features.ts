@@ -32,6 +32,12 @@ import type { QuoteDocumentsClient, QuoteDocumentsCommand, QuoteDocumentsCommand
 import type { ListQuery, PlatformAccess, PlatformClient } from "../../lib/features/platform-operations/types";
 
 export type FeatureKey = "quoteDocuments" | "planning" | "notifications" | "siteOperations" | "platformOperations";
+/** Context a re-probe needs when the contract has no context-free read. */
+export type ReprobeHint = { siteId?: string; quoteId?: string; interventionId?: string };
+/** Only a transient failure is worth a user retry; a missing contract is a deployment state. */
+export function retryableState(state: ContractState): boolean {
+  return state === "unavailable";
+}
 export type Request = <T>(path: string, body?: unknown, method?: string) => Promise<T>;
 export type FeatureDeps = {
   /** Current identity generation (createGuard().generation); bumped on every identity change. */

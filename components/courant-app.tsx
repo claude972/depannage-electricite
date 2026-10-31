@@ -7,7 +7,7 @@ import { createClient } from "../lib/supabase/client";
 import { api, ApiRequestError, contractStateFromError, uploadDocument } from "./app/api";
 import { createGuard, createRunner, runForResult, type RunContext, type Runner } from "./app/guard";
 import { adoptIdentity } from "./app/identity";
-import { createDemoFeatureClients, createFeatureClients, planningProbeRange } from "./app/features";
+import { createDemoFeatureClients, createFeatureClients, planningProbeRange, type FeatureKey, type ReprobeHint } from "./app/features";
 import type { PlatformAccess } from "../lib/features/platform-operations/types";
 import { PLATFORM_DEMO } from "../lib/features/platform-operations/demo";
 import { demoNotificationPage } from "../lib/features/notifications/demo";
@@ -2324,6 +2324,42 @@ export default function CourantApp() {
     setPlatformAccess(role === "admin" ? PLATFORM_DEMO.access : null);
     setUnreadNotifications(demoNotificationPage({}).unread_count);
   }, [mode, role]);
+  // SHARED-REV-006: explicit recovery action after a transient 503/network failure. Re-probes the
+  // one contract with the bound client (same identity generation, same rights); the reply alone
+  // sets the capability again. Errors are swallowed here: the capability already reflects them.
+  const reprobeFeature = useCallback(
+    async (key: FeatureKey, hint?: ReprobeHint) => {
+      if (modeRef.current !== "live") return;
+      setCapabilities((c) => (c[key] === "unknown" ? c : { ...c, [key]: "unknown" }));
+      const ignore = () => undefined;
+      switch (key) {
+        case "notifications": {
+          const summary = await features.notifications.summary().catch(() => null);
+          if (summary) setUnreadNotifications(summary.unread_count);
+          return;
+        }
+        case "platformOperations": {
+          const access = await features.platform.load.me().catch(() => null);
+          setPlatformAccess(access);
+          return;
+        }
+        case "planning":
+          await features.planning.load(planningProbeRange()).catch(ignore);
+          return;
+        case "siteOperations": {
+          const siteId = hint?.siteId || activeSiteRef.current;
+          if (siteId) await features.siteOperations.load(siteId).catch(ignore);
+          return;
+        }
+        case "quoteDocuments": {
+          const target = hint?.quoteId ? { quoteId: hint.quoteId } : hint?.interventionId ? { interventionId: hint.interventionId } : null;
+          if (target) await features.quoteDocuments.load(target).catch(ignore);
+          return;
+        }
+      }
+    },
+    [features],
+  );
 
   const session: Session = {
     mode: mode === "live" ? "live" : "demo",
@@ -2441,6 +2477,7 @@ export default function CourantApp() {
     features,
     platformAccess,
     unreadNotifications,
+    reprobeFeature,
   };
 
   if (booting)

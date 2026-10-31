@@ -2,7 +2,7 @@
 // (components/role/*). Spaces are presentational: every mutation, demo counterpart and
 // live/unavailable decision goes through this object so that identity resets and role
 // guards are enforced in one place.
-import type { FeatureClients } from "./features";
+import type { FeatureClients, FeatureKey, ReprobeHint } from "./features";
 import type { PlatformAccess } from "../../lib/features/platform-operations/types";
 import type {
   AdminInterventionDetail,
@@ -213,4 +213,9 @@ export interface Session {
   platformAccess: PlatformAccess | null;
   /** Unread notifications from the server summary; null when unknown or unavailable. */
   unreadNotifications: number | null;
+  /**
+   * Bounded recovery after a transient failure: re-probes ONE contract under the current identity
+   * and rights (the reply alone decides the new availability). Never grants anything; no-op in demo.
+   */
+  reprobeFeature(key: FeatureKey, hint?: ReprobeHint): Promise<void>;
 }
