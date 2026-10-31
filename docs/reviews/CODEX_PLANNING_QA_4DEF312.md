@@ -1,4 +1,4 @@
-# Revue croisée — harnais de recette avancée Codex (`codex/planning-qa`)
+# Revue croisée — harnais de recette avancée Codex (`codex/planning-qa`) — revue initiale `4def312`, addendum final `bc25fec8f8ddad4c76b4d55360c2c16743828a1a`
 
 Revue indépendante par Claude QA (WEB-ACCEPTANCE-TESTS-001), **lecture seule**, sans cloud, sans credentials, sans modification des fichiers Codex. Objet : rapport `4def312` (code `4be763a`, contrat `b20c5c2`, `docs/CODEX_PLANNING_QA.md`), base `c92f4de`. Révisé dans un worktree détaché au SHA exact, `node_modules` lié depuis mon worktree (Node v24.15.0). Référence serveur : `docs/CLAUDE_ADV_PLANNING_CONTRACT.md` et migration 016 sur `origin/claude/web-planning` `b26bc45`. Mes helpers de référence : `scripts/qa/**` à `c0fc095`.
 
@@ -104,3 +104,47 @@ Aucun appel RPC des suites ne peut produire un `P0002` légitime **hors** des de
 **Acceptable pour l'exécution API-first par le pilote** (`--suite api`) une fois P2-6 corrigé, sous réserve que le rapport Codex déclare explicitement les non-preuves P2-3 et P2-4 : propriété des fichiers respectée, aucun helper partagé modifié, imports compatibles avec `c0fc095`, tests 13/13 et `node --check` reproduits, concurrence réelle avec chevauchement mesuré, sondes sous JWT propre, révocation support conforme à `b26bc45`, zéro admin, nettoyage fail-closed par identifiants exacts avec readback, manifeste atomique 0600/0700, secrets jamais exposés au navigateur ni à la CLI.
 
 **Suite navigateur : non prête** tant que P2-1 (formulaire fermé par défaut → fausse FAIL, assertion vide) et P2-2 (SIGINT Playwright à la base `c92f4de`) ne sont pas traités. Aucun P1. Rien dans cette revue ne constitue une preuve cloud : aucune exécution réelle par le réviseur.
+
+## 5. Addendum bc25 — revue du harnais final `bc25fec8f8ddad4c76b4d55360c2c16743828a1a`
+
+Même méthode, lecture seule : worktree détaché au SHA exact, `node_modules` lié, supprimé en fin de revue ; aucun cloud, aucun credential, aucun fichier Codex modifié. Commits relus depuis `4def312` : `f766ab6`, `14cff58`, `b91d5e5`, `d5ae664`, `bc25fec` (delta `4def312..bc25fec` : +60/−13 sur les trois scripts, le test et le rapport).
+
+Faits transmis par le pilote (exécution réelle de `bc25fec` contre l'API et le Supabase dédié, migrations 001–017), **non observés par le réviseur** : 7/7 étapes PASS, exit 0, nettoyage 33/33, aucun résultat incertain ; deux vraies courses HTTP prouvées (créneaux : un commit / un conflit ; premières préférences : une seule ligne version 1, contenu du gagnant relu) ; notification d'assistance liée masquée après révocation, ticket personnel conservé, comptes et marquages cohérents.
+
+### 5.1 Vérifié à `bc25fec`
+
+| Point | Constat |
+| --- | --- |
+| Propriété | `git diff --stat c92f4de bc25fec` : toujours exactement les 5 fichiers (`docs/CODEX_PLANNING_QA.md`, `scripts/qa-advanced/{core,run,scenarios}.mjs`, `tests/qa-advanced.test.ts`, +652). `git diff c92f4de bc25fec -- scripts/qa` **vide** : aucun helper partagé modifié. Imports de `scripts/qa/lib/{redact,cohort,browser}.mjs` inchangés, toujours compatibles avec `c0fc095`. |
+| `node --check` | `core.mjs`, `run.mjs`, `scenarios.mjs` : OK. |
+| Tests unitaires | `node --test tests/qa-advanced*.test.ts` : **14 tests, 14 réussis, 0 échec, code 0** (13 + 1 nouveau test de classification). |
+| Classification P0002 (ex-P2-6) | **Corrigée.** `core.mjs:13-16` : `definiteMissingRow(body)` exige un objet JSON non-tableau, `code === 'P0002'` et `message` chaîne non vide ; `isPostgrestEndpoint(endpoint)` n'accepte que le chemin relatif `/rest/v1/<table>` ou `/rest/v1/rpc/<fonction>` (regex stricte, refus de `/auth/v1/*`, `/api/*`, `/storage/*`, URL absolue, `..`) ; `uncertainResponse(method, status, body, endpoint)` ne lève l'incertitude pour un 500 que hors de ce cas exact ; 501–504, transport, corps non JSON, `{code:'P0002'}` sans message, `{code:'XX000', message:'P0002'}` restent « inconnu ». `run.mjs:40-44` : le corps est désormais parsé **avant** la classification, le statut 500 est conservé dans la preuve avec `trace.rollback_code='P0002'` (jamais renommé en 404). Le navigateur (`scenarios.mjs:97`) passe la route `/api/...` : jamais reconnue PostgREST. Test `tests/qa-advanced.test.ts:85-96` couvre le cas positif, dix formes malformées, les 5xx voisins et sept endpoints non-PostgREST. Règle **plus étroite** que ma recommandation (seul `P0002` ; les autres SQLSTATE en 5xx restent incertains) : choix conservateur, acceptable, documenté dans leur rapport. |
+| Attentes des refus tiers | `scenarios.mjs:20,32` utilisent `planningOwnershipRefused(result)` (`core.mjs:16`) : 403, 404 ou le 500/P0002 PostgREST exact. Cohérent avec 016 l.227/280 (`no_data_found`). |
+| RPC `void` → 204 | `scenarios.mjs:77` : `set_organization_member_site_access` (009, `returns void`) attendu **204** explicitement, avec commentaire. `run.mjs:49` : `ok()` devient une égalité stricte de statut avec message « observed X expected Y » ; la branche qui transformait un 2xx inattendu en `remoteUnknown` a été retirée. Sûr : `ok()` s'exécute **après** la résolution de `mutate` (intention déjà `done`, commit avéré), donc un 2xx divergent devient un FAIL définitif sans bloquer le nettoyage. Les autres RPC (JSON → 200, inserts → 201, PATCH → 204) relues : attentes exactes. |
+| `select` service | `run.mjs:50-58` : projection `user_id` pour `notification_preferences` (clé primaire sans `id`) ; une réponse non-2xx lève « cohort read refused: <table> (HTTP n; code X) » avec un code borné `^[A-Z0-9]{5,12}$`, sans message brut ni en-tête ; `exactCount` toujours exigé ensuite. |
+
+### 5.2 État des constats de la revue initiale à `bc25fec`
+
+| Constat | État | Référence `bc25fec` |
+| --- | --- | --- |
+| P2-1 formulaire d'entrée fermé par défaut (fausse FAIL, assertion vide) | **Reste** — inchangé | `scenarios.mjs:113` (`form` filtré par le titre sans cliquer « Ajouter une entrée ponctuelle », `artisan-planning.tsx:272` à `b26bc45`) ; `:130` (`count === 0` vide de preuve) |
+| P2-2 SIGINT pendant la suite navigateur (Playwright sort en 130 avant `finish()`) | **Reste** — dépend de l'intégration de `dc7209d` (`launchBrowser` avec `handleSIGINT/SIGTERM/SIGHUP:false`) dans le checkout servi, ou d'options passées par Codex | `run.mjs:81-83` (gestionnaires inchangés : `interrupt` lève la porte seulement) |
+| P2-3 courses rendez-vous / `current_setting('role')` de `b26bc45` l.257-258 non exercées | **Reste** — absentes des étapes et des `non_proofs` | `run.mjs:28`, `scenarios.mjs:26-50` |
+| P2-4 couverture HTTP de `--suite api` limitée à l'anonyme 401 | **Reste** (déclaré par le contrat Codex comme « par HTTP via navigateur ») | `run.mjs:96` |
+| P2-5 marqueurs d'incertitude sans procédure/outil de levée | **Reste** — sans objet pour l'exécution rapportée (aucun incertain) | `core.mjs:109`, `validateManifest` `:66-73` |
+| P2-6 classification 5xx par statut seul | **Corrigé** (voir 5.1) | `core.mjs:13-16`, `run.mjs:40-44` |
+| P3-1 raison du refus de préflight avalée | Reste | `run.mjs:19` |
+| P3-2 arrêt à la première étape en échec ; nom d'étape erroné après SIGINT | Reste | `run.mjs:84,94-102` |
+| P3-3 `--suite browser` seul : étape de révocation ignorée sans trace | Reste | `scenarios.mjs:139` ; nom `article` exact `:148` valable seulement en `all` |
+| P3-4 jetons (password grant) traités comme mutations à réconcilier | Reste | `run.mjs:92` |
+| P3-5 SIGINT → 1 ici, 130 dans `scripts/qa` | Reste (convention documentée) | `core.mjs:146` |
+| P3-6 « finalisation unique / signal » annoncé testé mais inline non testé | Reste | `run.mjs:67-80` |
+| P3-7 console non recopiée | Reste | `run.mjs:32` |
+
+Nouveau constat mineur — **P3-8** : `planningOwnershipRefused` (`core.mjs:16`) accepte aussi **404** pour un appel PostgREST direct ; or PostgREST ne renvoie 404 sur `/rest/v1/rpc/<f>` que si la **fonction n'existe pas** (016 absente ou nom erroné), jamais pour un refus de propriété. Un 404 y masquerait une migration manquante en « refus attendu ». Risque faible (le préflight compte une table 016 et l'étape a déjà appelé la même famille de RPC avec succès), mais retirer 404 de l'acceptation PostgREST (le garder pour les routes Next seulement) serait plus juste.
+
+### 5.3 Verdict actualisé (borné)
+
+- **API-first : prouvé en direct par le pilote** sur `bc25fec` (7/7, exit 0, nettoyage 33/33, aucun incertain, deux courses HTTP réelles avec un commit/un conflit, révocation support conforme à `b26bc45`). Le réviseur confirme par lecture que le code exécuté correspond à ces faits et que les deux correctifs (classification P0002, 204 du RPC `void`) sont limités au harnais, stricts, testés, sans modification applicative ni SQL, sans affaiblissement du fail-closed. Non-preuves qui demeurent et doivent rester déclarées : courses rendez-vous et `current_setting('role')` (P2-3), critères HTTP de `b26bc45` l.259 hors navigateur (P2-4), génération des notifications par triggers (déjà dans `non_proofs`).
+- **Navigateur : non prête** — P2-1 et P2-2 sont **inchangés** à `bc25fec` ; une exécution `--suite all` produirait une fausse FAIL sur le formulaire d'entrée et, sans `dc7209d` intégré, un Ctrl-C laisserait la cohorte au seul `--cleanup-manifest`.
+- Aucun P1. Rien dans cet addendum n'est une preuve cloud du réviseur : les faits d'exécution viennent du pilote.
