@@ -840,3 +840,10 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - Targeted run: `--only T6` (existing, documented §7) runs the full seed then T6 only, client session still opened before the seed (reproduces the suspected stale workspace), diagnostics always on, no provider calls without `--provider-proof`.
 - Checks: tsc 0; `tests/qa-tracking*` 47/47 (7 new in `tests/qa-tracking-diagnostics.test.ts`, incl. real local Chromium: no request/navigation during capture, no token/header/query/address/coordinate in outputs; T8 locator on 4c panel markup — old exact text matches nothing, two status lines / missing button / sentence outside panel / lowercase refused); `tests/*.test.ts` 323/323; `tests/ui` 166/166; `scripts/qa/tests` 92/92; node --check; `--dry-run --only T6` 0.
 - For root: review 18039eb, then the targeted T6 diagnostic run.
+
+## 2026-10-31 — business §20 bis: emission proof + bound baseline, 49ff713
+
+- `claude/web-qa-business`: amendment `02ec5b71f27fb36ecfb31eb42f73c1623bbac8ae`, fix **`49ff7134197573da2148b81be406a228bb8e4f1c`** (`scripts/qa-business/lib/network.mjs`, `tests/qa-business.test.ts`; shared browser lib untouched; no cloud).
+- P2-1: `openUiWindow` (alias `settledBaseline`) settles driver probes, then synchronously freezes the baseline and attaches `page.on("request")` (method + path, same origin, `/api/`, non GET/HEAD) before UI navigation; `assertNoUiWrites` FAILs on the emission log OR the response log after baseline — a pending UI POST fails.
+- P2-2: window = opaque frozen token without own keys, registered in a module WeakMap with its handle, index (0 ≤ i ≤ log length, re-checked at assertion), emission log and listener; foreign handle, `{}`, null, plain `{index}`, out-of-range, handle without page, `since` beyond log ⇒ `UiWindowError` (harness error), never PASS; `closeUiWindow` detaches.
+- Tests incl. root's repro ported with the real shared `newPage` handle (pending POST FAIL — passed on b943b45 —, after 403 FAIL, foreign context error, `{}` error). Harness 54 pass / 1 skipped; `tests/**/*.test.ts` 619 / 0 fail / 1 skipped; tsc clean; node --check 14/14; dry-run 0. For root: review 49ff713.
