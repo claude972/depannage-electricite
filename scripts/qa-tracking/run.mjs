@@ -32,6 +32,7 @@ import { runTrackingCleanup, cleanupOrder } from "./lib/cleanup.mjs";
 import { createTrackingApi } from "./lib/guard.mjs";
 import { createReconciler } from "./lib/reconcile.mjs";
 import { makeManifestDurable, atomicWriteJsonSync } from "./lib/durable.mjs";
+import { captureDiagnostics } from "./lib/diagnostics.mjs";
 import { createGuardedCleanup, recoveryCommand, exitCodeFor } from "./lib/finalize.mjs";
 import { TrackingFixtures, setupCohort, SCENARIO_RUNNERS, PROVIDER_RUNNERS, createSessionPool } from "./scenarios.mjs";
 
@@ -148,7 +149,9 @@ async function main(argv) {
             provider_proof: providers.length ? providers : "disabled (opt-in --provider-proof; one real call each, no burst, no retry)",
             cleanup_order: cleanupOrder(),
             cleanup_checks: ["intent recovery by canonical e-mail (validated before lookup)", "remote ownership proof before deletion", "tracking_provider_leases re-read = 0 (cascade)", "tracking_provider_budget never written"],
-            outputs: ["run.log 0600", "events.ndjson", "result.json + summary.md", "manifest.json", "intents.json", "cleanup.json", "*.png"],
+            order: scenarioOrder(options.scenarios, providers).map((e) => `${e.suite}:${e.name}`),
+            diagnostics: "on first failure: diagnostics/<scenario>/<page>.png + .json (0700/0600), same identity, no relogin/reload/navigation, passive network summary, <= 3 pages, <= 20 s",
+            outputs: ["run.log 0600", "events.ndjson", "result.json + summary.md", "manifest.json", "intents.json", "cleanup.json", "*.png", "diagnostics/<scenario>/*"],
             exit_codes: { 0: "no FAIL", 1: "FAIL or FATAL", 2: "preflight refusal", 3: "cleanup incomplete / unknown outcome / unproven id", 130: "interrupted, cleanup complete" },
           },
           null,
@@ -294,13 +297,17 @@ async function main(argv) {
         }),
       );
       if (setup.status === "PASS") {
-        for (const name of options.scenarios) {
+        // A8 §6: the provider proofs run BEFORE T19 (its logout is global and revokes the client).
+        // A8 §1: bounded diagnostics at the first failure, on the pages the scenario used.
+        const diagnose = (name, s) => captureDiagnostics({ scenario: name, handles: pool.diagnosticHandles(), out: outDir, redactor, gate }).then((d) => {
+          for (const file of d.files || []) s.evidence(file, "diagnostics");
+          if (d.skipped || d.truncated || d.errors?.length) log(`diagnostics ${name}: ${d.skipped || ""}${d.truncated ? " truncated" : ""} ${(d.errors || []).join(",")}`.trim());
+        });
+        for (const { suite, name } of scenarioOrder(options.scenarios, providers)) {
           if (lifecycle.stopping) break;
-          await runOne(report, "tracking", name, (s) => SCENARIO_RUNNERS[name](ctx, s), persist, gate);
-        }
-        for (const name of providers) {
-          if (lifecycle.stopping) break;
-          await runOne(report, "provider", name, (s) => PROVIDER_RUNNERS[name](ctx, s), persist, gate);
+          const runner = suite === "tracking" ? SCENARIO_RUNNERS[name] : PROVIDER_RUNNERS[name];
+          pool.beginScenario();
+          await runOne(report, suite, name, (s) => runner(ctx, s), persist, gate, diagnose);
         }
       }
     } finally {
@@ -327,17 +334,29 @@ async function main(argv) {
 }
 
 function bindPool(pool) {
-  return { session: (l, u) => pool.session(l, u), freshSession: (l, u) => pool.freshSession(l, u), closeSession: (l) => pool.closeSession(l) };
+  return { session: (l, u) => pool.session(l, u), freshSession: (l, u) => pool.freshSession(l, u), closeSession: (l) => pool.closeSession(l), revokeUser: (id) => pool.revokeUser(id), rebind: (l, u) => pool.rebind(l, u) };
+}
+
+/** A8 §6: tracking scenarios except T19, then the provider proofs, then T19 last (global logout). */
+export function scenarioOrder(scenarios, providers = []) {
+  const last = scenarios.filter((n) => n === "T19");
+  return [...scenarios.filter((n) => n !== "T19").map((name) => ({ suite: "tracking", name })), ...providers.map((name) => ({ suite: "provider", name })), ...last.map((name) => ({ suite: "tracking", name }))];
 }
 
 /** A precondition refused by a guard (e.g. reassignment simulation) is BLOCKED, never PASS. */
-export async function runOne(report, suite, name, fn, persist = async () => {}, gate = null) {
+export async function runOne(report, suite, name, fn, persist = async () => {}, gate = null, diagnose = null) {
   if (gate?.stopping) return null; // never START a scenario once the run is stopping
   let blocked = null;
   const scenarioRun = report.scenario(suite, name, async (s) => {
     try {
       await fn(s);
     } catch (error) {
+      // A8 §1: first failure, pages still open, same identity; never changes the verdict.
+      if (diagnose) {
+        try {
+          await diagnose(name, s);
+        } catch {}
+      }
       if (error?.blocked) {
         blocked = String(error.message);
         return;

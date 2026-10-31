@@ -654,3 +654,9 @@ Ainsi, aucun scénario ultérieur ne peut réutiliser une session de `users.clie
 En défense supplémentaire, toute déconnexion faite par un scénario marque comme révoquées toutes les sessions du pool appartenant au même utilisateur. Un `session()` ultérieur pour cet utilisateur échoue en BLOCKED (« session révoquée par une déconnexion globale »), sans reconnexion silencieuse.
 
 Le comportement d'authentification du produit (déconnexion globale) est inchangé. Précision ROOT (§5 e) : seule la forme historique exacte prouve l'absence, et ce resserrement entre dans ce lot de code.
+
+### 7. Run ciblé (diagnostic T6 sous la même identité)
+
+`--only` existe déjà : `--only T6` (ou `--only T6,T9,T16`) exécute le seed complet de `setupCohort`, puis seulement les scénarios demandés, dans l'ordre du §6. La session `client` est donc ouverte avant le seed, exactement comme dans le run 4e8bc1a68a89 : la condition suspectée est reproduite, pas masquée. Les diagnostics du §1 sont toujours actifs, sans option. Le `--dry-run` affiche `order` et `diagnostics`.
+
+Exemple ROOT : `node scripts/qa-tracking/run.mjs --mode remote … --only T6`. Sans `--provider-proof`, aucun appel fournisseur n'est fait.
