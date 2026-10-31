@@ -133,3 +133,54 @@ réponse invalide) ; étiquetage `simulated_browser_geolocation` ; absence de qu
 2. Les leases fournisseur de la cohorte sont-ils supprimés par cascade FK sur `interventions` (019) ? Sinon, nom et clé de la
    table pour une étape de nettoyage explicite approuvée par ROOT.
 3. Sélecteurs et noms accessibles : à relier dès réception du SHA du contrat UI.
+
+## Amendement A1 — sélecteurs liés au contrat UI `origin/claude/web-tracking-ui` a7a1fed
+
+Source : `docs/TRACKING_UI_CONTRACT.md` (a7a1fed, base 6c67644), feuilles `ArtisanTrackingPanel`, `TrackingCard`,
+`DestinationPicker`, `TrackingMap`, placées par le lead (artisan : dossier de mission près du panneau « Déplacement » ; client /
+entreprise : détail d’intervention). Règle inchangée : `getByRole` + nom accessible exact partout où un rôle existe ; textes
+d’état lus dans la région `aria-live="polite"` (sélecteur `[aria-live="polite"]` à l’intérieur de la feuille). Les libellés
+contenant un nombre (âge, précision, heure, durée) sont vérifiés par expression régulière ancrée, jamais par valeur exacte de
+position. Si le raccordement lead change un libellé, le scénario échoue en `ANOMALY: selector`, il n’est pas adapté en silence.
+
+| Élément | Sélecteur lié (rôle, nom) | Scénarios |
+| --- | --- | --- |
+| Ouvrir le consentement | `button` « Partager ma position » | T1, T2, T3, T7, T8 |
+| Valider / renoncer | `button` « Autoriser et démarrer » / `button` « Annuler » | T2 (Annuler ⇒ aucun POST), T3 |
+| Texte de consentement | contient `tracking-v1` (version) et « IGN » (envoi origine/destination) | T3 |
+| Arrêter / arrivé | `button` « Arrêter le partage » / `button` « Je suis arrivé » | T14 |
+| Dernière position envoyée | texte « position déclarée par le navigateur », `/± \d+ m/`, `/il y a \d+ s/` ; jamais « GPS certifié » | T3, T4 |
+| Permission refusée | message d’explication de réactivation dans les réglages ; watch arrêté | T1 |
+| Indisponible / délai | `button` « Réessayer » | T1 (variante timeout) |
+| Hors ligne | message hors ligne dans la région live ; aucun POST pendant la coupure (pas de file différée) | T7 |
+| Échantillon refusé localement | « trop imprécise » (accuracy > 250 m) / « trop ancienne » (> 60 s) ; aucun POST | T5 (volet navigateur) |
+| Reload | « Partage interrompu par le rechargement » + bouton de redémarrage explicite ; aucun POST sans clic | T8 |
+| Mention web | « Sur le web, le partage s’arrête si la page est fermée, mise en arrière-plan ou en veille » (préfixe) | T3 |
+| Client — états | « Suivi actif » (seulement `shared` + `fresh`), « Position périmée (dernière il y a N min) », « Partage arrêté par l’artisan », « Aucune position partagée » | T6, T9, T14, T19 |
+| Arrivée estimée | `/Arrivée estimée vers \d{2}:\d{2}/` + « hors trafic temps réel » + « IGN Géoplateforme / BD TOPO » ; absente pour `stale` et pour chaque raison 503 | T6, provider-proof |
+| Recalculer | `button` « Recalculer » (≤ 1 appel `route` par 30 s observé) | provider-proof |
+| Messages 503 | textes exacts du §6 UI (`position_unavailable` … `server_configuration`) | T6, provider-proof |
+| Destination | champ de recherche du `DestinationPicker` (2–200 car.), `button` « Confirmer cette destination » par candidat, `button` « Retirer la destination » + confirmation | T16, T17 |
+| Lien navigation | `link` « Ouvrir dans mon application de navigation » (cliqué jamais ; vérifié présent seulement avec destination confirmée) | T16 |
+| Carte | `role="img"` avec description `/Position de l’artisan à \d+ m de la destination/` ; attributions « © OpenStreetMap contributors » et « Itinéraire : IGN Géoplateforme / BD TOPO » visibles ; « Fond de carte indisponible » hors ligne | T7, T9, provider-proof |
+
+Ajustements de scénarios induits par le contrat UI (le volet API reste celui du §6) :
+
+- **T2** : « Annuler » sur l’écran de consentement ⇒ aucun `POST …/tracking` ; la permission navigateur accordée seule ne déclenche
+  aucun envoi.
+- **T3** : ordre vérifié : la réponse 200 du `start` précède le premier `POST` d’action `point` (le `watchPosition` ne démarre
+  qu’après le start).
+- **T4** : volet navigateur : au plus 1 `POST point` par 5 s observé avec positions simulées changeantes ; `seq` croissant lu
+  dans le corps (sans journaliser les coordonnées).
+- **T5** : volet navigateur : précision simulée 300 m ⇒ « trop imprécise », aucun `POST`. Les bornes serveur restent testées en API.
+- **T7** : pendant `setOffline(true)`, aucun POST n’est émis ni mis en file ; à la reprise, l’échantillon suivant part sur la **même**
+  session avec `seq` supérieur, sans nouveau `start` ; si le serveur répond 409, l’UI recharge le snapshot (attendu admis).
+- **T8** : après reload avec `shared=true` côté serveur : message « Partage interrompu par le rechargement », zéro POST jusqu’au clic,
+  puis nouveau `start` avec un `session_id` différent.
+- **T12** : reste `skipped: needs-root-actor` tant que ROOT n’a pas désigné l’acteur de réaffectation (question 1, transmise par le lead).
+- **Cleanup** : question 2 (cascade des leases fournisseur) transmise à ROOT par le lead ; d’ici sa réponse, les leases de la
+  cohorte sont seulement comptés et listés, jamais supprimés.
+
+Captures 360/1280 (après hydratation complète) : artisan — non partagé, consentement, en partage, refus, hors ligne, reload ;
+client — `fresh`, `stale`, `stopped`, arrivée estimée ou message 503. Les coordonnées visibles sont uniquement les points publics
+simulés. Toujours aucun code ni exécution avant le GO de ROOT.
