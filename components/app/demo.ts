@@ -24,6 +24,7 @@ export const DEMO_KEYS = {
   artisan: "courant-demo-artisan-v1",
   invitations: "courant-demo-invitations-v1",
   siteAccess: "courant-demo-site-access-v1",
+  quoteDrafts: "courant-demo-quote-drafts-v1",
 } as const;
 export const DEMO_IDS = {
   client: "demo-client",

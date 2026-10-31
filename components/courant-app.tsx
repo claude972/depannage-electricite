@@ -7,7 +7,16 @@ import { createClient } from "../lib/supabase/client";
 import { api, ApiRequestError, contractStateFromError, uploadDocument } from "./app/api";
 import { createGuard, createRunner, type RunContext, type Runner } from "./app/guard";
 import { adoptIdentity } from "./app/identity";
-import { allUploaded, processUploadQueue, uploadSummary } from "./app/uploads";
+import { createRevalidationScheduler } from "./app/revalidate";
+import {
+  acknowledgeUpload,
+  allUploaded,
+  processUploadQueue,
+  reconcileUncertain,
+  removeQueue,
+  uploadSummary,
+  upsertQueue,
+} from "./app/uploads";
 import {
   DEMO_IDS,
   DEMO_KEYS,
@@ -28,6 +37,7 @@ import {
   CONNECT_RETURN_MESSAGE,
   INVITE_TOKEN,
   buildHash,
+  enterpriseContext,
   canAccess,
   homeFor,
   membershipRole,
@@ -48,6 +58,10 @@ import {
   type AdminInterventionsPage,
   type AdminListFilters,
   type AdminOverview,
+  type DirectoryFilters,
+  type DirectoryItem,
+  type DirectoryKind,
+  type DirectoryPage,
   type ArtisanCommand,
   type ArtisanDossier,
   type ArtisanPerformanceReport,
@@ -69,10 +83,15 @@ import {
   type ProfessionalData,
   type Profile,
   type Quote,
+  type QuoteDraft,
+  type QuoteDraftCommand,
+  type QuoteDraftEnvelope,
+  type QuoteDraftResult,
   type RequestValues,
   type ReturnContext,
   type Role,
   type Status,
+  type StoredDocument,
   type View,
   type Workspace,
 } from "./app/types";
@@ -111,7 +130,7 @@ export default function CourantApp() {
   const [categoryId, setCategoryId] = useState<Category>("panel");
   const [pendingDraft, setPendingDraft] = useState<RequestValues | null>(null);
   const [pendingInvitation, setPendingInvitation] = useState<string | null>(null);
-  const [uploads, setUploads] = useState<UploadQueue | null>(null);
+  const [uploads, setUploads] = useState<UploadQueue[]>([]);
   // Incremented on every identity change: forces role spaces to remount with fresh local state.
   const [sessionKey, setSessionKey] = useState(0);
 
@@ -151,7 +170,7 @@ export default function CourantApp() {
     setError("");
     setNotice("");
     setPendingDraft(null);
-    setUploads(null);
+    setUploads([]);
     try {
       sessionStorage.removeItem(DRAFT_KEY);
     } catch {}
@@ -239,31 +258,29 @@ export default function CourantApp() {
     }
   }, []);
 
-  // Revalidation when the tab becomes visible or focused again (live only, throttled):
-  // workspace, then professional data for managers. Spaces re-read their scoped views from
-  // the refreshed data (session.refreshedAt changes).
-  const lastRevalidation = useRef(0);
-  const revalidate = useCallback(async () => {
+  // Revalidation when the tab becomes visible or focused again (live only). Signals are never
+  // dropped: a run in progress gets one trailing run, a recent run delays the next to the end
+  // of the quiet window (CL-UI-008). Workspace, then professional data for managers.
+  const revalidateNow = useCallback(async () => {
     if (modeRef.current !== "live") return;
-    const now = Date.now();
-    if (now - lastRevalidation.current < 15000) return;
-    lastRevalidation.current = now;
     await refresh();
     if (roleRef.current === "manager") await loadProfessional();
   }, [refresh, loadProfessional]);
   useEffect(() => {
     if (mode !== "live") return;
+    const scheduler = createRevalidationScheduler(revalidateNow, { minIntervalMs: 15000 });
     const onVisible = () => {
-      if (document.visibilityState === "visible") void revalidate();
+      if (document.visibilityState === "visible") scheduler.signal();
     };
-    const onFocus = () => void revalidate();
+    const onFocus = () => scheduler.signal();
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onFocus);
     return () => {
+      scheduler.cancel();
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onFocus);
     };
-  }, [mode, revalidate]);
+  }, [mode, revalidateNow]);
 
   // Boot: draft, return parameters, existing session, auth listener.
   useEffect(() => {
@@ -507,6 +524,8 @@ export default function CourantApp() {
       payments: "available",
       siteAccess: "available",
       adminLists: "available",
+      quoteDraft: "available",
+      adminDirectory: "available",
     });
     guard.bump();
     runner.reset();
@@ -948,12 +967,13 @@ export default function CourantApp() {
   }
 
   // Uploads the queue items one by one; each result is recorded, failures stay retryable.
-  const processUploads = (ctx: RunContext, queue: UploadQueue) =>
+  const processUploads = (ctx: RunContext, queue: UploadQueue, resendUncertain = false) =>
     processUploadQueue(
       queue,
       (file, interventionId) => uploadDocument(file, interventionId),
       () => ctx.alive(),
-      ctx.when(setUploads),
+      ctx.when((q: UploadQueue) => setUploads((all) => upsertQueue(all, q))),
+      { resendUncertain },
     );
   async function createIntervention(values: RequestValues, photos: File[] = []) {
     return run(async (ctx) => {
@@ -987,9 +1007,11 @@ export default function CourantApp() {
       const result = await api<{ intervention: Intervention }>("/api/interventions", values);
       if (ctx.alive()) await refresh();
       ctx.when(setPendingDraft)(null);
-      try {
-        sessionStorage.removeItem(DRAFT_KEY);
-      } catch {}
+      ctx.when(() => {
+        try {
+          sessionStorage.removeItem(DRAFT_KEY);
+        } catch {}
+      })();
       const id = result.intervention?.id;
       if (id) {
         ctx.when(setSelectedId)(id);
@@ -1002,26 +1024,47 @@ export default function CourantApp() {
       // 2. Then upload the photos; a failure never recreates the dossier.
       const queue: UploadQueue = {
         interventionId: id,
+        startedAt: new Date().toISOString(),
         items: photos.map((file, index) => ({ key: `${index}-${file.name}-${file.size}`, file, status: "pending" })),
       };
-      ctx.when(setUploads)(queue);
+      ctx.when((q: UploadQueue) => setUploads((all) => upsertQueue(all, q)))(queue);
       const finished = await processUploads(ctx, queue);
       if (!ctx.alive()) return;
       await refresh();
-      if (allUploaded(finished)) ctx.when(setUploads)(null);
+      if (allUploaded(finished)) ctx.when(() => setUploads((all) => removeQueue(all, id)))();
       ctx.notice(`Votre demande a été enregistrée. ${uploadSummary(finished)}`);
     });
   }
-  async function retryUploads() {
+  async function retryUploads(interventionId: string, options: { resendUncertain?: boolean } = {}) {
     return run(async (ctx) => {
-      if (!uploads || modeRef.current !== "live") return;
-      const finished = await processUploads(ctx, uploads);
+      if (modeRef.current !== "live") return;
+      const queue = uploads.find((q) => q.interventionId === interventionId);
+      if (!queue) return;
+      // Uncertain items: the dossier's documents decide before anything is re-sent.
+      await refresh();
+      if (!ctx.alive()) return;
+      let fresh: StoredDocument[] = [];
+      try {
+        const docs = await api<{ documents: StoredDocument[] }>("/api/documents");
+        fresh = docs.documents ?? [];
+      } catch {
+        /* reconciliation falls back to the workspace documents already loaded */
+        fresh = data.documents;
+      }
+      if (!ctx.alive()) return;
+      const reconciled = reconcileUncertain(queue, fresh);
+      ctx.when((q: UploadQueue) => setUploads((all) => upsertQueue(all, q)))(reconciled);
+      const finished = await processUploads(ctx, reconciled, options.resendUncertain === true);
       if (!ctx.alive()) return;
       await refresh();
       if (allUploaded(finished)) {
-        ctx.when(setUploads)(null);
+        ctx.when(() => setUploads((all) => removeQueue(all, interventionId)))();
         ctx.notice("Toutes les photos sont enregistrées dans le dossier.");
-      } else ctx.error(uploadSummary(finished));
+      } else if (finished.items.some((i) => i.status === "uncertain") && !options.resendUncertain)
+        ctx.notice(
+          "Vérification effectuée : les documents du dossier portant le même nom sont proposés comme candidats. Ces photos restent incertaines tant que vous n’avez pas confirmé un candidat ou renvoyé le fichier.",
+        );
+      else ctx.error(uploadSummary(finished));
     });
   }
   async function sendMessage(interventionId: string, body: string) {
@@ -1274,6 +1317,105 @@ export default function CourantApp() {
       return null;
     }
   }
+  function demoDirectoryRows<K extends DirectoryKind>(kind: K): DirectoryItem<K>[] {
+    const artisans = readDemo(DEMO_KEYS.admin, adminSeed(), Array.isArray);
+    const dossier = readDemo(DEMO_KEYS.artisan, artisanSeed()).artisan_profile;
+    if (kind === "artisans")
+      return artisans.map((a) => ({
+        id: a.id,
+        full_name: a.full_name,
+        phone: a.phone || "",
+        artisan_approved: !!a.artisan_approved,
+        created_at: a.created_at,
+        company_name: a.id === DEMO_IDS.artisan ? dossier?.company_name ?? null : null,
+        application_status: a.id === DEMO_IDS.artisan ? dossier?.application_status ?? null : a.artisan_approved ? "approved" : "submitted",
+      })) as DirectoryItem<K>[];
+    if (kind === "clients")
+      return [
+        { id: DEMO_IDS.client, full_name: DEMO_NAMES.client, phone: "", role: "client" as const, created_at: "2026-10-01T09:00:00Z" },
+        { id: DEMO_IDS.manager, full_name: DEMO_NAMES.manager, phone: "", role: "manager" as const, created_at: "2026-10-02T09:00:00Z" },
+      ] as DirectoryItem<K>[];
+    return data.organizations.map((o) => ({
+      id: o.id,
+      name: o.name,
+      owner_id: o.owner_id || DEMO_IDS.manager,
+      created_at: "2026-10-02T09:00:00Z",
+    })) as DirectoryItem<K>[];
+  }
+  async function loadAdminDirectory<K extends DirectoryKind>(
+    kind: K,
+    params: DirectoryFilters & { limit?: number; cursor?: string | null },
+  ): Promise<DirectoryPage<K> | null> {
+    const limit = Math.min(100, Math.max(1, params.limit ?? 25));
+    if (modeRef.current === "demo") {
+      const q = params.q?.trim().toLowerCase();
+      const rows = demoDirectoryRows(kind)
+        .filter((row) => {
+          const r = row as unknown as Record<string, unknown>;
+          if (q && !String(r.full_name ?? r.name ?? "").toLowerCase().includes(q) && r.id !== q) return false;
+          if (params.approved !== undefined && r.artisan_approved !== params.approved) return false;
+          if (params.role && r.role !== params.role) return false;
+          if (params.owner_id && r.owner_id !== params.owner_id) return false;
+          return true;
+        })
+        .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id.localeCompare(a.id));
+      const start = params.cursor ? Number(params.cursor) || 0 : 0;
+      return {
+        kind,
+        items: rows.slice(start, start + limit),
+        page: {
+          limit,
+          has_more: start + limit < rows.length,
+          next_cursor: start + limit < rows.length ? String(start + limit) : null,
+          total: rows.length,
+        },
+        filters: { q: params.q ?? null, approved: params.approved ?? null, role: params.role ?? null, owner_id: params.owner_id ?? null },
+      };
+    }
+    const my = seq.current;
+    try {
+      const search = new URLSearchParams({ kind, limit: String(limit) });
+      if (params.cursor) search.set("cursor", params.cursor);
+      if (params.q) search.set("q", params.q);
+      if (params.approved !== undefined) search.set("approved", String(params.approved));
+      if (params.role) search.set("role", params.role);
+      if (params.owner_id) search.set("owner_id", params.owner_id);
+      const result = await api<DirectoryPage<K>>(`/api/admin/directory?${search}`);
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, adminDirectory: "available" }));
+      return result;
+    } catch (e) {
+      if (my !== seq.current) return null;
+      if (e instanceof ApiRequestError && e.status === 422) {
+        setError(e.message);
+        return null;
+      }
+      if (e instanceof ApiRequestError && e.status === 403) {
+        void refresh();
+        setError("Vos droits d’administration ne sont plus reconnus. Vos données ont été rechargées.");
+        return null;
+      }
+      setCapabilities((c) => ({ ...c, adminDirectory: contractStateFromError(e) }));
+      return null;
+    }
+  }
+  async function loadAdminDirectoryItem<K extends DirectoryKind>(kind: K, id: string): Promise<DirectoryItem<K> | null> {
+    if (modeRef.current === "demo") return demoDirectoryRows(kind).find((r) => r.id === id) ?? null;
+    const my = seq.current;
+    try {
+      const result = await api<{ kind: K; item: DirectoryItem<K> }>(
+        `/api/admin/directory?kind=${kind}&id=${encodeURIComponent(id)}`,
+      );
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, adminDirectory: "available" }));
+      return result.item;
+    } catch (e) {
+      if (my !== seq.current) return null;
+      if (e instanceof ApiRequestError && e.status === 404) return null;
+      setCapabilities((c) => ({ ...c, adminDirectory: contractStateFromError(e) }));
+      return null;
+    }
+  }
   async function loadAdminIntervention(id: string): Promise<AdminInterventionDetail | null> {
     if (modeRef.current === "demo") {
       const intervention = data.interventions.find((i) => i.id === id);
@@ -1300,6 +1442,143 @@ export default function CourantApp() {
       setCapabilities((c) => ({ ...c, adminLists: contractStateFromError(e) }));
       return null;
     }
+  }
+  // ---- Quote draft (contract QUOTE-DRAFT-001). Demo: one private draft per dossier in the
+  // browser; live: dedicated route, unavailable until the backend checkpoint is integrated.
+  const demoDrafts = () =>
+    readDemo<Record<string, { draft: QuoteDraft | null; version: number }>>(
+      DEMO_KEYS.quoteDrafts,
+      {},
+      (v) => !!v && typeof v === "object",
+    );
+  function demoDraftEnvelope(interventionId: string): QuoteDraftEnvelope {
+    const entry = demoDrafts()[interventionId] || { draft: null, version: 0 };
+    const current = data.quotes.find(
+      (q) => q.intervention_id === interventionId && q.status === "sent",
+    );
+    return {
+      draft: entry.draft,
+      version: entry.version,
+      assignment_token: `demo-assignment-${interventionId}`,
+      current_quote_id: current?.id ?? null,
+    };
+  }
+  async function loadQuoteDraft(interventionId: string): Promise<QuoteDraftEnvelope | null> {
+    if (modeRef.current === "demo") return demoDraftEnvelope(interventionId);
+    const my = seq.current;
+    try {
+      const result = await api<QuoteDraftEnvelope>(`/api/interventions/${interventionId}/quote-draft`);
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, quoteDraft: "available" }));
+      return result;
+    } catch (e) {
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, quoteDraft: contractStateFromError(e) }));
+      return null;
+    }
+  }
+  async function quoteDraftCommand(
+    interventionId: string,
+    body: QuoteDraftCommand,
+  ): Promise<QuoteDraftResult> {
+    let outcome: QuoteDraftResult = { ok: false, conflict: false, message: "Action interrompue." };
+    await run(async (ctx) => {
+      if (modeRef.current === "demo") {
+        const all = demoDrafts();
+        const envelope = demoDraftEnvelope(interventionId);
+        if (body.expected_version !== envelope.version || body.assignment_token !== envelope.assignment_token) {
+          outcome = {
+            ok: false,
+            conflict: true,
+            message: "Le brouillon a changé depuis votre dernière lecture. Rechargez-le ; votre saisie est conservée.",
+          };
+          return;
+        }
+        if (body.action === "save") {
+          if (body.base_quote_id !== envelope.current_quote_id) {
+            outcome = {
+              ok: false,
+              conflict: true,
+              message: "Un devis a été publié entre-temps sur ce dossier. Rechargez avant d’enregistrer.",
+            };
+            return;
+          }
+          const draft: QuoteDraft = {
+            intervention_id: interventionId,
+            artisan_id: DEMO_IDS.artisan,
+            version: envelope.version + 1,
+            assignment_token: envelope.assignment_token,
+            base_quote_id: body.base_quote_id,
+            lines: body.lines,
+            tax_rate: body.tax_rate,
+            updated_at: new Date().toISOString(),
+          };
+          all[interventionId] = { draft, version: draft.version };
+          writeDemo(DEMO_KEYS.quoteDrafts, all);
+          outcome = { ok: true, envelope: { ...envelope, draft, version: draft.version } };
+          ctx.notice("Brouillon enregistré dans la démonstration (non envoyé au client).");
+          return;
+        }
+        if (!envelope.draft) {
+          outcome = { ok: false, conflict: true, message: "Aucun brouillon actif à traiter. Rechargez le dossier." };
+          return;
+        }
+        if (body.action === "discard") {
+          all[interventionId] = { draft: null, version: envelope.version + 1 };
+          writeDemo(DEMO_KEYS.quoteDrafts, all);
+          outcome = { ok: true, envelope: { ...envelope, draft: null, version: envelope.version + 1 } };
+          ctx.notice("Brouillon abandonné.");
+          return;
+        }
+        // send: publish through the existing demo action; the draft is consumed only on success.
+        const draft = envelope.draft;
+        if (draft.tax_rate === null || !draft.lines.length || draft.lines.some((l) => !l.label.trim()))
+          throw new Error("Le brouillon n’est pas publiable : lignes nommées et taux de TVA requis.");
+        const beforeIds = new Set(data.quotes.map((q) => q.id));
+        const ok = await action(interventionId, "send_quote", { lines: draft.lines, tax_rate: draft.tax_rate });
+        if (!ok) {
+          outcome = { ok: false, conflict: false, message: "Le devis n’a pas pu être publié ; le brouillon est conservé." };
+          return;
+        }
+        all[interventionId] = { draft: null, version: envelope.version + 1 };
+        writeDemo(DEMO_KEYS.quoteDrafts, all);
+        outcome = {
+          ok: true,
+          envelope: {
+            ...envelope,
+            draft: null,
+            version: envelope.version + 1,
+            // The exact quote created by this publication is read back after the state update.
+            quote_id: data.quotes.find((q) => !beforeIds.has(q.id))?.id,
+          },
+        };
+        return;
+      }
+      try {
+        const result = await api<QuoteDraftEnvelope>(`/api/interventions/${interventionId}/quote-draft`, body);
+        ctx.when(setCapabilities)((c) => ({ ...c, quoteDraft: "available" }));
+        outcome = { ok: true, envelope: result };
+        if (body.action === "send") {
+          if (ctx.alive()) await refresh();
+          ctx.notice("Devis envoyé au client.");
+        } else
+          ctx.notice(
+            body.action === "save"
+              ? "Brouillon enregistré. Il n’est pas envoyé au client tant que vous ne publiez pas."
+              : "Brouillon abandonné.",
+          );
+      } catch (e) {
+        if (e instanceof ApiRequestError && e.status === 409) {
+          outcome = { ok: false, conflict: true, message: e.message };
+          return; // not an error banner: the editor shows the conflict and keeps the input
+        }
+        if (contractStateFromError(e) === "missing")
+          ctx.when(setCapabilities)((c) => ({ ...c, quoteDraft: "missing" }));
+        outcome = { ok: false, conflict: false, message: (e as Error).message };
+        throw e;
+      }
+    });
+    return outcome;
   }
   // Membership lost or never held: drop every cached view of the organisation.
   function dropOrganizationContext() {
@@ -1785,9 +2064,12 @@ export default function CourantApp() {
     activeOrganizationId,
     activeSiteId,
     refreshedAt,
+    // Same rule as the enterprise space: a sole organisation is the implicit context, several
+    // organisations require an explicit choice (never organizations[0]).
     membershipRole: membershipRole(
       data.organization_members,
-      activeOrganizationId,
+      enterpriseContext(data.organizations, data.sites, [], activeOrganizationId, activeSiteId)
+        .organizationId,
       mode === "live" ? profile?.id || "" : `demo-${role}`,
     ),
     go: navigate,
@@ -1813,7 +2095,11 @@ export default function CourantApp() {
     artisanCommand,
     loadAdminOverview,
     loadAdminInterventions,
+    loadAdminDirectory,
+    loadAdminDirectoryItem,
     loadAdminIntervention,
+    loadQuoteDraft,
+    quoteDraftCommand,
     loadOrganization,
     organizationCommand,
     acceptInvitation,
@@ -1824,8 +2110,14 @@ export default function CourantApp() {
     createIntervention,
     uploads,
     retryUploads,
-    dismissUploads() {
-      setUploads(null);
+    acknowledgeUpload(interventionId, key, documentId) {
+      setUploads((all) =>
+        all.map((q) => (q.interventionId === interventionId ? acknowledgeUpload(q, key, documentId) : q)),
+      );
+      setNotice("Photo confirmée comme enregistrée dans le dossier.");
+    },
+    dismissUploads(interventionId) {
+      setUploads((all) => removeQueue(all, interventionId));
     },
     sendMessage,
     submitReview,

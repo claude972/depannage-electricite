@@ -374,12 +374,21 @@ export function ArtisanSpace({ session }: { session: Session }) {
   const [dossierVersion, setDossierVersion] = useState(0);
   const [declinedIds, setDeclinedIds] = useState<string[]>([]);
   const menuButton = useRef<HTMLButtonElement>(null);
+  // Where focus lands once the drawer is closed and the page body is no longer inert.
+  const afterClose = useRef<"menu" | "main" | null>(null);
   const { dossier, pending: dossierPending } = useDossier(session, dossierVersion);
 
   const closeMenu = useCallback(() => {
+    afterClose.current = "menu";
     setMenuOpen(false);
-    menuButton.current?.focus();
   }, []);
+  useEffect(() => {
+    if (menuOpen || !afterClose.current) return;
+    const target = afterClose.current;
+    afterClose.current = null;
+    if (target === "main") document.getElementById("main")?.focus();
+    else menuButton.current?.focus();
+  }, [menuOpen]);
   const command = useCallback(
     async (body: ArtisanCommand) => {
       const ok = await session.artisanCommand(body);
@@ -393,6 +402,7 @@ export function ArtisanSpace({ session }: { session: Session }) {
     [],
   );
   const navigate = (view: View, param?: string) => {
+    if (menuOpen) afterClose.current = "main";
     setMenuOpen(false);
     session.go(view, param);
   };
@@ -473,11 +483,8 @@ export function ArtisanSpace({ session }: { session: Session }) {
   const current = activeNav(session.view);
   return (
     <div className={styles.space}>
-      <a className="skip-link" href="#main">
-        Aller au contenu
-      </a>
       <Sidebar session={session} current={current} onNavigate={navigate} />
-      <div className={styles.body}>
+      <div className={styles.body} inert={menuOpen}>
         {session.mode === "demo" && <DemoBar session={session} />}
         <header className={styles.topbar}>
           <button
@@ -563,7 +570,16 @@ function NavButtons({
         >
           <Icon name={item.icon} size={18} />
           {item.label}
-          {counts?.[item.view] ? <small>{counts[item.view]}</small> : null}
+          {counts?.[item.view] ? (
+            <small>
+              <span aria-hidden="true">{counts[item.view]}</span>
+              <span className="sr-only">
+                {item.view === "quotes"
+                  ? `${counts[item.view]} devis à rédiger`
+                  : `${counts[item.view]} missions en cours`}
+              </span>
+            </small>
+          ) : null}
         </button>
       ))}
     </>
@@ -745,9 +761,14 @@ function PanelArt() {
   );
 }
 function appointmentSlot(entry: AppointmentEntry | undefined, now: Date): ReactNode {
-  if (entry === undefined) return <span>Horaire en cours de lecture…</span>;
-  if (entry === null) return <span>Horaire indisponible</span>;
-  if (!entry.appointment) return <span>Horaire à fixer</span>;
+  if (entry === undefined)
+    return (
+      <span role="status" className={styles.rowHint}>
+        Horaire en cours de lecture…
+      </span>
+    );
+  if (entry === null) return <span className={styles.rowHint}>Horaire indisponible</span>;
+  if (!entry.appointment) return <span className={styles.rowHint}>Horaire à fixer</span>;
   const start = new Date(entry.appointment.starts_at);
   return (
     <>
@@ -775,11 +796,13 @@ function MissionRow({
       </span>
       <span className={styles.rowBody}>
         <strong className={styles.rowTitle}>{c.label}</strong>
-        <span className={styles.rowMeta}>
-          <Icon name="location" size={14} />
-          {i.address}, {i.city}
-        </span>
-        <span className={styles.rowTags}>
+        <span className={styles.rowLine}>
+          <span className={styles.rowMeta}>
+            <Icon name="location" size={14} />
+            <span className={styles.rowPlace}>
+              {i.address}, {i.city}
+            </span>
+          </span>
           <Badge status={i.status} wording="artisan" />
         </span>
       </span>
@@ -797,11 +820,13 @@ function OfferRow({ intervention: i, onOpen }: { intervention: Intervention; onO
       </span>
       <span className={styles.rowBody}>
         <strong className={styles.rowTitle}>{c.label}</strong>
-        <span className={styles.rowMeta}>
-          <Icon name="location" size={14} />
-          {i.city} · {maskPostal(i.postal_code)}
-        </span>
-        <span className={styles.rowTags}>
+        <span className={styles.rowLine}>
+          <span className={styles.rowMeta}>
+            <Icon name="location" size={14} />
+            <span className={styles.rowPlace}>
+              {i.city} · {maskPostal(i.postal_code)}
+            </span>
+          </span>
           <Tag tone={i.urgency === "urgent" ? "amber" : "neutral"}>
             {i.urgency === "urgent" ? "Urgente" : "À planifier"}
           </Tag>
@@ -859,17 +884,21 @@ function PerformanceSummary({ perf, onDetail }: { perf: Performance; onDetail: (
           <div>
             <span className={styles.perfLabel}>CA du mois</span>
             <strong className={styles.perfValue}>{money(perf.monthRevenueCents)}</strong>
-            <span className={styles.perfNote}>Mois en cours — {perf.period}</span>
+            <span className={styles.perfNote}>Mois en cours</span>
           </div>
         </div>
       </div>
-      <p className={styles.perfFoot}>
-        <Icon name="info" size={15} />
-        <span>
-          {perf.basis} Aucune évolution par rapport au mois précédent n’est affichée : cet
-          historique n’est pas chargé dans votre espace.
-        </span>
-      </p>
+      <details className={styles.basis}>
+        <summary>Base de calcul</summary>
+        <div className={styles.basisBody}>
+          <p>Période : {perf.period}.</p>
+          <p>{perf.basis}</p>
+          <p>
+            Aucune évolution par rapport au mois précédent n’est affichée : cet historique n’est
+            pas chargé dans votre espace.
+          </p>
+        </div>
+      </details>
     </section>
   );
 }
@@ -930,21 +959,28 @@ function Overview({
           Voir tout
         </button>
       </div>
-      <p className={styles.sectionNote}>
-        Dossiers actifs qui vous sont affectés. L’horaire affiché est le rendez-vous enregistré ;
-        sans rendez-vous, il reste à fixer.
-      </p>
       {today.length ? (
-        <div className={styles.rows}>
-          {today.map((i) => (
-            <MissionRow
-              key={i.id}
-              intervention={i}
-              right={appointmentSlot(appointments[i.id], now)}
-              onOpen={() => session.go("mission", i.id)}
-            />
-          ))}
-        </div>
+        <>
+          <div className={styles.rows}>
+            {today.map((i) => (
+              <MissionRow
+                key={i.id}
+                intervention={i}
+                right={appointmentSlot(appointments[i.id], now)}
+                onOpen={() => session.go("mission", i.id)}
+              />
+            ))}
+          </div>
+          <details className={`${styles.basis} ${styles.basisFlat}`}>
+            <summary>Comment ces missions sont choisies</summary>
+            <div className={styles.basisBody}>
+              <p>
+                Dossiers actifs qui vous sont affectés, sur les dossiers chargés. L’horaire affiché
+                est le rendez-vous enregistré ; sans rendez-vous, il reste à fixer.
+              </p>
+            </div>
+          </details>
+        </>
       ) : (
         <section className="panel">
           <Empty
@@ -1002,7 +1038,7 @@ function Missions({ session, declinedIds }: { session: Session; declinedIds: str
     <>
       <PageTitle
         title="Missions"
-        subtitle="Offres anonymisées, dossiers en cours et interventions terminées, sur les dossiers chargés."
+        subtitle="Offres, dossiers en cours et terminés, sur les dossiers chargés."
       />
       <div className={styles.segmentsWrap}>
         <Segments label="Filtrer les missions" value={segment} options={options} onChange={setSegment} />
@@ -1017,8 +1053,7 @@ function Missions({ session, declinedIds }: { session: Session; declinedIds: str
         ) : (
           <section className="panel">
             <Empty icon="search" title="Aucune mission disponible">
-              Les nouvelles demandes sans artisan affecté apparaîtront ici. Elles restent
-              anonymisées jusqu’à l’acceptation.
+              Les demandes sans artisan affecté apparaîtront ici, anonymisées jusqu’à l’acceptation.
             </Empty>
           </section>
         ))}
@@ -2944,50 +2979,70 @@ function PerfTile({
 }
 function PerfGrid({ perf, since }: { perf: Performance; since: string | null }) {
   return (
-    <div className={styles.perfGrid}>
-      <div className={styles.perfTile}>
-        <Unavailable
-          title="Taux de satisfaction"
-          reason="Aucune source de mesure : aucun questionnaire de satisfaction n’est collecté auprès des clients."
-          blocker="enquête de satisfaction non prévue"
+    <>
+      <div className={styles.perfGrid}>
+        <div className={styles.perfTile}>
+          <Unavailable
+            title="Taux de satisfaction"
+            reason="Aucun questionnaire de satisfaction n’est collecté."
+            blocker="enquête de satisfaction non prévue"
+          />
+        </div>
+        <PerfTile
+          icon="star"
+          tone={styles.amberIcon}
+          label="Note moyenne"
+          value={perf.rating ? `${fmtRating(perf.rating.average)} / 5` : "—"}
+          note={perf.rating ? `${perf.rating.count} avis client${perf.rating.count > 1 ? "s" : ""}` : "Aucun avis encore"}
+        />
+        <PerfTile
+          icon="check"
+          tone={styles.greenIcon}
+          label="Interventions réalisées"
+          value={perf.completedCount}
+          note="Dossiers réglés"
+        />
+        <PerfTile
+          icon="calendar"
+          tone={styles.blueIcon}
+          label="Ancienneté"
+          value={since ?? "—"}
+          note={since ? "Depuis l’inscription" : "Date d’inscription non transmise"}
+        />
+        <div className={styles.perfTile}>
+          <Unavailable
+            title="Ponctualité"
+            reason="Les rendez-vous ne sont pas comparés aux arrivées."
+            blocker="mesure de ponctualité non prévue"
+          />
+        </div>
+        <PerfTile
+          icon="euro"
+          tone={styles.greenIcon}
+          label="CA du mois"
+          value={money(perf.monthRevenueCents)}
+          note={`${perf.monthPaidCount} règlement${perf.monthPaidCount > 1 ? "s" : ""} — ${perf.period}`}
         />
       </div>
-      <PerfTile
-        icon="star"
-        tone={styles.amberIcon}
-        label="Note moyenne"
-        value={perf.rating ? `${fmtRating(perf.rating.average)} / 5` : "—"}
-        note={perf.rating ? `${perf.rating.count} avis client${perf.rating.count > 1 ? "s" : ""}` : "Aucun avis encore"}
-      />
-      <PerfTile
-        icon="check"
-        tone={styles.greenIcon}
-        label="Interventions réalisées"
-        value={perf.completedCount}
-        note="Dossiers réglés, sur les dossiers chargés"
-      />
-      <PerfTile
-        icon="calendar"
-        tone={styles.blueIcon}
-        label="Ancienneté"
-        value={since ?? "—"}
-        note={since ? "Depuis la création de votre compte" : "Date d’inscription non transmise"}
-      />
-      <div className={styles.perfTile}>
-        <Unavailable
-          title="Ponctualité"
-          reason="Aucun créneau mesuré : l’historique des rendez-vous n’est pas comparé aux arrivées."
-          blocker="mesure de ponctualité non prévue"
-        />
-      </div>
-      <PerfTile
-        icon="euro"
-        tone={styles.greenIcon}
-        label="CA du mois"
-        value={money(perf.monthRevenueCents)}
-        note={`${perf.monthPaidCount} règlement${perf.monthPaidCount > 1 ? "s" : ""} — ${perf.period}`}
-      />
-    </div>
+      <details className={styles.basis}>
+        <summary>Base de calcul</summary>
+        <div className={styles.basisBody}>
+          <p>Période : {perf.period}. Calculs réalisés sur vos dossiers chargés, sans extrapolation.</p>
+          <p>{perf.basis}</p>
+          <ul className={styles.formulaList}>
+            <li>Note moyenne : moyenne des notes (1 à 5) des avis déposés sur vos interventions, arrondie au dixième.</li>
+            <li>CA du mois : somme TTC des règlements au statut « payé » dont la date de paiement est dans le mois en cours.</li>
+            <li>Interventions réalisées : dossiers au statut « réglée ».</li>
+            <li>Ancienneté : écart entre la date de création de votre compte et aujourd’hui.</li>
+            <li>Taux de satisfaction et ponctualité : aucune source de données ; non calculés.</li>
+          </ul>
+          <p>
+            Aucune évolution par rapport au mois précédent n’est affichée : cet historique n’est pas
+            chargé dans votre espace.
+          </p>
+        </div>
+      </details>
+    </>
   );
 }
 function Profile({
@@ -3046,7 +3101,7 @@ function Profile({
         </span>
         <div>
           <h2 id="profile-docs">Documents et assurances</h2>
-          <p>
+          <p role="status">
             {pending
               ? "Lecture du dossier…"
               : dossier
@@ -3103,8 +3158,7 @@ function Profile({
           Configurer mes règlements Stripe
         </button>
         <p className={styles.sectionNote}>
-          Stripe Connect nécessite un compte artisan réel approuvé. L’état du compte de règlement est
-          actualisé à votre retour.
+          Compte artisan approuvé requis ; état du compte actualisé à votre retour.
         </p>
       </div>
       <section className="panel" aria-labelledby="profile-availability">
@@ -3176,22 +3230,9 @@ function PerformanceView({ session }: { session: Session }) {
       <PageTitle
         back={{ label: "Profil", onClick: () => session.go("profile") }}
         title="Performance"
-        subtitle={`Période : ${perf.period}. Calculs réalisés sur vos dossiers chargés, sans extrapolation.`}
+        subtitle={`Période : ${perf.period} — sur vos dossiers chargés.`}
       />
       <PerfGrid perf={perf} since={since} />
-      <section className="panel" aria-labelledby="perf-basis">
-        <h2 id="perf-basis" style={{ fontSize: 17 }}>
-          Base de calcul
-        </h2>
-        <p style={{ marginTop: 8 }}>{perf.basis}</p>
-        <ul className={styles.formulaList}>
-          <li>Note moyenne : moyenne des notes (1 à 5) des avis déposés sur vos interventions, arrondie au dixième.</li>
-          <li>CA du mois : somme TTC des règlements au statut « payé » dont la date de paiement est dans le mois en cours.</li>
-          <li>Interventions réalisées : dossiers au statut « réglée ».</li>
-          <li>Ancienneté : écart entre la date de création de votre compte et aujourd’hui.</li>
-          <li>Taux de satisfaction et ponctualité : aucune source de données ; non calculés.</li>
-        </ul>
-      </section>
       <section className="panel" aria-labelledby="perf-paid">
         <h2 id="perf-paid" style={{ fontSize: 17, marginBottom: 8 }}>
           Règlements confirmés ce mois-ci

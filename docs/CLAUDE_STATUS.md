@@ -45,6 +45,26 @@ Fichier de coordination émis par l’agent Claude pour le pilote (Codex). Le pi
 - incident : l’écriture d’`admin-space.tsx` a échoué une fois (ENOSPC, fichier tronqué) ; reconstruit depuis HEAD + modifications prévues, vérifié par typecheck ; aucune autre modification perdue (diff relu).
 - ce que Codex doit vérifier : Membres → « Accès aux sites » (owner) enregistre et relit la portée ; invitation avec portée « selected » ; non-owner voit « Votre accès » uniquement ; fiche admin d’un artisan lit le dossier et les pièces ; bouton d’installation présent dans Profil et Aide, silencieux quand l’installation n’est pas possible.
 
+## Table des findings → commits de correction (pour clôture par le pilote)
+
+| Finding | Fix commit(s) | Test / preuve |
+| --- | --- | --- |
+| CL-UI-001 résultat réseau ambigu | 685738c (api.ts) ; 4f41fff | `tests/ui/api.test.ts` (panne réseau sur mutation) |
+| CL-UI-002 hash malformé | 685738c (session.ts) | `tests/ui/session.test.ts` (hash parsing) |
+| CL-UI-003 retour URL ≠ paiement | 4f41fff, c4333e0 | `tests/ui/api.test.ts` (paymentReturnMessage) |
+| CL-UI-004 200 invalide | 4f41fff | `tests/ui/api.test.ts` (malformed 200 / non-2xx) |
+| CL-UI-005 copies utilisateur | a5c4faa | relecture des 5 espaces |
+| CL-UI-006 / UI-REV-001 guard d’identité + connexion | 685738c, 75feaab, a472fc6, 2e3dcf1, 823b021 | `tests/ui/guard.test.ts`, `tests/ui/identity.test.ts` |
+| UI-REV-002/003 revalidation, 403, refreshedAt | 88562367, 6962be6 | `tests/ui/session.test.ts` (validateContext) |
+| CL-UI-009 validité d’invitation 14 j | 6962be6 | — |
+| PHOTO-REV-001/002/003 | fcc7f6b, puis correction du rapprochement (aucune confirmation automatique par nom/date : candidats à vérifier par l’utilisateur, confirmation explicite ou renvoi) | `tests/ui/uploads.test.ts` |
+| VIS-001 densité artisan | 529fe0f | capture preview à refaire par le pilote |
+| CL-UI-008 revalidation (signal perdu < 15 s) | 6667ffd (`components/app/revalidate.ts` : coalescence + relance différée, aucun signal perdu) | `tests/ui/revalidate.test.ts` |
+| Contexte organisation unique (badge/accès nuls) | 6667ffd (`membershipRole` sur le même contexte que l’espace : organisation unique implicite, plusieurs = choix explicite) | `tests/ui/invitations.test.ts` |
+| PHOTO-REV-004 fausse confirmation par nom/date | dbd500c (candidats à vérifier par l’utilisateur, confirmation explicite) | `tests/ui/uploads.test.ts` |
+| ADMIN-LISTS-001 | c2796f2 | revue source ; recette preview pilote |
+| ADMIN-DIRECTORIES-001 | a43e1a0 (session) + lot admin en cours | — |
+
 ## Corrections de revue pilote appliquées (checkpoint 2b)
 
 - **CL-UI-001** api.ts : échec réseau sur mutation = résultat incertain, consigne de relecture avant nouvel essai.
@@ -61,8 +81,12 @@ Fichier de coordination émis par l’agent Claude pour le pilote (Codex). Le pi
 - **Photos de la demande (CLI-02)** : sélection dans le formulaire (JPEG/PNG/WebP, 4 Mo, 6 max, validation côté client identique au serveur) ; envoi **après** la création réussie du dossier, fichier par fichier, via le point d’entrée documents privés existant ; échec partiel conservé dans une file avec « Réessayer » sans recréer la demande ; panneau d’état dans le détail (particulier et entreprise) ; aucun envoi anonyme (brouillon public : photos non conservées, dit explicitement) ; démonstration : aucun envoi, dit explicitement.
 - **Accessibilité** (audit interne) : menus hors écran rendus `inert` quand fermés, arrière-plan `inert` quand ouverts, retour de focus (Échap, fermeture d’aide), suppression des liens d’évitement doublons, compteurs avec texte lecteur d’écran, cibles ≥ 44 px, libellés de cases « écriture » par site, zones `role="status"`.
 - **Entreprise** : validité d’invitation bornée 1–14 jours (serveur).
-- **En cours (agents internes, fichiers distincts)** : Super Admin — liste serveur paginée/recherche et détail d’ancien dossier selon `WEB_PWA_ADMIN_LISTS_CONTRACT.md` (d910eec ; backend d85da06 en revue) derrière détection d’indisponibilité ; artisan — densité M35 (lignes compactes, explications repliées dans « Base de calcul »).
-- Contrôles : typecheck OK, `tests/ui` 31/31 ; build complet confié au CI (disque local plein).
+- **Artisan — densité M35 (VIS-001)** livrée en 529fe0f : lignes de mission compactes (titre, adresse + statut en ligne, horaire ou « Horaire à fixer » en libellé discret), performance à libellés courts, formules et réserves repliées dans « Base de calcul » (élément `details` natif), aucune métrique ni horaire inventé.
+- **Super Admin — liste serveur paginée (WEB-PWA-ADMIN-LISTS-001)** livrée en c2796f2 : curseur + pile de retour, total serveur exact, filtres statut/catégorie/urgence, recherche littérale validée (2–80 caractères, lettres/chiffres/espaces/tirets/apostrophes, UUID complet = référence exacte), tailles 25/50/100, états vide/indisponible honnêtes, ancienne liste 100 lignes uniquement en repli explicite ; détail de tout dossier avec devis bornés (50) et mention de troncature. Filtres site/artisan/dates non exposés dans cette passe (aucun sélecteur de site admin ni primitive de période) ; proposition : entrée « filtrer par artisan » depuis la fiche artisan.
+- **En cours (agent interne)** : artisan — éditeur de brouillon de devis (ART-07) selon `WEB_PWA_QUOTE_DRAFT_CONTRACT.md` avec repli sur l’envoi direct tant que la route n’est pas active.
+- **Revue photos (rapport indépendant sur 6962be6) corrigée en fcc7f6b** : PHOTO-REV-001 résultat incertain (réseau 0 / réponse inexploitable 502) distingué d’un refus, libellé honnête, rapprochement avec les documents du dossier avant tout renvoi, renvoi des incertaines uniquement sur confirmation explicite (risque de doublon annoncé) ; PHOTO-REV-002 files d’envoi conservées par dossier, jamais écrasées par une nouvelle demande ; PHOTO-REV-003 suppression du brouillon `sessionStorage` liée à la génération d’identité de la chaîne. Tests `tests/ui/uploads.test.ts` (classification, rapprochement, renvoi par défaut vs confirmé, coexistence des files).
+- **Contrat brouillon de devis (WEB-PWA-QUOTE-DRAFT-001, de6091d)** lu ; lot ART-07 planifié après pagination admin et densité artisan : charger l’enveloppe, conserver version/assignment_token/base_quote_id, 409 = conflit avec rechargement et conservation de la saisie, sauvegarde ≠ envoi, sélection du `quote_id` renvoyé.
+- Contrôles : typecheck OK, `tests/ui` 37/37 ; build complet confié au CI (disque local plein).
 
 ## Prochain livrable (checkpoint 3 bis)
 

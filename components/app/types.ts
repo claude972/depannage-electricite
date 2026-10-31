@@ -498,6 +498,8 @@ export type Capabilities = {
   payments: ContractState;
   siteAccess: ContractState;
   adminLists: ContractState;
+  quoteDraft: ContractState;
+  adminDirectory: ContractState;
 };
 export const UNKNOWN_CAPABILITIES: Capabilities = {
   operations: "unknown",
@@ -509,6 +511,8 @@ export const UNKNOWN_CAPABILITIES: Capabilities = {
   payments: "unknown",
   siteAccess: "unknown",
   adminLists: "unknown",
+  quoteDraft: "unknown",
+  adminDirectory: "unknown",
 };
 export type ReturnContext =
   | { kind: "payment"; state: "pending" | "cancelled"; interventionId: string }
@@ -562,15 +566,20 @@ export type View =
 
 // Photos selected with a request are uploaded one by one AFTER the dossier exists; failures
 // stay in the queue for an explicit retry that never recreates the dossier.
+// "uncertain": the connection dropped or the reply was unusable after the request left; the
+// file may be stored. It is re-sent only after an explicit verification/confirmation.
 export type UploadItem = {
   key: string;
   file: File;
-  status: "pending" | "uploading" | "done" | "failed";
+  status: "pending" | "uploading" | "done" | "failed" | "uncertain";
   error?: string;
   documentId?: string;
+  /** Same-name documents of the dossier, shown to the USER for verification; never auto-confirmed. */
+  candidates?: { id: string; name: string; created_at: string }[];
 };
 export type UploadQueue = {
   interventionId: string;
+  startedAt: string;
   items: UploadItem[];
 };
 
@@ -608,4 +617,72 @@ export type AdminInterventionDetail = {
   quotes: Quote[];
   quotes_limit: number;
   quotes_limited: boolean;
+};
+
+// Contract WEB-PWA-QUOTE-DRAFT-001 (published before implementation): private persistent quote
+// draft of the assigned artisan, optimistic version and assignment token. Saving is never sending.
+export type QuoteDraft = {
+  intervention_id: string;
+  artisan_id: string;
+  version: number;
+  assignment_token: string;
+  base_quote_id: string | null;
+  lines: Line[];
+  tax_rate: number | null;
+  updated_at: string;
+};
+export type QuoteDraftEnvelope = {
+  draft: QuoteDraft | null;
+  version: number;
+  assignment_token: string;
+  current_quote_id: string | null;
+  /** Present only in the answer of a successful send. */
+  quote_id?: string;
+  intervention?: Intervention;
+};
+export type QuoteDraftCommand =
+  | {
+      action: "save";
+      expected_version: number;
+      assignment_token: string;
+      base_quote_id: string | null;
+      lines: Line[];
+      tax_rate: number | null;
+    }
+  | { action: "discard"; expected_version: number; assignment_token: string }
+  | { action: "send"; expected_version: number; assignment_token: string };
+export type QuoteDraftResult =
+  | { ok: true; envelope: QuoteDraftEnvelope }
+  | { ok: false; conflict: true; message: string }
+  | { ok: false; conflict: false; message: string };
+
+// Contract WEB-PWA-ADMIN-DIRECTORIES-001: keyset-paginated admin directories with exact totals.
+export type DirectoryKind = "artisans" | "clients" | "organizations";
+export type DirectoryArtisan = {
+  id: string;
+  full_name: string;
+  phone: string;
+  artisan_approved: boolean;
+  created_at: string;
+  company_name: string | null;
+  application_status: ArtisanApplicationStatus | null;
+};
+export type DirectoryClient = { id: string; full_name: string; phone: string; role: "client" | "manager"; created_at: string };
+export type DirectoryOrganization = { id: string; name: string; owner_id: string; created_at: string };
+export type DirectoryItem<K extends DirectoryKind> = K extends "artisans"
+  ? DirectoryArtisan
+  : K extends "clients"
+    ? DirectoryClient
+    : DirectoryOrganization;
+export type DirectoryFilters = {
+  q?: string;
+  approved?: boolean;
+  role?: "client" | "manager";
+  owner_id?: string;
+};
+export type DirectoryPage<K extends DirectoryKind = DirectoryKind> = {
+  kind: K;
+  items: DirectoryItem<K>[];
+  page: { limit: number; has_more: boolean; next_cursor: string | null; total: number };
+  filters: { q: string | null; approved: boolean | null; role: string | null; owner_id: string | null };
 };

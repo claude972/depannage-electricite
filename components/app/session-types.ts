@@ -12,6 +12,10 @@ import type {
   ArtisanPerformanceReport,
   Capabilities,
   Category,
+  DirectoryFilters,
+  DirectoryItem,
+  DirectoryKind,
+  DirectoryPage,
   InterventionAction,
   InvitationCreated,
   Mode,
@@ -22,6 +26,9 @@ import type {
   PaymentStatusReport,
   ProfessionalData,
   Profile,
+  QuoteDraftCommand,
+  QuoteDraftEnvelope,
+  QuoteDraftResult,
   RequestValues,
   ReturnContext,
   Role,
@@ -120,8 +127,22 @@ export interface Session {
   loadAdminOverview(): Promise<AdminOverview | null>;
   /** Admin dossier list, server-paginated (cursor) and filtered; null when unavailable. */
   loadAdminInterventions(params: AdminListFilters & { limit?: number; cursor?: string | null }): Promise<AdminInterventionsPage | null>;
+  /** Admin directories (artisans / clients / organisations), keyset-paginated with exact totals; null when unavailable. */
+  loadAdminDirectory<K extends DirectoryKind>(
+    kind: K,
+    params: DirectoryFilters & { limit?: number; cursor?: string | null },
+  ): Promise<DirectoryPage<K> | null>;
+  /** Minimal detail of one directory entry outside the loaded window; null when absent/unavailable. */
+  loadAdminDirectoryItem<K extends DirectoryKind>(kind: K, id: string): Promise<DirectoryItem<K> | null>;
   /** Admin detail of any dossier (not limited to the 100 loaded in workspace), with bounded quotes. */
   loadAdminIntervention(id: string): Promise<AdminInterventionDetail | null>;
+  /** Quote draft envelope of the assigned artisan (contract QUOTE-DRAFT-001); null when unavailable. */
+  loadQuoteDraft(interventionId: string): Promise<QuoteDraftEnvelope | null>;
+  /**
+   * save / discard / send on the draft. A 409 is returned as a conflict (the caller keeps the
+   * typed lines and offers a reload); a successful send returns the exact created quote_id.
+   */
+  quoteDraftCommand(interventionId: string, body: QuoteDraftCommand): Promise<QuoteDraftResult>;
   /** Organisation membership read model (GET /api/organizations?organization_id=). */
   loadOrganization(organizationId: string): Promise<OrganizationOverview | null>;
   /** Owner-only member commands; create_invitation resolves with the one-time code. */
@@ -139,12 +160,17 @@ export interface Session {
 
   /** Creates the dossier, then uploads the given photos one by one (live only). */
   createIntervention(values: RequestValues, photos?: File[]): Promise<boolean>;
-  /** Photos of the last created dossier still pending or failed; null when nothing is queued. */
-  uploads: UploadQueue | null;
-  /** Retries the failed/pending uploads of the queue without touching the dossier. */
-  retryUploads(): Promise<boolean>;
-  /** Drops the queue (files stay on the device; nothing is deleted on the server). */
-  dismissUploads(): void;
+  /** Photo queues per dossier (pending, failed or uncertain items); never overwritten by a new request. */
+  uploads: UploadQueue[];
+  /**
+   * Retries a dossier's queue: refused/pending files are re-sent; uncertain files are first
+   * reconciled against the dossier's stored documents and re-sent only when `resendUncertain`.
+   */
+  retryUploads(interventionId: string, options?: { resendUncertain?: boolean }): Promise<boolean>;
+  /** User confirms that an existing document (listed as candidate) is the uncertain photo. */
+  acknowledgeUpload(interventionId: string, key: string, documentId: string): void;
+  /** Drops a dossier's queue (files stay on the device; nothing is deleted on the server). */
+  dismissUploads(interventionId: string): void;
   sendMessage(interventionId: string, body: string): Promise<boolean>;
   submitReview(interventionId: string, values: { rating: number; body: string }): Promise<boolean>;
   createSite(values: { name: string; type: string; address: string; budget_cents: number; organization_id?: string }): Promise<boolean>;
