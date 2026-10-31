@@ -125,3 +125,47 @@ type PanelProps<T> = {
 - Raccordement session/menus/coque entreprise (lead WEB-SHARED-001) ; captures d’écran sur maquette.
 - Application de la migration 017 sur une base, recette hébergée, revue indépendante (Codex).
 - Toute déduction automatique de faits SLA depuis les dossiers (hors contrat : les faits restent saisis par l’organisation).
+
+## Amendement A1 — alignement sur le contrat partagé WEB-SHARED-001 (correction lead sur 86bb3f3)
+
+Référence : `docs/CLAUDE_WEB_SHARED_CONTRACT.md` (claude/web-shared a29f732). La section « Composants feuilles » ci-dessus est **remplacée** par ce qui suit ; l’historique est conservé. Modèle de données, RLS, RPC, API et règles SLA sont inchangés.
+
+### Surface d’intégration unique
+
+Un seul point d’entrée exporté : `SiteOperationsView` dans `components/features/site-operations/site-operations-view.tsx`, prenant **exactement** les props normalisées. Les panneaux internes (équipements, maintenance, budget, grilles, SLA, ERP, historique) ne sont pas une surface d’intégration ; ils sont rendus par ce composant sous forme d’onglets accessibles.
+
+```ts
+// lib/features/site-operations/types.ts — aucun import de components/app/**
+export type SiteOperationsState = "unknown" | "available" | "missing" | "unavailable";
+export type SiteOperationsScope = {
+  userId: string; role: string; organizationId?: string; siteId?: string;
+  authority: { canWrite: boolean; reason?: string };
+};
+export type SiteOperationsClient = {
+  load(siteId: string): Promise<SiteOperationsReport | null>;          // null = chaîne périmée
+  command(command: SiteOperationsCommand): Promise<SiteOperationsCommandResult | null>; // null = chaîne périmée
+};
+export type SiteOperationsViewProps = {
+  state: SiteOperationsState;
+  scope: SiteOperationsScope;
+  client: SiteOperationsClient;
+  unavailableMessage: string;
+  demo?: SiteOperationsReport;
+  onNavigate?(view: string, param?: string): void;
+};
+```
+
+Règles appliquées par `SiteOperationsView` :
+1. `client` obligatoire et injecté ; aucun `fetch` dans le dossier `components/features/site-operations/**`. Le chargement passe par `client.load(scope.siteId)` au montage et à chaque rechargement ; sans `scope.siteId`, état vide « choisissez un site » sans requête. `demo` fourni → rendu direct sans appel `load` ; les commandes restent celles de `client`.
+2. Un résultat `null` de `client.load`/`client.command` est une chaîne périmée : ni message de succès, ni mise à jour d’état, ni réinitialisation de formulaire.
+3. Changement de `scope` (`userId`, `organizationId`, `siteId`) : le contenu est remonté (`key`), ce qui efface formulaires, brouillons et données chargées, puis recharge.
+4. `scope.authority.canWrite === false` : aucun contrôle d’écriture (boutons, formulaires, actions de pause/publication) ; la raison `scope.authority.reason` est affichée dans un bloc lecture seule. Les écritures d’organisation (exercices, calendriers, grilles) exigent en plus `snapshot.limits.can_write_organization` renvoyé par le serveur. Tout refus serveur est rendu tel quel ; viewer ou grant retiré = lecture seule sans recalcul côté composant.
+5. `state ≠ "available"` : bloc indisponible avec `unavailableMessage` (attribut `data-blocker="site-operations"`), aucune donnée de remplacement, aucune commande.
+6. `onNavigate` optionnel : seul moyen de naviguer (liens vers un dossier d’intervention) ; jamais `location.hash`.
+7. Démonstration : graines synthétiques dans `lib/features/site-operations/demo.ts`, étiquetées « démonstration » dans leurs libellés, jamais mélangées aux données réelles.
+
+### Clés, vue et chargeurs (réservés par le lead)
+
+- `Capabilities.siteOperations`, sonde `GET /api/site-operations?site_id=<site actif>` ; vue `site-operations` (param : id de site) ; rôle manager (lecture viewer/gestionnaire, écriture selon grant).
+- Chargeurs lead : `load = (siteId) => api<SiteOperationsReport>(\`/api/site-operations?site_id=${siteId}\`)` ; `command = (c) => api<SiteOperationsCommandResult>("/api/site-operations", c)` bornés par `runForResult`.
+- `scope.authority` = `{ canWrite: enterpriseAuthority(role, scope).canWriteSite(siteId), reason: readOnlyReason ?? undefined }`.
