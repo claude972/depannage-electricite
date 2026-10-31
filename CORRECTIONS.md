@@ -225,3 +225,95 @@ Ce journal ne constitue pas une revue passée ; aucune affectation terminée à 
 - codex implement_organization_members :006 et contrats fe0f4d3 ; invitations securemanualshare liéesemailAuthvérifié, membres/rôles owner ; périmètre site/payeur horslot
 - codex implement_artisan_performance :007 et contrats b1ba515 ; agrégats globaux artisan/parpériode et rendez-vousworkspace, aucune métrique chargée partielle présentée comme totale
 - ownership séparée sur routes/migrations/harness/docs ; builds/index coordonnés ; aucun codefronttouché. Relais toutcodeClaude demeure00:00 America/Martinique.
+
+## WEB-PWA-REVIEW-001 / claude — rapport reçu
+- timestamp: 2026-10-30T22:15:26-04:00 (America/Martinique)
+- reviewer/session: Claude c38a6bc4-5051-4ba1-acca-3fd4b37445d2 ; CLIprint lectureseule
+- reviewed exact revision:6aaa1b36b99e64de4e0544780c8234c508cc1fd5
+- checks réellement exécutés parClaude : npmtest28/28, TypeScript, SQLisolé22 groupes, sonde suspension ; pas cloud/build/preview par ce reviewer
+- résultat : PWA001/PWA002/APIQUOTE001 codecorrects danspérimètre ; deux findings CL-001/CL-002 ci-dessous. Le test PWApreview13 a été effectué séparément ensuitepar QA, ne pas confondre preuves.
+- status: ready_for_review du rapport ; mission globale restein_progress tantque corrections/intégration nonfinies
+
+## Finding CL-001 — Suspension effaçable côté candidature
+- reviewer: claude, revue WEB-PWA-REVIEW-001
+- assigned agent: codex avant00h, puis Claude au relais si encours
+- reviewed branch/revision: codex/web-pwa-backend /6aaa1b36b99e64de4e0544780c8234c508cc1fd5
+- evidence:003 save_artisan_profile remet draft mêmeaprès suspended, puis submit possible ; disponibilité true aussiacceptée. ReproduitSQLparClaude ; pas d’accèsmission car artisan_approved restefalse, mais gouvernancesuspensioncontournée.
+- expected correction: suspension persistante jusqu’à actionopérateur explicite ; pasde resetpar save/submit/dispo ; réactivations contrôlées et lockordercohérent ; tests suspended→edit→submit/dispo, opérateurreactivation, helpersprivés
+- status: open
+- fix commit: àvenir
+- recheck evidence: reproClaude confirmé ; correction demandée
+
+## Finding CL-002 — Filtre des missions trop large
+- reviewer: claude
+- assigned agent: codex avant00h, puis Claude aurelais
+- reviewed branch/revision: codex/web-pwa-backend /6aaa1b36b99e64de4e0544780c8234c508cc1fd5
+- evidence:available_missions appelle helpersecuritydefiner sur ensembleinterventions sans prédicat externe requested/artisanNULL, dont dossierspayés/annulés
+- expected correction: prédicats externes requested et artisan_idisnull avant éligibilité, préserver tri/limite/anonymisation et permissions
+- status: open
+- fix commit: àvenir
+- recheck evidence: revuecode ; pas testperfcloud
+
+### Texte du rapport Claude (sans transcript)
+
+# Rapport de revue croisée Claude — WEB-PWA-REVIEW-001
+
+Affectation revendiquée : uniquement « Claude review assignment » de WEB-PWA-REVIEW-001 (branche claude/web-pwa-review, worktree depannage-web-pwa-review). Lecture seule, aucun code modifié, aucune interaction avec la session frontend b4b555f0.
+
+**SHA revu :** `6aaa1b36b99e64de4e0544780c8234c508cc1fd5` (diff `3c1ca2c..6aaa1b3`, 6 commits).
+
+## Sources lues
+- Distant : MISSIONS.md et CORRECTIONS.md de `origin/missions/web-pwa` (dont PWA-001, PWA-002, API-QUOTE-001).
+- Projet : AGENTS.md, DESIGN.md, CLAUDE.md, WEB_PWA_CONTRACTS.md, CODEX_BACKEND_VERIFICATION.md, PWA_VERIFICATION.md.
+- Code : migrations 001 à 005, routes artisan, operations, actions, admin/overview, workspace, payments checkout/webhook/status, documents en contexte, lib payment-events, server, validation, stripe, manifest, sw.js, pwa-registration, next.config, layout, offline.html, tests PWA/payment-events/sql-review, test pgTAP, workflow CI.
+
+## Contrôles réellement exécutés
+
+| Contrôle | Résultat |
+|---|---|
+| `npm test` | 28/28 passent |
+| `npm run typecheck` | passe |
+| `node tests/sql-review.mjs` avec PGlite 0.5.13 (stubs Auth/Storage) | 22 groupes PASS |
+| Sonde PGlite ad hoc pour CL-001 | reproduit |
+| Build, Supabase distant, Stripe, preview, installation navigateur | non exécutés |
+
+## Recontrôle des corrections annoncées
+- **PWA-001** : `requestPwaUpdate` recharge si le worker n'est plus `installed` ou est déjà contrôleur, sinon poste ACTIVATE_UPDATE. Rechargement uniquement après clic. Correct, testé.
+- **PWA-002** : install fetch same-origin, redirect error, URL exacte sans query, marqueur posé par next.config sur /offline.html seul, content-type HTML. Échec initial distingué de l'obsolescence ultérieure. Correct, testé.
+- **API-QUOTE-001** : signature 5 paramètres, `accept_quote` exige le devis actif exact sous verrou, `p_quote_id` refusé ailleurs, anciens helpers révoqués, route exige quote_id. Correct, testé en SQL.
+
+## Vérifications ciblées sans finding
+- EXECUTE/RLS : toutes les nouvelles fonctions révoquées puis accordées explicitement, helpers internes privés, nouvelles tables en RLS select seul.
+- Révocation B2B : helpers d'accès fondés sur l'appartenance courante, documents et storage alignés, review/garantie/messages suivent.
+- Verrous et idempotence : dossier verrouillé avant tout contrôle, ordre quote → payment → attempt identique entre succès et échec, clé d'idempotence Stripe par session précédente.
+- Paiements : aucune rétrogradation d'un paiement payé, événement tardif d'une ancienne session sans effet sur la tentative courante.
+- PWA : seul /offline.html en cache, navigations no-store jamais mises en cache, /api, /auth, non-GET, non-navigate et autres origines non interceptés.
+
+## Findings actionnables
+
+**CL-001 — Un artisan suspendu remet lui-même son dossier en `draft` puis `submitted`** (Moyenne)
+- `supabase/migrations/202610310003_web_operations.sql:69-82` et `:83-92`, aussi `:93-101`.
+- `save_artisan_profile` force `application_status='draft'` sans tester le statut courant. `submit_artisan_application` accepte ensuite `draft`.
+- Reproduit en PGlite : suspendu → submit refusé (22023) → save_profile accepté → draft → submit accepté → `pending_applications=1`. La ligne admin affiche `submitted`, indiscernable d'une première candidature. `set_artisan_availability(true)` est aussi accepté pendant la suspension.
+- Pas d'accès données : `artisan_approved` reste false. Problème de gouvernance de la suspension.
+- Correction : lever `insufficient_privilege` dans `save_artisan_profile` et `set_artisan_availability` si statut `suspended`, ou porter la suspension dans une colonne que seul `approve_artisan` lève. Ajouter le scénario au script SQL.
+
+**CL-002 — `available_missions` évalue `mission_eligible` sur toute la table** (Basse, performance)
+- `supabase/migrations/202610310003_web_operations.sql:127-131`.
+- Aucun prédicat externe. La fonction SECURITY DEFINER n'est pas inlinable et s'exécute pour chaque intervention, y compris payées ou annulées. L'index partiel sur `status='requested'` reste inutilisé.
+- Correction : ajouter `where i.status='requested' and i.artisan_id is null` avant l'appel à `mission_eligible`.
+
+Aucun autre finding bloquant dans le périmètre.
+
+## Dépendances d'intégration, pas des régressions Codex
+- Le frontend présent à ce SHA appelle `accept_quote` sans quote_id (`components/courant-app.tsx:1887`). Il recevra 422 en mode live. Déjà consigné sous API-QUOTE-001 pour l'affectation UI.
+- Dossier B2B dont le créateur a quitté l'organisation : plus aucun payeur possible. Blocage délibéré documenté.
+
+## Limites restantes
+- Pas de Supabase ni Stripe distants. RLS, Auth, Storage et webhooks validés uniquement par PGlite avec stubs. Pas de preuve de concurrence réelle.
+- Installation, offline et mise à jour non vérifiés en navigateur ni sur preview. PWA-002 reste à retester en ligne.
+- Preview protégé par SSO : le navigateur récupère le manifeste sans cookies par défaut. Le critère « installable » peut donc échouer sur preview sans défaut du code. Tester sur un déploiement non protégé ou ajouter `crossorigin="use-credentials"` au lien manifest pendant le test.
+- Build non exécuté pour éviter une course sur `.next` dans le checkout partagé.
+- Factures, remboursements, payouts, équipes, calendrier : absents et déclarés absents, aucun considéré livré.
+
+Rapport complet également écrit dans `/Users/claudebrafa/.claude/plans/you-are-claude-independent-wobbly-charm.md`.

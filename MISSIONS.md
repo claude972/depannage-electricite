@@ -68,7 +68,7 @@ Objective: revue indépendante Claude du code Codex exact (003/004/005, API, dro
 Shared contracts/dependencies: lire mission WEB-PWA-20261030 et rapports ; verdict borné au SHA exact, findings sourcés et tests effectivement exécutés ; Supabase/Stripe distants non disponibles, ne pas les déclarer passés.
 ### Claude review assignment
 - agent: claude
-- status: pending
+- status: ready_for_review
 - branch: claude/web-pwa-review
 - worktree: /Volumes/Stockage/Projets/depannage-web-pwa-review
 - deliverables: rapport de revue exactSHA, problèmes concrets ou absence de finding dans périmètre, résultats des contrôles et limites
