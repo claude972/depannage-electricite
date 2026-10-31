@@ -67,6 +67,20 @@ import {
 } from "../app/session";
 import type { Session } from "../app/session-types";
 import { UploadQueuePanel } from "../app/upload-queue";
+import {
+  NO_FILTERS,
+  budgetFigures,
+  budgetTone,
+  filterInterventions,
+  isFiltered,
+  pageWindow,
+  reconcileFilters,
+  siteAlertSummary,
+  siteAlerts,
+  wholePercent,
+  type InterventionFilters,
+  type ListContext,
+} from "./enterprise-lists";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
 import type {
   Approval,
@@ -219,13 +233,16 @@ function siteFigures(site: Site, data: Workspace) {
       .map((p) => p.total_cents),
   );
   const budget = site.budget_cents || 0;
+  // `ratio` est le taux réel (peut dépasser 100), `width` la seule valeur plafonnée (barre).
+  const { ratio, width, over } = budgetFigures(committed, budget);
   return {
     budget,
     committed,
     paid,
     remaining: budget - committed,
-    ratio: budget > 0 ? Math.min(100, (committed / budget) * 100) : 0,
-    over: budget > 0 && committed > budget,
+    ratio,
+    width,
+    over,
     count: mine.length,
     open: mine.filter((i) => OPEN_STATUSES.includes(i.status)).length,
   };
@@ -476,7 +493,7 @@ export function EnterpriseSpace({ session }: { session: Session }) {
         </button>
         <button type="button" className={styles.brandButton} onClick={() => go("overview")}>
           <Brand compact />
-          <span className={styles.brandSub}>Espace entreprise</span>
+          <span className={styles.brandSub}>Portail entreprise</span>
         </button>
         <div className={styles.topbarActions}>
           <button
@@ -582,20 +599,24 @@ export function EnterpriseSpace({ session }: { session: Session }) {
               <NavButton key={n.view} item={n} active={activeNav === n.view} onClick={() => go(n.view)}
                 count={n.view === "approvals" ? pendingApprovals : 0} />
             ))}
-            <span className={styles.navCaption}>Organisation</span>
+            <span className={styles.navDivider} role="separator" />
             {NAV.filter((n) => n.section === "more").map((n) => (
               <NavButton key={n.view} item={n} active={activeNav === n.view} onClick={() => go(n.view)} />
             ))}
           </nav>
           <div className={styles.sidebarBottom}>
+            <button type="button" className={styles.sidebarHelp} onClick={() => go("support")}>
+              <Icon name="help" size={20} />
+              <span>
+                <strong>Besoin d’aide ?</strong>
+                Ouvrir une demande d’assistance
+              </span>
+              <Icon name="arrow" size={16} />
+            </button>
             <button type="button" className={styles.navItem} onClick={() => void session.logout()}>
               <Icon name="logout" />
               Se déconnecter
             </button>
-            <div className={styles.sidebarHelp}>
-              <strong>{organization?.name || "Aucune organisation"}</strong>
-              {activeSite ? `Site filtré : ${activeSite.name}` : "Tous les sites de l’organisation"}
-            </div>
           </div>
         </aside>
 
@@ -785,140 +806,178 @@ function ContextBar({
   );
 }
 
-// ---- Tableau d’interventions (M66 / M4) -------------------------------------------------
+// ---- Tableau d’interventions (M4 structure, M66 lignes) -----------------------------------
+const timeOf = (value: string) =>
+  new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+
+type InterventionList = ReturnType<typeof useInterventionList>;
+function useInterventionList(c: Ctx) {
+  const { scope } = c;
+  const [filters, setFilters] = useState<InterventionFilters>(NO_FILTERS);
+  const [page, setPage] = useState(1);
+  // Périmètre global vu au dernier rendu : un changement d’organisation ou de site global
+  // invalide le filtre local de site (sélecteur masqué) et ramène à la première page.
+  const context: ListContext = { organizationId: c.organization?.id || "", siteId: c.activeSite?.id || "" };
+  const [seen, setSeen] = useState(context);
+  const reconciled = reconcileFilters(
+    filters,
+    seen,
+    context,
+    scope.sites.map((s) => s.id),
+  );
+  if (seen.organizationId !== context.organizationId || seen.siteId !== context.siteId) setSeen(context);
+  if (reconciled.reset) {
+    if (reconciled.filters !== filters) setFilters(reconciled.filters);
+    if (page !== 1) setPage(1);
+  }
+  const siteName = (id?: string | null) => scope.sites.find((s) => s.id === id)?.name || "";
+  // Le prédicat effectif ne croise jamais un site local avec un périmètre incompatible.
+  const effective = reconciled.filters;
+  const rows = filterInterventions(scope.interventions, effective, (i) =>
+    [siteName(i.site_id), i.description, shortId(i.id), fullAddress(i), category(i.category).label].join(" "),
+  );
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const current = Math.min(reconciled.reset ? 1 : page, pages);
+  return {
+    filters: effective,
+    rows,
+    pageRows: rows.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE),
+    current,
+    pages,
+    filtered: isFiltered(effective),
+    siteName,
+    setPage,
+    set: <K extends keyof InterventionFilters>(key: K, value: InterventionFilters[K]) => {
+      setFilters((f) => ({ ...f, [key]: value }));
+      setPage(1);
+    },
+    reset: () => {
+      setFilters((f) => ({ ...NO_FILTERS, sort: f.sort }));
+      setPage(1);
+    },
+    exportCsv: () =>
+      download(
+        "courant-interventions.csv",
+        csv([
+          ["Référence", "Site", "Type", "Statut", "Adresse", "Estimation min (EUR)", "Estimation max (EUR)", "Date"],
+          ...rows.map((i) => [
+            shortId(i.id),
+            siteName(i.site_id) || "Hors site",
+            category(i.category).label,
+            STATUS[i.status],
+            fullAddress(i),
+            (i.estimate_min_cents / 100).toFixed(2),
+            (i.estimate_max_cents / 100).toFixed(2),
+            dateTime(i.created_at),
+          ]),
+        ]),
+        "text/csv;charset=utf-8",
+      ),
+  };
+}
+
+function ExportButton({ list }: { list: InterventionList }) {
+  return (
+    <button type="button" className="button outline" onClick={list.exportCsv} disabled={!list.rows.length}>
+      <Icon name="download" size={17} />
+      Exporter
+    </button>
+  );
+}
+
+// Carte de filtres séparée, au-dessus du tableau (M4) ; recherche reprise de M66.
+function InterventionFiltersCard({ c, list }: { c: Ctx; list: InterventionList }) {
+  const { filters: f, set } = list;
+  return (
+    <div className={cx("panel", styles.filtersCard)} role="search" aria-label="Filtres des interventions">
+      {!c.activeSite && (
+        <label className={styles.filterField}>
+          Site
+          <select value={f.site} onChange={(e) => set("site", e.target.value)}>
+            <option value="">Tous les sites</option>
+            {c.scope.sites.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <label className={styles.filterField}>
+        Type d’intervention
+        <select value={f.type} onChange={(e) => set("type", e.target.value)}>
+          <option value="">Tous les types</option>
+          {CATEGORIES.map((cat) => (
+            <option key={cat.id} value={cat.id}>
+              {cat.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className={styles.filterField}>
+        Statut
+        <select value={f.status} onChange={(e) => set("status", e.target.value)}>
+          <option value="">Tous les statuts</option>
+          {(Object.keys(STATUS) as Status[]).map((s) => (
+            <option key={s} value={s}>
+              {STATUS[s]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className={cx(styles.filterField, styles.filterSearch)}>
+        Recherche
+        <span className={styles.searchInput}>
+          <Icon name="search" size={16} />
+          <input
+            type="search"
+            value={f.search}
+            maxLength={120}
+            placeholder="Site, référence, adresse…"
+            onChange={(e) => set("search", e.target.value)}
+          />
+        </span>
+      </label>
+      <button type="button" className={styles.resetButton} onClick={list.reset} disabled={!list.filtered}>
+        <Icon name="refresh" size={16} />
+        Réinitialiser
+      </button>
+    </div>
+  );
+}
+
 function InterventionsTable({
   c,
+  list,
   title,
-  exportable = false,
   emptyAction,
 }: {
   c: Ctx;
+  list: InterventionList;
   title: string;
-  exportable?: boolean;
   emptyAction?: ReactNode;
 }) {
-  const { scope, activeSite } = c;
-  const [siteFilter, setSiteFilter] = useState("");
-  const [typeFilter, setTypeFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const siteName = (id?: string | null) => scope.sites.find((s) => s.id === id)?.name || "";
-  const needle = search.trim().toLowerCase();
-  const rows = byDateDesc(scope.interventions).filter(
-    (i) =>
-      (!siteFilter || i.site_id === siteFilter) &&
-      (!typeFilter || i.category === typeFilter) &&
-      (!statusFilter || i.status === statusFilter) &&
-      (!needle ||
-        [siteName(i.site_id), i.description, shortId(i.id), fullAddress(i), category(i.category).label]
-          .join(" ")
-          .toLowerCase()
-          .includes(needle)),
-  );
-  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-  const current = Math.min(page, pages);
-  const pageRows = rows.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
-  const filtered = Boolean(siteFilter || typeFilter || statusFilter || needle);
-  const reset = () => {
-    setSiteFilter("");
-    setTypeFilter("");
-    setStatusFilter("");
-    setSearch("");
-    setPage(1);
-  };
-  const update = (setter: (v: string) => void) => (v: string) => {
-    setter(v);
-    setPage(1);
-  };
-  function exportCsv() {
-    download(
-      "courant-interventions.csv",
-      csv([
-        ["Référence", "Site", "Type", "Statut", "Adresse", "Estimation min (EUR)", "Estimation max (EUR)", "Date"],
-        ...rows.map((i) => [
-          shortId(i.id),
-          siteName(i.site_id) || "Hors site",
-          category(i.category).label,
-          STATUS[i.status],
-          fullAddress(i),
-          (i.estimate_min_cents / 100).toFixed(2),
-          (i.estimate_max_cents / 100).toFixed(2),
-          dateTime(i.created_at),
-        ]),
-      ]),
-      "text/csv;charset=utf-8",
-    );
-  }
+  const { rows, pageRows, current, pages, filtered, siteName } = list;
+  const headingId = useId();
+  const count = `${rows.length} intervention${rows.length > 1 ? "s" : ""}`;
   return (
-    <section className={cx("panel", styles.tablePanel)} aria-labelledby="interventions-table-title">
+    <section className={cx("panel", styles.tablePanel)} aria-labelledby={headingId}>
       <div className={styles.tableHead}>
-        <div>
-          <h2 id="interventions-table-title">{title}</h2>
-          <p className={styles.muted}>
-            {rows.length} dossier{rows.length > 1 ? "s" : ""}
-            {filtered ? " après filtres" : ""} · {LOADED_NOTE.toLowerCase()}
-          </p>
-        </div>
-        {exportable && (
-          <div className={styles.tableHeadActions}>
-            <button type="button" className="button outline" onClick={exportCsv} disabled={!rows.length}>
-              <Icon name="download" size={17} />
-              Exporter CSV
-            </button>
-          </div>
-        )}
-      </div>
-      <div className={styles.filters} role="search" aria-label="Filtres des interventions">
-        {!activeSite && (
-          <label className={styles.filterField}>
-            Site
-            <select value={siteFilter} onChange={(e) => update(setSiteFilter)(e.target.value)}>
-              <option value="">Tous les sites</option>
-              {scope.sites.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <label className={styles.filterField}>
-          Type
-          <select value={typeFilter} onChange={(e) => update(setTypeFilter)(e.target.value)}>
-            <option value="">Tous les types</option>
-            {CATEGORIES.map((cat) => (
-              <option key={cat.id} value={cat.id}>
-                {cat.label}
-              </option>
-            ))}
+        <h2 id={headingId}>
+          {count}
+          {filtered ? " après filtres" : ""}
+          <span className="sr-only"> — {title}</span>
+        </h2>
+        <label className={styles.sortField}>
+          Trier par :
+          <select
+            value={list.filters.sort}
+            onChange={(e) => list.set("sort", e.target.value as InterventionFilters["sort"])}
+          >
+            <option value="recent">Date de création (récent)</option>
+            <option value="oldest">Date de création (ancien)</option>
           </select>
         </label>
-        <label className={styles.filterField}>
-          Statut
-          <select value={statusFilter} onChange={(e) => update(setStatusFilter)(e.target.value)}>
-            <option value="">Tous les statuts</option>
-            {(Object.keys(STATUS) as Status[]).map((s) => (
-              <option key={s} value={s}>
-                {STATUS[s]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className={cx(styles.filterField, styles.filterSearch)}>
-          Recherche
-          <input
-            type="search"
-            value={search}
-            maxLength={120}
-            placeholder="Site, référence, adresse, description…"
-            onChange={(e) => update(setSearch)(e.target.value)}
-          />
-        </label>
-        <button type="button" className={styles.resetButton} onClick={reset} disabled={!filtered}>
-          <Icon name="refresh" size={16} />
-          Réinitialiser
-        </button>
       </div>
       {rows.length === 0 ? (
         <Empty
@@ -926,7 +985,7 @@ function InterventionsTable({
           title={filtered ? "Aucun dossier ne correspond aux filtres" : "Aucune intervention sur ce périmètre"}
           action={
             filtered ? (
-              <button type="button" className="button outline" onClick={reset}>
+              <button type="button" className="button outline" onClick={list.reset}>
                 Réinitialiser les filtres
               </button>
             ) : (
@@ -940,7 +999,7 @@ function InterventionsTable({
         </Empty>
       ) : (
         <>
-          <table className={styles.table}>
+          <table className={cx(styles.table, styles.interventionsTable)}>
             <caption className="sr-only">{title}</caption>
             <thead>
               <tr>
@@ -957,36 +1016,44 @@ function InterventionsTable({
             <tbody>
               {pageRows.map((i) => (
                 <tr key={i.id}>
-                  <td data-label="Site">
-                    <div className={styles.cellMain}>
-                      <span className={styles.cellIcon} aria-hidden="true">
-                        <Icon name="building" size={18} />
-                      </span>
+                  <td className={styles.cellSite}>
+                    <button
+                      type="button"
+                      className={styles.rowOpen}
+                      onClick={() => c.session.openIntervention(i.id)}
+                    >
+                      <Icon name="building" size={22} />
                       <span>
                         <strong>{siteName(i.site_id) || "Hors site"}</strong>
                         <small>{fullAddress(i)}</small>
                       </span>
-                    </div>
+                    </button>
                   </td>
-                  <td data-label="Type">
-                    <div className={styles.cellStack}>
-                      <span>{category(i.category).label}</span>
-                      {urgencyTag(i)}
-                    </div>
+                  <td className={styles.cellType}>
+                    <span>{category(i.category).label}</span>
+                    {urgencyTag(i)}
                   </td>
-                  <td data-label="Artisan">{i.artisan_id ? "Attribué" : "En attente"}</td>
-                  <td data-label="Statut">
+                  <td className={styles.cellArtisan}>
+                    {i.artisan_id ? "Artisan attribué" : <span className={styles.muted}>Recherche en cours</span>}
+                  </td>
+                  <td className={styles.cellStatus}>
                     <Badge status={i.status} />
                   </td>
-                  <td data-label="Date">{dateTime(i.created_at)}</td>
-                  <td data-label="">
+                  <td className={styles.cellDate}>
+                    <time dateTime={i.created_at}>
+                      {date(i.created_at)}
+                      <small>{timeOf(i.created_at)}</small>
+                    </time>
+                  </td>
+                  <td className={styles.cellAction}>
                     <button
                       type="button"
-                      className={cx("button outline", styles.rowAction)}
+                      className={styles.rowMore}
                       onClick={() => c.session.openIntervention(i.id)}
                       aria-label={`Ouvrir le dossier ${shortId(i.id)}`}
+                      title="Ouvrir le dossier"
                     >
-                      Ouvrir
+                      <Icon name="arrow" size={18} />
                     </button>
                   </td>
                 </tr>
@@ -994,30 +1061,49 @@ function InterventionsTable({
             </tbody>
           </table>
           <div className={styles.tableFoot}>
-            <span>Le périmètre est limité aux 100 derniers dossiers chargés.</span>
-            <nav className={styles.pagination} aria-label="Pagination des interventions">
-              <button
-                type="button"
-                className={styles.pageButton}
-                aria-label="Page précédente"
-                disabled={current <= 1}
-                onClick={() => setPage(current - 1)}
-              >
-                <Icon name="back" size={16} />
-              </button>
-              <span className={styles.pageLabel} aria-live="polite">
-                Page {current} / {pages}
-              </span>
-              <button
-                type="button"
-                className={styles.pageButton}
-                aria-label="Page suivante"
-                disabled={current >= pages}
-                onClick={() => setPage(current + 1)}
-              >
-                <Icon name="arrow" size={16} />
-              </button>
-            </nav>
+            <span>
+              {count} · {LOADED_NOTE.toLowerCase()}
+            </span>
+            {pages > 1 && (
+              <nav className={styles.pagination} aria-label="Pagination des interventions">
+                <button
+                  type="button"
+                  className={styles.pageButton}
+                  aria-label="Page précédente"
+                  disabled={current <= 1}
+                  onClick={() => list.setPage(current - 1)}
+                >
+                  <Icon name="back" size={16} />
+                </button>
+                {pageWindow(current, pages).map((n, k) =>
+                  n === null ? (
+                    <span key={`gap-${k}`} className={styles.pageGap} aria-hidden="true">
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={n}
+                      type="button"
+                      className={cx(styles.pageNumber, n === current && styles.pageNumberActive)}
+                      aria-current={n === current ? "page" : undefined}
+                      aria-label={`Page ${n}`}
+                      onClick={() => list.setPage(n)}
+                    >
+                      {n}
+                    </button>
+                  ),
+                )}
+                <button
+                  type="button"
+                  className={styles.pageButton}
+                  aria-label="Page suivante"
+                  disabled={current >= pages}
+                  onClick={() => list.setPage(current + 1)}
+                >
+                  <Icon name="arrow" size={16} />
+                </button>
+              </nav>
+            )}
           </div>
         </>
       )}
@@ -1028,6 +1114,7 @@ function InterventionsTable({
 // ---- Tableau de bord ---------------------------------------------------------------------
 function OverviewView({ c }: { c: Ctx }) {
   const { scope } = c;
+  const list = useInterventionList(c);
   const open = scope.interventions.filter((i) => OPEN_STATUSES.includes(i.status)).length;
   const pending = byDateDesc(
     scope.approvals.filter((a) => a.status === "pending").map((a) => ({ ...a, created_at: a.created_at || "" })),
@@ -1066,8 +1153,10 @@ function OverviewView({ c }: { c: Ctx }) {
         />
         <Stat icon="building" tone="green" label="Sites suivis" value={scope.sites.length} note={c.activeSite ? "Site filtré" : "Organisation active"} />
       </div>
+      <InterventionFiltersCard c={c} list={list} />
       <InterventionsTable
         c={c}
+        list={list}
         title="Interventions récentes"
         emptyAction={
           c.canCreateRequest ? (
@@ -1159,26 +1248,31 @@ function ComplianceRow({ c, record }: { c: Ctx; record: ComplianceRecord }) {
 
 // ---- Interventions -------------------------------------------------------------------------
 function RequestsView({ c }: { c: Ctx }) {
+  const list = useInterventionList(c);
   return (
     <>
       <PageTitle
         title="Interventions"
-        subtitle={`Suivi des demandes de ${c.activeSite ? c.activeSite.name : "tous les sites"} · ${LOADED_NOTE}`}
+        subtitle={`Suivez les demandes de ${c.activeSite ? c.activeSite.name : "tous vos sites"}, de la demande au règlement.`}
         action={
-          c.canCreateRequest ? (
-            <button type="button" className="button primary" onClick={() => c.go("new")}>
-              <Icon name="plus" size={17} />
-              Nouvelle demande
-            </button>
-          ) : (
-            <ReadOnlyNote compact reason={c.authority.readOnlyReason} />
-          )
+          <div className={styles.titleActions}>
+            <ExportButton list={list} />
+            {c.canCreateRequest ? (
+              <button type="button" className="button primary" onClick={() => c.go("new")}>
+                <Icon name="plus" size={17} />
+                Nouvelle demande
+              </button>
+            ) : (
+              <ReadOnlyNote compact reason={c.authority.readOnlyReason} />
+            )}
+          </div>
         }
       />
+      <InterventionFiltersCard c={c} list={list} />
       <InterventionsTable
         c={c}
+        list={list}
         title="Toutes les interventions"
-        exportable
         emptyAction={
           c.canCreateRequest ? (
             <button type="button" className="button primary" onClick={() => c.go("new")}>
@@ -1842,76 +1936,247 @@ function ProfessionalBlock({ c }: { c: Ctx }) {
   );
 }
 
+// Sites (M13 « Mes immeubles » + « Interventions récentes ») : tableaux denses, données réelles.
 function SitesView({ c }: { c: Ctx }) {
   const { session, scope } = c;
+  // Disponibilité réelle des approbations/échéances : jamais supposée (VIS-REV-001).
+  const alertsState = session.capabilities.professional;
+  const recent = byDateDesc(scope.interventions).slice(0, 5);
+  const siteName = (id?: string | null) => scope.sites.find((s) => s.id === id)?.name || "Hors site";
   return (
     <>
       <PageTitle
         title="Sites & contrats"
-        subtitle={`${scope.sites.length} site${scope.sites.length > 1 ? "s" : ""} · budgets ${BASIS}`}
+        subtitle={`Vos sites, leurs interventions en cours et le budget engagé (${BASIS}).`}
         action={
-          <button type="button" className="button outline" onClick={() => c.go("contracts")}>
-            <Icon name="document" size={17} />
-            Contrats cadres
-          </button>
+          <div className={styles.titleActions}>
+            <button type="button" className="button outline" onClick={() => c.go("contracts")}>
+              <Icon name="document" size={17} />
+              Contrats cadres
+            </button>
+            {c.canCreateRequest && (
+              <button type="button" className="button primary" onClick={() => c.go("new")}>
+                <Icon name="plus" size={17} />
+                Nouvelle demande
+              </button>
+            )}
+          </div>
         }
       />
-      {scope.sites.length ? (
-        <div className={styles.siteGrid}>
-          {scope.sites.map((s) => {
-            const f = siteFigures(s, session.data);
-            return (
-              <section key={s.id} className={cx("panel", styles.siteCard)} aria-labelledby={`site-${s.id}`}>
-                <div className={styles.siteCardTop}>
-                  <Tag tone="blue">{(s.type && SITE_TYPES[s.type]) || "Site"}</Tag>
-                  <span className={styles.siteMeta}>
-                    {f.open} en cours · {f.count} dossier{f.count > 1 ? "s" : ""}
-                  </span>
-                </div>
-                <h2 id={`site-${s.id}`}>{s.name}</h2>
-                <p className={styles.siteAddress}>
-                  <Icon name="location" size={15} />
-                  {s.address}
-                </p>
-                <div>
-                  <div className={styles.budgetHead}>
-                    <span>Devis acceptés</span>
-                    <strong>
-                      {money(f.committed)}
-                      {f.budget > 0 ? ` / ${money(f.budget)}` : ""}
-                    </strong>
-                  </div>
-                  <div className={cx(styles.budgetBar, f.over && styles.budgetBarOver)} role="img" aria-label={f.budget > 0 ? `${percent(f.ratio)} du budget de référence engagé` : "Aucun budget de référence"}>
-                    <span style={{ width: `${f.ratio}%` }} />
-                  </div>
-                  <p className={styles.note}>
-                    {f.budget > 0 ? `${percent(f.ratio)} du budget de référence` : "Budget de référence non renseigné"} · {BASIS}
-                  </p>
-                </div>
-                <div className={styles.siteActions}>
-                  <button type="button" className="button outline" onClick={() => c.go("site", s.id)}>
-                    Fiche du site
-                  </button>
-                  {c.authority.canWriteSite(s.id) ? (
-                    <button type="button" className="button primary" onClick={() => c.go("new", s.id)}>
-                      <Icon name="plus" size={16} />
-                      Nouvelle demande
-                    </button>
-                  ) : (
-                    <ReadOnlyNote compact reason="Lecture seule sur ce site" />
-                  )}
-                </div>
-              </section>
-            );
-          })}
+      <section className={styles.listSection} aria-labelledby="sites-table-title">
+        <div className={styles.sectionHead}>
+          <h2 id="sites-table-title">
+            Mes sites <span className={styles.countPill}>{scope.sites.length}</span>
+          </h2>
         </div>
-      ) : (
-        <Empty icon="building" title="Aucun site sur ce périmètre">
-          {c.authority.canWriteOrganization
-            ? "Ajoutez un premier site pour rattacher vos demandes, budgets et règles d’approbation."
-            : "Aucun site ne vous est accessible sur ce périmètre."}
-        </Empty>
+        {scope.sites.length && alertsState !== "unknown" && alertsState !== "available" ? (
+          <Unavailable title="Alertes des sites non vérifiées" state={alertsState}>
+            <p>
+              Les devis à approuver et les échéances de contrôle n’ont pas pu être chargés : aucune
+              absence d’alerte n’est affirmée ci-dessous.
+            </p>
+            <button type="button" className="button outline" onClick={() => void session.loadProfessional()}>
+              Réessayer
+            </button>
+          </Unavailable>
+        ) : null}
+        {scope.sites.length ? (
+          <div className={cx("panel", styles.tablePanel, styles.scrollX)}>
+            <table className={cx(styles.table, styles.sitesTable)}>
+              <caption className="sr-only">
+                Sites de l’organisation active ; interventions, budget et alertes {BASIS}
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Site</th>
+                  <th scope="col">Interventions en cours</th>
+                  <th scope="col">Budget engagé</th>
+                  <th scope="col">Montant</th>
+                  <th scope="col">
+                    Alertes
+                    <span className={styles.thHint}>parmi les données chargées</span>
+                  </th>
+                  <th scope="col">
+                    <span className="sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {scope.sites.map((s) => {
+                  const f = siteFigures(s, session.data);
+                  const tone = budgetTone(f.ratio ?? 0, f.over);
+                  const alerts = siteAlertSummary(
+                    alertsState,
+                    siteAlerts(
+                      s.id,
+                      scope.approvals,
+                      scope.compliance,
+                      session.data.interventions,
+                      session.data.quotes,
+                    ),
+                  );
+                  const writable = c.authority.canWriteSite(s.id);
+                  return (
+                    <tr key={s.id}>
+                      <td className={styles.cellSite}>
+                        <button type="button" className={styles.rowOpen} onClick={() => c.go("site", s.id)}>
+                          <span className={styles.siteIcon} aria-hidden="true">
+                            <Icon name="building" size={20} />
+                          </span>
+                          <span>
+                            <strong>{s.name}</strong>
+                            <small>
+                              {(s.type && SITE_TYPES[s.type]) || "Site"} · {s.address}
+                            </small>
+                          </span>
+                        </button>
+                      </td>
+                      <td className={styles.cellOpen}>
+                        <span className={styles.openWrap}>
+                          <span className={cx(styles.openCount, f.open === 0 && styles.openCountNone)} aria-hidden="true">
+                            {f.open}
+                          </span>
+                          <span className={f.open ? styles.openText : styles.muted}>
+                            {f.open} en cours
+                            <small>
+                              {f.count} dossier{f.count > 1 ? "s" : ""} au total
+                            </small>
+                          </span>
+                        </span>
+                      </td>
+                      <td className={styles.cellBudget}>
+                        {f.ratio !== null ? (
+                          <span className={styles.budgetLine}>
+                            <span
+                              className={cx(styles.budgetBar, styles[`budget_${tone}`])}
+                              role="img"
+                              aria-label={`${percent(f.ratio)} du budget de référence engagé${f.over ? ", budget dépassé" : ""}`}
+                            >
+                              <span style={{ width: `${f.width}%` }} />
+                            </span>
+                            <span className={cx(styles.budgetPercent, f.over && styles.budgetPercentOver)}>
+                              {wholePercent(f.ratio)}
+                            </span>
+                          </span>
+                        ) : (
+                          <span className={styles.muted}>Pas de budget de référence</span>
+                        )}
+                      </td>
+                      <td className={styles.cellAmount}>
+                        <strong>{money(f.committed)}</strong>
+                        <small>{f.budget > 0 ? `sur ${money(f.budget)}` : "devis acceptés"}</small>
+                      </td>
+                      <td className={styles.cellAlerts}>
+                        {alerts.kind === "alerts" ? (
+                          <span className={alerts.overdue ? styles.alertRed : styles.alertAmber}>
+                            {alerts.parts.join(", ")}
+                          </span>
+                        ) : alerts.kind === "none" ? (
+                          <span className={styles.muted}>
+                            Aucune
+                            {/* Visible sur mobile (en-tête de colonne masqué), lu partout. */}
+                            <span className={styles.alertQualifier}> parmi les données chargées</span>
+                          </span>
+                        ) : alerts.kind === "checking" ? (
+                          <span className={styles.muted}>Vérification…</span>
+                        ) : (
+                          <span className={styles.alertUnverified}>
+                            <Icon name="lock" size={14} />
+                            Non vérifiées
+                          </span>
+                        )}
+                      </td>
+                      <td className={styles.cellActions}>
+                        <button type="button" className={styles.rowLink} onClick={() => c.go("site", s.id)}>
+                          Fiche<span className="sr-only"> du site {s.name}</span>
+                        </button>
+                        {writable ? (
+                          <button type="button" className={styles.rowLink} onClick={() => c.go("new", s.id)}>
+                            <Icon name="plus" size={15} />
+                            Demande<span className="sr-only"> pour {s.name}</span>
+                          </button>
+                        ) : (
+                          <span className={styles.readOnlyTag} title="Lecture seule sur ce site">
+                            <Icon name="lock" size={14} />
+                            Lecture seule
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="panel">
+            <Empty icon="building" title="Aucun site sur ce périmètre">
+              {c.authority.canWriteOrganization
+                ? "Ajoutez un premier site pour rattacher vos demandes, budgets et règles d’approbation."
+                : "Aucun site ne vous est accessible sur ce périmètre."}
+            </Empty>
+          </div>
+        )}
+      </section>
+
+      {scope.sites.length > 0 && (
+        <section className={styles.listSection} aria-labelledby="sites-recent-title">
+          <div className={styles.sectionHead}>
+            <h2 id="sites-recent-title">
+              Interventions récentes <span className={styles.sectionHint}>(tous les sites)</span>{" "}
+              <span className={styles.countPill}>{scope.interventions.length}</span>
+            </h2>
+            <button type="button" className={styles.textLink} onClick={() => c.go("requests")}>
+              Voir toutes les interventions
+              <Icon name="arrow" size={15} />
+            </button>
+          </div>
+          <div className={cx("panel", styles.tablePanel)}>
+            {recent.length ? (
+              <table className={cx(styles.table, styles.recentTable)}>
+                <caption className="sr-only">Cinq dernières interventions de vos sites</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Référence</th>
+                    <th scope="col">Site</th>
+                    <th scope="col">Intervention</th>
+                    <th scope="col">Date</th>
+                    <th scope="col">Statut</th>
+                    <th scope="col">Priorité</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recent.map((i) => (
+                    <tr key={i.id}>
+                      <td className={styles.cellRef}>
+                        <button type="button" className={styles.refLink} onClick={() => c.session.openIntervention(i.id)}>
+                          {shortId(i.id)}
+                        </button>
+                      </td>
+                      <td className={styles.cellRecentSite}>{siteName(i.site_id)}</td>
+                      <td className={styles.cellRecentType}>{category(i.category).label}</td>
+                      <td className={styles.cellRecentDate}>{date(i.created_at)}</td>
+                      <td className={styles.cellStatus}>
+                        <Badge status={i.status} />
+                      </td>
+                      <td className={styles.cellPriority}>
+                        <span className={i.urgency === "urgent" ? styles.priorityUrgent : styles.priorityPlanned}>
+                          {i.urgency === "urgent" ? "Urgent" : "Planifiée"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <Empty icon="wrench" title="Aucune intervention sur vos sites">
+                Les demandes créées depuis un site apparaîtront ici.
+              </Empty>
+            )}
+          </div>
+        </section>
       )}
+
       {c.authority.canWriteOrganization ? (
         <SiteForm
           busy={session.busy}
@@ -2025,7 +2290,13 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
         <div className={styles.tile}>
           <span>Restant</span>
           <strong>{f.budget > 0 ? money(f.remaining) : "—"}</strong>
-          <small>{f.budget > 0 ? (f.over ? "Budget dépassé" : `${percent(f.ratio)} engagé`) : "Budget non défini"}</small>
+          <small>
+            {f.ratio === null
+              ? "Budget non défini"
+              : f.over
+                ? `Budget dépassé · ${percent(f.ratio)} engagé`
+                : `${percent(f.ratio)} engagé`}
+          </small>
         </div>
         <div className={styles.tile}>
           <span>Interventions en cours</span>
@@ -2087,8 +2358,16 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
               {f.budget > 0 ? ` / ${money(f.budget)}` : ""}
             </strong>
           </div>
-          <div className={cx(styles.budgetBar, f.over && styles.budgetBarOver)} role="img" aria-label={f.budget > 0 ? `${percent(f.ratio)} du budget engagé` : "Aucun budget de référence"}>
-            <span style={{ width: `${f.ratio}%` }} />
+          <div
+            className={cx(styles.budgetBar, f.over && styles.budgetBarOver)}
+            role="img"
+            aria-label={
+              f.ratio === null
+                ? "Aucun budget de référence"
+                : `${percent(f.ratio)} du budget engagé${f.over ? ", budget dépassé" : ""}`
+            }
+          >
+            <span style={{ width: `${f.width}%` }} />
           </div>
           <div className={styles.keyValue}>
             <span>Réglé (Stripe confirmé)</span>

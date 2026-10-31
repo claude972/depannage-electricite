@@ -113,21 +113,60 @@
   color: var(--a-muted, #526178) !important;
 }
 
-/* Lines */
-.rows {
+/* Lines (M34 « Lignes du devis / Prix HT ») : carte, une ligne = une rangée, total HT par ligne. */
+.linesCard {
   margin-top: 16px;
+  border: 1px solid var(--a-line, #dce4ee);
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+.linesHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--a-bg, #f5f7fb);
+  border-bottom: 1px solid var(--a-line, #dce4ee);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--a-muted, #526178);
+}
+.rows {
   display: flex;
   flex-direction: column;
-  gap: 4px;
 }
 .row {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(90px, 0.7fr) minmax(130px, 1fr) 44px;
+  grid-template-columns: minmax(0, 2fr) minmax(88px, 0.6fr) minmax(130px, 0.9fr) minmax(96px, auto) 44px;
   gap: 10px;
   align-items: start;
+  padding: 12px 14px;
+  border-bottom: 1px solid #edf0f4;
+}
+.row:last-child {
+  border-bottom: 0;
 }
 .row :global(.field) {
-  margin-bottom: 8px;
+  margin-bottom: 0;
+}
+.lineTotal {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+  text-align: right;
+  padding-top: 26px;
+  font-size: 12px;
+  color: var(--a-muted, #526178);
+  white-space: nowrap;
+}
+.lineTotal strong {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--a-navy, #102a43);
 }
 .remove {
   margin-top: 26px;
@@ -145,36 +184,54 @@
   opacity: 0.5;
 }
 @media (max-width: 640px) {
+  /* Carte de ligne : libellé, puis quantité | prix, puis total HT | supprimer. */
   .row {
-    grid-template-columns: minmax(0, 1fr) 44px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px 10px;
   }
-  .row > :global(.field):nth-child(2),
-  .row > :global(.field):nth-child(3) {
+  .row > :global(.field):first-child {
     grid-column: 1 / -1;
+  }
+  .lineTotal {
+    padding-top: 0;
+    align-items: flex-start;
+    align-self: center;
+    text-align: left;
+  }
+  .remove {
+    margin-top: 0;
+    justify-self: end;
   }
 }
 .emptyLines {
   margin: 4px 0 8px;
+  padding: 12px 14px;
   font-size: 14px;
   color: var(--a-muted, #526178);
+}
+.addLine {
+  margin-top: 8px;
 }
 .tax {
   margin-top: 12px;
   max-width: 240px;
 }
 
-/* Browser-side totals, labelled as a display estimate. */
+/* Browser-side totals (M34) : carte Sous-total HT / TVA / Total TTC mis en avant. */
 .totals {
   margin-top: 16px;
-  padding-top: 6px;
-  border-top: 1px solid var(--a-line, #dce4ee);
+  border: 1px solid var(--a-line, #dce4ee);
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
 }
 .totals > div {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  padding: 6px 0;
+  padding: 10px 14px;
   font-size: 14px;
+  border-bottom: 1px solid #edf0f4;
 }
 .totals strong {
   font-weight: 550;
@@ -182,13 +239,16 @@
   white-space: nowrap;
 }
 .total {
-  margin-top: 6px;
-  padding-top: 12px !important;
-  border-top: 1px solid var(--a-line, #dce4ee);
-  font-size: 18px !important;
+  border-bottom: 0 !important;
+  background: #edf3fd;
+  padding: 14px !important;
+  font-size: 16px !important;
+  font-weight: 650;
+  color: var(--a-navy, #102a43);
 }
 .total strong {
-  font-weight: 650;
+  font-size: 20px;
+  font-weight: 700;
 }
 .estimate {
   display: block;
@@ -208,6 +268,14 @@
 .actions :global(.button),
 .actions :global(.text-button) {
   min-height: 44px;
+}
+@media (max-width: 640px) {
+  /* M34 : envoi en bouton pleine largeur ; enregistrer / abandonner au-dessus. */
+  .actions :global(.button.primary) {
+    flex: 1 1 100%;
+    min-height: 52px;
+    font-size: 16px;
+  }
 }
 .hint {
   margin: 10px 0 0;

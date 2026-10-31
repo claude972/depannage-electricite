@@ -11,6 +11,7 @@ import { ConfirmAction, Field, Loader, Unavailable } from "../app/ui";
 import { QuoteEditor } from "../app/forms";
 import { dateTime, money, quoteRef } from "../app/format";
 import styles from "./artisan-quote-draft.module.css";
+import { quoteLineTotalCents, quoteTotals } from "./artisan-lists";
 
 type EditLine = { label: string; quantity: string; price: string };
 type LineErrors = { label?: string; quantity?: string; price?: string };
@@ -179,8 +180,10 @@ export function QuoteDraftEditor({
   const errors = lines.map((l) => lineErrors(l, touched));
   const tooMany = lines.length > MAX_LINES;
   const saveValid = parsed !== null && !tooMany;
-  const subtotal = parsed ? parsed.reduce((n, l) => n + l.quantity * l.unit_price_cents, 0) : 0;
-  const tax = taxRate === null ? 0 : Math.round((subtotal * taxRate) / 100);
+  // Même formule que la plateforme (affichage) ; TVA inconnue tant qu’aucun taux n’est choisi.
+  const totals = quoteTotals(parsed ?? [], taxRate);
+  const subtotal = totals.subtotal;
+  const tax = totals.tax ?? 0;
   const missing: string[] = [];
   if (!parsed) missing.push("des quantités et prix valides");
   else {
@@ -496,12 +499,20 @@ export function QuoteDraftEditor({
         </div>
       )}
 
-      <div className={styles.rows}>
+      <div className={styles.linesCard}>
+        <div className={styles.linesHead} aria-hidden="true">
+          <span>Lignes du devis</span>
+          <span>Prix HT</span>
+        </div>
+        <div className={styles.rows}>
         {lines.length === 0 && (
           <p className={styles.emptyLines}>Aucune ligne. Ajoutez une prestation pour commencer.</p>
         )}
         {lines.map((l, index) => {
           const e = errors[index] ?? {};
+          const q = parseQuantity(l.quantity);
+          const unit = parsePrice(l.price);
+          const lineTotal = q !== null && unit !== null ? quoteLineTotalCents(q, unit) : null;
           return (
             <div className={styles.row} key={index}>
               <Field label={`Prestation ${index + 1}`} error={e.label}>
@@ -535,6 +546,10 @@ export function QuoteDraftEditor({
                   onChange={(ev) => update(index, { price: ev.target.value })}
                 />
               </Field>
+              <span className={styles.lineTotal}>
+                <span>Total HT de la ligne</span>
+                <strong>{lineTotal === null ? "—" : money(lineTotal)}</strong>
+              </span>
               <button
                 type="button"
                 className={`icon-button ${styles.remove}`}
@@ -547,10 +562,11 @@ export function QuoteDraftEditor({
             </div>
           );
         })}
+        </div>
       </div>
       <button
         type="button"
-        className="text-button"
+        className={`text-button ${styles.addLine}`}
         disabled={busy || lines.length >= MAX_LINES}
         onClick={() =>
           setLines((prev) => [...prev, { label: "", quantity: "1", price: "0" }])
@@ -589,7 +605,7 @@ export function QuoteDraftEditor({
 
       <div className={styles.totals}>
         <div>
-          <span>Total HT</span>
+          <span>Sous-total HT</span>
           <strong>{parsed ? money(subtotal) : "—"}</strong>
         </div>
         <div>
@@ -600,10 +616,10 @@ export function QuoteDraftEditor({
           <span>Total TTC</span>
           <strong>{parsed && taxRate !== null ? money(subtotal + tax) : "—"}</strong>
         </div>
-        <small className={styles.estimate}>
-          Estimation d’affichage ; montants recalculés par la plateforme à l’envoi.
-        </small>
       </div>
+      <small className={styles.estimate}>
+        Estimation d’affichage ; montants recalculés par la plateforme à l’envoi.
+      </small>
 
       <div className={styles.actions}>
         <button
