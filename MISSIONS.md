@@ -30,9 +30,9 @@ Livrer la version Web responsive et PWA installable selon docs/PLAN_REPRISE.md, 
 - owned files: frontend paths above only
 - acceptance criteria: each of 76 capabilities tracked, no unsupported action silently simulated live; M35 recognizable with mission rows/performance/bottom nav; M43 menus and actual available views; enterprise active org/site and accurate filtering; no cross-session cached data; online preview checked; implementation report and exact revision pushed; mandatory review of Codex before done
 - verification report: CORRECTIONS.md, WEB-PWA-20261030 / claude
-- implementation revision: not yet implemented
-- preview: not yet deployed
-- blockers: backend services and proposed contracts pending verification; commercial decisions recorded, not fabricated
+- implementation revision: 6962be6ccfae615551d2575edb8ca05420aef635 (checkpoint UI en revue ; trois corrections photo ouvertes, mission globale in_progress)
+- preview: https://depannage-electricite-1ng8kugh5-brafas-projects.vercel.app (0017b48 vérifié UI/PWA/Auth SSR ; checkpoints suivants intégrés pour recette, photos6962 pas encore acceptées)
+- blockers: Stripe test non connecté ; corrections/reviews UI et fonctions du plan restantes. Supabase dédié maintenant actif et testé ; aucune donnée commerciale inventée.
 
 ## Codex assignment
 - agent: codex
@@ -42,9 +42,9 @@ Livrer la version Web responsive et PWA installable selon docs/PLAN_REPRISE.md, 
 - owned files: backend/PWA paths above only
 - acceptance criteria: preserve atomic claim/server amounts/webhook integrity; actor/org/site boundaries, no private PWA cache, installable manifest/icons/offline public page, typecheck/tests/build, SQL and remote service limitations recorded; preview checked; mandatory review by Claude before done
 - verification report: CORRECTIONS.md, WEB-PWA-20261030 / codex
-- implementation revision: not yet implemented
-- preview: not yet deployed
-- blockers: Supabase/Stripe credentials and commercial rules require recheck; no live payments authorized
+- implementation revision: d85da0657586f152ee9bba941d67345b4eead616 (admin pagination en revue), contrat quote drafts de6091d publié avant code010 en cours
+- preview: https://depannage-electricite-git-integration-web-pwa-brafas-projects.vercel.app ; preuve liée à chaque SHA dans CORRECTIONS.md
+- blockers: Stripe test non connecté et décisions commerciales réelles ; Supabase dédié provisionné neuf migrations et tests cloud ciblés réussis. Aucun paiement réel autorisé.
 
 ## Cross-verification
 Claude reviews exact pushed Codex revision; Codex reviews exact pushed Claude revision. Findings with IDs, owner, reviewed SHA, evidence, correction, fix SHA and recheck in CORRECTIONS.md. ready_for_review is not done. Combined result must be verified on Vercel Preview before completion. Failed or unavailable tests remain open.

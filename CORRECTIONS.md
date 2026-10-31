@@ -774,3 +774,105 @@ Codex a vérifié le reviewer c38a6bc4 inactif après son précédent rapport, a
 
 ### Intégration courante
 fe4c9c9 intègre d85da06 et le correctif Auth2e3dcf1/revalidation8856236 pour recette. P1 ancienne réponse A sur session B recontrôlé corrigé ; P2 brouillon anonyme après logout reste assigné Claude. La nouvelle interface professionnelle doit encore consommer refreshedAt. Aucune clôture globale. Le CSV révisé préserve76IDs et leurs états historiques ; preuves cloud/preview enregistrées dans docs/verification.
+
+
+## WEB-PWA-20261030 — rapport revue photos6962 et login823
+
+# Independent photo checkpoint review — 6962be6
+
+Exact reviewed frontend: `6962be6ccfae615551d2575edb8ca05420aef635`. Exact git source only, no mutable role work or owner edits. Backend documents route compared to current integration implementation. No full build/dependency install.
+
+## Findings (assign Claude)
+
+### PHOTO-REV-001 — P2: uncertain upload outcome is classified as a definite failure
+`components/courant-app.tsx:968–973` catches every upload exception and sets failed. `components/app/upload-queue.tsx:19–20` then says “Certaines photos n’ont pas été enregistrées”; retry resends every failed item. `uploadDocument` correctly reports status0 and502 as uncertain, but queue discards that distinction. A server may have committed the file before a response is lost. Documents POST generates a new randomUUID on each request and has no upload idempotency key, so retry can duplicate an already stored photo.
+
+Independent reproduction drives exact processUploads: file1 confirmed, file2 committed then fetch throws; statuses become done/failed, explicit retry skips file1 but resends file2, creating third stored item. No automatic retry or request recreation is alleged. Required: retain uncertain outcome separately; remove definite “not saved” claims for uncertain files and require document recheck/explicit duplicate-risk acknowledgment before resend, or implement actual server idempotency with a reviewed contract. Do not silently count uncertainty as confirmed success.
+
+### PHOTO-REV-002 — P2: second request silently replaces outstanding photo queue
+There is one `uploads: UploadQueue|null` at controller113, and createIntervention1031–1035 unconditionally replaces it for the next request with photos. After partial failure the runner becomes idle; user can navigate to New Request and submit another request with photos. New queue overwrites all old File references. Returning to first dossier no longer shows its outstanding queue/retry (panel only renders matching interventionId). Ordinary request-form unmount is safe because parent owns queue, but this second-request overwrite is not guarded or warned.
+
+Required: retain queues per intervention, or block/ask user to explicitly resolve/abandon outstanding queue before starting a replacement. Avoid silently abandoning failed files. Browser reload/file persistence is outside this finding.
+
+### PHOTO-REV-003 — P2: stale create completion erases newer session/public draft storage
+`components/courant-app.tsx:1018–1020` removes sessionStorage DRAFT_KEY unconditionally after awaited request creation/optionalrefresh, even when ctx was invalidated by logout/account change. State setter and navigation are guarded; this storage side effect is not. An A request response completing after logout and a new anonymous draft deletes that newer draft from storage. This is independent of now-fixed login adoption edge.
+
+Required: bind this storage removal to original identity generation (or return immediately when stale before any draft/file/queue side effect). Test held create response → logout/new draft → resolve old response; newer storage must remain, no new upload starts and no old queue/navigation publishes. Demo branch removes storage before its first await and does not create this particular late-response sequence.
+
+## Verified bounded behavior
+
+- Creation POST occurs once per create invocation. Uploads start only after intervention id is returned. Retry invokes processUploads only, never create POST.
+- Confirmed done files are skipped on retry. Failed files remain parent-owned across ordinary RequestForm unmount/navigation; panels exist in client and enterprise dossier views.
+- Queue and File references cleared by clearSessionState. Process guard checks ctx before each next upload and guarded state publication drops old results. One already-in-flight upload is not canceled; no claim of atomic revocation.
+- Demo branch returns before upload path; no document API invoked there and notice explicitly says photos not sent.
+- Public form passes only values to saveDraft; File selections not serialized into sessionStorage. Public hint explicitly says photos must be added again after login, so this is disclosed rather than a new silent-loss finding.
+- Client validates six photo limit, JPEG/PNG/WebP and nonempty4MiB bound. Generic upload helper supports PDF for documents. Server independently validates size/type and magic bytes. Multipart request has no forced JSON Content-Type, uses no-store and intervention id.
+- Malformed HTTP200 response and network failure do not return false confirmed-upload success.
+
+## Prior UI findings
+
+- CL-UI-008 / UI-REV-002 dependent cache gap corrected in source: enterprise siteAccess effect now includes `session.refreshedAt` at337, Members overview at2953. Both clear/reload their respective cache before request and ignore unmounted results. Earlier controller focus/403 logic remains. This closes the previously identified missing revision dependency in code; actual foreground revoke/downgrade/scope-change preview tests remain necessary. No whole cache architecture completion claim.
+- CL-UI-009 / UI-REV-003 duration mismatch corrected in source: validation2981, error2982, hint3201 and inputmax3205 consistently1–14, matching backend API. Browser boundary validation14/15 not executed here.
+- Earlier login bounded verdict823 is preserved; no newly identified login finding in this photo review.
+
+## Actual checks
+
+Snapshot `/tmp/depannage-ui-review-6962`, dependencies symlinked read-only. Exact inline processUploads function exported to a temporary harness with injected setter and exact API upload helper; owner source unmodified.
+
+**31 existing UI tests +5 new narrow photo checks =36PASS**, exit0:
+1. empty/oversize/PDF-photo rejection and exact4MiB JPEG acceptance;
+2. correct multipart private endpoint/intervention_id and no fetch for invalidfile;
+3. malformed200/network failures yield uncertain errors;
+4. partial queue retry skips confirmed success but reproduces duplicate risk for uncertain committed upload;
+5. generation invalidation during first upload suppresses next file request.
+
+Tests: `/tmp/depannage-ui-review-6962/photos.test.ts`. Some tests intentionally assert existing undesirable uncertainty classification to document the finding. No source fix verified for PHOTO findings.
+
+No mounted React browser test, actual Storage upload, cloud Auth, online preview, full build, visual/a11y audit or UI admin route runtime test performed by this reviewer. Admin session contract exposure read as a dependency, not claimed delivered server functionality.
+
+Verdict: focused photo corrections required; previous cache dependency and invitation limit fixes are source-confirmed within the stated bounds.
+
+
+# Focused independent login recheck — 823b021
+
+Exact reviewed revision: `823b02127e033a132314ae1d046cd132ffa05b9d`. Reviewed exact git source only, no role work in progress. No owner edits.
+
+## Verdict
+
+**CL-UI-007 / UI-REV-001 may be marked verified within this bounded helper/controller-ordering review.** No remaining actionable finding identified in the previously reported normal login self-invalidation, different-account verification race, logout stale-verification or stale error/busy preservation cases.
+
+This does not declare actual browser/cloud Auth journeys complete, nor close membership/cache/invitation findings or the overall mission.
+
+## Source recheck
+
+`components/app/identity.ts` checks:
+- verification matches expected login identity;
+- a differing already-loaded identity supersedes the attempt before clear/rebind;
+- `loaded === null && !ctx.alive()` rejects an obsolete verified response after logout;
+- initial anonymous login still proceeds when its context is current;
+- legitimate own SIGNED_IN adoption still proceeds without another clear when the expected user is loaded;
+- after workspace await, invalidated context or replaced user suppresses draft restoration/navigation.
+
+The controller's signIn and session-bearing signup both invoke this same helper. Existing generation guard still suppresses stale error/notice and prevents a stale chain's finally from clearing a newer identity's busy flag.
+
+## Checks actually executed
+
+Snapshot `/tmp/depannage-ui-review-823` exported via git archive with existing dependency symlink, no owner source/dependency/build changes.
+
+- **31 existing UI tests PASS**.
+- **3 independent ordering regressions PASS** in `/tmp/depannage-ui-review-823/independent-auth.test.ts`:
+  1. A verification pending → newer liveB and active B mutation → stale verificationA; B identity unchanged, no extra clear, B busy preserved, B notice completes normally.
+  2. Stale A verification rejection after B does not surface A's error or reset B.
+  3. Verification pendingA → logout → newly entered anonymous draft → stale verifiedA; no extra clear, draft preserved, final user refnull, no private navigation.
+- **34 total tests PASS**, exit0. Previous logout failure reproduction was changed to assert required preserved state, and now passes.
+- Existing controls include promise-before-event, own event-before-promise, staleA already superseded by B, logout returning null verification, logout during workspace load, generic stale mutation, and kept-draft adoption.
+
+These are deterministic tests of exact helper/runner with mirrored relevant controller events and unauthorized-refresh handling. No mounted React render, real cross-tab Supabase race, online preview, full build or visual test performed by this reviewer. Integration should still verify normal login/logout/account switch in the deployed preview with actual Auth.
+
+
+### Statuts consolidés
+- CL-UI-007 : verified pour la revue helper/contrôleur au823b021, intégré5cfad13 ; recette normale connexion A/logout/B en cours surfe4 (avant dernière gardeP2), ne pas confondre les SHA.
+- CL-UI-008 : fixed_pending_review au6962be6, consommation refreshedAt présente ; vérifier révocation réelle en navigateur avant clôture globale.
+- CL-UI-009 : fixed_pending_review au6962be6 ; source valide1–14, contrôle navigateur à venir.
+- CL-PHOTO-001/002/003 : open, assignés Claude sessionb4b555f0, même checkpoint6962. Rapport canonique : 001 résultat incertain,002 file singleton,003 effet storage non gardé. Les deux premiers numéros courts du premier message pilote étaient inversés ; cette correspondance prévaut, aucune correction perdue.
+- de6091d publie le contrat quote drafts avant code. CLI lead informé de ce contrat, avec priorités : finir correctifs photo, admin paginé et densité visuelle avant branchement brouillons.
