@@ -1356,3 +1356,774 @@ Le finding Claude sur l’édition du dossier qui retire l’approbation pendant
 
 ### CL-BE-001 — précision avant contrat/code012
 L’implémenteur a identifié que Checkout exige encore l’approbation après clôture terrain. La garde conservatrice couvre donc aussi completed (non payé), en plus des quatre états actifs. Seuls paid/cancelled permettent l’édition du dossier ; disponibilité/contact séparés restent possibles. Aucune validation Stripe ni règle financière relâchée. Contrat à publier avec cette décision et tests completed refusé/paid autorisé. Les comptes historiques déjà non approuvés avec règlement dû restent à réexaminer par opérateur, sans auto-approbation.
+
+
+## WEB-PWA-REVIEW-001 — rapport Claude réel011
+
+# Rapport de revue croisée Claude — WEB-PWA-REVIEW-001 (assistance privée 011)
+
+Même reviewer, même session, lecture seule, branche locale de revue `claude/review-support-011`. Aucun fichier source, schéma, cloud ou coordination modifié. Aucun fichier d'identifiants ouvert, aucune autre session contactée. Affectation revendiquée : uniquement la revue. Le lien node_modules reste un artefact d'outillage non touché.
+
+**SHA revu :** `fface1af11d62b19522cc5266b6f2b6b536209c0`. Quatre commits depuis 254d497 : le contrat e7fb62d, deux commits de configuration Vercel, et le code fface1a. La migration 011 n'est pas appliquée à distance et cette revue n'en est pas la recette.
+
+## Sources lues
+Mission WEB-PWA-SUPPORT-001 et CORRECTIONS.md distants, migration 011, les deux routes support, le contrat et le rapport de vérification Codex, les tests HTTP et le harness SQL support, les diffs de la CI et de vercel.json.
+
+## Contrôles réellement exécutés
+
+| Contrôle | Résultat |
+|---|---|
+| `npm test` | 49/49, dont 6 tests HTTP support |
+| `npm run typecheck` | passe |
+| `node tests/sql-support-review.mjs` avec PGlite, 11 migrations, stubs Auth/Storage | 8 groupes PASS |
+| `node tests/sql-review.mjs` | 29 PASS |
+| `node tests/sql-quote-draft-review.mjs` | 9 PASS |
+| `node tests/sql-site-access-review.mjs` | 8 PASS |
+| `node tests/sql-performance-review.mjs` | 6 PASS |
+| `npm run check`, build, preview, Supabase réel | non exécutés, checkout sans tests/ui |
+
+## Migration 011
+- **Confidentialité.** La lecture des tickets, messages et événements passe par un helper : admin, ou créateur ayant encore accès au dossier lié via le helper de la migration 009. Pairs d'organisation, artisan affecté et autres comptes ne lisent rien. Retrait de membre, réduction de portée site et réaffectation ferment l'accès, confirmé par le harness.
+- **Mutations et auteur.** Select seul pour authenticated, aucune insertion ni mise à jour directe. Auteur, type, acteur, dates et versions sont fixés côté serveur depuis la session.
+- **Création idempotente.** Unicité créateur plus clé client. Un rejeu identique renvoie le ticket existant avec `replayed:true`, sans nouvel événement ni consommation de quota. Un contenu différent donne 409. Le rejeu après révocation de l'accès au dossier lié est refusé.
+- **CAS et immutabilité.** Version exacte exigée sinon 409, incrément par mutation, messages et événements uniques par version, aucune mise à jour possible. L'échec d'un append annule toute la transaction, confirmé par le harness.
+- **Transitions.** Changement d'état réservé à l'admin, matrice exacte du contrat, même état refusé. Une réponse créateur en awaiting_user ou resolved rouvre à open. Une réponse admin sur resolved est refusée tant que non rouvert.
+- **Verrous.** Ordre organisation liée, intervention liée, ticket, avec recontrôle d'accès après verrou. La création verrouille aussi le profil du créateur en NO KEY UPDATE avant le ticket. Ordre cohérent avec les brouillons de devis et les commandes 009. La réaffectation ne verrouille que le dossier et l'approbation artisan que profil et dossier artisan : aucun cycle identifié. Le NO KEY UPDATE reste compatible avec les verrous KEY SHARE des clés étrangères des réponses.
+- **Helper admin_overview.** Ancien corps renommé et privé, EXECUTE révoqué. Le wrapper conserve la garde admin et ne change que la capacité support_tickets, clé déjà présente depuis la migration 003. Refus compte ordinaire et appel interne testés.
+
+## Routes
+- **Liste.** Clés strictes, `scope=all` réservé admin, filtres status, intervention_id et recherche sur le même alphabet littéral passée en `ilike` dédié. Curseur strict lié à l'empreinte scope plus filtres, microsecondes conservées, tri created_at puis id décroissants, total exact avant curseur sous RLS, COUNT absent en 503.
+- **Détail.** Ticket sous RLS sinon 404. Événements paginés par version croissante avec COUNT restant, messages des mêmes versions seulement, totaux serveur exacts, permissions cohérentes avec le SQL.
+- **Création et mutation.** Schémas stricts sans champ d'auteur, d'état ou de version venant du navigateur, refus du caractère NUL, origine contrôlée, réponses et erreurs en `private, no-store`, réponse RPC non-objet en 503.
+
+## Findings
+Aucun finding actionnable dans le périmètre revu.
+
+Observations sans action requise :
+- La clé client d'idempotence reste lisible par le créateur et l'admin en lecture directe de la table. Les routes l'excluent et la valeur n'est qu'un UUID aléatoire.
+- Une mutation sur un ticket inconnu ou non lisible renvoie 403 plutôt que 404. Comportement anti-énumération cohérent, le détail renvoyant 404.
+- La configuration vercel.json limitant les previews à main et integration est hors périmètre fonctionnel et non vérifiée sur Vercel par ce reviewer.
+
+## Dépendances d'intégration frontend
+Générer la clé de requête une fois par création, conserver la version attendue, traiter 409 par relecture sans renvoi automatique, afficher les réponses opérateur sans identité supplémentaire, invalider les tickets devenus non lisibles.
+
+## Limites
+Pas de Supabase, Auth ou PostgREST réels, pas de concurrence multi-connexion, les entrelacements ayant été vérifiés en séquentiel et par lecture du code. Pas de build, preview ni UI par ce reviewer. Le fournisseur HTTP des tests de route est un modèle, pas PostgREST.
+
+Rapport également écrit dans `/Users/claudebrafa/.claude/plans/you-are-claude-independent-wobbly-charm.md`.
+
+## WEB-PWA-SUPPORT-001 — preuve Supabase réelle
+
+# Support011 hosted RPC/RLS review
+
+{
+  "sourceRevision": "fface1af11d62b19522cc5266b6f2b6b536209c0",
+  "migration": "supabase/migrations/202610310011_support_tickets.sql",
+  "checks": [
+    {
+      "name": "concurrent_idempotent_create_one_ticket_message_event_server_authorship",
+      "status": "pass",
+      "detail": {
+        "tickets": 1,
+        "messages": 1,
+        "events": 1,
+        "serverDerivedAuthor": true
+      }
+    },
+    {
+      "name": "different_body_same_key_conflict_without_extra_rows",
+      "status": "pass",
+      "detail": {
+        "http": 400,
+        "code": "P0001"
+      }
+    },
+    {
+      "name": "creator_admin_only_not_org_owner_or_assigned_artisan",
+      "status": "pass",
+      "detail": {
+        "jobReadersDeniedSupport": 2,
+        "creatorAndAdminRead": true
+      }
+    },
+    {
+      "name": "direct_writes_internal_helpers_denied_and_events_immutable",
+      "status": "pass",
+      "detail": {
+        "directUpdateDeleteDenied": 12,
+        "internalLockDenied": 2,
+        "eventsUnchanged": true
+      }
+    },
+    {
+      "name": "concurrent_reply_cas_single_winner",
+      "status": "pass",
+      "detail": {
+        "winnerHttp": 200,
+        "loserHttp": 400,
+        "loserCode": "P0001"
+      }
+    },
+    {
+      "name": "status_transitions_user_reopens_admin_explicit_reopen",
+      "status": "pass",
+      "detail": {
+        "version": 9,
+        "events": 9,
+        "messages": 5,
+        "adminRejectedHttp": 400,
+        "adminRejectedCode": "P0001"
+      }
+    },
+    {
+      "name": "unlinked_personal_ticket_created",
+      "status": "pass",
+      "detail": {
+        "unlinked": true
+      }
+    },
+    {
+      "name": "site_scope_reduction_revokes_linked_read_mutate_replay_not_personal",
+      "status": "pass",
+      "detail": {
+        "linkedDenied": [
+          {
+            "http": 403,
+            "code": "42501"
+          },
+          {
+            "http": 403,
+            "code": "42501"
+          }
+        ],
+        "personalAccessible": true
+      }
+    },
+    {
+      "name": "membership_removal_keeps_linked_denied_personal_accessible",
+      "status": "pass",
+      "detail": {
+        "linkedDenied": true,
+        "personalWritable": true
+      }
+    },
+    {
+      "name": "admin_database_support_capability_only",
+      "status": "pass",
+      "detail": {
+        "supportCapability": true,
+        "proof": "DB RPC only; no support HTTP/UI deployment claim"
+      }
+    }
+  ],
+  "cleanup": [
+    {
+      "table": "support_events",
+      "status": "pass",
+      "remaining": 0
+    },
+    {
+      "table": "support_messages",
+      "status": "pass",
+      "remaining": 0
+    },
+    {
+      "table": "support_tickets",
+      "status": "pass",
+      "remaining": 0
+    },
+    {
+      "table": "audit_log",
+      "status": "pass",
+      "remaining": 0
+    },
+    {
+      "table": "audit_log",
+      "status": "pass",
+      "remaining": 0
+    },
+    {
+      "table": "interventions",
+      "status": "pass",
+      "remaining": 0
+    },
+    {
+      "table": "professional_audit",
+      "status": "pass",
+      "remaining": 0
+    },
+    {
+      "table": "organization_membership_events",
+      "status": "pass",
+      "remaining": 0
+    },
+    {
+      "table": "organization_members",
+      "status": "pass",
+      "remaining": 0
+    },
+    {
+      "table": "sites",
+      "status": "pass",
+      "remaining": 0
+    },
+    {
+      "table": "organizations",
+      "status": "pass",
+      "remaining": 0
+    },
+    {
+      "table": "Auth/profile manager",
+      "status": "pass"
+    },
+    {
+      "table": "Auth/profile manager",
+      "status": "pass"
+    },
+    {
+      "table": "Auth/profile artisan",
+      "status": "pass"
+    },
+    {
+      "table": "Auth/profile admin",
+      "status": "pass"
+    }
+  ],
+  "limits": [
+    "Real hosted Supabase RPC/RLS only. Existing Next preview1be8f00 does not deploy support HTTP/UI routes.",
+    "No email, Stripe, schema or settings changes; no other accounts touched."
+  ]
+}
+
+The initial run had 9 passes and one harness failure: it expected six messages, but the controlled sequence creates five (initial, CAS winner, user awaiting-user reply, user reopen reply, admin reply). This diagnostic is preserved at /tmp/depannage-web-pwa-qa/support011/initial-harness-diagnostic.json. That first cohort was fully cleaned (15/15 operations). The corrected harness ran a fresh isolated cohort: 10/10 checks and 15/15 cleanup/readbacks passed. Both cohorts remain separately tracked. Additional exact-ID readback checks are preserved in /tmp/depannage-web-pwa-qa/support-cleanup-readback.json.
+
+Source references at fface1af11d62b19522cc5266b6f2b6b536209c0, migration supabase/migrations/202610310011_support_tickets.sql:
+- lines 3–43: private tables, restricted grants and creator/admin read policies.
+- lines 47–60: organization/job/ticket locking and second access check.
+- lines 62–94: creation idempotency and server-derived authorship.
+- lines 96–133: optimistic version check, status/reply transitions and immutable appended events.
+- lines 140–145: admin database capability flag.
+
+No application defect found in this bounded hosted RPC/RLS scope. Direct PostgREST P0001 conflicts return HTTP400, distinct from application API409 mapping; access denials return HTTP403/code42501. No support HTTP route or support browser UI deployment was tested or claimed.
+
+
+## WEB-PWA-REVIEW-001 — rapport Claude réel012
+
+# Rapport de revue croisée Claude — WEB-PWA-REVIEW-001 (CL-BE-001, migration 012)
+
+Même reviewer, même session, lecture seule, branche locale `claude/review-artisan-active-012`. Aucun fichier source, schéma, cloud ou coordination modifié. Aucun fichier d'identifiants ouvert, aucune autre session contactée. Lien node_modules non touché.
+
+**SHA revu :** `d0bf053a3ab3e7f96aa50d587987c54c8dfb3a86`. Trois commits depuis fface1a : le contrat 47e7b13, son renforcement 1951782, le code d0bf053. Migration 012 additive seule, les migrations 001 à 011 sont inchangées dans ce diff.
+
+## Sources lues
+Mission « Correction CL-BE-001 » et les deux entrées CORRECTIONS distantes, dont la précision sur completed non réglé. Migration 012, contrat et rapport de vérification Codex, harness SQL garde active, diff de la CI.
+
+## Contrôles réellement exécutés
+
+| Contrôle | Résultat |
+|---|---|
+| `npm test` | 49/49 |
+| `npm run typecheck` | passe |
+| `node tests/sql-artisan-active-guard-review.mjs` avec PGlite, 12 migrations, stubs Auth/Storage | 6 groupes PASS |
+| `node tests/sql-review.mjs` | 29 PASS |
+| `node tests/sql-quote-draft-review.mjs` | 9 PASS |
+| `node tests/sql-support-review.mjs` | 8 PASS |
+| `node tests/sql-site-access-review.mjs` | 8 PASS |
+| `node tests/sql-performance-review.mjs` | 6 PASS |
+| Build, tests UI, preview, Supabase réel | non exécutés, checkout backend |
+
+## Analyse de la migration 012
+- **Politique conservatrice.** La sauvegarde du dossier appelle d'abord la garde de suspension existante (rôle artisan, verrous profil puis dossier artisan), puis lit sans verrou les interventions de l'acteur en assigned, quoted, accepted, in_progress ou completed. Toute présence déclenche un 409 avant l'appel au helper hérité. Les états paid et cancelled libèrent. Disponibilité et contact restent séparés, la suspension explicite reste prioritaire en 403.
+- **Approbation intacte en cas de refus.** Le raise précède la chaîne 008 puis 003. Aucun champ du dossier ni le drapeau d'approbation ne change, vérifié par le harness sur les cinq états.
+- **Sérialisation.** L'acceptation de mission vérifie le rôle artisan, puis verrouille organisation, intervention, profil propre et dossier artisan propre avant la chaîne existante. La réaffectation vérifie `is_admin()` avant tout verrou, puis organisation, intervention, profil cible avec rôle artisan et dossier artisan cible. L'édition verrouille profil puis dossier artisan et ne verrouille jamais d'intervention. Les deux ordres d'arrivée convergent : édition d'abord rend l'attribution inéligible, attribution d'abord fait échouer l'édition. Aucun cycle identifié.
+- **Interaction avec les brouillons 010.** La gestion de brouillon suit organisation, intervention, profil, dossier artisan, brouillon. Le wrapper 012 n'ajoute aucun verrou pour l'envoi de devis. L'édition étant bloquée pendant le travail actif, un brouillon ne peut plus devenir orphelin par retrait d'approbation self-service.
+- **Interaction avec le support 011.** La création de ticket prend le profil en NO KEY UPDATE après l'intervention, les messages prennent KEY SHARE sur le profil. L'édition en FOR UPDATE attend ou fait attendre sans inversion d'ordre, donc pas de cycle.
+- **Helpers privés.** Les trois fonctions renommées par 012 sont révoquées, les helpers antérieurs restent révoqués, aucune RPC alternative n'est exposée, signatures publiques inchangées et grants réaffirmés.
+- **CI.** Étape harness ajoutée avec l'étiquette « not live Supabase ».
+
+## Findings
+Aucun finding actionnable dans le périmètre revu.
+
+Observations sans action requise :
+- Le traducteur d'erreurs renvoie un 409 générique pour tout P0001, la raison française du SQL n'atteint pas le client. La sauvegarde du dossier n'a pas d'autre chemin P0001, donc le frontend peut contextualiser ce 409 comme le contrat le prévoit.
+- La soumission de candidature et la liaison de pièces ne sont pas sous la garde. Elles ne retirent pas l'approbation, pas d'impact.
+- Les comptes déjà rétrogradés par l'ancien comportement avec règlement dû restent une remédiation opérateur, comme documenté.
+
+## Limites
+Le harness PGlite est mono-connexion. Les deux ordres d'arrivée sont vérifiés en séquentiel et l'ordre des verrous en source, ce qui ne prouve pas une course réseau multi-session réelle. Pas de Supabase, Auth ou PostgREST réels, pas de build, tests UI ni preview par ce reviewer. La migration 012 n'est pas appliquée à distance.
+
+Rapport également écrit dans `/Users/claudebrafa/.claude/plans/you-are-claude-independent-wobbly-charm.md`.
+
+## CL-BE-001 — concurrence réelle hébergée
+
+# Active work guard012 hosted concurrency QA
+
+{
+  "sourceRevision": "d0bf053a3ab3e7f96aa50d587987c54c8dfb3a86",
+  "migration": "supabase/migrations/202610310012_artisan_active_work_guard.sql",
+  "mode": "Hosted real Postgres authenticated RPC concurrency; no PGlite",
+  "checks": [
+    {
+      "name": "six_real_concurrent_self_edit_vs_accept_trials",
+      "status": "pass",
+      "detail": [
+        {
+          "trial": 0,
+          "edit": {
+            "http": 200,
+            "code": null,
+            "success": true
+          },
+          "claim": {
+            "http": 403,
+            "code": "42501",
+            "success": false
+          },
+          "winner": "edit"
+        },
+        {
+          "trial": 1,
+          "edit": {
+            "http": 200,
+            "code": null,
+            "success": true
+          },
+          "claim": {
+            "http": 403,
+            "code": "42501",
+            "success": false
+          },
+          "winner": "edit"
+        },
+        {
+          "trial": 2,
+          "edit": {
+            "http": 200,
+            "code": null,
+            "success": true
+          },
+          "claim": {
+            "http": 403,
+            "code": "42501",
+            "success": false
+          },
+          "winner": "edit"
+        },
+        {
+          "trial": 3,
+          "edit": {
+            "http": 400,
+            "code": "P0001",
+            "success": false
+          },
+          "claim": {
+            "http": 200,
+            "code": null,
+            "success": true
+          },
+          "winner": "claim"
+        },
+        {
+          "trial": 4,
+          "edit": {
+            "http": 200,
+            "code": null,
+            "success": true
+          },
+          "claim": {
+            "http": 403,
+            "code": "42501",
+            "success": false
+          },
+          "winner": "edit"
+        },
+        {
+          "trial": 5,
+          "edit": {
+            "http": 200,
+            "code": null,
+            "success": true
+          },
+          "claim": {
+            "http": 403,
+            "code": "42501",
+            "success": false
+          },
+          "winner": "edit"
+        }
+      ]
+    },
+    {
+      "name": "completed_unpaid_blocks_edit_preserves_approval_and_dossier",
+      "status": "pass",
+      "detail": {
+        "http": 400,
+        "code": "P0001",
+        "success": false
+      }
+    },
+    {
+      "name": "cancelled_and_synthetic_paid_allow_self_edit",
+      "status": "pass",
+      "detail": [
+        {
+          "state": "cancelled",
+          "http": 200,
+          "code": null,
+          "success": true,
+          "syntheticPaymentOnly": false
+        },
+        {
+          "state": "paid",
+          "http": 200,
+          "code": null,
+          "success": true,
+          "syntheticPaymentOnly": true
+        }
+      ]
+    },
+    {
+      "name": "availability_and_basic_contact_separate_from_professional_edit_guard",
+      "status": "pass",
+      "detail": {
+        "availabilityChanged": true,
+        "basicContactChanged": true,
+        "approvalPreserved": true
+      }
+    },
+    {
+      "name": "suspended_professional_edit_and_availability_denied",
+      "status": "pass",
+      "detail": [
+        {
+          "http": 403,
+          "code": "42501",
+          "success": false
+        },
+        {
+          "http": 403,
+          "code": "42501",
+          "success": false
+        }
+      ]
+    },
+    {
+      "name": "three_real_concurrent_admin_reassign_vs_target_self_edit_trials",
+      "status": "pass",
+      "detail": [
+        {
+          "edit": {
+            "http": 200,
+            "code": null,
+            "success": true
+          },
+          "reassign": {
+            "http": 403,
+            "code": "42501",
+            "success": false
+          },
+          "winner": "edit"
+        },
+        {
+          "edit": {
+            "http": 200,
+            "code": null,
+            "success": true
+          },
+          "reassign": {
+            "http": 403,
+            "code": "42501",
+            "success": false
+          },
+          "winner": "edit"
+        },
+        {
+          "edit": {
+            "http": 200,
+            "code": null,
+            "success": true
+          },
+          "reassign": {
+            "http": 403,
+            "code": "42501",
+            "success": false
+          },
+          "winner": "edit"
+        }
+      ]
+    }
+  ],
+  "cleanup": [
+    {
+      "table": "messages",
+      "status": "pass",
+      "remaining": 0
+    },
+    {
+      "table": "audit_log",
+      "status": "pass",
+      "remaining": 0
+    },
+    {
+      "table": "audit_log",
+      "status": "pass",
+      "remaining": 0
+    },
+    {
+      "table": "interventions",
+      "status": "pass",
+      "remaining": 0
+    },
+    {
+      "table": "Auth/profile/dossier/limits client",
+      "status": "pass"
+    },
+    {
+      "table": "Auth/profile/dossier/limits artisan",
+      "status": "pass"
+    },
+    {
+      "table": "Auth/profile/dossier/limits admin",
+      "status": "pass"
+    }
+  ],
+  "limits": [
+    "Synthetic paid status is fixture state only, never provider payment proof.",
+    "No HTTP browser mapping check; direct PostgREST error codes/statuses are recorded."
+  ],
+  "finishedAt": "2026-10-31T03:54:41.238Z"
+}
+
+The initial run exercised six real concurrent claim/edit races (three edit wins and three claim wins) and three reassignment races successfully. Its separate contact check used a forbidden direct profiles UPDATE; this was a harness mistake, corrected to the documented update_profile RPC. Initial cleanup encountered messages created by successful reassignment and preserved that failure. Recovery deleted only tracked messages before tracked jobs, then verified all three Auth users/profiles/dossiers/action limits absent. Evidence: active-guard012/initial-diagnostic.json and cleanup-recovery.json.
+
+A fresh isolated confirmation run then passed all six grouped checks, including nine actual concurrent races and the corrected contact RPC. All seven cleanup/readback scopes passed. Synthetic completed/paid/cancelled states are test fixtures, never payment-provider evidence. P0001 is HTTP400 through direct hosted PostgREST, not a verified HTTP409 application response.
+
+Source references at d0bf053a3ab3e7f96aa50d587987c54c8dfb3a86:
+- supabase/migrations/202610310012_artisan_active_work_guard.sql:6–16: self-edit approval guard and outstanding attributed work exclusion.
+- same file:21–34: accept_mission serializes job, profile and dossier before existing eligibility rules.
+- same file:39–55: administrator reassignment serializes the target profile/dossier.
+- app/api/profile/route.ts:20: contact changes delegate to update_profile, independently from professional dossier approval reset.
+
+No application finding in this bounded real-provider concurrency scope. No PGlite used, no application/schema change, no email/charge, no unrelated data touched. Temporary test code was finished before the midnight relay; all sessions ended and fixtures were cleaned.
+
+
+## WEB-PWA-20261030 — QA locale photos et entreprise
+
+# Local browser fallback QA
+
+Final rerun: 8/8 functional checks PASS, zero browser page errors; 13 cleanup/readback operations PASS.
+
+LOCAL Next dev browser + REAL dedicated hosted Supabase; NOT Vercel/online deployed UI proof
+
+Revision b8a277afeaac85eec8867d67b236303579e0ec88
+
+- local_compact_artisan_360: PASS
+- local_compact_artisan_1280: PASS
+- local_live_browser_login: PASS
+- photo_partial_failure_keeps_single_request: PASS
+- photo_retry_sends_only_failed_file: PASS
+- lost_upload_response_remains_uncertain_after_server_store: PASS
+- verify_lists_same_name_candidate_without_auto_confirmation: PASS
+- explicit_candidate_acknowledgement_does_not_resend: PASS
+
+Fatal: none
+
+## Cleanup
+
+- Read tracked QA docs: PASS
+- Remove tracked Storage objects: PASS
+- Remove tracked document metadata: PASS
+- Read tracked QA jobs: PASS
+- Remove tracked job audit: PASS
+- Remove tracked jobs: PASS
+- Remove tracked actor audit: PASS
+- Remove tracked Auth user: PASS
+- Auth identity absent readback: PASS
+- Profile absent readback: PASS
+- documents absent readback: PASS
+- interventions absent readback: PASS
+- Storage user prefix empty readback: PASS
+
+## Limits
+
+- New Vercel preview blocked by daily quota, local fallback explicitly authorized.
+- No Stripe, email, OS PWA installation or native app tested.
+- Enterprise foreground/coalescing cases not run in this bounded photo/artisan session.
+
+## Captures
+
+- /tmp/depannage-local-fallback-captures/artisan-360.png
+- /tmp/depannage-local-fallback-captures/artisan-1280.png
+- /tmp/depannage-local-fallback-captures/partial-photo-failure.png
+- /tmp/depannage-local-fallback-captures/photo-retry-success.png
+- /tmp/depannage-local-fallback-captures/uncertain-upload.png
+- /tmp/depannage-local-fallback-captures/uncertain-manual-candidate.png
+- /tmp/depannage-local-fallback-captures/candidate-acknowledged.png
+
+
+## Execution history and verification limits
+
+- Initial harness expected “Tableau de bord” as a heading; current compact screen correctly uses this as a kicker span and uses “Missions d’aujourd’hui” as a heading. Corrected the test selector; no application source changed. Preserved `harness-initial-selector-error.json`.
+- Browser origin `http://127.0.0.1:3017` was rejected by local Next request-origin reconstruction, while `http://localhost:3017` reached authentication normally. Used localhost for browser QA on the same server bound exclusively to 127.0.0.1. No server policy bypass or application change. Preserved `local-origin-blocked-run.json`; its later browser-closed failures were test teardown after the initial origin problem, not independent product findings. QA user cleaned.
+- A cold first localhost run exceeded the 60-second queue wait while compiling routes and completing cloud calls. Its retry/uncertain checks still passed and resources were cleaned. Preserved `local-cold-compilation-timeout.json`. Final warm rerun used a 120-second bound and passed all eight checks.
+- Final real browser photo flow: one request created; first photo forwarded/stored, second deliberately returned 422 before forwarding. Retry produced exactly one additional upload, preserved the single intervention and did not resend the successful first file. Second request forwarded/stored its photo but the response was deliberately aborted before browser receipt. State remained uncertain. Verification listed its same-name candidate while preserving uncertainty, made no automatic upload, and required explicit “C’est bien cette photo” acknowledgement to mark it stored. No resend occurred.
+- M35 visual comparison: navy overview band, daily mission rows, performance panel, blue mission CTA, greeting/bell and five navigation tabs present. No horizontal overflow at 360 or 1280. The performance panel stacks on narrow screens; this is not pixel identity or a claim that the whole screen fits one viewport. Screenshots include explicit demo controls, a warning caused by Playwright blocking service workers, the Next dev badge and fixed-position navigation artifacts in full-page capture. These are local test conditions, not production screenshots.
+- The candidate Open action was present but opening the signed object in a new tab was NOT exercised in this run; Storage URL authorization was verified in earlier hosted QA.
+- Browser contexts closed, Next local server stopped successfully (port3017 no longer responds). Restored only generated next-env.d.ts. Git tracked files unchanged; pre-existing node_modules symlink remains. No production deployment or new Vercel preview claimed.
+
+
+# Local enterprise browser QA
+
+Final bounded run: 7/9 automated checks PASS; one concrete UI action-gating finding and one 22-second latency timeout. Zero browser page errors. All cleanup and readback operations passed.
+
+LOCAL browser + real dedicated hosted Supabase; NOT Vercel deployed UI proof
+
+Exact revision b8a277afeaac85eec8867d67b236303579e0ec88
+
+- sole_org_effective_context_and_membership_badge: PASS — {"singleOrgBadge":"Gestionnaire","orgSelectorAbsent":true,"effectiveOrgDisplayed":true}
+- first_healthy_foreground_reads_workspace_and_professional: PASS — {"workspace":true,"professional":true,"firstCompletedAt":1793418159816}
+- rapid_second_foreground_revalidates_without_third_signal: PASS — {"elapsedMs":17860,"secondSignalAfterHealthyMs":1245,"noThirdSignal":true,"siteBOptionGone":true,"siteBDataAndGlobalContractGone":true}
+- restricted_server_reads_match_browser: PASS — {"oneAuthorizedSite":true,"oneAuthorizedJob":true,"organizationWideContractHidden":true}
+- viewer_membership_badge_updates_after_foreground: FAIL — locator.waitFor: Timeout 22000ms exceeded.
+Call log:
+[2m  - waiting for getByText(/Votre rôle : Lecture/) to be visible[22m
+
+- viewer_server_budget_write_denied: PASS — {"status":403,"storedBudgetUnchanged":true}
+- viewer_budget_editor_visually_unavailable: FAIL — Viewer still has enabled Modifier le budget control
+
+true !== false
+
+- removed_membership_clears_org_site_and_professional_ui: PASS — {"oldContextGone":true,"oldProfessionalMarkerGone":true}
+- removed_member_fresh_reads_refused_or_filtered: PASS — {"workspaceStatus":200,"orgs":0,"sites":0,"jobs":0,"organizationStatus":403,"contracts":0,"compliance":0}
+
+Fatal: none
+
+## Cleanup
+
+- Remove tracked job audit: PASS
+- Remove tracked jobs: PASS
+- Remove tracked compliance records: PASS
+- Remove tracked sites: PASS
+- Remove tracked contracts: PASS
+- Remove tracked professional_audit: PASS
+- Remove tracked organization_membership_events: PASS
+- Remove tracked organization_invitations: PASS
+- Remove tracked organizations: PASS
+- Remove tracked actor audit: PASS
+- Remove tracked Auth identity: PASS
+- Remove tracked actor audit: PASS
+- Remove tracked Auth identity: PASS
+- Readback absent profiles: PASS
+- Readback absent organizations: PASS
+- Readback absent sites: PASS
+- Readback absent interventions: PASS
+- Readback Auth identity absent: PASS
+- Readback Auth identity absent: PASS
+
+## Limits
+
+- No Stripe, email, OS PWA or native app.
+- Headless bringToFront alone emitted no useful foreground events. Final browser run explicitly dispatched synthetic DOM blur/focus into the real app handler; no actual OS foreground/visibility proof.
+
+## Captures
+
+- /tmp/depannage-local-enterprise-captures/sole-org-members-manager.png
+- /tmp/depannage-local-enterprise-captures/healthy-site-b-context.png
+- /tmp/depannage-local-enterprise-captures/restricted-site-a-auto-refresh.png
+- /tmp/depannage-local-enterprise-captures/failure-viewer_membership_badge_updates_after_foreground.png
+- /tmp/depannage-local-enterprise-captures/viewer-site-budget.png
+- /tmp/depannage-local-enterprise-captures/failure-viewer_budget_editor_visually_unavailable.png
+- /tmp/depannage-local-enterprise-captures/membership-removed.png
+
+
+## Finding — viewer still offered operational write actions
+
+Confirmed on exact b8a277afeaac85eec8867d67b236303579e0ec88. After owner downgraded membership to viewer and refreshed siteAccess visibly displayed “(lecture)”, the site sheet still exposed an enabled “Modifier le budget” button. The same screenshot shows Nouvelle demande, Ajouter and Configurer la règle actions; those extra controls were observed but not submitted by this test. Source: components/role/enterprise-space.tsx:1981 always mounts BudgetEditor; components/app/forms.tsx:2177 disables its trigger only while busy. Expected: absent/disabled unavailable write actions based on current membership AND effective per-site write grant, with a read-only explanation. This is misleading UI, not an authorization bypass: actual browser POST /api/professional returned403 and stored budget stayed unchanged. Capture: failure-viewer_budget_editor_visually_unavailable.png.
+
+## Revalidation evidence and latency
+
+- Sole organization effective membership badge was Gestionnaire without an explicit organization selector; org in header/context matched fixture.
+- First healthy synthetic browser focus caused real workspace and professional network reads.
+- Owner restricted member from ALL to siteA within1,237ms of healthy response; second signal was sent in that window. SiteB selection/option, B compliance marker and organization-wide contract data disappeared automatically, siteAccess showed siteA. Automatic bounded UI refresh finished17,860ms after second signal, with no third signal/manual reload. Actual fresh hosted reads matched one site/one job and no global contract.
+- Viewer badge wait at22 seconds timed out. This is NOT classified as a dropped revalidation signal: actual local log shows GET /api/workspace took24.7 seconds, in addition to configured quiet-window scheduling; response arrived about42.3 seconds after that focus. Subsequent site sheet screenshot shows refreshed read-only siteAccess. The precise final badge text after this late response was not separately reasserted before navigating to the site sheet.
+- Removal then cleared old org/site/professional context automatically and fresh organization lookup returned403; workspace and professional data were empty for the removed member.
+
+## Test-method history
+
+The first two setup attempts contained harness selection errors: inactive professional subtab and duplicate selected site label matching strong+option. Both cohorts cleaned fully; preserved harness-initial-tab-not-open.json and harness-duplicate-site-label.json. Corrected tests click actual role buttons “Contrats cadres” and “Audits et maintenance”, and assert selected combobox value.
+
+A third run using only headless bringToFront recorded ZERO focus/visibility events, so its stale UI observations are not product foreground failures. Its complete results are preserved in headless-tab-switch-no-focus-events.json, cohort cleaned. Final run dispatched synthetic DOM blur/focus into the actual app handler. Real network and rendered state were observed, but actual OS foreground/visibility-event generation remains unverified. No application source or schema modified.
+
+
+Server/browser cleanup: contexts closed, local Next server stopped; port3017 no longer responds. Restored generated next-env.d.ts; tracked source unchanged. Only pre-existing node_modules symlink remains untracked.
+
+
+## WEB-PWA-20261030 — revue source autorité/support9a321
+
+# Independent authority/support review — 9a321d4
+
+Exact reviewed revision: `9a321d49231d6f4d3553029f4d308ee70a98596d`, includes e5e7750,11f90d5,b0343e5,9b9f293. No owner source/working files edited. Review and independent test-script authoring below occurred before00:00 America/Martinique; no source/test coding is delegated to Codex after that boundary.
+
+## Existing enterprise presentation P2 remains open
+
+The new enterpriseAuthority helper and ProfessionalOperations props are not wired through EnterpriseSpace in this exact checkpoint:
+
+- `components/role/enterprise-space.tsx:1741–1758` passes no canWriteOrganization/canWriteSite/readOnlyReason. `components/app/forms.tsx:1391–1392` defaults omitted props totrue, leaving write forms enabled.
+- Enterprise SiteForm remains unconditional1826–1834; BudgetEditor unconditional1998–2004. Read-only viewer or selected-site read-only member gets edit controls that the server correctly refuses.
+- ApprovalDetail2223–2228 blocks viewer and owner-only-rule manager, but null role and manager selected-site can_writefalse are not blocked.
+- `components/app/session.ts:enterpriseAuthority` defaults null/undefined scope metadata toall for a manager. An independent negative check confirms both organization write and excluded-site write returntrue when metadata unavailable. This is fail-open presentation while access metadata loads/fails.
+
+Required fix to existing enterprise P2: compute authority from effective membership and current user's siteAccess, pass it into shared professional forms, and gate dedicated site creation, budget, rules/config, contract and approval controls. Fail closed for manager until access metadata available; canonical owner can retain legitimate owner authority. Preserve personal profile/support actions (not organization administration). Server403 remains the security boundary; no new SQL authorization bypass is asserted.
+
+Reproduction for Claude/browser: real viewer→Sites and sitebudget; selectedmanager with can_writefalse→same site+pendingapproval; manager with siteaccess loader held/missing→no organization write controls; owner/all-manager writable controls still usable. Root's older local7/9 report remains relevant; helper-only tests do not resolve the missing component wiring.
+
+## SUPPORT-REV-001 — P1 stale create result escapes runner into newer identity
+
+`components/courant-app.tsx:1705–1739` stores created from the awaited API and returns it even if run() returnsfalse due to generation change. The mutation's own notice/capability are guarded, but its return payload is not.
+
+`components/role/support-tickets.tsx:390–405` awaits that value then calls the old session.go and session.setNotice without mounted/current-identity checking. An unmounted component's state setter is harmless, but these session methods mutate the root controller.
+
+Sequence: A submits supportcreate; response held; A logsout/Blogs in (role remount); A create response returns; old NewTicket continuation navigates B to A's ticket id and publishes A's creation notice. Fresh server reads should deny access, so no ticket-content leak/server permission bypass is claimed. It is the same class of cross-identity root effect that session guards are intended to prevent.
+
+Required: suppress stale mutation results at controller boundary (return null when runner says notapplied), and bind post-await caller navigation/notices to identity/mount ownership. Review other returned command results for the same pattern before claiming global stale effects closed. Test held create→identity change→old completion, ensuring no new identity navigation/notices.
+
+## SUPPORT-REV-002 — P2 unresolved create idempotency key only survives a mounted form
+
+NewTicket365 creates requestId with local useState(uid). A network-uncertain create keeps that key only while this component remains mounted. The PageTitle Back action remains usable while submitting and navigation/remount/reload discards the key. Returning to NewTicket creates another key; resubmitting the same unresolved intent may duplicate a server-committed ticket whose response was lost.
+
+Within the same mounted form, retry correctly reuses requestId. Do not describe this as persistent idempotent creation across navigation. Required for persistent retry intent: retain unresolved create key/payload account-scoped until outcome resolved/explicitly abandoned, including appropriate identity clearing, or constrain/warn navigation and qualify the guarantee. Test commit+lostresponse→leave/reopen→retry retains original key and server replay rather than newticket. No claim that deliberate new separate requests must be deduplicated.
+
+## Bounded support behavior verified in source
+
+- Private list calls scope mine with server cursor/limit/filter; user has no all-scope UI. Admin list uses explicit allscope and server response total/cursor.
+- Detail requests limit50 and after_version, merges message/eventids, sorts byversion; reply sends current expected_version. CAS409 preserves body, shows conflict, disables resend until explicit reread. No automatic conflicting retry.
+- Detail renders can_reply from server; user status picker absent; admin state actions separate. Server reload null/403/404 gives unavailable/notreadable state rather than fabricated data.
+- Loader seq guard suppresses stale read payload across identity change. The write return-value escape above is distinct and remains.
+- TicketDetail initial-read effect depends id/reloadKey, not refreshedAt. A linked ticket cached before same-account accessrevocation is not automatically revalidated on focus; treat under existing CL-UI008 cache revalidation concerns, not duplicate a new finding ID. Server denies future access.
+- Personal support/profile remain available to enterprise viewer, as required; do not hide them behind organization write authority.
+
+## Admin directories source check
+
+`useDirectory` at admin-space2276+ requests server kind/filter/limit/cursor, uses returned items and server totals/has_more/next_cursor; filterchanges reset cursor, previous pages use saved cursors. This is actual server paging plumbing, not slicing the overview100-array. Bounded overview fallback is separately labeled. Artisan detail calls loadAdminDirectoryItem and dossier read uses its dedicated endpoint. No runtime proof or full directory journey coverage claimed by this review.
+
+## Actual checks
+
+Snapshot `/tmp/depannage-ui-review-9a321` exported exact revision, read-only dependency symlink. **42 existing UI tests +2 independent negative reproductions =44PASS**, exit0.
+
+Independent cases in `/tmp/depannage-ui-review-9a321/support-authority-negative.test.ts`:
+- exact enterpriseAuthority returns unrestricted writes for manager with absent metadata (asserts current bad behavior);
+- exact runner plus copied create-return/caller sequence demonstrates stale created payload still drives old-form root navigation after generation reset (asserts current bad behavior).
+
+No mounted React/browser, cloudsupport, actualCASrace, screenshots or full build performed. Negative tests passing documents defects, not fixes. Owner should add meaningful regression coverage while implementing through Claude. No owner edits.
+
+Verdict: authority wiring remains incomplete; support stale-return and persistent unresolved-key handling need correction. Server authorization is not declared broken. Entire app/preview acceptance remains outside this review.
+
+
+### Nouveaux statuts et instructions du propriétaire
+Objectif explicite : résultat complet le31octobre à08h America/Martinique. Le propriétaire autorise Vercel et Stripe à ATTENDRE ; ces services ne bloquent plus la progression sur le reste. Deux automations effectivement enregistrées et relues : pilotage de nuit à00,01,02,03,04,05,06,07 ; bilan distinct à08. La première tentative d’update est restée sans confirmation et a été interrompue, configuration relue inchangée ; la seconde update courte a réussi. Aucun bilan programmé dupliqué.
+
+Supabase001–012 réellement appliquées :012 limitée seule par dry-run puis appliquée après revue Claude sans finding ; concurrence réseau ensuite réussie, voir rapport ci-dessus. CL-BE-001 est verified dans ce périmètre backend ; UI contextualisation a4eca69 à recontrôler.
+
+CL-UI-008 reste OPEN : e5e7750/9a321 introduisent un helper mais les callsites restent incomplets et certains defaults autorisent l’écriture. Ne pas fermer sur seul test du helper. SUPPORT-REV001 P1 OPEN : résultat de création retourné malgré runner invalidé et continuation ancien compte qui navigue/notifie le nouveau. SUPPORT-REV002 P2 OPEN : clé idempotente perdue au démontage/rechargement après résultat incertain. Reproduction source9a321 et44 tests, rapport ci-dessus. Findings transmis par CLI au lead avant minuit. Exiger des tests sur la chaîne réellement utilisée, et audit des autres mutations retournant une valeur.
+
+Le compte EAS a été vérifié connecté (claude972, Owner), sans projet/build créé. Prévol/plan dans docs ci-dessous. ExpoSDK58 nécessite des outils plus récents que le compilateur local ; privilégier builds cloud compatibles déjà autorisés et vérifier quotas/signatures avant toute affirmation. Vrai natif après checkpoint fonctionnel Web/PWA hors Vercel/Stripe différés, pas de webview renommée native.
