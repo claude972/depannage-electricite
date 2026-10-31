@@ -2496,3 +2496,7 @@ c511ee0b5d9230bcf971a34f2517a3ff67d880e7 :5testsciblésPASS, paid+paid_atserveur
 
 ### PWA-LIFECYCLE-REV-004 — P2 harness fauxéchec cleanup, Claude QA, d97049f
 Confirmationlectureindépendante : stopAll itèreold→new ; olddéjàsorti maisnewactifmêmeport, stop(old)attend/retournefalsecarportoccupéparNEWpropre, puisstopnewlibère ; every(steps.stopped)conservefalsemêmepropre. Corrigerordreinverseou séparerPIDparchild/portglobalfinal, testoldsorti+newactif+stopAll=>cleanupvrai/aucunPIDrestant. Ne pas tuerétranger niignorervraieoccupationfinale. DéfautfauxFAILconservateurpaspreuveorphelin, distinctREV001launchrace ; pasdéréglerreadbackportdéjàcorrigé. RapportPWA_D97049Frevuecomplétéhorsrepoagent, findingassignémêmeQA.
+
+
+### GW-QA-401-002 — P2 OPEN recheck068a14d,13h21Martinique
+36testsGatewayPASS maisparserisPlatformUnauthorizedEnvelope vérifiecode===401numérique, tandislesdeuxenveloppesRÉELLESobservéesroot/codepubliéesGW001ontdesSTRINGScodesUNAUTHORIZED_NO_AUTH_HEADERetUNAUTHORIZED_INVALID_JWT_FORMAT. ProbeNodepuredusource068retournefalsepources2corpsreels, donccloudrelancedanscetétatéchoueraitdéterministementencore. AjouterfixturesCORPSRÉELSetacceptationstrictedeleurcode/message/authactor401; garderrefus403/500/autresc odessanspreuves+leakCheck. BackendClaudepropriétaire,mêmeagent,pascloudavantpetitSHArevu ; pasdésactivationJWT. Aucuncloud068tenté, premierFAILd7historiqueconservé/nettoyé.
