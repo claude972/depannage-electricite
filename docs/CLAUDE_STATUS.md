@@ -408,3 +408,12 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - Hidden marker at 360 px dispatched to the design agent (a2ddf36, own files only): framing padding reserved for the controls, information accessible as text outside the map, no new style; captures 360 redone; lead merges the SHA into `claude/web-shared-a5`.
 - Business c97a018: root rechecks stop gate/diagnostics before rerun; old 947 FAIL cleaned, readbacks 0.
 - Server 3017 stays BE17 for the PWA OS recovery; stale SingletonLock left to Chrome (no manual deletion). Root verifies expiry 6466 after 15:06:23 AST; no `qa-gw` cohort before its cleanup.
+
+## 2026-10-31 — root review UI GPS 0778532: integration BLOCKED, 2 P2 dispatched to design worker
+
+- Root integrates for now **backend 282edc1 only**, not the UI 0778532.
+- **P2-1** `ShareController.interrupt()` returns without bumping the generation while START is pending (repro: start suspended → pagehide → reply ⇒ watchPosition opened, watching=true, no stop). Fix required: every interruption invalidates pending operations; no watch after interruption; a late successful start gets one best-effort compensating STOP only through the same bound client/actor; null (stale) triggers nothing.
+- **P2-2** `TrackingCard` recompute depends on the new snapshot object; the route effect fires on every 15 s poll; `retry_after_s` displayed but not honoured. Fix required: real throttle ≥ 30 s and Retry-After, stable context key deps, manual calls bounded by the same gate, no 409/503 loop.
+- Root: 50 tests + tsc PASS did not cover the effects/races — deterministic controller/gate tests (deferred promises, fake clock) required. No fake wiring.
+- Dispatched to the existing design worker a2ddf36 together with the 360 marker fix; lead re-merges its SHA into `claude/web-shared-a5` and re-runs the full suite.
+- Root notes: provider 019/020 dry-run on the GPS branch refused because 018 is absent locally but present remote ⇒ root uses the integration branch that contains 018, no repair/revert of migrations. PWA recovery preflight blocked on stale lock 5318 (no manual deletion, protocol by amendment). Expiry 6466 verify is root's priority.
