@@ -867,3 +867,14 @@ compteur 500 caractères (limite serveur 2 000 conservée). Les montants restent
 3. V5-C01 fiche de site — `enterprise-site-office-{360,1280}-after.jpg`.
 4. V5-C05 tableau de bord — `enterprise-overview-{360,1280}-after.jpg`.
 5. V5-C08 approbation — `enterprise-approval-{360,1280}-after.jpg`.
+
+### Résultat du checkpoint 1 (A) — M14 documents (commit local, publication sur instruction du lead)
+
+| Ligne de l’addendum | Fait | Reste / écart |
+| --- | --- | --- |
+| Badge de compte | « N/3 pièces transmises » (`credentialSummary`), teinte succès seulement à 3/3 ; aucun pourcentage. | — |
+| Carte | Grille icône teintée / titre + description + document transmis / **colonne d’état** (pastille réelle + « Valide jusqu’au », « Expiré le » ou « Sans date d’expiration renseignée » via `credentialDateLabel`) ; actions en bas ; à ≤ 480 px l’état passe sous le titre. | Teinte de l’icône inchangée (manquant rouge, à renouveler ambre, transmis bleu, validé vert). |
+| Cibles | 0 élément interactif < 44 px à 360 et 1280 ; aucun débordement ; console sans erreur. | — |
+
+Captures : `artisan-documents-{360,1280}-after.jpg` (avant : `artisan-documents-{360,1280}-before.jpg`). Tests :
+`credentialSummary`, `credentialDateLabel` (suite UI 93/93) ; `tsc` au vert.

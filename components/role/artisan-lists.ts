@@ -168,3 +168,26 @@ export function demoPlanningRange(now: Date, zone: string): { from: string; to: 
   const iso = (d: Date) => d.toISOString().slice(0, 10);
   return { from: `${iso(monday)}T00:00:00`, to: `${iso(next)}T00:00:00` };
 }
+
+// ---- Documents obligatoires (M14) : compte réel de pièces, libellé de date sans invention -------
+import { date as formatDate } from "../app/format";
+
+export type CredentialLike = {
+  key: "missing" | "pending" | "expired" | "valid";
+  credential?: { expires_on?: string | null; created_at: string };
+};
+
+/** Compte des pièces transmises sur les trois obligatoires ; « complet » seulement à 3/3 (jamais un pourcentage de validation). */
+export function credentialSummary(states: readonly CredentialLike[]) {
+  const total = states.length;
+  const transmitted = states.filter((s) => s.key !== "missing").length;
+  return { transmitted, total, complete: total > 0 && transmitted === total, label: `${transmitted}/${total} pièces transmises` };
+}
+
+/** Colonne d’état M14 : la date vient uniquement de `expires_on` ; sans date, on le dit. */
+export function credentialDateLabel(state: CredentialLike): string | null {
+  if (!state.credential) return null;
+  const until = state.credential.expires_on;
+  if (!until) return "Sans date d’expiration renseignée";
+  return state.key === "expired" ? `Expiré le ${formatDate(until)}` : `Valide jusqu’au ${formatDate(until)}`;
+}
