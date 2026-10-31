@@ -55,6 +55,7 @@ import type {
 } from "../app/types";
 import styles from "./client.module.css";
 import { UploadQueuePanel } from "../app/upload-queue";
+import { DossierHelpLink, SupportCenter } from "./support-tickets";
 
 const CLIENT_VIEWS: readonly View[] = [
   "overview",
@@ -66,6 +67,7 @@ const CLIENT_VIEWS: readonly View[] = [
   "documents",
   "profile",
   "help",
+  "support",
 ];
 const VIEW_NAMES: Partial<Record<View, string>> = {
   overview: "Vue d’ensemble",
@@ -77,6 +79,7 @@ const VIEW_NAMES: Partial<Record<View, string>> = {
   documents: "Documents",
   profile: "Mon profil",
   help: "Aide",
+  support: "Assistance",
 };
 const SIDE_NAV: { id: View; label: string; icon: string }[] = [
   { id: "overview", label: "Vue d’ensemble", icon: "home" },
@@ -88,7 +91,7 @@ const BOTTOM_NAV: { id: View; label: string; icon: string; also: View[] }[] = [
   { id: "overview", label: "Accueil", icon: "home", also: [] },
   { id: "requests", label: "Demandes", icon: "list", also: ["new", "detail", "quote"] },
   { id: "messages", label: "Messages", icon: "message", also: [] },
-  { id: "profile", label: "Profil", icon: "person", also: ["help", "documents"] },
+  { id: "profile", label: "Profil", icon: "person", also: ["help", "documents", "support"] },
 ];
 const PROGRESS: Status[] = [
   "requested",
@@ -247,6 +250,8 @@ export function ClientSpace({ session }: { session: Session }) {
         return <ProfileView session={session} />;
       case "help":
         return <HelpView session={session} />;
+      case "support":
+        return <SupportCenter session={session} interventions={rows} backView="overview" />;
       default:
         return <Forbidden onHome={() => session.go("overview")} />;
     }
@@ -311,6 +316,14 @@ export function ClientSpace({ session }: { session: Session }) {
           >
             <Icon name="help" size={18} />
             Aide
+          </button>
+          <button
+            type="button"
+            aria-current={view === "support" ? "page" : undefined}
+            onClick={() => session.go("support")}
+          >
+            <Icon name="shield" size={18} />
+            Assistance
           </button>
           <button
             type="button"
@@ -1086,6 +1099,7 @@ function DetailView({
           </Tag>
         </div>
       </section>
+      <DossierHelpLink session={session} interventionId={i.id} />
 
       <div className={styles.cardHead}>
         <h2>
@@ -1846,6 +1860,18 @@ function ProfileView({ session }: { session: Session }) {
             </button>
           </section>
           <section className={styles.asideCard}>
+            <Icon name="shield" size={26} />
+            <h3>Assistance</h3>
+            <p>Vos demandes à l’équipe de la plateforme et leurs réponses, consultables ici.</p>
+            <button
+              type="button"
+              className="button outline full"
+              onClick={() => session.go("support")}
+            >
+              Ouvrir l’assistance
+            </button>
+          </section>
+          <section className={styles.asideCard}>
             <Icon name="help" size={26} />
             <h3>Aide</h3>
             <p>Comprendre les étapes : estimation, devis, intervention, règlement.</p>
@@ -1905,6 +1931,21 @@ function HelpView({ session }: { session: Session }) {
               onClick={() => session.go("new")}
             >
               Créer une demande
+            </button>
+          </section>
+          <section className={styles.asideCard}>
+            <Icon name="shield" size={26} />
+            <h3>Une question que l’aide ne couvre pas ?</h3>
+            <p>
+              Écrivez à l’équipe de la plateforme : les réponses apparaissent dans votre espace, sans
+              appel ni email, et aucun délai n’est garanti.
+            </p>
+            <button
+              type="button"
+              className="button outline full"
+              onClick={() => session.go("support")}
+            >
+              Ouvrir l’assistance
             </button>
           </section>
           <section className={styles.asideCard}>

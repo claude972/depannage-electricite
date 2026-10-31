@@ -2,8 +2,9 @@
 // Platform Super Admin space (reference M43). The operator of the platform, not the owner of a
 // client organisation. Every figure comes from session.loadAdminOverview() (global counts,
 // lists bounded to capabilities.list_limit), from the server-paginated dossier list
-// (session.loadAdminInterventions / loadAdminIntervention, contract WEB-PWA-ADMIN-LISTS-001) or
-// from session.data; every mutation goes through session.* or the shared forms that already
+// (session.loadAdminInterventions / loadAdminIntervention, contract WEB-PWA-ADMIN-LISTS-001),
+// from the server-paginated directories (session.loadAdminDirectory / loadAdminDirectoryItem,
+// contract WEB-PWA-ADMIN-DIRECTORIES-001) or from session.data; every mutation goes through session.* or the shared forms that already
 // carry their own confirmation.
 import {
   useCallback,
@@ -24,12 +25,24 @@ import type {
   ArtisanDossier,
   Category,
   CredentialKind,
+  DirectoryArtisan,
+  DirectoryClient,
+  DirectoryFilters,
+  DirectoryItem,
+  DirectoryKind,
+  DirectoryPage,
   Intervention,
   Message,
   Operations,
   Quote,
   Role,
   Status,
+  SupportCommand,
+  SupportDetail,
+  SupportEvent,
+  SupportListPage,
+  SupportMessage,
+  SupportStatus,
   Urgency,
   View,
 } from "../app/types";
@@ -150,6 +163,7 @@ const maskSiret = (siret: string) => {
   if (digits.length <= 4) return digits;
   return `${"•".repeat(digits.length - 4)} ${digits.slice(-4)}`;
 };
+const yesNo = (value: boolean) => (value ? "Oui" : "Non");
 const todayIso = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -330,6 +344,8 @@ export function AdminSpace({ session }: { session: Session }) {
   const [reloading, setReloading] = useState(false);
   const [loadedAt, setLoadedAt] = useState<Date | null>(null);
   const [staleNote, setStaleNote] = useState("");
+  // Name of the artisan opened from the directory when the bounded overview does not hold it.
+  const [detailName, setDetailName] = useState("");
   const load = useCallback(async () => {
     setReloading(true);
     const result = await sessionRef.current.loadAdminOverview();
@@ -439,7 +455,7 @@ export function AdminSpace({ session }: { session: Session }) {
         return { title: "Artisans", subtitle: "Candidatures, approbations et suspensions" };
       case "admin-artisan":
         return {
-          title: artisanName(session.param) || "Dossier artisan",
+          title: artisanName(session.param) || detailName || "Dossier artisan",
           subtitle: "Examen d’une candidature artisan",
         };
       case "admin-interventions":
@@ -455,7 +471,7 @@ export function AdminSpace({ session }: { session: Session }) {
         return { title: "Avis & Notes", subtitle: "Avis déposés par les clients après règlement" };
       case "admin-messages":
       case "messages":
-        return { title: "Messages", subtitle: "Support et échanges des dossiers" };
+        return { title: "Messages", subtitle: "Assistance et messages des dossiers" };
       case "admin-settings":
         return { title: "Paramètres", subtitle: "Réglages de la plateforme, fonctions activées et journal d’audit" };
       case "admin-warranty":
@@ -561,91 +577,36 @@ export function AdminSpace({ session }: { session: Session }) {
     );
   };
 
-  const renderArtisans = (o: AdminOverview) => (
-    <ArtisansView overview={o} demo={demo} limitNote={limitNote} onOpen={(id) => go("admin-artisan", id)} onReload={() => void load()} reloading={reloading} />
+  // Server-paginated directory (contract WEB-PWA-ADMIN-DIRECTORIES-001): does not depend on the
+  // overview, which only feeds the labelled fallback list.
+  const renderArtisans = () => (
+    <ArtisansView
+      session={session}
+      overview={overview}
+      overviewFailed={overviewFailed}
+      demo={demo}
+      limitNote={limitNote}
+      onOpen={(id) => go("admin-artisan", id)}
+      onReloadOverview={() => void load()}
+      reloadingOverview={reloading}
+    />
   );
 
-  const renderArtisan = (o: AdminOverview) => {
-    const id = session.param;
-    const artisan = o.artisans.find((a) => a.id === id);
-    const back = (
-      <button type="button" className={styles.backLink} onClick={() => go("admin-artisans")}>
-        <Icon name="back" size={16} />
-        Retour aux artisans
-      </button>
-    );
-    if (!artisan)
-      return (
-        <>
-          {back}
-          <Empty icon="person" title="Artisan introuvable">
-            Cet identifiant ne figure pas parmi les {o.capabilities.list_limit} derniers artisans chargés. Actualisez les données ou revenez à la liste.
-          </Empty>
-        </>
-      );
-    const missions = o.interventions.filter((i) => i.artisan_id === artisan.id).sort(byNewest);
-    return (
-      <>
-        {back}
-        <div className={styles.detailGrid}>
-          <div>
-            <Panel title="Identité">
-              <dl className={styles.definitions}>
-                <dt>Nom</dt>
-                <dd>{artisan.full_name}</dd>
-                {artisan.phone && (
-                  <>
-                    <dt>Téléphone</dt>
-                    <dd>{artisan.phone}</dd>
-                  </>
-                )}
-                <dt>Approbation</dt>
-                <dd>{artisan.artisan_approved ? <Tag tone="green">Approuvé</Tag> : <Tag tone="amber">Non approuvé</Tag>}</dd>
-                <dt>Inscription</dt>
-                <dd>{artisan.created_at ? date(artisan.created_at) : "Date non transmise"}</dd>
-                <dt>Identifiant</dt>
-                <dd className={styles.mono}>{shortUser(artisan.id)}</dd>
-              </dl>
-            </Panel>
-            <ArtisanDossierPanel session={session} userId={artisan.id} summary={artisan} />
-            <Panel title="Règles d’approbation">
-              <ul className={styles.rules}>
-                <li>L’approbation exige un dossier soumis par l’artisan (société, SIRET, adresse, zone et compétences).</li>
-                <li>Toute modification du dossier par l’artisan remet son approbation à zéro : le dossier repasse en brouillon.</li>
-                <li>La suspension bloque l’accès aux nouvelles missions et les écritures terrain (étape de déplacement, compte rendu).</li>
-              </ul>
-            </Panel>
-            <Panel title={`Interventions de ${artisan.full_name}`} count={missions.length}>
-              {missions.length ? (
-                <div className={styles.rowList}>
-                  {missions.map((i) => (
-                    <InterventionRow key={i.id} intervention={i} artisanName={artisan.full_name} onOpen={() => openDossier(i.id)} />
-                  ))}
-                </div>
-              ) : (
-                <Empty icon="list" title="Aucune intervention attribuée">
-                  Aucun dossier parmi les {o.capabilities.list_limit} derniers chargés n’est attribué à cet artisan.
-                </Empty>
-              )}
-            </Panel>
-          </div>
-          <aside>
-            <Panel title="Décision">
-              <div className={styles.highlight}>
-                <Icon name="info" size={16} />
-                <span>
-                  Retrouvez la ligne « {artisan.full_name} » dans la liste ci-dessous pour approuver ou suspendre sa candidature. La liste est celle de l’administration existante ; actualisez ensuite les données.
-                </span>
-              </div>
-              <div className={styles.embedded}>
-                <ArtisanAdministration demo={demo} />
-              </div>
-            </Panel>
-          </aside>
-        </div>
-      </>
-    );
-  };
+  const renderArtisan = () => (
+    <ArtisanDetailView
+      key={session.param}
+      id={session.param}
+      session={session}
+      overview={overview}
+      overviewFailed={overviewFailed}
+      demo={demo}
+      onBack={() => go("admin-artisans")}
+      onOpenDossier={openDossier}
+      onResolvedName={setDetailName}
+      onReloadOverview={() => void load()}
+      reloadingOverview={reloading}
+    />
+  );
 
   // Server-paginated list: does not depend on the overview (only artisan names come from it).
   const renderInterventions = () => (
@@ -770,7 +731,16 @@ export function AdminSpace({ session }: { session: Session }) {
     );
   };
 
-  const renderClients = (o: AdminOverview) => <ClientsView overview={o} limitNote={limitNote} onOpen={openDossier} />;
+  const renderClients = () => (
+    <ClientsView
+      session={session}
+      overview={overview}
+      overviewFailed={overviewFailed}
+      limitNote={limitNote}
+      onReloadOverview={() => void load()}
+      reloadingOverview={reloading}
+    />
+  );
 
   const renderReviews = () => {
     const reviews = [...session.data.reviews].sort((a, b) => Date.parse(b.created_at || "") - Date.parse(a.created_at || ""));
@@ -836,14 +806,12 @@ export function AdminSpace({ session }: { session: Session }) {
       session.data.interventions.find((i) => i.id === id) || overview?.interventions.find((i) => i.id === id);
     return (
       <>
-        <Unavailable
-          title="Boîte de support"
-          reason={
-            caps?.support_tickets
-              ? "Fonction annoncée mais pas encore activée dans cette interface : attendez son activation."
-              : "Pas encore activé sur ce service : les demandes d’assistance ne transitent pas par cette interface. Les messages des dossiers restent lisibles ci-dessous."
-          }
-          blocker="ADM-07"
+        <AssistanceCentre
+          session={session}
+          ticketId={view === "admin-messages" ? session.param : ""}
+          onOpenTicket={(id) => go("admin-messages", id)}
+          onBack={() => go("admin-messages")}
+          onOpenDossier={openDossier}
         />
         <Panel title="Messages des dossiers (lecture)" count={messages.length} intro="Vingt derniers messages échangés dans les dossiers chargés, en lecture seule.">
           {messages.length ? (
@@ -901,15 +869,22 @@ export function AdminSpace({ session }: { session: Session }) {
               <tbody>
                 {(
                   [
-                    ["Réaffectation avant acceptation du devis", o.capabilities.dispatch_before_quote_acceptance],
-                    ["Remboursements", o.capabilities.refunds],
-                    ["Factures", o.capabilities.invoices],
-                    ["Tickets support", o.capabilities.support_tickets],
+                    ["Réaffectation avant acceptation du devis", yesNo(o.capabilities.dispatch_before_quote_acceptance)],
+                    ["Remboursements", yesNo(o.capabilities.refunds)],
+                    ["Factures", yesNo(o.capabilities.invoices)],
+                    [
+                      "Demandes d’assistance",
+                      o.capabilities.support_tickets
+                        ? "Oui"
+                        : session.capabilities.support === "available"
+                          ? "Activé par le service d’assistance"
+                          : "Non",
+                    ],
                   ] as const
                 ).map(([label, value]) => (
                   <tr key={label}>
                     <td data-label="Fonction">{label}</td>
-                    <td data-label="Valeur">{value ? "Oui" : "Non"}</td>
+                    <td data-label="Valeur">{value}</td>
                   </tr>
                 ))}
                 <tr>
@@ -985,10 +960,10 @@ export function AdminSpace({ session }: { session: Session }) {
         content = withOverview(renderDashboard);
         break;
       case "admin-artisans":
-        content = withOverview(renderArtisans);
+        content = renderArtisans();
         break;
       case "admin-artisan":
-        content = withOverview(renderArtisan);
+        content = renderArtisan();
         break;
       case "admin-interventions":
         content = renderInterventions();
@@ -1005,7 +980,7 @@ export function AdminSpace({ session }: { session: Session }) {
         content = renderQuotes();
         break;
       case "admin-clients":
-        content = withOverview(renderClients);
+        content = renderClients();
         break;
       case "admin-reviews":
         content = renderReviews();
@@ -1163,7 +1138,7 @@ function ArtisanDossierPanel({
 }: {
   session: Session;
   userId: string;
-  summary: OverviewArtisan;
+  summary: Pick<ArtisanRow, "company_name" | "application_status">;
 }) {
   const sessionRef = useRef(session);
   sessionRef.current = session;
@@ -1304,105 +1279,170 @@ function FragmentPair({ term, value }: { term: string; value: string }) {
 }
 
 // ---- Artisans ------------------------------------------------------------------------------
+// Row shape shared by the directory projection and the bounded overview list.
+type ArtisanRow = {
+  id: string;
+  full_name: string;
+  phone?: string | null;
+  artisan_approved?: boolean;
+  created_at?: string | null;
+  company_name?: string | null;
+  application_status?: ArtisanApplicationStatus | null;
+};
+type ApprovedFilter = "" | "true" | "false";
+
+function ArtisanTable<T extends ArtisanRow>({ rows, caption, onOpen }: { rows: T[]; caption: string; onOpen: (id: string) => void }) {
+  return (
+    <DataTable
+      caption={caption}
+      rows={rows}
+      keyOf={(a) => a.id}
+      columns={[
+        { key: "name", label: "Artisan", wide: true, render: (a) => <Person name={a.full_name} sub={a.created_at ? `Inscrit le ${date(a.created_at)}` : undefined} /> },
+        { key: "company", label: "Société", render: (a) => a.company_name || "—" },
+        { key: "status", label: "Dossier", render: (a) => applicationTag(a.application_status) },
+        {
+          key: "approved",
+          label: "Approuvé",
+          render: (a) => (
+            <span className={styles.badges}>
+              {a.artisan_approved ? "Oui" : "Non"}
+              {a.artisan_approved ? <Tag tone="green">Missions ouvertes</Tag> : <Tag tone="neutral">Missions fermées</Tag>}
+            </span>
+          ),
+        },
+        {
+          key: "actions",
+          label: "Actions",
+          render: (a) => (
+            <button type="button" className={styles.rowAction} onClick={() => onOpen(a.id)}>
+              <Icon name="eye" size={15} />
+              Examiner
+            </button>
+          ),
+        },
+      ]}
+      empty={null}
+    />
+  );
+}
+
+// Server-paginated artisan directory. The bounded overview list only appears, labelled as such,
+// when the directory is unavailable; the decisions block below is the existing administration.
 function ArtisansView({
+  session,
   overview,
+  overviewFailed,
   demo,
   limitNote,
   onOpen,
-  onReload,
-  reloading,
+  onReloadOverview,
+  reloadingOverview,
 }: {
-  overview: AdminOverview;
+  session: Session;
+  overview: AdminOverview | null;
+  overviewFailed: boolean;
   demo: boolean;
   limitNote: string;
   onOpen: (id: string) => void;
-  onReload: () => void;
-  reloading: boolean;
+  onReloadOverview: () => void;
+  reloadingOverview: boolean;
 }) {
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState<"all" | "none" | ArtisanApplicationStatus>("all");
-  const rows = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return overview.artisans
-      .filter((a) => {
-        if (status === "none" && a.application_status) return false;
-        if (status !== "all" && status !== "none" && a.application_status !== status) return false;
-        if (!q) return true;
-        return a.full_name.toLowerCase().includes(q) || (a.company_name || "").toLowerCase().includes(q);
-      })
-      .sort((a, b) => Date.parse(b.created_at || "") - Date.parse(a.created_at || ""));
-  }, [overview.artisans, search, status]);
+  const directory = useDirectory(session, "artisans");
+  const [showBounded, setShowBounded] = useState(false);
+  const approved: ApprovedFilter =
+    directory.filters.approved === undefined ? "" : directory.filters.approved ? "true" : "false";
+  const filtering = Boolean(directory.filters.q || directory.filters.approved !== undefined);
+  const boundedLabel = `${overview?.capabilities.list_limit ?? 100} derniers artisans chargés`;
+
+  let body: ReactNode;
+  if (directory.page === undefined) {
+    body = <Loader label="Chargement des artisans…" />;
+  } else if (directory.page === null) {
+    body = (
+      <DirectoryUnavailable
+        title="Annuaire des artisans indisponible"
+        state={session.capabilities.adminDirectory}
+        onRetry={directory.retry}
+        fallbackLabel={`Afficher les ${boundedLabel}`}
+        fallbackShown={showBounded}
+        onFallback={() => setShowBounded(true)}
+      />
+    );
+  } else if (!directory.rows.length) {
+    body = (
+      <DirectoryEmpty
+        directory={directory}
+        filtering={filtering}
+        icon="users"
+        texts={{
+          gone: "Cette page ne contient plus d’artisan",
+          noMatch: "Aucun artisan ne correspond",
+          none: "Aucun artisan inscrit",
+          noneText: "Les inscriptions artisans apparaîtront ici.",
+        }}
+      />
+    );
+  } else {
+    body = <ArtisanTable rows={directory.rows} caption="Annuaire des artisans" onOpen={onOpen} />;
+  }
+
   return (
     <>
-      <Panel title="Artisans inscrits" count={overview.counts.artisans}>
-        <div className={styles.filters}>
-          <label className={styles.filter}>
-            Recherche (nom ou société)
-            <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Nom de l’artisan ou de la société" maxLength={100} />
-          </label>
-          <label className={styles.filter}>
-            État du dossier
-            <select value={status} onChange={(e) => setStatus(e.target.value as typeof status)}>
-              <option value="all">Tous les états</option>
-              {(Object.keys(APPLICATION) as ArtisanApplicationStatus[]).map((s) => (
-                <option key={s} value={s}>
-                  {APPLICATION[s].label}
-                </option>
-              ))}
-              <option value="none">Aucun dossier</option>
-            </select>
-          </label>
-        </div>
-        <DataTable
-          caption="Artisans"
-          rows={rows}
-          keyOf={(a) => a.id}
-          columns={[
-            { key: "name", label: "Artisan", wide: true, render: (a) => <Person name={a.full_name} sub={a.created_at ? `Inscrit le ${date(a.created_at)}` : undefined} /> },
-            { key: "company", label: "Société", render: (a) => a.company_name || "—" },
-            { key: "status", label: "Dossier", render: (a) => applicationTag(a.application_status) },
-            {
-              key: "approved",
-              label: "Approuvé",
-              render: (a) => (
-                <span className={styles.badges}>
-                  {a.artisan_approved ? "Oui" : "Non"}
-                  {a.artisan_approved ? <Tag tone="green">Missions ouvertes</Tag> : <Tag tone="neutral">Missions fermées</Tag>}
-                </span>
-              ),
-            },
-            {
-              key: "actions",
-              label: "Actions",
-              render: (a) => (
-                <button type="button" className={styles.rowAction} onClick={() => onOpen(a.id)}>
-                  <Icon name="eye" size={15} />
-                  Examiner
-                </button>
-              ),
-            },
-          ]}
-          empty={
-            overview.artisans.length ? (
-              <Empty icon="search" title="Aucun artisan ne correspond">
-                Modifiez la recherche ou l’état du dossier.
-              </Empty>
-            ) : (
-              <Empty icon="users" title="Aucun artisan inscrit">
-                Les inscriptions artisans apparaîtront ici.
-              </Empty>
-            )
-          }
-        />
-        <Basis>{limitNote}</Basis>
+      <Panel title="Artisans inscrits" count={directory.page?.page.total}>
+        <form className={styles.filters} onSubmit={directory.submitSearch} noValidate>
+          <DirectorySearch id="admin-artisan-search" label="Recherche (nom ou identifiant complet)" placeholder="Nom de l’artisan" directory={directory} />
+          <Segments
+            label="Approbation"
+            value={approved}
+            options={[
+              ["", "Tous"],
+              ["true", "Approuvés"],
+              ["false", "Non approuvés"],
+            ]}
+            onChange={(v) => directory.restart({ approved: v === "" ? undefined : v === "true" })}
+          />
+          <PageSizeSelect label="Artisans par page" directory={directory} />
+          <button type="button" className={styles.link} onClick={directory.reset}>
+            <Icon name="refresh" size={15} />
+            Réinitialiser
+          </button>
+          <DirectorySearchHelp id="admin-artisan-search" directory={directory} />
+        </form>
+        {body}
+        <DirectoryPager directory={directory} noun={{ one: "artisan", many: "artisans" }} />
+        <Basis>
+          Nombre total compté sur l’ensemble des artisans inscrits selon les filtres, pas seulement sur la page affichée. La recherche porte sur le nom, pas sur la société. Les inscriptions ou modifications survenues pendant la consultation n’apparaissent qu’après une actualisation.
+        </Basis>
       </Panel>
+      {showBounded && (
+        <BoundedArtisansView
+          overview={overview}
+          overviewFailed={overviewFailed}
+          overviewState={session.capabilities.adminOverview}
+          limitNote={limitNote}
+          label={boundedLabel}
+          onOpen={onOpen}
+          onHide={() => setShowBounded(false)}
+          onReload={onReloadOverview}
+          reloading={reloadingOverview}
+        />
+      )}
       <Panel
         title="Décisions d’approbation et suspension"
-        intro="Approuver ouvre l’accès aux missions après vérification du dossier ; suspendre ferme les nouvelles missions et les écritures terrain. Après une décision, actualisez les données pour mettre la liste ci-dessus à jour."
+        intro="Approuver ouvre l’accès aux missions après vérification du dossier ; suspendre ferme les nouvelles missions et les écritures terrain. Après une décision, actualisez les données pour mettre l’annuaire ci-dessus à jour."
         action={
-          <button type="button" className={styles.link} onClick={onReload} disabled={reloading}>
+          <button
+            type="button"
+            className={styles.link}
+            onClick={() => {
+              directory.retry();
+              onReloadOverview();
+            }}
+            disabled={reloadingOverview}
+          >
             <Icon name="refresh" size={15} />
-            {reloading ? "Actualisation…" : "Actualiser la vue d’ensemble"}
+            {reloadingOverview ? "Actualisation…" : "Actualiser les données"}
           </button>
         }
       >
@@ -1410,6 +1450,320 @@ function ArtisansView({
           <ArtisanAdministration demo={demo} />
         </div>
       </Panel>
+    </>
+  );
+}
+
+// Fallback when the directory is unavailable: the bounded overview list, filtered in the browser
+// and labelled as such. Never presented as the complete directory, never with a total.
+function BoundedArtisansView({
+  overview,
+  overviewFailed,
+  overviewState,
+  limitNote,
+  label,
+  onOpen,
+  onHide,
+  onReload,
+  reloading,
+}: {
+  overview: AdminOverview | null;
+  overviewFailed: boolean;
+  overviewState: Session["capabilities"]["adminOverview"];
+  limitNote: string;
+  label: string;
+  onOpen: (id: string) => void;
+  onHide: () => void;
+  onReload: () => void;
+  reloading: boolean;
+}) {
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<"all" | "none" | ArtisanApplicationStatus>("all");
+  const artisans = overview?.artisans;
+  const rows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (artisans || [])
+      .filter((a) => {
+        if (status === "none" && a.application_status) return false;
+        if (status !== "all" && status !== "none" && a.application_status !== status) return false;
+        if (!q) return true;
+        return a.full_name.toLowerCase().includes(q) || (a.company_name || "").toLowerCase().includes(q);
+      })
+      .sort((a, b) => Date.parse(b.created_at || "") - Date.parse(a.created_at || ""));
+  }, [artisans, search, status]);
+  return (
+    <BoundedPanel
+      label={label}
+      overview={overview}
+      overviewFailed={overviewFailed}
+      overviewState={overviewState}
+      onHide={onHide}
+      onReload={onReload}
+      reloading={reloading}
+      count={(o) => o.artisans.length}
+      intro={(o) => `Liste de secours : les ${o.capabilities.list_limit} derniers artisans chargés au plus, filtrés dans le navigateur. Elle n’est pas exhaustive et n’affiche aucun total.`}
+    >
+      {(o) => (
+        <>
+          <div className={styles.filters}>
+            <label className={styles.filter}>
+              Recherche (nom ou société)
+              <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Nom de l’artisan ou de la société" maxLength={100} />
+            </label>
+            <label className={styles.filter}>
+              État du dossier
+              <select value={status} onChange={(e) => setStatus(e.target.value as typeof status)}>
+                <option value="all">Tous les états</option>
+                {(Object.keys(APPLICATION) as ArtisanApplicationStatus[]).map((s) => (
+                  <option key={s} value={s}>
+                    {APPLICATION[s].label}
+                  </option>
+                ))}
+                <option value="none">Aucun dossier</option>
+              </select>
+            </label>
+          </div>
+          {rows.length ? (
+            <ArtisanTable rows={rows} caption={label} onOpen={onOpen} />
+          ) : o.artisans.length ? (
+            <Empty icon="search" title="Aucun artisan chargé ne correspond">
+              Modifiez la recherche ou l’état du dossier ; seuls les derniers artisans chargés sont parcourus.
+            </Empty>
+          ) : (
+            <Empty icon="users" title="Aucun artisan chargé">
+              La vue d’ensemble n’a transmis aucun artisan.
+            </Empty>
+          )}
+          <Basis>{limitNote}</Basis>
+        </>
+      )}
+    </BoundedPanel>
+  );
+}
+
+// Shared chrome of the fallback lists: hide link, loading and unavailable states of the overview.
+function BoundedPanel({
+  label,
+  overview,
+  overviewFailed,
+  overviewState,
+  onHide,
+  onReload,
+  reloading,
+  count,
+  intro,
+  children,
+}: {
+  label: string;
+  overview: AdminOverview | null;
+  overviewFailed: boolean;
+  overviewState: Session["capabilities"]["adminOverview"];
+  onHide: () => void;
+  onReload: () => void;
+  reloading: boolean;
+  count: (o: AdminOverview) => number;
+  intro: (o: AdminOverview) => string;
+  children: (o: AdminOverview) => ReactNode;
+}) {
+  const hide = (
+    <button type="button" className={styles.link} onClick={onHide}>
+      Masquer cette liste
+    </button>
+  );
+  if (!overview) {
+    return (
+      <Panel title={label} action={hide}>
+        {overviewFailed ? (
+          <div className={styles.panelBody}>
+            <Unavailable title="Derniers enregistrements chargés indisponibles" state={overviewState}>
+              <div className={styles.actions} style={{ marginTop: 12 }}>
+                <button type="button" className="button outline" onClick={onReload} disabled={reloading}>
+                  <Icon name="refresh" size={16} />
+                  {reloading ? "Actualisation…" : "Réessayer"}
+                </button>
+              </div>
+            </Unavailable>
+          </div>
+        ) : (
+          <Loader label="Chargement des derniers enregistrements…" />
+        )}
+      </Panel>
+    );
+  }
+  return (
+    <Panel title={label} count={count(overview)} action={hide} intro={intro(overview)}>
+      {children(overview)}
+    </Panel>
+  );
+}
+
+// Admin reading of one artisan. The header comes from the bounded overview when it holds the
+// artisan, otherwise from the directory detail; the full dossier stays ArtisanDossierPanel.
+function ArtisanDetailView({
+  id,
+  session,
+  overview,
+  overviewFailed,
+  demo,
+  onBack,
+  onOpenDossier,
+  onResolvedName,
+  onReloadOverview,
+  reloadingOverview,
+}: {
+  id: string;
+  session: Session;
+  overview: AdminOverview | null;
+  overviewFailed: boolean;
+  demo: boolean;
+  onBack: () => void;
+  onOpenDossier: (id: string) => void;
+  onResolvedName: (name: string) => void;
+  onReloadOverview: () => void;
+  reloadingOverview: boolean;
+}) {
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  const fromOverview = overview?.artisans.find((a) => a.id === id);
+  const needsItem = !fromOverview;
+  // undefined = loading, null = absent (404) or directory unavailable.
+  const [item, setItem] = useState<DirectoryArtisan | null | undefined>(undefined);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    if (!needsItem) return;
+    let active = true;
+    setItem(undefined);
+    void sessionRef.current.loadAdminDirectoryItem("artisans", id).then((result) => {
+      if (active) setItem(result);
+    });
+    return () => {
+      active = false;
+    };
+  }, [id, needsItem, attempt, session.data]);
+  const nameRef = useRef(onResolvedName);
+  nameRef.current = onResolvedName;
+  const resolvedName = fromOverview ? "" : item?.full_name ?? "";
+  useEffect(() => {
+    nameRef.current(resolvedName);
+    return () => nameRef.current("");
+  }, [resolvedName]);
+
+  const artisan: ArtisanRow | undefined = fromOverview ?? item ?? undefined;
+  const back = (
+    <button type="button" className={styles.backLink} onClick={onBack}>
+      <Icon name="back" size={16} />
+      Retour aux artisans
+    </button>
+  );
+  if (!artisan && item === undefined)
+    return (
+      <>
+        {back}
+        <Loader label="Recherche de l’artisan…" />
+      </>
+    );
+  if (!artisan) {
+    const state = session.capabilities.adminDirectory;
+    return (
+      <>
+        {back}
+        <Empty
+          icon="person"
+          title="Artisan introuvable"
+          action={
+            <button type="button" className="button outline" onClick={() => setAttempt((n) => n + 1)}>
+              <Icon name="refresh" size={16} />
+              Réessayer
+            </button>
+          }
+        >
+          Aucune fiche artisan ne correspond à cet identifiant, ou l’annuaire n’a pas répondu. Revenez à la liste pour choisir un artisan.
+        </Empty>
+        {state !== "available" && <Unavailable title="Annuaire des artisans" state={state} />}
+      </>
+    );
+  }
+  const missions = overview ? overview.interventions.filter((i) => i.artisan_id === artisan.id).sort(byNewest) : [];
+  return (
+    <>
+      {back}
+      <div className={styles.detailGrid}>
+        <div>
+          <Panel title="Identité">
+            <dl className={styles.definitions}>
+              <dt>Nom</dt>
+              <dd>{artisan.full_name}</dd>
+              {artisan.phone && (
+                <>
+                  <dt>Téléphone</dt>
+                  <dd>{artisan.phone}</dd>
+                </>
+              )}
+              <dt>Approbation</dt>
+              <dd>{artisan.artisan_approved ? <Tag tone="green">Approuvé</Tag> : <Tag tone="amber">Non approuvé</Tag>}</dd>
+              <dt>Société</dt>
+              <dd>{artisan.company_name || "Non renseignée"}</dd>
+              <dt>État du dossier</dt>
+              <dd>{applicationTag(artisan.application_status)}</dd>
+              <dt>Inscription</dt>
+              <dd>{artisan.created_at ? date(artisan.created_at) : "Date non transmise"}</dd>
+              <dt>Identifiant</dt>
+              <dd className={styles.mono}>{shortUser(artisan.id)}</dd>
+            </dl>
+            {!fromOverview && <Basis>Fiche lue dans l’annuaire : cet artisan ne figure pas parmi les derniers enregistrements de la vue d’ensemble.</Basis>}
+          </Panel>
+          <ArtisanDossierPanel session={session} userId={artisan.id} summary={artisan} />
+          <Panel title="Règles d’approbation">
+            <ul className={styles.rules}>
+              <li>L’approbation exige un dossier soumis par l’artisan (société, SIRET, adresse, zone et compétences).</li>
+              <li>Toute modification du dossier par l’artisan remet son approbation à zéro : le dossier repasse en brouillon.</li>
+              <li>La suspension bloque l’accès aux nouvelles missions et les écritures terrain (étape de déplacement, compte rendu).</li>
+            </ul>
+          </Panel>
+          <Panel title={`Interventions de ${artisan.full_name}`} count={overview ? missions.length : undefined}>
+            {!overview ? (
+              overviewFailed ? (
+                <div className={styles.panelBody}>
+                  <Unavailable title="Interventions de l’artisan indisponibles" state={session.capabilities.adminOverview}>
+                    <div className={styles.actions} style={{ marginTop: 12 }}>
+                      <button type="button" className="button outline" onClick={onReloadOverview} disabled={reloadingOverview}>
+                        <Icon name="refresh" size={16} />
+                        {reloadingOverview ? "Actualisation…" : "Réessayer"}
+                      </button>
+                    </div>
+                  </Unavailable>
+                </div>
+              ) : (
+                <Loader label="Chargement des derniers dossiers…" />
+              )
+            ) : missions.length ? (
+              <div className={styles.rowList}>
+                {missions.map((i) => (
+                  <InterventionRow key={i.id} intervention={i} artisanName={artisan.full_name} onOpen={() => onOpenDossier(i.id)} />
+                ))}
+              </div>
+            ) : (
+              <Empty icon="list" title="Aucune intervention attribuée">
+                Aucun dossier parmi les {overview.capabilities.list_limit} derniers chargés n’est attribué à cet artisan.
+              </Empty>
+            )}
+            {overview && <Basis>Dossiers attribués à cet artisan parmi les {overview.capabilities.list_limit} derniers chargés ; la liste complète de ses interventions n’est pas transmise.</Basis>}
+          </Panel>
+        </div>
+        <aside>
+          <Panel title="Décision">
+            <div className={styles.highlight}>
+              <Icon name="info" size={16} />
+              <span>
+                Retrouvez la ligne « {artisan.full_name} » dans la liste ci-dessous pour approuver ou suspendre sa candidature. La liste est celle de l’administration existante ; actualisez ensuite les données.
+              </span>
+            </div>
+            <div className={styles.embedded}>
+              <ArtisanAdministration demo={demo} />
+            </div>
+          </Panel>
+        </aside>
+      </div>
     </>
   );
 }
@@ -1895,109 +2249,626 @@ function BoundedInterventionsView({
   );
 }
 
-// ---- Clients -------------------------------------------------------------------------------
-function ClientsView({
-  overview,
-  limitNote,
-  onOpen,
+// ---- Directories (contract WEB-PWA-ADMIN-DIRECTORIES-001) ----------------------------------
+const DIRECTORY_SEARCH_HELP =
+  "2 à 80 caractères : lettres, chiffres, espaces, tirets et apostrophes. Un identifiant complet ouvre cette fiche exacte.";
+type Directory<K extends DirectoryKind> = {
+  page: DirectoryPage<K> | null | undefined;
+  rows: DirectoryItem<K>[];
+  filters: DirectoryFilters;
+  limit: PageSize;
+  position: PagePosition;
+  hasPrevious: boolean;
+  search: string;
+  searchError: string;
+  setSearch: (value: string) => void;
+  submitSearch: (event: FormEvent) => void;
+  restart: (next: DirectoryFilters) => void;
+  changeLimit: (next: PageSize) => void;
+  reset: () => void;
+  retry: () => void;
+  goNext: () => void;
+  goPrevious: () => void;
+};
+// One server-paginated directory: a filter change restarts from the first page (the cursor is
+// bound to the filters), "Précédent" replays the cursors kept client-side, the total is the
+// server count. undefined = loading, null = unavailable (capabilities.adminDirectory tells why).
+function useDirectory<K extends DirectoryKind>(session: Session, kind: K): Directory<K> {
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  const [filters, setFilters] = useState<DirectoryFilters>({});
+  const [limit, setLimit] = useState<PageSize>(25);
+  const [position, setPosition] = useState<PagePosition>(FIRST_PAGE);
+  const [previous, setPrevious] = useState<PagePosition[]>([]);
+  const [search, setSearchText] = useState("");
+  const [searchError, setSearchError] = useState("");
+  const [page, setPage] = useState<DirectoryPage<K> | null | undefined>(undefined);
+  const [attempt, setAttempt] = useState(0);
+  const requestId = useRef(0);
+
+  useEffect(() => {
+    const my = ++requestId.current;
+    setPage(undefined);
+    void sessionRef.current
+      .loadAdminDirectory(kind, {
+        q: filters.q || undefined,
+        approved: filters.approved,
+        role: filters.role,
+        owner_id: filters.owner_id,
+        limit,
+        cursor: position.cursor,
+      })
+      .then((result) => {
+        if (my === requestId.current) setPage(result);
+      });
+  }, [kind, filters, limit, position, attempt, session.data]);
+
+  const restart = useCallback((next: DirectoryFilters) => {
+    setFilters((f) => ({ ...f, ...next }));
+    setPosition(FIRST_PAGE);
+    setPrevious([]);
+  }, []);
+  const changeLimit = (next: PageSize) => {
+    setLimit(next);
+    setPosition(FIRST_PAGE);
+    setPrevious([]);
+  };
+  const reset = () => {
+    setSearchText("");
+    setSearchError("");
+    setLimit(25);
+    setFilters({});
+    setPosition(FIRST_PAGE);
+    setPrevious([]);
+  };
+  const setSearch = (value: string) => {
+    setSearchText(value);
+    if (searchError) setSearchError("");
+  };
+  const submitSearch = (event: FormEvent) => {
+    event.preventDefault();
+    const check = checkSearch(search);
+    if (!check.ok) {
+      setSearchError(check.error);
+      return;
+    }
+    setSearchError("");
+    setSearchText(check.value);
+    if (check.value !== (filters.q || "")) restart({ q: check.value || undefined });
+  };
+  const goNext = () => {
+    if (!page?.page.next_cursor) return;
+    setPrevious((stack) => [...stack, position]);
+    setPosition({ cursor: page.page.next_cursor, offset: position.offset + page.items.length });
+  };
+  const goPrevious = () => {
+    const last = previous[previous.length - 1];
+    if (!last) return;
+    setPrevious((stack) => stack.slice(0, -1));
+    setPosition(last);
+  };
+  return {
+    page,
+    rows: page?.items ?? [],
+    filters,
+    limit,
+    position,
+    hasPrevious: previous.length > 0,
+    search,
+    searchError,
+    setSearch,
+    submitSearch,
+    restart,
+    changeLimit,
+    reset,
+    retry: () => setAttempt((n) => n + 1),
+    goNext,
+    goPrevious,
+  };
+}
+type AnyDirectory = Directory<DirectoryKind>;
+
+function DirectorySearch({
+  id,
+  label,
+  placeholder,
+  directory,
 }: {
-  overview: AdminOverview;
-  limitNote: string;
-  onOpen: (id: string) => void;
+  id: string;
+  label: string;
+  placeholder: string;
+  directory: Pick<AnyDirectory, "search" | "searchError" | "setSearch">;
 }) {
-  const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState("");
-  const q = search.trim().toLowerCase();
-  const clients = overview.clients
-    .filter((c) => !q || c.full_name.toLowerCase().includes(q))
-    .sort((a, b) => Date.parse(b.created_at || "") - Date.parse(a.created_at || ""));
-  const organizations = overview.organizations.filter((o) => !q || o.name.toLowerCase().includes(q));
-  const dossiersOf = (clientId: string) => overview.interventions.filter((i) => i.client_id === clientId);
-  const current = overview.clients.find((c) => c.id === selected);
   return (
     <>
-      <Panel title="Clients" count={overview.counts.clients}>
-        <div className={styles.filters}>
-          <label className={styles.filter}>
-            Recherche (nom du client ou de l’organisation)
-            <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Nom" maxLength={100} />
-          </label>
-        </div>
-        <DataTable
-          caption="Clients"
-          rows={clients}
-          keyOf={(c) => c.id}
-          columns={[
-            { key: "name", label: "Client", wide: true, render: (c) => <Person name={c.full_name} /> },
-            { key: "kind", label: "Type", render: (c) => clientKind(c.role) },
-            { key: "created", label: "Inscription", render: (c) => (c.created_at ? date(c.created_at) : "—") },
-            { key: "count", label: "Dossiers", render: (c) => <span className={styles.mono}>{dossiersOf(c.id).length}</span> },
-            {
-              key: "actions",
-              label: "Actions",
-              render: (c) => (
-                <button type="button" className={styles.rowAction} aria-pressed={selected === c.id} onClick={() => setSelected(selected === c.id ? "" : c.id)}>
-                  <Icon name="eye" size={15} />
-                  {selected === c.id ? "Masquer" : "Voir"}
-                </button>
-              ),
-            },
-          ]}
-          empty={
-            overview.clients.length ? (
-              <Empty icon="search" title="Aucun client ne correspond">
-                Modifiez la recherche.
-              </Empty>
-            ) : (
-              <Empty icon="person" title="Aucun client inscrit">
-                Les comptes clients apparaîtront ici.
-              </Empty>
-            )
-          }
+      <label className={styles.filter} htmlFor={id}>
+        {label}
+        <input
+          id={id}
+          type="search"
+          value={directory.search}
+          onChange={(e) => directory.setSearch(e.target.value)}
+          placeholder={placeholder}
+          maxLength={120}
+          aria-invalid={directory.searchError ? true : undefined}
+          aria-describedby={`${id}-help`}
         />
-        <Basis>
-          {limitNote} Le nombre de dossiers est compté sur les {overview.capabilities.list_limit} dernières interventions chargées.
-        </Basis>
-      </Panel>
-      {current && (
-        <Panel title={current.full_name} count={dossiersOf(current.id).length} intro={`${clientKind(current.role)}${current.created_at ? ` · inscrit le ${date(current.created_at)}` : ""}`}>
-          {dossiersOf(current.id).length ? (
-            <div className={styles.rowList}>
-              {dossiersOf(current.id)
-                .sort(byNewest)
-                .map((i) => (
-                  <InterventionRow key={i.id} intervention={i} onOpen={() => onOpen(i.id)} />
-                ))}
-            </div>
-          ) : (
-            <Empty icon="list" title="Aucun dossier chargé pour ce client">
-              Aucune intervention parmi les {overview.capabilities.list_limit} dernières ne lui est rattachée.
-            </Empty>
-          )}
-          <div className={styles.panelBody}>
-            <Unavailable title="Fiche client détaillée non disponible" reason="Coordonnées, historique complet et sites ne sont pas transmis à l’administration ; seule la liste des interventions chargées est disponible." blocker="ADM-04" />
-          </div>
-        </Panel>
-      )}
-      <Panel title="Organisations" count={overview.counts.organizations}>
-        <DataTable
-          caption="Organisations"
-          rows={organizations}
-          keyOf={(o) => o.id}
-          columns={[
-            { key: "name", label: "Organisation", wide: true, render: (o) => <strong>{o.name}</strong> },
-            { key: "type", label: "Type", render: (o) => (o.type ? SITE_TYPES[o.type] || o.type : "—") },
-            { key: "owner", label: "Propriétaire", render: (o) => <span className={styles.mono}>{shortUser(o.owner_id)}</span> },
-          ]}
-          empty={
-            <Empty icon="building" title="Aucune organisation">
-              Les organisations clientes (syndics, restauration, bureaux, ERP) apparaîtront ici.
-            </Empty>
-          }
-        />
-        <Basis>La date de création des organisations n’est pas transmise par la vue d’ensemble.</Basis>
-      </Panel>
+      </label>
+      <button type="submit" className="button outline">
+        <Icon name="search" size={16} />
+        Rechercher
+      </button>
     </>
+  );
+}
+function DirectorySearchHelp({ id, directory }: { id: string; directory: Pick<AnyDirectory, "searchError"> }) {
+  return (
+    <p id={`${id}-help`} className={styles.searchHelp} data-error={directory.searchError ? "true" : undefined} role={directory.searchError ? "alert" : undefined}>
+      {directory.searchError || DIRECTORY_SEARCH_HELP}
+    </p>
+  );
+}
+function PageSizeSelect({ label, directory }: { label: string; directory: Pick<AnyDirectory, "limit" | "changeLimit"> }) {
+  return (
+    <label className={styles.filter}>
+      {label}
+      <select value={directory.limit} onChange={(e) => directory.changeLimit(Number(e.target.value) as PageSize)}>
+        {PAGE_SIZES.map((n) => (
+          <option key={n} value={n}>
+            {n}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+// Any server-paginated source: the directories and the assistance list share this pager.
+type PagerSource = {
+  page: { page: { total: number; has_more: boolean; next_cursor: string | null } } | null | undefined;
+  rows: unknown[];
+  position: PagePosition;
+  hasPrevious: boolean;
+  goNext: () => void;
+  goPrevious: () => void;
+};
+function DirectoryPager({ directory, noun }: { directory: PagerSource; noun: { one: string; many: string } }) {
+  const { page, rows, position } = directory;
+  if (!page) return null;
+  const total = page.page.total;
+  const from = position.offset + 1;
+  const to = position.offset + rows.length;
+  return (
+    <div className={styles.pager}>
+      <p className={styles.pagerInfo} role="status">
+        <strong>
+          {total} {total === 1 ? noun.one : noun.many}
+        </strong>
+        {rows.length ? (from === to ? ` · ligne ${from} affichée` : ` · lignes ${from} à ${to} affichées`) : ""}
+        {` · ${page.page.has_more ? `d’autres ${noun.many} suivent` : "fin de la liste"}`}
+      </p>
+      <div className={styles.pagerButtons}>
+        <button type="button" className="button outline" onClick={directory.goPrevious} disabled={!directory.hasPrevious}>
+          <Icon name="back" size={16} />
+          Précédent
+        </button>
+        <button type="button" className="button outline" onClick={directory.goNext} disabled={!page.page.has_more || !page.page.next_cursor}>
+          Suivant
+        </button>
+      </div>
+    </div>
+  );
+}
+function DirectoryUnavailable({
+  title,
+  state,
+  onRetry,
+  fallbackLabel,
+  fallbackShown,
+  onFallback,
+}: {
+  title: string;
+  state: Session["capabilities"]["adminDirectory"];
+  onRetry: () => void;
+  fallbackLabel: string;
+  fallbackShown: boolean;
+  onFallback: () => void;
+}) {
+  return (
+    <div className={styles.panelBody}>
+      <Unavailable
+        title={title}
+        state={state}
+        reason={state === "available" ? "L’annuaire n’a pas pu être chargé. Vérifiez les filtres ou réessayez dans un instant." : undefined}
+      >
+        <div className={styles.actions} style={{ marginTop: 12 }}>
+          <button type="button" className="button outline" onClick={onRetry}>
+            <Icon name="refresh" size={16} />
+            Réessayer
+          </button>
+          <button type="button" className="button outline" onClick={onFallback} aria-pressed={fallbackShown}>
+            <Icon name="list" size={16} />
+            {fallbackLabel}
+          </button>
+        </div>
+      </Unavailable>
+    </div>
+  );
+}
+function DirectoryEmpty({
+  directory,
+  filtering,
+  icon,
+  texts,
+}: {
+  directory: Pick<AnyDirectory, "position" | "reset">;
+  filtering: boolean;
+  icon: string;
+  texts: { gone: string; noMatch: string; none: string; noneText: string };
+}) {
+  if (directory.position.offset > 0)
+    return (
+      <Empty
+        icon={icon}
+        title={texts.gone}
+        action={
+          <button type="button" className="button outline" onClick={directory.reset}>
+            Revenir au début de la liste
+          </button>
+        }
+      >
+        Des fiches ont changé depuis le chargement de la page précédente.
+      </Empty>
+    );
+  if (filtering)
+    return (
+      <Empty
+        icon="search"
+        title={texts.noMatch}
+        action={
+          <button type="button" className="button outline" onClick={directory.reset}>
+            Réinitialiser les filtres
+          </button>
+        }
+      >
+        Modifiez les filtres ou la recherche.
+      </Empty>
+    );
+  return (
+    <Empty icon={icon} title={texts.none}>
+      {texts.noneText}
+    </Empty>
+  );
+}
+
+// ---- Clients -------------------------------------------------------------------------------
+type RoleFilter = "" | "client" | "manager";
+const DIRECTORY_TOTAL_NOTE =
+  "Nombre total compté sur l’ensemble des fiches selon les filtres, pas seulement sur la page affichée. Les fiches créées ou modifiées pendant la consultation n’apparaissent qu’après une actualisation.";
+
+// Two server-paginated directories: clients (particuliers and entreprises clientes) and
+// organisations, each with its own pager and total. A client row can restrict the organisations
+// to those it owns (owner_id); the owner of an organisation is named from the loaded clients.
+function ClientsView({
+  session,
+  overview,
+  overviewFailed,
+  limitNote,
+  onReloadOverview,
+  reloadingOverview,
+}: {
+  session: Session;
+  overview: AdminOverview | null;
+  overviewFailed: boolean;
+  limitNote: string;
+  onReloadOverview: () => void;
+  reloadingOverview: boolean;
+}) {
+  const clients = useDirectory(session, "clients");
+  const organizations = useDirectory(session, "organizations");
+  const [owner, setOwner] = useState<{ id: string; name: string } | null>(null);
+  const [showBounded, setShowBounded] = useState(false);
+  const organizationsPanel = useRef<HTMLDivElement>(null);
+  const role: RoleFilter = clients.filters.role ?? "";
+  const ownerId = organizations.filters.owner_id;
+  const boundedLabel = `${overview?.capabilities.list_limit ?? 100} derniers clients et organisations chargés`;
+  const ownerName = (id: string) =>
+    clients.rows.find((c) => c.id === id)?.full_name ||
+    overview?.clients.find((c) => c.id === id)?.full_name ||
+    (owner?.id === id ? owner.name : undefined);
+  const filterByOwner = (c: DirectoryClient) => {
+    setOwner({ id: c.id, name: c.full_name });
+    organizations.restart({ owner_id: c.id });
+    organizationsPanel.current?.scrollIntoView({ block: "start" });
+  };
+  const clearOwner = () => {
+    setOwner(null);
+    organizations.restart({ owner_id: undefined });
+  };
+  const resetOrganizations = () => {
+    setOwner(null);
+    organizations.reset();
+  };
+
+  let clientsBody: ReactNode;
+  if (clients.page === undefined) {
+    clientsBody = <Loader label="Chargement des clients…" />;
+  } else if (clients.page === null) {
+    clientsBody = (
+      <DirectoryUnavailable
+        title="Annuaire des clients indisponible"
+        state={session.capabilities.adminDirectory}
+        onRetry={clients.retry}
+        fallbackLabel={`Afficher les ${boundedLabel}`}
+        fallbackShown={showBounded}
+        onFallback={() => setShowBounded(true)}
+      />
+    );
+  } else if (!clients.rows.length) {
+    clientsBody = (
+      <DirectoryEmpty
+        directory={clients}
+        filtering={Boolean(clients.filters.q || clients.filters.role)}
+        icon="person"
+        texts={{
+          gone: "Cette page ne contient plus de client",
+          noMatch: "Aucun client ne correspond",
+          none: "Aucun client inscrit",
+          noneText: "Les comptes clients apparaîtront ici.",
+        }}
+      />
+    );
+  } else {
+    clientsBody = (
+      <DataTable
+        caption="Annuaire des clients"
+        rows={clients.rows}
+        keyOf={(c) => c.id}
+        columns={[
+          { key: "name", label: "Client", wide: true, render: (c) => <Person name={c.full_name} sub={c.phone || undefined} /> },
+          { key: "kind", label: "Type", render: (c) => clientKind(c.role) },
+          { key: "created", label: "Inscription", render: (c) => date(c.created_at) },
+          {
+            key: "actions",
+            label: "Actions",
+            render: (c) => (
+              <button type="button" className={styles.rowAction} aria-pressed={ownerId === c.id} onClick={() => filterByOwner(c)}>
+                <Icon name="building" size={15} />
+                Organisations dont il est propriétaire
+              </button>
+            ),
+          },
+        ]}
+        empty={null}
+      />
+    );
+  }
+
+  let organizationsBody: ReactNode;
+  if (organizations.page === undefined) {
+    organizationsBody = <Loader label="Chargement des organisations…" />;
+  } else if (organizations.page === null) {
+    organizationsBody = (
+      <DirectoryUnavailable
+        title="Annuaire des organisations indisponible"
+        state={session.capabilities.adminDirectory}
+        onRetry={organizations.retry}
+        fallbackLabel={`Afficher les ${boundedLabel}`}
+        fallbackShown={showBounded}
+        onFallback={() => setShowBounded(true)}
+      />
+    );
+  } else if (!organizations.rows.length) {
+    organizationsBody = (
+      <DirectoryEmpty
+        directory={{ position: organizations.position, reset: resetOrganizations }}
+        filtering={Boolean(organizations.filters.q || ownerId)}
+        icon="building"
+        texts={{
+          gone: "Cette page ne contient plus d’organisation",
+          noMatch: ownerId ? "Aucune organisation pour ce propriétaire" : "Aucune organisation ne correspond",
+          none: "Aucune organisation",
+          noneText: "Les organisations clientes (syndics, restauration, bureaux, ERP) apparaîtront ici.",
+        }}
+      />
+    );
+  } else {
+    organizationsBody = (
+      <DataTable
+        caption="Annuaire des organisations"
+        rows={organizations.rows}
+        keyOf={(o) => o.id}
+        columns={[
+          { key: "name", label: "Organisation", wide: true, render: (o) => <strong>{o.name}</strong> },
+          {
+            key: "owner",
+            label: "Propriétaire",
+            render: (o) => {
+              const name = ownerName(o.owner_id);
+              return name ? (
+                <span className={styles.cellStack}>
+                  {name}
+                  <small className={styles.mono}>{shortUser(o.owner_id)}</small>
+                </span>
+              ) : (
+                <span className={styles.mono}>{shortUser(o.owner_id)}</span>
+              );
+            },
+          },
+          { key: "created", label: "Création", render: (o) => date(o.created_at) },
+        ]}
+        empty={null}
+      />
+    );
+  }
+
+  return (
+    <>
+      <Panel title="Clients" count={clients.page?.page.total}>
+        <form className={styles.filters} onSubmit={clients.submitSearch} noValidate>
+          <DirectorySearch id="admin-client-search" label="Recherche (nom ou identifiant complet)" placeholder="Nom du client" directory={clients} />
+          <Segments
+            label="Type de client"
+            value={role}
+            options={[
+              ["", "Tous"],
+              ["client", "Particuliers"],
+              ["manager", "Entreprises clientes"],
+            ]}
+            onChange={(v) => clients.restart({ role: v || undefined })}
+          />
+          <PageSizeSelect label="Clients par page" directory={clients} />
+          <button type="button" className={styles.link} onClick={clients.reset}>
+            <Icon name="refresh" size={15} />
+            Réinitialiser
+          </button>
+          <DirectorySearchHelp id="admin-client-search" directory={clients} />
+        </form>
+        {clientsBody}
+        <DirectoryPager directory={clients} noun={{ one: "client", many: "clients" }} />
+        <Basis>{DIRECTORY_TOTAL_NOTE}</Basis>
+        <div className={styles.panelBody}>
+          <Unavailable
+            title="Fiche client détaillée non disponible"
+            reason="Coordonnées complètes, historique des dossiers et sites ne sont pas transmis à l’administration ; seuls le nom, le téléphone, le type et la date d’inscription le sont."
+            blocker="ADM-04"
+          />
+        </div>
+      </Panel>
+      <div ref={organizationsPanel} tabIndex={-1}>
+        <Panel title="Organisations" count={organizations.page?.page.total}>
+          <form className={styles.filters} onSubmit={organizations.submitSearch} noValidate>
+            <DirectorySearch id="admin-organization-search" label="Recherche (nom ou identifiant complet)" placeholder="Nom de l’organisation" directory={organizations} />
+            <PageSizeSelect label="Organisations par page" directory={organizations} />
+            <button type="button" className={styles.link} onClick={resetOrganizations}>
+              <Icon name="refresh" size={15} />
+              Réinitialiser
+            </button>
+            {ownerId && (
+              <div className={styles.activeFilter} role="status">
+                <span className={styles.chip}>
+                  <Icon name="person" size={16} />
+                  Propriétaire : {owner?.name || ownerName(ownerId) || shortUser(ownerId)}
+                </span>
+                <button type="button" className={styles.link} onClick={clearOwner}>
+                  <Icon name="close" size={15} />
+                  Retirer ce filtre
+                </button>
+              </div>
+            )}
+            <DirectorySearchHelp id="admin-organization-search" directory={organizations} />
+          </form>
+          {organizationsBody}
+          <DirectoryPager directory={organizations} noun={{ one: "organisation", many: "organisations" }} />
+          <Basis>
+            {DIRECTORY_TOTAL_NOTE} Le propriétaire est nommé lorsqu’il figure dans la page de clients chargée ; sinon seul son identifiant abrégé est affiché. Les membres et sites des organisations ne sont pas transmis.
+          </Basis>
+        </Panel>
+      </div>
+      {showBounded && (
+        <BoundedClientsView
+          overview={overview}
+          overviewFailed={overviewFailed}
+          overviewState={session.capabilities.adminOverview}
+          limitNote={limitNote}
+          label={boundedLabel}
+          onHide={() => setShowBounded(false)}
+          onReload={onReloadOverview}
+          reloading={reloadingOverview}
+        />
+      )}
+    </>
+  );
+}
+
+// Fallback when the directories are unavailable: the bounded overview lists, filtered in the
+// browser and labelled as such. Never presented as the complete directory, never with a total.
+function BoundedClientsView({
+  overview,
+  overviewFailed,
+  overviewState,
+  limitNote,
+  label,
+  onHide,
+  onReload,
+  reloading,
+}: {
+  overview: AdminOverview | null;
+  overviewFailed: boolean;
+  overviewState: Session["capabilities"]["adminOverview"];
+  limitNote: string;
+  label: string;
+  onHide: () => void;
+  onReload: () => void;
+  reloading: boolean;
+}) {
+  const [search, setSearch] = useState("");
+  const q = search.trim().toLowerCase();
+  return (
+    <BoundedPanel
+      label={label}
+      overview={overview}
+      overviewFailed={overviewFailed}
+      overviewState={overviewState}
+      onHide={onHide}
+      onReload={onReload}
+      reloading={reloading}
+      count={(o) => o.clients.length + o.organizations.length}
+      intro={(o) => `Liste de secours : les ${o.capabilities.list_limit} derniers clients et organisations chargés au plus, filtrés dans le navigateur. Elle n’est pas exhaustive et n’affiche aucun total.`}
+    >
+      {(o) => {
+        const clients = o.clients
+          .filter((c) => !q || c.full_name.toLowerCase().includes(q))
+          .sort((a, b) => Date.parse(b.created_at || "") - Date.parse(a.created_at || ""));
+        const organizations = o.organizations.filter((x) => !q || x.name.toLowerCase().includes(q));
+        return (
+          <>
+            <div className={styles.filters}>
+              <label className={styles.filter}>
+                Recherche (nom du client ou de l’organisation)
+                <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Nom" maxLength={100} />
+              </label>
+            </div>
+            <div className={styles.panelBody}>
+              <h3 className={styles.subheading}>Clients chargés ({clients.length})</h3>
+            </div>
+            <DataTable
+              caption={`${label} : clients`}
+              rows={clients}
+              keyOf={(c) => c.id}
+              columns={[
+                { key: "name", label: "Client", wide: true, render: (c) => <Person name={c.full_name} /> },
+                { key: "kind", label: "Type", render: (c) => clientKind(c.role) },
+                { key: "created", label: "Inscription", render: (c) => (c.created_at ? date(c.created_at) : "—") },
+              ]}
+              empty={
+                <Empty icon="search" title="Aucun client chargé ne correspond">
+                  Seuls les derniers clients chargés sont parcourus.
+                </Empty>
+              }
+            />
+            <div className={styles.panelBody}>
+              <h3 className={styles.subheading}>Organisations chargées ({organizations.length})</h3>
+            </div>
+            <DataTable
+              caption={`${label} : organisations`}
+              rows={organizations}
+              keyOf={(x) => x.id}
+              columns={[
+                { key: "name", label: "Organisation", wide: true, render: (x) => <strong>{x.name}</strong> },
+                { key: "type", label: "Type", render: (x) => (x.type ? SITE_TYPES[x.type] || x.type : "—") },
+                { key: "owner", label: "Propriétaire", render: (x) => <span className={styles.mono}>{shortUser(x.owner_id)}</span> },
+              ]}
+              empty={
+                <Empty icon="building" title="Aucune organisation chargée ne correspond">
+                  Seules les dernières organisations chargées sont parcourues.
+                </Empty>
+              }
+            />
+            <Basis>{limitNote} La date de création des organisations n’est pas transmise par la vue d’ensemble.</Basis>
+          </>
+        );
+      }}
+    </BoundedPanel>
   );
 }
 
@@ -2517,5 +3388,632 @@ function ReassignPanel({
     <Panel title="Réaffectation">
       <div className={styles.panelBody}>{body}</div>
     </Panel>
+  );
+}
+
+// ---- Assistance (contract WEB-PWA-SUPPORT-001) ---------------------------------------------
+// Private persistent tickets handled by the platform administration. The contract transmits
+// no name or email of the creator: a user is shown as "Utilisateur" plus a shortened identifier.
+const SUPPORT_STATUS: Record<SupportStatus, { label: string; tone: Tone }> = {
+  open: { label: "Ouverte", tone: "blue" },
+  in_progress: { label: "En cours", tone: "amber" },
+  awaiting_user: { label: "Réponse attendue de l’utilisateur", tone: "violet" },
+  resolved: { label: "Résolue", tone: "green" },
+};
+// Transitions the contract allows from each state; the server refuses anything else.
+const SUPPORT_TRANSITIONS: Record<SupportStatus, readonly SupportStatus[]> = {
+  open: ["in_progress", "awaiting_user", "resolved"],
+  in_progress: ["awaiting_user", "resolved"],
+  awaiting_user: ["in_progress", "resolved"],
+  resolved: ["in_progress"],
+};
+const SUPPORT_SEARCH_HELP =
+  "Recherche littérale sur le sujet : 2 à 80 caractères, lettres, chiffres, espaces, tirets et apostrophes.";
+const SUPPORT_BODY_MAX = 4000;
+const SUPPORT_HISTORY_LIMIT = 50;
+type SupportFilters = { status: "" | SupportStatus; q: string };
+const NO_SUPPORT_FILTERS: SupportFilters = { status: "", q: "" };
+
+const mergeById = <T extends { id: string }>(current: T[], added: T[]) => {
+  const seen = new Set(current.map((x) => x.id));
+  return [...current, ...added.filter((x) => !seen.has(x.id))];
+};
+function SupportStatusTag({ status }: { status: SupportStatus }) {
+  const s = SUPPORT_STATUS[status];
+  return <Tag tone={s.tone}>{s.label}</Tag>;
+}
+
+// Server-paginated list of every ticket of the platform (scope all), on the directory model:
+// a filter change restarts from the first page (the cursor is bound to the filters), "Précédent"
+// replays the cursors kept client-side, the total is the server count.
+// undefined = loading, null = unavailable (capabilities.support tells why).
+function useSupportList(session: Session, ticketId: string) {
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  const [filters, setFilters] = useState<SupportFilters>(NO_SUPPORT_FILTERS);
+  const [limit, setLimit] = useState<PageSize>(25);
+  const [position, setPosition] = useState<PagePosition>(FIRST_PAGE);
+  const [previous, setPrevious] = useState<PagePosition[]>([]);
+  const [search, setSearchText] = useState("");
+  const [searchError, setSearchError] = useState("");
+  const [page, setPage] = useState<SupportListPage | null | undefined>(undefined);
+  const [attempt, setAttempt] = useState(0);
+  const requestId = useRef(0);
+  const wasOnTicket = useRef(false);
+
+  useEffect(() => {
+    const my = ++requestId.current;
+    setPage(undefined);
+    void sessionRef.current
+      .loadSupportTickets({
+        scope: "all",
+        status: filters.status || undefined,
+        q: filters.q || undefined,
+        limit,
+        cursor: position.cursor,
+      })
+      .then((result) => {
+        if (my === requestId.current) setPage(result);
+      });
+  }, [filters, limit, position, attempt, session.refreshedAt, session.mode]);
+  // Coming back from a ticket: its replies and state changes must appear in the list.
+  useEffect(() => {
+    if (ticketId) {
+      wasOnTicket.current = true;
+    } else if (wasOnTicket.current) {
+      wasOnTicket.current = false;
+      setAttempt((n) => n + 1);
+    }
+  }, [ticketId]);
+
+  const restart = (next: Partial<SupportFilters>) => {
+    setFilters((f) => ({ ...f, ...next }));
+    setPosition(FIRST_PAGE);
+    setPrevious([]);
+  };
+  const changeLimit = (next: PageSize) => {
+    setLimit(next);
+    setPosition(FIRST_PAGE);
+    setPrevious([]);
+  };
+  const reset = () => {
+    setSearchText("");
+    setSearchError("");
+    setLimit(25);
+    restart(NO_SUPPORT_FILTERS);
+  };
+  const setSearch = (value: string) => {
+    setSearchText(value);
+    if (searchError) setSearchError("");
+  };
+  const submitSearch = (event: FormEvent) => {
+    event.preventDefault();
+    const check = checkSearch(search);
+    if (!check.ok) {
+      setSearchError(check.error);
+      return;
+    }
+    setSearchError("");
+    setSearchText(check.value);
+    if (check.value !== filters.q) restart({ q: check.value });
+  };
+  const goNext = () => {
+    if (!page?.page.next_cursor) return;
+    setPrevious((stack) => [...stack, position]);
+    setPosition({ cursor: page.page.next_cursor, offset: position.offset + page.tickets.length });
+  };
+  const goPrevious = () => {
+    const last = previous[previous.length - 1];
+    if (!last) return;
+    setPrevious((stack) => stack.slice(0, -1));
+    setPosition(last);
+  };
+  return {
+    page,
+    rows: page?.tickets ?? [],
+    filters,
+    limit,
+    position,
+    hasPrevious: previous.length > 0,
+    search,
+    searchError,
+    setSearch,
+    submitSearch,
+    restart,
+    changeLimit,
+    reset,
+    retry: () => setAttempt((n) => n + 1),
+    goNext,
+    goPrevious,
+  };
+}
+
+function AssistanceCentre({
+  session,
+  ticketId,
+  onOpenTicket,
+  onBack,
+  onOpenDossier,
+}: {
+  session: Session;
+  ticketId: string;
+  onOpenTicket: (id: string) => void;
+  onBack: () => void;
+  onOpenDossier: (id: string) => void;
+}) {
+  const list = useSupportList(session, ticketId);
+  if (ticketId) return <SupportTicketView session={session} id={ticketId} onBack={onBack} onOpenDossier={onOpenDossier} />;
+
+  const { page, rows, filters } = list;
+  const filtering = Boolean(filters.status || filters.q);
+  let body: ReactNode;
+  if (page === undefined) {
+    body = <Loader label="Chargement des demandes d’assistance…" />;
+  } else if (page === null) {
+    const state = session.capabilities.support;
+    body = (
+      <div className={styles.panelBody}>
+        <Unavailable
+          title="Centre d’assistance indisponible"
+          state={state}
+          reason={
+            state === "available"
+              ? "La liste des demandes n’a pas pu être chargée. Vérifiez les filtres ou réessayez dans un instant."
+              : "L’assistance n’est pas encore activée sur ce service. Les messages des dossiers restent lisibles ci-dessous."
+          }
+        >
+          <div className={styles.actions} style={{ marginTop: 12 }}>
+            <button type="button" className="button outline" onClick={list.retry}>
+              <Icon name="refresh" size={16} />
+              Réessayer
+            </button>
+          </div>
+        </Unavailable>
+      </div>
+    );
+  } else if (!rows.length) {
+    body = (
+      <DirectoryEmpty
+        directory={list}
+        filtering={filtering}
+        icon="message"
+        texts={{
+          gone: "Cette page ne contient plus de demande",
+          noMatch: "Aucune demande ne correspond",
+          none: "Aucune demande d’assistance",
+          noneText: "Les demandes envoyées par les utilisateurs depuis leur espace apparaîtront ici.",
+        }}
+      />
+    );
+  } else {
+    body = (
+      <DataTable
+        caption="Demandes d’assistance"
+        rows={rows}
+        keyOf={(t) => t.id}
+        columns={[
+          {
+            key: "subject",
+            label: "Sujet",
+            wide: true,
+            render: (t) => (
+              <button type="button" className={`${styles.link} ${styles.subjectLink}`} onClick={() => onOpenTicket(t.id)}>
+                {t.subject}
+              </button>
+            ),
+          },
+          { key: "status", label: "État", render: (t) => <SupportStatusTag status={t.status} /> },
+          {
+            key: "creator",
+            label: "Demandeur",
+            render: (t) => (
+              <span className={styles.cellStack}>
+                Utilisateur
+                <small className={styles.mono}>{shortUser(t.creator_id)}</small>
+              </span>
+            ),
+          },
+          {
+            key: "dossier",
+            label: "Dossier lié",
+            render: (t) =>
+              t.intervention_id ? (
+                <button type="button" className={`${styles.link} ${styles.mono}`} onClick={() => onOpenDossier(t.intervention_id as string)}>
+                  {shortId(t.intervention_id)}
+                </button>
+              ) : (
+                <span className={styles.muted}>Aucun</span>
+              ),
+          },
+          { key: "activity", label: "Dernière activité", render: (t) => dateTime(t.last_message_at) },
+        ]}
+        empty={null}
+      />
+    );
+  }
+
+  return (
+    <Panel
+      title="Demandes d’assistance"
+      count={page?.page.total}
+      intro="Demandes privées envoyées par les utilisateurs depuis leur espace, traitées par l’administration. Les réponses se lisent en actualisant : aucun appel, e-mail ou notification n’est envoyé."
+    >
+      <form className={styles.filters} onSubmit={list.submitSearch} noValidate>
+        <DirectorySearch id="admin-support-search" label="Recherche sur le sujet" placeholder="Mot du sujet" directory={list} />
+        <Segments
+          label="État"
+          value={filters.status}
+          options={[
+            ["", "Toutes"],
+            ["open", "Ouvertes"],
+            ["in_progress", "En cours"],
+            ["awaiting_user", "Réponse attendue de l’utilisateur"],
+            ["resolved", "Résolues"],
+          ]}
+          onChange={(status) => list.restart({ status })}
+        />
+        <PageSizeSelect label="Demandes par page" directory={list} />
+        <button type="button" className={styles.link} onClick={list.reset}>
+          <Icon name="refresh" size={15} />
+          Réinitialiser
+        </button>
+        <p
+          id="admin-support-search-help"
+          className={styles.searchHelp}
+          data-error={list.searchError ? "true" : undefined}
+          role={list.searchError ? "alert" : undefined}
+        >
+          {list.searchError || SUPPORT_SEARCH_HELP}
+        </p>
+      </form>
+      {body}
+      <DirectoryPager directory={list} noun={{ one: "demande", many: "demandes" }} />
+      {page && <Basis>{DIRECTORY_TOTAL_NOTE}</Basis>}
+    </Panel>
+  );
+}
+
+// One ticket: header, immutable timeline (events ascending, one per version), reply and state
+// change with the exact expected version. A 409 keeps the typed text and asks for a re-read.
+type SupportThread = { detail: SupportDetail; events: SupportEvent[]; messages: SupportMessage[] };
+function SupportTicketView({
+  session,
+  id,
+  onBack,
+  onOpenDossier,
+}: {
+  session: Session;
+  id: string;
+  onBack: () => void;
+  onOpenDossier: (id: string) => void;
+}) {
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  // undefined = loading, null = unknown / unreadable / unavailable.
+  const [thread, setThread] = useState<SupportThread | null | undefined>(undefined);
+  const [attempt, setAttempt] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [body, setBody] = useState("");
+  const [bodyError, setBodyError] = useState("");
+  const [sending, setSending] = useState(false);
+  const [conflict, setConflict] = useState("");
+  const [failure, setFailure] = useState("");
+  const [target, setTarget] = useState<"" | SupportStatus>("");
+  const requestId = useRef(0);
+
+  useEffect(() => {
+    const my = ++requestId.current;
+    setThread(undefined);
+    setConflict("");
+    setFailure("");
+    void sessionRef.current.loadSupportTicket(id, { limit: SUPPORT_HISTORY_LIMIT }).then((result) => {
+      if (my !== requestId.current) return;
+      setThread(result ? { detail: result, events: result.events, messages: result.messages } : null);
+    });
+  }, [id, attempt]);
+  // The typed text survives a re-read after a conflict, not a change of ticket.
+  useEffect(() => {
+    setBody("");
+    setBodyError("");
+    setTarget("");
+  }, [id]);
+
+  const reread = () => setAttempt((n) => n + 1);
+
+  const loadMore = async () => {
+    if (!thread || thread.detail.page.next_after_version === null) return;
+    setLoadingMore(true);
+    const more = await sessionRef.current.loadSupportTicket(id, {
+      limit: SUPPORT_HISTORY_LIMIT,
+      after_version: thread.detail.page.next_after_version,
+    });
+    setLoadingMore(false);
+    if (!more) {
+      setFailure("La suite de l’historique n’a pas pu être chargée. Réessayez dans un instant.");
+      return;
+    }
+    setFailure("");
+    setThread((t) =>
+      t ? { detail: more, events: mergeById(t.events, more.events), messages: mergeById(t.messages, more.messages) } : t,
+    );
+  };
+
+  // Applies a server result: new version and appended message/event, or the conflict to show.
+  const runCommand = async (command: SupportCommand) => {
+    const result = await sessionRef.current.supportCommand(id, command);
+    if (result.ok) {
+      setConflict("");
+      setFailure("");
+      setThread((t) =>
+        t
+          ? {
+              detail: {
+                ...t.detail,
+                ticket: result.ticket,
+                page: {
+                  ...t.detail.page,
+                  total_events: t.detail.page.total_events + 1,
+                  total_messages: t.detail.page.total_messages + (result.message ? 1 : 0),
+                },
+              },
+              events: mergeById(t.events, [result.event]),
+              messages: result.message ? mergeById(t.messages, [result.message]) : t.messages,
+            }
+          : t,
+      );
+      return true;
+    }
+    if (result.conflict) setConflict(result.message);
+    else setFailure(result.message);
+    return false;
+  };
+
+  const submitReply = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!thread) return;
+    const text = body.trim();
+    if (!text) {
+      setBodyError("Saisissez votre réponse avant d’envoyer.");
+      return;
+    }
+    if (text.length > SUPPORT_BODY_MAX) {
+      setBodyError(`La réponse est limitée à ${SUPPORT_BODY_MAX} caractères.`);
+      return;
+    }
+    setBodyError("");
+    setSending(true);
+    const ok = await runCommand({ action: "reply", expected_version: thread.detail.ticket.version, body: text });
+    setSending(false);
+    if (ok) setBody("");
+  };
+
+  const back = (
+    <button type="button" className={styles.backLink} onClick={onBack}>
+      <Icon name="back" size={16} />
+      Retour aux demandes
+    </button>
+  );
+  if (thread === undefined)
+    return (
+      <>
+        {back}
+        <Loader label="Chargement de la demande…" />
+      </>
+    );
+  if (thread === null) {
+    const state = session.capabilities.support;
+    return (
+      <>
+        {back}
+        <Panel title="Demande d’assistance">
+          <div className={styles.panelBody}>
+            <Unavailable
+              title="Demande indisponible"
+              state={state}
+              reason={
+                state === "available"
+                  ? "Cette demande est introuvable ou n’a pas pu être chargée."
+                  : "L’assistance n’est pas encore activée sur ce service."
+              }
+            >
+              <div className={styles.actions} style={{ marginTop: 12 }}>
+                <button type="button" className="button outline" onClick={reread}>
+                  <Icon name="refresh" size={16} />
+                  Réessayer
+                </button>
+              </div>
+            </Unavailable>
+          </div>
+        </Panel>
+      </>
+    );
+  }
+
+  const { ticket, permissions, page } = thread.detail;
+  const events = [...thread.events].sort((a, b) => a.version - b.version);
+  const messageById = new Map(thread.messages.map((m) => [m.id, m]));
+  const me = session.profileId;
+  const authorOf = (m: SupportMessage) =>
+    m.author_kind === "admin" ? (m.author_id === me ? "Assistance (vous)" : "Assistance") : "Utilisateur";
+  const actorOf = (actorId: string) => (actorId === me ? "par vous" : "par l’assistance");
+  const targets = SUPPORT_TRANSITIONS[ticket.status];
+  const chosen = target && targets.includes(target) ? target : "";
+  const resolved = ticket.status === "resolved";
+  const busy = session.busy || sending;
+  const remaining = SUPPORT_BODY_MAX - body.trim().length;
+
+  const statusControl = permissions.can_set_status && (
+    <div className={styles.statusControl}>
+      <Field
+        label="Nouvel état"
+        hint={`État actuel : ${SUPPORT_STATUS[ticket.status].label}. Seuls les passages autorisés depuis cet état sont proposés.`}
+      >
+        <select value={chosen} onChange={(e) => setTarget(e.target.value as "" | SupportStatus)} disabled={busy}>
+          <option value="">Choisir un état</option>
+          {targets.map((s) => (
+            <option key={s} value={s}>
+              {SUPPORT_STATUS[s].label}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <ConfirmAction
+        label="Changer l’état"
+        message={
+          chosen
+            ? `Passer la demande de « ${SUPPORT_STATUS[ticket.status].label} » à « ${SUPPORT_STATUS[chosen].label} ». Le changement est inscrit dans l’historique visible par l’utilisateur.`
+            : ""
+        }
+        confirmLabel="Confirmer"
+        busy={busy || !chosen}
+        onConfirm={async () => {
+          if (!chosen) return;
+          const ok = await runCommand({ action: "set_status", expected_version: ticket.version, status: chosen });
+          if (ok) setTarget("");
+        }}
+      />
+    </div>
+  );
+
+  return (
+    <>
+      {back}
+      <section className={styles.panel}>
+        <div className={styles.ticketHead}>
+          <div>
+            <h2>{ticket.subject}</h2>
+            <p>
+              Utilisateur <span className={styles.mono}>{shortUser(ticket.creator_id)}</span> · créée le {dateTime(ticket.created_at)} · dernière
+              activité {dateTime(ticket.last_message_at)}
+            </p>
+          </div>
+          <SupportStatusTag status={ticket.status} />
+        </div>
+        <dl className={styles.definitions}>
+          <dt>Dossier lié</dt>
+          <dd>
+            {ticket.intervention_id ? (
+              <button type="button" className={`${styles.link} ${styles.inlineLink}`} onClick={() => onOpenDossier(ticket.intervention_id as string)}>
+                Ouvrir le dossier <span className={styles.mono}>{shortId(ticket.intervention_id)}</span>
+              </button>
+            ) : (
+              "Aucun dossier lié"
+            )}
+          </dd>
+          <dt>Référence</dt>
+          <dd className={styles.mono}>{shortId(ticket.id)}</dd>
+          <dt>Historique</dt>
+          <dd>
+            {page.total_events} {page.total_events === 1 ? "événement" : "événements"} · {page.total_messages}{" "}
+            {page.total_messages === 1 ? "message" : "messages"} · version {ticket.version}
+          </dd>
+        </dl>
+      </section>
+
+      <Panel title="Historique" count={events.length} intro="Du plus ancien au plus récent. Chaque réponse et chaque changement d’état y sont inscrits ; rien n’est modifié a posteriori.">
+        <ol className={styles.timeline}>
+          {events.map((ev) => {
+            const msg = ev.message_id ? messageById.get(ev.message_id) : undefined;
+            if (ev.kind === "status_changed")
+              return (
+                <li key={ev.id} className={styles.timelineEvent}>
+                  <span>
+                    État passé de « {ev.from_status ? SUPPORT_STATUS[ev.from_status].label : "—"} » à « {SUPPORT_STATUS[ev.to_status].label} »
+                  </span>
+                  <small>
+                    {actorOf(ev.actor_id)} · {dateTime(ev.created_at)}
+                  </small>
+                </li>
+              );
+            const fromAdmin = msg ? msg.author_kind === "admin" : false;
+            return (
+              <li key={ev.id} className={`${styles.message} ${fromAdmin ? styles.fromAdmin : ""}`}>
+                <header>
+                  <strong>{msg ? authorOf(msg) : ev.kind === "ticket_created" ? "Utilisateur" : "Réponse"}</strong>
+                  <span>
+                    {ev.kind === "ticket_created" ? "Demande créée · " : ""}
+                    {dateTime(ev.created_at)}
+                  </span>
+                </header>
+                {msg ? <p>{msg.body}</p> : <p className={styles.muted}>Message non chargé dans cette page de l’historique.</p>}
+              </li>
+            );
+          })}
+        </ol>
+        {page.has_more && page.next_after_version !== null && (
+          <div className={styles.timelineMore}>
+            <button type="button" className="button outline" onClick={() => void loadMore()} disabled={loadingMore}>
+              {loadingMore ? "Chargement…" : "Charger la suite"}
+            </button>
+            <span className={styles.muted}>
+              {events.length} sur {page.total_events} {page.total_events === 1 ? "événement" : "événements"} affichés
+            </span>
+          </div>
+        )}
+      </Panel>
+
+      <Panel title="Traitement">
+        <div className={styles.panelBody}>
+          {conflict && (
+            <div className={styles.conflict} role="alert">
+              <Icon name="warning" size={16} />
+              <div>
+                <strong>La demande a changé depuis votre lecture.</strong>
+                <p>{conflict} Votre texte est conservé : relisez la demande, puis renvoyez-le si nécessaire.</p>
+                <button type="button" className="button outline" onClick={reread}>
+                  <Icon name="refresh" size={16} />
+                  Relire la demande
+                </button>
+              </div>
+            </div>
+          )}
+          {failure && (
+            <p className={styles.inlineError} role="alert">
+              {failure}
+            </p>
+          )}
+          {permissions.can_reply ? (
+            <form onSubmit={(e) => void submitReply(e)} noValidate>
+              <Field
+                label="Votre réponse"
+                hint={`Visible par l’utilisateur dans son espace. ${remaining >= 0 ? `${remaining} caractères restants.` : ""}`}
+                error={bodyError}
+              >
+                <textarea
+                  value={body}
+                  onChange={(e) => {
+                    setBody(e.target.value);
+                    if (bodyError) setBodyError("");
+                  }}
+                  rows={5}
+                  maxLength={SUPPORT_BODY_MAX + 200}
+                  disabled={busy}
+                  placeholder="Réponse de l’assistance"
+                />
+              </Field>
+              {resolved ? (
+                <p className={styles.formNote}>
+                  Cette demande est résolue : rouvrez-la (état « {SUPPORT_STATUS.in_progress.label} ») avant d’envoyer une réponse. Votre texte est conservé.
+                </p>
+              ) : (
+                <div className={styles.actions}>
+                  <button type="submit" className="button primary" disabled={busy || Boolean(conflict)}>
+                    <Icon name="send" size={16} />
+                    {sending ? "Envoi…" : "Envoyer la réponse"}
+                  </button>
+                </div>
+              )}
+              {conflict && !resolved && <p className={styles.formNote}>Relisez la demande avant de renvoyer votre réponse.</p>}
+            </form>
+          ) : (
+            <p className={styles.formNote}>Vous ne pouvez pas répondre à cette demande.</p>
+          )}
+          {statusControl}
+          {!permissions.can_reply && !permissions.can_set_status && (
+            <p className={styles.formNote}>Aucune action n’est possible sur cette demande avec vos droits actuels.</p>
+          )}
+        </div>
+      </Panel>
+    </>
   );
 }
