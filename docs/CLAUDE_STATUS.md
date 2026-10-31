@@ -522,3 +522,12 @@ Le propriétaire a indiqué qu’à 00:00 America/Martinique le 31 octobre 2026,
 - Preview f8 READY deployed `mh0ttyp8u`, protected by Vercel login; root HTML 200 via CLI; **not production**.
 - **PWA 671 on 557 PASS**: OS window (computer use), relaunch, independent cleanup.
 - Tracking QA fix (after 8aa5a78) still WIP — SHA pending.
+
+## 2026-10-31 — business run complement: budget ANOMALY diagnosed as UI P2; CI green on f8e36d4; gateway 2 FAIL
+
+- B2B equipment and maintenance UI PASS. **Budget ANOMALY**: exact « Saisir » button absent in site-operations (30 s timeout).
+- **Lead diagnosis (to be confirmed against root's diagnostic):** the label is « Saisir » (`components/features/site-operations/budget-panel.tsx:134`), but `BudgetPanel` sets `selected` once at mount (`useState(current ?? years[0]?.id ?? "")`). Mounted with 0 fiscal years then refreshed with the new year, `selected` stays "" ⇒ `year` null ⇒ no lines table ⇒ no « Saisir », while the controlled select visually shows the year. Real-user dead end until remount ⇒ **product P2** in the site-operations leaf. Dispatched to b2b worker a96ae75: derived effective selection with fallback (no effect loop), pure test, harness targets the « Maintenance » row instead of `.first()`; report differently if the diagnostic shows another cause.
+- **CI integration f8e36d4 GREEN** (run 41233943801, 2 jobs); root 510 tests PASS, tsc 557 PASS.
+- Preview f8 READY `mh0ttyp8u`, Vercel-protected; new URL given to the user with Vercel login required; not main, not production.
+- App 557 build `UN3j_PEcrQn-l9kzidHfx` local 3017, session 68346, HTTP 200. Business cohort 78a5f871aaba still active: no other cohort before its cleanup.
+- **Gateway: 2 FAIL** — 201, race lost. Cleanup 37 PASS + root 12 scopes 0 / 2 Auth 404 / 2 Storage 0. No new race before an aligned protocol; **security not claimed complete**.
