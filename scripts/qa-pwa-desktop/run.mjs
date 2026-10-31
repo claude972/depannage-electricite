@@ -221,8 +221,8 @@ async function main(argv) {
     const args=[`--user-data-dir=${state.profileRoot}`,'--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--remote-debugging-pipe','--enable-automation','--no-first-run','--no-default-browser-check','--disable-sync','about:blank'];
     child=await mutation('spawn',async()=>{
       const c=spawn(pf.binary,args,{stdio:['ignore','ignore','ignore','pipe','pipe'],env:{HOME:os.homedir(),PATH:'/usr/bin:/bin:/usr/sbin:/sbin',TMPDIR:os.tmpdir(),LANG:'fr_FR.UTF-8'}});
-      pipe=createPipeClient(c.stdio[3],c.stdio[4]);
       child=c; c.on('error',e=>{state.spawnError=e.message;});state.browserPid=c.pid;
+      pipe=createPipeClient(c.stdio[3],c.stdio[4]);
       // Capture identity inside the tracked spawn operation even if a signal arrives meanwhile.
       for(let n=0;n<30;n++){const fact=c.pid?await processFact(c.pid):null;if(fact){childFact=fact;break;}if(state.spawnError)throw new Error(state.spawnError);await pause(50);}
       if(!childFact)throw new Error('spawned process identity unavailable');
