@@ -1,0 +1,96 @@
+/* Maquette test 006 — héros plein écran, sans publicité, thème clair/sombre. S’ajoute à web.css + web-slide.css. */
+
+/* Héros : toute la largeur de la fenêtre, hauteur = écran moins la barre haute (76 px, 68 px sur mobile). */
+.full-hero { margin: 0; padding: 0; max-width: none; width: 100%; }
+.full-hero .slides { border: 0; border-radius: 0; }
+.full-hero .slide { min-height: calc(100svh - 77px); }
+/* Voile plus dense que 005 : texte blanc ≥ 4,5:1 sur la zone de lecture à toutes les largeurs. */
+.full-hero .slide::after { background: linear-gradient(90deg, rgba(0, 0, 0, 0.94) 0%, rgba(0, 0, 0, 0.9) 50%, rgba(0, 0, 0, 0.55) 78%, rgba(0, 0, 0, 0.35) 100%); }
+.full-hero .slide-text { margin-left: max(32px, calc((100vw - 1200px) / 2 + 32px)); padding: 56px 0 120px; }
+.full-hero .slide-controls { left: max(32px, calc((100vw - 1200px) / 2 + 32px)); bottom: 48px; }
+.credit { margin: 12px 0 0; }
+
+/* Bouton de thème */
+.theme-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 48px; min-width: 48px; padding: 0 14px; border-radius: 14px; border: 1.5px solid #3a3a3a; background: transparent; color: var(--white); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.theme-toggle .icon-moon { display: none; }
+[data-theme="light"] .theme-toggle .icon-sun { display: none; }
+[data-theme="light"] .theme-toggle .icon-moon { display: inline; }
+
+@media (max-width: 1320px) { .theme-label { display: none; } }
+@media (max-width: 900px) {
+  .full-hero .slide::after { background: linear-gradient(180deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.9) 22%, rgba(0, 0, 0, 0.94) 100%); }
+  .full-hero .slide-text { margin-left: 0; padding: 32px 28px 112px; }
+  .full-hero .slide-controls { left: 28px; bottom: 32px; }
+}
+@media (max-width: 640px) {
+  .full-hero { padding: 0; }
+  .full-hero .slide { min-height: calc(100svh - 69px); }
+  .full-hero .slide-text { padding: 28px 20px 104px; }
+  .full-hero .slide-controls { left: 20px; bottom: 24px; }
+  .topbar-actions .btn-primary { display: none; }
+}
+
+/* ---- Thème clair : fond blanc / gris pâle, texte noir, cartes claires, vert forêt ---- */
+[data-theme="light"] {
+  --bg: #ffffff;
+  --surface: #f4f6f5;
+  --card: #ffffff;
+  --line: #d9dfdc;
+  --muted: #4b5563;      /* 7,56:1 sur blanc, 6,96:1 sur #F4F6F5 */
+  --white: #111111;      /* « texte principal » de web.css : 18,88:1 sur blanc */
+  --accent: #0f5c3a;     /* texte/liens verts : 8,04:1 sur blanc, 7,41:1 sur #F4F6F5 */
+  --dark-green: #e3f1e9; /* pastilles : texte #0F5C3A 6,90:1 */
+  --dark-green-line: #b7d9c6;
+  color-scheme: light;
+}
+[data-theme="light"] html, [data-theme="light"] body { background: #fff; color: #111; }
+[data-theme="light"] .topbar { background: #fff; border-bottom-color: var(--line); }
+[data-theme="light"] .mainnav a { color: #1f2937; }
+[data-theme="light"] .mainnav a:hover { background: var(--surface); color: var(--accent); }
+[data-theme="light"] .btn-ghost, [data-theme="light"] .theme-toggle { border-color: #c4ccc8; color: #111; }
+/* Boutons verts : fond #18794E, texte blanc (5,41:1) dans les deux thèmes. */
+[data-theme="light"] .btn-primary, [data-theme="light"] .brand-mark, [data-theme="light"] .step-num { color: #fff; }
+[data-theme="light"] .cta-band { color: #fff; }
+[data-theme="light"] .cta-band h2, [data-theme="light"] .cta-band p { color: #fff; }
+[data-theme="light"] .btn-dark { background: #111; color: #fff; }
+[data-theme="light"] .btn-outline-light { color: #fff; border-color: rgba(255, 255, 255, 0.85); }
+[data-theme="light"] .footer { background: var(--surface); }
+[data-theme="light"] .faq summary::after { background: var(--dark-green); color: var(--accent); }
+[data-theme="light"] dialog { background: #fff; color: #111; border: 1px solid var(--line); }
+[data-theme="light"] dialog p { color: #374151; }
+[data-theme="light"] :focus-visible { outline-color: #0f5c3a; }
+/* Le héros reste sombre (photo + voile noir) dans les deux thèmes : texte blanc. */
+[data-theme="light"] .full-hero .slide-text h1, [data-theme="light"] .full-hero .slide-title { color: #fff; }
+[data-theme="light"] .full-hero .slide-text p { color: #e6e6e6; }
+[data-theme="light"] .full-hero .slide-arrow { color: #fff; }
+
+/* ---- Contraste garanti du héros (priorité 006) ----
+   Surface de texte opaque à 72 % sous le texte, en plus du voile (≥ 55 % partout) : opacité combinée
+   ≥ 1 − 0,45 × 0,28 = 87 %. Même sur un pixel de photo blanc pur, le fond sous le texte reste ≤ rgb(33,33,33)
+   (luminance ≤ 0,016) ⇒ texte blanc ≥ 15:1, #E6E6E6 ≥ 12:1 — quels que soient la photo, la largeur et le thème. */
+.full-hero .slide-text { background: rgba(0, 0, 0, 0.72); border-radius: 20px; padding: 32px 36px; max-width: 640px; margin-bottom: 120px; }
+.full-hero .slide-text { margin-top: 32px; }
+@media (max-width: 900px) {
+  .full-hero .slide-text { margin: 24px 20px 104px; padding: 24px 22px; max-width: none; }
+}
+@media (max-width: 640px) {
+  .full-hero .slide-text { margin: 16px 14px 96px; padding: 20px 18px; }
+}
+[data-theme="light"] .skip { background: #111; color: #fff; }
+
+/* Le héros reste sombre dans les deux thèmes : accents, focus, indicateurs et boutons secondaires y gardent les
+   couleurs du thème sombre (#5BD49A, blanc). */
+.full-hero { --accent: #5bd49a; }
+.full-hero :focus-visible { outline-color: #5bd49a; }
+[data-theme="light"] .full-hero .btn-ghost,
+[data-theme="light"] .full-hero .btn-outline-light { color: #fff; border-color: rgba(255, 255, 255, 0.85); }
+[data-theme="light"] .full-hero :focus-visible { outline-color: #5bd49a; }
+
+/* Contenu jamais coupé : hauteur au moins égale au contenu, au moins 560 px sur mobile. */
+@media (max-width: 640px) {
+  .full-hero .slide { min-height: max(560px, calc(100svh - 69px)); }
+}
+/* Variables du thème sombre conservées dans le héros (survol des flèches : fond vert sombre + flèche blanche). */
+.full-hero { --dark-green: #0e3b26; --white: #fff; }
+.full-hero .slide-arrow:hover, .full-hero .slide-arrow:focus-visible { background: #0e3b26; color: #fff; }
+.full-hero .slide-dot[aria-current="true"]::before { background: #5bd49a; }

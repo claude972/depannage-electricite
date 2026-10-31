@@ -105,3 +105,12 @@
     mais marge faible : texte vert = `#0F5C3A`).
 - Vérif : 1440/1280/390/360 × 2 thèmes, persistance après rechargement, préférence système, diapositives, focus, pas de
   débordement, aucune requête externe, console propre.
+- Livré 006 : `web-full.html` (charge `web.css` + `web-slide.css` + `web-full.css`), `web-full.js`. Contraste du héros
+  garanti par une surface de texte noire à 72 % au-dessus du voile (≥ 55 %) : opacité combinée ≥ 87 %, donc fond ≤ rgb(33,33,33)
+  même sur un pixel blanc. Mesure (texte rendu transparent, capture de la zone titre + paragraphe, pixel le plus clair) :
+  pire cas sur 16 captures (2 thèmes × 1440/1280/390/360 × 2 diapositives) = luminance 0,0019 ⇒ titre blanc **20,24:1**,
+  paragraphe #E6E6E6 **16,21:1**. Hors héros, minimum mesuré 5,41:1 (texte blanc sur bouton vert) dans les deux thèmes.
+  Dans le héros, les deux thèmes gardent les couleurs sombres : indicateur actif et focus #5BD49A, bouton secondaire blanc,
+  survol/focus des flèches fond #0E3B26 + flèche blanche. Thème : `prefers-color-scheme`, clé unique `delivo-test-theme`
+  (try/catch, repli session vérifié), appliqué avant rendu. Aucune publicité. 8 cas sans débordement, cibles ≥ 44 px,
+  héros pleine largeur (left 0, largeur = fenêtre, hauteur ≥ fenêtre − barre, contenu jamais coupé), console propre.
