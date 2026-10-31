@@ -2344,3 +2344,29 @@ Amendements contrats reçus : documents0e31711/planning8574b78 normalisent clien
 ### Revue checkpoints design/plateforme — 31 octobre 2026 11:05 AST — Codex
 Design90f79b6 :58 testsUI existants PASS, diff/captures relus. VIS filtrecontexte/budget150brut/ciblemobile44 vérifiés. Alertes : indisponible/unknown corrigés mais mobile masque encore le qualifiant (.thHint displaynone, précision sr-only) : Aucune seule reste visible. Même worker averti, correction attendue avant intégration. Rapport docs/reviews/DESIGN_90F79B6.md.
 Contrat plateformefd29b7f : amendement traite taux trusted/instantané et commission réelle distincte estimation, props/null/démo, verrous/fingerprint et support non livré. Restes : TVA HT/TTC commission à qualifier, facturation distincte adresse intervention, révoquer EXECUTE hérité sur ancienne fonction renommée et tester refus RPC ; lecture modérateur limité nécessite policy permissive appropriée en plus de restrictive. Rapport docs/reviews/PLATFORM_FD29B7F.md. Revue de contrat uniquement, pas de validation migration WIP. Automation existante actualisée avec ces checkpoints, aucun doublon.
+
+
+## A3 — livraison des quatre lots, revue indépendante en cours — 31 octobre 2026 11:43 AST
+Lead b4b555f0 a effectivement livré les quatre checkpoints poussés : documents adb3152, planning dac7505, B2B603ce12, plateforme0b92a7a. Les contrats seuls ne sont plus la preuve : code présent, mais NON appliqué/raccordé/validé intégralement. Agents disponibles réutilisés pour corrections. Artisan1007ef7 ajoute aperçu/coque M35 ; profil M36 encore WIP, préservé. Le choix Accueil en onglet mobile est accepté, Tableau de bord conservé sidebar/tiroir. Pas de nouvelle mission Desktop.
+
+### Visuel entreprise et gateway
+Design entreprise f3fd9c6 revu :58 testsUI et quatre P2 fermés, qualification visible dans capture360. Intégré/poussé par57c244f537ab1bacb980e41a9cfa6fb38b64e54e ; CI deux jobs PASS https://github.com/claude972/depannage-electricite/actions/runs/41215956380 . Checkout QA local avancé de62b1f7f à57c244f (fast-forward, environnement privé et symlink node_modules préservés) ; ancien serveur proprement arrêté, buildwebpack en cours avant recette combinée. Ce n’est pas une preview déployée.
+Gateway d7abd8c revu source+33 tests existants : présence connue/réapparue prise en compte, fenêtre backoff entière ; accepté pour intégration/recette nominale contrôlée.30s reste une fenêtre de réconciliation, jamais preuve de fin d’une écriture distante après timeout. Aucun déploiement Edge.
+
+### ADV-DOC-REV-003 — P2 OPEN, assigné Claude documents, adb3152
+Revue indépendante : typecheck+33 tests documents PASS et12 sections SQL isolées PASS. P2 ancien artisan corrigé et retesté (génération/retrait/téléchargement refusés après réaffectation). Nouveau défaut UI : quote-documents-panel run après second await client.load renvoie true malgré loadnull/changement scope ; continuations proposition/décision peuvent fermer un formulaire dans le nouveau scope. Revalider clé/null après chaque await et protéger continuation ; test de régression attendu. Pas de fuite serveur alléguée.
+
+### ADV-PLAN-REV-001 — P1 OPEN, assigné Claude planning, dac7505
+notify_support_reply/status 016:448–465 incluent sujet ticket dans notification mais scope intervention/site/org NULL. Predicate RLS81–90 ne revérifie pas can_access_support_ticket : notification reste lisible et marquable après révocation du dossier lié. Rattacher scope/ticket et revérifier droit courant dans liste/count/mark ; tester ticket lié révoqué et ticket personnel sans lien. NE PAS appliquer016 inchangée.
+
+### ADV-PLAN-REV-002 — P2 OPEN, assigné Claude planning, dac7505
+save_notification_preferences514–520 lit ligne absente version0 sans verrou stable user avant lecture. Deux premières sauvegardes peuvent valider0, se sérialiser ensuite sur quota, puis ON CONFLICT écraser toutes deux avecversion1. Sérialiser avant lecture/CASupsert et vérifier vraie concurrence. Typecheck+27 tests ciblés+SQLisolé001–013/016 PASS ne couvrent pas ces deux défauts. Le soupçon réaffectation/RDV a été retiré après lecture003 qui supprime explicitement le RDV : AUCUN correctif demandé sur ce point ; retrait transmis au lead immédiatement.
+
+### ADV-B2B-REV-001/002 — P2 OPEN, assigné Claude B2B,603ce12
+26 tests Node+11 groupesSQL isolés PASS. Snapshot SQL limite à50pauses/case sans flag, calcul ignore51e pause ouverte et peut annoncer faux SLA ; charger faits complets ou flag explicite/not_measurable. UI conserve ancien snapshot/flags écriture après refus relecture403/null : invalider/vider selon contexte au lieu de laisser droits affichés. Rapport docs/reviews/B2B_603CE12.md. Alerte initiale clientdémo rétractée : amendementA2 autorise clientdémo isolé injecté par lead ; c’est un invariant à tester au raccordement, pas défaut autonome établi.
+
+### ADV-FIN-REV-003 — P2 OPEN, assigné Claude plateforme,0b92a7a
+Revue Codex :18 tests ciblésPASS +12 sectionsSQLisoléesPASS (001–014). UI IssueForm check attend readiness sans lier réponse au paymentId/basis courant, champs éditables pendant busy : réponseA peut présenter montantA puis émissionB après changement de sélection. Lier empreinte sélection/génération et invalider résultat tardif, vérifier confirmation du même paiement. Serveur recalcule bien readiness ; pas de débit réel.
+
+### ADV-FIN-REV-004 — P2 OPEN, assigné Claude plateforme,0b92a7a
+platform_issue_credit_note arrondit TVA de chaque avoir indépendamment : facture total100centimes/TVA17, trois avoirs33 produisent6+6+6=18>17. Calculer delta de TVA cumulée sous verrou et plafonner résiduel ; tester fractionnement et avoir final. Contrôles idempotence/grants/audit/modération/rate trusted et refus bornés passent le harnais, mais concurrence réseau/UX assemblée/PDFfacture non vérifiés. Aucun feu migration014 tant que corrections ouvertes.
