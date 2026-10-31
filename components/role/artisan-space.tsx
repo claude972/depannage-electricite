@@ -68,7 +68,6 @@ import {
 import {
   artisanMissions,
   artisanPerformance,
-  isSameDay,
   pickQuote,
   quoteVersions,
   type Performance,
@@ -76,13 +75,15 @@ import {
 import styles from "./artisan.module.css";
 import { QuoteDraftEditor } from "./artisan-quote-draft";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
+import { appointmentSlotState, missionSegmentOptions, type AppointmentEntry, type MissionSegment } from "./artisan-lists";
 
 // ---- Static definitions ---------------------------------------------------------------
 type Tone = "neutral" | "blue" | "green" | "amber" | "red" | "violet";
-type NavItem = { view: View; label: string; icon: string };
+/** `short` : libellé de l’onglet bas (une ligne à 360 px, M36 « Accueil ») ; le menu garde `label`. */
+type NavItem = { view: View; label: string; icon: string; short?: string };
 
 const PRIMARY_NAV: NavItem[] = [
-  { view: "overview", label: "Tableau de bord", icon: "grid" },
+  { view: "overview", label: "Tableau de bord", icon: "grid", short: "Accueil" },
   { view: "missions", label: "Missions", icon: "briefcase" },
   { view: "quotes", label: "Devis", icon: "receipt" },
   { view: "messages", label: "Messages", icon: "message" },
@@ -338,7 +339,6 @@ function useOperations(session: Session, id: string, version: number) {
   }, [id, version, mode, profileId]);
   return state;
 }
-type AppointmentEntry = { appointment: Appointment | null } | null;
 function useAppointments(session: Session, ids: string[]) {
   const key = ids.join("|");
   const [map, setMap] = useState<Record<string, AppointmentEntry>>({});
@@ -537,7 +537,7 @@ export function ArtisanSpace({ session }: { session: Session }) {
               onClick={() => navigate(item.view)}
             >
               <Icon name={item.icon} size={22} />
-              {item.label}
+              {item.short ?? item.label}
             </button>
           ))}
         </nav>
@@ -768,20 +768,20 @@ function PanelArt() {
   );
 }
 function appointmentSlot(entry: AppointmentEntry | undefined, now: Date): ReactNode {
-  if (entry === undefined)
+  const slot = appointmentSlotState(entry, now);
+  if (slot.kind === "loading")
     return (
       <span role="status" className={styles.rowHint}>
         Horaire en cours de lecture…
       </span>
     );
-  if (entry === null) return <span className={styles.rowHint}>Horaire indisponible</span>;
-  if (!entry.appointment) return <span className={styles.rowHint}>Horaire à fixer</span>;
-  const start = new Date(entry.appointment.starts_at);
+  if (slot.kind === "unavailable") return <span className={styles.rowHint}>Horaire indisponible</span>;
+  if (slot.kind === "unscheduled") return <span className={styles.rowHint}>Horaire à fixer</span>;
   return (
     <>
-      <strong>{isSameDay(start, now) ? "Aujourd’hui" : date(entry.appointment.starts_at)}</strong>
+      <strong>{slot.today ? "Aujourd’hui" : date(slot.startsAt)}</strong>
       <span>
-        {time(entry.appointment.starts_at)} – {time(entry.appointment.ends_at)}
+        {time(slot.startsAt)} – {time(slot.endsAt)}
       </span>
     </>
   );
@@ -1015,6 +1015,7 @@ function Overview({
       >
         Voir missions disponibles
         {offers.length ? <span className={styles.ctaCount}>{offers.length}</span> : null}
+        <Icon name="arrow" size={18} />
       </button>
       {session.mode === "demo" && (
         <DemoNote>
@@ -1026,7 +1027,6 @@ function Overview({
 }
 
 // ---- Missions list -------------------------------------------------------------------------
-type MissionSegment = "available" | "active" | "done";
 function Missions({ session, declinedIds }: { session: Session; declinedIds: string[] }) {
   const [segment, setSegment] = useState<MissionSegment>("available");
   const m = artisanMissions(session.data.interventions, session.profileId);
@@ -1035,11 +1035,7 @@ function Missions({ session, declinedIds }: { session: Session; declinedIds: str
   const done = [...m.awaitingPayment, ...m.done].sort(
     (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
   );
-  const options = [
-    ["available", `Disponibles (${offers.length})`],
-    ["active", `En cours (${m.active.length})`],
-    ["done", `Terminées (${done.length})`],
-  ] as const;
+  const options = missionSegmentOptions({ offers: offers.length, active: m.active.length, done: done.length });
   const open = (id: string) => session.go("mission", id);
   return (
     <>

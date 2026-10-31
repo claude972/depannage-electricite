@@ -182,3 +182,17 @@ compteur de notifications. Ces absences restent des états explicites (`Unavaila
 1. Coque + tableau de bord M35 (+ segments de la liste Missions) — captures `artisan-overview-{360,1280}-after.jpg`.
 2. Profil M36 — captures `artisan-profile-{360,1280}-after.jpg`.
 3. Éditeur de devis M34 — captures `artisan-quote-{360,1280}-after.jpg`.
+
+### Résultat du checkpoint 1 — coque et tableau de bord M35
+
+| Ligne de l’addendum | Fait | Reste / écart |
+| --- | --- | --- |
+| Onglets bas | Libellés sur une ligne, 63 px (60 + filet actif), masqués ≥ 1024 px avec le bouton menu (règles replacées après `.bottomNav` / `.iconButton`). Onglet d’accueil libellé **« Accueil »** (M36) car « Tableau de bord » ne tient pas sur une ligne dans 72 px ; le menu et la barre latérale gardent « Tableau de bord ». | — |
+| Bandeau | Illustration conservée à 360 (64 px), titre 26 px sur une ligne ; masquée seulement < 340 px. | — |
+| Lignes de mission | Titre sur 2 lignes maximum (plus de troncature) ; horaire réel ou « à fixer » via `appointmentSlotState`. | Colonne droite ≤ 96 px à 360 : les titres longs passent sur 2 lignes (choix assumé contre l’ellipse). |
+| CTA | Flèche à droite, compteur d’offres réel, une ligne à 360 (15 px). | — |
+| Cibles | `summary` 44 px ; segments Missions 44 px, 3 sur une ligne à 360 (wrapper local, primitive partagée inchangée) ; 0 élément interactif visible < 44 px à 360 et 760 sur Accueil, Missions, Profil. | — |
+
+Captures : `artisan-overview-360-after.jpg`, `artisan-overview-1280-after.jpg`, `artisan-missions-360-after.jpg`
+(avant : `artisan-overview-{360,1280}-before.jpg`). Tests : `tests/ui/artisan-lists.test.ts` (états d’horaire,
+segments) ; suite UI 61/61 ; `tsc` au vert ; console sans erreur à 360 / 760 / 1280.
