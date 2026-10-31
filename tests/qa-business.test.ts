@@ -856,3 +856,43 @@ test("§16-4 accepted status read from status elements only; informational sente
   assert.equal(prereq.acceptedStatusShown({ formNotes: ["Devis accepté le 31 oct., 15:30. Il sert de base au règlement après intervention."], statusTags: [] }), true);
   assert.equal(prereq.acceptedStatusShown({ formNotes: [], statusTags: ["Accepté"] }), true);
 });
+
+// ---------------------------------------------------------------- §18 strict Flight parser (root review of Codex helper 7e029)
+test("§18 a non-array push or a push missing its ')' makes the page invalid: no build id extracted", () => {
+  const valid = nextFlightHtml([root("BuildTest")]);
+  assert.equal(preflight.servedBuildIdentity(valid).id, "BuildTest", "control: valid page");
+  for (const [label, html] of [
+    ["push(null) after a valid page", valid + "<script>self.__next_f.push(null)</script>"],
+    ["push({}) object", valid + '<script>self.__next_f.push({"b":"BuildTest"})</script>'],
+    ["push(\"string\")", valid + '<script>self.__next_f.push("0:{}")</script>'],
+    ["missing closing parenthesis (repro shape)", `<script>self.__next_f.push(${JSON.stringify([1, '0:{"b":"BuildTest"}\n'])}</script>`],
+    ["extra argument after the array", `<script>self.__next_f.push(${JSON.stringify([1, '0:{"b":"BuildTest"}\n'])},1)</script>`],
+    ["unbalanced array (truncated page)", '<script>self.__next_f.push([1,"0:{\\"b\\":\\"BuildTest\\"}"'],
+    ["unparseable payload", valid + "<script>self.__next_f.push([1, undefined])</script>"],
+  ] as const) {
+    const identity = preflight.servedBuildIdentity(html);
+    assert.equal(identity.id, null, label);
+    assert.equal(identity.source, "invalid", label);
+    assert.ok(identity.invalid >= 1, label);
+    const verdict = preflight.compareBuildIds("BuildTest", identity.id, identity);
+    assert.equal(verdict.verified, false, label);
+    assert.equal(verdict.invalid, true, label);
+  }
+  assert.ok(preflight.flightPushes(valid + "<script>self.__next_f.push(null)</script>").invalid === 1);
+});
+test("§18 preserved: 4c-shaped valid page → W1T6udg45nuoEg3XO7IGT, fragmented id across pushes, whitespace before ')', static fallback, ambiguous unchanged", () => {
+  // Next 16-shaped page carrying the id root's probe recorded for 4c (full 4c HTML not available locally).
+  const id4c = "W1T6udg45nuoEg3XO7IGT";
+  const page4c = nextFlightHtml(['1:"$Sreact.fragment"', root(id4c), '2:I[61234,[],"default"]']);
+  assert.deepEqual(preflight.servedBuildIdentity(page4c), { id: id4c, source: "flight", candidates: [id4c], ambiguous: false });
+  // Id itself split across two pushes.
+  const rootRow = root(id4c) + "\n";
+  const cut = rootRow.indexOf(id4c) + 7;
+  const fragmented = `<script>(self.__next_f=self.__next_f||[]).push([0])</script><script>self.__next_f.push(${JSON.stringify([1, rootRow.slice(0, cut)])})</script><script>self.__next_f.push( ${JSON.stringify([1, rootRow.slice(cut)])} )</script>`;
+  assert.equal(preflight.servedBuildIdentity(fragmented).id, id4c);
+  assert.equal(preflight.flightPushes(fragmented).invalid, 0, "the bootstrap push and whitespace are not errors");
+  const legacy = '<script src="/_next/static/AbC123xyz/_buildManifest.js"></script>';
+  assert.equal(preflight.servedBuildIdentity(legacy).source, "static");
+  const two = nextFlightHtml([root("BuildIdOne111")], { staticId: "BuildIdTwo222" });
+  assert.equal(preflight.servedBuildIdentity(two).source, "ambiguous");
+});

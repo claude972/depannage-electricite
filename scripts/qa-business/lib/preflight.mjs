@@ -30,10 +30,14 @@ export function flightPushes(html) {
   let at = 0;
   while ((at = text.indexOf(marker, at)) >= 0) {
     let i = at + marker.length;
+    while (i < text.length && /\s/.test(text[i])) i++;
     if (text[i] !== "[") {
+      // null, object, string, number…: not a Flight push. Counted, never skipped silently.
+      invalid++;
       at = i;
       continue;
     }
+    const start = i;
     let depth = 0;
     let inString = false;
     let end = -1;
@@ -53,12 +57,22 @@ export function flightPushes(html) {
       invalid++;
       break;
     }
+    // The array must be the whole argument: only whitespace, then the closing parenthesis.
+    let k = end + 1;
+    while (k < text.length && /\s/.test(text[k])) k++;
+    if (text[k] !== ")") {
+      invalid++;
+      at = end + 1;
+      continue;
+    }
     try {
-      pushes.push(JSON.parse(text.slice(at + marker.length, end + 1)));
+      const value = JSON.parse(text.slice(start, end + 1));
+      if (Array.isArray(value)) pushes.push(value);
+      else invalid++;
     } catch {
       invalid++;
     }
-    at = end + 1;
+    at = k + 1;
   }
   return { pushes, invalid };
 }
@@ -99,10 +113,14 @@ export function staticBuildIds(html) {
 /**
  * Served build identity: Flight root `b` first, `/_next/static/<id>/` manifests as fallback. Never
  * read from a URL query. Several distinct candidates (in either source, or across both) are
- * AMBIGUOUS; none is UNVERIFIED. Returns {id|null, source, candidates, ambiguous}.
+ * AMBIGUOUS; none is UNVERIFIED; any malformed push is INVALID (id null). Returns
+ * {id|null, source: flight|static|ambiguous|none|invalid, candidates, ambiguous[, invalid]}.
  */
 export function servedBuildIdentity(html) {
-  const flight = flightBuildIds(html).ids;
+  const parsed = flightBuildIds(html);
+  // Strict parser for received data: any malformed push makes the page unusable as evidence.
+  if (parsed.invalid > 0) return { id: null, source: "invalid", candidates: parsed.ids, ambiguous: false, invalid: parsed.invalid };
+  const flight = parsed.ids;
   const legacy = staticBuildIds(html);
   const candidates = [...new Set([...flight, ...legacy])];
   if (candidates.length > 1) return { id: null, source: "ambiguous", candidates, ambiguous: true };
@@ -118,6 +136,7 @@ export function servedBuildId(html) {
 /** Verdict used by the first scenario: a mismatch is an application-under-test defect (FAIL). */
 export function compareBuildIds(local, served, identity = null) {
   if (!local) return { verified: false, reason: "no .next/BUILD_ID in --app-dir: build identity declared, not verified" };
+  if (identity?.source === "invalid") return { verified: false, invalid: true, reason: `served document carries ${identity.invalid} malformed Flight push(es): not attributable` };
   if (identity?.ambiguous) return { verified: false, ambiguous: true, reason: `served document carries several build ids (${identity.candidates.join(", ")}): ambiguous, not attributable` };
   if (!served) return { verified: false, reason: "served document carries no recognisable build id" };
   if (local !== served) return { verified: false, mismatch: true, reason: `served build ${served} differs from --app-dir build ${local}` };
