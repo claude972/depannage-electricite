@@ -9,6 +9,8 @@
 import { api as defaultApi, ApiRequestError, contractStateFromError } from "./api";
 import type { ContractState, Role } from "./types";
 import { demoPlanning } from "../../lib/features/planning/demo";
+import { toIsoWithOffset, weekRange } from "../../lib/features/planning/time";
+import { PLANNING_TIME_ZONE } from "../../lib/features/planning/types";
 import { demoNotificationPage, demoPreferences } from "../../lib/features/notifications/demo";
 import { demoClient as demoSiteOperationsClient, demoReport } from "../../lib/features/site-operations/demo";
 import { quoteDocumentsDemo } from "../../lib/features/quote-documents/demo";
@@ -98,6 +100,15 @@ async function boundResult<T, R>(
 }
 
 const requestOf = (deps: FeatureDeps): Request => deps.request ?? ((path, body, method) => defaultApi(path, body, method));
+
+/**
+ * Range used by the controller's planning probe: the current week in the planning time zone, as
+ * full ISO instants with offset (what GET /api/planning validates), end strictly after start.
+ */
+export function planningProbeRange(now: Date | number | string = new Date(), zone = PLANNING_TIME_ZONE): { from: string; to: string } {
+  const week = weekRange(now, zone);
+  return { from: toIsoWithOffset(week.from, zone), to: toIsoWithOffset(week.to, zone) };
+}
 
 export function createPlanningClient(deps: FeatureDeps): PlanningClient {
   const request = requestOf(deps);

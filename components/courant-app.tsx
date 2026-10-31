@@ -7,7 +7,7 @@ import { createClient } from "../lib/supabase/client";
 import { api, ApiRequestError, contractStateFromError, uploadDocument } from "./app/api";
 import { createGuard, createRunner, runForResult, type RunContext, type Runner } from "./app/guard";
 import { adoptIdentity } from "./app/identity";
-import { createDemoFeatureClients, createFeatureClients } from "./app/features";
+import { createDemoFeatureClients, createFeatureClients, planningProbeRange } from "./app/features";
 import type { PlatformAccess } from "../lib/features/platform-operations/types";
 import { PLATFORM_DEMO } from "../lib/features/platform-operations/demo";
 import { demoNotificationPage } from "../lib/features/notifications/demo";
@@ -2308,10 +2308,7 @@ export default function CourantApp() {
       .me()
       .then((access) => active && setPlatformAccess(access))
       .catch(() => active && setPlatformAccess(null));
-    if (role === "artisan") {
-      const today = new Date().toISOString().slice(0, 10);
-      void features.planning.load({ from: today, to: today }).catch(ignore);
-    }
+    if (role === "artisan") void features.planning.load(planningProbeRange()).catch(ignore);
     if (role === "manager" && activeSiteId) void features.siteOperations.load(activeSiteId).catch(ignore);
     return () => {
       active = false;

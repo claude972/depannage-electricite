@@ -14,6 +14,9 @@ import {
 } from "../../components/app/features";
 import type { ContractState } from "../../components/app/types";
 import type { PlatformAccess } from "../../lib/features/platform-operations/types";
+import { isoInstant } from "../../lib/features/planning/schemas";
+import { PLANNING_MAX_RANGE_DAYS } from "../../lib/features/planning/types";
+import { planningProbeRange } from "../../components/app/features";
 
 type Call = { path: string; body?: unknown; method?: string };
 function harness(reply: (call: Call) => unknown) {
@@ -213,4 +216,18 @@ test("demo clients: seeds only, every command refused with the demonstration mes
   assert.ok(me && typeof me.super_admin === "boolean");
   const live = createDemoFeatureClients("admin");
   assert.equal(live.demo, true);
+});
+
+test("planning probe range passes the real API validation (full ISO instants with offset, 0 < span <= max days)", () => {
+  // Same rule as GET /api/planning: both bounds must satisfy isoInstant and to must be after from.
+  for (const now of ["2026-10-31T12:00:00Z", "2026-03-29T01:30:00Z", "2026-12-31T23:59:59Z", Date.UTC(2027, 0, 1)]) {
+    const { from, to } = planningProbeRange(now);
+    assert.equal(isoInstant.safeParse(from).success, true, `from ${from}`);
+    assert.equal(isoInstant.safeParse(to).success, true, `to ${to}`);
+    const span = Date.parse(to) - Date.parse(from);
+    assert.ok(span > 0 && span <= PLANNING_MAX_RANGE_DAYS * 86400000, `span ${span}`);
+    assert.equal(span, 7 * 86400000, "one week");
+  }
+  // A bare calendar date is exactly what the API refuses (the previous probe shape).
+  assert.equal(isoInstant.safeParse("2026-10-31").success, false);
 });
