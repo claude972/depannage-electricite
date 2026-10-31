@@ -1061,3 +1061,8 @@ Evidence: 0017b48a7a12/auth-ssr/result.json ; recovery-success.png visually open
 
 
 Le reviewer Claude c38a6bc4 a terminé réellement sa revue, exit0 et rapport reçu ; aucun finding actionnable dans le périmètre d85. La mission backend ADMIN-LISTS peut être close pour la route, ses filtres, droits et recette en ligne ; le branchement frontend reste dans l’affectation Claude in_progress. Photos6962 en preview5650 pour recette corrective, trois P2 ouverts.
+
+
+## WEB-PWA-20261030 — plan de vérification PWA multi-onglets
+
+Codex prépare un passage de version de la seule notice publique PWA (cachev2→v3) pour le checkpoint majeur Web/PWA. Le lot conserve strictement un unique offline.html public, sans nouveau cache/API/sync privé. Avant mutation, la QA doit garder deux onglets du même alias preview sous le worker v2 et un brouillon local non soumis. Après le déploiement réel du worker v3 sur ce même alias : vérifier attente visible, absence de reload automatique, activation explicite ongletA, puis clic du contrôle resté ancien dans ongletB qui doit recharger correctement (PWA-001), et suppression du seul ancien cache public. Mettre à jour la seule assertion de version du test existant puis rejouer les tests PWA pertinents ; aucune preuve ne sera déduite de cette planification. Propriétaire du petit changement : Codex public/sw.js et tests/pwa.test.ts sur integration/web-pwa, après signal de préparation QA. Aucun autre fichier PWA ou cache privé élargi. Avant minuit ; sinon transfert de cette mutation à Claude.
