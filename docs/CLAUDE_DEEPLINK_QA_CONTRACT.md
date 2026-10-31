@@ -194,3 +194,85 @@ Zero frames plus a « non connectée » badge do not prove that the route blocks
    - **(c)** the recorded summary contains neither `SECRET` nor `apikey=` nor any query value.
    - It is the same pattern object, imported from `scripts/qa-deeplink/lib/realtime-block.mjs`, so the test checks exactly what the harness installs.
 5. **Distinct and OPEN.** This proves only that the deep-link fallback is tested WITHOUT Realtime. **Realtime effectiveness (LIVE-WORKSPACE-001)** stays OPEN and separate (§6). No scenario in this contract may conclude anything about it, either way.
+
+## Amendment A2 (independent review of 6fb13ad + 8a402ff, 4 P2) — before any GO
+
+A10 is settled (ROOT run 6a6: setup + T9 + T14 PASS, cleanup 29, drain 0, open intents 0). This amendment replaces the parts of §2, §4 and A1 that conflict with it.
+
+### P2-1 — Realtime interception: installed before login, exact path, close resolved
+
+- `context.routeWebSocket(...)` is installed and AWAITED on the session's CONTEXT BEFORE `login()`, so before the app can open any socket. The session pool installs it as soon as the context is created (deps injectable), before `trackFn` and `loginFn`.
+- **Match.** The handler receives every WebSocket of the context. It applies the block only when `new URL(ws.url())` has the exact path `/realtime/v1/websocket` and the Supabase origin of the run's credentials.
+  - The block counts one hit (`realtime_hits`) and stores scalars only: ISO time, origin, path (no query, so never `apikey` or `vsn`).
+  - Any other socket ⇒ `ws.connectToServer()` (left alone) and counted as `other_sockets`. Only the path is noted.
+- **Close resolved.** The handler `await`s `ws.close({ code: 4000, reason: "qa-realtime-blocked" })`.
+  - On the page side, a passive `page.on("websocket")` observer waits for the `close` event of that socket.
+  - It records the observed close code (4000) and the count of server frames (0).
+  - The hit counts only once the close has been observed.
+- `connectToServer()` is NEVER called for the Realtime path.
+- **BLOCKED (never PASS, never FAIL)** in any of these cases:
+  - 0 hits before the measured navigation;
+  - a hit on another path or origin (wrong pattern);
+  - a handler error;
+  - close not observed or with another code;
+  - ≥ 1 server frame.
+- « 0 frames + non connectée badge » alone is NEVER enough. The badge stays a secondary check.
+- The local control test of A1 §4 adds:
+  - a socket opened BEFORE the handler is installed (negative check: not intercepted ⇒ the scenario would be BLOCKED);
+  - a socket on another path (left alone, `other_sockets = 1`, no Realtime hit);
+  - an error thrown inside the handler ⇒ BLOCKED verdict.
+
+### P2-2 — counting windows: only THIS cause, after a drain; focus pollution ⇒ BLOCKED
+
+- **Drain before opening.** A window opens only after:
+  - every `GET /api/workspace` already in flight has settled (the observer tracks request ⇒ response/requestfailed);
+  - then 1 s of network quiet on `/api/workspace` (bounded to 10 s; past that ⇒ BLOCKED « bootstrap not drained »).
+  - Bootstrap, the harness's identity check (`waitForWorkspace`, outside windows) and UI-driver requests are therefore excluded by construction. Harness requests carry `x-qa-harness: 1` and are never counted.
+- **Attribution to the cause.** Only UI-sourced `GET /api/workspace` STARTED after the action (hash change, click) and before the window closes are counted.
+- **Passive revalidation is detected, not assumed absent.** An in-page passive listener (marker installed with the doc marker, removed afterwards) records `focus`, `blur` and `visibilitychange` (type and time only) and `document.visibilityState`.
+  - If a focus/visibility event lands in a window, the count is not attributable ⇒ **BLOCKED** (« passive revalidation in window »), never a false FAIL.
+  - The 15 s cooldown is NOT a proof that the first focus never happens; only the listener counts.
+  - The scenarios keep the page visible and focused (`page.bringToFront()` before the window, no other tab).
+- **Double click with a REAL in-flight barrier (D2).**
+  - The stub for request #2 is DEFERRED: the route stays pending until the harness releases it.
+  - The second click happens while #2 is provably in flight (the observer saw the request start, with no response). It must add 0 requests. The button is `disabled` / `aria-busy`, a read-only attribute check.
+  - Then the release: malformed 200 ⇒ error state.
+  - No real request #3 is sent before the explicit retry.
+
+### P2-3 — D4: proof of the attempt memory for ABSENCE
+
+Window (b) of D4 only proves the positive cache. Added:
+- **(e)** hash to a UUID NEVER seeded (`randomUUID()`, run-unique). That gives exactly 1 refresh, a complete loaded 200 (real reply), then « Intervention introuvable ».
+- **(f)** back to the list, then the same UUID again, same context ⇒ **0** requests, « introuvable » rendered directly with no « Recherche du dossier… ».
+- **(g)** control: a context change (another identity, in another page or session) does not reuse that memory. One refresh in the new context; the absence memory is keyed by context.
+
+### P2-4 — Auth orphan recovery: exact adapter contract (no blind duplication)
+
+**Proposal (recommended): sequential generalisation of the tracking modules, owner Claude, A10 frozen.**
+1. **Step B1, on `claude/web-qa-tracking`, separate lot with ROOT review.** `cleanupWithProof` is extracted from `scripts/qa-tracking/run.mjs` into `scripts/qa-tracking/lib/cleanup-proof.mjs`, unchanged.
+   - It takes the cleanup function as a parameter: `runCleanupFn(db, proven, log)` (tracking: `runTrackingCleanup`), plus a hook `settleSideEffects(intents, steps)` (tracking: provider lease intents, otherwise a no-op).
+   - Tracking behaviour stays identical: `run.mjs` re-exports `cleanupWithProof` with the tracking parameters, and the 57 tracking tests pass unchanged, plus one adapter test.
+   - No change to A7, A8, A9 or A10.
+2. **Step B2, here.** `scripts/qa-deeplink/lib/cleanup.mjs` imports `cleanupWithProof` READ-ONLY. It passes `runCleanupFn` = the shared `runCleanup` with the deep-link steps:
+   - interventions (with `intervention_tracking` pre-steps imported from `TRACKING_PRE_STEPS`, in case the app created a row lazily);
+   - then site scopes and members, sites, organisations, profiles, Auth users.
+   - `settleSideEffects` = no-op.
+3. **Fixtures.** `TrackingFixtures` (`scripts/qa-tracking/scenarios.mjs`) is imported READ-ONLY for `createUser`, `createOrganization`, `addMember`, `createSite`, `setSiteScope` and `createIntervention`. Their intent protocol is exactly the required one. Nothing is copied.
+
+Fallback option A, if ROOT refuses B: `scripts/qa-deeplink/lib/cleanup.mjs` composes the same read-only primitives (`IntentLog`, `createAuthAdmin`, `readOwnership` / `proveOwnership`, `atomicWriteJsonSync`) with no copy of `cleanupWithProof`. It is tested against the same repro cases as the tracking ones.
+
+**Required semantics (both options, tested here):**
+- **Before `createAuth`**: a durable intent (`createAuthUser`, key = the run's canonical e-mail, validated by `assertCanonicalEmail` before any lookup), written atomically to disk BEFORE the emission.
+- **Discovery** by that exact canonical e-mail only (`searchByEmail`: exhaustive pagination, end proof, spaced repeats). Another e-mail or domain is never accepted.
+- **The found id is persisted** (`manifest.recovered` + `created.auth_users`, atomic write) BEFORE any DELETE. Ownership is proven by `readUser` (exact schema) plus canonical e-mail plus run_id.
+- **Unknown or malformed** (Auth schema not recognised, non-legacy 404, 5xx, transport) ⇒ intent OPEN, cleanup INCOMPLETE, exit 3.
+- **An absence never closes an intent**, not even an exhaustive one.
+
+Repro tests (offline, injected Auth/DB):
+- creation lost after commit ⇒ UID found then persisted before the DELETE;
+- malformed Auth ⇒ INCOMPLETE, exit 3;
+- non-legacy 404 ⇒ unknown;
+- exhaustive absence ⇒ intent open, exit 3;
+- interruption between recovery and DELETE ⇒ UID on disk, resumed by `--cleanup-manifest`.
+
+Code only after ROOT GO on A2. If B is chosen, B1 (tracking extraction) comes first, as a separate SHA reviewed before any deep-link code.
