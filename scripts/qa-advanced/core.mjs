@@ -7,7 +7,12 @@ import { randomUUID } from 'node:crypto';
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const exec = promisify(execFile);
 export async function gitSha(dir) {const {stdout}=await exec('git',['-C',dir,'rev-parse','HEAD']);const sha=stdout.trim();if(!/^[a-f0-9]{40}$/.test(sha))throw Error('invalid Git revision');return sha;}
-export function uncertainResponse(method,status) { return !['GET','HEAD','OPTIONS'].includes(method) && status>=500; }
+// PostgREST maps the SQL NO_DATA_FOUND exception to HTTP500. Unlike an upstream
+// failure, this structured SQL error proves the transaction was rolled back.
+// Keep this allowlist narrow: do not infer rollback from a plain "500" or message text.
+export function definiteMissingRow(body) { return Boolean(body && typeof body==='object' && !Array.isArray(body) && body.code==='P0002' && typeof body.message==='string' && body.message.length>0); }
+export function uncertainResponse(method,status,body=null) { return !['GET','HEAD','OPTIONS'].includes(method) && status>=500 && !(status===500 && definiteMissingRow(body)); }
+export function planningOwnershipRefused(result) { return [403,404].includes(result.status) || (result.status===500 && definiteMissingRow(result.body)); }
 export function parseArgs(argv) {
   const o = { suite: 'all', timeoutMs: 120000, allowed: [] };
   const flags = { '--base-url':'baseUrl', '--sha':'sha', '--app-dir':'appDir', '--project':'project', '--credentials':'credentials', '--out':'out', '--suite':'suite', '--playwright-path':'playwrightPath', '--chromium-path':'chromiumPath', '--cleanup-manifest':'cleanupManifest', '--timeout-ms':'timeoutMs' };

@@ -7,7 +7,7 @@ import os from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 // Node24 can require this synchronous ESM module; the runtime import does not execute a runner.
-const {parseArgs,preflight,uncertainResponse,exactCount,Registry,emptyManifest,validateManifest,Gate,mutate,cleanup,cleanupPlan,assertRace,finalCode}=createRequire(import.meta.url)('../scripts/qa-advanced/core.mjs');
+const {parseArgs,preflight,definiteMissingRow,planningOwnershipRefused,uncertainResponse,exactCount,Registry,emptyManifest,validateManifest,Gate,mutate,cleanup,cleanupPlan,assertRace,finalCode}=createRequire(import.meta.url)('../scripts/qa-advanced/core.mjs');
 const REF='abcdefghijklmnopqrst',SHA='a'.repeat(40),U='10000000-0000-4000-8000-000000000001',T='10000000-0000-4000-8000-000000000002';
 const base=['--base-url','http://localhost:3017','--sha',SHA,'--app-dir','/unused','--project',REF,'--credentials','/unused/private.json','--out','/unused/evidence'];
 const exec=promisify(execFile);
@@ -81,6 +81,15 @@ test('mutation 5xx responses remain transport-uncertain, not a definite rollback
   for(const status of [500,502,503,504])assert.equal(uncertainResponse('POST',status),true);
   for(const status of [200,201,204,400,403,409,422,429])assert.equal(uncertainResponse('POST',status),false);
   assert.equal(uncertainResponse('GET',503),false);
+});
+test('structured SQL P0002 at HTTP500 is a definite rollback and a valid foreign-row refusal, preserving the actual status',()=>{
+  const body={code:'P0002',details:null,hint:null,message:'no_data_found'};
+  const response={status:500,body};assert.equal(definiteMissingRow(body),true);assert.equal(uncertainResponse('POST',500,body),false);assert.equal(planningOwnershipRefused(response),true);assert.equal(response.status,500);
+  assert.equal(planningOwnershipRefused({status:403,body:null}),true);assert.equal(planningOwnershipRefused({status:404,body:null}),true);
+  for(const malformed of [null,'P0002',[],[body],{}, {code:'P0002'}, {code:'P0002',message:''}, {code:'P0002',message:123}, {code:'XX000',message:'P0002'}, {message:'P0002'}]) {
+    assert.equal(definiteMissingRow(malformed),false);assert.equal(uncertainResponse('POST',500,malformed),true);assert.equal(planningOwnershipRefused({status:500,body:malformed}),false);
+  }
+  for(const status of [501,502,503,504])assert.equal(uncertainResponse('POST',status,body),true);
 });
 test('the actual CLI dry-run exits before cloud/browser work and never prints fixture keys',async()=>temporary(async dir=>{
   const app=path.join(dir,'app');await mkdir(app);await exec('git',['init','-q',app]);await exec('git',['-C',app,'-c','user.name=QA','-c','user.email=qa@qa.invalid','commit','--allow-empty','-qm','fixture']);

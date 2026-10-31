@@ -39,8 +39,9 @@ async function main() {
     let r,text;
     try {r=await fetch(base+endpoint,{method,headers,body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(o.timeoutMs),redirect:'error'});text=await r.text();trace.status=r.status;trace.finished_at=new Date().toISOString();}
     catch {trace.finished_at=new Date().toISOString();const e=Error('HTTP transport outcome unknown');e.remoteUnknown=method!=='GET'&&method!=='HEAD';throw e;}
-    if(uncertainResponse(method,r.status)){const e=Error('Mutation upstream failure; remote commit unknown');e.remoteUnknown=true;throw e;}
     let parsed=null;try {parsed=text?JSON.parse(text):null;}catch {if(r.ok && method!=='GET'&&method!=='HEAD'){const e=Error('Mutation reply unreadable');e.remoteUnknown=true;throw e;}}
+    if(uncertainResponse(method,r.status,parsed)){const e=Error('Mutation upstream failure; remote commit unknown');e.remoteUnknown=true;throw e;}
+    if(r.status===500 && parsed?.code==='P0002')trace.rollback_code='P0002';
     return {status:r.status,body:parsed,headers:r.headers,timing:{start:Date.parse(trace.started_at),end:Date.parse(trace.finished_at)}};
   };
   const change=(label,actor,method,endpoint,body)=>mutate(gate,registry,label,()=>request(actor,method,endpoint,body));

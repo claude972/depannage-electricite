@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { assertRace, mutate, uncertainResponse } from './core.mjs';
+import { assertRace, mutate, uncertainResponse, planningOwnershipRefused } from './core.mjs';
 
 export async function apiScenarios(ctx) {
   const {users:u,rpc,ok,request,change,registry,cohort,db,token,step}=ctx;
@@ -17,7 +17,7 @@ export async function apiScenarios(ctx) {
     assert.equal((await request(u.other,'GET',`/rest/v1/artisan_availability_rules?id=eq.${ruleRow.id}&select=id`)).body?.length,0);
     const denied=await rpc(u.client,'artisan_planning',{p_from:from,p_to:to});assert.equal(denied.status,403);
     assert.equal((await rpc(u.client,'save_availability_rule',{...rule,p_request_id:randomUUID()})).status,403);
-    const wrong=await rpc(u.other,'delete_availability_rule',{p_id:ruleRow.id,p_expected_version:ruleRow.version});assert.ok([403,404].includes(wrong.status));
+    const wrong=await rpc(u.other,'delete_availability_rule',{p_id:ruleRow.id,p_expected_version:ruleRow.version});assert.ok(planningOwnershipRefused(wrong));
     const changed=ok(await rpc(u.artisan,'save_availability_rule',{...rule,p_id:ruleRow.id,p_request_id:randomUUID(),p_expected_version:ruleRow.version,p_start_minute:600}));assert.equal(changed.rule.version,2);
     const stale=await rpc(u.artisan,'save_availability_rule',{...rule,p_id:ruleRow.id,p_request_id:randomUUID(),p_expected_version:1});assert.equal(stale.body?.code,'P0001');
     const view=ok(await rpc(u.artisan,'artisan_planning',{p_from:from,p_to:to}));assert.equal(view.rules.length,1);assert.ok(view.free.length>0);
@@ -29,7 +29,7 @@ export async function apiScenarios(ctx) {
     const results=await Promise.all([rpc(u.artisan,'save_planning_entry',bodies[0]),rpc(second,'save_planning_entry',bodies[1])]);const winner=assertRace(results,{requireOverlap:true});
     const rows=await db.select('artisan_planning_entries',{artisan_id:`eq.${u.artisan.id}`},'id,title,version');assert.equal(rows.length,1);assert.equal(rows[0].title,bodies[winner].p_title);
     const replay=ok(await rpc(u.artisan,'save_planning_entry',bodies[winner]));assert.equal(replay.replayed,true);assert.equal(replay.entry.id,rows[0].id);
-    const notMine=await rpc(u.other,'delete_planning_entry',{p_id:rows[0].id,p_expected_version:1});assert.ok([403,404].includes(notMine.status));
+    const notMine=await rpc(u.other,'delete_planning_entry',{p_id:rows[0].id,p_expected_version:1});assert.ok(planningOwnershipRefused(notMine));
     ctx.busy=rows[0];
   });
   await step('planning: exception changes availability; suspended artisan read-only',async()=>{
@@ -93,7 +93,7 @@ export async function browserScenarios(ctx) {
   const handle=await b.newPage(browser,{baseUrl:o.baseUrl,redactor});const {page}=handle;
   const app=async(method,route,body)=>{
     const invoke=()=>page.evaluate(async({method,route,body,timeout})=>{const r=await fetch(route,{method,headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(timeout)});return {status:r.status,body:await r.json().catch(()=>null)};},{method,route,body,timeout:o.timeoutMs});
-    if(method==='GET')return invoke();return mutate(ctx.gate,ctx.registry,'browser '+route,async()=>{try{const r=await invoke();if(uncertainResponse(method,r.status))throw Error('upstream failure');return r;}catch{const e=Error('browser mutation outcome unknown');e.remoteUnknown=true;throw e;}});
+    if(method==='GET')return invoke();return mutate(ctx.gate,ctx.registry,'browser '+route,async()=>{try{const r=await invoke();if(uncertainResponse(method,r.status,r.body))throw Error('upstream failure');return r;}catch{const e=Error('browser mutation outcome unknown');e.remoteUnknown=true;throw e;}});
   };
   await step('browser: real artisan session, planning and notifications contracts',async()=>{
     await b.login(handle,o.baseUrl,u.artisan,o.project,{timeout:o.timeoutMs});
