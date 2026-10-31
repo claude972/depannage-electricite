@@ -96,6 +96,17 @@ export async function browserScenarios(ctx) {
     const invoke=()=>page.evaluate(async({method,route,body,timeout})=>{const r=await fetch(route,{method,headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(timeout)});return {status:r.status,body:await r.json().catch(()=>null)};},{method,route,body,timeout:o.timeoutMs});
     if(method==='GET')return invoke();return mutate(ctx.gate,ctx.registry,'browser '+route,async()=>{try{const r=await invoke();if(uncertainResponse(method,r.status,r.body,route))throw Error('upstream failure');return r;}catch{const e=Error('browser mutation outcome unknown');e.remoteUnknown=true;throw e;}});
   };
+  const reloadPlanning=async(expectedEditable)=>{
+    // First prove the current authenticated server result; a UI timeout is not
+    // evidence that the external suspension write failed or that it was reread.
+    const live=await app('GET','/api/planning');assert.equal(live.status,200);assert.equal(live.body?.permissions?.can_edit,expectedEditable);
+    const response=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/planning' && r.request().method()==='GET').catch(()=>null);
+    await page.reload({waitUntil:'domcontentloaded',timeout:o.timeoutMs});
+    const reread=await response;assert.ok(reread,'reload must request planning');assert.equal(reread.status(),200);
+    const body=await reread.json();assert.equal(body?.permissions?.can_edit,expectedEditable);
+    await b.waitForWorkspace(page,u.artisan.id,o.timeoutMs);
+    await page.getByRole('heading',{name:/Semaine du/}).waitFor();
+  };
   await step('browser: real artisan session, planning and notifications contracts',async()=>{
     await b.login(handle,o.baseUrl,u.artisan,o.project,{timeout:o.timeoutMs});
     await b.openHash(page,o.baseUrl,'planning');await page.getByRole('heading',{name:/Semaine du/}).waitFor();
@@ -126,14 +137,20 @@ export async function browserScenarios(ctx) {
   });
   await step('browser: server suspension reflected as read-only planning',async()=>{
     ok(await change('suspend browser cohort artisan','service','PATCH',`/rest/v1/artisan_profiles?user_id=eq.${u.artisan.id}`,{application_status:'suspended'}),204);
-    await b.openHash(page,o.baseUrl,'planning');await page.getByRole('note').filter({hasText:'Votre compte est suspendu'}).first().waitFor();
+    await reloadPlanning(false);await page.getByRole('note').filter({hasText:'Votre compte est suspendu'}).first().waitFor();
     const r=await app('POST','/api/planning',{action:'save_entry',request_id:randomUUID(),kind:'busy',starts_at:new Date(Date.now()+86400000).toISOString(),ends_at:new Date(Date.now()+90000000).toISOString(),title:'refused',note:''});assert.equal(r.status,403);
     assert.equal(await page.getByRole('button',{name:'Ajouter une entrée ponctuelle',exact:true}).count(),0);
     ok(await change('restore browser cohort artisan','service','PATCH',`/rest/v1/artisan_profiles?user_id=eq.${u.artisan.id}`,{application_status:'approved'}),204);
+    await reloadPlanning(true);await page.getByRole('button',{name:'Ajouter une entrée ponctuelle',exact:true}).waitFor();
   });
   await step('browser: deterministic GET failure surfaces retry, then recovers',async()=>{
     await page.route('**/api/planning?*',async route=>{await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Panne technique injectée pour la recette.'})});});
-    try {await b.openHash(page,o.baseUrl,'planning');await page.getByRole('button',{name:'Réessayer',exact:true}).first().waitFor();await page.screenshot({path:path.join(o.out,'planning-error.png'),fullPage:true});}
+    try {
+      const response=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/planning' && r.request().method()==='GET').catch(()=>null);
+      await page.getByRole('button',{name:'Recharger la semaine',exact:true}).click();
+      const failed=await response;assert.ok(failed,'refresh must request planning');assert.equal(failed.status(),503);
+      await page.getByRole('button',{name:'Réessayer',exact:true}).first().waitFor();await page.screenshot({path:path.join(o.out,'planning-error.png'),fullPage:true});
+    }
     finally {await page.unrouteAll({behavior:'wait'});}
     await page.getByRole('button',{name:'Réessayer',exact:true}).first().click();await page.getByRole('heading',{name:'Disponibilités habituelles',exact:true}).waitFor();
   });
