@@ -46,3 +46,48 @@ Base `58b76414` ; branche `claude/web-remaining-contracts`. **Docs seulement** :
 
 ## 4. Limites et interdits
 Aucun affaiblissement RLS, aucune policy modifiée, aucune migration (ajout de `payments` à la publication = décision séparée du propriétaire des migrations, après diagnostic), aucun changement de l’app pendant le diagnostic. Le correctif éventuel (bindings publiés seulement ou un canal par table, écoute `system`, `wait`, badge honnête) relève des propriétaires de la coque et des migrations, sur contrat séparé.
+
+## 5. Claim — WEB-REALTIME-PROBE-001 (mission 78a9020, contract 2058c2c)
+
+Owner: Claude, the existing QA worker. Branch `claude/web-qa-realtime` = integration 53d34a9 plus a clean merge of 2058c2c. That merge also brings `docs/DETAIL_READ_CONTRACT.md` from the same branch, unchanged.
+
+**Exclusive files (new):**
+- `scripts/qa-realtime/**`;
+- `tests/qa-realtime*.test.ts`;
+- this claim section.
+
+**Read-only imports:**
+- from tracking (B1): `intents.mjs`, `durable.mjs`, `auth-admin.mjs`, `ownership.mjs`, `cleanup-proof.mjs`, `cleanup.mjs` (`runTrackingCleanup` as `runCleanupFn`), `finalize.mjs`, `guard.mjs`;
+- `scenarios.mjs` (`TrackingFixtures`: intent before `createAuthUser`, before every INSERT);
+- `scripts/qa/lib/*`.
+
+None of these files is modified.
+
+**Implementation choices within the contract:**
+- **SDK.** A local QA page, never the production app, loads the app's real client: `@supabase/ssr` `createBrowserClient`, with supabase-js and realtime-js taken from the app's `node_modules`.
+  - The bundle is built locally with esbuild (already installed; no new dependency) into the run's temporary folder, outside Git. It is served from a loopback server.
+  - The preflight requires realtime-js `2.118.0` (`--expect-sdk`) and identity with the app's `--app-dir`. The report records the version, the source (paths) and the exact channel specification. It makes NO claim of UI proof.
+- **Volatile token projection.** A Playwright `routeWebSocket` on the QA context proxies ONLY the Realtime socket (`connectToServer` plus explicit forwarding both ways). It decodes the frames IN MEMORY: `phx_join`, `access_token`, `phx_reply` of the join, `system`.
+  - It derives only booleans: per epoch, token present, `role === "authenticated"`, `sub ===` the QA UID read independently through Auth admin.
+  - It also derives relative times, the server bindings (public table and event, per-position match) and the whitelisted `system` messages.
+  - No frame, JWT, claim, payload, header or cookie is kept.
+  - Proxy not invoked, or a token change seen on the SDK side (`onAuthStateChange`) without a captured `access_token` frame ⇒ role **UNKNOWN**.
+- **Events.** The page holds IN MEMORY the ids of received INSERT events on `interventions`. The harness asks it only « the exact id of this measurement received? » ⇒ a boolean.
+- **Measurements, sequential, one channel each:**
+  - `app-4`: `workspace-<uid>`, the app's 4 bindings in the app's order;
+  - `pub-3`;
+  - `int-1`;
+  - `app-4-wait` (`postgres_changes_options: { wait: true }`).
+
+  Each one is closed and drained in a `finally` before the next. `--only` selects a subset.
+- **Cohort.** The e-mail is `qa-<run>-rt-client@qa.invalid`: the canonical shared cohort format required by the B1 ownership proof, instead of the literal `qa-rt-<run>-client` of §3. The meaning is the same: one confirmed client, no admin.
+- **Root preflight:**
+  - credentials, project and publishable key;
+  - an explicit `--confirm-no-active-cohort` flag;
+  - exact SDK;
+  - `GET /auth/v1/health` = 200;
+  - QA identity proven after the login (session UID = created UID).
+
+  Any refusal ⇒ exit 2 before any mutation.
+- **Exits:** 0 diagnostic completed (whatever the conclusion), 1 FATAL, 2 BLOCKED / preflight, 3 incomplete cleanup / unknown / stop with an open drain (precedence 3 > 2 > 130 > 1).
+- **Outputs:** `--out` outside Git, folders 0700, files 0600: `report.json` (scalars and booleans only), `manifest.json`, `intents.json`, `cleanup.json`. `--cleanup-manifest` gives a cold restart (strict manifest, exact journal, generic B1).
