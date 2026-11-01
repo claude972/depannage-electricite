@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { FULL_NAME_MAX, BOOKING_DRAFT_KEY, bookingDescription, clearBooking, contactErrors, parseBooking, profilePatch, readBooking, saveBooking, type BookingDraft } from "../../components/app/booking-draft";
+import { normalizePhone, FULL_NAME_MAX, BOOKING_DRAFT_KEY, bookingDescription, clearBooking, contactErrors, parseBooking, profilePatch, readBooking, saveBooking, type BookingDraft } from "../../components/app/booking-draft";
 
 const NOW = 1_800_000_000_000;
 const contact = { civility: "mme" as const, first_name: "Léa", last_name: "Martin", email: "lea@example.test", phone: "0696 12 34 56", company: false };
@@ -58,4 +58,17 @@ test("full name bound = API max 120: 120 accepted, 121 refused by the step AND b
   assert.ok(contactErrors(at121).last_name, "the contact step refuses 121");
   assert.equal(profilePatch(at121), null, "no PATCH that the API would reject with 422");
   assert.equal(profilePatch({ ...contact, phone: "1".repeat(31) }), null, "phone > 30 refused, not truncated");
+});
+
+test("guest checkout: payment choice strict (legacy without it accepted), phone E.164 as the contract", () => {
+  assert.equal(parseBooking({ ...booking, payment: "on_site" })?.payment, "on_site");
+  assert.equal(parseBooking({ ...booking, payment: "card_hold" })?.payment, "card_hold");
+  assert.equal(parseBooking({ ...booking, payment: "paid" }), null, "no invented « paid » state");
+  assert.equal(parseBooking(booking)?.payment, undefined);
+  assert.equal(normalizePhone("0696 12 34 56"), "+596696123456");
+  assert.equal(normalizePhone("0697.12.34.56"), "+596697123456");
+  assert.equal(normalizePhone("06 12 34 56 78"), "+33612345678");
+  assert.equal(normalizePhone("+44 7700 900123"), "+447700900123");
+  assert.equal(normalizePhone("0596 12 34 56"), null, "landline: not an SMS number");
+  assert.equal(normalizePhone("12"), null);
 });

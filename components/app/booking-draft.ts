@@ -41,7 +41,27 @@ export type BookingDraft = {
    *  lifetime, carried across login/reload/back/errors). Legacy drafts may lack it: a key is then
    *  created and PROVEN persisted before the first POST. */
   request_id?: string;
+  /** Guest checkout (docs/GUEST_CHECKOUT_CONTRACT.md): the customer's choice. « on_site » =
+   *  pay the artisan on site (the request stays UNPAID); « card_hold » = card authorisation
+   *  (empreinte, NOT a charge). Optional for legacy drafts (then asked again). */
+  payment?: PaymentChoice;
 };
+export const PAYMENT_CHOICES = ["on_site", "card_hold"] as const;
+export type PaymentChoice = (typeof PAYMENT_CHOICES)[number];
+export const PAYMENT_LABEL: Record<PaymentChoice, string> = {
+  on_site: "Règlement sur place, après l’intervention",
+  card_hold: "Empreinte bancaire (aucun débit à la réservation)",
+};
+
+/** E.164 as the contract normalises it (display/validation only; the server re-normalises):
+ *  Martinique 0696/0697 → +596…, metropolitan 06/07 → +33…, international « + » kept. */
+export function normalizePhone(input: string): string | null {
+  const raw = input.replace(/[\s.()-]/g, "");
+  if (/^\+[1-9][0-9]{7,14}$/.test(raw)) return raw;
+  if (/^069[67][0-9]{6}$/.test(raw)) return `+596${raw.slice(1)}`;
+  if (/^0[67][0-9]{8}$/.test(raw)) return `+33${raw.slice(1)}`;
+  return null;
+}
 export type StoredBooking = { savedAt: number; booking: BookingDraft };
 
 const LIMITS = { slug: 80, notes: 1500, first_name: 60, last_name: 60, email: 254, phone: 30 } as const;
@@ -68,7 +88,12 @@ export function parseBooking(input: unknown): BookingDraft | null {
     if (typeof input.request_id !== "string" || !REQUEST_ID.test(input.request_id)) return null;
     request_id = input.request_id.toLowerCase();
   }
-  return { slug, urgent: input.urgent, slot, notes, contact: { civility, first_name, last_name, email, phone, company: Boolean(c.company) }, ...(request_id ? { request_id } : {}) };
+  let payment: PaymentChoice | undefined;
+  if (input.payment !== undefined) {
+    if (!PAYMENT_CHOICES.includes(input.payment as PaymentChoice)) return null;
+    payment = input.payment as PaymentChoice;
+  }
+  return { slug, urgent: input.urgent, slot, notes, contact: { civility, first_name, last_name, email, phone, company: Boolean(c.company) }, ...(request_id ? { request_id } : {}), ...(payment ? { payment } : {}) };
 }
 
 export const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
