@@ -65,6 +65,10 @@ const defaultTimers: Timers = {
   clear: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
   now: () => Date.now(),
 };
+/** True when `value` was not produced by this field's own last emission (external replace). */
+export function isExternalChange(value: AddressValue, lastEmitted: AddressValue): boolean {
+  return value.address !== lastEmitted.address || value.postal_code !== lastEmitted.postal_code || value.city !== lastEmitted.city;
+}
 /** Only the three address strings: never ids, labels or coordinates. */
 export function pickFields(c: AddressCandidate): AddressValue {
   return { address: c.address, postal_code: c.postal_code, city: c.city };
@@ -243,6 +247,20 @@ export function createAddressController(opts: AddressControllerOptions) {
     dismissGeo() {
       if (state.geo === "message") set({ geo: "idle", geoMessage: "" });
     },
+    /** Parent replaced the value (new draft / reset): forget everything in flight. Aborts the
+     *  search and reverse, cancels a pending geolocation (its late callback is ignored), closes
+     *  the list and drops any pending « Utiliser cette adresse » confirmation. */
+    reset() {
+      cancelSearch();
+      blockedUntil = 0;
+      geoSeq++;
+      geoAbort?.abort();
+      geoAbort = null;
+      if (geoGuard !== null) timers.clear(geoGuard);
+      geoGuard = null;
+      state = INITIAL_ADDRESS_STATE;
+      opts.onState(state);
+    },
     dispose() {
       cancelSearch();
       geoSeq++;
@@ -314,6 +332,12 @@ export function AddressField({
   const [state, setState] = useState<AddressState>(INITIAL_ADDRESS_STATE);
   const latest = useRef({ value, onChange });
   latest.current = { value, onChange };
+  /** Last value this field emitted (or received): anything else is an external replacement. */
+  const lastEmitted = useRef<AddressValue>(value);
+  const emit = (next: AddressValue) => {
+    lastEmitted.current = next;
+    latest.current.onChange(next);
+  };
   const ctrlRef = useRef<AddressController | null>(null);
   if (ctrlRef.current === null)
     ctrlRef.current = createAddressController({
@@ -321,11 +345,17 @@ export function AddressField({
       reverse,
       geolocation: geolocation ?? null,
       onState: setState,
-      onPick: (fields) => latest.current.onChange({ ...latest.current.value, ...fields }),
+      onPick: (fields) => emit({ ...latest.current.value, ...fields }),
     });
   const ctrl = ctrlRef.current;
   ctrl.setDeps({ search, reverse, geolocation: geolocation ?? null });
   useEffect(() => () => ctrl.dispose(), [ctrl]);
+  // New draft / reset from the parent: an old suggestion, request or confirmation must never
+  // apply to the new value.
+  useEffect(() => {
+    if (isExternalChange(value, lastEmitted.current)) ctrl.reset();
+    lastEmitted.current = value;
+  }, [ctrl, value]);
 
   const canLocate = Boolean(geolocation && reverse);
   const listShown = state.open && state.status !== "idle";
@@ -374,7 +404,7 @@ export function AddressField({
             value={value.address}
             disabled={disabled}
             onChange={(e) => {
-              latest.current.onChange({ ...latest.current.value, address: e.target.value });
+              emit({ ...latest.current.value, address: e.target.value });
               ctrl.input(e.target.value);
             }}
             onKeyDown={onKey}
@@ -455,7 +485,7 @@ export function AddressField({
             autoComplete="postal-code"
             value={value.postal_code}
             disabled={disabled}
-            onChange={(e) => latest.current.onChange({ ...latest.current.value, postal_code: e.target.value })}
+            onChange={(e) => emit({ ...latest.current.value, postal_code: e.target.value })}
           />
         </div>
         <div className={styles.field}>
@@ -468,7 +498,7 @@ export function AddressField({
             autoComplete="address-level2"
             value={value.city}
             disabled={disabled}
-            onChange={(e) => latest.current.onChange({ ...latest.current.value, city: e.target.value })}
+            onChange={(e) => emit({ ...latest.current.value, city: e.target.value })}
           />
         </div>
       </div>

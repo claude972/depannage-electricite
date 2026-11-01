@@ -318,3 +318,55 @@ test("SSR sans window : 3 champs étiquetés et éditables, combobox ARIA, bouto
   assert.doesNotMatch(noGeo, /Utiliser ma position/);
   assert.match(noGeo, /required=""/);
 });
+
+// ---- Remplacement externe de la valeur (nouveau brouillon / réinitialisation) -----------------
+test("valeur remplacée par le parent : seule une valeur non émise par le champ est « externe »", () => {
+  const v = { address: "1 rue A", postal_code: "97200", city: "Fort-de-France" };
+  assert.equal(mod.isExternalChange(v, { ...v }), false);
+  assert.equal(mod.isExternalChange({ ...v, address: "" }, v), true);
+  assert.equal(mod.isExternalChange({ ...v, city: "Lamentin" }, v), true);
+});
+
+test("reset() : recherche annulée, liste vidée, géolocalisation en attente ignorée, confirmation abandonnée", async () => {
+  const g = fakeGeo();
+  const rev: ReturnType<typeof deferred<AddressSuggestions>>[] = [];
+  const s = setup({ geolocation: g.geo, reverse: () => { const d = deferred<AddressSuggestions>(); rev.push(d); return d.promise; } });
+  // 1. recherche en vol + liste ouverte → reset
+  s.ctrl.input("rue A");
+  s.t.advance(DEBOUNCE_MS);
+  s.calls[0].d.resolve(reply([cand(1)]));
+  await flush();
+  s.ctrl.input("rue Ab");
+  s.t.advance(DEBOUNCE_MS);
+  assert.equal(s.calls.length, 2);
+  s.ctrl.reset();
+  assert.equal(s.calls[1].signal.aborted, true);
+  assert.equal(JSON.stringify(s.last()), JSON.stringify(mod.INITIAL_ADDRESS_STATE));
+  s.calls[1].d.resolve(reply([cand(2)])); // réponse tardive : ignorée
+  await flush();
+  assert.equal(s.last().open, false);
+  assert.equal(s.ctrl.choose(0), false);
+  // 2. confirmation en attente → reset → « Utiliser cette adresse » ne peut plus s’appliquer
+  s.ctrl.locate();
+  g.requests[0].ok(position(14.6, -61));
+  rev[0].resolve(reply([cand(4)]));
+  await flush();
+  assert.equal(s.last().geo, "confirm");
+  s.ctrl.reset();
+  s.ctrl.confirmGeo(true);
+  assert.equal(s.last().geo, "idle");
+  // 3. géolocalisation pendante (rappel et reverse tardifs) → reset → ignorée
+  s.ctrl.locate();
+  assert.equal(g.requests.length, 2);
+  s.ctrl.reset();
+  g.requests[1].ok(position(14.6, -61)); // rappel tardif après reset
+  assert.equal(rev.length, 1); // aucun reverse lancé
+  s.ctrl.locate();
+  g.requests[2].ok(position(14.6, -61));
+  s.ctrl.reset(); // reverse en vol
+  rev[1].resolve(reply([cand(5)]));
+  await flush();
+  assert.equal(s.last().geo, "idle");
+  assert.equal(s.t.pending(), 0); // garde de délai annulée
+  assert.deepEqual(s.picks, []); // rien n’a été appliqué au nouveau brouillon
+});
