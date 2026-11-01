@@ -14,6 +14,16 @@ import {
   type HistoryFetch,
   type HistoryState,
 } from "./message-history";
+import {
+  applyDocumentOutcome,
+  documentHistoryKey,
+  fetchDocumentPage,
+  initialDocumentHistory,
+  mergeDocuments,
+  offersOlderDocuments,
+  type DocumentFetch,
+  type DocumentHistoryState,
+} from "./document-history";
 import { Icon } from "./icons";
 import { Empty, Field, ConfirmAction, Unavailable } from "./ui";
 import {
@@ -1183,17 +1193,83 @@ export function ReviewForm({
     </form>
   );
 }
+// Paginated documents history (live only): newest page read on mount, older pages on explicit
+// request. Keyed by identity + filter (the cursor scope); a change aborts the read in flight and
+// starts empty, a late reply is ignored. 503 honours Retry-After before « Réessayer ». No cache.
+const browserDocumentFetch: DocumentFetch = (url, init) => fetch(url, init);
+function useDocumentHistory(live: boolean, profileId: string, filter: string, fetchImpl: DocumentFetch) {
+  const key = documentHistoryKey(profileId, filter);
+  const [state, setState] = useState<DocumentHistoryState>(() => initialDocumentHistory(key));
+  const stateRef = useRef(state);
+  const flight = useRef<AbortController | null>(null);
+  const [, setTick] = useState(0);
+  const update = useCallback((next: (s: DocumentHistoryState) => DocumentHistoryState) => {
+    stateRef.current = next(stateRef.current);
+    setState(stateRef.current);
+  }, []);
+  const load = useCallback(() => {
+    const from = stateRef.current;
+    if (!live || from.key !== key || from.status === "loading" || from.status === "not_found" || from.status === "signed_out") return;
+    if (from.loaded && !from.hasMore) return;
+    if (from.status === "error" && from.retryAt && Date.now() < from.retryAt) return; // Retry-After
+    flight.current?.abort();
+    const ctl = new AbortController();
+    flight.current = ctl;
+    update((s) => ({ ...s, status: "loading" }));
+    void fetchDocumentPage(fetchImpl, filter, from.cursor, ctl.signal).then((outcome) => {
+      if (flight.current !== ctl) return; // superseded by an identity/filter change
+      flight.current = null;
+      update((s) => applyDocumentOutcome(s, key, outcome, Date.now()));
+    });
+  }, [live, key, filter, fetchImpl, update]);
+  useEffect(() => {
+    flight.current?.abort();
+    flight.current = null;
+    update(() => initialDocumentHistory(key));
+    if (live) load();
+    return () => {
+      flight.current?.abort();
+      flight.current = null;
+    };
+  }, [key, live, load, update]);
+  const current = state.key === key ? state : initialDocumentHistory(key);
+  const waitMs = current.status === "error" && current.retryAt ? current.retryAt - Date.now() : 0;
+  useEffect(() => {
+    if (waitMs <= 0) return;
+    const t = window.setTimeout(() => setTick((n) => n + 1), waitMs + 20);
+    return () => window.clearTimeout(t);
+  }, [waitMs]);
+  return { state: current, load, retryInS: waitMs > 0 ? Math.ceil(waitMs / 1000) : 0 };
+}
 export function DocumentManager({
   documents,
   interventions,
   demo,
   onRefresh,
+  live = false,
+  profileId = "",
+  interventionId = "",
+  fetchHistory = browserDocumentFetch,
 }: {
   documents: StoredDocument[];
   interventions: Intervention[];
   demo: boolean;
   onRefresh: () => Promise<void>;
+  /** Live session: older documents are read from /api/documents/history. Default/demo: no call. */
+  live?: boolean;
+  /** Identity part of the history key (role spaces also remount on identity change). */
+  profileId?: string;
+  /** Optional dossier filter (cursor scope); "" = every document of the account. */
+  interventionId?: string;
+  /** Test seam for the history client. */
+  fetchHistory?: DocumentFetch;
 }) {
+  const history = useDocumentHistory(live && !demo, profileId, interventionId, fetchHistory);
+  const hs = history.state;
+  const historyOn = live && !demo;
+  const unavailable = historyOn && hs.status === "not_found";
+  const rows = unavailable ? [] : historyOn ? mergeDocuments(interventionId, documents, hs.pages) : documents;
+  const firstLoad = historyOn && !hs.loaded && (hs.status === "idle" || hs.status === "loading");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -1251,10 +1327,31 @@ export function DocumentManager({
           {notice}
         </div>
       )}
-      {documents.length ? (
+      {historyOn && hs.status === "error" && (
+        <div className="alert error" role="alert" data-document-history="error">
+          <p>
+            {hs.loaded
+              ? "Les documents plus anciens n’ont pas pu être chargés. Les documents affichés restent valables."
+              : "L’historique des documents n’a pas pu être chargé. Les documents affichés restent valables."}
+          </p>
+          <button type="button" className="button outline" disabled={history.retryInS > 0} onClick={history.load}>
+            Réessayer{history.retryInS > 0 ? ` (${history.retryInS} s)` : ""}
+          </button>
+        </div>
+      )}
+      {historyOn && hs.status === "signed_out" && (
+        <div className="alert error" role="alert" data-document-history="signed_out">
+          Votre session a expiré. Reconnectez-vous pour retrouver vos documents.
+        </div>
+      )}
+      {unavailable ? (
+        <p className="document-empty" data-document-history="not_found">
+          Ces documents ne sont pas accessibles depuis votre compte.
+        </p>
+      ) : rows.length ? (
         <div className="document-list">
-          {documents.map((d) => (
-            <div key={d.id}>
+          {rows.map((d) => (
+            <div key={d.id} data-document-id={d.id}>
               <Icon name="document" />
               <section>
                 <h3>{d.name}</h3>
@@ -1288,8 +1385,18 @@ export function DocumentManager({
             </div>
           ))}
         </div>
-      ) : (
+      ) : firstLoad ? null : (
         <p className="document-empty">Aucune pièce jointe pour le moment.</p>
+      )}
+      {historyOn && hs.status === "loading" && (
+        <p role="status" data-document-history="loading">
+          Chargement des documents…
+        </p>
+      )}
+      {historyOn && offersOlderDocuments(hs) && (
+        <button type="button" className="button outline" data-document-older disabled={hs.status === "loading"} onClick={history.load}>
+          Charger les documents plus anciens
+        </button>
       )}
       {demo ? (
         <div className="inline-note">

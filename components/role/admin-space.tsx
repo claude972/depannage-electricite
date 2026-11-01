@@ -1017,7 +1017,7 @@ export function AdminSpace({ session }: { session: Session }) {
         break;
       case "documents":
         content = (
-          <DocumentManager documents={session.data.documents} interventions={session.data.interventions} demo={demo} onRefresh={session.refresh} />
+          <DocumentManager live={session.mode === "live"} documents={session.data.documents} interventions={session.data.interventions} demo={demo} onRefresh={session.refresh} />
         );
         break;
       case "profile":

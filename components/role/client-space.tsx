@@ -1872,6 +1872,7 @@ function DocumentsView({ session, rows }: { session: Session; rows: Intervention
         )}
       </section>
       <DocumentManager
+        live={session.mode === "live"}
         documents={session.data.documents}
         interventions={rows}
         demo={session.mode === "demo"}

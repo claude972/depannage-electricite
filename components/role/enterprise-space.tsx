@@ -4009,6 +4009,7 @@ function DocumentsView({ c }: { c: Ctx }) {
         )}
       </section>
       <DocumentManager
+        live={session.mode === "live"}
         documents={session.data.documents}
         interventions={byDateDesc(scope.interventions)}
         demo={demo}
