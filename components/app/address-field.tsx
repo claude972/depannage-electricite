@@ -7,23 +7,11 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import styles from "./address-field.module.css";
 
-// ---- Contract types (same shape as lib/features/addresses/types.ts; import it once it lands) ---
-export type AddressCandidate = {
-  id: string;
-  label: string;
-  address: string;
-  postal_code: string;
-  city: string;
-  latitude: number;
-  longitude: number;
-};
-export type AddressSuggestions = {
-  source: "IGN / BAN";
-  candidates: AddressCandidate[];
-  attribution: string;
-};
-/** Rejection shape of `search` / `reverse` (API error body + optional Retry-After seconds). */
-export type AddressAssistError = { message: string; retryable: boolean; retryAfterSeconds?: number };
+// ---- Contract types: published by the address API (lib/features/addresses/types.ts) --------
+import type { AddressAssistError as ApiError, AddressCandidate, AddressSuggestions } from "../../lib/features/addresses/types";
+export type { AddressCandidate, AddressSuggestions };
+/** Rejection shape of `search` / `reverse`: the API error body + optional Retry-After seconds. */
+export type AddressAssistError = ApiError & { retryAfterSeconds?: number };
 export type AddressValue = { address: string; postal_code: string; city: string };
 export type AddressSearch = (q: string, signal: AbortSignal) => Promise<AddressSuggestions>;
 export type AddressReverse = (lat: number, lon: number, signal: AbortSignal) => Promise<AddressSuggestions>;
@@ -268,8 +256,8 @@ export type AddressController = ReturnType<typeof createAddressController>;
 // ---- Optional API client (the lead decides where it is wired) ---------------------------------
 export function createAddressApi(options: { fetcher?: typeof fetch; searchPath?: string; reversePath?: string } = {}) {
   const fetcher = options.fetcher ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
-  const searchPath = options.searchPath ?? "/api/public/addresses/search";
-  const reversePath = options.reversePath ?? "/api/public/addresses/reverse";
+  const searchPath = options.searchPath ?? "/api/addresses/search";
+  const reversePath = options.reversePath ?? "/api/addresses/reverse";
   async function call(url: string, signal: AbortSignal): Promise<AddressSuggestions> {
     const res = await fetcher(url, { signal, cache: "no-store", headers: { Accept: "application/json" } });
     let body: unknown = null;
@@ -295,6 +283,12 @@ export function createAddressApi(options: { fetcher?: typeof fetch; searchPath?:
     search: (q: string, signal: AbortSignal) => call(`${searchPath}?q=${encodeURIComponent(q)}`, signal),
     reverse: (lat: number, lon: number, signal: AbortSignal) => call(`${reversePath}?lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lon))}`, signal),
   };
+}
+
+/** Attribution line: always names the source « IGN / BAN », plus the API's attribution text. */
+export function attributionText(attribution: string): string {
+  const extra = attribution.trim();
+  return extra ? `Suggestions IGN / BAN — ${extra}` : "Suggestions IGN / BAN";
 }
 
 // ---- View --------------------------------------------------------------------------------------
@@ -406,7 +400,7 @@ export function AddressField({
                 </li>
               ))}
             </ul>
-            {state.status === "results" && state.attribution && <p className={styles.attribution}>{state.attribution}</p>}
+            {state.status === "results" && <p className={styles.attribution}>{attributionText(state.attribution)}</p>}
           </div>
         </div>
         <p id={ids.status} className={styles.status} role="status" aria-live="polite">

@@ -120,6 +120,8 @@ test("≤ 5 suggestions, attribution, aucune sélection automatique ; vide → �
   assert.equal(last().status, "results");
   assert.equal(last().active, -1);
   assert.match(last().attribution, /IGN/);
+  assert.equal(mod.attributionText(""), "Suggestions IGN / BAN");
+  assert.equal(mod.attributionText(" Source : BAN "), "Suggestions IGN / BAN — Source : BAN");
   assert.deepEqual(picks, []);
   ctrl.input("rue Z");
   t.advance(DEBOUNCE_MS);
@@ -288,7 +290,7 @@ test("client API : enveloppe filtrée (≤ 5), erreurs { message, retryable } + 
   const r = await ok.search("12 rue des É", new AbortController().signal);
   assert.equal(r.candidates.length, 5);
   await ok.reverse(14.6, -61.07, new AbortController().signal);
-  assert.deepEqual(urls, ["/api/public/addresses/search?q=12%20rue%20des%20%C3%89", "/api/public/addresses/reverse?lat=14.6&lon=-61.07"]);
+  assert.deepEqual(urls, ["/api/addresses/search?q=12%20rue%20des%20%C3%89", "/api/addresses/reverse?lat=14.6&lon=-61.07"]);
   const busy = createAddressApi({ fetcher: (async () => new Response(JSON.stringify({ message: "Très sollicité.", retryable: true }), { status: 429, headers: { "Retry-After": "2" } })) as never });
   await assert.rejects(busy.search("rue A", new AbortController().signal), (e: unknown) => {
     assert.equal(JSON.stringify(e), JSON.stringify({ message: "Très sollicité.", retryable: true, retryAfterSeconds: 2 }));
