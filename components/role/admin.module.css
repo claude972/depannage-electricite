@@ -1488,3 +1488,433 @@ button.row:hover {
     max-width: 100%;
   }
 }
+
+/* ---- Admin theme overrides (FASTSPLIT-ADMIN-THEME-001) ---------------------------------------
+   Active only inside ThemeSurface (`.ui-v2`, same element as `.adminSkin` from
+   admin-theme.module.css). Generated: one override per colour declaration of the matching rule
+   above (same selector, +1 class), legacy colours mapped to --ui-* tokens (text → --ui-text /
+   --ui-text-muted, links and active items → --ui-accent, pale tints → --ui-surface, white cards
+   → --ui-card, filled blue → --ui-primary, lines → --ui-border). Then manual corrections.
+   Layout is unchanged. */
+:global(.ui-v2) .space {
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .sidebar {
+  background: var(--ui-card);
+  border-right: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .sidebarTop {
+  border-bottom: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .closeButton {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .navItem {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .navItem:hover {
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .navItem[aria-current="page"] {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .navCount {
+  background: var(--ui-surface);
+  color: var(--ui-warning);
+}
+:global(.ui-v2) .roleSwitch {
+  border-top: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .roleSwitch label {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .roleSwitch select {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .account {
+  border-top: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .accountButton:hover {
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .accountButton[aria-current="page"] {
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .accountButton strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .accountButton small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .demoBanner {
+  background: var(--ui-surface);
+  border-bottom: 1px solid var(--ui-border);
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .demoBanner :global(.inline-confirmation) > button {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .header {
+  background: var(--ui-card);
+  border-bottom: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .menuButton {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .chip {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .chip svg {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .stale {
+  color: var(--ui-warning);
+}
+:global(.ui-v2) .kpi {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .blue {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .amber {
+  background: var(--ui-surface);
+  color: var(--ui-warning);
+}
+:global(.ui-v2) .green {
+  background: var(--ui-surface);
+  color: var(--ui-success);
+}
+:global(.ui-v2) .navy {
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .kpiLabel {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .kpiValue {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .kpiNote {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .kpiBasis summary {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .kpiBasis summary::before {
+  border-right: 1.5px solid var(--ui-text-muted);
+  border-bottom: 1.5px solid var(--ui-text-muted);
+}
+:global(.ui-v2) .kpiBasis ul {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .panel {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .count {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .link {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .footerLink {
+  border-top: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .basis {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .filter {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .filter input,
+:global(.ui-v2) .filter select {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .tableWrap {
+  border-top: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .table th {
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+  border-bottom: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .table td {
+  border-bottom: 1px solid var(--ui-border);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .table tbody tr:hover {
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .person strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .person small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .rowAction {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .rowAction:hover {
+  background: var(--ui-surface);
+  border-color: var(--ui-border);
+}
+:global(.ui-v2) .muted {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .cellStack small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .rowList {
+  border-top: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .row {
+  border-bottom: 1px solid var(--ui-border);
+}
+:global(.ui-v2) button.row:hover {
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .rowBody strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .rowBody span {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .rowMeta {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .facts small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .facts strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .description {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .summaryTop > div > span {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .steps li {
+  border: 1px solid var(--ui-border);
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .steps li span {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .steps li.reached {
+  background: var(--ui-surface);
+  border-color: var(--ui-border);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .steps li.reached span {
+  background: var(--ui-primary);
+  border-color: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+:global(.ui-v2) .steps li.current {
+  border-color: var(--ui-accent);
+}
+:global(.ui-v2) .message {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .message header {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .message header strong {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .message p {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .checks li {
+  border-bottom: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .definitions dt {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .definitions dd {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .rules {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .subheading {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .credRow {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .credRow > svg {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .credRow strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .credRow span {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .formNote {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .effects {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .inlineError {
+  color: var(--ui-danger);
+}
+:global(.ui-v2) .backLink {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .backLink:hover {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .highlight {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .highlight svg {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .stars {
+  color: var(--ui-warning);
+}
+:global(.ui-v2) .capTable td:last-child {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .searchHelp {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .searchHelp[data-error="true"] {
+  color: var(--ui-danger);
+}
+:global(.ui-v2) .pager {
+  border-top: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .pagerInfo {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .pagerInfo strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .quoteList {
+  border-top: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .quoteList > li + li {
+  border-top: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .quote summary {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .quote summary:hover {
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .quote summary > strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .quoteToggle {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .quoteLines th {
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+  border-bottom: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .quoteLines td {
+  border-bottom: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .quoteTotals dt {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .quoteId {
+  color: var(--ui-text-muted);
+}
+@media (max-width: 600px) {
+  :global(.ui-v2) .table tr {
+    border-bottom: 1px solid var(--ui-border);
+  }
+  :global(.ui-v2) .table td::before {
+    color: var(--ui-text-muted);
+  }
+}
+:global(.ui-v2) .subjectLink {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .subjectLink:hover {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .ticketHead h2 {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .ticketHead p {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .timeline .fromAdmin {
+  background: var(--ui-card);
+  border-color: var(--ui-border);
+  border-left: 3px solid var(--ui-accent);
+}
+:global(.ui-v2) .timeline .fromAdmin header strong {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .timelineEvent {
+  border: 1px dashed var(--ui-border);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .timelineEvent small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .conflict {
+  border: 1px solid var(--ui-border);
+  color: var(--ui-warning);
+}
+:global(.ui-v2) .conflict strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .conflict p {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .statusControl {
+  border-top: 1px solid var(--ui-border);
+}
+/* Manual corrections. Active nav item: inset accent bar, as in the enterprise skin. */
+:global(.ui-v2) .navItem[aria-current="page"] {
+  box-shadow: inset 3px 0 0 var(--ui-accent);
+}
+/* Header bell (notifications leaf, fixed #fff button): repainted from the admin header itself. */
+:global(.ui-v2) .tools > button:not(:global(.button)) {
+  border-color: var(--ui-border);
+  background: transparent;
+  color: var(--ui-text);
+}
+:global(.ui-v2) .tools > button:not(:global(.button)):hover:not(:disabled) {
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .tools > button:not(:global(.button)):disabled {
+  color: var(--ui-text-muted);
+}
+/* Phone widths: the stacked row action wraps inside its cell instead of widening the page. */
+@media (max-width: 760px) {
+  :global(.ui-v2) .table td > .rowAction {
+    min-width: 0;
+    max-width: 100%;
+    white-space: normal;
+    text-align: left;
+  }
+}

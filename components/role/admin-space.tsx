@@ -84,6 +84,9 @@ import {
   shortId,
 } from "../app/format";
 import styles from "./admin.module.css";
+import theme from "./admin-theme.module.css";
+import { ThemeSurface } from "../app/theme-provider";
+import { ThemeToggle } from "../app/theme-toggle";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { PLATFORM_TITLES, PlatformPage } from "./platform-anchor";
 import { adminKpis, dashboardRows, loadedNote } from "./admin-lists";
@@ -1029,6 +1032,7 @@ export function AdminSpace({ session }: { session: Session }) {
 
   const pendingCount = overview?.counts.pending_applications || 0;
   return (
+    <ThemeSurface className={theme.adminSkin}>
     <div className={styles.space}>
       <aside
         id="admin-sidebar"
@@ -1123,6 +1127,7 @@ export function AdminSpace({ session }: { session: Session }) {
             <p>{heading.subtitle}</p>
           </div>
           <div className={styles.tools}>
+            <ThemeToggle />
             <HeaderBell session={session} />
             <span className={styles.chip} role="status">
               <Icon name="clock" size={16} />
@@ -1148,6 +1153,7 @@ export function AdminSpace({ session }: { session: Session }) {
         </main>
       </div>
     </div>
+    </ThemeSurface>
   );
 }
 
