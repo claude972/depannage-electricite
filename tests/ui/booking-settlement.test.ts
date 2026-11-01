@@ -30,6 +30,9 @@ test("analyse stricte : seul le DTO gelé est accepté ; le reste ⇒ null (jama
   same(st.parseSettlement(dto()), dto());
   same(st.parseSettlement(dto({ amount_cents: null, available: false, reason: "configuration_required" })), dto({ amount_cents: null, available: false, reason: "configuration_required" }));
   for (const bad of [null, {}, dto({ method: "on_site" }), dto({ status: "unknown" }), dto({ currency: "usd" }), dto({ amount_cents: -1 }), dto({ amount_cents: 1.5 }), dto({ amount_cents: "240" }), dto({ available: "yes" }), dto({ reason: 3 })]) assert.equal(st.parseSettlement(bad), null, JSON.stringify(bad));
+  // Montant : entier sûr STRICTEMENT positif ; null seulement avant tout règlement.
+  for (const status of ["not_started", "processing", "needs_review"]) assert.ok(st.parseSettlement(dto({ status, amount_cents: null })), status);
+  for (const status of ["paid", "captured_transfer_pending"]) assert.equal(st.parseSettlement(dto({ status, amount_cents: null })), null, status);
   // 503 ou forme inattendue au chargement ⇒ erreur + Réessayer.
   for (const r of [res(503), res(200, { status: "not_started" }), res(st.SETTLEMENT_TIMEOUT), res(0)]) {
     const s = st.applyStatus(st.SETTLEMENT_INITIAL, r);
@@ -223,6 +226,38 @@ test("onSettled : une seule fois sur « paid » (POST et Actualiser), jamais sur
   assert.match(failed, /data-settlement-refresh="">Actualiser</);
   const src = readFileSync(path.join(ROOT, "components/role/booking-settlement.tsx"), "utf8");
   assert.doesNotMatch(src, /Rien n’a été modifié/);
+});
+
+test("réponse malformée (montant 0 / -1 / 1,5 / 2^53 / null sur paid / statut inconnu) ⇒ erreur + Réessayer, 0 POST, 0 onSettled", async () => {
+  const malformed = [
+    dto({ amount_cents: 0 }),
+    dto({ amount_cents: -1 }),
+    dto({ amount_cents: 1.5 }),
+    dto({ amount_cents: 2 ** 53 }),
+    dto({ status: "paid", amount_cents: null }),
+    dto({ status: "captured_transfer_pending", amount_cents: null }),
+    dto({ status: "refunded" }),
+    dto({ status: "paid", amount_cents: 0 }),
+  ];
+  for (const body of malformed) {
+    assert.equal(st.parseSettlement(body), null, JSON.stringify(body));
+    // Chargement : erreur + Réessayer, jamais un état ; aucun POST possible ensuite.
+    let posts = 0;
+    let settled = 0;
+    let s = { ...st.SETTLEMENT_INITIAL };
+    const ctrl = st.createSettlementController({ api: () => ({ status: async () => res(200, body), capture: async () => (posts++, res(200, dto({ status: "paid" }))) }), interventionId: ID, get: () => s, set: (n) => (s = n), onSettled: () => settled++ });
+    await ctrl.load();
+    same([s.phase, s.dto, s.retry], ["error", null, "load"], JSON.stringify(body));
+    assert.match(render(s), /data-settlement-refresh="">Réessayer</);
+    assert.equal(await ctrl.capture(), false);
+    same([posts, settled], [0, 0], JSON.stringify(body));
+    // Réponse POST malformée : statut non confirmé, Réessayer la même requête ; jamais « paid ».
+    let s2 = ready({ status: "captured_transfer_pending" });
+    let settled2 = 0;
+    const c2 = st.createSettlementController({ api: () => ({ status: async () => res(503), capture: async () => res(200, body) }), interventionId: ID, get: () => s2, set: (n) => (s2 = n), onSettled: () => settled2++ });
+    await c2.capture();
+    same([s2.dto?.status, s2.retry, s2.error, settled2], ["captured_transfer_pending", "capture", st.SETTLEMENT_COPY.captureFailed, 0], JSON.stringify(body));
+  }
 });
 
 // ---- Montage réel (Chromium, un seul processus) ------------------------------------------------
