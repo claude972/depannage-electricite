@@ -152,3 +152,25 @@ export function openThread(current: string, target: string, listed: readonly str
   if (!current || current === target || listed.includes(current)) return current || target || listed[0] || "";
   return target || listed[0] || "";
 }
+
+/**
+ * Messages shown in a LIVE conversation. The workspace preview may carry hundreds of messages;
+ * pre-filling the view with all of them would make the first « Charger les messages plus anciens »
+ * clicks look useless. So:
+ * - before any history page has loaded: only the `window` most recent preview messages;
+ * - once pages exist: the pages, plus only the preview messages at or after the OLDEST paged one
+ *   (new realtime arrivals stay; older preview items never pre-fill what the pages will bring).
+ * Deduplicated by id, one dossier only, chronological (compareMessages: created_at then id).
+ */
+export function visibleHistoryMessages(
+  interventionId: string,
+  preview: readonly Message[],
+  pages: readonly Message[],
+  window = HISTORY_PAGE_SIZE,
+): Message[] {
+  const paged = mergeMessages(interventionId, pages);
+  const own = mergeMessages(interventionId, preview);
+  if (!paged.length) return own.slice(-window);
+  const oldest = paged[0];
+  return mergeMessages(interventionId, paged, own.filter((m) => compareMessages(m, oldest) >= 0));
+}

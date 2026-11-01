@@ -216,8 +216,8 @@ export function ClientSpace({ session }: { session: Session }) {
         return (
           <RequestForm
             key={session.param}
-            initialCategory={isCategory(session.param) ? session.param : "panel"}
-            initialValues={null}
+            initialCategory={session.pendingDraft?.category ?? (isCategory(session.param) ? session.param : "panel")}
+            initialValues={session.pendingDraft}
             sites={[]}
             mode={session.mode}
             busy={session.busy}
