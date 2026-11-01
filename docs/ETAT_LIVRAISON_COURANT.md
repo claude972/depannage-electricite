@@ -1,3 +1,17 @@
+## Checkpoint actuel — 01/11/2026 00:42 Martinique
+
+Version publique : https://depannage-electricite-fp9k2xvhh-brafas-projects.vercel.app
+
+- **Intégré/poussé** : `0f5bc00a86f16f4a532ba5b119333e02f409bac1`. Pages publiques restantes, erreurs/404, modules devis/sites/suivi et avis PWA suivent les thèmes ; chat et documents paginés, contexte entreprise isolé et composition masquée en lecture seule. Brouillon public hors connexion intégré atomiquement : HTML596fb90 + JSd2e1ea1 + boot2b4fabd. Aucun SQL/Edge/main/production modifié.
+- **Déployé** : READY `dpl_3Bn31D2h7jY5YK7q6PkHMgMtQdih`, GitSource exact0f5, Flight `gz4HTuiGZbRpXK1PaTzOf`. Exception publique limitée à ce seul déploiement. CI41274046048 encore en cours à cette lecture.
+- **Tests** : suite914/914 avant ajout final des consommateurs chat/documents ; revue indépendante de ces derniers12/12 (deux Chromium factices séquentiels), TypeScript strict final PASS. Assemblage offline/thème64/64 ciblés ; contre-revue source offline40/40, aucun P1/P2 trouvé dans ce périmètre.
+- **Vraie preview** : deux cas390sombre/1440clair PASS : worker réellement actif, cache EXACT de trois seuls fichiers publics, note partielle sauvée hors connexion, reload/restauration, quota conserve ancien brouillon, reprise manuelle en ligne dans le formulaire avec valeurs exactes, aucun envoi ; vraie page404 et zéro erreur JS/débordement. Preuve privée `night-offline-chat-public-proof-v1.json`. Pas d'actions privées hors réseau ni preuve Safari physique.
+- **Livraison précédente90d** : upload Web réel201 + téléchargement signé/bytes identiques200 + client tiers404 PASS, run73edb4772a1a nettoyé25PASS, drain0 ; ROOTpostflight32/32PASS à03:43:35UTC (2Auth404 stricts/28REST0/2Storage0). Publication devis démonstration2/2PASS, modules partagés14/14PASS et administration démonstration8/8PASS ; ne pas présenter comme vrai SuperAdmin.
+- **Recette connectée EN COURS** : chat run9e934f5fb495, sessionROOT19820, dossier privé message-history-9e934f5fb495. Trois Auth QA et un dossier intentionnellement actifs à cette lecture ; attendre fin/drain/cleanup puis postflight indépendant. Aucun verdict final annoncé.
+- **Répartition** : deux Codex ROOT compris, cinq Claude conservés ; pas de nouvelle automation15min. Premier vrai SuperAdmin/Stripe toujours différés ; aucune création/promotion substitut. Application complète et zéro erreur non démontrés ; autres capacités du catalogue restent qualifiées par leurs preuves.
+
+---
+
 # Objectif actif — livraison autonome jusqu’au 1 novembre 2026, 06:00 Martinique
 
 Objectif enregistré, cinq Claude (lead + quatre workers) effectivement répartis ; capacité Codex réelle quatre simultanés ROOT inclus. Pas de nouvelle automation15min. Poursuite des parcours sans attendre les décisions différées. Application complète et utilisable visée, aucune garantie zéro erreur absolue ni déclaration de livraison sanspreuve.
