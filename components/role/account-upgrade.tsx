@@ -74,9 +74,9 @@ export const UPGRADE_COPY = {
   used: "Cette adresse est déjà utilisée par un compte ; connectez-vous avec ce compte ou utilisez une autre adresse.",
   invalid: "Vérifiez l’adresse email et le mot de passe (10 à 128 caractères).",
   tooMany: (s: number) => `Trop de tentatives. Réessayez dans ${s} s.`,
-  unavailable: "Service momentanément indisponible, réessayez dans un instant. Rien n’a été modifié.",
+  unavailable: "Service momentanément indisponible. La modification n’a pas pu être confirmée ; réessayez dans un instant.",
   timeout: "Délai dépassé, réessayez. Rien n’a été confirmé.",
-  failed: "La création de l’accès n’a pas abouti. Rien n’a été modifié ; réessayez.",
+  failed: "La création de l’accès n’a pas pu être confirmée ; réessayez.",
 } as const;
 export type UpgradeOutcome = { done: boolean; message: string; fieldErrors: FieldErrors };
 export function applyUpgrade(r: UpgradeResult): UpgradeOutcome {
