@@ -287,6 +287,8 @@ export type AdminOverview = {
   };
   financial: {
     paid_service_cents: number;
+    bank_paid_service_cents?: number;
+    on_site_declared_cents?: number;
     currency: string;
     platform_revenue_cents: number | null;
     note: string;

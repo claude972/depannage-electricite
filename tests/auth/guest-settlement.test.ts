@@ -1,4 +1,5 @@
 import test from "node:test";
+import Stripe from "stripe";
 import assert from "node:assert/strict";
 import { loadModule,ApiError,fakeServerHelpers } from "../documents/harness";
 const A="10000000-0000-4000-8000-000000000001",J="20000000-0000-4000-8000-000000000002",Q="30000000-0000-4000-8000-000000000003",R="40000000-0000-4000-8000-000000000004",L="50000000-0000-4000-8000-000000000005";
@@ -22,3 +23,16 @@ test("real status handler readable without provider keys; capture disabled befor
 test("capture real handler uses one server ledger/key, final DTO; no price or recipient accepted from browser",async()=>{const f=routeFixture(true,{configured:true});assert.equal((await response(await f.request(),200)).status,"paid");assert.deepEqual(f.calls.map(c=>c.name),["guest_settlement_status","begin_guest_settlement","guest_settlement_status"]);for(const body of[{intervention_id:J,amount:1},{intervention_id:J,destination:"acct_OTHER"},{intervention_id:"bad"}])await response(await routeFixture(true).request(body),422);await response(await routeFixture(false).request(undefined,`?intervention_id=${J}&intervention_id=${J}`),422)});
 
 test("transfer listing unknown is never empty: malformed object/data/has_more cannot create a transfer",async()=>{for(const badList of[{has_more:false,data:[]},{object:"list",data:[]},{object:"list",has_more:0,data:[]},{object:"list",has_more:false,data:{}},{object:"list",has_more:true,data:[]},{object:"list",has_more:false,data:[{id:"tr_FOREIGN"}]}]){const f=providerFixture({captured:true,badList});await assert.rejects(f.execute());assert.equal(f.calls.some(c=>c.op==="transfer"),false);assert.equal(f.ledger.status,"captured_transfer_pending")}});
+
+// The installed SDK fixes request semantics; no provider request is made here.
+test("pinned Stripe API uses Basil-or-newer partial capture semantics; real refunds block settlement", async () => {
+  const client = new Stripe("sk_test_INJECTED_ONLY");
+  const version = (client as unknown as {getApiField(name:string):string}).getApiField("version");
+  assert.equal(version, "2026-10-28.endive");
+  const partial = providerFixture(); await partial.execute(); assert.equal(partial.ledger.status, "paid");
+  for (const amount_refunded of [1, 3000]) {
+    const refunded = providerFixture({captured:true,badCharge:{amount_refunded}});
+    await assert.rejects(refunded.execute());
+    assert.equal(refunded.calls.some(c => c.op === "transfer" || c.op === "capture"), false);
+  }
+});

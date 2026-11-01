@@ -110,4 +110,18 @@ begin
  if not found then raise insufficient_privilege; end if;
  if exists(select 1 from public.phone_booking_requests where intervention_id=job) then raise exception 'Booking requires its dedicated settlement method' using errcode='P0001'; end if;
 end; $$;
+
+-- Keep the business total, and disclose its bank/declaration provenance.
+-- Preserve the existing private admin workflow and support capability wrapper.
+create or replace function public.admin_overview() returns jsonb language plpgsql stable security definer set search_path='' as $$
+declare result jsonb;
+begin
+ if not public.is_admin() then raise insufficient_privilege; end if;
+ result=jsonb_set(public.admin_overview_before_support(),'{capabilities,support_tickets}','true'::jsonb,false);
+ return jsonb_set(result,'{financial}',(result->'financial')||jsonb_build_object(
+  'bank_paid_service_cents',(select coalesce(sum(total_cents),0) from public.payments where status='paid' and method='stripe'),
+  'on_site_declared_cents',(select coalesce(sum(total_cents),0) from public.payments where status='paid' and method='on_site_declared'),
+  'note','Prestations réglées : paiements bancaires confirmés et règlements sur place déclarés par les artisans, distingués ci-dessous. Pas le revenu net de la plateforme.'
+ ),false);
+end; $$;
 commit;
