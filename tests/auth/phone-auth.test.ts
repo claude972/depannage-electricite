@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createServerClient as realServerClient } from "@supabase/ssr";
 import { loadModule, ApiError } from "../documents/harness";
 
 const ID = "10000000-0000-4000-8000-000000000001", OTHER = "20000000-0000-4000-8000-000000000002";
@@ -44,7 +45,7 @@ function fixture(op: Operation, options: { users?: unknown[]; profileRole?: stri
     "@/lib/supabase/server": { ApiError, assertOrigin: (request: Request) => { const o = request.headers.get("origin"); if (o && o !== new URL(request.url).origin) throw new ApiError(403, "ORIGIN"); } },
   });
   const request = (body?: unknown, headers: Record<string, string> = {}, suffix = "") => (module[(op === "session" || op === "history") ? "GET" : "POST"] as (r: Request) => Promise<Response>)(new Request(`${ORIGIN}/api/auth/phone/${op}${suffix}`, { method: (op === "session" || op === "history") ? "GET" : "POST", headers: { Origin: ORIGIN, "Content-Type": "application/json", ...headers }, ...((op === "session" || op === "history") ? {} : { body: JSON.stringify(body) }) }));
-  return { request, calls, written, created: () => created };
+  return { request, calls, written, created: () => created, raw: (r: Request) => (module[op === "session" || op === "history" ? "GET" : "POST"] as (request: Request) => Promise<Response>)(r) };
 }
 async function result(response: Response, status: number) {
   assert.equal(response.status, status); assert.equal(response.headers.get("cache-control"), "private, no-store"); assert.equal(response.headers.get("referrer-policy"), "no-referrer");
@@ -169,4 +170,45 @@ test("history: no session401, professional409, phone unverified403; empty and pr
   const unverified = fixture("history", { users: active({ phone_confirmed_at: null }) }); await result(await unverified.request(), 403); assert.equal(unverified.calls.some(c => c.op === "history"), false);
   const empty = fixture("history", { users: active() }); assert.deepEqual(await result(await empty.request(), 200), { interventions: [], page: { limit: 25, has_more: false, next_cursor: null } });
   for (const options of [{ historyError: true }, { historyRows: {} }, { historyRows: [{ ...historyRows[0], created_at: "invalid" }] }, { historyRows: [historyRows[0], historyRows[0]] }]) { const f = fixture("history", { users: active(), ...options }); const r = await f.request(); await result(r, 503); assert.equal(r.headers.get("retry-after"), "2"); }
+});
+
+test("chunked request without Content-Length is cancelled at4096 bytes before SDK construction", async () => {
+  const f = fixture("start"); let cancelled = false, chunksRead = 0;
+  const chunks = [new Uint8Array(2500).fill(32), new Uint8Array(2500).fill(32), new Uint8Array(2500).fill(32)];
+  const stream = new ReadableStream<Uint8Array>({ pull(controller) { if (chunksRead < chunks.length) controller.enqueue(chunks[chunksRead++]); else controller.close(); }, cancel() { cancelled = true; } }, { highWaterMark: 0 });
+  const request = new Request(ORIGIN + "/api/auth/phone/start", { method: "POST", headers: { Origin: ORIGIN }, body: stream, duplex: "half" } as RequestInit);
+  assert.equal(request.headers.get("content-length"), null); await result(await f.raw(request), 413);
+  assert.equal(cancelled, true); assert.equal(chunksRead, 2); assert.equal(f.created(), 0);
+  // Byte bound, not JS UTF16 character count.
+  const multi = fixture("start"); await result(await multi.request({ ...startBody, first_name: "é".repeat(2100) }), 413); assert.equal(multi.created(), 0);
+});
+
+test("actual Supabase SSR with LOCAL fake fetch: verified pending cookies feed getUser before any cookie commit", async () => {
+  for (const role of ["client", "artisan"]) {
+    const now = Math.floor(Date.now() / 1000);
+    const fakeToken = [Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url"), Buffer.from(JSON.stringify({ sub: ID, role: "authenticated", exp: now + 3600 })).toString("base64url"), "fake-not-a-real-signature"].join(".");
+    const u = { ...user(), aud: "authenticated", role: "authenticated", created_at: "2026-11-01T00:00:00Z", app_metadata: { provider: "phone", providers: ["phone"] }, user_metadata: {}, identities: [] };
+    const writes: unknown[] = [], wire: { path: string; method: string }[] = []; let originalCookieReads = 0, freshTokenSeen = false;
+    const fakeFetch: typeof fetch = async (input, init) => {
+      const url = new URL(String(input)); assert.equal(url.origin, "https://local-fake.supabase.co");
+      const method = init?.method ?? "GET"; wire.push({ path: url.pathname, method }); assert.equal(writes.length, 0, "cookies must remain deferred until role/phone verification finishes");
+      if (url.pathname === "/auth/v1/verify" && method === "POST") {
+        const body = JSON.parse(String(init?.body)); assert.equal(body.type, "sms"); assert.equal(body.phone, PHONE);
+        return Response.json({ access_token: fakeToken, refresh_token: "FAKE_LOCAL_REFRESH", expires_in: 3600, token_type: "bearer", user: u });
+      }
+      const authorization = new Headers(init?.headers).get("authorization");
+      if (url.pathname === "/auth/v1/user") { freshTokenSeen = authorization === "Bearer " + fakeToken; assert.ok(freshTokenSeen, "getUser must use the newly verified local session"); return Response.json(u); }
+      if (url.pathname === "/rest/v1/profiles") { assert.ok(authorization === "Bearer " + fakeToken); assert.equal(url.searchParams.get("id"), "eq." + ID); return Response.json([{ id: ID, role }]); }
+      throw new Error("Unexpected local transport path");
+    };
+    const mod = loadModule("app/api/auth/phone/verify/route.ts", {
+      "node:process": { env: { NEXT_PUBLIC_SUPABASE_URL: "https://local-fake.supabase.co", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "FAKE_LOCAL_PUBLISHABLE" } },
+      "@supabase/ssr": { createServerClient: (url: string, key: string, config: any) => realServerClient(url, key, { ...config, global: { fetch: fakeFetch } }) },
+      "next/headers": { cookies: async () => ({ getAll: () => { originalCookieReads++; return []; }, set: (...args: unknown[]) => writes.push(args) }) },
+      "@/lib/supabase/server": { ApiError, assertOrigin: () => {} },
+    });
+    const response = await (mod.POST as (r: Request) => Promise<Response>)(new Request(ORIGIN + "/api/auth/phone/verify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(verifyBody) }));
+    await result(response, role === "client" ? 200 : 409); assert.ok(freshTokenSeen); assert.ok(originalCookieReads > 0);
+    assert.equal(writes.length > 0, role === "client"); assert.deepEqual(wire.map(x => x.path), ["/auth/v1/verify", "/auth/v1/user", "/rest/v1/profiles"]);
+  }
 });

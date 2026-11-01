@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { env } from "node:process";
+import { TextDecoder } from "node:util";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import type { User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
@@ -95,8 +96,19 @@ function providerError(error: unknown, operation: "start" | "verify" | "upgrade"
 }
 async function input<T>(request: Request, schema: z.ZodType<T>): Promise<T> {
   if (Number(request.headers.get("content-length") || 0) > 4096) fail(413);
-  const text = await request.text(); if (text.length > 4096) fail(413);
-  let raw; try { raw = JSON.parse(text); } catch { fail(400); }
+  const reader = request.body?.getReader(); if (!reader) fail(400);
+  const chunks: Uint8Array[] = []; let size = 0;
+  try {
+    for (;;) {
+      const next = await reader.read(); if (next.done) break;
+      size += next.value.byteLength;
+      if (size > 4096) { void reader.cancel().catch(() => {}); fail(413); }
+      chunks.push(next.value);
+    }
+  } finally { reader.releaseLock(); }
+  const bytes = new Uint8Array(size); let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  let raw; try { raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); } catch { fail(400); }
   const r = schema.safeParse(raw); if (!r.success) fail(422); return r.data;
 }
 async function start(request: Request, ctx: Context, data: z.output<typeof startSchema>) {
