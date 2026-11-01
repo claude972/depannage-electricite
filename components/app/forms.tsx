@@ -3,6 +3,7 @@
 // role spaces. Styling classes live in app/globals.css.
 import { useEffect, useState, type FormEvent } from "react";
 import { api, PHOTO_TYPES, validateUpload } from "./api";
+import { AddressField, createAddressApi } from "./address-field";
 import { Icon } from "./icons";
 import { Empty, Field, ConfirmAction, Unavailable } from "./ui";
 import {
@@ -36,6 +37,10 @@ import type {
   WarrantyCase,
 } from "./types";
 
+// Address suggestions (IGN / BAN via /api/addresses/*): strings only, never coordinates in drafts
+// or payloads. Demo stays offline (no suggestions, no geolocation).
+const addressApi = createAddressApi();
+
 export function RequestForm({
   initialCategory,
   initialValues,
@@ -56,6 +61,11 @@ export function RequestForm({
   onDemo: () => void;
 }) {
   const [step, setStep] = useState(1);
+  // Read after mount: the geolocation button never differs between server and client renders.
+  const [geolocation, setGeolocation] = useState<Geolocation | null>(null);
+  useEffect(() => {
+    setGeolocation(typeof navigator !== "undefined" && navigator.geolocation ? navigator.geolocation : null);
+  }, []);
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoError, setPhotoError] = useState("");
   function addPhotos(list: FileList | null) {
@@ -232,46 +242,14 @@ export function RequestForm({
                 </select>
               </Field>
             )}
-            <Field label="Adresse d’intervention">
-              <input
-                required
-                minLength={5}
-                maxLength={250}
-                autoComplete="street-address"
-                value={values.address}
-                onChange={(e) =>
-                  setValues({ ...values, address: e.target.value })
-                }
-                placeholder="Numéro et nom de rue"
-              />
-            </Field>
-            <div className="form-columns">
-              <Field label="Code postal">
-                <input
-                  required
-                  inputMode="numeric"
-                  pattern="[0-9]{5}"
-                  maxLength={5}
-                  autoComplete="postal-code"
-                  value={values.postal_code}
-                  onChange={(e) =>
-                    setValues({ ...values, postal_code: e.target.value })
-                  }
-                />
-              </Field>
-              <Field label="Ville">
-                <input
-                  required
-                  minLength={2}
-                  maxLength={100}
-                  autoComplete="address-level2"
-                  value={values.city}
-                  onChange={(e) =>
-                    setValues({ ...values, city: e.target.value })
-                  }
-                />
-              </Field>
-            </div>
+            <AddressField
+              value={{ address: values.address, postal_code: values.postal_code, city: values.city }}
+              onChange={(next) => setValues((current) => ({ ...current, ...next }))}
+              disabled={busy}
+              search={mode === "demo" ? undefined : addressApi.search}
+              reverse={mode === "demo" ? undefined : addressApi.reverse}
+              geolocation={mode === "demo" ? null : geolocation}
+            />
             <fieldset className="urgency-options">
               <legend>Quel est votre besoin ?</legend>
               {[
