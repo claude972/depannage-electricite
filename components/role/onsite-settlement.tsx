@@ -18,7 +18,7 @@ export const ONSITE_PATH = "/api/bookings/settlement/onsite";
 export const ONSITE_TIMEOUT_MS = 15_000;
 
 export type OnsiteDue = { method: "on_site"; status: "due_on_site"; amount_cents: number | null; currency: "eur"; can_declare: boolean; available: boolean };
-export type OnsiteDeclared = { method: "on_site_declared"; status: "declared_received"; amount_cents: number | null; currency: "eur"; can_declare: false; available: false };
+export type OnsiteDeclared = { method: "on_site_declared"; status: "declared_received"; amount_cents: number; currency: "eur"; can_declare: false; available: false };
 export type OnsiteSettlementState = OnsiteDue | OnsiteDeclared;
 export type OnsiteReply = { status: number; body: unknown };
 export type OnsiteApi = {
@@ -33,12 +33,13 @@ export function parseOnsiteSettlement(raw: unknown): OnsiteSettlementState | nul
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const v = raw as Record<string, unknown>;
   const amount = v.amount_cents;
-  if (!(amount === null || (Number.isSafeInteger(amount) && (amount as number) >= 0))) return null;
+  // A positive safe integer, or null only while due (the amount may not be known yet).
+  if (!(amount === null || (Number.isSafeInteger(amount) && (amount as number) > 0))) return null;
   if (v.currency !== "eur" || typeof v.can_declare !== "boolean" || typeof v.available !== "boolean") return null;
   const amount_cents = amount as number | null;
   if (v.method === "on_site" && v.status === "due_on_site")
     return { method: "on_site", status: "due_on_site", amount_cents, currency: "eur", can_declare: v.can_declare, available: v.available };
-  if (v.method === "on_site_declared" && v.status === "declared_received" && v.can_declare === false && v.available === false)
+  if (v.method === "on_site_declared" && v.status === "declared_received" && amount_cents !== null && v.can_declare === false && v.available === false)
     return { method: "on_site_declared", status: "declared_received", amount_cents, currency: "eur", can_declare: false, available: false };
   return null;
 }
@@ -102,7 +103,12 @@ export const DEFAULT_ONSITE_CONTEXT: OnsiteContext = { generation: () => 0, user
 // ---- Load ------------------------------------------------------------------------------------
 export type LoadOutcome = { kind: "ready"; settlement: OnsiteSettlementState } | { kind: "hidden" } | { kind: "error" };
 export async function loadOnsite(api: OnsiteApi, interventionId: string): Promise<LoadOutcome> {
-  const r = await api.get(interventionId);
+  let r: OnsiteReply;
+  try {
+    r = await api.get(interventionId);
+  } catch {
+    return { kind: "error" };
+  }
   if (r.status === 404 || r.status === 401 || r.status === 403) return { kind: "hidden" };
   if (r.status !== 200) return { kind: "error" };
   const settlement = parseOnsiteSettlement(r.body);
@@ -125,7 +131,12 @@ export async function declareOnsite(flight: Flight, context: OnsiteContext, api:
   flight.current = true;
   const generation = context.generation();
   try {
-    const r = await api.post({ intervention_id: interventionId });
+    let r: OnsiteReply;
+    try {
+      r = await api.post({ intervention_id: interventionId });
+    } catch {
+      r = { status: 0, body: null }; // thrown transport: unknown outcome, retryable
+    }
     if (!alive() || context.generation() !== generation || context.userId() !== me) return { kind: "ignored" };
     if (r.status === 200 || r.status === 201) {
       const s = parseOnsiteSettlement(r.body);
@@ -182,11 +193,13 @@ export function OnsiteSettlement({
     setLoad({ phase: "loading" });
     setConfirming(false);
     setPostError(null);
-    const out = await loadOnsite(api, interventionId);
+    const out = await loadOnsite(api, interventionId); // fetch + JSON parse + catch all inside
+    // Stale reply (unmounted, newer load, or generation / UID changed since the request): nothing
+    // is applied — no data, no state, no onSettled. The parent re-keys on identity change.
     if (!mounted.current || seq.current !== mine) return;
-    const sameIdentity = context.generation() === generation && context.userId() === me;
+    if (context.generation() !== generation || context.userId() !== me) return;
     setLoad(out.kind === "ready" ? { phase: "ready", settlement: out.settlement } : { phase: out.kind });
-    if (sameIdentity && out.kind === "ready" && out.settlement.status === "declared_received") fireSettled();
+    if (out.kind === "ready" && out.settlement.status === "declared_received") fireSettled();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, interventionId]);
 
