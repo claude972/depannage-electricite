@@ -717,3 +717,6 @@ Attribution complémentaire avant code : ROOT seul `lib/payment-events.ts`, `app
 
 ### FASTSPLIT-GUEST-SETTLEMENT-001 — Root complément de provenance
 Root seul : projections payments.method et payment_attempts.method (workspace/detail/status/types/tests), garde Checkout legacy pour toutes réservations téléphone dans nouvelle migration025 (022 inchangée). But : reçu artisan sur place distingué de Stripe et aucun second Checkout après choix sur place. Claude conserve widgets/câblage/session ; Codex existant contre-revoit frontend, Claude workerD contre-revoit backend. Tests SQL/HTTP/TS avant push ; fournisseurs OFF, aucun cloud avant revue.
+
+### Heure fastsplit autorisée — 1 novembre 14h25–15h25 Martinique
+Objectif prioritaire : finir et déployer le règlement sur place, fermer les deux P2 frontend, puis recette réelle complète et bilan. Root garde backend/migrations/provenance et qualification ; Codex identity existant contre-revue frontend puis driver QA privé ; Claude lead/ouvriers existants frontend et contre-revue backend. Complément Root : ventilation admin_overview banque/déclarations sur place via025 encore non appliquée, types optionnels, test SDK Stripe23.1.0 API2026-10-28.endive qui conserve amount_refunded0 après libération partielle (changelog Basil officiel). Pas activation fournisseur, main, production, nouveau compte owner ou cron.
