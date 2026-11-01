@@ -131,6 +131,12 @@
 .form [aria-invalid="true"] {
   border-color: var(--ui-danger);
 }
+/* The bar stays fixed: a focused field (and the step title) is scrolled clear of it. */
+.form input,
+.form textarea,
+.form select {
+  scroll-margin-bottom: calc(var(--booking-bar-h, 88px) + 24px + env(safe-area-inset-bottom, 0px));
+}
 .form input::placeholder,
 .form textarea::placeholder {
   color: var(--ui-text-muted);
@@ -242,6 +248,12 @@
   right: 0;
   bottom: 0;
   z-index: 30;
+  /* Always fixed (never moved by focus/blur). Declared height = --booking-bar-h (page wrapper,
+     public-service.module.css) + safe area; the content fits inside it at every breakpoint. */
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  min-height: calc(var(--booking-bar-h, 88px) + env(safe-area-inset-bottom, 0px));
   padding: 12px 0 calc(12px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--ui-border);
   background: var(--ui-card);
@@ -272,8 +284,13 @@
   color: var(--ui-text-muted);
   font-size: 13px;
 }
+.barText strong,
+.barText span {
+  line-height: 1.35;
+}
 .barButton {
   flex-shrink: 0;
+  white-space: nowrap; /* the exact label never wraps nor shrinks */
   min-height: 48px;
   padding: 0 24px;
   border: 0;
@@ -313,11 +330,6 @@
   }
 }
 @media (max-width: 760px) {
-  /* While typing, the bar leaves the fixed layer: the on-screen keyboard never covers it. */
-  .bar[data-typing="true"] {
-    position: static;
-    margin-top: 16px;
-  }
   .barInner {
     padding: 0 16px;
   }
@@ -330,5 +342,20 @@
   }
   .barText strong {
     font-size: 14px;
+  }
+}
+/* Narrow screens: text above, full-width button (label and 48 px target never squeezed). */
+@media (max-width: 480px) {
+  .bar {
+    padding-top: 10px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+  .barInner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .barButton {
+    width: 100%;
   }
 }

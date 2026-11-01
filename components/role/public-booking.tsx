@@ -66,6 +66,13 @@ export function urgencyLabel(s: Pick<BookingState, "urgent" | "slot">): string {
   if (s.urgent === false && s.slot) return `${SLOT_LABEL[s.slot]} (créneau souhaité)`;
   return "À préciser";
 }
+/** One « Continuer » press: validate the active step; advance (1→4) or report the finish. Pure. */
+export function advanceBooking(s: BookingState): { state: BookingState; errors: Errors; finish: boolean } {
+  const errors = stepErrors(s);
+  if (Object.keys(errors).length) return { state: s, errors, finish: false };
+  if (s.step < 4) return { state: { ...s, step: (s.step + 1) as BookingStep }, errors: {}, finish: false };
+  return { state: s, errors: {}, finish: true };
+}
 export function toBooking(service: Pick<ServiceEntry, "slug">, s: BookingState): BookingDraft {
   const urgent = s.urgent === true;
   return { slug: service.slug, urgent, slot: urgent ? null : s.slot, notes: s.notes, contact: { ...s.contact, first_name: s.contact.first_name.trim(), last_name: s.contact.last_name.trim(), email: s.contact.email.trim(), phone: s.contact.phone.trim() } };
@@ -141,29 +148,10 @@ export function finishBooking({ storage, service, state, go, now = Date.now() }:
 }
 
 // ---- Bottom bar (closed page: « Confirmer » ; wizard: the active step's real submit) -----------
-/** True while a text control is focused on a narrow screen: the bar leaves the fixed layer so the
- *  on-screen keyboard never covers it nor the field. */
-function useTypingOnMobile(): boolean {
-  const [typing, setTyping] = useState(false);
-  useEffect(() => {
-    const isField = (t: EventTarget | null) => t instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) && !["checkbox", "radio", "button", "submit"].includes((t as HTMLInputElement).type);
-    const narrow = () => typeof window.matchMedia === "function" && window.matchMedia("(max-width: 760px)").matches;
-    const onIn = (e: FocusEvent) => setTyping(isField(e.target) && narrow());
-    const onOut = () => setTyping(false);
-    document.addEventListener("focusin", onIn);
-    document.addEventListener("focusout", onOut);
-    return () => {
-      document.removeEventListener("focusin", onIn);
-      document.removeEventListener("focusout", onOut);
-    };
-  }, []);
-  return typing;
-}
-
 export function BookingBar({ title, range, children }: { title: string; range: string; children: ReactNode }) {
-  const typing = useTypingOnMobile();
+  // Always fixed and stable (never moved by focus/blur): a tap that blurs a field lands on it.
   return (
-    <div className={styles.bar} data-booking-bar="" data-typing={typing ? "true" : undefined}>
+    <div className={styles.bar} data-booking-bar="">
       <div className={styles.barInner}>
         <div className={styles.barText}>
           <strong>{title}</strong>
@@ -215,11 +203,10 @@ export function BookingWizard({
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFailure("");
-    const found = stepErrors(state);
-    setErrors(found);
-    if (Object.keys(found).length) return;
-    if (state.step < 4) {
-      set({ step: (state.step + 1) as BookingStep });
+    const step = advanceBooking(state);
+    setErrors(step.errors);
+    if (!step.finish) {
+      if (step.state !== state) setState(step.state);
       return;
     }
     const result = finishBooking({ storage: storage(), service, state, go });

@@ -6,7 +6,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
-import { loadModule } from "../documents/harness";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { ROOT, loadModule } from "../documents/harness";
 import { BOOKING_DRAFT_KEY, SLOT_LABEL, readBooking } from "../../components/app/booking-draft";
 import { PUBLIC_DRAFT_KEY, readPublicDraft } from "../../lib/shared/request-draft";
 import type * as Booking from "../../components/role/public-booking";
@@ -49,6 +51,27 @@ test("page : barre fixe « Confirmer » = même action que le CTA principal (ouv
   assert.match(root, /\bwithBar\b/);
   const footer = html.indexOf("<footer"), rootEnd = html.lastIndexOf("</div>");
   assert.ok(html.indexOf(`class="${root}"`) < footer && footer < rootEnd);
+  // Hauteur de barre = UNE propriété (--booking-bar-h) partagée par la barre, la réserve et la
+  // marge de défilement des champs : 88 px (réserve 112 px) ; 152 px empilée en étroit (réserve 176 px).
+  const serviceCss = readFileSync(path.join(ROOT, "components/role/public-service.module.css"), "utf8");
+  const bookingCss = readFileSync(path.join(ROOT, "components/role/public-booking.module.css"), "utf8");
+  const wide = Number(serviceCss.match(/\.withBar \{\s*--booking-bar-h: (\d+)px;/)![1]);
+  const narrowH = Number(serviceCss.match(/@media \(max-width: 480px\) \{\s*\.withBar \{\s*--booking-bar-h: (\d+)px;/)![1]);
+  assert.match(serviceCss, /\.withBar \{[^}]*padding-bottom: calc\(var\(--booking-bar-h\) \+ 24px \+ env\(safe-area-inset-bottom, 0px\)\);/);
+  assert.equal(wide + 24, 112, "réserve large = 112 px + safe-area");
+  assert.ok(narrowH + 24 >= 176, "réserve étroite ≥ 176 px + safe-area");
+  assert.match(bookingCss, /\.bar \{[^}]*min-height: calc\(var\(--booking-bar-h, 88px\) \+ env\(safe-area-inset-bottom, 0px\)\);/);
+  assert.match(bookingCss, /scroll-margin-bottom: calc\(var\(--booking-bar-h, 88px\) \+ 24px \+ env\(safe-area-inset-bottom, 0px\)\);/);
+  const button = Number(bookingCss.match(/\.barButton \{[^}]*min-height: (\d+)px/)![1]);
+  assert.ok(button >= 44);
+  const row = 12 + button + 12 + 1; // contenu en ligne : padding + bouton + bordure
+  const stacked = 10 + Math.ceil(14 * 1.35) + 2 + Math.ceil(13 * 1.35) + 8 + button + 10 + 1; // texte au-dessus, bouton pleine largeur
+  assert.ok(wide >= row, `hauteur déclarée ${wide} ≥ contenu en ligne ${row}`);
+  assert.ok(narrowH >= stacked, `hauteur déclarée ${narrowH} ≥ contenu empilé ${stacked}`);
+  const narrowBar = bookingCss.slice(bookingCss.lastIndexOf("@media (max-width: 480px)"));
+  assert.match(narrowBar, /\.barInner \{\s*flex-direction: column;/);
+  assert.match(narrowBar, /\.barButton \{\s*width: 100%;/);
+  assert.match(bookingCss, /\.barButton \{[^}]*white-space: nowrap;/);
   // Ouvert : l’assistant remplace le contenu, la catégorie n’est jamais redemandée.
   const opened = render(createElement(servicePage.PublicServicePage, { service, initialOpen: true }));
   assert.match(opened, /data-booking-wizard="" data-step="1"/);
@@ -215,4 +238,41 @@ test("paire : succès ⇒ les deux nouvelles entrées remplacent l’ancienne pa
   same(went, ["/#auth"]);
   assert.equal(readPublicDraft(s.getItem(PUBLIC_DRAFT_KEY))!.values.category, "panel");
   assert.equal(readBooking(s.getItem(BOOKING_DRAFT_KEY))!.booking.slug, "panne-tableau-electrique");
+});
+
+// ---- Barre stable : aucun changement de position piloté par le focus ---------------------------
+test("barre toujours fixe : aucun basculement focus/blur dans le source ; bouton = submit natif du formulaire de l’étape", () => {
+  const tsx = readFileSync(path.join(ROOT, "components/role/public-booking.tsx"), "utf8");
+  const css = readFileSync(path.join(ROOT, "components/role/public-booking.module.css"), "utf8");
+  assert.doesNotMatch(tsx, /data-typing|focusin|focusout|onFocus|onBlur/);
+  assert.doesNotMatch(css, /data-typing/);
+  // Toute règle visant la barre elle-même (.bar, hors .barInner/.barText/.barButton) garde position: fixed.
+  const barRules = [...css.matchAll(/([^{}]*\.bar(?![A-Za-z])[^{}]*)\{([^}]*)\}/g)];
+  assert.ok(barRules.length >= 2);
+  for (const [, , body] of barRules) for (const m of body.matchAll(/position:\s*([a-z]+)/g)) assert.equal(m[1], "fixed");
+  for (const step of [1, 2, 3, 4] as const) {
+    const html = wizard({ ...filled(), step });
+    assert.match(html, new RegExp(`<form id="booking-step-${step}"`));
+    assert.match(html, new RegExp(`<button type="submit" form="booking-step-${step}"[^>]*data-booking-submit="${step}"`));
+  }
+});
+
+test("« Continuer » après saisie des notes, du téléphone et de l’adresse fait avancer (logique pure du clic)", () => {
+  // Prouvé ici : la règle appliquée par le submit (advanceBooking) avance avec ces saisies, et le
+  // bouton de barre est un submit natif lié au formulaire de l’étape. NON prouvé ici : le tap réel
+  // sur mobile (événements tactiles, clavier virtuel) — rejoué par ROOT en navigateur.
+  let s1: Booking.BookingState = { ...booking.EMPTY_BOOKING, urgent: false, slot: "tomorrow", notes: "Odeur de chaud près de la prise du salon." };
+  let r = booking.advanceBooking(s1);
+  same([r.state.step, r.errors, r.finish], [2, {}, false]);
+  s1 = { ...r.state, contact: { ...contact, phone: "0696 12 34 56" } };
+  r = booking.advanceBooking(s1);
+  same([r.state.step, r.errors, r.finish], [3, {}, false]);
+  r = booking.advanceBooking({ ...r.state, address });
+  same([r.state.step, r.errors, r.finish], [4, {}, false]);
+  r = booking.advanceBooking(r.state);
+  same([r.state.step, r.finish], [4, true]);
+  // Erreurs : pas d’avancée, saisies conservées.
+  const bad = { ...booking.EMPTY_BOOKING, step: 2 as const, notes: "gardé", contact: { ...contact, phone: "12" } };
+  const kept = booking.advanceBooking(bad);
+  same([kept.state.step, Object.keys(kept.errors), kept.state.notes, kept.state.contact.first_name], [2, ["phone"], "gardé", "Camille"]);
 });
