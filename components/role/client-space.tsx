@@ -54,6 +54,9 @@ import type {
   View,
 } from "../app/types";
 import styles from "./client.module.css";
+import theme from "./client-theme.module.css";
+import { ThemeSurface } from "../app/theme-provider";
+import { ThemeToggle } from "../app/theme-toggle";
 import { CLIENT_STEPS, currentStepIndex, detailHistory, quoteDecisionState, quoteLineCells, recentRowDescriptor } from "./client-lists";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
@@ -267,6 +270,7 @@ export function ClientSpace({ session }: { session: Session }) {
   }
 
   return (
+    <ThemeSurface className={theme.clientSkin}>
     <div className={styles.space}>
       <aside className={styles.sidebar}>
         <button
@@ -386,6 +390,7 @@ export function ClientSpace({ session }: { session: Session }) {
                 Connexion temps réel : {session.connection === "SUBSCRIBED" ? "Connecté" : "non connectée"} · Actualiser
               </button>
             )}
+            <ThemeToggle />
             <HeaderBell session={session} />
             <button
               type="button"
@@ -419,6 +424,7 @@ export function ClientSpace({ session }: { session: Session }) {
             <Brand compact />
           </button>
           <div className={styles.mobileHeaderTools}>
+            <ThemeToggle />
             <HeaderBell session={session} />
             <button
               type="button"
@@ -500,6 +506,7 @@ export function ClientSpace({ session }: { session: Session }) {
         })}
       </nav>
     </div>
+    </ThemeSurface>
   );
 }
 
