@@ -1006,6 +1006,7 @@ export function AuthForm({
   busy,
   onSubmit,
   onDemo,
+  initial,
 }: {
   mode: "login" | "signup" | "reset";
   onMode: (mode: "login" | "signup" | "reset") => void;
@@ -1017,10 +1018,12 @@ export function AuthForm({
     role: Role;
   }) => Promise<void>;
   onDemo: () => void;
+  /** Prefill from the service booking flow (email + full name typed there); never a password. */
+  initial?: { email?: string; full_name?: string };
 }) {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initial?.email ?? "");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
+  const [name, setName] = useState(initial?.full_name ?? "");
   const [role, setRole] = useState<Role>("client");
   return (
     <div className="auth-layout">

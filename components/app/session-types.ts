@@ -1,3 +1,4 @@
+import type { BookingDraft } from "./booking-draft";
 // Contract between the session controller (components/courant-app.tsx) and the role spaces
 // (components/role/*). Spaces are presentational: every mutation, demo counterpart and
 // live/unavailable decision goes through this object so that identity resets and role
@@ -59,6 +60,8 @@ export interface PublicSession {
   authMode: AuthMode;
   categoryId: Category;
   pendingDraft: RequestValues | null;
+  /** Booking extras of the service flow (private contact included), same identity chain only. */
+  booking: BookingDraft | null;
   go(view: View, param?: string): void;
   setAuthMode(mode: AuthMode): void;
   setCategory(category: Category): void;
@@ -86,6 +89,10 @@ export interface Session {
   displayName: string;
   /** First name from the real profile (live) or the demo cast (demo); null when unknown — never invented. */
   firstName: string | null;
+  /** Public request draft kept across login (same identity chain only); cleared after POST 201. */
+  pendingDraft: RequestValues | null;
+  /** Booking extras of the service flow (private contact included), same identity chain only. */
+  booking: BookingDraft | null;
   data: Workspace;
   professional: ProfessionalData;
   capabilities: Capabilities;
