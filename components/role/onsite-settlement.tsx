@@ -6,8 +6,8 @@
 // nothing); an error or a malformed reply is never shown as settled. A client can NEVER declare.
 // `onSettled` (the lead passes session.refresh) fires at most ONCE per mount, only for a verified
 // « declared_received » reply under the unchanged identity (generation + UID) while mounted: the
-// POST reply, or the GET re-read after a POST attempt (e.g. « Actualiser » after a 503 / timeout).
-// A GET at mount that is already declared does not fire it (no refresh loop on opening a dossier).
+// POST reply or any GET (first load, « Actualiser », re-read after a 503 / timeout): the parent
+// dossier may be stale. The lead passes it only while the dossier is not « paid » (no loop).
 // A declaration is the artisan's statement that the amount was received on site — not a bank
 // payment, and it is never worded as one.
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -166,7 +166,6 @@ export function OnsiteSettlement({
   const seq = useRef(0);
   const current = useRef(interventionId);
   current.current = interventionId;
-  const attempted = useRef(false); // a POST was sent from this mount (its outcome may be unknown)
   const settled = useRef(false); // onSettled already fired for this mount
   const settledCb = useRef(onSettled);
   settledCb.current = onSettled;
@@ -187,7 +186,7 @@ export function OnsiteSettlement({
     if (!mounted.current || seq.current !== mine) return;
     const sameIdentity = context.generation() === generation && context.userId() === me;
     setLoad(out.kind === "ready" ? { phase: "ready", settlement: out.settlement } : { phase: out.kind });
-    if (sameIdentity && attempted.current && out.kind === "ready" && out.settlement.status === "declared_received") fireSettled();
+    if (sameIdentity && out.kind === "ready" && out.settlement.status === "declared_received") fireSettled();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, interventionId]);
 
@@ -205,7 +204,6 @@ export function OnsiteSettlement({
     const id = interventionId;
     const loadSeq = seq.current;
     if (flight.current.current) return;
-    attempted.current = true;
     setSending(true);
     setPostError(null);
     const out = await declareOnsite(flight.current, context, api, id, () => mounted.current && current.current === id && seq.current === loadSeq);

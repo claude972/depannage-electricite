@@ -139,10 +139,10 @@ test("declare: generation / UID change or unmount ⇒ reply ignored; outcome map
   assert.equal(m.ONSITE_COPY.forbidden, "Action réservée à l’artisan affecté.");
 });
 
-test("onSettled wiring: once, only after a verified declared reply (POST, or GET re-read after a POST attempt)", () => {
+test("onSettled wiring: once, only after a verified declared reply (POST or GET), never stale", () => {
   const src = readFileSync("components/role/onsite-settlement.tsx", "utf8");
   assert.match(src, /if \(settled\.current\) return;\s*settled\.current = true;/);
-  assert.match(src, /if \(sameIdentity && attempted\.current && out\.kind === "ready" && out\.settlement\.status === "declared_received"\) fireSettled\(\);/);
+  assert.match(src, /if \(sameIdentity && out\.kind === "ready" && out\.settlement\.status === "declared_received"\) fireSettled\(\);/);
   const submit = src.slice(src.indexOf("async function submit()"), src.indexOf("return (\n    <OnsiteView"));
   assert.ok(submit.indexOf('out.kind === "ignored"') < submit.indexOf("fireSettled()"), "stale replies never fire");
   assert.match(submit, /if \(viewer !== "artisan"\) return;/);
@@ -153,7 +153,7 @@ const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_module
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
 const APP = `
-import { createElement as h } from "react";
+import { createElement as h, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { OnsiteSettlement } from "./components/role/onsite-settlement";
 const ID = "${ID}";
@@ -169,11 +169,16 @@ const api = {
 };
 const context = { generation: () => 1, userId: () => "artisan-1" };
 createRoot(document.getElementById("app")).render(h(OnsiteSettlement, { interventionId: ID, viewer: "artisan", api, context, onSettled: () => { window.settled += 1; } }));
+// Fresh dossier already declared: StrictMode runs the mount effect twice ⇒ two GETs, one onSettled.
+window.gets2 = 0;
+window.settled2 = 0;
+const declaredApi = { get: async () => { window.gets2 += 1; return { status: 200, body: ${JSON.stringify(DECLARED)} }; }, post: async () => ({ status: 500, body: null }) };
+createRoot(document.getElementById("app2")).render(h(StrictMode, null, h(OnsiteSettlement, { interventionId: ID, viewer: "client", api: declaredApi, context, onSettled: () => { window.settled2 += 1; } })));
 `;
-test("mounted (artisan): declare → confirm (double click = 1 POST) → 503 « non confirmé » → retry same body → declared, onSettled once", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
+test("mounted (artisan): declare → confirm (double click = 1 POST) → 503 « non confirmé » → retry same body → declared, onSettled once; fresh declared GET twice ⇒ one onSettled", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
   const out = await build({ absWorkingDir: ROOT, stdin: { contents: APP, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, outdir: "out", platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "local-css" }, define: { "process.env.NODE_ENV": '"development"' }, logLevel: "error" });
   const js = out.outputFiles.find((f) => f.path.endsWith(".js"))!.text;
-  const server = createServer((_q, r) => { r.setHeader("content-type", "text/html"); r.end(`<!doctype html><div id="app"></div><script>${js}</script>`); });
+  const server = createServer((_q, r) => { r.setHeader("content-type", "text/html"); r.end(`<!doctype html><div id="app"></div><div id="app2"></div><script>${js}</script>`); });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
   const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true });
@@ -192,14 +197,20 @@ test("mounted (artisan): declare → confirm (double click = 1 POST) → 503 « 
     assert.equal((await posts()).length, 1, "double click ⇒ one POST");
     assert.match(await page.locator('[data-onsite-error="retry"]').innerText(), /Statut non confirmé\. Vérifiez à nouveau ou reprenez la même déclaration\./);
     assert.equal(await page.locator("[data-onsite-reload]").count(), 1, "« Actualiser » offered");
-    assert.equal(await page.locator('[data-onsite-settlement="declared_received"]').count(), 0);
+    assert.equal(await page.locator('#app [data-onsite-settlement="declared_received"]').count(), 0);
     await page.locator("[data-onsite-confirm]").click();
-    await page.locator('[data-onsite-settlement="declared_received"]').waitFor();
+    await page.locator('#app [data-onsite-settlement="declared_received"]').waitFor();
     const all = await posts();
     assert.deepEqual(all, [JSON.stringify({ intervention_id: ID }), JSON.stringify({ intervention_id: ID })], "identical body on retry");
-    const text = await page.locator('[data-onsite-settlement="declared_received"]').innerText();
+    const text = await page.locator('#app [data-onsite-settlement="declared_received"]').innerText();
     assert.match(text, /Déclaré reçu sur place par l’artisan \(180,00\s€\)\. Ce n’est pas un paiement bancaire\./);
     assert.equal(await page.evaluate(() => (window as unknown as { settled: number }).settled), 1, "onSettled once");
+    // Fresh declared GET (twice, StrictMode) ⇒ exactly one onSettled.
+    await page.locator('#app2 [data-onsite-settlement="declared_received"]').waitFor();
+    await page.waitForTimeout(100);
+    const fresh = await page.evaluate(() => ({ gets: (window as unknown as { gets2: number }).gets2, settled: (window as unknown as { settled2: number }).settled2 }));
+    assert.equal(fresh.gets, 2, "two GETs (StrictMode double mount effect)");
+    assert.equal(fresh.settled, 1, "fresh declared GET ⇒ onSettled exactly once");
     assert.deepEqual(errors, []);
     assert.deepEqual(requests.filter((u) => !u.startsWith("http://127.0.0.1")), [], "no network beyond the local page");
   } finally {
