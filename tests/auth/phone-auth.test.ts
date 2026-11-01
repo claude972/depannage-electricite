@@ -1,0 +1,120 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { loadModule, ApiError } from "../documents/harness";
+
+const ID = "10000000-0000-4000-8000-000000000001", OTHER = "20000000-0000-4000-8000-000000000002";
+const ORIGIN = "https://preview.example.test", PHONE = "+596696123456";
+const user = (over: Record<string, unknown> = {}) => ({ id: ID, phone: "596696123456", phone_confirmed_at: "2026-11-01T00:00:00Z", email: "", ...over });
+const native = (u = user()) => ({ error: null, data: { user: u, session: { user: u, access_token: "OPAQUE_ACCESS", refresh_token: "OPAQUE_REFRESH", token_type: "bearer", expires_in: 3600 } } });
+const anonymous = { data: { user: null }, error: { name: "AuthSessionMissingError", status: 400 } };
+const started = { error: null, data: { user: null, session: null } };
+const startBody = { phone: "0696 12 34 56", first_name: "QA", last_name: "Essai", purpose: "booking" };
+const verifyBody = { phone: PHONE, token: "123456", kind: "sms" };
+type Operation = "start" | "verify" | "session" | "upgrade";
+function fixture(op: Operation, options: { users?: unknown[]; profileRole?: string; profileId?: string; profileError?: boolean; cookie?: boolean; otp?: unknown; verify?: unknown; update?: unknown; transport?: boolean } = {}) {
+  let sdkOptions: any, index = 0, created = 0;
+  const calls: { op: string; value?: any; extra?: any }[] = [], written: unknown[] = [];
+  const nextUser = () => (options.users ?? [anonymous])[Math.min(index++, (options.users ?? [anonymous]).length - 1)];
+  const queue = () => sdkOptions.cookies.setAll([{ name: "sb-fake-auth-token", value: "NEVER_RETURN_SESSION", options: { httpOnly: true } }]);
+  const db = { auth: {
+    getUser: async () => { calls.push({ op: "getUser" }); return nextUser(); },
+    signInWithOtp: async (value: unknown) => { calls.push({ op: "otp", value }); if (options.transport) throw Error("PRIVATE_PHONE_OR_TOKEN"); return options.otp ?? started; },
+    verifyOtp: async (value: unknown) => { calls.push({ op: "verify", value }); queue(); if (options.transport) throw Error("PRIVATE_PHONE_OR_TOKEN"); return options.verify ?? native(); },
+    updateUser: async (value: unknown, extra: unknown) => { calls.push({ op: "update", value, extra }); queue(); if (options.transport) throw Error("PRIVATE_PHONE_OR_TOKEN"); return options.update ?? { error: null, data: { user: user() } }; },
+  }, from: (table: string) => ({ select: (columns: string) => ({ eq: (_key: string, id: string) => ({ maybeSingle: async () => { calls.push({ op: "profile", value: { table, columns, id } }); return { error: options.profileError ? { code: "broken" } : null, data: { id: options.profileId ?? id, role: options.profileRole ?? "client" } }; } }) }) }) };
+  const module = loadModule(`app/api/auth/phone/${op}/route.ts`, {
+    "node:process": { env: { NEXT_PUBLIC_SUPABASE_URL: "https://fake.supabase.co", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "FAKE_PUBLIC_KEY" } },
+    "@supabase/ssr": { createServerClient: (_url: string, _key: string, config: unknown) => { created++; sdkOptions = config; return db; } },
+    "next/headers": { cookies: async () => ({ getAll: () => options.cookie ? [{ name: "sb-fake-auth-token", value: "OLD_COOKIE" }] : [], set: (...value: unknown[]) => written.push(value) }) },
+    "@/lib/supabase/server": { ApiError, assertOrigin: (request: Request) => { const o = request.headers.get("origin"); if (o && o !== new URL(request.url).origin) throw new ApiError(403, "ORIGIN"); } },
+  });
+  const request = (body?: unknown, headers: Record<string, string> = {}, suffix = "") => (module[op === "session" ? "GET" : "POST"] as (r: Request) => Promise<Response>)(new Request(`${ORIGIN}/api/auth/phone/${op}${suffix}`, { method: op === "session" ? "GET" : "POST", headers: { Origin: ORIGIN, "Content-Type": "application/json", ...headers }, ...(op === "session" ? {} : { body: JSON.stringify(body) }) }));
+  return { request, calls, written, created: () => created };
+}
+async function result(response: Response, status: number) {
+  assert.equal(response.status, status); assert.equal(response.headers.get("cache-control"), "private, no-store"); assert.equal(response.headers.get("referrer-policy"), "no-referrer");
+  const raw = await response.text(); assert.doesNotMatch(raw, /OPAQUE_|NEVER_RETURN|OLD_COOKIE|PRIVATE_PHONE_OR_TOKEN/); return JSON.parse(raw);
+}
+
+test("phone normalization: Martinique before metropolitan prefix, E164 and invalid inputs", () => {
+  const m = loadModule("lib/features/guest/phone-auth.ts", { "node:process": { env: {} } });
+  const normalize = m.normalizePhone as (s: string) => string | null;
+  for (const [raw, expected] of [["0696 12 34 56", PHONE], ["0697123456", "+596697123456"], ["0612345678", "+33612345678"], ["0712345678", "+33712345678"], ["+1 (202) 555-0100", "+12025550100"]]) assert.equal(normalize(raw), expected);
+  for (const raw of ["", "foo", "+0001234567", "06961234", "1234567890", "+1234567890123456", "+33/612345678"]) assert.equal(normalize(raw), null);
+});
+
+test("start: anonymous booking creates only OTP client identity metadata, never session/job", async () => {
+  const f = fixture("start"); const b = await result(await f.request(startBody), 200);
+  assert.deepEqual(b, { status: "code_requested", kind: "sms", retry_after: 60, phone_suffix: "3456" });
+  const otp = f.calls.find(c => c.op === "otp")!;
+  assert.equal(otp.value.phone, PHONE); assert.equal(otp.value.options.shouldCreateUser, true); assert.equal(otp.value.options.data.role, "client"); assert.equal(otp.value.options.data.full_name, "QA Essai"); assert.equal(f.written.length, 0);
+});
+
+test("lookup unknown is uniform, never creates user and makes no SMS delivery claim", async () => {
+  const known = fixture("start"), missing = fixture("start", { otp: { error: { status: 400, code: "otp_disabled", message: "PRIVATE_PHONE_OR_TOKEN" }, data: { user: null, session: null } } });
+  const a = await result(await known.request({ ...startBody, purpose: "lookup" }), 200), b = await result(await missing.request({ ...startBody, first_name: "Autre", purpose: "lookup" }), 200);
+  assert.deepEqual(a, b); assert.doesNotMatch(JSON.stringify(a), /envoy|sent|delivered/);
+  for (const f of [known, missing]) { const otp = f.calls.find(c => c.op === "otp")!; assert.equal(otp.value.options.shouldCreateUser, false); assert.equal(otp.value.options.data, undefined); }
+});
+
+test("existing client phone_change retains UID; already verified same phone skips provider", async () => {
+  const same = fixture("start", { users: [{ data: { user: user() }, error: null }], cookie: true });
+  assert.deepEqual(await result(await same.request(startBody), 200), { status: "verified" }); assert.equal(same.calls.some(c => c.op === "update" || c.op === "otp"), false);
+  const change = fixture("start", { users: [{ data: { user: user({ phone: "33612345678" }) }, error: null }], cookie: true });
+  assert.equal((await result(await change.request(startBody), 200)).kind, "phone_change"); assert.equal(JSON.stringify(change.calls.find(c => c.op === "update")!.value), JSON.stringify({ phone: PHONE }));
+  for (const role of ["artisan", "manager", "admin"]) { const f = fixture("start", { users: [{ data: { user: user() }, error: null }], profileRole: role }); await result(await f.request(startBody), 409); assert.equal(f.calls.some(c => ["update", "otp"].includes(c.op)), false); assert.equal(f.written.length, 0); }
+});
+
+test("verify SMS: cookies commit only after getUser + exact confirmed phone + client profile", async () => {
+  const f = fixture("verify", { users: [anonymous, { data: { user: user() }, error: null }] });
+  assert.deepEqual(await result(await f.request(verifyBody), 200), { verified: true }); assert.equal(f.written.length, 1); assert.equal(f.calls.filter(c => c.op === "getUser").length, 2);
+  const call = f.calls.find(c => c.op === "verify")!; assert.equal(JSON.stringify(call.value), JSON.stringify({ phone: PHONE, token: "123456", type: "sms" }));
+  for (const options of [
+    { users: [anonymous, { data: { user: user({ phone: "33612345678" }) }, error: null }] },
+    { users: [anonymous, { data: { user: user({ phone_confirmed_at: null }) }, error: null }] },
+    { users: [anonymous, { data: { user: user({ id: OTHER }) }, error: null }] },
+    { users: [anonymous, { data: { user: user() }, error: null }], profileId: OTHER },
+    { users: [anonymous, { data: { user: user() }, error: null }], profileError: true },
+  ]) { const bad = fixture("verify", options); await result(await bad.request(verifyBody), 503); assert.equal(bad.written.length, 0); }
+  const professional = fixture("verify", { users: [anonymous, { data: { user: user() }, error: null }], profileRole: "artisan" }); await result(await professional.request(verifyBody), 409); assert.equal(professional.written.length, 0);
+});
+
+test("verify kind/session binding: no silent replacement; phone_change UID stays identical", async () => {
+  const active = { data: { user: user({ phone: "33612345678" }) }, error: null }, after = { data: { user: user() }, error: null };
+  const good = fixture("verify", { users: [active, after], cookie: true, verify: { error: null, data: { user: user(), session: null } } }); await result(await good.request({ ...verifyBody, kind: "phone_change" }), 200); assert.equal(good.written.length, 1);
+  const foreign = fixture("verify", { users: [active], verify: native(user({ id: OTHER })) }); await result(await foreign.request({ ...verifyBody, kind: "phone_change" }), 409); assert.equal(foreign.written.length, 0);
+  const smsActive = fixture("verify", { users: [active] }); await result(await smsActive.request(verifyBody), 409); assert.equal(smsActive.calls.some(c => c.op === "verify"), false);
+  const changeNoSession = fixture("verify"); await result(await changeNoSession.request({ ...verifyBody, kind: "phone_change" }), 401); assert.equal(changeNoSession.calls.some(c => c.op === "verify"), false);
+});
+
+test("wrong OTP422, provider503, rate429 and transport are neutral and never commit cookies", async () => {
+  for (const [error, expected] of [[{ status: 403, code: "otp_expired" }, 422], [{ status: 429, code: "over_sms_send_rate_limit" }, 429], [{ status: 503, code: "unexpected_failure" }, 503], [{ status: 400, code: "untrusted_private_code" }, 503]] as const) {
+    const f = fixture("verify", { verify: { data: { user: null, session: null }, error: { ...error, message: "PRIVATE_PHONE_OR_TOKEN" } } }); const r = await f.request(verifyBody); await result(r, expected); if (expected === 503 || expected === 429) assert.equal(r.headers.get("retry-after"), expected === 503 ? "2" : "60"); assert.equal(f.written.length, 0);
+  }
+  const unavailable = fixture("start", { otp: { data: { user: null, session: null }, error: { status: 400, code: "phone_provider_disabled" } } }); await result(await unavailable.request({ ...startBody, purpose: "lookup" }), 503);
+  const transport = fixture("verify", { transport: true }); await result(await transport.request(verifyBody), 503); assert.equal(transport.written.length, 0);
+  const limited = fixture("start"); await result(await limited.request(startBody), 200); const retry = await limited.request(startBody); await result(retry, 429); assert.ok(Number(retry.headers.get("retry-after")) > 0);
+});
+
+test("session returns only caller status; GET with stale/unknown authority stays unavailable", async () => {
+  const no = fixture("session"); assert.deepEqual(await result(await no.request(), 200), { authenticated: false, verified_phone: false, phone_suffix: null, role: null, email_account: false });
+  const yes = fixture("session", { users: [{ data: { user: user({ email: "private@example.test" }) }, error: null }] }); const b = await result(await yes.request(), 200); assert.deepEqual(b, { authenticated: true, verified_phone: true, phone_suffix: "3456", role: "client", email_account: true }); assert.doesNotMatch(JSON.stringify(b), /private@example|596696|10000000/);
+  const stale = fixture("session", { cookie: true }); await result(await stale.request(), 503);
+});
+
+test("upgrade attaches email/password to same verified phone UID only, requires email confirmation", async () => {
+  const u = user(), upgraded = user({ new_email: "qa@example.test" }), active = { data: { user: u }, error: null };
+  const f = fixture("upgrade", { users: [active, { data: { user: upgraded }, error: null }], update: { error: null, data: { user: upgraded } } });
+  assert.deepEqual(await result(await f.request({ email: "QA@example.test", password: "FictitiousPassword42!" }), 200), { confirmation_required: true });
+  const update = f.calls.find(c => c.op === "update")!; assert.equal(JSON.stringify(update.value), JSON.stringify({ email: "qa@example.test", password: "FictitiousPassword42!" })); assert.equal(update.extra.emailRedirectTo, ORIGIN + "/auth/confirm"); assert.equal(f.written.length, 1);
+  for (const existing of [user({ email: "existing@example.test" }), user({ new_email: "pending@example.test" })]) { const x = fixture("upgrade", { users: [{ data: { user: existing }, error: null }] }); await result(await x.request({ email: "qa@example.test", password: "FictitiousPassword42!" }), 409); assert.equal(x.calls.some(c => c.op === "update"), false); }
+  const conflict = fixture("upgrade", { users: [active], update: { data: { user: null }, error: { status: 422, code: "email_exists" } } }); await result(await conflict.request({ email: "qa@example.test", password: "FictitiousPassword42!" }), 409); assert.equal(conflict.written.length, 0);
+  const wrongIdentity = fixture("upgrade", { users: [active], update: { data: { user: user({ id: OTHER, new_email: "qa@example.test" }) }, error: null } }); await result(await wrongIdentity.request({ email: "qa@example.test", password: "FictitiousPassword42!" }), 409); assert.equal(wrongIdentity.written.length, 0);
+});
+
+test("strict bodies/origin/limits reject before constructing SDK; malformed provider results503", async () => {
+  for (const body of [{ ...startBody, phone: "n/a" }, { ...startBody, role: "admin" }, { ...startBody, first_name: "a".repeat(60), last_name: "b".repeat(60) }, { ...startBody, phone: null }]) { const f = fixture("start"); await result(await f.request(body), 422); assert.equal(f.created(), 0); }
+  const origin = fixture("start"); await result(await origin.request(startBody, { Origin: "https://foreign.example.test" }), 403); assert.equal(origin.created(), 0);
+  const huge = fixture("start"); await result(await huge.request({ ...startBody, last_name: "x".repeat(5000) }), 413); assert.equal(huge.created(), 0);
+  for (const response of [{}, { error: null, data: {} }, { error: null, data: { user: user(), session: null } }]) { const f = fixture("start", { otp: response }); await result(await f.request(startBody), 503); assert.equal(f.written.length, 0); }
+});
