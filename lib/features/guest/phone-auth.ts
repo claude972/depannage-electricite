@@ -224,10 +224,12 @@ async function history(ctx: Context, request: Request) {
   await clientRole(ctx, user); const phone = authPhone(user.phone);
   if (!phone || !confirmed(user)) fail(403);
   const q = phoneHistoryQuery(request.url, user.id, phone);
-  let query = ctx.db.from("interventions").select(HISTORY_FIELDS).eq("client_id", user.id);
+  let query = ctx.db.from("interventions").select(HISTORY_FIELDS, { count: "exact" }).eq("client_id", user.id);
   if (q.cursor) query = query.or(`created_at.lt."${q.cursor.created_at}",and(created_at.eq."${q.cursor.created_at}",id.lt.${q.cursor.id})`);
   const r = await query.order("created_at", { ascending: false }).order("id", { ascending: false }).limit(q.limit + 1);
   if (r.error) fail();
+  const count = r.count;
+  if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0 || !Array.isArray(r.data) || r.data.length !== Math.min(count, q.limit + 1)) fail();
   const parsed = z.array(historyRow).max(q.limit + 1).safeParse(r.data);
   if (!parsed.success || new Set(parsed.data.map(row => row.id)).size !== parsed.data.length || parsed.data.some((row, i) => row.estimate_max_cents < row.estimate_min_cents || (i > 0 && !historyBefore(row, parsed.data[i - 1])) || (q.cursor !== null && !historyBefore(row, q.cursor)))) fail();
   const interventions = parsed.data.slice(0, q.limit), hasMore = parsed.data.length > q.limit, last = interventions.at(-1);
