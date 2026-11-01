@@ -2,6 +2,15 @@
 // Sans React ni CSS : testée par tests/ui/enterprise-lists.test.ts.
 import type { Approval, ComplianceRecord, ContractState, Intervention, Quote, Site } from "../app/types";
 
+/** Accepted commitment of a quote = base + accepted amendments, as computed by the server
+ *  (Quote.accepted_total_cents, FASTSPLIT-ACCEPTED-TOTALS-001). Falls back to the base total ONLY
+ *  when the field is absent (demo data / older API). Never a max/clamp with what was paid. */
+export type QuoteWithAccepted = Pick<Quote, "total_cents"> & { accepted_total_cents?: number };
+export function acceptedCommittedCents(q: QuoteWithAccepted): number {
+  // validateWorkspace already rejects a present-but-malformed value: absent ⇒ base (legacy/demo).
+  return q.accepted_total_cents === undefined ? q.total_cents : q.accepted_total_cents;
+}
+
 export type InterventionFilters = {
   site: string;
   type: string;
@@ -186,13 +195,13 @@ export type SiteBudgetBar = {
 export function siteBudgetBars(
   sites: Pick<Site, "id" | "name" | "budget_cents">[],
   interventions: Pick<Intervention, "id" | "site_id">[],
-  quotes: Pick<Quote, "intervention_id" | "status" | "total_cents">[],
+  quotes: (Pick<Quote, "intervention_id" | "status" | "total_cents"> & { accepted_total_cents?: number })[],
 ): SiteBudgetBar[] {
   return sites.map((site) => {
     const ids = new Set(interventions.filter((i) => i.site_id === site.id).map((i) => i.id));
     const committed = quotes
       .filter((q) => q.status === "accepted" && ids.has(q.intervention_id))
-      .reduce((sum, q) => sum + q.total_cents, 0);
+      .reduce((sum, q) => sum + acceptedCommittedCents(q), 0);
     const budget = site.budget_cents || 0;
     return { id: site.id, name: site.name, committed, budget, ...budgetFigures(committed, budget) };
   });
@@ -215,7 +224,7 @@ export function dashboardFigures(
     interventions: Pick<Intervention, "status" | "urgency">[];
     compliance: Pick<ComplianceRecord, "status" | "due_on">[];
     approvals: Pick<Approval, "status">[];
-    quotes: Pick<Quote, "status" | "total_cents">[];
+    quotes: (Pick<Quote, "status" | "total_cents"> & { accepted_total_cents?: number })[];
   },
   today: string,
   isOpen: (status: Intervention["status"]) => boolean,
@@ -229,7 +238,7 @@ export function dashboardFigures(
     professional,
     deadlines30: loaded ? base.deadlines30 : null,
     approvalsPending: loaded ? scope.approvals.filter((a) => a.status === "pending").length : null,
-    committedCents: loaded ? scope.quotes.filter((q) => q.status === "accepted").reduce((sum, q) => sum + q.total_cents, 0) : null,
+    committedCents: loaded ? scope.quotes.filter((q) => q.status === "accepted").reduce((sum, q) => sum + acceptedCommittedCents(q), 0) : null,
   };
 }
 
