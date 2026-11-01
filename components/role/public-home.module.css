@@ -301,6 +301,20 @@ h2.slideTitle {
 .ivc:hover {
   border-color: var(--h-line-hover);
 }
+/* Cards are links (FASTSPLIT-PUBLIC-SERVICE-PAGES-001): no underline, theme text colour. */
+a.ivc {
+  color: var(--ui-text);
+  text-decoration: none;
+}
+a.ivc:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+.ivcPrice {
+  color: var(--ui-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
 .ivc img {
   width: 112px;
   height: 88px;

@@ -105,13 +105,16 @@ test("SSR sans window : structure, 5 onglets métier, slides, thème, aucune anc
   assert.match(slides[1][0], /hidden=""/);
   assert.match(html, /aria-roledescription="carrousel"/);
   assert.equal(attr(html, "aria-current").filter((v) => v === "true").length, 1);
-  // Routage par hash : aucun lien <a> ni href="#…" (les sections s’atteignent par boutons).
-  assert.doesNotMatch(html, /<a\s/);
-  assert.ok(attr(html, "href").every((h) => h.startsWith("/home/")), "seuls les préchargements d’images");
+  // Routage par hash : aucun href="#…" (les sections s’atteignent par boutons) ; les seuls liens
+  // sont les 8 cartes d’intervention vers leur page de prestation (FASTSPLIT-PUBLIC-SERVICE-PAGES-001).
+  const links = [...html.matchAll(/<a\s[^>]*href="([^"]*)"/g)].map((m) => m[1]);
+  assert.equal(JSON.stringify(links), JSON.stringify(HOME_CARDS.map((c) => `/prestations/${c.slug}`)));
+  assert.ok(attr(html, "href").every((h) => h.startsWith("/home/") || h.startsWith("/prestations/")), "préchargements d’images et pages de prestation");
   assert.deepEqual(attr(html, "data-home-anchor").sort(), ["accueil-conseils", "accueil-interventions", "accueil-services"]);
   for (const id of attr(html, "data-home-anchor")) assert.match(html, new RegExp(`id="${id}"`));
-  // Copie : aucun prix, avis, délai ou promesse interdite.
-  const copy = text(html);
+  // Copie : aucun prix (hors fourchette indicative des cartes, vérifiée dans public-service.test.ts),
+  // avis, délai ou promesse interdite.
+  const copy = text(html.replace(/<span class="ivcPrice">[\s\S]*?<\/span>/g, ""));
   assert.doesNotMatch(copy, /€|\bavis\b|note moyenne|\d+\s*min\b|certifi|qualifi/i);
   assert.deepEqual(forbiddenClaims(copy), []);
   assert.doesNotMatch(copy, /publicité|sponsoris/i);

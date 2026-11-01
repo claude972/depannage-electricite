@@ -4,11 +4,13 @@
 // `web-network.html` (green / Plus Jakarta Sans / light-dark). Presentational only: every action
 // goes through `HomeHandlers`, wired by PublicSite to the existing PublicSession callbacks.
 // Navigation uses hash routing, so in-page sections are reached with buttons (scroll + focus),
-// never `href="#…"`. No price, review, delay, qualification or metric; photos are illustrations
+// never `href="#…"`; the intervention cards are real links to /prestations/<slug> and show the
+// category's indicative estimate only. No review, delay, qualification or metric; photos are illustrations
 // (credits in public/home/CREDITS.md). Role spaces are not re-themed by this file.
 import { useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { Category } from "../app/types";
-import { CATEGORIES } from "../app/format";
+import { CATEGORIES, money } from "../app/format";
+import { SERVICES, serviceEstimate, servicePath } from "./public-service-catalog";
 import { FAQ } from "./public-lists";
 import { PublicChrome, actionButton, type HomeAction, type HomeHandlers } from "./public-chrome";
 import styles from "./public-home.module.css";
@@ -43,9 +45,7 @@ const PHOTO = {
   hero1: "/home/hero-photo-1.jpg",
   hero2: "/home/hero-photo-2.jpg",
   panel: "/home/section-real-panel.jpg",
-  socket: "/home/section-socket.jpg",
-  outlet: "/home/section-outlet.jpg",
-};
+}; // card photos: public-service-catalog.ts (SERVICE_PHOTOS)
 type Slide = { image: string; width: number; height: number; alt: string; title: string; text: string; secondary: { label: string; action: HomeAction } };
 export const HOME_SLIDES: Slide[] = [
   {
@@ -67,16 +67,12 @@ export const HOME_SLIDES: Slide[] = [
     secondary: { label: "Comment ça marche", action: { type: "view", view: "help" } },
   },
 ];
-export const HOME_CARDS: { title: string; category: Category; image: string; position: string }[] = [
-  { title: "Panne de tableau électrique", category: "panel", image: PHOTO.panel, position: "center 45%" },
-  { title: "Prise qui ne fonctionne plus", category: "socket", image: PHOTO.socket, position: "center" },
-  { title: "Disjoncteur qui saute", category: "panel", image: PHOTO.hero1, position: "45% 40%" },
-  { title: "Coupure de courant partielle", category: "outage", image: PHOTO.hero1, position: "30% 35%" },
-  { title: "Prise abîmée ou qui chauffe", category: "socket", image: PHOTO.outlet, position: "center 40%" },
-  { title: "Éclairage qui ne s’allume plus", category: "lighting", image: PHOTO.hero2, position: "60% 40%" },
-  { title: "Plusieurs prises sans courant", category: "socket", image: PHOTO.socket, position: "center 60%" },
-  { title: "Origine de la panne inconnue", category: "diagnostic", image: PHOTO.outlet, position: "center" },
-];
+// The 8 intervention cards = the service pages catalogue (each card links to /prestations/<slug>
+// and shows the canonical indicative estimate of its category).
+export const HOME_CARDS: { slug: string; title: string; category: Category; image: string; position: string; href: string; min: number; max: number }[] = SERVICES.map((s) => {
+  const e = serviceEstimate(s.category);
+  return { slug: s.slug, title: s.title, category: s.category, image: s.photo.src, position: s.position, href: servicePath(s.slug), min: e.min, max: e.max };
+});
 export const HOME_SITUATIONS: Record<Category, string[]> = {
   outage: ["Plus de courant dans tout le logement", "Coupure sur une partie du logement", "Courant qui revient puis repart"],
   panel: ["Disjoncteur qui saute", "Différentiel qui déclenche", "Fusible ou disjoncteur à vérifier", "Tableau qui chauffe ou grésille"],
@@ -201,14 +197,17 @@ export function PublicHome({ gated = false, handlers }: { gated?: boolean; handl
           </h2>
           <ul className={styles.ivGrid}>
             {HOME_CARDS.map((card) => (
-              <li key={card.title}>
-                <button className={styles.ivc} {...act({ type: "new", category: card.category })}>
+              <li key={card.slug}>
+                <a className={styles.ivc} href={card.href} data-service-card={card.slug}>
                   <img src={card.image} alt="" width={160} height={120} loading="lazy" decoding="async" style={{ objectPosition: card.position }} />
                   <span className={styles.ivcBody}>
                     <span className={styles.chip}>{CATEGORIES.find((c) => c.id === card.category)?.label}</span>
                     <strong>{card.title}</strong>
+                    <span className={styles.ivcPrice}>
+                      Estimation indicative : {money(card.min)} – {money(card.max)}
+                    </span>
                   </span>
-                </button>
+                </a>
               </li>
             ))}
             <li className={styles.ivCta}>
