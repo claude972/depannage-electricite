@@ -2889,3 +2889,6 @@ FASTSPLIT livraisonpublique070 :UIrequestauthc9INTÉGRÉ/PUBLIÉ/VÉRIFIÉ8cas+2
 
 
 Ajoutownerprénom/adresse :mission108f4c4publiéeavantcode ;Codex3cbb345revueindép5testsPASS0P2+ROOTlecture,intégréf8fd66bPOUSSÉtscPASS. AppelsréelsduservicemoduleadresseàIGNsearch/reverse200/résultatsstructurésCP97200villeFort-de-France,sansdonnéeutilisateur ;paspreviewgéolocalisationphysique. LeafUIClaudeWIP,leadownerform/prénom. Consumer5c55revue4P2reproduits401boucle/TTLfocus/absenceunproved/paiementsincomplete,rapport/tmp/depannage-detail-consumer-5c55-review.md transmisleadavantmerge ;nepasdéployerad144quiethérite5c55avantfix. APIadressesnonbloquéeparcescorrectifs ;nouveauxchampsraccordablesindépendamment.
+
+## Réservation invitée — fournisseur à la fin, code poursuivi
+Le propriétaire confirme « Tu auras SMS et Stripe à la fin, ça ne t’empêche pas de coder ». Ne plus suspendre le code pour ces clés. Réservation sur place vérifiée e5c/run3419 :21/21 et postflight47/47. Email désormais facultatif après défaut réel constaté sur09e4, téléphone normalisé ; aucune validation assouplie pour masquer un échec. Téléphone/empreinte/upgrade codés mais fournisseurs désactivés et non qualifiés ; règlement final d’une empreinte restant. Rapport GUEST_CHECKOUT_E5C_HOSTED_PASS, aucune application complète annoncée.
