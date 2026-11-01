@@ -118,8 +118,17 @@ export const initialHistory = (key: string): HistoryState => ({ key, pages: [], 
 /** Applies an outcome to the state it was requested for; a reply for another key is ignored. */
 export function applyOutcome(state: HistoryState, key: string, outcome: HistoryOutcome): HistoryState {
   if (state.key !== key || outcome.kind === "aborted") return state;
+  // 401 and 404 are terminal for this identity + dossier: only a new key (reset) leaves them.
+  if (state.status === "signed_out" || state.status === "not_found") return state;
   if (outcome.kind === "loaded")
     return { key, pages: [...state.pages, ...outcome.messages], cursor: outcome.nextCursor, hasMore: outcome.hasMore, loaded: true, status: "idle" };
   if (outcome.kind === "failed") return { ...state, status: "error", errorStatus: outcome.status }; // cursor kept: resume there
   return { ...state, status: outcome.kind };
 }
+
+/**
+ * Whether « Charger les messages plus anciens » is offered. A 401 is terminal for this identity
+ * (the session handles the logout): the button disappears instead of staying as a dead control,
+ * and the messages already loaded stay shown. A 404 hides the whole conversation.
+ */
+export const offersOlder = (state: HistoryState) => state.hasMore && state.status !== "signed_out" && state.status !== "not_found";

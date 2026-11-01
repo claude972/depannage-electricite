@@ -16,6 +16,7 @@ import {
   historyUrl,
   initialHistory,
   mergeMessages,
+  offersOlder,
   parseHistoryPage,
 } from "../../components/app/message-history";
 import type { Message } from "../../components/app/types";
@@ -75,6 +76,19 @@ test("parse + cursor: opaque cursor kept per dossier, foreign rows or bad page r
   assert.equal((await fetchHistoryPage(async () => { throw new DOMException("x", "AbortError"); }, A, null, ctl.signal)).kind, "aborted");
 });
 
+test("401 after a partial page: no older-page offer, loaded messages kept, never re-requested", () => {
+  const k = historyKey("u1", A);
+  let s = applyOutcome(initialHistory(k), k, { kind: "loaded", messages: [msg(1), msg(2)], hasMore: true, nextCursor: "C1" });
+  assert.equal(offersOlder(s), true);
+  s = applyOutcome(s, k, { kind: "signed_out" });
+  assert.equal(s.status, "signed_out");
+  assert.equal(offersOlder(s), false, "no dead « Charger les messages plus anciens » button");
+  assert.equal(s.pages.length, 2, "already loaded messages stay shown");
+  // A later reply (e.g. a stale read) cannot revive the offer for this identity: only a new key resets.
+  assert.equal(offersOlder(applyOutcome(s, k, { kind: "failed", status: 503 })), false);
+  assert.equal(offersOlder(applyOutcome(initialHistory(k), k, { kind: "not_found" })), false);
+});
+
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM =
   process.env.QA_CHROMIUM_PATH ||
@@ -102,6 +116,7 @@ const fakeFetch = async (url, init) => {
   const late = kind === "switch" && d === A && window.calls.length === 1;
   await new Promise((r) => setTimeout(r, late ? 400 : 20)); // late reply ignores the abort on purpose
   if (kind === "401") return new Response("{}", { status: 401 });
+  if (kind === "401late" && cursor) return new Response("{}", { status: 401 });
   if (kind === "404") return new Response("{}", { status: 404 });
   if (kind === "503" && cursor && n503++ === 0) return new Response("{}", { status: 503 });
   const off = cursor ? Number(cursor.split(":")[1]) : 0; // opaque to the client
@@ -195,6 +210,20 @@ test("MessageCenter history in real React/Chromium: 237 messages over 10 pages, 
       await page.waitForTimeout(400);
       assert.equal((await calls(page)).length, 1);
       assert.equal(await page.$("text=Réessayer"), null);
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    // 4b. 401 AFTER a partial page: button gone (not a dead control), messages kept, 0 further GET.
+    {
+      const { page, errors } = await open("401late");
+      await page.waitForSelector(OLDER);
+      await page.click(OLDER);
+      await page.waitForSelector("[data-message-history=signed_out]");
+      assert.equal(await page.$(OLDER), null, "older-page button removed after the 401");
+      assert.equal((await ids(page)).length, 25, "already loaded messages stay shown");
+      await page.click(".message-threads button:nth-child(2)"); // re-render, same dossier and identity
+      await page.waitForTimeout(400);
+      assert.equal((await calls(page)).length, 2, "no request after the 401 for this identity");
       assert.deepEqual(errors, []);
       await page.close();
     }

@@ -10,6 +10,7 @@ import {
   historyKey,
   initialHistory,
   mergeMessages,
+  offersOlder,
   type HistoryFetch,
   type HistoryState,
 } from "./message-history";
@@ -692,7 +693,7 @@ export function MessageCenter({
               <span>Conversation liée à l’intervention</span>
             </div>
             <div className="message-history" aria-live="polite" aria-busy={h.status === "loading"}>
-              {history.enabled && h.hasMore && !unavailable && (
+              {history.enabled && offersOlder(h) && (
                 <button
                   type="button"
                   className="button outline"
