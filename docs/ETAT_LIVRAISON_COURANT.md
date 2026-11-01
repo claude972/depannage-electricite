@@ -1,4 +1,21 @@
-# État courant — fastsplit
+# Objectif actif — livraison autonome jusqu’au 1 novembre 2026, 06:00 Martinique
+
+Objectif enregistré, cinq Claude (lead + quatre workers) effectivement répartis ; capacité Codex réelle quatre simultanés ROOT inclus. Pas de nouvelle automation15min. Poursuite des parcours sans attendre les décisions différées. Application complète et utilisable visée, aucune garantie zéro erreur absolue ni déclaration de livraison sanspreuve.
+
+## Nouveau checkpoint public 6b9 — 31 octobre 23h10 Martinique
+https://depannage-electricite-51ddlbqpp-brafas-projects.vercel.app
+
+READY `dpl_pxzWiq2LWKXQdsB9kfjrr5Badq7A`, GitSource exact `6b9e3440ed0313ca992f01658a11cb8c2730ef02`, exception publique ce seul déploiement ; CI41267468961 SUCCESS. Ajoute administration thémée et résilience SWcache ainsi que backend messages paginés. ROOT admin8/8PASS 360/390/1280/1440×clair/sombre : dashboard, Clients, Interventions, Devis&Factures ; démonstration explicite, aucunepreuve opérateur réel. Première recette ROOT refusée pour mauvais heading puis corrigée en v2 sansmodificationapp, historique conservé. Suite intégrée859PASS/2SKIPcapturesoptionnelles ; vraisHTML4c ensuite2/2testsciblésPASS0skip. TypeScriptstrictPASS.
+
+## Intégré après 6b9, pas encore déployé
+ROOT b181336 : finalisation atomique Webdocuments4c1294b (deuxP2 collisionSDK/ackcleanup corrigés et contre-revus), backendDocumentshistory5919168, troisfeuilles CSS notifications/support/quote-documents/planning/plateforme255/ee0/e2dd revues29testsPASS. Consommateurs et retrait ciblé des anciensîlotsclairs en cours chezClaude avantpreview. AucuncloudSQL/Edge/migration/changementdeprotectionglobale.
+
+## Défauts en correction / recettes à finir
+Publication devis démo : run imbriqué refuse son proprebusy ; Singleclick réel confirmé390/1440, leadClaude correctif/test en cours. Chat frontend27085e9 en contre-revue avantintégration ; recette réelle3comptes/1dossier/237messages préparée et peerrevue, AUCUNEcohortecréée. Documentsfrontend enchaîné aprèschatfigé. PremierSuperAdmin/Stripe toujoursexplicitementdifférés, pascompte substitut/transaction. Horsconnexion : notice publique et reprise disponibles ; aucunepromesse données privées ou action serveur sansréseau.
+
+## Checkpoint précédent et preuves conservées
+
+## État précédent — fastsplit
 
 ## Version publique vérifiée — 31 octobre 2026, 22 h 48 Martinique
 https://depannage-electricite-h7kwhl1gh-brafas-projects.vercel.app
