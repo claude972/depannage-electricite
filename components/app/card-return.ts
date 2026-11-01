@@ -68,3 +68,27 @@ export const PENDING_COPY = {
   found: "Une réservation par carte est en attente. Vérifiez votre empreinte ou annulez la réservation.",
   error: "Impossible de vérifier vos réservations par carte en attente pour le moment.",
 } as const;
+
+// ---- Single flight + context check for card verify/cancel (they don't go through run(ctx)) ---------
+export type CardFlight = { current: boolean };
+/** Runs ONE card action at a time (a second one in the same tick is refused, even before React
+ *  re-renders). `still()` is true only while the identity generation AND the UID captured before the
+ *  first await are unchanged: check it after EVERY await (provider call AND refresh) before touching
+ *  state, storage or navigation. The flight is released in finally, so a retry after 503 works. */
+export async function cardAction<T>(
+  flight: CardFlight,
+  context: { generation(): number; userId(): string | null },
+  action: (still: () => boolean, me: string) => Promise<T>,
+): Promise<T | false> {
+  if (flight.current) return false;
+  const me = context.userId();
+  if (!me) return false;
+  flight.current = true;
+  const generation = context.generation();
+  const still = () => context.generation() === generation && context.userId() === me;
+  try {
+    return await action(still, me);
+  } finally {
+    flight.current = false;
+  }
+}
