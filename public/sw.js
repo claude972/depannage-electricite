@@ -73,9 +73,14 @@ self.addEventListener("fetch", (event) => {
         // The network response is returned directly and never put in CacheStorage.
         return await fetch(request, { cache: "no-store" });
       } catch {
-        const cache = await caches.open(PUBLIC_CACHE);
-        const offline = await cache.match(OFFLINE_URL);
-        if (offline) return offline;
+        try {
+          const cache = await caches.open(PUBLIC_CACHE);
+          const offline = await cache.match(OFFLINE_URL);
+          if (offline) return offline;
+        } catch {
+          // Storage may be unavailable or evicted. Still return the neutral notice,
+          // rather than rejecting navigation with a browser network error.
+        }
         return new Response("Connexion indisponible. Reconnectez-vous pour retrouver vos dossiers.", {
           status: 503,
           headers: {
