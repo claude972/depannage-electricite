@@ -1,8 +1,9 @@
 "use client";
 // Operational forms extracted from the original monolith; behaviour preserved, shared by the
 // role spaces. Styling classes live in app/globals.css.
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, PHOTO_TYPES, validateUpload } from "./api";
+import { AddressField, createAddressApi } from "./address-field";
 import { Icon } from "./icons";
 import { Empty, Field, ConfirmAction, Unavailable } from "./ui";
 import {
@@ -36,6 +37,13 @@ import type {
   WarrantyCase,
 } from "./types";
 
+// Address suggestions (IGN / BAN via /api/addresses/*): strings only, never coordinates in drafts
+// or payloads. Demo stays offline (no suggestions, no geolocation).
+const addressApi = createAddressApi();
+
+/** Keeps the focused step title clear of a sticky header when scrolled into view. */
+const STEP_TITLE_STYLE = { scrollMarginTop: 88 } as const;
+
 export function RequestForm({
   initialCategory,
   initialValues,
@@ -56,6 +64,26 @@ export function RequestForm({
   onDemo: () => void;
 }) {
   const [step, setStep] = useState(1);
+  // On each step change (not on first render) move focus AND the viewport to the new step title,
+  // so mobile users never land at the bottom after « Continuer » and screen readers announce it.
+  const stepTitle = useRef<HTMLHeadingElement>(null);
+  const firstStep = useRef(true);
+  useEffect(() => {
+    if (firstStep.current) {
+      firstStep.current = false;
+      return;
+    }
+    const el = stepTitle.current;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    const reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" });
+  }, [step]);
+  // Read after mount: the geolocation button never differs between server and client renders.
+  const [geolocation, setGeolocation] = useState<Geolocation | null>(null);
+  useEffect(() => {
+    setGeolocation(typeof navigator !== "undefined" && navigator.geolocation ? navigator.geolocation : null);
+  }, []);
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoError, setPhotoError] = useState("");
   function addPhotos(list: FileList | null) {
@@ -126,7 +154,7 @@ export function RequestForm({
         )}
         {step === 1 ? (
           <>
-            <h2>Que se passe-t-il ?</h2>
+            <h2 ref={stepTitle} tabIndex={-1} style={STEP_TITLE_STYLE}>Que se passe-t-il ?</h2>
             <div className="category-grid">
               {CATEGORIES.map((cat) => (
                 <button
@@ -211,7 +239,7 @@ export function RequestForm({
           </>
         ) : step === 2 ? (
           <>
-            <h2>Où faut-il intervenir ?</h2>
+            <h2 ref={stepTitle} tabIndex={-1} style={STEP_TITLE_STYLE}>Où faut-il intervenir ?</h2>
             {sites.length > 0 && (
               <Field label="Site professionnel (facultatif)">
                 <select
@@ -232,46 +260,14 @@ export function RequestForm({
                 </select>
               </Field>
             )}
-            <Field label="Adresse d’intervention">
-              <input
-                required
-                minLength={5}
-                maxLength={250}
-                autoComplete="street-address"
-                value={values.address}
-                onChange={(e) =>
-                  setValues({ ...values, address: e.target.value })
-                }
-                placeholder="Numéro et nom de rue"
-              />
-            </Field>
-            <div className="form-columns">
-              <Field label="Code postal">
-                <input
-                  required
-                  inputMode="numeric"
-                  pattern="[0-9]{5}"
-                  maxLength={5}
-                  autoComplete="postal-code"
-                  value={values.postal_code}
-                  onChange={(e) =>
-                    setValues({ ...values, postal_code: e.target.value })
-                  }
-                />
-              </Field>
-              <Field label="Ville">
-                <input
-                  required
-                  minLength={2}
-                  maxLength={100}
-                  autoComplete="address-level2"
-                  value={values.city}
-                  onChange={(e) =>
-                    setValues({ ...values, city: e.target.value })
-                  }
-                />
-              </Field>
-            </div>
+            <AddressField
+              value={{ address: values.address, postal_code: values.postal_code, city: values.city }}
+              onChange={(next) => setValues((current) => ({ ...current, ...next }))}
+              disabled={busy}
+              search={mode === "demo" ? undefined : addressApi.search}
+              reverse={mode === "demo" ? undefined : addressApi.reverse}
+              geolocation={mode === "demo" ? null : geolocation}
+            />
             <fieldset className="urgency-options">
               <legend>Quel est votre besoin ?</legend>
               {[
@@ -316,7 +312,7 @@ export function RequestForm({
           </>
         ) : (
           <>
-            <h2>Votre demande, en clair.</h2>
+            <h2 ref={stepTitle} tabIndex={-1} style={STEP_TITLE_STYLE}>Votre demande, en clair.</h2>
             <div className="recap-service">
               <span className="service-icon">
                 <Icon name={c.icon} size={27} />

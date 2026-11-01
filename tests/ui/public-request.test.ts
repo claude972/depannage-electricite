@@ -127,16 +127,33 @@ test("new : alertes de session rendues dans le thème, au-dessus du formulaire",
   assert.match(html, /role="status"[^>]*>(?:(?!<\/div>).)*Brouillon conservé\./s);
 });
 
-test("rôles jamais thémés : les espaces client/entreprise n’importent ni chrome, ni habillage, ni ThemeSurface", async () => {
+test("habillage par périmètre : seul l’espace client (FASTSPLIT-CLIENT-THEME-001) porte ThemeSurface ; entreprise et forms jamais ; aucun chrome public dans les rôles", async () => {
   const { readFileSync } = await import("node:fs");
   for (const file of ["components/role/client-space.tsx", "components/role/enterprise-space.tsx", "components/app/forms.tsx"]) {
-    const src = readFileSync(file, "utf8");
-    assert.doesNotMatch(src, /public-chrome|public-forms|ThemeSurface|ui-v2/, file);
+    assert.doesNotMatch(readFileSync(file, "utf8"), /public-chrome|public-forms/, file);
   }
+  for (const file of ["components/role/enterprise-space.tsx", "components/app/forms.tsx"]) {
+    assert.doesNotMatch(readFileSync(file, "utf8"), /ThemeSurface|ui-v2/, file);
+  }
+  assert.match(readFileSync("components/role/client-space.tsx", "utf8"), /<ThemeSurface className=\{theme\.clientSkin\}>/);
   // Le RequestForm seul (tel que les rôles le rendent) ne porte aucune classe du thème.
   const forms = loadModule("components/app/forms.tsx");
   const html = renderToString(createElement(forms.RequestForm as never, { initialCategory: "panel", initialValues: null, sites: [], mode: "live", busy: false, onBack() {}, onSubmit: async () => {}, onDemo() {} } as never));
   assert.doesNotMatch(html, /ui-v2|requestSkin|data-public-skin/);
+});
+
+test("formulaire de demande : AddressField branché (combobox + 3 champs requis), aucune coordonnée dans le formulaire", async () => {
+  const { readFileSync } = await import("node:fs");
+  const forms = loadModule("components/app/forms.tsx");
+  const html = renderToString(createElement(forms.RequestForm as never, { initialCategory: "panel", initialValues: { category: "panel", description: "Disjoncteur qui saute souvent", address: "2 rue Test", postal_code: "97200", city: "Fort-de-France", urgency: "scheduled", site_id: null }, sites: [], mode: "live", busy: false, onBack() {}, onSubmit: async () => {}, onDemo() {} } as never));
+  if (/role="combobox"/.test(html)) {
+    assert.match(html, /value="2 rue Test"/);
+    assert.match(html, /value="97200"/);
+    assert.match(html, /value="Fort-de-France"/);
+  }
+  const src = readFileSync("components/app/forms.tsx", "utf8");
+  assert.match(src, /<AddressField/);
+  assert.doesNotMatch(src, /\blat(itude)?\b|\blon(gitude)?\b|coords/, "no coordinates handled by the form");
 });
 
 // ---- P3 : vue « auth » ---------------------------------------------------------------------

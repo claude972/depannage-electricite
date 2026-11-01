@@ -55,11 +55,15 @@ import type {
   View,
 } from "../app/types";
 import styles from "./client.module.css";
+import theme from "./client-theme.module.css";
+import { ThemeSurface } from "../app/theme-provider";
+import { ThemeToggle } from "../app/theme-toggle";
 import { CLIENT_STEPS, currentStepIndex, detailHistory, quoteDecisionState, quoteLineCells, recentRowDescriptor } from "./client-lists";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
 import { TrackingAnchor } from "./tracking-anchor";
 import { useDetailPresence } from "./use-detail-presence";
+import { PointReadState } from "./detail-read-view";
 import { PlatformPage } from "./platform-anchor";
 import { platformEntries } from "./anchors";
 import { UploadQueuePanel } from "../app/upload-queue";
@@ -267,6 +271,7 @@ export function ClientSpace({ session }: { session: Session }) {
   }
 
   return (
+    <ThemeSurface className={theme.clientSkin}>
     <div className={styles.space}>
       <aside className={styles.sidebar}>
         <button
@@ -386,6 +391,7 @@ export function ClientSpace({ session }: { session: Session }) {
                 Connexion temps réel : {session.connection === "SUBSCRIBED" ? "Connecté" : "non connectée"} · Actualiser
               </button>
             )}
+            <ThemeToggle />
             <HeaderBell session={session} />
             <button
               type="button"
@@ -419,6 +425,7 @@ export function ClientSpace({ session }: { session: Session }) {
             <Brand compact />
           </button>
           <div className={styles.mobileHeaderTools}>
+            <ThemeToggle />
             <HeaderBell session={session} />
             <button
               type="button"
@@ -500,6 +507,7 @@ export function ClientSpace({ session }: { session: Session }) {
         })}
       </nav>
     </div>
+    </ThemeSurface>
   );
 }
 
@@ -912,6 +920,8 @@ function DetailView({
   const presence = useDetailPresence(session, "client-detail", id, Boolean(i));
   if (!i) {
     if (presence.decision === "loading") return <Loader label="Recherche du dossier…" />;
+    if (presence.decision === "detail" || presence.decision === "detail_loading" || presence.decision === "detail_error")
+      return <PointReadState presence={presence} backLabel="Mes demandes" onBack={() => session.go("requests")} />;
     if (presence.decision === "error")
       return (
         <Unavailable
@@ -925,14 +935,23 @@ function DetailView({
   if (!i)
     return (
       <Empty
-        title="Intervention introuvable"
+        title={presence.openAnyway ? "Dossier absent de vos demandes récentes" : "Intervention introuvable"}
         action={
-          <button type="button" className="button primary" onClick={() => session.go("requests")}>
-            Voir mes demandes
-          </button>
+          <>
+            <button type="button" className="button primary" onClick={() => session.go("requests")}>
+              Voir mes demandes
+            </button>
+            {presence.openAnyway && (
+              <button type="button" className="button outline" onClick={presence.openAnyway}>
+                Ouvrir quand même
+              </button>
+            )}
+          </>
         }
       >
-        Ce dossier n’existe pas dans votre espace ou son lien n’est plus valide.
+        {presence.openAnyway
+          ? "Ce dossier n’apparaît pas parmi vos demandes chargées. Vous pouvez essayer de l’ouvrir directement."
+          : "Ce dossier n’existe pas dans votre espace ou son lien n’est plus valide."}
       </Empty>
     );
   const quotes = session.data.quotes;
