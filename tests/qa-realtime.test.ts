@@ -40,11 +40,11 @@ test("decodeFrame: vsn 2.0.0 arrays and 1.0.0 objects; binary / junk ⇒ null", 
 
 test("projectToken: three booleans from FAKE tokens; the token and claims never come back", () => {
   const good = fakeJwt({ sub: UID, role: "authenticated" });
-  assert.deepEqual(projectToken(good, UID), { present: true, role_authenticated: true, sub_matches: true });
-  assert.deepEqual(projectToken(fakeJwt({ sub: UID, role: "anon" }), UID), { present: true, role_authenticated: false, sub_matches: true });
-  assert.deepEqual(projectToken(fakeJwt({ sub: "other", role: "authenticated" }), UID), { present: true, role_authenticated: true, sub_matches: false });
-  assert.deepEqual(projectToken(undefined, UID), { present: false, role_authenticated: false, sub_matches: false });
-  assert.deepEqual(projectToken("garbage", UID), { present: true, role_authenticated: false, sub_matches: false });
+  assert.deepEqual(projectToken(good, UID), { present: true, role_authenticated: true, sub_matches: true, role_class: "authenticated" });
+  assert.deepEqual(projectToken(fakeJwt({ sub: UID, role: "anon" }), UID), { present: true, role_authenticated: false, sub_matches: true, role_class: "anon" });
+  assert.deepEqual(projectToken(fakeJwt({ sub: "other", role: "authenticated" }), UID), { present: true, role_authenticated: true, sub_matches: false, role_class: "authenticated" });
+  assert.deepEqual(projectToken(undefined, UID), { present: false, role_authenticated: false, sub_matches: false, role_class: "absent" });
+  assert.deepEqual(projectToken("garbage", UID), { present: true, role_authenticated: false, sub_matches: false, role_class: "unknown" });
   assert.ok(!JSON.stringify(projectToken(good, UID)).includes("eyJ"));
 });
 
@@ -69,15 +69,38 @@ test("projector: bound to ONE topic, epochs (join + access_token), join reply po
 });
 
 test("authVerdict: proxy not invoked / no join ⇒ unknown; SDK token change without a captured epoch ⇒ unknown; anon ⇒ observed_false; all good ⇒ proven", () => {
-  const ep = (o = {}) => ({ epoch: 0, t_ms: 0, present: true, role_authenticated: true, sub_matches: true, ...o });
+  const ep = (o = {}) => ({ epoch: 0, t_ms: 0, present: true, role_authenticated: true, sub_matches: true, role_class: "authenticated", ...o });
   assert.equal(authVerdict({ proxyInvoked: false, snapshot: { join_seen: true, epochs: [ep()] } }).verdict, "unknown");
   assert.equal(authVerdict({ proxyInvoked: true, snapshot: { join_seen: false, epochs: [] } }).verdict, "unknown");
   assert.equal(authVerdict({ proxyInvoked: true, snapshot: { join_seen: true, epochs: [ep()] }, sdkTokenChanges: 1 }).verdict, "unknown", "missing epoch is never a false proof");
-  assert.equal(authVerdict({ proxyInvoked: true, snapshot: { join_seen: true, epochs: [ep({ role_authenticated: false })] } }).verdict, "observed_false");
-  assert.equal(authVerdict({ proxyInvoked: true, snapshot: { join_seen: true, epochs: [ep({ present: false })] } }).verdict, "observed_false");
+  assert.equal(authVerdict({ proxyInvoked: true, snapshot: { join_seen: true, epochs: [ep({ role_authenticated: false, role_class: "anon" })] } }).verdict, "observed_false");
+  assert.equal(authVerdict({ proxyInvoked: true, snapshot: { join_seen: true, epochs: [ep({ present: false, role_authenticated: false, role_class: "absent" })] } }).verdict, "observed_false");
   assert.equal(authVerdict({ proxyInvoked: true, snapshot: { join_seen: true, epochs: [ep({ sub_matches: false })] } }).verdict, "unknown");
   assert.equal(authVerdict({ proxyInvoked: true, snapshot: { join_seen: true, epochs: [ep(), ep({ epoch: 1 })] }, sdkTokenChanges: 1 }).verdict, "proven");
   assert.equal(whitelistText(null), null);
+});
+
+test("DL P2 (Codex review of 4dad028): malformed or role-less tokens ⇒ role UNKNOWN, never « H2 observed »; only absent / explicit anon ⇒ observed_false", () => {
+  const b64u = (x) => Buffer.from(typeof x === "string" ? x : JSON.stringify(x)).toString("base64url");
+  const header = b64u({ alg: "HS256", typ: "JWT" });
+  const verdictFor = (token) => authVerdict({ proxyInvoked: true, snapshot: { join_seen: true, epochs: [{ epoch: 0, t_ms: 0, ...projectToken(token, UID) }] } }).verdict;
+  const unknowns = {
+    "not-a-jwt": "not-a-jwt",
+    "two parts": `${header}.${b64u({ sub: UID, role: "anon" })}`,
+    "base64 garbage payload": `${header}.%%%garbage%%%.c2ln`,
+    "undecodable payload": `${header}.${b64u("not json {")}.c2ln`,
+    "JSON array payload": `${header}.${b64u([{ role: "anon" }])}.c2ln`,
+    "payload without role": `${header}.${b64u({ sub: UID })}.c2ln`,
+    "other explicit role": `${header}.${b64u({ sub: UID, role: "service_role" })}.c2ln`,
+  };
+  for (const [name, token] of Object.entries(unknowns)) {
+    assert.equal(projectToken(token, UID).role_class, "unknown", name);
+    assert.equal(verdictFor(token), "unknown", `${name} ⇒ UNKNOWN`);
+    assert.ok(!conclude([{ name: "int-1", verdict: "no_event", auth: { verdict: verdictFor(token) } }]).some((c) => c.code === "H2_observed"), `${name}: no H2`);
+  }
+  assert.equal(verdictFor(fakeJwt({ sub: UID, role: "anon" })), "observed_false", "explicit anon ⇒ H2 observed");
+  assert.equal(verdictFor(undefined), "observed_false", "absent token ⇒ H2 observed");
+  assert.equal(verdictFor(fakeJwt({ sub: UID, role: "authenticated" })), "proven", "authenticated + matching sub ⇒ proven");
 });
 
 test("conclusion table: positive evidence only; absence alone ⇒ UNKNOWN_H3_POSSIBLE, H3 only with a whitelisted RLS error", () => {

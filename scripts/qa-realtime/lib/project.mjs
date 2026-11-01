@@ -20,17 +20,26 @@ export function decodeFrame(message) {
   return null;
 }
 
-/** JWT ⇒ three booleans only; the token and its claims never leave this function. */
+/**
+ * JWT ⇒ booleans + a role class only; the token and its claims never leave this function.
+ * `role_class`: "authenticated" | "anon" (explicit claim) | "unknown" (malformed token: not three
+ * base64url parts, undecodable payload, non-object JSON, or no / other `role` claim). Only an ABSENT
+ * token or an explicit "anon" may support « H2 observed »; "unknown" never does.
+ */
 export function projectToken(token, expectedSub) {
-  if (typeof token !== "string" || !token) return { present: false, role_authenticated: false, sub_matches: false };
+  if (typeof token !== "string" || !token) return { present: false, role_authenticated: false, sub_matches: false, role_class: "absent" };
   let claims = null;
-  try {
-    const part = token.split(".")[1];
-    claims = JSON.parse(Buffer.from(part.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"));
-  } catch {
-    claims = null;
+  const parts = token.split(".");
+  if (parts.length === 3 && parts.every((p) => /^[A-Za-z0-9_-]+$/.test(p))) {
+    try {
+      const decoded = JSON.parse(Buffer.from(parts[1].replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"));
+      if (decoded && typeof decoded === "object" && !Array.isArray(decoded)) claims = decoded;
+    } catch {
+      claims = null;
+    }
   }
-  return { present: true, role_authenticated: claims?.role === "authenticated", sub_matches: typeof expectedSub === "string" && claims?.sub === expectedSub };
+  const role_class = claims?.role === "authenticated" ? "authenticated" : claims?.role === "anon" ? "anon" : "unknown";
+  return { present: true, role_authenticated: role_class === "authenticated", sub_matches: Boolean(claims) && typeof expectedSub === "string" && claims.sub === expectedSub, role_class };
 }
 
 export function whitelistText(text) {
@@ -94,8 +103,11 @@ export function createProjector({ topic, clientTables, expectedSub, now = Date.n
 export function authVerdict({ proxyInvoked, snapshot, sdkTokenChanges = 0 }) {
   if (!proxyInvoked || !snapshot?.join_seen || !snapshot.epochs.length) return { verdict: "unknown", reason: "join token capture not demonstrated" };
   if (snapshot.epochs.length - 1 < sdkTokenChanges) return { verdict: "unknown", reason: "token change not observed on the channel" };
-  const bad = snapshot.epochs.find((e) => !e.present || !e.role_authenticated);
-  if (bad) return { verdict: "observed_false", reason: `epoch ${bad.epoch}: ${bad.present ? "role not authenticated" : "no token"}` };
+  // Only an ABSENT token or an EXPLICIT anon role is a negative observation; a malformed token or a
+  // missing / other role claim is UNKNOWN (never a false « H2 observed »).
+  const negative = snapshot.epochs.find((e) => !e.present || e.role_class === "absent" || e.role_class === "anon");
+  if (negative) return { verdict: "observed_false", reason: `epoch ${negative.epoch}: ${negative.present ? "explicit anon role" : "no token"}` };
+  if (snapshot.epochs.some((e) => e.role_class !== "authenticated")) return { verdict: "unknown", reason: "token role not decodable (malformed or no role claim)" };
   if (snapshot.epochs.some((e) => !e.sub_matches)) return { verdict: "unknown", reason: "sub does not match the QA identity" };
   return { verdict: "proven", reason: "" };
 }
