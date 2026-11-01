@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { env } from "node:process";
 import {
   adminClient,
   ApiError,
@@ -6,13 +7,13 @@ import {
   dbError,
 } from "@/lib/supabase/server";
 import { stripeClient } from "@/lib/supabase/stripe";
-import { checkoutEventOutcome } from "@/lib/payment-events";
+import { checkoutEventOutcome, isBookingHoldSession } from "@/lib/payment-events";
 import { uuid } from "@/lib/supabase/validation";
 export const runtime = "nodejs";
 export async function POST(request: Request) {
   try {
     const stripe = stripeClient();
-    const secret = process.env.STRIPE_WEBHOOK_SECRET;
+    const secret = env.STRIPE_WEBHOOK_SECRET;
     if (!secret)
       throw new ApiError(503, "Le webhook de paiement n’est pas configuré.");
     const signature = request.headers.get("stripe-signature");
@@ -30,6 +31,9 @@ export async function POST(request: Request) {
       throw new ApiError(400, "Signature de paiement invalide.");
     }
     const session = event.data.object as Stripe.Checkout.Session;
+    // Signed booking-hold events have no quote_id and must not enter the legacy payment writer.
+    // Acknowledging them never confirms a booking, capture, transfer or payment.
+    if (isBookingHoldSession(session)) return Response.json({ received: true });
     const outcome = checkoutEventOutcome(event.type, session);
     if (outcome === "ignore") return Response.json({ received: true });
     const quoteId = session.metadata?.quote_id;
