@@ -530,7 +530,7 @@ Realtime : lire source createBrowserClient et abonnement courant-app aux tables 
 Limite100 : contrat de lecture ponctuelle autorisée d’un dossier hors des100 récents, cohérent avec les périmètres client/artisan/organisation/site, en réutilisant Auth/RLS et champs minimaux,404 nondivulgation distinct de503/retry. Proposer fichiers backend/types/front-consumer séparés, contexte/génération et réponses périmées, aucun élargissement de droits, aucun nouveau taux/finance. Revue ROOT du contrat avant code ; pas de changement de la recette28b ni des fichiers UI réservés. Livrer deux docs courts et SHA poussé, aucun nouvel agent doublon.
 
 
-## UI-PUBLIC-HOME-001 — agent: claude — pending
+## UI-PUBLIC-HOME-001 — agent: claude — done
 
 Deuxième tranche directionUIvalidée, publiéeAVANTcode. Dépendance : fondation743d revue/intégréeROOT (corrigée si nécessaire), puis baseSHAintégration communiquée. RéutiliserworkerUIEXISTANT designidle, checkoutproprepréservé/brancheclaude/ui-public-home. Propriétéexclusive nouveaux components/role/public-home.tsx et public-home.module.css, assets/photosprovenanceàpartirprototype6bc (copie desphotosretenues uniquement), testsUI ciblés et docs/UI_PUBLIC_HOME_CONTRACT.md. EDITcomponents/role/public-site.tsx seulement pourrendre accueilréel depuiscallbacks PublicSessionexistants, sanschangerautresvues ; aucunCSSglobal/layout/session/courant-app/api/backend/SQL. Claimfichiers/contratcourtavantcode, pasnouvelagentdoublon. Leadconservelesfondationsglobals ; worker nepasmodifierleurbranche.
 

@@ -1,3 +1,10 @@
+# Checkpoint prioritaire — 31 octobre 20h10 Martinique
+
+ACCUEILRÉELnouveauthèmelivré : source3ae8c2d/intégration53d34a9b2058d885b3043d527b33730f4d6cf17f POUSSÉE767PASS0skip+tscstrict/buildwebpackPASS/CI41255238292SUCCESS. Publichttps://depannage-electricite-opioou6mt-brafas-projects.vercel.app READYdpl_AbL3FyQukYMGCovZjbh1xwWbecSdGitSource53d. ROOT8cas36039012801440lightdarkPASS :hérofullscreen/photos/togglepersist/slides/onglets/ancressanshashcollision/vraicatégorieprise→draft→AuthsansPOSTcookies0,noconsoleoverflow. Preuves /tmp/depannage-public-home-hosted-proof.json +anon401private,no-store,captureschat. MissionhomeDONEbornée ;autrespages/formulaires/rôlesPASencoremigrés.
+RTcontrat2058ACCEPTÉsondeQAmissionWEB-REALTIME-PROBE-001publiée78a9020GOenvoyélead/workerQAexistant,claim/codeencoreàvérifier,aucuncloudagent. DETAIL2058toujours2P2+annexeàfigeravantcode ;readpoint/gpsRT/supportopérateurpositif/adminStripebornéshistoriquesrestentlimites. AucuneQAcohorteconnueactive.
+
+Historique conservé ci-dessous.
+
 # Checkpoint prioritaire — 31 octobre 19h52 Martinique
 
 Fondation UI743d acceptée,intégrée1d2ebd42f71dee8499ca441c19d5da307399a9ac POUSSÉE :756tests0skip+tscstrictPASS/buildwebpackPASS. Nouvellepreviewfondationgpxp9f3iw READY/public,ROOTlight/dark390/hydratation/policevariable/persist/nooverflowJS/APIanon401PASS23:51:21UTC. CI41254159891encoursàvérifier. AUCUNécranencorere-thémé : UI-PUBLIC-HOME-001 prochainebase1d2/missionf54/GOenvoyéetacceptéworkerUIexistant,claimattendu. RT348deuxfindingsfermésmaisupdate-token/Authintent/ownership/joinrefuséàamender ; DETAIL2f9troisP2àamender, pasbackendcodeGO. AucunecohorteQAconnueactive,nouvelowneradmin/Stripeexplicitementdifférés.
