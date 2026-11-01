@@ -386,3 +386,41 @@
   opacity: 0.6;
   cursor: progress;
 }
+
+/* In-form step action (FASTSPLIT-BOOKING-INLINE-CONTINUE-001): always visible at the end of each
+   step, in addition to the fixed bar. Same submit, 48px target, full width on mobile, long
+   « Continuer vers la connexion » label never clipped. */
+.inlineActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ui-border);
+}
+.inlineSubmit {
+  min-height: 48px;
+  padding: 12px 24px;
+  border: 0;
+  border-radius: var(--ui-radius-pill, 999px);
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: normal;
+  text-align: center;
+  cursor: pointer;
+}
+.inlineSubmit:hover {
+  filter: brightness(0.95);
+}
+.inlineSubmit:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+@media (max-width: 640px) {
+  .inlineSubmit {
+    width: 100%;
+  }
+}
