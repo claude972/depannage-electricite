@@ -27,7 +27,7 @@ const same = (a: unknown, b: unknown, msg = "") => assert.equal(JSON.stringify(a
 
 const contact = { civility: "mme" as const, first_name: "Camille", last_name: "Durand", email: "camille.durand@example.test", phone: "06 12 34 56 78", company: true };
 const address = { address: "12 rue des Lilas", postal_code: "97200", city: "Fort-de-France" };
-const filled = (over: Partial<Booking.BookingState> = {}): Booking.BookingState => ({ ...booking.EMPTY_BOOKING, urgent: false, slot: "day_after", notes: "La prise noircit autour d’une broche.", contact, address, ...over });
+const filled = (over: Partial<Booking.BookingState> = {}): Booking.BookingState => ({ ...booking.EMPTY_BOOKING, urgent: false, slot: "day_after", notes: "La prise noircit autour d’une broche.", contact, address, payment: "on_site", ...over });
 const wizard = (over: Partial<Booking.BookingState> = {}) => render(createElement(booking.BookingWizard as never, { service, range: "80 € – 180 €", onClose() {}, initial: { ...booking.EMPTY_BOOKING, ...over } } as never));
 class MemoryStorage {
   data = new Map<string, string>();
@@ -128,27 +128,28 @@ test("étape 3 : AddressField réutilisé et mêmes contraintes que la demande (
   same(booking.addressErrors(address), {});
 });
 
-test("résumé visible à chaque étape ; récapitulatif complet et rien d’envoyé avant connexion", () => {
-  for (const step of [1, 2, 3, 4] as const) {
+test("résumé visible à chaque étape ; récapitulatif complet et rien d’envoyé avant la vérification du téléphone", () => {
+  for (const step of [1, 2, 3, 4, 5] as const) {
     const html = wizard({ ...filled(), step });
     const summary = html.slice(html.indexOf("data-booking-summary"), html.indexOf("</aside>"));
     assert.match(summary, new RegExp(service.title), `étape ${step}`);
     assert.match(text(summary), /Estimation indicative : 80 € – 180 €/);
     assert.match(text(summary), /Urgence : Après-demain \(créneau souhaité\)/);
   }
-  const recap = wizard({ ...filled(), step: 4 });
+  const recap = wizard({ ...filled(), step: 5 });
   const t = text(recap);
-  for (const part of [service.title, "80 € – 180 €", "Après-demain", "12 rue des Lilas", "97200 Fort-de-France", "Vos coordonnées (privées)", "Camille Durand", "Demande pour une entreprise"]) assert.ok(t.includes(part), part);
-  assert.match(t, /Rien n’est encore envoyé\. À l’étape suivante, vous vous connectez ou créez votre compte, puis vous confirmez l’envoi/);
-  assert.match(recap, /form="booking-step-4"[^>]*>Continuer vers la connexion<\/button>/);
+  for (const part of [service.title, "80 € – 180 €", "Après-demain", "12 rue des Lilas", "97200 Fort-de-France", "Vos coordonnées (privées)", "Camille Durand", "Demande pour une entreprise", "Règlement", "Règlement sur place, après l’intervention"]) assert.ok(t.includes(part), part);
+  assert.match(t, /Rien n’est encore envoyé\. À l’étape suivante, vous vérifiez votre téléphone avec un code \(sans créer de compte\), puis vous confirmez l’envoi/);
+  assert.match(recap, /form="booking-step-5"[^>]*>Vérifier mon téléphone<\/button>/);
+  assert.match(recap, /data-booking-inline-submit="5">Vérifier mon téléphone<\/button>/);
 });
 
 test("fin : les deux brouillons sont écrits, description sans nom/email/téléphone, puis /#auth", () => {
   const storage = new MemoryStorage();
   const went: string[] = [];
-  const result = booking.finishBooking({ storage: storage as unknown as Storage, service, state: filled({ step: 4 }), go: (h) => went.push(h) });
+  const result = booking.finishBooking({ storage: storage as unknown as Storage, service, state: filled({ step: 4 }), onSaved: () => went.push("saved") });
   same(result, { ok: true });
-  same(went, ["/#auth"]);
+  same(went, ["saved"]);
   const draft = readPublicDraft(storage.getItem(PUBLIC_DRAFT_KEY));
   assert.ok(draft);
   same({ ...draft!.values, description: undefined }, { category: "socket", address: "12 rue des Lilas", postal_code: "97200", city: "Fort-de-France", urgency: "scheduled", description: undefined });
@@ -169,7 +170,7 @@ test("fin : les deux brouillons sont écrits, description sans nom/email/télép
 test("échec d’enregistrement : aucune navigation, message honnête (stockage absent, brouillon refusé, extras refusés)", () => {
   for (const make of [() => null, () => Object.assign(new MemoryStorage(), { fail: new Set([PUBLIC_DRAFT_KEY]) }), () => Object.assign(new MemoryStorage(), { fail: new Set([BOOKING_DRAFT_KEY]) })]) {
     const went: string[] = [];
-    const result = booking.finishBooking({ storage: make() as unknown as Storage | null, service, state: filled({ step: 4 }), go: (h) => went.push(h) });
+    const result = booking.finishBooking({ storage: make() as unknown as Storage | null, service, state: filled({ step: 4 }), onSaved: () => went.push("saved") });
     assert.equal(result.ok, false);
     same(went, []);
     assert.match((result as { message: string }).message, /n’a pas pu être conservée dans ce navigateur.*Rien n’a été envoyé/);
@@ -183,7 +184,7 @@ const oldPair = (s: MemoryStorage) => { s.data.set(PUBLIC_DRAFT_KEY, OLD_DRAFT);
 const panel = () => catalog.SERVICES.find((x: { slug: string }) => x.slug === "panne-tableau-electrique");
 const finish = (storage: MemoryStorage) => {
   const went: string[] = [];
-  const result = booking.finishBooking({ storage: storage as unknown as Storage, service: panel(), state: filled({ step: 4, address: { address: "9 avenue Nouvelle", postal_code: "97232", city: "Le Lamentin" } }), go: (h) => went.push(h) });
+  const result = booking.finishBooking({ storage: storage as unknown as Storage, service: panel(), state: filled({ step: 4, address: { address: "9 avenue Nouvelle", postal_code: "97232", city: "Le Lamentin" } }), onSaved: () => went.push("saved") });
   return { result, went };
 };
 
@@ -251,7 +252,7 @@ test("paire : succès ⇒ les deux nouvelles entrées remplacent l’ancienne pa
   const s = oldPair(new MemoryStorage());
   const { result, went } = finish(s);
   same(result, { ok: true });
-  same(went, ["/#auth"]);
+  same(went, ["saved"]);
   assert.equal(readPublicDraft(s.getItem(PUBLIC_DRAFT_KEY))!.values.category, "panel");
   assert.equal(readBooking(s.getItem(BOOKING_DRAFT_KEY))!.booking.slug, "panne-tableau-electrique");
 });
@@ -285,8 +286,10 @@ test("« Continuer » après saisie des notes, du téléphone et de l’adresse 
   same([r.state.step, r.errors, r.finish], [3, {}, false]);
   r = booking.advanceBooking({ ...r.state, address });
   same([r.state.step, r.errors, r.finish], [4, {}, false]);
+  r = booking.advanceBooking({ ...r.state, payment: "on_site" });
+  same([r.state.step, r.errors, r.finish], [5, {}, false]);
   r = booking.advanceBooking(r.state);
-  same([r.state.step, r.finish], [4, true]);
+  same([r.state.step, r.finish], [5, true]);
   // Erreurs : pas d’avancée, saisies conservées.
   const bad = { ...booking.EMPTY_BOOKING, step: 2 as const, notes: "gardé", contact: { ...contact, phone: "12" } };
   const kept = booking.advanceBooking(bad);
