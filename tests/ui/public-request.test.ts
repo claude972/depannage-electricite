@@ -232,10 +232,11 @@ test("parcours brouillon sans inscription automatique : home → new (catégorie
   assert.deepEqual(back.calls, []);
 });
 
-test("autres vues publiques : ancien shell inchangé, jamais le chrome thémé", () => {
+test("vues publiques informatives : chrome thémé partagé (ThemeSurface), lien courant marqué", () => {
   for (const view of ["help", "pricing", "join", "about", "privacy", "legal"]) {
     const { html } = renderSite({ view });
-    assert.match(html, /class="public-main/, view);
-    assert.doesNotMatch(html, /ui-v2|data-public-skin|data-chrome-home/, view);
+    assert.match(html, /ui-v2/, view);
+    assert.match(html, /data-chrome-home/, view);
+    assert.match(html, /aria-current="page"/, view);
   }
 });

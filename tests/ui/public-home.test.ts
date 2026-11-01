@@ -179,7 +179,7 @@ function fakeSession(over: Record<string, unknown> = {}) {
 function loadSite(captured: Record<string, unknown>) {
   return loadModule("components/role/public-site.tsx", {
     "./public-home": { PublicHome: (props: unknown) => ((captured.home = props), null) },
-    // new/auth are rendered in PublicChrome (UI-PUBLIC-REQUEST-001): pass-through, theme-free.
+    // Every public view renders in PublicChrome (UI-PUBLIC-REQUEST-001): pass-through, theme-free.
     "./public-chrome": { PublicChrome: (props: { children: unknown }) => props.children },
     "../app/forms": {
       RequestForm: (props: unknown) => ((captured.form = props), null),
@@ -206,7 +206,7 @@ test("PublicSite : la vue home rend PublicHome avec les callbacks réels de la s
   assert.deepEqual(calls, ["go(new)", "setCategory(panel)", "go(new)", "setAuthMode(login)", "go(auth)", "go(join)", "go(help)", "startDemo(undefined)", "startDemo(manager)"]);
 });
 
-test("PublicSite : vue inconnue → accueil avec message de connexion ; autres vues gardent l’en-tête", () => {
+test("PublicSite : vue inconnue → accueil avec message de connexion ; autres vues rendues dans le chrome partagé", () => {
   const captured: Record<string, unknown> = {};
   const site = loadSite(captured);
   renderToString(createElement(site.PublicSite as never, { session: fakeSession({ view: "admin" }).session } as never));
@@ -214,7 +214,8 @@ test("PublicSite : vue inconnue → accueil avec message de connexion ; autres v
   delete captured.home;
   const help = renderToString(createElement(site.PublicSite as never, { session: fakeSession({ view: "help" }).session } as never));
   assert.equal(captured.home, undefined);
-  assert.match(help, /aria-label="Navigation principale"/);
+  // The header/nav now comes from PublicChrome (mocked pass-through here): no old shell header.
+  assert.doesNotMatch(help, /aria-label="Navigation principale"/);
   assert.match(help, /Questions fréquentes/);
 });
 

@@ -82,7 +82,9 @@ const FOOTER_VIEWS: { view: HomeTargetView; label: string }[] = [
   { view: "legal", label: "Mentions légales" },
 ];
 
-export type ChromeView = "home" | "new" | "auth";
+/** Current public view: home/new/auth have their own header controls; informational views are
+ *  marked in the nav or footer link that opens them. */
+export type ChromeView = "home" | "new" | "auth" | HomeTargetView | (string & {});
 export type ChromeSection = { id: string; label: string };
 
 function BrandMark() {
@@ -174,7 +176,7 @@ export function PublicChrome({
                   </button>
                 )}
             {NAV_VIEWS.map((item) => (
-              <button key={item.view} className={styles.navLink} {...act({ type: "view", view: item.view })}>
+              <button key={item.view} className={styles.navLink} aria-current={current === item.view ? "page" : undefined} {...act({ type: "view", view: item.view })}>
                 {item.label}
               </button>
             ))}
@@ -211,7 +213,7 @@ export function PublicChrome({
           </span>
           <nav className={styles.footerNav} aria-label="Informations">
             {FOOTER_VIEWS.map((item) => (
-              <button key={item.view} {...act({ type: "view", view: item.view })}>
+              <button key={item.view} aria-current={current === item.view ? "page" : undefined} {...act({ type: "view", view: item.view })}>
                 {item.label}
               </button>
             ))}

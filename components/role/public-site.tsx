@@ -13,7 +13,7 @@ import { Icon } from "../app/icons";
 import { InstallPanel } from "../app/install-panel";
 import { CATEGORIES, category, money } from "../app/format";
 import { PublicHome } from "./public-home";
-import { PublicChrome, type ChromeView, type HomeHandlers } from "./public-chrome";
+import { PublicChrome, type HomeHandlers } from "./public-chrome";
 import formStyles from "./public-forms.module.css";
 import { ABOUT_VALUES, FAQ, HELP_PROCESS, JOIN_FACTS, JOIN_REVIEW, JOIN_STEPS, JOIN_TILES, LEGAL_SECTIONS, PENDING, PRIVACY_DATA, numbered, pricingRows } from "./public-lists";
 import styles from "./public.module.css";
@@ -92,7 +92,7 @@ export function PublicSite({ session }: { session: PublicSession }) {
   // PublicChrome marks only home/new/auth as current; an informational view is none of them
   // (no aria-current there, as in the chrome's own footer links).
   return (
-    <PublicChrome current={view as ChromeView} handlers={chromeHandlers} onHome={() => navigate("home")} mainClassName={`${styles.main} ${viewStyles.main}`}>
+    <PublicChrome current={view} handlers={chromeHandlers} onHome={() => navigate("home")} mainClassName={`${styles.main} ${viewStyles.main}`}>
       <div className={viewStyles.wrap}>
         {themedAlerts}
         <div className={viewStyles.skin} data-public-skin="info">
