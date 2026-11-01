@@ -1,3 +1,13 @@
+# Checkpoint fastsplit — 1 novembre 2026, réservation connectée
+
+Application publique : https://depannage-electricite-git-integration-web-pwa-brafas-projects.vercel.app (HTTP200/Flight exact vérifié). Sourceapp a4b6f3177bd6e326bda9324ac7297f074e5ae1c0, READYdpl_9tnfmuqieh48xhEAX8XGAME7QvDK, Flight4KsRbx0ZO5gyyXjblsH8O, CI41312089858 deux jobs SUCCESS. Migration021 seule appliquée, RLS/ACL relus ; aucun main/production/Edge modifié.
+
+Parcours réel fiche→formulaire→login→confirmation→création : run3c1b681539d4 **19/19PASS**, deux clients QA synthétiques préconfirmés, un dossier. Deux POST concurrents puis réponse perdue après commit, rechargement et rejeu : même UUID, un dossier/audit/quota. Erreur profil503 conserve brouillon, tiers/inexistant404 uniformes, aucune mutation automatique. UUID stable et chargement Confirmer corrigés. Avant-JS bouton désactivé puis un clic ouvre,390/1280PASS. Cleanupok/drain0/dix intentions réglées, ROOTpostflight **45/45PASS**, deuxAuth404/41REST0/deuxStorage0 inclledger ; aucune cohorteQA connue active après readback. Ancien nominal315 app24316/16PASS +root43 conservé ; tentativeb52 INCOMPLETE sansdossier etroot28clean conservée.
+
+Rapport app : docs/reviews/BOOKING_A4_CONNECTED_REPLAY_HOSTED_PASS.md. SMTP/inbox réel non vérifié ; GPS physique non prouvé par ce run (adresse manuelle avec provider503 simulé). Stripe/premierSuperAdmin toujours explicitementdifférés. Pasapplicationcomplète/zéroerreurgarantie. DeuxCodexROOTcompris/cinqClaude conservés ; aucuneautomation15min. État historique ci-dessous conservé avec ses bornes SHA.
+
+---
+
 ## Reprise visuelle des fiches — source243aa0b
 
 Nouvelle composition du modèle fourni, thème conservé : source243aa0b22d3c24730c6469bc3caff727c0c6c574, READYdpl_GBYZekPDwyHRVdRG3M9i4QuZtN8f, BID60_DYmfKRnZNBefMF6KVc. LIENSTABLEpreviewexistant https://depannage-electricite-git-integration-web-pwa-brafas-projects.vercel.app/prestations/plusieurs-prises-sans-courant :ROOTGET200mêmeFlight+navigateur390neufcarteaccueil→fiche→Confirmer→UrgencePASS0POST0JS/cookiesinitiaux0. Pasnouvelalias/prod/protectionglobale. ROOT8/8formats2thèmesPASS jusquAuth, photosgauche/actiondroite desktop ;mobiletitre/prix/pictosavantphoto ;FAQ/liensliés/barrecompacte/footervérifiés. Huitroutes200/inconnue404,23testsciblés+tscPASS. Captures1440clair/390sombrevues. Rapportdocs/reviews/SERVICE_REFERENCE_243_HOSTED_PASS.mdpoussébc0c89b. Propriétairedit«çanemarchepas»sanspointdeblocage :questionasynchroneouverte,nepasaffirmerbuginconnuclos ;pasnouvellepreuveenvoiauthSMTP/paiement. AucunecohorteQAcréée.
