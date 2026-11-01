@@ -64,8 +64,12 @@ const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 
 export function parseSettlement(body: unknown): SettlementDTO | null {
   if (!isObj(body) || body.method !== "card_hold" || body.currency !== "eur" || typeof body.available !== "boolean") return null;
   if (!SETTLEMENT_STATUSES.includes(body.status as SettlementStatus)) return null;
+  // Amount: a safe POSITIVE integer of cents; null only while nothing is settled yet
+  // (not_started / processing / needs_review). paid / captured_transfer_pending need the amount.
   const amount = body.amount_cents;
-  if (!(amount === null || (typeof amount === "number" && Number.isSafeInteger(amount) && amount >= 0))) return null;
+  const status = body.status as SettlementStatus;
+  const nullAllowed = status === "not_started" || status === "processing" || status === "needs_review";
+  if (amount === null ? !nullAllowed : !(typeof amount === "number" && Number.isSafeInteger(amount) && amount > 0)) return null;
   if (body.reason !== undefined && typeof body.reason !== "string") return null;
   return { method: "card_hold", status: body.status as SettlementStatus, amount_cents: amount as number | null, currency: "eur", available: body.available, ...(typeof body.reason === "string" ? { reason: body.reason } : {}) };
 }
@@ -134,7 +138,8 @@ export function applyCapture(s: SettlementState, r: SettlementResult): Settlemen
   const base = { ...s, busy: false, error: "", retry: null };
   if (r.status === 200) {
     const dto = parseSettlement(r.body);
-    return dto ? { ...base, phase: "ready", dto, confirming: false } : { ...base, error: SETTLEMENT_COPY.conflict, retry: "refresh", confirming: false };
+    // A malformed 200 is not a state: unconfirmed, same request may be retried.
+    return dto ? { ...base, phase: "ready", dto, confirming: false } : { ...base, error: SETTLEMENT_COPY.captureFailed, retry: "capture" };
   }
   if (r.status === 409 || r.status === 422) return { ...base, confirming: false, error: SETTLEMENT_COPY.conflict, retry: "refresh" };
   if (r.status === 404) return { ...base, phase: "unavailable", dto: null, confirming: false, error: SETTLEMENT_COPY.unavailable };
