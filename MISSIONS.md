@@ -618,3 +618,6 @@ WorkerUIB exclusif components/features/quote-documents/** et components/features
 
 ## FASTSPLIT-PLATFORM-THEME-001 — Claude — ready
 WorkerUIC exclusif components/features/platform-operations/** et components/role/platform-anchor.tsx : thèmevert/Jakarta/clair-sombre opt-in et attributstable auroot dumodule pour remplacer sélecteurstructurelfragile; aucunadmin-shell/forms/globals/backend/auth/status/financeexecution. Démonstrationexpliciteseulement,pasvraiadmincréé. CourtSHA/testsnominauxerreursvide. Leadpossèdeseul tests/ui/public-request.test.ts et assemblage.
+
+## FASTSPLIT-PWA-RESILIENCE-001 — Codex — in progress
+delivery_offline auteur exclusif public/sw.js + tests/pwa.test.ts, brancheisolée depuis0c2. ReproVM réseauoff+caches.openUnknownError=>rejetworker confirmé ; corrigerlecturecacheopen/matchthrowversréponse503neutre/no-store sanscache privé niAPI/nonGETinterceptés. TestsréelexécutéVM puispushcourt. Claudelead possèdeUIoffline.html/manifest/PwaRegistration seulement,aucunchevauchementSW. ROOTintègre et vérifienavigateurréelhorsligne/retourenligne ; aucune garantie d’actions serveur horsconnexion.
