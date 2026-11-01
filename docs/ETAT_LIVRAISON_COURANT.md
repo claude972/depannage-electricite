@@ -1,3 +1,11 @@
+# Checkpoint Super Admin — 1 novembre 2026, 15h55 Martinique
+
+Ordre fastsplit points1/2/4. Application d3d2d6cf23eeffe992964c2ec848b73919a19747 intégrée/poussée/READY publique : https://depannage-electricite-oihjfxt7l-brafas-projects.vercel.app . Gestion statuts/réactivation artisans et finance confirmations/aperçus corrigées ;57tests0skip+tscPASS,8cas navigateur public DEMO PASS,5refus anonymes401privatenostore. Aucun opérateur réel qualifié par la démo. CI41343879691 en cours à la rédaction ; API7ccCI41343143784 SUCCESS. Rapport SUPERADMIN_D3D2_HOSTED_CHECKPOINT.md ; code/documentation6c02157 distinct de la source app d3d2.
+
+Accès propriétaire encore NON activé : email exact du compte demandé, aucune réponse/identité choisie à ce stade. Ancien report remplacé par son ordre1, mais pas de promotion sans identifier SON compte confirmé. LectureROOTadmin0 ; invoice_issuer/commission_bps absents. Bootstrap privé préparé/revu/19testsPGlitePASS, aucune exécution cloud. Recette connectée gestion/finances reste à finir après activation ; pas de faux compte admin ni factures/audits immuables de QAcommittés, aucune cohorte active créée. SMS/Stripe différés, aucun main/prod/store/transaction réelle, pas de nouvelle automation.
+
+---
+
 ## Checkpoint fastsplit — 1 novembre 14h36 Martinique
 
 Application règlement d1f88e3b7e32912fcf989ef3f648b2f08e61c79f poussée, READY dpl_J9LMQN2ANrQfkerm33pbzBKcdESt, publique sans token : https://depannage-electricite-fohe9cvu8-brafas-projects.vercel.app . Flight ooAn2jjxoM2crE44XCD76, GitSource lié, exception publique ce seul déploiement. Frontend c92c614 contre-revu28tests/2montages et deuxP2fermés ; banque vs déclaration sur place distinguées client/artisan/B2B/admin. 1115testsPASS et unHTMLoptionnel ensuite55/55PASS0skip avec vraie source4c ; delta UI2tests+tscPASS. CI52511e1/41337060236 deuxjobsSUCCESS, appcode byteidentique d1f après deux corrections tests-only. Échec CI d1f conservé : ancien test support attendait l'enveloppe financière inchangée ; maintenant garde ACL/périmètre/totaux et contrôle les nouveaux champs.
