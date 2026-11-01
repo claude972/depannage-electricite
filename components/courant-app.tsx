@@ -40,7 +40,7 @@ import {
   type DemoOperations,
 } from "./app/demo";
 import { resolveDisplayName } from "./app/display-name";
-import { draftNotice, readBootDraft } from "./app/request-draft-boot";
+import { draftNotice, getDraftStorage, readBootDraft } from "./app/request-draft-boot";
 import { savePublicDraft } from "../lib/shared/request-draft";
 import { REALTIME_CHANNEL_CONFIG, REALTIME_TABLES, nextConnection } from "./app/realtime";
 import { category, uid } from "./app/format";
@@ -337,7 +337,7 @@ export default function CourantApp() {
     let active = true;
     let unsubscribe: (() => void) | undefined;
     // Canonical bounded format shared with /offline-request.html (strict category, 30 min TTL).
-    const bootDraft = readBootDraft(typeof sessionStorage === "undefined" ? null : sessionStorage);
+    const bootDraft = readBootDraft(getDraftStorage());
     if (bootDraft) setPendingDraft(bootDraft);
     try {
       const token = sessionStorage.getItem(INVITE_KEY);
@@ -2286,7 +2286,7 @@ export default function CourantApp() {
     saveDraft(values) {
       setPendingDraft(values);
       // Same canonical format as /offline-request.html; storage refusal keeps the in-memory draft.
-      const saved = savePublicDraft(typeof sessionStorage === "undefined" ? null : sessionStorage, values);
+      const saved = savePublicDraft(getDraftStorage(), values);
       setAuthMode("signup");
       navigate("auth");
       setNotice(draftNotice(saved)); // quota/refusal: the input stays in memory, never a false « saved »

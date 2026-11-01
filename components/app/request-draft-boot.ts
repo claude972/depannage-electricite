@@ -4,6 +4,16 @@
 import { PUBLIC_DRAFT_KEY, readPublicDraft } from "../../lib/shared/request-draft";
 import type { RequestValues } from "./types";
 
+/** window.sessionStorage itself may throw (SecurityError: blocked storage, sandboxed frame): the
+ *  GETTER is read inside the try, never outside. null ⇒ no storage, in-memory only. */
+export function getDraftStorage(win: { sessionStorage?: Storage } | undefined = typeof window === "undefined" ? undefined : window): Storage | null {
+  try {
+    return win?.sessionStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function readBootDraft(storage: Pick<Storage, "getItem"> | null | undefined, now = Date.now()): RequestValues | null {
   let raw: string | null;
   try {

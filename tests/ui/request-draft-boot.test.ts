@@ -3,7 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { DRAFT_MEMORY_ONLY_NOTICE, DRAFT_SAVED_NOTICE, draftNotice, readBootDraft } from "../../components/app/request-draft-boot";
+import { DRAFT_MEMORY_ONLY_NOTICE, DRAFT_SAVED_NOTICE, draftNotice, getDraftStorage, readBootDraft } from "../../components/app/request-draft-boot";
 import { PUBLIC_DRAFT_KEY, savePublicDraft } from "../../lib/shared/request-draft";
 
 function memory(initial: Record<string, string> = {}) {
@@ -72,4 +72,29 @@ test("save: quota / refused storage ⇒ honest « page only » notice, never a f
   assert.equal(draftNotice(savePublicDraft(memory(), values, NOW)), DRAFT_SAVED_NOTICE);
   const src = readFileSync("components/courant-app.tsx", "utf8");
   assert.match(src, /setPendingDraft\(values\);[\s\S]{0,400}setNotice\(draftNotice\(saved\)\)/, "in-memory draft kept, notice follows the real result");
+});
+
+test("storage getter itself throws (SecurityError) ⇒ boot returns null, save keeps memory with the honest notice", () => {
+  const win = {} as { sessionStorage?: Storage };
+  Object.defineProperty(win, "sessionStorage", { get() { throw new DOMException("blocked", "SecurityError"); } });
+  assert.equal(getDraftStorage(win), null);
+  assert.equal(readBootDraft(getDraftStorage(win), NOW), null);
+  const saved = savePublicDraft(getDraftStorage(win), values, NOW);
+  assert.equal(saved.ok, false);
+  assert.equal(draftNotice(saved), DRAFT_MEMORY_ONLY_NOTICE);
+  // Real global getter throwing: the default argument path never throws either.
+  const g = globalThis as unknown as { window?: unknown };
+  const had = Object.prototype.hasOwnProperty.call(g, "window");
+  const previous = g.window;
+  g.window = win;
+  try {
+    assert.equal(getDraftStorage(), null);
+  } finally {
+    if (had) g.window = previous;
+    else delete g.window;
+  }
+  const src = readFileSync("components/courant-app.tsx", "utf8");
+  assert.match(src, /readBootDraft\(getDraftStorage\(\)\)/);
+  assert.match(src, /savePublicDraft\(getDraftStorage\(\), values\)/);
+  assert.doesNotMatch(src, /typeof sessionStorage === "undefined" \? null : sessionStorage/, "no getter read outside a try");
 });
