@@ -81,6 +81,11 @@ function attachOfflineForm() {
     if (navigator.onLine === false) { event.preventDefault(); tell("La connexion semble encore indisponible. Rien n’est envoyé ; reprenez manuellement quand elle revient."); }
   });
   window.addEventListener("online", reflectNetwork); window.addEventListener("offline", reflectNetwork); reflectNetwork();
+  // HTML stays inert without this module. Enable input only after every handler is installed.
+  for (const id of ["offline-fields", "offline-save", "offline-clear"]) {
+    const control = document.getElementById(id);
+    if (control && "disabled" in control) control.disabled = false;
+  }
 }
 if (typeof window !== "undefined" && typeof document !== "undefined" && window.location.pathname === "/offline-request.html") {
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", attachOfflineForm, { once: true });

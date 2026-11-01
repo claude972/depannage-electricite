@@ -57,13 +57,14 @@ function offlineDom(options: { initial?: string | null; quota?: boolean; storage
     get(name: string) { return controls[name]?.value; }
   }
   const form = new Form(), status = { textContent: "not initialized" }, attributes: Record<string, string> = {};
-  const clear = { addEventListener: (name: string, cb: Listener) => listeners.set(`clear:${name}`, cb) };
+  const fields = { disabled: true }, save = { disabled: true };
+  const clear = { disabled: true, addEventListener: (name: string, cb: Listener) => listeners.set(`clear:${name}`, cb) };
   const resume = { addEventListener: (name: string, cb: Listener) => listeners.set(`resume:${name}`, cb), setAttribute: (name: string, value: string) => { attributes[name] = value; } };
   const win = { location: { pathname: options.pathname ?? "/offline-request.html" }, addEventListener: (name: string, cb: () => void) => windowEvents.set(name, cb) };
   Object.defineProperty(win, "sessionStorage", { get: () => { if (options.storageDenied) throw Error("Storage refused"); return s; } });
-  runInNewContext(script, { window: win, document: { readyState: options.loading ? "loading" : "complete", getElementById: (id: string) => ({ "offline-request-form": form, "offline-status": status, "offline-clear": clear, "offline-resume": resume })[id], addEventListener: (name: string, cb: () => void) => docEvents.set(name, cb) }, navigator: { onLine: options.online ?? false }, HTMLFormElement: Form, FormData: Data, Date: { now: () => now }, fetch: () => { requests++; throw Error("No network allowed"); } });
+  runInNewContext(script, { window: win, document: { readyState: options.loading ? "loading" : "complete", getElementById: (id: string) => ({ "offline-request-form": form, "offline-status": status, "offline-clear": clear, "offline-resume": resume, "offline-fields": fields, "offline-save": save })[id], addEventListener: (name: string, cb: () => void) => docEvents.set(name, cb) }, navigator: { onLine: options.online ?? false }, HTMLFormElement: Form, FormData: Data, Date: { now: () => now }, fetch: () => { requests++; throw Error("No network allowed"); } });
   const emit = (key: string) => { let prevented = 0; if (key === "form:submit") submits++; listeners.get(key)?.({ preventDefault: () => { prevented++; } }); return prevented; };
-  return { s, status, controls, attributes, windowEvents, docEvents, emit, requests: () => requests, submits: () => submits, reset: () => reset, listenerCount: () => listeners.size };
+  return { s, status, controls, attributes, fields, save, clear, windowEvents, docEvents, emit, requests: () => requests, submits: () => submits, reset: () => reset, listenerCount: () => listeners.size };
 }
 test("offline page restores only fresh drafts, saves only on explicit submit and never auto-submits when network returns", () => {
   const h = offlineDom({ initial: envelope({ ...input, description: "Notes précédentes" }) });
@@ -85,4 +86,16 @@ test("expired/malformed drafts never hydrate controls and online bundle import n
   }
   const online = offlineDom({ pathname: "/" }); assert.equal(online.listenerCount(), 0); assert.equal(online.windowEvents.size, 0); assert.equal(online.status.textContent, "not initialized");
   const loading = offlineDom({ loading: true }); assert.equal(loading.listenerCount(), 0); loading.docEvents.get("DOMContentLoaded")!(); assert.ok(loading.listenerCount() > 0);
+});
+
+test("offline controls stay disabled before module initialization and enable only after submit prevention is attached", () => {
+  const h = offlineDom({ loading: true });
+  assert.equal(h.fields.disabled, true); assert.equal(h.save.disabled, true); assert.equal(h.clear.disabled, true);
+  assert.equal(h.listenerCount(), 0);
+  h.docEvents.get("DOMContentLoaded")!();
+  assert.equal(h.fields.disabled, false); assert.equal(h.save.disabled, false); assert.equal(h.clear.disabled, false);
+  assert.equal(h.emit("form:submit"), 1); assert.equal(h.requests(), 0);
+  const denied = offlineDom({ storageDenied: true });
+  assert.equal(denied.fields.disabled, false); assert.equal(denied.emit("form:submit"), 1);
+  assert.match(denied.status.textContent, /Enregistrement impossible/);
 });
