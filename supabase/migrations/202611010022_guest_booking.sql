@@ -43,7 +43,7 @@ declare job public.interventions;
 begin
  if b.intervention_id is not null then
   select * into job from public.interventions where id=b.intervention_id;
-  if not found or job.client_id<>b.actor_id or not public.can_access_intervention(job.id) then raise insufficient_privilege; end if;
+  if not found or job.client_id<>b.actor_id or not public.can_access_intervention(job.id) then raise no_data_found; end if;
   return jsonb_build_object('status','confirmed','intervention',jsonb_build_object('id',job.id,'status',job.status,
    'estimate_min_cents',job.estimate_min_cents,'estimate_max_cents',job.estimate_max_cents),
    'payment',jsonb_build_object('method',b.method,'status',case when b.method='on_site' then 'due_on_site' else 'authorization_recorded' end,'checked_at',b.authorization_checked_at));

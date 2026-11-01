@@ -61,6 +61,10 @@ try{
  eq(atomicFirst.status,'confirmed');eq((await atomic({...payload,description:'Description modifiée après échec synthétique QA'})).rows[0].v.intervention.id,atomicFirst.intervention.id);eq(await scalar("select count v from public.action_limits where actor_id=$1 and action='prepare_phone_booking'",[actors.atomic.id]),1);eq(await scalar("select count v from public.action_limits where actor_id=$1 and action='create_intervention'",[actors.atomic.id]),1);
  const legacyNonce=randomUUID();await as('a','select public.create_intervention_once($1,$2,$3,$4,$5,$6,$7,null)',[legacyNonce,payload.category,payload.description,payload.address,payload.postal_code,payload.city,payload.urgency]);await denied(prepare('a',legacyNonce),'P0001');
  const racedNonce=randomUUID();await prepare('a',racedNonce);await as('a','select public.create_intervention_once($1,$2,$3,$4,$5,$6,$7,null)',[racedNonce,payload.category,payload.description,payload.address,payload.postal_code,payload.city,payload.urgency]);await denied(submit('a',racedNonce),'P0001');eq(await scalar('select intervention_id is null v from public.phone_booking_requests where actor_id=$1 and request_id=$2',[actors.a.id,racedNonce]),true);
+ // A previously owned dossier that changed owner is hidden by the same 404 as an absent one.
+ await db.query('update public.interventions set client_id=$1 where id=$2',[actors.b.id,job]);
+ await denied(status('a',key),'P0002');
+ await denied(as('a','select public.phone_booking_status(null,$1) v',[job]),'P0002');
  eq(await scalar('select count(*)::int v from public.payments'),0);eq(await scalar('select count(*)::int v from public.payment_attempts'),0);
  console.log(JSON.stringify({sql:'PASS',checks,migrations:22,auth_storage_cron:'STUBS',provider:'NO REAL STRIPE OR SMS',real_concurrency_proved:false}));
 }finally{await db.close()}
