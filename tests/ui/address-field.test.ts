@@ -5,6 +5,12 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import Module, { createRequire } from "node:module";
+import { existsSync } from "node:fs";
+import { createServer } from "node:http";
+import { homedir } from "node:os";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+import { build, type Plugin } from "esbuild";
 import type * as AF from "../../components/app/address-field";
 import type { AddressCandidate, AddressState, AddressSuggestions, AddressValue } from "../../components/app/address-field";
 
@@ -369,4 +375,105 @@ test("reset() : recherche annulée, liste vidée, géolocalisation en attente ig
   assert.equal(s.last().geo, "idle");
   assert.equal(s.t.pending(), 0); // garde de délai annulée
   assert.deepEqual(s.picks, []); // rien n’a été appliqué au nouveau brouillon
+});
+
+// ---- Real React component in local Chromium (root P2) -------------------------------------
+// The real <AddressField> rendered by a real React root under a tiny parent that owns the value
+// (esbuild browser bundle served on 127.0.0.1). Skipped — never passed — without local Chromium.
+const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
+const CHROMIUM =
+  process.env.QA_CHROMIUM_PATH ||
+  path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
+const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
+
+const APP = `
+import { useState, createElement as h } from "react";
+import { createRoot } from "react-dom/client";
+import { AddressField } from "./components/app/address-field";
+const cand = (address, postal_code, city) => ({ id: address, label: address, address, postal_code, city, latitude: 14.6, longitude: -61.07 });
+window.searches = [];
+// Delayed fake search: resolved by the test through window.reply(index, candidates).
+const search = (q, signal) => new Promise((resolve) => { window.searches.push({ q, resolve, signal }); });
+window.reply = (i, list) => window.searches[i].resolve({ source: "IGN / BAN", candidates: list.map((c) => cand(c[0], c[1], c[2])), attribution: "Source : BAN" });
+window.aborted = (i) => window.searches[i].signal.aborted;
+function App() {
+  const [value, setValue] = useState({ address: "", postal_code: "", city: "" });
+  window.setValue = setValue;
+  window.value = value;
+  return h("div", null, h(AddressField, { value, onChange: setValue, search }), h("pre", { id: "value" }, JSON.stringify(value)));
+}
+createRoot(document.getElementById("app")).render(h(App));
+`;
+// CSS modules → class-name proxy (no stylesheet needed for behaviour).
+const cssStub: Plugin = {
+  name: "css-module-stub",
+  setup(b) {
+    b.onResolve({ filter: /\.css$/ }, (args) => ({ path: args.path, namespace: "css-stub" }));
+    b.onLoad({ filter: /.*/, namespace: "css-stub" }, () => ({ contents: "export default new Proxy({}, { get: (_t, k) => String(k) });", loader: "js" }));
+  },
+};
+
+type W = Window & { searches: { q: string }[]; reply(i: number, list: [string, string, string][]): void; aborted(i: number): boolean; setValue(v: unknown): void; value: { address: string; postal_code: string; city: string } };
+
+test("<AddressField> in real React: external draft replacement drops A's late reply; own typing echo does not reset", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
+  const bundle = await build({ absWorkingDir: ROOT, stdin: { contents: APP, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, platform: "browser", format: "iife", plugins: [cssStub], define: { "process.env.NODE_ENV": '"development"' } });
+  const js = bundle.outputFiles[0].text;
+  const server = createServer((_rq, rs) => {
+    rs.setHeader("content-type", "text/html");
+    rs.end('<div id="app"></div><script>' + js + "</script>");
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const port = (server.address() as { port: number }).port;
+  const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
+  const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true });
+  const B = { address: "5 avenue B", postal_code: "97232", city: "Le Lamentin" };
+  try {
+    const page = await browser.newPage();
+    const errors: string[] = [];
+    page.on("pageerror", (e: Error) => errors.push(e.message));
+    await page.goto(`http://127.0.0.1:${port}/`);
+    const combo = page.locator("[role=combobox]");
+    const options = page.locator("[role=option]");
+
+    // 1. Draft A typed (keystroke by keystroke, each echoed back by the parent) → one search pending.
+    await combo.click();
+    await page.keyboard.type("12 rue A", { delay: 15 });
+    await page.waitForFunction(() => (window as unknown as W).searches.length === 1);
+    assert.equal(await page.evaluate(() => (window as unknown as W).searches[0].q), "12 rue A");
+    // 2. The parent replaces the value with draft B (new draft / reset).
+    await page.evaluate((b: unknown) => (window as unknown as W).setValue(b), B);
+    await page.waitForFunction(() => (window as unknown as W).value.address === "5 avenue B");
+    assert.equal(await page.evaluate(() => (window as unknown as W).aborted(0)), true, "A's search is aborted");
+    // 3. A's reply arrives late: no listbox for A, and ArrowDown + Enter leave B unchanged.
+    await page.evaluate(() => (window as unknown as W).reply(0, [["12 rue A", "97200", "Fort-de-France"], ["14 rue A", "97200", "Fort-de-France"]]));
+    await page.waitForTimeout(150);
+    assert.equal(await combo.getAttribute("aria-expanded"), "false");
+    assert.equal(await options.count(), 0, "no suggestion from A is rendered");
+    await combo.focus();
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(100);
+    assert.deepEqual(await page.evaluate(() => (window as unknown as W).value), B, "B is never overwritten by A's suggestion");
+    assert.equal(await combo.inputValue(), "5 avenue B");
+
+    // 4. The user's own typing echoed by the parent does NOT reset: suggestions for the current text appear.
+    await combo.fill("");
+    await page.keyboard.type("8 rue C", { delay: 15 });
+    await page.waitForFunction(() => (window as unknown as W).searches.length === 2);
+    assert.equal(await page.evaluate(() => (window as unknown as W).searches[1].q), "8 rue C");
+    assert.equal(await page.evaluate(() => (window as unknown as W).aborted(1)), false, "echo of own typing keeps the request alive");
+    await page.evaluate(() => (window as unknown as W).reply(1, [["8 rue C", "97200", "Fort-de-France"]]));
+    await page.waitForFunction(() => document.querySelectorAll("[role=option]").length === 1);
+    assert.equal(await combo.getAttribute("aria-expanded"), "true");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(() => (window as unknown as W).value.city === "Fort-de-France");
+    assert.deepEqual(await page.evaluate(() => (window as unknown as W).value), { address: "8 rue C", postal_code: "97200", city: "Fort-de-France" });
+    assert.deepEqual(errors, []);
+    await page.close();
+  } finally {
+    await browser.close();
+    server.close();
+  }
 });
