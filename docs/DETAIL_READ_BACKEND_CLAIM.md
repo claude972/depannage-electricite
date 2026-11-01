@@ -1,0 +1,11 @@
+# WEB-DETAIL-READ-BACKEND-001 — claim avant code
+
+Auteur Codex review_gateway_013, branche codex/detail-read, base53d34a9b2058d885b3043d527b33730f4d6cf17f. Mission33bc491 publiée avant code ; contrat accepté690da9f importé sans modification. Ancienne branche QA4a1d148 conservée, checkout propre avant changement ; aucun node_modules/WIP déplacé.
+
+Propriété exclusive : nouveau app/api/interventions/[id]/route.ts ; app/api/workspace/route.ts seulement lecturesbornées+limits ; nouveau lib/features/workspace/detail-read.ts (types,projections,validation et orchestration de lecture pure injectable) ; components/app/types.ts uniquement Workspace.limits optionnel/importtype. Tests nouveaux tests/detail-read-backend.test.ts et tests/workspace-limits.test.ts ; docs/DETAIL_READ_BACKEND_CLAIM.md et docs/DETAIL_READ_BACKEND_REPORT.md. Aucun autre fichier, hookUI/session/CSS/SQL/Edge/cloud/credential. Helpers de test existants en lectureseule.
+
+Plan : 1.figer les projections/enveloppe discriminée et validateur strict ; 2.GETAuth/RLS parUUID, dépendanceslocalisées avec étatsnone/hidden/error etscopepaiements200IDs indépendantdes20devis ; 3.workspaceL+1/limitsN>L en préservant l’ancienformat ; 4.vraies routes avec fauxclientsinjectés, erreurs/malformations/RLSsimulée/caps/projections et compatvalidationworkspace ; typecheck strict avec dépendancescachéesexistantes sansinstall. Authmock n’est pas preuveRLSréelle. Pas de recettecloud ni cap100final annoncé avant front+recetteROOT.
+
+Précisions d’interface : limits.interventions porte sur les dossierscompletsRLS, pas les offres concaténées. Les souslistes utilisent ordrecreated_atdesc+id pour déterminisme (RDVstarts_atdesc+intervention_id). Scopeidsdeviscount exact valide requis ; échec =>paymentserror ; plus200 =>incomplete true, même si0paiementdansle sousscope. Projectionretourne seulement les clés de l’annexe. Annexe schémaréelle003 pour travel_stage/RDV. Les types exposés sont partagés avec le consommateurlead ; cache/singleflight ne sont pas implémentés ici.
+
+Livraison : commits/push cohérents, rapport exactSHA/tests/limites. Une AUTRE revue indépendante est obligatoire avant intégration ; aucune autorevue présentée comme validation finale.
