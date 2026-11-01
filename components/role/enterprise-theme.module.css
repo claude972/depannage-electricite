@@ -690,17 +690,13 @@
 }
 
 /* ---- Legacy leaf islands ------------------------------------------------------------------
-   Support tickets, notifications, quote documents, site operations and tracking are leaf modules
-   (other owners) that still paint fixed light surfaces (#fff) with legacy text colours. Until
+   Site operations and tracking are leaf modules (other owners, not yet migrated) that still paint
+   fixed light surfaces (#fff) with legacy text colours. Until
    their own token pass they are LIGHT islands in both themes, as in the client skin: the --ui-*
    tokens take the light values on their root (stable attributes, no hashed class), so themed
    primitives inside them stay AA on their white cards. */
-.enterpriseSkin section[aria-labelledby="quote-documents-title"],
 .enterpriseSkin section[aria-labelledby="site-operations"],
-.enterpriseSkin section[aria-labelledby="tracking-card-title"],
-.enterpriseSkin section[aria-labelledby^="support-"],
-.enterpriseSkin ul[aria-label="Demandes d’assistance"],
-.enterpriseSkin [data-scope] {
+.enterpriseSkin section[aria-labelledby="tracking-card-title"] {
   --ui-bg: #ffffff;
   --ui-surface: #f4f6f5;
   --ui-card: #ffffff;
@@ -716,9 +712,4 @@
   color-scheme: light;
   background: #ffffff;
   color: #111111;
-}
-.enterpriseSkin [data-scope] {
-  padding: 16px;
-  border: 1px solid var(--ui-border);
-  border-radius: 16px;
 }

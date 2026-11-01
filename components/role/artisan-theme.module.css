@@ -510,16 +510,11 @@
   white-space: nowrap;
 }
 
-/* ---- Legacy leaf islands ------------------------------------------------------------------
-   Leaf modules owned elsewhere (quote documents, quote draft editor, support centre,
-   notification centre, artisan planning) still
-   paint fixed light surfaces with legacy text colours: rendered as LIGHT islands in both themes
-   (light --ui-* values on their root, selected by stable attributes) so the themed primitives
-   inside them stay AA. */
-.artisanSkin section[aria-labelledby="quote-documents-title"],
-.artisanSkin section[aria-labelledby="quote-draft-title"],
-.artisanSkin [data-theme-island="support"],
-.artisanSkin [data-scope] {
+/* ---- Legacy leaf island ------------------------------------------------------------------
+   Only the quote draft editor (artisan-quote-draft.module.css, not yet migrated) still paints
+   fixed light surfaces: it stays a LIGHT island in both themes. Quote documents, support,
+   notifications and planning now theme themselves with :global(.ui-v2) overrides. */
+.artisanSkin section[aria-labelledby="quote-draft-title"] {
   --ui-bg: #ffffff;
   --ui-surface: #f4f6f5;
   --ui-card: #ffffff;
@@ -534,19 +529,4 @@
   --ui-scheme: light;
   color-scheme: light;
   color: #111111;
-}
-/* Card frame for the islands that are not already a .panel (the quote draft editor is one). The
-   support centre renders a fragment, so artisan-space.tsx wraps it in [data-theme-island]. */
-.artisanSkin section[aria-labelledby="quote-documents-title"],
-.artisanSkin [data-theme-island="support"],
-.artisanSkin [data-scope] {
-  padding: 16px;
-  border: 1px solid var(--ui-border);
-  border-radius: 16px;
-  background: #ffffff;
-}
-/* "Besoin d'aide sur ce dossier ?" line (support-tickets) in the dossier: text repainted with
-   the muted token, no card (its legacy #52627a fails AA on the dark background). */
-.artisanSkin [data-theme-leaf="support-help"] p {
-  color: var(--ui-text-muted);
 }

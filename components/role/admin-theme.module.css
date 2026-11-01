@@ -688,38 +688,3 @@
 .adminSkin :global(.page-title) + p {
   color: var(--ui-text-muted);
 }
-
-/* ---- Legacy leaf islands ------------------------------------------------------------------
-   Support tickets (A5 support queue), notifications, quote documents and the platform operations
-   views (operators / finance / moderation: `main > div` whose head is `div > h2 + p`) are leaf modules
-   (other owners) that still paint fixed light surfaces (#fff) with legacy text colours. Until
-   their own token pass they are LIGHT islands in both themes, as in the client skin: the --ui-*
-   tokens take the light values on their root (stable attributes, no hashed class), so themed
-   primitives inside them stay AA on their white cards. */
-.adminSkin section[aria-labelledby="quote-documents-title"],
-.adminSkin section[aria-labelledby^="support-"],
-.adminSkin ul[aria-label="Demandes d’assistance"],
-.adminSkin main > div:has(> div:first-child > div > h2 + p),
-.adminSkin [data-scope] {
-  --ui-bg: #ffffff;
-  --ui-surface: #f4f6f5;
-  --ui-card: #ffffff;
-  --ui-text: #111111;
-  --ui-text-muted: #4b5563;
-  --ui-border: #d9dfdc;
-  --ui-accent: #0f5c3a;
-  --ui-focus: #0f5c3a;
-  --ui-danger: #b42318;
-  --ui-warning: #925c00;
-  --ui-success: #0f5c3a;
-  --ui-scheme: light;
-  color-scheme: light;
-  background: #ffffff;
-  color: #111111;
-}
-.adminSkin main > div:has(> div:first-child > div > h2 + p),
-.adminSkin [data-scope] {
-  padding: 16px;
-  border: 1px solid var(--ui-border);
-  border-radius: 16px;
-}

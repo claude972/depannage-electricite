@@ -143,6 +143,12 @@ test("habillage par périmètre : espaces client, artisan, entreprise et admin (
   for (const file of ["components/role/artisan-theme.module.css", "components/role/artisan.module.css", "components/role/enterprise-theme.module.css", "components/role/enterprise.module.css", "components/role/admin-theme.module.css", "components/role/admin.module.css"]) {
     assert.doesNotMatch(readFileSync(file, "utf8"), /\[class[$*^]?=/, file);
   }
+  // Migrated leaf modules (quote documents, planning, notifications, support, platform operations)
+  // theme themselves: no role skin may force them back to light islands, nor use a structural :has().
+  for (const file of ["components/role/client-theme.module.css", "components/role/artisan-theme.module.css", "components/role/enterprise-theme.module.css", "components/role/admin-theme.module.css"]) {
+    const css = readFileSync(file, "utf8");
+    assert.doesNotMatch(css, /quote-documents-title|\[data-scope\]|data-theme-island|aria-labelledby\^="support-|Demandes d’assistance|:has\(/, file);
+  }
   // Le RequestForm seul (tel que les rôles le rendent) ne porte aucune classe du thème.
   const forms = loadModule("components/app/forms.tsx");
   const html = renderToString(createElement(forms.RequestForm as never, { initialCategory: "panel", initialValues: null, sites: [], mode: "live", busy: false, onBack() {}, onSubmit: async () => {}, onDemo() {} } as never));
