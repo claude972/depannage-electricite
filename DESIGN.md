@@ -45,6 +45,14 @@ Vérifier le contraste des combinaisons réellement utilisées avant livraison. 
 - Adapter les tableaux sur petits écrans avec cartes ou défilement identifié ; ne pas comprimer toutes les colonnes.
 - Ne pas afficher les cadres de téléphone, barres système simulées ou cadres de navigateur des maquettes dans le produit.
 
+## Parcours client retenu — complément du 1 novembre 2026
+
+- Après l’adresse : choix du paiement (empreinte bancaire sans débit immédiat ou règlement sur place), récapitulatif puis confirmation. Une création de compte email/mot de passe est facultative ; elle ne doit plus être la suite imposée du formulaire particulier.
+- Le suivi permet de retrouver ses interventions à partir du téléphone et des coordonnées. Nom, prénom et téléphone ne sont pas des secrets : une vérification du numéro précède l’affichage privé. Le fournisseur SMS étant explicitement différé par le propriétaire, le suivi téléphone reste désactivé tant qu’il n’est pas configuré, avec un état honnête.
+- Les clients déjà connectés par un email confirmé gardent leur accès ; aucun rattachement de dossiers entre comptes n’est fait sur la seule égalité d’un téléphone non vérifié. Artisans et organisations conservent leurs parcours d’authentification.
+- Paiement sur place reste un règlement à effectuer, jamais un paiement confirmé. L’empreinte doit être autorisée par le fournisseur ; retour navigateur ou choix de radio ne prouvent ni autorisation ni débit. Débit limité au devis accepté, après intervention et contrôles fournisseur.
+- MesDépanneurs sert de référence de structure ; ses garanties, moyens de règlement précis, CGU, coordonnées et délais ne deviennent pas nos engagements.
+
 ## Parcours et composants
 - Client : problème, adresse/zone, description et photos, estimation, confirmation et état de la demande. Distinguer informations obligatoires et facultatives.
 - Artisan : mission avec problème, distance estimée et fourchette, acceptation/refus ; devis détaillant déplacement, main-d'œuvre, pièces, taxes et total.
