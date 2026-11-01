@@ -4,8 +4,18 @@
   padding: 24px 0 72px;
 }
 /* Room for the fixed booking bar: no content, FAQ or footer line is ever hidden under it. */
+/* Booking bar height: ONE custom property, used by the fixed bar (its min-height), this page
+   reserve and the wizard fields' scroll margin, so they cannot drift. 88 px in one row (reserve
+   88 + 24 = 112 px); the narrow stacked bar (text above, full-width 48 px button) gets 152 px
+   (reserve 176 px). Inherited by the bar, which lives inside this ThemeSurface root. */
 .withBar {
-  padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  --booking-bar-h: 88px;
+  padding-bottom: calc(var(--booking-bar-h) + 24px + env(safe-area-inset-bottom, 0px));
+}
+@media (max-width: 480px) {
+  .withBar {
+    --booking-bar-h: 152px;
+  }
 }
 .wrap {
   width: 100%;
