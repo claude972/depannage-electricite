@@ -80,6 +80,8 @@
       }
       @media (min-width: 720px) { form { padding: 2rem; } }
       fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+      .fields { display: grid; gap: 1.25rem; }
+      .actions-clear { display: flex; flex-wrap: wrap; gap: 0.75rem; }
       legend, label { color: var(--text); font-weight: 600; font-size: 0.9375rem; }
       legend { padding: 0; margin-bottom: 0.5rem; }
       .field { display: grid; gap: 0.375rem; }
@@ -138,12 +140,20 @@
       button[type="submit"]:hover { background: #136640; }
       button[type="button"] { background: transparent; border-color: var(--border); color: var(--text); }
       button[type="button"]:hover { border-color: var(--danger); color: var(--danger); }
-      button:disabled { opacity: 0.6; cursor: not-allowed; }
+      /* Disabled until /offline-request.js has installed its listeners: readable (AA), not faded. */
+      button:disabled,
+      button[type="submit"]:disabled,
+      button[type="button"]:disabled { background: var(--surface); border-color: var(--border); color: var(--muted); cursor: not-allowed; }
+      fieldset:disabled .choice { background: var(--surface); cursor: not-allowed; }
+      fieldset:disabled input[type="text"],
+      fieldset:disabled textarea { background: var(--surface); color: var(--muted); cursor: not-allowed; }
+      fieldset:disabled input[type="radio"] { cursor: not-allowed; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
       .resume { background: transparent; border-color: var(--accent); color: var(--accent); }
       .resume:hover { background: var(--surface); }
       :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
       input[type="text"]:focus-visible, textarea:focus-visible { outline-offset: 1px; }
-      @media (max-width: 519px) { .actions > * { flex: 1 1 100%; } }
+      @media (max-width: 519px) { .actions > *, .actions-clear > * { flex: 1 1 100%; } }
       /* Status region: written by /offline-request.js. data-state: saved | error | quota | info. */
       #offline-status { margin: 0; font-size: 0.9375rem; color: var(--text); }
       #offline-status:empty { display: none; }
@@ -182,6 +192,10 @@
       </div>
 
       <form id="offline-request-form">
+        <p id="offline-status" role="status" aria-live="polite" data-state="info">Brouillon non enregistré. Le formulaire doit être chargé pour permettre l’enregistrement local.</p>
+
+        <fieldset id="offline-fields" class="fields" disabled>
+        <legend class="sr-only">Votre note</legend>
         <fieldset>
           <legend>Type de problème</legend>
           <div class="choices">
@@ -223,11 +237,13 @@
           </div>
         </fieldset>
 
-        <p id="offline-status" role="status" aria-live="polite" data-state="info">Brouillon non enregistré. Le formulaire doit être chargé pour permettre l’enregistrement local.</p>
-
         <div class="actions">
-          <button type="submit" id="offline-save">Garder ma note sur cet appareil</button>
-          <button type="button" id="offline-clear">Effacer la note</button>
+          <button type="submit" id="offline-save" disabled>Garder ma note sur cet appareil</button>
+        </div>
+        </fieldset>
+
+        <div class="actions-clear">
+          <button type="button" id="offline-clear" disabled>Effacer la note</button>
         </div>
       </form>
 
