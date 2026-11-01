@@ -533,8 +533,14 @@ export function ArtisanSpace({ session }: { session: Session }) {
             <Icon name="menu" />
           </button>
           <div className={styles.greeting}>
-            <span>Bonjour,</span>
-            <strong>{firstName(session.displayName)}</strong>
+            {session.firstName ? (
+              <>
+                <span>Bonjour,</span>
+                <strong>{session.firstName}</strong>
+              </>
+            ) : (
+              <strong>Bonjour</strong>
+            )}
           </div>
           <HeaderBell session={session} />
         </header>
