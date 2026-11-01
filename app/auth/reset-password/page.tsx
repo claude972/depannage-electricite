@@ -2,6 +2,9 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { Brand } from "@/components/app/ui";
+import { ThemeSurface } from "@/components/app/theme-provider";
+import { ThemeToggle } from "@/components/app/theme-toggle";
 import styles from "./page.module.css";
 
 export default function ResetPasswordPage() {
@@ -71,74 +74,67 @@ export default function ResetPasswordPage() {
       setSaving(false);
     }
   }
+  // Visual layer only (FASTSPLIT-AUTH-RESET-THEME-001): same Auth calls, states and texts as before.
   return (
-    <main className={styles.screen}>
-      <section className={styles.panel} aria-labelledby="reset-title">
-        <Link href="/" className={styles.brand}>
-          Courant<span>Dépannage électrique</span>
+    <ThemeSurface className={styles.page}>
+      <header className={styles.bar}>
+        <Link className={styles.home} href="/" aria-label="Courant, retour à l’accueil">
+          <Brand compact />
         </Link>
-        <h1 id="reset-title">
-          {success
-            ? "Votre mot de passe a été modifié"
-            : "Choisir un nouveau mot de passe"}
-        </h1>
-        {loading ? (
-          <p role="status">Vérification de votre lien…</p>
-        ) : success ? (
-          <>
-            <p>
-              Vous pouvez désormais utiliser votre nouveau mot de passe pour
-              vous connecter.
+        <ThemeToggle />
+      </header>
+      <main id="main" className={styles.main}>
+        <section className={styles.card} aria-labelledby="reset-title" aria-busy={loading || saving ? true : undefined}>
+          <p className={styles.eyebrow}>Dépannage électrique</p>
+          <h1 id="reset-title">
+            {success ? "Votre mot de passe a été modifié" : "Choisir un nouveau mot de passe"}
+          </h1>
+          {loading ? (
+            <p role="status" className={styles.status}>
+              Vérification de votre lien…
             </p>
-            <Link className={styles.button} href="/">
-              Retour à l’application
-            </Link>
-          </>
-        ) : (
-          <>
-            <p>
-              Utilisez au moins 10 caractères et un mot de passe différent de
-              vos autres comptes.
-            </p>
-            {error ? (
-              <p className={styles.error} role="alert">
-                {error}
+          ) : success ? (
+            <>
+              <p className={styles.success} role="status">
+                Vous pouvez désormais utiliser votre nouveau mot de passe pour vous connecter.
               </p>
-            ) : null}
-            {ready ? (
-              <form onSubmit={submit}>
-                <label htmlFor="password">Nouveau mot de passe</label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  minLength={10}
-                  maxLength={128}
-                />
-                <label htmlFor="confirmation">Confirmer le mot de passe</label>
-                <input
-                  id="confirmation"
-                  name="confirmation"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  minLength={10}
-                  maxLength={128}
-                />
-                <button type="submit" disabled={saving}>
-                  {saving ? "Enregistrement…" : "Enregistrer le mot de passe"}
-                </button>
-              </form>
-            ) : (
-              <Link href="/">
-                Revenir à l’application pour demander un nouveau lien
-              </Link>
-            )}
-          </>
-        )}
-      </section>
-    </main>
+              <div className={styles.actions}>
+                <Link className={styles.primary} href="/">
+                  Retour à l’application
+                </Link>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className={styles.lead}>Utilisez au moins 10 caractères et un mot de passe différent de vos autres comptes.</p>
+              {error ? (
+                <p className={styles.error} role="alert">
+                  {error}
+                </p>
+              ) : null}
+              {ready ? (
+                <form onSubmit={submit} className={styles.form}>
+                  <label htmlFor="password">Nouveau mot de passe</label>
+                  <input id="password" name="password" type="password" autoComplete="new-password" required minLength={10} maxLength={128} />
+                  <label htmlFor="confirmation">Confirmer le mot de passe</label>
+                  <input id="confirmation" name="confirmation" type="password" autoComplete="new-password" required minLength={10} maxLength={128} />
+                  <div className={styles.actions}>
+                    <button type="submit" className={styles.primary} disabled={saving}>
+                      {saving ? "Enregistrement…" : "Enregistrer le mot de passe"}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className={styles.actions}>
+                  <Link className={styles.secondary} href="/">
+                    Revenir à l’application pour demander un nouveau lien
+                  </Link>
+                </div>
+              )}
+            </>
+          )}
+        </section>
+      </main>
+    </ThemeSurface>
   );
 }
