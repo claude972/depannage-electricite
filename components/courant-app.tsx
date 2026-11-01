@@ -14,7 +14,7 @@ import { PLATFORM_DEMO } from "../lib/features/platform-operations/demo";
 import { demoNotificationPage } from "../lib/features/notifications/demo";
 import { createRevalidationScheduler } from "./app/revalidate";
 import { createRefreshCoordinator, refreshContextKey, type ReadResult, type RefreshCoordinator } from "./app/workspace-refresh";
-import { createWorkspaceReader } from "./app/workspace-reader";
+import { createWorkspaceReader, validateWorkspace } from "./app/workspace-reader";
 import {
   acknowledgeUpload,
   allUploaded,
@@ -41,6 +41,17 @@ import {
 } from "./app/demo";
 import { resolveDisplayName } from "./app/display-name";
 import { draftNotice, getDraftStorage, readBootDraft } from "./app/request-draft-boot";
+import {
+  UNKNOWN_OUTCOME_MESSAGE,
+  VERIFY_FAILED_MESSAGE,
+  clearPendingCreate,
+  findCommittedRequest,
+  outcomeUnknown,
+  readPendingCreate,
+  requestDigest,
+  writePendingCreate,
+  type PendingCreate,
+} from "./app/request-reconcile";
 import { BOOKING_DRAFT_KEY, clearBooking, readBooking, saveBooking, type BookingDraft } from "./app/booking-draft";
 import { savePublicDraft } from "../lib/shared/request-draft";
 import { REALTIME_CHANNEL_CONFIG, REALTIME_TABLES, nextConnection } from "./app/realtime";
@@ -162,6 +173,8 @@ export default function CourantApp() {
   // by the SAME identity chain only, consumed after POST 201, dropped on any identity reset.
   const [booking, setBooking] = useState<BookingDraft | null>(null);
   const bookingCarry = useRef<BookingDraft | null>(null);
+  // Interrupted « create request » awaiting reconciliation (this tab, digest only).
+  const pendingCreate = useRef<PendingCreate | null>(null);
   const [pendingInvitation, setPendingInvitation] = useState<string | null>(null);
   const [uploads, setUploads] = useState<UploadQueue[]>([]);
   // Incremented on every identity change: forces role spaces to remount with fresh local state.
@@ -213,6 +226,8 @@ export default function CourantApp() {
     setBooking(null);
     setUploads([]);
     clearBooking(getDraftStorage());
+    pendingCreate.current = null;
+    clearPendingCreate(getDraftStorage());
     try {
       sessionStorage.removeItem(DRAFT_KEY);
       // Pending private content (unsent assistance request) of the outgoing user never survives
@@ -1125,8 +1140,51 @@ export default function CourantApp() {
         );
         return;
       }
-      // 1. Create the dossier exactly once.
-      const result = await api<{ intervention: Intervention }>("/api/interventions", values);
+      // 1. Create the dossier exactly once. An interrupted send (unknown outcome) is reconciled by
+      //    re-reading the workspace BEFORE any resend: never two POSTs for one request.
+      const me = userId.current;
+      const storage = getDraftStorage();
+      const verify = async (sentAt: number): Promise<Intervention | null | "unknown"> => {
+        try {
+          const checked = validateWorkspace(await api<unknown>("/api/workspace"));
+          if (!checked.ok || !me || checked.workspace.profile?.id !== me) return "unknown";
+          return findCommittedRequest(checked.workspace.interventions, values, me, sentAt);
+        } catch {
+          return "unknown";
+        }
+      };
+      const previous = pendingCreate.current ?? readPendingCreate(storage);
+      let result: { intervention: Intervention } | null = null;
+      if (previous && me && previous.userId === me && previous.digest === requestDigest(values)) {
+        const found = await verify(previous.sentAt);
+        if (found === "unknown") throw new Error(VERIFY_FAILED_MESSAGE);
+        if (found) result = { intervention: found }; // it was stored: no resend
+      }
+      if (!result) {
+        const marker = { userId: me ?? "", sentAt: Date.now(), digest: requestDigest(values) };
+        pendingCreate.current = marker;
+        writePendingCreate(storage, marker);
+        try {
+          result = await api<{ intervention: Intervention }>("/api/interventions", values);
+        } catch (e) {
+          if (!outcomeUnknown(e)) {
+            pendingCreate.current = null;
+            clearPendingCreate(storage);
+            throw e;
+          }
+          ctx.notice(UNKNOWN_OUTCOME_MESSAGE);
+          const found = await verify(marker.sentAt);
+          if (found === "unknown") throw new Error(VERIFY_FAILED_MESSAGE); // marker kept: next click verifies first
+          if (!found) {
+            pendingCreate.current = null;
+            clearPendingCreate(storage);
+            throw new Error("Votre demande n’a pas été enregistrée. Vous pouvez la renvoyer.");
+          }
+          result = { intervention: found };
+        }
+      }
+      pendingCreate.current = null;
+      clearPendingCreate(storage);
       if (ctx.alive()) await refresh();
       ctx.when(setPendingDraft)(null);
       ctx.when(setBooking)(null);

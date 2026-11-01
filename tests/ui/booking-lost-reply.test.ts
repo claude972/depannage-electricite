@@ -1,4 +1,5 @@
-// LOCAL PROOF (no cloud, no Chromium) of finding 1 on the current controller: a POST whose reply
+// LOCAL PROOF (no cloud, no Chromium) of finding 1, transport level (before the fix in
+// request-reconcile.ts): a POST whose reply
 // is lost AFTER the server committed leaves the draft and an enabled « Envoyer ma demande »; a
 // second click POSTs again and the server stores a second row (no idempotency key).
 // Uses the REAL api() helper against a local HTTP server that commits then drops the socket.
@@ -40,14 +41,11 @@ test("lost reply after commit ⇒ status 0 « a pu être enregistrée », and a 
   }
 });
 
-test("current code: nothing prevents that resend (facts the proof relies on)", () => {
+test("fixed controller: the unknown outcome is reconciled from the workspace before any resend", () => {
+  // The transport fact above stays true (the server may commit and the reply be lost); the
+  // controller now re-reads the workspace and never POSTs twice — see request-reconcile.test.ts.
   const app = readFileSync("components/courant-app.tsx", "utf8");
-  const create = app.slice(app.indexOf("async function createIntervention"), app.indexOf("async function createIntervention") + 4000);
-  assert.match(create, /const result = await api<\{ intervention: Intervention \}>\("\/api\/interventions", values\);/);
-  assert.doesNotMatch(create, /idempot|request_id|Idempotency-Key/i, "no idempotency key sent");
-  const confirm = readFileSync("components/role/booking-confirm.tsx", "utf8");
-  assert.match(confirm, /disabled=\{sending \|\| busy \|\| editingContact\}/, "the send button is re-enabled once the failed chain ends");
-  assert.doesNotMatch(confirm, /status === 0|uncertain|vérifier son état/, "no unknown-outcome state in the confirmation");
-  const route = readFileSync("app/api/interventions/route.ts", "utf8");
-  assert.doesNotMatch(route, /idempot|Idempotency-Key|client_request_id/i, "the route has no idempotency key");
+  assert.match(app, /if \(!outcomeUnknown\(e\)\)/);
+  assert.match(app, /const found = await verify\(marker\.sentAt\);/);
+  assert.match(app, /const found = await verify\(previous\.sentAt\);/);
 });
