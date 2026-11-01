@@ -1,0 +1,464 @@
+/* Public request + account views (UI-PUBLIC-REQUEST-001 P2/P3): opt-in skin for the SHARED
+   RequestForm / AuthForm rendered unchanged inside PublicChrome (ThemeSurface). Every rule is
+   scoped under .requestSkin / .authSkin / .alerts (never reaches role spaces) and only
+   repaints the legacy class names listed in docs/UI_PUBLIC_REQUEST_IMPLEMENTATION_PLAN.md §3
+   with --ui-* tokens. No layout logic, no state, no global selector without a local scope. */
+.page {
+  padding: 32px 0 72px;
+}
+.wrap {
+  width: 100%;
+  max-width: 914px;
+  margin: 0 auto;
+  padding: 0 32px;
+}
+
+/* ---- Session alerts (error / notice), themed and never hidden under the sticky header ---- */
+.alerts :global(.alert) {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.alerts :global(.alert.error) {
+  border-color: var(--ui-danger);
+  color: var(--ui-danger);
+}
+.alerts :global(.alert.success) {
+  border-color: var(--ui-success);
+  color: var(--ui-text);
+}
+.alerts :global(.alert.success) > svg {
+  color: var(--ui-success);
+}
+.alerts :global(.alert) > button {
+  min-width: 44px;
+  min-height: 44px;
+  margin: -12px -10px -12px auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+
+/* ---- Shared form primitives (both skins) ---------------------------------------------------- */
+.requestSkin,
+.authSkin {
+  color: var(--ui-text);
+}
+.requestSkin :global(.panel),
+.authSkin :global(.panel) {
+  margin: 0;
+  border: 1px solid var(--ui-border);
+  border-radius: 16px;
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+.requestSkin h1,
+.authSkin h1 {
+  color: var(--ui-text);
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -0.8px;
+}
+.requestSkin h2,
+.authSkin h2 {
+  color: var(--ui-text);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.4px;
+}
+.requestSkin p,
+.authSkin p {
+  color: var(--ui-text-muted);
+}
+.requestSkin :global(.field) label,
+.authSkin :global(.field) label,
+.requestSkin :global(.urgency-options) legend {
+  color: var(--ui-text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.requestSkin :global(.field) small,
+.authSkin :global(.field) small {
+  color: var(--ui-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.requestSkin :global(.field) :global(.field-error),
+.authSkin :global(.field) :global(.field-error) {
+  color: var(--ui-danger);
+  font-weight: 600;
+}
+.requestSkin :global(.field) input,
+.requestSkin :global(.field) select,
+.requestSkin :global(.field) textarea,
+.authSkin :global(.field) input,
+.authSkin :global(.field) select {
+  min-height: 48px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  font-size: 16px;
+  color-scheme: var(--ui-scheme);
+}
+.requestSkin :global(.field) textarea::placeholder,
+.requestSkin :global(.field) input::placeholder {
+  color: var(--ui-text-muted);
+}
+.requestSkin :global(.field-invalid) input,
+.requestSkin :global(.field-invalid) textarea,
+.authSkin :global(.field-invalid) input {
+  border-color: var(--ui-danger);
+}
+.requestSkin :global(.field) input[type="file"] {
+  padding: 8px;
+  font-size: 15px;
+}
+.requestSkin :global(.field) input[type="file"]::file-selector-button {
+  min-height: 36px;
+  margin-right: 12px;
+  padding: 0 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.requestSkin :global(.alert),
+.authSkin :global(.alert) {
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font-size: 14px;
+}
+.requestSkin :global(.alert.error),
+.authSkin :global(.alert.error) {
+  border-color: var(--ui-danger);
+  color: var(--ui-danger);
+}
+.requestSkin :global(.alert.warning),
+.authSkin :global(.alert.warning) {
+  border-color: var(--ui-warning);
+}
+.requestSkin :global(.alert.warning) > svg,
+.authSkin :global(.alert.warning) > svg {
+  color: var(--ui-warning);
+}
+.requestSkin :global(.inline-note),
+.authSkin :global(.inline-note) {
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-surface);
+}
+.requestSkin :global(.inline-note) svg,
+.authSkin :global(.inline-note) svg {
+  color: var(--ui-accent);
+}
+.requestSkin :global(.inline-note) p,
+.authSkin :global(.inline-note) p {
+  color: var(--ui-text-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.requestSkin :global(.form-note),
+.authSkin :global(.form-note) {
+  color: var(--ui-text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+/* Buttons: action = --ui-primary (white text 5.41:1), secondary = 1px border. */
+.requestSkin :global(.button),
+.authSkin :global(.button) {
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.requestSkin :global(.button.primary),
+.authSkin :global(.button.primary) {
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+.requestSkin :global(.button.primary):hover:not(:disabled),
+.authSkin :global(.button.primary):hover:not(:disabled) {
+  background: #136640;
+}
+.requestSkin :global(.button.primary):disabled,
+.authSkin :global(.button.primary):disabled {
+  opacity: 0.6;
+}
+.requestSkin :global(.button.outline),
+.authSkin :global(.button.outline) {
+  border-color: var(--ui-border);
+  background: transparent;
+  color: var(--ui-text);
+}
+.requestSkin :global(.button.outline):hover,
+.authSkin :global(.button.outline):hover {
+  border-color: var(--ui-accent);
+}
+.requestSkin :global(.text-button),
+.authSkin :global(.text-button) {
+  color: var(--ui-accent);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* ---- Request view (RequestForm, mode "public") -------------------------------------------- */
+.requestSkin :global(.form-page) {
+  max-width: none;
+  padding: 0;
+}
+.requestSkin :global(.back-link) {
+  color: var(--ui-text-muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+.requestSkin :global(.back-link):hover {
+  color: var(--ui-accent);
+}
+.requestSkin :global(.form-heading) p {
+  margin-top: 8px;
+  font-size: 16px;
+}
+.requestSkin :global(.stepper) li {
+  color: var(--ui-text-muted);
+  font-size: 14px;
+}
+.requestSkin :global(.stepper) li > span {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+.requestSkin :global(.stepper) li:global(.current) {
+  color: var(--ui-text);
+}
+.requestSkin :global(.stepper) li:global(.current) > span {
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+.requestSkin :global(.stepper) strong {
+  font-weight: 600;
+}
+.requestSkin :global(.request-form) {
+  padding: 32px;
+}
+.requestSkin :global(.request-form) h2 {
+  margin-bottom: 24px;
+}
+.requestSkin :global(.category-grid) > button {
+  min-height: 88px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+}
+.requestSkin :global(.category-grid) > button:hover {
+  border-color: var(--ui-accent);
+}
+.requestSkin :global(.category-grid) > button > svg {
+  color: var(--ui-accent);
+}
+.requestSkin :global(.category-grid) strong {
+  font-size: 16px;
+  font-weight: 700;
+}
+.requestSkin :global(.category-grid) small {
+  color: var(--ui-text-muted);
+  font-size: 14px;
+}
+.requestSkin :global(.category-grid) > button:global(.selected) {
+  border-color: var(--ui-accent);
+  background: var(--ui-surface);
+  box-shadow: inset 0 0 0 1px var(--ui-accent);
+}
+.requestSkin :global(.radio-dot) {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border: 1px solid var(--ui-text-muted);
+}
+.requestSkin :global(.selected) > :global(.radio-dot) {
+  border: 5px solid var(--ui-accent);
+  outline: 0;
+  background: var(--ui-bg);
+}
+.requestSkin :global(.photo-list) li {
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  font-size: 14px;
+}
+.requestSkin :global(.photo-list) :global(.icon-button) {
+  min-width: 44px;
+  min-height: 44px;
+  margin: -6px -10px -6px 0;
+  color: var(--ui-text-muted);
+}
+.requestSkin :global(.urgency-options) > label {
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-bg);
+}
+.requestSkin :global(.urgency-options) > label:global(.selected) {
+  border-color: var(--ui-accent);
+  background: var(--ui-surface);
+  box-shadow: inset 0 0 0 1px var(--ui-accent);
+}
+.requestSkin :global(.urgency-options) input {
+  accent-color: var(--ui-primary);
+}
+.requestSkin :global(.urgency-options) strong {
+  font-size: 16px;
+}
+.requestSkin :global(.urgency-options) small {
+  color: var(--ui-text-muted);
+  font-size: 14px;
+}
+.requestSkin :global(.recap-service) {
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-surface);
+}
+.requestSkin :global(.recap-service) strong {
+  font-size: 17px;
+}
+.requestSkin :global(.recap-service) div > span {
+  color: var(--ui-text-muted);
+  font-size: 14px;
+}
+.requestSkin :global(.service-icon) {
+  border-radius: 10px;
+  background: var(--ui-bg);
+  color: var(--ui-accent);
+}
+.requestSkin :global(.request-form) > p:not(:global(.form-note)) {
+  color: var(--ui-text);
+  font-size: 16px;
+}
+.requestSkin :global(.recap-address) {
+  color: var(--ui-text-muted);
+  font-size: 15px;
+}
+.requestSkin :global(.recap-address) svg {
+  color: var(--ui-accent);
+}
+/* Indicative range only (root decision: examples, never a guaranteed price). */
+.requestSkin :global(.estimate-box) {
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-surface);
+}
+.requestSkin :global(.estimate-box) > span {
+  color: var(--ui-text-muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+.requestSkin :global(.estimate-box) > strong {
+  color: var(--ui-text);
+  font-size: 28px;
+}
+.requestSkin :global(.estimate-box) p {
+  font-size: 14px;
+  line-height: 1.6;
+}
+.requestSkin :global(.form-actions) {
+  border-top: 1px solid var(--ui-border);
+}
+
+/* ---- Account view (AuthForm inside the existing AuthView: login / signup / reset) ---------- */
+.authSkin :global(.auth-form) {
+  padding: 32px;
+}
+.authSkin :global(.auth-form) > p:first-of-type {
+  margin: 8px 0 24px;
+  font-size: 15px;
+}
+.authSkin :global(.forgot-link),
+.authSkin :global(.auth-switch) button {
+  border: 0;
+  background: transparent;
+  color: var(--ui-accent);
+  font-size: 15px;
+  font-weight: 600;
+}
+.authSkin :global(.forgot-link):hover,
+.authSkin :global(.auth-switch) button:hover {
+  text-decoration: underline;
+}
+.authSkin :global(.auth-switch) {
+  color: var(--ui-text-muted);
+  font-size: 15px;
+}
+.authSkin :global(.button.full) {
+  margin-top: 16px;
+}
+@media (max-width: 760px) {
+  .requestSkin :global(.stepper) li {
+    font-size: 13px;
+  }
+  .requestSkin :global(.request-form) {
+    padding: 20px 16px;
+  }
+  .requestSkin :global(.category-grid) strong {
+    font-size: 15px;
+  }
+  .requestSkin :global(.category-grid) small {
+    font-size: 13px;
+  }
+  .requestSkin :global(.form-actions) :global(.button) {
+    font-size: 15px;
+    padding: 0 16px;
+  }
+  .authSkin :global(.auth-form) {
+    padding: 24px 16px;
+  }
+}
+@media (max-width: 640px) {
+  .page {
+    padding-top: 20px;
+  }
+  .wrap {
+    padding: 0 16px;
+  }
+  .requestSkin h1,
+  .authSkin h1 {
+    font-size: 28px;
+  }
+  .requestSkin h2,
+  .authSkin h2 {
+    font-size: 21px;
+  }
+}
+@media (max-width: 430px) {
+  .requestSkin :global(.stepper) li {
+    font-size: 12px;
+  }
+  .requestSkin :global(.stepper) li > span {
+    width: 28px;
+    height: 28px;
+    font-size: 13px;
+  }
+}

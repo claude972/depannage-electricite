@@ -1,0 +1,253 @@
+/* Public chrome (UI-PUBLIC-REQUEST-001 P1): header + footer shared by the public home, the
+   request view and the account view. Rules moved unchanged from public-home.module.css (home
+   pixel-identical); .wrap and the header buttons are copied. Only --ui-* tokens. */
+.chrome {
+  --h-footer: #070707;
+  --h-header-h: 76px;
+  min-height: 100vh;
+}
+:global([data-ui-theme="light"]) .chrome {
+  --h-footer: var(--ui-surface);
+}
+/* Button reset limited to the chrome's own parts (same specificity and order as before the
+   extraction, so header/footer render identically; never reaches the page content). */
+.topbar button,
+.footer button {
+  font: inherit;
+  color: inherit;
+}
+/* Legacy heading colour (navy) must not leak into the migrated surface. */
+.chrome h1,
+.chrome h2,
+.chrome h3 {
+  color: inherit;
+}
+@media (max-width: 640px) {
+  .chrome {
+    --h-header-h: 68px;
+  }
+}
+.wrap {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 32px;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 22px;
+  border-radius: 14px;
+  border: 0;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.btn.btnPrimary {
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+.btn.btnPrimary:hover {
+  background: #136640;
+}
+.btn.btnGhost {
+  background: transparent;
+  color: var(--ui-text);
+  border: 1px solid var(--ui-border);
+}
+.btn.btnGhost:hover {
+  border-color: var(--ui-accent);
+}
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--ui-bg);
+  border-bottom: 1px solid var(--ui-border);
+}
+.topbarInner {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-height: var(--h-header-h);
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+}
+.brandMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+  flex-shrink: 0;
+}
+.brandText {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.brandText strong {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+.brandText small {
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--ui-text-muted);
+}
+.nav {
+  display: flex;
+  gap: 2px;
+}
+.navLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  font-size: 15px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.navLink:hover {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.navLogin {
+  display: none;
+}
+.topbarActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.menuButton {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--ui-border);
+  border-radius: 14px;
+  background: transparent;
+  cursor: pointer;
+}
+.footer {
+  border-top: 1px solid var(--ui-border);
+  background: var(--h-footer);
+}
+.footerInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-top: 20px;
+}
+.footerNav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.footer .footerNav button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  color: var(--ui-text-muted);
+  font-size: 14px;
+  cursor: pointer;
+}
+.footer .footerNav button:hover {
+  color: var(--ui-accent);
+}
+.credits {
+  flex-basis: 100%;
+  margin: 0 0 18px;
+  font-size: 12px;
+  color: var(--ui-text-muted);
+}
+@media (max-width: 1320px) {
+  .navLink {
+    padding: 0 9px;
+    font-size: 14px;
+  }
+  .topbarInner {
+    gap: 14px;
+  }
+}
+@media (max-width: 1100px) {
+  .nav {
+    display: none;
+  }
+  .nav.navOpen {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    display: grid;
+    gap: 2px;
+    padding: 8px 18px 16px;
+    background: var(--ui-bg);
+    border-bottom: 1px solid var(--ui-border);
+  }
+  .topbarInner {
+    position: relative;
+  }
+  .menuButton {
+    display: inline-flex;
+  }
+}
+@media (max-width: 640px) {
+  .wrap {
+    padding: 0 18px;
+  }
+  .topbarInner {
+    gap: 10px;
+  }
+  .brandText small {
+    display: none;
+  }
+  .brandText strong {
+    font-size: 16px;
+  }
+  .loginButton,
+  .headerCta {
+    display: none;
+  }
+  .navLogin {
+    display: inline-flex;
+  }
+  .themeToggle > span:last-child {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
