@@ -103,6 +103,7 @@ import { leafScope, platformEntries } from "./anchors";
 import { PlatformPage } from "./platform-anchor";
 import { FeatureUnavailable, useProbeWhenUnknown } from "./feature-unavailable";
 import type {
+  Category,
   Approval,
   ApprovalRule,
   ComplianceRecord,
@@ -444,7 +445,13 @@ export function EnterpriseSpace({ session }: { session: Session }) {
         case "requests":
           return <RequestsView c={c} />;
         case "new":
-          return <NewRequestView key={param} c={c} siteId={param} />;
+          // #new/<site UUID> pre-selects a site (unchanged); #new/<category> (service page CTA)
+          // pre-selects the category only — never a site, authority or right.
+          return isRequestCategory(param) ? (
+            <NewRequestView key={param} c={c} siteId="" initialCategory={param} />
+          ) : (
+            <NewRequestView key={param} c={c} siteId={param} />
+          );
         case "detail":
         case "quote":
           return (
@@ -1394,7 +1401,9 @@ function RequestsView({ c }: { c: Ctx }) {
   );
 }
 
-function NewRequestView({ c, siteId }: { c: Ctx; siteId: string }) {
+const isRequestCategory = (value: string): value is Category => CATEGORIES.some((cat) => cat.id === value);
+
+function NewRequestView({ c, siteId, initialCategory = "panel" }: { c: Ctx; siteId: string; initialCategory?: Category }) {
   const site = c.orgSites.find((s) => s.id === siteId) || null;
   const writableSites = c.orgSites.filter((s) => c.authority.canWriteSite(s.id));
   const allowed = site ? c.authority.canWriteSite(site.id) : c.canCreateRequest;
@@ -1421,7 +1430,7 @@ function NewRequestView({ c, siteId }: { c: Ctx; siteId: string }) {
         </p>
       )}
       <RequestForm
-        initialCategory="panel"
+        initialCategory={initialCategory}
         initialValues={
           site
             ? {
