@@ -65,3 +65,12 @@ test("settlement leaf: mounted only for a completed card-hold booking with an ac
   assert.match(app, /mutationContext: cardContext,/);
   assert.match(app, /const cardContext = \{ generation: \(\) => guard\.generation\(\), userId: \(\) => userId\.current \};/);
 });
+
+test("on-site cash: client widget on completed|paid replaces the « aucun encaissement » line; artisan widget in the dossier; refresh only while not paid", () => {
+  const client = readFileSync("components/role/client-space.tsx", "utf8");
+  assert.match(client, /currentBookingStatus\.payment\.method === "on_site" && \(i\.status === "completed" \|\| i\.status === "paid"\) && \(\s*<OnsiteSettlement[\s\S]*?viewer="client"[\s\S]*?onSettled=\{i\.status === "paid" \? undefined : \(\) => void session\.refresh\(\)\}/);
+  assert.match(client, /currentBookingStatus\?\.kind === "booking" && !\(currentBookingStatus\.payment\.method === "on_site" && \(i\.status === "completed" \|\| i\.status === "paid"\)\) && \(\s*<p className=\{styles\.paymentLine\}/, "no contradictory sentence next to the cash widget");
+  const artisan = readFileSync("components/role/artisan-space.tsx", "utf8");
+  assert.match(artisan, /\["completed", "paid"\]\.includes\(i\.status\) && session\.mode === "live" && \(\s*<OnsiteSettlement[\s\S]*?viewer="artisan"[\s\S]*?context=\{session\.mutationContext\}[\s\S]*?onSettled=\{i\.status === "paid" \? undefined : \(\) => void session\.refresh\(\)\}/);
+  assert.doesNotMatch(client, /viewer="artisan"/, "a client never gets the artisan declaration");
+});

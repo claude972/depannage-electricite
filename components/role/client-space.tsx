@@ -58,6 +58,7 @@ import { BookingConfirm } from "./booking-confirm";
 import { CardReturnPanel } from "./card-return-panel";
 import { AccountUpgrade } from "./account-upgrade";
 import { BookingSettlement } from "./booking-settlement";
+import { OnsiteSettlement } from "./onsite-settlement";
 import { createOptionsApi } from "./phone-access";
 import { bookingPaymentText, fetchBookingStatus, type BookingStatus } from "../app/booking-status";
 import styles from "./client.module.css";
@@ -1496,7 +1497,18 @@ function DetailView({
         </p>
       </section>
 
-      {currentBookingStatus?.kind === "booking" && (
+      {/* On-site booking, completed or paid: the cash widget carries the state (planned / declared);
+          the generic « aucun encaissement » line would contradict a declaration, so it is not shown. */}
+      {currentBookingStatus?.kind === "booking" && currentBookingStatus.payment.method === "on_site" && (i.status === "completed" || i.status === "paid") && (
+        <OnsiteSettlement
+          key={`${session.profileId}|${i.id}`}
+          interventionId={i.id}
+          viewer="client"
+          context={session.mutationContext}
+          onSettled={i.status === "paid" ? undefined : () => void session.refresh()}
+        />
+      )}
+      {currentBookingStatus?.kind === "booking" && !(currentBookingStatus.payment.method === "on_site" && (i.status === "completed" || i.status === "paid")) && (
         <p className={styles.paymentLine} role="status" data-booking-payment-status={currentBookingStatus.payment.method}>
           <Icon name={currentBookingStatus.payment.method === "on_site" ? "clock" : "lock"} size={16} />
           <span>{bookingPaymentText(currentBookingStatus.payment, dateTime)}</span>

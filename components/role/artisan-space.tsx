@@ -78,6 +78,7 @@ import theme from "./artisan-theme.module.css";
 import { ThemeSurface } from "../app/theme-provider";
 import { ThemeToggle } from "../app/theme-toggle";
 import { QuoteDraftEditor } from "./artisan-quote-draft";
+import { OnsiteSettlement } from "./onsite-settlement";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
@@ -1514,6 +1515,17 @@ function WorkDossier({ session, intervention: i }: { session: Session; intervent
         </div>
         <aside className={styles.dossierSide}>
           <ParticipantsPanel ops={ops} pending={pending} state={state} />
+          {/* On-site receipt declaration (booking dossiers only: the leaf renders nothing on 404).
+              A declaration, never a bank payment. */}
+          {["completed", "paid"].includes(i.status) && session.mode === "live" && (
+            <OnsiteSettlement
+              key={`${session.profileId}|${i.id}`}
+              interventionId={i.id}
+              viewer="artisan"
+              context={session.mutationContext}
+              onSettled={i.status === "paid" ? undefined : () => void session.refresh()}
+            />
+          )}
           {["completed", "paid"].includes(i.status) && (
             <PaymentPanel session={session} intervention={i} />
           )}
