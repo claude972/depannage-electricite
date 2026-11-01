@@ -1,0 +1,122 @@
+/* Public informational views (UI-PUBLIC-VIEWS-001): help, pricing, join, join-organization, demo
+   entry, about, privacy, legal, rendered in PublicChrome (ThemeSurface) with their markup, texts
+   and handlers unchanged. Container = the former `.public-main` (app/globals.css) widths. The
+   skin repaints only the global primitives these views use, with --ui-* tokens; every rule is
+   scoped under `.skin` (never reaches role spaces). public.module.css carries the local-class
+   overrides under `:global(.ui-v2)`. */
+.main {
+  padding-bottom: 24px;
+}
+.wrap {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 48px;
+}
+@media (max-width: 1150px) {
+  .wrap {
+    padding: 0 32px;
+  }
+}
+@media (max-width: 760px) {
+  .wrap {
+    padding: 0 22px;
+  }
+}
+@media (max-width: 430px) {
+  .wrap {
+    padding: 0 19px;
+  }
+}
+
+/* ---- Element colours: low specificity so the local classes keep theirs -------------------- */
+.skin {
+  color: var(--ui-text);
+}
+:where(.skin) h1,
+:where(.skin) h2,
+:where(.skin) h3,
+:where(.skin) strong,
+:where(.skin) dt,
+:where(.skin) summary {
+  color: var(--ui-text);
+}
+:where(.skin) p,
+:where(.skin) dd,
+:where(.skin) small {
+  color: var(--ui-text-muted);
+}
+:where(.skin) a {
+  color: var(--ui-accent);
+}
+.skin :focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+/* ---- Global primitives ---------------------------------------------------------------------- */
+.skin :global(.panel) {
+  border: 1px solid var(--ui-border);
+  border-radius: 16px;
+  background: var(--ui-card);
+  color: var(--ui-text);
+  box-shadow: none;
+}
+.skin :global(.page-title) h1 {
+  color: var(--ui-text);
+}
+.skin :global(.page-title) p {
+  color: var(--ui-text-muted);
+}
+.skin :global(.button) {
+  min-height: 44px;
+}
+.skin :global(.button.primary) {
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+.skin :global(.button.primary):hover:not(:disabled) {
+  background: #136640;
+}
+.skin :global(.button.outline) {
+  border-color: var(--ui-border);
+  background: transparent;
+  color: var(--ui-text);
+}
+.skin :global(.button.outline):hover {
+  border-color: var(--ui-accent);
+  background: var(--ui-surface);
+}
+.skin :global(.text-button) {
+  min-height: 44px;
+  color: var(--ui-accent);
+  font-weight: 600;
+}
+.skin :global(.empty-icon) {
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.skin :global(.unavailable) {
+  border: 1px dashed var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.skin :global(.unavailable-icon) {
+  background: var(--ui-card);
+  color: var(--ui-text-muted);
+}
+.skin :global(.unavailable) strong {
+  color: var(--ui-text);
+}
+.skin :global(.unavailable) p,
+.skin :global(.unavailable) small {
+  color: var(--ui-text-muted);
+}
+.skin :global(.install-icon) {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.skin :global(.install-head) h2 {
+  color: var(--ui-text);
+}

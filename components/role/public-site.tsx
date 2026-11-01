@@ -4,10 +4,10 @@
 // Visual references (addendum « pages publiques »): M11/M51 (home), M46/M70/M42 (help), M38
 // (pricing), M60 (join), V8-C03 (about), V8-C05 (privacy), M63 (legal), M49 (auth). Every number,
 // promise, team or contact of those mockups is an example and is never reproduced here.
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import type { PublicSession } from "../app/session-types";
 import type { Category, View } from "../app/types";
-import { Alerts, Brand, PageTitle, Unavailable } from "../app/ui";
+import { Alerts, PageTitle, Unavailable } from "../app/ui";
 import { AuthForm, RequestForm } from "../app/forms";
 import { Icon } from "../app/icons";
 import { InstallPanel } from "../app/install-panel";
@@ -17,45 +17,18 @@ import { PublicChrome, type HomeHandlers } from "./public-chrome";
 import formStyles from "./public-forms.module.css";
 import { ABOUT_VALUES, FAQ, HELP_PROCESS, JOIN_FACTS, JOIN_REVIEW, JOIN_STEPS, JOIN_TILES, LEGAL_SECTIONS, PENDING, PRIVACY_DATA, numbered, pricingRows } from "./public-lists";
 import styles from "./public.module.css";
+import viewStyles from "./public-views.module.css";
 
-const NAV: { view: View; label: string }[] = [
-  { view: "help", label: "Comment ça marche" },
-  { view: "pricing", label: "Tarifs" },
-  { view: "join", label: "Vous êtes artisan ?" },
-];
-const FOOTER_LINKS: { view: View; label: string }[] = [
-  { view: "help", label: "Aide" },
-  { view: "about", label: "À propos" },
-  { view: "privacy", label: "Confidentialité" },
-  { view: "legal", label: "Mentions légales" },
-];
 const PUBLIC_VIEWS: View[] = ["home", "new", "auth", "help", "pricing", "join", "join-organization", "demo", "about", "privacy", "legal"];
 
 export function PublicSite({ session }: { session: PublicSession }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const navId = useId();
-  const menuToggle = useRef<HTMLButtonElement>(null);
   const known = PUBLIC_VIEWS.includes(session.view);
   const view: View = known ? session.view : "home";
 
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setMenuOpen(false);
-        menuToggle.current?.focus();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [menuOpen]);
-
   const navigate = (target: View) => {
-    setMenuOpen(false);
     session.go(target);
   };
   const login = () => {
-    setMenuOpen(false);
     session.setAuthMode("login");
     session.go("auth");
   };
@@ -74,8 +47,9 @@ export function PublicSite({ session }: { session: PublicSession }) {
     </div>
   );
 
-  // UI-PUBLIC-HOME-001 / UI-PUBLIC-REQUEST-001: home, new and auth are the migrated surfaces
-  // (PublicChrome + theme foundation); every other public view keeps the shell below unchanged.
+  // UI-PUBLIC-HOME-001 / UI-PUBLIC-REQUEST-001: every public view renders in PublicChrome (theme
+  // foundation). home, new and auth first; the informational views below since
+  // UI-PUBLIC-VIEWS-001, in the opt-in `viewStyles.skin` (same markup, texts and handlers).
   const chromeHandlers: HomeHandlers = { onNew: newRequest, onLogin: login, onNavigate: navigate, onDemo: (role) => session.startDemo(role) };
   if (view === "home")
     return (
@@ -115,65 +89,33 @@ export function PublicSite({ session }: { session: PublicSession }) {
       </PublicChrome>
     );
 
+  // PublicChrome marks only home/new/auth as current; an informational view is none of them
+  // (no aria-current there, as in the chrome's own footer links).
   return (
-    <div className={styles.site}>
-      {alerts}
-      <div className={styles.headerBar}>
-        <header className={styles.header}>
-          <button type="button" className="brand-button" onClick={() => navigate("home")} aria-label="Courant, accueil">
-            <Brand />
-          </button>
-          <nav id={navId} className={`${styles.nav} ${menuOpen ? styles.navOpen : ""}`} aria-label="Navigation principale">
-            {NAV.map((item) => (
-              <button type="button" key={item.view} className={styles.navLink} aria-current={view === item.view ? "page" : undefined} onClick={() => navigate(item.view)}>
-                {item.label}
-              </button>
-            ))}
-          </nav>
-          <div className={styles.headerActions}>
-            <button type="button" className={`button outline ${styles.loginButton}`} onClick={login}>
-              <Icon name="person" size={16} />
-              Se connecter
-            </button>
-            <button ref={menuToggle} type="button" className={styles.menuButton} aria-expanded={menuOpen} aria-controls={navId} aria-label={menuOpen ? "Fermer le menu" : "Ouvrir le menu"} onClick={() => setMenuOpen((open) => !open)}>
-              <Icon name={menuOpen ? "close" : "menu"} size={22} />
-            </button>
-          </div>
-        </header>
+    <PublicChrome current={view} handlers={chromeHandlers} onHome={() => navigate("home")} mainClassName={`${styles.main} ${viewStyles.main}`}>
+      <div className={viewStyles.wrap}>
+        {themedAlerts}
+        <div className={viewStyles.skin} data-public-skin="info">
+          {view === "help" ? (
+            <HelpView onNew={() => newRequest()} />
+          ) : view === "pricing" ? (
+            <PricingView onNew={() => newRequest()} />
+          ) : view === "join" ? (
+            <JoinView onSignup={signupArtisan} onDemo={() => session.startDemo("artisan")} />
+          ) : view === "join-organization" ? (
+            <JoinOrganizationView session={session} />
+          ) : view === "demo" ? (
+            <DemoEntryView session={session} />
+          ) : view === "about" ? (
+            <AboutView onNew={() => newRequest()} onJoin={() => navigate("join")} />
+          ) : view === "privacy" ? (
+            <PrivacyView onHome={() => navigate("home")} />
+          ) : view === "legal" ? (
+            <LegalView onHome={() => navigate("home")} />
+          ) : null}
+        </div>
       </div>
-
-      <main id="main" className={`public-main ${styles.main}`}>
-        {view === "help" ? (
-          <HelpView onNew={() => newRequest()} />
-        ) : view === "pricing" ? (
-          <PricingView onNew={() => newRequest()} />
-        ) : view === "join" ? (
-          <JoinView onSignup={signupArtisan} onDemo={() => session.startDemo("artisan")} />
-        ) : view === "join-organization" ? (
-          <JoinOrganizationView session={session} />
-        ) : view === "demo" ? (
-          <DemoEntryView session={session} />
-        ) : view === "about" ? (
-          <AboutView onNew={() => newRequest()} onJoin={() => navigate("join")} />
-        ) : view === "privacy" ? (
-          <PrivacyView onHome={() => navigate("home")} />
-        ) : view === "legal" ? (
-          <LegalView onHome={() => navigate("home")} />
-        ) : null}
-      </main>
-
-      <footer className={`public-footer ${styles.footer}`}>
-        <Brand compact />
-        <span>Courant est un nom de travail. Application en préparation.</span>
-        <nav className={styles.footerNav} aria-label="Informations">
-          {FOOTER_LINKS.map((item) => (
-            <button type="button" key={item.view} aria-current={view === item.view ? "page" : undefined} onClick={() => navigate(item.view)}>
-              {item.label}
-            </button>
-          ))}
-        </nav>
-      </footer>
-    </div>
+    </PublicChrome>
   );
 }
 

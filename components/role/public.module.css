@@ -1390,3 +1390,274 @@
     border-top: 1px solid var(--line);
   }
 }
+
+/* ===== UI-PUBLIC-VIEWS-001 — themed overrides =================================================
+   Active only inside PublicChrome's ThemeSurface (`.ui-v2`). Same selectors as above +1 class,
+   colour declarations mapped to --ui-* tokens (navy/text → text, muted → text-muted, line and
+   light blue borders → border, soft blue fills → surface, blue → accent / primary fill / focus,
+   white → card / on-primary, amber → warning); layout unchanged. */
+:global(.ui-v2) .kicker {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .tile {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .accent {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .title {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .subtitle {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .crumb {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .crumb [aria-current="page"] {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .stepsRow > li + li {
+  border-left: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .stepBadge {
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+:global(.ui-v2) .stepsRow strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .stepsRow p {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .stepArrow {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .facts {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+}
+:global(.ui-v2) .facts > li {
+  border-left: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .facts strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .facts span {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .hero {
+  background: var(--ui-surface);
+  border-bottom: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .heroCopy h1 {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .heroCopy > p {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .rule {
+  background: var(--ui-primary);
+}
+:global(.ui-v2) .block > h2,
+:global(.ui-v2) .block > h3 {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .lead {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .steps > li {
+  border-top: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .steps strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .steps3 > li {
+  border-left: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .stepNumber {
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+:global(.ui-v2) .list {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .list li::marker {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .processTitle {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .faqPanel > h2 {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .faqItem {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+}
+:global(.ui-v2) .faqItem[open] {
+  border-color: var(--ui-border);
+}
+:global(.ui-v2) .faqItem summary {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .faqItem summary > svg:last-child {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .faqItem summary:focus-visible {
+  outline: 3px solid var(--ui-focus);
+}
+:global(.ui-v2) .faqItem > p {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .faqFoot {
+  border-top: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .faqFoot strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .faqFoot span {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .helpCta {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .helpCta h2 {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .helpCta p {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .table caption {
+  color: var(--ui-warning);
+}
+:global(.ui-v2) .table thead th {
+  color: var(--ui-text);
+  border-bottom: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .table tbody th {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .table tbody th small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .table td {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .table tbody tr {
+  border-bottom: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .footnote {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .tiles > li {
+  border: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .tiles strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .tiles span {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .checklist > li {
+  border-top: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .checklist strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .checklist p {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .checkMark {
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+:global(.ui-v2) .aboutColumns h2 {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .aboutMission > p {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .aboutCta {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .aboutCta strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .aboutCta span {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .valueCards > li {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+}
+:global(.ui-v2) .valueCards strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .valueCards span {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .docSection {
+  border-top: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .docSection h2 {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .docSection p {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .docList {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .docList li::marker {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .docList strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .docFoot {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .docFoot svg {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .legalFields dt {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .legalFields dd {
+  color: var(--ui-warning);
+}
+:global(.ui-v2) .cta {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .cta h2 {
+  color: var(--ui-text);
+}
+@media (max-width: 950px) {
+  :global(.ui-v2) .stepsRow > li + li {
+    border-top: 1px solid var(--ui-border);
+  }
+  :global(.ui-v2) .facts > li:nth-child(n + 3) {
+    border-top: 1px solid var(--ui-border);
+  }
+  :global(.ui-v2) .steps3 > li {
+    border-top: 1px solid var(--ui-border);
+  }
+}
+@media (max-width: 420px) {
+  :global(.ui-v2) .facts > li + li {
+    border-top: 1px solid var(--ui-border);
+  }
+}
