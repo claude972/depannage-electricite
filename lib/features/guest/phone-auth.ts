@@ -162,14 +162,14 @@ async function upgrade(request: Request, ctx: Context, data: z.output<typeof upg
   if (target !== data.email) fail();
   return { confirmation_required: true };
 }
-export async function phoneRoute(operation: "start" | "verify" | "session" | "upgrade", request: Request): Promise<Response> {
+export async function phoneRoute(operation: "start" | "verify" | "session" | "upgrade" | "history", request: Request): Promise<Response> {
   try {
     assertOrigin(request);
-    if (new URL(request.url).searchParams.size) fail(422);
+    if (operation !== "history" && new URL(request.url).searchParams.size) fail(422);
     // Validate before the SDK is even constructed (including a possible session refresh).
     const parsed = operation === "start" ? await input(request, startSchema) : operation === "verify" ? await input(request, verifySchema) : operation === "upgrade" ? await input(request, upgradeSchema) : null;
     const ctx = await context();
-    const body = operation === "start" ? await start(request, ctx, parsed as z.output<typeof startSchema>) : operation === "verify" ? await verify(request, ctx, parsed as z.output<typeof verifySchema>) : operation === "upgrade" ? await upgrade(request, ctx, parsed as z.output<typeof upgradeSchema>) : await session(ctx);
+    const body = operation === "start" ? await start(request, ctx, parsed as z.output<typeof startSchema>) : operation === "verify" ? await verify(request, ctx, parsed as z.output<typeof verifySchema>) : operation === "upgrade" ? await upgrade(request, ctx, parsed as z.output<typeof upgradeSchema>) : operation === "history" ? await history(ctx, request) : await session(ctx);
     ctx.commit();
     return Response.json(body, { headers: HEADERS });
   } catch (error) {
@@ -177,4 +177,48 @@ export async function phoneRoute(operation: "start" | "verify" | "session" | "up
     const messages: Record<number, string> = { 400: "Le contenu envoyé est invalide.", 401: "Vérifiez votre accès téléphone pour continuer.", 403: "Cette action n’est pas autorisée.", 409: "Utilisez votre espace compte pour poursuivre cette action.", 413: "Le contenu envoyé est trop volumineux.", 422: "Vérifiez les informations ou le code saisi.", 429: "Trop de tentatives. Patientez avant de réessayer.", 503: "Le service de vérification est momentanément indisponible. Réessayez." };
     return Response.json({ error: messages[status] ?? messages[503] }, { status: messages[status] ? status : 503, headers: { ...HEADERS, ...(status === 503 ? { "Retry-After": "2" } : status === 429 ? { "Retry-After": String(error instanceof PhoneError ? error.retryAfter ?? 60 : 60) } : {}) } });
   }
+}
+
+const HISTORY_FIELDS = "id,category,status,city,created_at,estimate_min_cents,estimate_max_cents";
+const historyTimestamp = z.iso.datetime({ offset: true }).max(40).refine(v => !/\.\d{7}/.test(v) && Number.isFinite(Date.parse(v)));
+const historyCursor = z.object({ v: z.literal(1), user_id: z.uuid(), phone_scope: z.string().regex(/^[a-f0-9]{64}$/), created_at: historyTimestamp, id: z.uuid() }).strict();
+const historyRow = z.object({ id: z.uuid(), category: z.enum(["outage", "panel", "socket", "lighting", "diagnostic"]), status: z.enum(["requested", "assigned", "quoted", "accepted", "in_progress", "completed", "paid", "cancelled"]), city: z.string().min(2).max(120), created_at: historyTimestamp, estimate_min_cents: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), estimate_max_cents: z.number().int().positive().max(Number.MAX_SAFE_INTEGER) }).strict();
+export function phoneHistoryQuery(url: string, userId: string, verifiedPhone: string) {
+  const params = new URL(url).searchParams;
+  if (url.length > 4096) fail(422);
+  for (const key of params.keys()) if (!["limit", "cursor"].includes(key) || params.getAll(key).length !== 1) fail(422);
+  const text = params.get("limit") ?? "25";
+  if (!/^(?:[1-9]|[1-9][0-9]|100)$/.test(text)) fail(422);
+  const scope = createHash("sha256").update(userId.toLowerCase() + "\0" + verifiedPhone).digest("hex");
+  let cursor: z.output<typeof historyCursor> | null = null;
+  if (params.has("cursor")) {
+    const raw = params.get("cursor")!;
+    if (!raw || raw.length > 1024 || !/^[A-Za-z0-9_-]+$/.test(raw)) fail(422);
+    try {
+      const bytes = Buffer.from(raw, "base64url");
+      if (bytes.toString("base64url") !== raw) fail(422);
+      const parsed = historyCursor.safeParse(JSON.parse(bytes.toString("utf8")));
+      if (!parsed.success || parsed.data.user_id !== userId.toLowerCase() || parsed.data.phone_scope !== scope) fail(422);
+      cursor = parsed.data;
+    } catch { fail(422); }
+  }
+  return { userId, scope, limit: Number(text), cursor };
+}
+// Preserve PostgreSQL's fractional microseconds: Date alone rounds keyset boundaries to ms.
+const historyMicros = (s: string) => BigInt(Date.parse(s)) * 1000n + BigInt((/\.(\d{1,6})(?:Z|[+-]\d\d:\d\d)$/.exec(s)?.[1] ?? "").slice(3).padEnd(3, "0") || "0");
+const historyBefore = (a: { created_at: string; id: string }, b: { created_at: string; id: string }) => historyMicros(a.created_at) < historyMicros(b.created_at) || (historyMicros(a.created_at) === historyMicros(b.created_at) && a.id.toLowerCase() < b.id.toLowerCase());
+async function history(ctx: Context, request: Request) {
+  const user = await current(ctx); if (!user) fail(401);
+  await clientRole(ctx, user); const phone = authPhone(user.phone);
+  if (!phone || !confirmed(user)) fail(403);
+  const q = phoneHistoryQuery(request.url, user.id, phone);
+  let query = ctx.db.from("interventions").select(HISTORY_FIELDS).eq("client_id", user.id);
+  if (q.cursor) query = query.or(`created_at.lt."${q.cursor.created_at}",and(created_at.eq."${q.cursor.created_at}",id.lt.${q.cursor.id})`);
+  const r = await query.order("created_at", { ascending: false }).order("id", { ascending: false }).limit(q.limit + 1);
+  if (r.error) fail();
+  const parsed = z.array(historyRow).max(q.limit + 1).safeParse(r.data);
+  if (!parsed.success || new Set(parsed.data.map(row => row.id)).size !== parsed.data.length || parsed.data.some((row, i) => row.estimate_max_cents < row.estimate_min_cents || (i > 0 && !historyBefore(row, parsed.data[i - 1])) || (q.cursor !== null && !historyBefore(row, q.cursor)))) fail();
+  const interventions = parsed.data.slice(0, q.limit), hasMore = parsed.data.length > q.limit, last = interventions.at(-1);
+  const next = hasMore && last ? Buffer.from(JSON.stringify({ v: 1, user_id: user.id.toLowerCase(), phone_scope: q.scope, created_at: last.created_at, id: last.id })).toString("base64url") : null;
+  return { interventions, page: { limit: q.limit, has_more: hasMore, next_cursor: next } };
 }

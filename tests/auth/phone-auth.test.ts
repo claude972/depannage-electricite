@@ -10,8 +10,8 @@ const anonymous = { data: { user: null }, error: { name: "AuthSessionMissingErro
 const started = { error: null, data: { user: null, session: null } };
 const startBody = { phone: "0696 12 34 56", first_name: "QA", last_name: "Essai", purpose: "booking" };
 const verifyBody = { phone: PHONE, token: "123456", kind: "sms" };
-type Operation = "start" | "verify" | "session" | "upgrade";
-function fixture(op: Operation, options: { users?: unknown[]; profileRole?: string; profileId?: string; profileError?: boolean; cookie?: boolean; otp?: unknown; verify?: unknown; update?: unknown; transport?: boolean } = {}) {
+type Operation = "start" | "verify" | "session" | "upgrade" | "history";
+function fixture(op: Operation, options: { users?: unknown[]; profileRole?: string; profileId?: string; profileError?: boolean; cookie?: boolean; otp?: unknown; verify?: unknown; update?: unknown; transport?: boolean; historyRows?: unknown; historyError?: boolean } = {}) {
   let sdkOptions: any, index = 0, created = 0;
   const calls: { op: string; value?: any; extra?: any }[] = [], written: unknown[] = [];
   const nextUser = () => (options.users ?? [anonymous])[Math.min(index++, (options.users ?? [anonymous]).length - 1)];
@@ -21,14 +21,29 @@ function fixture(op: Operation, options: { users?: unknown[]; profileRole?: stri
     signInWithOtp: async (value: unknown) => { calls.push({ op: "otp", value }); if (options.transport) throw Error("PRIVATE_PHONE_OR_TOKEN"); return options.otp ?? started; },
     verifyOtp: async (value: unknown) => { calls.push({ op: "verify", value }); queue(); if (options.transport) throw Error("PRIVATE_PHONE_OR_TOKEN"); return options.verify ?? native(); },
     updateUser: async (value: unknown, extra: unknown) => { calls.push({ op: "update", value, extra }); queue(); if (options.transport) throw Error("PRIVATE_PHONE_OR_TOKEN"); return options.update ?? { error: null, data: { user: user() } }; },
-  }, from: (table: string) => ({ select: (columns: string) => ({ eq: (_key: string, id: string) => ({ maybeSingle: async () => { calls.push({ op: "profile", value: { table, columns, id } }); return { error: options.profileError ? { code: "broken" } : null, data: { id: options.profileId ?? id, role: options.profileRole ?? "client" } }; } }) }) }) };
+  }, from: (table: string) => {
+    if (table === "interventions") {
+      const state: any = { table, orders: [] };
+      const query: any = { select: (columns: string) => { state.columns = columns; return query; }, eq: (key: string, value: string) => { state.eq = { key, value }; return query; }, or: (value: string) => { state.or = value; return query; }, order: (key: string, value: unknown) => { state.orders.push({ key, value }); return query; }, limit: async (n: number) => {
+        state.limit = n; calls.push({ op: "history", value: state });
+        let rows: any = options.historyRows ?? [];
+        if (Array.isArray(rows)) {
+          rows = [...rows].sort((a, b) => a.created_at === b.created_at ? (a.id < b.id ? 1 : -1) : a.created_at < b.created_at ? 1 : -1);
+          if (state.or) { const m = /created_at.lt."([^"]+)",and\(created_at.eq."[^"]+",id.lt.([a-f0-9-]+)\)/.exec(state.or)!; rows = rows.filter(r => r.created_at < m[1] || (r.created_at === m[1] && r.id < m[2])); }
+          rows = rows.slice(0, n);
+        }
+        return { data: rows, error: options.historyError ? { code: "unavailable" } : null };
+      } }; return query;
+    }
+    return { select: (columns: string) => ({ eq: (_key: string, id: string) => ({ maybeSingle: async () => { calls.push({ op: "profile", value: { table, columns, id } }); return { error: options.profileError ? { code: "broken" } : null, data: { id: options.profileId ?? id, role: options.profileRole ?? "client" } }; } }) }) };
+  } };
   const module = loadModule(`app/api/auth/phone/${op}/route.ts`, {
     "node:process": { env: { NEXT_PUBLIC_SUPABASE_URL: "https://fake.supabase.co", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "FAKE_PUBLIC_KEY" } },
     "@supabase/ssr": { createServerClient: (_url: string, _key: string, config: unknown) => { created++; sdkOptions = config; return db; } },
     "next/headers": { cookies: async () => ({ getAll: () => options.cookie ? [{ name: "sb-fake-auth-token", value: "OLD_COOKIE" }] : [], set: (...value: unknown[]) => written.push(value) }) },
     "@/lib/supabase/server": { ApiError, assertOrigin: (request: Request) => { const o = request.headers.get("origin"); if (o && o !== new URL(request.url).origin) throw new ApiError(403, "ORIGIN"); } },
   });
-  const request = (body?: unknown, headers: Record<string, string> = {}, suffix = "") => (module[op === "session" ? "GET" : "POST"] as (r: Request) => Promise<Response>)(new Request(`${ORIGIN}/api/auth/phone/${op}${suffix}`, { method: op === "session" ? "GET" : "POST", headers: { Origin: ORIGIN, "Content-Type": "application/json", ...headers }, ...(op === "session" ? {} : { body: JSON.stringify(body) }) }));
+  const request = (body?: unknown, headers: Record<string, string> = {}, suffix = "") => (module[(op === "session" || op === "history") ? "GET" : "POST"] as (r: Request) => Promise<Response>)(new Request(`${ORIGIN}/api/auth/phone/${op}${suffix}`, { method: (op === "session" || op === "history") ? "GET" : "POST", headers: { Origin: ORIGIN, "Content-Type": "application/json", ...headers }, ...((op === "session" || op === "history") ? {} : { body: JSON.stringify(body) }) }));
   return { request, calls, written, created: () => created };
 }
 async function result(response: Response, status: number) {
@@ -117,4 +132,41 @@ test("strict bodies/origin/limits reject before constructing SDK; malformed prov
   const origin = fixture("start"); await result(await origin.request(startBody, { Origin: "https://foreign.example.test" }), 403); assert.equal(origin.created(), 0);
   const huge = fixture("start"); await result(await huge.request({ ...startBody, last_name: "x".repeat(5000) }), 413); assert.equal(huge.created(), 0);
   for (const response of [{}, { error: null, data: {} }, { error: null, data: { user: user(), session: null } }]) { const f = fixture("start", { otp: response }); await result(await f.request(startBody), 503); assert.equal(f.written.length, 0); }
+});
+
+const historyRows = Array.from({ length: 101 }, (_, i) => ({ id: `30000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`, category: "socket", status: "requested", city: "Commune QA", created_at: `2026-11-01T00:00:00.${String(123000 + Math.floor(i / 4)).padStart(6, "0")}Z`, estimate_min_cents: 8000, estimate_max_cents: 18000 }));
+const active = (over: Record<string, unknown> = {}) => [{ data: { user: user(over) }, error: null }];
+
+test("phone history: all101 through five25-row pages, tied microseconds/id order, private minimal projection", async () => {
+  const f = fixture("history", { users: active(), historyRows }); let cursor: string | null = null; const ids: string[] = []; let pages = 0;
+  do {
+    const b = await result(await f.request(undefined, {}, cursor ? "?cursor=" + cursor : ""), 200);
+    ids.push(...b.interventions.map((r: any) => r.id)); pages++; cursor = b.page.next_cursor;
+    assert.equal(b.page.limit, 25); assert.equal(b.page.has_more, cursor !== null);
+    for (const row of b.interventions) assert.deepEqual(Object.keys(row).sort(), ["category", "city", "created_at", "estimate_max_cents", "estimate_min_cents", "id", "status"]);
+    assert.ok(pages <= 5);
+  } while (cursor);
+  assert.equal(ids.length, 101); assert.equal(new Set(ids).size, 101); assert.equal(pages, 5); assert.equal(ids[0], historyRows[100].id);
+  for (const call of f.calls.filter(c => c.op === "history")) {
+    assert.equal(call.value.columns, "id,category,status,city,created_at,estimate_min_cents,estimate_max_cents"); assert.equal(call.value.eq.key, "client_id"); assert.equal(call.value.eq.value, ID); assert.equal(call.value.limit, 26);
+    assert.equal(JSON.stringify(call.value.orders), JSON.stringify([{ key: "created_at", value: { ascending: false } }, { key: "id", value: { ascending: false } }]));
+  }
+  const maximum = fixture("history", { users: active(), historyRows }); const b = await result(await maximum.request(undefined, {}, "?limit=100"), 200); assert.equal(b.interventions.length, 100); assert.equal(b.page.has_more, true); assert.equal(maximum.calls.find(c => c.op === "history")!.value.limit, 101);
+});
+
+test("history cursor is bound to current verified UID/phone, malformed/unknown query422", async () => {
+  const f = fixture("history", { users: active(), historyRows }); const b = await result(await f.request(undefined, {}, "?limit=1"), 200); const cursor = b.page.next_cursor;
+  assert.ok(typeof cursor === "string"); assert.doesNotMatch(Buffer.from(cursor, "base64url").toString("utf8"), /596696123456|OPAQUE|NEVER_RETURN/);
+  for (const over of [{ id: OTHER }, { phone: "33612345678" }]) { const foreign = fixture("history", { users: active(over), historyRows }); await result(await foreign.request(undefined, {}, "?cursor=" + cursor), 422); assert.equal(foreign.calls.some(c => c.op === "history"), false); }
+  for (const query of ["?limit=0", "?limit=101", "?limit=01", "?limit=1e2", "?limit=25&limit=25", "?phone=0696123456", "?first_name=QA", "?cursor=", "?cursor=!!!", "?cursor=" + cursor + "&cursor=" + cursor]) { const invalid = fixture("history", { users: active() }); await result(await invalid.request(undefined, {}, query), 422); assert.equal(invalid.calls.some(c => c.op === "history"), false); }
+  const decoded = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")); decoded.created_at = "2026-11-01T00:00:00.1234567Z";
+  const precision = fixture("history", { users: active() }); await result(await precision.request(undefined, {}, "?cursor=" + Buffer.from(JSON.stringify(decoded)).toString("base64url")), 422);
+});
+
+test("history: no session401, professional409, phone unverified403; empty and provider errors honest", async () => {
+  const no = fixture("history"); await result(await no.request(), 401); assert.equal(no.calls.some(c => c.op === "history"), false);
+  for (const role of ["artisan", "manager", "admin"]) { const f = fixture("history", { users: active(), profileRole: role }); await result(await f.request(), 409); assert.equal(f.calls.some(c => c.op === "history"), false); }
+  const unverified = fixture("history", { users: active({ phone_confirmed_at: null }) }); await result(await unverified.request(), 403); assert.equal(unverified.calls.some(c => c.op === "history"), false);
+  const empty = fixture("history", { users: active() }); assert.deepEqual(await result(await empty.request(), 200), { interventions: [], page: { limit: 25, has_more: false, next_cursor: null } });
+  for (const options of [{ historyError: true }, { historyRows: {} }, { historyRows: [{ ...historyRows[0], created_at: "invalid" }] }, { historyRows: [historyRows[0], historyRows[0]] }]) { const f = fixture("history", { users: active(), ...options }); const r = await f.request(); await result(r, 503); assert.equal(r.headers.get("retry-after"), "2"); }
 });
