@@ -57,8 +57,10 @@ import type {
 import { BookingConfirm } from "./booking-confirm";
 import { CardReturnPanel } from "./card-return-panel";
 import { AccountUpgrade } from "./account-upgrade";
+import { BookingSettlement } from "./booking-settlement";
+import { OnsiteSettlement } from "./onsite-settlement";
 import { createOptionsApi } from "./phone-access";
-import { bookingPaymentText, fetchBookingStatus, type BookingStatus } from "../app/booking-status";
+import { bookingPaymentText, fetchBookingStatus, isDeclaredOnSite, type BookingStatus } from "../app/booking-status";
 import styles from "./client.module.css";
 import theme from "./client-theme.module.css";
 import { ThemeSurface } from "../app/theme-provider";
@@ -127,7 +129,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "Quand dois-je régler l’intervention ?",
-    "Le paiement est proposé une fois l’intervention terminée, sur la base du devis accepté. Le règlement est traité avec Stripe. Une redirection de paiement ne suffit pas à confirmer son encaissement.",
+    "Le paiement intervient une fois l’intervention terminée, sur la base du devis accepté : en ligne par carte, ou sur place auprès de l’artisan si vous l’avez choisi (l’artisan déclare alors l’avoir reçu ; ce n’est pas une confirmation bancaire). Une redirection de paiement ne suffit pas à confirmer un encaissement.",
   ],
   [
     "Comment suivre ma demande ?",
@@ -1495,11 +1497,34 @@ function DetailView({
         </p>
       </section>
 
-      {currentBookingStatus?.kind === "booking" && (
+      {/* On-site booking, completed or paid: the cash widget carries the state (planned / declared);
+          the generic « aucun encaissement » line would contradict a declaration, so it is not shown. */}
+      {currentBookingStatus?.kind === "booking" && currentBookingStatus.payment.method === "on_site" && (i.status === "completed" || i.status === "paid") && (
+        <OnsiteSettlement
+          key={`${session.profileId}|${i.id}`}
+          interventionId={i.id}
+          viewer="client"
+          context={session.mutationContext}
+          onSettled={i.status === "paid" ? undefined : () => void session.refresh()}
+        />
+      )}
+      {currentBookingStatus?.kind === "booking" && !(currentBookingStatus.payment.method === "on_site" && (i.status === "completed" || i.status === "paid")) && (
         <p className={styles.paymentLine} role="status" data-booking-payment-status={currentBookingStatus.payment.method}>
           <Icon name={currentBookingStatus.payment.method === "on_site" ? "clock" : "lock"} size={16} />
           <span>{bookingPaymentText(currentBookingStatus.payment, dateTime)}</span>
         </p>
+      )}
+      {/* Final settlement of a card hold: only a completed booking dossier with an accepted quote.
+          The amount, ledger and proofs are the server's; never the legacy Checkout for a hold. */}
+      {currentBookingStatus?.kind === "booking" && currentBookingStatus.payment.method === "card_hold" && (i.status === "completed" || i.status === "paid") && accepted && (
+        <BookingSettlement
+          key={`${session.profileId}|${i.id}`}
+          interventionId={i.id}
+          context={session.mutationContext}
+          // Re-read the workspace (fresh barrier) once the server reports « paid »; only while the
+          // dossier itself is not « paid » yet (no loop, stale dossier corrected).
+          onSettled={i.status === "paid" ? undefined : () => void session.refresh()}
+        />
       )}
       {/* After a booking: optional email access (self-hides unless phone-verified, client, no email account). */}
       {currentBookingStatus?.kind === "booking" && <AccountUpgrade />}
@@ -1510,7 +1535,9 @@ function DetailView({
         >
           <Icon name={payment.status === "paid" ? "check" : payment.status === "failed" ? "warning" : "clock"} size={16} />
           <span>
-            {payment.status === "paid"
+            {payment.status === "paid" && isDeclaredOnSite(payment)
+              ? `Règlement de ${money(payment.total_cents)} déclaré reçu sur place par l’artisan${payment.paid_at ? ` le ${dateTime(payment.paid_at)}` : ""}. Ce n’est pas une confirmation bancaire.`
+              : payment.status === "paid"
               ? `Règlement de ${money(payment.total_cents)} confirmé par la plateforme${payment.paid_at ? ` le ${dateTime(payment.paid_at)}` : ""}.`
               : payment.status === "failed"
                 ? "Le paiement n’a pas abouti selon Stripe. Le règlement reste à effectuer ; vérifiez auprès de votre banque avant de recommencer."
@@ -2006,7 +2033,7 @@ function ProfileView({ session }: { session: Session }) {
           <InstallPanel />
           <Unavailable
             title="Adresses enregistrées, moyens de paiement et préférences"
-            reason="Pas encore activé sur ce service : aucune adresse supplémentaire, aucun moyen de paiement mémorisé ni préférence de notification n’est enregistré. Chaque règlement se fait au moment voulu, via Stripe."
+            reason="Pas encore activé sur ce service : aucune adresse supplémentaire, aucun moyen de paiement mémorisé ni préférence de notification n’est enregistré. Chaque règlement se fait au moment voulu, par carte ou sur place selon votre réservation."
             blocker="CLI-09"
           />
         </div>

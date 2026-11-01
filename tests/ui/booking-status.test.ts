@@ -56,3 +56,32 @@ test("optional account: offered in the profile and on a booking dossier only, ne
   assert.match(src, /\{currentBookingStatus\?\.kind === "booking" && <AccountUpgrade \/>\}/);
   assert.doesNotMatch(readFileSync("components/role/booking-confirm.tsx", "utf8"), /AccountUpgrade/, "not part of the send path");
 });
+
+test("settlement leaf: mounted only for a completed card-hold booking with an accepted quote, keyed by UID + job, with the session identity context", () => {
+  const src = readFileSync("components/role/client-space.tsx", "utf8");
+  assert.match(src, /currentBookingStatus\?\.kind === "booking" && currentBookingStatus\.payment\.method === "card_hold" && \(i\.status === "completed" \|\| i\.status === "paid"\) && accepted && \(\s*<BookingSettlement\s*key=\{`\$\{session\.profileId\}\|\$\{i\.id\}`\}\s*interventionId=\{i\.id\}\s*context=\{session\.mutationContext\}/);
+  assert.match(src, /onSettled=\{i\.status === "paid" \? undefined : \(\) => void session\.refresh\(\)\}/);
+  const app = readFileSync("components/courant-app.tsx", "utf8");
+  assert.match(app, /mutationContext: cardContext,/);
+  assert.match(app, /const cardContext = \{ generation: \(\) => guard\.generation\(\), userId: \(\) => userId\.current \};/);
+});
+
+test("on-site cash: client widget on completed|paid replaces the « aucun encaissement » line; artisan widget in the dossier; refresh only while not paid", () => {
+  const client = readFileSync("components/role/client-space.tsx", "utf8");
+  assert.match(client, /currentBookingStatus\.payment\.method === "on_site" && \(i\.status === "completed" \|\| i\.status === "paid"\) && \(\s*<OnsiteSettlement[\s\S]*?viewer="client"[\s\S]*?onSettled=\{i\.status === "paid" \? undefined : \(\) => void session\.refresh\(\)\}/);
+  assert.match(client, /currentBookingStatus\?\.kind === "booking" && !\(currentBookingStatus\.payment\.method === "on_site" && \(i\.status === "completed" \|\| i\.status === "paid"\)\) && \(\s*<p className=\{styles\.paymentLine\}/, "no contradictory sentence next to the cash widget");
+  const artisan = readFileSync("components/role/artisan-space.tsx", "utf8");
+  assert.match(artisan, /\["completed", "paid"\]\.includes\(i\.status\) && session\.mode === "live" && \(\s*<OnsiteSettlement[\s\S]*?viewer="artisan"[\s\S]*?context=\{session\.mutationContext\}[\s\S]*?onSettled=\{i\.status === "paid" \? undefined : \(\) => void session\.refresh\(\)\}/);
+  assert.doesNotMatch(client, /viewer="artisan"/, "a client never gets the artisan declaration");
+});
+
+test("provenance: a payment declared received on site is never worded as a bank/Stripe confirmation", async () => {
+  const { isDeclaredOnSite } = await import("../../components/app/booking-status");
+  assert.equal(isDeclaredOnSite({ method: "on_site_declared" }), true);
+  for (const p of [{ method: "card" }, {}, null, undefined]) assert.equal(isDeclaredOnSite(p as never), false);
+  const client = readFileSync("components/role/client-space.tsx", "utf8");
+  assert.match(client, /payment\.status === "paid" && isDeclaredOnSite\(payment\)\s*\? `Règlement de \$\{money\(payment\.total_cents\)\} déclaré reçu sur place par l’artisan[\s\S]{0,120}?Ce n’est pas une confirmation bancaire\.`/);
+  assert.doesNotMatch(client, /Le règlement est traité avec Stripe|via Stripe\./, "help texts no longer say every payment goes through Stripe");
+  const artisan = readFileSync("components/role/artisan-space.tsx", "utf8");
+  assert.match(artisan, /isDeclaredOnSite\(payment\)\s*\? "Règlement déclaré reçu sur place\. Ce n’est pas une confirmation bancaire\."/);
+});
