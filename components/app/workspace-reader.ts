@@ -56,6 +56,13 @@ export function validateWorkspace(raw: unknown): WorkspaceValidation {
   if (!(raw.interventions as Record<string, unknown>[]).every((i) => STATUSES.includes(i.status as Status)))
     return { ok: false, reason: "interventions" };
   if (raw.artisan_profile !== null && !isObject(raw.artisan_profile)) return { ok: false, reason: "artisan_profile" };
+  // accepted_total_cents (base + accepted amendments, server): optional for legacy/demo, but when
+  // PRESENT it must be a safe non-negative integer — a malformed total never enters the session.
+  // When PRESENT (backend 027): base total_cents a safe positive integer, accepted_total_cents a
+  // safe positive integer and ≥ the base (base + accepted amendments). Absent ⇒ legacy/demo, accepted.
+  const positive = (v: unknown): v is number => typeof v === "number" && Number.isSafeInteger(v) && v > 0;
+  if (!(raw.quotes as Record<string, unknown>[]).every((q) => !("accepted_total_cents" in q) || (positive(q.total_cents) && positive(q.accepted_total_cents) && q.accepted_total_cents >= q.total_cents)))
+    return { ok: false, reason: "quotes" };
   // Optional window metadata (older backends omit it). When present it must be exact: it decides
   // whether an absent dossier may be point-read, so a malformed value invalidates the reply.
   if (raw.limits !== undefined && !workspaceLimitsSchema.safeParse(raw.limits).success) return { ok: false, reason: "limits" };

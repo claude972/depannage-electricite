@@ -74,6 +74,7 @@ import {
 import type { Session } from "../app/session-types";
 import { UploadQueuePanel } from "../app/upload-queue";
 import {
+  acceptedCommittedCents,
   FIGURE_PLACEHOLDER,
   dashboardFigures,
   overviewSubtitle,
@@ -248,7 +249,8 @@ function siteFigures(site: Site, data: Workspace) {
     (q) => ids.has(q.intervention_id) && q.status === "accepted",
   );
   const acceptedIds = new Set(accepted.map((q) => q.id));
-  const committed = sum(accepted.map((q) => q.total_cents));
+  // Commitment = base + accepted amendments (server accepted_total_cents), like the real payments.
+  const committed = sum(accepted.map((q) => acceptedCommittedCents(q)));
   const paidRows = data.payments.filter((p) => acceptedIds.has(p.quote_id) && p.status === "paid");
   const paid = sum(paidRows.map((p) => p.total_cents));
   // Part of « Réglé » that is a receipt DECLARED on site by the artisan (not a bank confirmation).
@@ -1866,7 +1868,7 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
               <>
                 <div className={styles.keyValue}>
                   <span>Montant à régler</span>
-                  <strong>{money(acceptedQuote.total_cents)}</strong>
+                  <strong>{money(acceptedCommittedCents(acceptedQuote))}</strong>
                 </div>
                 {payment?.status === "failed" && (
                   <p className={cx("alert error")} role="alert">
