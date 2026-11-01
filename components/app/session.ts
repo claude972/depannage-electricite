@@ -123,6 +123,22 @@ export function buildHash(view: View, param?: string): string {
 export function isPublicView(view: View) {
   return PUBLIC_VIEWS.includes(view) || view === "forbidden";
 }
+/** A signed-in destination reached by hash: a non-public view with its parameter. */
+export type DeepLink = { view: View; param: string };
+/** A hash that names a signed-in view (e.g. #detail/<id>), whatever the current mode; else null. */
+export function protectedLink(hash: string): DeepLink | null {
+  const parsed = parseHash(hash);
+  return parsed.view && !isPublicView(parsed.view) ? { view: parsed.view, param: parsed.param } : null;
+}
+// Landing of a login chain (WEB-DEEPLINK-LOGIN-001). A signed-in view already in the address bar
+// (link opened or set while the session was loading) wins; otherwise the deep link a signed-out
+// visitor opened before going to the login form; otherwise null (role home). Never a view the
+// role may not open: the role guard decides, the server still re-checks every read.
+export function loginLanding(currentHash: string, pending: DeepLink | null, role: Role | null): DeepLink | null {
+  for (const link of [protectedLink(currentHash), pending])
+    if (link && canAccess(link.view, role, "live")) return link;
+  return null;
+}
 // Server return parameters are only hints to re-read state; they never set a status.
 export function parseReturnParams(search: string): ReturnContext | null {
   const q = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
