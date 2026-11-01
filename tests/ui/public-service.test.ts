@@ -108,8 +108,10 @@ test("page : chacune des 8 prestations rend titre, photo, fourchette canonique e
     const price = html.slice(html.indexOf("data-service-price"), html.indexOf("data-service-cta"));
     assert.ok(text(price).includes(range(s.category)), s.slug);
     assert.match(text(price), /Estimation indicative/);
-    const ctas = [...html.matchAll(/<a [^>]*href="([^"]*)"[^>]*>Décrire ma panne/g)].map((m) => m[1]);
-    assert.deepEqual(ctas, [`/#new/${s.category}`, `/#new/${s.category}`], s.slug);
+    // CTA → assistant de réservation sur place (FASTSPLIT-SERVICE-BOOKING-FLOW-001), jamais le formulaire générique.
+    const ctas = [...html.matchAll(/<button [^>]*data-booking-open=""[^>]*>([^<]*)/g)].map((m) => m[1].trim());
+    assert.deepEqual(ctas, ["Décrire ma panne", "Décrire ma panne", "Confirmer"], s.slug);
+    assert.doesNotMatch(html, /href="\/#new/, s.slug);
     for (const h of ["Ce que couvre ce dépannage", "Vérifications possibles selon le diagnostic", "Comment ça se passe", "Questions fréquentes"]) assert.match(html, new RegExp(h), s.slug);
     assert.deepEqual(forbiddenClaims(text(html)), [], s.slug);
   }

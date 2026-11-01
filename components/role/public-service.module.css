@@ -3,6 +3,10 @@
 .main {
   padding: 24px 0 72px;
 }
+/* Room for the fixed booking bar: no content, FAQ or footer line is ever hidden under it. */
+.withBar {
+  padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+}
 .wrap {
   width: 100%;
   max-width: 1200px;
@@ -95,6 +99,9 @@
   line-height: 1.5;
 }
 .cta {
+  border: 0;
+  font-family: inherit;
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
