@@ -29,7 +29,7 @@ function fixture(op: Operation, options: { users?: unknown[]; profileRole?: stri
         let rows: any = options.historyRows ?? [];
         if (Array.isArray(rows)) {
           rows = [...rows].sort((a, b) => a.created_at === b.created_at ? (a.id < b.id ? 1 : -1) : a.created_at < b.created_at ? 1 : -1);
-          if (state.or) { const m = /created_at.lt."([^"]+)",and\(created_at.eq."[^"]+",id.lt.([a-f0-9-]+)\)/.exec(state.or)!; rows = rows.filter(r => r.created_at < m[1] || (r.created_at === m[1] && r.id < m[2])); }
+          if (state.or) { const m = /created_at.lt."([^"]+)",and\(created_at.eq."[^"]+",id.lt.([a-f0-9-]+)\)/.exec(state.or)!; rows = rows.filter((r: any) => r.created_at < m[1] || (r.created_at === m[1] && r.id < m[2])); }
           rows = rows.slice(0, n);
         }
         return { data: rows, error: options.historyError ? { code: "unavailable" } : null };
