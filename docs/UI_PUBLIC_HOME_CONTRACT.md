@@ -79,3 +79,19 @@ Exclues définitivement : photos électroménager (Pexels 34054464 / 34054474).
 Les espaces rôles (client, artisan, entreprise, admin) ne sont PAS rethémés. L'application n'est
 pas « complète » ; seule l'accueil public adopte la fondation. Recette réelle par root
 (2 thèmes × 360/390/1280/1440, home → décrire panne → brouillon → auth sans mutation réelle).
+
+## Livraison (code)
+
+- Ancres de nav = boutons (défilement + focus du titre), jamais `href="#…"` : le routage de l'app
+  est par hash.
+- `public-site.tsx` : la vue `home` rend `PublicHome` (alertes conservées au-dessus) ; l'ancien
+  `HomeView`, devenu inatteignable, est retiré avec ses deux imports. Autres vues inchangées.
+- `.home h1/h2/h3 { color: inherit }` neutralise la couleur héritée (navy) des titres globaux
+  dans la surface migrée uniquement.
+- Tests `tests/ui/public-home.test.ts` (11) : helpers slides/onglets, aller-retour des actions,
+  SSR sans `window` (structure, 5 onglets métier, roving tabindex, aucun `<a>`, aucun prix/avis/
+  promesse), chaque contrôle rendu rejoué vers son callback, photos/crédits, câblage PublicSite
+  via la session factice, parcours brouillon home → new (catégorie) → `saveDraft` → auth.
+- Captures locales (non commitées) 2 thèmes × 360/390/1280/1440 : 0 débordement, 0 cible < 44 px,
+  0 erreur console, 0 requête externe ; ←/→ sur le héros, End/→ sur les onglets, Échap ferme le
+  menu et rend le focus, `prefers-reduced-motion` coupe l'animation, onglet → formulaire pré-rempli.

@@ -12,7 +12,8 @@ import { AuthForm, RequestForm } from "../app/forms";
 import { Icon } from "../app/icons";
 import { InstallPanel } from "../app/install-panel";
 import { CATEGORIES, category, money } from "../app/format";
-import { ABOUT_VALUES, FAQ, HELP_PROCESS, HOME_FACTS, HOME_STEPS, JOIN_FACTS, JOIN_REVIEW, JOIN_STEPS, JOIN_TILES, LEGAL_SECTIONS, PENDING, PRIVACY_DATA, numbered, pricingRows } from "./public-lists";
+import { PublicHome } from "./public-home";
+import { ABOUT_VALUES, FAQ, HELP_PROCESS, JOIN_FACTS, JOIN_REVIEW, JOIN_STEPS, JOIN_TILES, LEGAL_SECTIONS, PENDING, PRIVACY_DATA, numbered, pricingRows } from "./public-lists";
 import styles from "./public.module.css";
 
 const NAV: { view: View; label: string }[] = [
@@ -65,16 +66,28 @@ export function PublicSite({ session }: { session: PublicSession }) {
     session.go("new");
   };
 
+  const alerts = (session.error || session.notice) && (
+    <div className="public-alerts">
+      <Alerts error={session.error} notice={session.notice} onClearError={() => session.setError("")} onClearNotice={() => session.setNotice("")} />
+    </div>
+  );
+
+  // UI-PUBLIC-HOME-001: the home is the migrated surface (own header/footer, theme foundation);
+  // every other public view keeps the shell below unchanged.
+  if (view === "home")
+    return (
+      <>
+        {alerts}
+        <PublicHome gated={!known} handlers={{ onNew: newRequest, onLogin: login, onNavigate: navigate, onDemo: (role) => session.startDemo(role) }} />
+      </>
+    );
+
   return (
     <div className={styles.site}>
-      {(session.error || session.notice) && (
-        <div className="public-alerts">
-          <Alerts error={session.error} notice={session.notice} onClearError={() => session.setError("")} onClearNotice={() => session.setNotice("")} />
-        </div>
-      )}
+      {alerts}
       <div className={styles.headerBar}>
         <header className={styles.header}>
-          <button type="button" className="brand-button" onClick={() => navigate("home")} aria-label="Courant, accueil" aria-current={view === "home" ? "page" : undefined}>
+          <button type="button" className="brand-button" onClick={() => navigate("home")} aria-label="Courant, accueil">
             <Brand />
           </button>
           <nav id={navId} className={`${styles.nav} ${menuOpen ? styles.navOpen : ""}`} aria-label="Navigation principale">
@@ -117,9 +130,7 @@ export function PublicSite({ session }: { session: PublicSession }) {
           <PrivacyView onHome={() => navigate("home")} />
         ) : view === "legal" ? (
           <LegalView onHome={() => navigate("home")} />
-        ) : (
-          <HomeView gated={!known} onLogin={login} onNew={newRequest} onDemo={() => session.startDemo()} onProfessional={() => session.startDemo("manager")} />
-        )}
+        ) : null}
       </main>
 
       <footer className={`public-footer ${styles.footer}`}>
@@ -196,77 +207,6 @@ function Crumb({ onHome, current }: { onHome: () => void; current: string }) {
       <span aria-hidden="true">›</span>
       <span aria-current="page">{current}</span>
     </nav>
-  );
-}
-
-// ---- Home (M11 + M51) ----------------------------------------------------------------------
-function HomeView({ gated, onLogin, onNew, onDemo, onProfessional }: { gated: boolean; onLogin: () => void; onNew: (c?: Category) => void; onDemo: () => void; onProfessional: () => void }) {
-  return (
-    <>
-      {gated && (
-        <div className={`alert warning ${styles.gate}`} role="status">
-          <Icon name="lock" />
-          <span>Connectez-vous pour accéder à cet espace.</span>
-          <button type="button" className="button outline" onClick={onLogin}>Se connecter</button>
-        </div>
-      )}
-      <section className={styles.hero} aria-labelledby="home-title">
-        <div className={styles.heroInner}>
-          <div className={styles.heroCopy}>
-            <Kicker>Dépannage électrique pour particuliers et professionnels</Kicker>
-            <h1 id="home-title">
-              Une panne électrique.
-              <br />
-              <span className={styles.accent}>Un parcours clair.</span>
-            </h1>
-            <p>Décrivez le problème, consultez une estimation indicative et validez le devis de votre artisan. Chaque étape reste au même endroit.</p>
-            <div className={styles.heroActions}>
-              <button type="button" className={`button primary large ${styles.heroCta}`} onClick={() => onNew()}>
-                Demander une intervention
-                <Icon name="arrow" size={18} />
-              </button>
-              <button type="button" className={`text-button ${styles.demoLink}`} onClick={onDemo}>
-                Explorer la démonstration <Icon name="arrow" size={16} />
-              </button>
-            </div>
-          </div>
-          {/* PUBLIC-HERO-001: illustration derived from reference mockup M41 (vol. 3 p10), no face,
-              no badge, no brand; not an artisan of the platform (traceability in the contract). */}
-          <figure className={styles.heroFigure}>
-            <img src="/images/public-hero-m41.jpg" width={346} height={306} alt="Illustration : électricien devant un tableau électrique" loading="eager" decoding="async" />
-            <figcaption>Illustration</figcaption>
-          </figure>
-        </div>
-      </section>
-      <section className={styles.stepsCard} aria-label="Les trois étapes">
-        <StepsRow steps={HOME_STEPS} columns={3} />
-      </section>
-      <FactsStrip facts={HOME_FACTS} columns={4} />
-      <section className={styles.categorySection} aria-labelledby="services-title">
-        <div className={styles.sectionHead}>
-          <h2 id="services-title">Quel est le problème ?</h2>
-          <p>Commencez par ce qui vous ressemble le plus. L’estimation s’affiche dès la première étape.</p>
-        </div>
-        <div className={styles.categories}>
-          {CATEGORIES.map((c) => (
-            <button type="button" key={c.id} onClick={() => onNew(c.id)}>
-              <IconTile icon={c.icon} size={44} />
-              <strong>{c.label}</strong>
-              <span>{c.description}</span>
-              <Icon name="arrow" size={16} />
-            </button>
-          ))}
-        </div>
-      </section>
-      <section className={styles.proBand} aria-labelledby="pro-title">
-        <IconTile icon="building" size={64} />
-        <div>
-          <h2 id="pro-title">Plusieurs sites. Un seul espace de suivi.</h2>
-          <p>Syndics, restaurants, bureaux et établissements recevant du public : organisez vos demandes par site.</p>
-        </div>
-        <button type="button" className="button outline" onClick={onProfessional}>Découvrir l’espace professionnel</button>
-      </section>
-    </>
   );
 }
 
