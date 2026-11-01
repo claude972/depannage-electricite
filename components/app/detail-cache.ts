@@ -44,6 +44,11 @@ export class DetailCache {
     const entry = this.entries.get(id);
     return entry ? Math.max(0, this.ttlMs - (this.now() - entry.at)) : 0;
   }
+  /** Milliseconds since the entry was stored (Infinity when absent); does not promote. */
+  ageMs(id: string): number {
+    const entry = this.entries.get(id);
+    return entry ? this.now() - entry.at : Number.POSITIVE_INFINITY;
+  }
   delete(id: string) {
     this.entries.delete(id);
   }

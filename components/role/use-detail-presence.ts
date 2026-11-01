@@ -25,6 +25,8 @@ type PointState =
   /** 401 on the point read: the session handles it; never re-read automatically. */
   | { state: "signed_out" };
 const points = new Map<string, PointState>();
+/** Focus/visibility revalidation never re-reads a copy younger than this. */
+const FOCUS_MIN_AGE_MS = 15_000;
 /** Ids point-read successfully in this context: revalidated on focus and when the cache expires. */
 const loadedOnce = new Set<string>();
 let pointsContext = "";
@@ -83,7 +85,9 @@ export function useDetailPresence(
   }, [key, rerender]);
 
   const pointRead = useCallback(() => {
-    if (!id || points.get(id)?.state === "pending") return; // single flight per id and context
+    const current = id ? points.get(id) : undefined;
+    if (!id || current?.state === "pending") return; // single flight per id and context
+    if (current?.state === "failed" && Date.now() < current.retryAt) return; // honour Retry-After
     const startedIn = context;
     points.set(id, { state: "pending" });
     rerender();
@@ -130,9 +134,14 @@ export function useDetailPresence(
     const t = window.setInterval(() => {
       if (cache.expiresInMs(id) <= 0) rerender();
     }, 1000);
-    const onFocus = () => pointRead(); // background: the cached copy stays visible meanwhile
+    // Background revalidation (the cached copy stays visible meanwhile), at most once per 15 s;
+    // pointRead itself refuses while a Retry-After delay runs.
+    const revalidate = () => {
+      if (cache.ageMs(id) >= FOCUS_MIN_AGE_MS) pointRead();
+    };
+    const onFocus = () => revalidate();
     const onVisible = () => {
-      if (document.visibilityState === "visible") pointRead();
+      if (document.visibilityState === "visible") revalidate();
     };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisible);
@@ -151,13 +160,14 @@ export function useDetailPresence(
   }, [retryInS, rerender]);
 
   if (base === "not_found" && live) {
-    if (cached) return { decision: "detail", detail: cached, retry: pointRead, retrying: false };
-    if (point?.state === "pending") return { decision: "detail_loading", retry: pointRead, retrying: true };
+    // A failed revalidation is shown as an error (with Retry-After), never as a fresh-looking copy.
     if (point?.state === "failed") return { decision: "detail_error", retry: pointRead, retrying: false, retryInS };
-    if (point?.state === "not_found") return { decision: "not_found", retry: attemptRefresh, retrying: false };
-    // 401: terminal for automatic reads (the session handles the expired session); the user may
+    // 401 (also over a cached copy): terminal for automatic reads (the session handles the expired session); the user may
     // retry explicitly — never shown as a proven « introuvable », never retried in a loop.
     if (point?.state === "signed_out") return { decision: "detail_error", retry: pointRead, retrying: false, retryInS: 0 };
+    if (cached) return { decision: "detail", detail: cached, retry: pointRead, retrying: point?.state === "pending" };
+    if (point?.state === "pending") return { decision: "detail_loading", retry: pointRead, retrying: true };
+    if (point?.state === "not_found") return { decision: "not_found", retry: attemptRefresh, retrying: false };
     if (limited) return { decision: "detail_loading", retry: pointRead, retrying: true }; // effect is starting the read
     return { decision: "not_found", retry: attemptRefresh, retrying: false, openAnyway: pointRead };
   }

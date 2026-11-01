@@ -31,6 +31,7 @@ const fetcher = async () => {
   window.calls++;
   await new Promise((r) => setTimeout(r, 25));
   if (kind === "401") throw new ApiRequestError(401, "expired");
+  if (kind === "focus503" && window.calls > 1) throw new ApiRequestError(503, "busy", { retry_after_s: 5 });
   return envelope(window.calls === 1 ? "PRIVATE_OLD_DETAIL" : "FRESH_DETAIL_" + window.calls);
 };
 const ensureFresh = async () => { window.fresh++; return { kind: "loaded" }; };
@@ -39,7 +40,7 @@ function App() {
   window.setCtx = setCtx;
   const limited = kind !== "unproven";
   const p = useDetailPresence({ mode: "live", refreshContext: ctx, ensureFresh, data: { limits: { interventions: { limited } } } }, "client-detail", id, false, fetcher);
-  window.last = { decision: p.decision, detail: p.detail && p.detail.intervention.description, openAnyway: Boolean(p.openAnyway) };
+  window.last = { retryInS: p.retryInS, decision: p.decision, detail: p.detail && p.detail.intervention.description, openAnyway: Boolean(p.openAnyway) };
   window.seen.push(window.last.detail || "");
   window.openAnyway = p.openAnyway;
   window.retry = p.retry;
@@ -100,6 +101,12 @@ test("useDetailPresence in real React: 401 terminal, TTL after clock jump, focus
       // 3. Focus revalidates in the background (the cached copy stays visible meanwhile).
       const before = await page.evaluate(() => (window as unknown as W).calls);
       await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await page.waitForTimeout(150);
+      assert.equal(await page.evaluate(() => (window as unknown as W).calls), before, "no focus re-read of a copy younger than 15 s");
+      await page.evaluate(() => {
+        (window as unknown as W).__off += 16_000;
+        window.dispatchEvent(new Event("focus"));
+      });
       await page.waitForFunction((n: number) => (window as unknown as W).calls === n + 1, before);
       assert.match((await page.evaluate(() => (window as unknown as W).last.detail)) ?? "", /^FRESH_DETAIL_/);
       // 5. Context change (identity / role / org / site): the old dossier is purged, re-read under the new context.
@@ -127,6 +134,32 @@ test("useDetailPresence in real React: 401 terminal, TTL after clock jump, focus
       await page.clock.runFor(100);
       await page.waitForFunction(() => /^FRESH_DETAIL_/.test((window as unknown as W).last?.detail ?? ""), undefined, { timeout: 3000 });
       assert.equal(await page.evaluate(() => (window as unknown as W).calls), 2, "expired copy re-read exactly once, without any external render");
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    // 2c. Focus storm on a cached copy, backend 503 Retry-After 5: one GET, then a visible error.
+    {
+      const { page, errors } = await open("focus503");
+      await page.waitForFunction(() => (window as unknown as W).last?.detail === "PRIVATE_OLD_DETAIL");
+      await page.evaluate(async () => {
+        (window as unknown as W).__off += 16_000;
+        for (let n = 0; n < 3; n++) {
+          window.dispatchEvent(new Event("focus"));
+          await new Promise((r) => setTimeout(r, 100));
+        }
+      });
+      await page.waitForFunction(() => (window as unknown as W).last?.decision === "detail_error");
+      await page.evaluate(async () => {
+        for (let n = 0; n < 3; n++) {
+          window.dispatchEvent(new Event("focus"));
+          await new Promise((r) => setTimeout(r, 100));
+        }
+      });
+      const s = await page.evaluate(() => ({ calls: (window as unknown as W).calls, last: (window as unknown as W).last as unknown as { decision: string; retryInS?: number; detail?: string } }));
+      assert.equal(s.calls, 2, "3+3 focuses => a single revalidation GET; Retry-After honoured");
+      assert.equal(s.last.decision, "detail_error", "failed revalidation is visible, not a fresh-looking copy");
+      assert.ok((s.last.retryInS ?? 0) > 0, "retry delayed by Retry-After");
+      assert.equal(s.last.detail, undefined);
       assert.deepEqual(errors, []);
       await page.close();
     }
