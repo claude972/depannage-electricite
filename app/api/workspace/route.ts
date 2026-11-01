@@ -1,3 +1,4 @@
+import { enrichAcceptedTotals, AcceptedTotalsUnavailable } from "@/lib/features/workspace/accepted-totals";
 import { authenticatedClient, apiError, dbError } from "@/lib/supabase/server";
 import { DetailReadUnavailable, workspaceWindow } from "@/lib/features/workspace/detail-read";
 export const dynamic = "force-dynamic";
@@ -71,6 +72,7 @@ export async function GET() {
       dbError(response.error);
     const jobWindow = workspaceWindow(jobs.data, 100);
     const quoteWindow = workspaceWindow(quotes.data, 200);
+    const enrichedQuotes = await enrichAcceptedTotals(db, quoteWindow.rows);
     const siteWindow = workspaceWindow(sites.data, 100);
     const orgWindow = workspaceWindow(organizations.data, 50);
     const offers =
@@ -92,7 +94,7 @@ export async function GET() {
       {
         profile: profile.data,
         interventions: [...jobWindow.rows, ...(offers.data ?? [])],
-        quotes: quoteWindow.rows,
+        quotes: enrichedQuotes,
         sites: siteWindow.rows,
         organizations: orgWindow.rows,
         limits: {
@@ -114,7 +116,7 @@ export async function GET() {
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (error) {
-    if (error instanceof DetailReadUnavailable)
+    if (error instanceof DetailReadUnavailable || error instanceof AcceptedTotalsUnavailable)
       return Response.json({ error: error.message }, { status: 503, headers: { "Cache-Control": "private, no-store", "Retry-After": "2" } });
     return apiError(error);
   }

@@ -51,6 +51,7 @@ export type Quote = {
   subtotal_cents: number;
   tax_cents: number;
   total_cents: number;
+  accepted_total_cents?: number;
   tax_rate: number;
   status: "sent" | "accepted" | "rejected" | string;
   created_at: string;
