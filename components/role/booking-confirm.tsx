@@ -1,12 +1,11 @@
 "use client";
-// Final explicit confirmation of the service booking flow, AFTER login (FASTSPLIT-SERVICE-BOOKING-
-// FLOW-001). Nothing is created on login: the user reviews and clicks « Envoyer ma demande ».
-// Order: PATCH /api/profile {full_name, phone} (private, never in the description) then ONE POST
-// of the request. A double click is refused; any failure keeps the draft and the booking; the
-// component is remounted on identity change (role space key) so a late step never runs for
-// another account.
+// Final explicit confirmation of the service booking flow, AFTER identification (FASTSPLIT-SERVICE-
+// BOOKING-FLOW-001 + guest checkout contract). Nothing is created on login: the user reviews and
+// clicks « Envoyer ma demande » ⇒ ONE idempotent POST /api/bookings (contact in the booking body,
+// never in the description; never the legacy /api/interventions). A double click is refused; any
+// failure keeps the draft and the booking; the component is remounted on identity change.
 import { useEffect, useRef, useState } from "react";
-import { PAYMENT_LABEL, SLOT_LABEL, contactErrors, profilePatch, type BookingDraft, type PaymentChoice } from "../app/booking-draft";
+import { PAYMENT_LABEL, SLOT_LABEL, contactErrors, type BookingDraft, type PaymentChoice } from "../app/booking-draft";
 import { category, money } from "../app/format";
 import type { RequestValues } from "../app/types";
 import { serviceBySlug } from "./public-service-catalog";
@@ -16,8 +15,7 @@ export function BookingConfirm({
   booking,
   busy,
   profileId,
-  updateProfile,
-  createIntervention,
+  confirmBooking,
   onEdit,
   onContactChange,
   onPaymentChange,
@@ -27,8 +25,8 @@ export function BookingConfirm({
   booking: BookingDraft;
   busy: boolean;
   profileId: string;
-  updateProfile(values: { full_name: string; phone: string }): Promise<boolean>;
-  createIntervention(values: RequestValues): Promise<boolean>;
+  /** POST /api/bookings (idempotent; contact travels in the booking body, never the description). */
+  confirmBooking(): Promise<boolean>;
   /** « Modifier la demande »: regular form prefilled; its submit only replaces the kept draft. */
   onEdit(): void;
   /** Saves edited private contact details in the kept booking (nothing is sent). */
@@ -67,19 +65,18 @@ export function BookingConfirm({
     }
     inFlight.current = true;
     setSending(true);
-    const startedAs = identity.current;
     try {
-      const patch = profilePatch(contact);
-      if (!patch || Object.keys(contactErrors(contact)).length) {
-        // Never a PATCH the API would refuse, never a request without the contact profile.
+      if (Object.keys(contactErrors(contact)).length) {
         setProblem("Vos coordonnées sont incomplètes ou trop longues. Modifiez-les avant d’envoyer ; rien n’a été envoyé.");
         setEditingContact(true);
         return;
       }
+      if (!booking.payment) {
+        setProblem("Choisissez un mode de paiement avant d’envoyer ; rien n’a été envoyé.");
+        return;
+      }
       setProblem("");
-      const ok = await updateProfile(patch);
-      if (!ok || !alive.current || identity.current !== startedAs) return; // draft kept
-      await createIntervention(draft); // clears draft + booking only after POST 201
+      await confirmBooking(); // draft + booking consumed only on 201 « confirmed »
     } finally {
       inFlight.current = false;
       if (alive.current) setSending(false);
@@ -106,6 +103,17 @@ export function BookingConfirm({
           <dt>Délai souhaité</dt>
           <dd>{wish} <small>(souhait, pas un rendez-vous réservé)</small></dd>
         </div>
+        {!booking.payment && onPaymentChange && (
+          <div>
+            <dt>Paiement</dt>
+            <dd data-booking-payment="">
+              À choisir.{" "}
+              <button type="button" className="text-button" disabled={sending || busy} onClick={() => { onPaymentChange("on_site"); setProblem(""); }}>
+                Règlement sur place
+              </button>
+            </dd>
+          </div>
+        )}
         {booking.payment && (
           <div>
             <dt>Paiement</dt>
@@ -180,7 +188,7 @@ export function BookingConfirm({
               </>
             )}
             <br />
-            <small>Enregistrées dans votre profil, jamais dans la description visible des artisans. L’email est celui de votre compte.</small>
+            <small>Transmises avec votre réservation, jamais dans la description visible des artisans.</small>
           </dd>
         </div>
       </dl>
