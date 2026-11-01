@@ -35,7 +35,7 @@ function Inner({ scope, client, demo }: PlatformOperatorsViewProps) {
   if (me.error && !me.data) return <ErrorBox message={me.error} onRetry={me.reload} />;
   if (!me.data?.super_admin) return <div className="forbidden"><strong>Gestion des opérateurs réservée aux super administrateurs.</strong><p>Vos droits actuels : {me.data?.scopes.length ? me.data.scopes.map((s) => SCOPE_LABELS[s]).join(", ") : "aucun scope plateforme"}.</p></div>;
   return (
-    <div className={styles.view}>
+    <div className={styles.view} data-module="platform-operations" data-platform-view="operators">
       <div className={styles.head}><div><h2>Opérateurs de plateforme</h2><p>Chaque droit est un scope explicite accordé côté serveur, distinct du rôle super administrateur et des organisations clientes. La visibilité d’un menu ne confère aucun droit.</p></div></div>
       {!scope.authority.canWrite && <ReadOnly reason={scope.authority.reason} />}
       {demo && <p className={styles.alert}>{DEMO_NOTE}</p>}
