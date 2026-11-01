@@ -70,18 +70,21 @@ w.scenarios = {
     return { verified };
   },
   async identity() {
+    // Repro: read of A in flight → SIGNED_OUT → SIGNED_IN B → A answers ⇒ nothing under B.
     let emit = () => {};
     const watch = (cb) => { emit = cb; return () => {}; };
-    let expired = 0;
-    const api = async () => ({ status: 200, body: { interventions: [{ id: "00000000-0000-4000-8000-000000000001", category: "socket", status: "requested", city: "Fort-de-France", created_at: "2026-10-30T10:00:00Z", estimate_min_cents: 8000, estimate_max_cents: 18000 }], page: { limit: 20, has_more: false, next_cursor: null } }, retryAfter: null });
+    let expired = 0; let resolveA; let calls = 0;
+    const api = () => (calls++, new Promise((r) => (resolveA = r)));
     const { div } = mount(h(PhoneHistory, { api, watchIdentity: watch, onExpired: () => expired++ }));
     await tick(50);
-    emit("user-a");
+    const callsBeforeIdentity = calls; // unknown identity: no read
+    emit("INITIAL_SESSION", "user-a");
+    await tick(20);
+    emit("SIGNED_OUT", null);
+    emit("SIGNED_IN", "user-b");
+    resolveA({ status: 200, body: { interventions: [{ id: "00000000-0000-4000-8000-000000000001", category: "socket", status: "requested", city: "Fort-de-France", created_at: "2026-10-30T10:00:00Z", estimate_min_cents: 8000, estimate_max_cents: 18000 }], page: { limit: 20, has_more: false, next_cursor: null } }, retryAfter: null });
     await tick(50);
-    const before = div.querySelectorAll("[data-history-id]").length;
-    emit(null);
-    await tick(10);
-    return { before, after: div.querySelectorAll("[data-history-id]").length, expired, text: div.textContent };
+    return { callsBeforeIdentity, calls, rows: div.querySelectorAll("[data-history-id]").length, expired, text: div.textContent };
   },
 };
 `;
@@ -120,8 +123,8 @@ test("PhoneAccess / PhoneHistory montés (Chromium, faux API, horloge factice)",
     assert.equal(deadline.phone, "0696123456");
     assert.equal(deadline.stage, "form");
     same(await run("lateAfterUnmount"), { verified: 0 });
-    const identity = (await run("identity")) as { before: number; after: number; expired: number; text: string };
-    same([identity.before, identity.after, identity.expired], [1, 0, 1]);
+    const identity = (await run("identity")) as { callsBeforeIdentity: number; calls: number; rows: number; expired: number; text: string };
+    same([identity.callsBeforeIdentity, identity.calls, identity.rows, identity.expired], [0, 1, 0, 1]);
     assert.match(identity.text, /Votre vérification a expiré, recommencez\./);
     same(errors, []);
     same(requests.filter((u) => u.startsWith("/api/")), []); // aucune requête réseau réelle

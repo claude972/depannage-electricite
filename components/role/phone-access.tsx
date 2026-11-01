@@ -394,31 +394,42 @@ export function applyHistory(s: HistoryState, r: ApiResult, append: boolean): Hi
   return { ...base, status: append ? s.status : "error", error: HISTORY_COPY.failed };
 }
 
-/** Identity source: (uid | null) on every auth change, incl. the initial session. */
-export type IdentityWatch = (cb: (uid: string | null) => void) => () => void;
+/** Identity source: every auth event with its uid (or null). « UNAVAILABLE » = no auth client. */
+export type AuthEvent = "INITIAL_SESSION" | "SIGNED_IN" | "SIGNED_OUT" | "TOKEN_REFRESHED" | "USER_UPDATED" | "UNAVAILABLE" | (string & {});
+export type IdentityWatch = (cb: (event: AuthEvent, uid: string | null) => void) => () => void;
 export const supabaseIdentity: IdentityWatch = (cb) => {
   try {
-    const { data } = createClient().auth.onAuthStateChange((_event, session) => cb(session?.user?.id ?? null));
+    const { data } = createClient().auth.onAuthStateChange((event, session) => cb(event, session?.user?.id ?? null));
     return () => data.subscription.unsubscribe();
   } catch {
-    return () => {}; // auth client not configured: the server 401 still ends the list
+    cb("UNAVAILABLE", null); // no auth client: identity can never be proven ⇒ nothing is read
+    return () => {};
   }
 };
 
-/** History outside React: a generation counter (identity change, reload) makes every older reply
- *  void; « Afficher plus » is single-flight; an identity change clears the list at once. */
+/** History outside React. PRIVACY: nothing is read before an identity is PROVEN (a known uid);
+ *  every read is bound to the uid and generation current when it started and is dropped if
+ *  either changed; an explicit SIGNED_OUT, a session-less start or another uid clears the list
+ *  at once. One read at a time per uid (« Afficher plus » single-flight). Nothing persisted. */
 export function createHistoryController({ api, get, set, onExpired }: { api: () => HistoryApi; get: () => HistoryState; set: (s: HistoryState) => void; onExpired: () => void }) {
   let gen = 0;
   let moreInFlight = false;
   let attached = true;
-  let uid: string | undefined; // undefined = not known yet
+  let uid: string | undefined; // undefined = unknown, never authorised
+  let wanted = false; // a load was requested while the identity was still unknown
+  let ended = false; // expired / unavailable: no further read in this view
   const expire = () => {
     gen++;
+    uid = undefined;
+    wanted = false;
     moreInFlight = false;
+    ended = true;
     set({ ...HISTORY_INITIAL, status: "expired", error: HISTORY_COPY.expired });
     onExpired();
   };
   const fetchPage = async (append: boolean) => {
+    if (uid === undefined || ended) return false;
+    const boundUid = uid;
     const my = append ? gen : ++gen;
     const cursor = append ? get().nextCursor ?? undefined : undefined;
     let result: ApiResult;
@@ -428,42 +439,61 @@ export function createHistoryController({ api, get, set, onExpired }: { api: () 
       result = { status: 0, body: null, retryAfter: null };
     }
     if (append) moreInFlight = false;
-    if (!attached || my !== gen) return false; // old identity / superseded reload
+    // Dropped unless the SAME proven uid and generation are still current in an attached view.
+    if (!attached || ended || my !== gen || uid !== boundUid) return false;
     const next = applyHistory(get(), result, append);
     if (next.status === "expired") return expire(), true;
     set(next);
     return true;
   };
   return {
-    /** First load or retry: shows « loading » (no stale list). */
+    /** First load or retry: « loading », no stale list; deferred until the uid is proven. */
     load() {
+      if (ended) return Promise.resolve(false);
+      gen++;
       set(HISTORY_INITIAL);
+      if (uid === undefined) {
+        wanted = true;
+        return Promise.resolve(false);
+      }
       return fetchPage(false);
     },
-    /** Window focus: revalidate in place (the current list stays until the fresh reply). */
+    /** Window focus: revalidate in place under the same proven uid. */
     revalidate() {
-      if (get().status === "expired") return Promise.resolve(false);
+      if (uid === undefined || ended) return Promise.resolve(false);
       return fetchPage(false);
     },
     more() {
       const s = get();
-      if (moreInFlight || !s.hasMore || !s.nextCursor) return Promise.resolve(false);
+      if (uid === undefined || ended || moreInFlight || !s.hasMore || !s.nextCursor) return Promise.resolve(false);
       moreInFlight = true;
       set({ ...s, loadingMore: true });
       return fetchPage(true);
     },
-    /** Auth change: SIGNED_OUT (null) or another uid ⇒ cleared immediately, back to the phone step. */
-    identity(next: string | null) {
-      // Before a uid is known (e.g. the browser client cannot read the session), nothing is
-      // inferred: the server's 401 still ends the list. Once known, any change clears it.
-      if (uid === undefined) {
-        if (next !== null) uid = next;
+    identity(event: AuthEvent, next: string | null) {
+      if (event === "UNAVAILABLE") {
+        gen++;
+        ended = true;
+        set({ ...HISTORY_INITIAL, status: "unavailable", error: HISTORY_COPY.unavailable });
         return;
       }
-      if (next !== uid) {
-        uid = next ?? undefined;
-        expire();
+      if (event === "SIGNED_OUT") return expire(); // even when the previous uid was unknown
+      if (next === null) {
+        // No session (initial or after a refresh failure): never authorised; an established list
+        // is cleared, a pending first load is ended honestly.
+        if (event === "INITIAL_SESSION" || uid !== undefined || wanted) expire();
+        return;
       }
+      if (uid === undefined) {
+        uid = next;
+        gen++; // every read started under the unknown identity is void
+        if (wanted) {
+          wanted = false;
+          void fetchPage(false);
+        }
+        return;
+      }
+      if (next !== uid) expire(); // another account: cleared, never shown under it
     },
     attach() {
       attached = true;
@@ -493,7 +523,7 @@ export function PhoneHistory({ api, onExpired, initial, watchIdentity = supabase
   useEffect(() => {
     ctrl.attach();
     if (!initial) void ctrl.load();
-    const stop = watchIdentity((uid) => ctrl.identity(uid));
+    const stop = watchIdentity((event, uid) => ctrl.identity(event, uid));
     const onFocus = () => void ctrl.revalidate();
     window.addEventListener("focus", onFocus);
     return () => {
