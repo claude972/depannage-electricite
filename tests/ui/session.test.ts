@@ -152,3 +152,12 @@ test("a reloaded workspace drops an organisation or site the server no longer re
   assert.deepEqual(validateContext(orgs, sites, "o1", "s9"), { organizationId: "o1", siteId: "", organizationDropped: false });
   assert.deepEqual(validateContext([], [], "", ""), { organizationId: "", siteId: "", organizationDropped: false });
 });
+
+test("public mode: a direct #new link opens the public request form; private views stay closed", () => {
+  assert.equal(canAccess("new", null, "public"), true);
+  assert.equal(canAccess("requests", null, "public"), false);
+  assert.equal(canAccess("detail", null, "public"), false);
+  assert.equal(canAccess("new", null, "demo"), false, "no role outside public mode ⇒ closed");
+  assert.equal(canAccess("new", "artisan", "live"), false, "artisans still cannot create requests");
+  assert.equal(canAccess("new", "client", "live"), true);
+});

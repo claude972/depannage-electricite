@@ -91,7 +91,9 @@ export function isView(value: string): value is View {
 export function canAccess(view: View, role: Role | null, mode: Mode): boolean {
   const rule = ACCESS[view];
   if (rule === "public") return true;
-  if (mode === "public" || !role) return false;
+  // Signed-out visitors may open the public request form directly (#new): it only saves a local
+  // draft and leads to sign-up. Role-restricted views stay closed in public mode.
+  if (mode === "public" || !role) return mode === "public" && PUBLIC_VIEWS.includes(view);
   return rule.includes(role);
 }
 export function homeFor(role: Role | null, mode: Mode): View {
