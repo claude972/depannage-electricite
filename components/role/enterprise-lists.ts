@@ -5,7 +5,7 @@ import type { Approval, ComplianceRecord, ContractState, Intervention, Quote, Si
 /** Accepted commitment of a quote = base + accepted amendments, as computed by the server
  *  (Quote.accepted_total_cents, FASTSPLIT-ACCEPTED-TOTALS-001). Falls back to the base total ONLY
  *  when the field is absent (demo data / older API). Never a max/clamp with what was paid. */
-export type QuoteWithAccepted = Pick<Quote, "total_cents"> & { accepted_total_cents?: number };
+export type QuoteWithAccepted = Pick<Quote, "total_cents" | "accepted_total_cents">;
 export function acceptedCommittedCents(q: QuoteWithAccepted): number {
   // validateWorkspace already rejects a present-but-malformed value: absent ⇒ base (legacy/demo).
   return q.accepted_total_cents === undefined ? q.total_cents : q.accepted_total_cents;
@@ -195,7 +195,7 @@ export type SiteBudgetBar = {
 export function siteBudgetBars(
   sites: Pick<Site, "id" | "name" | "budget_cents">[],
   interventions: Pick<Intervention, "id" | "site_id">[],
-  quotes: (Pick<Quote, "intervention_id" | "status" | "total_cents"> & { accepted_total_cents?: number })[],
+  quotes: Pick<Quote, "intervention_id" | "status" | "total_cents" | "accepted_total_cents">[],
 ): SiteBudgetBar[] {
   return sites.map((site) => {
     const ids = new Set(interventions.filter((i) => i.site_id === site.id).map((i) => i.id));
@@ -224,7 +224,7 @@ export function dashboardFigures(
     interventions: Pick<Intervention, "status" | "urgency">[];
     compliance: Pick<ComplianceRecord, "status" | "due_on">[];
     approvals: Pick<Approval, "status">[];
-    quotes: (Pick<Quote, "status" | "total_cents"> & { accepted_total_cents?: number })[];
+    quotes: Pick<Quote, "status" | "total_cents" | "accepted_total_cents">[];
   },
   today: string,
   isOpen: (status: Intervention["status"]) => boolean,
