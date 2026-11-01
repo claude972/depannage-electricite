@@ -388,6 +388,33 @@
   border-top: 1px solid var(--ui-border);
 }
 
+/* ---- Account view (AuthForm inside the existing AuthView: login / signup / reset) ---------- */
+.authSkin :global(.auth-form) {
+  padding: 32px;
+}
+.authSkin :global(.auth-form) > p:first-of-type {
+  margin: 8px 0 24px;
+  font-size: 15px;
+}
+.authSkin :global(.forgot-link),
+.authSkin :global(.auth-switch) button {
+  border: 0;
+  background: transparent;
+  color: var(--ui-accent);
+  font-size: 15px;
+  font-weight: 600;
+}
+.authSkin :global(.forgot-link):hover,
+.authSkin :global(.auth-switch) button:hover {
+  text-decoration: underline;
+}
+.authSkin :global(.auth-switch) {
+  color: var(--ui-text-muted);
+  font-size: 15px;
+}
+.authSkin :global(.button.full) {
+  margin-top: 16px;
+}
 @media (max-width: 760px) {
   .requestSkin :global(.stepper) li {
     font-size: 13px;
@@ -404,6 +431,9 @@
   .requestSkin :global(.form-actions) :global(.button) {
     font-size: 15px;
     padding: 0 16px;
+  }
+  .authSkin :global(.auth-form) {
+    padding: 24px 16px;
   }
 }
 @media (max-width: 640px) {

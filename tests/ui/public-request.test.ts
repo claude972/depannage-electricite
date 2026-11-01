@@ -138,3 +138,74 @@ test("rôles jamais thémés : les espaces client/entreprise n’importent ni ch
   const html = renderToString(createElement(forms.RequestForm as never, { initialCategory: "panel", initialValues: null, sites: [], mode: "live", busy: false, onBack() {}, onSubmit: async () => {}, onDemo() {} } as never));
   assert.doesNotMatch(html, /ui-v2|requestSkin|data-public-skin/);
 });
+
+// ---- P3 : vue « auth » ---------------------------------------------------------------------
+test("auth (SSR réel) : login / signup / reset dans le chrome thémé, classes réellement rendues", () => {
+  const guards: Record<string, string[]> = {
+    login: ["auth-layout", "panel auth-form", "field", "forgot-link", "button primary full", "auth-switch", "form-note"],
+    signup: ["auth-layout", "panel auth-form", "field", "button primary full", "auth-switch"],
+    reset: ["auth-layout", "panel auth-form", "field", "button primary full", "auth-switch"],
+  };
+  const titles: Record<string, string> = { login: "Connexion", signup: "Créer un compte", reset: "Réinitialiser mon mot de passe" };
+  for (const mode of ["login", "signup", "reset"]) {
+    const { html, calls } = renderSite({ view: "auth", authMode: mode });
+    assert.match(html, /class="ui-v2 /);
+    assert.match(html, /data-public-skin="auth"/);
+    assert.equal([...html.matchAll(/aria-current="page"[^>]*data-home-action="login"/g)].length, 2, mode);
+    assert.match(html, new RegExp(`<h2>${titles[mode]}</h2>`));
+    for (const cls of guards[mode]) assert.match(html, new RegExp(`class="${cls}`), `${mode}: ${cls}`);
+    assert.equal(/type="password"/.test(html), mode !== "reset", mode);
+    assert.equal(/<select/.test(html), mode === "signup", mode); // choix d’espace en inscription seulement
+    assert.doesNotMatch(html, /class="public-main/);
+    assert.deepEqual(calls, []);
+  }
+  const withDraft = renderSite({ view: "auth", authMode: "signup", pendingDraft: { category: "socket" } }).html;
+  assert.match(withDraft, /Votre brouillon de demande sera repris après connexion/);
+});
+
+test("auth : props de l’AuthForm inchangées, chaque mode appelle son seul callback de session", async () => {
+  const values = { email: "a@b.invalid", password: "motdepasse10", full_name: "A B", role: "client" };
+  const expected: Record<string, string> = { login: "signIn(a@b.invalid,motdepasse10)", signup: `signUp(${JSON.stringify(values)})`, reset: "resetPassword(a@b.invalid)" };
+  for (const mode of ["login", "signup", "reset"]) {
+    const { captured, calls } = spySite({ view: "auth", authMode: mode, busy: true });
+    const a = captured.auth;
+    assert.equal(a.mode, mode);
+    assert.equal(a.busy, true);
+    await a.onSubmit(values);
+    a.onMode("reset");
+    a.onDemo();
+    assert.deepEqual(calls, [expected[mode], "setAuthMode(reset)", "startDemo(client)"], mode);
+    assert.equal(captured.chrome.current, "auth");
+    calls.length = 0;
+    captured.chrome.onHome();
+    assert.deepEqual(calls, ["go(home)"]);
+  }
+});
+
+test("parcours brouillon sans inscription automatique : home → new (catégorie) → saveDraft → auth", async () => {
+  const draft = { category: "socket", description: "Prise sans courant depuis hier", address: "1 rue A", postal_code: "97200", city: "FdF", urgency: "scheduled" };
+  const home = spySite({ view: "home" });
+  home.captured.home.handlers.onNew("socket");
+  assert.deepEqual(home.calls, ["setCategory(socket)", "go(new)"]);
+  const form = spySite({ view: "new", categoryId: "socket" });
+  assert.equal(form.captured.form.initialCategory, "socket");
+  await form.captured.form.onSubmit(draft, []);
+  assert.deepEqual(form.calls, [`saveDraft(${JSON.stringify(draft)})`]); // aucun signUp / signIn
+  // saveDraft (session réelle) bascule en signup : la vue auth s’affiche sans rien soumettre.
+  const auth = spySite({ view: "auth", authMode: "signup", pendingDraft: draft });
+  assert.match(auth.html, /Votre brouillon de demande sera repris après connexion/);
+  assert.equal(auth.captured.auth.mode, "signup");
+  assert.deepEqual(auth.calls, []);
+  // Retour au formulaire : valeurs restaurées depuis le brouillon.
+  const back = spySite({ view: "new", categoryId: "socket", pendingDraft: draft });
+  assert.equal(JSON.stringify(back.captured.form.initialValues), JSON.stringify(draft));
+  assert.deepEqual(back.calls, []);
+});
+
+test("autres vues publiques : ancien shell inchangé, jamais le chrome thémé", () => {
+  for (const view of ["help", "pricing", "join", "about", "privacy", "legal"]) {
+    const { html } = renderSite({ view });
+    assert.match(html, /class="public-main/, view);
+    assert.doesNotMatch(html, /ui-v2|data-public-skin|data-chrome-home/, view);
+  }
+});

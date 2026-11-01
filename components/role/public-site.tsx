@@ -102,6 +102,19 @@ export function PublicSite({ session }: { session: PublicSession }) {
       </PublicChrome>
     );
 
+  // Account view: the existing AuthView (draft notice + SHARED AuthForm, unchanged) in a skin.
+  if (view === "auth")
+    return (
+      <PublicChrome current="auth" handlers={chromeHandlers} onHome={() => navigate("home")} mainClassName={formStyles.page}>
+        <div className={formStyles.wrap}>
+          {themedAlerts}
+          <div className={formStyles.authSkin} data-public-skin="auth">
+            <AuthView session={session} />
+          </div>
+        </div>
+      </PublicChrome>
+    );
+
   return (
     <div className={styles.site}>
       {alerts}
@@ -118,7 +131,7 @@ export function PublicSite({ session }: { session: PublicSession }) {
             ))}
           </nav>
           <div className={styles.headerActions}>
-            <button type="button" className={`button outline ${styles.loginButton}`} aria-current={view === "auth" ? "page" : undefined} onClick={login}>
+            <button type="button" className={`button outline ${styles.loginButton}`} onClick={login}>
               <Icon name="person" size={16} />
               Se connecter
             </button>
@@ -130,9 +143,7 @@ export function PublicSite({ session }: { session: PublicSession }) {
       </div>
 
       <main id="main" className={`public-main ${styles.main}`}>
-        {view === "auth" ? (
-          <AuthView session={session} />
-        ) : view === "help" ? (
+        {view === "help" ? (
           <HelpView onNew={() => newRequest()} />
         ) : view === "pricing" ? (
           <PricingView onNew={() => newRequest()} />
