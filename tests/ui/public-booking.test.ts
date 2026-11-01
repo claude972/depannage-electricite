@@ -43,6 +43,12 @@ test("page : barre fixe « Confirmer » = même action que le CTA principal (ouv
   same(opens, ["Décrire ma panne", "Décrire ma panne", "Confirmer"]);
   assert.match(bar, /data-booking-open="">Confirmer<\/button>/); // libellé exact
   assert.doesNotMatch(html, /href="\/#new/); // jamais le formulaire générique
+  // Réserve basse sur le conteneur ThemeSurface ENTIER (en-tête, main ET pied de page) : la barre
+  // fixe ne masque jamais les derniers boutons du pied de page.
+  const root = html.match(/<div class="(ui-v2 [^"]*)"/)![1];
+  assert.match(root, /\bwithBar\b/);
+  const footer = html.indexOf("<footer"), rootEnd = html.lastIndexOf("</div>");
+  assert.ok(html.indexOf(`class="${root}"`) < footer && footer < rootEnd);
   // Ouvert : l’assistant remplace le contenu, la catégorie n’est jamais redemandée.
   const opened = render(createElement(servicePage.PublicServicePage, { service, initialOpen: true }));
   assert.match(opened, /data-booking-wizard="" data-step="1"/);
