@@ -25,7 +25,8 @@ function workerHarness() {
   const assetResponses: Record<string, AssetResponse> = {};
   let putFailure: number | undefined, puts = 0, deleteFailure = false;
   let disconnected = false;
-  let cacheReadFailure: "open" | "match" | undefined;
+  let fetchGate: Promise<void> | undefined;
+  let cacheReadFailure: "storage" | "match" | undefined;
   let claims = 0;
   let activations = 0;
   let html = "<main>public notice</main>";
@@ -46,9 +47,13 @@ function workerHarness() {
     },
     caches: {
       keys: async () => [...stores.keys()],
+      match: async (url: string, options: { cacheName: string }) => {
+        if (cacheReadFailure) throw Error("CacheStorage read failed");
+        return stores.get(options.cacheName)?.get(url)?.clone();
+      },
       delete: async (key: string) => { if (deleteFailure) throw Error("Cache deletion unavailable"); return stores.delete(key); },
       open: async (key: string) => {
-        if (cacheReadFailure === "open") throw new Error("Storage unavailable");
+        if (cacheReadFailure === "storage") throw new Error("Storage unavailable");
         if (!stores.has(key)) stores.set(key, new Map());
         return {
           put: async (url: string, response: Response) => { puts++; stores.get(key)!.set(url, response.clone()); if (puts === putFailure) throw Error("Cache write failed"); },
@@ -61,6 +66,7 @@ function workerHarness() {
     },
     fetch: async (input: RequestLike, init?: RequestInit) => {
       fetched.push({ url: input.url, cache: init?.cache ?? (input as Request).cache, credentials: (input as Request).credentials, redirect: (input as Request).redirect });
+      if (fetchGate) await fetchGate;
       if (disconnected) throw new TypeError("Network unavailable");
       const pathname = new URL(input.url).pathname;
       const assets: Record<string, { marker: string; type: string; body: string }> = {
@@ -104,6 +110,7 @@ function workerHarness() {
     setNoticeResponse: (value: AssetResponse) => { assetResponses["/offline.html"] = value; },
     setAssetResponse: (asset: string, value: AssetResponse) => { assetResponses[asset] = value; },
     failPut: (at: number, failDelete = false) => { putFailure = at; deleteFailure = failDelete; },
+    holdFetch: () => { let release!: () => void; fetchGate = new Promise<void>(resolve => { release = resolve; }); return release; },
     claims: () => claims,
     activations: () => activations,
   };
@@ -172,7 +179,7 @@ test("missing offline cache returns a generic 503 with no private account conten
   assert.match(await response.text(), /Connexion indisponible/);
 });
 
-for (const point of ["open", "match"] as const) {
+for (const point of ["storage", "match"] as const) {
   test(`offline navigation still returns a neutral no-store 503 when cache ${point} fails`, async () => {
     const h = workerHarness();
     await Promise.all(h.emit("install").waits);
@@ -345,4 +352,37 @@ test("new public routes receive isolated markers, no-store and restrictive offli
   assert.equal(headers["X-Courant-Public-Request"], "1"); assert.equal(headers["Cache-Control"], "no-store");
   for (const rule of ["default-src 'none'", "script-src 'self'", "connect-src 'none'", "form-action 'none'", "base-uri 'none'"]) assert.ok(headers["Content-Security-Policy"].includes(rule));
   assert.ok(script.headers.some(h => h.key === "X-Courant-Public-Draft-Script" && h.value === "1"));
+});
+
+async function cacheBits(store: Map<string, Response> | undefined) {
+  if (!store) return null;
+  return Promise.all([...store.entries()].map(async ([key, response]) => ({ key, status: response.status, url: response.url, headers: [...response.headers.entries()], body: await response.clone().text() })));
+}
+test("a reused active v4 generation is immutable even when a new install would fail its first put", async () => {
+  const h = workerHarness(); await Promise.all(h.emit("install").waits); await Promise.all(h.emit("activate").waits);
+  const before = await cacheBits(h.stores.get("courant-pwa-public-v4")); const requests = h.fetched.length;
+  h.failPut(4); // Old implementation wrote into the active v4 and then deleted it on failure.
+  await assert.rejects(Promise.all(h.emit("install").waits), /generation already exists; version bump required/);
+  assert.deepEqual(await cacheBits(h.stores.get("courant-pwa-public-v4")), before);
+  assert.equal(h.fetched.length, requests, "a reused generation is refused before even fetching replacement assets"); assert.equal(h.claims(), 1); assert.equal(h.activations(), 0);
+});
+test("a partial orphan generation is preserved and refused, never repaired in place or claimed", async () => {
+  const h = workerHarness(); await Promise.all(h.emit("install").waits); h.stores.get("courant-pwa-public-v4")!.delete("/offline-request.js");
+  h.stores.set("courant-pwa-public-v3", new Map()); const before = await cacheBits(h.stores.get("courant-pwa-public-v4"));
+  await assert.rejects(Promise.all(h.emit("install").waits), /generation already exists/);
+  assert.deepEqual(await cacheBits(h.stores.get("courant-pwa-public-v4")), before);
+  await assert.rejects(Promise.all(h.emit("activate").waits), /Public offline cache incomplete/); assert.equal(h.claims(), 0); assert.equal(h.stores.has("courant-pwa-public-v3"), true);
+});
+test("the old active generation stays byte-identical while every new public asset is in flight and after install", async () => {
+  const h = workerHarness(); const old = new Map([
+    ["/offline.html", new Response("old public notice", { headers: { "X-Courant-Public-Offline": "1" } })],
+    ["/offline-request.html", new Response("old public form")], ["/offline-request.js", new Response("old public script")],
+  ]); h.stores.set("courant-pwa-public-v3", old); const before = await cacheBits(old); const release = h.holdFetch();
+  const install = Promise.all(h.emit("install").waits); await new Promise<void>(resolve => setImmediate(resolve));
+  assert.equal(h.fetched.length, 3); assert.equal(h.stores.has("courant-pwa-public-v4"), false); assert.deepEqual(await cacheBits(old), before);
+  release(); await install; assert.deepEqual(await cacheBits(old), before); assert.equal(h.stores.get("courant-pwa-public-v4")!.size, 3);
+  await Promise.all(h.emit("activate").waits); assert.equal(h.claims(), 1); assert.equal(h.stores.has("courant-pwa-public-v3"), false);
+});
+test("missing-cache offline reads never create an orphan cache that could collide with an installer", async () => {
+  const h = workerHarness(); h.setOffline(); assert.equal((await h.navigate("/private").response!).status, 503); assert.equal(h.stores.size, 0);
 });

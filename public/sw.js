@@ -1,6 +1,8 @@
 /* Public offline notice and explicit local note form only. Never cache an account, API,
  * Auth, RSC, photos or mutation; no runtime writes, background sync or submission queue. */
 const PUBLIC_CACHE_PREFIX = "courant-pwa-public-";
+// A generation is immutable and may be created only once. Bump it whenever this worker
+// or any of the three public assets changes; a reused generation fails closed.
 const PUBLIC_CACHE = `${PUBLIC_CACHE_PREFIX}v4`;
 const OFFLINE_URL = "/offline.html";
 const FORM_URL = "/offline-request.html";
@@ -15,22 +17,30 @@ function validAsset(response, asset) {
 }
 async function cachedAsset(path) {
   const asset = ASSETS.find(asset => asset.path === path);
-  const response = await (await caches.open(PUBLIC_CACHE)).match(path);
+  // CacheStorage.match never creates a missing cache while an installer is preparing assets.
+  const response = await caches.match(path, { cacheName: PUBLIC_CACHE });
   return validAsset(response, asset) ? response : null;
 }
 self.addEventListener("install", event => {
   event.waitUntil((async () => {
+    // Never overwrite an active generation or a partial orphan of an earlier failed install.
+    if ((await caches.keys()).includes(PUBLIC_CACHE)) throw new Error("Public offline cache generation already exists; version bump required");
     // Fetch and validate ALL responses before opening or writing the new cache.
     const responses = await Promise.all(ASSETS.map(async asset => {
       const response = await fetch(new Request(asset.path, { cache: "reload", credentials: "same-origin", redirect: "error" }));
       if (!validAsset(response, asset)) throw new Error("Public offline asset unavailable");
       return response;
     }));
+    // Re-check after network awaits. Reads of the active worker cannot create this cache.
+    if ((await caches.keys()).includes(PUBLIC_CACHE)) throw new Error("Public offline cache generation already exists; version bump required");
+    let created = false;
     try {
       const cache = await caches.open(PUBLIC_CACHE);
+      created = true;
       for (let i = 0; i < ASSETS.length; i++) await cache.put(ASSETS[i].path, responses[i]);
     } catch (error) {
-      try { await caches.delete(PUBLIC_CACHE); } catch {}
+      // Only this newly-created, not-yet-installed generation may be rolled back.
+      if (created) try { await caches.delete(PUBLIC_CACHE); } catch {}
       throw error;
     }
   })());
