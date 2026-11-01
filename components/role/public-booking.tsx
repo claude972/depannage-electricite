@@ -7,7 +7,7 @@
 // details never enter the request description. The category comes from the service: never re-asked.
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { AddressField, createAddressApi, type AddressValue } from "../app/address-field";
-import { BOOKING_DRAFT_KEY, CIVILITIES, SLOTS, SLOT_LABEL, bookingDescription, contactErrors, parseBooking, readBooking, saveBooking, type BookingContact, type BookingDraft, type Civility, type Slot } from "../app/booking-draft";
+import { BOOKING_DRAFT_KEY, CIVILITIES, SLOTS, SLOT_LABEL, bookingDescription, contactErrors, newRequestId, parseBooking, readBooking, saveBooking, type BookingContact, type BookingDraft, type Civility, type Slot } from "../app/booking-draft";
 import { getDraftStorage } from "../app/request-draft-boot";
 import { PUBLIC_DRAFT_KEY, parsePublicDraftValues, readPublicDraft, savePublicDraft } from "../../lib/shared/request-draft";
 import { Field } from "../app/ui";
@@ -84,7 +84,16 @@ export function toBooking(service: Pick<ServiceEntry, "slug">, s: BookingState):
  *  only when both new entries are proven; never a mixed pair announced as saved. */
 export function finishBooking({ storage, service, state, go, now = Date.now() }: { storage: Storage | null; service: Pick<ServiceEntry, "slug" | "title" | "category">; state: BookingState; go: (href: string) => void; now?: number }): { ok: true } | { ok: false; message: string } {
   if (!storage) return { ok: false, message: SAVE_FAILED_MESSAGE };
-  const booking = toBooking(service, state);
+  // Idempotency key: generated ONCE per tab draft; going back and finishing again keeps the key
+  // already stored for this service (never a new key for the same request).
+  let keptId: string | undefined;
+  try {
+    const stored = readBooking(storage.getItem(BOOKING_DRAFT_KEY), now)?.booking;
+    if (stored?.slug === service.slug && stored.request_id) keptId = stored.request_id;
+  } catch {
+    keptId = undefined;
+  }
+  const booking = { ...toBooking(service, state), request_id: keptId ?? newRequestId() };
   const values = {
     category: service.category,
     description: bookingDescription(service.title, booking),

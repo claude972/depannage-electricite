@@ -2,6 +2,7 @@
 // route (static params, metadata, notFound), home cards as priced links, honest photos, and the
 // `#new/<category>` deep link of the public request form (a saved draft keeps priority).
 import test from "node:test";
+import * as draftModule from "../../components/app/booking-draft";
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
