@@ -1,0 +1,1203 @@
+/* Artisan space theme (FASTSPLIT-ARTISAN-ENTERPRISE-THEME-001, artisan part). Exported
+   `.artisanSkin` is put by the lead on the artisan root together with ThemeSurface (`.ui-v2`).
+   Every rule is scoped under `.artisanSkin`, --ui-* tokens only; no global or legacy variable
+   is redefined and artisan.module.css is not edited. Same pattern as client-theme.module.css:
+   one override per colour declaration of the matching rule (+1 class), mapped to tokens;
+   layout unchanged. artisan.module.css / artisan-quote-draft.module.css classes are reached
+   without TSX through their local-name suffix (`[class$="_name"]`, `[class*="_name "]`), which
+   matches both the dev ("…module__HASH__name") and the production ("HASH_name") class names
+   whatever the hash. */
+.artisanSkin {
+  min-height: 100vh;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+}
+:where(.artisanSkin) h1,
+:where(.artisanSkin) h2,
+:where(.artisanSkin) h3 {
+  color: inherit;
+}
+:where(.artisanSkin) p {
+  color: var(--ui-text-muted);
+}
+.artisanSkin input,
+.artisanSkin select,
+.artisanSkin textarea {
+  color-scheme: var(--ui-scheme);
+}
+.artisanSkin a {
+  color: var(--ui-accent);
+}
+
+/* ---- Generated from app/globals.css (global primitives used in the artisan space) ---------- */
+.artisanSkin :global(.primary) {
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+.artisanSkin :global(.primary):hover {
+  background: var(--ui-primary);
+}
+.artisanSkin :global(.outline) {
+  border-color: var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+.artisanSkin :global(.outline):hover {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+}
+.artisanSkin :global(.text-button) {
+  color: var(--ui-accent);
+}
+.artisanSkin :global(.brand) {
+  color: var(--ui-text);
+}
+.artisanSkin :global(.brand) small {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.brand-mark) {
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+.artisanSkin :global(.brand-dot) {
+  color: var(--ui-accent);
+}
+.artisanSkin :global(.spinner) {
+  border: 3px solid var(--ui-border);
+  border-top-color: var(--ui-accent);
+}
+.artisanSkin :global(.avatar) {
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+.artisanSkin :global(.panel) {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.service-icon) {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.artisanSkin :global(.badge) {
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.status-quoted),
+.artisanSkin :global(.status-completed) {
+  background: var(--ui-surface);
+  color: var(--ui-warning);
+}
+.artisanSkin :global(.status-paid) {
+  background: var(--ui-surface);
+  color: var(--ui-success);
+}
+.artisanSkin :global(.status-assigned),
+.artisanSkin :global(.status-accepted),
+.artisanSkin :global(.status-in_progress) {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.artisanSkin :global(.status-cancelled) {
+  background: var(--ui-surface);
+  color: var(--ui-danger);
+}
+.artisanSkin :global(.alert):global(.error) {
+  background: var(--ui-surface);
+  color: var(--ui-danger);
+  border-color: var(--ui-border);
+}
+.artisanSkin :global(.alert):global(.success) {
+  background: var(--ui-surface);
+  color: var(--ui-success);
+  border-color: var(--ui-border);
+}
+.artisanSkin :global(.alert):global(.warning) {
+  background: var(--ui-surface);
+  color: var(--ui-warning);
+  border-color: var(--ui-border);
+}
+.artisanSkin :global(.empty-icon) {
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.tabs) > button {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.tabs) > button:global(.active) {
+  color: var(--ui-accent);
+  background: var(--ui-surface);
+}
+.artisanSkin :global(.back-link) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.back-link):hover {
+  color: var(--ui-accent);
+}
+.artisanSkin :global(.stepper) li {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.stepper) li > span {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+}
+.artisanSkin :global(.stepper) li:global(.current) {
+  color: var(--ui-accent);
+}
+.artisanSkin :global(.stepper) li:global(.current) > span {
+  background: var(--ui-primary);
+  border-color: var(--ui-accent);
+  color: var(--ui-on-primary);
+}
+.artisanSkin :global(.field) > span,
+.artisanSkin :global(.urgency-options) legend {
+  color: var(--ui-text);
+}
+.artisanSkin :global(.field) input,
+.artisanSkin :global(.field) select,
+.artisanSkin :global(.field) textarea {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+.artisanSkin :global(.field) small {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.category-grid) > button {
+  border: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.category-grid) > button > svg {
+  color: var(--ui-accent);
+}
+.artisanSkin :global(.category-grid) small {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.category-grid) > button:global(.selected) {
+  background: var(--ui-surface);
+  border-color: var(--ui-accent);
+}
+.artisanSkin :global(.radio-dot) {
+  border: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.selected) > :global(.radio-dot) {
+  background: var(--ui-primary);
+  border: 4px solid var(--ui-border);
+}
+.artisanSkin :global(.form-actions) {
+  border-top: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.inline-note) {
+  background: var(--ui-surface);
+}
+.artisanSkin :global(.inline-note) svg {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.urgency-options) > label {
+  border: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.urgency-options) > label:global(.selected) {
+  border-color: var(--ui-accent);
+  background: var(--ui-surface);
+}
+.artisanSkin :global(.urgency-options) input {
+  accent-color: var(--ui-primary);
+}
+.artisanSkin :global(.urgency-options) small {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.form-note) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.recap-service) {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.recap-service) div > span {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.recap-address) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.estimate-box) {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+}
+.artisanSkin :global(.estimate-box) > span {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.estimate-box) > strong {
+  color: var(--ui-text);
+}
+.artisanSkin :global(.quote-totals) :global(.total) {
+  border-top: 1px solid var(--ui-border);
+  color: var(--ui-text);
+}
+.artisanSkin :global(.document-list) > div {
+  border-bottom: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.site-form) form {
+  border-top: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.message-threads) {
+  border-right: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+}
+.artisanSkin :global(.message-threads) > button {
+  border-bottom: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.message-threads) > button:global(.selected) {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.artisanSkin :global(.message-threads) small {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.conversation-header) {
+  border-bottom: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.conversation-header) > span {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.message-bubble) {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.message-bubble) > span {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.message-bubble) > p {
+  color: var(--ui-text);
+}
+.artisanSkin :global(.message-bubble) small {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.message-compose) {
+  border-top: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.message-compose) textarea {
+  border: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.profile-intro) {
+  border-bottom: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.auth-mark) {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.artisanSkin :global(.forgot-link) {
+  color: var(--ui-accent);
+}
+.artisanSkin :global(.auth-switch) button {
+  color: var(--ui-accent);
+}
+@media (max-width: 950px) {
+  .artisanSkin :global(.message-threads) {
+    border-bottom: 1px solid var(--ui-border);
+  }
+  .artisanSkin :global(.message-threads) > button {
+    border: 1px solid var(--ui-border);
+    background: var(--ui-card);
+  }
+}
+.artisanSkin :global(.review-stars) {
+  color: var(--ui-warning);
+}
+.artisanSkin :global(.rating-options) legend {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.rating-options) span {
+  border: 1px solid var(--ui-border);
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.rating-options) input:checked + span {
+  color: var(--ui-warning);
+  border-color: var(--ui-warning);
+  background: var(--ui-surface);
+}
+.artisanSkin :global(.document-manager) form {
+  border-top: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.operations-tabs) {
+  border-bottom: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.operations-form) {
+  border-left: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.approval-list) > div {
+  border-bottom: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.rule-row) {
+  border-bottom: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.rule-row) > svg {
+  color: var(--ui-accent);
+}
+.artisanSkin :global(.rule-row) small {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.checkbox-field) input {
+  accent-color: var(--ui-primary);
+}
+.artisanSkin :global(.contract-list) details {
+  border-bottom: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.contract-list) small {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.compliance-list) > div {
+  border-bottom: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.record-icon) {
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.operation-empty) {
+  color: var(--ui-text-muted);
+}
+@media (max-width: 1050px) {
+  .artisanSkin :global(.operations-form) {
+    border-top: 1px solid var(--ui-border);
+  }
+}
+.artisanSkin :global(.warranty-list) > div {
+  border-top: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.warranty-list) small {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.warranty-panel) form {
+  border-top: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.confirmation-review) {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+}
+.artisanSkin :global(.inline-editor) {
+  border-top: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.inline-validation) {
+  color: var(--ui-danger);
+}
+.artisanSkin :global(.tag) {
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.tag-blue) {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.artisanSkin :global(.tag-green) {
+  background: var(--ui-surface);
+  color: var(--ui-success);
+}
+.artisanSkin :global(.tag-amber) {
+  background: var(--ui-surface);
+  color: var(--ui-warning);
+}
+.artisanSkin :global(.tag-red) {
+  background: var(--ui-surface);
+  color: var(--ui-danger);
+}
+.artisanSkin :global(.tag-violet) {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.artisanSkin :global(.stat) {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.stat) section > span {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.stat) strong {
+  color: var(--ui-text);
+}
+.artisanSkin :global(.stat) small {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.unavailable) {
+  border: 1px dashed var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.unavailable-icon) {
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.unavailable) strong {
+  color: var(--ui-text);
+}
+.artisanSkin :global(.unavailable) small {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.field) label {
+  color: var(--ui-text);
+}
+.artisanSkin :global(.field-error) {
+  color: var(--ui-danger);
+}
+.artisanSkin :global(.demo-note) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.tabs) > button[aria-pressed="true"] {
+  color: var(--ui-accent);
+  background: var(--ui-surface);
+}
+.artisanSkin :global(.install-icon) {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.artisanSkin :global(.photo-list) li {
+  color: var(--ui-text);
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+}
+.artisanSkin :global(.upload-queue) li {
+  border: 1px solid var(--ui-border);
+}
+.artisanSkin :global(.upload-queue) li[data-status="failed"] {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+}
+.artisanSkin :global(.upload-queue) li[data-status="done"] {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+}
+.artisanSkin :global(.upload-queue) li small {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :global(.upload-queue) li[data-status="uncertain"] {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+}
+.artisanSkin :global(.upload-open) small {
+  color: var(--ui-danger);
+}
+
+/* ---- Generated from the artisan-space modules (suffix selectors) ------------------------- */
+/* -- components/role/support-tickets.module.css -- */
+.artisanSkin :is([class$="_summary"], [class*="_summary "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_list"], [class*="_list "]) {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+}
+.artisanSkin :is([class$="_list"], [class*="_list "]) li + li {
+  border-top: 1px solid var(--ui-border);
+}
+.artisanSkin :is([class$="_row"], [class*="_row "]):hover {
+  background: var(--ui-surface);
+}
+.artisanSkin :is([class$="_rowTitle"], [class*="_rowTitle "]) {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_rowMeta"], [class*="_rowMeta "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_rowArrow"], [class*="_rowArrow "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_pagination"], [class*="_pagination "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_note"], [class*="_note "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_counter"], [class*="_counter "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_counterOver"], [class*="_counterOver "]) {
+  color: var(--ui-danger);
+}
+.artisanSkin :is([class$="_headerMeta"], [class*="_headerMeta "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_event"], [class*="_event "]) {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+}
+.artisanSkin :is([class$="_eventUser"], [class*="_eventUser "]) {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+}
+.artisanSkin :is([class$="_eventSystem"], [class*="_eventSystem "]) {
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_eventHead"], [class*="_eventHead "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_eventHead"], [class*="_eventHead "]) strong {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_eventBody"], [class*="_eventBody "]) {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_eventSystem"], [class*="_eventSystem "]) :is([class$="_eventBody"], [class*="_eventBody "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_more"], [class*="_more "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_conflict"], [class*="_conflict "]) {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-warning);
+}
+.artisanSkin :is([class$="_closedNote"], [class*="_closedNote "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_inlineHelp"], [class*="_inlineHelp "]) {
+  color: var(--ui-text-muted);
+}
+/* -- components/role/artisan-quote-draft.module.css -- */
+.artisanSkin :is([class$="_lead"], [class*="_lead "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_saved"], [class*="_saved "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_note"], [class*="_note "]) {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_note"], [class*="_note "]) svg {
+  color: var(--ui-accent);
+}
+.artisanSkin :is([class$="_conflictBody"], [class*="_conflictBody "]) h3 {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_compare"], [class*="_compare "]) > div {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_summary"], [class*="_summary "]) li {
+  border-bottom: 1px solid var(--ui-border);
+}
+.artisanSkin :is([class$="_summary"], [class*="_summary "]) li span {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_summaryEmpty"], [class*="_summaryEmpty "]),
+.artisanSkin :is([class$="_summaryFooter"], [class*="_summaryFooter "]) {
+  color: var(--ui-text-muted) !important;
+}
+.artisanSkin :is([class$="_linesCard"], [class*="_linesCard "]) {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+}
+.artisanSkin :is([class$="_linesHead"], [class*="_linesHead "]) {
+  background: var(--ui-surface);
+  border-bottom: 1px solid var(--ui-border);
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_row"], [class*="_row "]) {
+  border-bottom: 1px solid var(--ui-border);
+}
+.artisanSkin :is([class$="_lineTotal"], [class*="_lineTotal "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_lineTotal"], [class*="_lineTotal "]) strong {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_remove"], [class*="_remove "]) {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_emptyLines"], [class*="_emptyLines "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_totals"], [class*="_totals "]) {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+}
+.artisanSkin :is([class$="_totals"], [class*="_totals "]) > div {
+  border-bottom: 1px solid var(--ui-border);
+}
+.artisanSkin :is([class$="_totals"], [class*="_totals "]) strong {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_total"], [class*="_total "]) {
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_estimate"], [class*="_estimate "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_hint"], [class*="_hint "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_fallback"], [class*="_fallback "]) :global(.unavailable) {
+  background: var(--ui-card);
+}
+/* -- components/role/artisan.module.css -- */
+.artisanSkin :is([class$="_space"], [class*="_space "]) {
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_space"], [class*="_space "]) h1,
+.artisanSkin :is([class$="_space"], [class*="_space "]) h2,
+.artisanSkin :is([class$="_space"], [class*="_space "]) h3 {
+  color: var(--ui-text);
+}
+@media (min-width: 1024px) {
+  .artisanSkin :is([class$="_sidebar"], [class*="_sidebar "]) {
+    background: var(--ui-card);
+    border-right: 1px solid var(--ui-border);
+  }
+}
+.artisanSkin :is([class$="_sidebarBrand"], [class*="_sidebarBrand "]) {
+  border-bottom: 1px solid var(--ui-border);
+}
+.artisanSkin :is([class$="_sideCaption"], [class*="_sideCaption "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_sideItem"], [class*="_sideItem "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_sideItem"], [class*="_sideItem "]):hover {
+  background: var(--ui-surface);
+}
+.artisanSkin :is([class$="_sideItem"], [class*="_sideItem "])[aria-current="page"] {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.artisanSkin :is([class$="_sideItem"], [class*="_sideItem "]) small {
+  color: var(--ui-accent);
+  background: var(--ui-surface);
+}
+.artisanSkin :is([class$="_sideFoot"], [class*="_sideFoot "]) {
+  border-top: 1px solid var(--ui-border);
+}
+.artisanSkin :is([class$="_sideUser"], [class*="_sideUser "]) strong {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_sideUser"], [class*="_sideUser "]) span {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_avatarSmall"], [class*="_avatarSmall "]) {
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_demoBar"], [class*="_demoBar "]) {
+  background: var(--ui-surface);
+  border-bottom: 1px solid var(--ui-border);
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_demoRole"], [class*="_demoRole "]) select {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_topbar"], [class*="_topbar "]) {
+  background: var(--ui-card);
+  border-bottom: 1px solid var(--ui-border);
+}
+.artisanSkin :is([class$="_greeting"], [class*="_greeting "]) span {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_greeting"], [class*="_greeting "]) strong {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_iconButton"], [class*="_iconButton "]) {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_iconButton"], [class*="_iconButton "]):hover {
+  background: var(--ui-surface);
+}
+.artisanSkin :is([class$="_bottomNav"], [class*="_bottomNav "]) {
+  background: var(--ui-card);
+  border-top: 1px solid var(--ui-border);
+}
+.artisanSkin :is([class$="_bottomItem"], [class*="_bottomItem "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_bottomItem"], [class*="_bottomItem "])[aria-current="page"] {
+  color: var(--ui-accent);
+  border-top-color: var(--ui-accent);
+}
+.artisanSkin :is([class$="_drawerOverlay"], [class*="_drawerOverlay "]) {
+  background: var(--ui-surface);
+}
+.artisanSkin :is([class$="_drawer"], [class*="_drawer "]) {
+  background: var(--ui-card);
+}
+.artisanSkin :is([class$="_drawerHead"], [class*="_drawerHead "]) {
+  border-bottom: 1px solid var(--ui-border);
+}
+.artisanSkin :is([class$="_sectionNote"], [class*="_sectionNote "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_note"], [class*="_note "]) {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+}
+.artisanSkin :is([class$="_note"], [class*="_note "]) strong {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_noteAmber"], [class*="_noteAmber "]) {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-warning);
+}
+.artisanSkin :is([class$="_noteAmber"], [class*="_noteAmber "]) svg {
+  color: var(--ui-warning);
+}
+.artisanSkin :is([class$="_inlineLink"], [class*="_inlineLink "]) {
+  color: var(--ui-accent);
+}
+.artisanSkin :is([class$="_banner"], [class*="_banner "]) {
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_banner"], [class*="_banner "]) h1 {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_banner"], [class*="_banner "]) p {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_bannerKicker"], [class*="_bannerKicker "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_bannerArt"], [class*="_bannerArt "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_row"], [class*="_row "]) {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+}
+.artisanSkin :is([class$="_row"], [class*="_row "]):hover {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+}
+.artisanSkin :is([class$="_row"], [class*="_row "]) > svg:last-child {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_rowIcon"], [class*="_rowIcon "]) {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.artisanSkin :is([class$="_tone_outage"], [class*="_tone_outage "]) {
+  background: var(--ui-surface);
+  color: var(--ui-warning);
+}
+.artisanSkin :is([class$="_tone_panel"], [class*="_tone_panel "]) {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.artisanSkin :is([class$="_tone_socket"], [class*="_tone_socket "]) {
+  background: var(--ui-surface);
+  color: var(--ui-success);
+}
+.artisanSkin :is([class$="_tone_lighting"], [class*="_tone_lighting "]) {
+  background: var(--ui-surface);
+  color: var(--ui-warning);
+}
+.artisanSkin :is([class$="_tone_diagnostic"], [class*="_tone_diagnostic "]) {
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_rowTitle"], [class*="_rowTitle "]) {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_rowMeta"], [class*="_rowMeta "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_rowRight"], [class*="_rowRight "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_rowRight"], [class*="_rowRight "]) strong {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_rowHint"], [class*="_rowHint "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_perfHead"], [class*="_perfHead "]) svg {
+  color: var(--ui-accent);
+}
+.artisanSkin :is([class$="_perfPair"], [class*="_perfPair "]) > div:first-child {
+  border-right: 1px solid var(--ui-border);
+}
+@media (max-width: 420px) {
+  .artisanSkin :is([class$="_perfPair"], [class*="_perfPair "]) > div:first-child {
+    border-bottom: 1px solid var(--ui-border);
+  }
+}
+.artisanSkin :is([class$="_amberIcon"], [class*="_amberIcon "]) {
+  background: var(--ui-surface);
+  color: var(--ui-warning);
+}
+.artisanSkin :is([class$="_greenIcon"], [class*="_greenIcon "]) {
+  background: var(--ui-surface);
+  color: var(--ui-success);
+}
+.artisanSkin :is([class$="_blueIcon"], [class*="_blueIcon "]) {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.artisanSkin :is([class$="_violetIcon"], [class*="_violetIcon "]) {
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_perfLabel"], [class*="_perfLabel "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_perfValue"], [class*="_perfValue "]) {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_perfValue"], [class*="_perfValue "]) small {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_perfNote"], [class*="_perfNote "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_basis"], [class*="_basis "]) {
+  border-top: 1px solid var(--ui-border);
+}
+.artisanSkin :is([class$="_basis"], [class*="_basis "]) summary {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_basis"], [class*="_basis "]) summary::before {
+  border-right: 1.5px solid var(--ui-text-muted);
+  border-bottom: 1.5px solid var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_basisBody"], [class*="_basisBody "]) p {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_basisBody"], [class*="_basisBody "]) :is([class$="_formulaList"], [class*="_formulaList "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_cardLabel"], [class*="_cardLabel "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_cardValue"], [class*="_cardValue "]) {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_description"], [class*="_description "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_tileLabel"], [class*="_tileLabel "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_tileValue"], [class*="_tileValue "]) {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_tileNote"], [class*="_tileNote "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_facts"], [class*="_facts "]) {
+  border-top: 1px solid var(--ui-border);
+}
+.artisanSkin :is([class$="_facts"], [class*="_facts "]) dt {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_facts"], [class*="_facts "]) dd {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_facts"], [class*="_facts "]) dd small {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_stageButton"], [class*="_stageButton "]) {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_stageButton"], [class*="_stageButton "])[aria-pressed="true"] {
+  background: var(--ui-surface);
+  border-color: var(--ui-border);
+  color: var(--ui-accent);
+}
+.artisanSkin :is([class$="_appointmentLine"], [class*="_appointmentLine "]) {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_appointmentLine"], [class*="_appointmentLine "]) svg {
+  color: var(--ui-accent);
+}
+.artisanSkin :is([class$="_appointmentLine"], [class*="_appointmentLine "]) small {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_quoteHead"], [class*="_quoteHead "]) strong {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_versionButton"], [class*="_versionButton "]) {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_versionButton"], [class*="_versionButton "])[aria-pressed="true"] {
+  background: var(--ui-surface);
+  border-color: var(--ui-border);
+  color: var(--ui-accent);
+}
+.artisanSkin :is([class$="_quoteLines"], [class*="_quoteLines "]) {
+  border-top: 1px solid var(--ui-border);
+}
+.artisanSkin :is([class$="_quoteLine"], [class*="_quoteLine "]) {
+  border-bottom: 1px solid var(--ui-border);
+}
+.artisanSkin :is([class$="_quoteLine"], [class*="_quoteLine "]) span {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_quoteLine"], [class*="_quoteLine "]) strong {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_quoteTotal"], [class*="_quoteTotal "]) {
+  border-top: 1px solid var(--ui-border);
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_reportChecks"], [class*="_reportChecks "]) li {
+  border-bottom: 1px solid var(--ui-border);
+}
+.artisanSkin :is([class$="_participant"], [class*="_participant "]) {
+  border-bottom: 1px solid var(--ui-border);
+}
+.artisanSkin :is([class$="_participant"], [class*="_participant "]) strong {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_participant"], [class*="_participant "]) span {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_groupHead"], [class*="_groupHead "]) span {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_groupHead"], [class*="_groupHead "]) strong {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_credCount"], [class*="_credCount "]) {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_credCount"], [class*="_credCount "]) svg {
+  color: var(--ui-accent);
+}
+.artisanSkin :is([class$="_credStatus"], [class*="_credStatus "]) small {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_credGreen"], [class*="_credGreen "]) {
+  background: var(--ui-surface);
+  color: var(--ui-success);
+}
+.artisanSkin :is([class$="_credBlue"], [class*="_credBlue "]) {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.artisanSkin :is([class$="_credAmber"], [class*="_credAmber "]) {
+  background: var(--ui-surface);
+  color: var(--ui-warning);
+}
+.artisanSkin :is([class$="_credRed"], [class*="_credRed "]) {
+  background: var(--ui-surface);
+  color: var(--ui-danger);
+}
+.artisanSkin :is([class$="_credTitle"], [class*="_credTitle "]) {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_credDesc"], [class*="_credDesc "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_credMeta"], [class*="_credMeta "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_credCountComplete"], [class*="_credCountComplete "]) {
+  color: var(--ui-success);
+}
+.artisanSkin :is([class$="_linkForm"], [class*="_linkForm "]) {
+  border-color: var(--ui-border);
+}
+.artisanSkin :is([class$="_appStatus"], [class*="_appStatus "]) {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+}
+.artisanSkin :is([class$="_appSteps"], [class*="_appSteps "]) li {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_appSteps"], [class*="_appSteps "]) li + li::before {
+  background: var(--ui-border);
+}
+.artisanSkin :is([class$="_stepsSummary"], [class*="_stepsSummary "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_appSteps"], [class*="_appSteps "]) li span:first-child {
+  border: 1px solid var(--ui-border);
+}
+.artisanSkin :is([class$="_appSteps"], [class*="_appSteps "]) li:is([class$="_stepDone"], [class*="_stepDone "]) span:first-child {
+  background: var(--ui-surface);
+  border-color: var(--ui-border);
+  color: var(--ui-success);
+}
+.artisanSkin :is([class$="_appSteps"], [class*="_appSteps "]) li small {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_sectionNum"], [class*="_sectionNum "]) {
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+.artisanSkin :is([class$="_readonlyRow"], [class*="_readonlyRow "]) {
+  border-bottom: 1px solid var(--ui-border);
+}
+.artisanSkin :is([class$="_readonlyRow"], [class*="_readonlyRow "]) span {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_readonlyRow"], [class*="_readonlyRow "]) strong {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_chip"], [class*="_chip "]) {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.artisanSkin :is([class$="_chipRemove"], [class*="_chipRemove "]):hover {
+  background: var(--ui-surface);
+}
+.artisanSkin :is([class$="_switchRow"], [class*="_switchRow "]) > span {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_switchRow"], [class*="_switchRow "]) small {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_switchButton"], [class*="_switchButton "]) {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_switchTrack"], [class*="_switchTrack "]) {
+  background: var(--ui-surface);
+}
+.artisanSkin :is([class$="_switchButton"], [class*="_switchButton "])[aria-checked="true"] :is([class$="_switchTrack"], [class*="_switchTrack "]) {
+  background: var(--ui-primary);
+}
+.artisanSkin :is([class$="_switchKnob"], [class*="_switchKnob "]) {
+  background: var(--ui-card);
+}
+.artisanSkin :is([class$="_missing"], [class*="_missing "]) {
+  color: var(--ui-warning);
+}
+.artisanSkin :is([class$="_profileHead"], [class*="_profileHead "]) {
+  background: var(--ui-surface);
+  border-bottom: 1px solid var(--ui-border);
+}
+.artisanSkin :is([class$="_avatar"], [class*="_avatar "]) {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_profileSub"], [class*="_profileSub "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_profileLine"], [class*="_profileLine "]) {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_profileLine"], [class*="_profileLine "]) svg {
+  color: var(--ui-warning);
+}
+.artisanSkin :is([class$="_docCount"], [class*="_docCount "]) {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_perfTile"], [class*="_perfTile "]) {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+}
+.artisanSkin :is([class$="_perfTileTop"], [class*="_perfTileTop "]) strong {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_perfTile"], [class*="_perfTile "]) > span {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_perfTile"], [class*="_perfTile "]) > small {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_accountLink"], [class*="_accountLink "]) {
+  border-bottom: 1px solid var(--ui-border);
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_accountLink"], [class*="_accountLink "]) > svg:first-child {
+  color: var(--ui-accent);
+}
+.artisanSkin :is([class$="_accountLink"], [class*="_accountLink "]) > svg:last-child {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_formulaList"], [class*="_formulaList "]) {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_paidRow"], [class*="_paidRow "]) {
+  border-bottom: 1px solid var(--ui-border);
+}
+.artisanSkin :is([class$="_paidRow"], [class*="_paidRow "]) span {
+  color: var(--ui-text-muted);
+}
+.artisanSkin :is([class$="_paidRow"], [class*="_paidRow "]) strong {
+  color: var(--ui-text);
+}
+.artisanSkin :is([class$="_helpList"], [class*="_helpList "]) details {
+  border-bottom: 1px solid var(--ui-border);
+}
+.artisanSkin :is([class$="_helpList"], [class*="_helpList "]) summary {
+  color: var(--ui-text);
+}
+
+/* ---- Manual corrections ---------------------------------------------------------------- */
+.artisanSkin :is([class$="_space"], [class*="_space "]) {
+  background: var(--ui-bg);
+  color: var(--ui-text);
+}
+.artisanSkin :global(.primary):hover:not(:disabled) {
+  background: #136640;
+}
+/* Destructive: outlined in the danger token (a filled --ui-danger would fail AA with white). */
+.artisanSkin :global(.destructive-button),
+.artisanSkin :global(.destructive-button):hover {
+  border: 1px solid var(--ui-danger);
+  background: transparent;
+  color: var(--ui-danger);
+}
+.artisanSkin :global(.tabs) > button {
+  min-height: 44px;
+}
+/* 44 px targets for short text buttons and the message send button. */
+.artisanSkin :global(.text-button),
+.artisanSkin :global(.message-compose) button {
+  min-width: 44px;
+}
+/* Install note: inline legacy colour (#526178) in the shared PWA panel. */
+.artisanSkin :global(.install-panel) p[style] {
+  color: var(--ui-text-muted) !important;
+}
+/* Two legends carry an inline legacy navy (#102a43): repainted with the text token. */
+.artisanSkin legend[style*="#102a43"],
+.artisanSkin legend[style*="rgb(16, 42, 67)"] {
+  color: var(--ui-text) !important;
+}
+/* Theme toggle in the artisan header: visible label off-screen (accessible name kept). */
+.artisanSkin header [data-theme-toggle] > span:last-child {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---- Legacy leaf islands ------------------------------------------------------------------
+   Leaf modules owned elsewhere (quote documents, notification centre, artisan planning) still
+   paint fixed light surfaces with legacy text colours: rendered as LIGHT islands in both themes
+   (light --ui-* values on their root, selected by stable attributes) so the themed primitives
+   inside them stay AA. */
+.artisanSkin section[aria-labelledby="quote-documents-title"],
+.artisanSkin [data-scope] {
+  --ui-bg: #ffffff;
+  --ui-surface: #f4f6f5;
+  --ui-card: #ffffff;
+  --ui-text: #111111;
+  --ui-text-muted: #4b5563;
+  --ui-border: #d9dfdc;
+  --ui-accent: #0f5c3a;
+  --ui-focus: #0f5c3a;
+  --ui-danger: #b42318;
+  --ui-warning: #925c00;
+  --ui-success: #0f5c3a;
+  --ui-scheme: light;
+  color-scheme: light;
+  padding: 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: 16px;
+  background: #ffffff;
+  color: #111111;
+}
