@@ -144,3 +144,10 @@ export function applyDocumentOutcome(state: DocumentHistoryState, key: string, o
 /** Whether « Charger les documents plus anciens » is offered: never as a dead control after a 401/404. */
 export const offersOlderDocuments = (state: DocumentHistoryState) =>
   state.hasMore && state.status !== "signed_out" && state.status !== "not_found";
+
+/**
+ * Whether the offered older-page button can be used now: not while a read runs, and not before a
+ * Retry-After delay ends (load() refuses then, so an enabled button would be a dead control).
+ */
+export const olderDocumentsUsable = (state: DocumentHistoryState, now: number) =>
+  offersOlderDocuments(state) && state.status !== "loading" && !(state.status === "error" && state.retryAt !== undefined && now < state.retryAt);

@@ -17,6 +17,7 @@ import {
   initialDocumentHistory,
   mergeDocuments,
   offersOlderDocuments,
+  olderDocumentsUsable,
   parseDocumentPage,
 } from "../../components/app/document-history";
 import type { StoredDocument } from "../../components/app/types";
@@ -85,6 +86,18 @@ test("401 after a partial page: no older-page offer, loaded documents kept, term
   assert.equal(offersOlderDocuments(s), false);
   assert.equal(s.pages.length, 2);
   assert.equal(offersOlderDocuments(applyDocumentOutcome(s, k, { kind: "failed", status: 503, retryAfterS: 2 }, 0)), false);
+});
+
+test("503 Retry-After: the older-page button is disabled until the delay ends, then usable", () => {
+  const k = documentHistoryKey("u1", "");
+  let s = applyDocumentOutcome(initialDocumentHistory(k), k, { kind: "loaded", documents: [doc(1)], hasMore: true, nextCursor: "C1" }, 0);
+  assert.equal(olderDocumentsUsable(s, 0), true);
+  assert.equal(olderDocumentsUsable({ ...s, status: "loading" }, 0), false, "not while a read runs");
+  s = applyDocumentOutcome(s, k, { kind: "failed", status: 503, retryAfterS: 2 }, 1000);
+  assert.equal(offersOlderDocuments(s), true, "still offered (same cursor) …");
+  assert.equal(olderDocumentsUsable(s, 2999), false, "… but not usable before Retry-After: no refused click");
+  assert.equal(olderDocumentsUsable(s, 3000), true, "usable once the delay is over");
+  assert.equal(olderDocumentsUsable(applyDocumentOutcome(s, k, { kind: "signed_out" }, 0), 9e9), false, "a 401 after the error stays terminal");
 });
 
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
@@ -182,7 +195,9 @@ test("DocumentManager history in real React/Chromium: 137 docs over 6 pages, 503
       await page.waitForSelector("[data-document-history=error]");
       assert.equal((await ids(page)).length, 25, "shown documents kept");
       assert.equal(await page.$eval("[data-document-history=error] button", (b: HTMLButtonElement) => b.disabled), true, "Retry-After honoured");
+      assert.equal(await page.$eval("[data-document-older]", (b: HTMLButtonElement) => b.disabled), true, "older-page button not a dead control during Retry-After");
       await page.waitForFunction(() => !(document.querySelector("[data-document-history=error] button") as HTMLButtonElement).disabled, undefined, { timeout: 4000 });
+      assert.equal(await page.$eval("[data-document-older]", (b: HTMLButtonElement) => b.disabled), false, "usable again after the delay");
       await page.click("[data-document-history=error] button");
       await page.waitForFunction(() => document.querySelectorAll("[data-document-id]").length === 50);
       const c = await calls(page);

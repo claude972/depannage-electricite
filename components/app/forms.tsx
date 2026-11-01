@@ -23,6 +23,7 @@ import {
   initialDocumentHistory,
   mergeDocuments,
   offersOlderDocuments,
+  olderDocumentsUsable,
   type DocumentFetch,
   type DocumentHistoryState,
 } from "./document-history";
@@ -1411,7 +1412,7 @@ export function DocumentManager({
         </p>
       )}
       {historyOn && offersOlderDocuments(hs) && (
-        <button type="button" className="button outline" data-document-older disabled={hs.status === "loading"} onClick={history.load}>
+        <button type="button" className="button outline" data-document-older disabled={!olderDocumentsUsable(hs, Date.now())} onClick={history.load}>
           Charger les documents plus anciens
         </button>
       )}
