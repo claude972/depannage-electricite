@@ -1,94 +1,71 @@
-/* Courant PWA: a public offline notice, never an offline copy of a user account.
- * Registration/worker conventions: https://nextjs.org/docs/app/guides/progressive-web-apps
- * Deliberately no runtime cache, background sync, push handler or request queue.
- */
+/* Public offline notice and explicit local note form only. Never cache an account, API,
+ * Auth, RSC, photos or mutation; no runtime writes, background sync or submission queue. */
 const PUBLIC_CACHE_PREFIX = "courant-pwa-public-";
-const PUBLIC_CACHE = `${PUBLIC_CACHE_PREFIX}v3`;
+const PUBLIC_CACHE = `${PUBLIC_CACHE_PREFIX}v4`;
 const OFFLINE_URL = "/offline.html";
-
-self.addEventListener("install", (event) => {
-  event.waitUntil(
-    (async () => {
-      const response = await fetch(
-        new Request(OFFLINE_URL, { cache: "reload", credentials: "same-origin", redirect: "error" }),
-      );
-      // A preview protection cookie may be needed to reach this static asset.
-      // Never cache an SSO/login redirect, authenticated page or URL with query data.
-      const expectedUrl = new URL(OFFLINE_URL, self.location.origin).href;
-      if (
-        !response.ok ||
-        response.redirected ||
-        response.url !== expectedUrl ||
-        response.headers.get("X-Courant-Public-Offline") !== "1" ||
-        !response.headers.get("content-type")?.includes("text/html")
-      ) {
-        throw new Error("Public offline notice unavailable");
-      }
+const FORM_URL = "/offline-request.html";
+const SCRIPT_URL = "/offline-request.js";
+const ASSETS = [
+  { path: OFFLINE_URL, marker: "X-Courant-Public-Offline", type: "text/html" },
+  { path: FORM_URL, marker: "X-Courant-Public-Request", type: "text/html" },
+  { path: SCRIPT_URL, marker: "X-Courant-Public-Draft-Script", type: "application/javascript" },
+];
+function validAsset(response, asset) {
+  return response && response.status === 200 && !response.redirected && response.url === new URL(asset.path, self.location.origin).href && response.headers.get(asset.marker) === "1" && response.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase() === asset.type;
+}
+async function cachedAsset(path) {
+  const asset = ASSETS.find(asset => asset.path === path);
+  const response = await (await caches.open(PUBLIC_CACHE)).match(path);
+  return validAsset(response, asset) ? response : null;
+}
+self.addEventListener("install", event => {
+  event.waitUntil((async () => {
+    // Fetch and validate ALL responses before opening or writing the new cache.
+    const responses = await Promise.all(ASSETS.map(async asset => {
+      const response = await fetch(new Request(asset.path, { cache: "reload", credentials: "same-origin", redirect: "error" }));
+      if (!validAsset(response, asset)) throw new Error("Public offline asset unavailable");
+      return response;
+    }));
+    try {
       const cache = await caches.open(PUBLIC_CACHE);
-      await cache.put(OFFLINE_URL, response);
-    })(),
-  );
-  // A new worker waits until the user accepts its update or closes old tabs.
+      for (let i = 0; i < ASSETS.length; i++) await cache.put(ASSETS[i].path, responses[i]);
+    } catch (error) {
+      try { await caches.delete(PUBLIC_CACHE); } catch {}
+      throw error;
+    }
+  })());
+  // The installed update waits for explicit acceptance or old tabs closing.
 });
-
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    (async () => {
-      const keys = await caches.keys();
-      await Promise.all(
-        keys
-          .filter((key) => key.startsWith(PUBLIC_CACHE_PREFIX) && key !== PUBLIC_CACHE)
-          .map((key) => caches.delete(key)),
-      );
-      await self.clients.claim();
-    })(),
-  );
+self.addEventListener("activate", event => {
+  event.waitUntil((async () => {
+    // A cache write may have failed, or storage may have been evicted after install.
+    // Never claim clients or delete the old working cache for a partial installation.
+    for (const asset of ASSETS) if (!(await cachedAsset(asset.path))) throw new Error("Public offline cache incomplete");
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(key => key.startsWith(PUBLIC_CACHE_PREFIX) && key !== PUBLIC_CACHE).map(key => caches.delete(key)));
+    await self.clients.claim();
+  })());
 });
-
-self.addEventListener("message", (event) => {
-  if (event.data?.type === "ACTIVATE_UPDATE") {
-    event.waitUntil(self.skipWaiting());
-  }
+self.addEventListener("message", event => {
+  if (event.data?.type === "ACTIVATE_UPDATE") event.waitUntil(self.skipWaiting());
 });
-
-self.addEventListener("fetch", (event) => {
-  const { request } = event;
-  const url = new URL(request.url);
-  // Do not intercept APIs, auth, RSC/data requests, mutations or other origins.
-  if (
-    request.method !== "GET" ||
-    request.mode !== "navigate" ||
-    url.origin !== self.location.origin ||
-    url.pathname.startsWith("/api/") ||
-    url.pathname === "/api" ||
-    url.pathname.startsWith("/auth/") ||
-    url.pathname === "/auth"
-  ) {
-    return;
-  }
-
-  event.respondWith(
-    (async () => {
-      try {
-        // The network response is returned directly and never put in CacheStorage.
-        return await fetch(request, { cache: "no-store" });
-      } catch {
-        try {
-          const cache = await caches.open(PUBLIC_CACHE);
-          const offline = await cache.match(OFFLINE_URL);
-          if (offline) return offline;
-        } catch {
-          // Storage may be unavailable or evicted. Still return the neutral notice,
-          // rather than rejecting navigation with a browser network error.
-        }
-        return new Response("Connexion indisponible. Reconnectez-vous pour retrouver vos dossiers.", {
-          status: 503,
-          headers: {
-            "Content-Type": "text/plain; charset=utf-8",
-            "Cache-Control": "no-store",
-          },
-        });
-      }
-    })(),
-  );
+function unavailable() {
+  return new Response("Connexion indisponible. Reconnectez-vous pour retrouver vos dossiers.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
+}
+self.addEventListener("fetch", event => {
+  const { request } = event, url = new URL(request.url);
+  if (request.method !== "GET" || url.origin !== self.location.origin || url.pathname === "/api" || url.pathname.startsWith("/api/") || url.pathname === "/auth" || url.pathname.startsWith("/auth/") || url.searchParams.has("_rsc") || request.headers?.get("RSC") === "1" || request.headers?.has("Next-Router-State-Tree")) return;
+  const script = url.pathname === SCRIPT_URL && !url.search && request.destination === "script";
+  if (request.mode !== "navigate" && !script) return;
+  event.respondWith((async () => {
+    try {
+      // Network responses are NEVER stored. Only install writes the three static assets.
+      const response = await fetch(request, { cache: "no-store" });
+      if (script && !validAsset(response, ASSETS[2])) throw new Error("Public script unavailable");
+      return response;
+    } catch {
+      try { return (await cachedAsset(script ? SCRIPT_URL : url.pathname === FORM_URL && !url.search ? FORM_URL : OFFLINE_URL)) || unavailable(); }
+      catch { return unavailable(); }
+    }
+  })());
 });
