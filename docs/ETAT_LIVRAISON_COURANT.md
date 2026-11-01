@@ -1,3 +1,13 @@
+# Checkpoint fastsplit — 1 novembre 2026, parcours artisan connecté
+
+Public : https://depannage-electricite-git-integration-web-pwa-brafas-projects.vercel.app ; immuable https://depannage-electricite-om1bmcd6i-brafas-projects.vercel.app . App210536d3b18ee822be5a7a061b22929741b7ef95 READYdpl_dvjoMKJEUvaQ4nUWUaWGTAbgULUG/FlightWcMjL3w7zwfUBU6Gr28eF, alias200mêmeFlight. Resetpassworddésormaisvert/Jakarta/clair-sombre :360/1280x2modes4/4PASS(lieninvalide/error/absenceform/togglepersist/retour/noPOST/JS). LogiqueAuthinchangée.
+
+VraieUIartisan run7b73e73ba151 **16/16PASS** sur app210 : deux QA préconfirmés dont artisan approuvé synthétiquement, un dossier setup APIclient ; six mutations par clicsUI acceptmission→brouillonprivé→publicationdevis120€TTCsynthétique→acceptationclientquote_idexact→démarrer→terminer. Un devis/6audits exacts, brouillon privé403, statutcompleted et montant accepté conservés. Cleanup25/drain0/neuf intentions réglées puisROOT **47/47readbacksPASS** (2Auth404stricts/43REST0/2Storage0). Aucune cohorteQA connue active après lecture. Première tentative1df60 FAILSCOPED_READ_UNKNOWN conservée+cleanup/root47zéro ; harnaisV2 utiliseune réponseGET/count exact faceaux mutations, pasappmodifiéepourpasser.
+
+Intégration1529e8b tests-only corrige dépendanceGitshallow du nouveautest reset, CI41315745212 deuxjobsSUCCESS. Appcodebyteidentique210, aucun nouveau deploypourtests/docs. Rapport app docs/reviews/ARTISAN_UI_210_HOSTED.md pousséb2a0a90. Stripe/premierSuperAdmintoujoursdifférés, SMTP/inbox et compterendufinalnonprouvésparcetravail, aucunGPSphysique/paiment/stores/main/prod. Pasapplicationentière/zéroerreurgarantis. DeuxCodexROOTcompris/cinqClaude, aucuncron15min.
+
+---
+
 # Checkpoint fastsplit — 1 novembre 2026, réservation connectée
 
 Application publique : https://depannage-electricite-git-integration-web-pwa-brafas-projects.vercel.app (HTTP200/Flight exact vérifié). Sourceapp a4b6f3177bd6e326bda9324ac7297f074e5ae1c0, READYdpl_9tnfmuqieh48xhEAX8XGAME7QvDK, Flight4KsRbx0ZO5gyyXjblsH8O, CI41312089858 deux jobs SUCCESS. Migration021 seule appliquée, RLS/ACL relus ; aucun main/production/Edge modifié.

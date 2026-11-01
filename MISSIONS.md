@@ -682,3 +682,7 @@ Après réservation réelle19/19, vérifier vrais clics artisan/client : mission
 
 ## FASTSPLIT-AUTH-RESET-THEME-001 — Claude lead — in progress
 Défautsourceconcret : app/auth/reset-password/page.module.css restefondbleu/boutonbleucontreDESIGNvalidé. Scopeexclusifpage.tsx+page.module.css+testcibléneuf ; ThemeSurface/Toggle/Jakartaexistantslectureseule,2modes/focus44/loading/error/success,liensretourscohérents. AucunappelAuth/session/callback/RPCchangéaveuglément, pasemailsenvoyésniSMTPclaim. CourtSHA+tests ; ROOTreview puispreview2modesmobile/desktop/invalide+vraicomposantétatssimulésidentifiés. Main/prod/anciennespreviewspréservés.
+
+
+## FASTSPLIT-ARTISAN-CONNECTED-UI-001 / AUTH-RESET-THEME-001 — done borné
+Reset593fa54 intégré210/public4/4PASS ; CItest76af6de intégré1529,41315745212SUCCESS sansappchangement. UIartisan7b73 **16/16PASS** (acceptationmission/brouillon/envoidevis/acceptclient/start/complete),cleanup25/root47READONLYtous0. Premier1df60FAILlectureinconnuepréservé/root47zéro ;V2snapshotcorrigé115testsinjectés+ROOTrevue. RapportARTISAN_UI_210_HOSTED.md pousséb2a0a90. AucunQAconnuactif. PaspreuveSMTP/adminopérateur/paiement/compterendu/GPSphysique. eDemanddernièrementécartéparowner :aucuneadoption/changementstack.
