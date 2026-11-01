@@ -240,11 +240,12 @@ export function ClientSpace({ session }: { session: Session }) {
               subtitle="Les échanges liés à vos interventions restent regroupés ici."
             />
             <MessageCenter
+              live={session.mode === "live"}
               interventions={rows}
               messages={session.data.messages}
               role={session.role}
               profileId={session.profileId}
-              selectedId={session.selectedId}
+              selectedId={session.param || session.selectedId}
               busy={session.busy}
               onSubmit={(id, body) => session.sendMessage(id, body)}
             />
@@ -1871,6 +1872,8 @@ function DocumentsView({ session, rows }: { session: Session; rows: Intervention
         )}
       </section>
       <DocumentManager
+        live={session.mode === "live"}
+        profileId={session.profileId}
         documents={session.data.documents}
         interventions={rows}
         demo={session.mode === "demo"}

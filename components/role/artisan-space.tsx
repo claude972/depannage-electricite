@@ -2310,6 +2310,7 @@ function Messages({ session }: { session: Session }) {
       />
       {mine.length ? (
         <MessageCenter
+          live={session.mode === "live"}
           key={selected}
           interventions={mine}
           messages={session.data.messages}
@@ -2436,6 +2437,8 @@ function Documents({
         </div>
       </div>
       <DocumentManager
+        live={session.mode === "live"}
+        profileId={session.profileId}
         documents={session.data.documents}
         interventions={mine}
         demo={session.mode === "demo"}

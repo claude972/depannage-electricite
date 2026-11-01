@@ -3939,19 +3939,37 @@ function MembersView({ c }: { c: Ctx }) {
 function MessagesView({ c }: { c: Ctx }) {
   const { session, scope } = c;
   const selected = session.param || session.selectedId;
+  // Only a dossier of the ACTIVE scope is opened; the view is re-keyed on the refresh context
+  // (identity, role, organisation, site) and on that visible target, so nothing of another scope
+  // (messages, history, draft, late replies) survives a switch or a rights change.
+  const visible = scope.interventions.some((i) => i.id === selected) ? selected : "";
+  const outside = selected && !visible ? (session.data.interventions.some((i) => i.id === selected) ? "scope" : "unloaded") : null;
   return (
     <>
       <PageTitle title="Messages" subtitle="Échanges liés aux interventions du périmètre" />
+      {outside && (
+        <p className="inline-note" data-message-target={outside}>
+          {outside === "scope"
+            ? "Ce dossier est hors de ce périmètre. Choisissez son organisation ou son site pour ouvrir sa conversation."
+            : "Ce dossier n’est pas chargé dans la liste actuelle (dossiers les plus récents). Ouvrez-le depuis sa fiche."}
+        </p>
+      )}
       {scope.interventions.length ? (
         <MessageCenter
-          key={selected}
+          live={session.mode === "live"}
+          key={`${session.refreshContext}|${visible}`}
           interventions={byDateDesc(scope.interventions)}
           messages={session.data.messages}
           role={session.role}
           profileId={session.profileId}
-          selectedId={scope.interventions.some((i) => i.id === selected) ? selected : ""}
+          selectedId={visible}
           busy={session.busy}
           onSubmit={session.sendMessage}
+          canSend={(id) => {
+            const row = scope.interventions.find((i) => i.id === id);
+            return Boolean(row && c.authority.canWriteSite(row.site_id));
+          }}
+          readOnlyReason={c.authority.readOnlyReason || undefined}
         />
       ) : (
         <Empty icon="message" title="Aucune conversation" action={
@@ -4008,6 +4026,8 @@ function DocumentsView({ c }: { c: Ctx }) {
         )}
       </section>
       <DocumentManager
+        live={session.mode === "live"}
+        profileId={session.profileId}
         documents={session.data.documents}
         interventions={byDateDesc(scope.interventions)}
         demo={demo}

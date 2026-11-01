@@ -1,9 +1,34 @@
 "use client";
 // Operational forms extracted from the original monolith; behaviour preserved, shared by the
 // role spaces. Styling classes live in app/globals.css.
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { api, PHOTO_TYPES, validateUpload } from "./api";
 import { AddressField, createAddressApi } from "./address-field";
+import {
+  applyOutcome,
+  fetchHistoryPage,
+  historyKey,
+  initialHistory,
+  clearSentDraft,
+  draftText,
+  mergeMessages,
+  offersOlder,
+  openThread,
+  type ComposeDraft,
+  type HistoryFetch,
+  type HistoryState,
+} from "./message-history";
+import {
+  applyDocumentOutcome,
+  documentHistoryKey,
+  fetchDocumentPage,
+  initialDocumentHistory,
+  mergeDocuments,
+  offersOlderDocuments,
+  olderDocumentsUsable,
+  type DocumentFetch,
+  type DocumentHistoryState,
+} from "./document-history";
 import { Icon } from "./icons";
 import { Empty, Field, ConfirmAction, Unavailable } from "./ui";
 import {
@@ -575,6 +600,47 @@ export function QuoteEditor({
     </form>
   );
 }
+// Paginated history of the open conversation (FASTSPLIT-MESSAGE-HISTORY-001). Live mode only:
+// the newest page is read when the dossier opens, older pages on explicit request. State is keyed
+// by identity + dossier: a change aborts the read in flight and starts empty; a late reply is
+// ignored. Nothing is cached beyond the mounted view.
+const browserFetch: HistoryFetch = (url, init) => fetch(url, init);
+function useMessageHistory(live: boolean, profileId: string, interventionId: string, fetchImpl: HistoryFetch) {
+  const key = historyKey(profileId, interventionId);
+  const enabled = live && Boolean(profileId) && Boolean(interventionId);
+  const [state, setState] = useState<HistoryState>(() => initialHistory(key));
+  const stateRef = useRef(state);
+  const flight = useRef<AbortController | null>(null);
+  const update = useCallback((next: (s: HistoryState) => HistoryState) => {
+    stateRef.current = next(stateRef.current);
+    setState(stateRef.current);
+  }, []);
+  const load = useCallback(() => {
+    const from = stateRef.current;
+    if (!enabled || from.key !== key || from.status === "loading" || from.status === "not_found" || from.status === "signed_out") return;
+    if (from.loaded && !from.hasMore) return;
+    flight.current?.abort();
+    const ctl = new AbortController();
+    flight.current = ctl;
+    update((s) => ({ ...s, status: "loading" }));
+    void fetchHistoryPage(fetchImpl, interventionId, from.cursor, ctl.signal).then((outcome) => {
+      if (flight.current !== ctl) return; // superseded by a dossier/identity change
+      flight.current = null;
+      update((s) => applyOutcome(s, key, outcome));
+    });
+  }, [enabled, key, interventionId, fetchImpl, update]);
+  useEffect(() => {
+    flight.current?.abort();
+    flight.current = null;
+    update(() => initialHistory(key));
+    if (enabled) load();
+    return () => {
+      flight.current?.abort();
+      flight.current = null;
+    };
+  }, [key, enabled, load, update]);
+  return { state: state.key === key ? state : initialHistory(key), load, enabled };
+}
 export function MessageCenter({
   interventions,
   messages,
@@ -583,6 +649,10 @@ export function MessageCenter({
   selectedId,
   busy,
   onSubmit,
+  live = false,
+  fetchHistory = browserFetch,
+  canSend,
+  readOnlyReason,
 }: {
   interventions: Intervention[];
   messages: Message[];
@@ -591,10 +661,41 @@ export function MessageCenter({
   selectedId: string;
   busy: boolean;
   onSubmit: (id: string, body: string) => Promise<boolean | undefined>;
+  /** Live session: the paginated history is read from /api/messages. Demo/default: preview only, no call. */
+  live?: boolean;
+  /** Test seam for the history client. */
+  fetchHistory?: HistoryFetch;
+  /** Whether the viewer may write in this dossier (default: yes). The server still decides. */
+  canSend?: (id: string) => boolean;
+  /** Short reason shown instead of the compose box when canSend is false. */
+  readOnlyReason?: string;
 }) {
-  const [id, setId] = useState(selectedId || interventions[0]?.id || "");
-  const [body, setBody] = useState("");
-  const rows = messages.filter((m) => m.intervention_id === id);
+  const [picked, setId] = useState(selectedId || interventions[0]?.id || "");
+  // The open dossier follows the selectedId prop (hash #messages/A → #messages/B in the same
+  // document) and identity changes; a click in the thread list still selects explicitly.
+  const [seen, setSeen] = useState({ selectedId, profileId });
+  if (seen.selectedId !== selectedId || seen.profileId !== profileId) {
+    const identityChanged = seen.profileId !== profileId;
+    setSeen({ selectedId, profileId });
+    if (selectedId) setId(selectedId);
+    else if (identityChanged) setId(interventions[0]?.id || "");
+  }
+  // A dossier that left the list (scope switched, rights removed) is never kept open unless it is
+  // the explicit target: its messages, history and draft must not show in the new scope.
+  const id = openThread(picked, selectedId, interventions.map((i) => i.id));
+  if (id !== picked) setId(id);
+  const target = interventions.find((i) => i.id === id);
+  const writable = !canSend || canSend(id);
+  // The compose draft belongs to ONE identity + dossier: switching never carries A's text to B.
+  const threadKey = historyKey(profileId, id);
+  const [draft, setDraft] = useState<ComposeDraft>({ key: threadKey, text: "" });
+  const body = draftText(draft, threadKey);
+  const setBody = (text: string) => setDraft({ key: threadKey, text });
+  const history = useMessageHistory(live, profileId, id, fetchHistory);
+  const h = history.state;
+  const unavailable = history.enabled && h.status === "not_found";
+  const rows = unavailable ? [] : history.enabled ? mergeMessages(id, messages, h.pages) : messages.filter((m) => m.intervention_id === id);
+  const firstLoad = history.enabled && !h.loaded && (h.status === "idle" || h.status === "loading");
   return (
     <section className="panel messages-layout">
       <div className="message-threads">
@@ -622,21 +723,56 @@ export function MessageCenter({
         ) : (
           <>
             <div className="conversation-header">
-              <h2>
-                {
-                  category(
-                    interventions.find((i) => i.id === id)?.category || "",
-                  ).label
-                }
-              </h2>
-              <span>Conversation liée à l’intervention</span>
+              {/* A target absent from the list gets a generic title, never an invented category. */}
+              <h2>{target ? category(target.category).label : "Conversation"}</h2>
+              <span>{target ? "Conversation liée à l’intervention" : `Dossier ${shortId(id)}`}</span>
             </div>
-            <div className="message-history" aria-live="polite">
-              {rows.length ? (
+            <div className="message-history" aria-live="polite" aria-busy={h.status === "loading"}>
+              {history.enabled && offersOlder(h) && (
+                <button
+                  type="button"
+                  className="button outline"
+                  data-message-older
+                  disabled={h.status === "loading"}
+                  onClick={history.load}
+                >
+                  Charger les messages plus anciens
+                </button>
+              )}
+              {history.enabled && h.status === "loading" && (
+                <p role="status" data-message-history="loading">
+                  Chargement des messages…
+                </p>
+              )}
+              {history.enabled && h.status === "error" && (
+                <div role="alert" data-message-history="error">
+                  <p>
+                    {h.loaded
+                      ? "Les messages plus anciens n’ont pas pu être chargés. Les messages affichés restent valables."
+                      : "L’historique des messages n’a pas pu être chargé. Les messages affichés restent valables."}
+                  </p>
+                  <button type="button" className="button outline" onClick={history.load}>
+                    Réessayer
+                  </button>
+                </div>
+              )}
+              {history.enabled && h.status === "signed_out" && (
+                <p role="alert" data-message-history="signed_out">
+                  Votre session a expiré. Reconnectez-vous pour retrouver vos messages.
+                </p>
+              )}
+              {unavailable ? (
+                <div data-message-history="not_found">
+                  <Empty icon="message" title="Conversation indisponible">
+                    Cette conversation n’est pas accessible depuis votre compte.
+                  </Empty>
+                </div>
+              ) : rows.length ? (
                 rows.map((m) => (
                   <div
                     className={`message-bubble ${m.author_id === profileId ? "mine" : ""}`}
                     key={m.id}
+                    data-message-id={m.id}
                   >
                     <span>
                       {m.author_id === profileId
@@ -649,19 +785,29 @@ export function MessageCenter({
                     <small>{date(m.created_at)}</small>
                   </div>
                 ))
-              ) : (
+              ) : firstLoad ? null : (
                 <Empty icon="message" title="Commencez l’échange">
                   Posez une question sur cette intervention.
                 </Empty>
               )}
             </div>
+            {!unavailable && !writable && (
+              <p className="inline-note" data-message-readonly>
+                {readOnlyReason || "Lecture seule : vos droits sur ce dossier ne permettent pas d’envoyer de message."}
+              </p>
+            )}
+            {!unavailable && writable && (
             <form
               className="message-compose"
               onSubmit={(e) => {
                 e.preventDefault();
                 if (body.trim()) {
+                  const sentKey = threadKey;
+                  const sentText = body; // snapshot of the draft as sent
                   void onSubmit(id, body.trim()).then((saved) => {
-                    if (saved) setBody("");
+                    // Clear only the draft that was sent (same thread, unchanged since); text typed
+                    // during the request is kept; on failure the draft stays as is.
+                    if (saved) setDraft((d) => clearSentDraft(d, sentKey, sentText));
                   });
                 }
               }}
@@ -687,6 +833,7 @@ export function MessageCenter({
                 <Icon name="send" />
               </button>
             </form>
+            )}
           </>
         )}
       </div>
@@ -1080,17 +1227,83 @@ export function ReviewForm({
     </form>
   );
 }
+// Paginated documents history (live only): newest page read on mount, older pages on explicit
+// request. Keyed by identity + filter (the cursor scope); a change aborts the read in flight and
+// starts empty, a late reply is ignored. 503 honours Retry-After before « Réessayer ». No cache.
+const browserDocumentFetch: DocumentFetch = (url, init) => fetch(url, init);
+function useDocumentHistory(live: boolean, profileId: string, filter: string, fetchImpl: DocumentFetch) {
+  const key = documentHistoryKey(profileId, filter);
+  const [state, setState] = useState<DocumentHistoryState>(() => initialDocumentHistory(key));
+  const stateRef = useRef(state);
+  const flight = useRef<AbortController | null>(null);
+  const [, setTick] = useState(0);
+  const update = useCallback((next: (s: DocumentHistoryState) => DocumentHistoryState) => {
+    stateRef.current = next(stateRef.current);
+    setState(stateRef.current);
+  }, []);
+  const load = useCallback(() => {
+    const from = stateRef.current;
+    if (!live || from.key !== key || from.status === "loading" || from.status === "not_found" || from.status === "signed_out") return;
+    if (from.loaded && !from.hasMore) return;
+    if (from.status === "error" && from.retryAt && Date.now() < from.retryAt) return; // Retry-After
+    flight.current?.abort();
+    const ctl = new AbortController();
+    flight.current = ctl;
+    update((s) => ({ ...s, status: "loading" }));
+    void fetchDocumentPage(fetchImpl, filter, from.cursor, ctl.signal).then((outcome) => {
+      if (flight.current !== ctl) return; // superseded by an identity/filter change
+      flight.current = null;
+      update((s) => applyDocumentOutcome(s, key, outcome, Date.now()));
+    });
+  }, [live, key, filter, fetchImpl, update]);
+  useEffect(() => {
+    flight.current?.abort();
+    flight.current = null;
+    update(() => initialDocumentHistory(key));
+    if (live) load();
+    return () => {
+      flight.current?.abort();
+      flight.current = null;
+    };
+  }, [key, live, load, update]);
+  const current = state.key === key ? state : initialDocumentHistory(key);
+  const waitMs = current.status === "error" && current.retryAt ? current.retryAt - Date.now() : 0;
+  useEffect(() => {
+    if (waitMs <= 0) return;
+    const t = window.setTimeout(() => setTick((n) => n + 1), waitMs + 20);
+    return () => window.clearTimeout(t);
+  }, [waitMs]);
+  return { state: current, load, retryInS: waitMs > 0 ? Math.ceil(waitMs / 1000) : 0 };
+}
 export function DocumentManager({
   documents,
   interventions,
   demo,
   onRefresh,
+  live = false,
+  profileId = "",
+  interventionId = "",
+  fetchHistory = browserDocumentFetch,
 }: {
   documents: StoredDocument[];
   interventions: Intervention[];
   demo: boolean;
   onRefresh: () => Promise<void>;
+  /** Live session: older documents are read from /api/documents/history. Default/demo: no call. */
+  live?: boolean;
+  /** Identity part of the history key (role spaces also remount on identity change). */
+  profileId?: string;
+  /** Optional dossier filter (cursor scope); "" = every document of the account. */
+  interventionId?: string;
+  /** Test seam for the history client. */
+  fetchHistory?: DocumentFetch;
 }) {
+  const history = useDocumentHistory(live && !demo, profileId, interventionId, fetchHistory);
+  const hs = history.state;
+  const historyOn = live && !demo;
+  const unavailable = historyOn && hs.status === "not_found";
+  const rows = unavailable ? [] : historyOn ? mergeDocuments(interventionId, documents, hs.pages) : documents;
+  const firstLoad = historyOn && !hs.loaded && (hs.status === "idle" || hs.status === "loading");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -1148,10 +1361,31 @@ export function DocumentManager({
           {notice}
         </div>
       )}
-      {documents.length ? (
+      {historyOn && hs.status === "error" && (
+        <div className="alert error" role="alert" data-document-history="error">
+          <p>
+            {hs.loaded
+              ? "Les documents plus anciens n’ont pas pu être chargés. Les documents affichés restent valables."
+              : "L’historique des documents n’a pas pu être chargé. Les documents affichés restent valables."}
+          </p>
+          <button type="button" className="button outline" disabled={history.retryInS > 0} onClick={history.load}>
+            Réessayer{history.retryInS > 0 ? ` (${history.retryInS} s)` : ""}
+          </button>
+        </div>
+      )}
+      {historyOn && hs.status === "signed_out" && (
+        <div className="alert error" role="alert" data-document-history="signed_out">
+          Votre session a expiré. Reconnectez-vous pour retrouver vos documents.
+        </div>
+      )}
+      {unavailable ? (
+        <p className="document-empty" data-document-history="not_found">
+          Ces documents ne sont pas accessibles depuis votre compte.
+        </p>
+      ) : rows.length ? (
         <div className="document-list">
-          {documents.map((d) => (
-            <div key={d.id}>
+          {rows.map((d) => (
+            <div key={d.id} data-document-id={d.id}>
               <Icon name="document" />
               <section>
                 <h3>{d.name}</h3>
@@ -1185,8 +1419,18 @@ export function DocumentManager({
             </div>
           ))}
         </div>
-      ) : (
+      ) : firstLoad ? null : (
         <p className="document-empty">Aucune pièce jointe pour le moment.</p>
+      )}
+      {historyOn && hs.status === "loading" && (
+        <p role="status" data-document-history="loading">
+          Chargement des documents…
+        </p>
+      )}
+      {historyOn && offersOlderDocuments(hs) && (
+        <button type="button" className="button outline" data-document-older disabled={!olderDocumentsUsable(hs, Date.now())} onClick={history.load}>
+          Charger les documents plus anciens
+        </button>
       )}
       {demo ? (
         <div className="inline-note">
