@@ -18,10 +18,16 @@ Intégrationa8d033939300d2d4e77f9a4ee51a9ddd2a58ae6dPOUSSÉE/tscPASS/CI412586265
 - Mission FASTSPLIT-CLIENT-ADDRESS-NAME-001 : lead Claude responsable du parcours/UI, Codex backend. Recherche+inverse IGN codés3cbb345 et intégrésf8fd66b014a7135708d4f338a6f58818d67bfc50/tscPASS ;recherche et inverse via le module intégré ont réellement répondu200 sur des coordonnées de test publiques en Martinique. Ce sont des contrôles du fournisseur via code local, pas encore une livraison du champ sur la preview.
 - UI AddressField et raccordement/prénom en cours chez Claude ; aucune nouvelle adresse ou position utilisateur collectée par ces contrôles. Pas encore annoncé utilisable dans la version publique070.
 
+## Checkpoint du 31 octobre — 21h27 Martinique
+
+Intégrationdd4fde3 poussée : composant adressecf60799 et prénom8aea536 relus,21 tests ciblés et TypeScript strictPASS. Le champ adresse n’est pas encore raccordé au formulaire publié. Thèmeclient2fa relu CSS/wrapper, consumerdetail encore en correction sur délai passif après503/401 ; pas annoncé livré.
+
+Sonde Realtime réelle043/bb05 terminée : abonnement4tables en erreur sans événement, témoins3tables et1table reçoivent leurs événements. H1b mesuré, correctif applicatif demandé ; aucune preuve UI par cette sonde SDK isolée. Cleanup runner et ROOT28lectures indépendantesPASS à01:24:28.989UTC. Rapport REALTIME_043_BB05_REAL_FINDING.md.
+
 ## En cours
 - LeadClaude :consumerpointread/cache/contexte + raccordementclient/artisan/entreprise,codeobservéenpréparationuse-detail-presence/détailreadonly.
 - WorkerUIexistant :styleclientSCOPÉCSS,leadseulclient-space/wrapperthème pouréviterconflitconsumer. MissionFASTSPLIT-CLIENT-THEME-001.
-- WorkerQAClaude :sondeRT4dad ;1P2tokenindécodableclasséàtortH2au lieuUNKNOWN,corrigercibléavantrootcloud. RapportREALTIME_4DAD_REVIEW.md.
+- Claude : corriger abonnement Realtime applicatif (trois tables publiées), raccordement adresse/prénom et finition thème client ; ROOT recette et preview ensuite.
 
 Pasdenouvelleautomatisation15min. AucunecohorteQAconnueactive ;bauxexpirydéjàconsommésnettoyés,pasrejouer. Stripe/premierSuperAdminexplicitementdifférés. Pasproduction/main/transactionréelle/stores/natif. Rôlesetautrespagespubliquespasencoreentièrementmigrés ;applicationcomplètenonannoncée.
 
