@@ -41,7 +41,7 @@ import {
 } from "./app/demo";
 import { resolveDisplayName } from "./app/display-name";
 import { draftNotice, getDraftStorage, readBootDraft } from "./app/request-draft-boot";
-import { BOOKING_DRAFT_KEY, clearBooking, readBooking, saveBooking, type BookingDraft } from "./app/booking-draft";
+import { BOOKING_DRAFT_KEY, clearBooking, ensureRequestId, readBooking, saveBooking, type BookingDraft } from "./app/booking-draft";
 import { savePublicDraft } from "../lib/shared/request-draft";
 import { REALTIME_CHANNEL_CONFIG, REALTIME_TABLES, nextConnection } from "./app/realtime";
 import { category, uid } from "./app/format";
@@ -1125,8 +1125,30 @@ export default function CourantApp() {
         );
         return;
       }
-      // 1. Create the dossier exactly once.
-      const result = await api<{ intervention: Intervention }>("/api/interventions", values);
+      // 1. Create the dossier exactly once. A service booking carries its idempotency key: the
+      //    server returns the SAME dossier for a replay of that key (lost reply, retry, reload).
+      //    The canonical RequestValues / offline draft format is unchanged; only the API payload
+      //    gains request_id. A legacy booking without a key gets one PROVEN stored first.
+      let payload: RequestValues & { request_id?: string } = values;
+      if (booking && pendingDraft) {
+        const keyed = ensureRequestId(getDraftStorage(), booking);
+        if (!keyed)
+          throw new Error(
+            "Votre demande n’a pas été envoyée : ce navigateur n’a pas pu préparer son envoi en toute sécurité. Réessayez ; si cela persiste, rechargez la page.",
+          );
+        if (keyed.booking !== booking) ctx.when(setBooking)(keyed.booking);
+        payload = { ...values, request_id: keyed.request_id };
+      }
+      let result: { intervention: Intervention };
+      try {
+        result = await api<{ intervention: Intervention }>("/api/interventions", payload);
+      } catch (e) {
+        if (payload.request_id && e instanceof ApiRequestError && e.status === 409)
+          throw new Error(
+            "Cette demande a peut-être déjà été enregistrée avec un contenu différent. Vérifiez « Mes demandes » avant toute nouvelle demande.",
+          );
+        throw e; // draft and key kept: the next attempt replays the SAME key
+      }
       if (ctx.alive()) await refresh();
       ctx.when(setPendingDraft)(null);
       ctx.when(setBooking)(null);
@@ -2364,7 +2386,9 @@ export default function CourantApp() {
             );
         } else
           ctx.notice(
-            "Votre compte a été créé. Consultez votre email pour confirmer votre inscription avant de vous connecter.",
+            pendingDraft && booking
+              ? "Votre compte a été créé. Confirmez votre adresse depuis l’email reçu, puis revenez dans CET onglet et connectez-vous : votre demande y est gardée 30 minutes. Rien n’a encore été envoyé."
+              : "Votre compte a été créé. Consultez votre email pour confirmer votre inscription avant de vous connecter.",
           );
       });
     },

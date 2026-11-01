@@ -37,6 +37,10 @@ export type BookingDraft = {
   /** Free, NON-personal notes about the fault (optional). */
   notes: string;
   contact: BookingContact;
+  /** Idempotency key of the ONE request this booking creates (UUID, stable for the tab's draft
+   *  lifetime, carried across login/reload/back/errors). Legacy drafts may lack it: a key is then
+   *  created and PROVEN persisted before the first POST. */
+  request_id?: string;
 };
 export type StoredBooking = { savedAt: number; booking: BookingDraft };
 
@@ -59,7 +63,42 @@ export function parseBooking(input: unknown): BookingDraft | null {
   const email = str(c.email ?? "", LIMITS.email);
   const phone = str(c.phone ?? "", LIMITS.phone);
   if (first_name === null || last_name === null || email === null || phone === null) return null;
-  return { slug, urgent: input.urgent, slot, notes, contact: { civility, first_name, last_name, email, phone, company: Boolean(c.company) } };
+  let request_id: string | undefined;
+  if (input.request_id !== undefined) {
+    if (typeof input.request_id !== "string" || !REQUEST_ID.test(input.request_id)) return null;
+    request_id = input.request_id.toLowerCase();
+  }
+  return { slug, urgent: input.urgent, slot, notes, contact: { civility, first_name, last_name, email, phone, company: Boolean(c.company) }, ...(request_id ? { request_id } : {}) };
+}
+
+export const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export function newRequestId(): string {
+  return crypto.randomUUID();
+}
+
+/** The booking's idempotency key, PROVEN present in this tab's storage before any POST (so a
+ *  reload/resume replays the same key). An existing key is NEVER replaced: it is re-written as is
+ *  when storage lost it, then read back. A key is generated only for a legacy booking without one.
+ *  null ⇒ not provable (no storage, refused write, readback mismatch): the caller sends nothing. */
+export function ensureRequestId(
+  storage: Pick<Storage, "getItem" | "setItem"> | null | undefined,
+  booking: BookingDraft,
+  now = Date.now(),
+): { booking: BookingDraft; request_id: string } | null {
+  if (!storage) return null;
+  const existing = booking.request_id && REQUEST_ID.test(booking.request_id) ? booking.request_id.toLowerCase() : null;
+  const request_id = existing ?? newRequestId();
+  const next = existing ? booking : { ...booking, request_id };
+  const stored = () => {
+    try {
+      return readBooking(storage.getItem(BOOKING_DRAFT_KEY), now)?.booking.request_id ?? null;
+    } catch {
+      return null;
+    }
+  };
+  if (existing && stored() === existing) return { booking: next, request_id };
+  if (!saveBooking(storage, next, now)) return null;
+  return stored() === request_id ? { booking: next, request_id } : null;
 }
 
 export function readBooking(raw: unknown, now = Date.now()): StoredBooking | null {

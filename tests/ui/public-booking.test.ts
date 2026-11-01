@@ -3,6 +3,7 @@
 // summary on every step, and the final local save (two drafts, no personal data in the
 // description, honest failure without navigation). SSR + pure; no browser.
 import test from "node:test";
+import * as draftModule from "../../components/app/booking-draft";
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
@@ -14,7 +15,8 @@ import { PUBLIC_DRAFT_KEY, readPublicDraft } from "../../lib/shared/request-draf
 import type * as Booking from "../../components/role/public-booking";
 
 const tp = loadModule("components/app/theme-provider.tsx");
-const overrides = { "@/components/app/theme-provider": tp };
+// vm harness has no `crypto`: the real booking-draft module (Node crypto.randomUUID) is injected.
+const overrides = { "@/components/app/theme-provider": tp, "../app/booking-draft": draftModule };
 const booking = loadModule("components/role/public-booking.tsx", overrides) as unknown as typeof Booking;
 const servicePage = loadModule("components/role/public-service-page.tsx", overrides) as Record<string, any>;
 const catalog = loadModule("components/role/public-service-catalog.ts") as Record<string, any>;
