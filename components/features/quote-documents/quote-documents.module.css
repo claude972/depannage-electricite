@@ -304,3 +304,77 @@
     transition: none !important;
   }
 }
+
+/* ---- Opt-in theme (FASTSPLIT-DOCUMENTS-PLANNING-THEME-001) -----------------------------------
+   Active only under the parent ThemeSurface (`.ui-v2`): --ui-* tokens, light and dark, same
+   selectors +1 class so they win over the rules above. Outside a themed space nothing changes.
+   Acceptance (devis / avenant accepté, global tags) and online payment (note under the list)
+   keep their distinct treatments; read-only, loading and empty states keep their own frames. */
+:global(.ui-v2) .head h2,
+:global(.ui-v2) .quoteHead h3,
+:global(.ui-v2) .quoteHead .amount,
+:global(.ui-v2) .item strong,
+:global(.ui-v2) .amendment header strong,
+:global(.ui-v2) .amendment header .amount,
+:global(.ui-v2) .lines tfoot .total td,
+:global(.ui-v2) .form legend,
+:global(.ui-v2) .preview strong,
+:global(.ui-v2) .history summary,
+:global(.ui-v2) .empty h3 {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .lead,
+:global(.ui-v2) .section h4,
+:global(.ui-v2) .meta,
+:global(.ui-v2) .preview,
+:global(.ui-v2) .note,
+:global(.ui-v2) .history time,
+:global(.ui-v2) .loader,
+:global(.ui-v2) .empty p {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .reason,
+:global(.ui-v2) .lines,
+:global(.ui-v2) .history {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .readOnly {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .quote {
+  border-color: var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-card);
+}
+:global(.ui-v2) .quoteHead,
+:global(.ui-v2) .section,
+:global(.ui-v2) .lines th,
+:global(.ui-v2) .lines td {
+  border-bottom-color: var(--ui-border);
+}
+:global(.ui-v2) .section:last-child,
+:global(.ui-v2) .lines tfoot td {
+  border-bottom: 0;
+}
+:global(.ui-v2) .item,
+:global(.ui-v2) .amendment {
+  border-color: var(--ui-border);
+  background: var(--ui-card);
+}
+:global(.ui-v2) .form {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .empty {
+  border-color: var(--ui-border);
+  border-radius: var(--ui-radius-md);
+}
+:global(.ui-v2) .demoTag {
+  color: var(--ui-warning);
+}
+:global(.ui-v2) .history summary:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}

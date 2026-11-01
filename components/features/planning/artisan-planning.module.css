@@ -262,3 +262,84 @@
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* ---- Opt-in theme (FASTSPLIT-DOCUMENTS-PLANNING-THEME-001) -----------------------------------
+   Active only under the parent ThemeSurface (`.ui-v2`): --ui-* tokens, light and dark, same
+   selectors +1 class. Outside a themed space nothing changes. Slot kinds stay distinguishable
+   without relying on colour alone: free = success bar on a tinted surface, appointment = strong
+   text-colour bar on the card, busy = muted bar, unavailable = warning bar + stripes, available =
+   dashed success border. One accent (green) for « today » and the free / available states. */
+:global(.ui-v2) .weekTitle,
+:global(.ui-v2) .dayHead strong,
+:global(.ui-v2) .block time,
+:global(.ui-v2) .sectionHead h2,
+:global(.ui-v2) .rules strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .zone,
+:global(.ui-v2) .legend,
+:global(.ui-v2) .dayHead,
+:global(.ui-v2) .dayEmpty,
+:global(.ui-v2) .block small,
+:global(.ui-v2) .rules small,
+:global(.ui-v2) .demoNote {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .swatch {
+  border-color: var(--ui-border);
+}
+:global(.ui-v2) .day,
+:global(.ui-v2) .rules,
+:global(.ui-v2) .form {
+  border-color: var(--ui-border);
+  background: var(--ui-card);
+}
+:global(.ui-v2) .rules li + li {
+  border-top-color: var(--ui-border);
+}
+:global(.ui-v2) .dayToday {
+  border-color: var(--ui-accent);
+}
+:global(.ui-v2) .today {
+  border-color: var(--ui-accent);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .block {
+  border-color: var(--ui-border);
+  color: var(--ui-text);
+  background: var(--ui-card);
+}
+:global(.ui-v2) .blockFree {
+  border-left-color: var(--ui-success);
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .blockAppointment {
+  border-left-color: var(--ui-text);
+  background: var(--ui-card);
+}
+:global(.ui-v2) .blockBusy {
+  border-left-color: var(--ui-text-muted);
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .blockUnavailable {
+  border-left-color: var(--ui-warning);
+  background: repeating-linear-gradient(135deg, var(--ui-card) 0 6px, var(--ui-surface) 6px 12px);
+}
+:global(.ui-v2) .blockAvailable {
+  border-left-color: var(--ui-success);
+}
+:global(.ui-v2) .outside {
+  color: var(--ui-warning);
+}
+:global(.ui-v2) .error {
+  color: var(--ui-danger);
+}
+:global(.ui-v2) .notice {
+  color: var(--ui-success);
+}
+:global(.ui-v2) .readOnly {
+  border-color: var(--ui-border);
+  border-left-color: var(--ui-warning);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
