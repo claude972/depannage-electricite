@@ -1,6 +1,9 @@
 // Minimal Supabase service client over fetch (PostgREST, Auth admin, Storage). No SDK
 // dependency. The service key lives only in this closure; error messages are redacted and
 // never include request or response headers. Every request has a timeout.
+import { createAuthAdmin } from "../../qa-tracking/lib/auth-admin.mjs";
+import { UUID } from "./cohort.mjs";
+import { parseStorageListing } from "../../qa-gateway/lib.ts";
 
 async function timedFetch(url, init, timeoutMs, label) {
   try {
@@ -112,22 +115,65 @@ export function createServiceClient({ url, serviceKey, redactor, timeoutMs = 900
       if (!response.ok && response.status !== 404) throw fail("deleteAuthUser", response.status, await response.text());
     },
     async authUserExists(id) {
-      const response = await go(`/auth/v1/admin/users/${encodeURIComponent(id)}`, { method: "GET", headers: headers() }, "getAuthUser");
-      if (response.status === 404) return false;
-      if (!response.ok) throw fail("getAuthUser", response.status, await response.text());
-      const user = await response.json().catch(() => null);
-      return Boolean(user?.id);
+      if (typeof id !== "string" || !UUID.test(id)) throw new Error("getAuthUser: UNKNOWN invalid requested id");
+      const result = await createAuthAdmin({ url: base, serviceKey, timeoutMs }).readUser(id);
+      if (result.state === "found") return true;
+      if (result.state === "absent") return false;
+      throw new Error("getAuthUser: UNKNOWN user state was not confirmed");
     },
     async storageRemove(bucket, paths) {
       const response = await go(`/storage/v1/object/${bucket}`, { method: "DELETE", headers: headers(), body: JSON.stringify({ prefixes: paths }) }, "storageRemove");
       if (!response.ok && response.status !== 404) throw fail("storageRemove", response.status, await response.text());
     },
     async storageList(bucket, prefix) {
-      const response = await go(`/storage/v1/object/list/${bucket}`, { method: "POST", headers: headers(), body: JSON.stringify({ prefix, limit: 1000, offset: 0 }) }, "storageList");
-      if (response.status === 404 || response.status === 400) return [];
-      if (!response.ok) throw fail("storageList", response.status, await response.text());
-      const items = await response.json();
-      return Array.isArray(items) ? items.filter((o) => o.id) : [];
+      const unknown = (why) => new Error(`storageList: UNKNOWN ${why}`);
+      if (typeof bucket !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(bucket) ||
+        typeof prefix !== "string" || !prefix.length || prefix.length > 1024 || /[\u0000-\u001f\u007f]/.test(prefix))
+        throw unknown("invalid list scope");
+      const items = [], seen = new Set(), seenIds = new Set();
+      let lastName = null;
+      const deadline = Date.now() + timeoutMs;
+      const instant = (value) => typeof value === "string" && value.length <= 40 &&
+        /^\d{4}-\d{2}-\d{2}T/.test(value) && Number.isFinite(Date.parse(value));
+      for (let page = 0, offset = 0; page < 50; page++) {
+        const remainingMs = deadline - Date.now();
+        if (!(remainingMs > 0)) throw unknown("list deadline exceeded");
+        let response;
+        try {
+          response = await timedFetch(`${base}/storage/v1/object/list/${encodeURIComponent(bucket)}`,
+            { method: "POST", headers: headers(), body: JSON.stringify({ prefix, limit: 1000, offset, sortBy: { column: "name", order: "asc" } }) },
+            remainingMs, "storageList");
+        } catch { throw unknown("transport failed"); }
+        if (response.status !== 200) throw unknown(`HTTP ${response.status}`);
+        let rows;
+        try { rows = await response.json(); } catch { throw unknown("response is not JSON"); }
+        const parsed = parseStorageListing(rows);
+        if (parsed.malformed.length || !Array.isArray(rows) || rows.length > 1000) throw unknown("malformed list page");
+        // Only an actually empty, valid page proves exhaustion. A short page may be a provider
+        // cap, so advance by its real size and read again; never return an unproven partial list.
+        if (!rows.length) return items;
+        for (const row of rows) {
+          if (/[/\\\u0000-\u001f\u007f]/.test(row.name) || row.name === "." || row.name === ".." || seen.has(row.name))
+            throw unknown("ambiguous or repeated object name");
+          // Cohort object names are ASCII. A provider order that cannot be verified against
+          // that ordering (including another collation) cannot prove an exhaustive offset scan.
+          if (!/^[\x20-\x7e]+$/.test(row.name) || (lastName !== null && row.name <= lastName))
+            throw unknown("unconfirmed name ordering");
+          const folder = row.id === null && row.metadata === null &&
+            row.created_at === null && row.updated_at === null && row.last_accessed_at === null;
+          const file = typeof row.id === "string" && UUID.test(row.id) &&
+            row.metadata !== null && typeof row.metadata === "object" && !Array.isArray(row.metadata) &&
+            instant(row.created_at) && instant(row.updated_at) && instant(row.last_accessed_at);
+          if (!folder && !file) throw unknown("unconfirmed file or folder shape");
+          if (file && seenIds.has(row.id)) throw unknown("repeated object id");
+          seen.add(row.name);
+          lastName = row.name;
+          if (file) seenIds.add(row.id);
+          items.push(row); // Folders are evidence too: never drop id:null entries silently.
+        }
+        offset += rows.length;
+      }
+      throw unknown("exhaustion not proved within 50 pages");
     },
   };
 }
