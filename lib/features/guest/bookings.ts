@@ -68,13 +68,15 @@ export async function bookingRoute(request: Request, operation: "create" | "stat
       const data = schema.parse(parsed.data);
       const card = data.payment_choice === "card_hold" ? cardHoldContext() : null; // Before prepare/quota/provider mutation.
       const { request_id, contact, payment_choice, ...payload } = data;
-      const prepared = await db.rpc("prepare_phone_booking", { p_request_id: request_id, p_payload: payload, p_contact: { ...contact, email: contact.email.toLowerCase() }, p_method: payment_choice }); dbError(prepared.error); const ready = validResult(prepared.data);
-      if (ready.payment.method !== payment_choice) throw unavailable();
+      if (!card) {
+        const submitted = await db.rpc("create_on_site_booking", { p_request_id: request_id, p_payload: payload, p_contact: { ...contact, email: contact.email.toLowerCase() } }); dbError(submitted.error);
+        const result = validResult(submitted.data); if (result.status !== "confirmed" || result.payment.method !== "on_site") throw unavailable();
+        return Response.json(result, { status: 201, headers });
+      }
+      const prepared = await db.rpc("prepare_phone_booking", { p_request_id: request_id, p_payload: payload, p_contact: { ...contact, email: contact.email.toLowerCase() }, p_method: payment_choice }); dbError(prepared.error);
+      const ready = validResult(prepared.data); if (ready.payment.method !== payment_choice) throw unavailable();
       if (ready.status === "confirmed") return Response.json(ready, { status: 201, headers });
-      if (card) return Response.json(await openCardHold(user.id, request_id, card), { headers });
-      const submitted = await db.rpc("submit_phone_booking", { p_request_id: request_id }); dbError(submitted.error);
-      const result = validResult(submitted.data); if (result.status !== "confirmed") throw unavailable();
-      return Response.json(result, { status: 201, headers });
+      return Response.json(await openCardHold(user.id, request_id, card), { headers });
     }
     const { request_id } = keySchema.parse(parsed.data);
     const current = await db.rpc("phone_booking_status", { p_request_id: request_id, p_intervention_id: null }); dbError(current.error);

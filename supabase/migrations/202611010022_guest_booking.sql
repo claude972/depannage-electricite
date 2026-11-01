@@ -127,6 +127,15 @@ end; $$;
 revoke all on function public.submit_phone_booking(uuid) from public,anon,authenticated,service_role;
 grant execute on function public.submit_phone_booking(uuid) to authenticated;
 
+-- On-site has no external provider step: preparation and submission must commit together.
+create function public.create_on_site_booking(p_request_id uuid,p_payload jsonb,p_contact jsonb) returns jsonb language plpgsql security definer set search_path='' as $$
+begin
+ perform public.prepare_phone_booking(p_request_id,p_payload,p_contact,'on_site');
+ return public.submit_phone_booking(p_request_id);
+end; $$;
+revoke all on function public.create_on_site_booking(uuid,jsonb,jsonb) from public,anon,authenticated,service_role;
+grant execute on function public.create_on_site_booking(uuid,jsonb,jsonb) to authenticated;
+
 create function public.phone_booking_status(p_request_id uuid default null,p_intervention_id uuid default null) returns jsonb language plpgsql security definer set search_path='' as $$
 declare actor uuid=public.guest_booking_actor(); b public.phone_booking_requests;
 begin
@@ -151,7 +160,7 @@ begin
  if b.stripe_session_id is not null and b.stripe_session_id<>p_session_id then raise exception 'Provider session conflict' using errcode='P0001'; end if;
  if b.stripe_payment_intent_id is not null and b.stripe_payment_intent_id is distinct from p_intent_id then raise exception 'Provider intent conflict' using errcode='P0001'; end if;
  if p_action='session' then
-  if b.intervention_id is null then update public.phone_booking_requests set stripe_session_id=p_session_id,stripe_payment_intent_id=p_intent_id,status=case when status='cancelling' then 'cancelling' else 'checkout_open' end,updated_at=now() where actor_id=p_actor and request_id=p_request_id; end if;
+  if b.intervention_id is null then update public.phone_booking_requests set stripe_session_id=p_session_id,stripe_payment_intent_id=p_intent_id,status=case when status in ('cancelling','authorized') then status else 'checkout_open' end,updated_at=now() where actor_id=p_actor and request_id=p_request_id; end if;
  elsif p_action='authorize' then
   if b.status='cancelling' or b.stripe_session_id is distinct from p_session_id or p_intent_id is null or p_amount is distinct from b.expected_max_cents or p_currency is distinct from 'eur' or p_state is distinct from 'requires_capture' then raise insufficient_privilege; end if;
   update public.phone_booking_requests set stripe_payment_intent_id=p_intent_id,authorized_amount_cents=p_amount,authorized_currency=p_currency,provider_state=p_state,
