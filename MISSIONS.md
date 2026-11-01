@@ -1,3 +1,7 @@
+## Méthode courante — fastsplit (instruction du propriétaire)
+
+Appliquer le skill partagé `~/.agents/skills/fastsplit/SKILL.md` pour la suite : parcours complets, un responsable par parcours, Claude UI/frontend et Codex backend/données. Documentation minimale ; vérifier nominal, erreurs principales, loading/error/empty, DESIGN et RLS des données privées. Corriger, intégrer, pousser et fournir une preview vérifiée ; seul un parcours intégré, accessible en ligne et dont les actions essentielles fonctionnent est livré. Réutiliser les travaux et agents existants. Ne pas recréer le rapport automatique de 15 minutes supprimé.
+
 # Missions
 
 ## Mission: Livraison Web et PWA fidèle aux références
