@@ -137,3 +137,9 @@ export const offersOlder = (state: HistoryState) => state.hasMore && state.statu
 export type ComposeDraft = { key: string; text: string };
 /** The draft text for the open thread: another thread's draft is never shown nor sent. */
 export const draftText = (draft: ComposeDraft, key: string) => (draft.key === key ? draft.text : "");
+/**
+ * After a successful send, clear the draft only if it is still exactly what was sent, in the same
+ * thread: text typed while the request was in flight (or another thread's draft) is kept.
+ */
+export const clearSentDraft = (draft: ComposeDraft, sentKey: string, sentText: string): ComposeDraft =>
+  draft.key === sentKey && draft.text === sentText ? { key: sentKey, text: "" } : draft;

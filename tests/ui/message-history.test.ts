@@ -15,6 +15,7 @@ import {
   historyKey,
   historyUrl,
   initialHistory,
+  clearSentDraft,
   draftText,
   mergeMessages,
   offersOlder,
@@ -97,6 +98,14 @@ test("compose draft is bound to identity + dossier: A's text is never shown nor 
   assert.equal(draftText(draft, historyKey("u2", A)), "", "another identity starts empty");
 });
 
+test("successful send clears only the unchanged sent draft; text typed meanwhile and failures keep it", () => {
+  const k = historyKey("u1", A);
+  assert.deepEqual(clearSentDraft({ key: k, text: "bonjour" }, k, "bonjour"), { key: k, text: "" });
+  assert.deepEqual(clearSentDraft({ key: k, text: "bonjour suite" }, k, "bonjour"), { key: k, text: "bonjour suite" }, "text typed during the request is kept");
+  const other = { key: historyKey("u1", B), text: "draft B" };
+  assert.equal(clearSentDraft(other, k, "bonjour"), other, "another thread's draft is never cleared");
+});
+
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM =
   process.env.QA_CHROMIUM_PATH ||
@@ -142,7 +151,7 @@ function App() {
   const [profile, setProfile] = useState("u1");
   window.setSel = setSel;
   window.setProfile = setProfile;
-  return h(MessageCenter, { interventions, messages: preview, role: "client", profileId: profile, selectedId: sel, busy: false, onSubmit: async (id, body) => { window.sent.push([id, body]); return true; }, live: kind !== "demo", fetchHistory: fakeFetch });
+  return h(MessageCenter, { interventions, messages: preview, role: "client", profileId: profile, selectedId: sel, busy: false, onSubmit: (id, body) => { window.sent.push([id, body]); return kind === "deferred" ? new Promise((r) => { window.resolveSend = r; }) : Promise.resolve(true); }, live: kind !== "demo", fetchHistory: fakeFetch });
 }
 createRoot(document.getElementById("app")).render(h(App));
 `;
@@ -292,6 +301,28 @@ test("MessageCenter history in real React/Chromium: 237 messages over 10 pages, 
       assert.equal(await page.inputValue("#message-body"), "", "the previous identity's draft is gone");
       assert.deepEqual((await calls(page)).map((x) => [x.d, x.cursor]).slice(2), [[B, null]], "fresh newest page, no old cursor");
       assert.ok(await page.$("[data-message-older]"), "the older-page button carries data-message-older");
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    // 6d. Deferred send: « bonjour » sent, « suite » typed before the reply ⇒ kept on success;
+    //     a failed send keeps the draft as is.
+    {
+      const { page, errors } = await open("deferred");
+      await page.waitForSelector(OLDER);
+      type Win = { sent: [string, string][]; resolveSend(v: boolean): void };
+      await page.fill("#message-body", "bonjour");
+      await page.click("[aria-label='Envoyer le message']");
+      await page.waitForFunction(() => (window as unknown as Win).sent.length === 1);
+      await page.fill("#message-body", "suite");
+      await page.evaluate(() => (window as unknown as Win).resolveSend(true));
+      await page.waitForTimeout(100);
+      assert.equal(await page.inputValue("#message-body"), "suite", "new text typed in flight survives the success");
+      await page.click("[aria-label='Envoyer le message']");
+      await page.waitForFunction(() => (window as unknown as Win).sent.length === 2);
+      await page.evaluate(() => (window as unknown as Win).resolveSend(false));
+      await page.waitForTimeout(100);
+      assert.equal(await page.inputValue("#message-body"), "suite", "failed send keeps the draft");
+      assert.deepEqual(await page.evaluate(() => (window as unknown as Win).sent), [[A, "bonjour"], [A, "suite"]]);
       assert.deepEqual(errors, []);
       await page.close();
     }
