@@ -1,0 +1,202 @@
+/* Address field leaf (FASTSPLIT-CLIENT-ADDRESS-NAME-001). Local variables: light values by
+   default (legacy white forms, outside ThemeSurface), mapped to the --ui-* tokens inside
+   ThemeSurface (.ui-v2) for both themes. 44 px targets, 1 px borders, visible focus. */
+.root {
+  --af-bg: #ffffff;
+  --af-surface: #f4f6f5;
+  --af-text: #111111;
+  --af-muted: #4b5563;
+  --af-border: #c9d2ce;
+  --af-accent: #0f5c3a;
+  --af-primary: #18794e;
+  --af-on-primary: #ffffff;
+  --af-danger: #b42318;
+  --af-focus: #0f5c3a;
+  display: grid;
+  gap: 12px;
+  margin-bottom: 20px;
+  color: var(--af-text);
+}
+:global(.ui-v2) .root {
+  --af-bg: var(--ui-bg);
+  --af-surface: var(--ui-surface);
+  --af-text: var(--ui-text);
+  --af-muted: var(--ui-text-muted);
+  --af-border: var(--ui-border);
+  --af-accent: var(--ui-accent);
+  --af-primary: var(--ui-primary);
+  --af-on-primary: var(--ui-on-primary);
+  --af-danger: var(--ui-danger);
+  --af-focus: var(--ui-focus);
+}
+.field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.field label {
+  color: var(--af-text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.field input {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid var(--af-border);
+  border-radius: 12px;
+  background: var(--af-bg);
+  color: var(--af-text);
+  font: inherit;
+  font-size: 16px;
+}
+.field input::placeholder {
+  color: var(--af-muted);
+}
+.field input[aria-invalid="true"] {
+  border-color: var(--af-danger);
+}
+.field input:disabled {
+  opacity: 0.6;
+}
+.root input:focus-visible,
+.root button:focus-visible {
+  outline: 3px solid var(--af-focus);
+  outline-offset: 2px;
+}
+.combo {
+  position: relative;
+}
+.popup {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  border: 1px solid var(--af-border);
+  border-radius: 12px;
+  background: var(--af-bg);
+  overflow: hidden;
+}
+.popup[hidden] {
+  display: none;
+}
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+}
+.option {
+  display: grid;
+  gap: 2px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: var(--af-text);
+  cursor: pointer;
+}
+.option strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+.option span {
+  color: var(--af-muted);
+  font-size: 14px;
+}
+.option:hover,
+.option[aria-selected="true"] {
+  background: var(--af-surface);
+  box-shadow: inset 3px 0 0 var(--af-accent);
+}
+.attribution {
+  margin: 0;
+  padding: 8px 12px;
+  border-top: 1px solid var(--af-border);
+  color: var(--af-muted);
+  font-size: 12px;
+}
+.status {
+  margin: 0;
+  min-height: 0;
+  color: var(--af-muted);
+  font-size: 14px;
+}
+.status:empty {
+  display: none;
+}
+.error {
+  margin: 0;
+  color: var(--af-danger);
+  font-size: 14px;
+  font-weight: 600;
+}
+.geo {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.primary,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.primary {
+  border: 1px solid var(--af-primary);
+  background: var(--af-primary);
+  color: var(--af-on-primary);
+}
+.secondary {
+  border: 1px solid var(--af-border);
+  background: transparent;
+  color: var(--af-text);
+}
+.secondary:hover:not(:disabled) {
+  border-color: var(--af-accent);
+}
+.secondary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.confirm {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--af-border);
+  border-radius: 12px;
+  background: var(--af-surface);
+}
+.confirm p {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  color: var(--af-text);
+}
+.confirm p span {
+  color: var(--af-muted);
+  font-size: 14px;
+}
+.confirmActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 430px) {
+  .columns {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
