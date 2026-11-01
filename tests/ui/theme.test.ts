@@ -156,6 +156,40 @@ test("controller: meta theme-color only while surfaces are mounted; restored exa
   assert.equal(d.metaAttrs.get("content"), "#102a43", "original restored after the last surface");
 });
 
+test("controller: light/dark media theme-color variants all follow the explicit theme, each restored", () => {
+  const mk = (content: string) => {
+    const a = new Map([["content", content]]);
+    return { a, el: { getAttribute: (n: string) => a.get(n) ?? null, setAttribute: (n: string, v: string) => void a.set(n, v) } };
+  };
+  const light = mk("#FFFFFF");
+  const dark = mk("#000000");
+  const attrs = new Map<string, string>();
+  const doc = {
+    documentElement: { getAttribute: (n: string) => attrs.get(n) ?? null, setAttribute: (n: string, v: string) => void attrs.set(n, v) },
+    querySelector: () => light.el,
+    querySelectorAll: (sel: string) => (sel === 'meta[name="theme-color"]' ? [light.el, dark.el] : []),
+  };
+  const c = createThemeController({ doc, storage: fakeStorage().storage, media: media(true) });
+  c.set("light"); // explicit light while the OS is dark
+  const release = c.acquireSurface();
+  assert.equal(light.a.get("content"), THEME_COLOR.light);
+  assert.equal(dark.a.get("content"), THEME_COLOR.light, "explicit choice wins over the dark media variant");
+  c.set("dark");
+  assert.equal(light.a.get("content"), THEME_COLOR.dark);
+  release();
+  assert.equal(light.a.get("content"), "#FFFFFF");
+  assert.equal(dark.a.get("content"), "#000000", "each variant restored to its own original");
+});
+
+test("layout: neutral theme-color per scheme, aligned with the manifest and THEME_COLOR", async () => {
+  const { readFileSync } = await import("node:fs");
+  const layout = readFileSync("app/layout.tsx", "utf8");
+  assert.match(layout, /media: "\(prefers-color-scheme: light\)", color: "#FFFFFF"/);
+  assert.match(layout, /media: "\(prefers-color-scheme: dark\)", color: "#000000"/);
+  assert.doesNotMatch(layout, /#102a43/);
+  assert.match(readFileSync("app/manifest.ts", "utf8"), /theme_color: "#ffffff"/i);
+});
+
 // ---------- inline anti-flash script ----------
 function runScript(opts: { stored?: string; throwStorage?: boolean; dark?: boolean | "throw" }) {
   const attrs = new Map<string, string>();
