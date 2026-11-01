@@ -1,3 +1,15 @@
+## Checkpoint fastsplit — 1 novembre 14h36 Martinique
+
+Application règlement d1f88e3b7e32912fcf989ef3f648b2f08e61c79f poussée, READY dpl_J9LMQN2ANrQfkerm33pbzBKcdESt, publique sans token : https://depannage-electricite-fohe9cvu8-brafas-projects.vercel.app . Flight ooAn2jjxoM2crE44XCD76, GitSource lié, exception publique ce seul déploiement. Frontend c92c614 contre-revu28tests/2montages et deuxP2fermés ; banque vs déclaration sur place distinguées client/artisan/B2B/admin. 1115testsPASS et unHTMLoptionnel ensuite55/55PASS0skip avec vraie source4c ; delta UI2tests+tscPASS. CI52511e1/41337060236 deuxjobsSUCCESS, appcode byteidentique d1f après deux corrections tests-only. Échec CI d1f conservé : ancien test support attendait l'enveloppe financière inchangée ; maintenant garde ACL/périmètre/totaux et contrôle les nouveaux champs.
+
+ROOT 8formats36039012801804×2thèmes parcours public5étapesPASS,4nouveaux endpoints settlement anonymes401 JSON private/no-store. Migrations024/025 revues/appliquées seules (001–023 inchangées), hashes14007298… et56aae842… ;45readbacks ACL/RLS/search_pathPASS. Clés SMS/Stripe et flags réels toujours absents/OFF. Aucun SMS/capture/transfert financier réel exécuté ; fixtures provider injectées uniquement.
+
+Recette cash run1e2a69aba431 TERMINÉE INCOMPLETEexit3 :20preuves acquises puis lecture financière multi-tables pendant commit avant réponseUI. Deux POST concurrents200 ont chacun ensuite prouvé reçu/paiement/historique exact15000 ; aucune correction produit déduite. Run resteINCOMPLETE, pas PASS. Cleanup.ok=true,3suppressionsfinancières exactes+24étapesB1,drain0/intentsréglés ; postflight indépendant ENPRÉPARATION, absence finale pas encore attestée. V2 Root attend réponseUI validée puis mêmes assertions ;132selfchecksPASS, original préservé. Aucun nouveau run avant postflight indépendant.
+
+026 facture avenants en cours isolé chez Codex : source014 utilisait seulement devis de base malgré paiement majoré des avenants acceptés ; objectif facture exacte15000 ou refus explicite des cas non représentables, jamais facture approximative. Pas encore intégré/appliqué. Premier owner/admin opérateur positif, SMTP réel et autres capacités non qualifiées restent ouverts ; aucune livraison complète proclamée. Pas main/production/store/achat/cron.
+
+---
+
 ## Checkpoint courant — réservation cinq étapes, 1 novembre 2026
 
 Application poussée et déployée `e5c82681deb3f9956ca0dc48ece150437d03dc16`, publique sans compte Vercel : https://depannage-electricite-gy7wyxhjk-brafas-projects.vercel.app . READY `dpl_3Swvh9sFnDa8HdbcwVRtk8AJGYS7`, GitSource lié, Flight `JVgF3INtZ2M3jJeHRwkxi`, CI41332926660 deux jobs SUCCESS. Nouveau parcours Urgence/Coordonnées/Adresse/Paiement/Récapitulatif, email facultatif, continuation sous formulaire et barre fixe ; contact privé, sur place impayé, nonce atomique et reprise sans doublon. Empreinte manuelle/vérification/annulation/reprise sans brouillon, historique téléphone paginé et création facultative d’accès email sur le même UID codés. Pas de refonte non demandée, main/production inchangés.
