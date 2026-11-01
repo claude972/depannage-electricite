@@ -39,12 +39,12 @@ test("Storage returns[] only for a valid empty200 page; errors/malformed rows ar
   await withFetch(async () => { throw new Error("test-service-key-only private error"); }, async db => assert.rejects(db.storageList("intervention-documents", UID), e => /UNKNOWN/.test(e.message) && !e.message.includes("test-service-key-only")));
 });
 test("Storage reads beyond1000, includes proven folders, and requires a terminal empty page", async () => {
-  const rows = [...Array.from({ length: 1000 }, (_, n) => file(n)), folder("nested"), file(1001)], offsets = [];
+  const rows = [...Array.from({ length: 1000 }, (_, n) => file(n)), file(1001), folder("nested")], offsets = [];
   await withFetch(async (_url, init) => {
     assert.equal(init.method, "POST"); const args = JSON.parse(init.body); offsets.push(args.offset);
     assert.deepEqual(args.sortBy, { column: "name", order: "asc" }); assert.equal(args.prefix, UID); assert.equal(args.limit, 1000);
     return reply(rows.slice(args.offset, args.offset + 1000));
-  }, async db => { const listed = await db.storageList("intervention-documents", UID); assert.equal(listed.length, 1002); assert.equal(listed[1000].id, null); });
+  }, async db => { const listed = await db.storageList("intervention-documents", UID); assert.equal(listed.length, 1002); assert.equal(listed[1001].id, null); });
   assert.deepEqual(offsets, [0, 1000, 1002]);
 });
 test("a short provider page is not assumed exhaustive, and a later error never returns a partial list", async () => {
@@ -61,6 +61,12 @@ test("repeated names, overfull pages and missing exhaustion within50 pages stay 
   let reads = 0;
   await withFetch(async () => reply([file(reads++)]), async db => assert.rejects(db.storageList("intervention-documents", UID), /UNKNOWN.*50 pages/));
   assert.equal(reads, 50);
+});
+test("unique but nonmonotone names within/between pages and unverifiable collation stay UNKNOWN", async () => {
+  await withFetch(async () => reply([file(2), file(1)]), async db => assert.rejects(db.storageList("intervention-documents", UID), /UNKNOWN.*ordering/));
+  let page = 0;
+  await withFetch(async () => reply(page++ ? [file(1)] : [file(3)]), async db => assert.rejects(db.storageList("intervention-documents", UID), /UNKNOWN.*ordering/));
+  await withFetch(async () => reply([{ ...file(1), name: "éclairage" }]), async db => assert.rejects(db.storageList("intervention-documents", UID), /UNKNOWN.*ordering/));
 });
 test("cleanup remains incomplete for unknown Auth/Storage reads and counts folder evidence instead of dropping it", async () => {
   const manifest = emptyManifest(); manifest.created.storage_paths = [`${UID}/target`]; manifest.created.auth_users = [UID];

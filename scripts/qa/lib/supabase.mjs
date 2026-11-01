@@ -131,6 +131,7 @@ export function createServiceClient({ url, serviceKey, redactor, timeoutMs = 900
         typeof prefix !== "string" || !prefix.length || prefix.length > 1024 || /[\u0000-\u001f\u007f]/.test(prefix))
         throw unknown("invalid list scope");
       const items = [], seen = new Set(), seenIds = new Set();
+      let lastName = null;
       const deadline = Date.now() + timeoutMs;
       const instant = (value) => typeof value === "string" && value.length <= 40 &&
         /^\d{4}-\d{2}-\d{2}T/.test(value) && Number.isFinite(Date.parse(value));
@@ -154,6 +155,10 @@ export function createServiceClient({ url, serviceKey, redactor, timeoutMs = 900
         for (const row of rows) {
           if (/[/\\\u0000-\u001f\u007f]/.test(row.name) || row.name === "." || row.name === ".." || seen.has(row.name))
             throw unknown("ambiguous or repeated object name");
+          // Cohort object names are ASCII. A provider order that cannot be verified against
+          // that ordering (including another collation) cannot prove an exhaustive offset scan.
+          if (!/^[\x20-\x7e]+$/.test(row.name) || (lastName !== null && row.name <= lastName))
+            throw unknown("unconfirmed name ordering");
           const folder = row.id === null && row.metadata === null &&
             row.created_at === null && row.updated_at === null && row.last_accessed_at === null;
           const file = typeof row.id === "string" && UUID.test(row.id) &&
@@ -162,6 +167,7 @@ export function createServiceClient({ url, serviceKey, redactor, timeoutMs = 900
           if (!folder && !file) throw unknown("unconfirmed file or folder shape");
           if (file && seenIds.has(row.id)) throw unknown("repeated object id");
           seen.add(row.name);
+          lastName = row.name;
           if (file) seenIds.add(row.id);
           items.push(row); // Folders are evidence too: never drop id:null entries silently.
         }
