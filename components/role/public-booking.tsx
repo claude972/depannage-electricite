@@ -7,9 +7,9 @@
 // details never enter the request description. The category comes from the service: never re-asked.
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { AddressField, createAddressApi, type AddressValue } from "../app/address-field";
-import { CIVILITIES, SLOTS, SLOT_LABEL, bookingDescription, contactErrors, saveBooking, type BookingContact, type BookingDraft, type Civility, type Slot } from "../app/booking-draft";
+import { BOOKING_DRAFT_KEY, CIVILITIES, SLOTS, SLOT_LABEL, bookingDescription, contactErrors, parseBooking, readBooking, saveBooking, type BookingContact, type BookingDraft, type Civility, type Slot } from "../app/booking-draft";
 import { getDraftStorage } from "../app/request-draft-boot";
-import { savePublicDraft } from "../../lib/shared/request-draft";
+import { PUBLIC_DRAFT_KEY, parsePublicDraftValues, readPublicDraft, savePublicDraft } from "../../lib/shared/request-draft";
 import { Field } from "../app/ui";
 import type { ServiceEntry } from "./public-service-catalog";
 import styles from "./public-booking.module.css";
@@ -37,6 +37,9 @@ export const STEP_ACTION: Record<BookingStep, string> = { 1: "Continuer", 2: "Co
 const CIVILITY_LABEL: Record<Civility, string> = { mme: "Madame", m: "Monsieur", "": "Non précisé" };
 export const SAVE_FAILED_MESSAGE =
   "Votre demande n’a pas pu être conservée dans ce navigateur (stockage local refusé ou plein). Rien n’a été envoyé. Vos réponses restent affichées : autorisez le stockage pour ce site ou réessayez.";
+
+export const ROLLBACK_FAILED_MESSAGE =
+  "Votre demande n’a pas pu être conservée dans ce navigateur et l’état précédent n’a pas pu être vérifié. Rien n’a été envoyé ; votre saisie reste sur cette page.";
 
 type Errors = Partial<Record<string, string>>;
 export function urgencyErrors(s: Pick<BookingState, "urgent" | "slot">): Errors {
@@ -68,26 +71,73 @@ export function toBooking(service: Pick<ServiceEntry, "slug">, s: BookingState):
   return { slug: service.slug, urgent, slot: urgent ? null : s.slot, notes: s.notes, contact: { ...s.contact, first_name: s.contact.first_name.trim(), last_name: s.contact.last_name.trim(), email: s.contact.email.trim(), phone: s.contact.phone.trim() } };
 }
 
-/** Last step: both drafts or nothing announced as saved; navigation only on full success. */
-export function finishBooking({ storage, service, state, go }: { storage: Storage | null; service: Pick<ServiceEntry, "slug" | "title" | "category">; state: BookingState; go: (href: string) => void }): { ok: true } | { ok: false; message: string } {
+/** Last step, all-or-nothing on the PAIR (public draft + booking extras): the two previous raw
+ *  entries are read first; both new entries are written then proven by readback; on any failure
+ *  the two previous raw values are restored (or removed when absent) and proven again. Navigation
+ *  only when both new entries are proven; never a mixed pair announced as saved. */
+export function finishBooking({ storage, service, state, go, now = Date.now() }: { storage: Storage | null; service: Pick<ServiceEntry, "slug" | "title" | "category">; state: BookingState; go: (href: string) => void; now?: number }): { ok: true } | { ok: false; message: string } {
+  if (!storage) return { ok: false, message: SAVE_FAILED_MESSAGE };
   const booking = toBooking(service, state);
-  let draftOk = false;
+  const values = {
+    category: service.category,
+    description: bookingDescription(service.title, booking),
+    address: state.address.address.trim(),
+    postal_code: state.address.postal_code.trim(),
+    city: state.address.city.trim(),
+    urgency: booking.urgent ? ("urgent" as const) : ("scheduled" as const),
+  };
+  const expectedValues = parsePublicDraftValues(values);
+  const expectedBooking = parseBooking(booking);
+  if (!expectedValues || !expectedBooking) return { ok: false, message: SAVE_FAILED_MESSAGE };
+  const keys = [PUBLIC_DRAFT_KEY, BOOKING_DRAFT_KEY] as const;
+  let previous: (string | null)[];
   try {
-    draftOk = !!storage && savePublicDraft(storage, {
-      category: service.category,
-      description: bookingDescription(service.title, booking),
-      address: state.address.address.trim(),
-      postal_code: state.address.postal_code.trim(),
-      city: state.address.city.trim(),
-      urgency: booking.urgent ? "urgent" : "scheduled",
-    }).ok;
+    previous = keys.map((k) => storage.getItem(k));
   } catch {
-    draftOk = false;
+    return { ok: false, message: SAVE_FAILED_MESSAGE }; // nothing written
   }
-  const bookingOk = draftOk && saveBooking(storage, booking);
-  if (!draftOk || !bookingOk) return { ok: false, message: SAVE_FAILED_MESSAGE };
-  go("/#auth");
-  return { ok: true };
+  const proven = () => {
+    try {
+      const draft = readPublicDraft(storage.getItem(PUBLIC_DRAFT_KEY), now);
+      const stored = readBooking(storage.getItem(BOOKING_DRAFT_KEY), now);
+      return !!draft && !!stored && JSON.stringify(draft.values) === JSON.stringify(expectedValues) && JSON.stringify(stored.booking) === JSON.stringify(expectedBooking);
+    } catch {
+      return false;
+    }
+  };
+  let written = false;
+  try {
+    written = savePublicDraft(storage, values, now).ok && saveBooking(storage, booking, now) && proven();
+  } catch {
+    written = false;
+  }
+  if (written) {
+    go("/#auth");
+    return { ok: true };
+  }
+  // Rollback to the exact previous pair, then prove it.
+  let restored = true;
+  keys.forEach((key, i) => {
+    try {
+      let current: string | null | undefined;
+      try {
+        current = storage.getItem(key);
+      } catch {
+        current = undefined; // unknown: restore anyway
+      }
+      if (current === previous[i]) return; // untouched entry: nothing to restore
+      if (previous[i] === null) storage.removeItem(key);
+      else storage.setItem(key, previous[i] as string);
+    } catch {
+      restored = false;
+    }
+  });
+  try {
+    restored = restored && keys.every((key, i) => storage.getItem(key) === previous[i]);
+  } catch {
+    restored = false;
+  }
+  return { ok: false, message: restored ? SAVE_FAILED_MESSAGE : ROLLBACK_FAILED_MESSAGE };
 }
 
 // ---- Bottom bar (closed page: « Confirmer » ; wizard: the active step's real submit) -----------

@@ -43,6 +43,12 @@ test("page : barre fixe « Confirmer » = même action que le CTA principal (ouv
   same(opens, ["Décrire ma panne", "Décrire ma panne", "Confirmer"]);
   assert.match(bar, /data-booking-open="">Confirmer<\/button>/); // libellé exact
   assert.doesNotMatch(html, /href="\/#new/); // jamais le formulaire générique
+  // Réserve basse sur le conteneur ThemeSurface ENTIER (en-tête, main ET pied de page) : la barre
+  // fixe ne masque jamais les derniers boutons du pied de page.
+  const root = html.match(/<div class="(ui-v2 [^"]*)"/)![1];
+  assert.match(root, /\bwithBar\b/);
+  const footer = html.indexOf("<footer"), rootEnd = html.lastIndexOf("</div>");
+  assert.ok(html.indexOf(`class="${root}"`) < footer && footer < rootEnd);
   // Ouvert : l’assistant remplace le contenu, la catégorie n’est jamais redemandée.
   const opened = render(createElement(servicePage.PublicServicePage, { service, initialOpen: true }));
   assert.match(opened, /data-booking-wizard="" data-step="1"/);
@@ -129,4 +135,84 @@ test("échec d’enregistrement : aucune navigation, message honnête (stockage 
     same(went, []);
     assert.match((result as { message: string }).message, /n’a pas pu être conservée dans ce navigateur.*Rien n’a été envoyé/);
   }
+});
+
+// ---- Paire tout-ou-rien (revue indépendante de 35a07bd) -----------------------------------------
+const OLD_DRAFT = JSON.stringify({ savedAt: Date.now() - 60_000, values: { category: "socket", description: "Ancien brouillon de prise", address: "1 rue Ancienne", postal_code: "97200", city: "Fort-de-France", urgency: "scheduled" } });
+const OLD_BOOKING = JSON.stringify({ savedAt: Date.now() - 60_000, booking: { slug: "prise-qui-ne-fonctionne-plus", urgent: true, slot: null, notes: "", contact: { civility: "m", first_name: "Ancien", last_name: "Contact", email: "ancien@example.test", phone: "0600000000", company: false } } });
+const oldPair = (s: MemoryStorage) => { s.data.set(PUBLIC_DRAFT_KEY, OLD_DRAFT); s.data.set(BOOKING_DRAFT_KEY, OLD_BOOKING); return s; };
+const panel = () => catalog.SERVICES.find((x: { slug: string }) => x.slug === "panne-tableau-electrique");
+const finish = (storage: MemoryStorage) => {
+  const went: string[] = [];
+  const result = booking.finishBooking({ storage: storage as unknown as Storage, service: panel(), state: filled({ step: 4, address: { address: "9 avenue Nouvelle", postal_code: "97232", city: "Le Lamentin" } }), go: (h) => went.push(h) });
+  return { result, went };
+};
+
+test("paire : 2e écriture refusée ⇒ les DEUX entrées reviennent exactement à l’ancienne paire, aucune navigation", () => {
+  const s = oldPair(new MemoryStorage());
+  s.fail.add(BOOKING_DRAFT_KEY);
+  const { result, went } = finish(s);
+  assert.equal(result.ok, false);
+  same(went, []);
+  assert.equal(s.getItem(PUBLIC_DRAFT_KEY), OLD_DRAFT);
+  assert.equal(s.getItem(BOOKING_DRAFT_KEY), OLD_BOOKING);
+  assert.equal((result as { message: string }).message, booking.SAVE_FAILED_MESSAGE);
+});
+
+test("paire : 1re écriture refusée ⇒ ancienne paire intacte ; sans paire préalable ⇒ rien ne reste", () => {
+  const s = oldPair(new MemoryStorage());
+  s.fail.add(PUBLIC_DRAFT_KEY);
+  const a = finish(s);
+  assert.equal(a.result.ok, false);
+  same(a.went, []);
+  assert.equal(s.getItem(PUBLIC_DRAFT_KEY), OLD_DRAFT);
+  assert.equal(s.getItem(BOOKING_DRAFT_KEY), OLD_BOOKING);
+  const empty = new MemoryStorage();
+  empty.fail.add(BOOKING_DRAFT_KEY);
+  const b = finish(empty);
+  assert.equal(b.result.ok, false);
+  same(b.went, []);
+  same([...empty.data.keys()], []); // le brouillon public écrit est retiré : pas de demi-paire
+});
+
+test("paire : relecture différente de l’écriture ⇒ restauration de l’ancienne paire, aucune navigation", () => {
+  class Lossy extends MemoryStorage {
+    setItem(k: string, v: string) { super.setItem(k, k === BOOKING_DRAFT_KEY && !v.includes("ancien@") ? v.replace("Camille", "Autre") : v); }
+  }
+  const s = oldPair(new Lossy());
+  const { result, went } = finish(s);
+  assert.equal(result.ok, false);
+  same(went, []);
+  assert.equal(s.getItem(PUBLIC_DRAFT_KEY), OLD_DRAFT);
+  assert.equal(s.getItem(BOOKING_DRAFT_KEY), OLD_BOOKING);
+});
+
+test("paire : restauration impossible à prouver ⇒ message honnête « votre saisie reste sur cette page », aucune navigation", () => {
+  class Stuck extends MemoryStorage {
+    writes = 0;
+    setItem(k: string, v: string) { this.writes++; if (this.writes > 1) throw new Error("QuotaExceededError"); super.setItem(k, v); }
+    removeItem() { throw new Error("SecurityError"); }
+  }
+  const s = oldPair(new Stuck());
+  const { result, went } = finish(s);
+  assert.equal(result.ok, false);
+  same(went, []);
+  assert.equal((result as { message: string }).message, booking.ROLLBACK_FAILED_MESSAGE);
+  assert.match(booking.ROLLBACK_FAILED_MESSAGE, /Rien n’a été envoyé ; votre saisie reste sur cette page/);
+  // Lecture initiale impossible ⇒ aucune écriture du tout.
+  class Blind extends MemoryStorage { getItem(): string | null { throw new Error("SecurityError"); } }
+  const blind = new Blind();
+  const r = finish(blind);
+  assert.equal(r.result.ok, false);
+  same(r.went, []);
+  same([...blind.data.keys()], []);
+});
+
+test("paire : succès ⇒ les deux nouvelles entrées remplacent l’ancienne paire, puis /#auth", () => {
+  const s = oldPair(new MemoryStorage());
+  const { result, went } = finish(s);
+  same(result, { ok: true });
+  same(went, ["/#auth"]);
+  assert.equal(readPublicDraft(s.getItem(PUBLIC_DRAFT_KEY))!.values.category, "panel");
+  assert.equal(readBooking(s.getItem(BOOKING_DRAFT_KEY))!.booking.slug, "panne-tableau-electrique");
 });
