@@ -1,5 +1,8 @@
 import test from "node:test";
 import Stripe from "stripe";
+import { readFileSync } from "node:fs";
+import vm from "node:vm";
+import { transformSync } from "esbuild";
 import assert from "node:assert/strict";
 import { loadModule,ApiError,fakeServerHelpers } from "../documents/harness";
 const A="10000000-0000-4000-8000-000000000001",J="20000000-0000-4000-8000-000000000002",Q="30000000-0000-4000-8000-000000000003",R="40000000-0000-4000-8000-000000000004",L="50000000-0000-4000-8000-000000000005";
@@ -26,9 +29,27 @@ test("transfer listing unknown is never empty: malformed object/data/has_more ca
 
 // The installed SDK fixes request semantics; no provider request is made here.
 test("pinned Stripe API uses Basil-or-newer partial capture semantics; real refunds block settlement", async () => {
-  const client = new Stripe("sk_test_INJECTED_ONLY");
-  const version = (client as unknown as {getApiField(name:string):string}).getApiField("version");
-  assert.equal(version, "2026-10-28.endive");
+  const versions: (string | null)[] = [];
+  const fakeFetch: typeof fetch = async (_input, init) => {
+    versions.push(new Headers(init?.headers).get("Stripe-Version"));
+    return Response.json({id:"ch_LOCAL_ONLY",object:"charge"});
+  };
+  class LocalStripe extends Stripe {
+    constructor(key: string, options: ConstructorParameters<typeof Stripe>[1]) {
+      super(key, {...options, httpClient: Stripe.createFetchHttpClient(fakeFetch)});
+    }
+  }
+  // Execute the production constructor with a fake key and HTTP transport only.
+  // An apiVersion override added there must change this actual outbound header.
+  const source = readFileSync(new URL("../../lib/supabase/stripe.ts", import.meta.url), "utf8");
+  const compiled = transformSync(source, {loader:"ts",format:"cjs",target:"es2022"}).code;
+  const module = {exports:{} as {stripeClient?:()=>Stripe}};
+  vm.runInNewContext(compiled, {module,exports:module.exports,URL,
+    process:{env:{STRIPE_SECRET_KEY:"sk_test_LOCAL_ONLY"}},
+    require:(name:string)=>name === "stripe" ? {__esModule:true,default:LocalStripe} : {ApiError},
+  });
+  await module.exports.stripeClient!().charges.retrieve("ch_LOCAL_ONLY");
+  assert.deepEqual(versions, ["2026-10-28.endive"]);
   const partial = providerFixture(); await partial.execute(); assert.equal(partial.ledger.status, "paid");
   for (const amount_refunded of [1, 3000]) {
     const refunded = providerFixture({captured:true,badCharge:{amount_refunded}});
