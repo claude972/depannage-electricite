@@ -414,11 +414,17 @@ export default function CourantApp() {
     if (!returnContext || booting) return;
     if (returnContext.kind === "auth") {
       if (returnContext.state === "confirmed") {
+        // Same-tab return from the signup email with a request prepared before: open its
+        // confirmation (never an automatic POST), as the login chain does.
+        const resume = mode === "live" && pendingDraft !== null;
         setNotice(
-          mode === "live"
-            ? "Votre adresse est confirmée. Votre espace est chargé."
-            : "Votre adresse est confirmée. Connectez-vous pour ouvrir votre espace.",
+          resume
+            ? "Votre adresse est confirmée. Vérifiez votre demande puis confirmez son envoi."
+            : mode === "live"
+              ? "Votre adresse est confirmée. Votre espace est chargé."
+              : "Votre adresse est confirmée. Connectez-vous pour ouvrir votre espace.",
         );
+        if (resume) navigate("new");
         if (mode === "public") {
           setAuthMode("login");
           navigate("auth");
@@ -479,7 +485,7 @@ export default function CourantApp() {
       setNotice(CONNECT_RETURN_MESSAGE[returnContext.state]);
     }
     setReturnContext(null);
-  }, [returnContext, booting, mode, data, navigate]);
+  }, [returnContext, booting, mode, data, navigate, pendingDraft]);
 
   // A kept invitation code is accepted once a live session exists (verified recipient server-side).
   const inviteAttempt = useRef("");
@@ -2449,6 +2455,19 @@ export default function CourantApp() {
     // Live: only the draft adopted by THIS identity chain (clearSessionState drops it on any
     // identity change); demo never inherits a public draft.
     pendingDraft: mode === "live" ? pendingDraft : null,
+    // « Modifier » on the booking confirmation: the edited request replaces the kept draft (same
+    // tab storage), nothing is sent; the confirmation then shows it again.
+    updatePendingDraft(values: RequestValues) {
+      if (modeRef.current !== "live") return;
+      setPendingDraft(values);
+      savePublicDraft(getDraftStorage(), values);
+    },
+    updateBookingContact(contact: BookingDraft["contact"]) {
+      if (modeRef.current !== "live" || !booking) return;
+      const next = { ...booking, contact };
+      setBooking(next);
+      saveBooking(getDraftStorage(), next);
+    },
     booking: mode === "live" && pendingDraft ? booking : null,
     data,
     professional,

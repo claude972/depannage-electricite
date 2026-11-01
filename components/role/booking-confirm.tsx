@@ -19,6 +19,7 @@ export function BookingConfirm({
   updateProfile,
   createIntervention,
   onEdit,
+  onContactChange,
 }: {
   draft: RequestValues;
   booking: BookingDraft;
@@ -26,10 +27,16 @@ export function BookingConfirm({
   profileId: string;
   updateProfile(values: { full_name: string; phone: string }): Promise<boolean>;
   createIntervention(values: RequestValues): Promise<boolean>;
+  /** « Modifier la demande »: regular form prefilled; its submit only replaces the kept draft. */
   onEdit(): void;
+  /** Saves edited private contact details in the kept booking (nothing is sent). */
+  onContactChange(contact: BookingDraft["contact"]): void;
 }) {
   const [sending, setSending] = useState(false);
   const [problem, setProblem] = useState("");
+  const [editingContact, setEditingContact] = useState(false);
+  const [contactDraft, setContactDraft] = useState(booking.contact);
+  const contactProblems = contactErrors(contactDraft);
   const inFlight = useRef(false);
   const alive = useRef(true);
   const identity = useRef(profileId);
@@ -55,6 +62,7 @@ export function BookingConfirm({
       if (!patch || Object.keys(contactErrors(contact)).length) {
         // Never a PATCH the API would refuse, never a request without the contact profile.
         setProblem("Vos coordonnées sont incomplètes ou trop longues. Modifiez-les avant d’envoyer ; rien n’a été envoyé.");
+        setEditingContact(true);
         return;
       }
       setProblem("");
@@ -100,10 +108,46 @@ export function BookingConfirm({
         <div>
           <dt>Vos coordonnées (privées)</dt>
           <dd>
-            {[contact.first_name, contact.last_name].filter(Boolean).join(" ")}
-            {contact.phone ? ` · ${contact.phone}` : ""}
+            {editingContact ? (
+              <span className="booking-contact-edit" data-booking-contact-edit="">
+                {(["first_name", "last_name", "phone"] as const).map((key) => (
+                  <label key={key} className="field">
+                    <span>{key === "first_name" ? "Prénom" : key === "last_name" ? "Nom" : "Téléphone"}</span>
+                    <input
+                      value={contactDraft[key]}
+                      maxLength={key === "phone" ? 30 : 60}
+                      autoComplete={key === "first_name" ? "given-name" : key === "last_name" ? "family-name" : "tel"}
+                      inputMode={key === "phone" ? "tel" : undefined}
+                      aria-invalid={contactProblems[key] ? true : undefined}
+                      onChange={(e) => setContactDraft({ ...contactDraft, [key]: e.target.value })}
+                    />
+                    {contactProblems[key] && <small className="field-error">{contactProblems[key]}</small>}
+                  </label>
+                ))}
+                <button
+                  type="button"
+                  className="button outline"
+                  disabled={Object.keys(contactProblems).length > 0}
+                  onClick={() => {
+                    onContactChange(contactDraft);
+                    setEditingContact(false);
+                    setProblem("");
+                  }}
+                >
+                  Enregistrer mes coordonnées
+                </button>
+              </span>
+            ) : (
+              <>
+                {[contact.first_name, contact.last_name].filter(Boolean).join(" ")}
+                {contact.phone ? ` · ${contact.phone}` : ""}{" "}
+                <button type="button" className="text-button" disabled={sending || busy} onClick={() => setEditingContact(true)}>
+                  Modifier mes coordonnées
+                </button>
+              </>
+            )}
             <br />
-            <small>Enregistrées dans votre profil, jamais dans la description visible des artisans.</small>
+            <small>Enregistrées dans votre profil, jamais dans la description visible des artisans. L’email est celui de votre compte.</small>
           </dd>
         </div>
       </dl>
@@ -114,9 +158,9 @@ export function BookingConfirm({
       )}
       <div className="form-actions">
         <button type="button" className="button outline" disabled={sending || busy} onClick={onEdit}>
-          Modifier
+          Modifier la demande
         </button>
-        <button type="button" className="button primary" disabled={sending || busy} onClick={() => void send()} data-booking-send="">
+        <button type="button" className="button primary" disabled={sending || busy || editingContact} onClick={() => void send()} data-booking-send="">
           {sending ? "Envoi…" : "Envoyer ma demande"}
         </button>
       </div>

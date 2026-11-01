@@ -93,6 +93,9 @@ export interface Session {
   pendingDraft: RequestValues | null;
   /** Booking extras of the service flow (private contact included), same identity chain only. */
   booking: BookingDraft | null;
+  /** Booking confirmation « Modifier »: replace the kept request draft / private contact (no send). */
+  updatePendingDraft(values: RequestValues): void;
+  updateBookingContact(contact: BookingDraft["contact"]): void;
   data: Workspace;
   professional: ProfessionalData;
   capabilities: Capabilities;

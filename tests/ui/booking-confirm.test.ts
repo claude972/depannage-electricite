@@ -12,13 +12,15 @@ const draft = { category: "socket" as const, description: "Prestation choisie : 
 const booking: BookingDraft = { slug: "plusieurs-prises-sans-courant", urgent: false, slot: "tomorrow", notes: "", contact: { civility: "mme", first_name: "Léa", last_name: "Martin", email: "lea@example.test", phone: "0696 12 34 56", company: false } };
 
 test("confirmation renders the recap, private contact apart from the description, and an explicit send button", () => {
-  const html = renderToStaticMarkup(createElement(BookingConfirm, { draft, booking, busy: false, profileId: "u1", updateProfile: async () => true, createIntervention: async () => true, onEdit() {} }));
+  const html = renderToStaticMarkup(createElement(BookingConfirm, { draft, booking, busy: false, profileId: "u1", updateProfile: async () => true, createIntervention: async () => true, onEdit() {}, onContactChange() {} }));
   assert.match(html, /Confirmez l’envoi de votre demande/);
   assert.match(html, /Rien n’a encore été envoyé/);
   assert.match(html, /Plusieurs prises sans courant/);
   assert.match(html, /souhait, pas un rendez-vous réservé/);
   assert.match(html, /pas un prix garanti/);
   assert.match(html, /data-booking-send=""[^>]*>Envoyer ma demande/);
+  assert.match(html, /Modifier mes coordonnées/);
+  assert.match(html, /Modifier la demande/);
   assert.ok(!draft.description.includes("Martin") && !draft.description.includes("0696"), "contact never in the description");
 });
 
@@ -42,4 +44,17 @@ test("wiring: client « new » shows the confirmation only with a draft + bookin
   assert.match(app, /emailRedirectTo: `\$\{window\.location\.origin\}\/auth\/confirm`/);
   const identity = readFileSync("components/app/identity.ts", "utf8");
   assert.doesNotMatch(identity, /createIntervention|\/api\/interventions/, "login never creates a request");
+});
+
+test("« Modifier »: contact edited inside the confirmation (bounded), request edit only replaces the kept draft", () => {
+  const confirm = readFileSync("components/role/booking-confirm.tsx", "utf8");
+  assert.match(confirm, /disabled=\{Object\.keys\(contactProblems\)\.length > 0\}/, "no save of an invalid / >120 contact");
+  assert.match(confirm, /onContactChange\(contactDraft\)/);
+  const client = readFileSync("components/role/client-space.tsx", "utf8");
+  assert.match(client, /if \(editBooking && session\.booking\) \{\s*\/\/[^\n]*\n\s*session\.updatePendingDraft\(values\);\s*setEditBooking\(false\);\s*return;/, "edit never POSTs");
+});
+
+test("return from the signup email (same tab, ?auth=confirmed) resumes the confirmation, never POSTs", () => {
+  const app = readFileSync("components/courant-app.tsx", "utf8");
+  assert.match(app, /const resume = mode === "live" && pendingDraft !== null;[\s\S]{0,500}if \(resume\) navigate\("new"\);/);
 });
