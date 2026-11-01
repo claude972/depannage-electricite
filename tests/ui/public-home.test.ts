@@ -179,6 +179,8 @@ function fakeSession(over: Record<string, unknown> = {}) {
 function loadSite(captured: Record<string, unknown>) {
   return loadModule("components/role/public-site.tsx", {
     "./public-home": { PublicHome: (props: unknown) => ((captured.home = props), null) },
+    // new/auth are rendered in PublicChrome (UI-PUBLIC-REQUEST-001): pass-through, theme-free.
+    "./public-chrome": { PublicChrome: (props: { children: unknown }) => props.children },
     "../app/forms": {
       RequestForm: (props: unknown) => ((captured.form = props), null),
       AuthForm: (props: unknown) => ((captured.auth = props), null),
