@@ -132,3 +132,8 @@ export function applyOutcome(state: HistoryState, key: string, outcome: HistoryO
  * and the messages already loaded stay shown. A 404 hides the whole conversation.
  */
 export const offersOlder = (state: HistoryState) => state.hasMore && state.status !== "signed_out" && state.status !== "not_found";
+
+/** Compose draft of one identity + dossier (memory only, never persisted). */
+export type ComposeDraft = { key: string; text: string };
+/** The draft text for the open thread: another thread's draft is never shown nor sent. */
+export const draftText = (draft: ComposeDraft, key: string) => (draft.key === key ? draft.text : "");

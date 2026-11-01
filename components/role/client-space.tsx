@@ -245,7 +245,7 @@ export function ClientSpace({ session }: { session: Session }) {
               messages={session.data.messages}
               role={session.role}
               profileId={session.profileId}
-              selectedId={session.selectedId}
+              selectedId={session.param || session.selectedId}
               busy={session.busy}
               onSubmit={(id, body) => session.sendMessage(id, body)}
             />
