@@ -127,15 +127,16 @@ test("new : alertes de session rendues dans le thème, au-dessus du formulaire",
   assert.match(html, /role="status"[^>]*>(?:(?!<\/div>).)*Brouillon conservé\./s);
 });
 
-test("habillage par périmètre : seul l’espace client (FASTSPLIT-CLIENT-THEME-001) porte ThemeSurface ; entreprise et forms jamais ; aucun chrome public dans les rôles", async () => {
+test("habillage par périmètre : seuls les espaces client (FASTSPLIT-CLIENT-THEME-001) et artisan (FASTSPLIT-ARTISAN-ENTERPRISE-THEME-001) portent ThemeSurface ; entreprise et forms jamais ; aucun chrome public dans les rôles", async () => {
   const { readFileSync } = await import("node:fs");
-  for (const file of ["components/role/client-space.tsx", "components/role/enterprise-space.tsx", "components/app/forms.tsx"]) {
+  for (const file of ["components/role/client-space.tsx", "components/role/artisan-space.tsx", "components/role/enterprise-space.tsx", "components/app/forms.tsx"]) {
     assert.doesNotMatch(readFileSync(file, "utf8"), /public-chrome|public-forms/, file);
   }
   for (const file of ["components/role/enterprise-space.tsx", "components/app/forms.tsx"]) {
     assert.doesNotMatch(readFileSync(file, "utf8"), /ThemeSurface|ui-v2/, file);
   }
   assert.match(readFileSync("components/role/client-space.tsx", "utf8"), /<ThemeSurface className=\{theme\.clientSkin\}>/);
+  assert.match(readFileSync("components/role/artisan-space.tsx", "utf8"), /<ThemeSurface className=\{theme\.artisanSkin\}>/);
   // Le RequestForm seul (tel que les rôles le rendent) ne porte aucune classe du thème.
   const forms = loadModule("components/app/forms.tsx");
   const html = renderToString(createElement(forms.RequestForm as never, { initialCategory: "panel", initialValues: null, sites: [], mode: "live", busy: false, onBack() {}, onSubmit: async () => {}, onDemo() {} } as never));
