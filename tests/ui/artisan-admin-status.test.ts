@@ -70,9 +70,9 @@ test("liste tronquée ⇒ bandeau « limité aux 100 premiers » + lien vers l�
   assert.equal(f.parseArtisanApplications({ artisans: [], truncated: "yes" }).truncated, false);
 });
 
-test("forme héritée / démo (sans application_status) toujours rendue, jamais de statut inventé", () => {
-  const legacy = f.parseArtisanApplications({ artisans: [row(undefined, true), row(undefined, false), { id: 1 }] });
-  assert.equal(legacy.rows.length, 2, "malformed row dropped");
+test("forme héritée / démo (sans application_status) valide toujours rendue, jamais de statut inventé", () => {
+  const legacy = f.parseArtisanApplications({ artisans: [row(undefined, true), { ...row(undefined, false), id: "a2", role: "artisan" }] });
+  assert.equal(legacy.rows.length, 2);
   assert.equal(legacy.truncated, false);
   const html = list(legacy.rows);
   assert.equal((html.match(/Statut non disponible/g) || []).length, 2);
@@ -81,4 +81,31 @@ test("forme héritée / démo (sans application_status) toujours rendue, jamais 
   assert.deepEqual(buttons(list([legacy.rows[0]])), ["Suspendre"]);
   assert.deepEqual(buttons(list([legacy.rows[1]])), []);
   assert.match(list([]), /Aucune candidature à vérifier/);
+  const fresh = f.parseArtisanApplications({ artisans: [row("submitted"), { ...row("weird"), id: "a3" }], limit: 100, truncated: false });
+  assert.deepEqual(fresh.rows.map((r) => r.application_status), ["submitted", "weird"]);
+  assert.deepEqual(buttons(list([fresh.rows[1]])), [], "statut inconnu non actionnable");
+});
+
+test("réponse illisible ou UNE ligne invalide ⇒ erreur explicite (jamais une liste vide ou raccourcie)", () => {
+  const bad: [string, unknown][] = [
+    ["corps null", null],
+    ["corps tableau", [row("approved", true)]],
+    ["artisans absent", { limit: 100, truncated: false }],
+    ["artisans objet", { artisans: { a: 1 } }],
+    ["ligne null", { artisans: [row("approved", true), null] }],
+    ["id nombre", { artisans: [row("approved", true), { ...row("submitted"), id: 7 }] }],
+    ["nom absent", { artisans: [{ id: "a1", artisan_approved: false, created_at: "2026-10-30T09:00:00Z" }] }],
+    ["artisan_approved texte", { artisans: [{ ...row("submitted"), artisan_approved: "true" }] }],
+    ["created_at nombre", { artisans: [{ ...row("submitted"), created_at: 1 }] }],
+    ["statut nombre", { artisans: [{ ...row("submitted"), application_status: 3 }] }],
+  ];
+  for (const [name, body] of bad) assert.throws(() => f.parseArtisanApplications(body), (e: Error) => e.message === f.ARTISAN_LIST_INVALID, name);
+  assert.equal(f.ARTISAN_LIST_INVALID, "Liste des artisans illisible : réponse du service invalide. Réessayez.");
+  // Le chargement passe par le catch existant : pas de liste ni d’action, message + « Réessayer ».
+  const src = readFileSync("components/app/forms.tsx", "utf8");
+  const load = src.slice(src.indexOf("export function ArtisanAdministration("), src.indexOf("async function decide("));
+  assert.match(load, /\} catch \(e\) \{\s*setRows\(\[\]\);\s*setTruncated\(false\);\s*setError\(\(e as Error\)\.message\);/);
+  const view = src.slice(src.indexOf("async function decide("), src.indexOf("export function ProfessionalOperations("));
+  assert.match(view, /error && !rows\.length \? null : \(\s*<ArtisanApplicationsList/);
+  assert.match(view, /data-artisan-applications-error=""[\s\S]*?Réessayer/);
 });

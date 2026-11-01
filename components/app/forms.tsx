@@ -1555,23 +1555,22 @@ export function artisanApplicationView(row: Pick<ArtisanApplicationRow, "artisan
   // Access still open on an unexpected status: closing it remains possible, approving does not.
   return { label, decision: row.artisan_approved === true ? "suspend" : null, note };
 }
-/** Tolerant read of the GET reply (new or legacy shape); malformed rows are dropped. */
+export const ARTISAN_LIST_INVALID = "Liste des artisans illisible : réponse du service invalide. Réessayez.";
+/** Strict read of the GET reply (new or legacy shape). A missing / non-array `artisans` or ANY
+ *  invalid row throws ARTISAN_LIST_INVALID: the list is never silently emptied or shortened. */
 export function parseArtisanApplications(raw: unknown): { rows: ArtisanApplicationRow[]; truncated: boolean; limit: number | null } {
-  const v = (raw && typeof raw === "object" ? raw : {}) as { artisans?: unknown; truncated?: unknown; limit?: unknown };
-  const list = Array.isArray(v.artisans) ? v.artisans : [];
-  const rows: ArtisanApplicationRow[] = [];
-  for (const item of list) {
-    const r = item as Partial<ArtisanApplicationRow> | null;
-    if (!r || typeof r.id !== "string" || typeof r.full_name !== "string" || typeof r.created_at !== "string") continue;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error(ARTISAN_LIST_INVALID);
+  const v = raw as { artisans?: unknown; truncated?: unknown; limit?: unknown };
+  if (!Array.isArray(v.artisans)) throw new Error(ARTISAN_LIST_INVALID);
+  const rows: ArtisanApplicationRow[] = v.artisans.map((item) => {
+    const r = item as Record<string, unknown> | null;
+    if (!r || typeof r !== "object" || Array.isArray(r)) throw new Error(ARTISAN_LIST_INVALID);
     const status = r.application_status;
-    rows.push({
-      id: r.id,
-      full_name: r.full_name,
-      artisan_approved: r.artisan_approved === true,
-      created_at: r.created_at,
-      application_status: typeof status === "string" ? status : null,
-    });
-  }
+    if (typeof r.id !== "string" || typeof r.full_name !== "string" || typeof r.artisan_approved !== "boolean" || typeof r.created_at !== "string")
+      throw new Error(ARTISAN_LIST_INVALID);
+    if (!(status === undefined || status === null || typeof status === "string")) throw new Error(ARTISAN_LIST_INVALID);
+    return { id: r.id, full_name: r.full_name, artisan_approved: r.artisan_approved, created_at: r.created_at, application_status: typeof status === "string" ? status : null };
+  });
   return { rows, truncated: v.truncated === true, limit: typeof v.limit === "number" && Number.isSafeInteger(v.limit) && v.limit > 0 ? v.limit : null };
 }
 const DEMO_ARTISANS: ArtisanApplicationRow[] = [
@@ -1671,6 +1670,8 @@ export function ArtisanAdministration({ demo }: { demo: boolean }) {
       setTruncated(result.truncated);
       setLimit(result.limit);
     } catch (e) {
+      setRows([]);
+      setTruncated(false);
       setError((e as Error).message);
     } finally {
       setLoading(false);
@@ -1711,8 +1712,13 @@ export function ArtisanAdministration({ demo }: { demo: boolean }) {
         </button>
       </div>
       {error && (
-        <div className="alert error" role="alert">
-          {error}
+        <div className="alert error" role="alert" data-artisan-applications-error="">
+          <span>{error}</span>
+          {!loading && !rows.length && (
+            <button type="button" className="button outline" onClick={() => void load()}>
+              Réessayer
+            </button>
+          )}
         </div>
       )}
       {loading ? (
@@ -1720,7 +1726,7 @@ export function ArtisanAdministration({ demo }: { demo: boolean }) {
           <span className="spinner" />
           Chargement des candidatures…
         </div>
-      ) : (
+      ) : error && !rows.length ? null : (
         <ArtisanApplicationsList rows={rows} truncated={truncated} limit={limit} busy={Boolean(busy)} onDecide={decide} />
       )}
     </section>
