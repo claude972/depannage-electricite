@@ -6,7 +6,7 @@ Base `58b76414` ; branche `claude/web-remaining-contracts`. **Docs seulement** ;
 `app/api/workspace/route.ts` (58b) lit : `interventions` 100 (`created_at desc`) + au plus 100 offres (`available_missions`, artisans), `quotes` 200, `sites` 100, `organizations` 50, `messages` 500, `documents` 100, `payments` 100, `organization_members` 500, `intervention_appointments` 200 (seul signal existant : `appointments_limited`). Un dossier hors fenêtre — ou son site, son organisation, ses devis — peut manquer de l’instantané ; `#detail/<id>` affiche alors « introuvable » à tort. Aucun endpoint ne renvoie aujourd’hui le dossier complet (`GET /api/interventions/[id]/operations` n’est qu’un modèle de structure).
 
 ## 2. Déclencheur — signal de troncature (DETAIL-CONTRACT-2F9-001)
-- **À ajouter (backend, propriétaire Codex)** à l’enveloppe du workspace, sans inventer d’autre indicateur : `limits: { interventions: { limit: 100, limited: boolean }, quotes: { limit: 200, limited }, sites: { limit: 100, limited }, organizations: { limit: 50, limited } }`, où `limited` est **vrai si la lecture a renvoyé exactement `limit` lignes** (lecture `limit + 1`, ligne surnuméraire non exposée, ou `count: "exact"`) — jamais estimé.
+- **À ajouter (backend, propriétaire Codex)** à l’enveloppe du workspace, sans inventer d’autre indicateur : `limits: { interventions: { limit: 100, limited: boolean }, quotes: { limit: 200, limited }, sites: { limit: 100, limited }, organizations: { limit: 50, limited } }`, où `limited` signifie **exactement N > limit** (N = nombre de lignes visibles sous RLS) : la route lit `limit + 1` lignes (la ligne surnuméraire n’est jamais exposée) ou un `count: "exact"` ; **N = limit ⇒ `limited = false`**, **N = limit + 1 ⇒ `limited = true`** ; jamais estimé, jamais « N == limit ».
 - Le consommateur appelle la lecture ponctuelle **seulement si** l’id demandé est absent **et** `limits.interventions.limited = true` (ou, pour un dossier présent dont le site/l’organisation/les devis manquent, si la collection correspondante est `limited`).
 - **Sans signal** (enveloppe d’une version qui ne le porte pas, ou `limits` absent/illisible) : aucune lecture ponctuelle automatique ; la vue affiche « Ce dossier n’apparaît pas parmi les dossiers chargés » avec une action explicite « Ouvrir quand même » qui déclenche **une** lecture ponctuelle à la demande de l’utilisateur ; jamais « introuvable » affirmé sans lecture.
 
@@ -18,20 +18,35 @@ Base `58b76414` ; branche `claude/web-remaining-contracts`. **Docs seulement** ;
 ## 4. Enveloppe 200 (DETAIL-CONTRACT-2F9-002)
 ```
 {
-  "intervention": { <projection explicite, mêmes colonnes que celles consommées par la vue de détail> },
+  "intervention": { <projection §4.1> },
   "site":         { "status": "ok", "value": { id, organization_id, name, type, address, budget_cents, created_at } } | { "status": "none" } | { "status": "hidden" } | { "status": "error" },
   "organization": { "status": "ok", "value": { id, name, owner_id, created_at } } | { "status": "none" } | { "status": "hidden" } | { "status": "error" },
-  "quotes":       { "status": "ok", "items": [ <colonnes explicites>, ≤ 20 ], "limited": boolean } | { "status": "error" },
-  "payments":     { "status": "ok", "items": [ { id, quote_id, total_cents, currency, status, created_at, paid_at }, ≤ 20 ], "limited": boolean } | { "status": "error" },
-  "messages":     { "status": "ok", "items": [ <colonnes explicites>, ≤ 200, plus récents ], "limited": boolean } | { "status": "error" },
+  "quotes":       { "status": "ok", "items": [ <projection §4.1>, ≤ 20, plus récents ], "limited": boolean } | { "status": "error" },
+  "payments":     { "status": "ok", "items": [ <projection §4.1>, ≤ 20 ], "limited": boolean, "incomplete": boolean } | { "status": "error" },
+  "messages":     { "status": "ok", "items": [ <projection §4.1>, ≤ 200, plus récents ], "limited": boolean } | { "status": "error" },
   "documents":    { "status": "ok", "items": [ { id, intervention_id, owner_id, name, mime_type, created_at }, ≤ 50 ], "limited": boolean } | { "status": "error" },
   "appointments": { "status": "ok", "items": [ { intervention_id, starts_at, ends_at, note, updated_by, updated_at }, ≤ 50 ], "limited": boolean } | { "status": "error" },
   "generated_at": "<ISO>"
 }
 ```
-- Chaque dépendance est lue **par identifiant** sous RLS : site par `intervention.site_id`, organisation par `site.organization_id`, devis par `intervention_id`, paiements par `quote_id ∈ devis lus`, messages/documents/rendez-vous par `intervention_id` — **hors** des listes du workspace (aucune dépendance aux fenêtres 100/50/200).
+- Chaque dépendance est lue **par identifiant** sous RLS : site par `intervention.site_id`, organisation par `site.organization_id`, devis par `intervention_id`, messages/documents/rendez-vous par `intervention_id` — **hors** des listes du workspace (aucune dépendance aux fenêtres 100/50/200).
+- **Paiements sur le périmètre COMPLET des devis du dossier** (jamais seulement les 20 devis affichés) : la route lit d’abord **tous** les identifiants de devis du dossier (`quotes?intervention_id=eq.<id>&select=id`, `count: "exact"`, au plus 200 ids), puis les paiements `quote_id ∈ ces ids` (≤ 20, `limited` selon §2). Si le dossier compte **plus de 200 devis** (scope d’ids lui-même tronqué) ou si la lecture des ids échoue, `payments.incomplete = true` (ou `status: "error"`) : la liste n’est **jamais** présentée comme complète silencieusement ; la vue affiche « certains paiements peuvent ne pas être listés ».
 - **Absence ≠ erreur** pour chaque élément lié : `none` = le dossier n’a pas de site (`site_id` nul) ; `hidden` = lecture réussie, 0 ligne sous RLS ; `error` = lecture en échec (transport/base) — la vue affiche alors « momentanément indisponible » pour cet élément, jamais « aucun ». Les listes portent `limited` (vrai si le plafond est atteint, même règle que §2).
-- Projections fermées : aucune colonne hors liste, aucun `select *`. Les colonnes exactes de `intervention`, `quotes` et `messages` sont figées dans le fichier de types (`detail-read.ts`) à partir de ce que la vue consomme, revues avec le backend avant code.
+- Projections fermées : aucune colonne hors liste, aucun `select *`.
+
+### 4.1 Projections figées (annexe complète — source : `components/app/types.ts` et colonnes réelles des migrations 001/002, base 58b)
+| Élément | Colonnes exactes (`select=`) |
+|---|---|
+| `intervention` | `id,client_id,artisan_id,site_id,category,description,address,postal_code,city,urgency,estimate_min_cents,estimate_max_cents,status,created_at,updated_at,completed_at,paid_at,travel_stage` |
+| `quotes` | `id,intervention_id,artisan_id,lines,subtotal_cents,tax_rate,tax_cents,total_cents,status,created_at,accepted_at` |
+| `payments` | `id,quote_id,total_cents,currency,status,created_at,paid_at` |
+| `messages` | `id,intervention_id,author_id,body,created_at` |
+| `documents` | `id,intervention_id,owner_id,name,mime_type,created_at` |
+| `appointments` (`intervention_appointments`) | `intervention_id,starts_at,ends_at,note,updated_by,updated_at` |
+| `site` | `id,organization_id,name,type,address,budget_cents,created_at` |
+| `organization` | `id,name,owner_id,created_at` |
+
+Écarts constatés et tranchés : les types front `Site.vertical` et `Organization.type` **n’existent pas** en base (aucune colonne dans les migrations) ⇒ **non projetés** ; ils restent `undefined` côté front comme aujourd’hui avec `select *`. Aucune colonne ajoutée ; toute évolution de ces listes = amendement de ce contrat.
 
 ## 5. Erreurs et en-têtes
 - `404` « introuvable » sans divulgation : la lecture du dossier **a réussi** et ne renvoie aucune ligne sous RLS (inexistant ou non visible), ou id non UUID — indiscernables (même corps, même code).
@@ -51,4 +66,4 @@ Base `58b76414` ; branche `claude/web-remaining-contracts`. **Docs seulement** ;
 Backend `app/api/interventions/[id]/route.ts` (Codex) ; types/validation `lib/features/workspace/detail-read.ts` (schéma de l’enveloppe §4, statuts d’éléments) ; consommateur `lib/features/workspace/use-detail-read.ts` (hook sans UI : déclencheur §2, cache §6) ; câblage de la vue et textes par le lead ; ajout de `limits` au workspace (Codex).
 
 ## 8. Tests attendus (avant toute recette)
-Route (faux client) : 200 pour client direct (y compris dossier sans artisan), artisan attribué, membre d’organisation/site, avec site/organisation/devis résolus par id hors des fenêtres 100/50/200 ; `none`/`hidden`/`error` distincts par dépendance ; plafonds et `limited` ; 404 identique pour inexistant, non UUID, autre client, ancien artisan après réaffectation, membre retiré, offre non accessible à l’artisan ; 503 + `Retry-After` sur erreur base/transport du dossier ; `Cache-Control: private, no-store` sur 200/401/404/503 ; aucune colonne hors liste, aucune clé serveur. Workspace : `limits.*.limited` exact (lecture `limit + 1`). Consommateur : pas d’appel sans signal hors action explicite ; cache borné (taille, TTL), purge sur changement de contexte/droits, revalidation sans Realtime, réponse périmée ignorée, une requête en vol, annulation.
+Route (faux client) : 200 pour client direct (y compris dossier sans artisan), artisan attribué, membre d’organisation/site, avec site/organisation/devis résolus par id hors des fenêtres 100/50/200 ; `none`/`hidden`/`error` distincts par dépendance ; plafonds et `limited` ; 404 identique pour inexistant, non UUID, autre client, ancien artisan après réaffectation, membre retiré, offre non accessible à l’artisan ; 503 + `Retry-After` sur erreur base/transport du dossier ; `Cache-Control: private, no-store` sur 200/401/404/503 ; aucune colonne hors liste, aucune clé serveur. Workspace : `limits.*.limited` exact (lecture `limit + 1`) — **N = L ⇒ `limited = false`**, **N = L + 1 ⇒ `limited = true`**, N < L ⇒ `false`, ligne surnuméraire jamais exposée. Paiements : devis hors des 20 affichés mais dans le dossier ⇒ leurs paiements sont listés ; 201 devis ⇒ `payments.incomplete = true` ; échec de lecture des ids de devis ⇒ `payments.status = "error"`. Projections : chaque requête utilise exactement la liste §4.1. Consommateur : pas d’appel sans signal hors action explicite ; cache borné (taille, TTL), purge sur changement de contexte/droits, revalidation sans Realtime, réponse périmée ignorée, une requête en vol, annulation.
