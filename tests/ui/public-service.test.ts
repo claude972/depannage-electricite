@@ -51,6 +51,31 @@ test("catalogue : 8 prestations, slugs uniques, catégories ⊂ CATEGORIES (tout
   for (const c of DOMAIN) same(catalog.serviceEstimate(c.id), { min: c.min, max: c.max, label: c.label });
 });
 
+test("conseils : constats sans injonction risquée, réseau non affirmé, inclusions renvoyées au devis détaillé", () => {
+  const all = catalog.SERVICES.flatMap((s) => [s.intro, ...s.covers, ...s.checks, ...s.faq.flatMap((f) => [f.question, f.answer])]).join(" ");
+  assert.doesNotMatch(all, /forcément/i);
+  assert.doesNotMatch(all, /rebranchez|tentez un réarmement|réarmez(?!\s+pas)/i);
+  for (const s of catalog.SERVICES) for (const f of s.faq) {
+    // Toute mention de réarmement dans un conseil exclut le cas du tableau qui chauffe ou sent le brûlé.
+    if (/réarm/i.test(f.answer)) assert.match(f.answer, /ne forcez pas|ne le réarmez pas/i, s.slug);
+    if (/réarm/i.test(f.answer)) assert.match(f.answer, /chauffe|brûlé|traces noires/i, s.slug);
+    if (/inclus|compris/i.test(f.question)) {
+      assert.match(f.answer, /devis détaillé/, s.slug);
+      assert.doesNotMatch(f.answer, /^Non\b/, s.slug); // jamais d’exclusion contractuelle tirée d’une estimation
+    }
+  }
+  const byslug = (slug: string) => catalog.SERVICES.find((s) => s.slug === slug)!.faq.map((f) => f.answer).join(" ");
+  assert.match(byslug("panne-tableau-electrique"), /N’ouvrez pas le tableau/);
+  assert.match(byslug("disjoncteur-qui-saute"), /Notez les appareils/);
+  assert.match(byslug("disjoncteur-qui-saute"), /Ne démontez rien/);
+  assert.match(byslug("prise-abimee-ou-qui-chauffe"), /Cessez d’utiliser la prise et ne la démontez pas/);
+  assert.match(byslug("eclairage-qui-ne-sallume-plus"), /un seul point lumineux ou plusieurs/);
+  const outage = byslug("coupure-de-courant-partielle");
+  assert.match(outage, /réseau de distribution/);
+  assert.match(outage, /installation commune de l’immeuble/);
+  assert.match(outage, /gestionnaire de l’immeuble/);
+});
+
 test("photos : cartes prise = vraie prise, jamais la photo du luminaire ; le luminaire va à l’éclairage", () => {
   const { SERVICES, SERVICE_PHOTOS } = catalog;
   const fixture = SERVICE_PHOTOS.fixture.src;
@@ -83,8 +108,10 @@ test("page : chacune des 8 prestations rend titre, photo, fourchette canonique e
     const price = html.slice(html.indexOf("data-service-price"), html.indexOf("data-service-cta"));
     assert.ok(text(price).includes(range(s.category)), s.slug);
     assert.match(text(price), /Estimation indicative/);
-    const ctas = [...html.matchAll(/<a [^>]*href="([^"]*)"[^>]*>Décrire ma panne/g)].map((m) => m[1]);
-    assert.deepEqual(ctas, [`/#new/${s.category}`, `/#new/${s.category}`], s.slug);
+    // CTA → assistant de réservation sur place (FASTSPLIT-SERVICE-BOOKING-FLOW-001), jamais le formulaire générique.
+    const ctas = [...html.matchAll(/<button [^>]*data-booking-open=""[^>]*>([^<]*)/g)].map((m) => m[1].trim());
+    assert.deepEqual(ctas, ["Décrire ma panne", "Décrire ma panne", "Confirmer"], s.slug);
+    assert.doesNotMatch(html, /href="\/#new/, s.slug);
     for (const h of ["Ce que couvre ce dépannage", "Vérifications possibles selon le diagnostic", "Comment ça se passe", "Questions fréquentes"]) assert.match(html, new RegExp(h), s.slug);
     assert.deepEqual(forbiddenClaims(text(html)), [], s.slug);
   }

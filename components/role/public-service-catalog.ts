@@ -43,8 +43,8 @@ export const SERVICES: ServiceEntry[] = [
     covers: ["Disjoncteur ou interrupteur différentiel qui ne se réarme pas", "Module qui chauffe, grésille ou sent le chaud", "Tableau ancien dont un circuit ne répond plus"],
     checks: ["Contrôle visuel des modules et des serrages", "Test des différentiels et de l’isolement des circuits", "Remplacement d’un module défectueux, sur devis accepté"],
     faq: [
-      { question: "Puis-je réarmer moi-même le tableau ?", answer: "Vous pouvez tenter un réarmement simple. S’il redéclenche aussitôt, laissez-le coupé et décrivez la situation : n’ouvrez pas le tableau." },
-      { question: "Le remplacement complet du tableau est-il inclus ?", answer: "Non. L’estimation concerne le dépannage. Un remplacement complet ferait l’objet d’un devis distinct." },
+      { question: "Puis-je réarmer moi-même le tableau ?", answer: "N’ouvrez pas le tableau et ne forcez pas un réarmement. S’il chauffe, sent le brûlé ou porte des traces noires, ne le réarmez pas et faites-le vérifier par un professionnel." },
+      { question: "Le remplacement complet du tableau est-il inclus ?", answer: "L’estimation n’est qu’une fourchette indicative. Ce que comprend l’intervention est précisé dans le devis détaillé de l’artisan, que vous acceptez avant tout travail." },
     ],
   },
   {
@@ -59,7 +59,7 @@ export const SERVICES: ServiceEntry[] = [
     checks: ["Mesure de la tension et de la continuité du circuit", "Contrôle des connexions de la prise", "Remplacement du mécanisme si nécessaire, sur devis accepté"],
     faq: [
       { question: "Dois-je couper le courant en attendant ?", answer: "N’utilisez plus la prise. Si elle présente une trace de chauffe, coupez le disjoncteur du circuit concerné." },
-      { question: "Le prix de la prise est-il compris ?", answer: "Le devis de l’artisan détaille la main-d’œuvre et le matériel éventuel avant toute intervention." },
+      { question: "Le prix de la prise est-il compris ?", answer: "Le devis détaillé de l’artisan précise la main-d’œuvre et le matériel éventuel avant toute intervention." },
     ],
   },
   {
@@ -73,7 +73,7 @@ export const SERVICES: ServiceEntry[] = [
     covers: ["Disjoncteur qui saute dès qu’un appareil est branché", "Déclenchements répétés sans raison apparente", "Différentiel qui coupe tout le logement"],
     checks: ["Recherche d’une surcharge ou d’un appareil en défaut", "Mesure d’isolement circuit par circuit", "Remplacement d’un disjoncteur défaillant, sur devis accepté"],
     faq: [
-      { question: "Faut-il débrancher les appareils ?", answer: "Oui, c’est un bon premier réflexe : rebranchez-les un par un pour repérer celui qui provoque la coupure, et notez-le dans votre demande." },
+      { question: "Que noter avant de faire votre demande ?", answer: "Notez les appareils qui fonctionnaient au moment où le disjoncteur a sauté. Ne démontez rien et ne renouvelez pas l’essai si un appareil, une prise ou le tableau présente une anomalie : chaleur, odeur ou traces noires." },
       { question: "Un disjoncteur plus puissant réglerait-il le problème ?", answer: "Non. Le calibre dépend du câble qu’il protège ; seul l’artisan peut juger d’un remplacement." },
     ],
   },
@@ -88,7 +88,7 @@ export const SERVICES: ServiceEntry[] = [
     covers: ["Une pièce ou un étage sans courant", "Plusieurs circuits coupés en même temps", "Courant qui revient puis repart"],
     checks: ["Contrôle de l’arrivée et du tableau", "Recherche du circuit ou de la connexion en défaut", "Réparation de la liaison concernée, sur devis accepté"],
     faq: [
-      { question: "Comment savoir si la coupure vient du réseau ?", answer: "Si tout le quartier ou tout l’immeuble est concerné, contactez d’abord votre fournisseur ou gestionnaire de réseau : ce n’est pas un dépannage de votre installation." },
+      { question: "D’où peut venir une coupure partielle ?", answer: "Elle peut venir du réseau de distribution, de l’installation commune de l’immeuble ou de votre propre installation. Consultez les informations du gestionnaire de l’immeuble ; l’origine n’est établie qu’après vérification." },
       { question: "Que préciser dans ma demande ?", answer: "Les pièces concernées, depuis quand, et si un disjoncteur est en position basse." },
     ],
   },
@@ -103,8 +103,8 @@ export const SERVICES: ServiceEntry[] = [
     covers: ["Prise qui chauffe ou noircit", "Odeur de brûlé près d’une prise", "Prise fendue ou mal fixée"],
     checks: ["Contrôle des connexions et de l’état des conducteurs", "Vérification de la protection du circuit", "Remplacement de la prise, sur devis accepté"],
     faq: [
-      { question: "Est-ce urgent ?", answer: "Une prise qui chauffe doit être mise hors service : coupez le disjoncteur du circuit et n’y branchez plus rien en attendant l’intervention." },
-      { question: "Faut-il changer toutes les prises de la pièce ?", answer: "Pas forcément. Le diagnostic indique ce qui doit l’être ; le devis le précise avant toute intervention." },
+      { question: "Que faire en attendant ?", answer: "Cessez d’utiliser la prise et ne la démontez pas. Faites vérifier la prise et son circuit par un professionnel." },
+      { question: "Faut-il changer toutes les prises de la pièce ?", answer: "Pas nécessairement. Le diagnostic indique ce qui doit l’être, et le devis détaillé le précise avant toute intervention." },
     ],
   },
   {
@@ -118,8 +118,8 @@ export const SERVICES: ServiceEntry[] = [
     covers: ["Luminaire qui ne s’allume plus malgré une ampoule neuve", "Circuit d’éclairage entièrement éteint", "Éclairage qui clignote ou s’allume seul"],
     checks: ["Contrôle de l’interrupteur et du raccordement du luminaire", "Mesure sur le circuit d’éclairage", "Remplacement de l’élément défectueux, sur devis accepté"],
     faq: [
-      { question: "Ai-je vérifié l’essentiel ?", answer: "Essayez une ampoule qui fonctionne ailleurs et regardez le disjoncteur du circuit d’éclairage. Notez ces essais dans votre demande." },
-      { question: "La fourniture d’un nouveau luminaire est-elle incluse ?", answer: "Non, l’estimation concerne le dépannage. Un luminaire à fournir apparaîtrait dans le devis." },
+      { question: "Que préciser dans ma demande ?", answer: "Indiquez si un seul point lumineux ou plusieurs sont concernés, et depuis quand, sans démonter le luminaire ni l’interrupteur." },
+      { question: "La fourniture d’un nouveau luminaire est-elle incluse ?", answer: "L’estimation reste indicative. La fourniture éventuelle d’un luminaire, comme le reste de l’intervention, est précisée dans le devis détaillé de l’artisan." },
     ],
   },
   {
