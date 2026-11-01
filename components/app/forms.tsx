@@ -1485,8 +1485,166 @@ export function DocumentManager({
     </section>
   );
 }
+// ---- Artisan applications (admin) ------------------------------------------------------------
+// GET /api/admin/artisans → { artisans: [{ id, full_name, artisan_approved, created_at,
+// application_status }], limit, truncated } (older servers / demo: no status, no limit). The status
+// shown is the server's application_status only; when absent it says so, never inferred. Actions
+// follow the status: approved ⇒ Suspendre, suspended ⇒ Réactiver, submitted ⇒ Approuver; no
+// approval for a draft, changes requested, unknown or missing status (the server would refuse an
+// incomplete dossier anyway). All decisions POST { user_id, approved } after an explicit confirm.
+export type ArtisanApplicationRow = {
+  id: string;
+  full_name: string;
+  artisan_approved: boolean;
+  created_at: string;
+  application_status?: string | null;
+};
+export type ArtisanDecision = "suspend" | "reactivate" | "approve";
+export const ARTISAN_STATUS_LABELS: Record<string, string> = {
+  submitted: "Dossier soumis",
+  approved: "Approuvé",
+  suspended: "Suspendu",
+  changes_requested: "Modifications demandées",
+  draft: "Brouillon",
+};
+const DECISIONS: Record<ArtisanDecision, { label: string; message: string; confirmLabel: string; approved: boolean }> = {
+  suspend: {
+    label: "Suspendre",
+    message: "Suspendre l’accès aux nouvelles missions de cet artisan ?",
+    confirmLabel: "Confirmer la suspension",
+    approved: false,
+  },
+  reactivate: {
+    label: "Réactiver",
+    message: "Réactiver cet artisan suspendu ? Il retrouvera l’accès aux nouvelles missions.",
+    confirmLabel: "Confirmer la réactivation",
+    approved: true,
+  },
+  approve: {
+    label: "Approuver",
+    message: "Confirmez-vous avoir vérifié la candidature et ses justificatifs ?",
+    confirmLabel: "Confirmer l’approbation",
+    approved: true,
+  },
+};
+/** Label, single allowed decision and honest note for one row (pure, exported for tests). */
+export function artisanApplicationView(row: Pick<ArtisanApplicationRow, "artisan_approved" | "application_status">): {
+  label: string;
+  decision: ArtisanDecision | null;
+  note: string | null;
+} {
+  const status = row.application_status;
+  if (status === undefined || status === null) {
+    // Legacy shape: only the access flag is known. Open access can still be closed; nothing is approved.
+    return {
+      label: "Statut non disponible",
+      decision: row.artisan_approved === true ? "suspend" : null,
+      note: row.artisan_approved === true ? null : "Statut du dossier non transmis : aucune décision proposée.",
+    };
+  }
+  const label = ARTISAN_STATUS_LABELS[status] ?? "Statut inconnu";
+  if (status === "approved") return { label, decision: "suspend", note: null };
+  if (status === "suspended") return { label, decision: "reactivate", note: null };
+  if (status === "submitted") return { label, decision: "approve", note: null };
+  const note =
+    status === "draft"
+      ? "Dossier incomplet : en attente de l’artisan."
+      : status === "changes_requested"
+        ? "Modifications demandées : en attente de l’artisan."
+        : "Statut inconnu : aucune décision proposée.";
+  // Access still open on an unexpected status: closing it remains possible, approving does not.
+  return { label, decision: row.artisan_approved === true ? "suspend" : null, note };
+}
+/** Tolerant read of the GET reply (new or legacy shape); malformed rows are dropped. */
+export function parseArtisanApplications(raw: unknown): { rows: ArtisanApplicationRow[]; truncated: boolean; limit: number | null } {
+  const v = (raw && typeof raw === "object" ? raw : {}) as { artisans?: unknown; truncated?: unknown; limit?: unknown };
+  const list = Array.isArray(v.artisans) ? v.artisans : [];
+  const rows: ArtisanApplicationRow[] = [];
+  for (const item of list) {
+    const r = item as Partial<ArtisanApplicationRow> | null;
+    if (!r || typeof r.id !== "string" || typeof r.full_name !== "string" || typeof r.created_at !== "string") continue;
+    const status = r.application_status;
+    rows.push({
+      id: r.id,
+      full_name: r.full_name,
+      artisan_approved: r.artisan_approved === true,
+      created_at: r.created_at,
+      application_status: typeof status === "string" ? status : null,
+    });
+  }
+  return { rows, truncated: v.truncated === true, limit: typeof v.limit === "number" && Number.isSafeInteger(v.limit) && v.limit > 0 ? v.limit : null };
+}
+const DEMO_ARTISANS: ArtisanApplicationRow[] = [
+  { id: "demo-artisan", full_name: "Alex Martin", artisan_approved: true, created_at: "2026-10-30T09:00:00Z", application_status: "approved" },
+  { id: "demo-artisan-2", full_name: "Sam Laurent", artisan_approved: false, created_at: "2026-10-30T10:00:00Z", application_status: "submitted" },
+];
+const DEMO_KEY = "courant-admin-demo-v1";
+
+/** Stateless list (exported for SSR tests). */
+export function ArtisanApplicationsList({
+  rows,
+  truncated,
+  limit,
+  busy,
+  onDecide,
+}: {
+  rows: ArtisanApplicationRow[];
+  truncated: boolean;
+  limit: number | null;
+  busy: boolean;
+  onDecide(row: ArtisanApplicationRow, decision: ArtisanDecision): Promise<unknown>;
+}) {
+  if (!rows.length)
+    return (
+      <Empty icon="shield" title="Aucune candidature à vérifier">
+        Les inscriptions artisans apparaîtront ici.
+      </Empty>
+    );
+  return (
+    <>
+      {truncated && (
+        <p className="inline-note" role="status" data-artisan-applications-truncated="">
+          Affichage limité aux {limit ?? 100} premiers artisans.{" "}
+          <a className="text-button" href="#admin-artisans">
+            Ouvrir l’annuaire des artisans
+          </a>
+        </p>
+      )}
+      <div className="document-list">
+        {rows.map((p) => {
+          const view = artisanApplicationView(p);
+          const decision = view.decision ? DECISIONS[view.decision] : null;
+          return (
+            <div key={p.id} data-artisan-application={p.id} data-application-status={p.application_status ?? "unknown"}>
+              <span className="avatar">{p.full_name.slice(0, 2).toUpperCase()}</span>
+              <section>
+                <h3>{p.full_name}</h3>
+                <p>
+                  {view.label} — {date(p.created_at)}
+                </p>
+                {view.note && <p className="inline-note">{view.note}</p>}
+              </section>
+              {decision && view.decision && (
+                <ConfirmAction
+                  label={decision.label}
+                  message={decision.message}
+                  confirmLabel={decision.confirmLabel}
+                  busy={busy}
+                  onConfirm={() => onDecide(p, view.decision as ArtisanDecision)}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
 export function ArtisanAdministration({ demo }: { demo: boolean }) {
-  const [rows, setRows] = useState<(Profile & { created_at: string })[]>([]);
+  const [rows, setRows] = useState<ArtisanApplicationRow[]>([]);
+  const [truncated, setTruncated] = useState(false);
+  const [limit, setLimit] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
@@ -1495,33 +1653,23 @@ export function ArtisanAdministration({ demo }: { demo: boolean }) {
     setError("");
     try {
       if (demo) {
-        const stored = localStorage.getItem("courant-admin-demo-v1");
-        setRows(
-          stored
-            ? JSON.parse(stored)
-            : [
-                {
-                  id: "demo-artisan",
-                  full_name: "Alex Martin",
-                  role: "artisan",
-                  artisan_approved: true,
-                  created_at: "2026-10-30T09:00:00Z",
-                },
-                {
-                  id: "demo-artisan-2",
-                  full_name: "Sam Laurent",
-                  role: "artisan",
-                  artisan_approved: false,
-                  created_at: "2026-10-30T10:00:00Z",
-                },
-              ],
-        );
+        const stored = localStorage.getItem(DEMO_KEY);
+        let parsed: unknown = null;
+        try {
+          parsed = stored ? JSON.parse(stored) : null;
+        } catch {
+          parsed = null;
+        }
+        const demoRows = parseArtisanApplications({ artisans: Array.isArray(parsed) ? parsed : DEMO_ARTISANS }).rows;
+        setRows(demoRows);
+        setTruncated(false);
+        setLimit(null);
         return;
       }
-      const result = await api<{
-        artisans: (Profile & { created_at: string })[];
-      }>("/api/admin/artisans");
-      setRows(result.artisans);
+      const result = parseArtisanApplications(await api<unknown>("/api/admin/artisans"));
+      setRows(result.rows);
+      setTruncated(result.truncated);
+      setLimit(result.limit);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -1530,16 +1678,34 @@ export function ArtisanAdministration({ demo }: { demo: boolean }) {
   }
   useEffect(() => {
     void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  async function decide(p: ArtisanApplicationRow, decision: ArtisanDecision) {
+    const approved = DECISIONS[decision].approved;
+    setBusy(p.id);
+    setError("");
+    try {
+      if (demo) {
+        const next = rows.map((row) =>
+          row.id === p.id ? { ...row, artisan_approved: approved, application_status: approved ? "approved" : "suspended" } : row,
+        );
+        localStorage.setItem(DEMO_KEY, JSON.stringify(next));
+        setRows(next);
+      } else {
+        await api("/api/admin/artisans", { user_id: p.id, approved });
+        await load();
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  }
   return (
     <section className="panel">
       <div className="section-heading">
         <h2>Candidatures artisans</h2>
-        <button
-          className="button outline"
-          onClick={() => void load()}
-          disabled={loading}
-        >
+        <button className="button outline" onClick={() => void load()} disabled={loading}>
           <Icon name="refresh" />
           Actualiser
         </button>
@@ -1554,71 +1720,8 @@ export function ArtisanAdministration({ demo }: { demo: boolean }) {
           <span className="spinner" />
           Chargement des candidatures…
         </div>
-      ) : rows.length ? (
-        <div className="document-list">
-          {rows.map((p) => (
-            <div key={p.id}>
-              <span className="avatar">
-                {p.full_name.slice(0, 2).toUpperCase()}
-              </span>
-              <section>
-                <h3>{p.full_name}</h3>
-                <p>
-                  {p.artisan_approved
-                    ? "Candidature approuvée"
-                    : "En attente de vérification"}{" "}
-                  — {date(p.created_at)}
-                </p>
-              </section>
-              <ConfirmAction
-                label={p.artisan_approved ? "Suspendre" : "Approuver"}
-                message={
-                  p.artisan_approved
-                    ? "Suspendre l’accès aux nouvelles missions de cet artisan ?"
-                    : "Confirmez-vous avoir vérifié la candidature et ses justificatifs ?"
-                }
-                confirmLabel={
-                  p.artisan_approved
-                    ? "Confirmer la suspension"
-                    : "Confirmer l’approbation"
-                }
-                busy={Boolean(busy)}
-                onConfirm={async () => {
-                  setBusy(p.id);
-                  setError("");
-                  try {
-                    if (demo) {
-                      const next = rows.map((row) =>
-                        row.id === p.id
-                          ? { ...row, artisan_approved: !row.artisan_approved }
-                          : row,
-                      );
-                      localStorage.setItem(
-                        "courant-admin-demo-v1",
-                        JSON.stringify(next),
-                      );
-                      setRows(next);
-                    } else {
-                      await api("/api/admin/artisans", {
-                        user_id: p.id,
-                        approved: !p.artisan_approved,
-                      });
-                      await load();
-                    }
-                  } catch (e) {
-                    setError((e as Error).message);
-                  } finally {
-                    setBusy("");
-                  }
-                }}
-              />
-            </div>
-          ))}
-        </div>
       ) : (
-        <Empty icon="shield" title="Aucune candidature à vérifier">
-          Les inscriptions artisans apparaîtront ici.
-        </Empty>
+        <ArtisanApplicationsList rows={rows} truncated={truncated} limit={limit} busy={Boolean(busy)} onDecide={decide} />
       )}
     </section>
   );
