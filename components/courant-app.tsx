@@ -624,6 +624,148 @@ export default function CourantApp() {
     readDemo<DemoOperations>(DEMO_KEYS.operations, {}, (v) => !!v && typeof v === "object");
   const saveDemoOps = (ops: DemoOperations) => writeDemo(DEMO_KEYS.operations, ops);
 
+  // Demo transition of a dossier, run INSIDE the caller's chain (never opens a second run: the
+  // global busy guard would refuse it). Throws a user-facing Error when the action is refused.
+  function demoTransition(
+    ctx: RunContext,
+    id: string,
+    name: InterventionAction | "simulate_payment",
+    extra?: Record<string, unknown>,
+  ) {
+    const i = data.interventions.find((x) => x.id === id);
+    if (!i) throw new Error("Demande introuvable.");
+    if (name === "accept_mission") {
+      const artisan = readDemo(DEMO_KEYS.admin, adminSeed(), Array.isArray).find(
+        (p) => p.id === DEMO_IDS.artisan,
+      );
+      if (artisan && !artisan.artisan_approved)
+        throw new Error(
+          "L’accès aux nouvelles missions de cet artisan de démonstration est suspendu. Réactivez sa candidature dans l’administration de démonstration.",
+        );
+    }
+    const transitions: Record<string, Status> = {
+      accept_mission: "assigned",
+      send_quote: "quoted",
+      accept_quote: "accepted",
+      start: "in_progress",
+      complete: "completed",
+      cancel: "cancelled",
+      simulate_payment: "paid",
+    };
+    const allowed: Record<string, Status[]> = {
+      accept_mission: ["requested"],
+      send_quote: ["assigned", "quoted"],
+      accept_quote: ["quoted"],
+      start: ["accepted"],
+      complete: ["in_progress"],
+      cancel: ["requested", "assigned", "quoted"],
+      simulate_payment: ["completed"],
+    };
+    const status = transitions[name];
+    if (!status) throw new Error("Action inconnue.");
+    if (!allowed[name]?.includes(i.status))
+      throw new Error("Cette action n’est plus disponible pour cette demande.");
+    let qs = data.quotes;
+    let pro = professional;
+    if (name === "accept_quote") {
+      const shown = qs.find((q) => q.id === extra?.quote_id);
+      if (!shown || shown.intervention_id !== id || shown.status !== "sent")
+        throw new Error(
+          "Le devis affiché n’est plus la version active. Rechargez le dossier avant d’accepter.",
+        );
+      if (pro.approvals.some((a) => a.quote_id === shown.id && a.status !== "approved"))
+        throw new Error(
+          "Ce devis nécessite une approbation dans l’espace entreprise avant son acceptation.",
+        );
+      qs = qs.map((q) =>
+        q.id === shown.id
+          ? { ...q, status: "accepted", accepted_at: new Date().toISOString() }
+          : q,
+      );
+    }
+    if (name === "send_quote") {
+      const lines = extra?.lines as Line[];
+      const rate = Number(extra?.tax_rate);
+      const subtotal = lines.reduce(
+        (n, l) => n + Math.round(l.quantity * l.unit_price_cents),
+        0,
+      );
+      // A revision replaces the previously sent (not accepted) version, as the server does.
+      qs = qs.map((q) =>
+        q.intervention_id === id && q.status === "sent" ? { ...q, status: "rejected" } : q,
+      );
+      const quote: Quote = {
+        id: typeof extra?.quote_id === "string" ? extra.quote_id : uid(),
+        intervention_id: id,
+        artisan_id: DEMO_IDS.artisan,
+        lines,
+        subtotal_cents: subtotal,
+        tax_cents: Math.round((subtotal * rate) / 100),
+        total_cents: subtotal + Math.round((subtotal * rate) / 100),
+        tax_rate: rate,
+        status: "sent",
+        created_at: new Date().toISOString(),
+      };
+      qs = [...qs, quote];
+      const rule = i.site_id
+        ? pro.approval_rules.find((r) => r.site_id === i.site_id && r.enabled)
+        : undefined;
+      if (rule && quote.total_cents > rule.threshold_cents)
+        pro = {
+          ...pro,
+          approvals: [
+            ...pro.approvals,
+            {
+              id: uid(),
+              site_id: i.site_id!,
+              quote_id: quote.id,
+              status: "pending",
+              created_at: new Date().toISOString(),
+            },
+          ],
+        };
+    }
+    let payments = data.payments;
+    if (name === "simulate_payment") {
+      const accepted = qs.find((q) => q.intervention_id === id && q.status === "accepted");
+      if (accepted)
+        payments = [
+          ...payments.filter((p) => p.quote_id !== accepted.id),
+          {
+            id: uid(),
+            quote_id: accepted.id,
+            total_cents: accepted.total_cents,
+            currency: "eur",
+            status: "paid",
+            created_at: new Date().toISOString(),
+            paid_at: new Date().toISOString(),
+          },
+        ];
+    }
+    ctx.when(setProfessional)(pro);
+    ctx.when(setData)({
+      ...data,
+      quotes: qs,
+      payments,
+      interventions: data.interventions.map((x) =>
+        x.id === id
+          ? {
+              ...x,
+              status,
+              artisan_id: name === "accept_mission" ? DEMO_IDS.artisan : x.artisan_id,
+              completed_at: name === "complete" ? new Date().toISOString() : x.completed_at,
+              paid_at: name === "simulate_payment" ? new Date().toISOString() : x.paid_at,
+            }
+          : x,
+      ),
+    });
+    ctx.notice(
+      name === "simulate_payment"
+        ? "Paiement simulé dans la démonstration. Aucun débit bancaire n’a été effectué."
+        : "Modification enregistrée dans la démonstration.",
+    );
+  }
+
   async function action(
     id: string,
     name: InterventionAction | "simulate_payment",
@@ -631,138 +773,7 @@ export default function CourantApp() {
   ) {
     return run(async (ctx) => {
       if (modeRef.current === "demo") {
-        const i = data.interventions.find((x) => x.id === id);
-        if (!i) throw new Error("Demande introuvable.");
-        if (name === "accept_mission") {
-          const artisan = readDemo(DEMO_KEYS.admin, adminSeed(), Array.isArray).find(
-            (p) => p.id === DEMO_IDS.artisan,
-          );
-          if (artisan && !artisan.artisan_approved)
-            throw new Error(
-              "L’accès aux nouvelles missions de cet artisan de démonstration est suspendu. Réactivez sa candidature dans l’administration de démonstration.",
-            );
-        }
-        const transitions: Record<string, Status> = {
-          accept_mission: "assigned",
-          send_quote: "quoted",
-          accept_quote: "accepted",
-          start: "in_progress",
-          complete: "completed",
-          cancel: "cancelled",
-          simulate_payment: "paid",
-        };
-        const allowed: Record<string, Status[]> = {
-          accept_mission: ["requested"],
-          send_quote: ["assigned", "quoted"],
-          accept_quote: ["quoted"],
-          start: ["accepted"],
-          complete: ["in_progress"],
-          cancel: ["requested", "assigned", "quoted"],
-          simulate_payment: ["completed"],
-        };
-        const status = transitions[name];
-        if (!status) throw new Error("Action inconnue.");
-        if (!allowed[name]?.includes(i.status))
-          throw new Error("Cette action n’est plus disponible pour cette demande.");
-        let qs = data.quotes;
-        let pro = professional;
-        if (name === "accept_quote") {
-          const shown = qs.find((q) => q.id === extra?.quote_id);
-          if (!shown || shown.intervention_id !== id || shown.status !== "sent")
-            throw new Error(
-              "Le devis affiché n’est plus la version active. Rechargez le dossier avant d’accepter.",
-            );
-          if (pro.approvals.some((a) => a.quote_id === shown.id && a.status !== "approved"))
-            throw new Error(
-              "Ce devis nécessite une approbation dans l’espace entreprise avant son acceptation.",
-            );
-          qs = qs.map((q) =>
-            q.id === shown.id
-              ? { ...q, status: "accepted", accepted_at: new Date().toISOString() }
-              : q,
-          );
-        }
-        if (name === "send_quote") {
-          const lines = extra?.lines as Line[];
-          const rate = Number(extra?.tax_rate);
-          const subtotal = lines.reduce(
-            (n, l) => n + Math.round(l.quantity * l.unit_price_cents),
-            0,
-          );
-          // A revision replaces the previously sent (not accepted) version, as the server does.
-          qs = qs.map((q) =>
-            q.intervention_id === id && q.status === "sent" ? { ...q, status: "rejected" } : q,
-          );
-          const quote: Quote = {
-            id: typeof extra?.quote_id === "string" ? extra.quote_id : uid(),
-            intervention_id: id,
-            artisan_id: DEMO_IDS.artisan,
-            lines,
-            subtotal_cents: subtotal,
-            tax_cents: Math.round((subtotal * rate) / 100),
-            total_cents: subtotal + Math.round((subtotal * rate) / 100),
-            tax_rate: rate,
-            status: "sent",
-            created_at: new Date().toISOString(),
-          };
-          qs = [...qs, quote];
-          const rule = i.site_id
-            ? pro.approval_rules.find((r) => r.site_id === i.site_id && r.enabled)
-            : undefined;
-          if (rule && quote.total_cents > rule.threshold_cents)
-            pro = {
-              ...pro,
-              approvals: [
-                ...pro.approvals,
-                {
-                  id: uid(),
-                  site_id: i.site_id!,
-                  quote_id: quote.id,
-                  status: "pending",
-                  created_at: new Date().toISOString(),
-                },
-              ],
-            };
-        }
-        let payments = data.payments;
-        if (name === "simulate_payment") {
-          const accepted = qs.find((q) => q.intervention_id === id && q.status === "accepted");
-          if (accepted)
-            payments = [
-              ...payments.filter((p) => p.quote_id !== accepted.id),
-              {
-                id: uid(),
-                quote_id: accepted.id,
-                total_cents: accepted.total_cents,
-                currency: "eur",
-                status: "paid",
-                created_at: new Date().toISOString(),
-                paid_at: new Date().toISOString(),
-              },
-            ];
-        }
-        ctx.when(setProfessional)(pro);
-        ctx.when(setData)({
-          ...data,
-          quotes: qs,
-          payments,
-          interventions: data.interventions.map((x) =>
-            x.id === id
-              ? {
-                  ...x,
-                  status,
-                  artisan_id: name === "accept_mission" ? DEMO_IDS.artisan : x.artisan_id,
-                  completed_at: name === "complete" ? new Date().toISOString() : x.completed_at,
-                  paid_at: name === "simulate_payment" ? new Date().toISOString() : x.paid_at,
-                }
-              : x,
-          ),
-        });
-        ctx.notice(
-          name === "simulate_payment"
-            ? "Paiement simulé dans la démonstration. Aucun débit bancaire n’a été effectué."
-            : "Modification enregistrée dans la démonstration.",
-        );
+        demoTransition(ctx, id, name, extra);
         return;
       }
       if (name === "simulate_payment")
@@ -1623,15 +1634,22 @@ export default function CourantApp() {
         if (draft.tax_rate === null || !draft.lines.length || draft.lines.some((l) => !l.label.trim()))
           throw new Error("Le brouillon n’est pas publiable : lignes nommées et taux de TVA requis.");
         const newQuoteId = uid();
-        const ok = await action(interventionId, "send_quote", {
-          lines: draft.lines,
-          tax_rate: draft.tax_rate,
-          quote_id: newQuoteId,
-        });
-        if (!ok) {
-          outcome = { ok: false, conflict: false, message: "Le devis n’a pas pu être publié ; le brouillon est conservé." };
+        // Same chain as this command (calling action() here re-entered run() and was refused as busy).
+        try {
+          demoTransition(ctx, interventionId, "send_quote", {
+            lines: draft.lines,
+            tax_rate: draft.tax_rate,
+            quote_id: newQuoteId,
+          });
+        } catch (e) {
+          outcome = {
+            ok: false,
+            conflict: false,
+            message: `Le devis n’a pas pu être publié ; le brouillon est conservé. ${(e as Error).message}`.trim(),
+          };
           return;
         }
+        ctx.notice("Devis publié dans la démonstration (aucun envoi réel au client).");
         all[interventionId] = { draft: null, version: envelope.version + 1 };
         writeDemo(DEMO_KEYS.quoteDrafts, all);
         outcome = {
