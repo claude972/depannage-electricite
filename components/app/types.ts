@@ -1,4 +1,5 @@
 // Shared frontend types. Server contracts: app/api/* and docs/WEB_PWA_CONTRACTS.md (Codex branch).
+import type { WorkspaceLimits } from "../../lib/features/workspace/detail-read";
 export type Role = "client" | "artisan" | "manager" | "admin";
 export type Mode = "public" | "demo" | "live";
 export type Status =
@@ -432,6 +433,7 @@ export type ArtisanPerformanceReport = {
   basis: Record<string, string>;
 };
 export type Workspace = {
+  limits?: WorkspaceLimits;
   documents: StoredDocument[];
   reviews: Review[];
   profile: Profile | null;
