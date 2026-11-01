@@ -148,15 +148,23 @@ export function finishBooking({ storage, service, state, go, now = Date.now() }:
 }
 
 // ---- Bottom bar (closed page: « Confirmer » ; wizard: the active step's real submit) -----------
-export function BookingBar({ title, range, children }: { title: string; range: string; children: ReactNode }) {
+export function BookingBar({ title, range, compact = false, children }: { title: string; range: string; compact?: boolean; children: ReactNode }) {
   // Always fixed and stable (never moved by focus/blur): a tap that blurs a field lands on it.
+  // `compact` (closed service page): range + caption + button on one line, no title.
   return (
-    <div className={styles.bar} data-booking-bar="">
+    <div className={compact ? `${styles.bar} ${styles.barCompact}` : styles.bar} data-booking-bar={compact ? "compact" : ""}>
       <div className={styles.barInner}>
-        <div className={styles.barText}>
-          <strong>{title}</strong>
-          <span>Estimation indicative : {range}</span>
-        </div>
+        {compact ? (
+          <div className={styles.barText}>
+            <strong>{range}</strong>
+            <span>Estimation indicative</span>
+          </div>
+        ) : (
+          <div className={styles.barText}>
+            <strong>{title}</strong>
+            <span>Estimation indicative : {range}</span>
+          </div>
+        )}
         {children}
       </div>
     </div>

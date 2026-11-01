@@ -7,7 +7,8 @@ import { useState } from "react";
 import { money } from "../app/format";
 import type { Category } from "../app/types";
 import { PublicChrome, type HomeHandlers, type HomeTargetView } from "./public-chrome";
-import { SERVICE_STEPS, serviceEstimate, serviceRequestHref, type ServiceEntry } from "./public-service-catalog";
+import { SERVICE_STEPS, relatedServices, serviceEstimate, servicePath, serviceRequestHref, type ServiceEntry } from "./public-service-catalog";
+import { Icon } from "../app/icons";
 import { BookingBar, BookingWizard } from "./public-booking";
 import bookingStyles from "./public-booking.module.css";
 import styles from "./public-service.module.css";
@@ -32,6 +33,12 @@ export function serviceChromeHandlers(go: Go = browserGo): HomeHandlers {
   };
 }
 
+/** Shared third question of the hero FAQ (each service brings its own two first). */
+const COMMON_FAQ = {
+  question: "Quand le prix est-il confirmé ?",
+  answer: "Après le diagnostic, dans le devis détaillé de l’artisan. Rien n’est engagé tant que vous ne l’avez pas accepté.",
+};
+
 export function PublicServicePage({ service, initialOpen = false }: { service: ServiceEntry; initialOpen?: boolean }) {
   const estimate = serviceEstimate(service.category);
   const range = `${money(estimate.min)} – ${money(estimate.max)}`;
@@ -55,67 +62,50 @@ export function PublicServicePage({ service, initialOpen = false }: { service: S
       </PublicChrome>
     );
   return (
-    <PublicChrome current="service" className={styles.withBar} handlers={serviceChromeHandlers()} onHome={() => browserGo("/")} mainClassName={styles.main}>
+    <PublicChrome current="service" className={`${styles.withBar} ${styles.withCompactBar}`} handlers={serviceChromeHandlers()} onHome={() => browserGo("/")} mainClassName={styles.main}>
       <div className={styles.wrap}>
-        {crumb}
+        <a className={styles.backLink} href="/">
+          <span aria-hidden="true">←</span> Retour
+        </a>
 
+        {/* Hero: photo left; right column: title, indicative range, pictogram panel, CTA, top FAQ. */}
         <section className={styles.hero} aria-labelledby="service-title">
-          <div className={styles.heroText}>
-            <span className={styles.chip}>{estimate.label}</span>
-            <h1 id="service-title">{service.title}</h1>
-            <p className={styles.intro}>{service.intro}</p>
-            <div className={styles.price} data-service-price="">
-              <span>Estimation indicative</span>
-              <strong>{range}</strong>
-              <small>Fourchette de la catégorie « {estimate.label} ». Le montant final figure sur le devis de l’artisan, que vous acceptez avant toute intervention.</small>
-            </div>
-            <button type="button" className={styles.cta} onClick={openBooking} data-service-cta="" data-booking-open="">
-              Décrire ma panne <span aria-hidden="true">→</span>
-            </button>
-          </div>
           <figure className={styles.heroMedia}>
             <img src={service.photo.src} alt={service.alt} width={service.photo.width} height={service.photo.height} decoding="async" style={{ objectPosition: service.position }} />
           </figure>
-        </section>
-
-        <div className={styles.columns}>
-          <section className={styles.card} aria-labelledby="service-covers">
-            <h2 id="service-covers">Ce que couvre ce dépannage</h2>
-            <ul className={styles.list}>
-              {service.covers.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </section>
-          <section className={styles.card} aria-labelledby="service-checks">
-            <h2 id="service-checks">Vérifications possibles selon le diagnostic</h2>
-            <ul className={styles.list}>
-              {service.checks.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-            <p className={styles.note}>L’artisan adapte ses contrôles à ce qu’il constate sur place ; seul le devis accepté engage une réparation.</p>
-          </section>
-        </div>
-
-        <section className={styles.section} aria-labelledby="service-steps">
-          <h2 id="service-steps">Comment ça se passe</h2>
-          <ol className={styles.steps}>
-            {SERVICE_STEPS.map((step, index) => (
-              <li key={step.title}>
-                <span className={styles.stepNumber} aria-hidden="true">{index + 1}</span>
-                <strong>{step.title}</strong>
-                <span>{step.text}</span>
+          {/* Single grid, no wrapper: desktop photo left / column right; mobile title → price →
+              pictograms → photo → Confirmer → FAQ (grid-template-areas in the CSS). */}
+          <h1 id="service-title" className={styles.heroTitle}>{service.title}</h1>
+          <div className={styles.price} data-service-price="">
+            <span>Estimation indicative</span>
+            <strong>{range}</strong>
+          </div>
+          <div className={styles.pictoPanel}>
+            <ul className={styles.pictos} aria-label="Précisés dans le devis" data-service-pictos="">
+              <li>
+                <span className={styles.pictoIcon} aria-hidden="true"><Icon name="truck" size={20} /></span>
+                Déplacement
               </li>
-            ))}
-          </ol>
-        </section>
-
-        <section className={styles.section} aria-labelledby="service-faq">
-          <h2 id="service-faq">Questions fréquentes</h2>
-          <div className={styles.faq}>
-            {service.faq.map((item) => (
-              <details key={item.question}>
+              <li>
+                <span className={styles.pictoIcon} aria-hidden="true"><Icon name="wrench" size={20} /></span>
+                Main-d’œuvre
+              </li>
+              <li>
+                <span className={styles.pictoIcon} aria-hidden="true"><Icon name="box" size={20} /></span>
+                Matériel
+              </li>
+            </ul>
+            <p className={styles.pictoNote}>Précisés dans le devis</p>
+          </div>
+          <div className={styles.ctaRow}>
+            <p className={styles.proof}>Demande sans engagement · Rien n’est envoyé avant votre confirmation</p>
+            <button type="button" className={styles.cta} onClick={openBooking} data-service-cta="" data-booking-open="">
+              Confirmer
+            </button>
+          </div>
+          <div className={styles.topFaq} data-service-faq="">
+            {[...service.faq, COMMON_FAQ].slice(0, 3).map((item) => (
+              <details key={item.question} className={styles.faqRow}>
                 <summary>{item.question}</summary>
                 <p>{item.answer}</p>
               </details>
@@ -123,19 +113,94 @@ export function PublicServicePage({ service, initialOpen = false }: { service: S
           </div>
         </section>
 
-        <section className={styles.band} aria-labelledby="service-cta">
-          <div>
-            <h2 id="service-cta">Décrivez votre panne</h2>
-            <p>L’estimation indicative s’affiche dès la première étape, avant toute création de compte.</p>
+        {/* Full-width bands: heading + pictogram left, content right. */}
+        <section className={styles.band} aria-labelledby="service-know">
+          <div className={styles.bandInner}>
+            <div className={styles.bandHead}>
+              <span className={styles.pictoIcon} aria-hidden="true"><Icon name="info" size={22} /></span>
+              <h2 id="service-know">Ce qu’il faut savoir</h2>
+            </div>
+            <div className={styles.bandBody}>
+              <p>{service.intro}</p>
+              <ul className={styles.list}>
+                {service.covers.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
           </div>
-          <button type="button" className={styles.cta} onClick={openBooking} data-booking-open="">
-            Décrire ma panne <span aria-hidden="true">→</span>
-          </button>
+        </section>
+        <section className={styles.section} aria-labelledby="service-included">
+          <div className={styles.bandHead}>
+            <span className={styles.pictoIcon} aria-hidden="true"><Icon name="check" size={22} /></span>
+            <h2 id="service-included">Ce qui est inclus</h2>
+          </div>
+          <div className={styles.bandBody}>
+            <p>Selon le diagnostic, l’intervention peut comprendre :</p>
+            <ul className={styles.list}>
+              {service.checks.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+            <p className={styles.note}>Le contenu exact est précisé dans le devis détaillé de l’artisan.</p>
+          </div>
+        </section>
+        <section className={styles.section} aria-labelledby="service-extras">
+          <div className={styles.bandHead}>
+            <span className={styles.pictoIcon} aria-hidden="true"><Icon name="layers" size={22} /></span>
+            <h2 id="service-extras">Ce qui n’est pas inclus</h2>
+          </div>
+          <div className={styles.bandBody}>
+            <p>Selon le diagnostic, ces éléments peuvent faire l’objet d’un chiffrage distinct, précisé dans le devis détaillé :</p>
+            <ul className={styles.list}>
+              {service.extras.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        </section>
+        <section className={styles.section} aria-labelledby="service-steps">
+          <div className={styles.bandHead}>
+            <span className={styles.pictoIcon} aria-hidden="true"><Icon name="list" size={22} /></span>
+            <h2 id="service-steps">Déroulement</h2>
+          </div>
+          <ol className={`${styles.bandBody} ${styles.steps}`}>
+            {SERVICE_STEPS.map((step, index) => (
+              <li key={step.title}>
+                <span className={styles.stepNumber} aria-hidden="true">{index + 1}</span>
+                <span>
+                  <strong>{step.title}</strong>
+                  <span>{step.text}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        {/* Related services: real links, photo + title + indicative range. */}
+        <section className={styles.related} aria-labelledby="service-related">
+          <h2 id="service-related">Autres dépannages</h2>
+          <ul className={styles.relatedGrid}>
+            {relatedServices(service.slug).map((other) => {
+              const e = serviceEstimate(other.category);
+              return (
+                <li key={other.slug}>
+                  <a className={styles.relatedCard} href={servicePath(other.slug)} data-related={other.slug}>
+                    <img src={other.photo.src} alt="" width={other.photo.width} height={other.photo.height} loading="lazy" decoding="async" style={{ objectPosition: other.position }} />
+                    <span className={styles.relatedBody}>
+                      <strong>{other.title}</strong>
+                      <span>Estimation indicative : {money(e.min)} – {money(e.max)}</span>
+                    </span>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
         </section>
 
         <p className={styles.credit}>Photo d’illustration (Pexels) : elle ne représente ni notre équipe ni un artisan de la plateforme.</p>
       </div>
-      <BookingBar title={service.title} range={range}>
+      <BookingBar title={service.title} range={range} compact>
         <button type="button" className={bookingStyles.barButton} onClick={openBooking} data-booking-open="">
           Confirmer
         </button>

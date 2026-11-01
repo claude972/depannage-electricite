@@ -359,3 +359,25 @@
     width: 100%;
   }
 }
+/* Compact bar (closed service page): range + caption + « Confirmer » on ONE row at every width.
+   Content: 8 + 48 + 8 + 1 = 65 px <= its declared --booking-bar-h (72 px, set by the page). */
+.bar.barCompact {
+  padding-top: 8px;
+  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+}
+.barCompact .barText strong {
+  font-size: 17px;
+}
+.barCompact .barText span {
+  font-size: 12px;
+}
+@media (max-width: 480px) {
+  .barCompact .barInner {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+  .barCompact .barButton {
+    width: auto;
+  }
+}

@@ -37,18 +37,20 @@ class MemoryStorage {
 
 test("page : barre fixe « Confirmer » = même action que le CTA principal (ouvre l’assistant sur place)", () => {
   const html = render(createElement(servicePage.PublicServicePage, { service }));
-  assert.match(html, /data-booking-bar=""/);
+  // Page fermée : barre COMPACTE (fourchette + légende + « Confirmer », sans titre long).
+  assert.match(html, /data-booking-bar="compact"/);
   const bar = html.slice(html.indexOf("data-booking-bar"));
-  assert.match(bar, new RegExp(service.title));
-  assert.match(text(bar), /Estimation indicative : 80/);
+  assert.doesNotMatch(bar, new RegExp(service.title));
+  assert.match(text(bar), /80,00.*180,00.*Estimation indicative/);
   const opens = [...html.matchAll(/<button type="button" class="([^"]*)"[^>]*data-booking-open=""[^>]*>([^<]*)/g)].map((m) => m[2].trim());
-  same(opens, ["Décrire ma panne", "Décrire ma panne", "Confirmer"]);
+  same(opens, ["Confirmer", "Confirmer"]); // héros + barre : même action
   assert.match(bar, /data-booking-open="">Confirmer<\/button>/); // libellé exact
   assert.doesNotMatch(html, /href="\/#new/); // jamais le formulaire générique
   // Réserve basse sur le conteneur ThemeSurface ENTIER (en-tête, main ET pied de page) : la barre
   // fixe ne masque jamais les derniers boutons du pied de page.
   const root = html.match(/<div class="(ui-v2 [^"]*)"/)![1];
   assert.match(root, /\bwithBar\b/);
+  assert.match(root, /\bwithCompactBar\b/);
   const footer = html.indexOf("<footer"), rootEnd = html.lastIndexOf("</div>");
   assert.ok(html.indexOf(`class="${root}"`) < footer && footer < rootEnd);
   // Hauteur de barre = UNE propriété (--booking-bar-h) partagée par la barre, la réserve et la
@@ -68,7 +70,19 @@ test("page : barre fixe « Confirmer » = même action que le CTA principal (ouv
   const stacked = 10 + Math.ceil(14 * 1.35) + 2 + Math.ceil(13 * 1.35) + 8 + button + 10 + 1; // texte au-dessus, bouton pleine largeur
   assert.ok(wide >= row, `hauteur déclarée ${wide} ≥ contenu en ligne ${row}`);
   assert.ok(narrowH >= stacked, `hauteur déclarée ${narrowH} ≥ contenu empilé ${stacked}`);
-  const narrowBar = bookingCss.slice(bookingCss.lastIndexOf("@media (max-width: 480px)"));
+  // Barre compacte (page fermée) : sa propre hauteur, une seule ligne même à 360.
+  const compactH = Number(serviceCss.match(/\.withBar\.withCompactBar \{\s*--booking-bar-h: (\d+)px;/)![1]);
+  const compactContent = 8 + button + 8 + 1;
+  assert.ok(compactH >= compactContent && compactH <= 80, `compacte ${compactH} ≥ contenu ${compactContent}, ≤ 80`);
+  assert.ok(compactH + 24 >= compactContent + 24, "réserve compacte = hauteur + 24 px + safe-area");
+  assert.match(bookingCss, /\.bar\.barCompact \{\s*padding-top: 8px;/);
+  const compactNarrow = bookingCss.slice(bookingCss.lastIndexOf("@media (max-width: 480px)"));
+  assert.match(compactNarrow, /\.barCompact \.barInner \{\s*flex-direction: row;/);
+  // L’assistant garde sa barre 88 / 152 px (pas de classe compacte une fois ouvert).
+  const wizardPage = render(createElement(servicePage.PublicServicePage, { service, initialOpen: true }));
+  assert.doesNotMatch(wizardPage.match(/<div class="(ui-v2 [^"]*)"/)![1], /withCompactBar/);
+  assert.match(wizardPage, /data-booking-bar=""/);
+  const narrowBar = bookingCss.slice(bookingCss.indexOf("/* Narrow screens"), bookingCss.indexOf("/* Compact bar"));
   assert.match(narrowBar, /\.barInner \{\s*flex-direction: column;/);
   assert.match(narrowBar, /\.barButton \{\s*width: 100%;/);
   assert.match(bookingCss, /\.barButton \{[^}]*white-space: nowrap;/);
