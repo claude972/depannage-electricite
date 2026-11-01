@@ -9,8 +9,10 @@ import {
   fetchHistoryPage,
   historyKey,
   initialHistory,
+  draftText,
   mergeMessages,
   offersOlder,
+  type ComposeDraft,
   type HistoryFetch,
   type HistoryState,
 } from "./message-history";
@@ -650,7 +652,20 @@ export function MessageCenter({
   fetchHistory?: HistoryFetch;
 }) {
   const [id, setId] = useState(selectedId || interventions[0]?.id || "");
-  const [body, setBody] = useState("");
+  // The open dossier follows the selectedId prop (hash #messages/A → #messages/B in the same
+  // document) and identity changes; a click in the thread list still selects explicitly.
+  const [seen, setSeen] = useState({ selectedId, profileId });
+  if (seen.selectedId !== selectedId || seen.profileId !== profileId) {
+    const identityChanged = seen.profileId !== profileId;
+    setSeen({ selectedId, profileId });
+    if (selectedId) setId(selectedId);
+    else if (identityChanged) setId(interventions[0]?.id || "");
+  }
+  // The compose draft belongs to ONE identity + dossier: switching never carries A's text to B.
+  const threadKey = historyKey(profileId, id);
+  const [draft, setDraft] = useState<ComposeDraft>({ key: threadKey, text: "" });
+  const body = draftText(draft, threadKey);
+  const setBody = (text: string) => setDraft({ key: threadKey, text });
   const history = useMessageHistory(live, profileId, id, fetchHistory);
   const h = history.state;
   const unavailable = history.enabled && h.status === "not_found";
@@ -762,8 +777,10 @@ export function MessageCenter({
               onSubmit={(e) => {
                 e.preventDefault();
                 if (body.trim()) {
+                  const sentKey = threadKey;
                   void onSubmit(id, body.trim()).then((saved) => {
-                    if (saved) setBody("");
+                    // Clear only the draft that was sent, never the draft of another thread.
+                    if (saved) setDraft((d) => (d.key === sentKey ? { key: sentKey, text: "" } : d));
                   });
                 }
               }}

@@ -15,6 +15,7 @@ import {
   historyKey,
   historyUrl,
   initialHistory,
+  draftText,
   mergeMessages,
   offersOlder,
   parseHistoryPage,
@@ -89,6 +90,13 @@ test("401 after a partial page: no older-page offer, loaded messages kept, never
   assert.equal(offersOlder(applyOutcome(initialHistory(k), k, { kind: "not_found" })), false);
 });
 
+test("compose draft is bound to identity + dossier: A's text is never shown nor sent in B", () => {
+  const draft = { key: historyKey("u1", A), text: "secret A" };
+  assert.equal(draftText(draft, historyKey("u1", A)), "secret A");
+  assert.equal(draftText(draft, historyKey("u1", B)), "", "another dossier starts empty");
+  assert.equal(draftText(draft, historyKey("u2", A)), "", "another identity starts empty");
+});
+
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM =
   process.env.QA_CHROMIUM_PATH ||
@@ -97,7 +105,7 @@ const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM)
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
 
 const APP = `
-import { createElement as h } from "react";
+import { createElement as h, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { MessageCenter } from "./components/app/forms";
 const A = "${A}", B = "${B}";
@@ -113,7 +121,7 @@ const fakeFetch = async (url, init) => {
   const u = new URL(url, location.origin);
   const d = u.searchParams.get("intervention_id"), cursor = u.searchParams.get("cursor"), limit = Number(u.searchParams.get("limit"));
   window.calls.push({ d, cursor, limit, credentials: init.credentials, cache: init.cache });
-  const late = kind === "switch" && d === A && window.calls.length === 1;
+  const late = (kind === "switch" || kind === "follow") && d === A && window.calls.length === 1;
   await new Promise((r) => setTimeout(r, late ? 400 : 20)); // late reply ignores the abort on purpose
   if (kind === "401") return new Response("{}", { status: 401 });
   if (kind === "401late" && cursor) return new Response("{}", { status: 401 });
@@ -127,7 +135,16 @@ const fakeFetch = async (url, init) => {
 // Workspace preview: the 5 newest of A (duplicated by page 1) + 2 of B.
 const preview = kind === "empty" ? [] : [...desc(A).slice(0, 5), ...desc(B).slice(0, 2)];
 const interventions = [A, B].map((id) => ({ id, category: "panel", status: "requested", created_at: "2026-10-01T00:00:00.000Z" }));
-createRoot(document.getElementById("app")).render(h(MessageCenter, { interventions, messages: preview, role: "client", profileId: "u1", selectedId: A, busy: false, onSubmit: async () => true, live: kind !== "demo", fetchHistory: fakeFetch }));
+window.sent = [];
+// selectedId and profileId are driven like the shell does (#messages/<id> param, identity change).
+function App() {
+  const [sel, setSel] = useState(A);
+  const [profile, setProfile] = useState("u1");
+  window.setSel = setSel;
+  window.setProfile = setProfile;
+  return h(MessageCenter, { interventions, messages: preview, role: "client", profileId: profile, selectedId: sel, busy: false, onSubmit: async (id, body) => { window.sent.push([id, body]); return true; }, live: kind !== "demo", fetchHistory: fakeFetch });
+}
+createRoot(document.getElementById("app")).render(h(App));
 `;
 
 test("MessageCenter history in real React/Chromium: 237 messages over 10 pages, 503+retry, 404, 401, empty, switch, demo", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
@@ -248,6 +265,33 @@ test("MessageCenter history in real React/Chromium: 237 messages over 10 pages, 
       assert.ok(shown.every((i) => i.startsWith("m-b-")), "never a message of A in B's conversation");
       const c = await calls(page);
       assert.deepEqual(c.map((x) => [x.d, x.cursor]), [[A, null], [B, null], [B, "b:25"]]);
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    // 6b. Hash #messages/A → #messages/B in the same document (selectedId prop changes): B opens,
+    //     B's history is read, A's late reply is ignored, A's typed text never reaches B's POST.
+    {
+      const { page, errors } = await open("follow");
+      await page.fill("#message-body", "secret A");
+      await page.evaluate((b: string) => (window as unknown as { setSel(v: string): void }).setSel(b), B);
+      await page.waitForFunction(() => document.querySelectorAll("[data-message-id]").length === 25);
+      assert.equal(await page.inputValue("#message-body"), "", "A's draft is not carried into B");
+      await page.waitForTimeout(500); // A's late reply has arrived by now
+      const shown = await ids(page);
+      assert.ok(shown.length > 0 && shown.every((i) => i.startsWith("m-b-")), "only B's messages");
+      assert.deepEqual((await calls(page)).map((x) => [x.d, x.cursor]), [[A, null], [B, null]]);
+      await page.fill("#message-body", "hello B");
+      await page.click("[aria-label='Envoyer le message']");
+      await page.waitForFunction(() => (window as unknown as { sent: unknown[] }).sent.length === 1);
+      const sent = await page.evaluate(() => (window as unknown as { sent: [string, string][] }).sent);
+      assert.deepEqual(sent, [[B, "hello B"]], "B's POST never carries A's text");
+      // 6c. Identity change on the same dossier: history and draft reset, re-read for the new identity.
+      await page.fill("#message-body", "draft of u1");
+      await page.evaluate(() => (window as unknown as { setProfile(v: string): void }).setProfile("u2"));
+      await page.waitForFunction(() => (window as unknown as { calls: unknown[] }).calls.length === 3);
+      assert.equal(await page.inputValue("#message-body"), "", "the previous identity's draft is gone");
+      assert.deepEqual((await calls(page)).map((x) => [x.d, x.cursor]).slice(2), [[B, null]], "fresh newest page, no old cursor");
+      assert.ok(await page.$("[data-message-older]"), "the older-page button carries data-message-older");
       assert.deepEqual(errors, []);
       await page.close();
     }
