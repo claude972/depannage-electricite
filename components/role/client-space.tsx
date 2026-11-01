@@ -59,6 +59,7 @@ import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
 import { TrackingAnchor } from "./tracking-anchor";
 import { useDetailPresence } from "./use-detail-presence";
+import { PointReadState } from "./detail-read-view";
 import { PlatformPage } from "./platform-anchor";
 import { platformEntries } from "./anchors";
 import { UploadQueuePanel } from "../app/upload-queue";
@@ -911,6 +912,8 @@ function DetailView({
   const presence = useDetailPresence(session, "client-detail", id, Boolean(i));
   if (!i) {
     if (presence.decision === "loading") return <Loader label="Recherche du dossier…" />;
+    if (presence.decision === "detail" || presence.decision === "detail_loading" || presence.decision === "detail_error")
+      return <PointReadState presence={presence} backLabel="Mes demandes" onBack={() => session.go("requests")} />;
     if (presence.decision === "error")
       return (
         <Unavailable
@@ -926,9 +929,16 @@ function DetailView({
       <Empty
         title="Intervention introuvable"
         action={
-          <button type="button" className="button primary" onClick={() => session.go("requests")}>
-            Voir mes demandes
-          </button>
+          <>
+            <button type="button" className="button primary" onClick={() => session.go("requests")}>
+              Voir mes demandes
+            </button>
+            {presence.openAnyway && (
+              <button type="button" className="button outline" onClick={presence.openAnyway}>
+                Ouvrir quand même
+              </button>
+            )}
+          </>
         }
       >
         Ce dossier n’existe pas dans votre espace ou son lien n’est plus valide.

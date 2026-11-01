@@ -92,6 +92,7 @@ import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
 import { TrackingAnchor } from "./tracking-anchor";
 import { useDetailPresence } from "./use-detail-presence";
+import { PointReadState } from "./detail-read-view";
 import { SiteOperationsView } from "../features/site-operations/site-operations-view";
 import { CONTRACT_MESSAGES } from "../app/api";
 import { demoReport } from "../../lib/features/site-operations/demo";
@@ -1474,6 +1475,15 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
 
   if (!intervention) {
     if (presence.decision === "loading") return <Loader label="Recherche du dossier…" />;
+    if (presence.decision === "detail" || presence.decision === "detail_loading" || presence.decision === "detail_error")
+      return (
+        <PointReadState
+          presence={presence}
+          backLabel="Interventions"
+          onBack={() => c.go("requests")}
+          outsideActivePerimeter={(d) => Boolean(c.activeSite?.id) && d.intervention.site_id !== c.activeSite?.id}
+        />
+      );
     if (presence.decision === "error")
       return (
         <Unavailable
@@ -1490,9 +1500,16 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
         icon="search"
         title="Dossier introuvable sur ce périmètre"
         action={
-          <button type="button" className="button outline" onClick={() => c.go("requests")}>
-            Retour aux interventions
-          </button>
+          <>
+            <button type="button" className="button outline" onClick={() => c.go("requests")}>
+              Retour aux interventions
+            </button>
+            {presence.openAnyway && (
+              <button type="button" className="button outline" onClick={presence.openAnyway}>
+                Ouvrir quand même
+              </button>
+            )}
+          </>
         }
       >
         Le dossier n’appartient pas à l’organisation active ou n’est pas parmi les dossiers chargés.
