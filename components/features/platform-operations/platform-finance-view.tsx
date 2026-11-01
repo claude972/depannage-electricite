@@ -19,6 +19,91 @@ const MISSING_LABEL: Record<string, string> = { billing_contact: "coordonnées d
 /** Unknown readiness code: still a BLOCKING condition, never shown raw. */
 const MISSING_FALLBACK = "condition bloquante non détaillée : vérifiez le dossier avant toute émission";
 
+// ---- F2: preview amounts are shown only when the server gave them as safe integers ----------------
+export const PREVIEW_UNAVAILABLE = "Montants de l’aperçu indisponibles : vérifiez à nouveau.";
+export type PreviewAmounts = { total_cents: number; tax_cents: number; subtotal_cents: number };
+const safeCents = (v: unknown): v is number => typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
+/** null ⇒ blocking: never a substituted 0, never an « Émettre » button. */
+export function previewAmounts(preview: InvoiceReadiness["preview"] | null | undefined): PreviewAmounts | null {
+  if (!preview) return null;
+  const { total_cents, tax_cents, subtotal_cents } = preview;
+  if (!(safeCents(total_cents) && safeCents(tax_cents) && safeCents(subtotal_cents) && total_cents > 0)) return null;
+  // HT + TVA must equal TTC exactly (and the sum stay a safe integer): an inconsistent preview blocks.
+  const sum = subtotal_cents + tax_cents;
+  return Number.isSafeInteger(sum) && sum === total_cents ? { total_cents, tax_cents, subtotal_cents } : null;
+}
+
+// ---- F3: explicit confirmation with a FROZEN payload ---------------------------------------------
+/** A confirmation holds a cloned, recursively frozen copy of the payload taken when it opened; any input change
+ *  cancels it (re-confirmation required). The request_id inside is the form's current one, so a
+ *  retry after a failure reuses it (a new one is generated only after success, as before). */
+export type Confirmation<P> = { payload: Readonly<P>; summary: string[] } | null;
+export function openConfirmation<P extends object>(payload: P, summary: string[]): Confirmation<P> {
+  return { payload: deepFreeze(structuredCloneSafe(payload)), summary: [...summary] };
+}
+function deepFreeze<T>(value: T): T {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const v of Object.values(value as Record<string, unknown>)) deepFreeze(v);
+  }
+  return value;
+}
+function structuredCloneSafe<P>(value: P): P {
+  return JSON.parse(JSON.stringify(value)) as P;
+}
+export function ConfirmBox({ title, summary, confirmLabel, busy, onConfirm, onCancel }: { title: string; summary: string[]; confirmLabel: string; busy: boolean; onConfirm: () => void; onCancel: () => void }) {
+  return (
+    <div className={styles.card} role="alertdialog" aria-label={title} data-finance-confirm="">
+      <strong>{title}</strong>
+      <ul className={styles.list}>{summary.map((line) => <li key={line}>{line}</li>)}</ul>
+      <div className={styles.actions}>
+        <button type="button" className={`${styles.button} ${styles.primary}`} disabled={busy} onClick={onConfirm} data-finance-confirm-ok="">{confirmLabel}</button>
+        <button type="button" className={styles.button} disabled={busy} onClick={onCancel}>Annuler</button>
+      </div>
+    </div>
+  );
+}
+
+// ---- F4: ledger basis — allowlisted business keys only, provider ids never shown ----------------
+const SOURCE_LABEL: Record<string, string> = { payments: "règlement enregistré", provider_event: "événement fournisseur confirmé" };
+const RATE_SOURCE_LABEL: Record<string, string> = { platform_setting: "paramètre plateforme" };
+const BASIS_LABELS: Record<string, { label: string; format: (v: unknown) => string | null }> = {
+  // Own-property lookups only: inherited names (« __proto__ », « constructor »…) are never labels.
+  source: { label: "Origine", format: (v) => (typeof v === "string" && Object.prototype.hasOwnProperty.call(SOURCE_LABEL, v) && SOURCE_LABEL[v]) || null },
+  paid_at: { label: "Réglé le", format: (v) => (typeof v === "string" && !Number.isNaN(Date.parse(v)) ? dateTime(v) : null) },
+  quote_id: { label: "Devis", format: (v) => (typeof v === "string" && UUID_RE.test(v) ? shortId(v) : null) },
+  rate_source: { label: "Origine du taux", format: (v) => (typeof v === "string" && Object.prototype.hasOwnProperty.call(RATE_SOURCE_LABEL, v) && RATE_SOURCE_LABEL[v]) || null },
+  bps: { label: "Taux", format: (v) => (typeof v === "number" && Number.isSafeInteger(v) ? `${(v / 100).toFixed(2)} %` : null) },
+  setting_version: { label: "Version du paramètre", format: (v) => (typeof v === "number" && Number.isSafeInteger(v) ? String(v) : null) },
+  gross_cents: { label: "Montant de base", format: (v) => (safeCents(v) ? money(v) : null) },
+  amount_cents: { label: "Montant", format: (v) => (safeCents(v) ? money(v) : null) },
+  tax_included: { label: "TVA incluse", format: (v) => (typeof v === "boolean" ? (v ? "oui" : "non") : null) },
+  version: { label: "Version", format: (v) => (typeof v === "number" && Number.isSafeInteger(v) ? String(v) : null) },
+  refund_request_id: { label: "Demande de remboursement", format: (v) => (typeof v === "string" && UUID_RE.test(v) ? shortId(v) : null) },
+};
+/** Known keys with French labels; every other key (provider references, event/session ids…) is
+ *  only counted, never rendered. */
+export function ledgerBasisRows(basis: Record<string, unknown> | null | undefined): { rows: { label: string; value: string }[]; hidden: number } {
+  const rows: { label: string; value: string }[] = [];
+  let hidden = 0;
+  for (const [key, value] of Object.entries(basis ?? {})) {
+    const known = Object.prototype.hasOwnProperty.call(BASIS_LABELS, key) ? BASIS_LABELS[key] : null;
+    const shown = known ? known.format(value) : null;
+    if (known && shown !== null) rows.push({ label: known.label, value: shown });
+    else hidden++;
+  }
+  return { rows, hidden };
+}
+export function LedgerBasis({ basis }: { basis: Record<string, unknown> | null | undefined }) {
+  const { rows, hidden } = ledgerBasisRows(basis);
+  return (
+    <>
+      {rows.map((r) => <span key={r.label}>{r.label} : {r.value}</span>)}
+      {hidden > 0 && <span className={styles.hint}>{hidden === 1 ? "1 autre détail non affiché" : `${hidden} autres détails non affichés`}</span>}
+    </>
+  );
+}
+
 type Ctx = { client: PlatformClient; demo?: PlatformDemo; canWrite: boolean; superAdmin: boolean; notify: (m: { kind: "ok" | "error"; text: string } | null) => void; busy: boolean; act: (work: () => Promise<unknown | null>, done: string, after?: () => void) => Promise<void>; scopeKey: string; rendering: boolean };
 
 export function PlatformFinanceView(props: PlatformFinanceViewProps) {
@@ -119,7 +204,7 @@ function Ledger({ ctx }: { ctx: Ctx }) {
       {list.loading && !list.data ? <Loading /> : list.error && !list.data ? <ErrorBox message={list.error} onRetry={list.reload} /> : !list.data?.entries.length ? <EmptyState title="Aucune écriture">Le rapprochement inscrit les paiements confirmés ; les commissions prélevées et remboursements n’apparaissent qu’après confirmation du fournisseur.</EmptyState> : (
         <div className={styles.tableWrap}><table className={styles.table}><caption className={styles.srOnly}>Écritures du ledger</caption>
           <thead><tr><th>Date</th><th>Nature</th><th>Paiement</th><th className={styles.num}>Montant</th><th>Base</th></tr></thead>
-          <tbody>{list.data.entries.map((e) => <tr key={e.id}><td>{dateTime(e.created_at)}</td><td>{KIND_LABEL[e.entry_kind]}</td><td className={styles.mono}>{shortId(e.payment_id)}{e.external_event_id && <div>{e.external_event_id}</div>}</td><td className={styles.num}>{e.direction === "debit" ? "−" : "+"}{money(e.amount_cents, e.currency)}</td><td className={styles.details}>{Object.entries(e.basis).map(([k, v]) => <span key={k}>{k} : {String(v)}</span>)}</td></tr>)}</tbody></table></div>
+          <tbody>{list.data.entries.map((e) => <tr key={e.id}><td>{dateTime(e.created_at)}</td><td>{KIND_LABEL[e.entry_kind]}</td><td className={styles.mono}>{shortId(e.payment_id)}</td><td className={styles.num}>{e.direction === "debit" ? "−" : "+"}{money(e.amount_cents, e.currency)}</td><td className={styles.details}><LedgerBasis basis={e.basis} /></td></tr>)}</tbody></table></div>
       )}
       {list.data && list.pager(list.data.page)}
     </Panel>
@@ -176,15 +261,40 @@ function Invoices({ ctx }: { ctx: Ctx }) {
     </>
   );
 }
+const BASIS_LABEL = { service: "Prestation (émetteur : artisan)", platform_commission: "Commission (émetteur : plateforme)" } as const;
+export function issueSummary(basis: keyof typeof BASIS_LABEL, paymentId: string, a: PreviewAmounts): string[] {
+  return [`Base : ${BASIS_LABEL[basis]}`, `Paiement : ${paymentId}`, `TTC ${money(a.total_cents)} · TVA ${money(a.tax_cents)} · HT ${money(a.subtotal_cents)}`];
+}
+/** Readiness outcome: missing reasons (translated), or amounts from the server, or a blocking
+ *  « amounts unavailable » — never a substituted 0 and then no « Émettre ». */
+export function ReadinessResult({ readiness, paymentId, busy, onIssue, onRecheck }: { readiness: InvoiceReadiness; paymentId: string; busy: boolean; onIssue: (a: PreviewAmounts) => void; onRecheck: () => void }) {
+  if (!readiness.ready) return <div className={styles.danger} role="alert"><strong>Émission impossible</strong><ul>{readiness.missing.map((m) => <li key={m}>{MISSING_LABEL[m] ?? MISSING_FALLBACK}</li>)}</ul></div>;
+  const amounts = previewAmounts(readiness.preview);
+  if (!amounts)
+    return (
+      <div className={styles.danger} role="alert" data-finance-preview-missing="">
+        <strong>{PREVIEW_UNAVAILABLE}</strong>
+        <div className={styles.actions}><button type="button" className={styles.button} disabled={busy} onClick={onRecheck}>Vérifier les conditions</button></div>
+      </div>
+    );
+  return (
+    <div className={styles.card}>
+      <strong>Conditions réunies pour le paiement <span className={styles.mono}>{shortId(paymentId)}</span></strong>
+      <dl className={styles.kv}><dt>TTC</dt><dd>{money(amounts.total_cents)}</dd><dt>TVA</dt><dd>{money(amounts.tax_cents)}</dd><dt>HT</dt><dd>{money(amounts.subtotal_cents)}</dd></dl>
+      <div className={styles.actions}><button type="button" className={`${styles.button} ${styles.primary}`} disabled={busy} onClick={() => onIssue(amounts)}>Émettre</button></div>
+    </div>
+  );
+}
 function IssueForm({ ctx, onIssued }: { ctx: Ctx; onIssued: () => void }) {
   const [basis, setBasis] = useState<"service" | "platform_commission">("service"); const [paymentId, setPaymentId] = useState(""); const [error, setError] = useState(""); const [requestId, setRequestId] = useState(newRequestId);
   // Readiness is bound to the exact target it was requested for (payment, basis, scope); a late result for another target is discarded.
   const [model, setModel] = useState(EMPTY_READINESS);
+  const [confirm, setConfirm] = useState<Confirmation<{ request_id: string; basis: typeof basis; payment_id: string }>>(null);
   const target = (): ReadinessTarget => ({ payment_id: paymentId.trim().toLowerCase(), basis, scope_key: ctx.scopeKey });
-  const onInput = (next: { basis?: typeof basis; paymentId?: string }) => { const b = next.basis ?? basis, p = next.paymentId ?? paymentId; if (next.basis) setBasis(next.basis); if (next.paymentId !== undefined) setPaymentId(next.paymentId); setModel((m) => readinessReduce(m, { type: "input", target: { payment_id: p.trim().toLowerCase(), basis: b, scope_key: ctx.scopeKey } })); };
+  const onInput = (next: { basis?: typeof basis; paymentId?: string }) => { setConfirm(null); const b = next.basis ?? basis, p = next.paymentId ?? paymentId; if (next.basis) setBasis(next.basis); if (next.paymentId !== undefined) setPaymentId(next.paymentId); setModel((m) => readinessReduce(m, { type: "input", target: { payment_id: p.trim().toLowerCase(), basis: b, scope_key: ctx.scopeKey } })); };
   const check = () => {
     if (!UUID_RE.test(paymentId.trim())) { setError("Identifiant de paiement invalide."); return; }
-    setError(""); const t = target(), fingerprint = readinessFingerprint(t);
+    setError(""); setConfirm(null); const t = target(), fingerprint = readinessFingerprint(t);
     setModel((m) => readinessReduce(m, { type: "check", target: t }));
     void ctx.act(async () => {
       try { const r: InvoiceReadiness | null = await ctx.client.command.invoiceReadiness({ basis: t.basis, payment_id: t.payment_id }); if (r) setModel((m) => readinessReduce(m, { type: "result", fingerprint, readiness: r })); else setModel((m) => readinessReduce(m, { type: "fail", fingerprint })); return r; }
@@ -199,23 +309,53 @@ function IssueForm({ ctx, onIssued }: { ctx: Ctx; onIssued: () => void }) {
         <Field label="Identifiant du paiement" error={error}><input value={paymentId} disabled={ctx.busy} onChange={(e) => onInput({ paymentId: e.target.value })} autoComplete="off" aria-invalid={Boolean(error)} /></Field>
         <div className={`${styles.actions} ${styles.full}`}><button type="submit" className={styles.button} disabled={ctx.busy}>{model.pending ? "Vérification…" : "Vérifier les conditions"}</button></div>
       </form>
-      {readiness && bound && !stale && (readiness.ready
-        ? <div className={styles.card}><strong>Conditions réunies pour le paiement <span className={styles.mono}>{shortId(bound.payment_id)}</span></strong><dl className={styles.kv}><dt>TTC</dt><dd>{money(readiness.preview.total_cents ?? 0)}</dd><dt>TVA</dt><dd>{money(readiness.preview.tax_cents ?? 0)}</dd><dt>HT</dt><dd>{money(readiness.preview.subtotal_cents ?? 0)}</dd></dl>
-          <div className={styles.actions}><button type="button" className={`${styles.button} ${styles.primary}`} disabled={ctx.busy} onClick={() => ctx.act(() => ctx.client.command.issueInvoice({ request_id: requestId, basis: bound.basis, payment_id: bound.payment_id }), "Facture émise et auditée.", () => { setModel(EMPTY_READINESS); setRequestId(newRequestId()); onIssued(); })}>Émettre</button></div></div>
-        : <div className={styles.danger} role="alert"><strong>Émission impossible</strong><ul>{readiness.missing.map((m) => <li key={m}>{MISSING_LABEL[m] ?? MISSING_FALLBACK}</li>)}</ul></div>)}
+      {readiness && bound && !stale && !confirm && (
+        <ReadinessResult
+          readiness={readiness}
+          paymentId={bound.payment_id}
+          busy={ctx.busy}
+          onRecheck={check}
+          onIssue={(amounts) => setConfirm(openConfirmation({ request_id: requestId, basis: bound.basis, payment_id: bound.payment_id }, issueSummary(bound.basis, bound.payment_id, amounts)))}
+        />
+      )}
+      {confirm && (
+        <ConfirmBox
+          title="Confirmer l’émission de la facture"
+          summary={confirm.summary}
+          confirmLabel="Confirmer l’émission"
+          busy={ctx.busy}
+          onCancel={() => setConfirm(null)}
+          onConfirm={() => ctx.act(() => ctx.client.command.issueInvoice({ ...confirm.payload }), "Facture émise et auditée.", () => { setConfirm(null); setModel(EMPTY_READINESS); setRequestId(newRequestId()); onIssued(); })}
+        />
+      )}
     </Panel>
   );
 }
 function CreditNoteForm({ ctx, onIssued }: { ctx: Ctx; onIssued: () => void }) {
-  const [invoiceId, setInvoiceId] = useState(""); const [amount, setAmount] = useState(""); const [reason, setReason] = useState(""); const [errors, setErrors] = useState<Record<string, string>>({}); const [requestId, setRequestId] = useState(newRequestId);
+  const [invoiceId, setInvoiceIdRaw] = useState(""); const [amount, setAmountRaw] = useState(""); const [reason, setReasonRaw] = useState(""); const [errors, setErrors] = useState<Record<string, string>>({}); const [requestId, setRequestId] = useState(newRequestId);
+  const [confirm, setConfirm] = useState<Confirmation<{ request_id: string; invoice_id: string; amount_cents: number; reason: string }>>(null);
+  // Any field change cancels an open confirmation (its payload was frozen when it opened).
+  const setInvoiceId = (v: string) => { setConfirm(null); setInvoiceIdRaw(v); };
+  const setAmount = (v: string) => { setConfirm(null); setAmountRaw(v); };
+  const setReason = (v: string) => { setConfirm(null); setReasonRaw(v); };
   return (
     <Panel title="Émettre un avoir" intro="Plafonné au solde restant de la facture ; TVA au prorata.">
-      <form className={styles.form} noValidate onSubmit={(e) => { e.preventDefault(); const next: Record<string, string> = {}; if (!UUID_RE.test(invoiceId.trim())) next.invoice = "Identifiant de facture invalide."; const cents = validateAmountCents(amount, 10000000); if ("error" in cents) next.amount = cents.error; const r = validateText(reason, 10, 1000, "Motif"); if (r) next.reason = r; setErrors(next); if (Object.keys(next).length || "error" in cents) return; void ctx.act(() => ctx.client.command.issueCreditNote({ request_id: requestId, invoice_id: invoiceId.trim().toLowerCase(), amount_cents: cents.cents, reason: reason.trim() }), "Avoir émis et audité.", () => { setAmount(""); setReason(""); setRequestId(newRequestId()); onIssued(); }); }}>
+      <form className={styles.form} noValidate onSubmit={(e) => { e.preventDefault(); const next: Record<string, string> = {}; if (!UUID_RE.test(invoiceId.trim())) next.invoice = "Identifiant de facture invalide."; const cents = validateAmountCents(amount, 10000000); if ("error" in cents) next.amount = cents.error; const r = validateText(reason, 10, 1000, "Motif"); if (r) next.reason = r; setErrors(next); if (Object.keys(next).length || "error" in cents) return; const invoice_id = invoiceId.trim().toLowerCase(); setConfirm(openConfirmation({ request_id: requestId, invoice_id, amount_cents: cents.cents, reason: reason.trim() }, [`Facture : ${invoice_id}`, `Montant TTC de l’avoir : ${money(cents.cents)}`, `Motif : ${reason.trim()}`])); }}>
         <Field label="Identifiant de la facture" error={errors.invoice}><input value={invoiceId} onChange={(e) => setInvoiceId(e.target.value)} autoComplete="off" /></Field>
         <Field label="Montant TTC (€)" error={errors.amount}><input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" /></Field>
         <Field label="Motif" error={errors.reason} full><textarea value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} /></Field>
-        <div className={`${styles.actions} ${styles.full}`}><button type="submit" className={`${styles.button} ${styles.primary}`} disabled={ctx.busy}>Émettre l’avoir</button></div>
+        <div className={`${styles.actions} ${styles.full}`}><button type="submit" className={`${styles.button} ${styles.primary}`} disabled={ctx.busy || Boolean(confirm)}>Émettre l’avoir</button></div>
       </form>
+      {confirm && (
+        <ConfirmBox
+          title="Confirmer l’émission de l’avoir"
+          summary={confirm.summary}
+          confirmLabel="Confirmer l’avoir"
+          busy={ctx.busy}
+          onCancel={() => setConfirm(null)}
+          onConfirm={() => ctx.act(() => ctx.client.command.issueCreditNote({ ...confirm.payload }), "Avoir émis et audité.", () => { setConfirm(null); setAmountRaw(""); setReasonRaw(""); setRequestId(newRequestId()); onIssued(); })}
+        />
+      )}
     </Panel>
   );
 }
@@ -330,19 +470,31 @@ function DisputeForm({ ctx, onCreated }: { ctx: Ctx; onCreated: () => void }) {
 // ---- Settings (super admin) ----------------------------------------------------------------
 function Settings({ ctx, onSaved }: { ctx: Ctx; onSaved: () => void }) {
   const settings = useLoad(() => (ctx.demo ? Promise.resolve({ invoice_issuer: null, commission_bps: null }) : ctx.client.load.settings()), [ctx.demo]);
-  const [bps, setBps] = useState(""); const [issuer, setIssuer] = useState({ legal_name: "", siret: "", address: "", vat_number: "", commission_vat_rate: "" }); const [errors, setErrors] = useState<Record<string, string>>({}); const [seeded, setSeeded] = useState(false);
+  const [bps, setBpsRaw] = useState(""); const [issuer, setIssuer] = useState({ legal_name: "", siret: "", address: "", vat_number: "", commission_vat_rate: "" }); const [errors, setErrors] = useState<Record<string, string>>({}); const [seeded, setSeeded] = useState(false);
+  const [rateConfirm, setRateConfirm] = useState<Confirmation<{ key: "commission_bps"; value: { bps: number }; expected_version: number | null }>>(null);
   if (settings.loading && !settings.data) return <Loading />;
   if (settings.error && !settings.data) return <ErrorBox message={settings.error} onRetry={settings.reload} />;
   const data = settings.data;
-  if (data && !seeded) { setSeeded(true); if (data.commission_bps) setBps(String(data.commission_bps.value.bps)); if (data.invoice_issuer) { const v = data.invoice_issuer.value; setIssuer({ legal_name: v.legal_name, siret: v.siret, address: v.address, vat_number: v.vat_number ?? "", commission_vat_rate: v.commission_vat_rate === null ? "" : String(v.commission_vat_rate) }); } }
+  const setBps = (v: string) => { setRateConfirm(null); setBpsRaw(v); };
+  if (data && !seeded) { setSeeded(true); if (data.commission_bps) setBpsRaw(String(data.commission_bps.value.bps)); if (data.invoice_issuer) { const v = data.invoice_issuer.value; setIssuer({ legal_name: v.legal_name, siret: v.siret, address: v.address, vat_number: v.vat_number ?? "", commission_vat_rate: v.commission_vat_rate === null ? "" : String(v.commission_vat_rate) }); } }
   if (!ctx.superAdmin) return <ReadOnly reason="les paramètres sont réservés aux super administrateurs." />;
   return (
     <>
       <Panel title="Taux de commission (points de base)" intro="Valeur serveur de confiance utilisée pour les estimations ; chaque écriture conserve le taux et la version appliqués. Aucun taux par défaut.">
-        <form className={styles.form} noValidate onSubmit={(e) => { e.preventDefault(); if (!/^\d{1,5}$/.test(bps) || Number(bps) > 10000) { setErrors({ bps: "Entier entre 0 et 10000 (100 = 1 %)." }); return; } setErrors({}); void ctx.act(() => ctx.client.command.setSetting({ key: "commission_bps", value: { bps: Number(bps) }, expected_version: data?.commission_bps?.version ?? null }), "Taux enregistré et audité.", () => { settings.reload(); onSaved(); }); }}>
+        <form className={styles.form} noValidate onSubmit={(e) => { e.preventDefault(); if (!/^\d{1,5}$/.test(bps) || Number(bps) > 10000) { setErrors({ bps: "Entier entre 0 et 10000 (100 = 1 %)." }); return; } setErrors({}); const value = Number(bps); setRateConfirm(openConfirmation({ key: "commission_bps" as const, value: { bps: value }, expected_version: data?.commission_bps?.version ?? null }, [`Nouveau taux de commission : ${(value / 100).toFixed(2)} % (${value} points de base)`, data?.commission_bps ? `Taux actuel : ${(data.commission_bps.value.bps / 100).toFixed(2)} % (version ${data.commission_bps.version})` : "Taux actuel : non configuré"])); }}>
           <Field label="Points de base" hint={data?.commission_bps ? `Version actuelle ${data.commission_bps.version}.` : "Non configuré."} error={errors.bps}><input value={bps} onChange={(e) => setBps(e.target.value)} inputMode="numeric" /></Field>
-          <div className={`${styles.actions} ${styles.full}`}><button type="submit" className={`${styles.button} ${styles.primary}`} disabled={ctx.busy}>Enregistrer</button></div>
+          <div className={`${styles.actions} ${styles.full}`}><button type="submit" className={`${styles.button} ${styles.primary}`} disabled={ctx.busy || Boolean(rateConfirm)}>Enregistrer</button></div>
         </form>
+        {rateConfirm && (
+          <ConfirmBox
+            title="Confirmer le taux de commission"
+            summary={rateConfirm.summary}
+            confirmLabel="Confirmer le taux"
+            busy={ctx.busy}
+            onCancel={() => setRateConfirm(null)}
+            onConfirm={() => ctx.act(() => ctx.client.command.setSetting({ ...rateConfirm.payload, value: { ...rateConfirm.payload.value } }), "Taux enregistré et audité.", () => { setRateConfirm(null); settings.reload(); onSaved(); })}
+          />
+        )}
       </Panel>
       <Panel title="Émetteur plateforme (factures de commission)" intro="Données légales saisies sous la responsabilité du super administrateur ; rien n’est pré-rempli.">
         <form className={styles.form} noValidate onSubmit={(e) => { e.preventDefault(); const next: Record<string, string> = {}; const n = validateText(issuer.legal_name, 1, 160, "Raison sociale"); if (n) next.legal_name = n; if (!/^[0-9]{14}$/.test(issuer.siret)) next.siret = "14 chiffres attendus."; const a = validateText(issuer.address, 5, 500, "Adresse"); if (a) next.address = a; if (issuer.vat_number && !/^[A-Z]{2}[0-9A-Z]{2,13}$/.test(issuer.vat_number)) next.vat_number = "Numéro de TVA invalide."; if (issuer.commission_vat_rate && !["0", "5.5", "10", "20"].includes(issuer.commission_vat_rate)) next.commission_vat_rate = "Taux non pris en charge."; setErrors(next); if (Object.keys(next).length) return; void ctx.act(() => ctx.client.command.setSetting({ key: "invoice_issuer", value: { legal_name: issuer.legal_name.trim(), siret: issuer.siret, address: issuer.address.trim(), vat_number: issuer.vat_number || null, commission_vat_rate: issuer.commission_vat_rate === "" ? null : (Number(issuer.commission_vat_rate) as 0 | 5.5 | 10 | 20) }, expected_version: data?.invoice_issuer?.version ?? null }), "Émetteur enregistré et audité.", () => { settings.reload(); onSaved(); }); }}>
