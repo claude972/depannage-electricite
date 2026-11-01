@@ -57,6 +57,7 @@ export type Quote = {
   accepted_at?: string | null;
 };
 export type Payment = {
+  method?: "stripe" | "on_site_declared";
   id: string;
   quote_id: string;
   total_cents: number;
@@ -398,6 +399,7 @@ export type InvitationCreated = {
   delivery: "manual_share";
 };
 export type PaymentAttempt = {
+  method?: "stripe" | "on_site_declared";
   id?: string;
   quote_id?: string;
   status: "pending" | "paid" | "failed" | "expired" | string;

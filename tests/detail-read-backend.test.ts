@@ -142,3 +142,19 @@ test("stored SQL-valid quote lines project known fields and normalize exact boun
     }
   }
 });
+
+
+test("detail and workspace preserve payment provenance without exposing provider references", async () => {
+  for (const mode of ["detail", "workspace"] as const) {
+    const q = quote(1);
+    const cash = { ...payment(q.id as string), method: "on_site_declared" };
+    const h = routeHarness(mode, { rows: { quotes: [q], payments: [cash] } });
+    const response = await h.get();
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    const rows = mode === "detail" ? body.payments.items : body.payments;
+    assert.equal(rows[0].method, "on_site_declared");
+    assert.equal(JSON.stringify(body).includes("server-only-never-return"), false);
+    if (mode === "detail") assert.equal(detailReadSchema.safeParse(body).success, true);
+  }
+});

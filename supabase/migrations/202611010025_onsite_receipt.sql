@@ -100,4 +100,14 @@ create trigger onsite_receipt_immutable before update on public.on_site_receipts
 create trigger onsite_receipt_job_guard before update on public.interventions for each row execute function public.guard_onsite_receipt_work();
 create trigger onsite_receipt_quote_guard before insert or update or delete on public.quotes for each row execute function public.guard_onsite_receipt_work();
 create trigger onsite_receipt_amendment_guard before insert or update or delete on public.quote_amendments for each row execute function public.guard_onsite_receipt_work();
+
+-- A booking already chose its settlement method. Never start a legacy Checkout
+-- alongside its card hold or an on-site receipt declaration.
+create or replace function public.guard_phone_booking_checkout(p_quote_id uuid) returns void language plpgsql security definer set search_path='' as $$
+declare job uuid;
+begin
+ select i.id into job from public.quotes q join public.interventions i on i.id=q.intervention_id where q.id=p_quote_id and i.client_id=auth.uid();
+ if not found then raise insufficient_privilege; end if;
+ if exists(select 1 from public.phone_booking_requests where intervention_id=job) then raise exception 'Booking requires its dedicated settlement method' using errcode='P0001'; end if;
+end; $$;
 commit;
