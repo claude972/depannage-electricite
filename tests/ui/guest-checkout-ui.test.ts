@@ -325,6 +325,7 @@ function historyHarness(replies: Phone.ApiResult[]) {
   let expired = 0;
   const api: Phone.HistoryApi = async (p) => (calls.push(p), replies.shift()!);
   const ctrl = phone.createHistoryController({ api: () => api, get: () => current, set: (s) => (current = s), onExpired: () => expired++ });
+  ctrl.identity("INITIAL_SESSION", "user-a"); // identity PROVEN before any read
   return { ctrl, get: () => current, calls, expired: () => expired };
 }
 
@@ -366,30 +367,81 @@ test("historique : vide, 401 ⇒ « vérification expirée » + retour au télé
   same([late.get().status, late.get().error], ["error", phone.PHONE_COPY.timeout]);
 });
 
-test("historique : changement d’identité ⇒ liste vidée aussitôt ; réponse de l’ancienne identité ignorée", async () => {
-  const d = deferred<Phone.ApiResult>();
+// Harness with a manual reply per call (deferred) and full control over auth events.
+function identityHarness() {
   let current = { ...phone.HISTORY_INITIAL };
   let expired = 0;
-  const replies = [Promise.resolve(ok({ interventions: [row(ID(1))], page: { limit: 20, has_more: false, next_cursor: null } })), d.promise];
-  const ctrl = phone.createHistoryController({ api: () => () => replies.shift()!, get: () => current, set: (s) => (current = s), onExpired: () => expired++ });
-  ctrl.identity("user-a");
-  await ctrl.load();
-  assert.equal(current.items.length, 1);
-  const revalidating = ctrl.revalidate(); // focus : relecture en vol
-  ctrl.identity(null); // SIGNED_OUT
-  same([current.status, current.items, expired], ["expired", [], 1]);
-  d.resolve(ok({ interventions: [row(ID(9))], page: { limit: 20, has_more: false, next_cursor: null } }));
-  await revalidating;
-  same(current.items, []); // jamais la liste de l’ancienne identité
-  // Autre UID après une identité connue ⇒ vidée aussi ; un premier « null » seul n’infère rien.
-  let c2 = { ...phone.HISTORY_INITIAL, status: "ready" as const, items: [] };
-  let e2 = 0;
-  const ctrl2 = phone.createHistoryController({ api: () => async () => ok(null, 500), get: () => c2, set: (s) => (c2 = s as typeof c2), onExpired: () => e2++ });
-  ctrl2.identity(null);
-  assert.equal(e2, 0);
-  ctrl2.identity("user-a");
-  ctrl2.identity("user-b");
-  assert.equal(e2, 1);
+  const pending: { resolve: (r: Phone.ApiResult) => void }[] = [];
+  const api: Phone.HistoryApi = () => new Promise((resolve) => pending.push({ resolve }));
+  const ctrl = phone.createHistoryController({ api: () => api, get: () => current, set: (s) => (current = s), onExpired: () => expired++ });
+  const page = (id: string) => ok({ interventions: [row(id)], page: { limit: 20, has_more: false, next_cursor: null } });
+  return { ctrl, get: () => current, expired: () => expired, pending, page };
+}
+
+test("vie privée (repro Codex 1) : lecture de A en vol → SIGNED_OUT → SIGNED_IN B → A répond ⇒ rien sous B, « expirée »", async () => {
+  const h = identityHarness();
+  h.ctrl.identity("INITIAL_SESSION", "user-a");
+  const a = h.ctrl.load();
+  assert.equal(h.pending.length, 1);
+  h.ctrl.identity("SIGNED_OUT", null);
+  h.ctrl.identity("SIGNED_IN", "user-b");
+  h.pending[0].resolve(h.page(ID(1)));
+  await a;
+  same([h.get().status, h.get().items, h.expired()], ["expired", [], 1]);
+});
+
+test("vie privée (repro Codex 2) : identité inconnue/nulle d’abord ⇒ aucune lecture ; une réponse ne remplit jamais la liste", async () => {
+  const h = identityHarness();
+  const first = h.ctrl.load(); // identité inconnue : différé, AUCUNE requête
+  await first;
+  same([h.pending.length, h.get().status, h.get().items], [0, "loading", []]);
+  h.ctrl.identity("INITIAL_SESSION", null); // pas de session : jamais autorisé
+  same([h.pending.length, h.get().status, h.get().items, h.expired()], [0, "expired", [], 1]);
+  // Même si l’identité arrive ensuite, la vue terminée ne lit plus rien.
+  h.ctrl.identity("SIGNED_IN", "user-a");
+  await h.ctrl.load();
+  same(h.pending.length, 0);
+  // Une lecture différée part UNIQUEMENT quand l’uid est prouvé, liée à cet uid.
+  const g = identityHarness();
+  await g.ctrl.load();
+  assert.equal(g.pending.length, 0);
+  g.ctrl.identity("INITIAL_SESSION", "user-a");
+  assert.equal(g.pending.length, 1);
+  g.pending[0].resolve(g.page(ID(1)));
+  await new Promise((r) => setTimeout(r, 0));
+  same(g.get().items.map((i) => i.id), [ID(1)]);
+});
+
+test("vie privée : SIGNED_OUT avec uid précédent inconnu ⇒ vidé ; autre uid ⇒ vidé ; réponse tardive ignorée", async () => {
+  const h = identityHarness();
+  void h.ctrl.load();
+  h.ctrl.identity("SIGNED_OUT", null);
+  same([h.get().status, h.expired(), h.pending.length], ["expired", 1, 0]);
+  const k = identityHarness();
+  k.ctrl.identity("INITIAL_SESSION", "user-a");
+  const pa = k.ctrl.load();
+  k.ctrl.identity("TOKEN_REFRESHED", "user-b"); // autre compte
+  k.pending[0].resolve(k.page(ID(1)));
+  await pa;
+  same([k.get().status, k.get().items, k.expired()], ["expired", [], 1]);
+  // Indisponibilité du client d’authentification : rien n’est lu, message honnête.
+  const u = identityHarness();
+  u.ctrl.identity("UNAVAILABLE", null);
+  await u.ctrl.load();
+  same([u.get().status, u.pending.length], ["unavailable", 0]);
+});
+
+test("vie privée : revalidation au focus sous le MÊME uid ⇒ liste remplacée ; aucun cache privé", async () => {
+  const h = identityHarness();
+  h.ctrl.identity("INITIAL_SESSION", "user-a");
+  const first = h.ctrl.load();
+  h.pending[0].resolve(h.page(ID(1)));
+  await first;
+  const again = h.ctrl.revalidate();
+  h.ctrl.identity("TOKEN_REFRESHED", "user-a"); // même uid : rien n’est invalidé
+  h.pending[1].resolve(h.page(ID(2)));
+  await again;
+  same([h.get().status, h.get().items.map((i) => i.id), h.expired()], ["ready", [ID(2)], 0]);
   const src = readFileSync(path.join(ROOT, "components/role/phone-access.tsx"), "utf8");
   assert.doesNotMatch(src, /localStorage\.|sessionStorage\.|setItem\(/); // aucun cache privé
 });
