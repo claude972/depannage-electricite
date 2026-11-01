@@ -106,8 +106,6 @@ export function finishBooking({ storage, service, state, onSaved = () => {}, now
   state: BookingState;
   /** Called once both entries are proven (the wizard then opens the phone check). */
   onSaved?: () => void;
-  /** Legacy (before the phone step): ignored, finishBooking no longer navigates. */
-  go?: (href: string) => void;
   now?: number;
 }): { ok: true } | { ok: false; message: string } {
   if (!storage) return { ok: false, message: SAVE_FAILED_MESSAGE };

@@ -162,7 +162,7 @@ test("fin : les deux brouillons sont écrits, description sans nom/email/télép
   same([stored!.booking.slug, stored!.booking.urgent, stored!.booking.slot], [service.slug, false, "day_after"]);
   // Urgent : pas de créneau, urgence « urgent ».
   const s2 = new MemoryStorage();
-  booking.finishBooking({ storage: s2 as unknown as Storage, service, state: filled({ step: 4, urgent: true, slot: "tomorrow" }), go: () => {} });
+  booking.finishBooking({ storage: s2 as unknown as Storage, service, state: filled({ step: 4, urgent: true, slot: "tomorrow" }) });
   assert.equal(readPublicDraft(s2.getItem(PUBLIC_DRAFT_KEY))!.values.urgency, "urgent");
   assert.equal(readBooking(s2.getItem(BOOKING_DRAFT_KEY))!.booking.slot, null);
 });

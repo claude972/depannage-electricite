@@ -69,10 +69,10 @@ test("ensureRequestId: legacy booking gets ONE key, stored, then reused on retry
 
 test("finishBooking: generates a UUID once; going back and finishing again keeps the SAME key", () => {
   const s = new Mem();
-  assert.equal(booking.finishBooking({ storage: s as unknown as Storage, service, state: { ...state, step: 4 } as never, go: () => {} }).ok, true);
+  assert.equal(booking.finishBooking({ storage: s as unknown as Storage, service, state: { ...state, step: 5, payment: "on_site" } as never, onSaved: () => {} }).ok, true);
   const first = readBooking(s.getItem(BOOKING_DRAFT_KEY))!.booking.request_id!;
   assert.match(first, REQUEST_ID);
-  assert.equal(booking.finishBooking({ storage: s as unknown as Storage, service, state: { ...state, step: 4, notes: "Ajout" } as never, go: () => {} }).ok, true);
+  assert.equal(booking.finishBooking({ storage: s as unknown as Storage, service, state: { ...state, step: 5, payment: "on_site", notes: "Ajout" } as never, onSaved: () => {} }).ok, true);
   assert.equal(readBooking(s.getItem(BOOKING_DRAFT_KEY))!.booking.request_id, first, "same request, same key");
 });
 
