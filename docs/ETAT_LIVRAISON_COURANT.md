@@ -10,6 +10,14 @@ SourceClaude c9d9f12 revue23testsciblésPASS + vraisformulaireslocaux ;rootinté
 ## Code intégré après cette preview
 Intégrationa8d033939300d2d4e77f9a4ee51a9ddd2a58ae6dPOUSSÉE/tscPASS/CI41258626503SUCCESS ajoutebackenddetailCodexa44ca07. P2Claudequotesextras/stringnumericcorrigé,contre-revue14routes+21casPASS. CeGETid/workspacelimits n’estPASdanspreview070etlefrontcap100n’estPASlivré.
 
+## Ajouts demandés au parcours client — prénom et adresse
+
+- Prénom cohérent aux endroits manquants : accueil/en-têtes mobile et ordinateur, profil et reprise ; source profil réel, aucun nom de démonstration en mode connecté.
+- Adresse : bouton « Utiliser ma position » avec permission explicite, suggestions de proximité à confirmer ; saisie manuelle conservée en cas de refus/échec.
+- Saisie assistée : suggestions après saisie, choix qui préremplit adresse/code postal/ville, correction manuelle et brouillon préservés.
+- Mission FASTSPLIT-CLIENT-ADDRESS-NAME-001 : lead Claude responsable du parcours/UI, Codex backend. Recherche+inverse IGN codés3cbb345 et intégrésf8fd66b014a7135708d4f338a6f58818d67bfc50/tscPASS ;recherche et inverse via le module intégré ont réellement répondu200 sur des coordonnées de test publiques en Martinique. Ce sont des contrôles du fournisseur via code local, pas encore une livraison du champ sur la preview.
+- UI AddressField et raccordement/prénom en cours chez Claude ; aucune nouvelle adresse ou position utilisateur collectée par ces contrôles. Pas encore annoncé utilisable dans la version publique070.
+
 ## En cours
 - LeadClaude :consumerpointread/cache/contexte + raccordementclient/artisan/entreprise,codeobservéenpréparationuse-detail-presence/détailreadonly.
 - WorkerUIexistant :styleclientSCOPÉCSS,leadseulclient-space/wrapperthème pouréviterconflitconsumer. MissionFASTSPLIT-CLIENT-THEME-001.
