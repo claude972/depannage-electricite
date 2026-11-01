@@ -12,7 +12,7 @@ const started = { error: null, data: { user: null, session: null } };
 const startBody = { phone: "0696 12 34 56", first_name: "QA", last_name: "Essai", purpose: "booking" };
 const verifyBody = { phone: PHONE, token: "123456", kind: "sms" };
 type Operation = "start" | "verify" | "session" | "upgrade" | "history";
-function fixture(op: Operation, options: { users?: unknown[]; profileRole?: string; profileId?: string; profileError?: boolean; cookie?: boolean; otp?: unknown; verify?: unknown; update?: unknown; transport?: boolean; historyRows?: unknown; historyError?: boolean } = {}) {
+function fixture(op: Operation, options: { users?: unknown[]; profileRole?: string; profileId?: string; profileError?: boolean; cookie?: boolean; otp?: unknown; verify?: unknown; update?: unknown; transport?: boolean; historyRows?: unknown; historyError?: boolean; historyCount?: unknown; historyCap?: number } = {}) {
   let sdkOptions: any, index = 0, created = 0;
   const calls: { op: string; value?: any; extra?: any }[] = [], written: unknown[] = [];
   const nextUser = () => (options.users ?? [anonymous])[Math.min(index++, (options.users ?? [anonymous]).length - 1)];
@@ -25,15 +25,15 @@ function fixture(op: Operation, options: { users?: unknown[]; profileRole?: stri
   }, from: (table: string) => {
     if (table === "interventions") {
       const state: any = { table, orders: [] };
-      const query: any = { select: (columns: string) => { state.columns = columns; return query; }, eq: (key: string, value: string) => { state.eq = { key, value }; return query; }, or: (value: string) => { state.or = value; return query; }, order: (key: string, value: unknown) => { state.orders.push({ key, value }); return query; }, limit: async (n: number) => {
+      const query: any = { select: (columns: string, settings: unknown) => { state.columns = columns; state.settings = settings; return query; }, eq: (key: string, value: string) => { state.eq = { key, value }; return query; }, or: (value: string) => { state.or = value; return query; }, order: (key: string, value: unknown) => { state.orders.push({ key, value }); return query; }, limit: async (n: number) => {
         state.limit = n; calls.push({ op: "history", value: state });
-        let rows: any = options.historyRows ?? [];
+        let rows: any = options.historyRows ?? []; let exactCount: number | null = null;
         if (Array.isArray(rows)) {
           rows = [...rows].sort((a, b) => a.created_at === b.created_at ? (a.id < b.id ? 1 : -1) : a.created_at < b.created_at ? 1 : -1);
           if (state.or) { const m = /created_at.lt."([^"]+)",and\(created_at.eq."[^"]+",id.lt.([a-f0-9-]+)\)/.exec(state.or)!; rows = rows.filter((r: any) => r.created_at < m[1] || (r.created_at === m[1] && r.id < m[2])); }
-          rows = rows.slice(0, n);
+          exactCount = rows.length; rows = rows.slice(0, Math.min(n, options.historyCap ?? n));
         }
-        return { data: rows, error: options.historyError ? { code: "unavailable" } : null };
+        return { data: rows, count: Object.hasOwn(options, "historyCount") ? options.historyCount : exactCount, error: options.historyError ? { code: "unavailable" } : null };
       } }; return query;
     }
     return { select: (columns: string) => ({ eq: (_key: string, id: string) => ({ maybeSingle: async () => { calls.push({ op: "profile", value: { table, columns, id } }); return { error: options.profileError ? { code: "broken" } : null, data: { id: options.profileId ?? id, role: options.profileRole ?? "client" } }; } }) }) };
@@ -210,5 +210,20 @@ test("actual Supabase SSR with LOCAL fake fetch: verified pending cookies feed g
     const response = await (mod.POST as (r: Request) => Promise<Response>)(new Request(ORIGIN + "/api/auth/phone/verify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(verifyBody) }));
     await result(response, role === "client" ? 200 : 409); assert.ok(freshTokenSeen); assert.ok(originalCookieReads > 0);
     assert.equal(writes.length > 0, role === "client"); assert.deepEqual(wire.map(x => x.path), ["/auth/v1/verify", "/auth/v1/user", "/rest/v1/profiles"]);
+  }
+});
+
+test("history same-response exact count refuses silent provider cap and absent/invalid totals", async () => {
+  for (const options of [{ historyRows, historyCap: 5 }, ...[undefined, null, -1, 1.5, 4, NaN].map(historyCount => ({ historyRows: historyRows.slice(0, 5), historyCount }))]) {
+    const f = fixture("history", { users: active(), ...options }); const response = await f.request(); await result(response, 503); assert.equal(response.headers.get("retry-after"), "2");
+    assert.equal(f.calls.filter(c => c.op === "history").length, 1);
+    assert.equal(JSON.stringify(f.calls.find(c => c.op === "history")!.value.settings), JSON.stringify({ count: "exact" }));
+  }
+});
+
+test("history boundaries N=limit and N=limit+1 have an exact terminal/continuing page", async () => {
+  for (const length of [25, 26]) {
+    const f = fixture("history", { users: active(), historyRows: historyRows.slice(0, length) }); const b = await result(await f.request(), 200);
+    assert.equal(b.interventions.length, 25); assert.equal(b.page.has_more, length === 26); assert.equal(typeof b.page.next_cursor === "string", length === 26);
   }
 });
