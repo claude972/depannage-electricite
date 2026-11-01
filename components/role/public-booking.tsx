@@ -403,7 +403,7 @@ export function BookingWizard({
                   <Field label="Nom" error={errors.last_name}>
                     <input autoComplete="family-name" maxLength={60} value={state.contact.last_name} onChange={(e) => setContact({ last_name: e.target.value })} />
                   </Field>
-                  <Field label="Adresse email" error={errors.email}>
+                  <Field label="Adresse email" hint="Facultatif" error={errors.email}>
                     <input type="email" autoComplete="email" inputMode="email" maxLength={254} value={state.contact.email} onChange={(e) => setContact({ email: e.target.value })} />
                   </Field>
                   <Field label="Téléphone" error={errors.phone}>

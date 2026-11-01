@@ -72,3 +72,14 @@ test("guest checkout: payment choice strict (legacy without it accepted), phone 
   assert.equal(normalizePhone("0596 12 34 56"), null, "landline: not an SMS number");
   assert.equal(normalizePhone("12"), null);
 });
+
+test("contact: email OPTIONAL (empty ok), non-empty must be valid ≤ 254; phone via the contract E.164 normalisation", () => {
+  const base = { civility: "" as const, first_name: "Léa", last_name: "Martin", email: "", phone: "0696000000", company: false };
+  assert.deepEqual(contactErrors(base), {}, "no email + 0696000000 passes (guest without account)");
+  assert.deepEqual(contactErrors({ ...base, email: "   " }), {}, "blank email = empty");
+  assert.ok(contactErrors({ ...base, email: "pas-un-email" }).email);
+  assert.ok(contactErrors({ ...base, email: `${"a".repeat(250)}@x.fr` }).email, "> 254");
+  assert.deepEqual(contactErrors({ ...base, email: "lea@example.test" }), {});
+  for (const bad of ["12", "0596 12 34 56", "abc", ""]) assert.ok(contactErrors({ ...base, phone: bad }).phone, bad);
+  for (const good of ["0696 00 00 00", "0697.12.34.56", "06 12 34 56 78", "+44 7700 900123"]) assert.equal(contactErrors({ ...base, phone: good }).phone, undefined, good);
+});

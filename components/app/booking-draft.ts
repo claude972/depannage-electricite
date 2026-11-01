@@ -183,7 +183,10 @@ export function contactErrors(c: BookingContact): Partial<Record<"first_name" | 
   if (!c.first_name.trim()) errors.first_name = "Indiquez votre prénom.";
   if (!c.last_name.trim()) errors.last_name = "Indiquez votre nom.";
   else if (fullName(c).length > FULL_NAME_MAX) errors.last_name = `Prénom et nom : ${FULL_NAME_MAX} caractères au plus.`;
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email.trim())) errors.email = "Indiquez un email valide.";
-  if (!/^\+?[0-9 .()-]{6,30}$/.test(c.phone.trim())) errors.phone = "Indiquez un numéro de téléphone valide.";
+  // Email is OPTIONAL (guest checkout: account optional); when given it must be valid, ≤ 254.
+  const email = c.email.trim();
+  if (email && (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) errors.email = "Indiquez un email valide, ou laissez ce champ vide.";
+  // Same E.164 normalisation as the server contract (0696/0697 → +596, 06/07 → +33, « + » kept).
+  if (!normalizePhone(c.phone)) errors.phone = "Indiquez un numéro de mobile valide (ex. 0696 12 34 56).";
   return errors;
 }
