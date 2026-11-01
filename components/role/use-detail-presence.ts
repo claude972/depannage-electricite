@@ -18,13 +18,21 @@ import type { DetailRead } from "../../lib/features/workspace/detail-read";
 // One bounded memory for the tab; keys carry the context, and a context change clears it.
 const memory = new DetailAttemptMemory(32);
 const cache = new DetailCache(20, 60_000);
-type PointState = { state: "pending" } | { state: "not_found" } | { state: "failed"; status: number; retryAt: number };
+type PointState =
+  | { state: "pending" }
+  | { state: "not_found" }
+  | { state: "failed"; status: number; retryAt: number }
+  /** 401 on the point read: the session handles it; never re-read automatically. */
+  | { state: "signed_out" };
 const points = new Map<string, PointState>();
+/** Ids point-read successfully in this context: revalidated on focus and when the cache expires. */
+const loadedOnce = new Set<string>();
 let pointsContext = "";
 const usePointsContext = (context: string) => {
   if (context !== pointsContext) {
     pointsContext = context;
     points.clear();
+    loadedOnce.clear();
   }
 };
 
@@ -42,7 +50,8 @@ export function useDetailPresence(
   retrying: boolean;
   /** Read-only dossier from the point read (decision « detail »). */
   detail?: DetailRead;
-  /** Available when the absence is not proven by a point read and the window was not truncated. */
+  /** Available when the absence is not proven by a point read and the window was not truncated:
+   *  the view must then use NON-definitive wording (not « introuvable »). */
   openAnyway?: () => void;
   /** Seconds before a point-read retry is allowed (Retry-After). */
   retryInS?: number;
@@ -82,10 +91,17 @@ export function useDetailPresence(
       if (pointsContext !== startedIn) return; // identity/role/org/site changed: drop the reply
       if (outcome.kind === "loaded") {
         cache.set(id, outcome.detail);
+        loadedOnce.add(id);
         points.delete(id);
-      } else if (outcome.kind === "not_found") points.set(id, { state: "not_found" });
-      else if (outcome.kind === "signed_out") points.delete(id);
-      else points.set(id, { state: "failed", status: outcome.status, retryAt: Date.now() + outcome.retryAfterS * 1000 });
+      } else if (outcome.kind === "not_found") {
+        cache.delete(id); // a revalidation that proves the dossier gone removes the cached copy
+        loadedOnce.delete(id);
+        points.set(id, { state: "not_found" });
+      } else if (outcome.kind === "signed_out") {
+        // Terminal for this id: let the session's own workspace read handle the 401 (sign-out).
+        points.set(id, { state: "signed_out" });
+        void session.ensureFresh();
+      } else points.set(id, { state: "failed", status: outcome.status, retryAt: Date.now() + outcome.retryAfterS * 1000 });
       rerender();
     });
     // fetchJson is a test seam; context/id identify the read.
@@ -101,9 +117,31 @@ export function useDetailPresence(
     if (base === "refresh" && id) attemptRefresh();
   }, [base, id, attemptRefresh]);
   useEffect(() => {
-    // Automatic point read only when the absence may be due to the 100-dossier window.
-    if (base === "not_found" && live && limited && id && !cached && !point) pointRead();
+    // Automatic point read when the absence may be due to the 100-dossier window, or to revalidate
+    // a dossier already opened whose cached copy expired. Never after a 401 or a proven 404.
+    if (base !== "not_found" || !live || !id || cached || point) return;
+    if (limited || loadedOnce.has(id)) pointRead();
   }, [base, live, limited, id, cached, point, pointRead]);
+  // Revalidation independent of Realtime: when the cached copy expires (TTL) and on window focus.
+  // A 1 s check (not a single long timer) so a clock jump or a device wake-up after sleep never
+  // leaves an expired private copy on screen: once expired it is dropped and re-read.
+  useEffect(() => {
+    if (!cached) return;
+    const t = window.setInterval(() => {
+      if (cache.expiresInMs(id) <= 0) rerender();
+    }, 1000);
+    const onFocus = () => pointRead(); // background: the cached copy stays visible meanwhile
+    const onVisible = () => {
+      if (document.visibilityState === "visible") pointRead();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(t);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [cached, id, rerender, pointRead]);
   // Re-render when a Retry-After delay elapses so the retry becomes available.
   const retryInS = point?.state === "failed" ? Math.max(0, Math.ceil((point.retryAt - Date.now()) / 1000)) : undefined;
   useEffect(() => {
@@ -117,6 +155,9 @@ export function useDetailPresence(
     if (point?.state === "pending") return { decision: "detail_loading", retry: pointRead, retrying: true };
     if (point?.state === "failed") return { decision: "detail_error", retry: pointRead, retrying: false, retryInS };
     if (point?.state === "not_found") return { decision: "not_found", retry: attemptRefresh, retrying: false };
+    // 401: terminal for automatic reads (the session handles the expired session); the user may
+    // retry explicitly — never shown as a proven « introuvable », never retried in a loop.
+    if (point?.state === "signed_out") return { decision: "detail_error", retry: pointRead, retrying: false, retryInS: 0 };
     if (limited) return { decision: "detail_loading", retry: pointRead, retrying: true }; // effect is starting the read
     return { decision: "not_found", retry: attemptRefresh, retrying: false, openAnyway: pointRead };
   }

@@ -1498,7 +1498,7 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
     return (
       <Empty
         icon="search"
-        title="Dossier introuvable sur ce périmètre"
+        title={presence.openAnyway ? "Dossier absent des interventions chargées" : "Dossier introuvable sur ce périmètre"}
         action={
           <>
             <button type="button" className="button outline" onClick={() => c.go("requests")}>
@@ -1512,7 +1512,9 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
           </>
         }
       >
-        Le dossier n’appartient pas à l’organisation active ou n’est pas parmi les dossiers chargés.
+        {presence.openAnyway
+          ? "Ce dossier n’apparaît pas parmi les interventions chargées. Vous pouvez essayer de l’ouvrir directement."
+          : "Le dossier n’appartient pas à l’organisation active ou n’est pas parmi les dossiers chargés."}
       </Empty>
     );
 

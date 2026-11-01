@@ -1192,7 +1192,7 @@ function MissionView({
       <>
         <PageTitle
           back={{ label: "Missions", onClick: () => session.go("missions") }}
-          title="Dossier introuvable"
+          title={presence.openAnyway ? "Dossier non chargé" : "Dossier introuvable"}
         />
         <section className="panel">
           <Empty

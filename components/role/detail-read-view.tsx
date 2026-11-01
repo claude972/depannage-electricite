@@ -22,7 +22,15 @@ const PAYMENT_STATUS: Record<string, string> = { pending: "En attente", paid: "R
 
 function Partial({ limited, incomplete }: { limited?: boolean; incomplete?: boolean }) {
   if (!limited && !incomplete) return null;
-  return <p className="form-note">Liste partielle : seuls les éléments les plus récents sont affichés.</p>;
+  return (
+    <p className="form-note">
+      {incomplete ? "Historique incomplet : certains éléments n'ont pas pu être chargés." : "Liste partielle : seuls les éléments les plus récents sont affichés."}
+    </p>
+  );
+}
+/** Empty list: a global « aucun » only when the list is complete; otherwise say it covers the loaded part. */
+function EmptyList({ none, noneLoaded, partial }: { none: string; noneLoaded: string; partial: boolean }) {
+  return <p className="form-note">{partial ? `${noneLoaded} Historique incomplet.` : none}</p>;
 }
 function Unreadable() {
   return (
@@ -95,7 +103,7 @@ export function DetailReadView({ detail, backLabel, onBack, outsideActivePerimet
         {detail.quotes.status === "error" ? (
           <Unreadable />
         ) : detail.quotes.items.length === 0 ? (
-          <p className="form-note">Aucun devis pour ce dossier.</p>
+          <EmptyList none="Aucun devis pour ce dossier." noneLoaded="Aucun devis dans la partie chargée." partial={detail.quotes.limited} />
         ) : (
           <ul>
             {detail.quotes.items.map((q) => (
@@ -105,7 +113,7 @@ export function DetailReadView({ detail, backLabel, onBack, outsideActivePerimet
             ))}
           </ul>
         )}
-        {detail.quotes.status === "ok" && <Partial limited={detail.quotes.limited} />}
+        {detail.quotes.status === "ok" && detail.quotes.items.length > 0 && <Partial limited={detail.quotes.limited} />}
       </section>
 
       <section className="panel" aria-labelledby="detail-read-payments">
@@ -113,7 +121,7 @@ export function DetailReadView({ detail, backLabel, onBack, outsideActivePerimet
         {detail.payments.status === "error" ? (
           <Unreadable />
         ) : detail.payments.items.length === 0 ? (
-          <p className="form-note">Aucun paiement enregistré.</p>
+          <EmptyList none="Aucun paiement enregistré." noneLoaded="Aucun paiement dans la partie chargée." partial={detail.payments.limited || detail.payments.incomplete} />
         ) : (
           <ul>
             {detail.payments.items.map((p) => (
@@ -123,7 +131,7 @@ export function DetailReadView({ detail, backLabel, onBack, outsideActivePerimet
             ))}
           </ul>
         )}
-        {detail.payments.status === "ok" && <Partial limited={detail.payments.limited} incomplete={detail.payments.incomplete} />}
+        {detail.payments.status === "ok" && detail.payments.items.length > 0 && <Partial limited={detail.payments.limited} incomplete={detail.payments.incomplete} />}
       </section>
 
       <section className="panel" aria-labelledby="detail-read-messages">
@@ -131,7 +139,7 @@ export function DetailReadView({ detail, backLabel, onBack, outsideActivePerimet
         {detail.messages.status === "error" ? (
           <Unreadable />
         ) : messages.length === 0 ? (
-          <p className="form-note">Aucun message.</p>
+          <EmptyList none="Aucun message." noneLoaded="Aucun message dans la partie chargée." partial={detail.messages.limited} />
         ) : (
           <ul>
             {messages.map((m) => (
@@ -141,7 +149,7 @@ export function DetailReadView({ detail, backLabel, onBack, outsideActivePerimet
             ))}
           </ul>
         )}
-        {detail.messages.status === "ok" && <Partial limited={detail.messages.limited} />}
+        {detail.messages.status === "ok" && detail.messages.items.length > 0 && <Partial limited={detail.messages.limited} />}
       </section>
 
       <section className="panel" aria-labelledby="detail-read-documents">
@@ -149,7 +157,7 @@ export function DetailReadView({ detail, backLabel, onBack, outsideActivePerimet
         {detail.documents.status === "error" ? (
           <Unreadable />
         ) : detail.documents.items.length === 0 ? (
-          <p className="form-note">Aucun document.</p>
+          <EmptyList none="Aucun document." noneLoaded="Aucun document dans la partie chargée." partial={detail.documents.limited} />
         ) : (
           <ul>
             {detail.documents.items.map((d) => (
@@ -159,7 +167,7 @@ export function DetailReadView({ detail, backLabel, onBack, outsideActivePerimet
             ))}
           </ul>
         )}
-        {detail.documents.status === "ok" && <Partial limited={detail.documents.limited} />}
+        {detail.documents.status === "ok" && detail.documents.items.length > 0 && <Partial limited={detail.documents.limited} />}
       </section>
     </>
   );

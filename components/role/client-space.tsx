@@ -927,7 +927,7 @@ function DetailView({
   if (!i)
     return (
       <Empty
-        title="Intervention introuvable"
+        title={presence.openAnyway ? "Dossier absent de vos demandes récentes" : "Intervention introuvable"}
         action={
           <>
             <button type="button" className="button primary" onClick={() => session.go("requests")}>
@@ -941,7 +941,9 @@ function DetailView({
           </>
         }
       >
-        Ce dossier n’existe pas dans votre espace ou son lien n’est plus valide.
+        {presence.openAnyway
+          ? "Ce dossier n’apparaît pas parmi vos demandes chargées. Vous pouvez essayer de l’ouvrir directement."
+          : "Ce dossier n’existe pas dans votre espace ou son lien n’est plus valide."}
       </Empty>
     );
   const quotes = session.data.quotes;

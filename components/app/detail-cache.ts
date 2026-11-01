@@ -39,6 +39,11 @@ export class DetailCache {
     this.entries.set(id, { detail, at: this.now() });
     while (this.entries.size > this.limit) this.entries.delete(this.entries.keys().next().value as string);
   }
+  /** Milliseconds before the entry expires (0 when absent or expired); does not promote. */
+  expiresInMs(id: string): number {
+    const entry = this.entries.get(id);
+    return entry ? Math.max(0, this.ttlMs - (this.now() - entry.at)) : 0;
+  }
   delete(id: string) {
     this.entries.delete(id);
   }

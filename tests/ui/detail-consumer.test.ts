@@ -165,6 +165,32 @@ test("read-only view: honest linked-item states, partial lists, perimeter note, 
   assert.match(html, /autre site que le site actif/);
   assert.doesNotMatch(html, /introuvable/i);
   assert.doesNotMatch(html, new RegExp(ORG), "no raw ids shown");
+  // Empty but incomplete payments: never a global « aucun paiement enregistré ».
+  assert.doesNotMatch(html, /Aucun paiement enregistré/);
+  assert.match(html, /Aucun paiement dans la partie chargée\. Historique incomplet\./);
+});
+
+test("read-only view: empty lists say « aucun » globally only when complete, « dans la partie chargée » when limited/incomplete", async () => {
+  const { DetailReadView } = await compileView();
+  const React = require("react");
+  const { renderToString } = require("react-dom/server");
+  const render = (patch: Partial<Record<keyof DetailRead, unknown>>) =>
+    renderToString(React.createElement(DetailReadView, { detail: envelope(patch), backLabel: "x", onBack: () => {} })) as string;
+  const complete = render({ quotes: { status: "ok", items: [], limited: false }, messages: { status: "ok", items: [], limited: false } });
+  assert.match(complete, /Aucun paiement enregistré\./);
+  assert.match(complete, /Aucun devis pour ce dossier\./);
+  assert.match(complete, /Aucun message\./);
+  assert.doesNotMatch(complete, /partie chargée|Liste partielle|Historique incomplet/);
+  const partial = render({
+    quotes: { status: "ok", items: [], limited: true },
+    messages: { status: "ok", items: [], limited: true },
+    documents: { status: "ok", items: [], limited: true },
+    payments: { status: "ok", items: [], limited: true, incomplete: false },
+  });
+  assert.doesNotMatch(partial, /Aucun paiement enregistré|Aucun devis pour ce dossier|Aucun message\.|Aucun document\./);
+  assert.match(partial, /Aucun devis dans la partie chargée/);
+  assert.match(partial, /Aucun paiement dans la partie chargée/);
+  assert.doesNotMatch(partial, /Liste partielle/, "no contradictory second notice on an empty list");
 });
 
 test("point-read error: retry disabled while Retry-After runs, enabled after; never « introuvable »", async () => {
