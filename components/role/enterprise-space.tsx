@@ -1442,7 +1442,11 @@ function NewRequestView({ c, siteId, initialCategory = "panel" }: { c: Ctx; site
                 urgency: "scheduled",
                 site_id: site.id,
               }
-            : null
+            : // Draft kept across login (service booking flow): prefilled, the manager still picks an
+              // authorised site; no organisation or right is derived from it.
+              c.session.pendingDraft
+                ? { ...c.session.pendingDraft, site_id: undefined }
+                : null
         }
         sites={writableSites}
         mode={c.session.mode}
