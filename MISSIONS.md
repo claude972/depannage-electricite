@@ -621,3 +621,6 @@ WorkerUIC exclusif components/features/platform-operations/** et components/role
 
 ## FASTSPLIT-PWA-RESILIENCE-001 — Codex — in progress
 delivery_offline auteur exclusif public/sw.js + tests/pwa.test.ts, brancheisolée depuis0c2. ReproVM réseauoff+caches.openUnknownError=>rejetworker confirmé ; corrigerlecturecacheopen/matchthrowversréponse503neutre/no-store sanscache privé niAPI/nonGETinterceptés. TestsréelexécutéVM puispushcourt. Claudelead possèdeUIoffline.html/manifest/PwaRegistration seulement,aucunchevauchementSW. ROOTintègre et vérifienavigateurréelhorsligne/retourenligne ; aucune garantie d’actions serveur horsconnexion.
+
+## FASTSPLIT-DEMO-QUOTE-PUBLISH-001 — Claude lead — in progress
+QA réelle390/1440 : savebrouillonPASS, sendFAIL. Cause source ROOTconfirmée quoteDraftCommand run→action send_quote→mêmerunbusy=>false. LeadSEULcomponents/courant-app.tsx/session/guardtestdédié, brancheisolée0c2 ; extraire/appelertransitiondémo àl’intérieurdu runexistant sansréentrée,conserverbusy/1publicationexacte/conflits/version/consommationdraftseulementsuccès. PasmodifliveAPI/montants/permissions. Testvraihook/nominal+doubleclic+échec,pushpuisROOTpreviewrepro. Aucunassouplissementauthdémoaprèsreload, réentréedémoexpliciterequisecommeavant.
