@@ -21,6 +21,7 @@ import {
   offersOlder,
   openThread,
   parseHistoryPage,
+  visibleHistoryMessages,
 } from "../../components/app/message-history";
 import type { Message } from "../../components/app/types";
 
@@ -115,6 +116,27 @@ test("openThread: a dossier that left the list is never kept open, unless it is 
   assert.equal(openThread("", "", [A, B]), A);
 });
 
+test("visibleHistoryMessages: a 500-message preview never pre-fills older history", () => {
+  // 537 messages; pairs share a created_at so ties are ordered by id.
+  const all = Array.from({ length: 537 }, (_, n) => msg(n, A, new Date(Date.UTC(2026, 9, 1, 0, Math.floor(n / 2))).toISOString()));
+  const preview = [...all.slice(-500), msg(9, B)];
+  const newestFirst = [...all].reverse();
+  const pages = (k: number) => newestFirst.slice(0, 25 * k);
+  assert.deepEqual(visibleHistoryMessages(A, preview, []).map((m) => m.id), all.slice(-25).map((m) => m.id), "before any page: 25 most recent");
+  assert.equal(visibleHistoryMessages(A, preview, pages(1)).length, 25, "first page: 25");
+  assert.equal(visibleHistoryMessages(A, preview, pages(2)).length, 50, "first older click: 50");
+  const end = visibleHistoryMessages(A, preview, pages(22));
+  assert.equal(end.length, 537);
+  assert.equal(new Set(end.map((m) => m.id)).size, 537);
+  assert.deepEqual(end.map((m) => m.id), all.map((m) => m.id), "chronological, ties by id");
+  // A realtime arrival (newer than every page) joins the preview after pages were loaded: kept.
+  const live = msg(9000, A, "2026-10-02T00:00:00.000Z");
+  const withLive = visibleHistoryMessages(A, [...preview, live], pages(2));
+  assert.equal(withLive.length, 51);
+  assert.equal(withLive.at(-1)?.id, live.id);
+  assert.ok(withLive.every((m) => m.intervention_id === A), "never another dossier");
+});
+
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM =
   process.env.QA_CHROMIUM_PATH ||
@@ -128,7 +150,7 @@ import { createRoot } from "react-dom/client";
 import { MessageCenter } from "./components/app/forms";
 const A = "${A}", B = "${B}";
 const kind = new URLSearchParams(location.search).get("case");
-const TOTAL = kind === "empty" ? 0 : 237;
+const TOTAL = kind === "empty" ? 0 : kind === "big" ? 537 : 237;
 const pad = (n) => String(n).padStart(4, "0");
 // Server truth: TOTAL messages per dossier; several share a created_at (tie broken by id).
 const all = (d) => Array.from({ length: d === A ? TOTAL : 30 }, (_, n) => ({ id: "m-" + d.slice(-1) + "-" + pad(n), intervention_id: d, author_id: n % 2 ? "u1" : "u2", body: "body " + n, created_at: new Date(Date.UTC(2026, 9, 1, 0, Math.floor(n / 2))).toISOString() }));
@@ -151,7 +173,7 @@ const fakeFetch = async (url, init) => {
   return new Response(JSON.stringify({ messages: rows, page: { limit, has_more: more, next_cursor: more ? d.slice(-1) + ":" + (off + limit) : null } }), { status: 200 });
 };
 // Workspace preview: the 5 newest of A (duplicated by page 1) + 2 of B.
-const preview = kind === "empty" ? [] : [...desc(A).slice(0, 5), ...desc(B).slice(0, 2)];
+const preview = kind === "empty" ? [] : kind === "big" ? desc(A).slice(0, 500) : [...desc(A).slice(0, 5), ...desc(B).slice(0, 2)];
 const interventions = [A, B].map((id) => ({ id, category: "panel", status: "requested", created_at: "2026-10-01T00:00:00.000Z" }));
 window.sent = [];
 // selectedId and profileId are driven like the shell does (#messages/<id> param, identity change).
@@ -375,6 +397,26 @@ test("MessageCenter history in real React/Chromium: 237 messages over 10 pages, 
       await page.waitForSelector(".conversation-header h2");
       assert.equal((await page.textContent(".conversation-header h2"))?.trim(), "Conversation");
       assert.match((await page.textContent(".conversation-header")) ?? "", /Dossier/);
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    // 11. 500-message workspace preview: 25 shown, 50 after the FIRST older click, 537 at the end.
+    {
+      const { page, errors } = await open("big");
+      await page.waitForSelector(OLDER);
+      assert.equal((await ids(page)).length, 25, "the preview does not pre-fill 500 messages");
+      await page.click(OLDER);
+      await page.waitForFunction(() => document.querySelectorAll("[data-message-id]").length === 50);
+      for (let n = 0; n < 30 && (await page.$(OLDER)); n++) {
+        const before = (await calls(page)).length;
+        await page.click(OLDER);
+        await page.waitForFunction((k: number) => (window as unknown as { calls: Call[] }).calls.length > k && !document.querySelector("[data-message-history=loading]"), before);
+      }
+      const shown = await ids(page);
+      assert.equal(shown.length, 537);
+      assert.equal(new Set(shown).size, 537);
+      assert.deepEqual(shown, [...shown].sort());
+      assert.equal((await calls(page)).length, 22);
       assert.deepEqual(errors, []);
       await page.close();
     }

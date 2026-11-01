@@ -11,12 +11,12 @@ import {
   initialHistory,
   clearSentDraft,
   draftText,
-  mergeMessages,
   offersOlder,
   openThread,
   type ComposeDraft,
   type HistoryFetch,
   type HistoryState,
+  visibleHistoryMessages,
 } from "./message-history";
 import {
   applyDocumentOutcome,
@@ -694,7 +694,9 @@ export function MessageCenter({
   const history = useMessageHistory(live, profileId, id, fetchHistory);
   const h = history.state;
   const unavailable = history.enabled && h.status === "not_found";
-  const rows = unavailable ? [] : history.enabled ? mergeMessages(id, messages, h.pages) : messages.filter((m) => m.intervention_id === id);
+  // Live: the preview never pre-fills older history (see visibleHistoryMessages). Demo: unchanged,
+  // every workspace message of the dossier (no history exists there).
+  const rows = unavailable ? [] : history.enabled ? visibleHistoryMessages(id, messages, h.pages) : messages.filter((m) => m.intervention_id === id);
   const firstLoad = history.enabled && !h.loaded && (h.status === "idle" || h.status === "loading");
   return (
     <section className="panel messages-layout">
