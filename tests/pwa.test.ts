@@ -23,6 +23,7 @@ function workerHarness() {
   const fetched: { url: string; cache?: string; credentials?: string; redirect?: string }[] = [];
   let noticeResponse: { url?: string; redirected?: boolean; marker?: string | null; contentType?: string; status?: number } = {};
   let disconnected = false;
+  let cacheReadFailure: "open" | "match" | undefined;
   let claims = 0;
   let activations = 0;
   let html = "<main>public notice</main>";
@@ -45,10 +46,14 @@ function workerHarness() {
       keys: async () => [...stores.keys()],
       delete: async (key: string) => stores.delete(key),
       open: async (key: string) => {
+        if (cacheReadFailure === "open") throw new Error("Storage unavailable");
         if (!stores.has(key)) stores.set(key, new Map());
         return {
           put: async (url: string, response: Response) => stores.get(key)!.set(url, response.clone()),
-          match: async (url: string) => stores.get(key)!.get(url)?.clone(),
+          match: async (url: string) => {
+            if (cacheReadFailure === "match") throw new Error("Cache read failed");
+            return stores.get(key)!.get(url)?.clone();
+          },
         };
       },
     },
@@ -82,6 +87,7 @@ function workerHarness() {
   return {
     emit, navigate, stores, fetched,
     setOffline: () => { disconnected = true; },
+    failCacheReadAt: (point: typeof cacheReadFailure) => { cacheReadFailure = point; },
     setHtml: (value: string) => { html = value; },
     setNoticeResponse: (value: typeof noticeResponse) => { noticeResponse = value; },
     claims: () => claims,
@@ -151,6 +157,22 @@ test("missing offline cache returns a generic 503 with no private account conten
   assert.equal(response.headers.get("Cache-Control"), "no-store");
   assert.match(await response.text(), /Connexion indisponible/);
 });
+
+for (const point of ["open", "match"] as const) {
+  test(`offline navigation still returns a neutral no-store 503 when cache ${point} fails`, async () => {
+    const h = workerHarness();
+    await Promise.all(h.emit("install").waits);
+    h.setHtml("<main>private dossier client A</main>");
+    h.setOffline();
+    h.failCacheReadAt(point);
+    const response = await h.navigate("/private?intervention=secret").response!;
+    assert.equal(response.status, 503);
+    assert.equal(response.headers.get("Cache-Control"), "no-store");
+    assert.equal(response.headers.get("Content-Type"), "text/plain; charset=utf-8");
+    assert.equal(await response.text(), "Connexion indisponible. Reconnectez-vous pour retrouver vos dossiers.");
+    assert.deepEqual([...h.stores.values()].flatMap((store) => [...store.keys()]), ["/offline.html"]);
+  });
+}
 
 test("activation only removes obsolete Courant public caches and claims clients", async () => {
   const h = workerHarness();
