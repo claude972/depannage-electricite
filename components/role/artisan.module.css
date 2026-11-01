@@ -1791,3 +1791,514 @@
   text-align: center;
   white-space: nowrap;
 }
+
+/* ===== FASTSPLIT-ARTISAN-ENTERPRISE-THEME-001 — themed overrides ============================
+   Active only inside ThemeSurface (`.ui-v2`, same element as `.artisanSkin` from
+   artisan-theme.module.css; a module cannot select another module's hashed class). Same
+   selectors as above, +1 class, colour declarations mapped to --ui-* tokens; layout unchanged.
+   Without the wrapper nothing here applies. */
+:global(.ui-v2) .space {
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .space h1,
+:global(.ui-v2) .space h2,
+:global(.ui-v2) .space h3 {
+  color: var(--ui-text);
+}
+@media (min-width: 1024px) {
+  :global(.ui-v2) .sidebar {
+    background: var(--ui-card);
+    border-right: 1px solid var(--ui-border);
+  }
+}
+:global(.ui-v2) .sidebarBrand {
+  border-bottom: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .sideCaption {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .sideItem {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .sideItem:hover {
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .sideItem[aria-current="page"] {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .sideItem small {
+  color: var(--ui-accent);
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .sideFoot {
+  border-top: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .sideUser strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .sideUser span {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .avatarSmall {
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .demoBar {
+  background: var(--ui-surface);
+  border-bottom: 1px solid var(--ui-border);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .demoRole select {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .topbar {
+  background: var(--ui-card);
+  border-bottom: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .greeting span {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .greeting strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .iconButton {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .iconButton:hover {
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .bottomNav {
+  background: var(--ui-card);
+  border-top: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .bottomItem {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .bottomItem[aria-current="page"] {
+  color: var(--ui-accent);
+  border-top-color: var(--ui-accent);
+}
+:global(.ui-v2) .drawerOverlay {
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .drawer {
+  background: var(--ui-card);
+}
+:global(.ui-v2) .drawerHead {
+  border-bottom: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .sectionNote {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .note {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+}
+:global(.ui-v2) .note strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .noteAmber {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-warning);
+}
+:global(.ui-v2) .noteAmber svg {
+  color: var(--ui-warning);
+}
+:global(.ui-v2) .inlineLink {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .banner {
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .banner h1 {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .banner p {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .bannerKicker {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .bannerArt {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .row {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .row:hover {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .row > svg:last-child {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .rowIcon {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .tone_outage {
+  background: var(--ui-surface);
+  color: var(--ui-warning);
+}
+:global(.ui-v2) .tone_panel {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .tone_socket {
+  background: var(--ui-surface);
+  color: var(--ui-success);
+}
+:global(.ui-v2) .tone_lighting {
+  background: var(--ui-surface);
+  color: var(--ui-warning);
+}
+:global(.ui-v2) .tone_diagnostic {
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .rowTitle {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .rowMeta {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .rowRight {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .rowRight strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .rowHint {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .perfHead svg {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .perfPair > div:first-child {
+  border-right: 1px solid var(--ui-border);
+}
+@media (max-width: 420px) {
+  :global(.ui-v2) .perfPair > div:first-child {
+    border-bottom: 1px solid var(--ui-border);
+  }
+}
+:global(.ui-v2) .amberIcon {
+  background: var(--ui-surface);
+  color: var(--ui-warning);
+}
+:global(.ui-v2) .greenIcon {
+  background: var(--ui-surface);
+  color: var(--ui-success);
+}
+:global(.ui-v2) .blueIcon {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .violetIcon {
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .perfLabel {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .perfValue {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .perfValue small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .perfNote {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .basis {
+  border-top: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .basis summary {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .basis summary::before {
+  border-right: 1.5px solid var(--ui-text-muted);
+  border-bottom: 1.5px solid var(--ui-text-muted);
+}
+:global(.ui-v2) .basisBody p {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .basisBody .formulaList {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .cardLabel {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .cardValue {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .description {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .tileLabel {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .tileValue {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .tileNote {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .facts {
+  border-top: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .facts dt {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .facts dd {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .facts dd small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .stageButton {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .stageButton[aria-pressed="true"] {
+  background: var(--ui-surface);
+  border-color: var(--ui-border);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .appointmentLine {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .appointmentLine svg {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .appointmentLine small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .quoteHead strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .versionButton {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .versionButton[aria-pressed="true"] {
+  background: var(--ui-surface);
+  border-color: var(--ui-border);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .quoteLines {
+  border-top: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .quoteLine {
+  border-bottom: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .quoteLine span {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .quoteLine strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .quoteTotal {
+  border-top: 1px solid var(--ui-border);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .reportChecks li {
+  border-bottom: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .participant {
+  border-bottom: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .participant strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .participant span {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .groupHead span {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .groupHead strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .credCount {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .credCount svg {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .credStatus small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .credGreen {
+  background: var(--ui-surface);
+  color: var(--ui-success);
+}
+:global(.ui-v2) .credBlue {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .credAmber {
+  background: var(--ui-surface);
+  color: var(--ui-warning);
+}
+:global(.ui-v2) .credRed {
+  background: var(--ui-surface);
+  color: var(--ui-danger);
+}
+:global(.ui-v2) .credTitle {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .credDesc {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .credMeta {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .credCountComplete {
+  color: var(--ui-success);
+}
+:global(.ui-v2) .linkForm {
+  border-color: var(--ui-border);
+}
+:global(.ui-v2) .appStatus {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+}
+:global(.ui-v2) .appSteps li {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .appSteps li + li::before {
+  background: var(--ui-border);
+}
+:global(.ui-v2) .stepsSummary {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .appSteps li span:first-child {
+  border: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .appSteps li.stepDone span:first-child {
+  background: var(--ui-surface);
+  border-color: var(--ui-border);
+  color: var(--ui-success);
+}
+:global(.ui-v2) .appSteps li small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .sectionNum {
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+:global(.ui-v2) .readonlyRow {
+  border-bottom: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .readonlyRow span {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .readonlyRow strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .chip {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .chipRemove:hover {
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .switchRow > span {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .switchRow small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .switchButton {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .switchTrack {
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .switchButton[aria-checked="true"] .switchTrack {
+  background: var(--ui-primary);
+}
+:global(.ui-v2) .switchKnob {
+  background: var(--ui-card);
+}
+:global(.ui-v2) .missing {
+  color: var(--ui-warning);
+}
+:global(.ui-v2) .profileHead {
+  background: var(--ui-surface);
+  border-bottom: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .avatar {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .profileSub {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .profileLine {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .profileLine svg {
+  color: var(--ui-warning);
+}
+:global(.ui-v2) .docCount {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .perfTile {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .perfTileTop strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .perfTile > span {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .perfTile > small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .accountLink {
+  border-bottom: 1px solid var(--ui-border);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .accountLink > svg:first-child {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .accountLink > svg:last-child {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .formulaList {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .paidRow {
+  border-bottom: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .paidRow span {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .paidRow strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .helpList details {
+  border-bottom: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .helpList summary {
+  color: var(--ui-text);
+}
+
+/* Manual correction: the space root sits on the page background. */
+:global(.ui-v2) .space {
+  background: var(--ui-bg);
+  color: var(--ui-text);
+}

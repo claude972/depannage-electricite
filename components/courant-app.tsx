@@ -49,13 +49,16 @@ import {
   enterpriseContext,
   canAccess,
   homeFor,
+  loginLanding,
   membershipRole,
   monthPeriods,
   parseHash,
   parseReturnParams,
   paymentReturnMessage,
+  protectedLink,
   pickQuote,
   validateContext,
+  type DeepLink,
   type PaymentServerStatus,
 } from "./app/session";
 import type { PublicSession, Session } from "./app/session-types";
@@ -168,6 +171,10 @@ export default function CourantApp() {
   const userId = useRef<string | null>(null);
   const modeRef = useRef<Mode>("public");
   const roleRef = useRef<Role>("client");
+  // Signed-in deep link opened by a signed-out visitor (#detail/<id> at load or by hash change),
+  // kept across the login form and consumed once by the login chain (WEB-DEEPLINK-LOGIN-001).
+  const pendingLink = useRef<DeepLink | null>(null);
+  const hashSeen = useRef(false);
   const activeOrgRef = useRef("");
   const activeSiteRef = useRef("");
   modeRef.current = mode;
@@ -350,11 +357,13 @@ export default function CourantApp() {
         if (auth.user) {
           userId.current = auth.user.id;
           await refresh();
+          pendingLink.current = null; // already signed in: the hash routing handles the link
         }
         const sub = client.auth.onAuthStateChange((event, session) => {
           if (!active) return;
           const nextId = session?.user?.id ?? null;
           if (event === "SIGNED_OUT" || (!nextId && modeRef.current === "live")) {
+            pendingLink.current = null;
             clearSessionState();
             setMode("public");
             setView("home");
@@ -475,8 +484,15 @@ export default function CourantApp() {
 
   // Hash routing with role guard. Unknown or forbidden targets never mount their view.
   useEffect(() => {
-    const onHash = () => {
+    const onHash = (event?: Event) => {
       const parsed = parseHash(window.location.hash);
+      // Only a link the visitor opened (first load or a real hash change) is remembered — not the
+      // stale hash a logout leaves behind when this effect re-runs on the mode change.
+      if (mode === "public" && (event || !hashSeen.current)) {
+        const link = protectedLink(window.location.hash);
+        if (link) pendingLink.current = link;
+      }
+      hashSeen.current = true;
       const target = parsed.view ?? homeFor(mode === "public" ? null : role, mode);
       setParam(parsed.param);
       setView(canAccess(target, mode === "public" ? null : role, mode) ? target : "forbidden");
@@ -2209,6 +2225,11 @@ export default function CourantApp() {
     navigate,
     setPendingDraft,
     homeView: () => homeFor(roleRef.current, "live"),
+    landing() {
+      const link = loginLanding(window.location.hash, pendingLink.current, roleRef.current);
+      pendingLink.current = null;
+      return link;
+    },
   };
 
   // ---- Public (unauthenticated) session -------------------------------------------------

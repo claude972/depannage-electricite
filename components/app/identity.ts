@@ -16,10 +16,12 @@ export type IdentityDeps = {
   setUserId(id: string | null): void;
   /** Loads the workspace for the current user id. */
   refresh(): Promise<void>;
-  navigate(view: View): void;
+  navigate(view: View, param?: string): void;
   setPendingDraft(draft: RequestValues | null): void;
   /** Home view for the role known after refresh. */
   homeView(): View;
+  /** Signed-in deep link to land on instead of the home view (read after refresh), or null. */
+  landing?(): { view: View; param: string } | null;
 };
 export type AdoptionOutcome = "adopted" | "superseded" | "interrupted";
 export async function adoptIdentity(
@@ -53,6 +55,12 @@ export async function adoptIdentity(
   if (keepDraft) {
     deps.setPendingDraft(keepDraft);
     deps.navigate("new");
-  } else deps.navigate(deps.homeView());
+  } else {
+    // A deep link (#detail/<id>) opened before or during the login is honoured: forcing the
+    // home view here overwrote it once the workspace had loaded (WEB-DEEPLINK-LOGIN-001).
+    const link = deps.landing?.() ?? null;
+    if (link) deps.navigate(link.view, link.param);
+    else deps.navigate(deps.homeView());
+  }
   return "adopted";
 }

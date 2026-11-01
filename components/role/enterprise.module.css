@@ -2265,3 +2265,759 @@
   color: #b42318;
   border-color: #f0c4c0;
 }
+
+/* ---- Enterprise theme overrides (FASTSPLIT-ARTISAN-ENTERPRISE-THEME-001) ---------------------
+   Active only inside ThemeSurface (`.ui-v2`, same element as `.enterpriseSkin` from
+   enterprise-theme.module.css). One override per colour declaration of the matching rule above
+   (same selector, +1 class), mapped to --ui-* tokens; then manual corrections (neutral top bar
+   with 1px rule, pale page surface, filled active page, AA approval decisions, 12 px text floor,
+   44 px touch targets, theme-toggle label clipped under 760 px). Layout is unchanged. */
+:global(.ui-v2) .shell {
+  background-color: var(--ui-surface);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .demoBanner {
+  background-color: var(--ui-surface);
+  color: var(--ui-warning);
+  border-bottom-color: var(--ui-warning);
+}
+:global(.ui-v2) .demoActions select {
+  border-color: var(--ui-warning);
+  background-color: var(--ui-card);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .demoReset {
+  color: var(--ui-warning);
+}
+:global(.ui-v2) .demoActions :global(.confirmation-review) {
+  background-color: var(--ui-card);
+  border-color: var(--ui-warning);
+}
+:global(.ui-v2) .sidebar {
+  background-color: var(--ui-card);
+  border-right-color: var(--ui-border);
+}
+:global(.ui-v2) .navDivider {
+  background-color: var(--ui-surface);
+}
+:global(.ui-v2) .navItem {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .navItem:hover {
+  background-color: var(--ui-surface);
+}
+:global(.ui-v2) .navItemActive,
+:global(.ui-v2) .navItemActive:hover {
+  background-color: var(--ui-surface);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .navItem svg {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .navItemActive svg {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .navCount {
+  background-color: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+:global(.ui-v2) .sidebarHelp {
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .sidebarHelp:hover {
+  border-color: var(--ui-accent);
+  background-color: var(--ui-surface);
+}
+:global(.ui-v2) .sidebarHelp > svg:first-child {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .sidebarHelp > svg:last-child {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .sidebarHelp strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .main :global(.page-title p) {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .contextBar {
+  border-bottom-color: var(--ui-border);
+}
+:global(.ui-v2) .contextNames {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .contextNames svg {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .contextNames strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .contextControls label {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .contextControls select,
+:global(.ui-v2) .select {
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .choiceButton {
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+}
+:global(.ui-v2) .choiceButton:hover {
+  border-color: var(--ui-accent);
+  background-color: var(--ui-surface);
+}
+:global(.ui-v2) .choiceButton strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .choiceButton small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .choiceButton svg:first-child {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .choiceButton svg:last-child {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .helpPanel {
+  background-color: var(--ui-card);
+  border-color: var(--ui-border);
+}
+:global(.ui-v2) .helpPanel ul {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .helpClose {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .helpClose:hover {
+  background-color: var(--ui-surface);
+}
+:global(.ui-v2) .filterField {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .filterField select,
+:global(.ui-v2) .filterField input {
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .searchInput svg {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .resetButton {
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .resetButton:hover:not(:disabled) {
+  background-color: var(--ui-surface);
+}
+:global(.ui-v2) .resetButton:disabled {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .tableHead {
+  border-bottom-color: var(--ui-border);
+}
+:global(.ui-v2) .sortField {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .sortField select {
+  background-color: transparent;
+  color: var(--ui-text);
+}
+:global(.ui-v2) .table th {
+  color: var(--ui-text-muted);
+  border-bottom-color: var(--ui-border);
+  background-color: var(--ui-card);
+}
+:global(.ui-v2) .table td {
+  border-bottom-color: var(--ui-border);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .table tbody tr:hover {
+  background-color: var(--ui-surface);
+}
+:global(.ui-v2) .table td small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .cellSub {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .rowOpen > svg {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .rowOpen strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .rowOpen:hover strong {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .rowOpen:focus-visible {
+  outline-color: var(--ui-focus);
+}
+:global(.ui-v2) .cellType > span:first-child {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .cellDate time {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .rowMore {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .rowMore:hover {
+  background-color: var(--ui-surface);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .tableFoot {
+  border-top-color: var(--ui-border);
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .pageButton {
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .pageButton:hover:not(:disabled) {
+  background-color: var(--ui-surface);
+}
+:global(.ui-v2) .pageNumber {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .pageNumber:hover {
+  background-color: var(--ui-surface);
+}
+:global(.ui-v2) .pageGap {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .sectionHead h2 {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .sectionHint {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .countPill {
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .siteIcon {
+  background-color: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+:global(.ui-v2) .openCount {
+  background-color: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+:global(.ui-v2) .openCountNone {
+  background-color: var(--ui-text-muted);
+}
+:global(.ui-v2) .openText {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .budgetPercent {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .budgetPercentOver {
+  color: var(--ui-danger);
+}
+:global(.ui-v2) .thHint {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .budget_normal > span {
+  background-color: var(--ui-primary);
+}
+:global(.ui-v2) .budget_warning > span {
+  background-color: var(--ui-warning);
+}
+:global(.ui-v2) .budget_over > span {
+  background-color: var(--ui-danger);
+}
+:global(.ui-v2) .cellAmount strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .alertAmber {
+  color: var(--ui-warning);
+}
+:global(.ui-v2) .alertRed {
+  color: var(--ui-danger);
+}
+:global(.ui-v2) .alertUnverified {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .rowLink {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .rowLink:hover {
+  background-color: var(--ui-surface);
+}
+:global(.ui-v2) .readOnlyTag {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .refLink {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .cellRecentSite {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .priorityUrgent {
+  color: var(--ui-danger);
+}
+:global(.ui-v2) .priorityPlanned {
+  color: var(--ui-success);
+}
+:global(.ui-v2) .listRow {
+  border-top-color: var(--ui-border);
+}
+:global(.ui-v2) .listRowButton:hover {
+  background-color: var(--ui-surface);
+}
+:global(.ui-v2) .listRow strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .listRow small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .listRow > svg:last-child {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .amount {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .textLink {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .note {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .muted {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .budgetHead {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .budgetHead strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .budgetBar {
+  background-color: var(--ui-surface);
+}
+:global(.ui-v2) .budgetBar > span {
+  background-color: var(--ui-primary);
+}
+:global(.ui-v2) .budgetBarOver > span {
+  background-color: var(--ui-warning);
+}
+:global(.ui-v2) .kicker {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .facts dt {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .facts dd {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .datedRow > time {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .tile {
+  background-color: var(--ui-card);
+  border-color: var(--ui-border);
+}
+:global(.ui-v2) .tile span {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .tile strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .tile small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .facts {
+  border-top-color: var(--ui-border);
+}
+:global(.ui-v2) .facts small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .facts strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .description {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .versionButton {
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .versionSelected {
+  border-color: var(--ui-accent);
+  background-color: var(--ui-surface);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .lines > div {
+  border-bottom-color: var(--ui-border);
+}
+:global(.ui-v2) .lines span {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .totals > div {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .totals > div:last-child {
+  border-top-color: var(--ui-border);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .rejectForm {
+  border-color: var(--ui-border);
+  background-color: var(--ui-surface);
+}
+:global(.ui-v2) .keyValue {
+  border-bottom-color: var(--ui-border);
+}
+:global(.ui-v2) .keyValue span {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .keyValue strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .breadcrumb {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .breadcrumb button {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .quoteFacts > div small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .quoteFacts > div strong,
+:global(.ui-v2) .quoteFacts > div p {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .quoteFacts > div p {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .amountBlock {
+  border-top-color: var(--ui-border);
+}
+:global(.ui-v2) .amountBlock span {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .amountBlock strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .decisionButton {
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .decisionButton:hover {
+  background-color: var(--ui-surface);
+}
+:global(.ui-v2) .decisionApprove[aria-pressed="true"] {
+  background-color: var(--ui-primary);
+  border-color: var(--ui-success);
+  color: var(--ui-on-primary);
+}
+:global(.ui-v2) .decisionReject[aria-pressed="true"] {
+  background-color: var(--ui-danger);
+  border-color: var(--ui-danger);
+  color: var(--ui-on-primary);
+}
+:global(.ui-v2) .counter {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .historyTable th {
+  color: var(--ui-text-muted);
+  border-bottom-color: var(--ui-border);
+  background-color: var(--ui-surface);
+}
+:global(.ui-v2) .historyTable td {
+  border-bottom-color: var(--ui-border);
+}
+:global(.ui-v2) .footNote {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .readOnly {
+  border-color: var(--ui-border);
+  background-color: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .memberRow {
+  border-top-color: var(--ui-border);
+}
+:global(.ui-v2) .memberMe {
+  background-color: var(--ui-surface);
+}
+:global(.ui-v2) .memberRow strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .memberRow small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .memberItem {
+  border-top-color: var(--ui-border);
+}
+:global(.ui-v2) .accessSelf p {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .accessPanel {
+  border-color: var(--ui-border);
+  background-color: var(--ui-surface);
+}
+:global(.ui-v2) .scopeControl legend {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .scopeControl label {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .scopeControl input[type="radio"],
+:global(.ui-v2) .scopeControl input[type="checkbox"] {
+  accent-color: var(--ui-accent);
+}
+:global(.ui-v2) .scopeSites {
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+}
+:global(.ui-v2) .scopeSites li {
+  border-top-color: var(--ui-border);
+}
+:global(.ui-v2) .scopeWriteOff {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .shell :global(.field > label) {
+  color: var(--ui-text);
+}
+@media (max-width: 1023px) {
+  :global(.ui-v2) .sidebarClose {
+    color: var(--ui-text);
+  }
+}
+@media (max-width: 760px) {
+  :global(.ui-v2) .table tr {
+    border-bottom-color: var(--ui-border);
+  }
+  :global(.ui-v2) .table td[data-label]::before {
+    color: var(--ui-text-muted);
+  }
+  :global(.ui-v2) .interventionsTable tr,
+  :global(.ui-v2) .sitesTable tr,
+  :global(.ui-v2) .recentTable tr {
+    border-bottom-color: var(--ui-border);
+  }
+  :global(.ui-v2) .interventionsTable tr,
+  :global(.ui-v2) .sitesTable tr,
+  :global(.ui-v2) .recentTable tr {
+    border-bottom-color: var(--ui-border);
+  }
+  :global(.ui-v2) .interventionsTable .cellArtisan {
+    color: var(--ui-text-muted);
+  }
+  :global(.ui-v2) .sitesTable .cellActions {
+    border-top-color: var(--ui-border);
+  }
+  :global(.ui-v2) .recentTable .cellRecentType {
+    color: var(--ui-text-muted);
+  }
+  :global(.ui-v2) .recentTable .cellRecentDate {
+    color: var(--ui-text-muted);
+  }
+}
+:global(.ui-v2) .memberActions :global(.confirmation-review) {
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+}
+:global(.ui-v2) .inviteForm {
+  border-top-color: var(--ui-border);
+}
+:global(.ui-v2) .inviteCode {
+  border-color: var(--ui-border);
+  background-color: var(--ui-surface);
+}
+:global(.ui-v2) .inviteCode strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .inviteCode code {
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+}
+:global(.ui-v2) .siteBudgetName {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .siteBudgetValue {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .siteBudgetValue strong {
+  color: var(--ui-text);
+}
+@media (max-width: 760px) {
+  :global(.ui-v2) .kpis {
+    background-color: transparent;
+  }
+  :global(.ui-v2) .kpis > div {
+    border-color: var(--ui-border);
+  }
+}
+:global(.ui-v2) .decisionApprove {
+  color: var(--ui-success);
+  border-color: var(--ui-success);
+}
+:global(.ui-v2) .decisionReject {
+  color: var(--ui-danger);
+  border-color: var(--ui-danger);
+}
+:global(.ui-v2) .shell {
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .readOnly {
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .topbar {
+  border-bottom: 1px solid var(--ui-border);
+  background: var(--ui-bg);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .menuButton,
+:global(.ui-v2) .brandButton,
+:global(.ui-v2) .brandButton :global(.brand),
+:global(.ui-v2) .account {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .menuButton:hover,
+:global(.ui-v2) .account:hover {
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .brandButton :global(.brand-mark) {
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+:global(.ui-v2) .brandButton :global(.brand-dot) {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .brandSub,
+:global(.ui-v2) .accountText small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .topbarBell > button {
+  border-color: var(--ui-border);
+  background: transparent;
+  color: var(--ui-text);
+}
+:global(.ui-v2) .topbarBell > button:hover:not(:disabled) {
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .topbarBell > button:disabled {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .iconButton {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .iconButton:hover,
+:global(.ui-v2) .iconButtonActive,
+:global(.ui-v2) .iconButtonActive:hover {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .iconCount,
+:global(.ui-v2) .accountAvatar {
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+:global(.ui-v2) .account {
+  border-left: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .demoBanner {
+  border-bottom-color: var(--ui-border);
+}
+:global(.ui-v2) .demoActions select,
+:global(.ui-v2) .demoActions :global(.confirmation-review) {
+  border-color: var(--ui-border);
+}
+:global(.ui-v2) .navDivider,
+:global(.ui-v2) .budgetBar {
+  background: var(--ui-border);
+}
+:global(.ui-v2) .pageNumberActive,
+:global(.ui-v2) .pageNumberActive:hover {
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+:global(.ui-v2) .navItemActive,
+:global(.ui-v2) .navItemActive:hover {
+  box-shadow: inset 3px 0 0 var(--ui-accent);
+}
+:global(.ui-v2) .openCountNone {
+  background: var(--ui-text-muted);
+  color: var(--ui-bg);
+}
+:global(.ui-v2) .decisionApprove[aria-pressed="true"] {
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+:global(.ui-v2) .decisionReject[aria-pressed="true"] {
+  border-color: var(--ui-danger);
+  background: var(--ui-danger);
+  color: var(--ui-bg);
+}
+:global(.ui-v2) .scopeControl input[type="radio"],
+:global(.ui-v2) .scopeControl input[type="checkbox"] {
+  accent-color: var(--ui-primary);
+}
+:global(.ui-v2) .rowOpen:focus-visible {
+  outline: 3px solid var(--ui-focus);
+}
+:global(.ui-v2) .thHint {
+  font-size: 12px;
+}
+:global(.ui-v2) .versionButton,
+:global(.ui-v2) .breadcrumb button,
+:global(.ui-v2) .scopeControl label {
+  min-height: 44px;
+}
+@media (max-width: 760px) {
+  :global(.ui-v2) .topbar [data-theme-toggle] > span:last-child {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+/* Phone top bar with the theme toggle: the « courant. » wordmark is clipped (still the button's
+   accessible name), the brand mark stays, so menu, mark, toggle, bell, messages, help and
+   account fit 360 px without overlap. */
+@media (max-width: 760px) {
+  :global(.ui-v2) .topbar {
+    gap: 4px;
+  }
+  :global(.ui-v2) .topbarActions {
+    gap: 0;
+  }
+  :global(.ui-v2) .brandButton {
+    min-width: 0;
+    flex: 0 0 auto;
+  }
+  :global(.ui-v2) .account {
+    padding-left: 4px;
+  }
+  :global(.ui-v2) .brandButton :global(.brand) > span:last-child {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+/* Touch target: the stacked reference link of « Interventions récentes » at phone widths. */
+@media (max-width: 760px) {
+  :global(.ui-v2) .refLink {
+    min-height: 44px;
+  }
+}
