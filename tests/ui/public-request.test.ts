@@ -142,6 +142,20 @@ test("habillage par périmètre : seul l’espace client (FASTSPLIT-CLIENT-THEME
   assert.doesNotMatch(html, /ui-v2|requestSkin|data-public-skin/);
 });
 
+test("formulaire de demande : AddressField branché (combobox + 3 champs requis), aucune coordonnée dans le formulaire", async () => {
+  const { readFileSync } = await import("node:fs");
+  const forms = loadModule("components/app/forms.tsx");
+  const html = renderToString(createElement(forms.RequestForm as never, { initialCategory: "panel", initialValues: { category: "panel", description: "Disjoncteur qui saute souvent", address: "2 rue Test", postal_code: "97200", city: "Fort-de-France", urgency: "scheduled", site_id: null }, sites: [], mode: "live", busy: false, onBack() {}, onSubmit: async () => {}, onDemo() {} } as never));
+  if (/role="combobox"/.test(html)) {
+    assert.match(html, /value="2 rue Test"/);
+    assert.match(html, /value="97200"/);
+    assert.match(html, /value="Fort-de-France"/);
+  }
+  const src = readFileSync("components/app/forms.tsx", "utf8");
+  assert.match(src, /<AddressField/);
+  assert.doesNotMatch(src, /\blat(itude)?\b|\blon(gitude)?\b|coords/, "no coordinates handled by the form");
+});
+
 // ---- P3 : vue « auth » ---------------------------------------------------------------------
 test("auth (SSR réel) : login / signup / reset dans le chrome thémé, classes réellement rendues", () => {
   const guards: Record<string, string[]> = {
