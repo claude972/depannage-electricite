@@ -688,28 +688,3 @@
 .enterpriseSkin :global(.page-title) + p {
   color: var(--ui-text-muted);
 }
-
-/* ---- Legacy leaf islands ------------------------------------------------------------------
-   Site operations and tracking are leaf modules (other owners, not yet migrated) that still paint
-   fixed light surfaces (#fff) with legacy text colours. Until
-   their own token pass they are LIGHT islands in both themes, as in the client skin: the --ui-*
-   tokens take the light values on their root (stable attributes, no hashed class), so themed
-   primitives inside them stay AA on their white cards. */
-.enterpriseSkin section[aria-labelledby="site-operations"],
-.enterpriseSkin section[aria-labelledby="tracking-card-title"] {
-  --ui-bg: #ffffff;
-  --ui-surface: #f4f6f5;
-  --ui-card: #ffffff;
-  --ui-text: #111111;
-  --ui-text-muted: #4b5563;
-  --ui-border: #d9dfdc;
-  --ui-accent: #0f5c3a;
-  --ui-focus: #0f5c3a;
-  --ui-danger: #b42318;
-  --ui-warning: #925c00;
-  --ui-success: #0f5c3a;
-  --ui-scheme: light;
-  color-scheme: light;
-  background: #ffffff;
-  color: #111111;
-}
