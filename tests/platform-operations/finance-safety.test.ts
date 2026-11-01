@@ -94,3 +94,31 @@ test("F4 : base du registre = clés métier autorisées en français ; inconnues
   assert.doesNotMatch(src, /external_event_id && <div>/);
   assert.doesNotMatch(src, /Object\.entries\(e\.basis\)\.map/);
 });
+
+test("F2: an inconsistent preview (HT + TVA ≠ TTC) blocks; consistent ones (incl. TVA 0) pass", () => {
+  const { previewAmounts } = view;
+  assert.equal(previewAmounts({ total_cents: 100, tax_cents: 100, subtotal_cents: 100 } as never), null, "100 + 100 ≠ 100");
+  assert.equal(previewAmounts({ total_cents: 12000, tax_cents: 2000, subtotal_cents: 9000 } as never), null);
+  // vm-loaded module (other realm): compare by value.
+  assert.equal(JSON.stringify(previewAmounts({ total_cents: 12000, tax_cents: 2000, subtotal_cents: 10000 } as never)), JSON.stringify({ total_cents: 12000, tax_cents: 2000, subtotal_cents: 10000 }));
+  assert.equal(JSON.stringify(previewAmounts({ total_cents: 5000, tax_cents: 0, subtotal_cents: 5000 } as never)), JSON.stringify({ total_cents: 5000, tax_cents: 0, subtotal_cents: 5000 }), "TVA 0 valid");
+  assert.equal(previewAmounts({ total_cents: 0, tax_cents: 0, subtotal_cents: 0 } as never), null, "total must be > 0");
+});
+
+test("F3: the confirmation payload is cloned and RECURSIVELY frozen (nested objects too)", () => {
+  const { openConfirmation } = view;
+  const input = { request_id: "r1", amount_cents: 100, nested: { basis: "commission" } };
+  const c = openConfirmation(input, ["x"])!;
+  input.nested.basis = "changed";
+  assert.equal((c.payload as typeof input).nested.basis, "commission", "clone: input mutation doesn't leak");
+  assert.equal(Object.isFrozen(c.payload), true);
+  assert.equal(Object.isFrozen((c.payload as typeof input).nested), true, "nested frozen");
+});
+
+test("F4: inherited names as label VALUES (« __proto__ », « constructor », « toString ») are hidden, never rendered or crashing", () => {
+  for (const bad of ["__proto__", "constructor", "toString", "hasOwnProperty"]) {
+    const r = view.ledgerBasisRows({ source: bad, rate_source: bad });
+    assert.ok(r.rows.every((row) => typeof row.value === "string" && !row.value.includes("function") && row.value !== "[object Object]"), bad);
+    assert.equal(r.rows.some((row) => row.label === "Origine" || row.label === "Origine du taux"), false, `${bad} not shown as a label`);
+  }
+});

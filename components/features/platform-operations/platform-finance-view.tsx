@@ -27,16 +27,26 @@ const safeCents = (v: unknown): v is number => typeof v === "number" && Number.i
 export function previewAmounts(preview: InvoiceReadiness["preview"] | null | undefined): PreviewAmounts | null {
   if (!preview) return null;
   const { total_cents, tax_cents, subtotal_cents } = preview;
-  return safeCents(total_cents) && safeCents(tax_cents) && safeCents(subtotal_cents) && total_cents > 0 ? { total_cents, tax_cents, subtotal_cents } : null;
+  if (!(safeCents(total_cents) && safeCents(tax_cents) && safeCents(subtotal_cents) && total_cents > 0)) return null;
+  // HT + TVA must equal TTC exactly (and the sum stay a safe integer): an inconsistent preview blocks.
+  const sum = subtotal_cents + tax_cents;
+  return Number.isSafeInteger(sum) && sum === total_cents ? { total_cents, tax_cents, subtotal_cents } : null;
 }
 
 // ---- F3: explicit confirmation with a FROZEN payload ---------------------------------------------
-/** A confirmation holds a deep-frozen copy of the payload taken when it opened; any input change
+/** A confirmation holds a cloned, recursively frozen copy of the payload taken when it opened; any input change
  *  cancels it (re-confirmation required). The request_id inside is the form's current one, so a
  *  retry after a failure reuses it (a new one is generated only after success, as before). */
 export type Confirmation<P> = { payload: Readonly<P>; summary: string[] } | null;
 export function openConfirmation<P extends object>(payload: P, summary: string[]): Confirmation<P> {
-  return { payload: Object.freeze(structuredCloneSafe(payload)), summary: [...summary] };
+  return { payload: deepFreeze(structuredCloneSafe(payload)), summary: [...summary] };
+}
+function deepFreeze<T>(value: T): T {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const v of Object.values(value as Record<string, unknown>)) deepFreeze(v);
+  }
+  return value;
 }
 function structuredCloneSafe<P>(value: P): P {
   return JSON.parse(JSON.stringify(value)) as P;
@@ -58,10 +68,11 @@ export function ConfirmBox({ title, summary, confirmLabel, busy, onConfirm, onCa
 const SOURCE_LABEL: Record<string, string> = { payments: "règlement enregistré", provider_event: "événement fournisseur confirmé" };
 const RATE_SOURCE_LABEL: Record<string, string> = { platform_setting: "paramètre plateforme" };
 const BASIS_LABELS: Record<string, { label: string; format: (v: unknown) => string | null }> = {
-  source: { label: "Origine", format: (v) => (typeof v === "string" && SOURCE_LABEL[v]) || null },
+  // Own-property lookups only: inherited names (« __proto__ », « constructor »…) are never labels.
+  source: { label: "Origine", format: (v) => (typeof v === "string" && Object.prototype.hasOwnProperty.call(SOURCE_LABEL, v) && SOURCE_LABEL[v]) || null },
   paid_at: { label: "Réglé le", format: (v) => (typeof v === "string" && !Number.isNaN(Date.parse(v)) ? dateTime(v) : null) },
   quote_id: { label: "Devis", format: (v) => (typeof v === "string" && UUID_RE.test(v) ? shortId(v) : null) },
-  rate_source: { label: "Origine du taux", format: (v) => (typeof v === "string" && RATE_SOURCE_LABEL[v]) || null },
+  rate_source: { label: "Origine du taux", format: (v) => (typeof v === "string" && Object.prototype.hasOwnProperty.call(RATE_SOURCE_LABEL, v) && RATE_SOURCE_LABEL[v]) || null },
   bps: { label: "Taux", format: (v) => (typeof v === "number" && Number.isSafeInteger(v) ? `${(v / 100).toFixed(2)} %` : null) },
   setting_version: { label: "Version du paramètre", format: (v) => (typeof v === "number" && Number.isSafeInteger(v) ? String(v) : null) },
   gross_cents: { label: "Montant de base", format: (v) => (safeCents(v) ? money(v) : null) },
