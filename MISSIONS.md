@@ -676,3 +676,9 @@ Recette315e08c8bd10 terminée16/16PASS/cleanupok/drain0/intents0 et ROOT43readba
 
 ## FASTSPLIT-BOOKING-IDEMPOTENCY-001 — done borné
 Backend4f9e42e/frontend4649b07/hydratationb144 intégrés appa4b6f31/poussés/CI41312089858SUCCESS/previewpubliqueREADY. Migration021 appliquéeROOTseule/readbackRLSACL ; vrai run3c1b19/19PASS concurrent201+réponseperdue+reload/replaymêmeUUID/unparentauditquota. Cleanupok/drain0/intents0 puisROOT45/45READONLYtousscopes0inclledger. AucuneQAcohorteconnueactive. SMTP/Stripe/admin/GPSphysique nonprouvésparcetravail ; anciennesFAILspréservées. RapportBOOKING_A4_CONNECTED_REPLAY_HOSTED_PASS.md.
+
+## FASTSPLIT-ARTISAN-CONNECTED-UI-001 — ROOT + Codex identity — in progress
+Après réservation réelle19/19, vérifier vrais clics artisan/client : mission disponible→acceptation→devis→acceptationclient→démarrer→terminer. AncienneAPI8/8app0f5 ne prouvepasUI. Réutiliser seulagentCodexidentity : préparerdriverprivéborné à2comptesQAclient/artisanapprouvésynthétique/1dossier, fixtures/B1/recovery/intentsdurables existants ; ROOTseulcloudaprèsrevuedriver/provenancefresh, cleanup+readbackindépendant. PasStripe/admin/GPS/SQL/appréciationsréelles, pascloudagent/credentials. SHAappfigéaprèsUIresetavantrecette ; pasnouveaucontratlong. CorrigerdéfautsreproduitsavecleadClaudeownerUI/controller.
+
+## FASTSPLIT-AUTH-RESET-THEME-001 — Claude lead — in progress
+Défautsourceconcret : app/auth/reset-password/page.module.css restefondbleu/boutonbleucontreDESIGNvalidé. Scopeexclusifpage.tsx+page.module.css+testcibléneuf ; ThemeSurface/Toggle/Jakartaexistantslectureseule,2modes/focus44/loading/error/success,liensretourscohérents. AucunappelAuth/session/callback/RPCchangéaveuglément, pasemailsenvoyésniSMTPclaim. CourtSHA+tests ; ROOTreview puispreview2modesmobile/desktop/invalide+vraicomposantétatssimulésidentifiés. Main/prod/anciennespreviewspréservés.
