@@ -470,3 +470,13 @@
     padding: 28px 0;
   }
 }
+
+/* « Confirmer » before hydration: visibly disabled (not hidden), label kept. */
+.preparing {
+  font-size: 13px;
+  color: var(--ui-text-muted);
+}
+.cta:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
