@@ -186,7 +186,7 @@ test("onSettled : une seule fois sur « paid » (POST et Actualiser), jamais sur
   const get = st.createSettlementController({ api: () => ({ status: async () => res(200, dto({ status: "paid" })), capture: async () => res(503) }), interventionId: ID, get: () => s2, set: (n) => (s2 = n), onSettled: () => g++ });
   await get.load();
   assert.equal(g, 1);
-  // Autres statuts, premier chargement d’un dossier déjà réglé, erreurs : jamais.
+  // Autres statuts : jamais.
   for (const next of ["processing", "captured_transfer_pending", "needs_review"]) {
     let n = 0;
     let s3 = ready({ status: "processing" });
@@ -197,8 +197,10 @@ test("onSettled : une seule fois sur « paid » (POST et Actualiser), jamais sur
   }
   let first = 0;
   let s4 = { ...st.SETTLEMENT_INITIAL };
-  await st.createSettlementController({ api: () => ({ status: async () => res(200, dto({ status: "paid" })), capture: async () => res(503) }), interventionId: ID, get: () => s4, set: (x) => (s4 = x), onSettled: () => first++ }).load();
-  assert.equal(first, 0);
+  const firstCtrl = st.createSettlementController({ api: () => ({ status: async () => res(200, dto({ status: "paid" })), capture: async () => res(503) }), interventionId: ID, get: () => s4, set: (x) => (s4 = x), onSettled: () => first++ });
+  await firstCtrl.load(); // premier chargement déjà « paid » : le parent peut être en retard ⇒ une fois
+  await firstCtrl.load(); // jamais répété
+  assert.equal(first, 1);
   // Génération / UID changés pendant l’attente : réponse ignorée, aucun appel.
   for (const change of ["generation", "user"] as const) {
     let gen = 1;

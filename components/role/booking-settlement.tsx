@@ -167,9 +167,9 @@ export function createSettlementController({ api, interventionId, context = DEFA
     const before = get().dto?.status;
     const next = apply(get(), r);
     set(next);
-    // Once, on a verified transition to « paid » under the current identity (POST or refresh):
-    // the parent re-reads the dossier. Not on the first load of an already settled dossier.
-    if (next.dto?.status === "paid" && before !== undefined && before !== "paid" && !settled) {
+    // Once, on a verified « paid » under the current identity (first load, POST or refresh):
+    // the parent re-reads the dossier (it may be stale). Never repeated while already paid.
+    if (next.dto?.status === "paid" && before !== "paid" && !settled) {
       settled = true;
       onSettled?.();
     }
