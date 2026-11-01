@@ -15,6 +15,7 @@ import {
   documentNameFor,
   validateDocumentUpload,
 } from "@/lib/shared/document-policy";
+import { storeWebDocument, WebUploadError } from "@/lib/features/documents/web-upload";
 export const runtime = "nodejs";
 export async function GET(request: Request) {
   try {
@@ -113,28 +114,21 @@ export async function POST(request: Request) {
     const id = randomUUID();
     const path = `${user.id}/${id}`;
     const admin = adminClient();
-    const upload = await admin.storage
-      .from(bucket)
-      .upload(path, buffer, { contentType: mime, upsert: false });
-    dbError(upload.error);
-    const inserted = await admin
-      .from("documents")
-      .insert({
-        id,
-        intervention_id: interventionId || null,
-        owner_id: user.id,
-        name: documentNameFor(file.name),
-        path,
-        mime_type: mime,
-      })
-      .select("id,name,mime_type,created_at")
-      .single();
-    if (inserted.error) {
-      await admin.storage.from(bucket).remove([path]);
-      dbError(inserted.error);
-    }
-    return Response.json({ document: inserted.data }, { status: 201 });
+    const document = await storeWebDocument(db, admin, {
+      id,
+      path,
+      ownerId: user.id,
+      interventionId: typeof interventionId === "string" && interventionId ? interventionId : null,
+      name: documentNameFor(file.name),
+      mime,
+    }, buffer);
+    return Response.json({ document }, { status: 201, headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
-    return apiError(error);
+    const response = error instanceof WebUploadError
+      ? Response.json({ error: error.message, ...error.details }, { status: error.status })
+      : apiError(error);
+    response.headers.set("Cache-Control", "private, no-store");
+    if (response.status === 503) response.headers.set("Retry-After", "2");
+    return response;
   }
 }
