@@ -148,10 +148,14 @@ const FOOTER_VIEWS: { view: HomeTargetView; label: string }[] = [
   { view: "legal", label: "Mentions légales" },
 ];
 
-function scrollToSection(id: SectionId) {
-  const section = document.getElementById(id);
+type ScrollDoc = { getElementById(id: string): { scrollIntoView(o: ScrollIntoViewOptions): void; querySelector<E extends Element = HTMLElement>(s: string): E | null } | null };
+type ScrollWin = { matchMedia?: (q: string) => { matches: boolean } };
+/** In-page section navigation: scroll + focus the section heading. Never touches
+ *  `location.hash`/history (the app router reads the hash as a view) nor the session. */
+export function scrollToSection(id: string, doc: ScrollDoc = document, win: ScrollWin = window) {
+  const section = doc.getElementById(id);
   if (!section) return;
-  const reduced = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reduced = typeof win.matchMedia === "function" && win.matchMedia("(prefers-reduced-motion: reduce)").matches;
   section.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
   section.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
 }

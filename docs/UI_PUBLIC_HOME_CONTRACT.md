@@ -27,7 +27,7 @@ Aucun changement : CSS global, layout, session, `courant-app.tsx`, API, backend,
 | Bloc | Action | Callback / vue |
 | --- | --- | --- |
 | Marque | retour accueil | `navigate("home")` |
-| Nav « Interventions / Services / Conseils » | ancres internes | `#interventions` `#services` `#conseils` |
+| Nav « Interventions / Services / Conseils » | navigation interne | boutons → `scrollToSection(id)` : `scrollIntoView` (auto si mouvement réduit) + focus du titre ; jamais `location.hash`/history ni session (amendement root) |
 | Nav « Vous êtes artisan ? » | vue réelle | `navigate("join")` |
 | « Se connecter » | auth réelle | `login()` (`setAuthMode("login")` + `go("auth")`) |
 | Bascule thème | clair/sombre | `ThemeToggle` de la fondation |
@@ -95,3 +95,15 @@ pas « complète » ; seule l'accueil public adopte la fondation. Recette réell
 - Captures locales (non commitées) 2 thèmes × 360/390/1280/1440 : 0 débordement, 0 cible < 44 px,
   0 erreur console, 0 requête externe ; ←/→ sur le héros, End/→ sur les onglets, Échap ferme le
   menu et rend le focus, `prefers-reduced-motion` coupe l'animation, onglet → formulaire pré-rempli.
+
+## Amendement root — navigation interne SPA (après claim d0a0b42)
+
+Le routeur de l'app lit le hash comme une VUE : les entrées Interventions / Services / Conseils
+sont des `button type="button"` (aucun `href`), qui appellent `scrollToSection` : défilement vers
+la section (`smooth`, ou `auto` sous `prefers-reduced-motion`) puis focus du titre `h2`
+(`tabIndex=-1`, `preventScroll`). Aucune écriture de `location.hash`, de l'historique ni de la
+session. Preuves : tests `scrollToSection` (window factice qui lève sur `location`/`history`) et
+`PublicSite` réel (boutons sans href ni action) ; navigateur sur l'app réelle (`CourantApp`, `/`
+et `/#home`, 1280 et 360 via menu, mouvement normal et réduit) : 18/18 PASS — hash et longueur
+d'historique inchangés, accueil toujours affiché, section à ≤ 96 px du haut, focus sur son titre,
+0 erreur.

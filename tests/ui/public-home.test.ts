@@ -237,3 +237,39 @@ test("parcours brouillon : home → décrire (catégorie pré-remplie) → broui
   assert.match(html, /Votre brouillon de demande sera repris après connexion/);
   assert.deepEqual(auth.calls, []);
 });
+
+// ---- Navigation interne : jamais de hash ni de session (routeur par hash de l’app) ---------------
+test("sections : défilement + focus du titre, sans toucher location/history ; mouvement réduit respecté", () => {
+  const { scrollToSection } = loadHome().home;
+  for (const reduce of [false, true]) {
+    const log: string[] = [];
+    const heading = { focus: (o: unknown) => log.push(`focus ${JSON.stringify(o)}`) };
+    const doc = { getElementById: (id: string) => (id === "accueil-services" ? { scrollIntoView: (o: unknown) => log.push(`scroll ${JSON.stringify(o)}`), querySelector: (sel: string) => (sel === "h2" ? heading : null) } : null) };
+    const win = new Proxy({ matchMedia: (q: string) => ({ matches: reduce && q.includes("reduce") }) } as Record<string, unknown>, {
+      get: (t, k) => {
+        if (k === "location" || k === "history") throw new Error(`accès interdit : ${String(k)}`);
+        return t[k as string];
+      },
+    });
+    scrollToSection("accueil-services", doc as never, win as never);
+    assert.deepEqual(log, [`scroll {"behavior":"${reduce ? "auto" : "smooth"}","block":"start"}`, 'focus {"preventScroll":true}']);
+    scrollToSection("inconnue", doc as never, win as never); // section absente : rien
+    assert.equal(log.length, 2);
+  }
+});
+
+test("PublicSite réel : liens de section = boutons sans href ni action de session", () => {
+  const { session, calls } = fakeSession();
+  // ThemeSurface lit le contexte : rendu sous le ThemeProvider du même graphe de modules.
+  const siteTp = loadModule("components/app/theme-provider.tsx");
+  const siteWithTp = loadModule("components/role/public-site.tsx", { "@/components/app/theme-provider": siteTp });
+  const html = renderToString(createElement(siteTp.ThemeProvider as never, null, createElement(siteWithTp.PublicSite as never, { session } as never)));
+  const anchors = [...html.matchAll(/<button[^>]*data-home-anchor="([^"]+)"[^>]*>/g)];
+  assert.deepEqual(anchors.map((m) => m[1]), ["accueil-interventions", "accueil-services", "accueil-conseils"]);
+  for (const [tag] of anchors) {
+    assert.match(tag, /type="button"/);
+    assert.doesNotMatch(tag, /href=|data-home-action=/);
+  }
+  assert.doesNotMatch(html, /<a\s[^>]*href="#/);
+  assert.deepEqual(calls, []); // le rendu n’écrit rien dans la session
+});
