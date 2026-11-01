@@ -80,7 +80,7 @@ test("provenance: a payment declared received on site is never worded as a bank/
   assert.equal(isDeclaredOnSite({ method: "on_site_declared" }), true);
   for (const p of [{ method: "card" }, {}, null, undefined]) assert.equal(isDeclaredOnSite(p as never), false);
   const client = readFileSync("components/role/client-space.tsx", "utf8");
-  assert.match(client, /payment\.status === "paid" && isDeclaredOnSite\(payment\)\s*\? `Règlement de \$\{money\(payment\.total_cents\)\} déclaré reçu sur place par l’artisan[^`]*Ce n’est pas une confirmation bancaire\.`/);
+  assert.match(client, /payment\.status === "paid" && isDeclaredOnSite\(payment\)\s*\? `Règlement de \$\{money\(payment\.total_cents\)\} déclaré reçu sur place par l’artisan[\s\S]{0,120}?Ce n’est pas une confirmation bancaire\.`/);
   assert.doesNotMatch(client, /Le règlement est traité avec Stripe|via Stripe\./, "help texts no longer say every payment goes through Stripe");
   const artisan = readFileSync("components/role/artisan-space.tsx", "utf8");
   assert.match(artisan, /isDeclaredOnSite\(payment\)\s*\? "Règlement déclaré reçu sur place\. Ce n’est pas une confirmation bancaire\."/);
