@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createGuard, createRunner } from "../../components/app/guard";
 import { adoptIdentity, type IdentityDeps } from "../../components/app/identity";
 import type { View } from "../../components/app/types";
+import { loginLanding } from "../../components/app/session";
 
 const deferred = <T,>() => {
   let resolve!: (v: T) => void;
@@ -210,4 +211,35 @@ test("a kept draft is restored after adoption", async () => {
   h.refreshGate.resolve();
   await chain;
   assert.deepEqual(h.state.views, ["new"]);
+});
+
+// WEB-DEEPLINK-LOGIN-001: the login chain used to force the role home after its refresh, which
+// overwrote a #detail/<id> link set while the workspace was loading (or opened before login).
+test("deep link: a #detail hash set during the login refresh is kept, not overwritten by home", async () => {
+  const h = controllerLike();
+  let hash = "#auth";
+  const navigations: [View, string | undefined][] = [];
+  h.deps.navigate = (v, p) => void navigations.push([v, p]);
+  h.deps.landing = () => loginLanding(hash, null, "client");
+  const chain = h.runner.run(async (ctx) => {
+    h.state.sdkUser = "A";
+    assert.equal(await adoptIdentity(ctx, "A", null, h.deps), "adopted");
+  });
+  await h.refreshStarted.promise;
+  hash = "#detail/job-old-1"; // first workspace applied, UI already signed in: link opened now
+  h.refreshGate.resolve();
+  assert.equal(await chain, true);
+  assert.deepEqual(navigations, [["detail", "job-old-1"]]);
+});
+
+test("deep link: pending link from the signed-out visit is used once, role-guarded, else home", () => {
+  const pending = { view: "detail" as View, param: "job-old-1" };
+  // Login form in the address bar: the remembered link wins.
+  assert.deepEqual(loginLanding("#auth", pending, "client"), pending);
+  // A view the role may not open is never a landing (role guard first, server re-checks).
+  assert.equal(loginLanding("#admin-settings", null, "client"), null);
+  assert.equal(loginLanding("#auth", { view: "admin" as View, param: "" }, "client"), null);
+  // Nothing remembered, public hash: role home (null).
+  assert.equal(loginLanding("#home", null, "client"), null);
+  assert.equal(loginLanding("", null, "client"), null);
 });
