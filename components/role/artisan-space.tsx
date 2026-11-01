@@ -2438,6 +2438,7 @@ function Documents({
       </div>
       <DocumentManager
         live={session.mode === "live"}
+        profileId={session.profileId}
         documents={session.data.documents}
         interventions={mine}
         demo={session.mode === "demo"}
