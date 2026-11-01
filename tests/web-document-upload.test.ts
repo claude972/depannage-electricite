@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import vm from "node:vm";
 import { transformSync } from "esbuild";
+import { StorageApiError } from "@supabase/storage-js";
 import * as server from "../lib/supabase/server";
 
 const nodeRequire = createRequire(import.meta.url);
@@ -18,7 +19,7 @@ type Result = { data: unknown; error: { code?: string; statusCode?: string } | n
 type Options = {
   anonymous?: boolean; readOnly?: boolean; revokeDuringUpload?: boolean; personal?: boolean;
   finalized?: Result | "throw"; lookup?: Result | "throw";
-  upload?: "error" | "throw" | "collision"; cleanup?: "error" | "throw" | "malformed";
+  upload?: "error" | "throw" | "collision" | "collision-sdk" | "collision-semantic"; cleanup?: "error" | "throw" | "malformed" | "empty" | "foreign" | "mixed";
 };
 function setup(options: Options = {}) {
   let revoked = false;
@@ -51,12 +52,14 @@ function setup(options: Options = {}) {
           calls.push({ name: "upload", args: { path: p, size: bytes.length, options: opts } });
           if (options.revokeDuringUpload) revoked = true;
           if (options.upload === "throw") throw new Error("private transport detail");
+          if (options.upload === "collision-sdk") return { error: new StorageApiError("Object exists", 409, "ResourceAlreadyExists", "storage", "ResourceAlreadyExists") };
+          if (options.upload === "collision-semantic") return { error: { statusCode: "Duplicate", code: "Duplicate" } };
           return { error: options.upload === "collision" ? { statusCode: "409" } : options.upload === "error" ? { message: "private storage error" } : null };
         },
         remove: async (paths: string[]) => {
           calls.push({ name: "remove", args: [...paths] });
           if (options.cleanup === "throw") throw new Error("private remove detail");
-          return { data: options.cleanup === "malformed" ? null : [], error: options.cleanup === "error" ? { message: "private remove error" } : null };
+          return { data: options.cleanup === "malformed" ? null : options.cleanup === "empty" ? [] : options.cleanup === "foreign" ? [{ name: "another-user/another-file" }] : options.cleanup === "mixed" ? [{ name: objectPath }, { name: "another-user/another-file" }] : [{ name: objectPath }], error: options.cleanup === "error" ? { message: "private remove error" } : null };
         },
       };
     } },
@@ -146,7 +149,7 @@ test("known rollback does not treat failed readback as absence or compensate an 
   const h = setup({ revokeDuringUpload: true, lookup: { data: null, error: { code: "network" } } }); const r = await h.post(); assert.equal(r.status, 502); await payload(r); assert.equal(h.calls.some(c => c.name === "remove"), false);
 });
 test("failed compensation after a known rollback is explicitly incomplete503, never a success or raw exception", async () => {
-  for (const cleanup of ["error", "throw", "malformed"] as const) {
+  for (const cleanup of ["error", "throw", "malformed", "empty", "foreign", "mixed"] as const) {
     const h = setup({ revokeDuringUpload: true, cleanup }); const r = await h.post(); assert.equal(r.status, 503); assert.equal(r.headers.get("Retry-After"), "2"); assert.equal((await payload(r)).cleanup, "incomplete");
   }
 });
@@ -159,7 +162,9 @@ test("uncertain Storage upload is compensated before any finalization; failed cl
   }
 });
 test("an upsert:false duplicate-path refusal never deletes a preexisting object", async () => {
-  const h = setup({ upload: "collision" }); const r = await h.post(); assert.equal(r.status, 409); await payload(r); assert.equal(h.calls.some(c => c.name === "remove"), false);
+  for (const upload of ["collision", "collision-sdk", "collision-semantic"] as const) {
+    const h = setup({ upload }); const r = await h.post(); assert.equal(r.status, 409); await payload(r); assert.equal(h.calls.some(c => c.name === "remove"), false);
+  }
 });
 test("authentication, origin, readonly access and MIME magic-byte guards remain before Storage", async () => {
   for (const [opts, input, status] of [

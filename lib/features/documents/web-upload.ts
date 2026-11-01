@@ -27,10 +27,18 @@ const cleanupIncomplete = () => new WebUploadError(
 function publicDocument(row: FinalizedRow) {
   return { id: row.id, name: row.name, mime_type: row.mime_type, created_at: row.created_at };
 }
+function isExistingObjectError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const value = error as Record<string, unknown>;
+  // storage-js preserves HTTP status separately when statusCode/code is semantic.
+  const conflicts = new Set(["409", "ResourceAlreadyExists", "Duplicate"]);
+  return [value.status, value.statusCode, value.code].some(code => conflicts.has(String(code)));
+}
 async function compensate(admin: SupabaseClient, path: string) {
   try {
     const result = await admin.storage.from(DOCUMENT_BUCKET).remove([path]);
-    return !result.error && Array.isArray(result.data);
+    // Empty, unrelated or malformed acknowledgements do not prove this object was removed.
+    return !result.error && Array.isArray(result.data) && result.data.length === 1 && result.data[0]?.name === path;
   } catch { return false; }
 }
 
@@ -49,7 +57,7 @@ export async function storeWebDocument(
   } catch { uploaded = { error: { message: "Upload transport unavailable" } }; }
   if (uploaded.error) {
     // A duplicate-path refusal did not create this attempt's object: do not delete an older one.
-    if ("statusCode" in uploaded.error && String(uploaded.error.statusCode) === "409")
+    if (isExistingObjectError(uploaded.error))
       throw new ApiError(409, "L’état du fichier a changé. Rechargez les documents avant de réessayer.");
     if (!await compensate(admin, expected.path)) throw cleanupIncomplete();
     throw new ApiError(503, "Le fichier n’a pas pu être envoyé. Réessayez dans quelques instants.");
