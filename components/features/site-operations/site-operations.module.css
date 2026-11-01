@@ -405,3 +405,86 @@
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* FASTSPLIT site/tracking theme — opt-in Delivo theme. Applies only inside a ThemeSurface
+   (`.ui-v2`, which sets the --ui-* tokens for light and dark); unthemed consumers keep the rules
+   above. --ui-* tokens only, 1px borders. Status, SLA and budget tones keep their meaning
+   (green = on track, amber = attention, red = overdue/over budget) and always carry text. */
+:global(.ui-v2) .root { color: var(--ui-text); font-family: var(--ui-font); }
+:global(.ui-v2) .demoBanner { border-color: var(--ui-warning); background: var(--ui-surface); color: var(--ui-warning); }
+:global(.ui-v2) .header h2,
+:global(.ui-v2) .sectionHead h3,
+:global(.ui-v2) .subhead,
+:global(.ui-v2) .form h4 { color: var(--ui-text); }
+:global(.ui-v2) .muted,
+:global(.ui-v2) .sectionHead p,
+:global(.ui-v2) .hint,
+:global(.ui-v2) .readOnly p,
+:global(.ui-v2) .loading,
+:global(.ui-v2) .statRow span,
+:global(.ui-v2) .statRow small,
+:global(.ui-v2) .meta dt,
+:global(.ui-v2) .table thead th,
+:global(.ui-v2) .track small { color: var(--ui-text-muted); }
+:global(.ui-v2) .readOnly { border-color: var(--ui-border); border-left-color: var(--ui-warning); background: var(--ui-card); color: var(--ui-text); }
+:global(.ui-v2) .spinner { border-color: var(--ui-border); border-top-color: var(--ui-accent); }
+:global(.ui-v2) .statRow > div,
+:global(.ui-v2) .card,
+:global(.ui-v2) .form,
+:global(.ui-v2) .table { border-color: var(--ui-border); background: var(--ui-card); }
+:global(.ui-v2) .statRow strong,
+:global(.ui-v2) .cardHead strong,
+:global(.ui-v2) .meta dd,
+:global(.ui-v2) .notes,
+:global(.ui-v2) .table td,
+:global(.ui-v2) .table caption,
+:global(.ui-v2) .table tbody th,
+:global(.ui-v2) .fieldset legend,
+:global(.ui-v2) .plain li,
+:global(.ui-v2) .track > span { color: var(--ui-text); }
+:global(.ui-v2) .subform,
+:global(.ui-v2) .fieldset,
+:global(.ui-v2) .track { border-color: var(--ui-border); }
+:global(.ui-v2) .lineRow,
+:global(.ui-v2) .plain li { border-bottom-color: var(--ui-border); }
+:global(.ui-v2) .table th,
+:global(.ui-v2) .table td { border-top-color: var(--ui-border); }
+:global(.ui-v2) .table thead th { background: var(--ui-surface); }
+:global(.ui-v2) .details summary,
+:global(.ui-v2) .link { color: var(--ui-accent); }
+:global(.ui-v2) .link:disabled { color: var(--ui-text-muted); }
+:global(.ui-v2) .truncated { color: var(--ui-warning); }
+:global(.ui-v2) .details summary:focus-visible,
+:global(.ui-v2) .link:focus-visible,
+:global(.ui-v2) .tablist > button:focus-visible { outline: 3px solid var(--ui-focus); outline-offset: 2px; }
+/* Global primitives rendered by this module, scoped to its root. */
+:global(.ui-v2) .tablist > button { color: var(--ui-text-muted); }
+:global(.ui-v2) .tablist > button:global(.active) { background: var(--ui-surface); color: var(--ui-accent); box-shadow: inset 0 -2px 0 var(--ui-accent); }
+:global(.ui-v2) .root :global(.tag) { border: 1px solid var(--ui-border); background: var(--ui-surface); color: var(--ui-text-muted); }
+:global(.ui-v2) .root :global(.tag-blue),
+:global(.ui-v2) .root :global(.tag-violet) { color: var(--ui-accent); }
+:global(.ui-v2) .root :global(.tag-green) { color: var(--ui-success); }
+:global(.ui-v2) .root :global(.tag-amber) { border-color: var(--ui-warning); color: var(--ui-warning); }
+:global(.ui-v2) .root :global(.tag-red) { border-color: var(--ui-danger); color: var(--ui-danger); }
+:global(.ui-v2) .root :global(.alert) { border: 1px solid var(--ui-border); background: var(--ui-surface); color: var(--ui-text); }
+:global(.ui-v2) .root :global(.alert.error) { border-color: var(--ui-danger); color: var(--ui-danger); }
+:global(.ui-v2) .root :global(.alert.success) { border-color: var(--ui-success); color: var(--ui-success); }
+:global(.ui-v2) .root :global(.alert.warning) { border-color: var(--ui-warning); color: var(--ui-warning); }
+:global(.ui-v2) .root :global(.field) label,
+:global(.ui-v2) .root :global(.field) > span { color: var(--ui-text); }
+:global(.ui-v2) .root :global(.field) small { color: var(--ui-text-muted); }
+:global(.ui-v2) .root :global(.field) input,
+:global(.ui-v2) .root :global(.field) select,
+:global(.ui-v2) .root :global(.field) textarea { border: 1px solid var(--ui-border); background: var(--ui-bg); color: var(--ui-text); color-scheme: var(--ui-scheme); }
+:global(.ui-v2) .root :global(.field-invalid) input,
+:global(.ui-v2) .root :global(.field-invalid) select,
+:global(.ui-v2) .root :global(.field-invalid) textarea { border-color: var(--ui-danger); }
+:global(.ui-v2) .root :global(.field-error) { color: var(--ui-danger); }
+:global(.ui-v2) .root :global(.button.primary) { border-color: var(--ui-primary); background: var(--ui-primary); color: var(--ui-on-primary); }
+:global(.ui-v2) .root :global(.button.primary):hover:not(:disabled) { background: #136640; }
+:global(.ui-v2) .root :global(.button.outline) { border-color: var(--ui-border); background: transparent; color: var(--ui-text); }
+:global(.ui-v2) .root :global(.button.outline):hover:not(:disabled) { border-color: var(--ui-accent); background: var(--ui-surface); }
+:global(.ui-v2) .root :global(.empty-state) h3 { color: var(--ui-text); }
+:global(.ui-v2) .root :global(.empty-state) p { color: var(--ui-text-muted); }
+:global(.ui-v2) .root :global(.unavailable) { border-color: var(--ui-border); background: var(--ui-surface); color: var(--ui-text-muted); }
+:global(.ui-v2) .root :global(.unavailable) strong { color: var(--ui-text); }
