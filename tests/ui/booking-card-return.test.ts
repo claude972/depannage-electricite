@@ -20,18 +20,17 @@ test("return params: strict UUID + success|cancel; anything else ignored", () =>
   assert.equal(parseReturnParams(`?booking_request_id=${id}&booking_return=paid`), null);
 });
 
-test("controller: return ⇒ finalize (server), never a status from the URL; cancel waits for « cancelled » before dropping the key", () => {
+test("controller: return ⇒ server verification; the URL never changes the booking; redirect keeps draft/key", () => {
   const src = readFileSync("components/courant-app.tsx", "utf8");
   const effect = src.slice(src.indexOf('if (returnContext.kind === "booking")'), src.indexOf('if (returnContext.kind === "auth")'));
-  assert.match(effect, /if \(mode !== "live"\) \{[\s\S]*?return;\s*\}/, "kept until an identified session");
-  assert.match(effect, /if \(back\.state === "success"\) void finalizeBooking\(back\.requestId\);/);
-  assert.doesNotMatch(effect, /setBooking|clearBooking|confirmed/, "the URL never changes the booking state");
-  const fin = src.slice(src.indexOf("async function finalizeBooking("), src.indexOf("async function cancelBooking("));
-  assert.match(fin, /api<BookingReceipt>\("\/api\/bookings\/finalize", \{ request_id: requestId \}\)/);
-  assert.match(fin, /result\?\.status !== "confirmed"/);
+  assert.match(effect, /if \(mode !== "live" \|\| !userId\.current\) \{[\s\S]*?return;\s*\}/, "kept until an identified session");
+  assert.match(effect, /if \(back\.state === "success"\) void verifyCardHoldReturn\(back\.requestId\);/);
+  assert.doesNotMatch(effect, /setBooking|clearBooking|setPendingDraft/, "the URL never changes the booking state");
+  const verify = src.slice(src.indexOf("async function verifyCardHoldReturn("), src.indexOf("async function finalizeBooking("));
+  assert.match(verify, /verifyCardReturn\(\(p, b\) => api\(p, b\), requestId\)/);
   const cancel = src.slice(src.indexOf("async function cancelBooking("), src.indexOf("async function createIntervention("));
-  assert.ok(cancel.indexOf('r?.status !== "cancelled"') < cancel.indexOf("ctx.when(setBooking)(rest)"), "key dropped only after the server says cancelled");
-  const confirm = src.slice(src.indexOf("async function confirmBooking()"), src.indexOf("async function finalizeBooking("));
+  assert.ok(cancel.indexOf("if (!result.ok)") < cancel.indexOf("setBooking(rest)"), "key dropped only after the server says cancelled");
+  const confirm = src.slice(src.indexOf("async function confirmBooking()"), src.indexOf("async function verifyCardHoldReturn("));
   assert.match(confirm, /const url = safeCheckoutUrl\(result\.url\);\s*if \(!url\) throw/);
   assert.match(confirm, /window\.location\.assign\(url\);\s*return;/, "card: redirect, the draft/booking/key stay");
 });

@@ -15,6 +15,7 @@ import { demoNotificationPage } from "../lib/features/notifications/demo";
 import { createRevalidationScheduler } from "./app/revalidate";
 import { createRefreshCoordinator, refreshContextKey, type ReadResult, type RefreshCoordinator } from "./app/workspace-refresh";
 import { safeCheckoutUrl } from "./app/booking-status";
+import { CARD_RETURN_COPY, PENDING_COPY, cancelCardReturn, lookupPending, sameReturn, verifyCardReturn, type CardReturn } from "./app/card-return";
 import { createWorkspaceReader } from "./app/workspace-reader";
 import {
   acknowledgeUpload,
@@ -169,6 +170,13 @@ export default function CourantApp() {
   // by the SAME identity chain only, consumed after POST 201, dropped on any identity reset.
   const [booking, setBooking] = useState<BookingDraft | null>(null);
   const bookingCarry = useRef<BookingDraft | null>(null);
+  // Card-hold provider return, independent of the booking draft (see components/app/card-return.ts).
+  const [cardReturn, setCardReturn] = useState<CardReturn | null>(null);
+  const cardReturnRef = useRef<CardReturn | null>(null);
+  cardReturnRef.current = cardReturn;
+  // Pending card attempt lookup: once per identity (after login / opening the requests), no polling.
+  const [pendingLookup, setPendingLookup] = useState<"idle" | "error">("idle");
+  const pendingCheckedFor = useRef<string | null>(null);
   const [pendingInvitation, setPendingInvitation] = useState<string | null>(null);
   const [uploads, setUploads] = useState<UploadQueue[]>([]);
   // Incremented on every identity change: forces role spaces to remount with fresh local state.
@@ -218,6 +226,9 @@ export default function CourantApp() {
     setNotice("");
     setPendingDraft(null);
     setBooking(null);
+    setCardReturn(null);
+    setPendingLookup("idle");
+    pendingCheckedFor.current = null;
     setUploads([]);
     clearBooking(getDraftStorage());
     try {
@@ -416,12 +427,20 @@ export default function CourantApp() {
     };
   }, [refresh, clearSessionState]);
 
+  useEffect(() => {
+    if (mode !== "live" || booting || role !== "client" || !userId.current) return;
+    if (!["overview", "requests", "new", "detail"].includes(view)) return;
+    if (pendingCheckedFor.current === userId.current) return;
+    void checkPendingCardHold();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, booting, role, view, data.profile?.id]);
+
   // Return parameters are hints: re-read server state, never mark anything as paid.
   useEffect(() => {
     if (!returnContext || booting) return;
     if (returnContext.kind === "booking") {
       // Wait for an identified session: the hint is kept until then (never a status from the URL).
-      if (mode !== "live") {
+      if (mode !== "live" || !userId.current) {
         setNotice("Connectez-vous avec le même compte pour vérifier votre réservation. Aucun statut n’est déduit du lien.");
         setAuthMode("login");
         navigate("auth");
@@ -429,11 +448,14 @@ export default function CourantApp() {
       }
       const back = returnContext;
       setReturnContext(null);
-      if (back.state === "success") void finalizeBooking(back.requestId);
-      else {
-        setNotice("Paiement interrompu : aucune empreinte n’a été confirmée et rien n’a été débité. Vous pouvez réessayer ou annuler la réservation.");
-        if (pendingDraft) navigate("new");
-      }
+      const state: CardReturn = {
+        requestId: back.requestId,
+        userId: userId.current,
+        phase: back.state === "success" ? "checking" : "needs_action",
+        message: back.state === "success" ? CARD_RETURN_COPY.checking : CARD_RETURN_COPY.interrupted,
+      };
+      setCardReturn(state);
+      if (back.state === "success") void verifyCardHoldReturn(back.requestId);
       return;
     }
     if (returnContext.kind === "auth") {
@@ -1188,50 +1210,77 @@ export default function CourantApp() {
       );
     });
   }
-  // Card hold return (?booking_request_id&booking_return=success): the URL proves nothing; the
-  // server finalize re-verifies the provider authorisation before confirming. Same key, same draft.
-  async function finalizeBooking(requestId: string) {
-    return run(async (ctx) => {
-      let result: BookingReceipt;
+  // Card hold verification (return, « Vérifier mon empreinte », retry): the URL proves nothing;
+  // the server finalize decides. The dedicated return state is cleared ONLY on « confirmed ».
+  async function verifyCardHoldReturn(requestId: string) {
+    const me = userId.current;
+    setCardReturn((c) => (sameReturn(c, requestId, me) ? { ...c, phase: "checking", message: CARD_RETURN_COPY.checking } : c));
+    const result = await verifyCardReturn((p, b) => api(p, b), requestId);
+    if (userId.current !== me) return; // identity changed meanwhile: never apply
+    if (!result.ok) {
+      setCardReturn((c) => (sameReturn(c, requestId, me) ? { ...c, phase: "needs_action", message: result.message } : c));
+      return false;
+    }
+    setCardReturn((c) => (c?.requestId === requestId ? null : c));
+    await refresh();
+    if (booking?.request_id === requestId) {
+      setPendingDraft(null);
+      setBooking(null);
+      clearBooking(getDraftStorage());
       try {
-        result = await api<BookingReceipt>("/api/bookings/finalize", { request_id: requestId });
-      } catch (e) {
-        if (e instanceof ApiRequestError && e.status === 409)
-          throw new Error("Votre réservation n’a pas pu être confirmée avec cette empreinte. Vérifiez « Mes demandes » ; rien n’a été débité.");
-        throw new Error("La vérification de votre empreinte n’a pas abouti. Rien n’a été débité ; réessayez dans un instant depuis la confirmation.");
-      }
-      if (result?.status !== "confirmed" || !result.intervention?.id)
-        throw new Error("La vérification de votre empreinte n’a pas abouti. Rien n’a été débité ; réessayez dans un instant.");
-      if (ctx.alive()) await refresh();
-      if (booking?.request_id === requestId) {
-        ctx.when(setPendingDraft)(null);
-        ctx.when(setBooking)(null);
-        ctx.when(() => {
-          clearBooking(getDraftStorage());
-          try {
-            sessionStorage.removeItem(DRAFT_KEY);
-          } catch {}
-        })();
-      }
-      ctx.when(setSelectedId)(result.intervention.id);
-      ctx.when(navigate)("detail", result.intervention.id);
-      ctx.notice("Demande confirmée. Empreinte bancaire enregistrée : aucun débit ; seul le montant du devis accepté pourra être prélevé.");
-    });
+        sessionStorage.removeItem(DRAFT_KEY);
+      } catch {}
+    }
+    setSelectedId(result.interventionId);
+    navigate("detail", result.interventionId);
+    setNotice("Demande confirmée. Empreinte bancaire enregistrée : aucun débit ; seul le montant du devis accepté pourra être prélevé.");
+    return true;
   }
-  // Explicit cancellation of a card-hold attempt (server releases the hold). The key is then
-  // dropped from the booking so a new attempt (e.g. on site) uses a fresh key; the draft stays.
-  async function cancelBooking() {
-    return run(async (ctx) => {
-      const id = booking?.request_id;
-      if (!id || !booking) throw new Error("Aucune réservation en cours à annuler.");
-      const r = await api<{ status?: string }>("/api/bookings/cancel", { request_id: id });
-      if (r?.status !== "cancelled") throw new Error("L’annulation n’a pas pu être confirmée. Réessayez.");
+  async function checkPendingCardHold() {
+    const me = userId.current;
+    if (!me || modeRef.current !== "live") return;
+    pendingCheckedFor.current = me;
+    setPendingLookup("idle");
+    const r = await lookupPending((p) => api(p));
+    if (userId.current !== me) return; // late reply for another identity
+    if (!r.ok) {
+      setPendingLookup("error");
+      return;
+    }
+    if (r.pending && !cardReturnRef.current)
+      setCardReturn({ requestId: r.pending.request_id, userId: me, phase: "needs_action", message: PENDING_COPY.found });
+  }
+  async function finalizeBooking(requestId: string) {
+    if (!cardReturnRef.current || cardReturnRef.current.requestId !== requestId) {
+      const me = userId.current;
+      if (!me) return false;
+      setCardReturn({ requestId, userId: me, phase: "checking", message: CARD_RETURN_COPY.checking });
+    }
+    return Boolean(await verifyCardHoldReturn(requestId));
+  }
+  // Server cancel of a card-hold attempt (from the return or from the confirmation). The key and
+  // the return are dropped only after the server answers « cancelled »; the draft stays.
+  async function cancelBooking(explicitId?: string) {
+    const requestId = explicitId ?? cardReturnRef.current?.requestId ?? booking?.request_id;
+    const me = userId.current;
+    if (!requestId || !me) return false;
+    setCardReturn((c) => (sameReturn(c, requestId, me) ? { ...c, phase: "cancelling" } : c));
+    const result = await cancelCardReturn((p, b) => api(p, b), requestId);
+    if (userId.current !== me) return false;
+    if (!result.ok) {
+      setCardReturn((c) => (sameReturn(c, requestId, me) ? { ...c, phase: "needs_action", message: result.message } : c));
+      if (!cardReturnRef.current) setError(result.message);
+      return false;
+    }
+    setCardReturn((c) => (c?.requestId === requestId ? null : c));
+    if (booking?.request_id === requestId) {
       const { request_id: _drop, ...rest } = booking;
       void _drop;
-      ctx.when(setBooking)(rest);
-      ctx.when(() => saveBooking(getDraftStorage(), rest))();
-      ctx.notice("Réservation annulée. Aucun débit n’a été effectué ; votre saisie est conservée.");
-    });
+      setBooking(rest);
+      saveBooking(getDraftStorage(), rest);
+    }
+    setNotice("Réservation annulée par le service de paiement. Votre saisie est conservée.");
+    return true;
   }
   async function createIntervention(values: RequestValues, photos: File[] = []) {
     return run(async (ctx) => {
@@ -2628,6 +2677,9 @@ export default function CourantApp() {
       saveBooking(getDraftStorage(), next);
     },
     booking: mode === "live" && pendingDraft ? booking : null,
+    cardReturn: mode === "live" ? cardReturn : null,
+    pendingLookupFailed: mode === "live" && pendingLookup === "error",
+    retryPendingLookup: () => void checkPendingCardHold(),
     data,
     professional,
     capabilities,
