@@ -3,7 +3,7 @@
 // Same PublicChrome / ThemeSurface as the public home; this route is outside the hash-routed app,
 // so every chrome action is a real navigation back to it (/#new/<category>, /#auth, /#help…).
 // The price is the canonical indicative estimate of the category, labelled as such.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { money } from "../app/format";
 import type { Category } from "../app/types";
 import { PublicChrome, type HomeHandlers, type HomeTargetView } from "./public-chrome";
@@ -44,7 +44,19 @@ export function PublicServicePage({ service, initialOpen = false }: { service: S
   const range = `${money(estimate.min)} – ${money(estimate.max)}`;
   // Main CTA, final band and the fixed bar's « Confirmer » share ONE action: open the wizard here.
   const [open, setOpen] = useState(initialOpen);
-  const openBooking = () => setOpen(true);
+  // The server HTML shows « Confirmer » before React has hydrated: a click then would be lost
+  // (no handler yet). The buttons stay visibly disabled (aria-busy) until the effect runs, i.e.
+  // once the handlers are attached; openBooking also refuses before that point.
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
+  const openBooking = () => {
+    if (ready) setOpen(true);
+  };
+  const confirmProps = {
+    disabled: !ready,
+    "aria-busy": ready ? undefined : true,
+    "aria-describedby": ready ? undefined : "booking-preparing",
+  } as const;
   const crumb = (
     <nav className={styles.crumb} aria-label="Fil d’Ariane">
       <a href="/">Accueil</a>
@@ -99,7 +111,12 @@ export function PublicServicePage({ service, initialOpen = false }: { service: S
           </div>
           <div className={styles.ctaRow}>
             <p className={styles.proof}>Demande sans engagement · Rien n’est envoyé avant votre confirmation</p>
-            <button type="button" className={styles.cta} onClick={openBooking} data-service-cta="" data-booking-open="">
+            {!ready && (
+              <span id="booking-preparing" role="status" className={styles.preparing}>
+                Préparation du formulaire…
+              </span>
+            )}
+            <button type="button" className={styles.cta} onClick={openBooking} {...confirmProps} data-service-cta="" data-booking-open="">
               Confirmer
             </button>
           </div>
@@ -201,7 +218,7 @@ export function PublicServicePage({ service, initialOpen = false }: { service: S
         <p className={styles.credit}>Photo d’illustration (Pexels) : elle ne représente ni notre équipe ni un artisan de la plateforme.</p>
       </div>
       <BookingBar title={service.title} range={range} compact>
-        <button type="button" className={bookingStyles.barButton} onClick={openBooking} data-booking-open="">
+        <button type="button" className={bookingStyles.barButton} onClick={openBooking} {...confirmProps} data-booking-open="">
           Confirmer
         </button>
       </BookingBar>
