@@ -20,7 +20,7 @@ Le workspace lit une ligne supplémentaire pour les quatre collections concerné
 
 ## Vérification
 
-- **780 tests PASS, zéro échec, zéro SKIP**, sur l’état final : `QA_BUSINESS_4C_HTML=/tmp/depannage-public-4c-home-private.html npm test`. Ce chemin permet uniquement la lecture locale d’un ancien HTML public déjà capturé ; aucun HTML complet n’est commité. Log privé : `/tmp/depannage-detail-read-final-full-tests.log`.
+- **780 tests PASS, zéro échec, zéro SKIP**, sur le premier livrable `e0eeee4` : `QA_BUSINESS_4C_HTML=/tmp/depannage-public-4c-home-private.html npm test`. Ce chemin permet uniquement la lecture locale d’un ancien HTML public déjà capturé ; aucun HTML complet n’est commité. Log privé : `/tmp/depannage-detail-read-final-full-tests.log`.
 - `npm run typecheck` strict : **PASS** ; `git diff --check` : **PASS**.
 - Treize nouveaux tests utilisent les vraies routes, le vrai client Supabase et un fetch simulé : projections et filtres, utilisateur sans session, client propriétaire sans artisan, absence RLS simulée, erreurs/malformations, dépendances cachées, paiement hors20 et scope201, plafonds des documents/paiements, révocation/réaffectation retardée, limites du workspace et compatibilité des anciennes réponses.
 
@@ -29,3 +29,12 @@ La suite globale inclut les tests Chromium sur mini-apps locales existantes. Auc
 Une première passe globale avait un SKIP dû au chemin HTML non configuré. Une vérification séparée l’a passé, puis le correctif distinguant `null` malformé de l’absence RLS a justifié la passe finale780/780 ci-dessus.
 
 Le lien temporaire `node_modules` créé vers le cache QA existant a été retiré après les vérifications, sans installation ni modification du cache. La branche historique QA reste préservée. Ce backend seul ne ferme pas le besoin fonctionnel cap100 avant raccordement front et recette réelle.
+
+
+## Correctif P2 après revue Claude `d5c187b`
+
+Les lignes du devis sont stockées verbatim par `send_quote`, dont la projection SQL ignore les clés supplémentaires. Le décodeur retire désormais ces clés sans les exposer et conserve la validation stricte des colonnes du devis. Une reproduction PostgreSQL isolée (PGlite, expression exacte de validation de001) confirme que `quantity: "2.0"` est accepté ; le nombre JSON2.0 est déjà le nombre JavaScript2 et passait le validateur précédent.
+
+Les chaînes numériques des quantités et prix unitaires deviennent des nombres uniquement si leur valeur entière est exacte, sûre et dans les bornes SQL (quantité1–1000, prix0–10000000). Les fractions même très proches d’un entier, valeurs hors bornes, chaînes non numériques, null et booléens restent refusés. Les clés supplémentaires d’une ligne ne sont jamais renvoyées.
+
+Vérification du correctif : **14/14 tests ciblés PASS, aucun SKIP**, `tsx --test tests/detail-read-backend.test.ts tests/workspace-limits.test.ts` ; **typecheck strict PASS**, **diff --check PASS**. Log : `/tmp/depannage-detail-read-p2-tests.log`. La suite globale780 a été exécutée au livrable précédent et n’a pas été relancée pour ce correctif ciblé. Aucune recette cloud/RLS réelle supplémentaire.

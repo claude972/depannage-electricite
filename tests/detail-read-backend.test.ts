@@ -122,3 +122,23 @@ test("final user-scoped read discards an in-flight revoked or reassigned dossier
     assert.ok(!(await r.text()).includes("Un tableau en panne"));
   }
 });
+
+
+test("stored SQL-valid quote lines project known fields and normalize exact bounded numeric strings", async () => {
+  for (const quantity of [JSON.parse("2.0"), "2.0", "2e0", "+.2e1", " 002.000 "]) {
+    const h = routeHarness("detail", { rows: { quotes: [quote(1, { lines: [{ label: "Diagnostic", quantity, unit_price_cents: "1000.0", internal_extra: { private: "never expose" } }] })] } });
+    const response = await h.get(); assert.equal(response.status, 200);
+    const body = await response.json(); assert.equal(body.quotes.status, "ok");
+    assert.deepEqual(body.quotes.items[0].lines, [{ label: "Diagnostic", quantity: 2, unit_price_cents: 1000 }]);
+    assert.ok(!JSON.stringify(body).includes("internal_extra"));
+    assert.equal(detailReadSchema.safeParse(body).success, true);
+  }
+  for (const field of ["quantity", "unit_price_cents"]) {
+    const invalid = [null, true, false, "", "Infinity", "NaN", "2.1", "2.0000000000000000001", "1e999", {}, [], field === "quantity" ? 1001 : 10000001, field === "quantity" ? 0 : -1];
+    for (const value of invalid) {
+      const line = { label: "Diagnostic", quantity: 2, unit_price_cents: 1000, [field]: value };
+      const body = await (await routeHarness("detail", { rows: { quotes: [quote(1, { lines: [line] })] } }).get()).json();
+      assert.equal(body.quotes.status, "error", `${field}=${JSON.stringify(value)}`);
+    }
+  }
+});

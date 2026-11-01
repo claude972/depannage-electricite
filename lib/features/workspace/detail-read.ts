@@ -14,12 +14,32 @@ export const DETAIL_PROJECTIONS = {
 export const detailIdSchema = z.uuid();
 const date = z.iso.datetime({ offset: true });
 const cents = z.number().int().nonnegative();
+// send_quote stores the original JSON after PostgreSQL numeric validation.
+// Normalize only exact integer decimal strings; never coerce null/booleans or round fractions.
+const storedInteger = (value: unknown): unknown => {
+  if (typeof value !== "string" || value.length > 80) return value;
+  const match = /^([+-]?)(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/.exec(value.trim());
+  if (!match || !(match[2] || match[3])) return value;
+  const exponent = Number(match[4] ?? 0);
+  if (!Number.isInteger(exponent) || Math.abs(exponent) > 100) return value;
+  const digits = BigInt((match[2] || "0") + (match[3] || ""));
+  const shift = exponent - (match[3]?.length ?? 0);
+  if (shift < 0 && digits % (10n ** BigInt(-shift)) !== 0n) return value;
+  const integer = shift < 0 ? digits / (10n ** BigInt(-shift)) : digits * (10n ** BigInt(shift));
+  const number = Number(match[1] === "-" ? -integer : integer);
+  return Number.isSafeInteger(number) ? number : value;
+};
+const quoteLine = z.object({
+  label: z.string(),
+  quantity: z.preprocess(storedInteger, z.number().int().min(1).max(1000)),
+  unit_price_cents: z.preprocess(storedInteger, z.number().int().min(0).max(10000000)),
+}).strip();
 const rowSchemas = {
   intervention: z.object({ id: detailIdSchema, client_id: detailIdSchema, artisan_id: detailIdSchema.nullable(), site_id: detailIdSchema.nullable(),
     category: z.enum(["outage", "panel", "socket", "lighting", "diagnostic"]), description: z.string(), address: z.string(), postal_code: z.string().regex(/^[0-9]{5}$/), city: z.string(), urgency: z.enum(["urgent", "scheduled"]),
     estimate_min_cents: cents, estimate_max_cents: cents, status: z.enum(["requested", "assigned", "quoted", "accepted", "in_progress", "completed", "paid", "cancelled"]),
     created_at: date, updated_at: date, completed_at: date.nullable(), paid_at: date.nullable(), travel_stage: z.enum(["planned", "en_route", "on_site"]) }).strict(),
-  quotes: z.object({ id: detailIdSchema, intervention_id: detailIdSchema, artisan_id: detailIdSchema, lines: z.array(z.object({ label: z.string(), quantity: z.number().int().positive(), unit_price_cents: cents }).strict()), subtotal_cents: cents, tax_rate: z.union([z.literal(0), z.literal(5.5), z.literal(10), z.literal(20)]), tax_cents: cents, total_cents: cents, status: z.enum(["sent", "accepted", "rejected"]), created_at: date, accepted_at: date.nullable() }).strict(),
+  quotes: z.object({ id: detailIdSchema, intervention_id: detailIdSchema, artisan_id: detailIdSchema, lines: z.array(quoteLine), subtotal_cents: cents, tax_rate: z.union([z.literal(0), z.literal(5.5), z.literal(10), z.literal(20)]), tax_cents: cents, total_cents: cents, status: z.enum(["sent", "accepted", "rejected"]), created_at: date, accepted_at: date.nullable() }).strict(),
   payments: z.object({ id: detailIdSchema, quote_id: detailIdSchema, total_cents: cents, currency: z.literal("eur"), status: z.enum(["pending", "paid", "failed"]), created_at: date, paid_at: date.nullable() }).strict(),
   messages: z.object({ id: detailIdSchema, intervention_id: detailIdSchema, author_id: detailIdSchema, body: z.string(), created_at: date }).strict(),
   documents: z.object({ id: detailIdSchema, intervention_id: detailIdSchema, owner_id: detailIdSchema, name: z.string(), mime_type: z.string(), created_at: date }).strict(),
