@@ -223,8 +223,7 @@ export function ClientSpace({ session }: { session: Session }) {
               booking={session.booking}
               busy={session.busy}
               profileId={session.profileId}
-              updateProfile={session.updateProfile}
-              createIntervention={(values) => session.createIntervention(values, [])}
+              confirmBooking={session.confirmBooking}
               onEdit={() => setEditBooking(true)}
               onContactChange={session.updateBookingContact}
               onPaymentChange={session.updateBookingPayment}

@@ -108,17 +108,20 @@ test("replay of the same key after a lost reply ⇒ ONE dossier (local idempoten
   }
 });
 
-test("controller: key proven before the POST, payload only gains request_id, 409 ⇒ « Mes demandes », no regeneration; signup guidance", () => {
+test("controller: booking ⇒ POST /api/bookings (flat contract body, key proven first, 409 ⇒ « Mes demandes »), never the legacy route", () => {
   const src = readFileSync("components/courant-app.tsx", "utf8");
-  const create = src.slice(src.indexOf("// 1. Create the dossier exactly once."), src.indexOf("const id = result.intervention?.id;"));
-  assert.ok(create.indexOf("ensureRequestId(getDraftStorage(), booking)") < create.indexOf('api<{ intervention: Intervention }>("/api/interventions", payload)'));
-  assert.match(create, /if \(!keyed\)\s*throw new Error\(/, "not provable ⇒ local refusal, no POST");
-  assert.match(create, /payload = \{ \.\.\.values, request_id: keyed\.request_id \};/);
-  assert.match(create, /e\.status === 409/);
-  assert.match(create, /Vérifiez « Mes demandes »/);
-  assert.doesNotMatch(create, /newRequestId/, "the controller never mints a key itself");
-  assert.equal((create.match(/"\/api\/interventions"/g) || []).length, 1);
+  const fn = src.slice(src.indexOf("async function confirmBooking()"), src.indexOf("async function createIntervention("));
+  assert.ok(fn.indexOf("ensureRequestId(getDraftStorage(), current)") < fn.indexOf('api<BookingReceipt>("/api/bookings", body)'));
+  assert.match(fn, /if \(!keyed\)\s*throw new Error\(/, "not provable ⇒ local refusal, no POST");
+  for (const field of ["request_id: keyed.request_id", "service_slug: current.slug", "category: draft.category", "description: draft.description", "address: draft.address", "postal_code: draft.postal_code", "city: draft.city", "urgency: draft.urgency", "payment_choice: current.payment"])
+    assert.ok(fn.includes(field), field);
+  assert.match(fn, /contact: \{ first_name: c\.first_name\.trim\(\), last_name: c\.last_name\.trim\(\), email: c\.email\.trim\(\), phone: c\.phone\.trim\(\) \}/);
+  assert.match(fn, /e\.status === 409/);
+  assert.match(fn, /result\?\.status !== "confirmed"/, "only a « confirmed » receipt consumes the draft");
+  assert.doesNotMatch(fn, /\/api\/interventions|newRequestId/, "no silent fallback, no key minted here");
+  // Legacy create is unchanged and keyless (no booking context any more).
+  const create = src.slice(src.indexOf("async function createIntervention("), src.indexOf("const id = result.intervention?.id;"));
+  assert.doesNotMatch(create, /ensureRequestId|request_id: keyed/, "legacy create sends no booking key");
   assert.match(src, /revenez dans CET onglet et connectez-vous/);
-  // Canonical draft / offline format untouched.
   assert.doesNotMatch(readFileSync("lib/shared/request-draft.ts", "utf8") + readFileSync("public/offline-request.js", "utf8"), /request_id/);
 });
