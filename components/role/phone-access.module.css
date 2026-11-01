@@ -1,0 +1,183 @@
+/* Phone access (verified phone, no password). --ui-* tokens, light/dark, 44 px, focus visible. */
+.root {
+  display: grid;
+  gap: 12px;
+}
+.form {
+  display: grid;
+  gap: 14px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.form :global(.field) {
+  display: grid;
+  gap: 6px;
+}
+.form :global(.field) label {
+  color: var(--ui-text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.form :global(.field) small {
+  color: var(--ui-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.form :global(.field) :global(.field-error) {
+  color: var(--ui-danger);
+  font-weight: 600;
+}
+.form input {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  font: inherit;
+  font-size: 16px;
+  color-scheme: var(--ui-scheme);
+  scroll-margin-bottom: calc(var(--booking-bar-h, 88px) + 24px + env(safe-area-inset-bottom, 0px));
+}
+.form [aria-invalid="true"] {
+  border-color: var(--ui-danger);
+}
+.message {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font-size: 14px;
+}
+.error {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--ui-danger);
+  border-radius: 12px;
+  background: var(--ui-surface);
+  color: var(--ui-danger);
+  font-size: 14px;
+  font-weight: 600;
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+.link {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ui-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.link:disabled {
+  color: var(--ui-text-muted);
+  cursor: default;
+}
+.submit {
+  justify-self: start;
+  min-height: 48px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+a.submit {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+.submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.link:focus-visible,
+.submit:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .submit {
+    justify-self: stretch;
+  }
+}
+
+/* /suivi page */
+.page {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 32px 16px 72px;
+}
+.page h1 {
+  margin: 0 0 8px;
+  color: var(--ui-text);
+  font-size: 28px;
+  font-weight: 700;
+}
+.lead {
+  margin: 0 0 20px;
+  color: var(--ui-text-muted);
+  line-height: 1.6;
+}
+.card {
+  padding: 24px;
+  border: 1px solid var(--ui-border);
+  border-radius: 16px;
+  background: var(--ui-card);
+}
+/* Verified history */
+.history {
+  display: grid;
+  gap: 16px;
+}
+.historyList {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.historyRow {
+  display: grid;
+  gap: 4px;
+  min-height: 44px;
+  padding: 14px 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-card);
+  color: var(--ui-text);
+  text-decoration: none;
+}
+.historyRow:hover {
+  border-color: var(--ui-accent);
+}
+.historyRow:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+.historyRow > span {
+  color: var(--ui-text-muted);
+  font-size: 14px;
+}
+.historyRow > .historyStatus {
+  color: var(--ui-accent);
+  font-weight: 600;
+}

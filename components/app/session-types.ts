@@ -96,6 +96,7 @@ export interface Session {
   /** Booking confirmation « Modifier »: replace the kept request draft / private contact (no send). */
   updatePendingDraft(values: RequestValues): void;
   updateBookingContact(contact: BookingDraft["contact"]): void;
+  updateBookingPayment(payment: NonNullable<BookingDraft["payment"]>): void;
   data: Workspace;
   professional: ProfessionalData;
   capabilities: Capabilities;
@@ -195,6 +196,8 @@ export interface Session {
 
   /** Creates the dossier, then uploads the given photos one by one (live only). */
   createIntervention(values: RequestValues, photos?: File[]): Promise<boolean>;
+  /** Service booking: POST /api/bookings (idempotent key), never the legacy route. */
+  confirmBooking(): Promise<boolean>;
   /** Photo queues per dossier (pending, failed or uncertain items); never overwritten by a new request. */
   uploads: UploadQueue[];
   /**

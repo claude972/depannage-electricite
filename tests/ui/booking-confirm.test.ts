@@ -12,7 +12,7 @@ const draft = { category: "socket" as const, description: "Prestation choisie : 
 const booking: BookingDraft = { slug: "plusieurs-prises-sans-courant", urgent: false, slot: "tomorrow", notes: "", contact: { civility: "mme", first_name: "Léa", last_name: "Martin", email: "lea@example.test", phone: "0696 12 34 56", company: false } };
 
 test("confirmation renders the recap, private contact apart from the description, and an explicit send button", () => {
-  const html = renderToStaticMarkup(createElement(BookingConfirm, { draft, booking, busy: false, profileId: "u1", updateProfile: async () => true, createIntervention: async () => true, onEdit() {}, onContactChange() {} }));
+  const html = renderToStaticMarkup(createElement(BookingConfirm, { draft, booking, busy: false, profileId: "u1", confirmBooking: async () => true, onEdit() {}, onContactChange() {} }));
   assert.match(html, /Confirmez l’envoi de votre demande/);
   assert.match(html, /Rien n’a encore été envoyé/);
   assert.match(html, /Plusieurs prises sans courant/);
@@ -24,13 +24,14 @@ test("confirmation renders the recap, private contact apart from the description
   assert.ok(!draft.description.includes("Martin") && !draft.description.includes("0696"), "contact never in the description");
 });
 
-test("send logic: PATCH then POST, once; refused contact ⇒ no API call; PATCH failure ⇒ no POST", () => {
+test("send logic: one confirmBooking call, double click refused, invalid contact or missing payment ⇒ no call", () => {
   const src = readFileSync("components/role/booking-confirm.tsx", "utf8");
   assert.match(src, /if \(inFlight\.current \|\| busy\) return; \/\/ one POST only/);
-  assert.match(src, /const ok = await updateProfile\(patch\);\s*if \(!ok \|\| !alive\.current \|\| identity\.current !== startedAs\) return;/);
-  assert.match(src, /if \(!patch \|\| Object\.keys\(contactErrors\(contact\)\)\.length\) \{/);
-  const order = src.indexOf("await updateProfile(patch)") < src.indexOf("await createIntervention(draft)");
-  assert.ok(order, "profile before the request");
+  const send = src.slice(src.indexOf("async function send()"));
+  assert.ok(send.indexOf("contactErrors(contact)") < send.indexOf("await confirmBooking()"));
+  assert.ok(send.indexOf("if (!booking.payment)") < send.indexOf("await confirmBooking()"));
+  const code = src.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, "");
+  assert.doesNotMatch(code, /updateProfile|createIntervention|\/api\/interventions/, "booking never uses the legacy create");
 });
 
 test("wiring: client « new » shows the confirmation only with a draft + booking of this identity; no POST on login", () => {
@@ -57,4 +58,17 @@ test("« Modifier »: contact edited inside the confirmation (bounded), request 
 test("return from the signup email (same tab, ?auth=confirmed) resumes the confirmation, never POSTs", () => {
   const app = readFileSync("components/courant-app.tsx", "utf8");
   assert.match(app, /const resume = mode === "live" && pendingDraft !== null;[\s\S]{0,500}if \(resume\) navigate\("new"\);/);
+});
+
+test("guest checkout: payment line shown; card hold not available ⇒ honest refusal before any call + switch to on site", () => {
+  const onSite = renderToStaticMarkup(createElement(BookingConfirm, { draft, booking: { ...booking, payment: "on_site" }, busy: false, profileId: "u1", confirmBooking: async () => true, onEdit() {}, onContactChange() {} }));
+  assert.match(onSite, /data-booking-payment="on_site"/);
+  assert.match(onSite, /Rien n’est payé à la réservation/);
+  assert.doesNotMatch(onSite, /\bpayé\b(?! à la réservation)/, "never « payé »");
+  const card = renderToStaticMarkup(createElement(BookingConfirm, { draft, booking: { ...booking, payment: "card_hold" }, busy: false, profileId: "u1", confirmBooking: async () => true, onEdit() {}, onContactChange() {}, onPaymentChange() {} }));
+  assert.match(card, /Une empreinte n’est pas un débit/);
+  assert.match(card, /Choisir le règlement sur place/);
+  const src = readFileSync("components/role/booking-confirm.tsx", "utf8");
+  const send = src.slice(src.indexOf("async function send()"));
+  assert.ok(send.indexOf('booking.payment === "card_hold" && !cardAvailable') < send.indexOf("await confirmBooking()"), "refused before the POST");
 });

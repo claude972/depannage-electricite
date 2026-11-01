@@ -1,13 +1,16 @@
 "use client";
 // Service booking wizard (FASTSPLIT-SERVICE-BOOKING-FLOW-001), opened in place on a service page.
-// Four steps: urgency (or a wished slot: a wish, never a booked appointment), private contact
-// details, intervention address, summary. Nothing is sent here: the last step stores the canonical
-// public request draft + the booking extras (components/app/booking-draft.ts) in this tab, then
-// goes to sign-in; the request is sent only after login and an explicit confirmation. Contact
-// details never enter the request description. The category comes from the service: never re-asked.
+// Five steps: urgency (or a wished slot: a wish, never a booked appointment), private contact
+// details, intervention address, payment choice (on site, or a card authorisation that is NOT a
+// charge), summary. Nothing is sent here: the last step stores the canonical public request draft +
+// the booking extras (components/app/booking-draft.ts, payment included) in this tab, then the
+// phone is verified inline (PhoneAccess, no account required); the request is sent only after that
+// and an explicit confirmation. Contact details never enter the request description. The category
+// comes from the service: never re-asked.
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { AddressField, createAddressApi, type AddressValue } from "../app/address-field";
-import { BOOKING_DRAFT_KEY, CIVILITIES, SLOTS, SLOT_LABEL, bookingDescription, contactErrors, newRequestId, parseBooking, readBooking, saveBooking, type BookingContact, type BookingDraft, type Civility, type Slot } from "../app/booking-draft";
+import { BOOKING_DRAFT_KEY, CIVILITIES, PAYMENT_LABEL, SLOTS, SLOT_LABEL, bookingDescription, contactErrors, newRequestId, parseBooking, readBooking, saveBooking, type BookingContact, type BookingDraft, type Civility, type PaymentChoice, type Slot } from "../app/booking-draft";
+import { PhoneAccess, phoneActionLabel, phoneAuthOn, useBookingOptions, type OptionsApi, type OptionsState, type PhoneApi, type PhoneState } from "./phone-access";
 import { getDraftStorage } from "../app/request-draft-boot";
 import { PUBLIC_DRAFT_KEY, parsePublicDraftValues, readPublicDraft, savePublicDraft } from "../../lib/shared/request-draft";
 import { Field } from "../app/ui";
@@ -15,7 +18,8 @@ import type { ServiceEntry } from "./public-service-catalog";
 import styles from "./public-booking.module.css";
 
 // ---- State and pure rules ------------------------------------------------------------------------
-export type BookingStep = 1 | 2 | 3 | 4;
+export type BookingStep = 1 | 2 | 3 | 4 | 5;
+export const LAST_STEP: BookingStep = 5;
 export type BookingState = {
   step: BookingStep;
   urgent: boolean | null;
@@ -23,6 +27,7 @@ export type BookingState = {
   notes: string;
   contact: BookingContact;
   address: AddressValue;
+  payment: PaymentChoice | null;
 };
 export const EMPTY_BOOKING: BookingState = {
   step: 1,
@@ -31,9 +36,31 @@ export const EMPTY_BOOKING: BookingState = {
   notes: "",
   contact: { civility: "", first_name: "", last_name: "", email: "", phone: "", company: false },
   address: { address: "", postal_code: "", city: "" },
+  payment: null,
 };
-export const STEP_TITLES: Record<BookingStep, string> = { 1: "Urgence", 2: "Vos coordonnées", 3: "Adresse d’intervention", 4: "Récapitulatif" };
-export const STEP_ACTION: Record<BookingStep, string> = { 1: "Continuer", 2: "Continuer", 3: "Continuer", 4: "Continuer vers la connexion" };
+export const STEP_TITLES: Record<BookingStep, string> = { 1: "Urgence", 2: "Vos coordonnées", 3: "Adresse d’intervention", 4: "Paiement", 5: "Récapitulatif" };
+export const STEP_ACTIONS: Record<BookingStep, string> = { 1: "Continuer", 2: "Continuer", 3: "Continuer", 4: "Continuer", 5: "Vérifier mon téléphone" };
+/** Payment copy: honest, no « payé », no guarantee. */
+export const STEP_ACTION = STEP_ACTIONS;
+export const PAYMENT_COPY: Record<PaymentChoice, { title: string; text: string }> = {
+  on_site: { title: "Règlement sur place", text: "Vous réglez l’artisan après l’intervention. La demande reste non payée jusque-là." },
+  card_hold: { title: "Empreinte bancaire", text: "Une autorisation sur votre carte, sans débit à la réservation. Seul le montant du devis accepté pourra être prélevé ensuite." },
+};
+export const CARD_UNAVAILABLE = "Bientôt disponible. En attendant, choisissez le règlement sur place.";
+export const METHOD_UNAVAILABLE = "Ce mode de règlement n’est pas disponible pour le moment.";
+export const OPTIONS_FAILED = "Options de paiement momentanément indisponibles, réessayez.";
+export const SMS_OFF = "La vérification par SMS n’est pas encore disponible.";
+/** Optional alternative (and the only path while phone auth is off): sign in to an existing
+ *  account; the saved booking is kept and confirmed after login. */
+export const ACCOUNT_ACTION = "Utiliser mon compte existant";
+export type PaymentAvailability = Partial<Record<PaymentChoice, { available: boolean; reason?: string }>>;
+/** Availability from the server options only: unknown / failed ⇒ nothing available. */
+export function paymentAvailability(o: OptionsState): PaymentAvailability {
+  if (o.status !== "ready") return {};
+  const out: PaymentAvailability = {};
+  for (const m of o.options.payment_methods) out[m.id] = { available: m.available, ...(m.reason ? { reason: m.reason } : {}) };
+  return out;
+}
 const CIVILITY_LABEL: Record<Civility, string> = { mme: "Madame", m: "Monsieur", "": "Non précisé" };
 export const SAVE_FAILED_MESSAGE =
   "Votre demande n’a pas pu être conservée dans ce navigateur (stockage local refusé ou plein). Rien n’a été envoyé. Vos réponses restent affichées : autorisez le stockage pour ce site ou réessayez.";
@@ -55,10 +82,17 @@ export function addressErrors(a: AddressValue): Errors {
   if (a.city.trim().length < 2) errors.city = "Indiquez la commune.";
   return errors;
 }
-export function stepErrors(s: BookingState): Errors {
+export function paymentErrors(s: Pick<BookingState, "payment">, availability: PaymentAvailability = {}): Errors {
+  if (!s.payment) return { payment: "Choisissez un mode de règlement." };
+  const method = availability[s.payment];
+  if (!method?.available) return { payment: method?.reason ?? (s.payment === "card_hold" ? CARD_UNAVAILABLE : METHOD_UNAVAILABLE) };
+  return {};
+}
+export function stepErrors(s: BookingState, availability: PaymentAvailability = {}): Errors {
   if (s.step === 1) return urgencyErrors(s);
   if (s.step === 2) return contactErrors(s.contact);
   if (s.step === 3) return addressErrors(s.address);
+  if (s.step === 4) return paymentErrors(s, availability);
   return {};
 }
 export function urgencyLabel(s: Pick<BookingState, "urgent" | "slot">): string {
@@ -66,23 +100,30 @@ export function urgencyLabel(s: Pick<BookingState, "urgent" | "slot">): string {
   if (s.urgent === false && s.slot) return `${SLOT_LABEL[s.slot]} (créneau souhaité)`;
   return "À préciser";
 }
-/** One « Continuer » press: validate the active step; advance (1→4) or report the finish. Pure. */
-export function advanceBooking(s: BookingState): { state: BookingState; errors: Errors; finish: boolean } {
-  const errors = stepErrors(s);
+/** One « Continuer » press: validate the active step; advance (1→5) or report the finish. Pure. */
+export function advanceBooking(s: BookingState, availability: PaymentAvailability = {}): { state: BookingState; errors: Errors; finish: boolean } {
+  const errors = stepErrors(s, availability);
   if (Object.keys(errors).length) return { state: s, errors, finish: false };
-  if (s.step < 4) return { state: { ...s, step: (s.step + 1) as BookingStep }, errors: {}, finish: false };
+  if (s.step < LAST_STEP) return { state: { ...s, step: (s.step + 1) as BookingStep }, errors: {}, finish: false };
   return { state: s, errors: {}, finish: true };
 }
 export function toBooking(service: Pick<ServiceEntry, "slug">, s: BookingState): BookingDraft {
   const urgent = s.urgent === true;
-  return { slug: service.slug, urgent, slot: urgent ? null : s.slot, notes: s.notes, contact: { ...s.contact, first_name: s.contact.first_name.trim(), last_name: s.contact.last_name.trim(), email: s.contact.email.trim(), phone: s.contact.phone.trim() } };
+  return { slug: service.slug, urgent, slot: urgent ? null : s.slot, notes: s.notes, contact: { ...s.contact, first_name: s.contact.first_name.trim(), last_name: s.contact.last_name.trim(), email: s.contact.email.trim(), phone: s.contact.phone.trim() }, ...(s.payment ? { payment: s.payment } : {}) };
 }
 
-/** Last step, all-or-nothing on the PAIR (public draft + booking extras): the two previous raw
+/** Last step (BEFORE the phone check), all-or-nothing on the PAIR (public draft + booking extras): the two previous raw
  *  entries are read first; both new entries are written then proven by readback; on any failure
  *  the two previous raw values are restored (or removed when absent) and proven again. Navigation
  *  only when both new entries are proven; never a mixed pair announced as saved. */
-export function finishBooking({ storage, service, state, go, now = Date.now() }: { storage: Storage | null; service: Pick<ServiceEntry, "slug" | "title" | "category">; state: BookingState; go: (href: string) => void; now?: number }): { ok: true } | { ok: false; message: string } {
+export function finishBooking({ storage, service, state, onSaved = () => {}, now = Date.now() }: {
+  storage: Storage | null;
+  service: Pick<ServiceEntry, "slug" | "title" | "category">;
+  state: BookingState;
+  /** Called once both entries are proven (the wizard then opens the phone check). */
+  onSaved?: () => void;
+  now?: number;
+}): { ok: true } | { ok: false; message: string } {
   if (!storage) return { ok: false, message: SAVE_FAILED_MESSAGE };
   // Idempotency key: generated ONCE per tab draft; going back and finishing again keeps the key
   // already stored for this service (never a new key for the same request).
@@ -128,7 +169,7 @@ export function finishBooking({ storage, service, state, go, now = Date.now() }:
     written = false;
   }
   if (written) {
-    go("/#auth");
+    onSaved();
     return { ok: true };
   }
   // Rollback to the exact previous pair, then prove it.
@@ -154,6 +195,13 @@ export function finishBooking({ storage, service, state, go, now = Date.now() }:
     restored = false;
   }
   return { ok: false, message: restored ? SAVE_FAILED_MESSAGE : ROLLBACK_FAILED_MESSAGE };
+}
+
+/** End of the wizard: both drafts saved FIRST (atomic pair); then the phone check (only when the
+ *  server says phone auth is available) or the existing-account login (/#auth keeps the booking).
+ *  Nothing is navigated when the save fails. */
+export function completeBooking({ storage, service, state, mode, go, openPhone, now }: { storage: Storage | null; service: Pick<ServiceEntry, "slug" | "title" | "category">; state: BookingState; mode: "phone" | "account"; go: (href: string) => void; openPhone: () => void; now?: number }) {
+  return finishBooking({ storage, service, state, now, onSaved: () => (mode === "phone" ? openPhone() : go("/#auth")) });
 }
 
 // ---- Bottom bar (closed page: « Confirmer » ; wizard: the active step's real submit) -----------
@@ -190,6 +238,10 @@ export function BookingWizard({
   initial = EMPTY_BOOKING,
   go = (href: string) => window.location.assign(href),
   storage = () => getDraftStorage(),
+  phoneApi,
+  optionsApi,
+  initialOptions,
+  initialPhase = "steps",
 }: {
   service: ServiceEntry;
   range: string;
@@ -197,7 +249,23 @@ export function BookingWizard({
   initial?: BookingState;
   go?: (href: string) => void;
   storage?: () => Storage | null;
+  phoneApi?: PhoneApi;
+  /** GET /api/bookings/options (payment methods + phone auth availability), loaded once. */
+  optionsApi?: OptionsApi;
+  /** Tests only. */
+  initialOptions?: OptionsState;
+  /** Tests only. */
+  initialPhase?: "steps" | "phone";
 }) {
+  // After the summary, the drafts are saved and the phone is verified inline (same page).
+  const [phase, setPhase] = useState<"steps" | "phone">(initialPhase);
+  const [phoneState, setPhoneState] = useState<PhoneState | null>(null);
+  const { options, retry: retryOptions } = useBookingOptions(optionsApi, initialOptions);
+  const availability = paymentAvailability(options);
+  const phoneOn = phoneAuthOn(options);
+  // Labels of THIS render: step 5 opens the phone check only when the server says phone auth is
+  // available; otherwise its action is the existing-account path.
+  const STEP_ACTION: Record<BookingStep, string> = { ...STEP_ACTIONS, 5: phoneOn ? STEP_ACTIONS[5] : ACCOUNT_ACTION };
   const [state, setState] = useState<BookingState>(initial);
   const [errors, setErrors] = useState<Errors>({});
   const [failure, setFailure] = useState("");
@@ -212,27 +280,33 @@ export function BookingWizard({
     title.current?.focus({ preventScroll: first.current ? false : true });
     if (!first.current) title.current?.scrollIntoView({ block: "start", behavior: "auto" });
     first.current = false;
-  }, [state.step]);
+  }, [state.step, phase]);
 
   const set = (patch: Partial<BookingState>) => setState((s) => ({ ...s, ...patch }));
   const setContact = (patch: Partial<BookingContact>) => setState((s) => ({ ...s, contact: { ...s.contact, ...patch } }));
   const formId = `booking-step-${state.step}`;
+  const phoneFormId = "booking-phone";
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFailure("");
-    const step = advanceBooking(state);
+    const step = advanceBooking(state, availability);
     setErrors(step.errors);
     if (!step.finish) {
       if (step.state !== state) setState(step.state);
       return;
     }
-    const result = finishBooking({ storage: storage(), service, state, go });
+    finish(phoneOn ? "phone" : "account");
+  };
+  const finish = (mode: "phone" | "account") => {
+    setFailure("");
+    const result = completeBooking({ storage: storage(), service, state, mode, go, openPhone: () => setPhase("phone") });
     if (!result.ok) setFailure(result.message);
   };
   const back = () => {
     setErrors({});
     setFailure("");
-    if (state.step === 1) onClose();
+    if (phase === "phone") setPhase("steps");
+    else if (state.step === 1) onClose();
     else set({ step: (state.step - 1) as BookingStep });
   };
 
@@ -243,6 +317,7 @@ export function BookingWizard({
           <strong>{service.title}</strong>
           <span>Estimation indicative : {range}</span>
           <span>Urgence : {urgencyLabel(state)}</span>
+          {state.payment && <span>Règlement : {PAYMENT_COPY[state.payment].title}</span>}
         </aside>
 
         <div className={styles.panel}>
@@ -250,7 +325,7 @@ export function BookingWizard({
             <span aria-hidden="true">←</span> Retour
           </button>
           <ol className={styles.steps} aria-label="Étapes">
-            {([1, 2, 3, 4] as BookingStep[]).map((n) => (
+            {([1, 2, 3, 4, 5] as BookingStep[]).map((n) => (
               <li key={n} aria-current={n === state.step ? "step" : undefined} data-done={n < state.step ? "true" : undefined}>
                 <span aria-hidden="true">{n}</span>
                 {STEP_TITLES[n]}
@@ -258,9 +333,25 @@ export function BookingWizard({
             ))}
           </ol>
           <h2 ref={title} tabIndex={-1} className={styles.stepTitle}>
-            {STEP_TITLES[state.step]}
+            {phase === "phone" && phoneOn ? "Vérifier mon téléphone" : STEP_TITLES[state.step]}
           </h2>
 
+          {phase === "phone" && phoneOn ? (
+            <div className={styles.form} data-booking-phone="">
+              <p className={styles.private}>Votre demande est conservée dans ce navigateur. Vérifiez votre téléphone avec le code reçu : aucun compte ni mot de passe n’est nécessaire. Vous confirmerez ensuite l’envoi de la demande.</p>
+              <PhoneAccess
+                purpose="booking"
+                formId={phoneFormId}
+                api={phoneApi}
+                prefill={{ phone: state.contact.phone, first_name: state.contact.first_name, last_name: state.contact.last_name }}
+                onStateChange={setPhoneState}
+                onVerified={() => go("/#new")}
+              />
+              <button type="button" className={styles.secondary} onClick={() => go("/#auth")} data-booking-account="">
+                {ACCOUNT_ACTION}
+              </button>
+            </div>
+          ) : (
           <form id={formId} className={styles.form} onSubmit={submit} noValidate>
             {state.step === 1 && (
               <>
@@ -340,6 +431,35 @@ export function BookingWizard({
             )}
 
             {state.step === 4 && (
+              <fieldset className={styles.payments} data-booking-payment="">
+                <legend>Comment souhaitez-vous régler ?</legend>
+                {options.status === "loading" && <small className={styles.hint} role="status">Chargement des options de paiement…</small>}
+                {options.status === "error" && (
+                  <div className={styles.failure} role="alert" data-booking-options-error="">
+                    {OPTIONS_FAILED}{" "}
+                    <button type="button" className={styles.retry} onClick={retryOptions}>Réessayer</button>
+                  </div>
+                )}
+                {(["on_site", "card_hold"] as const).map((choice) => {
+                  const method = availability[choice];
+                  const disabled = !method?.available;
+                  const reason = options.status === "ready" ? method?.reason ?? (choice === "card_hold" ? CARD_UNAVAILABLE : METHOD_UNAVAILABLE) : "";
+                  return (
+                    <label key={choice} className={styles.payment} data-disabled={disabled ? "true" : undefined}>
+                      <input type="radio" name="payment" value={choice} checked={state.payment === choice} disabled={disabled} onChange={() => set({ payment: choice })} />
+                      <span>
+                        <strong>{PAYMENT_COPY[choice].title}</strong>
+                        <span>{PAYMENT_COPY[choice].text}</span>
+                        {disabled && reason && <em className={styles.soon}>{reason}</em>}
+                      </span>
+                    </label>
+                  );
+                })}
+                {errors.payment && <small className={styles.error} role="alert">{errors.payment}</small>}
+              </fieldset>
+            )}
+
+            {state.step === 5 && (
               <>
                 <dl className={styles.recap} data-booking-recap="">
                   <div><dt>Prestation</dt><dd>{service.title}</dd></div>
@@ -347,9 +467,14 @@ export function BookingWizard({
                   <div><dt>Urgence</dt><dd>{urgencyLabel(state)}</dd></div>
                   <div><dt>Adresse d’intervention</dt><dd>{state.address.address}<br />{state.address.postal_code} {state.address.city}</dd></div>
                   <div><dt>Vos coordonnées (privées)</dt><dd>{[CIVILITY_LABEL[state.contact.civility] === "Non précisé" ? "" : CIVILITY_LABEL[state.contact.civility], state.contact.first_name, state.contact.last_name].filter(Boolean).join(" ")}<br />{state.contact.email} · {state.contact.phone}{state.contact.company ? <><br />Demande pour une entreprise</> : null}</dd></div>
+                  <div><dt>Règlement</dt><dd>{state.payment ? PAYMENT_LABEL[state.payment] : "À préciser"}</dd></div>
                   {state.notes.trim() && <div><dt>Précisions</dt><dd>{state.notes}</dd></div>}
                 </dl>
-                <p className={styles.next} role="note">Rien n’est encore envoyé. À l’étape suivante, vous vous connectez ou créez votre compte, puis vous confirmez l’envoi de la demande.</p>
+                {phoneOn ? (
+                  <p className={styles.next} role="note">Rien n’est encore envoyé. À l’étape suivante, vous vérifiez votre téléphone avec un code (sans créer de compte), puis vous confirmez l’envoi de la demande. Vous pouvez aussi utiliser votre compte existant.</p>
+                ) : (
+                  <p className={styles.next} role="note" data-booking-sms-off="">{SMS_OFF} Rien n’est encore envoyé : vous pouvez vous connecter à votre compte existant, votre demande est conservée, puis vous confirmez son envoi.</p>
+                )}
               </>
             )}
             {failure && <p className={styles.failure} role="alert">{failure}</p>}
@@ -359,15 +484,29 @@ export function BookingWizard({
               <button type="submit" className={styles.inlineSubmit} data-booking-inline-submit={state.step}>
                 {STEP_ACTION[state.step]}
               </button>
+              {state.step === 5 && phoneOn && (
+                <button type="button" className={styles.secondary} onClick={() => finish("account")} data-booking-account="">
+                  {ACCOUNT_ACTION}
+                </button>
+              )}
             </div>
           </form>
+          )}
         </div>
       </div>
 
       <BookingBar title={service.title} range={range}>
-        <button type="submit" form={formId} className={styles.barButton} data-booking-submit={state.step}>
-          {STEP_ACTION[state.step]}
-        </button>
+        {phase === "phone" && phoneOn ? (
+          phoneState?.stage !== "verified" && (
+            <button type="submit" form={phoneFormId} className={styles.barButton} data-booking-submit="phone" disabled={phoneState?.stage === "sending" || phoneState?.stage === "verifying"}>
+              {phoneState ? phoneActionLabel(phoneState) : "Recevoir un code"}
+            </button>
+          )
+        ) : (
+          <button type="submit" form={formId} className={styles.barButton} data-booking-submit={state.step}>
+            {STEP_ACTION[state.step]}
+          </button>
+        )}
       </BookingBar>
     </div>
   );

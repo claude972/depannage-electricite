@@ -42,6 +42,12 @@ import {
 import { resolveDisplayName } from "./app/display-name";
 import { draftNotice, getDraftStorage, readBootDraft } from "./app/request-draft-boot";
 import { BOOKING_DRAFT_KEY, clearBooking, ensureRequestId, readBooking, saveBooking, type BookingDraft } from "./app/booking-draft";
+
+type BookingReceipt = {
+  status: "confirmed";
+  intervention: { id: string; status: string; estimate_min_cents?: number; estimate_max_cents?: number };
+  payment?: { method: "on_site" | "card_hold"; status: string };
+};
 import { savePublicDraft } from "../lib/shared/request-draft";
 import { REALTIME_CHANNEL_CONFIG, REALTIME_TABLES, nextConnection } from "./app/realtime";
 import { category, uid } from "./app/format";
@@ -1095,6 +1101,66 @@ export default function CourantApp() {
       ctx.when((q: UploadQueue) => setUploads((all) => upsertQueue(all, q))),
       { resendUncertain },
     );
+  // Service booking (docs/GUEST_CHECKOUT_CONTRACT.md + ROOT POST /api/bookings): the booking
+  // context NEVER posts the legacy /api/interventions (no silent fallback). One idempotent key,
+  // proven stored before the POST; the draft and booking are consumed only on 201 « confirmed ».
+  async function confirmBooking() {
+    return run(async (ctx) => {
+      const draft = pendingDraft;
+      const current = booking;
+      if (!draft || !current) throw new Error("Aucune demande en attente de confirmation dans cet onglet.");
+      if (!current.payment) throw new Error("Choisissez un mode de paiement avant d’envoyer votre demande ; rien n’a été envoyé.");
+      if (modeRef.current === "demo")
+        throw new Error("La réservation n’est pas disponible en démonstration ; rien n’a été envoyé.");
+      const keyed = ensureRequestId(getDraftStorage(), current);
+      if (!keyed)
+        throw new Error(
+          "Votre demande n’a pas été envoyée : ce navigateur n’a pas pu préparer son envoi en toute sécurité. Réessayez ; si cela persiste, rechargez la page.",
+        );
+      if (keyed.booking !== current) ctx.when(setBooking)(keyed.booking);
+      const c = current.contact;
+      const body = {
+        request_id: keyed.request_id,
+        service_slug: current.slug,
+        category: draft.category,
+        description: draft.description,
+        address: draft.address,
+        postal_code: draft.postal_code,
+        city: draft.city,
+        urgency: draft.urgency,
+        contact: { first_name: c.first_name.trim(), last_name: c.last_name.trim(), email: c.email.trim(), phone: c.phone.trim() },
+        payment_choice: current.payment,
+      };
+      let result: BookingReceipt;
+      try {
+        result = await api<BookingReceipt>("/api/bookings", body);
+      } catch (e) {
+        if (e instanceof ApiRequestError && e.status === 409)
+          throw new Error(
+            "Cette demande a peut-être déjà été enregistrée avec un contenu différent. Vérifiez « Mes demandes » avant toute nouvelle demande.",
+          );
+        throw e; // draft, booking and key kept: the next attempt replays the SAME key
+      }
+      if (result?.status !== "confirmed" || !result.intervention?.id)
+        throw new ApiRequestError(502, "Le service a répondu sans confirmation exploitable. Votre demande a pu être enregistrée : vérifiez « Mes demandes » avant de réessayer.");
+      if (ctx.alive()) await refresh();
+      ctx.when(setPendingDraft)(null);
+      ctx.when(setBooking)(null);
+      ctx.when(() => {
+        clearBooking(getDraftStorage());
+        try {
+          sessionStorage.removeItem(DRAFT_KEY);
+        } catch {}
+      })();
+      ctx.when(setSelectedId)(result.intervention.id);
+      ctx.when(navigate)("detail", result.intervention.id);
+      ctx.notice(
+        result.payment?.method === "on_site"
+          ? "Demande confirmée. Règlement sur place après l’intervention : rien n’est payé maintenant."
+          : "Demande confirmée.",
+      );
+    });
+  }
   async function createIntervention(values: RequestValues, photos: File[] = []) {
     return run(async (ctx) => {
       if (modeRef.current === "demo") {
@@ -1129,16 +1195,7 @@ export default function CourantApp() {
       //    server returns the SAME dossier for a replay of that key (lost reply, retry, reload).
       //    The canonical RequestValues / offline draft format is unchanged; only the API payload
       //    gains request_id. A legacy booking without a key gets one PROVEN stored first.
-      let payload: RequestValues & { request_id?: string } = values;
-      if (booking && pendingDraft) {
-        const keyed = ensureRequestId(getDraftStorage(), booking);
-        if (!keyed)
-          throw new Error(
-            "Votre demande n’a pas été envoyée : ce navigateur n’a pas pu préparer son envoi en toute sécurité. Réessayez ; si cela persiste, rechargez la page.",
-          );
-        if (keyed.booking !== booking) ctx.when(setBooking)(keyed.booking);
-        payload = { ...values, request_id: keyed.request_id };
-      }
+      const payload: RequestValues & { request_id?: string } = values;
       let result: { intervention: Intervention };
       try {
         result = await api<{ intervention: Intervention }>("/api/interventions", payload);
@@ -2486,6 +2543,12 @@ export default function CourantApp() {
       setPendingDraft(values);
       savePublicDraft(getDraftStorage(), values);
     },
+    updateBookingPayment(payment: NonNullable<BookingDraft["payment"]>) {
+      if (modeRef.current !== "live" || !booking) return;
+      const next = { ...booking, payment };
+      setBooking(next);
+      saveBooking(getDraftStorage(), next);
+    },
     updateBookingContact(contact: BookingDraft["contact"]) {
       if (modeRef.current !== "live" || !booking) return;
       const next = { ...booking, contact };
@@ -2559,6 +2622,7 @@ export default function CourantApp() {
     loadArtisanPerformance,
     loadPaymentStatus,
     createIntervention,
+    confirmBooking,
     uploads,
     retryUploads,
     acknowledgeUpload(interventionId, key, documentId) {
