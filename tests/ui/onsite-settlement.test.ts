@@ -52,6 +52,12 @@ test("parser: strict frozen DTO, extra keys dropped, anything else is null (neve
     ["déclaré disponible", { ...DECLARED, available: true }],
     ["devise", { ...DUE, currency: "usd" }],
     ["montant négatif", { ...DUE, amount_cents: -1 }],
+    ["montant nul", { ...DUE, amount_cents: 0 }],
+    ["montant nul déclaré", { ...DECLARED, amount_cents: 0 }],
+    ["montant 1.5", { ...DUE, amount_cents: 1.5 }],
+    ["montant 2^53", { ...DUE, amount_cents: 2 ** 53 }],
+    ["déclaré sans montant", { ...DECLARED, amount_cents: null }],
+    ["statut inconnu", { ...DUE, status: "paid" }],
     ["montant décimal", { ...DUE, amount_cents: 10.5 }],
     ["montant texte", { ...DUE, amount_cents: "180" }],
     ["can_declare absent", { method: "on_site", status: "due_on_site", amount_cents: 1, currency: "eur", available: true }],
@@ -68,6 +74,9 @@ test("load: 404 (and 401/403) ⇒ nothing rendered; 503 / malformed ⇒ error wi
   same(await m.loadOnsite(get(503, null), ID), { kind: "error" });
   same(await m.loadOnsite(get(0, null), ID), { kind: "error" });
   same(await m.loadOnsite(get(200, { status: "declared_received" }), ID), { kind: "error" });
+  for (const body of [{ ...DUE, amount_cents: 0 }, { ...DUE, amount_cents: -1 }, { ...DUE, amount_cents: 1.5 }, { ...DUE, amount_cents: 2 ** 53 }, { ...DECLARED, amount_cents: null }, { ...DUE, method: "card" }])
+    same(await m.loadOnsite(get(200, body), ID), { kind: "error" }, JSON.stringify(body));
+  same(await m.loadOnsite({ get: async () => { throw new Error("boom"); }, post: async () => ({ status: 0, body: null }) }, ID), { kind: "error" });
   assert.equal(view({ phase: "hidden" }, "client"), "");
   const err = view({ phase: "error" }, "artisan");
   assert.match(err, /Réessayer/);
@@ -142,7 +151,10 @@ test("declare: generation / UID change or unmount ⇒ reply ignored; outcome map
 test("onSettled wiring: once, only after a verified declared reply (POST or GET), never stale", () => {
   const src = readFileSync("components/role/onsite-settlement.tsx", "utf8");
   assert.match(src, /if \(settled\.current\) return;\s*settled\.current = true;/);
-  assert.match(src, /if \(sameIdentity && out\.kind === "ready" && out\.settlement\.status === "declared_received"\) fireSettled\(\);/);
+  const reload = src.slice(src.indexOf("const reload = useCallback("), src.indexOf("useEffect(() => {\n    mounted.current = true;"));
+  const guard = reload.indexOf("if (context.generation() !== generation || context.userId() !== me) return;");
+  assert.ok(guard > reload.indexOf("await loadOnsite(") && guard < reload.indexOf("setLoad(out.kind"), "identity guard before any state after the GET");
+  assert.ok(reload.indexOf("setLoad(out.kind") < reload.indexOf("fireSettled()"));
   const submit = src.slice(src.indexOf("async function submit()"), src.indexOf("return (\n    <OnsiteView"));
   assert.ok(submit.indexOf('out.kind === "ignored"') < submit.indexOf("fireSettled()"), "stale replies never fire");
   assert.match(submit, /if \(viewer !== "artisan"\) return;/);
@@ -173,12 +185,32 @@ createRoot(document.getElementById("app")).render(h(OnsiteSettlement, { interven
 window.gets2 = 0;
 window.settled2 = 0;
 const declaredApi = { get: async () => { window.gets2 += 1; return { status: 200, body: ${JSON.stringify(DECLARED)} }; }, post: async () => ({ status: 500, body: null }) };
+// Malformed amounts / enums: error + Réessayer, 0 POST, 0 onSettled.
+window.badPosts = 0;
+window.badSettled = 0;
+const BAD = ${JSON.stringify([{ ...DUE, amount_cents: 0 }, { ...DUE, amount_cents: -1 }, { ...DUE, amount_cents: 1.5 }, { ...DUE, amount_cents: 2 ** 53 }, { ...DECLARED, amount_cents: null }, { ...DUE, status: "paid" }])};
+BAD.forEach((body, i) => {
+  const el = document.createElement("div");
+  el.setAttribute("data-bad", String(i));
+  document.body.appendChild(el);
+  const badApi = { get: async () => ({ status: 200, body }), post: async () => { window.badPosts += 1; return { status: 200, body: ${JSON.stringify(DECLARED)} }; } };
+  createRoot(el).render(h(OnsiteSettlement, { interventionId: ID, viewer: "artisan", api: badApi, context, onSettled: () => { window.badSettled += 1; } }));
+});
+// Identity switch WITHOUT remount: load starts as A, context becomes B, then A's reply resolves.
+window.gen3 = 1;
+window.uid3 = "user-A";
+window.settled3 = 0;
+let resolveA;
+window.resolveA = () => resolveA({ status: 200, body: ${JSON.stringify(DECLARED)} });
+const deferredApi = { get: () => new Promise((r) => { resolveA = r; }), post: async () => ({ status: 500, body: null }) };
+const ctx3 = { generation: () => window.gen3, userId: () => window.uid3 };
+createRoot(document.getElementById("app3")).render(h(OnsiteSettlement, { interventionId: ID, viewer: "client", api: deferredApi, context: ctx3, onSettled: () => { window.settled3 += 1; } }));
 createRoot(document.getElementById("app2")).render(h(StrictMode, null, h(OnsiteSettlement, { interventionId: ID, viewer: "client", api: declaredApi, context, onSettled: () => { window.settled2 += 1; } })));
 `;
-test("mounted (artisan): declare → confirm (double click = 1 POST) → 503 « non confirmé » → retry same body → declared, onSettled once; fresh declared GET twice ⇒ one onSettled", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
+test("mounted (artisan): declare → confirm (double click = 1 POST) → 503 « non confirmé » → retry same body → declared, onSettled once; fresh declared GET twice ⇒ one onSettled; malformed ⇒ error, 0 POST; A→B stale GET dropped", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
   const out = await build({ absWorkingDir: ROOT, stdin: { contents: APP, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, outdir: "out", platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "local-css" }, define: { "process.env.NODE_ENV": '"development"' }, logLevel: "error" });
   const js = out.outputFiles.find((f) => f.path.endsWith(".js"))!.text;
-  const server = createServer((_q, r) => { r.setHeader("content-type", "text/html"); r.end(`<!doctype html><div id="app"></div><div id="app2"></div><script>${js}</script>`); });
+  const server = createServer((_q, r) => { r.setHeader("content-type", "text/html"); r.end(`<!doctype html><div id="app"></div><div id="app2"></div><div id="app3"></div><script>${js}</script>`); });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
   const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true });
@@ -190,15 +222,15 @@ test("mounted (artisan): declare → confirm (double click = 1 POST) → 503 « 
     page.on("pageerror", (e: Error) => errors.push(String(e)));
     await page.goto(`http://127.0.0.1:${(server.address() as { port: number }).port}/`);
     const posts = () => page.evaluate(() => (window as unknown as { posts: string[] }).posts);
-    await page.locator("[data-onsite-declare]").click();
+    await page.locator("#app [data-onsite-declare]").click();
     assert.deepEqual(await posts(), [], "the declare button alone never POSTs");
-    await page.locator("[data-onsite-confirm]").dblclick();
-    await page.locator('[data-onsite-error="retry"]').waitFor();
+    await page.locator("#app [data-onsite-confirm]").dblclick();
+    await page.locator('#app [data-onsite-error="retry"]').waitFor();
     assert.equal((await posts()).length, 1, "double click ⇒ one POST");
-    assert.match(await page.locator('[data-onsite-error="retry"]').innerText(), /Statut non confirmé\. Vérifiez à nouveau ou reprenez la même déclaration\./);
-    assert.equal(await page.locator("[data-onsite-reload]").count(), 1, "« Actualiser » offered");
+    assert.match(await page.locator('#app [data-onsite-error="retry"]').innerText(), /Statut non confirmé\. Vérifiez à nouveau ou reprenez la même déclaration\./);
+    assert.equal(await page.locator("#app [data-onsite-reload]").count(), 1, "« Actualiser » offered");
     assert.equal(await page.locator('#app [data-onsite-settlement="declared_received"]').count(), 0);
-    await page.locator("[data-onsite-confirm]").click();
+    await page.locator("#app [data-onsite-confirm]").click();
     await page.locator('#app [data-onsite-settlement="declared_received"]').waitFor();
     const all = await posts();
     assert.deepEqual(all, [JSON.stringify({ intervention_id: ID }), JSON.stringify({ intervention_id: ID })], "identical body on retry");
@@ -211,6 +243,18 @@ test("mounted (artisan): declare → confirm (double click = 1 POST) → 503 « 
     const fresh = await page.evaluate(() => ({ gets: (window as unknown as { gets2: number }).gets2, settled: (window as unknown as { settled2: number }).settled2 }));
     assert.equal(fresh.gets, 2, "two GETs (StrictMode double mount effect)");
     assert.equal(fresh.settled, 1, "fresh declared GET ⇒ onSettled exactly once");
+    // Malformed DTOs: each shows the error with « Réessayer », never a POST nor onSettled.
+    for (let i = 0; i < 6; i += 1) await page.locator(`[data-bad="${i}"] [data-onsite-settlement="error"]`).waitFor();
+    assert.equal(await page.locator("[data-bad] [data-onsite-declare]").count(), 0);
+    const bad = await page.evaluate(() => ({ posts: (window as unknown as { badPosts: number }).badPosts, settled: (window as unknown as { badSettled: number }).badSettled }));
+    assert.deepEqual(bad, { posts: 0, settled: 0 });
+    // A → B without remount: A's declared reply is dropped (no data, no onSettled under B).
+    await page.locator('#app3 [data-onsite-settlement="loading"]').waitFor();
+    await page.evaluate(() => { const w = window as unknown as { gen3: number; uid3: string; resolveA(): void }; w.gen3 = 2; w.uid3 = "user-B"; w.resolveA(); });
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('#app3 [data-onsite-settlement="declared_received"]').count(), 0, "no A data rendered under B");
+    assert.doesNotMatch(await page.locator("#app3").innerText(), /Déclaré/);
+    assert.equal(await page.evaluate(() => (window as unknown as { settled3: number }).settled3), 0, "no onSettled under B");
     assert.deepEqual(errors, []);
     assert.deepEqual(requests.filter((u) => !u.startsWith("http://127.0.0.1")), [], "no network beyond the local page");
   } finally {
