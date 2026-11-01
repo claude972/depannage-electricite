@@ -55,6 +55,7 @@ import type {
   View,
 } from "../app/types";
 import { BookingConfirm } from "./booking-confirm";
+import { CardReturnPanel } from "./card-return-panel";
 import { createOptionsApi } from "./phone-access";
 import { bookingPaymentText, fetchBookingStatus, type BookingStatus } from "../app/booking-status";
 import styles from "./client.module.css";
@@ -520,6 +521,16 @@ export function ClientSpace({ session }: { session: Session }) {
             onClearError={() => session.setError("")}
             onClearNotice={() => session.setNotice("")}
           />
+          {session.mode === "live" && (
+            <CardReturnPanel
+              cardReturn={session.cardReturn}
+              pendingLookupFailed={session.pendingLookupFailed}
+              busy={session.busy}
+              onVerify={(id) => void session.finalizeBooking(id)}
+              onCancel={(id) => void session.cancelBooking(id)}
+              onRetryLookup={session.retryPendingLookup}
+            />
+          )}
           {content()}
         </main>
       </div>

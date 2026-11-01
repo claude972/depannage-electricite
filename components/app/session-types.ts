@@ -93,6 +93,11 @@ export interface Session {
   pendingDraft: RequestValues | null;
   /** Booking extras of the service flow (private contact included), same identity chain only. */
   booking: BookingDraft | null;
+  /** Card-hold provider return awaiting a server verification (independent of the draft). */
+  cardReturn: import("./card-return").CardReturn | null;
+  /** GET /api/bookings/pending failed (an error is never « nothing pending »). */
+  pendingLookupFailed: boolean;
+  retryPendingLookup(): void;
   /** Booking confirmation « Modifier »: replace the kept request draft / private contact (no send). */
   updatePendingDraft(values: RequestValues): void;
   updateBookingContact(contact: BookingDraft["contact"]): void;
@@ -199,7 +204,7 @@ export interface Session {
   /** Service booking: POST /api/bookings (idempotent key), never the legacy route. */
   confirmBooking(): Promise<boolean>;
   /** Cancels the current card-hold attempt on the server (releases it); the draft stays. */
-  cancelBooking(): Promise<boolean>;
+  cancelBooking(requestId?: string): Promise<boolean>;
   /** Card hold: server finalize for this key (never inferred from a return URL). */
   finalizeBooking(requestId: string): Promise<boolean>;
   /** Photo queues per dossier (pending, failed or uncertain items); never overwritten by a new request. */
