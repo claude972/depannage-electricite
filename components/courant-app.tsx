@@ -39,6 +39,7 @@ import {
   writeDemo,
   type DemoOperations,
 } from "./app/demo";
+import { resolveDisplayName } from "./app/display-name";
 import { category, uid } from "./app/format";
 import {
   CONNECT_RETURN_MESSAGE,
@@ -2299,12 +2300,7 @@ export default function CourantApp() {
   };
 
   const profile: Profile | null = data.profile;
-  const displayName =
-    mode === "demo"
-      ? profile?.role === role && profile.full_name
-        ? profile.full_name
-        : DEMO_NAMES[role]
-      : profile?.full_name || "Bienvenue";
+  const { displayName, firstName } = resolveDisplayName(mode === "demo" ? "demo" : "live", role, profile, DEMO_NAMES);
   // Advanced lots (WEB-SHARED-001): one client bundle per identity. Live clients are bound to the
   // identity generation (a reply after logout/login/demo switch is dropped); demonstration clients
   // operate on seeds only and never touch the network.
@@ -2374,6 +2370,7 @@ export default function CourantApp() {
     profile,
     profileId: mode === "live" ? profile?.id || "" : `demo-${role}`,
     displayName,
+    firstName,
     data,
     professional,
     capabilities,

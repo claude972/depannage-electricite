@@ -2,6 +2,7 @@
 // Espace particulier (rôle "client"). Présentation uniquement : chaque mutation passe par
 // `session.*`. Références : M61 (accueil mobile), V8-C07 (détail d’intervention), V8-C06
 // (devis), M7 (suivi). Mobile < 1024 px : navigation basse ; desktop : barre latérale.
+import { realName } from "../app/display-name";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Session } from "../app/session-types";
 import {
@@ -504,7 +505,7 @@ export function ClientSpace({ session }: { session: Session }) {
 
 // ---- Vue d’ensemble ----------------------------------------------------------------
 function OverviewView({ session, rows }: { session: Session; rows: Intervention[] }) {
-  const firstName = session.displayName.split(" ")[0] || session.displayName;
+  const hello = session.firstName ? `Bonjour ${session.firstName}` : "Bonjour";
   const active = rows.filter((i) => isOpen(i.status));
   const awaiting = rows.filter((i) => i.status === "quoted");
   const completed = rows.filter((i) => i.status === "paid");
@@ -527,7 +528,7 @@ function OverviewView({ session, rows }: { session: Session; rows: Intervention[
       {/* Mobile : structure M61 */}
       <div className={styles.mobileOnly}>
         <div className={styles.hello}>
-          <h1>Bonjour {firstName}</h1>
+          <h1>{hello}</h1>
           <p>Comment pouvons-nous vous aider ?</p>
         </div>
         <button type="button" className={styles.ctaButton} onClick={() => session.go("new")}>
@@ -598,7 +599,7 @@ function OverviewView({ session, rows }: { session: Session; rows: Intervention[
         <div className="welcome">
           <div>
             <h1>
-              Bonjour {firstName}
+              {hello}
               <span className="hello-dot">.</span>
             </h1>
             <p>Le point sur vos demandes et vos interventions.</p>
@@ -1876,7 +1877,7 @@ function ProfileView({ session }: { session: Session }) {
       <div className={styles.twoColumns}>
         <div>
           <ProfileForm
-            name={demo ? session.displayName : session.profile?.full_name || ""}
+            name={demo ? session.displayName : realName(session.profile?.full_name) ?? ""}
             phone={session.profile?.phone || ""}
             role={session.role}
             demo={demo}

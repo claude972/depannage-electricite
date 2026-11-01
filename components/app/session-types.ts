@@ -84,6 +84,8 @@ export interface Session {
   /** Current user id: server profile id in live mode, demo-<role> in demo mode. */
   profileId: string;
   displayName: string;
+  /** First name from the real profile (live) or the demo cast (demo); null when unknown — never invented. */
+  firstName: string | null;
   data: Workspace;
   professional: ProfessionalData;
   capabilities: Capabilities;
