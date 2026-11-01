@@ -15,7 +15,7 @@ import { demoNotificationPage } from "../lib/features/notifications/demo";
 import { createRevalidationScheduler } from "./app/revalidate";
 import { createRefreshCoordinator, refreshContextKey, type ReadResult, type RefreshCoordinator } from "./app/workspace-refresh";
 import { safeCheckoutUrl } from "./app/booking-status";
-import { CARD_RETURN_COPY, PENDING_COPY, cancelCardReturn, lookupPending, sameReturn, verifyCardReturn, type CardReturn } from "./app/card-return";
+import { CARD_RETURN_COPY, PENDING_COPY, cancelCardReturn, cardAction, lookupPending, sameReturn, verifyCardReturn, type CardReturn } from "./app/card-return";
 import { createWorkspaceReader } from "./app/workspace-reader";
 import {
   acknowledgeUpload,
@@ -174,6 +174,11 @@ export default function CourantApp() {
   const [cardReturn, setCardReturn] = useState<CardReturn | null>(null);
   const cardReturnRef = useRef<CardReturn | null>(null);
   cardReturnRef.current = cardReturn;
+  // Card verify/cancel bypass run(ctx): their own single flight + identity/session generation check.
+  const cardFlight = useRef(false);
+  const bookingRef = useRef<BookingDraft | null>(null);
+  bookingRef.current = booking;
+  const cardContext = { generation: () => guard.generation(), userId: () => userId.current };
   // Pending card attempt lookup: once per identity (after login / opening the requests), no polling.
   const [pendingLookup, setPendingLookup] = useState<"idle" | "error">("idle");
   const pendingCheckedFor = useRef<string | null>(null);
@@ -1213,28 +1218,30 @@ export default function CourantApp() {
   // Card hold verification (return, « Vérifier mon empreinte », retry): the URL proves nothing;
   // the server finalize decides. The dedicated return state is cleared ONLY on « confirmed ».
   async function verifyCardHoldReturn(requestId: string) {
-    const me = userId.current;
-    setCardReturn((c) => (sameReturn(c, requestId, me) ? { ...c, phase: "checking", message: CARD_RETURN_COPY.checking } : c));
-    const result = await verifyCardReturn((p, b) => api(p, b), requestId);
-    if (userId.current !== me) return; // identity changed meanwhile: never apply
-    if (!result.ok) {
-      setCardReturn((c) => (sameReturn(c, requestId, me) ? { ...c, phase: "needs_action", message: result.message } : c));
-      return false;
-    }
-    setCardReturn((c) => (c?.requestId === requestId ? null : c));
-    await refresh();
-    if (booking?.request_id === requestId) {
-      setPendingDraft(null);
-      setBooking(null);
-      clearBooking(getDraftStorage());
-      try {
-        sessionStorage.removeItem(DRAFT_KEY);
-      } catch {}
-    }
-    setSelectedId(result.interventionId);
-    navigate("detail", result.interventionId);
-    setNotice("Demande confirmée. Empreinte bancaire enregistrée : aucun débit ; seul le montant du devis accepté pourra être prélevé.");
-    return true;
+    return cardAction(cardFlight, cardContext, async (still, me) => {
+      setCardReturn((c) => (sameReturn(c, requestId, me) ? { ...c, phase: "checking", message: CARD_RETURN_COPY.checking } : c));
+      const result = await verifyCardReturn((p, b) => api(p, b), requestId);
+      if (!still()) return false; // identity/session changed meanwhile: never apply
+      if (!result.ok) {
+        setCardReturn((c) => (sameReturn(c, requestId, me) ? { ...c, phase: "needs_action", message: result.message } : c));
+        return false;
+      }
+      setCardReturn((c) => (c?.requestId === requestId ? null : c));
+      await refresh();
+      if (!still()) return false; // re-checked AFTER the refresh: never clear another identity's draft
+      if (bookingRef.current?.request_id === requestId) {
+        setPendingDraft(null);
+        setBooking(null);
+        clearBooking(getDraftStorage());
+        try {
+          sessionStorage.removeItem(DRAFT_KEY);
+        } catch {}
+      }
+      setSelectedId(result.interventionId);
+      navigate("detail", result.interventionId);
+      setNotice("Demande confirmée. Empreinte bancaire enregistrée : aucun débit ; seul le montant du devis accepté pourra être prélevé.");
+      return true;
+    });
   }
   async function checkPendingCardHold() {
     const me = userId.current;
@@ -1261,26 +1268,28 @@ export default function CourantApp() {
   // Server cancel of a card-hold attempt (from the return or from the confirmation). The key and
   // the return are dropped only after the server answers « cancelled »; the draft stays.
   async function cancelBooking(explicitId?: string) {
-    const requestId = explicitId ?? cardReturnRef.current?.requestId ?? booking?.request_id;
-    const me = userId.current;
-    if (!requestId || !me) return false;
-    setCardReturn((c) => (sameReturn(c, requestId, me) ? { ...c, phase: "cancelling" } : c));
-    const result = await cancelCardReturn((p, b) => api(p, b), requestId);
-    if (userId.current !== me) return false;
-    if (!result.ok) {
-      setCardReturn((c) => (sameReturn(c, requestId, me) ? { ...c, phase: "needs_action", message: result.message } : c));
-      if (!cardReturnRef.current) setError(result.message);
-      return false;
-    }
-    setCardReturn((c) => (c?.requestId === requestId ? null : c));
-    if (booking?.request_id === requestId) {
-      const { request_id: _drop, ...rest } = booking;
-      void _drop;
-      setBooking(rest);
-      saveBooking(getDraftStorage(), rest);
-    }
-    setNotice("Réservation annulée par le service de paiement. Votre saisie est conservée.");
-    return true;
+    const requestId = explicitId ?? cardReturnRef.current?.requestId ?? bookingRef.current?.request_id;
+    if (!requestId) return false;
+    return cardAction(cardFlight, cardContext, async (still, me) => {
+      setCardReturn((c) => (sameReturn(c, requestId, me) ? { ...c, phase: "cancelling" } : c));
+      const result = await cancelCardReturn((p, b) => api(p, b), requestId);
+      if (!still()) return false;
+      if (!result.ok) {
+        setCardReturn((c) => (sameReturn(c, requestId, me) ? { ...c, phase: "needs_action", message: result.message } : c));
+        if (!cardReturnRef.current) setError(result.message);
+        return false;
+      }
+      setCardReturn((c) => (c?.requestId === requestId ? null : c));
+      const current = bookingRef.current;
+      if (current?.request_id === requestId) {
+        const { request_id: _drop, ...rest } = current;
+        void _drop;
+        setBooking(rest);
+        saveBooking(getDraftStorage(), rest);
+      }
+      setNotice("Réservation annulée par le service de paiement. Votre saisie est conservée.");
+      return true;
+    });
   }
   async function createIntervention(values: RequestValues, photos: File[] = []) {
     return run(async (ctx) => {

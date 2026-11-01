@@ -46,9 +46,9 @@ test("controller: URL cancel claims nothing financial; return kept without draft
   assert.doesNotMatch(effect, /débit|aucune empreinte|rien n’a été débité|confirm(é|ée)/i, "no financial claim from the URL");
   assert.match(effect, /message: back\.state === "success" \? CARD_RETURN_COPY\.checking : CARD_RETURN_COPY\.interrupted/);
   assert.doesNotMatch(effect, /pendingDraft/, "the return does not depend on a draft");
-  const verify = src.slice(src.indexOf("async function verifyCardHoldReturn("), src.indexOf("async function finalizeBooking("));
+  const verify = src.slice(src.indexOf("async function verifyCardHoldReturn("), src.indexOf("async function checkPendingCardHold("));
   assert.ok(verify.indexOf("if (!result.ok)") < verify.indexOf("setCardReturn((c) => (c?.requestId === requestId ? null : c));"), "cleared only after success");
-  assert.match(verify, /if \(userId\.current !== me\) return;/);
+  assert.match(verify, /if \(!still\(\)\) return false;/);
   const cancel = src.slice(src.indexOf("async function cancelBooking("), src.indexOf("async function createIntervention("));
   assert.ok(cancel.indexOf("if (!result.ok)") < cancel.indexOf("setCardReturn((c) => (c?.requestId === requestId ? null : c));"));
   assert.match(src, /setCardReturn\(null\);\s*setPendingLookup\("idle"\);\s*pendingCheckedFor\.current = null;/, "identity reset clears");

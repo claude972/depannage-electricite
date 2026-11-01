@@ -26,7 +26,7 @@ test("controller: return ⇒ server verification; the URL never changes the book
   assert.match(effect, /if \(mode !== "live" \|\| !userId\.current\) \{[\s\S]*?return;\s*\}/, "kept until an identified session");
   assert.match(effect, /if \(back\.state === "success"\) void verifyCardHoldReturn\(back\.requestId\);/);
   assert.doesNotMatch(effect, /setBooking|clearBooking|setPendingDraft/, "the URL never changes the booking state");
-  const verify = src.slice(src.indexOf("async function verifyCardHoldReturn("), src.indexOf("async function finalizeBooking("));
+  const verify = src.slice(src.indexOf("async function verifyCardHoldReturn("), src.indexOf("async function checkPendingCardHold("));
   assert.match(verify, /verifyCardReturn\(\(p, b\) => api\(p, b\), requestId\)/);
   const cancel = src.slice(src.indexOf("async function cancelBooking("), src.indexOf("async function createIntervention("));
   assert.ok(cancel.indexOf("if (!result.ok)") < cancel.indexOf("setBooking(rest)"), "key dropped only after the server says cancelled");
