@@ -134,7 +134,7 @@ await refused('writer','save_budget_line',{p_site_id:a,p_fiscal_year_id:otherFy,
 await refused('writer','save_budget_line',{p_site_id:a,p_fiscal_year_id:fy.id,p_category:'bonus',p_amount_cents:1,p_note:'QA'},'22023');
 // Consumption: an accepted quote dated inside the fiscal year on this site counts; another site's does not.
 const job=(await db.query("insert into public.interventions(client_id,artisan_id,site_id,category,description,address,postal_code,city,urgency,estimate_min_cents,estimate_max_cents,status) values($1,$2,$3,'panel','QA fixture description','QA fixture address','97200','QA city','scheduled',100,200,'paid') returning id",[ids.owner,ids.artisan,a])).rows[0].id;
-await db.query(`insert into public.quotes(intervention_id,artisan_id,lines,subtotal_cents,tax_rate,tax_cents,total_cents,status,accepted_at) values($1,$2,'[{"label":"QA","quantity":1,"unit_price_cents":12000}]',12000,0,0,12000,'accepted','2026-03-01T10:00:00Z')`,[job,ids.artisan]);
+const budgetQuote=(await db.query(`insert into public.quotes(intervention_id,artisan_id,lines,subtotal_cents,tax_rate,tax_cents,total_cents,status,accepted_at) values($1,$2,'[{"label":"QA","quantity":1,"unit_price_cents":12000}]',12000,0,0,12000,'accepted','2026-03-01T10:00:00Z') returning id`,[job,ids.artisan])).rows[0].id;
 await db.query(`insert into public.quotes(intervention_id,artisan_id,lines,subtotal_cents,tax_rate,tax_cents,total_cents,status,accepted_at) values($1,$2,'[{"label":"QA","quantity":1,"unit_price_cents":5000}]',5000,0,0,5000,'accepted','2027-03-01T10:00:00Z')`,[foreignJob,ids.artisan]);
 console.log('PASS: fiscal years need organisation-wide write, overlap and length refused, budget lines upsert with versions and same-organisation fiscal year');
 
@@ -236,7 +236,19 @@ assert.equal(snap.site.id,a);assert.equal(snap.equipment.length,1);assert.equal(
 assert.equal(snap.maintenance_plans.find(p=>p.id===plan.id).visits.length,1);
 assert.equal(snap.fiscal_years.length,2);assert.equal(snap.budget_lines.length,1);
 const consumption=snap.budget_consumption.find(x=>x.fiscal_year_id===fy.id);
-assert.equal(consumption.accepted_cents,12000);assert.equal(consumption.paid_cents,12000);assert.equal(consumption.interventions,1);
+assert.equal(consumption.accepted_cents,12000);assert.equal(consumption.paid_cents,0,'job.status=paid alone is not a settled payment');assert.equal(consumption.interventions,1);
+// Isolated SQL fixture only: no Stripe/bank proof. Budget paid amounts come from payments, not the job label.
+const budgetPayment=(await db.query("insert into public.payments(quote_id,session_id,total_cents,currency,status) values($1,$2,12000,'eur','pending') returning id",[budgetQuote,'cs_test_QA_site_budget_'+budgetQuote])).rows[0].id;
+const pendingBudget=await scalar('writer','select public.site_operations_snapshot($1) v',[a]);
+assert.equal(pendingBudget.budget_consumption.find(x=>x.fiscal_year_id===fy.id).paid_cents,0,'a pending payment does not count as paid');
+await db.query("update public.payments set status='paid',paid_at='2026-03-02T10:00:00Z' where id=$1",[budgetPayment]);
+for(const reader of ['writer','viewer']){
+ const paidBudget=await scalar(reader,'select public.site_operations_snapshot($1) v',[a]);
+ assert.equal(paidBudget.budget_consumption.find(x=>x.fiscal_year_id===fy.id).paid_cents,12000,'actual payments.status=paid counts for writable and read-only site scopes');
+ assert.equal(paidBudget.budget_consumption.find(x=>x.fiscal_year_id===fy.id).accepted_cents,12000,'payment does not change the accepted commitment');
+ assert.equal(paidBudget.budget_consumption.find(x=>x.fiscal_year_id===fy2.id).paid_cents,0,'another fiscal period/site never gains this payment');
+}
+
 assert.equal(snap.budget_consumption.find(x=>x.fiscal_year_id===fy2.id).accepted_cents,0,'other site quote not counted');
 assert.equal(snap.contract_grids,null,'selected-scope member: grids not readable, flagged not hidden');
 assert.equal(snap.limits.contract_grids_readable,false);assert.equal(snap.limits.can_write_site,true);assert.equal(snap.limits.can_write_organization,false);
