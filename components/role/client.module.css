@@ -1338,3 +1338,436 @@
   display: inline-flex;
   align-items: center;
 }
+
+/* ===== FASTSPLIT-CLIENT-THEME-001 — themed overrides =========================================
+   Active only inside ThemeSurface (`.ui-v2`, same element as `.clientSkin` from
+   client-theme.module.css; a module cannot select another module's hashed class). Same
+   selectors as above, +1 class, colour declarations mapped to --ui-* tokens; layout unchanged.
+   Without the wrapper nothing here applies. */
+:global(.ui-v2) .space {
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .workspaceBlock {
+  border-top: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .workspaceBlock > span:first-child {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .workspaceBlock strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .workspaceBlock small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .navCaption {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .sideNav button,
+:global(.ui-v2) .sidebarBottom button {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .sideNav button:hover,
+:global(.ui-v2) .sidebarBottom button:hover {
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .sideNav button[aria-current="page"],
+:global(.ui-v2) .sidebarBottom button[aria-current="page"] {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .sideCount {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .sidebarBottom {
+  border-top: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .mobileHeader {
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .bellButton {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .bellButton:hover {
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .bellDot {
+  background: var(--ui-primary);
+  border: 2px solid var(--ui-border);
+}
+:global(.ui-v2) .breadcrumb {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .breadcrumb strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .connection {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .connection:hover {
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .connection > span:first-child {
+  background: var(--ui-border);
+}
+:global(.ui-v2) .connection.live > span:first-child {
+  background: var(--ui-primary);
+}
+:global(.ui-v2) .userChip:hover {
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .userChip strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .userChip small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .demoBanner {
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  border-bottom: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .demoBanner strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .demoTools select {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .bottomNav {
+  background: var(--ui-card);
+  border-top: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .bottomNav button {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .bottomNav button[aria-current="page"] {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .navCount {
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+:global(.ui-v2) .ctaButton {
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+:global(.ui-v2) .ctaButton:hover {
+  background: var(--ui-primary);
+}
+:global(.ui-v2) .ctaButton > span:first-child {
+  background: var(--ui-card);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .linkButton {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .tiles button {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .tiles button:hover {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .tiles button > svg {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .recentRow {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .recentRow:hover {
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .recentRow > span:first-child {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .recentBody strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .recentBody > span {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .recentMeta {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .search {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .search input {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .card {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .cardHead h2 > svg {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .statusCard {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .statusMain > span:first-child {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .statusMain small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .statusMain strong {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .statusMain > div > span {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .stepper li {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .stepper li:not(:last-child)::after {
+  background: var(--ui-border);
+}
+:global(.ui-v2) .stepper li.done:not(:last-child)::after {
+  background: var(--ui-primary);
+}
+:global(.ui-v2) .stepper li > span {
+  border: 2px solid var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .stepper li.done > span {
+  background: var(--ui-primary);
+  border-color: var(--ui-accent);
+  color: var(--ui-on-primary);
+}
+:global(.ui-v2) .stepper li.current > span {
+  border-color: var(--ui-accent);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .stepper li.current {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .artisanRow > span:first-child {
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .artisanRow strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .addressCard address {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .description {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .fileList li {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .fileList li > svg {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .cancelButton {
+  color: var(--ui-danger);
+  border-color: var(--ui-border);
+}
+:global(.ui-v2) .cancelButton:hover {
+  background: var(--ui-surface);
+  border-color: var(--ui-danger);
+}
+:global(.ui-v2) .lines > div > span:first-child {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .lines small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .totals {
+  border-top: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .totals > div {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .totals > div.grand {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .totals > div.grand strong {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .inlineSelect {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .inlineSelect select {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .appointment {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .appointment strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .appointmentForm {
+  border-top: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .travelLine {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .travelLine > svg {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .history li:not(:last-child)::before {
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .history li > span:first-child {
+  border: 2px solid var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .history li.done > span:first-child {
+  background: var(--ui-primary);
+  border-color: var(--ui-success);
+  color: var(--ui-on-primary);
+}
+:global(.ui-v2) .history li.current > span:first-child {
+  border-color: var(--ui-accent);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .history strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .history small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .history li > span:last-child {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .history li.done > span:last-child {
+  color: var(--ui-success);
+}
+:global(.ui-v2) .history li.current > span:last-child {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .paymentLine {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .paymentLine.ok {
+  color: var(--ui-success);
+  background: var(--ui-surface);
+  border-color: var(--ui-border);
+}
+:global(.ui-v2) .paymentLine.ko {
+  color: var(--ui-danger);
+  background: var(--ui-surface);
+  border-color: var(--ui-border);
+}
+:global(.ui-v2) .quoteNote > svg {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .quoteNote strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .quoteTable {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .quoteTable th,
+:global(.ui-v2) .quoteTable td {
+  border-bottom: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .quoteTable th {
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .quoteTable td:nth-child(2) {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .quoteTable tfoot td {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .quoteTable tfoot tr.grand td {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .rejectForm {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+}
+:global(.ui-v2) .docRow {
+  border-top: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .asideCard {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .asideCard > svg {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .faq details {
+  border-top: 1px solid var(--ui-border);
+}
+:global(.ui-v2) .faq summary {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .faq summary > span {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .helpPanel {
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .helpPanel h2 {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .helpPanel p {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .helpPanel > span {
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .helpPanel button {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .statsNote {
+  color: var(--ui-text-muted);
+}
+@media (min-width: 1024px) {
+  :global(.ui-v2) .sidebar {
+    background: var(--ui-card);
+    border-right: 1px solid var(--ui-border);
+  }
+  :global(.ui-v2) .header {
+    background: var(--ui-card);
+    border-bottom: 1px solid var(--ui-border);
+  }
+}
+
+/* ---- Manual corrections (themed) -------------------------------------------------------- */
+:global(.ui-v2) .space {
+  background: var(--ui-bg);
+}
+:global(.ui-v2) .helpPanel button {
+  color: var(--ui-on-primary);
+}
+/* Theme toggle in the compact mobile header: visible label moved off-screen (accessible name
+   kept) so the header tools fit at 360 px. */
+:global(.ui-v2) .mobileHeaderTools [data-theme-toggle] > span:last-child,
+:global(.ui-v2) .headerTools [data-theme-toggle] > span:last-child {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

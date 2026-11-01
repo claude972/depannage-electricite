@@ -80,6 +80,7 @@ import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
 import { TrackingAnchor } from "./tracking-anchor";
 import { useDetailPresence } from "./use-detail-presence";
+import { PointReadState } from "./detail-read-view";
 import { ArtisanPlanning } from "../features/planning/artisan-planning";
 import { CONTRACT_MESSAGES } from "../app/api";
 import { demoPlanning } from "../../lib/features/planning/demo";
@@ -1180,6 +1181,8 @@ function MissionView({
   const presence = useDetailPresence(session, "artisan-mission", id, Boolean(i));
   if (id && !i) {
     if (presence.decision === "loading") return <Loader label="Recherche du dossier…" />;
+    if (presence.decision === "detail" || presence.decision === "detail_loading" || presence.decision === "detail_error")
+      return <PointReadState presence={presence} backLabel="Missions" onBack={() => session.go("missions")} />;
     if (presence.decision === "error")
       return (
         <Unavailable
@@ -1195,22 +1198,29 @@ function MissionView({
       <>
         <PageTitle
           back={{ label: "Missions", onClick: () => session.go("missions") }}
-          title="Dossier introuvable"
+          title={presence.openAnyway ? "Dossier non chargé" : "Dossier introuvable"}
         />
         <section className="panel">
           <Empty
             icon="search"
             title="Ce dossier n’est pas dans vos données chargées"
             action={
-              <button
-                type="button"
-                className="button outline"
-                disabled={session.busy}
-                onClick={() => void session.refresh()}
-              >
-                <Icon name="refresh" />
-                Actualiser mes données
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="button outline"
+                  disabled={session.busy}
+                  onClick={() => void session.refresh()}
+                >
+                  <Icon name="refresh" />
+                  Actualiser mes données
+                </button>
+                {presence.openAnyway && (
+                  <button type="button" className="button outline" onClick={presence.openAnyway}>
+                    Ouvrir quand même
+                  </button>
+                )}
+              </>
             }
           >
             Il a peut-être été attribué à un autre artisan ou retiré par le client.
