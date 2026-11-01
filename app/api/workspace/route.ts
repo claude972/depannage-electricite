@@ -1,4 +1,5 @@
 import { authenticatedClient, apiError, dbError } from "@/lib/supabase/server";
+import { DetailReadUnavailable, workspaceWindow } from "@/lib/features/workspace/detail-read";
 export const dynamic = "force-dynamic";
 export async function GET() {
   try {
@@ -25,18 +26,18 @@ export async function GET() {
         .from("interventions")
         .select("*")
         .order("created_at", { ascending: false })
-        .limit(100),
+        .limit(101),
       db
         .from("quotes")
         .select("*")
         .order("created_at", { ascending: false })
-        .limit(200),
+        .limit(201),
       db
         .from("sites")
         .select("*")
         .order("created_at", { ascending: false })
-        .limit(100),
-      db.from("organizations").select("*").limit(50),
+        .limit(101),
+      db.from("organizations").select("*").limit(51),
       db
         .from("messages")
         .select("*")
@@ -68,6 +69,10 @@ export async function GET() {
       artisanProfile,
     ])
       dbError(response.error);
+    const jobWindow = workspaceWindow(jobs.data, 100);
+    const quoteWindow = workspaceWindow(quotes.data, 200);
+    const siteWindow = workspaceWindow(sites.data, 100);
+    const orgWindow = workspaceWindow(organizations.data, 50);
     const offers =
       profile.data?.role === "artisan"
         ? await db.rpc("available_missions")
@@ -75,7 +80,7 @@ export async function GET() {
     dbError(offers.error);
     // Latest saved appointments only for dossiers already readable/loaded in this response.
     // Unassigned offers never gain an address, note or participant through this projection.
-    const loadedIds = (jobs.data ?? []).map((job: { id: string }) => job.id);
+    const loadedIds = jobWindow.rows.map(job => job.id);
     const appointments = loadedIds.length
       ? await db.from("intervention_appointments")
           .select("intervention_id,starts_at,ends_at,note,updated_by,updated_at", { count: "exact" })
@@ -86,10 +91,16 @@ export async function GET() {
     return Response.json(
       {
         profile: profile.data,
-        interventions: [...(jobs.data ?? []), ...(offers.data ?? [])],
-        quotes: quotes.data,
-        sites: sites.data,
-        organizations: organizations.data,
+        interventions: [...jobWindow.rows, ...(offers.data ?? [])],
+        quotes: quoteWindow.rows,
+        sites: siteWindow.rows,
+        organizations: orgWindow.rows,
+        limits: {
+          interventions: { limit: 100, limited: jobWindow.limited },
+          quotes: { limit: 200, limited: quoteWindow.limited },
+          sites: { limit: 100, limited: siteWindow.limited },
+          organizations: { limit: 50, limited: orgWindow.limited },
+        },
         messages: [...(messages.data ?? [])].reverse(),
         documents: documents.data,
         reviews: reviews.data,
@@ -103,6 +114,8 @@ export async function GET() {
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (error) {
+    if (error instanceof DetailReadUnavailable)
+      return Response.json({ error: error.message }, { status: 503, headers: { "Cache-Control": "private, no-store", "Retry-After": "2" } });
     return apiError(error);
   }
 }
