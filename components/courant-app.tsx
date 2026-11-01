@@ -40,6 +40,8 @@ import {
   type DemoOperations,
 } from "./app/demo";
 import { resolveDisplayName } from "./app/display-name";
+import { readBootDraft } from "./app/request-draft-boot";
+import { savePublicDraft } from "../lib/shared/request-draft";
 import { REALTIME_CHANNEL_CONFIG, REALTIME_TABLES, nextConnection } from "./app/realtime";
 import { category, uid } from "./app/format";
 import {
@@ -334,11 +336,9 @@ export default function CourantApp() {
   useEffect(() => {
     let active = true;
     let unsubscribe: (() => void) | undefined;
-    try {
-      const draft = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || "null");
-      if (draft && draft.savedAt > Date.now() - 1800000 && draft.values?.category)
-        setPendingDraft(draft.values);
-    } catch {}
+    // Canonical bounded format shared with /offline-request.html (strict category, 30 min TTL).
+    const bootDraft = readBootDraft(typeof sessionStorage === "undefined" ? null : sessionStorage);
+    if (bootDraft) setPendingDraft(bootDraft);
     try {
       const token = sessionStorage.getItem(INVITE_KEY);
       if (token && INVITE_TOKEN.test(token)) setPendingInvitation(token);
@@ -2285,9 +2285,8 @@ export default function CourantApp() {
     startDemo,
     saveDraft(values) {
       setPendingDraft(values);
-      try {
-        sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ savedAt: Date.now(), values }));
-      } catch {}
+      // Same canonical format as /offline-request.html; storage refusal keeps the in-memory draft.
+      savePublicDraft(typeof sessionStorage === "undefined" ? null : sessionStorage, values);
       setAuthMode("signup");
       navigate("auth");
       setNotice(
