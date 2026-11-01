@@ -1,0 +1,81 @@
+/* Card-hold settlement card. --ui-* tokens, light/dark, 44 px+ targets, focus visible. */
+.card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: 16px;
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+.title {
+  margin: 0;
+  color: var(--ui-text);
+  font-size: 16px;
+  font-weight: 700;
+}
+.text {
+  margin: 0;
+  color: var(--ui-text);
+  line-height: 1.55;
+}
+.confirm {
+  display: grid;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--ui-surface);
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.primary,
+.secondary {
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.primary {
+  justify-self: start;
+  border: 0;
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+.secondary {
+  justify-self: start;
+  border: 1px solid var(--ui-border);
+  background: transparent;
+  color: var(--ui-text);
+}
+.primary:disabled,
+.secondary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.primary:focus-visible,
+.secondary:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+.error {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--ui-danger);
+  border-radius: 12px;
+  background: var(--ui-surface);
+  color: var(--ui-danger);
+  font-size: 14px;
+  font-weight: 600;
+}
+@media (max-width: 640px) {
+  .primary,
+  .secondary {
+    width: 100%;
+  }
+}
