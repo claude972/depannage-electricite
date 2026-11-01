@@ -40,6 +40,7 @@ import {
   type DemoOperations,
 } from "./app/demo";
 import { resolveDisplayName } from "./app/display-name";
+import { REALTIME_CHANNEL_CONFIG, REALTIME_TABLES, nextConnection } from "./app/realtime";
 import { category, uid } from "./app/format";
 import {
   CONNECT_RETURN_MESSAGE,
@@ -513,8 +514,11 @@ export default function CourantApp() {
     } catch {
       return;
     }
-    let channel = client.channel(`workspace-${profileIdForRealtime}`);
-    for (const table of ["interventions", "quotes", "messages", "payments"])
+    let channel = client.channel(`workspace-${profileIdForRealtime}`, REALTIME_CHANNEL_CONFIG);
+    channel = channel.on("system", {}, (payload: { status?: string }) => {
+      if (active) setConnection((c) => nextConnection(c, { kind: "system", status: payload?.status }));
+    });
+    for (const table of REALTIME_TABLES)
       channel = channel.on(
         "postgres_changes",
         { event: "*", schema: "public", table },
@@ -526,7 +530,7 @@ export default function CourantApp() {
         },
       );
     channel.subscribe((status) => {
-      if (active) setConnection(status);
+      if (active) setConnection((c) => nextConnection(c, { kind: "status", status }));
     });
     return () => {
       active = false;
