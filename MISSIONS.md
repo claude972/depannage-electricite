@@ -633,3 +633,12 @@ Limite réelle centreDocuments/workspace100 rendanciensinaccessiblesglobalement.
 
 ## FASTSPLIT-DOCUMENT-DOWNLOAD-001 — Codex delivery_offline — in progress
 Défaut reproduit vraiGETinjecté : signedURLdata:null/error:null=>200{} lienabsent. ScopeGET?id app/api/documents/route.ts ettestdédié uniquement, baseb181336 avecPOST4c129préservé ; GETliste/POSTinchangés. maybeSingleparentdocumentmasqué/null=>404uniforme,transport/malformed503 ; pathvalide/signURLhttpsnonvideparseable,TTL60sinchangé, no-store+503Retry2réponsesdedownload. AucunURLtokenjournalisé/hardcodeprojet/creds/cloud/SQL. Testsnominal/auth/erreurs/refus,SHApoussé puisROOTcontre-revue+preview.
+
+## FASTSPLIT-OFFLINE-DRAFT-001 — Codex logique / Claude UI — in progress
+GO owner horsconnexion : préparer une note de panne PUBLIQUE dans cetonglet, conservation30minsessionStoragecléexistante courant-request-draft, repriseMANUELLE/#newonline ; jamaiscompteprivécaché/autoenvoi/filemutations/photospersistées. Codexidentity exclusif SWv4/next.configHEADERSajouts/publicoffline-request.js+types/libsharedrequest-draft/tests ; ClaudeC réutilisé exclusifpublic/offline-request.html +lienoffline.html(aprèse04figé). ContratDOM transmislead, JSmoduleexternecanoniqueexportreadPublicDraft etc, CSPconnectnone/form-actionnone/scriptself ; cacheSEUL3assetsstaticsvalidésURL/type/header/noRedirect avantinstall, private/API/auth/RSC/nonGETtoujoursbypass. LeaderSEULcontrollerbootreadPublicDraftstrictpartielborné/TTL/futur, catégoriesexistantes, aucunautrecontrollerscope. Nominaloffline/save/quota/reload/repriseonline+brouillonpréservé, preuveROOTonlineetofflinenavigateurréel ; paspromesseGPSphysique/actionserveurhorsréseau.
+
+## FASTSPLIT-PUBLIC-INFO-THEME-001 — Claude A — ready
+RéutiliserworkerA : public-site.tsx vuesJoin/Aide/Mentionsrestantes +public.module.css/nouveauleaf, SharedChrome/ThemeSurface existants, vert2modes. Aucuntextelegal/coordonnéesinventés, liens/authartisan/draft/permissionspréservés. Aucunforms/globals/session/layout. CourtSHA/testnominal+erreurs/focus44 puisROOTpreview.
+
+## FASTSPLIT-ERROR-PAGES-001 — Claude B — ready
+RéutiliserworkerB : app/error.tsx,app/not-found.tsx etmoduleCSSneufisolé, DESIGNvert/Jakarta2modes/taille44/focus. Retryreset explicite, homeaccessible, aucunstacksecret/causeinterne affichée/autoretrymutation. PasAPI/cache/auth/layout/globals/form. TestscomposantscibléspuisROOTvraie404preview, resetboundarytestborné.
