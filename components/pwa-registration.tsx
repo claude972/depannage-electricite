@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { CSSProperties } from "react";
 
 type InstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -11,28 +10,93 @@ type InstallPromptEvent = Event & {
 // This event is a browser capability, not account/session data. No user data is stored.
 let installPrompt: InstallPromptEvent | null = null;
 const INSTALL_EVENT = "courant:install-available";
-const noticeStyle: CSSProperties = {
-  position: "relative",
-  zIndex: 100,
-  padding: "12px 20px",
-  color: "#172b4d",
-  background: "#fff8e8",
-  borderBottom: "1px solid #d8e0eb",
-  fontSize: "14px",
-  lineHeight: 1.5,
-};
-const buttonStyle: CSSProperties = {
-  minHeight: 44,
-  padding: "8px 14px",
-  marginLeft: 8,
-  border: "1px solid #1457d9",
-  borderRadius: 8,
-  background: "white",
-  color: "#1457d9",
-  cursor: "pointer",
-  font: "inherit",
-  fontWeight: 600,
-};
+// Styles (DESIGN.md green / Plus Jakarta / light-dark). Base rules = the former inline styles,
+// unchanged, so pages without the new theme look exactly as before. The --ui-* tokens are defined
+// on :root (app/globals.css), so a var() fallback would never apply: the themed variant is opt-in
+// by ancestry. The status notice is mounted in app/layout.tsx, outside any ThemeSurface: it is
+// themed only when the page renders a `.ui-v2` surface (`body:has(.ui-v2)`; browsers without :has
+// keep the legacy look). The install control lives inside the role spaces: themed under `.ui-v2`.
+// Shipped as a React 19 hoisted, deduplicated <style> (no CSS import, so node tests can load
+// this module directly). Class names are prefixed `pwa-`.
+const PWA_CSS = `
+.pwa-notice {
+  position: relative;
+  z-index: 100;
+  padding: 12px 20px;
+  color: #172b4d;
+  background: #fff8e8;
+  border-bottom: 1px solid #d8e0eb;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.pwa-button {
+  min-height: 44px;
+  padding: 8px 14px;
+  margin-left: 8px;
+  border: 1px solid #1457d9;
+  border-radius: 8px;
+  background: white;
+  color: #1457d9;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+.pwa-install {
+  line-height: 1.5;
+}
+.pwa-install .pwa-button {
+  margin-left: 0;
+}
+.pwa-summary {
+  cursor: pointer;
+  min-height: 44px;
+  padding: 10px 0;
+}
+.pwa-note {
+  font-size: 14px;
+  color: #526178;
+}
+
+/* ===== Themed (DESIGN.md: green accent, Plus Jakarta Sans, light/dark) ======================= */
+body:has(.ui-v2) .pwa-notice {
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  border-bottom-color: var(--ui-border);
+  box-shadow: inset 4px 0 0 var(--ui-warning);
+  font-family: var(--ui-font);
+  color-scheme: var(--ui-scheme);
+}
+body:has(.ui-v2) .pwa-notice .pwa-button,
+.ui-v2 .pwa-install .pwa-button {
+  border-color: var(--ui-accent);
+  border-radius: var(--ui-radius-sm);
+  background: transparent;
+  color: var(--ui-accent);
+}
+body:has(.ui-v2) .pwa-notice .pwa-button:hover:not(:disabled),
+.ui-v2 .pwa-install .pwa-button:hover:not(:disabled) {
+  background: var(--ui-card);
+}
+body:has(.ui-v2) .pwa-notice .pwa-button:focus-visible,
+.ui-v2 .pwa-install .pwa-button:focus-visible,
+.ui-v2 .pwa-install .pwa-summary:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+.ui-v2 .pwa-install .pwa-summary {
+  color: var(--ui-text);
+}
+.ui-v2 .pwa-install .pwa-note {
+  color: var(--ui-text-muted);
+}
+`;
+function PwaStyles() {
+  return (
+    <style href="courant-pwa-registration" precedence="default">
+      {PWA_CSS}
+    </style>
+  );
+}
 
 function isStandalone() {
   return (
@@ -175,7 +239,8 @@ export function PwaRegistration() {
 
   if (offline) {
     return (
-      <div role="status" style={noticeStyle}>
+      <div role="status" className="pwa-notice">
+        <PwaStyles />
         Connexion interrompue. Les actions ne sont pas envoyées hors connexion.
         Vérifiez leur état avant de réessayer au retour du réseau.
       </div>
@@ -183,12 +248,13 @@ export function PwaRegistration() {
   }
   if (waiting) {
     return (
-      <div role="status" style={noticeStyle}>
+      <div role="status" className="pwa-notice">
+        <PwaStyles />
         Une nouvelle version est disponible. Enregistrez vos saisies avant de recharger.
         <button
           type="button"
           disabled={activating}
-          style={buttonStyle}
+          className="pwa-button"
           onClick={() => {
             reloadRequested.current = true;
             setActivating(true);
@@ -202,9 +268,10 @@ export function PwaRegistration() {
   }
   if (registrationError) {
     return (
-      <div role="status" style={noticeStyle}>
+      <div role="status" className="pwa-notice">
+        <PwaStyles />
         L’installation n’est pas disponible pour le moment. Le site reste accessible en ligne.
-        <button type="button" style={buttonStyle} onClick={() => setRetry((value) => value + 1)}>
+        <button type="button" className="pwa-button" onClick={() => setRetry((value) => value + 1)}>
           Réessayer
         </button>
       </div>
@@ -262,14 +329,15 @@ export function PwaInstallControl() {
 
   if (installed) return null;
   return (
-    <section aria-label="Installer l’application" style={{ lineHeight: 1.5 }}>
+    <section aria-label="Installer l’application" className="pwa-install">
+      <PwaStyles />
       {available ? (
-        <button type="button" disabled={busy} onClick={install} style={{ ...buttonStyle, marginLeft: 0 }}>
+        <button type="button" disabled={busy} onClick={install} className="pwa-button">
           {busy ? "Ouverture…" : "Installer Courant"}
         </button>
       ) : (
         <details>
-          <summary style={{ cursor: "pointer", minHeight: 44, padding: "10px 0" }}>
+          <summary className="pwa-summary">
             Installer sur cet appareil
           </summary>
           <p>
@@ -279,7 +347,7 @@ export function PwaInstallControl() {
           </p>
         </details>
       )}
-      <p style={{ fontSize: 14, color: "#526178" }}>
+      <p className="pwa-note">
         Une connexion Internet reste nécessaire pour consulter et modifier vos dossiers.
       </p>
       {error ? <p role="alert">{error}</p> : null}
