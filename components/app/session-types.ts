@@ -86,6 +86,8 @@ export interface Session {
   displayName: string;
   /** First name from the real profile (live) or the demo cast (demo); null when unknown — never invented. */
   firstName: string | null;
+  /** Public request draft kept across login (same identity chain only); cleared after POST 201. */
+  pendingDraft: RequestValues | null;
   data: Workspace;
   professional: ProfessionalData;
   capabilities: Capabilities;

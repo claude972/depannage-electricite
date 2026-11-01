@@ -2312,7 +2312,8 @@ export default function CourantApp() {
         const result = await client.auth.signUp({
           email: values.email,
           password: values.password,
-          options: { data: { full_name: values.full_name, role: values.role } },
+          // Confirmation link lands on the server callback (token_hash verify), never a fake session.
+          options: { data: { full_name: values.full_name, role: values.role }, emailRedirectTo: `${window.location.origin}/auth/confirm` },
         });
         if (result.error) throw result.error;
         if (result.data.session) {
@@ -2411,6 +2412,9 @@ export default function CourantApp() {
     profileId: mode === "live" ? profile?.id || "" : `demo-${role}`,
     displayName,
     firstName,
+    // Live: only the draft adopted by THIS identity chain (clearSessionState drops it on any
+    // identity change); demo never inherits a public draft.
+    pendingDraft: mode === "live" ? pendingDraft : null,
     data,
     professional,
     capabilities,
