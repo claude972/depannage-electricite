@@ -64,6 +64,11 @@ async function readDocuments(request: Request) {
       const expectedPath = `${base.pathname.replace(/\/$/, "")}/storage/v1/object/sign/${bucket}/${data.path}`;
       if (url.protocol !== "https:" || url.origin !== base.origin || url.username || url.password ||
         url.hash || decodeURIComponent(url.pathname) !== expectedPath) unavailableDownload();
+      // Inspect parameter names and raw presence only. The signature value stays opaque:
+      // never decode it, parse claims or expose it in diagnostics. Duplicate keys are ambiguous.
+      const tokenEntries = url.search.slice(1).split("&").filter(part =>
+        decodeURIComponent(part.split("=", 1)[0].replace(/\+/g, " ")) === "token");
+      if (tokenEntries.length !== 1 || !/^token=.+$/s.test(tokenEntries[0])) unavailableDownload();
     } catch { unavailableDownload(); }
     return Response.json({ url: value });
   } catch (error) {

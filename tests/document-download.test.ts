@@ -92,6 +92,13 @@ test("an unavailable Storage call or explicit provider error returns a neutral r
     const h = setup({ signed }); await unavailable(await h.get());
   }
 });
+test("a signed link needs exactly one nonempty opaque token parameter", async () => {
+  const path = signedUrl.split("?", 1)[0];
+  for (const query of ["", "?token=", "?download=file", "?token", "?token=one&token=two", "?token=one&%74oken=two", "?%74oken=one"]) {
+    const h = setup({ signed: { data: { signedUrl: path + query }, error: null } });
+    await unavailable(await h.get());
+  }
+});
 test("missing public provider configuration never produces an invented signed link", async () => {
   const h = setup(); delete process.env.NEXT_PUBLIC_SUPABASE_URL;
   await unavailable(await h.get()); assert.equal(h.calls.some(c => c.name === "sign"), false);
