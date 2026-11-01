@@ -33,8 +33,19 @@ test("wording: on site never « payé »; card dated, not a charge, not forever"
   assert.match(card, /pas valable indéfiniment/);
 });
 
-test("client detail: booking dossier hides the legacy Stripe button (also while the status is loading)", () => {
+test("client detail: legacy checkout ONLY for a proven legacy dossier (404); loading/503/malformed/booking ⇒ never", () => {
   const src = readFileSync("components/role/client-space.tsx", "utf8");
-  assert.match(src, /if \(i\.status === "completed" && \(isBooking \|\| \(!demo && bookingStatus === null\)\)\) \{\s*\/\/[^\n]*\n\s*return null;/);
-  assert.match(src, /data-booking-payment-status=\{bookingStatus\.payment\.method\}/);
+  assert.match(src, /if \(i\.status === "completed" && !demo && currentBookingStatus\?\.kind !== "legacy"\) \{/);
+  assert.match(src, /Statut de règlement momentanément indisponible/);
+  assert.match(src, /data-booking-payment-status=\{currentBookingStatus\.payment\.method\}/);
+});
+
+test("client detail: booking-status hooks run BEFORE any early return (deep link absent → present), keyed by UID + job", () => {
+  const src = readFileSync("components/role/client-space.tsx", "utf8");
+  const view = src.slice(src.indexOf("function DetailView("));
+  const firstReturn = view.search(/\n\s*if \(!i\)/);
+  for (const hook of ["useState<{ key: string; value: BookingStatus } | null>(null)", "useEffect(() => {\n    if (!statusKey) return;"])
+    assert.ok(view.indexOf(hook) > 0 && view.indexOf(hook) < firstReturn, hook);
+  assert.match(view, /const statusKey = i && !demo \? `\$\{session\.profileId\}\|\$\{i\.id\}` : "";/);
+  assert.match(view, /bookingStatus && bookingStatus\.key === statusKey \? bookingStatus\.value : null/, "stale key ⇒ null at once");
 });

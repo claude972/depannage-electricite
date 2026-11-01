@@ -72,3 +72,11 @@ test("guest checkout: payment line shown; card hold not available ⇒ honest ref
   const send = src.slice(src.indexOf("async function send()"));
   assert.ok(send.indexOf('booking.payment === "card_hold" && !cardAvailable') < send.indexOf("await confirmBooking()"), "refused before the POST");
 });
+
+test("card hold with a key: « Vérifier mon empreinte » (server finalize) and server cancel, no direct switch of mode", () => {
+  const card = renderToStaticMarkup(createElement(BookingConfirm, { draft, booking: { ...booking, payment: "card_hold", request_id: "11111111-1111-4111-8111-111111111111" }, busy: false, profileId: "u1", confirmBooking: async () => true, onEdit() {}, onContactChange() {}, onPaymentChange() {}, verifyCardHold: async () => true, cancelCardHold: async () => true }));
+  assert.match(card, /data-booking-card-actions=""/);
+  assert.match(card, /Vérifier mon empreinte/);
+  assert.match(card, /Annuler la réservation par carte/);
+  assert.doesNotMatch(card, /Choisir le règlement sur place/, "the mode/key change only after a server « cancelled »");
+});

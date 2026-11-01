@@ -149,6 +149,10 @@ export function parseReturnParams(search: string): ReturnContext | null {
   const connect = q.get("connect");
   if (connect === "returned" || connect === "refresh")
     return { kind: "connect", state: connect };
+  const bookingId = q.get("booking_request_id") ?? "";
+  const bookingReturn = q.get("booking_return");
+  if ((bookingReturn === "success" || bookingReturn === "cancel") && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(bookingId))
+    return { kind: "booking", state: bookingReturn, requestId: bookingId.toLowerCase() };
   const auth = q.get("auth");
   if (auth === "confirmed" || auth === "expired")
     return { kind: "auth", state: auth };

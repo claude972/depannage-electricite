@@ -110,8 +110,9 @@ test("replay of the same key after a lost reply ⇒ ONE dossier (local idempoten
 
 test("controller: booking ⇒ POST /api/bookings (flat contract body, key proven first, 409 ⇒ « Mes demandes »), never the legacy route", () => {
   const src = readFileSync("components/courant-app.tsx", "utf8");
-  const fn = src.slice(src.indexOf("async function confirmBooking()"), src.indexOf("async function createIntervention("));
-  assert.ok(fn.indexOf("ensureRequestId(getDraftStorage(), current)") < fn.indexOf('api<BookingReceipt>("/api/bookings", body)'));
+  const fn = src.slice(src.indexOf("async function confirmBooking()"), src.indexOf("async function finalizeBooking("));
+  const post = fn.search(/api<BookingReceipt[^>]*>\("\/api\/bookings", body\)/);
+  assert.ok(post > 0 && fn.indexOf("ensureRequestId(getDraftStorage(), current)") < post);
   assert.match(fn, /if \(!keyed\)\s*throw new Error\(/, "not provable ⇒ local refusal, no POST");
   for (const field of ["request_id: keyed.request_id", "service_slug: current.slug", "category: draft.category", "description: draft.description", "address: draft.address", "postal_code: draft.postal_code", "city: draft.city", "urgency: draft.urgency", "payment_choice: current.payment"])
     assert.ok(fn.includes(field), field);

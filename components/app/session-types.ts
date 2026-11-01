@@ -198,6 +198,10 @@ export interface Session {
   createIntervention(values: RequestValues, photos?: File[]): Promise<boolean>;
   /** Service booking: POST /api/bookings (idempotent key), never the legacy route. */
   confirmBooking(): Promise<boolean>;
+  /** Cancels the current card-hold attempt on the server (releases it); the draft stays. */
+  cancelBooking(): Promise<boolean>;
+  /** Card hold: server finalize for this key (never inferred from a return URL). */
+  finalizeBooking(requestId: string): Promise<boolean>;
   /** Photo queues per dossier (pending, failed or uncertain items); never overwritten by a new request. */
   uploads: UploadQueue[];
   /**
