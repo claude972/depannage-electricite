@@ -47,3 +47,10 @@ export function safeCheckoutUrl(raw: unknown): string | null {
     return null;
   }
 }
+
+/** Payment provenance: « on_site_declared » = received in cash/on site as DECLARED by the assigned
+ *  artisan (business « paid », never a bank confirmation). Read loosely: the projection field is
+ *  added by ROOT (Payment.method); anything else is treated as the legacy bank payment. */
+export function isDeclaredOnSite(payment: object | null | undefined): boolean {
+  return !!payment && (payment as { method?: unknown }).method === "on_site_declared";
+}

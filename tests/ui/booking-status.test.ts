@@ -74,3 +74,14 @@ test("on-site cash: client widget on completed|paid replaces the « aucun encais
   assert.match(artisan, /\["completed", "paid"\]\.includes\(i\.status\) && session\.mode === "live" && \(\s*<OnsiteSettlement[\s\S]*?viewer="artisan"[\s\S]*?context=\{session\.mutationContext\}[\s\S]*?onSettled=\{i\.status === "paid" \? undefined : \(\) => void session\.refresh\(\)\}/);
   assert.doesNotMatch(client, /viewer="artisan"/, "a client never gets the artisan declaration");
 });
+
+test("provenance: a payment declared received on site is never worded as a bank/Stripe confirmation", async () => {
+  const { isDeclaredOnSite } = await import("../../components/app/booking-status");
+  assert.equal(isDeclaredOnSite({ method: "on_site_declared" }), true);
+  for (const p of [{ method: "card" }, {}, null, undefined]) assert.equal(isDeclaredOnSite(p as never), false);
+  const client = readFileSync("components/role/client-space.tsx", "utf8");
+  assert.match(client, /payment\.status === "paid" && isDeclaredOnSite\(payment\)\s*\? `Règlement de \$\{money\(payment\.total_cents\)\} déclaré reçu sur place par l’artisan[^`]*Ce n’est pas une confirmation bancaire\.`/);
+  assert.doesNotMatch(client, /Le règlement est traité avec Stripe|via Stripe\./, "help texts no longer say every payment goes through Stripe");
+  const artisan = readFileSync("components/role/artisan-space.tsx", "utf8");
+  assert.match(artisan, /isDeclaredOnSite\(payment\)\s*\? "Règlement déclaré reçu sur place\. Ce n’est pas une confirmation bancaire\."/);
+});

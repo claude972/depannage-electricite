@@ -79,6 +79,7 @@ import { ThemeSurface } from "../app/theme-provider";
 import { ThemeToggle } from "../app/theme-toggle";
 import { QuoteDraftEditor } from "./artisan-quote-draft";
 import { OnsiteSettlement } from "./onsite-settlement";
+import { isDeclaredOnSite } from "../app/booking-status";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
@@ -2138,7 +2139,9 @@ function PaymentPanel({ session, intervention: i }: { session: Session; interven
   let text: string;
   if (i.status === "paid" || payment?.status === "paid") {
     tag = <Tag tone="green">Réglé{payment?.paid_at ? ` le ${date(payment.paid_at)}` : ""}</Tag>;
-    text = "Règlement confirmé par la plateforme.";
+    text = isDeclaredOnSite(payment)
+      ? "Règlement déclaré reçu sur place. Ce n’est pas une confirmation bancaire."
+      : "Règlement confirmé par la plateforme.";
   } else if (payment?.status === "pending") {
     tag = <Tag tone="amber">Paiement en cours</Tag>;
     text = "Une session de paiement est ouverte côté client ; la confirmation arrive par Stripe.";
@@ -2147,7 +2150,7 @@ function PaymentPanel({ session, intervention: i }: { session: Session; interven
     text = "Le dernier paiement n’a pas abouti selon Stripe. Le règlement reste attendu ; aucune nouvelle tentative n’est lancée automatiquement.";
   } else {
     tag = <Tag tone="neutral">Règlement attendu du client</Tag>;
-    text = "Le client est invité à régler le devis accepté. Le règlement est déclenché par le client, jamais depuis cet espace.";
+    text = "Le client est invité à régler le devis accepté. Un paiement en ligne est déclenché par le client, jamais depuis cet espace ; pour une réservation réglée sur place, déclarez le montant reçu dans le bloc dédié.";
   }
   return (
     <section className="panel" aria-labelledby="dossier-payment">
