@@ -12,9 +12,18 @@ const q = (over: Record<string, unknown> = {}) => ({ id: "q1", intervention_id: 
 
 test("validateWorkspace: accepted_total_cents absent OK (legacy/demo); present must be a safe non-negative integer", () => {
   assert.deepEqual(validateWorkspace(ws([q()])).ok, true, "absent field: accepted (legacy/demo)");
-  assert.equal(validateWorkspace(ws([q({ accepted_total_cents: 15000 })])).ok, true);
-  for (const bad of [null, "15000", -1, 1.5, Number.MAX_SAFE_INTEGER + 1, Number.NaN])
-    assert.deepEqual(validateWorkspace(ws([q({ accepted_total_cents: bad })])), { ok: false, reason: "quotes" }, String(bad));
+  const okRes = validateWorkspace(ws([q({ accepted_total_cents: 15000 })]));
+  assert.equal(okRes.ok, true, "15000 over a 12000 base: accepted");
+  if (okRes.ok) {
+    const quote = okRes.workspace.quotes[0];
+    assert.equal(quote.total_cents, 12000, "base unchanged");
+    assert.equal(quote.accepted_total_cents, 15000);
+  }
+  assert.equal(validateWorkspace(ws([q({ accepted_total_cents: 12000 })])).ok, true, "no amendment: equal to the base");
+  for (const bad of [0, 100, 11999, null, "15000", -1, 1.5, Number.MAX_SAFE_INTEGER + 1, Number.NaN])
+    assert.deepEqual(validateWorkspace(ws([q({ accepted_total_cents: bad })])), { ok: false, reason: "quotes" }, `accepted ${String(bad)}`);
+  for (const badBase of [0, -5, 1.5, "12000"])
+    assert.deepEqual(validateWorkspace(ws([q({ total_cents: badBase, accepted_total_cents: 15000 })])), { ok: false, reason: "quotes" }, `base ${String(badBase)}`);
 });
 
 test("helper: server total when present (incl. 0 amendments = base), base only when absent; never a max/clamp", () => {
