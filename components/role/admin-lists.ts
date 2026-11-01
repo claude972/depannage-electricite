@@ -45,8 +45,8 @@ export function adminKpis(o: AdminOverview): AdminKpi[] {
       tone: "green",
       label: "Prestations payées TTC",
       value: money(o.financial.paid_service_cents),
-      note: "Hors revenu plateforme",
-      basis: `Prestations payées TTC : ${o.financial.note} Revenu plateforme : non calculé.`,
+      note: paidBreakdown(o) ?? "Hors revenu plateforme",
+      basis: `Prestations payées TTC : ${o.financial.note}${paidBreakdown(o) ? ` Ventilation : ${paidBreakdown(o)}.` : ""} Revenu plateforme : non calculé.`,
     },
     {
       id: "pending",
@@ -74,4 +74,13 @@ export function dashboardRows(o: AdminOverview, activeLimit = 6) {
     .sort(byNewest)
     .slice(0, activeLimit);
   return { pending, active };
+}
+
+/** Optional server breakdown (ROOT projection): bank-confirmed vs declared received on site. Only
+ *  shown when BOTH fields are real numbers — never an invented 0 when the server omits them. */
+export function paidBreakdown(o: Pick<AdminOverview, "financial">): string | null {
+  const f = o.financial as { bank_paid_service_cents?: unknown; on_site_declared_cents?: unknown };
+  const ok = (v: unknown): v is number => typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
+  if (!ok(f.bank_paid_service_cents) || !ok(f.on_site_declared_cents)) return null;
+  return `dont ${money(f.bank_paid_service_cents)} confirmés par la banque et ${money(f.on_site_declared_cents)} déclarés reçus sur place`;
 }

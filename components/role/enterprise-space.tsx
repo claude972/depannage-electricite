@@ -13,6 +13,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
+import { isDeclaredOnSite } from "../app/booking-status";
 import styles from "./enterprise.module.css";
 import theme from "./enterprise-theme.module.css";
 import { ThemeSurface } from "../app/theme-provider";
@@ -248,11 +249,10 @@ function siteFigures(site: Site, data: Workspace) {
   );
   const acceptedIds = new Set(accepted.map((q) => q.id));
   const committed = sum(accepted.map((q) => q.total_cents));
-  const paid = sum(
-    data.payments
-      .filter((p) => acceptedIds.has(p.quote_id) && p.status === "paid")
-      .map((p) => p.total_cents),
-  );
+  const paidRows = data.payments.filter((p) => acceptedIds.has(p.quote_id) && p.status === "paid");
+  const paid = sum(paidRows.map((p) => p.total_cents));
+  // Part of « Réglé » that is a receipt DECLARED on site by the artisan (not a bank confirmation).
+  const declared = sum(paidRows.filter((p) => isDeclaredOnSite(p)).map((p) => p.total_cents));
   const budget = site.budget_cents || 0;
   // `ratio` est le taux réel (peut dépasser 100), `width` la seule valeur plafonnée (barre).
   const { ratio, width, over } = budgetFigures(committed, budget);
@@ -260,6 +260,7 @@ function siteFigures(site: Site, data: Workspace) {
     budget,
     committed,
     paid,
+    declared,
     remaining: budget - committed,
     ratio,
     width,
@@ -2564,9 +2565,15 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
             <span style={{ width: `${f.width}%` }} />
           </div>
           <div className={styles.keyValue}>
-            <span>Réglé (Stripe confirmé)</span>
+            <span>Réglé</span>
             <strong>{money(f.paid)}</strong>
           </div>
+          {f.declared > 0 && (
+            <div className={styles.keyValue}>
+              <span>dont déclaré reçu sur place</span>
+              <strong>{money(f.declared)}</strong>
+            </div>
+          )}
           <div className={styles.keyValue}>
             <span>Engagé non réglé</span>
             <strong>{money(f.committed - f.paid)}</strong>
@@ -3104,6 +3111,7 @@ function ReportsView({ c }: { c: Ctx }) {
     budget: sum(rows.map((r) => r.budget)),
     committed: sum(rows.map((r) => r.committed)),
     paid: sum(rows.map((r) => r.paid)),
+    declared: sum(rows.map((r) => r.declared)),
     count: sum(rows.map((r) => r.count)),
   };
   async function downloadCsv() {
@@ -3187,7 +3195,10 @@ function ReportsView({ c }: { c: Ctx }) {
                   </td>
                   <td data-label="Budget">{r.budget > 0 ? money(r.budget) : "—"}</td>
                   <td data-label="Devis acceptés">{money(r.committed)}</td>
-                  <td data-label="Réglé">{money(r.paid)}</td>
+                  <td data-label="Réglé">
+                    {money(r.paid)}
+                    {r.declared > 0 && <span className={styles.cellSub}>dont {money(r.declared)} déclarés reçus sur place</span>}
+                  </td>
                   <td data-label="Interventions">{r.count}</td>
                 </tr>
               ))}
@@ -3197,7 +3208,10 @@ function ReportsView({ c }: { c: Ctx }) {
                 </td>
                 <td data-label="Budget">{totals.budget > 0 ? money(totals.budget) : "—"}</td>
                 <td data-label="Devis acceptés">{money(totals.committed)}</td>
-                <td data-label="Réglé">{money(totals.paid)}</td>
+                <td data-label="Réglé">
+                  {money(totals.paid)}
+                  {totals.declared > 0 && <span className={styles.cellSub}>dont {money(totals.declared)} déclarés reçus sur place</span>}
+                </td>
                 <td data-label="Interventions">{totals.count}</td>
               </tr>
             </tbody>
