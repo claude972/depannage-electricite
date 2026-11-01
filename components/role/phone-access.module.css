@@ -143,3 +143,41 @@ a.submit {
   border-radius: 16px;
   background: var(--ui-card);
 }
+/* Verified history */
+.history {
+  display: grid;
+  gap: 16px;
+}
+.historyList {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.historyRow {
+  display: grid;
+  gap: 4px;
+  min-height: 44px;
+  padding: 14px 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-card);
+  color: var(--ui-text);
+  text-decoration: none;
+}
+.historyRow:hover {
+  border-color: var(--ui-accent);
+}
+.historyRow:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+.historyRow > span {
+  color: var(--ui-text-muted);
+  font-size: 14px;
+}
+.historyRow > .historyStatus {
+  color: var(--ui-accent);
+  font-weight: 600;
+}

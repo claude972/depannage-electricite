@@ -4,9 +4,12 @@
 // POST /api/auth/phone/start and /api/auth/phone/verify (Supabase SSR cookies are set by the
 // server; no JWT, token or code is ever read, logged or stored here). Pure state machine + thin
 // React view; the fetcher is injected (tests use a fake, never a real SMS).
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { normalizePhone } from "../app/booking-draft";
+import { STATUS, category as categoryOf, date as formatDate, money } from "../app/format";
+import type { Status } from "../app/types";
 import { Field } from "../app/ui";
+import { createClient } from "../../lib/supabase/client";
 import { PublicChrome } from "./public-chrome";
 import { serviceChromeHandlers } from "./public-service-page";
 import styles from "./phone-access.module.css";
@@ -19,13 +22,45 @@ export type PhoneApi = {
   verify(body: { phone: string; token: string; kind: PhoneKind }): Promise<ApiResult>;
 };
 
+/** Deadline of every phone/history request: a hung network never leaves « Envoi… » forever. */
+export const PHONE_TIMEOUT_MS = 15_000;
+/** Synthetic status of a request aborted by the deadline (never a server answer). */
+export const TIMEOUT_STATUS = -1;
+const systemClock = () => Date.now();
+
+/** fetch + JSON with a deadline: the request is aborted (AbortController) and the call settles as
+ *  TIMEOUT_STATUS when the deadline passes first; the timer is always cleared. */
+async function timedJson(fetcher: typeof fetch, path: string, init: RequestInit, timeoutMs: number): Promise<ApiResult> {
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut: ApiResult = { status: TIMEOUT_STATUS, body: null, retryAfter: null };
+  const deadline = new Promise<ApiResult>((resolve) => {
+    timer = setTimeout(() => {
+      controller?.abort();
+      resolve(timedOut);
+    }, timeoutMs);
+  });
+  const request = (async (): Promise<ApiResult> => {
+    try {
+      const response = await fetcher(path, { ...init, ...(controller ? { signal: controller.signal } : {}) });
+      const retry = Number(response.headers.get("Retry-After"));
+      const body = await response.json().catch(() => null);
+      return { status: response.status, body, retryAfter: Number.isFinite(retry) && retry > 0 ? Math.ceil(retry) : null };
+    } catch (error) {
+      if (controller?.signal.aborted) return timedOut;
+      throw error;
+    }
+  })();
+  try {
+    return await Promise.race([request, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 /** Same-origin JSON POST, credentials same-origin, no-store; Retry-After parsed (seconds). */
-export function createPhoneApi(fetcher: typeof fetch = (...a) => fetch(...a)): PhoneApi {
-  const post = async (path: string, body: unknown): Promise<ApiResult> => {
-    const response = await fetcher(path, { method: "POST", credentials: "same-origin", cache: "no-store", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const retry = Number(response.headers.get("Retry-After"));
-    return { status: response.status, body: await response.json().catch(() => null), retryAfter: Number.isFinite(retry) && retry > 0 ? Math.ceil(retry) : null };
-  };
+export function createPhoneApi(fetcher: typeof fetch = (...a) => fetch(...a), { timeoutMs = PHONE_TIMEOUT_MS } = {}): PhoneApi {
+  const post = (path: string, body: unknown) =>
+    timedJson(fetcher, path, { method: "POST", credentials: "same-origin", cache: "no-store", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, timeoutMs);
   return { start: (body) => post("/api/auth/phone/start", body), verify: (body) => post("/api/auth/phone/verify", body) };
 }
 
@@ -62,6 +97,7 @@ export const PHONE_COPY = {
   refused: "Ce numéro ne peut pas être utilisé ici. Connectez-vous avec votre compte habituel.",
   invalid: "Vérifiez le numéro de téléphone, votre nom et votre prénom.",
   failed: "La vérification n’a pas abouti. Rien n’a été confirmé ; réessayez.",
+  timeout: "Délai dépassé, réessayez. Rien n’a été confirmé.",
 } as const;
 
 export function phoneFormErrors(s: PhoneState): PhoneState["fieldErrors"] {
@@ -86,6 +122,7 @@ export function applyStart(s: PhoneState, r: ApiResult, purpose: PhonePurpose, n
     return { ...base, stage: "code", kind: body.kind, suffix, code: "", resendAt: now + retry * 1000, message: purpose === "lookup" ? PHONE_COPY.sentLookup : PHONE_COPY.sentBooking(suffix) };
   }
   const stage: PhoneStage = s.kind ? "code" : "form";
+  if (r.status === TIMEOUT_STATUS) return { ...base, stage, error: PHONE_COPY.timeout };
   if (r.status === 429) return { ...base, stage, blockedUntil: now + seconds(r) * 1000, error: PHONE_COPY.tooMany(seconds(r)) };
   if (r.status === 503) return { ...base, stage, error: PHONE_COPY.unavailable[purpose] };
   if (r.status === 409) return { ...base, stage, error: PHONE_COPY.refused };
@@ -96,6 +133,7 @@ export function applyStart(s: PhoneState, r: ApiResult, purpose: PhonePurpose, n
 export function applyVerify(s: PhoneState, r: ApiResult, purpose: PhonePurpose, now: number): PhoneState {
   const base = { ...s, stage: "code" as PhoneStage, error: "", fieldErrors: {} };
   if (r.status === 200 && isObj(r.body) && r.body.verified === true) return { ...base, stage: "verified", message: "" };
+  if (r.status === TIMEOUT_STATUS) return { ...base, error: PHONE_COPY.timeout };
   if (r.status === 422) return { ...base, error: PHONE_COPY.wrongCode };
   if (r.status === 429) return { ...base, blockedUntil: now + seconds(r) * 1000, error: PHONE_COPY.tooMany(seconds(r)) };
   if (r.status === 503) return { ...base, error: PHONE_COPY.unavailable[purpose] };
@@ -109,6 +147,74 @@ export function phoneActionLabel(s: PhoneState): string {
   return "Recevoir un code";
 }
 
+// ---- Controller: single flight, request sequence, late replies ignored --------------------------
+/** Drives start/verify outside React: ONE request at a time (a ref, not state), each reply applied
+ *  only if it belongs to the latest request of a still-attached view; onVerified at most once. */
+export function createPhoneController({ api, purpose, clock = systemClock, get, set, onVerified }: { api: () => PhoneApi; purpose: PhonePurpose; clock?: () => number; get: () => PhoneState; set: (s: PhoneState) => void; onVerified: () => void }) {
+  let inFlight = false;
+  let seq = 0;
+  let attached = true;
+  let verified = false;
+  const settle = (my: number, next: PhoneState) => {
+    if (!attached || my !== seq) return; // unmounted or superseded: ignored
+    set(next);
+    if (next.stage === "verified" && !verified) {
+      verified = true;
+      onVerified();
+    }
+  };
+  const send = async (call: () => Promise<ApiResult>, apply: (s: PhoneState, r: ApiResult) => PhoneState, busy: PhoneStage) => {
+    if (inFlight) return false;
+    inFlight = true;
+    const my = ++seq;
+    set({ ...get(), stage: busy, error: "" });
+    let result: ApiResult;
+    try {
+      result = await call();
+    } catch {
+      result = { status: 0, body: null, retryAfter: null };
+    } finally {
+      inFlight = false;
+    }
+    settle(my, apply(get(), result));
+    return true;
+  };
+  return {
+    get busy() {
+      return inFlight;
+    },
+    start(): Promise<boolean> | false {
+      const s = get();
+      const fieldErrors = phoneFormErrors(s);
+      if (Object.keys(fieldErrors).length) return set({ ...s, fieldErrors, error: "" }), false;
+      if (s.blockedUntil > clock() || inFlight) return false;
+      const phone = normalizePhone(s.phone)!;
+      return send(() => api().start({ phone, first_name: s.first_name.trim(), last_name: s.last_name.trim(), purpose }), (cur, r) => applyStart(cur, r, purpose, clock()), "sending");
+    },
+    verify(): Promise<boolean> | false {
+      const s = get();
+      const error = codeError(s.code);
+      if (error) return set({ ...s, fieldErrors: { code: error }, error: "" }), false;
+      if (s.blockedUntil > clock() || !s.kind || inFlight) return false;
+      const kind = s.kind;
+      return send(() => api().verify({ phone: normalizePhone(s.phone)!, token: s.code.trim(), kind }), (cur, r) => applyVerify(cur, r, purpose, clock()), "verifying");
+    },
+    /** « Modifier le numéro »: any reply still on its way is superseded. */
+    reset() {
+      seq++;
+      inFlight = false;
+      set({ ...get(), stage: "form", code: "", kind: null, message: "", error: "" });
+    },
+    attach() {
+      attached = true;
+    },
+    detach() {
+      attached = false;
+      seq++;
+    },
+  };
+}
+
 // ---- View ---------------------------------------------------------------------------------------
 export function PhoneAccess({
   purpose,
@@ -118,7 +224,7 @@ export function PhoneAccess({
   formId: givenFormId,
   onStateChange,
   initial,
-  clock = () => Date.now(),
+  clock = systemClock,
 }: {
   purpose: PhonePurpose;
   prefill?: { phone?: string; first_name?: string; last_name?: string };
@@ -128,64 +234,57 @@ export function PhoneAccess({
   onStateChange?: (s: PhoneState) => void;
   /** Tests only: render a given stage. */
   initial?: PhoneState;
+  /** Stable by default (module-level), so the countdown effect never re-subscribes per render. */
   clock?: () => number;
 }) {
   const uid = useId();
   const formId = givenFormId ?? `${uid}-phone`;
-  const client = useRef<PhoneApi | null>(api ?? null);
-  const [state, setState] = useState<PhoneState>(initial ?? initialPhoneState(prefill));
+  const [state, setStateRaw] = useState<PhoneState>(initial ?? initialPhoneState(prefill));
+  const stateRef = useRef(state);
+  const setState = useCallback((next: PhoneState | ((s: PhoneState) => PhoneState)) => {
+    stateRef.current = typeof next === "function" ? next(stateRef.current) : next;
+    setStateRaw(stateRef.current);
+  }, []);
+  const latest = useRef({ api, onVerified, clock });
+  latest.current = { api, onVerified, clock };
+  const controller = useRef<ReturnType<typeof createPhoneController> | null>(null);
+  if (!controller.current) {
+    let client: PhoneApi | null = null;
+    controller.current = createPhoneController({
+      api: () => (client ??= latest.current.api ?? createPhoneApi()),
+      purpose,
+      clock: () => latest.current.clock(),
+      get: () => stateRef.current,
+      set: setState,
+      onVerified: () => latest.current.onVerified(),
+    });
+  }
+  const ctrl = controller.current;
+  useEffect(() => {
+    ctrl.attach(); // StrictMode re-mount re-attaches
+    return () => ctrl.detach();
+  }, [ctrl]);
   const [now, setNow] = useState(() => clock());
-  const verifiedOnce = useRef(false);
   const namesPrefilled = !!(prefill?.first_name?.trim() && prefill?.last_name?.trim());
 
   useEffect(() => onStateChange?.(state), [state, onStateChange]);
+  // One-second tick only while a countdown is pending; deps are primitives + a stable clock.
+  const until = Math.max(state.resendAt, state.blockedUntil);
   useEffect(() => {
-    if (state.stage === "verified" && !verifiedOnce.current) {
-      verifiedOnce.current = true;
-      onVerified();
-    }
-  }, [state.stage, onVerified]);
-  // One-second tick only while a countdown is visible.
-  const waiting = state.resendAt > now || state.blockedUntil > now;
-  useEffect(() => {
+    if (!until) return;
     setNow(clock());
-    if (!(state.resendAt || state.blockedUntil)) return;
-    const timer = setInterval(() => setNow(clock()), 1000);
+    const timer = setInterval(() => {
+      const t = clock();
+      setNow(t);
+      if (t >= until) clearInterval(timer);
+    }, 1000);
     return () => clearInterval(timer);
-  }, [state.resendAt, state.blockedUntil, clock, waiting]);
+  }, [until, clock]);
 
-  const call = () => (client.current ??= createPhoneApi());
-  const start = async () => {
-    const fieldErrors = phoneFormErrors(state);
-    if (Object.keys(fieldErrors).length) return setState((s) => ({ ...s, fieldErrors, error: "" }));
-    if (state.blockedUntil > clock()) return;
-    const phone = normalizePhone(state.phone)!;
-    setState((s) => ({ ...s, stage: "sending", error: "" }));
-    let result: ApiResult;
-    try {
-      result = await call().start({ phone, first_name: state.first_name.trim(), last_name: state.last_name.trim(), purpose });
-    } catch {
-      result = { status: 0, body: null, retryAfter: null };
-    }
-    setState((s) => applyStart(s, result, purpose, clock()));
-  };
-  const verify = async () => {
-    const error = codeError(state.code);
-    if (error) return setState((s) => ({ ...s, fieldErrors: { code: error }, error: "" }));
-    if (state.blockedUntil > clock() || !state.kind) return;
-    setState((s) => ({ ...s, stage: "verifying", error: "" }));
-    let result: ApiResult;
-    try {
-      result = await call().verify({ phone: normalizePhone(state.phone)!, token: state.code.trim(), kind: state.kind });
-    } catch {
-      result = { status: 0, body: null, retryAfter: null };
-    }
-    setState((s) => applyVerify(s, result, purpose, clock()));
-  };
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (state.stage === "form") void start();
-    else if (state.stage === "code") void verify();
+    if (stateRef.current.stage === "form") void ctrl.start();
+    else if (stateRef.current.stage === "code") void ctrl.verify();
   };
   const busy = state.stage === "sending" || state.stage === "verifying";
   const resendIn = Math.max(0, Math.ceil((state.resendAt - now) / 1000));
@@ -219,10 +318,10 @@ export function PhoneAccess({
               <input autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]*" maxLength={6} value={state.code} disabled={busy} onChange={(e) => set({ code: e.target.value.replace(/\D/g, "").slice(0, 6) })} />
             </Field>
             <div className={styles.row}>
-              <button type="button" className={styles.link} disabled={busy || resendIn > 0 || blockedIn > 0} onClick={() => { set({ code: "" }); void start(); }}>
+              <button type="button" className={styles.link} disabled={busy || resendIn > 0 || blockedIn > 0} onClick={() => { set({ code: "" }); void ctrl.start(); }}>
                 {resendIn > 0 ? `Renvoyer le code dans ${resendIn} s` : "Renvoyer le code"}
               </button>
-              <button type="button" className={styles.link} disabled={busy} onClick={() => setState((s) => ({ ...s, stage: "form", code: "", kind: null, message: "", error: "" }))}>
+              <button type="button" className={styles.link} disabled={busy} onClick={() => ctrl.reset()}>
                 Modifier le numéro
               </button>
             </div>
@@ -240,28 +339,236 @@ export function PhoneAccess({
   );
 }
 
+// ---- Verified history (GET /api/auth/phone/history), cursor pagination ---------------------------
+export type HistoryItem = { id: string; category: string; status: string; city: string; created_at: string; estimate_min_cents: number | null; estimate_max_cents: number | null };
+export type HistoryApi = (params: { cursor?: string; limit: number }) => Promise<ApiResult>;
+export const HISTORY_LIMIT = 20;
+export function createHistoryApi(fetcher: typeof fetch = (...a) => fetch(...a), { timeoutMs = PHONE_TIMEOUT_MS } = {}): HistoryApi {
+  return ({ cursor, limit }) => {
+    // The opaque cursor is sent back unchanged (only URL-encoded).
+    const query = `limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`;
+    return timedJson(fetcher, `/api/auth/phone/history?${query}`, { method: "GET", credentials: "same-origin", cache: "no-store" }, timeoutMs);
+  };
+}
+export type HistoryState = {
+  status: "loading" | "ready" | "error" | "expired" | "unavailable";
+  items: HistoryItem[];
+  hasMore: boolean;
+  nextCursor: string | null;
+  loadingMore: boolean;
+  error: string;
+};
+export const HISTORY_INITIAL: HistoryState = { status: "loading", items: [], hasMore: false, nextCursor: null, loadingMore: false, error: "" };
+export const HISTORY_COPY = {
+  expired: "Votre vérification a expiré, recommencez.",
+  unavailable: "Le suivi est momentanément indisponible, réessayez dans un instant.",
+  failed: "Vos demandes n’ont pas pu être chargées. Réessayez.",
+  empty: "Aucune demande n’est associée à ce numéro.",
+} as const;
+const UUIDISH = /^[0-9a-f-]{8,64}$/i;
+function parseHistory(body: unknown): { items: HistoryItem[]; hasMore: boolean; nextCursor: string | null } | null {
+  if (!isObj(body) || !Array.isArray(body.interventions) || !isObj(body.page)) return null;
+  const items: HistoryItem[] = [];
+  for (const r of body.interventions) {
+    if (!isObj(r) || typeof r.id !== "string" || !UUIDISH.test(r.id) || typeof r.category !== "string" || typeof r.status !== "string" || typeof r.created_at !== "string") return null;
+    const cents = (v: unknown) => (typeof v === "number" && Number.isSafeInteger(v) ? v : null);
+    items.push({ id: r.id, category: r.category, status: r.status, city: typeof r.city === "string" ? r.city : "", created_at: r.created_at, estimate_min_cents: cents(r.estimate_min_cents), estimate_max_cents: cents(r.estimate_max_cents) });
+  }
+  const hasMore = body.page.has_more === true;
+  const nextCursor = hasMore && typeof body.page.next_cursor === "string" && body.page.next_cursor ? body.page.next_cursor : null;
+  return { items, hasMore: hasMore && nextCursor !== null, nextCursor };
+}
+/** One history reply applied to the state; `append` = « Afficher plus » (dedupe by id). */
+export function applyHistory(s: HistoryState, r: ApiResult, append: boolean): HistoryState {
+  const base = { ...s, loadingMore: false, error: "" };
+  if (r.status === 200) {
+    const page = parseHistory(r.body);
+    if (!page) return { ...base, status: append ? s.status : "error", error: HISTORY_COPY.failed };
+    const seen = new Set(append ? s.items.map((i) => i.id) : []);
+    const merged = [...(append ? s.items : []), ...page.items.filter((i) => !seen.has(i.id) && (seen.add(i.id), true))];
+    return { ...base, status: "ready", items: merged, hasMore: page.hasMore, nextCursor: page.nextCursor };
+  }
+  if (r.status === 401) return { ...HISTORY_INITIAL, status: "expired", error: HISTORY_COPY.expired };
+  if (r.status === TIMEOUT_STATUS) return { ...base, status: append ? s.status : "error", error: PHONE_COPY.timeout };
+  if (r.status === 503) return { ...base, status: append ? s.status : "unavailable", error: HISTORY_COPY.unavailable };
+  return { ...base, status: append ? s.status : "error", error: HISTORY_COPY.failed };
+}
+
+/** Identity source: (uid | null) on every auth change, incl. the initial session. */
+export type IdentityWatch = (cb: (uid: string | null) => void) => () => void;
+export const supabaseIdentity: IdentityWatch = (cb) => {
+  try {
+    const { data } = createClient().auth.onAuthStateChange((_event, session) => cb(session?.user?.id ?? null));
+    return () => data.subscription.unsubscribe();
+  } catch {
+    return () => {}; // auth client not configured: the server 401 still ends the list
+  }
+};
+
+/** History outside React: a generation counter (identity change, reload) makes every older reply
+ *  void; « Afficher plus » is single-flight; an identity change clears the list at once. */
+export function createHistoryController({ api, get, set, onExpired }: { api: () => HistoryApi; get: () => HistoryState; set: (s: HistoryState) => void; onExpired: () => void }) {
+  let gen = 0;
+  let moreInFlight = false;
+  let attached = true;
+  let uid: string | undefined; // undefined = not known yet
+  const expire = () => {
+    gen++;
+    moreInFlight = false;
+    set({ ...HISTORY_INITIAL, status: "expired", error: HISTORY_COPY.expired });
+    onExpired();
+  };
+  const fetchPage = async (append: boolean) => {
+    const my = append ? gen : ++gen;
+    const cursor = append ? get().nextCursor ?? undefined : undefined;
+    let result: ApiResult;
+    try {
+      result = await api()({ cursor, limit: HISTORY_LIMIT });
+    } catch {
+      result = { status: 0, body: null, retryAfter: null };
+    }
+    if (append) moreInFlight = false;
+    if (!attached || my !== gen) return false; // old identity / superseded reload
+    const next = applyHistory(get(), result, append);
+    if (next.status === "expired") return expire(), true;
+    set(next);
+    return true;
+  };
+  return {
+    /** First load or retry: shows « loading » (no stale list). */
+    load() {
+      set(HISTORY_INITIAL);
+      return fetchPage(false);
+    },
+    /** Window focus: revalidate in place (the current list stays until the fresh reply). */
+    revalidate() {
+      if (get().status === "expired") return Promise.resolve(false);
+      return fetchPage(false);
+    },
+    more() {
+      const s = get();
+      if (moreInFlight || !s.hasMore || !s.nextCursor) return Promise.resolve(false);
+      moreInFlight = true;
+      set({ ...s, loadingMore: true });
+      return fetchPage(true);
+    },
+    /** Auth change: SIGNED_OUT (null) or another uid ⇒ cleared immediately, back to the phone step. */
+    identity(next: string | null) {
+      // Before a uid is known (e.g. the browser client cannot read the session), nothing is
+      // inferred: the server's 401 still ends the list. Once known, any change clears it.
+      if (uid === undefined) {
+        if (next !== null) uid = next;
+        return;
+      }
+      if (next !== uid) {
+        uid = next ?? undefined;
+        expire();
+      }
+    },
+    attach() {
+      attached = true;
+    },
+    detach() {
+      attached = false;
+      gen++;
+    },
+  };
+}
+
+export function PhoneHistory({ api, onExpired, initial, watchIdentity = supabaseIdentity }: { api?: HistoryApi; onExpired: () => void; initial?: HistoryState; watchIdentity?: IdentityWatch }) {
+  const [state, setStateRaw] = useState<HistoryState>(initial ?? HISTORY_INITIAL);
+  const stateRef = useRef(state);
+  const setState = useCallback((next: HistoryState) => {
+    stateRef.current = next;
+    setStateRaw(next);
+  }, []);
+  const latest = useRef({ api, onExpired });
+  latest.current = { api, onExpired };
+  const controller = useRef<ReturnType<typeof createHistoryController> | null>(null);
+  if (!controller.current) {
+    let client: HistoryApi | null = null;
+    controller.current = createHistoryController({ api: () => (client ??= latest.current.api ?? createHistoryApi()), get: () => stateRef.current, set: setState, onExpired: () => latest.current.onExpired() });
+  }
+  const ctrl = controller.current;
+  useEffect(() => {
+    ctrl.attach();
+    if (!initial) void ctrl.load();
+    const stop = watchIdentity((uid) => ctrl.identity(uid));
+    const onFocus = () => void ctrl.revalidate();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      ctrl.detach();
+      stop();
+      window.removeEventListener("focus", onFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctrl, watchIdentity]);
+
+  if (state.status === "loading") return <p className={styles.lead} role="status" data-history="loading">Chargement de vos demandes…</p>;
+  if (state.status === "expired") return <p className={styles.error} role="alert" data-history="expired">{HISTORY_COPY.expired}</p>;
+  if (state.status === "error" || state.status === "unavailable")
+    return (
+      <div className={styles.card} data-history={state.status}>
+        <p className={styles.error} role="alert">{state.error}</p>
+        <button type="button" className={styles.link} onClick={() => void ctrl.load()}>Réessayer</button>
+      </div>
+    );
+  if (!state.items.length) return <p className={styles.lead} data-history="empty">{HISTORY_COPY.empty}</p>;
+  return (
+    <div className={styles.history} data-history="ready">
+      <ul className={styles.historyList}>
+        {state.items.map((item) => {
+          const c = categoryOf(item.category);
+          const range = item.estimate_min_cents !== null && item.estimate_max_cents !== null ? `${money(item.estimate_min_cents)} – ${money(item.estimate_max_cents)}` : null;
+          return (
+            <li key={item.id}>
+              <a className={styles.historyRow} href={`/#detail/${encodeURIComponent(item.id)}`} data-history-id={item.id}>
+                <strong>{c.label}</strong>
+                <span className={styles.historyStatus}>{STATUS[item.status as Status] ?? "Statut à vérifier"}</span>
+                <span>{[item.city, formatDate(item.created_at)].filter(Boolean).join(" · ")}</span>
+                {range && <span>Estimation indicative : {range}</span>}
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+      {state.error && <p className={styles.error} role="alert">{state.error}</p>}
+      {state.hasMore && (
+        <button type="button" className={styles.submit} disabled={state.loadingMore} onClick={() => void ctrl.more()} data-history-more="">
+          {state.loadingMore ? "Chargement…" : "Afficher plus"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ---- /suivi: find one's requests with a verified phone (no public lookup, no listing before) ----
 // While phone auth is off (server options), no phone form at all: honest message + account login.
-export function PhoneLookupPage({ api, optionsApi, initialOptions, go = (href: string) => window.location.assign(href) }: { api?: PhoneApi; optionsApi?: OptionsApi; initialOptions?: OptionsState; go?: (href: string) => void }) {
+export function PhoneLookupPage({ api, optionsApi, historyApi, watchIdentity, initialOptions, initialVerified = false, go = (href: string) => window.location.assign(href) }: { api?: PhoneApi; optionsApi?: OptionsApi; historyApi?: HistoryApi; watchIdentity?: IdentityWatch; initialOptions?: OptionsState; initialVerified?: boolean; go?: (href: string) => void }) {
   const { options } = useBookingOptions(optionsApi, initialOptions);
+  const [verified, setVerified] = useState(initialVerified);
+  const [expired, setExpired] = useState(false);
   return (
     <PublicChrome current="suivi" handlers={serviceChromeHandlers(go)} onHome={() => go("/")}>
       <div className={styles.page}>
         <h1>Suivre ma demande</h1>
         {options.status === "loading" ? (
           <p className={styles.lead} role="status">Chargement…</p>
-        ) : phoneAuthOn(options) ? (
-          <>
-            <p className={styles.lead}>Indiquez le téléphone utilisé pour votre demande, avec votre nom et votre prénom. Après vérification du code, vos demandes s’affichent dans votre espace.</p>
-            <div className={styles.card}>
-              <PhoneAccess purpose="lookup" api={api} onVerified={() => go("/#requests")} />
-            </div>
-          </>
-        ) : (
+        ) : !phoneAuthOn(options) ? (
           <div className={styles.card} data-suivi-off="">
             <p className={styles.lead}>{SUIVI_OFF}</p>
             <a className={styles.submit} href="/#auth">Me connecter à mon compte</a>
           </div>
+        ) : verified ? (
+          <PhoneHistory api={historyApi} watchIdentity={watchIdentity} onExpired={() => { setExpired(true); setVerified(false); }} />
+        ) : (
+          <>
+            {expired && <p className={styles.error} role="alert">{HISTORY_COPY.expired}</p>}
+            <p className={styles.lead}>Indiquez le téléphone utilisé pour votre demande, avec votre nom et votre prénom. Après vérification du code, vos demandes s’affichent ici.</p>
+            <div className={styles.card}>
+              <PhoneAccess purpose="lookup" api={api} onVerified={() => { setExpired(false); setVerified(true); }} />
+            </div>
+          </>
         )}
       </div>
     </PublicChrome>
@@ -286,12 +593,11 @@ export function parseBookingOptions(body: unknown): BookingOptions | null {
   const available = p.available === true ? true : p.available === false ? false : null;
   return { payment_methods: methods, phone_auth: { available, ...(typeof p.reason === "string" ? { reason: p.reason.slice(0, 300) } : {}) }, currency: typeof body.currency === "string" ? body.currency : "eur" };
 }
-export function createOptionsApi(fetcher: typeof fetch = (...a) => fetch(...a)): OptionsApi {
+export function createOptionsApi(fetcher: typeof fetch = (...a) => fetch(...a), { timeoutMs = PHONE_TIMEOUT_MS } = {}): OptionsApi {
   return async () => {
     try {
-      const response = await fetcher("/api/bookings/options", { method: "GET", credentials: "same-origin", cache: "no-store" });
-      if (response.status !== 200) return null;
-      return parseBookingOptions(await response.json().catch(() => null));
+      const r = await timedJson(fetcher, "/api/bookings/options", { method: "GET", credentials: "same-origin", cache: "no-store" }, timeoutMs);
+      return r.status === 200 ? parseBookingOptions(r.body) : null;
     } catch {
       return null;
     }

@@ -239,3 +239,157 @@ test("/suivi : SMS activé ⇒ PhoneAccess « lookup » (téléphone + nom + pr�
   assert.doesNotMatch(on, /data-request|Mes demandes|INT-/);
   same(went, []);
 });
+
+// ---- Robustesse PhoneAccess (revue ROOT) : délai, vol unique, réponses tardives -------------------
+const deferred = <T,>() => {
+  let resolve!: (v: T) => void;
+  const promise = new Promise<T>((r) => (resolve = r));
+  return { promise, resolve };
+};
+function controllerHarness(api: Phone.PhoneApi, initial = s0()) {
+  let current = initial;
+  const sets: Phone.PhoneState[] = [];
+  let verified = 0;
+  const ctrl = phone.createPhoneController({ api: () => api, purpose: "booking", clock: () => 0, get: () => current, set: (s) => { current = s; sets.push(s); }, onVerified: () => verified++ });
+  return { ctrl, get: () => current, sets, verified: () => verified };
+}
+
+test("délai : requête sans réponse ⇒ « Délai dépassé, réessayez » ; saisies conservées", async () => {
+  const never = (() => new Promise<Response>(() => {})) as unknown as typeof fetch;
+  const api = phone.createPhoneApi(never, { timeoutMs: 20 });
+  const r = await api.start({ phone: "+596696123456", first_name: "Camille", last_name: "Durand", purpose: "booking" });
+  assert.equal(r.status, phone.TIMEOUT_STATUS);
+  const h = controllerHarness(api);
+  await h.ctrl.start();
+  same([h.get().stage, h.get().error, h.get().phone, h.get().first_name, h.get().last_name], ["form", phone.PHONE_COPY.timeout, "0696123456", "Camille", "Durand"]);
+  const code = { ...phone.applyStart(s0(), ok({ status: "code_requested", kind: "sms", retry_after: 60, phone_suffix: "3456" }), "booking", 0), code: "123456" };
+  const v = phone.applyVerify(code, { status: phone.TIMEOUT_STATUS, body: null, retryAfter: null }, "booking", 0);
+  same([v.stage, v.code, v.error], ["code", "123456", phone.PHONE_COPY.timeout]);
+});
+
+test("vol unique : deux envois dans le même tick ⇒ UN appel ; idem pour la vérification", async () => {
+  const d = deferred<Phone.ApiResult>();
+  let starts = 0;
+  let verifies = 0;
+  const api: Phone.PhoneApi = { start: () => (starts++, d.promise), verify: () => (verifies++, d.promise) };
+  const h = controllerHarness(api);
+  const first = h.ctrl.start();
+  const second = h.ctrl.start();
+  assert.equal(second, false);
+  assert.equal(starts, 1);
+  d.resolve(ok({ status: "code_requested", kind: "sms", retry_after: 60, phone_suffix: "3456" }));
+  await first;
+  assert.equal(h.get().stage, "code");
+  const v = deferred<Phone.ApiResult>();
+  const api2: Phone.PhoneApi = { start: () => v.promise, verify: () => (verifies++, v.promise) };
+  const h2 = controllerHarness(api2, { ...h.get(), code: "123456" });
+  const a = h2.ctrl.verify();
+  assert.equal(h2.ctrl.verify(), false);
+  assert.equal(verifies, 1);
+  v.resolve(ok({ verified: true }));
+  await a;
+  same([h2.get().stage, h2.verified()], ["verified", 1]);
+});
+
+test("réponses tardives ignorées : après démontage, ou après « Modifier le numéro » (nouvelle requête)", async () => {
+  const d = deferred<Phone.ApiResult>();
+  const h = controllerHarness({ start: () => d.promise, verify: () => d.promise }, { ...s0(), stage: "code", kind: "sms", code: "123456" });
+  const pending = h.ctrl.verify();
+  h.ctrl.detach(); // démontage
+  d.resolve(ok({ verified: true }));
+  await pending;
+  assert.equal(h.verified(), 0);
+  assert.notEqual(h.get().stage, "verified");
+  // Nouvelle requête après « Modifier le numéro » : la réponse de l’ancienne est ignorée.
+  const old = deferred<Phone.ApiResult>();
+  const fresh = deferred<Phone.ApiResult>();
+  const queue = [old, fresh];
+  const h2 = controllerHarness({ start: () => queue.shift()!.promise, verify: () => old.promise });
+  const p1 = h2.ctrl.start();
+  h2.ctrl.reset();
+  const p2 = h2.ctrl.start();
+  old.resolve(ok({ status: "verified" }));
+  await p1;
+  assert.equal(h2.verified(), 0);
+  fresh.resolve(ok({ status: "code_requested", kind: "sms", retry_after: 60, phone_suffix: "9999" }));
+  await p2;
+  same([h2.get().stage, h2.get().suffix], ["code", "9999"]);
+});
+
+// ---- Historique vérifié (GET /api/auth/phone/history) -------------------------------------------
+const row = (id: string, over: Record<string, unknown> = {}) => ({ id, category: "socket", status: "requested", city: "Fort-de-France", created_at: "2026-10-30T10:00:00Z", estimate_min_cents: 8000, estimate_max_cents: 18000, ...over });
+const ID = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+function historyHarness(replies: Phone.ApiResult[]) {
+  let current = { ...phone.HISTORY_INITIAL };
+  const calls: { cursor?: string; limit: number }[] = [];
+  let expired = 0;
+  const api: Phone.HistoryApi = async (p) => (calls.push(p), replies.shift()!);
+  const ctrl = phone.createHistoryController({ api: () => api, get: () => current, set: (s) => (current = s), onExpired: () => expired++ });
+  return { ctrl, get: () => current, calls, expired: () => expired };
+}
+
+test("historique : 2 pages, curseur renvoyé tel quel, dédoublonnage, liens /#detail/<id>", async () => {
+  const cursor = "opaque+/=cursor==";
+  const h = historyHarness([
+    ok({ interventions: [row(ID(1)), row(ID(2), { status: "quoted", category: "panel" })], page: { limit: 20, has_more: true, next_cursor: cursor } }),
+    ok({ interventions: [row(ID(2)), row(ID(3), { estimate_min_cents: null, estimate_max_cents: null })], page: { limit: 20, has_more: false, next_cursor: null } }),
+  ]);
+  await h.ctrl.load();
+  same([h.get().status, h.get().items.length, h.get().hasMore], ["ready", 2, true]);
+  await h.ctrl.more();
+  same(h.calls, [{ limit: 20 }, { cursor, limit: 20 }]);
+  same(h.get().items.map((i) => i.id), [ID(1), ID(2), ID(3)]);
+  assert.equal(h.get().hasMore, false);
+  const html = render(createElement(phone.PhoneHistory as never, { initial: h.get(), onExpired() {}, watchIdentity: () => () => {} } as never));
+  same([...html.matchAll(/href="([^"]+)" data-history-id/g)].map((m) => m[1]), [ID(1), ID(2), ID(3)].map((id) => `/#detail/${id}`));
+  const t = text(html);
+  for (const part of ["Prise ou interrupteur", "Recherche d’un artisan", "Tableau électrique", "Devis à valider", "Fort-de-France", "Estimation indicative : 80,00"]) assert.ok(t.replace(/\s/g, " ").includes(part.replace(/\s/g, " ")), part);
+  // URL réelle : curseur encodé une fois, jamais modifié.
+  const urls: string[] = [];
+  await phone.createHistoryApi((async (u: string) => (urls.push(u), new Response("{}", { status: 200 }))) as unknown as typeof fetch)({ cursor, limit: 20 });
+  same(urls, [`/api/auth/phone/history?limit=20&cursor=${encodeURIComponent(cursor)}`]);
+});
+
+test("historique : vide, 401 ⇒ « vérification expirée » + retour au téléphone, 503 honnête, délai", async () => {
+  const empty = historyHarness([ok({ interventions: [], page: { limit: 20, has_more: false, next_cursor: null } })]);
+  await empty.ctrl.load();
+  assert.match(text(render(createElement(phone.PhoneHistory as never, { initial: empty.get(), onExpired() {}, watchIdentity: () => () => {} } as never))), /Aucune demande n’est associée à ce numéro\./);
+  const expired = historyHarness([ok(null, 401)]);
+  await expired.ctrl.load();
+  same([expired.get().status, expired.get().items, expired.expired()], ["expired", [], 1]);
+  const down = historyHarness([ok(null, 503)]);
+  await down.ctrl.load();
+  same([down.get().status, down.get().error], ["unavailable", phone.HISTORY_COPY.unavailable]);
+  assert.match(render(createElement(phone.PhoneHistory as never, { initial: down.get(), onExpired() {}, watchIdentity: () => () => {} } as never)), />Réessayer</);
+  const late = historyHarness([{ status: phone.TIMEOUT_STATUS, body: null, retryAfter: null }]);
+  await late.ctrl.load();
+  same([late.get().status, late.get().error], ["error", phone.PHONE_COPY.timeout]);
+});
+
+test("historique : changement d’identité ⇒ liste vidée aussitôt ; réponse de l’ancienne identité ignorée", async () => {
+  const d = deferred<Phone.ApiResult>();
+  let current = { ...phone.HISTORY_INITIAL };
+  let expired = 0;
+  const replies = [Promise.resolve(ok({ interventions: [row(ID(1))], page: { limit: 20, has_more: false, next_cursor: null } })), d.promise];
+  const ctrl = phone.createHistoryController({ api: () => () => replies.shift()!, get: () => current, set: (s) => (current = s), onExpired: () => expired++ });
+  ctrl.identity("user-a");
+  await ctrl.load();
+  assert.equal(current.items.length, 1);
+  const revalidating = ctrl.revalidate(); // focus : relecture en vol
+  ctrl.identity(null); // SIGNED_OUT
+  same([current.status, current.items, expired], ["expired", [], 1]);
+  d.resolve(ok({ interventions: [row(ID(9))], page: { limit: 20, has_more: false, next_cursor: null } }));
+  await revalidating;
+  same(current.items, []); // jamais la liste de l’ancienne identité
+  // Autre UID après une identité connue ⇒ vidée aussi ; un premier « null » seul n’infère rien.
+  let c2 = { ...phone.HISTORY_INITIAL, status: "ready" as const, items: [] };
+  let e2 = 0;
+  const ctrl2 = phone.createHistoryController({ api: () => async () => ok(null, 500), get: () => c2, set: (s) => (c2 = s as typeof c2), onExpired: () => e2++ });
+  ctrl2.identity(null);
+  assert.equal(e2, 0);
+  ctrl2.identity("user-a");
+  ctrl2.identity("user-b");
+  assert.equal(e2, 1);
+  const src = readFileSync(path.join(ROOT, "components/role/phone-access.tsx"), "utf8");
+  assert.doesNotMatch(src, /localStorage\.|sessionStorage\.|setItem\(/); // aucun cache privé
+});
