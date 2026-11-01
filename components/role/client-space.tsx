@@ -226,6 +226,7 @@ export function ClientSpace({ session }: { session: Session }) {
               updateProfile={session.updateProfile}
               createIntervention={(values) => session.createIntervention(values, [])}
               onEdit={() => setEditBooking(true)}
+              onContactChange={session.updateBookingContact}
             />
           );
         return (
@@ -238,6 +239,12 @@ export function ClientSpace({ session }: { session: Session }) {
             busy={session.busy}
             onBack={() => session.go("requests")}
             onSubmit={async (values, photos) => {
+              if (editBooking && session.booking) {
+                // Editing a booking: replace the kept draft and return to its confirmation.
+                session.updatePendingDraft(values);
+                setEditBooking(false);
+                return;
+              }
               await session.createIntervention(values, photos);
             }}
             onDemo={() => {}}
