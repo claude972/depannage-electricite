@@ -41,6 +41,7 @@ import {
 } from "./app/demo";
 import { resolveDisplayName } from "./app/display-name";
 import { draftNotice, getDraftStorage, readBootDraft } from "./app/request-draft-boot";
+import { BOOKING_DRAFT_KEY, clearBooking, readBooking, saveBooking, type BookingDraft } from "./app/booking-draft";
 import { savePublicDraft } from "../lib/shared/request-draft";
 import { REALTIME_CHANNEL_CONFIG, REALTIME_TABLES, nextConnection } from "./app/realtime";
 import { category, uid } from "./app/format";
@@ -157,6 +158,10 @@ export default function CourantApp() {
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [categoryId, setCategoryId] = useState<Category>("panel");
   const [pendingDraft, setPendingDraft] = useState<RequestValues | null>(null);
+  // Service booking extras (FASTSPLIT-SERVICE-BOOKING-FLOW-001): kept with the draft across login
+  // by the SAME identity chain only, consumed after POST 201, dropped on any identity reset.
+  const [booking, setBooking] = useState<BookingDraft | null>(null);
+  const bookingCarry = useRef<BookingDraft | null>(null);
   const [pendingInvitation, setPendingInvitation] = useState<string | null>(null);
   const [uploads, setUploads] = useState<UploadQueue[]>([]);
   // Incremented on every identity change: forces role spaces to remount with fresh local state.
@@ -205,7 +210,9 @@ export default function CourantApp() {
     setError("");
     setNotice("");
     setPendingDraft(null);
+    setBooking(null);
     setUploads([]);
+    clearBooking(getDraftStorage());
     try {
       sessionStorage.removeItem(DRAFT_KEY);
       // Pending private content (unsent assistance request) of the outgoing user never survives
@@ -339,6 +346,14 @@ export default function CourantApp() {
     // Canonical bounded format shared with /offline-request.html (strict category, 30 min TTL).
     const bootDraft = readBootDraft(getDraftStorage());
     if (bootDraft) setPendingDraft(bootDraft);
+    if (bootDraft) {
+      let rawBooking: string | null = null;
+      try {
+        rawBooking = getDraftStorage()?.getItem(BOOKING_DRAFT_KEY) ?? null;
+      } catch {}
+      const stored = readBooking(rawBooking);
+      if (stored) setBooking(stored.booking);
+    }
     try {
       const token = sessionStorage.getItem(INVITE_KEY);
       if (token && INVITE_TOKEN.test(token)) setPendingInvitation(token);
@@ -1090,6 +1105,8 @@ export default function CourantApp() {
         };
         ctx.when(setData)({ ...data, interventions: [intervention, ...data.interventions] });
         ctx.when(setPendingDraft)(null);
+        ctx.when(setBooking)(null);
+        clearBooking(getDraftStorage());
         try {
           sessionStorage.removeItem(DRAFT_KEY);
         } catch {}
@@ -1106,7 +1123,9 @@ export default function CourantApp() {
       const result = await api<{ intervention: Intervention }>("/api/interventions", values);
       if (ctx.alive()) await refresh();
       ctx.when(setPendingDraft)(null);
+      ctx.when(setBooking)(null);
       ctx.when(() => {
+        clearBooking(getDraftStorage());
         try {
           sessionStorage.removeItem(DRAFT_KEY);
         } catch {}
@@ -2241,7 +2260,19 @@ export default function CourantApp() {
     },
     refresh,
     navigate,
-    setPendingDraft,
+    // Restored by the login chain of THIS identity: the cleared storage is written back so a reload
+    // before sending keeps the draft and the booking (never deleted before POST 201).
+    setPendingDraft(draft: RequestValues | null) {
+      setPendingDraft(draft);
+      if (!draft) return;
+      savePublicDraft(getDraftStorage(), draft);
+      const carried = bookingCarry.current;
+      bookingCarry.current = null;
+      if (carried) {
+        setBooking(carried);
+        saveBooking(getDraftStorage(), carried);
+      }
+    },
     homeView: () => homeFor(roleRef.current, "live"),
     landing() {
       const link = loginLanding(window.location.hash, pendingLink.current, roleRef.current);
@@ -2260,6 +2291,7 @@ export default function CourantApp() {
     authMode,
     categoryId,
     pendingDraft,
+    booking: pendingDraft ? booking : null,
     pendingInvitation,
     keepInvitation(token) {
       if (!INVITE_TOKEN.test(token)) {
@@ -2299,6 +2331,7 @@ export default function CourantApp() {
           throw new Error(
             "Connexion impossible. Vérifiez votre email, votre mot de passe et la confirmation de votre compte.",
           );
+        bookingCarry.current = pendingDraft ? booking : null;
         const outcome = await adoptIdentity(ctx, result.data.user?.id ?? null, pendingDraft, identityDeps);
         if (outcome === "superseded")
           throw new Error(
@@ -2317,7 +2350,8 @@ export default function CourantApp() {
         });
         if (result.error) throw result.error;
         if (result.data.session) {
-          const outcome = await adoptIdentity(ctx, result.data.user?.id ?? null, pendingDraft, identityDeps);
+          bookingCarry.current = pendingDraft ? booking : null;
+        const outcome = await adoptIdentity(ctx, result.data.user?.id ?? null, pendingDraft, identityDeps);
           if (outcome === "superseded")
             throw new Error(
               "Une autre connexion a été établie entre-temps dans ce navigateur. Rechargez la page pour continuer avec le compte actif.",
@@ -2415,6 +2449,7 @@ export default function CourantApp() {
     // Live: only the draft adopted by THIS identity chain (clearSessionState drops it on any
     // identity change); demo never inherits a public draft.
     pendingDraft: mode === "live" ? pendingDraft : null,
+    booking: mode === "live" && pendingDraft ? booking : null,
     data,
     professional,
     capabilities,

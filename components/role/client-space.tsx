@@ -54,6 +54,7 @@ import type {
   Status,
   View,
 } from "../app/types";
+import { BookingConfirm } from "./booking-confirm";
 import styles from "./client.module.css";
 import theme from "./client-theme.module.css";
 import { ThemeSurface } from "../app/theme-provider";
@@ -203,6 +204,8 @@ export function ClientSpace({ session }: { session: Session }) {
     (m) => myIds.has(m.intervention_id) && m.author_id !== session.profileId,
   ).length;
   const goMessages = () => session.go("messages");
+  // « Modifier » on the booking confirmation opens the regular form prefilled with the same draft.
+  const [editBooking, setEditBooking] = useState(false);
 
   function content() {
     if (session.loading) return <Loader label="Chargement de votre espace…" />;
@@ -213,6 +216,18 @@ export function ClientSpace({ session }: { session: Session }) {
       case "requests":
         return <RequestsView session={session} rows={rows} />;
       case "new":
+        if (session.booking && session.pendingDraft && !editBooking)
+          return (
+            <BookingConfirm
+              draft={session.pendingDraft}
+              booking={session.booking}
+              busy={session.busy}
+              profileId={session.profileId}
+              updateProfile={session.updateProfile}
+              createIntervention={(values) => session.createIntervention(values, [])}
+              onEdit={() => setEditBooking(true)}
+            />
+          );
         return (
           <RequestForm
             key={session.param}

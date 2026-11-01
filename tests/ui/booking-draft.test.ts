@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { BOOKING_DRAFT_KEY, bookingDescription, clearBooking, contactErrors, parseBooking, profilePatch, readBooking, saveBooking, type BookingDraft } from "../../components/app/booking-draft";
+import { FULL_NAME_MAX, BOOKING_DRAFT_KEY, bookingDescription, clearBooking, contactErrors, parseBooking, profilePatch, readBooking, saveBooking, type BookingDraft } from "../../components/app/booking-draft";
 
 const NOW = 1_800_000_000_000;
 const contact = { civility: "mme" as const, first_name: "Léa", last_name: "Martin", email: "lea@example.test", phone: "0696 12 34 56", company: false };
@@ -47,4 +47,15 @@ test("profile patch and contact checks", () => {
   assert.equal(profilePatch({ ...contact, first_name: " ", last_name: "" }), null);
   assert.deepEqual(contactErrors(contact), {});
   assert.deepEqual(Object.keys(contactErrors({ ...contact, first_name: "", email: "x", phone: "12" })).sort(), ["email", "first_name", "phone"]);
+});
+
+test("full name bound = API max 120: 120 accepted, 121 refused by the step AND by the patch (never truncated)", () => {
+  const at120 = { ...contact, first_name: "a".repeat(59), last_name: "b".repeat(60) }; // 59 + 1 space + 60
+  assert.equal(`${at120.first_name} ${at120.last_name}`.length, FULL_NAME_MAX);
+  assert.deepEqual(contactErrors(at120), {});
+  assert.equal(profilePatch(at120)?.full_name.length, 120);
+  const at121 = { ...contact, first_name: "a".repeat(60), last_name: "b".repeat(60) };
+  assert.ok(contactErrors(at121).last_name, "the contact step refuses 121");
+  assert.equal(profilePatch(at121), null, "no PATCH that the API would reject with 422");
+  assert.equal(profilePatch({ ...contact, phone: "1".repeat(31) }), null, "phone > 30 refused, not truncated");
 });

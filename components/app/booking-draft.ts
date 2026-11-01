@@ -102,9 +102,15 @@ export function bookingDescription(serviceTitle: string, booking: Pick<BookingDr
 }
 
 /** Private profile fields for PATCH /api/profile after login (never sent with the request). */
+/** PATCH /api/profile limits: full_name 1..120, phone ≤ 30 (never truncated: refused instead). */
+export const FULL_NAME_MAX = 120;
+export const PHONE_MAX = 30;
+export const fullName = (c: Pick<BookingContact, "first_name" | "last_name">) => `${c.first_name.trim()} ${c.last_name.trim()}`.trim();
 export function profilePatch(contact: BookingContact): { full_name: string; phone: string } | null {
-  const full_name = `${contact.first_name.trim()} ${contact.last_name.trim()}`.trim();
-  return full_name ? { full_name, phone: contact.phone.trim() } : null;
+  const full_name = fullName(contact);
+  const phone = contact.phone.trim();
+  if (!full_name || full_name.length > FULL_NAME_MAX || phone.length > PHONE_MAX) return null;
+  return { full_name, phone };
 }
 
 /** Minimal client-side checks of the contact step (the server re-validates everything). */
@@ -112,6 +118,7 @@ export function contactErrors(c: BookingContact): Partial<Record<"first_name" | 
   const errors: Partial<Record<"first_name" | "last_name" | "email" | "phone", string>> = {};
   if (!c.first_name.trim()) errors.first_name = "Indiquez votre prénom.";
   if (!c.last_name.trim()) errors.last_name = "Indiquez votre nom.";
+  else if (fullName(c).length > FULL_NAME_MAX) errors.last_name = `Prénom et nom : ${FULL_NAME_MAX} caractères au plus.`;
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email.trim())) errors.email = "Indiquez un email valide.";
   if (!/^\+?[0-9 .()-]{6,30}$/.test(c.phone.trim())) errors.phone = "Indiquez un numéro de téléphone valide.";
   return errors;
