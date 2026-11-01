@@ -127,12 +127,15 @@ test("new : alertes de session rendues dans le thème, au-dessus du formulaire",
   assert.match(html, /role="status"[^>]*>(?:(?!<\/div>).)*Brouillon conservé\./s);
 });
 
-test("rôles jamais thémés : les espaces client/entreprise n’importent ni chrome, ni habillage, ni ThemeSurface", async () => {
+test("habillage par périmètre : seul l’espace client (FASTSPLIT-CLIENT-THEME-001) porte ThemeSurface ; entreprise et forms jamais ; aucun chrome public dans les rôles", async () => {
   const { readFileSync } = await import("node:fs");
   for (const file of ["components/role/client-space.tsx", "components/role/enterprise-space.tsx", "components/app/forms.tsx"]) {
-    const src = readFileSync(file, "utf8");
-    assert.doesNotMatch(src, /public-chrome|public-forms|ThemeSurface|ui-v2/, file);
+    assert.doesNotMatch(readFileSync(file, "utf8"), /public-chrome|public-forms/, file);
   }
+  for (const file of ["components/role/enterprise-space.tsx", "components/app/forms.tsx"]) {
+    assert.doesNotMatch(readFileSync(file, "utf8"), /ThemeSurface|ui-v2/, file);
+  }
+  assert.match(readFileSync("components/role/client-space.tsx", "utf8"), /<ThemeSurface className=\{theme\.clientSkin\}>/);
   // Le RequestForm seul (tel que les rôles le rendent) ne porte aucune classe du thème.
   const forms = loadModule("components/app/forms.tsx");
   const html = renderToString(createElement(forms.RequestForm as never, { initialCategory: "panel", initialValues: null, sites: [], mode: "live", busy: false, onBack() {}, onSubmit: async () => {}, onDemo() {} } as never));
