@@ -689,3 +689,7 @@ Reset593fa54 intégré210/public4/4PASS ; CItest76af6de intégré1529,4131574521
 
 ## FASTSPLIT-BOOKING-INLINE-CONTINUE-001 — Claude lead UI / ROOT preview — in progress
 Capture propriétaire01nov10h45 : étapeUrgence sansactionvisible, barreinférieurehorscapture. ROOTChrome1804x646/DPR2sur210barrevisible : causeexactecheznavigateurownerNONconfirmée. Corrigerergonomieconcrète : boutonprimary«Continuer»DANSformulaireàchaqueétape(étape4libellécanoniqueversconnexion) enPLUSbarrefixeexistante. Mêmetype=submit/validation/handlerunique, aucunautoadvance/POST/auth/draftmodifié ; nouvelattributdata-booking-inline-submit, garderdata-booking-submitfixeduniquepourcompatQA. CSS44+2modes/nomlong/mobile/zoomhauteurcourte. OwnerleadClaudeSEULpublic-booking.tsx/module.css/testsUIciblés,claimcourtcodeGOdéjàautorisé. ROOTtestvraipreviewbarrevolontairementmasquéedansHARNAISpourisolerinlinesubmit,4étapes/erreurs/retourvaleurs/versAuth0POSTsur36039012801804+2modesetviewportcourt ; CLIpublishsourceGitliée/publicexceptionseuldpl. Pasnouvellecohorte/SQL/backend/prod/cron.
+
+
+## FASTSPLIT-BOOKING-INLINE-CONTINUE-001 — done
+Clauded47f8a2intégré/pousséac95/public5v7lmsvpy/CI41318091842SUCCESS ;19testsciblés+tsc,ROOT8formatsinline4étapesjusquAuth0POST+2normauxdeuxboutonsPASS. Boutonàlasuitedeschampscommepréciséowner,barrefixeinchangée. Pascohorte/SQL/backend/prod,rapportBOOKING_INLINE_AC95_HOSTED.md.

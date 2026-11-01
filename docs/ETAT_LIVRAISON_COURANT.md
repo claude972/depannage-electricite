@@ -1,3 +1,9 @@
+# Correction propriétaire — Continuer dans le formulaire
+
+Source appac95eaf65d6ce79bee50235e8b3f0a5b0f68d21e, READYdpl_42AP1ByKVyZsTrVyoQrTsMfdg3fX, publique https://depannage-electricite-5v7lmsvpy-brafas-projects.vercel.app/prestations/coupure-de-courant-partielle . Aliasbranche200mêmeFlightjt1GKwxk76MX2_hppaOiX. BoutonContinuerDANSchaqueformulaireàlasuitedeschamps,barrefixeconservée,mêmehandler/validation/API/draftinchangés. SourceClauded47f8a2revueROOT,19testsciblés+tscPASS,CI41318091842deuxjobsSUCCESS. ROOT8/8formats4tailles2modesjusquAuth0POST(barremasquéedansharnaispourisolerboutoninline)+2/2normaux390/1804aveclesdeuxboutonsPASS. Capturebooking-inline-normal-desktop.pngvueROOT,aucuncompte/dossiercréé. RapportBOOKING_INLINE_AC95_HOSTED.md. Causeabsencebarrechezownerpasreproduite ;ownerprécisevouloirboutonégalementaufilduformulaire,réalisé.
+
+---
+
 # Checkpoint fastsplit — 1 novembre 2026, parcours artisan connecté
 
 Public : https://depannage-electricite-git-integration-web-pwa-brafas-projects.vercel.app ; immuable https://depannage-electricite-om1bmcd6i-brafas-projects.vercel.app . App210536d3b18ee822be5a7a061b22929741b7ef95 READYdpl_dvjoMKJEUvaQ4nUWUaWGTAbgULUG/FlightWcMjL3w7zwfUBU6Gr28eF, alias200mêmeFlight. Resetpassworddésormaisvert/Jakarta/clair-sombre :360/1280x2modes4/4PASS(lieninvalide/error/absenceform/togglepersist/retour/noPOST/JS). LogiqueAuthinchangée.
