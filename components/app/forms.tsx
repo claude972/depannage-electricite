@@ -1,7 +1,7 @@
 "use client";
 // Operational forms extracted from the original monolith; behaviour preserved, shared by the
 // role spaces. Styling classes live in app/globals.css.
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, PHOTO_TYPES, validateUpload } from "./api";
 import { AddressField, createAddressApi } from "./address-field";
 import { Icon } from "./icons";
@@ -41,6 +41,9 @@ import type {
 // or payloads. Demo stays offline (no suggestions, no geolocation).
 const addressApi = createAddressApi();
 
+/** Keeps the focused step title clear of a sticky header when scrolled into view. */
+const STEP_TITLE_STYLE = { scrollMarginTop: 88 } as const;
+
 export function RequestForm({
   initialCategory,
   initialValues,
@@ -61,6 +64,21 @@ export function RequestForm({
   onDemo: () => void;
 }) {
   const [step, setStep] = useState(1);
+  // On each step change (not on first render) move focus AND the viewport to the new step title,
+  // so mobile users never land at the bottom after « Continuer » and screen readers announce it.
+  const stepTitle = useRef<HTMLHeadingElement>(null);
+  const firstStep = useRef(true);
+  useEffect(() => {
+    if (firstStep.current) {
+      firstStep.current = false;
+      return;
+    }
+    const el = stepTitle.current;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    const reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" });
+  }, [step]);
   // Read after mount: the geolocation button never differs between server and client renders.
   const [geolocation, setGeolocation] = useState<Geolocation | null>(null);
   useEffect(() => {
@@ -136,7 +154,7 @@ export function RequestForm({
         )}
         {step === 1 ? (
           <>
-            <h2>Que se passe-t-il ?</h2>
+            <h2 ref={stepTitle} tabIndex={-1} style={STEP_TITLE_STYLE}>Que se passe-t-il ?</h2>
             <div className="category-grid">
               {CATEGORIES.map((cat) => (
                 <button
@@ -221,7 +239,7 @@ export function RequestForm({
           </>
         ) : step === 2 ? (
           <>
-            <h2>Où faut-il intervenir ?</h2>
+            <h2 ref={stepTitle} tabIndex={-1} style={STEP_TITLE_STYLE}>Où faut-il intervenir ?</h2>
             {sites.length > 0 && (
               <Field label="Site professionnel (facultatif)">
                 <select
@@ -294,7 +312,7 @@ export function RequestForm({
           </>
         ) : (
           <>
-            <h2>Votre demande, en clair.</h2>
+            <h2 ref={stepTitle} tabIndex={-1} style={STEP_TITLE_STYLE}>Votre demande, en clair.</h2>
             <div className="recap-service">
               <span className="service-icon">
                 <Icon name={c.icon} size={27} />
