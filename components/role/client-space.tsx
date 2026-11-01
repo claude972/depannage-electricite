@@ -1504,8 +1504,15 @@ function DetailView({
       )}
       {/* Final settlement of a card hold: only a completed booking dossier with an accepted quote.
           The amount, ledger and proofs are the server's; never the legacy Checkout for a hold. */}
-      {currentBookingStatus?.kind === "booking" && currentBookingStatus.payment.method === "card_hold" && i.status === "completed" && accepted && (
-        <BookingSettlement key={`${session.profileId}|${i.id}`} interventionId={i.id} context={session.mutationContext} />
+      {currentBookingStatus?.kind === "booking" && currentBookingStatus.payment.method === "card_hold" && (i.status === "completed" || i.status === "paid") && accepted && (
+        <BookingSettlement
+          key={`${session.profileId}|${i.id}`}
+          interventionId={i.id}
+          context={session.mutationContext}
+          // Re-read the workspace (fresh barrier) once the server reports « paid »; only while the
+          // dossier itself is not « paid » yet (no loop, stale dossier corrected).
+          onSettled={i.status === "paid" ? undefined : () => void session.refresh()}
+        />
       )}
       {/* After a booking: optional email access (self-hides unless phone-verified, client, no email account). */}
       {currentBookingStatus?.kind === "booking" && <AccountUpgrade />}

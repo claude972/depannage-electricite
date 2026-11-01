@@ -59,7 +59,8 @@ test("optional account: offered in the profile and on a booking dossier only, ne
 
 test("settlement leaf: mounted only for a completed card-hold booking with an accepted quote, keyed by UID + job, with the session identity context", () => {
   const src = readFileSync("components/role/client-space.tsx", "utf8");
-  assert.match(src, /currentBookingStatus\?\.kind === "booking" && currentBookingStatus\.payment\.method === "card_hold" && i\.status === "completed" && accepted && \(\s*<BookingSettlement key=\{`\$\{session\.profileId\}\|\$\{i\.id\}`\} interventionId=\{i\.id\} context=\{session\.mutationContext\} \/>/);
+  assert.match(src, /currentBookingStatus\?\.kind === "booking" && currentBookingStatus\.payment\.method === "card_hold" && \(i\.status === "completed" \|\| i\.status === "paid"\) && accepted && \(\s*<BookingSettlement\s*key=\{`\$\{session\.profileId\}\|\$\{i\.id\}`\}\s*interventionId=\{i\.id\}\s*context=\{session\.mutationContext\}/);
+  assert.match(src, /onSettled=\{i\.status === "paid" \? undefined : \(\) => void session\.refresh\(\)\}/);
   const app = readFileSync("components/courant-app.tsx", "utf8");
   assert.match(app, /mutationContext: cardContext,/);
   assert.match(app, /const cardContext = \{ generation: \(\) => guard\.generation\(\), userId: \(\) => userId\.current \};/);
