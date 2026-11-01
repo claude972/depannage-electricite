@@ -13,6 +13,8 @@ import { Icon } from "../app/icons";
 import { InstallPanel } from "../app/install-panel";
 import { CATEGORIES, category, money } from "../app/format";
 import { PublicHome } from "./public-home";
+import { PublicChrome, type HomeHandlers } from "./public-chrome";
+import formStyles from "./public-forms.module.css";
 import { ABOUT_VALUES, FAQ, HELP_PROCESS, JOIN_FACTS, JOIN_REVIEW, JOIN_STEPS, JOIN_TILES, LEGAL_SECTIONS, PENDING, PRIVACY_DATA, numbered, pricingRows } from "./public-lists";
 import styles from "./public.module.css";
 
@@ -72,14 +74,32 @@ export function PublicSite({ session }: { session: PublicSession }) {
     </div>
   );
 
-  // UI-PUBLIC-HOME-001: the home is the migrated surface (own header/footer, theme foundation);
-  // every other public view keeps the shell below unchanged.
+  // UI-PUBLIC-HOME-001 / UI-PUBLIC-REQUEST-001: home, new and auth are the migrated surfaces
+  // (PublicChrome + theme foundation); every other public view keeps the shell below unchanged.
+  const chromeHandlers: HomeHandlers = { onNew: newRequest, onLogin: login, onNavigate: navigate, onDemo: (role) => session.startDemo(role) };
   if (view === "home")
     return (
       <>
         {alerts}
-        <PublicHome gated={!known} handlers={{ onNew: newRequest, onLogin: login, onNavigate: navigate, onDemo: (role) => session.startDemo(role) }} />
+        <PublicHome gated={!known} handlers={chromeHandlers} />
       </>
+    );
+  const themedAlerts = (session.error || session.notice) && (
+    <div className={formStyles.alerts}>
+      <Alerts error={session.error} notice={session.notice} onClearError={() => session.setError("")} onClearNotice={() => session.setNotice("")} />
+    </div>
+  );
+  // Request view: the SHARED RequestForm, unchanged (same props as before), inside an opt-in skin.
+  if (view === "new")
+    return (
+      <PublicChrome current="new" handlers={chromeHandlers} onHome={() => navigate("home")} mainClassName={formStyles.page}>
+        <div className={formStyles.wrap}>
+          {themedAlerts}
+          <div className={formStyles.requestSkin} data-public-skin="request">
+            <RequestForm initialCategory={session.categoryId} initialValues={session.pendingDraft} sites={[]} mode="public" busy={session.busy} onBack={() => session.go("home")} onSubmit={async (values) => { session.saveDraft(values); }} onDemo={() => session.startDemo("client", "new")} />
+          </div>
+        </div>
+      </PublicChrome>
     );
 
   return (
@@ -110,9 +130,7 @@ export function PublicSite({ session }: { session: PublicSession }) {
       </div>
 
       <main id="main" className={`public-main ${styles.main}`}>
-        {view === "new" ? (
-          <RequestForm initialCategory={session.categoryId} initialValues={session.pendingDraft} sites={[]} mode="public" busy={session.busy} onBack={() => session.go("home")} onSubmit={async (values) => { session.saveDraft(values); }} onDemo={() => session.startDemo("client", "new")} />
-        ) : view === "auth" ? (
+        {view === "auth" ? (
           <AuthView session={session} />
         ) : view === "help" ? (
           <HelpView onNew={() => newRequest()} />

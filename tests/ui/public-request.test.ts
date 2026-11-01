@@ -42,3 +42,99 @@ test("chrome hors accueil : « Accueil » au lieu des sections, page courante ma
   assert.equal([...auth.matchAll(/aria-current="page"[^>]*data-home-action="login"/g)].length, 2); // menu + en-tête
   assert.doesNotMatch(auth, /aria-current="page"[^>]*data-home-action="new"/);
 });
+
+// ---- P2 : vue « new » ----------------------------------------------------------------------
+type Calls = string[];
+function fakeSession(over: Record<string, unknown> = {}) {
+  const calls: Calls = [];
+  const data: Record<string, unknown> = { view: "new", error: "", notice: "", categoryId: "socket", pendingDraft: null, busy: false, authMode: "login", ...over };
+  const session = new Proxy(data, {
+    get: (target, key) => (typeof key === "string" && key in target ? target[key] : (...args: unknown[]) => calls.push(`${String(key)}(${args.map((a) => (typeof a === "object" ? JSON.stringify(a) : String(a))).join(",")})`)),
+  });
+  return { session, calls };
+}
+/** Real PublicSite + real chrome + real forms, under the ThemeProvider of the same module graph. */
+function renderSite(over: Record<string, unknown>) {
+  const tp = loadModule("components/app/theme-provider.tsx");
+  const site = loadModule("components/role/public-site.tsx", { "@/components/app/theme-provider": tp });
+  const fake = fakeSession(over);
+  const html = renderToString(createElement(tp.ThemeProvider as never, null, createElement(site.PublicSite as never, { session: fake.session } as never))).replaceAll("<!-- -->", "");
+  return { html, calls: fake.calls };
+}
+/** PublicSite with spies on the shared forms and the chrome (props as actually passed). */
+function spySite(over: Record<string, unknown>) {
+  const captured: Record<string, any> = {};
+  const site = loadModule("components/role/public-site.tsx", {
+    "./public-chrome": { PublicChrome: (props: any) => ((captured.chrome = props), props.children) },
+    "./public-home": { PublicHome: (props: unknown) => ((captured.home = props), null) },
+    "../app/forms": {
+      RequestForm: (props: unknown) => ((captured.form = props), null),
+      AuthForm: (props: unknown) => ((captured.auth = props), null),
+    },
+  });
+  const fake = fakeSession(over);
+  const html = renderToString(createElement(site.PublicSite as never, { session: fake.session } as never));
+  return { html, captured, calls: fake.calls };
+}
+
+test("new (SSR réel, étape 1) : chrome thémé + habillage opt-in autour du RequestForm partagé", () => {
+  const { html, calls } = renderSite({ view: "new", categoryId: "socket" });
+  assert.match(html, /class="ui-v2 /);
+  assert.match(html, /data-chrome-home=""[^>]*>Accueil</);
+  assert.match(html, /aria-current="page"[^>]*data-home-action="new"/);
+  assert.match(html, /data-public-skin="request"/);
+  // Garde : classes historiques réellement rendues à l’étape 1 (états 2/3 : vérifiés en navigateur).
+  for (const cls of ["form-page", "back-link", "form-heading", "stepper", "panel request-form", "category-grid", "radio-dot", "field", "inline-note", "form-actions", "button primary"]) assert.match(html, new RegExp(`class="${cls}`), cls);
+  // Pré-remplissage réel : la catégorie de la session est sélectionnée.
+  assert.match(html, /class="selected"[^>]*>(?:(?!<\/button>).)*Prise ou interrupteur/s);
+  assert.match(html, /<textarea[^>]*required=""[^>]*minLength="15"[^>]*maxLength="2000"/);
+  assert.match(html, /accept="image\/jpeg,image\/png,image\/webp"/);
+  assert.match(html, /Les photos ne sont pas conservées avec le brouillon/);
+  assert.doesNotMatch(html, /class="public-main/); // ancien shell absent
+  assert.deepEqual(calls, []);
+});
+
+test("new : props du RequestForm strictement inchangées, retour = session.go(\"home\")", async () => {
+  const draft = { category: "panel", description: "Disjoncteur qui saute", address: "1 rue A", postal_code: "97200", city: "FdF", urgency: "scheduled" };
+  const { captured, calls } = spySite({ view: "new", categoryId: "panel", pendingDraft: draft, busy: true });
+  const f = captured.form;
+  assert.equal(f.initialCategory, "panel");
+  assert.deepEqual(JSON.parse(JSON.stringify(f.initialValues)), draft);
+  assert.equal(JSON.stringify(f.sites), "[]");
+  assert.equal(f.mode, "public");
+  assert.equal(f.busy, true);
+  f.onBack();
+  f.onDemo();
+  await f.onSubmit(draft, []);
+  assert.deepEqual(calls, ["go(home)", "startDemo(client,new)", `saveDraft(${JSON.stringify(draft)})`]);
+  // Chrome : vue courante, accueil par la session (jamais window.scrollTo), callbacks réels.
+  const c = captured.chrome;
+  assert.equal(c.current, "new");
+  assert.equal(c.sections, undefined);
+  calls.length = 0;
+  c.onHome();
+  c.handlers.onNew("lighting");
+  c.handlers.onLogin();
+  c.handlers.onNavigate("join");
+  assert.deepEqual(calls, ["go(home)", "setCategory(lighting)", "go(new)", "setAuthMode(login)", "go(auth)", "go(join)"]);
+});
+
+test("new : alertes de session rendues dans le thème, au-dessus du formulaire", () => {
+  const { html } = renderSite({ view: "new", error: "Connexion impossible.", notice: "Brouillon conservé." });
+  const alerts = html.indexOf("Connexion impossible.");
+  assert.ok(alerts > html.indexOf('id="main"') && alerts < html.indexOf('data-public-skin="request"'));
+  assert.match(html, /role="alert"[^>]*>(?:(?!<\/div>).)*Connexion impossible\./s);
+  assert.match(html, /role="status"[^>]*>(?:(?!<\/div>).)*Brouillon conservé\./s);
+});
+
+test("rôles jamais thémés : les espaces client/entreprise n’importent ni chrome, ni habillage, ni ThemeSurface", async () => {
+  const { readFileSync } = await import("node:fs");
+  for (const file of ["components/role/client-space.tsx", "components/role/enterprise-space.tsx", "components/app/forms.tsx"]) {
+    const src = readFileSync(file, "utf8");
+    assert.doesNotMatch(src, /public-chrome|public-forms|ThemeSurface|ui-v2/, file);
+  }
+  // Le RequestForm seul (tel que les rôles le rendent) ne porte aucune classe du thème.
+  const forms = loadModule("components/app/forms.tsx");
+  const html = renderToString(createElement(forms.RequestForm as never, { initialCategory: "panel", initialValues: null, sites: [], mode: "live", busy: false, onBack() {}, onSubmit: async () => {}, onDemo() {} } as never));
+  assert.doesNotMatch(html, /ui-v2|requestSkin|data-public-skin/);
+});
