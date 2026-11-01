@@ -9,7 +9,7 @@ import { observePwaInstallation, requestPwaUpdate } from "../components/pwa-regi
 const workerSource = readFileSync(new URL("../public/sw.js", import.meta.url), "utf8");
 const origin = "https://courant.example";
 
-type RequestLike = { url: string; method: string; mode: string };
+type RequestLike = { url: string; method: string; mode: string; destination?: string; headers?: Headers };
 type WorkerEvent = {
   request?: RequestLike;
   data?: unknown;
@@ -21,9 +21,12 @@ function workerHarness() {
   const listeners = new Map<string, (event: WorkerEvent) => void>();
   const stores = new Map<string, Map<string, Response>>();
   const fetched: { url: string; cache?: string; credentials?: string; redirect?: string }[] = [];
-  let noticeResponse: { url?: string; redirected?: boolean; marker?: string | null; contentType?: string; status?: number } = {};
+  type AssetResponse = { url?: string; redirected?: boolean; marker?: string | null; contentType?: string; status?: number };
+  const assetResponses: Record<string, AssetResponse> = {};
+  let putFailure: number | undefined, puts = 0, deleteFailure = false;
   let disconnected = false;
-  let cacheReadFailure: "open" | "match" | undefined;
+  let fetchGate: Promise<void> | undefined;
+  let cacheReadFailure: "storage" | "match" | undefined;
   let claims = 0;
   let activations = 0;
   let html = "<main>public notice</main>";
@@ -44,12 +47,16 @@ function workerHarness() {
     },
     caches: {
       keys: async () => [...stores.keys()],
-      delete: async (key: string) => stores.delete(key),
+      match: async (url: string, options: { cacheName: string }) => {
+        if (cacheReadFailure) throw Error("CacheStorage read failed");
+        return stores.get(options.cacheName)?.get(url)?.clone();
+      },
+      delete: async (key: string) => { if (deleteFailure) throw Error("Cache deletion unavailable"); return stores.delete(key); },
       open: async (key: string) => {
-        if (cacheReadFailure === "open") throw new Error("Storage unavailable");
+        if (cacheReadFailure === "storage") throw new Error("Storage unavailable");
         if (!stores.has(key)) stores.set(key, new Map());
         return {
-          put: async (url: string, response: Response) => stores.get(key)!.set(url, response.clone()),
+          put: async (url: string, response: Response) => { puts++; stores.get(key)!.set(url, response.clone()); if (puts === putFailure) throw Error("Cache write failed"); },
           match: async (url: string) => {
             if (cacheReadFailure === "match") throw new Error("Cache read failed");
             return stores.get(key)!.get(url)?.clone();
@@ -59,13 +66,24 @@ function workerHarness() {
     },
     fetch: async (input: RequestLike, init?: RequestInit) => {
       fetched.push({ url: input.url, cache: init?.cache ?? (input as Request).cache, credentials: (input as Request).credentials, redirect: (input as Request).redirect });
+      if (fetchGate) await fetchGate;
       if (disconnected) throw new TypeError("Network unavailable");
-      const notice = new URL(input.url).pathname === "/offline.html";
-      const headers = new Headers({ "Content-Type": notice ? noticeResponse.contentType ?? "text/html; charset=utf-8" : "text/html; charset=utf-8" });
-      if (notice && noticeResponse.marker !== null) headers.set("X-Courant-Public-Offline", noticeResponse.marker ?? "1");
-      const response = new Response(html, { status: notice ? noticeResponse.status ?? 200 : 200, headers });
-      Object.defineProperty(response, "url", { value: notice ? noticeResponse.url ?? input.url : input.url });
-      Object.defineProperty(response, "redirected", { value: notice ? noticeResponse.redirected ?? false : false });
+      const pathname = new URL(input.url).pathname;
+      const assets: Record<string, { marker: string; type: string; body: string }> = {
+        "/offline.html": { marker: "X-Courant-Public-Offline", type: "text/html; charset=utf-8", body: "<main>public notice</main>" },
+        "/offline-request.html": { marker: "X-Courant-Public-Request", type: "text/html; charset=utf-8", body: "<main>public draft form</main>" },
+        "/offline-request.js": { marker: "X-Courant-Public-Draft-Script", type: "application/javascript; charset=utf-8", body: "/* public draft script */" },
+      };
+      const asset = assets[pathname], override = assetResponses[pathname] ?? {};
+      const headers = new Headers({ "Content-Type": override.contentType ?? asset?.type ?? "text/html; charset=utf-8" });
+      if (asset && override.marker !== null) headers.set(asset.marker, override.marker ?? "1");
+      const preserve = (response: Response): Response => {
+        Object.defineProperty(response, "url", { value: override.url ?? input.url });
+        Object.defineProperty(response, "redirected", { value: override.redirected ?? false });
+        Object.defineProperty(response, "clone", { value: () => preserve(Response.prototype.clone.call(response)) });
+        return response;
+      };
+      const response = preserve(new Response(asset?.body ?? html, { status: override.status ?? 200, headers }));
       return response;
     },
   });
@@ -89,7 +107,10 @@ function workerHarness() {
     setOffline: () => { disconnected = true; },
     failCacheReadAt: (point: typeof cacheReadFailure) => { cacheReadFailure = point; },
     setHtml: (value: string) => { html = value; },
-    setNoticeResponse: (value: typeof noticeResponse) => { noticeResponse = value; },
+    setNoticeResponse: (value: AssetResponse) => { assetResponses["/offline.html"] = value; },
+    setAssetResponse: (asset: string, value: AssetResponse) => { assetResponses[asset] = value; },
+    failPut: (at: number, failDelete = false) => { putFailure = at; deleteFailure = failDelete; },
+    holdFetch: () => { let release!: () => void; fetchGate = new Promise<void>(resolve => { release = resolve; }); return release; },
     claims: () => claims,
     activations: () => activations,
   };
@@ -113,15 +134,15 @@ test("PWA manifest uses local installable icons with real declared PNG dimension
   assert.equal(apple.readUInt32BE(20), 180);
 });
 
-test("worker installs only marked static notice using same-origin access without immediate update", async () => {
+test("worker installs exactly three validated public assets using same-origin access without immediate update", async () => {
   const h = workerHarness();
   await Promise.all(h.emit("install").waits);
-  assert.equal(h.fetched.length, 1);
+  assert.equal(h.fetched.length, 3);
   assert.equal(h.fetched[0].url, `${origin}/offline.html`);
   assert.equal(h.fetched[0].credentials, "same-origin");
   assert.equal(h.fetched[0].redirect, "error");
   assert.equal(h.activations(), 0);
-  assert.deepEqual([...h.stores.values()].flatMap((store) => [...store.keys()]), ["/offline.html"]);
+  assert.deepEqual([...h.stores.values()].flatMap((store) => [...store.keys()]), ["/offline.html", "/offline-request.html", "/offline-request.js"]);
 });
 
 test("online private navigation goes to the network no-store and never writes its response into caches", async () => {
@@ -131,7 +152,7 @@ test("online private navigation goes to the network no-store and never writes it
   const event = h.navigate("/?intervention=secret");
   assert.equal(await (await event.response!).text(), "<main>private dossier client A</main>");
   assert.equal(h.fetched.at(-1)?.cache, "no-store");
-  assert.deepEqual([...h.stores.values()].flatMap((store) => [...store.keys()]), ["/offline.html"]);
+  assert.deepEqual([...h.stores.values()].flatMap((store) => [...store.keys()]), ["/offline.html", "/offline-request.html", "/offline-request.js"]);
   h.setOffline();
   const offline = await h.navigate("/?intervention=secret").response!;
   assert.equal(await offline.text(), "<main>public notice</main>");
@@ -158,7 +179,7 @@ test("missing offline cache returns a generic 503 with no private account conten
   assert.match(await response.text(), /Connexion indisponible/);
 });
 
-for (const point of ["open", "match"] as const) {
+for (const point of ["storage", "match"] as const) {
   test(`offline navigation still returns a neutral no-store 503 when cache ${point} fails`, async () => {
     const h = workerHarness();
     await Promise.all(h.emit("install").waits);
@@ -170,7 +191,7 @@ for (const point of ["open", "match"] as const) {
     assert.equal(response.headers.get("Cache-Control"), "no-store");
     assert.equal(response.headers.get("Content-Type"), "text/plain; charset=utf-8");
     assert.equal(await response.text(), "Connexion indisponible. Reconnectez-vous pour retrouver vos dossiers.");
-    assert.deepEqual([...h.stores.values()].flatMap((store) => [...store.keys()]), ["/offline.html"]);
+    assert.deepEqual([...h.stores.values()].flatMap((store) => [...store.keys()]), ["/offline.html", "/offline-request.html", "/offline-request.js"]);
   });
 }
 
@@ -182,7 +203,7 @@ test("activation only removes obsolete Courant public caches and claims clients"
   await Promise.all(h.emit("activate").waits);
   assert.equal(h.stores.has("courant-pwa-public-v0"), false);
   assert.equal(h.stores.has("another-application"), true);
-  assert.equal(h.stores.has("courant-pwa-public-v3"), true);
+  assert.equal(h.stores.has("courant-pwa-public-v4"), true);
   assert.equal(h.claims(), 1);
 });
 
@@ -228,7 +249,7 @@ test("explicit reload still works after a different tab activated or superseded 
 test("worker refuses an SSO/login redirect instead of caching protected-preview login HTML", async () => {
   const h = workerHarness();
   h.setNoticeResponse({ redirected: true, url: `${origin}/offline.html` });
-  await assert.rejects(Promise.all(h.emit("install").waits), /Public offline notice unavailable/);
+  await assert.rejects(Promise.all(h.emit("install").waits), /Public offline asset unavailable/);
   assert.equal(h.stores.size, 0);
 });
 
@@ -236,7 +257,7 @@ test("worker refuses wrong origin/path/query notice URLs even when an HTML marke
   for (const url of ["https://login.example/offline.html", `${origin}/login`, `${origin}/offline.html?token=private`, ""]) {
     const h = workerHarness();
     h.setNoticeResponse({ url });
-    await assert.rejects(Promise.all(h.emit("install").waits), /Public offline notice unavailable/, url);
+    await assert.rejects(Promise.all(h.emit("install").waits), /Public offline asset unavailable/, url);
     assert.equal(h.stores.size, 0);
   }
 });
@@ -245,7 +266,7 @@ test("worker refuses unmarked, unsuccessful or non-HTML responses before opening
   for (const response of [{ marker: null }, { marker: "0" }, { status: 403 }, { contentType: "application/json" }]) {
     const h = workerHarness();
     h.setNoticeResponse(response);
-    await assert.rejects(Promise.all(h.emit("install").waits), /Public offline notice unavailable/);
+    await assert.rejects(Promise.all(h.emit("install").waits), /Public offline asset unavailable/);
     assert.equal(h.stores.size, 0);
   }
 });
@@ -286,4 +307,82 @@ test("a successfully installed worker becoming obsolete is not misreported as an
   worker.change("redundant");
   assert.equal(failed, 0);
   stop();
+});
+
+test("all three install responses are validated before ANY cache write; malformed or missing form/script keeps the old cache", async () => {
+  for (const asset of ["/offline.html", "/offline-request.html", "/offline-request.js"]) for (const response of [{ marker: null }, { redirected: true }, { url: `${origin}${asset}?private=1` }, { contentType: "application/json" }, { status: 404 }, { status: 206 }]) {
+    const h = workerHarness(); h.stores.set("courant-pwa-public-v3", new Map()); h.setAssetResponse(asset, response);
+    await assert.rejects(Promise.all(h.emit("install").waits), /Public offline asset unavailable/);
+    assert.deepEqual([...h.stores.keys()], ["courant-pwa-public-v3"]); assert.equal(h.claims(), 0); assert.equal(h.activations(), 0);
+  }
+});
+test("a put failure rolls back the partial new cache; even failed rollback never activates or claims partial assets", async () => {
+  for (const failedRollback of [false, true]) {
+    const h = workerHarness(); h.stores.set("courant-pwa-public-v3", new Map()); h.failPut(2, failedRollback);
+    await assert.rejects(Promise.all(h.emit("install").waits), /Cache write failed/);
+    assert.equal(h.stores.has("courant-pwa-public-v3"), true); if (!failedRollback) assert.equal(h.stores.has("courant-pwa-public-v4"), false);
+    await assert.rejects(Promise.all(h.emit("activate").waits), /Public offline cache incomplete/);
+    assert.equal(h.claims(), 0); assert.equal(h.activations(), 0); assert.equal(h.stores.has("courant-pwa-public-v3"), true);
+  }
+});
+test("activation revalidates every asset after eviction, preserving the previous worker cache", async () => {
+  const h = workerHarness(); await Promise.all(h.emit("install").waits); h.stores.set("courant-pwa-public-v3", new Map()); h.stores.get("courant-pwa-public-v4")!.delete("/offline-request.js");
+  await assert.rejects(Promise.all(h.emit("activate").waits), /Public offline cache incomplete/); assert.equal(h.claims(), 0); assert.equal(h.stores.has("courant-pwa-public-v3"), true);
+});
+test("offline form navigation and exact public module script are served from cache; private and RSC requests remain bypassed", async () => {
+  const h = workerHarness(); await Promise.all(h.emit("install").waits); h.setOffline();
+  assert.equal(await (await h.navigate("/offline-request.html").response!).text(), "<main>public draft form</main>");
+  assert.equal(await (await h.navigate("/offline-request.js", { mode: "cors", destination: "script" }).response!).text(), "/* public draft script */");
+  for (const [url, overrides] of [
+    ["/offline-request.js?token=private", { mode: "cors", destination: "script" }],
+    ["/other.js", { mode: "cors", destination: "script" }],
+    ["/offline-request.js", { mode: "cors", destination: "image" }],
+    ["/offline-request.html?_rsc=private", {}],
+    ["/offline-request.html", { headers: new Headers({ RSC: "1" }) }],
+    ["/offline-request.html", { headers: new Headers({ "Next-Router-State-Tree": "private" }) }],
+    ["/offline-request.html", { method: "POST" }],
+  ] as [string, Partial<RequestLike>][]) assert.equal(h.navigate(url, overrides).response, undefined, url);
+  assert.equal(await (await h.navigate("/offline-request.html?dossier=private").response!).text(), "<main>public notice</main>");
+  assert.deepEqual([...h.stores.values()].flatMap(s => [...s.keys()]), ["/offline.html", "/offline-request.html", "/offline-request.js"]);
+});
+test("new public routes receive isolated markers, no-store and restrictive offline form CSP", async () => {
+  const { default: config } = await import("../next.config"); const routes = await config.headers!();
+  const form = routes.find(route => route.source === "/offline-request.html")!, script = routes.find(route => route.source === "/offline-request.js")!;
+  assert.ok(form && script); const headers = Object.fromEntries(form.headers.map(h => [h.key, h.value]));
+  assert.equal(headers["X-Courant-Public-Request"], "1"); assert.equal(headers["Cache-Control"], "no-store");
+  for (const rule of ["default-src 'none'", "script-src 'self'", "connect-src 'none'", "form-action 'none'", "base-uri 'none'"]) assert.ok(headers["Content-Security-Policy"].includes(rule));
+  assert.ok(script.headers.some(h => h.key === "X-Courant-Public-Draft-Script" && h.value === "1"));
+});
+
+async function cacheBits(store: Map<string, Response> | undefined) {
+  if (!store) return null;
+  return Promise.all([...store.entries()].map(async ([key, response]) => ({ key, status: response.status, url: response.url, headers: [...response.headers.entries()], body: await response.clone().text() })));
+}
+test("a reused active v4 generation is immutable even when a new install would fail its first put", async () => {
+  const h = workerHarness(); await Promise.all(h.emit("install").waits); await Promise.all(h.emit("activate").waits);
+  const before = await cacheBits(h.stores.get("courant-pwa-public-v4")); const requests = h.fetched.length;
+  h.failPut(4); // Old implementation wrote into the active v4 and then deleted it on failure.
+  await assert.rejects(Promise.all(h.emit("install").waits), /generation already exists; version bump required/);
+  assert.deepEqual(await cacheBits(h.stores.get("courant-pwa-public-v4")), before);
+  assert.equal(h.fetched.length, requests, "a reused generation is refused before even fetching replacement assets"); assert.equal(h.claims(), 1); assert.equal(h.activations(), 0);
+});
+test("a partial orphan generation is preserved and refused, never repaired in place or claimed", async () => {
+  const h = workerHarness(); await Promise.all(h.emit("install").waits); h.stores.get("courant-pwa-public-v4")!.delete("/offline-request.js");
+  h.stores.set("courant-pwa-public-v3", new Map()); const before = await cacheBits(h.stores.get("courant-pwa-public-v4"));
+  await assert.rejects(Promise.all(h.emit("install").waits), /generation already exists/);
+  assert.deepEqual(await cacheBits(h.stores.get("courant-pwa-public-v4")), before);
+  await assert.rejects(Promise.all(h.emit("activate").waits), /Public offline cache incomplete/); assert.equal(h.claims(), 0); assert.equal(h.stores.has("courant-pwa-public-v3"), true);
+});
+test("the old active generation stays byte-identical while every new public asset is in flight and after install", async () => {
+  const h = workerHarness(); const old = new Map([
+    ["/offline.html", new Response("old public notice", { headers: { "X-Courant-Public-Offline": "1" } })],
+    ["/offline-request.html", new Response("old public form")], ["/offline-request.js", new Response("old public script")],
+  ]); h.stores.set("courant-pwa-public-v3", old); const before = await cacheBits(old); const release = h.holdFetch();
+  const install = Promise.all(h.emit("install").waits); await new Promise<void>(resolve => setImmediate(resolve));
+  assert.equal(h.fetched.length, 3); assert.equal(h.stores.has("courant-pwa-public-v4"), false); assert.deepEqual(await cacheBits(old), before);
+  release(); await install; assert.deepEqual(await cacheBits(old), before); assert.equal(h.stores.get("courant-pwa-public-v4")!.size, 3);
+  await Promise.all(h.emit("activate").waits); assert.equal(h.claims(), 1); assert.equal(h.stores.has("courant-pwa-public-v3"), false);
+});
+test("missing-cache offline reads never create an orphan cache that could collide with an installer", async () => {
+  const h = workerHarness(); h.setOffline(); assert.equal((await h.navigate("/private").response!).status, 503); assert.equal(h.stores.size, 0);
 });
