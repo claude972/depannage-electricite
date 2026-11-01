@@ -1,5 +1,5 @@
 // Actual migrations001–026 in isolated PGlite0.5.4. Auth/Storage/cron stubs only; no bank/provider proof.
-import {readFile,readdir} from 'node:fs/promises';
+import {readFile,readdir,writeFile,lstat} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {isolatedMigrationSql} from './sql-isolated-migrations.mjs';
@@ -73,10 +73,17 @@ try{
  await denied(as('a','select public.guard_phone_booking_checkout($1)',[cq]),'P0001');
  const cardAm=randomUUID();await db.query("insert into public.quote_amendments(id,intervention_id,base_quote_id,artisan_id,version,reason,lines,subtotal_cents,tax_rate,tax_cents,total_cents,status)values($1,$2,$3,$4,1,'QA synthétique','[{\"label\":\"Avenant bancaire QA\",\"quantity\":1,\"unit_price_cents\":2500}]',2500,20,500,3000,'accepted')",[cardAm,card,cq,ids.artisan]);
  const cl=(await as('a','select public.begin_guest_settlement($1) v',[card])).rows[0].v;await db.query("select public.qualify_guest_settlement($1,$2,'acct_QAcompat',2000)",[cl,ids.a]);await db.query("select public.record_guest_settlement($1,$2,'ch_QAcompat',15000)",[cl,ids.a]);await db.query("select public.record_guest_settlement($1,$2,'ch_QAcompat',15000,'tr_QAcompat',12000,'acct_QAcompat')",[cl,ids.a]);eq(await scalar('select method v from public.payments where quote_id=$1',[cq]),'stripe');eq(await scalar('select method v from public.payment_attempts where quote_id=$1',[cq]),'stripe');
- const actualCardPay=await scalar('select id v from public.payments where quote_id=$1',[cq]);r=await ready(actualCardPay);eq(r.ready,true);eq(r.preview.total_cents,15000);eq(r.preview.lines.length,2);eq((await issue(randomUUID(),actualCardPay)).invoice.total_cents,15000);
+ const actualCardPay=await scalar('select id v from public.payments where quote_id=$1',[cq]);r=await ready(actualCardPay);eq(r.ready,true);eq(r.preview.total_cents,15000);eq(r.preview.lines.length,2);const cardInvoice=(await issue(randomUUID(),actualCardPay)).invoice;eq(cardInvoice.total_cents,15000);
  const badLine=await fixture();await db.query("update public.quote_amendments set lines='[{\"label\":\"QA\",\"quantity\":1,\"unit_price_cents\":2400}]' where id=$1",[badLine.amend]);eq((await ready(badLine.pay)).missing,['amendment_invalid']);
  await db.query("update public.artisan_profiles set siret='' where user_id=$1",[ids.artisan]);eq((await ready(mixed.pay)).missing,['artisan_siret','invoice_mixed_tax_rates']);
  r=await ready(bank.pay,'platform_commission');eq(r.missing,['platform_issuer','platform_commission_vat_rate','commission_not_confirmed','artisan_identity']);
  eq(await scalar('select count(*)::int v from public.platform_invoices'),3);
- console.log(JSON.stringify({sql:'PASS',checks,migrations:26,runtime:'PGlite0.5.4',bank_provider_proof:false}));
+ // Optional private bridge: export actual RPC-issued rows only, never an imitated Invoice fixture.
+ if(process.env.INVOICE_RPC_ROWS_PATH){
+  const {dirname,isAbsolute}=await import('node:path');const output=process.env.INVOICE_RPC_ROWS_PATH;
+  assert.ok(isAbsolute(output));const parent=await lstat(dirname(output));assert.ok(parent.isDirectory()&&!parent.isSymbolicLink());assert.equal(parent.mode&0o077,0);
+  eq(await scalar('select count(*)::int v from public.platform_invoices where payment_id=$1',[mixed.pay]),0);
+  await writeFile(output,JSON.stringify({cash:inv.invoice,card:cardInvoice,mixed_tax:{ready:false,issued_count:0}},null,2),{mode:0o600,flag:'wx'});
+ }
+ console.log(JSON.stringify({sql:'PASS' ,checks,migrations:26,runtime:'PGlite0.5.4',bank_provider_proof:false}));
 }finally{await db.close()}
