@@ -80,7 +80,7 @@ export const SETTLEMENT_COPY = {
   explain: (m: string) => `Régler ${m} : ce montant sera prélevé sur votre empreinte bancaire.`,
   confirm: (m: string) => `Je confirme le prélèvement de ${m}`,
   loadFailed: "Le statut du règlement n’a pas pu être vérifié. Réessayez.",
-  captureFailed: "Le prélèvement n’a pas pu être confirmé. Rien n’a été modifié de votre côté ; réessayez.",
+  captureFailed: "Statut non confirmé. Vérifiez à nouveau ou reprenez la même demande.",
   timeout: "Délai dépassé. Le prélèvement n’est pas confirmé ; réessayez.",
   conflict: "La situation du règlement a changé. Actualisez pour voir son état.",
   unavailable: "Ce règlement n’est pas disponible pour ce dossier.",
@@ -145,9 +145,10 @@ export function applyCapture(s: SettlementState, r: SettlementResult): Settlemen
 
 /** Requests outside React: one at a time (ref), each bound to the generation + uid current at its
  *  start; replies of an older generation/uid, or after unmount, are ignored. */
-export function createSettlementController({ api, interventionId, context = DEFAULT_CONTEXT, get, set }: { api: () => SettlementApi; interventionId: string; context?: SettlementContext; get: () => SettlementState; set: (s: SettlementState) => void }) {
+export function createSettlementController({ api, interventionId, context = DEFAULT_CONTEXT, get, set, onSettled }: { api: () => SettlementApi; interventionId: string; context?: SettlementContext; get: () => SettlementState; set: (s: SettlementState) => void; onSettled?: () => void }) {
   let inFlight = false;
   let attached = true;
+  let settled = false;
   const run = async (call: () => Promise<SettlementResult>, apply: (s: SettlementState, r: SettlementResult) => SettlementState) => {
     if (inFlight) return false;
     inFlight = true;
@@ -163,7 +164,15 @@ export function createSettlementController({ api, interventionId, context = DEFA
       inFlight = false;
     }
     if (!attached || context.generation() !== gen || context.userId() !== uid) return false;
-    set(apply(get(), r));
+    const before = get().dto?.status;
+    const next = apply(get(), r);
+    set(next);
+    // Once, on a verified transition to « paid » under the current identity (POST or refresh):
+    // the parent re-reads the dossier. Not on the first load of an already settled dossier.
+    if (next.dto?.status === "paid" && before !== undefined && before !== "paid" && !settled) {
+      settled = true;
+      onSettled?.();
+    }
     return true;
   };
   return {
@@ -194,15 +203,15 @@ export function createSettlementController({ api, interventionId, context = DEFA
 }
 
 // ---- View ---------------------------------------------------------------------------------------
-export function BookingSettlement({ interventionId, api, context = DEFAULT_CONTEXT, initial }: { interventionId: string; api?: SettlementApi; context?: SettlementContext; /** Tests only. */ initial?: SettlementState }) {
+export function BookingSettlement({ interventionId, api, context = DEFAULT_CONTEXT, onSettled, initial }: { interventionId: string; api?: SettlementApi; context?: SettlementContext; /** Called once when the server reports « paid » after a POST or a refresh. */ onSettled?: () => void; /** Tests only. */ initial?: SettlementState }) {
   const [state, setStateRaw] = useState<SettlementState>(initial ?? SETTLEMENT_INITIAL);
   const ref = useRef(state);
   const set = (next: SettlementState) => {
     ref.current = next;
     setStateRaw(next);
   };
-  const latest = useRef({ api, context });
-  latest.current = { api, context };
+  const latest = useRef({ api, context, onSettled });
+  latest.current = { api, context, onSettled };
   const controller = useRef<ReturnType<typeof createSettlementController> | null>(null);
   if (!controller.current) {
     let client: SettlementApi | null = null;
@@ -212,6 +221,7 @@ export function BookingSettlement({ interventionId, api, context = DEFAULT_CONTE
       context: { generation: () => latest.current.context.generation(), userId: () => latest.current.context.userId() },
       get: () => ref.current,
       set,
+      onSettled: () => latest.current.onSettled?.(),
     });
   }
   const ctrl = controller.current;
@@ -260,7 +270,7 @@ export function BookingSettlement({ interventionId, api, context = DEFAULT_CONTE
         </div>
       )}
       {state.error && <p className={styles.error} role="alert">{state.error}</p>}
-      {(state.retry === "load" || state.retry === "refresh" || view?.action === "resume" || (view?.action === "refresh" && !state.error)) && (
+      {(state.retry === "load" || state.retry === "refresh" || state.retry === "capture" || view?.action === "resume" || (view?.action === "refresh" && !state.error)) && (
         <button type="button" className={styles.secondary} disabled={state.busy} onClick={() => void ctrl.load()} data-settlement-refresh="">
           {state.retry === "load" ? "Réessayer" : "Actualiser"}
         </button>

@@ -172,6 +172,57 @@ test("reprise : processing / captured_transfer_pending + disponible ⇒ « Repre
   assert.doesNotMatch(src, /Régler à nouveau/);
 });
 
+test("onSettled : une seule fois sur « paid » (POST et Actualiser), jamais sur d’autres statuts ni réponse périmée ; ancien texte absent", async () => {
+  // POST → paid
+  let calls = 0;
+  let s = ready({ status: "captured_transfer_pending" });
+  const post = st.createSettlementController({ api: () => ({ status: async () => res(200, dto({ status: "paid" })), capture: async () => res(200, dto({ status: "paid" })) }), interventionId: ID, get: () => s, set: (n) => (s = n), onSettled: () => calls++ });
+  await post.capture();
+  await post.load(); // déjà réglé : pas de second appel
+  assert.equal(calls, 1);
+  // Actualiser (GET) → paid
+  let g = 0;
+  let s2 = ready({ status: "processing" });
+  const get = st.createSettlementController({ api: () => ({ status: async () => res(200, dto({ status: "paid" })), capture: async () => res(503) }), interventionId: ID, get: () => s2, set: (n) => (s2 = n), onSettled: () => g++ });
+  await get.load();
+  assert.equal(g, 1);
+  // Autres statuts, premier chargement d’un dossier déjà réglé, erreurs : jamais.
+  for (const next of ["processing", "captured_transfer_pending", "needs_review"]) {
+    let n = 0;
+    let s3 = ready({ status: "processing" });
+    const c = st.createSettlementController({ api: () => ({ status: async () => res(200, dto({ status: next })), capture: async () => res(200, dto({ status: next })) }), interventionId: ID, get: () => s3, set: (x) => (s3 = x), onSettled: () => n++ });
+    await c.capture();
+    await c.load();
+    assert.equal(n, 0, next);
+  }
+  let first = 0;
+  let s4 = { ...st.SETTLEMENT_INITIAL };
+  await st.createSettlementController({ api: () => ({ status: async () => res(200, dto({ status: "paid" })), capture: async () => res(503) }), interventionId: ID, get: () => s4, set: (x) => (s4 = x), onSettled: () => first++ }).load();
+  assert.equal(first, 0);
+  // Génération / UID changés pendant l’attente : réponse ignorée, aucun appel.
+  for (const change of ["generation", "user"] as const) {
+    let gen = 1;
+    let user: string | null = "user-a";
+    let resolve!: (r: Settlement.SettlementResult) => void;
+    let n = 0;
+    let s5 = ready({ status: "captured_transfer_pending" });
+    const c = st.createSettlementController({ api: () => ({ status: async () => res(200, dto()), capture: () => new Promise((r) => (resolve = r)) }), interventionId: ID, context: { generation: () => gen, userId: () => user }, get: () => s5, set: (x) => (s5 = x), onSettled: () => n++ });
+    const p = c.capture();
+    if (change === "generation") gen = 2;
+    else user = "user-b";
+    resolve(res(200, dto({ status: "paid" })));
+    await p;
+    assert.equal(n, 0, change);
+  }
+  // Texte honnête après 503 : aucune affirmation que rien ne s’est passé ; Actualiser + Réessayer.
+  assert.equal(st.SETTLEMENT_COPY.captureFailed, "Statut non confirmé. Vérifiez à nouveau ou reprenez la même demande.");
+  const failed = render(st.applyCapture(ready({}, { confirming: true }), res(503)));
+  assert.match(failed, /data-settlement-capture="">Réessayer</);
+  assert.match(failed, /data-settlement-refresh="">Actualiser</);
+  const src = readFileSync(path.join(ROOT, "components/role/booking-settlement.tsx"), "utf8");
+  assert.doesNotMatch(src, /Rien n’a été modifié/);
+});
+
 // ---- Montage réel (Chromium, un seul processus) ------------------------------------------------
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
@@ -224,7 +275,7 @@ test("monté (Chromium) : confirmer → 503 → Réessayer → prélevé, versem
     const r = (await page.evaluate(() => (window as unknown as { run: () => Promise<unknown> }).run())) as { posts: string[]; steps: string[]; buttons: number };
     same(r.posts, [ID, ID, ID]); // confirmer (double clic) + Réessayer + Reprendre (double clic) : même intervention
     assert.ok(r.steps[0].includes("ce montant sera prélevé sur votre empreinte bancaire"));
-    assert.ok(r.steps[1].includes("Le prélèvement n’a pas pu être confirmé") && r.steps[1].includes("Réessayer"));
+    assert.ok(r.steps[1].includes("Statut non confirmé. Vérifiez à nouveau ou reprenez la même demande.") && r.steps[1].includes("Réessayer"));
     assert.ok(r.steps[2].includes("Finalisation du versement à l’artisan en cours."));
     assert.equal(r.steps[3], "Reprendre la finalisation");
     assert.ok(r.steps[4].includes("Réglé ("));
