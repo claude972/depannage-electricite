@@ -12,7 +12,7 @@ create schema storage;create table storage.buckets(id text primary key,name text
 create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text);alter table storage.objects enable row level security;`);
 const dir=new URL('../supabase/migrations/',import.meta.url);
 for(const name of(await readdir(dir)).filter(n=>n.endsWith('.sql')).sort())await db.exec((await isolatedMigrationSql(db, name, await readFile(new URL(name,dir),'utf8'))).replace('create extension if not exists pgcrypto;','-- extension omitted only in local harness'));
-console.log('PASS: all eleven migrations execute under isolated PostgreSQL/Auth/Storage stubs');
+console.log('PASS: current migrations execute under isolated PostgreSQL/Auth/Storage stubs');
 const ids={};let i=1;
 for(const actor of['client','other','manager','delegate','artisan','otherArtisan','admin']){
  ids[actor]=`30000000-0000-4000-8000-${String(i++).padStart(12,'0')}`;
@@ -126,6 +126,17 @@ await denied(as('client','select public.admin_overview_before_support()'),'42501
 await db.query("select set_config('request.jwt.claim.sub',$1,false)",[ids.admin]);
 const oldOverview=(await db.query('select public.admin_overview_before_support() as v')).rows[0].v;
 oldOverview.capabilities.support_tickets=true;
-assert.deepEqual((await db.query('select public.admin_overview() as v')).rows[0].v,oldOverview);
+const currentOverview=(await db.query('select public.admin_overview() as v')).rows[0].v;
+// 025 adds explicit cash/bank provenance without changing the existing support
+// capability, admin perimeter, counts or business total. This fixture has no payment.
+const {financial:currentFinancial,...currentRest}=currentOverview;
+const {financial:oldFinancial,...oldRest}=oldOverview;
+assert.deepEqual(currentRest,oldRest);
+assert.equal(currentFinancial.paid_service_cents,oldFinancial.paid_service_cents);
+assert.equal(currentFinancial.currency,oldFinancial.currency);
+assert.equal(currentFinancial.platform_revenue_cents,oldFinancial.platform_revenue_cents);
+assert.equal(currentFinancial.bank_paid_service_cents,0);
+assert.equal(currentFinancial.on_site_declared_cents,0);
+assert.match(currentFinancial.note,/déclarés par les artisans/);
 console.log('PASS: admin overview advertises only the installed support DB capability; normal and internal guard bypasses are denied');
 await db.close();
