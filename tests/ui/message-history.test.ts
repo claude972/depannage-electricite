@@ -300,7 +300,9 @@ test("MessageCenter history in real React/Chromium: 237 messages over 10 pages, 
       await page.waitForFunction(() => (window as unknown as { calls: unknown[] }).calls.length === 3);
       assert.equal(await page.inputValue("#message-body"), "", "the previous identity's draft is gone");
       assert.deepEqual((await calls(page)).map((x) => [x.d, x.cursor]).slice(2), [[B, null]], "fresh newest page, no old cursor");
-      assert.ok(await page.$("[data-message-older]"), "the older-page button carries data-message-older");
+      // Wait for the rendered reply (fake answers after 20 ms), not just the request count.
+      await page.waitForSelector("[data-message-older]", { timeout: 3000 });
+      assert.equal(await page.textContent("[data-message-older]"), "Charger les messages plus anciens");
       assert.deepEqual(errors, []);
       await page.close();
     }
@@ -323,6 +325,7 @@ test("MessageCenter history in real React/Chromium: 237 messages over 10 pages, 
       await page.waitForTimeout(100);
       assert.equal(await page.inputValue("#message-body"), "suite", "failed send keeps the draft");
       assert.deepEqual(await page.evaluate(() => (window as unknown as Win).sent), [[A, "bonjour"], [A, "suite"]]);
+      (globalThis as { deferredReached?: boolean }).deferredReached = true;
       assert.deepEqual(errors, []);
       await page.close();
     }
@@ -337,6 +340,7 @@ test("MessageCenter history in real React/Chromium: 237 messages over 10 pages, 
       assert.deepEqual(errors, []);
       await page.close();
     }
+    assert.equal((globalThis as { deferredReached?: boolean }).deferredReached, true, "the deferred-send scenario ran to its snapshot checks");
   } finally {
     await browser.close();
     server.close();
