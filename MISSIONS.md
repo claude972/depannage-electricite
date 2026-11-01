@@ -642,3 +642,6 @@ RéutiliserworkerA : public-site.tsx vuesJoin/Aide/Mentionsrestantes +public.mod
 
 ## FASTSPLIT-ERROR-PAGES-001 — Claude B — ready
 RéutiliserworkerB : app/error.tsx,app/not-found.tsx etmoduleCSSneufisolé, DESIGNvert/Jakarta2modes/taille44/focus. Retryreset explicite, homeaccessible, aucunstacksecret/causeinterne affichée/autoretrymutation. PasAPI/cache/auth/layout/globals/form. TestscomposantscibléspuisROOTvraie404preview, resetboundarytestborné.
+
+## FASTSPLIT — Répartition actualisée par le propriétaire
+Dernière consigne : « Réduit à 2 agent codex et laisse le nombre Claude ». Limite désormais de deux Codex au total, ROOT compris : ROOT pilote/intègre/exécute et un seul agent Codex existant peut être mobilisé à la fois. Les autres restent arrêtés ou terminés ; aucun doublon ni contournement de quota. Nombre Claude conservé : lead existant et quatre workers. Cette consigne remplace la cible précédente de cinq Codex pour la livraison autonome en cours.
