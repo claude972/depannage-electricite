@@ -661,3 +661,6 @@ Réutiliser review_recovery_identity sur branche isolée depuis HEAD intégratio
 
 ### Checkpoint Confirmer livré — source018a482
 Bandeau bas et étapes publiques intégrés/poussés/déployés ; ROOT8/8PASS mobile/desktop2thèmes jusqu’à Auth. Correctifs d624 : footer non recouvert et bouton stable après saisie. Nouvelle recette d’envoi authentifié reste à exécuter séparément, aucun PASS déduit de la seule UI. Fastsplit : pas de nouveau contrat/doc avant code, ni cron.
+
+## FASTSPLIT-SERVICE-REFERENCE-002 — Claude A UI / ROOT recette — en cours
+Correction propriétaire : les pages livrées ne conviennent pas ; reprendre la composition de la page source mesdepanneurs.fr/cas/reparation-dune-panne-de-plusieurs-prises dans notre thème. Base018a482. Hero compact photo gauche/title-prix-action droite, Confirmer principal et fixe, informations service/accordéons/inclus-exclus/déroulement et prestations liées réelles. Huit cas cohérents, photos locales et fourchettes métier indicatives. Ne copier aucune marque, avis, garantie, qualification, délai ou promesse de prix contractuel. A seul public-service-page/CSS/catalogue/tests ; aucun backend/session/SQL. Petit SHA puis ROOT vérification visuelle comparaison et parcours réel mobile/desktop, push+preview publique. Demande de précision sur le blocage posée en parallèle ; aucune attente bloquante.
