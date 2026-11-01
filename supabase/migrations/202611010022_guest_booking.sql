@@ -88,6 +88,9 @@ begin
   if b.payload is distinct from payload or b.contact is distinct from contact or b.method<>p_method then raise exception 'Booking nonce conflict' using errcode='P0001'; end if;
   return public.guest_booking_view(b);
  end if;
+ -- Share 021's lock: this booking may create a fresh parent, never rebind a legacy nonce.
+ perform pg_advisory_xact_lock(hashtextextended('booking:'||actor::text||':'||p_request_id::text,0));
+ if exists(select 1 from public.intervention_request_keys where actor_id=actor and request_id=p_request_id) then raise exception 'Request key already bound' using errcode='P0001'; end if;
  if exists(select 1 from public.phone_booking_requests where actor_id=actor and request_id<>p_request_id and intervention_id is null and status<>'cancelled') then raise exception 'Previous booking attempt must be cancelled first' using errcode='P0001'; end if;
  max_cents=case expected_category when 'outage' then 25000 when 'panel' then 35000 when 'socket' then 18000 when 'lighting' then 20000 when 'diagnostic' then 28000 end;
  select phone_confirmed_at is not null and '+'||ltrim(phone,'+')=contact->>'phone' into verified from auth.users where id=actor;
@@ -112,6 +115,9 @@ begin
  if b.method='card_hold' and (b.status<>'authorized' or b.stripe_session_id is null or b.stripe_payment_intent_id is null or
   b.provider_state is distinct from 'requires_capture' or b.authorized_amount_cents is distinct from b.expected_max_cents or b.authorized_currency is distinct from 'eur' or
   b.authorization_checked_at is null or b.authorization_checked_at<clock_timestamp()-interval '30 seconds' or b.authorization_checked_at>clock_timestamp()) then raise insufficient_privilege; end if;
+ -- Share 021's lock: this booking may create a fresh parent, never rebind a legacy nonce.
+ perform pg_advisory_xact_lock(hashtextextended('booking:'||actor::text||':'||p_request_id::text,0));
+ if exists(select 1 from public.intervention_request_keys where actor_id=actor and request_id=p_request_id) then raise exception 'Request key already bound' using errcode='P0001'; end if;
  job=public.create_intervention_once(b.request_id,b.payload->>'category',b.payload->>'description',b.payload->>'address',b.payload->>'postal_code',b.payload->>'city',b.payload->>'urgency',null);
  if job.client_id<>actor or job.status<>'requested' or job.artisan_id is not null or job.site_id is not null then raise exception 'Existing dossier cannot be rebound' using errcode='P0001'; end if;
  perform public.update_profile((b.contact->>'first_name')||' '||(b.contact->>'last_name'),b.contact->>'phone');
@@ -120,6 +126,15 @@ begin
 end; $$;
 revoke all on function public.submit_phone_booking(uuid) from public,anon,authenticated,service_role;
 grant execute on function public.submit_phone_booking(uuid) to authenticated;
+
+-- On-site has no external provider step: preparation and submission must commit together.
+create function public.create_on_site_booking(p_request_id uuid,p_payload jsonb,p_contact jsonb) returns jsonb language plpgsql security definer set search_path='' as $$
+begin
+ perform public.prepare_phone_booking(p_request_id,p_payload,p_contact,'on_site');
+ return public.submit_phone_booking(p_request_id);
+end; $$;
+revoke all on function public.create_on_site_booking(uuid,jsonb,jsonb) from public,anon,authenticated,service_role;
+grant execute on function public.create_on_site_booking(uuid,jsonb,jsonb) to authenticated;
 
 create function public.phone_booking_status(p_request_id uuid default null,p_intervention_id uuid default null) returns jsonb language plpgsql security definer set search_path='' as $$
 declare actor uuid=public.guest_booking_actor(); b public.phone_booking_requests;
@@ -145,7 +160,7 @@ begin
  if b.stripe_session_id is not null and b.stripe_session_id<>p_session_id then raise exception 'Provider session conflict' using errcode='P0001'; end if;
  if b.stripe_payment_intent_id is not null and b.stripe_payment_intent_id is distinct from p_intent_id then raise exception 'Provider intent conflict' using errcode='P0001'; end if;
  if p_action='session' then
-  if b.intervention_id is null then update public.phone_booking_requests set stripe_session_id=p_session_id,stripe_payment_intent_id=p_intent_id,status=case when status='cancelling' then 'cancelling' else 'checkout_open' end,updated_at=now() where actor_id=p_actor and request_id=p_request_id; end if;
+  if b.intervention_id is null then update public.phone_booking_requests set stripe_session_id=p_session_id,stripe_payment_intent_id=p_intent_id,status=case when status in ('cancelling','authorized') then status else 'checkout_open' end,updated_at=now() where actor_id=p_actor and request_id=p_request_id; end if;
  elsif p_action='authorize' then
   if b.status='cancelling' or b.stripe_session_id is distinct from p_session_id or p_intent_id is null or p_amount is distinct from b.expected_max_cents or p_currency is distinct from 'eur' or p_state is distinct from 'requires_capture' then raise insufficient_privilege; end if;
   update public.phone_booking_requests set stripe_payment_intent_id=p_intent_id,authorized_amount_cents=p_amount,authorized_currency=p_currency,provider_state=p_state,

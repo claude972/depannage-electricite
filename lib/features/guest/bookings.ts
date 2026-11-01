@@ -2,6 +2,7 @@ import { TextDecoder } from "node:util";
 import { z } from "zod";
 import { ApiError, authenticatedClient, assertOrigin, dbError } from "@/lib/supabase/server";
 import { normalizePhone } from "./phone-auth";
+import { cardHoldContext, openCardHold, authorizeCardHold, releaseCardHold } from "./card-hold";
 
 const uuid = z.string().uuid();
 const contact = z.object({ first_name: z.string().trim().min(1).max(60), last_name: z.string().trim().min(1).max(60), email: z.string().trim().max(254).refine(v => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)), phone: z.string().max(64).transform(normalizePhone).refine(v => v !== null) }).strict().refine(v => `${v.first_name} ${v.last_name}`.length <= 120);
@@ -31,6 +32,7 @@ function validResult(value: unknown) {
   const v = value as Record<string, any>;
   if (!v.payment || !["on_site", "card_hold"].includes(v.payment.method)) throw unavailable();
   if (v.status === "confirmed") {
+    if (v.payment.method === "on_site" ? v.payment.status !== "due_on_site" : (!["authorized", "authorization_recorded"].includes(v.payment.status) || typeof v.payment.checked_at !== "string" || !Number.isFinite(Date.parse(v.payment.checked_at)) || Date.parse(v.payment.checked_at) > Date.now() + 30000)) throw unavailable();
     if (!uuid.safeParse(v.intervention?.id).success || typeof v.intervention.status !== "string" || !Number.isSafeInteger(v.intervention.estimate_min_cents) || !Number.isSafeInteger(v.intervention.estimate_max_cents) || !["due_on_site", "authorization_recorded", "authorized"].includes(v.payment.status)) throw unavailable();
     return { status: "confirmed", intervention: { id: v.intervention.id, status: v.intervention.status, estimate_min_cents: v.intervention.estimate_min_cents, estimate_max_cents: v.intervention.estimate_max_cents }, payment: { method: v.payment.method, status: v.payment.status, ...(v.payment.method === "card_hold" ? { checked_at: typeof v.payment.checked_at === "string" ? v.payment.checked_at : null } : {}) } };
   }
@@ -40,7 +42,7 @@ function validResult(value: unknown) {
 export async function bookingRoute(request: Request, operation: "create" | "status" | "cancel" | "finalize") {
   try {
     assertOrigin(request);
-    const { db } = await identity();
+    const { db, user } = await identity();
     if (operation === "status") {
       const query = new URL(request.url).searchParams;
       if ([...query.keys()].some(k => !["request_id", "intervention_id"].includes(k)) || [...query].length !== 1) throw new ApiError(422, "Vérifiez la référence.");
@@ -51,22 +53,39 @@ export async function bookingRoute(request: Request, operation: "create" | "stat
     }
     const parsed = (operation === "create" ? schema : keySchema).safeParse(await body(request));
     if (!parsed.success) throw new ApiError(422, "Vérifiez les informations saisies.");
-    if (operation === "finalize") throw unavailable(); // Card provider integration is delivered separately; never create a dossier here.
-    if (operation === "create") {
-      const data = schema.parse(parsed.data);
-      if (data.payment_choice === "card_hold") throw unavailable(); // Fail before prepare, quota or any provider/business mutation.
-      const { request_id, contact, payment_choice, ...payload } = data;
-      const prepared = await db.rpc("prepare_phone_booking", { p_request_id: request_id, p_payload: payload, p_contact: { ...contact, email: contact.email.toLowerCase() }, p_method: payment_choice }); dbError(prepared.error); validResult(prepared.data);
+    if (operation === "finalize") {
+      const { request_id } = keySchema.parse(parsed.data);
+      const context = cardHoldContext();
+      // Fresh JWT ownership/role check precedes any privileged provider read.
+      const current = await db.rpc("phone_booking_status", { p_request_id: request_id, p_intervention_id: null }); dbError(current.error);
+      if (validResult(current.data).payment.method !== "card_hold") throw new ApiError(409, "Cette demande ne comporte pas d’empreinte bancaire.");
+      await authorizeCardHold(user.id, request_id, context);
       const submitted = await db.rpc("submit_phone_booking", { p_request_id: request_id }); dbError(submitted.error);
       const result = validResult(submitted.data); if (result.status !== "confirmed") throw unavailable();
-      return Response.json(result, { status: 201, headers });
+      return Response.json({ ...result, payment: { ...result.payment, status: "authorized" } }, { status: 201, headers });
+    }
+    if (operation === "create") {
+      const data = schema.parse(parsed.data);
+      const card = data.payment_choice === "card_hold" ? cardHoldContext() : null; // Before prepare/quota/provider mutation.
+      const { request_id, contact, payment_choice, ...payload } = data;
+      if (!card) {
+        const submitted = await db.rpc("create_on_site_booking", { p_request_id: request_id, p_payload: payload, p_contact: { ...contact, email: contact.email.toLowerCase() } }); dbError(submitted.error);
+        const result = validResult(submitted.data); if (result.status !== "confirmed" || result.payment.method !== "on_site") throw unavailable();
+        return Response.json(result, { status: 201, headers });
+      }
+      const prepared = await db.rpc("prepare_phone_booking", { p_request_id: request_id, p_payload: payload, p_contact: { ...contact, email: contact.email.toLowerCase() }, p_method: payment_choice }); dbError(prepared.error);
+      const ready = validResult(prepared.data); if (ready.payment.method !== payment_choice) throw unavailable();
+      if (ready.status === "confirmed") return Response.json(ready, { status: 201, headers });
+      return Response.json(await openCardHold(user.id, request_id, card), { headers });
     }
     const { request_id } = keySchema.parse(parsed.data);
     const current = await db.rpc("phone_booking_status", { p_request_id: request_id, p_intervention_id: null }); dbError(current.error);
     const state = validResult(current.data);
     if (state.status === "confirmed") throw new ApiError(409, "Cette demande est déjà créée.");
-    if (state.payment.method === "card_hold") throw unavailable();
-    const begin = await db.rpc("begin_phone_booking_cancel", { p_request_id: request_id }); dbError(begin.error); validResult(begin.data);
+    if (state.status === "cancelled") return Response.json(state, { headers });
+    const card = state.payment.method === "card_hold" ? cardHoldContext() : null;
+    const begin = await db.rpc("begin_phone_booking_cancel", { p_request_id: request_id }); dbError(begin.error); const begun = validResult(begin.data);
+    if (card && begun.status !== "cancelled") await releaseCardHold(user.id, request_id, card);
     const cancelled = await db.rpc("cancel_phone_booking", { p_request_id: request_id }); dbError(cancelled.error);
     const result = validResult(cancelled.data); if (result.status !== "cancelled") throw unavailable();
     return Response.json(result, { headers });
