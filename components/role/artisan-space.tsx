@@ -74,6 +74,9 @@ import {
   type Performance,
 } from "../app/session";
 import styles from "./artisan.module.css";
+import theme from "./artisan-theme.module.css";
+import { ThemeSurface } from "../app/theme-provider";
+import { ThemeToggle } from "../app/theme-toggle";
 import { QuoteDraftEditor } from "./artisan-quote-draft";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
@@ -504,11 +507,13 @@ export function ArtisanSpace({ session }: { session: Session }) {
         break;
       case "support":
         content = (
-          <SupportCenter
-            session={session}
-            interventions={session.data.interventions.filter((x) => x.artisan_id === session.profileId)}
-            backView="overview"
-          />
+          <div data-theme-island="support">
+            <SupportCenter
+              session={session}
+              interventions={session.data.interventions.filter((x) => x.artisan_id === session.profileId)}
+              backView="overview"
+            />
+          </div>
         );
         break;
       default:
@@ -517,66 +522,69 @@ export function ArtisanSpace({ session }: { session: Session }) {
 
   const current = activeNav(session.view);
   return (
-    <div className={styles.space}>
-      <Sidebar session={session} current={current} onNavigate={navigate} />
-      <div className={styles.body} inert={menuOpen}>
-        {session.mode === "demo" && <DemoBar session={session} />}
-        <header className={styles.topbar}>
-          <button
-            ref={menuButton}
-            type="button"
-            className={`${styles.iconButton} ${styles.menuButton}`}
-            aria-label="Ouvrir le menu"
-            aria-expanded={menuOpen}
-            aria-controls={DRAWER_ID}
-            onClick={() => setMenuOpen(true)}
-          >
-            <Icon name="menu" />
-          </button>
-          <div className={styles.greeting}>
-            {session.firstName ? (
-              <>
-                <span>Bonjour,</span>
-                <strong>{session.firstName}</strong>
-              </>
-            ) : (
-              <strong>Bonjour</strong>
-            )}
-          </div>
-          <HeaderBell session={session} />
-        </header>
-        <main id="main" className={styles.main} tabIndex={-1}>
-          <Alerts
-            error={session.error}
-            notice={session.notice}
-            onClearError={() => session.setError("")}
-            onClearNotice={() => session.setNotice("")}
-          />
-          {content}
-        </main>
-        <nav className={styles.bottomNav} aria-label="Onglets de l’espace artisan">
-          {PRIMARY_NAV.map((item) => (
+    <ThemeSurface className={theme.artisanSkin}>
+      <div className={styles.space}>
+        <Sidebar session={session} current={current} onNavigate={navigate} />
+        <div className={styles.body} inert={menuOpen}>
+          {session.mode === "demo" && <DemoBar session={session} />}
+          <header className={styles.topbar}>
             <button
-              key={item.view}
+              ref={menuButton}
               type="button"
-              className={styles.bottomItem}
-              aria-current={current === item.view ? "page" : undefined}
-              onClick={() => navigate(item.view)}
+              className={`${styles.iconButton} ${styles.menuButton}`}
+              aria-label="Ouvrir le menu"
+              aria-expanded={menuOpen}
+              aria-controls={DRAWER_ID}
+              onClick={() => setMenuOpen(true)}
             >
-              <Icon name={item.icon} size={22} />
-              {item.short ?? item.label}
+              <Icon name="menu" />
             </button>
-          ))}
-        </nav>
+            <div className={styles.greeting}>
+              {session.firstName ? (
+                <>
+                  <span>Bonjour,</span>
+                  <strong>{session.firstName}</strong>
+                </>
+              ) : (
+                <strong>Bonjour</strong>
+              )}
+            </div>
+            <ThemeToggle />
+            <HeaderBell session={session} />
+          </header>
+          <main id="main" className={styles.main} tabIndex={-1}>
+            <Alerts
+              error={session.error}
+              notice={session.notice}
+              onClearError={() => session.setError("")}
+              onClearNotice={() => session.setNotice("")}
+            />
+            {content}
+          </main>
+          <nav className={styles.bottomNav} aria-label="Onglets de l’espace artisan">
+            {PRIMARY_NAV.map((item) => (
+              <button
+                key={item.view}
+                type="button"
+                className={styles.bottomItem}
+                aria-current={current === item.view ? "page" : undefined}
+                onClick={() => navigate(item.view)}
+              >
+                <Icon name={item.icon} size={22} />
+                {item.short ?? item.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+        <Drawer
+          open={menuOpen}
+          session={session}
+          current={current}
+          onClose={closeMenu}
+          onNavigate={navigate}
+        />
       </div>
-      <Drawer
-        open={menuOpen}
-        session={session}
-        current={current}
-        onClose={closeMenu}
-        onNavigate={navigate}
-      />
-    </div>
+    </ThemeSurface>
   );
 }
 
@@ -1431,7 +1439,9 @@ function WorkDossier({ session, intervention: i }: { session: Session; intervent
         subtitle={`${shortId(i.id)} — créée le ${dateTime(i.created_at)}`}
         action={<Badge status={i.status} wording="artisan" />}
       />
-      <DossierHelpLink session={session} interventionId={i.id} />
+      <div data-theme-leaf="support-help">
+        <DossierHelpLink session={session} interventionId={i.id} />
+      </div>
       <div className={styles.dossierGrid}>
         <div className={styles.dossierMain}>
           <section className="panel" aria-labelledby="dossier-intervention">
