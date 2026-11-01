@@ -9,3 +9,5 @@ Plan : 1.figer les projections/enveloppe discriminée et validateur strict ; 2.G
 Précisions d’interface : limits.interventions porte sur les dossierscompletsRLS, pas les offres concaténées. Les souslistes utilisent ordrecreated_atdesc+id pour déterminisme (RDVstarts_atdesc+intervention_id). Scopeidsdeviscount exact valide requis ; échec =>paymentserror ; plus200 =>incomplete true, même si0paiementdansle sousscope. Projectionretourne seulement les clés de l’annexe. Annexe schémaréelle003 pour travel_stage/RDV. Les types exposés sont partagés avec le consommateurlead ; cache/singleflight ne sont pas implémentés ici.
 
 Livraison : commits/push cohérents, rapport exactSHA/tests/limites. Une AUTRE revue indépendante est obligatoire avant intégration ; aucune autorevue présentée comme validation finale.
+
+Amendement annoncé àROOT avant édition : nouveau tests/detail-read-fixtures.ts partagé par les2suites, clientsSupabase réels avecfetchsimulé etdatasets ; aucun helper existant modifié.
