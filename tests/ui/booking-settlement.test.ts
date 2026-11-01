@@ -42,8 +42,10 @@ test("textes par statut serveur : honnêtes, montant du serveur uniquement, jama
   same(st.present(st.parseSettlement(dto())!), { text: `Régler ${M}`, action: "pay" });
   same(st.present(st.parseSettlement(dto({ amount_cents: null }))!), { text: "Montant en cours de vérification.", action: null });
   same(st.present(st.parseSettlement(dto({ available: false, reason: "configuration_required" }))!), { text: "Le règlement par carte n’est pas encore disponible.", action: null });
-  same(st.present(st.parseSettlement(dto({ status: "processing" }))!), { text: "Prélèvement en cours de vérification.", action: "refresh" });
-  same(st.present(st.parseSettlement(dto({ status: "captured_transfer_pending" }))!), { text: `Montant prélevé (${M}). Finalisation du versement à l’artisan en cours.`, action: null });
+  same(st.present(st.parseSettlement(dto({ status: "processing" }))!), { text: "Prélèvement en cours de vérification.", action: "resume" });
+  same(st.present(st.parseSettlement(dto({ status: "processing", available: false }))!), { text: "Prélèvement en cours de vérification.", action: "refresh" });
+  same(st.present(st.parseSettlement(dto({ status: "captured_transfer_pending" }))!), { text: `Montant prélevé (${M}). Finalisation du versement à l’artisan en cours.`, action: "resume" });
+  same(st.present(st.parseSettlement(dto({ status: "captured_transfer_pending", available: false }))!), { text: `Montant prélevé (${M}). Finalisation du versement à l’artisan en cours.`, action: null });
   same(st.present(st.parseSettlement(dto({ status: "paid" }))!), { text: `Réglé (${M}).`, action: null });
   same(st.present(st.parseSettlement(dto({ status: "needs_review" }))!), { text: "Votre règlement est en cours de vérification par notre équipe.", action: null });
   // SSR : configuration absente ⇒ aucun bouton ; jamais de lien Checkout.
@@ -130,6 +132,99 @@ test("requêtes exactes : GET statut / POST capture same-origin no-store ; déla
   assert.equal((await st.createSettlementApi(never, { timeoutMs: 20 }).status(ID)).status, st.SETTLEMENT_TIMEOUT);
 });
 
+test("reprise : processing / captured_transfer_pending + disponible ⇒ « Reprendre la finalisation » ⇒ même POST {intervention_id} ⇒ réglé", async () => {
+  for (const status of ["processing", "captured_transfer_pending"] as const) {
+    const html = render(ready({ status }));
+    assert.match(html, /data-settlement-resume="">Reprendre la finalisation</, status);
+    assert.match(text(html), /Cela poursuit la même opération, sans nouveau prélèvement\./);
+    assert.match(html, /data-settlement-refresh="">Actualiser</, status); // GET en secondaire
+    assert.doesNotMatch(text(html), /Régler à nouveau|Je confirme le prélèvement/);
+    const bodies: unknown[] = [];
+    const replies = [res(503), res(200, dto({ status: "paid" }))];
+    const api = st.createSettlementApi((async (_u: string, init: RequestInit) => {
+      if (init.method === "POST") bodies.push(JSON.parse(String(init.body)));
+      const r = replies.shift()!;
+      return new Response(JSON.stringify(r.body), { status: r.status });
+    }) as unknown as typeof fetch);
+    let s = ready({ status });
+    const ctrl = st.createSettlementController({ api: () => api, interventionId: ID, get: () => s, set: (n) => (s = n) });
+    const first = ctrl.capture();
+    assert.equal(await ctrl.capture(), false); // vol unique
+    await first;
+    same([s.retry, s.dto?.status], ["capture", status]);
+    assert.match(render(s), /data-settlement-resume="">Réessayer</);
+    await ctrl.capture(); // Réessayer : corps identique
+    same(bodies, [{ intervention_id: ID }, { intervention_id: ID }]); // aucun montant envoyé
+    same([s.dto?.status, s.error], ["paid", ""]);
+    assert.match(text(render(s)), new RegExp(`Réglé \\(${M.replace(/\s/g, "\\s")}\\)\\.`));
+  }
+  // Indisponible ⇒ aucun bouton de reprise, aucun POST.
+  for (const status of ["processing", "captured_transfer_pending"] as const) {
+    const off = render(ready({ status, available: false }));
+    assert.doesNotMatch(off, /data-settlement-resume/);
+    let posts = 0;
+    let s = ready({ status, available: false });
+    const ctrl = st.createSettlementController({ api: () => ({ status: async () => res(200, dto()), capture: async () => (posts++, res(200, dto({ status: "paid" }))) }), interventionId: ID, get: () => s, set: (n) => (s = n) });
+    assert.equal(await ctrl.capture(), false);
+    assert.equal(posts, 0);
+  }
+  const src = readFileSync(path.join(ROOT, "components/role/booking-settlement.tsx"), "utf8");
+  assert.doesNotMatch(src, /Régler à nouveau/);
+});
+
+test("onSettled : une seule fois sur « paid » (POST et Actualiser), jamais sur d’autres statuts ni réponse périmée ; ancien texte absent", async () => {
+  // POST → paid
+  let calls = 0;
+  let s = ready({ status: "captured_transfer_pending" });
+  const post = st.createSettlementController({ api: () => ({ status: async () => res(200, dto({ status: "paid" })), capture: async () => res(200, dto({ status: "paid" })) }), interventionId: ID, get: () => s, set: (n) => (s = n), onSettled: () => calls++ });
+  await post.capture();
+  await post.load(); // déjà réglé : pas de second appel
+  assert.equal(calls, 1);
+  // Actualiser (GET) → paid
+  let g = 0;
+  let s2 = ready({ status: "processing" });
+  const get = st.createSettlementController({ api: () => ({ status: async () => res(200, dto({ status: "paid" })), capture: async () => res(503) }), interventionId: ID, get: () => s2, set: (n) => (s2 = n), onSettled: () => g++ });
+  await get.load();
+  assert.equal(g, 1);
+  // Autres statuts : jamais.
+  for (const next of ["processing", "captured_transfer_pending", "needs_review"]) {
+    let n = 0;
+    let s3 = ready({ status: "processing" });
+    const c = st.createSettlementController({ api: () => ({ status: async () => res(200, dto({ status: next })), capture: async () => res(200, dto({ status: next })) }), interventionId: ID, get: () => s3, set: (x) => (s3 = x), onSettled: () => n++ });
+    await c.capture();
+    await c.load();
+    assert.equal(n, 0, next);
+  }
+  let first = 0;
+  let s4 = { ...st.SETTLEMENT_INITIAL };
+  const firstCtrl = st.createSettlementController({ api: () => ({ status: async () => res(200, dto({ status: "paid" })), capture: async () => res(503) }), interventionId: ID, get: () => s4, set: (x) => (s4 = x), onSettled: () => first++ });
+  await firstCtrl.load(); // premier chargement déjà « paid » : le parent peut être en retard ⇒ une fois
+  await firstCtrl.load(); // jamais répété
+  assert.equal(first, 1);
+  // Génération / UID changés pendant l’attente : réponse ignorée, aucun appel.
+  for (const change of ["generation", "user"] as const) {
+    let gen = 1;
+    let user: string | null = "user-a";
+    let resolve!: (r: Settlement.SettlementResult) => void;
+    let n = 0;
+    let s5 = ready({ status: "captured_transfer_pending" });
+    const c = st.createSettlementController({ api: () => ({ status: async () => res(200, dto()), capture: () => new Promise((r) => (resolve = r)) }), interventionId: ID, context: { generation: () => gen, userId: () => user }, get: () => s5, set: (x) => (s5 = x), onSettled: () => n++ });
+    const p = c.capture();
+    if (change === "generation") gen = 2;
+    else user = "user-b";
+    resolve(res(200, dto({ status: "paid" })));
+    await p;
+    assert.equal(n, 0, change);
+  }
+  // Texte honnête après 503 : aucune affirmation que rien ne s’est passé ; Actualiser + Réessayer.
+  assert.equal(st.SETTLEMENT_COPY.captureFailed, "Statut non confirmé. Vérifiez à nouveau ou reprenez la même demande.");
+  const failed = render(st.applyCapture(ready({}, { confirming: true }), res(503)));
+  assert.match(failed, /data-settlement-capture="">Réessayer</);
+  assert.match(failed, /data-settlement-refresh="">Actualiser</);
+  const src = readFileSync(path.join(ROOT, "components/role/booking-settlement.tsx"), "utf8");
+  assert.doesNotMatch(src, /Rien n’a été modifié/);
+});
+
 // ---- Montage réel (Chromium, un seul processus) ------------------------------------------------
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
@@ -142,7 +237,7 @@ const tick = (ms) => new Promise((r) => setTimeout(r, ms));
 const DTO = ${JSON.stringify(dto())};
 window.run = async () => {
   const posts = [];
-  const replies = [{ status: 503, body: null, retryAfter: 2 }, { status: 200, body: { ...DTO, status: "captured_transfer_pending" }, retryAfter: null }];
+  const replies = [{ status: 503, body: null, retryAfter: 2 }, { status: 200, body: { ...DTO, status: "captured_transfer_pending" }, retryAfter: null }, { status: 200, body: { ...DTO, status: "paid" }, retryAfter: null }];
   const api = { status: async () => ({ status: 200, body: DTO, retryAfter: null }), capture: async (id) => (posts.push(id), await tick(30), replies.shift()) };
   const div = document.createElement("div"); document.body.appendChild(div);
   createRoot(div).render(h(BookingSettlement, { interventionId: "${ID}", api }));
@@ -157,11 +252,16 @@ window.run = async () => {
   div.querySelector("[data-settlement-capture]").click(); // Réessayer
   await tick(100);
   steps.push(div.textContent);
+  const resume = div.querySelector("[data-settlement-resume]");
+  steps.push(resume ? resume.textContent : "");
+  resume.click(); resume.click(); // reprise, double clic
+  await tick(100);
+  steps.push(div.textContent);
   return { posts, steps, buttons: div.querySelectorAll("button").length };
 };
 `;
 
-test("monté (Chromium) : confirmer → 503 → Réessayer → prélevé, versement en cours ; un POST par action ; aucun réseau", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
+test("monté (Chromium) : confirmer → 503 → Réessayer → prélevé, versement en cours → Reprendre → réglé ; un POST par action ; aucun réseau", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
   const out = await build({ absWorkingDir: ROOT, stdin: { contents: ENTRY, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, outdir: "out", platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "local-css" }, define: { "process.env.NODE_ENV": '"development"' }, logLevel: "error" });
   const js = out.outputFiles.find((f) => f.path.endsWith(".js"))!.text;
   const requests: string[] = [];
@@ -175,10 +275,13 @@ test("monté (Chromium) : confirmer → 503 → Réessayer → prélevé, versem
     page.on("pageerror", (e: Error) => errors.push(String(e)));
     await page.goto(`http://127.0.0.1:${(server.address() as { port: number }).port}/`);
     const r = (await page.evaluate(() => (window as unknown as { run: () => Promise<unknown> }).run())) as { posts: string[]; steps: string[]; buttons: number };
-    same(r.posts, [ID, ID]); // 1 POST pour le double clic, 1 pour Réessayer : même intervention
+    same(r.posts, [ID, ID, ID]); // confirmer (double clic) + Réessayer + Reprendre (double clic) : même intervention
     assert.ok(r.steps[0].includes("ce montant sera prélevé sur votre empreinte bancaire"));
-    assert.ok(r.steps[1].includes("Le prélèvement n’a pas pu être confirmé") && r.steps[1].includes("Réessayer"));
+    assert.ok(r.steps[1].includes("Statut non confirmé. Vérifiez à nouveau ou reprenez la même demande.") && r.steps[1].includes("Réessayer"));
     assert.ok(r.steps[2].includes("Finalisation du versement à l’artisan en cours."));
+    assert.equal(r.steps[3], "Reprendre la finalisation");
+    assert.ok(r.steps[4].includes("Réglé ("));
+    assert.ok(!r.steps.join(" ").includes("Régler à nouveau"));
     assert.equal(r.buttons, 0);
     same(errors, []);
     same(requests.filter((u) => u.startsWith("/api/")), []);

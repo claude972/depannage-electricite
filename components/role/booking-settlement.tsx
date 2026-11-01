@@ -80,13 +80,17 @@ export const SETTLEMENT_COPY = {
   explain: (m: string) => `Régler ${m} : ce montant sera prélevé sur votre empreinte bancaire.`,
   confirm: (m: string) => `Je confirme le prélèvement de ${m}`,
   loadFailed: "Le statut du règlement n’a pas pu être vérifié. Réessayez.",
-  captureFailed: "Le prélèvement n’a pas pu être confirmé. Rien n’a été modifié de votre côté ; réessayez.",
+  captureFailed: "Statut non confirmé. Vérifiez à nouveau ou reprenez la même demande.",
   timeout: "Délai dépassé. Le prélèvement n’est pas confirmé ; réessayez.",
   conflict: "La situation du règlement a changé. Actualisez pour voir son état.",
   unavailable: "Ce règlement n’est pas disponible pour ce dossier.",
   session: "Votre session a expiré. Reconnectez-vous pour régler.",
+  resume: "Reprendre la finalisation",
+  resumeNote: "Cela poursuit la même opération, sans nouveau prélèvement.",
 } as const;
-export type SettlementPresentation = { text: string; action: "pay" | "refresh" | null };
+/** « resume »: the GET never settles on its own; the same POST continues the same operation
+ *  (the server skips an already captured payment and resumes the transfer with the same key). */
+export type SettlementPresentation = { text: string; action: "pay" | "refresh" | "resume" | null };
 export function present(dto: SettlementDTO): SettlementPresentation {
   const m = dto.amount_cents === null ? null : money(dto.amount_cents);
   if (!dto.available && dto.status === "not_started") return { text: SETTLEMENT_COPY.notAvailable, action: null };
@@ -94,9 +98,9 @@ export function present(dto: SettlementDTO): SettlementPresentation {
     case "not_started":
       return m ? { text: SETTLEMENT_COPY.pay(m), action: "pay" } : { text: SETTLEMENT_COPY.amountPending, action: null };
     case "processing":
-      return { text: SETTLEMENT_COPY.processing, action: "refresh" };
+      return { text: SETTLEMENT_COPY.processing, action: dto.available ? "resume" : "refresh" };
     case "captured_transfer_pending":
-      return { text: m ? SETTLEMENT_COPY.transferPending(m) : SETTLEMENT_COPY.amountPending, action: m ? null : "refresh" };
+      return { text: m ? SETTLEMENT_COPY.transferPending(m) : SETTLEMENT_COPY.amountPending, action: dto.available ? "resume" : m ? null : "refresh" };
     case "paid":
       return { text: m ? SETTLEMENT_COPY.paid(m) : SETTLEMENT_COPY.amountPending, action: m ? null : "refresh" };
     case "needs_review":
@@ -141,9 +145,10 @@ export function applyCapture(s: SettlementState, r: SettlementResult): Settlemen
 
 /** Requests outside React: one at a time (ref), each bound to the generation + uid current at its
  *  start; replies of an older generation/uid, or after unmount, are ignored. */
-export function createSettlementController({ api, interventionId, context = DEFAULT_CONTEXT, get, set }: { api: () => SettlementApi; interventionId: string; context?: SettlementContext; get: () => SettlementState; set: (s: SettlementState) => void }) {
+export function createSettlementController({ api, interventionId, context = DEFAULT_CONTEXT, get, set, onSettled }: { api: () => SettlementApi; interventionId: string; context?: SettlementContext; get: () => SettlementState; set: (s: SettlementState) => void; onSettled?: () => void }) {
   let inFlight = false;
   let attached = true;
+  let settled = false;
   const run = async (call: () => Promise<SettlementResult>, apply: (s: SettlementState, r: SettlementResult) => SettlementState) => {
     if (inFlight) return false;
     inFlight = true;
@@ -159,7 +164,15 @@ export function createSettlementController({ api, interventionId, context = DEFA
       inFlight = false;
     }
     if (!attached || context.generation() !== gen || context.userId() !== uid) return false;
-    set(apply(get(), r));
+    const before = get().dto?.status;
+    const next = apply(get(), r);
+    set(next);
+    // Once, on a verified « paid » under the current identity (first load, POST or refresh):
+    // the parent re-reads the dossier (it may be stale). Never repeated while already paid.
+    if (next.dto?.status === "paid" && before !== "paid" && !settled) {
+      settled = true;
+      onSettled?.();
+    }
     return true;
   };
   return {
@@ -167,11 +180,14 @@ export function createSettlementController({ api, interventionId, context = DEFA
       return inFlight;
     },
     load: () => run(() => api().status(interventionId), applyStatus),
-    /** POST only after the explicit confirmation step, and only for a payable server state. */
+    /** POST: a first capture only after the explicit confirmation step; a resume (processing /
+     *  captured_transfer_pending, available) continues the same operation without a new amount. */
     capture() {
       const s = get();
-      const payable = s.dto?.status === "not_started" && s.dto.available && s.dto.amount_cents !== null;
-      if (!payable || (!s.confirming && s.retry !== "capture")) return Promise.resolve(false);
+      const d = s.dto;
+      const payable = d?.status === "not_started" && d.available && d.amount_cents !== null;
+      const resumable = (d?.status === "processing" || d?.status === "captured_transfer_pending") && d.available;
+      if (!(payable && (s.confirming || s.retry === "capture")) && !resumable) return Promise.resolve(false);
       return run(() => api().capture(interventionId), applyCapture);
     },
     confirm(open: boolean) {
@@ -187,15 +203,15 @@ export function createSettlementController({ api, interventionId, context = DEFA
 }
 
 // ---- View ---------------------------------------------------------------------------------------
-export function BookingSettlement({ interventionId, api, context = DEFAULT_CONTEXT, initial }: { interventionId: string; api?: SettlementApi; context?: SettlementContext; /** Tests only. */ initial?: SettlementState }) {
+export function BookingSettlement({ interventionId, api, context = DEFAULT_CONTEXT, onSettled, initial }: { interventionId: string; api?: SettlementApi; context?: SettlementContext; /** Called once when the server reports « paid » after a POST or a refresh. */ onSettled?: () => void; /** Tests only. */ initial?: SettlementState }) {
   const [state, setStateRaw] = useState<SettlementState>(initial ?? SETTLEMENT_INITIAL);
   const ref = useRef(state);
   const set = (next: SettlementState) => {
     ref.current = next;
     setStateRaw(next);
   };
-  const latest = useRef({ api, context });
-  latest.current = { api, context };
+  const latest = useRef({ api, context, onSettled });
+  latest.current = { api, context, onSettled };
   const controller = useRef<ReturnType<typeof createSettlementController> | null>(null);
   if (!controller.current) {
     let client: SettlementApi | null = null;
@@ -205,6 +221,7 @@ export function BookingSettlement({ interventionId, api, context = DEFAULT_CONTE
       context: { generation: () => latest.current.context.generation(), userId: () => latest.current.context.userId() },
       get: () => ref.current,
       set,
+      onSettled: () => latest.current.onSettled?.(),
     });
   }
   const ctrl = controller.current;
@@ -224,6 +241,14 @@ export function BookingSettlement({ interventionId, api, context = DEFAULT_CONTE
       {state.phase === "loading" && <p className={styles.text} role="status">Vérification du règlement…</p>}
       {state.phase === "unavailable" && <p className={styles.text}>{SETTLEMENT_COPY.unavailable}</p>}
       {view && state.phase === "ready" && view.action !== "pay" && <p className={styles.text} role="status">{view.text}</p>}
+      {view?.action === "resume" && state.phase === "ready" && (
+        <div className={styles.row}>
+          <p className={styles.note}>{SETTLEMENT_COPY.resumeNote}</p>
+          <button type="button" className={styles.primary} disabled={state.busy} onClick={() => void ctrl.capture()} data-settlement-resume="">
+            {state.busy ? "Finalisation…" : state.retry === "capture" ? "Réessayer" : SETTLEMENT_COPY.resume}
+          </button>
+        </div>
+      )}
       {view && state.phase === "ready" && view.action === "pay" && !state.confirming && state.retry !== "capture" && (
         <button type="button" className={styles.primary} disabled={state.busy} onClick={() => ctrl.confirm(true)} data-settlement-pay="">
           {view.text}
@@ -245,7 +270,7 @@ export function BookingSettlement({ interventionId, api, context = DEFAULT_CONTE
         </div>
       )}
       {state.error && <p className={styles.error} role="alert">{state.error}</p>}
-      {(state.retry === "load" || state.retry === "refresh" || (view?.action === "refresh" && !state.error)) && (
+      {(state.retry === "load" || state.retry === "refresh" || state.retry === "capture" || view?.action === "resume" || (view?.action === "refresh" && !state.error)) && (
         <button type="button" className={styles.secondary} disabled={state.busy} onClick={() => void ctrl.load()} data-settlement-refresh="">
           {state.retry === "load" ? "Réessayer" : "Actualiser"}
         </button>
