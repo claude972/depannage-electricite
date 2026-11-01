@@ -353,6 +353,13 @@ export function BookingWizard({
               </>
             )}
             {failure && <p className={styles.failure} role="alert">{failure}</p>}
+            {/* Visible action at the end of every step (the fixed bar can be off-screen or hidden on
+                short viewports): SAME native submit of this form, same label, same handler. */}
+            <div className={styles.inlineActions}>
+              <button type="submit" className={styles.inlineSubmit} data-booking-inline-submit={state.step}>
+                {STEP_ACTION[state.step]}
+              </button>
+            </div>
           </form>
         </div>
       </div>
