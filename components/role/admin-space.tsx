@@ -722,15 +722,10 @@ export function AdminSpace({ session }: { session: Session }) {
             }
           />
         </Panel>
-        <Unavailable
-          title="Factures et avoirs"
-          reason={
-            caps?.invoices
-              ? "Fonction annoncée mais pas encore activée dans cette interface : attendez son activation. En attendant, les règlements Stripe ci-dessus font foi."
-              : "Pas encore activé sur ce service : aucune facture ni avoir n’est généré. Les règlements Stripe ci-dessus sont la seule pièce disponible."
-          }
-          blocker="FIN-05"
-        />
+        {/* Invoices, credit notes and the register live in the platform finance space. */}
+        <p className="inline-note" data-admin-finance-link="">
+          <a href="#platform-finance">Factures, avoirs et registre : espace Finance plateforme</a>
+        </p>
         <Unavailable
           title="Remboursements et litiges"
           reason={
