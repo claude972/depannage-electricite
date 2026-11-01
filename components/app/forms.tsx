@@ -9,6 +9,7 @@ import {
   fetchHistoryPage,
   historyKey,
   initialHistory,
+  clearSentDraft,
   draftText,
   mergeMessages,
   offersOlder,
@@ -778,9 +779,11 @@ export function MessageCenter({
                 e.preventDefault();
                 if (body.trim()) {
                   const sentKey = threadKey;
+                  const sentText = body; // snapshot of the draft as sent
                   void onSubmit(id, body.trim()).then((saved) => {
-                    // Clear only the draft that was sent, never the draft of another thread.
-                    if (saved) setDraft((d) => (d.key === sentKey ? { key: sentKey, text: "" } : d));
+                    // Clear only the draft that was sent (same thread, unchanged since); text typed
+                    // during the request is kept; on failure the draft stays as is.
+                    if (saved) setDraft((d) => clearSentDraft(d, sentKey, sentText));
                   });
                 }
               }}
