@@ -5,7 +5,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
-import { loadModule } from "../documents/harness";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { ROOT, loadModule } from "../documents/harness";
 import { CATEGORIES as DOMAIN } from "../../lib/domain";
 import { money } from "../../components/app/format";
 import { forbiddenClaims } from "../../components/role/public-lists";
@@ -42,7 +44,7 @@ test("catalogue : 8 prestations, slugs uniques, catégories ⊂ CATEGORIES (tout
   for (const s of SERVICES) assert.ok(ids.includes(s.category), s.slug);
   assert.deepEqual(new Set(SERVICES.map((s) => s.category)), new Set(ids));
   for (const s of SERVICES) {
-    const copy = [s.title, s.alt, s.intro, ...s.covers, ...s.checks, ...s.faq.flatMap((f) => [f.question, f.answer])].join(" ");
+    const copy = [s.title, s.alt, s.intro, ...s.covers, ...s.checks, ...s.extras, ...s.faq.flatMap((f) => [f.question, f.answer])].join(" ");
     assert.deepEqual(forbiddenClaims(copy), [], s.slug);
     assert.doesNotMatch(copy, /€|\d+\s*(?:euros?|min\b|h\b)|garanti|TTC|délai de/i, s.slug); // aucun prix, délai ni garantie inventés
     assert.ok(s.covers.length >= 3 && s.checks.length >= 3 && s.faq.length >= 2, s.slug);
@@ -52,7 +54,7 @@ test("catalogue : 8 prestations, slugs uniques, catégories ⊂ CATEGORIES (tout
 });
 
 test("conseils : constats sans injonction risquée, réseau non affirmé, inclusions renvoyées au devis détaillé", () => {
-  const all = catalog.SERVICES.flatMap((s) => [s.intro, ...s.covers, ...s.checks, ...s.faq.flatMap((f) => [f.question, f.answer])]).join(" ");
+  const all = catalog.SERVICES.flatMap((s) => [s.intro, ...s.covers, ...s.checks, ...s.extras, ...s.faq.flatMap((f) => [f.question, f.answer])]).join(" ");
   assert.doesNotMatch(all, /forcément/i);
   assert.doesNotMatch(all, /rebranchez|tentez un réarmement|réarmez(?!\s+pas)/i);
   for (const s of catalog.SERVICES) for (const f of s.faq) {
@@ -99,22 +101,68 @@ test("route : 8 paramètres statiques, dynamicParams désactivé, métadonnées,
   for (const slug of ["inconnu", "", "PANNE-TABLEAU-ELECTRIQUE", "../admin"]) await assert.rejects(() => page.default({ params: Promise.resolve({ slug }) }), new RegExp(NOT_FOUND), slug);
 });
 
-test("page : chacune des 8 prestations rend titre, photo, fourchette canonique et CTA vers #new/<catégorie>", async () => {
+test("page : composition de référence (héros 2 colonnes, panneau 3 pictos, « Confirmer », 3 FAQ, bandes, liens associés)", async () => {
   for (const s of catalog.SERVICES) {
     const html = render(await page.default({ params: Promise.resolve({ slug: s.slug }) }));
+    const t = text(html);
     assert.match(html, /class="ui-v2 /, s.slug); // même chrome thémé que l’accueil
-    assert.match(html, new RegExp(`<h1 id="service-title">${s.title.replace(/[’]/g, "’")}</h1>`), s.slug);
-    assert.match(html, new RegExp(`<img src="${s.photo.src}" alt="${s.alt.replace(/[()]/g, "\\$&")}"`), s.slug);
-    const price = html.slice(html.indexOf("data-service-price"), html.indexOf("data-service-cta"));
+    assert.match(html, /<a class="backLink" href="\/"><span aria-hidden="true">←<\/span> Retour<\/a>/, s.slug);
+    // Héros : photo + titre + fourchette + « Confirmer », dans une seule grille.
+    const hero = html.slice(html.indexOf('<section class="hero"'), html.indexOf("</section>", html.indexOf('<section class="hero"')));
+    assert.match(hero, new RegExp(`<img src="${s.photo.src}" alt="${s.alt.replace(/[()]/g, "\\$&")}"`), s.slug);
+    assert.match(hero, new RegExp(`<h1 id="service-title" class="heroTitle">${s.title}</h1>`), s.slug);
+    const price = hero.slice(hero.indexOf("data-service-price"), hero.indexOf("pictoPanel"));
     assert.ok(text(price).includes(range(s.category)), s.slug);
     assert.match(text(price), /Estimation indicative/);
-    // CTA → assistant de réservation sur place (FASTSPLIT-SERVICE-BOOKING-FLOW-001), jamais le formulaire générique.
-    const ctas = [...html.matchAll(/<button [^>]*data-booking-open=""[^>]*>([^<]*)/g)].map((m) => m[1].trim());
-    assert.deepEqual(ctas, ["Décrire ma panne", "Décrire ma panne", "Confirmer"], s.slug);
+    assert.doesNotMatch(t, /TTC/);
+    assert.match(hero, /data-booking-open="">Confirmer<\/button>/, s.slug);
+    // Panneau teinté : exactement 3 pictogrammes sous « Précisés dans le devis ».
+    const pictos = hero.slice(hero.indexOf("data-service-pictos"), hero.indexOf("</ul>", hero.indexOf("data-service-pictos")));
+    same([...pictos.matchAll(/<\/svg><\/span>([^<]+)<\/li>/g)].map((m) => m[1].trim()), ["Déplacement", "Main-d’œuvre", "Matériel"], s.slug);
+    assert.match(hero, />Précisés dans le devis</);
+    // 3 FAQ fines sous le CTA (details/summary natifs).
+    const faq = hero.slice(hero.indexOf("data-service-faq"));
+    assert.equal([...faq.matchAll(/<details class="faqRow"><summary>/g)].length, 3, s.slug);
+    // Bandes gauche/droite.
+    for (const h of ["Ce qu’il faut savoir", "Ce qui est inclus", "Ce qui n’est pas inclus", "Déroulement"]) assert.match(html, new RegExp(`<h2 id="[^"]+">${h}</h2>`), `${s.slug} ${h}`);
+    assert.match(t, /Selon le diagnostic, ces éléments peuvent faire l’objet d’un chiffrage distinct, précisé dans le devis détaillé/);
+    // Prestations associées : liens réels avec fourchette, jamais la page courante.
+    const related = [...html.matchAll(/<a class="relatedCard" href="([^"]*)" data-related="([^"]*)">([\s\S]*?)<\/a>/g)];
+    assert.equal(related.length, 3, s.slug);
+    for (const [, href, slug, body] of related) {
+      assert.notEqual(slug, s.slug);
+      assert.equal(href, `/prestations/${slug}`);
+      const other = catalog.SERVICES.find((x) => x.slug === slug)!;
+      assert.ok(text(body).includes(`Estimation indicative : ${range(other.category)}`), slug);
+    }
+    // Ouverture de l’assistant : héros + barre, les deux « Confirmer » ; jamais le formulaire générique.
+    const opens = [...html.matchAll(/<button [^>]*data-booking-open=""[^>]*>([^<]*)/g)].map((m) => m[1].trim());
+    same(opens, ["Confirmer", "Confirmer"], s.slug);
     assert.doesNotMatch(html, /href="\/#new/, s.slug);
-    for (const h of ["Ce que couvre ce dépannage", "Vérifications possibles selon le diagnostic", "Comment ça se passe", "Questions fréquentes"]) assert.match(html, new RegExp(h), s.slug);
-    assert.deepEqual(forbiddenClaims(text(html)), [], s.slug);
+    assert.deepEqual(forbiddenClaims(t), [], s.slug);
+    assert.doesNotMatch(t, /forcément|toujours inclus|rebranchez|tentez un réarmement/i, s.slug);
   }
+});
+
+test("héros : ordre mobile titre → prix → pictos → photo → Confirmer → FAQ ; photo à gauche sur bureau", () => {
+  const css = readFileSync(path.join(ROOT, "components/role/public-service.module.css"), "utf8");
+  const areas = (block: string) => [...block.matchAll(/"([a-z ]+)"/g)].map((m) => m[1].trim());
+  const desktop = css.match(/\.hero \{[^}]*grid-template-areas:([^;]+);/)![1];
+  same(areas(desktop), ["media title", "media price", "media panel", "media cta", "media faq"]);
+  // Colonnes égales, gouttière 56 px ; conteneur 1440 max + 72 px de marge ⇒ contenu à x = 72 en 1440.
+  assert.match(css, /\.hero \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[^}]*column-gap: 56px;/);
+  for (const cls of ["wrap", "bandInner"]) {
+    const rule = css.match(new RegExp(`\\.${cls} \\{([^}]*)\\}`))![1];
+    const max = Number(rule.match(/max-width: (\d+)px/)![1]);
+    const pad = Number(rule.match(/padding: 0 (\d+)px/)![1]);
+    assert.equal(max, 1440, cls);
+    assert.equal((1440 - Math.min(1440, max)) / 2 + pad, 72, `${cls} : contenu à x = 72 en 1440`);
+  }
+  assert.match(css.slice(css.indexOf("@media (max-width: 640px)")), /\.wrap,\s*\.bandInner \{\s*padding: 0 16px;/);
+  const mobile = css.slice(css.indexOf("@media (max-width: 860px)")).match(/\.hero \{[^}]*grid-template-areas:([^;]+);/)![1];
+  same(areas(mobile), ["title", "price", "panel", "media", "cta", "faq"]);
+  for (const [cls, area] of [["heroMedia", "media"], ["heroTitle", "title"], ["price", "price"], ["pictoPanel", "panel"], ["ctaRow", "cta"], ["topFaq", "faq"]])
+    assert.match(css, new RegExp(`\\.${cls} \\{[^}]*grid-area: ${area};`), cls);
 });
 
 test("chrome de la page : chaque action mène à la vraie vue de l’application (hash)", () => {
