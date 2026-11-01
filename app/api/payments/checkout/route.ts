@@ -15,6 +15,8 @@ export async function POST(request: Request) {
     assertOrigin(request);
     const { db, user } = await authenticatedClient();
     const { quote_id } = await validated(request, schema);
+    const holdGuard = await db.rpc("guard_phone_booking_checkout", { p_quote_id: quote_id });
+    dbError(holdGuard.error);
     const stripe = stripeClient();
     const base = appUrl();
     const feeBps = commissionBps();
