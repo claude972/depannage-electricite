@@ -16,6 +16,7 @@ const schema = z
     city: z.string().trim().min(2).max(120),
     urgency: z.enum(["urgent", "scheduled"]),
     site_id: uuid.nullish(),
+    request_id: uuid.optional(),
   })
   .strict();
 export async function POST(request: Request) {
@@ -23,7 +24,8 @@ export async function POST(request: Request) {
     assertOrigin(request);
     const { db } = await authenticatedClient();
     const data = await validated(request, schema);
-    const { data: result, error } = await db.rpc("create_intervention", {
+    const { data: result, error } = await db.rpc(data.request_id ? "create_intervention_once" : "create_intervention", {
+      ...(data.request_id ? { p_request_id: data.request_id } : {}),
       p_category: data.category,
       p_description: data.description,
       p_address: data.address,
