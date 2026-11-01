@@ -73,9 +73,13 @@ grant execute on function public.begin_guest_settlement(uuid) to authenticated;
 
 -- Recipient + fee come only from the server after an independent Connect read.
 create function public.qualify_guest_settlement(p_id uuid,p_actor uuid,p_account text,p_fee integer) returns void language plpgsql security definer set search_path='' as $$
-declare l public.guest_settlements; s jsonb; fee integer;
+declare l public.guest_settlements; s jsonb; fee integer; job uuid;
 begin
- select * into l from public.guest_settlements where id=p_id and actor_id=p_actor for update;
+ select intervention_id into job from public.guest_settlements where id=p_id and actor_id=p_actor;
+ if not found then raise no_data_found;end if;
+ perform 1 from public.interventions where id=job for update;
+ if not found then raise no_data_found;end if;
+ select * into l from public.guest_settlements where id=p_id and actor_id=p_actor and intervention_id=job for update;
  if not found then raise no_data_found; end if;
  s=public.guest_settlement_source(l.intervention_id,p_actor);
  if s->>'reason' is not null or s->>'account_id' is distinct from p_account or p_account is null or p_account !~ '^acct_[A-Za-z0-9]{1,200}$' or p_fee is null or p_fee not between 0 and 10000 then raise insufficient_privilege; end if;
@@ -89,13 +93,18 @@ grant execute on function public.qualify_guest_settlement(uuid,uuid,text,integer
 
 -- Trusted provider proof, verified by server retrieves. No user can declare their own payment.
 create function public.record_guest_settlement(p_id uuid,p_actor uuid,p_charge text,p_amount integer,p_transfer text default null,p_net integer default null,p_account text default null) returns void language plpgsql security definer set search_path='' as $$
-declare l public.guest_settlements; s jsonb;
+declare l public.guest_settlements; s jsonb; job uuid;
 begin
- select * into l from public.guest_settlements where id=p_id and actor_id=p_actor for update;
+ -- Same order as begin/qualify: job first, then ledger. The first read takes no lock.
+ select intervention_id into job from public.guest_settlements where id=p_id and actor_id=p_actor;
+ if not found then raise no_data_found;end if;
+ perform 1 from public.interventions where id=job for update;
+ if not found then raise no_data_found;end if;
+ select * into l from public.guest_settlements where id=p_id and actor_id=p_actor and intervention_id=job for update;
  if not found then raise no_data_found; end if;
  if p_charge is null or p_charge !~ '^ch_[A-Za-z0-9]{1,200}$' or p_amount is distinct from l.amount_cents or l.account_id is null or l.transfer_cents is null or (l.charge_id is not null and l.charge_id<>p_charge) then raise insufficient_privilege; end if;
  if l.status='paid' then
-  if p_transfer is distinct from l.transfer_id then raise insufficient_privilege; end if;return;
+  if (p_transfer is null and (p_net is not null or p_account is not null)) or (p_transfer is not null and(p_transfer is distinct from l.transfer_id or p_net is distinct from l.transfer_cents or p_account is distinct from l.account_id)) then raise insufficient_privilege;end if;return;
  end if;
  s=public.guest_settlement_source(l.intervention_id,l.actor_id);
  if s->>'reason' is not null or s->>'job_status'<>'completed' or (s->>'amount_cents')::bigint<>l.amount_cents or s->'amendments'<>l.amendments then raise exception 'Settlement context changed' using errcode='P0001'; end if;

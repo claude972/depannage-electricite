@@ -50,7 +50,7 @@ export async function executeSettlement(admin:ReturnType<typeof adminClient>,l:S
  }
  const recorded=await admin.rpc("record_guest_settlement",{p_id:l.id,p_actor:l.actor_id,p_charge:proof.charge.id,p_amount:l.amount_cents});dbError(recorded.error);l=await settlementLedger(admin,l.id,l.actor_id);
  const listed=await p.stripe.transfers.list({transfer_group:`guest-settlement:${l.id}`,limit:2});
- if(listed.has_more||listed.data.length>1)throw unknown();
+ if(!listed||typeof listed!=="object"||Array.isArray(listed)||listed.object!=="list"||typeof listed.has_more!=="boolean"||!Array.isArray(listed.data)||listed.has_more||listed.data.length>1||listed.data.some(t=>!t||typeof t!=="object"||Array.isArray(t)||!transferProof(t,l,proof.charge.id,p)))throw unknown();
  let transfer=listed.data[0];
  if(!transfer){
   if(!freshAttempt(l.transfer_started_at)){await markReview(admin,l);return;}
