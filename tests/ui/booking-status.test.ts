@@ -56,3 +56,11 @@ test("optional account: offered in the profile and on a booking dossier only, ne
   assert.match(src, /\{currentBookingStatus\?\.kind === "booking" && <AccountUpgrade \/>\}/);
   assert.doesNotMatch(readFileSync("components/role/booking-confirm.tsx", "utf8"), /AccountUpgrade/, "not part of the send path");
 });
+
+test("settlement leaf: mounted only for a completed card-hold booking with an accepted quote, keyed by UID + job, with the session identity context", () => {
+  const src = readFileSync("components/role/client-space.tsx", "utf8");
+  assert.match(src, /currentBookingStatus\?\.kind === "booking" && currentBookingStatus\.payment\.method === "card_hold" && i\.status === "completed" && accepted && \(\s*<BookingSettlement key=\{`\$\{session\.profileId\}\|\$\{i\.id\}`\} interventionId=\{i\.id\} context=\{session\.mutationContext\} \/>/);
+  const app = readFileSync("components/courant-app.tsx", "utf8");
+  assert.match(app, /mutationContext: cardContext,/);
+  assert.match(app, /const cardContext = \{ generation: \(\) => guard\.generation\(\), userId: \(\) => userId\.current \};/);
+});

@@ -57,6 +57,7 @@ import type {
 import { BookingConfirm } from "./booking-confirm";
 import { CardReturnPanel } from "./card-return-panel";
 import { AccountUpgrade } from "./account-upgrade";
+import { BookingSettlement } from "./booking-settlement";
 import { createOptionsApi } from "./phone-access";
 import { bookingPaymentText, fetchBookingStatus, type BookingStatus } from "../app/booking-status";
 import styles from "./client.module.css";
@@ -1500,6 +1501,11 @@ function DetailView({
           <Icon name={currentBookingStatus.payment.method === "on_site" ? "clock" : "lock"} size={16} />
           <span>{bookingPaymentText(currentBookingStatus.payment, dateTime)}</span>
         </p>
+      )}
+      {/* Final settlement of a card hold: only a completed booking dossier with an accepted quote.
+          The amount, ledger and proofs are the server's; never the legacy Checkout for a hold. */}
+      {currentBookingStatus?.kind === "booking" && currentBookingStatus.payment.method === "card_hold" && i.status === "completed" && accepted && (
+        <BookingSettlement key={`${session.profileId}|${i.id}`} interventionId={i.id} context={session.mutationContext} />
       )}
       {/* After a booking: optional email access (self-hides unless phone-verified, client, no email account). */}
       {currentBookingStatus?.kind === "booking" && <AccountUpgrade />}

@@ -96,6 +96,8 @@ export interface Session {
   /** Card-hold provider return awaiting a server verification (independent of the draft). */
   cardReturn: import("./card-return").CardReturn | null;
   /** GET /api/bookings/pending failed (an error is never « nothing pending »). */
+  /** Identity guard for leaves that mutate outside run(ctx): compare before/after every await. */
+  mutationContext: { generation(): number; userId(): string | null };
   pendingLookupFailed: boolean;
   retryPendingLookup(): void;
   /** Booking confirmation « Modifier »: replace the kept request draft / private contact (no send). */

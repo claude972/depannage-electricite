@@ -2687,6 +2687,7 @@ export default function CourantApp() {
     },
     booking: mode === "live" && pendingDraft ? booking : null,
     cardReturn: mode === "live" ? cardReturn : null,
+    mutationContext: cardContext,
     pendingLookupFailed: mode === "live" && pendingLookup === "error",
     retryPendingLookup: () => void checkPendingCardHold(),
     data,
