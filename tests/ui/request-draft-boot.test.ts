@@ -3,7 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { readBootDraft } from "../../components/app/request-draft-boot";
+import { DRAFT_MEMORY_ONLY_NOTICE, DRAFT_SAVED_NOTICE, draftNotice, readBootDraft } from "../../components/app/request-draft-boot";
 import { PUBLIC_DRAFT_KEY, savePublicDraft } from "../../lib/shared/request-draft";
 
 function memory(initial: Record<string, string> = {}) {
@@ -60,4 +60,16 @@ test("courant-app boots and saves through the canonical helper only (no ad-hoc J
   assert.match(src, /savePublicDraft\(/);
   assert.doesNotMatch(src, /JSON\.parse\(sessionStorage\.getItem\(DRAFT_KEY\)/);
   assert.doesNotMatch(src, /sessionStorage\.setItem\(DRAFT_KEY/);
+});
+
+test("save: quota / refused storage ⇒ honest « page only » notice, never a false save; success ⇒ saved notice", () => {
+  const quota = { setItem() { throw new DOMException("full", "QuotaExceededError"); } };
+  const failed = savePublicDraft(quota, values, NOW);
+  assert.deepEqual(failed, { ok: false, reason: "unavailable" });
+  assert.equal(draftNotice(failed), DRAFT_MEMORY_ONLY_NOTICE);
+  assert.doesNotMatch(DRAFT_MEMORY_ONLY_NOTICE, /conservé dans ce navigateur/);
+  assert.equal(draftNotice(savePublicDraft(null, values, NOW)), DRAFT_MEMORY_ONLY_NOTICE, "no storage at all");
+  assert.equal(draftNotice(savePublicDraft(memory(), values, NOW)), DRAFT_SAVED_NOTICE);
+  const src = readFileSync("components/courant-app.tsx", "utf8");
+  assert.match(src, /setPendingDraft\(values\);[\s\S]{0,400}setNotice\(draftNotice\(saved\)\)/, "in-memory draft kept, notice follows the real result");
 });

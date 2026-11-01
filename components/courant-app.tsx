@@ -40,7 +40,7 @@ import {
   type DemoOperations,
 } from "./app/demo";
 import { resolveDisplayName } from "./app/display-name";
-import { readBootDraft } from "./app/request-draft-boot";
+import { draftNotice, readBootDraft } from "./app/request-draft-boot";
 import { savePublicDraft } from "../lib/shared/request-draft";
 import { REALTIME_CHANNEL_CONFIG, REALTIME_TABLES, nextConnection } from "./app/realtime";
 import { category, uid } from "./app/format";
@@ -2286,12 +2286,10 @@ export default function CourantApp() {
     saveDraft(values) {
       setPendingDraft(values);
       // Same canonical format as /offline-request.html; storage refusal keeps the in-memory draft.
-      savePublicDraft(typeof sessionStorage === "undefined" ? null : sessionStorage, values);
+      const saved = savePublicDraft(typeof sessionStorage === "undefined" ? null : sessionStorage, values);
       setAuthMode("signup");
       navigate("auth");
-      setNotice(
-        "Votre brouillon est conservé dans ce navigateur. Connectez-vous ou créez votre compte pour enregistrer cette demande.",
-      );
+      setNotice(draftNotice(saved)); // quota/refusal: the input stays in memory, never a false « saved »
     },
     async signIn(email, password) {
       return run(async (ctx) => {

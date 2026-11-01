@@ -16,3 +16,12 @@ export function readBootDraft(storage: Pick<Storage, "getItem"> | null | undefin
   const { site_id, ...rest } = draft.values;
   return site_id ? { ...rest, site_id } : rest;
 }
+
+/** Honest notice after « save draft »: never claims a browser save that did not happen. */
+export const DRAFT_SAVED_NOTICE =
+  "Votre brouillon est conservé dans ce navigateur. Connectez-vous ou créez votre compte pour enregistrer cette demande.";
+export const DRAFT_MEMORY_ONLY_NOTICE =
+  "Votre saisie est gardée sur cette page uniquement : le navigateur refuse l’enregistrement local. Ne fermez pas cet onglet, connectez-vous ou créez votre compte pour envoyer cette demande.";
+export function draftNotice(result: { ok: boolean }): string {
+  return result.ok ? DRAFT_SAVED_NOTICE : DRAFT_MEMORY_ONLY_NOTICE;
+}
