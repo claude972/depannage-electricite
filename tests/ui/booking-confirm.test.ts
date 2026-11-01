@@ -58,3 +58,16 @@ test("return from the signup email (same tab, ?auth=confirmed) resumes the confi
   const app = readFileSync("components/courant-app.tsx", "utf8");
   assert.match(app, /const resume = mode === "live" && pendingDraft !== null;[\s\S]{0,500}if \(resume\) navigate\("new"\);/);
 });
+
+test("guest checkout: payment line shown; card hold not available ⇒ honest refusal before any call + switch to on site", () => {
+  const onSite = renderToStaticMarkup(createElement(BookingConfirm, { draft, booking: { ...booking, payment: "on_site" }, busy: false, profileId: "u1", updateProfile: async () => true, createIntervention: async () => true, onEdit() {}, onContactChange() {} }));
+  assert.match(onSite, /data-booking-payment="on_site"/);
+  assert.match(onSite, /Rien n’est payé à la réservation/);
+  assert.doesNotMatch(onSite, /\bpayé\b(?! à la réservation)/, "never « payé »");
+  const card = renderToStaticMarkup(createElement(BookingConfirm, { draft, booking: { ...booking, payment: "card_hold" }, busy: false, profileId: "u1", updateProfile: async () => true, createIntervention: async () => true, onEdit() {}, onContactChange() {}, onPaymentChange() {} }));
+  assert.match(card, /Une empreinte n’est pas un débit/);
+  assert.match(card, /Choisir le règlement sur place/);
+  const src = readFileSync("components/role/booking-confirm.tsx", "utf8");
+  const send = src.slice(src.indexOf("async function send()"));
+  assert.ok(send.indexOf('booking.payment === "card_hold" && !cardAvailable') < send.indexOf("await updateProfile(patch)"), "refused before PATCH/POST");
+});

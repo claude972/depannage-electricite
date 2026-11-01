@@ -2486,6 +2486,12 @@ export default function CourantApp() {
       setPendingDraft(values);
       savePublicDraft(getDraftStorage(), values);
     },
+    updateBookingPayment(payment: NonNullable<BookingDraft["payment"]>) {
+      if (modeRef.current !== "live" || !booking) return;
+      const next = { ...booking, payment };
+      setBooking(next);
+      saveBooking(getDraftStorage(), next);
+    },
     updateBookingContact(contact: BookingDraft["contact"]) {
       if (modeRef.current !== "live" || !booking) return;
       const next = { ...booking, contact };

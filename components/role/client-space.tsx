@@ -227,6 +227,7 @@ export function ClientSpace({ session }: { session: Session }) {
               createIntervention={(values) => session.createIntervention(values, [])}
               onEdit={() => setEditBooking(true)}
               onContactChange={session.updateBookingContact}
+              onPaymentChange={session.updateBookingPayment}
             />
           );
         return (

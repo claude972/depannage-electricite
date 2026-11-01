@@ -96,6 +96,7 @@ export interface Session {
   /** Booking confirmation « Modifier »: replace the kept request draft / private contact (no send). */
   updatePendingDraft(values: RequestValues): void;
   updateBookingContact(contact: BookingDraft["contact"]): void;
+  updateBookingPayment(payment: NonNullable<BookingDraft["payment"]>): void;
   data: Workspace;
   professional: ProfessionalData;
   capabilities: Capabilities;

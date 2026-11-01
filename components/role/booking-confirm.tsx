@@ -6,7 +6,7 @@
 // component is remounted on identity change (role space key) so a late step never runs for
 // another account.
 import { useEffect, useRef, useState } from "react";
-import { SLOT_LABEL, contactErrors, profilePatch, type BookingDraft } from "../app/booking-draft";
+import { PAYMENT_LABEL, SLOT_LABEL, contactErrors, profilePatch, type BookingDraft, type PaymentChoice } from "../app/booking-draft";
 import { category, money } from "../app/format";
 import type { RequestValues } from "../app/types";
 import { serviceBySlug } from "./public-service-catalog";
@@ -20,6 +20,8 @@ export function BookingConfirm({
   createIntervention,
   onEdit,
   onContactChange,
+  onPaymentChange,
+  cardAvailable = false,
 }: {
   draft: RequestValues;
   booking: BookingDraft;
@@ -31,6 +33,10 @@ export function BookingConfirm({
   onEdit(): void;
   /** Saves edited private contact details in the kept booking (nothing is sent). */
   onContactChange(contact: BookingDraft["contact"]): void;
+  /** Guest checkout: switch the payment choice (e.g. card hold not available yet ⇒ on site). */
+  onPaymentChange?(payment: PaymentChoice): void;
+  /** Card authorisation flow available (server checkout API qualified). Default false: honest refusal. */
+  cardAvailable?: boolean;
 }) {
   const [sending, setSending] = useState(false);
   const [problem, setProblem] = useState("");
@@ -54,6 +60,11 @@ export function BookingConfirm({
 
   async function send() {
     if (inFlight.current || busy) return; // one POST only
+    if (booking.payment === "card_hold" && !cardAvailable) {
+      // Never a fake card form or a request presented as covered by an authorisation.
+      setProblem("L’empreinte bancaire n’est pas encore disponible. Choisissez le règlement sur place pour envoyer votre demande ; rien n’a été envoyé.");
+      return;
+    }
     inFlight.current = true;
     setSending(true);
     const startedAs = identity.current;
@@ -95,6 +106,28 @@ export function BookingConfirm({
           <dt>Délai souhaité</dt>
           <dd>{wish} <small>(souhait, pas un rendez-vous réservé)</small></dd>
         </div>
+        {booking.payment && (
+          <div>
+            <dt>Paiement</dt>
+            <dd data-booking-payment={booking.payment}>
+              {PAYMENT_LABEL[booking.payment]}
+              <br />
+              <small>
+                {booking.payment === "on_site"
+                  ? "Rien n’est payé à la réservation ; le montant final figure dans le devis détaillé."
+                  : "Une empreinte n’est pas un débit ; seul le montant du devis accepté peut être prélevé."}
+              </small>
+              {booking.payment === "card_hold" && !cardAvailable && onPaymentChange && (
+                <>
+                  <br />
+                  <button type="button" className="text-button" disabled={sending || busy} onClick={() => { onPaymentChange("on_site"); setProblem(""); }}>
+                    Choisir le règlement sur place
+                  </button>
+                </>
+              )}
+            </dd>
+          </div>
+        )}
         <div>
           <dt>Adresse d’intervention</dt>
           <dd>
