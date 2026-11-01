@@ -34,7 +34,7 @@ function Inner({ scope, client, demo, onNavigate }: PlatformModerationViewProps)
   if (!me.data?.capabilities.reviews_moderation) return <div className="forbidden"><strong>Cet espace nécessite le scope de modération des avis.</strong><p>Demandez l’habilitation à un super administrateur.</p></div>;
   const canWrite = scope.authority.canWrite && !demo;
   return (
-    <div className={styles.view}>
+    <div className={styles.view} data-module="platform-operations" data-platform-view="moderation">
       <div className={styles.head}><div><h2>Modération des avis</h2><p>Un avis masqué reste conservé et audité ; il disparaît des lectures tierces et des moyennes. L’artisan noté peut contester, la décision est tracée.</p></div></div>
       {!scope.authority.canWrite && <ReadOnly reason={scope.authority.reason} />}
       {demo && <p className={styles.alert}>{DEMO_NOTE}</p>}

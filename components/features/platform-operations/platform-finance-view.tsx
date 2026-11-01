@@ -39,7 +39,7 @@ function Inner({ scope, client, demo }: PlatformFinanceViewProps) {
   if (!me.data?.capabilities.finance) return <div className="forbidden"><strong>Cet espace nécessite le scope finance.</strong><p>Demandez l’habilitation à un super administrateur.</p></div>;
   const ctx: Ctx = { client, demo, canWrite: scope.authority.canWrite && !demo && (me.data.super_admin || me.data.scopes.includes("finance_write")), superAdmin: !demo && scope.authority.canWrite && me.data.super_admin, notify, busy, act, scopeKey: scopeKey(scope), rendering: me.data.capabilities.invoice_rendering === true };
   return (
-    <div className={styles.view}>
+    <div className={styles.view} data-module="platform-operations" data-platform-view="finance">
       <div className={styles.head}><div><h2>Finance plateforme</h2><p>Ledger en centimes, rapprochement avec les paiements confirmés et suivi documentaire. Aucune action réelle auprès du fournisseur de paiement n’est disponible dans cette version.</p></div></div>
       {!scope.authority.canWrite && <ReadOnly reason={scope.authority.reason} />}
       {scope.authority.canWrite && !ctx.canWrite && !demo && <ReadOnly reason="votre scope finance est en lecture seule." />}

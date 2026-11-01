@@ -54,3 +54,80 @@
 .link:focus-visible { outline: 2px solid var(--blue, #1457d9); outline-offset: 2px; border-radius: 4px; }
 .disabledLink { color: var(--muted, #586b80); text-decoration: underline dotted; min-height: 44px; display: inline-flex; align-items: center; cursor: not-allowed; }
 .srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* FASTSPLIT-PLATFORM-THEME-001 — opt-in Delivo theme. Applies only inside a ThemeSurface
+   (`.ui-v2`, which sets the --ui-* tokens for light and dark); unthemed consumers keep the rules
+   above. Stable hook for host skins: the view roots carry data-module="platform-operations"
+   (+ data-platform-view="operators|finance|moderation"). --ui-* tokens only, 1px borders. */
+:global(.ui-v2) .view { color: var(--ui-text); font-family: var(--ui-font); }
+:global(.ui-v2) .head h2,
+:global(.ui-v2) .panel h3 { color: var(--ui-text); font-weight: 700; }
+:global(.ui-v2) .head p,
+:global(.ui-v2) .panelHead p,
+:global(.ui-v2) .stat dt,
+:global(.ui-v2) .stat small,
+:global(.ui-v2) .toolbar label,
+:global(.ui-v2) .hint,
+:global(.ui-v2) .pager,
+:global(.ui-v2) .details,
+:global(.ui-v2) .kv dt { color: var(--ui-text-muted); }
+:global(.ui-v2) .tabs { border-bottom-color: var(--ui-border); }
+:global(.ui-v2) .tab { color: var(--ui-text-muted); }
+:global(.ui-v2) .tab:hover { color: var(--ui-text); }
+:global(.ui-v2) .tab[aria-selected="true"] { color: var(--ui-accent); border-bottom-color: var(--ui-accent); }
+:global(.ui-v2) .panel { border-color: var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-card); }
+:global(.ui-v2) .stat,
+:global(.ui-v2) .card { border-color: var(--ui-border); background: var(--ui-card); }
+:global(.ui-v2) .panel .stat,
+:global(.ui-v2) .panel .card { background: var(--ui-surface); }
+:global(.ui-v2) .stat dd { color: var(--ui-text); }
+:global(.ui-v2) .tableWrap { border-color: var(--ui-border); }
+:global(.ui-v2) .table th,
+:global(.ui-v2) .table td { border-bottom-color: var(--ui-border); }
+:global(.ui-v2) .table th { background: var(--ui-surface); color: var(--ui-text-muted); }
+:global(.ui-v2) .table td { color: var(--ui-text); }
+:global(.ui-v2) .toolbar select,
+:global(.ui-v2) .toolbar input,
+:global(.ui-v2) .form input,
+:global(.ui-v2) .form select,
+:global(.ui-v2) .form textarea { border-color: var(--ui-border); background: var(--ui-bg); color: var(--ui-text); color-scheme: var(--ui-scheme); }
+:global(.ui-v2) .form input::placeholder,
+:global(.ui-v2) .form textarea::placeholder,
+:global(.ui-v2) .toolbar input::placeholder { color: var(--ui-text-muted); opacity: 1; }
+:global(.ui-v2) .form label { color: var(--ui-text); }
+:global(.ui-v2) .form input[aria-invalid="true"],
+:global(.ui-v2) .form textarea[aria-invalid="true"] { border-color: var(--ui-danger); }
+:global(.ui-v2) .form input:focus-visible,
+:global(.ui-v2) .form select:focus-visible,
+:global(.ui-v2) .form textarea:focus-visible,
+:global(.ui-v2) .toolbar select:focus-visible,
+:global(.ui-v2) .toolbar input:focus-visible,
+:global(.ui-v2) .tab:focus-visible,
+:global(.ui-v2) .button:focus-visible,
+:global(.ui-v2) .link:focus-visible { outline: 3px solid var(--ui-focus); outline-offset: 2px; }
+:global(.ui-v2) .error { color: var(--ui-danger); }
+:global(.ui-v2) .success { color: var(--ui-success); }
+:global(.ui-v2) .alert { border-color: var(--ui-warning); background: var(--ui-surface); color: var(--ui-text); }
+:global(.ui-v2) .danger { border-color: var(--ui-danger); background: var(--ui-surface); color: var(--ui-text); }
+:global(.ui-v2) .danger > span:first-child { color: var(--ui-danger); font-weight: 600; }
+:global(.ui-v2) .button { border-color: var(--ui-border); border-radius: var(--ui-radius-md); background: transparent; color: var(--ui-text); font-weight: 600; }
+:global(.ui-v2) .button:hover:not(:disabled) { border-color: var(--ui-accent); }
+:global(.ui-v2) .primary { border-color: var(--ui-primary); background: var(--ui-primary); color: var(--ui-on-primary); }
+:global(.ui-v2) .primary:hover:not(:disabled) { border-color: var(--ui-primary); background: #136640; }
+:global(.ui-v2) .destructive { border-color: var(--ui-danger); background: transparent; color: var(--ui-danger); }
+:global(.ui-v2) .link { color: var(--ui-accent); }
+:global(.ui-v2) .disabledLink { color: var(--ui-text-muted); }
+/* Global primitives rendered by these views, scoped to the module root (meaning kept: green =
+   active/settled, amber = pending/hidden, red = refused; always with a text label). */
+:global(.ui-v2) .view :global(.tag) { background: var(--ui-surface); color: var(--ui-text-muted); border: 1px solid var(--ui-border); }
+:global(.ui-v2) .view :global(.tag-green) { color: var(--ui-success); }
+:global(.ui-v2) .view :global(.tag-blue) { color: var(--ui-accent); }
+:global(.ui-v2) .view :global(.tag-amber) { color: var(--ui-warning); }
+:global(.ui-v2) .view :global(.tag-red) { color: var(--ui-danger); }
+:global(.ui-v2) .view :global(.text-button) { color: var(--ui-accent); min-height: 44px; }
+:global(.ui-v2) .view :global(.field-error) { color: var(--ui-danger); }
+:global(.ui-v2) .view :global(.empty-state) h3 { color: var(--ui-text); }
+:global(.ui-v2) .view :global(.empty-state) p { color: var(--ui-text-muted); }
+:global(.ui-v2) .view :global(.unavailable) { border-color: var(--ui-border); background: var(--ui-surface); color: var(--ui-text-muted); }
+:global(.ui-v2) .view :global(.unavailable) strong { color: var(--ui-text); }
+:global(.ui-v2) .view :global(.page-loader) { color: var(--ui-text-muted); }
