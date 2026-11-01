@@ -241,16 +241,78 @@ export function PhoneAccess({
 }
 
 // ---- /suivi: find one's requests with a verified phone (no public lookup, no listing before) ----
-export function PhoneLookupPage({ api, go = (href: string) => window.location.assign(href) }: { api?: PhoneApi; go?: (href: string) => void }) {
+// While phone auth is off (server options), no phone form at all: honest message + account login.
+export function PhoneLookupPage({ api, optionsApi, initialOptions, go = (href: string) => window.location.assign(href) }: { api?: PhoneApi; optionsApi?: OptionsApi; initialOptions?: OptionsState; go?: (href: string) => void }) {
+  const { options } = useBookingOptions(optionsApi, initialOptions);
   return (
     <PublicChrome current="suivi" handlers={serviceChromeHandlers(go)} onHome={() => go("/")}>
       <div className={styles.page}>
         <h1>Suivre ma demande</h1>
-        <p className={styles.lead}>Indiquez le téléphone utilisé pour votre demande, avec votre nom et votre prénom. Après vérification du code, vos demandes s’affichent dans votre espace.</p>
-        <div className={styles.card}>
-          <PhoneAccess purpose="lookup" api={api} onVerified={() => go("/#requests")} />
-        </div>
+        {options.status === "loading" ? (
+          <p className={styles.lead} role="status">Chargement…</p>
+        ) : phoneAuthOn(options) ? (
+          <>
+            <p className={styles.lead}>Indiquez le téléphone utilisé pour votre demande, avec votre nom et votre prénom. Après vérification du code, vos demandes s’affichent dans votre espace.</p>
+            <div className={styles.card}>
+              <PhoneAccess purpose="lookup" api={api} onVerified={() => go("/#requests")} />
+            </div>
+          </>
+        ) : (
+          <div className={styles.card} data-suivi-off="">
+            <p className={styles.lead}>{SUIVI_OFF}</p>
+            <a className={styles.submit} href="/#auth">Me connecter à mon compte</a>
+          </div>
+        )}
       </div>
     </PublicChrome>
   );
 }
+
+// ---- Booking options (GET /api/bookings/options): availability decided by the server only -------
+export type PaymentMethodOption = { id: "on_site" | "card_hold"; available: boolean; label?: string; description?: string; reason?: string };
+export type BookingOptions = { payment_methods: PaymentMethodOption[]; phone_auth: { available: boolean | null; reason?: string }; currency: string };
+export type OptionsState = { status: "loading" } | { status: "error" } | { status: "ready"; options: BookingOptions };
+export type OptionsApi = () => Promise<BookingOptions | null>;
+
+/** Strict parse: anything unexpected ⇒ null (treated as « options unavailable », never as available). */
+export function parseBookingOptions(body: unknown): BookingOptions | null {
+  if (!isObj(body) || !Array.isArray(body.payment_methods) || !isObj(body.phone_auth)) return null;
+  const methods: PaymentMethodOption[] = [];
+  for (const m of body.payment_methods) {
+    if (!isObj(m) || (m.id !== "on_site" && m.id !== "card_hold") || typeof m.available !== "boolean") return null;
+    methods.push({ id: m.id, available: m.available, ...(typeof m.label === "string" ? { label: m.label } : {}), ...(typeof m.description === "string" ? { description: m.description } : {}), ...(typeof m.reason === "string" ? { reason: m.reason.slice(0, 300) } : {}) });
+  }
+  const p = body.phone_auth;
+  const available = p.available === true ? true : p.available === false ? false : null;
+  return { payment_methods: methods, phone_auth: { available, ...(typeof p.reason === "string" ? { reason: p.reason.slice(0, 300) } : {}) }, currency: typeof body.currency === "string" ? body.currency : "eur" };
+}
+export function createOptionsApi(fetcher: typeof fetch = (...a) => fetch(...a)): OptionsApi {
+  return async () => {
+    try {
+      const response = await fetcher("/api/bookings/options", { method: "GET", credentials: "same-origin", cache: "no-store" });
+      if (response.status !== 200) return null;
+      return parseBookingOptions(await response.json().catch(() => null));
+    } catch {
+      return null;
+    }
+  };
+}
+/** Loads the options once (and on retry). Tests pass `initial` to render a given state. */
+export function useBookingOptions(api?: OptionsApi, initial?: OptionsState): { options: OptionsState; retry: () => void } {
+  const [options, setOptions] = useState<OptionsState>(initial ?? { status: "loading" });
+  const [attempt, setAttempt] = useState(initial ? -1 : 0);
+  useEffect(() => {
+    if (attempt < 0) return;
+    let alive = true;
+    setOptions({ status: "loading" });
+    void (api ?? createOptionsApi())().then((o) => {
+      if (alive) setOptions(o ? { status: "ready", options: o } : { status: "error" });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [api, attempt]);
+  return { options, retry: () => setAttempt((n) => Math.max(0, n) + 1) };
+}
+export const phoneAuthOn = (o: OptionsState) => o.status === "ready" && o.options.phone_auth.available === true;
+export const SUIVI_OFF = "Le suivi par SMS sera disponible prochainement.";

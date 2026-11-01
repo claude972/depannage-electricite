@@ -392,6 +392,8 @@
    « Continuer vers la connexion » label never clipped. */
 .inlineActions {
   display: flex;
+  flex-wrap: wrap-reverse;
+  gap: 12px;
   justify-content: flex-end;
   margin-top: 24px;
   padding-top: 16px;
@@ -483,4 +485,24 @@
   font-size: 13px;
   font-style: normal;
   font-weight: 600;
+}
+.retry,
+.secondary {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-card);
+  color: var(--ui-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.secondary {
+  min-height: 48px;
+}
+.retry:focus-visible,
+.secondary:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
 }

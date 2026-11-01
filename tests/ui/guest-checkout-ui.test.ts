@@ -34,35 +34,65 @@ class Mem {
   removeItem(k: string) { this.data.delete(k); }
 }
 
-// ---- Paiement ------------------------------------------------------------------------------
-test("paiement : exactement 2 choix, carte désactivée « Bientôt disponible » (sur place suggéré), aucun « payé »", () => {
-  const html = wizard({ initial: state({ step: 4 }) });
+// ---- Options serveur (GET /api/bookings/options) ---------------------------------------------
+const OPTS = ({ phone = false, card = false, reason = "Le paiement par carte n’est pas encore activé." } = {}): Phone.OptionsState => ({
+  status: "ready",
+  options: {
+    payment_methods: [
+      { id: "on_site", available: true, label: "Sur place", description: "x" },
+      { id: "card_hold", available: card, label: "Empreinte", description: "y", ...(card ? {} : { reason }) },
+    ],
+    phone_auth: { available: phone },
+    currency: "eur",
+  },
+});
+const radiosOf = (html: string) => {
   const step = html.slice(html.indexOf("data-booking-payment"), html.indexOf("</fieldset>", html.indexOf("data-booking-payment")));
-  const radios = [...step.matchAll(/<input type="radio"([^>]*)\/>/g)].map((m) => m[1]);
+  return { step, radios: [...step.matchAll(/<input type="radio"([^>]*)\/>/g)].map((m) => m[1]) };
+};
+
+test("paiement : 2 choix depuis les options ; carte indisponible désactivée avec la raison du serveur ; aucun « payé »", () => {
+  const { step, radios } = radiosOf(wizard({ initial: state({ step: 4 }), initialOptions: OPTS() }));
   same(radios.map((a) => a.match(/value="([^"]+)"/)![1]), ["on_site", "card_hold"]);
   assert.doesNotMatch(radios[0], /disabled/);
   assert.match(radios[1], /disabled=""/);
   const t = text(step);
   assert.match(t, /Règlement sur place Vous réglez l’artisan après l’intervention\. La demande reste non payée jusque-là\./);
   assert.match(t, /Empreinte bancaire Une autorisation sur votre carte, sans débit à la réservation\. Seul le montant du devis accepté pourra être prélevé ensuite\./);
-  assert.match(t, /Bientôt disponible\. En attendant, choisissez le règlement sur place\./);
-  // Seule occurrence admise : « non payée » (constat honnête), jamais un état « payé ».
+  assert.match(t, /Le paiement par carte n’est pas encore activé\./); // raison du serveur
   assert.doesNotMatch(t.replace("reste non payée", ""), /payé|garanti|numéro de carte|cvc|cryptogramme/i);
-  assert.doesNotMatch(html, /autocomplete="cc-|name="card/); // jamais de faux formulaire de carte
-  // Disponible ⇒ sélectionnable.
-  const on = wizard({ initial: state({ step: 4 }), cardAvailable: true });
-  assert.doesNotMatch(on.match(/<input type="radio"[^>]*value="card_hold"[^>]*\/>/)![0], /disabled/);
-  // Règles : choix requis ; carte refusée tant qu’indisponible.
-  same(Object.keys(booking.paymentErrors({ payment: null })), ["payment"]);
-  same(booking.paymentErrors({ payment: "card_hold" }), { payment: booking.CARD_UNAVAILABLE });
-  same(booking.paymentErrors({ payment: "card_hold" }, true), {});
-  same(booking.paymentErrors({ payment: "on_site" }), {});
-  same(booking.advanceBooking(state({ step: 4, payment: "card_hold" })).state.step, 4);
-  same(booking.advanceBooking(state({ step: 4, payment: "on_site" })).state.step, 5);
-  same(Object.values(booking.STEP_ACTION), ["Continuer", "Continuer", "Continuer", "Continuer", "Vérifier mon téléphone"]);
+  assert.doesNotMatch(step, /autocomplete="cc-|name="card/i); // jamais de faux formulaire de carte
+  // Sans raison serveur : copie honnête de repli.
+  const fallback = OPTS();
+  (fallback as { options: Phone.BookingOptions }).options.payment_methods[1] = { id: "card_hold", available: false };
+  assert.match(text(radiosOf(wizard({ initial: state({ step: 4 }), initialOptions: fallback })).step), /Bientôt disponible\. En attendant, choisissez le règlement sur place\./);
+  // Disponible côté serveur ⇒ sélectionnable.
+  assert.doesNotMatch(radiosOf(wizard({ initial: state({ step: 4 }), initialOptions: OPTS({ card: true }) })).radios[1], /disabled/);
+  // Règles : choix requis ; disponibilité = options serveur uniquement.
+  const avail = booking.paymentAvailability(OPTS());
+  same(Object.keys(booking.paymentErrors({ payment: null }, avail)), ["payment"]);
+  same(booking.paymentErrors({ payment: "card_hold" }, avail), { payment: "Le paiement par carte n’est pas encore activé." });
+  same(booking.paymentErrors({ payment: "card_hold" }, booking.paymentAvailability(OPTS({ card: true }))), {});
+  same(booking.paymentErrors({ payment: "on_site" }, avail), {});
+  same(booking.advanceBooking(state({ step: 4, payment: "card_hold" }), avail).state.step, 4);
+  same(booking.advanceBooking(state({ step: 4, payment: "on_site" }), avail).state.step, 5);
 });
 
-test("finishBooking : écrit les deux brouillons AVEC le paiement, sans naviguer (le téléphone vient ensuite)", () => {
+test("options en échec ou en cours : les deux modes désactivés, « réessayez » + bouton, aucune avancée", () => {
+  const failed = wizard({ initial: state({ step: 4 }), initialOptions: { status: "error" } });
+  const { radios } = radiosOf(failed);
+  assert.ok(radios.length === 2 && radios.every((r) => /disabled=""/.test(r)));
+  assert.match(text(failed), /Options de paiement momentanément indisponibles, réessayez\. Réessayer/);
+  assert.match(failed, /data-booking-options-error=""/);
+  same(booking.paymentAvailability({ status: "error" }), {});
+  // Rien n’avance, donc rien n’est enregistré (finishBooking n’est atteint qu’à l’étape 5).
+  for (const payment of ["on_site", "card_hold"] as const) same(booking.advanceBooking(state({ step: 4, payment }), {}).state.step, 4);
+  const loading = wizard({ initial: state({ step: 4 }), initialOptions: { status: "loading" } });
+  assert.ok(radiosOf(loading).radios.every((r) => /disabled=""/.test(r)));
+  assert.match(text(loading), /Chargement des options de paiement…/);
+});
+
+test("finishBooking : écrit les deux brouillons AVEC le paiement, sans naviguer", () => {
   const s = new Mem();
   let saved = 0;
   same(booking.finishBooking({ storage: s as unknown as Storage, service, state: state({ step: 5, payment: "on_site" }), onSaved: () => saved++ }), { ok: true });
@@ -70,15 +100,54 @@ test("finishBooking : écrit les deux brouillons AVEC le paiement, sans naviguer
   assert.equal(readBooking(s.getItem(BOOKING_DRAFT_KEY))!.booking.payment, "on_site");
 });
 
-test("étape téléphone : PhoneAccess « booking » en ligne, nom/prénom/téléphone repris, barre = même formulaire", () => {
-  const html = wizard({ initial: state({ step: 5, payment: "on_site" }), initialPhase: "phone" });
+test("SMS désactivé : pas de PhoneAccess ; note honnête ; « Utiliser mon compte existant » enregistre puis /#auth", () => {
+  const html = wizard({ initial: state({ step: 5, payment: "on_site" }), initialOptions: OPTS({ phone: false }) });
+  assert.doesNotMatch(html, /data-phone-access/);
+  assert.match(text(html), /La vérification par SMS n’est pas encore disponible\./);
+  assert.match(html, /data-booking-inline-submit="5">Utiliser mon compte existant<\/button>/);
+  assert.match(html, /form="booking-step-5"[^>]*data-booking-submit="5">Utiliser mon compte existant<\/button>/);
+  assert.doesNotMatch(html, /Vérifier mon téléphone/);
+  // Même en forçant la phase téléphone : jamais de formulaire SMS tant que le serveur ne l’a pas activé.
+  for (const initialOptions of [OPTS({ phone: false }), { status: "error" }, { status: "loading" }]) assert.doesNotMatch(wizard({ initial: state({ step: 5, payment: "on_site" }), initialOptions, initialPhase: "phone" }), /data-phone-access/);
+  // Chemin compte : brouillons enregistrés d’abord, puis /#auth ; échec ⇒ aucune navigation.
+  const s = new Mem();
+  const went: string[] = [];
+  same(booking.completeBooking({ storage: s as unknown as Storage, service, state: state({ step: 5, payment: "on_site" }), mode: "account", go: (h) => went.push(h), openPhone: () => went.push("phone") }), { ok: true });
+  same(went, ["/#auth"]);
+  assert.equal(readBooking(s.getItem(BOOKING_DRAFT_KEY))!.booking.payment, "on_site");
+  const none: string[] = [];
+  assert.equal(booking.completeBooking({ storage: null, service, state: state({ step: 5, payment: "on_site" }), mode: "account", go: (h) => none.push(h), openPhone: () => none.push("phone") }).ok, false);
+  same(none, []);
+});
+
+test("SMS activé : « Vérifier mon téléphone » ouvre PhoneAccess (après enregistrement) ; compte existant en second choix", () => {
+  const recap = wizard({ initial: state({ step: 5, payment: "on_site" }), initialOptions: OPTS({ phone: true }) });
+  assert.match(recap, /data-booking-inline-submit="5">Vérifier mon téléphone<\/button>/);
+  assert.match(recap, /data-booking-account="">Utiliser mon compte existant<\/button>/);
+  const html = wizard({ initial: state({ step: 5, payment: "on_site" }), initialOptions: OPTS({ phone: true }), initialPhase: "phone" });
   assert.match(html, /<h2[^>]*>Vérifier mon téléphone<\/h2>/);
   assert.match(html, /data-phone-access="booking" data-phone-stage="form"/);
   assert.doesNotMatch(html, />Prénom</); // déjà saisis à l’étape 2
   assert.match(html, /type="tel"[^>]*value="0696 12 34 56"/);
-  assert.match(html, /<form id="booking-phone"/);
   assert.match(html, /<button type="submit" form="booking-phone"[^>]*data-booking-submit="phone"[^>]*>Recevoir un code<\/button>/);
-  assert.match(text(html), /aucun compte ni mot de passe n’est nécessaire/);
+  assert.match(html, /data-booking-account="">Utiliser mon compte existant<\/button>/);
+  const s = new Mem();
+  const went: string[] = [];
+  booking.completeBooking({ storage: s as unknown as Storage, service, state: state({ step: 5, payment: "on_site" }), mode: "phone", go: (h) => went.push(h), openPhone: () => went.push("phone") });
+  same(went, ["phone"]);
+  assert.ok(s.getItem(BOOKING_DRAFT_KEY)); // enregistré AVANT l’étape téléphone
+});
+
+test("options : GET same-origin no-store, analyse stricte ; échec / forme inattendue ⇒ null (jamais « disponible »)", async () => {
+  const calls: RequestInit[] = [];
+  const reply = (status: number, body: unknown) => (async (_u: string, init: RequestInit) => { calls.push(init); return new Response(JSON.stringify(body), { status }); }) as unknown as typeof fetch;
+  const good = { payment_methods: [{ id: "on_site", available: true, label: "a", description: "b" }, { id: "card_hold", available: false, label: "c", description: "d", reason: "Pas encore activé." }], phone_auth: { available: false }, currency: "eur" };
+  same(await phone.createOptionsApi(reply(200, good))(), good);
+  same([calls[0].method, calls[0].credentials, calls[0].cache], ["GET", "same-origin", "no-store"]);
+  assert.equal(await phone.createOptionsApi(reply(503, good))(), null);
+  assert.equal(await phone.createOptionsApi(reply(200, { payment_methods: [{ id: "cash", available: true }], phone_auth: {} }))(), null);
+  assert.equal(phone.parseBookingOptions({ ...good, phone_auth: { available: "yes" } })!.phone_auth.available, null);
+  assert.equal(phone.phoneAuthOn({ status: "ready", options: { ...good, phone_auth: { available: null } } as Phone.BookingOptions }), false);
 });
 
 // ---- PhoneAccess : machine d’états --------------------------------------------------------
@@ -148,16 +217,25 @@ test("PhoneAccess : validation locale (numéro, noms, code 6 chiffres) et requê
 });
 
 // ---- /suivi ----------------------------------------------------------------------------------
-test("/suivi : page thémée, PhoneAccess « lookup » (téléphone + nom + prénom), rien de listé avant vérification", () => {
-  const html = render(createElement(suivi.default as never));
-  assert.match(html, /class="ui-v2 /);
-  assert.match(html, /<h1>Suivre ma demande<\/h1>/);
-  assert.match(html, /data-phone-access="lookup" data-phone-stage="form"/);
-  for (const label of ["Prénom", "Nom", "Téléphone mobile"]) assert.match(html, new RegExp(`>${label}<`), label);
-  assert.doesNotMatch(html, /data-request|Mes demandes|INT-/);
+test("/suivi : SMS désactivé ⇒ aucun formulaire téléphone, message honnête + « Me connecter à mon compte »", () => {
+  const off = render(createElement(phone.PhoneLookupPage as never, { initialOptions: OPTS({ phone: false }), go() {} } as never));
+  assert.match(off, /class="ui-v2 /);
+  assert.match(off, /<h1>Suivre ma demande<\/h1>/);
+  assert.doesNotMatch(off, /data-phone-access|type="tel"/);
+  assert.match(text(off), /Le suivi par SMS sera disponible prochainement\./);
+  assert.match(off, /<a class="submit" href="\/#auth">Me connecter à mon compte<\/a>/);
+  for (const initialOptions of [{ status: "error" }, { status: "loading" }]) assert.doesNotMatch(render(createElement(phone.PhoneLookupPage as never, { initialOptions, go() {} } as never)), /data-phone-access/);
+  // La page réelle (chargement initial) n’affiche aucun formulaire avant la réponse du serveur.
+  const page = render(createElement(suivi.default as never));
+  assert.doesNotMatch(page, /data-phone-access/);
   assert.equal(suivi.metadata.title, "Suivre ma demande — Courant");
+});
+
+test("/suivi : SMS activé ⇒ PhoneAccess « lookup » (téléphone + nom + prénom), rien de listé avant vérification", () => {
   const went: string[] = [];
-  const page = render(createElement(phone.PhoneLookupPage as never, { go: (h: string) => went.push(h) } as never));
-  assert.match(page, /data-phone-access="lookup"/);
-  same(went, []); // aucune navigation avant vérification
+  const on = render(createElement(phone.PhoneLookupPage as never, { initialOptions: OPTS({ phone: true }), go: (h: string) => went.push(h) } as never));
+  assert.match(on, /data-phone-access="lookup" data-phone-stage="form"/);
+  for (const label of ["Prénom", "Nom", "Téléphone mobile"]) assert.match(on, new RegExp(`>${label}<`), label);
+  assert.doesNotMatch(on, /data-request|Mes demandes|INT-/);
+  same(went, []);
 });
