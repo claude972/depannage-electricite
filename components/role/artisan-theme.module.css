@@ -509,24 +509,3 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
-
-/* ---- Legacy leaf island ------------------------------------------------------------------
-   Only the quote draft editor (artisan-quote-draft.module.css, not yet migrated) still paints
-   fixed light surfaces: it stays a LIGHT island in both themes. Quote documents, support,
-   notifications and planning now theme themselves with :global(.ui-v2) overrides. */
-.artisanSkin section[aria-labelledby="quote-draft-title"] {
-  --ui-bg: #ffffff;
-  --ui-surface: #f4f6f5;
-  --ui-card: #ffffff;
-  --ui-text: #111111;
-  --ui-text-muted: #4b5563;
-  --ui-border: #d9dfdc;
-  --ui-accent: #0f5c3a;
-  --ui-focus: #0f5c3a;
-  --ui-danger: #b42318;
-  --ui-warning: #925c00;
-  --ui-success: #0f5c3a;
-  --ui-scheme: light;
-  color-scheme: light;
-  color: #111111;
-}
