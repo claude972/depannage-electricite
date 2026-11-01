@@ -49,3 +49,10 @@ test("client detail: booking-status hooks run BEFORE any early return (deep link
   assert.match(view, /const statusKey = i && !demo \? `\$\{session\.profileId\}\|\$\{i\.id\}` : "";/);
   assert.match(view, /bookingStatus && bookingStatus\.key === statusKey \? bookingStatus\.value : null/, "stale key ⇒ null at once");
 });
+
+test("optional account: offered in the profile and on a booking dossier only, never a step", () => {
+  const src = readFileSync("components/role/client-space.tsx", "utf8");
+  assert.match(src, /\{session\.mode === "live" && <AccountUpgrade \/>\}\s*<ProfileView session=\{session\} \/>/);
+  assert.match(src, /\{currentBookingStatus\?\.kind === "booking" && <AccountUpgrade \/>\}/);
+  assert.doesNotMatch(readFileSync("components/role/booking-confirm.tsx", "utf8"), /AccountUpgrade/, "not part of the send path");
+});

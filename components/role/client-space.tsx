@@ -56,6 +56,7 @@ import type {
 } from "../app/types";
 import { BookingConfirm } from "./booking-confirm";
 import { CardReturnPanel } from "./card-return-panel";
+import { AccountUpgrade } from "./account-upgrade";
 import { createOptionsApi } from "./phone-access";
 import { bookingPaymentText, fetchBookingStatus, type BookingStatus } from "../app/booking-status";
 import styles from "./client.module.css";
@@ -301,7 +302,13 @@ export function ClientSpace({ session }: { session: Session }) {
       case "documents":
         return <DocumentsView session={session} rows={rows} />;
       case "profile":
-        return <ProfileView session={session} />;
+        return (
+          <>
+            {/* Optional email access for a phone-verified client (renders nothing otherwise). */}
+            {session.mode === "live" && <AccountUpgrade />}
+            <ProfileView session={session} />
+          </>
+        );
       case "help":
         return <HelpView session={session} />;
       case "support":
@@ -1494,6 +1501,8 @@ function DetailView({
           <span>{bookingPaymentText(currentBookingStatus.payment, dateTime)}</span>
         </p>
       )}
+      {/* After a booking: optional email access (self-hides unless phone-verified, client, no email account). */}
+      {currentBookingStatus?.kind === "booking" && <AccountUpgrade />}
       {accepted && payment && (
         <p
           className={`${styles.paymentLine} ${payment.status === "paid" ? styles.ok : payment.status === "failed" ? styles.ko : ""}`}
