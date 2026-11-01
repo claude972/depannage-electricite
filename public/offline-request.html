@@ -191,11 +191,12 @@
         </ul>
       </div>
 
-      <form id="offline-request-form">
+      <form id="offline-request-form" novalidate>
         <p id="offline-status" role="status" aria-live="polite" data-state="info">Brouillon non enregistré. Le formulaire doit être chargé pour permettre l’enregistrement local.</p>
 
         <fieldset id="offline-fields" class="fields" disabled>
         <legend class="sr-only">Votre note</legend>
+        <p class="hint" id="offline-partial-note">Vous pouvez garder une note incomplète : elle sera vérifiée avant l’envoi, une fois en ligne.</p>
         <fieldset>
           <legend>Type de problème</legend>
           <div class="choices">
