@@ -55,6 +55,7 @@ import type {
   View,
 } from "../app/types";
 import { BookingConfirm } from "./booking-confirm";
+import { bookingPaymentText, fetchBookingStatus, type BookingStatus } from "../app/booking-status";
 import styles from "./client.module.css";
 import theme from "./client-theme.module.css";
 import { ThemeSurface } from "../app/theme-provider";
@@ -984,6 +985,21 @@ function DetailView({
   const payment = accepted
     ? session.data.payments.find((p) => p.quote_id === accepted.id)
     : undefined;
+  // Booking dossier (POST /api/bookings): its payment mode comes from the server status, and the
+  // legacy Stripe checkout is never offered for it. 404 ⇒ legacy dossier, UI unchanged.
+  const [bookingStatus, setBookingStatus] = useState<BookingStatus | null>(null);
+  useEffect(() => {
+    if (demo) return;
+    let active = true;
+    setBookingStatus(null);
+    void fetchBookingStatus(i.id).then((s) => {
+      if (active) setBookingStatus(s);
+    });
+    return () => {
+      active = false;
+    };
+  }, [i.id, demo]);
+  const isBooking = bookingStatus?.kind === "booking";
   const participants = ops?.participants || [];
   const artisan = participants.find((p) => p.role === "artisan");
   const photos = session.data.documents.filter(
@@ -1012,6 +1028,10 @@ function DetailView({
           Consulter le devis
         </button>
       );
+    if (i.status === "completed" && (isBooking || (!demo && bookingStatus === null))) {
+      // Booking dossier (or status not read yet): no legacy checkout button.
+      return null;
+    }
     if (i.status === "completed") {
       if (!accepted)
         return (
@@ -1430,6 +1450,12 @@ function DetailView({
         </p>
       </section>
 
+      {bookingStatus?.kind === "booking" && (
+        <p className={styles.paymentLine} role="status" data-booking-payment-status={bookingStatus.payment.method}>
+          <Icon name={bookingStatus.payment.method === "on_site" ? "clock" : "lock"} size={16} />
+          <span>{bookingPaymentText(bookingStatus.payment, dateTime)}</span>
+        </p>
+      )}
       {accepted && payment && (
         <p
           className={`${styles.paymentLine} ${payment.status === "paid" ? styles.ok : payment.status === "failed" ? styles.ko : ""}`}
