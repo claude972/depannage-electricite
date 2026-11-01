@@ -31,7 +31,8 @@ const fetcher = async () => {
   window.calls++;
   await new Promise((r) => setTimeout(r, 25));
   if (kind === "401") throw new ApiRequestError(401, "expired");
-  if (kind === "focus503" && window.calls > 1) throw new ApiRequestError(503, "busy", { retry_after_s: 5 });
+  if (kind === "focus503" && window.calls > 1) throw new ApiRequestError(503, "busy", { retry_after_s: Number(q.get("ra") || 5) });
+  if (kind === "focus401" && window.calls > 1) throw new ApiRequestError(401, "expired");
   return envelope(window.calls === 1 ? "PRIVATE_OLD_DETAIL" : "FRESH_DETAIL_" + window.calls);
 };
 const ensureFresh = async () => { window.fresh++; return { kind: "loaded" }; };
@@ -160,6 +161,62 @@ test("useDetailPresence in real React: 401 terminal, TTL after clock jump, focus
       assert.equal(s.last.decision, "detail_error", "failed revalidation is visible, not a fresh-looking copy");
       assert.ok((s.last.retryInS ?? 0) > 0, "retry delayed by Retry-After");
       assert.equal(s.last.detail, undefined);
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    // 2d. Retry-After 2 s elapsed but < 15 s since the last passive attempt: focus must NOT re-read.
+    {
+      const { page, errors } = await (async () => {
+        const page = await browser.newPage();
+        const errors: string[] = [];
+        page.on("pageerror", (e: Error) => errors.push(e.message));
+        await page.goto(`http://127.0.0.1:${port}/?case=focus503&ra=2`);
+        return { page, errors };
+      })();
+      await page.waitForFunction(() => (window as unknown as W).last?.detail === "PRIVATE_OLD_DETAIL");
+      await page.evaluate(() => {
+        (window as unknown as W).__off += 16_000;
+        window.dispatchEvent(new Event("focus"));
+      });
+      await page.waitForFunction(() => (window as unknown as W).last?.decision === "detail_error");
+      await page.evaluate(() => {
+        (window as unknown as W).__off += 2_100;
+        window.dispatchEvent(new Event("focus"));
+      });
+      await page.waitForTimeout(200);
+      assert.equal(await page.evaluate(() => (window as unknown as W).calls), 2, "passive cooldown 15 s between attempts, not only Retry-After");
+      await page.evaluate(() => {
+        (window as unknown as W).__off += 13_000;
+        window.dispatchEvent(new Event("focus"));
+      });
+      await page.waitForFunction(() => (window as unknown as W).calls === 3);
+      // Explicit user retry keeps its own rule (Retry-After only).
+      await page.waitForFunction(() => (window as unknown as W).last?.decision === "detail_error");
+      await page.evaluate(() => { (window as unknown as W).__off += 2_100; });
+      await page.evaluate(() => (window as unknown as W).retry());
+      await page.waitForFunction(() => (window as unknown as W).calls === 4);
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    // 2e. Cached copy then 401: passive listeners are terminal (one GET, then focus storms emit none).
+    {
+      const { page, errors } = await open("focus401");
+      await page.waitForFunction(() => (window as unknown as W).last?.detail === "PRIVATE_OLD_DETAIL");
+      await page.evaluate(async () => {
+        (window as unknown as W).__off += 16_000;
+        for (let n = 0; n < 3; n++) {
+          window.dispatchEvent(new Event("focus"));
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        (window as unknown as W).__off += 60_000;
+        window.dispatchEvent(new Event("focus"));
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      await page.waitForTimeout(300);
+      const s = await page.evaluate(() => ({ calls: (window as unknown as W).calls, last: (window as unknown as W).last }));
+      assert.equal(s.calls, 2, "401 over a cached copy: no further passive GET");
+      assert.equal(s.last.decision, "detail_error");
+      assert.equal(s.last.detail, undefined, "the private copy is not shown after a 401");
       assert.deepEqual(errors, []);
       await page.close();
     }
