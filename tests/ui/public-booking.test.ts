@@ -28,7 +28,10 @@ const same = (a: unknown, b: unknown, msg = "") => assert.equal(JSON.stringify(a
 const contact = { civility: "mme" as const, first_name: "Camille", last_name: "Durand", email: "camille.durand@example.test", phone: "06 12 34 56 78", company: true };
 const address = { address: "12 rue des Lilas", postal_code: "97200", city: "Fort-de-France" };
 const filled = (over: Partial<Booking.BookingState> = {}): Booking.BookingState => ({ ...booking.EMPTY_BOOKING, urgent: false, slot: "day_after", notes: "La prise noircit autour d’une broche.", contact, address, payment: "on_site", ...over });
-const wizard = (over: Partial<Booking.BookingState> = {}) => render(createElement(booking.BookingWizard as never, { service, range: "80 € – 180 €", onClose() {}, initial: { ...booking.EMPTY_BOOKING, ...over } } as never));
+// Server options (GET /api/bookings/options) as a fake: on-site available, phone auth on.
+const OPTIONS = { status: "ready", options: { payment_methods: [{ id: "on_site", available: true }, { id: "card_hold", available: false }], phone_auth: { available: true }, currency: "eur" } } as const;
+const AVAILABLE = { on_site: { available: true } };
+const wizard = (over: Partial<Booking.BookingState> = {}) => render(createElement(booking.BookingWizard as never, { service, range: "80 € – 180 €", onClose() {}, initial: { ...booking.EMPTY_BOOKING, ...over }, initialOptions: OPTIONS } as never));
 class MemoryStorage {
   data = new Map<string, string>();
   fail = new Set<string>();
@@ -286,7 +289,7 @@ test("« Continuer » après saisie des notes, du téléphone et de l’adresse 
   same([r.state.step, r.errors, r.finish], [3, {}, false]);
   r = booking.advanceBooking({ ...r.state, address });
   same([r.state.step, r.errors, r.finish], [4, {}, false]);
-  r = booking.advanceBooking({ ...r.state, payment: "on_site" });
+  r = booking.advanceBooking({ ...r.state, payment: "on_site" }, AVAILABLE);
   same([r.state.step, r.errors, r.finish], [5, {}, false]);
   r = booking.advanceBooking(r.state);
   same([r.state.step, r.finish], [5, true]);
