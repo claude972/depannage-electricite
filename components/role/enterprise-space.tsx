@@ -14,6 +14,9 @@ import {
   type ReactNode,
 } from "react";
 import styles from "./enterprise.module.css";
+import theme from "./enterprise-theme.module.css";
+import { ThemeSurface } from "../app/theme-provider";
+import { ThemeToggle } from "../app/theme-toggle";
 import { Icon } from "../app/icons";
 import { InstallPanel } from "../app/install-panel";
 import {
@@ -509,6 +512,7 @@ export function EnterpriseSpace({ session }: { session: Session }) {
   }
 
   return (
+    <ThemeSurface className={theme.enterpriseSkin}>
     <div className={styles.shell}>
       <header className={styles.topbar} inert={isNarrow && menuOpen}>
         <button
@@ -527,6 +531,7 @@ export function EnterpriseSpace({ session }: { session: Session }) {
           <span className={styles.brandSub}>Portail entreprise</span>
         </button>
         <div className={styles.topbarActions}>
+          <ThemeToggle />
           <span className={styles.topbarBell}>
             <HeaderBell session={session} />
           </span>
@@ -680,6 +685,7 @@ export function EnterpriseSpace({ session }: { session: Session }) {
         </main>
       </div>
     </div>
+    </ThemeSurface>
   );
 }
 
