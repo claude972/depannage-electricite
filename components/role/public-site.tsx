@@ -64,17 +64,22 @@ export function PublicSite({ session }: { session: PublicSession }) {
     </div>
   );
   // Request view: the SHARED RequestForm, unchanged (same props as before), inside an opt-in skin.
-  if (view === "new")
+  // `#new/<category>` (service pages) pre-selects a KNOWN business category only; a saved draft
+  // keeps priority (its own values, and the session category untouched).
+  if (view === "new") {
+    const linked = CATEGORIES.find((c) => c.id === session.param)?.id;
+    const initialCategory = !session.pendingDraft && linked ? linked : session.categoryId;
     return (
       <PublicChrome current="new" handlers={chromeHandlers} onHome={() => navigate("home")} mainClassName={formStyles.page}>
         <div className={formStyles.wrap}>
           {themedAlerts}
           <div className={formStyles.requestSkin} data-public-skin="request">
-            <RequestForm initialCategory={session.categoryId} initialValues={session.pendingDraft} sites={[]} mode="public" busy={session.busy} onBack={() => session.go("home")} onSubmit={async (values) => { session.saveDraft(values); }} onDemo={() => session.startDemo("client", "new")} />
+            <RequestForm initialCategory={initialCategory} initialValues={session.pendingDraft} sites={[]} mode="public" busy={session.busy} onBack={() => session.go("home")} onSubmit={async (values) => { session.saveDraft(values); }} onDemo={() => session.startDemo("client", "new")} />
           </div>
         </div>
       </PublicChrome>
     );
+  }
 
   // Account view: the existing AuthView (draft notice + SHARED AuthForm, unchanged) in a skin.
   if (view === "auth")
