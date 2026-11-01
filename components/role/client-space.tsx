@@ -240,6 +240,7 @@ export function ClientSpace({ session }: { session: Session }) {
               subtitle="Les échanges liés à vos interventions restent regroupés ici."
             />
             <MessageCenter
+              live={session.mode === "live"}
               interventions={rows}
               messages={session.data.messages}
               role={session.role}

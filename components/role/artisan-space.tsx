@@ -2310,6 +2310,7 @@ function Messages({ session }: { session: Session }) {
       />
       {mine.length ? (
         <MessageCenter
+          live={session.mode === "live"}
           key={selected}
           interventions={mine}
           messages={session.data.messages}

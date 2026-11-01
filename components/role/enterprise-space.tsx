@@ -3944,6 +3944,7 @@ function MessagesView({ c }: { c: Ctx }) {
       <PageTitle title="Messages" subtitle="Échanges liés aux interventions du périmètre" />
       {scope.interventions.length ? (
         <MessageCenter
+          live={session.mode === "live"}
           key={selected}
           interventions={byDateDesc(scope.interventions)}
           messages={session.data.messages}

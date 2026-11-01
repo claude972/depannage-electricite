@@ -1,9 +1,18 @@
 "use client";
 // Operational forms extracted from the original monolith; behaviour preserved, shared by the
 // role spaces. Styling classes live in app/globals.css.
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { api, PHOTO_TYPES, validateUpload } from "./api";
 import { AddressField, createAddressApi } from "./address-field";
+import {
+  applyOutcome,
+  fetchHistoryPage,
+  historyKey,
+  initialHistory,
+  mergeMessages,
+  type HistoryFetch,
+  type HistoryState,
+} from "./message-history";
 import { Icon } from "./icons";
 import { Empty, Field, ConfirmAction, Unavailable } from "./ui";
 import {
@@ -575,6 +584,47 @@ export function QuoteEditor({
     </form>
   );
 }
+// Paginated history of the open conversation (FASTSPLIT-MESSAGE-HISTORY-001). Live mode only:
+// the newest page is read when the dossier opens, older pages on explicit request. State is keyed
+// by identity + dossier: a change aborts the read in flight and starts empty; a late reply is
+// ignored. Nothing is cached beyond the mounted view.
+const browserFetch: HistoryFetch = (url, init) => fetch(url, init);
+function useMessageHistory(live: boolean, profileId: string, interventionId: string, fetchImpl: HistoryFetch) {
+  const key = historyKey(profileId, interventionId);
+  const enabled = live && Boolean(profileId) && Boolean(interventionId);
+  const [state, setState] = useState<HistoryState>(() => initialHistory(key));
+  const stateRef = useRef(state);
+  const flight = useRef<AbortController | null>(null);
+  const update = useCallback((next: (s: HistoryState) => HistoryState) => {
+    stateRef.current = next(stateRef.current);
+    setState(stateRef.current);
+  }, []);
+  const load = useCallback(() => {
+    const from = stateRef.current;
+    if (!enabled || from.key !== key || from.status === "loading" || from.status === "not_found" || from.status === "signed_out") return;
+    if (from.loaded && !from.hasMore) return;
+    flight.current?.abort();
+    const ctl = new AbortController();
+    flight.current = ctl;
+    update((s) => ({ ...s, status: "loading" }));
+    void fetchHistoryPage(fetchImpl, interventionId, from.cursor, ctl.signal).then((outcome) => {
+      if (flight.current !== ctl) return; // superseded by a dossier/identity change
+      flight.current = null;
+      update((s) => applyOutcome(s, key, outcome));
+    });
+  }, [enabled, key, interventionId, fetchImpl, update]);
+  useEffect(() => {
+    flight.current?.abort();
+    flight.current = null;
+    update(() => initialHistory(key));
+    if (enabled) load();
+    return () => {
+      flight.current?.abort();
+      flight.current = null;
+    };
+  }, [key, enabled, load, update]);
+  return { state: state.key === key ? state : initialHistory(key), load, enabled };
+}
 export function MessageCenter({
   interventions,
   messages,
@@ -583,6 +633,8 @@ export function MessageCenter({
   selectedId,
   busy,
   onSubmit,
+  live = false,
+  fetchHistory = browserFetch,
 }: {
   interventions: Intervention[];
   messages: Message[];
@@ -591,10 +643,18 @@ export function MessageCenter({
   selectedId: string;
   busy: boolean;
   onSubmit: (id: string, body: string) => Promise<boolean | undefined>;
+  /** Live session: the paginated history is read from /api/messages. Demo/default: preview only, no call. */
+  live?: boolean;
+  /** Test seam for the history client. */
+  fetchHistory?: HistoryFetch;
 }) {
   const [id, setId] = useState(selectedId || interventions[0]?.id || "");
   const [body, setBody] = useState("");
-  const rows = messages.filter((m) => m.intervention_id === id);
+  const history = useMessageHistory(live, profileId, id, fetchHistory);
+  const h = history.state;
+  const unavailable = history.enabled && h.status === "not_found";
+  const rows = unavailable ? [] : history.enabled ? mergeMessages(id, messages, h.pages) : messages.filter((m) => m.intervention_id === id);
+  const firstLoad = history.enabled && !h.loaded && (h.status === "idle" || h.status === "loading");
   return (
     <section className="panel messages-layout">
       <div className="message-threads">
@@ -631,12 +691,52 @@ export function MessageCenter({
               </h2>
               <span>Conversation liée à l’intervention</span>
             </div>
-            <div className="message-history" aria-live="polite">
-              {rows.length ? (
+            <div className="message-history" aria-live="polite" aria-busy={h.status === "loading"}>
+              {history.enabled && h.hasMore && !unavailable && (
+                <button
+                  type="button"
+                  className="button outline"
+                  data-message-older
+                  disabled={h.status === "loading"}
+                  onClick={history.load}
+                >
+                  Charger les messages plus anciens
+                </button>
+              )}
+              {history.enabled && h.status === "loading" && (
+                <p role="status" data-message-history="loading">
+                  Chargement des messages…
+                </p>
+              )}
+              {history.enabled && h.status === "error" && (
+                <div role="alert" data-message-history="error">
+                  <p>
+                    {h.loaded
+                      ? "Les messages plus anciens n’ont pas pu être chargés. Les messages affichés restent valables."
+                      : "L’historique des messages n’a pas pu être chargé. Les messages affichés restent valables."}
+                  </p>
+                  <button type="button" className="button outline" onClick={history.load}>
+                    Réessayer
+                  </button>
+                </div>
+              )}
+              {history.enabled && h.status === "signed_out" && (
+                <p role="alert" data-message-history="signed_out">
+                  Votre session a expiré. Reconnectez-vous pour retrouver vos messages.
+                </p>
+              )}
+              {unavailable ? (
+                <div data-message-history="not_found">
+                  <Empty icon="message" title="Conversation indisponible">
+                    Cette conversation n’est pas accessible depuis votre compte.
+                  </Empty>
+                </div>
+              ) : rows.length ? (
                 rows.map((m) => (
                   <div
                     className={`message-bubble ${m.author_id === profileId ? "mine" : ""}`}
                     key={m.id}
+                    data-message-id={m.id}
                   >
                     <span>
                       {m.author_id === profileId
@@ -649,12 +749,13 @@ export function MessageCenter({
                     <small>{date(m.created_at)}</small>
                   </div>
                 ))
-              ) : (
+              ) : firstLoad ? null : (
                 <Empty icon="message" title="Commencez l’échange">
                   Posez une question sur cette intervention.
                 </Empty>
               )}
             </div>
+            {!unavailable && (
             <form
               className="message-compose"
               onSubmit={(e) => {
@@ -687,6 +788,7 @@ export function MessageCenter({
                 <Icon name="send" />
               </button>
             </form>
+            )}
           </>
         )}
       </div>
