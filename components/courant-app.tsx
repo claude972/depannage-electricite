@@ -14,6 +14,7 @@ import { PLATFORM_DEMO } from "../lib/features/platform-operations/demo";
 import { demoNotificationPage } from "../lib/features/notifications/demo";
 import { createRevalidationScheduler } from "./app/revalidate";
 import { createRefreshCoordinator, refreshContextKey, type ReadResult, type RefreshCoordinator } from "./app/workspace-refresh";
+import { safeCheckoutUrl } from "./app/booking-status";
 import { createWorkspaceReader } from "./app/workspace-reader";
 import {
   acknowledgeUpload,
@@ -418,6 +419,23 @@ export default function CourantApp() {
   // Return parameters are hints: re-read server state, never mark anything as paid.
   useEffect(() => {
     if (!returnContext || booting) return;
+    if (returnContext.kind === "booking") {
+      // Wait for an identified session: the hint is kept until then (never a status from the URL).
+      if (mode !== "live") {
+        setNotice("Connectez-vous avec le même compte pour vérifier votre réservation. Aucun statut n’est déduit du lien.");
+        setAuthMode("login");
+        navigate("auth");
+        return;
+      }
+      const back = returnContext;
+      setReturnContext(null);
+      if (back.state === "success") void finalizeBooking(back.requestId);
+      else {
+        setNotice("Paiement interrompu : aucune empreinte n’a été confirmée et rien n’a été débité. Vous pouvez réessayer ou annuler la réservation.");
+        if (pendingDraft) navigate("new");
+      }
+      return;
+    }
     if (returnContext.kind === "auth") {
       if (returnContext.state === "confirmed") {
         // Same-tab return from the signup email with a request prepared before: open its
@@ -1131,15 +1149,24 @@ export default function CourantApp() {
         contact: { first_name: c.first_name.trim(), last_name: c.last_name.trim(), email: c.email.trim(), phone: c.phone.trim() },
         payment_choice: current.payment,
       };
-      let result: BookingReceipt;
+      let result: BookingReceipt | { status: "authorization_required"; url: string };
       try {
-        result = await api<BookingReceipt>("/api/bookings", body);
+        result = await api<BookingReceipt | { status: "authorization_required"; url: string }>("/api/bookings", body);
       } catch (e) {
         if (e instanceof ApiRequestError && e.status === 409)
           throw new Error(
             "Cette demande a peut-être déjà été enregistrée avec un contenu différent. Vérifiez « Mes demandes » avant toute nouvelle demande.",
           );
         throw e; // draft, booking and key kept: the next attempt replays the SAME key
+      }
+      if (result?.status === "authorization_required") {
+        // Card hold: the draft, booking and key stay in this tab; the provider page records an
+        // authorisation (not a charge) and the return is verified by the server (finalize).
+        const url = safeCheckoutUrl(result.url);
+        if (!url) throw new ApiRequestError(502, "Le lien de paiement reçu n’est pas sûr ; rien n’a été débité. Réessayez ou choisissez le règlement sur place.");
+        ctx.notice("Redirection vers la page sécurisée de votre banque… Aucun débit n’est effectué.");
+        window.location.assign(url);
+        return;
       }
       if (result?.status !== "confirmed" || !result.intervention?.id)
         throw new ApiRequestError(502, "Le service a répondu sans confirmation exploitable. Votre demande a pu être enregistrée : vérifiez « Mes demandes » avant de réessayer.");
@@ -1159,6 +1186,51 @@ export default function CourantApp() {
           ? "Demande confirmée. Règlement sur place après l’intervention : rien n’est payé maintenant."
           : "Demande confirmée.",
       );
+    });
+  }
+  // Card hold return (?booking_request_id&booking_return=success): the URL proves nothing; the
+  // server finalize re-verifies the provider authorisation before confirming. Same key, same draft.
+  async function finalizeBooking(requestId: string) {
+    return run(async (ctx) => {
+      let result: BookingReceipt;
+      try {
+        result = await api<BookingReceipt>("/api/bookings/finalize", { request_id: requestId });
+      } catch (e) {
+        if (e instanceof ApiRequestError && e.status === 409)
+          throw new Error("Votre réservation n’a pas pu être confirmée avec cette empreinte. Vérifiez « Mes demandes » ; rien n’a été débité.");
+        throw new Error("La vérification de votre empreinte n’a pas abouti. Rien n’a été débité ; réessayez dans un instant depuis la confirmation.");
+      }
+      if (result?.status !== "confirmed" || !result.intervention?.id)
+        throw new Error("La vérification de votre empreinte n’a pas abouti. Rien n’a été débité ; réessayez dans un instant.");
+      if (ctx.alive()) await refresh();
+      if (booking?.request_id === requestId) {
+        ctx.when(setPendingDraft)(null);
+        ctx.when(setBooking)(null);
+        ctx.when(() => {
+          clearBooking(getDraftStorage());
+          try {
+            sessionStorage.removeItem(DRAFT_KEY);
+          } catch {}
+        })();
+      }
+      ctx.when(setSelectedId)(result.intervention.id);
+      ctx.when(navigate)("detail", result.intervention.id);
+      ctx.notice("Demande confirmée. Empreinte bancaire enregistrée : aucun débit ; seul le montant du devis accepté pourra être prélevé.");
+    });
+  }
+  // Explicit cancellation of a card-hold attempt (server releases the hold). The key is then
+  // dropped from the booking so a new attempt (e.g. on site) uses a fresh key; the draft stays.
+  async function cancelBooking() {
+    return run(async (ctx) => {
+      const id = booking?.request_id;
+      if (!id || !booking) throw new Error("Aucune réservation en cours à annuler.");
+      const r = await api<{ status?: string }>("/api/bookings/cancel", { request_id: id });
+      if (r?.status !== "cancelled") throw new Error("L’annulation n’a pas pu être confirmée. Réessayez.");
+      const { request_id: _drop, ...rest } = booking;
+      void _drop;
+      ctx.when(setBooking)(rest);
+      ctx.when(() => saveBooking(getDraftStorage(), rest))();
+      ctx.notice("Réservation annulée. Aucun débit n’a été effectué ; votre saisie est conservée.");
     });
   }
   async function createIntervention(values: RequestValues, photos: File[] = []) {
@@ -2623,6 +2695,8 @@ export default function CourantApp() {
     loadPaymentStatus,
     createIntervention,
     confirmBooking,
+    cancelBooking,
+    finalizeBooking,
     uploads,
     retryUploads,
     acknowledgeUpload(interventionId, key, documentId) {

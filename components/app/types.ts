@@ -534,7 +534,9 @@ export const UNKNOWN_CAPABILITIES: Capabilities = {
 export type ReturnContext =
   | { kind: "payment"; state: "pending" | "cancelled"; interventionId: string }
   | { kind: "connect"; state: "returned" | "refresh" }
-  | { kind: "auth"; state: "confirmed" | "expired" };
+  | { kind: "auth"; state: "confirmed" | "expired" }
+  /** Card hold provider return: a HINT only — the server finalize/status decides. */
+  | { kind: "booking"; state: "success" | "cancel"; requestId: string };
 
 // Every view the single-page shell can render. Access is decided in session.ts.
 export type View =

@@ -20,6 +20,8 @@ export function BookingConfirm({
   onContactChange,
   onPaymentChange,
   cardAvailable = false,
+  verifyCardHold,
+  cancelCardHold,
 }: {
   draft: RequestValues;
   booking: BookingDraft;
@@ -35,6 +37,10 @@ export function BookingConfirm({
   onPaymentChange?(payment: PaymentChoice): void;
   /** Card authorisation flow available (server checkout API qualified). Default false: honest refusal. */
   cardAvailable?: boolean;
+  /** Card hold already started with this key (reply lost / back from the bank): server finalize. */
+  verifyCardHold?(requestId: string): Promise<boolean>;
+  /** Cancels the card-hold attempt on the server; the mode/key only change after « cancelled ». */
+  cancelCardHold?(): Promise<boolean>;
 }) {
   const [sending, setSending] = useState(false);
   const [problem, setProblem] = useState("");
@@ -125,7 +131,22 @@ export function BookingConfirm({
                   ? "Rien n’est payé à la réservation ; le montant final figure dans le devis détaillé."
                   : "Une empreinte n’est pas un débit ; seul le montant du devis accepté peut être prélevé."}
               </small>
-              {booking.payment === "card_hold" && !cardAvailable && onPaymentChange && (
+              {booking.payment === "card_hold" && booking.request_id && (verifyCardHold || cancelCardHold) && (
+                <span className="booking-card-actions" data-booking-card-actions="">
+                  <br />
+                  {verifyCardHold && (
+                    <button type="button" className="text-button" disabled={sending || busy} onClick={() => void verifyCardHold(booking.request_id as string)}>
+                      Vérifier mon empreinte
+                    </button>
+                  )}{" "}
+                  {cancelCardHold && (
+                    <button type="button" className="text-button" disabled={sending || busy} onClick={() => void cancelCardHold()}>
+                      Annuler la réservation par carte
+                    </button>
+                  )}
+                </span>
+              )}
+              {booking.payment === "card_hold" && !booking.request_id && !cardAvailable && onPaymentChange && (
                 <>
                   <br />
                   <button type="button" className="text-button" disabled={sending || busy} onClick={() => { onPaymentChange("on_site"); setProblem(""); }}>

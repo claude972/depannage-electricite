@@ -55,6 +55,7 @@ import type {
   View,
 } from "../app/types";
 import { BookingConfirm } from "./booking-confirm";
+import { createOptionsApi } from "./phone-access";
 import { bookingPaymentText, fetchBookingStatus, type BookingStatus } from "../app/booking-status";
 import styles from "./client.module.css";
 import theme from "./client-theme.module.css";
@@ -207,6 +208,18 @@ export function ClientSpace({ session }: { session: Session }) {
   const goMessages = () => session.go("messages");
   // « Modifier » on the booking confirmation opens the regular form prefilled with the same draft.
   const [editBooking, setEditBooking] = useState(false);
+  // Card availability comes from the server options only (never assumed).
+  const [cardAvailable, setCardAvailable] = useState(false);
+  useEffect(() => {
+    if (!session.booking || session.mode !== "live") return;
+    let active = true;
+    void createOptionsApi()().then((o) => {
+      if (active) setCardAvailable(Boolean(o?.payment_methods.find((m) => m.id === "card_hold")?.available));
+    });
+    return () => {
+      active = false;
+    };
+  }, [session.booking, session.mode]);
 
   function content() {
     if (session.loading) return <Loader label="Chargement de votre espace…" />;
@@ -228,6 +241,9 @@ export function ClientSpace({ session }: { session: Session }) {
               onEdit={() => setEditBooking(true)}
               onContactChange={session.updateBookingContact}
               onPaymentChange={session.updateBookingPayment}
+              cardAvailable={cardAvailable}
+              verifyCardHold={session.finalizeBooking}
+              cancelCardHold={session.cancelBooking}
             />
           );
         return (
@@ -942,6 +958,24 @@ function DetailView({
   );
   // Deep link to a dossier absent from the cached workspace: one causal refresh before « introuvable ».
   const presence = useDetailPresence(session, "client-detail", id, Boolean(i));
+  // Booking dossier (POST /api/bookings): its payment mode comes from the server status; the
+  // legacy Stripe checkout is offered only for a proven legacy dossier (404). Hooks stay BEFORE any
+  // early return (deep link: absent → present must not change the hook order). Keyed by job + UID:
+  // reset to null at once on any change, a late reply for another key is ignored.
+  const statusKey = i && !demo ? `${session.profileId}|${i.id}` : "";
+  const [bookingStatus, setBookingStatus] = useState<{ key: string; value: BookingStatus } | null>(null);
+  useEffect(() => {
+    if (!statusKey) return;
+    let active = true;
+    const jobId = statusKey.slice(statusKey.indexOf("|") + 1);
+    void fetchBookingStatus(jobId).then((value) => {
+      if (active) setBookingStatus({ key: statusKey, value });
+    });
+    return () => {
+      active = false;
+    };
+  }, [statusKey]);
+  const currentBookingStatus = bookingStatus && bookingStatus.key === statusKey ? bookingStatus.value : null;
   if (!i) {
     if (presence.decision === "loading") return <Loader label="Recherche du dossier…" />;
     if (presence.decision === "detail" || presence.decision === "detail_loading" || presence.decision === "detail_error")
@@ -985,21 +1019,6 @@ function DetailView({
   const payment = accepted
     ? session.data.payments.find((p) => p.quote_id === accepted.id)
     : undefined;
-  // Booking dossier (POST /api/bookings): its payment mode comes from the server status, and the
-  // legacy Stripe checkout is never offered for it. 404 ⇒ legacy dossier, UI unchanged.
-  const [bookingStatus, setBookingStatus] = useState<BookingStatus | null>(null);
-  useEffect(() => {
-    if (demo) return;
-    let active = true;
-    setBookingStatus(null);
-    void fetchBookingStatus(i.id).then((s) => {
-      if (active) setBookingStatus(s);
-    });
-    return () => {
-      active = false;
-    };
-  }, [i.id, demo]);
-  const isBooking = bookingStatus?.kind === "booking";
   const participants = ops?.participants || [];
   const artisan = participants.find((p) => p.role === "artisan");
   const photos = session.data.documents.filter(
@@ -1028,8 +1047,16 @@ function DetailView({
           Consulter le devis
         </button>
       );
-    if (i.status === "completed" && (isBooking || (!demo && bookingStatus === null))) {
-      // Booking dossier (or status not read yet): no legacy checkout button.
+    if (i.status === "completed" && !demo && currentBookingStatus?.kind !== "legacy") {
+      // The legacy Stripe checkout is offered ONLY for a proven legacy dossier (status 404).
+      // Booking dossier, status loading, 503 or malformed ⇒ never the old checkout.
+      if (currentBookingStatus?.kind === "unavailable")
+        return (
+          <Unavailable
+            title="Statut de règlement momentanément indisponible"
+            reason="Nous n’avons pas pu vérifier le mode de règlement de ce dossier. Aucun paiement n’est proposé tant que ce n’est pas vérifié ; réessayez dans un instant."
+          />
+        );
       return null;
     }
     if (i.status === "completed") {
@@ -1450,10 +1477,10 @@ function DetailView({
         </p>
       </section>
 
-      {bookingStatus?.kind === "booking" && (
-        <p className={styles.paymentLine} role="status" data-booking-payment-status={bookingStatus.payment.method}>
-          <Icon name={bookingStatus.payment.method === "on_site" ? "clock" : "lock"} size={16} />
-          <span>{bookingPaymentText(bookingStatus.payment, dateTime)}</span>
+      {currentBookingStatus?.kind === "booking" && (
+        <p className={styles.paymentLine} role="status" data-booking-payment-status={currentBookingStatus.payment.method}>
+          <Icon name={currentBookingStatus.payment.method === "on_site" ? "clock" : "lock"} size={16} />
+          <span>{bookingPaymentText(currentBookingStatus.payment, dateTime)}</span>
         </p>
       )}
       {accepted && payment && (
