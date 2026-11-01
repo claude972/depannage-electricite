@@ -13,6 +13,7 @@ import {
   draftText,
   mergeMessages,
   offersOlder,
+  openThread,
   type ComposeDraft,
   type HistoryFetch,
   type HistoryState,
@@ -639,6 +640,8 @@ export function MessageCenter({
   onSubmit,
   live = false,
   fetchHistory = browserFetch,
+  canSend,
+  readOnlyReason,
 }: {
   interventions: Intervention[];
   messages: Message[];
@@ -651,8 +654,12 @@ export function MessageCenter({
   live?: boolean;
   /** Test seam for the history client. */
   fetchHistory?: HistoryFetch;
+  /** Whether the viewer may write in this dossier (default: yes). The server still decides. */
+  canSend?: (id: string) => boolean;
+  /** Short reason shown instead of the compose box when canSend is false. */
+  readOnlyReason?: string;
 }) {
-  const [id, setId] = useState(selectedId || interventions[0]?.id || "");
+  const [picked, setId] = useState(selectedId || interventions[0]?.id || "");
   // The open dossier follows the selectedId prop (hash #messages/A → #messages/B in the same
   // document) and identity changes; a click in the thread list still selects explicitly.
   const [seen, setSeen] = useState({ selectedId, profileId });
@@ -662,6 +669,12 @@ export function MessageCenter({
     if (selectedId) setId(selectedId);
     else if (identityChanged) setId(interventions[0]?.id || "");
   }
+  // A dossier that left the list (scope switched, rights removed) is never kept open unless it is
+  // the explicit target: its messages, history and draft must not show in the new scope.
+  const id = openThread(picked, selectedId, interventions.map((i) => i.id));
+  if (id !== picked) setId(id);
+  const target = interventions.find((i) => i.id === id);
+  const writable = !canSend || canSend(id);
   // The compose draft belongs to ONE identity + dossier: switching never carries A's text to B.
   const threadKey = historyKey(profileId, id);
   const [draft, setDraft] = useState<ComposeDraft>({ key: threadKey, text: "" });
@@ -699,14 +712,9 @@ export function MessageCenter({
         ) : (
           <>
             <div className="conversation-header">
-              <h2>
-                {
-                  category(
-                    interventions.find((i) => i.id === id)?.category || "",
-                  ).label
-                }
-              </h2>
-              <span>Conversation liée à l’intervention</span>
+              {/* A target absent from the list gets a generic title, never an invented category. */}
+              <h2>{target ? category(target.category).label : "Conversation"}</h2>
+              <span>{target ? "Conversation liée à l’intervention" : `Dossier ${shortId(id)}`}</span>
             </div>
             <div className="message-history" aria-live="polite" aria-busy={h.status === "loading"}>
               {history.enabled && offersOlder(h) && (
@@ -772,7 +780,12 @@ export function MessageCenter({
                 </Empty>
               )}
             </div>
-            {!unavailable && (
+            {!unavailable && !writable && (
+              <p className="inline-note" data-message-readonly>
+                {readOnlyReason || "Lecture seule : vos droits sur ce dossier ne permettent pas d’envoyer de message."}
+              </p>
+            )}
+            {!unavailable && writable && (
             <form
               className="message-compose"
               onSubmit={(e) => {

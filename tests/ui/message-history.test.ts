@@ -19,6 +19,7 @@ import {
   draftText,
   mergeMessages,
   offersOlder,
+  openThread,
   parseHistoryPage,
 } from "../../components/app/message-history";
 import type { Message } from "../../components/app/types";
@@ -106,6 +107,14 @@ test("successful send clears only the unchanged sent draft; text typed meanwhile
   assert.equal(clearSentDraft(other, k, "bonjour"), other, "another thread's draft is never cleared");
 });
 
+test("openThread: a dossier that left the list is never kept open, unless it is the explicit target", () => {
+  assert.equal(openThread(B, "", [A]), A, "B left the scope (rights removed / context switch): first listed");
+  assert.equal(openThread(B, "", []), "", "nothing listed: nothing open");
+  assert.equal(openThread(B, B, [A]), B, "explicit target outside the loaded list stays (server decides)");
+  assert.equal(openThread(B, A, [A, B]), B, "explicit click in the list is kept");
+  assert.equal(openThread("", "", [A, B]), A);
+});
+
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM =
   process.env.QA_CHROMIUM_PATH ||
@@ -130,7 +139,7 @@ const fakeFetch = async (url, init) => {
   const u = new URL(url, location.origin);
   const d = u.searchParams.get("intervention_id"), cursor = u.searchParams.get("cursor"), limit = Number(u.searchParams.get("limit"));
   window.calls.push({ d, cursor, limit, credentials: init.credentials, cache: init.cache });
-  const late = (kind === "switch" || kind === "follow") && d === A && window.calls.length === 1;
+  const late = ((kind === "switch" || kind === "follow") && d === A && window.calls.length === 1) || ((kind === "scope" || kind === "scope2") && d === B && window.calls.length === 1);
   await new Promise((r) => setTimeout(r, late ? 400 : 20)); // late reply ignores the abort on purpose
   if (kind === "401") return new Response("{}", { status: 401 });
   if (kind === "401late" && cursor) return new Response("{}", { status: 401 });
@@ -146,11 +155,19 @@ const preview = kind === "empty" ? [] : [...desc(A).slice(0, 5), ...desc(B).slic
 const interventions = [A, B].map((id) => ({ id, category: "panel", status: "requested", created_at: "2026-10-01T00:00:00.000Z" }));
 window.sent = [];
 // selectedId and profileId are driven like the shell does (#messages/<id> param, identity change).
+const X = "10000000-0000-4000-8000-00000000000c"; // a dossier absent from the given list
+const mk = (id) => ({ id, category: "panel", status: "requested", created_at: "2026-10-01T00:00:00.000Z" });
+const START = { scope: { ids: [A, B], sel: B, key: "ctx1|" + B }, scope2: { ids: [A, B], sel: B, key: "ctx1|" + B }, readonly: { ids: [A, B], sel: A, key: "k", ro: true }, unknown: { ids: [A], sel: X, key: "k" } };
 function App() {
   const [sel, setSel] = useState(A);
   const [profile, setProfile] = useState("u1");
+  const [cfg, setCfg] = useState(START[kind] || null);
   window.setSel = setSel;
   window.setProfile = setProfile;
+  window.setCfg = (p) => setCfg((c) => ({ ...c, ...p }));
+  if (cfg)
+    // Mirrors the enterprise call site: scoped list, visible target only, read-only rights.
+    return h(MessageCenter, { key: cfg.key, interventions: cfg.ids.map(mk), messages: preview, role: "manager", profileId: profile, selectedId: cfg.sel, busy: false, canSend: cfg.ro ? () => false : undefined, onSubmit: (id, body) => { window.sent.push([id, body]); return Promise.resolve(true); }, live: true, fetchHistory: fakeFetch });
   return h(MessageCenter, { interventions, messages: preview, role: "client", profileId: profile, selectedId: sel, busy: false, onSubmit: (id, body) => { window.sent.push([id, body]); return kind === "deferred" ? new Promise((r) => { window.resolveSend = r; }) : Promise.resolve(true); }, live: kind !== "demo", fetchHistory: fakeFetch });
 }
 createRoot(document.getElementById("app")).render(h(App));
@@ -326,6 +343,38 @@ test("MessageCenter history in real React/Chromium: 237 messages over 10 pages, 
       assert.equal(await page.inputValue("#message-body"), "suite", "failed send keeps the draft");
       assert.deepEqual(await page.evaluate(() => (window as unknown as Win).sent), [[A, "bonjour"], [A, "suite"]]);
       (globalThis as { deferredReached?: boolean }).deferredReached = true;
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    // 8. Enterprise scope: B open (its first reply late), draft typed, then B leaves the visible scope
+    //    (rights removed: same key) or the context switches (new key): never B's messages/draft in A.
+    for (const kind of ["scope", "scope2"]) {
+      const { page, errors } = await open(kind);
+      await page.fill("#message-body", "draft B");
+      await page.evaluate(([k, a]: string[]) => (window as unknown as { setCfg(p: object): void }).setCfg(k === "scope" ? { ids: [a], sel: "" } : { ids: [a], sel: "", key: "ctx2|" }), [kind, A]);
+      await page.waitForFunction(() => document.querySelectorAll("[data-message-id]").length === 25);
+      await page.waitForTimeout(500); // B's late reply has arrived by now
+      const shown = await ids(page);
+      assert.ok(shown.every((i) => i.startsWith("m-a-")), kind + ": never a message of B in scope A");
+      assert.equal(await page.inputValue("#message-body"), "", kind + ": B's draft is not carried into A");
+      assert.deepEqual((await calls(page)).map((x) => [x.d, x.cursor]), [[B, null], [A, null]], kind + ": history GET for the new target only");
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    // 9. Read-only rights: no compose box, a short reason instead.
+    {
+      const { page, errors } = await open("readonly");
+      await page.waitForSelector("[data-message-readonly]");
+      assert.equal(await page.$("#message-body"), null);
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    // 10. Target absent from the list: generic « Conversation » + reference, no invented category.
+    {
+      const { page, errors } = await open("unknown");
+      await page.waitForSelector(".conversation-header h2");
+      assert.equal((await page.textContent(".conversation-header h2"))?.trim(), "Conversation");
+      assert.match((await page.textContent(".conversation-header")) ?? "", /Dossier/);
       assert.deepEqual(errors, []);
       await page.close();
     }

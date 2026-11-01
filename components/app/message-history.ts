@@ -143,3 +143,12 @@ export const draftText = (draft: ComposeDraft, key: string) => (draft.key === ke
  */
 export const clearSentDraft = (draft: ComposeDraft, sentKey: string, sentText: string): ComposeDraft =>
   draft.key === sentKey && draft.text === sentText ? { key: sentKey, text: "" } : draft;
+
+/**
+ * Conversation to keep open: the current one while it is in the list or is the explicit target;
+ * otherwise (it left the scope, rights removed) the explicit target, else the first listed one.
+ */
+export function openThread(current: string, target: string, listed: readonly string[]): string {
+  if (!current || current === target || listed.includes(current)) return current || target || listed[0] || "";
+  return target || listed[0] || "";
+}
