@@ -48,8 +48,11 @@ export function resolveInitialTheme(input: { stored: ThemeName | null; system: T
 
 export type ThemeDocument = {
   documentElement: { getAttribute(name: string): string | null; setAttribute(name: string, value: string): void };
-  querySelector(selector: string): { getAttribute(name: string): string | null; setAttribute(name: string, value: string): void } | null;
+  querySelector(selector: string): ThemeMeta | null;
+  /** Optional: every meta theme-color (the layout may emit one per prefers-color-scheme). */
+  querySelectorAll?(selector: string): ArrayLike<ThemeMeta>;
 };
+type ThemeMeta = { getAttribute(name: string): string | null; setAttribute(name: string, value: string): void };
 
 export type ThemeControllerDeps = {
   doc: ThemeDocument;
@@ -81,11 +84,18 @@ export function createThemeController(deps: ThemeControllerDeps): ThemeControlle
   let current: ThemeName = isThemeName(fromDom) ? fromDom : resolveInitialTheme({ stored, system: systemTheme(deps.media) });
   const listeners = new Set<(t: ThemeName) => void>();
   let surfaces = 0;
-  let originalMeta: string | null = null;
+  // One entry per meta theme-color (light/dark media variants included): while a surface is
+  // mounted the EXPLICIT theme wins over the media query, so every variant gets the same colour.
+  let originals: { el: ThemeMeta; content: string | null }[] = [];
 
-  const meta = () => deps.doc.querySelector('meta[name="theme-color"]');
+  const SELECTOR = 'meta[name="theme-color"]';
+  const metas = (): ThemeMeta[] => {
+    if (deps.doc.querySelectorAll) return Array.from(deps.doc.querySelectorAll(SELECTOR));
+    const one = deps.doc.querySelector(SELECTOR);
+    return one ? [one] : [];
+  };
   const applyMeta = () => {
-    if (surfaces > 0) meta()?.setAttribute("content", THEME_COLOR[current]);
+    if (surfaces > 0) for (const el of metas()) el.setAttribute("content", THEME_COLOR[current]);
   };
   const apply = (theme: ThemeName) => {
     current = theme;
@@ -131,7 +141,7 @@ export function createThemeController(deps: ThemeControllerDeps): ThemeControlle
       }
     },
     acquireSurface() {
-      if (surfaces === 0) originalMeta = meta()?.getAttribute("content") ?? null;
+      if (surfaces === 0) originals = metas().map((el) => ({ el, content: el.getAttribute("content") }));
       surfaces += 1;
       applyMeta();
       let released = false;
@@ -139,7 +149,7 @@ export function createThemeController(deps: ThemeControllerDeps): ThemeControlle
         if (released) return;
         released = true;
         surfaces -= 1;
-        if (surfaces === 0 && originalMeta !== null) meta()?.setAttribute("content", originalMeta);
+        if (surfaces === 0) for (const { el, content } of originals) if (content !== null) el.setAttribute("content", content);
       };
     },
   };

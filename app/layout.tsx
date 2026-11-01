@@ -35,8 +35,12 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  // Non-migrated screens keep the historical colour; opt-in surfaces update it while mounted.
-  themeColor: "#102a43",
+  // Neutral per system scheme, aligned with the manifest and THEME_COLOR (components/app/theme.ts).
+  // Themed surfaces override every variant with the explicit choice while mounted.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },
+    { media: "(prefers-color-scheme: dark)", color: "#000000" },
+  ],
 };
 export default function RootLayout({
   children,
