@@ -1,3 +1,9 @@
+## Livraison courante — bandeau Confirmer et réservation publique
+
+App source `018a482c6d18733c2938eeaf4b40937255a19d92`, READY `dpl_Fc9LbHKZwRBGMRutHpqGYW2dr8yf`, publique : https://depannage-electricite-kdr9m0qj1-brafas-projects.vercel.app/prestations/plusieurs-prises-sans-courant . ROOT8/8PASS 360/390/1280/1440 × clair/sombre : barre fixe prestation/prix indicatif/Confirmer, footer non masqué, urgence→coordonnées→adresse→récapitulatif→Auth, erreurs/retour/saisie conservée,0POST/0erreurJS. Relecture capture390 effectuée. Deux défauts mobile réels corrigés d6240c6 (réserve footer et clic perdu au blur), échecs historiques conservés. Source et GitSource vérifiés, BID `nZ8rCAgV-5R34wSTX_qQT`. Code intégré/poussé ; contrôle ciblé22PASS+tsc strictPASS ; CI018 encore à relire. Rapport `docs/reviews/SERVICE_BOOKING_018_HOSTED_PASS.md` dans intégration52c7a30.
+
+Bornes : ce contrôle va jusqu’à la connexion ; nouvel envoi authentifié et délivrance email restent à vérifier. Aucun nouveau compte/cohorte/cloudSQL/achat/production ; aucun cron15min réactivé. Premier owner/Stripe toujours différés. Parcours complet global non déclaré livré.
+
 ## Checkpoint actuel — 01/11/2026 00:42 Martinique
 
 Version publique : https://depannage-electricite-fp9k2xvhh-brafas-projects.vercel.app
