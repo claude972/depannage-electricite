@@ -440,3 +440,64 @@
     order: -1;
   }
 }
+
+/* FASTSPLIT site/tracking theme — opt-in Delivo theme. Applies only inside a ThemeSurface
+   (`.ui-v2`, --ui-* tokens for light and dark); unthemed consumers keep the rules above.
+   The map frame stays a LIGHT area in both themes (tiles, markers, casing and the schematic
+   fallback were designed for it, so it stays readable); only its accent (route, position,
+   snap) becomes the primary green. Stage colours keep their meaning, always with text. */
+:global(.ui-v2) .panel { border-color: var(--ui-border); background: var(--ui-card); color: var(--ui-text); font-family: var(--ui-font); }
+:global(.ui-v2) .head h2,
+:global(.ui-v2) .consent h3,
+:global(.ui-v2) .dest h3,
+:global(.ui-v2) .consent ul,
+:global(.ui-v2) .facts dd,
+:global(.ui-v2) .eta strong,
+:global(.ui-v2) .destCurrent,
+:global(.ui-v2) .destCurrent svg,
+:global(.ui-v2) .candidates li,
+:global(.ui-v2) .draft { color: var(--ui-text); }
+:global(.ui-v2) .note,
+:global(.ui-v2) .muted,
+:global(.ui-v2) .small,
+:global(.ui-v2) .facts dt,
+:global(.ui-v2) .eta span,
+:global(.ui-v2) .eta small,
+:global(.ui-v2) .attribution,
+:global(.ui-v2) .destCurrent small,
+:global(.ui-v2) .candidates small { color: var(--ui-text-muted); }
+:global(.ui-v2) .demo { color: var(--ui-warning); }
+:global(.ui-v2) .warn { border-color: var(--ui-warning); background: var(--ui-surface); color: var(--ui-text); }
+:global(.ui-v2) .error { color: var(--ui-danger); }
+:global(.ui-v2) .ok { color: var(--ui-success); }
+:global(.ui-v2) .consent { border-color: var(--ui-border); background: var(--ui-surface); }
+:global(.ui-v2) .facts > div,
+:global(.ui-v2) .dest { border-color: var(--ui-border); }
+:global(.ui-v2) .stages li { border-color: var(--ui-border); background: var(--ui-card); color: var(--ui-text-muted); }
+:global(.ui-v2) .stages li > span { border-color: var(--ui-border); }
+:global(.ui-v2) .stageDone { color: var(--ui-text); }
+:global(.ui-v2) .stageDone > span { background: var(--ui-surface); border-color: var(--ui-success) !important; color: var(--ui-success); }
+:global(.ui-v2) .stageCurrent { border-color: var(--ui-accent) !important; color: var(--ui-accent) !important; }
+:global(.ui-v2) .stageCurrent > span { background: var(--ui-primary); border-color: var(--ui-primary) !important; color: var(--ui-on-primary); }
+:global(.ui-v2) .eta { border-color: var(--ui-border); background: var(--ui-card); }
+:global(.ui-v2) .eta > svg { color: var(--ui-accent); }
+:global(.ui-v2) .mapFrame { border-color: var(--ui-border); }
+:global(.ui-v2) .routeLine { stroke: var(--ui-primary); }
+:global(.ui-v2) .positionMarker { fill: var(--ui-primary); }
+:global(.ui-v2) .snapMarker { stroke: var(--ui-primary); }
+:global(.ui-v2) .accuracyHalo { fill: color-mix(in srgb, var(--ui-primary) 12%, transparent); stroke: color-mix(in srgb, var(--ui-primary) 45%, transparent); }
+:global(.ui-v2) .mapControls button { border-color: var(--ui-border); background: var(--ui-card); color: var(--ui-text); }
+:global(.ui-v2) .mapControls button:focus-visible,
+:global(.ui-v2) .attribution a:focus-visible,
+:global(.ui-v2) .manual summary:focus-visible { outline: 3px solid var(--ui-focus); outline-offset: 2px; }
+:global(.ui-v2) .attribution a,
+:global(.ui-v2) .manual summary { color: var(--ui-accent); }
+:global(.ui-v2) .candidates li { border-color: var(--ui-border); }
+:global(.ui-v2) .draft { border-color: var(--ui-accent); }
+/* Global primitives rendered by the tracking panels, scoped to their root. */
+:global(.ui-v2) .panel :global(.button.primary) { border-color: var(--ui-primary); background: var(--ui-primary); color: var(--ui-on-primary); }
+:global(.ui-v2) .panel :global(.button.primary):hover:not(:disabled) { background: #136640; }
+:global(.ui-v2) .panel :global(.button.outline) { border-color: var(--ui-border); background: transparent; color: var(--ui-text); }
+:global(.ui-v2) .panel :global(.button.outline):hover:not(:disabled) { border-color: var(--ui-accent); background: var(--ui-surface); }
+:global(.ui-v2) .panel :global(.field) input,
+:global(.ui-v2) .panel :global(.field) select { border: 1px solid var(--ui-border); background: var(--ui-bg); color: var(--ui-text); color-scheme: var(--ui-scheme); }
