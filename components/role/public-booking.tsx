@@ -1,0 +1,313 @@
+"use client";
+// Service booking wizard (FASTSPLIT-SERVICE-BOOKING-FLOW-001), opened in place on a service page.
+// Four steps: urgency (or a wished slot: a wish, never a booked appointment), private contact
+// details, intervention address, summary. Nothing is sent here: the last step stores the canonical
+// public request draft + the booking extras (components/app/booking-draft.ts) in this tab, then
+// goes to sign-in; the request is sent only after login and an explicit confirmation. Contact
+// details never enter the request description. The category comes from the service: never re-asked.
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { AddressField, createAddressApi, type AddressValue } from "../app/address-field";
+import { CIVILITIES, SLOTS, SLOT_LABEL, bookingDescription, contactErrors, saveBooking, type BookingContact, type BookingDraft, type Civility, type Slot } from "../app/booking-draft";
+import { getDraftStorage } from "../app/request-draft-boot";
+import { savePublicDraft } from "../../lib/shared/request-draft";
+import { Field } from "../app/ui";
+import type { ServiceEntry } from "./public-service-catalog";
+import styles from "./public-booking.module.css";
+
+// ---- State and pure rules ------------------------------------------------------------------------
+export type BookingStep = 1 | 2 | 3 | 4;
+export type BookingState = {
+  step: BookingStep;
+  urgent: boolean | null;
+  slot: Slot | null;
+  notes: string;
+  contact: BookingContact;
+  address: AddressValue;
+};
+export const EMPTY_BOOKING: BookingState = {
+  step: 1,
+  urgent: null,
+  slot: null,
+  notes: "",
+  contact: { civility: "", first_name: "", last_name: "", email: "", phone: "", company: false },
+  address: { address: "", postal_code: "", city: "" },
+};
+export const STEP_TITLES: Record<BookingStep, string> = { 1: "Urgence", 2: "Vos coordonnées", 3: "Adresse d’intervention", 4: "Récapitulatif" };
+export const STEP_ACTION: Record<BookingStep, string> = { 1: "Continuer", 2: "Continuer", 3: "Continuer", 4: "Continuer vers la connexion" };
+const CIVILITY_LABEL: Record<Civility, string> = { mme: "Madame", m: "Monsieur", "": "Non précisé" };
+export const SAVE_FAILED_MESSAGE =
+  "Votre demande n’a pas pu être conservée dans ce navigateur (stockage local refusé ou plein). Rien n’a été envoyé. Vos réponses restent affichées : autorisez le stockage pour ce site ou réessayez.";
+
+type Errors = Partial<Record<string, string>>;
+export function urgencyErrors(s: Pick<BookingState, "urgent" | "slot">): Errors {
+  if (s.urgent === null) return { urgent: "Indiquez si l’intervention est urgente." };
+  if (s.urgent === false && !s.slot) return { slot: "Choisissez un créneau souhaité." };
+  return {};
+}
+/** Same constraints as the request API (address 5+, postal code 5 digits, city 2+). */
+export function addressErrors(a: AddressValue): Errors {
+  const errors: Errors = {};
+  if (a.address.trim().length < 5) errors.address = "Indiquez l’adresse (5 caractères minimum).";
+  if (!/^\d{5}$/.test(a.postal_code.trim())) errors.postal_code = "Indiquez un code postal à 5 chiffres.";
+  if (a.city.trim().length < 2) errors.city = "Indiquez la commune.";
+  return errors;
+}
+export function stepErrors(s: BookingState): Errors {
+  if (s.step === 1) return urgencyErrors(s);
+  if (s.step === 2) return contactErrors(s.contact);
+  if (s.step === 3) return addressErrors(s.address);
+  return {};
+}
+export function urgencyLabel(s: Pick<BookingState, "urgent" | "slot">): string {
+  if (s.urgent === true) return "Urgent";
+  if (s.urgent === false && s.slot) return `${SLOT_LABEL[s.slot]} (créneau souhaité)`;
+  return "À préciser";
+}
+export function toBooking(service: Pick<ServiceEntry, "slug">, s: BookingState): BookingDraft {
+  const urgent = s.urgent === true;
+  return { slug: service.slug, urgent, slot: urgent ? null : s.slot, notes: s.notes, contact: { ...s.contact, first_name: s.contact.first_name.trim(), last_name: s.contact.last_name.trim(), email: s.contact.email.trim(), phone: s.contact.phone.trim() } };
+}
+
+/** Last step: both drafts or nothing announced as saved; navigation only on full success. */
+export function finishBooking({ storage, service, state, go }: { storage: Storage | null; service: Pick<ServiceEntry, "slug" | "title" | "category">; state: BookingState; go: (href: string) => void }): { ok: true } | { ok: false; message: string } {
+  const booking = toBooking(service, state);
+  let draftOk = false;
+  try {
+    draftOk = !!storage && savePublicDraft(storage, {
+      category: service.category,
+      description: bookingDescription(service.title, booking),
+      address: state.address.address.trim(),
+      postal_code: state.address.postal_code.trim(),
+      city: state.address.city.trim(),
+      urgency: booking.urgent ? "urgent" : "scheduled",
+    }).ok;
+  } catch {
+    draftOk = false;
+  }
+  const bookingOk = draftOk && saveBooking(storage, booking);
+  if (!draftOk || !bookingOk) return { ok: false, message: SAVE_FAILED_MESSAGE };
+  go("/#auth");
+  return { ok: true };
+}
+
+// ---- Bottom bar (closed page: « Confirmer » ; wizard: the active step's real submit) -----------
+/** True while a text control is focused on a narrow screen: the bar leaves the fixed layer so the
+ *  on-screen keyboard never covers it nor the field. */
+function useTypingOnMobile(): boolean {
+  const [typing, setTyping] = useState(false);
+  useEffect(() => {
+    const isField = (t: EventTarget | null) => t instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) && !["checkbox", "radio", "button", "submit"].includes((t as HTMLInputElement).type);
+    const narrow = () => typeof window.matchMedia === "function" && window.matchMedia("(max-width: 760px)").matches;
+    const onIn = (e: FocusEvent) => setTyping(isField(e.target) && narrow());
+    const onOut = () => setTyping(false);
+    document.addEventListener("focusin", onIn);
+    document.addEventListener("focusout", onOut);
+    return () => {
+      document.removeEventListener("focusin", onIn);
+      document.removeEventListener("focusout", onOut);
+    };
+  }, []);
+  return typing;
+}
+
+export function BookingBar({ title, range, children }: { title: string; range: string; children: ReactNode }) {
+  const typing = useTypingOnMobile();
+  return (
+    <div className={styles.bar} data-booking-bar="" data-typing={typing ? "true" : undefined}>
+      <div className={styles.barInner}>
+        <div className={styles.barText}>
+          <strong>{title}</strong>
+          <span>Estimation indicative : {range}</span>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ---- Wizard ----------------------------------------------------------------------------------
+const addressApi = createAddressApi();
+
+export function BookingWizard({
+  service,
+  range,
+  onClose,
+  initial = EMPTY_BOOKING,
+  go = (href: string) => window.location.assign(href),
+  storage = () => getDraftStorage(),
+}: {
+  service: ServiceEntry;
+  range: string;
+  onClose: () => void;
+  initial?: BookingState;
+  go?: (href: string) => void;
+  storage?: () => Storage | null;
+}) {
+  const [state, setState] = useState<BookingState>(initial);
+  const [errors, setErrors] = useState<Errors>({});
+  const [failure, setFailure] = useState("");
+  const [geolocation, setGeolocation] = useState<Geolocation | null>(null);
+  const title = useRef<HTMLHeadingElement>(null);
+  const first = useRef(true);
+  useEffect(() => {
+    setGeolocation(typeof navigator !== "undefined" && navigator.geolocation ? navigator.geolocation : null);
+  }, []);
+  useEffect(() => {
+    // Focus the step title (also when the wizard opens): keyboard and screen readers land on it.
+    title.current?.focus({ preventScroll: first.current ? false : true });
+    if (!first.current) title.current?.scrollIntoView({ block: "start", behavior: "auto" });
+    first.current = false;
+  }, [state.step]);
+
+  const set = (patch: Partial<BookingState>) => setState((s) => ({ ...s, ...patch }));
+  const setContact = (patch: Partial<BookingContact>) => setState((s) => ({ ...s, contact: { ...s.contact, ...patch } }));
+  const formId = `booking-step-${state.step}`;
+  const submit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setFailure("");
+    const found = stepErrors(state);
+    setErrors(found);
+    if (Object.keys(found).length) return;
+    if (state.step < 4) {
+      set({ step: (state.step + 1) as BookingStep });
+      return;
+    }
+    const result = finishBooking({ storage: storage(), service, state, go });
+    if (!result.ok) setFailure(result.message);
+  };
+  const back = () => {
+    setErrors({});
+    setFailure("");
+    if (state.step === 1) onClose();
+    else set({ step: (state.step - 1) as BookingStep });
+  };
+
+  return (
+    <div className={styles.wizard} data-booking-wizard="" data-step={state.step}>
+      <div className={styles.layout}>
+        <aside className={styles.summary} aria-label="Votre demande" data-booking-summary="">
+          <strong>{service.title}</strong>
+          <span>Estimation indicative : {range}</span>
+          <span>Urgence : {urgencyLabel(state)}</span>
+        </aside>
+
+        <div className={styles.panel}>
+          <button type="button" className={styles.back} onClick={back}>
+            <span aria-hidden="true">←</span> Retour
+          </button>
+          <ol className={styles.steps} aria-label="Étapes">
+            {([1, 2, 3, 4] as BookingStep[]).map((n) => (
+              <li key={n} aria-current={n === state.step ? "step" : undefined} data-done={n < state.step ? "true" : undefined}>
+                <span aria-hidden="true">{n}</span>
+                {STEP_TITLES[n]}
+              </li>
+            ))}
+          </ol>
+          <h2 ref={title} tabIndex={-1} className={styles.stepTitle}>
+            {STEP_TITLES[state.step]}
+          </h2>
+
+          <form id={formId} className={styles.form} onSubmit={submit} noValidate>
+            {state.step === 1 && (
+              <>
+                <fieldset className={styles.choices}>
+                  <legend>Est-ce urgent ?</legend>
+                  {([["Oui", true], ["Non", false]] as const).map(([label, value]) => (
+                    <label key={label} className={styles.choice}>
+                      <input type="radio" name="urgent" checked={state.urgent === value} onChange={() => set({ urgent: value, slot: value ? null : state.slot })} />
+                      {label}
+                    </label>
+                  ))}
+                  {errors.urgent && <small className={styles.error} role="alert">{errors.urgent}</small>}
+                </fieldset>
+                {state.urgent === false && (
+                  <fieldset className={styles.choices} data-booking-slots="">
+                    <legend>Quand souhaitez-vous l’intervention ?</legend>
+                    {SLOTS.map((slot) => (
+                      <label key={slot} className={styles.choice}>
+                        <input type="radio" name="slot" checked={state.slot === slot} onChange={() => set({ slot })} />
+                        {SLOT_LABEL[slot]}
+                      </label>
+                    ))}
+                    <small className={styles.hint}>C’est un souhait transmis à l’artisan, pas un rendez-vous réservé : le rendez-vous est fixé ensuite avec lui.</small>
+                    {errors.slot && <small className={styles.error} role="alert">{errors.slot}</small>}
+                  </fieldset>
+                )}
+                <Field label="Précisions sur la panne (facultatif)" hint="Ce que vous constatez. N’indiquez ici ni nom, ni téléphone, ni email.">
+                  <textarea value={state.notes} maxLength={1500} rows={4} onChange={(e) => set({ notes: e.target.value })} />
+                </Field>
+              </>
+            )}
+
+            {state.step === 2 && (
+              <>
+                <p className={styles.private}>Ces coordonnées restent privées : elles ne figurent pas dans la demande proposée aux artisans.</p>
+                <fieldset className={styles.choices}>
+                  <legend>Civilité</legend>
+                  {CIVILITIES.map((c) => (
+                    <label key={c || "none"} className={styles.choice}>
+                      <input type="radio" name="civility" checked={state.contact.civility === c} onChange={() => setContact({ civility: c })} />
+                      {CIVILITY_LABEL[c]}
+                    </label>
+                  ))}
+                </fieldset>
+                <div className={styles.grid}>
+                  <Field label="Prénom" error={errors.first_name}>
+                    <input autoComplete="given-name" maxLength={60} value={state.contact.first_name} onChange={(e) => setContact({ first_name: e.target.value })} />
+                  </Field>
+                  <Field label="Nom" error={errors.last_name}>
+                    <input autoComplete="family-name" maxLength={60} value={state.contact.last_name} onChange={(e) => setContact({ last_name: e.target.value })} />
+                  </Field>
+                  <Field label="Adresse email" error={errors.email}>
+                    <input type="email" autoComplete="email" inputMode="email" maxLength={254} value={state.contact.email} onChange={(e) => setContact({ email: e.target.value })} />
+                  </Field>
+                  <Field label="Téléphone" error={errors.phone}>
+                    <input type="tel" autoComplete="tel" inputMode="tel" maxLength={30} value={state.contact.phone} onChange={(e) => setContact({ phone: e.target.value })} />
+                  </Field>
+                </div>
+                <label className={styles.check}>
+                  <input type="checkbox" checked={state.contact.company} onChange={(e) => setContact({ company: e.target.checked })} />
+                  Je fais cette demande pour une entreprise
+                </label>
+              </>
+            )}
+
+            {state.step === 3 && (
+              <>
+                <AddressField
+                  value={state.address}
+                  onChange={(next) => set({ address: next })}
+                  error={errors.address ?? errors.postal_code ?? errors.city}
+                  search={addressApi.search}
+                  reverse={addressApi.reverse}
+                  geolocation={geolocation}
+                />
+              </>
+            )}
+
+            {state.step === 4 && (
+              <>
+                <dl className={styles.recap} data-booking-recap="">
+                  <div><dt>Prestation</dt><dd>{service.title}</dd></div>
+                  <div><dt>Estimation indicative</dt><dd>{range}</dd></div>
+                  <div><dt>Urgence</dt><dd>{urgencyLabel(state)}</dd></div>
+                  <div><dt>Adresse d’intervention</dt><dd>{state.address.address}<br />{state.address.postal_code} {state.address.city}</dd></div>
+                  <div><dt>Vos coordonnées (privées)</dt><dd>{[CIVILITY_LABEL[state.contact.civility] === "Non précisé" ? "" : CIVILITY_LABEL[state.contact.civility], state.contact.first_name, state.contact.last_name].filter(Boolean).join(" ")}<br />{state.contact.email} · {state.contact.phone}{state.contact.company ? <><br />Demande pour une entreprise</> : null}</dd></div>
+                  {state.notes.trim() && <div><dt>Précisions</dt><dd>{state.notes}</dd></div>}
+                </dl>
+                <p className={styles.next} role="note">Rien n’est encore envoyé. À l’étape suivante, vous vous connectez ou créez votre compte, puis vous confirmez l’envoi de la demande.</p>
+              </>
+            )}
+            {failure && <p className={styles.failure} role="alert">{failure}</p>}
+          </form>
+        </div>
+      </div>
+
+      <BookingBar title={service.title} range={range}>
+        <button type="submit" form={formId} className={styles.barButton} data-booking-submit={state.step}>
+          {STEP_ACTION[state.step]}
+        </button>
+      </BookingBar>
+    </div>
+  );
+}
