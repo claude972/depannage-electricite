@@ -202,3 +202,78 @@
   color: #172b4d;
   font-size: 14px;
 }
+
+/* ===== FASTSPLIT-SHARED-MODULE-THEME-001 — themed overrides ==================================
+   Opt-in: active only under ThemeSurface (`.ui-v2`). Same selectors as above +1 class, colour
+   declarations mapped to --ui-* tokens (light/dark); layout unchanged. Without a `.ui-v2`
+   ancestor nothing here applies and the legacy rendering above is untouched. */
+:global(.ui-v2) .bell {
+  border-color: var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .bell:hover:not(:disabled) {
+  border-color: var(--ui-accent);
+}
+:global(.ui-v2) .bell:disabled {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .bellCount {
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+  box-shadow: 0 0 0 2px var(--ui-surface);
+}
+:global(.ui-v2) .summary,
+:global(.ui-v2) .demoNote,
+:global(.ui-v2) .itemMeta,
+:global(.ui-v2) .prefsOption small {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .list {
+  border-color: var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-card);
+}
+:global(.ui-v2) .list li + li {
+  border-top-color: var(--ui-border);
+}
+:global(.ui-v2) .itemUnread {
+  background: var(--ui-surface);
+  box-shadow: inset 3px 0 0 var(--ui-accent);
+}
+:global(.ui-v2) .itemIcon {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .itemTitle,
+:global(.ui-v2) .prefs h2,
+:global(.ui-v2) .prefsGroup legend {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .itemBody,
+:global(.ui-v2) .prefsOption {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .itemError,
+:global(.ui-v2) .error {
+  color: var(--ui-danger);
+}
+:global(.ui-v2) .notice {
+  color: var(--ui-success);
+}
+:global(.ui-v2) .prefs {
+  border-color: var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-card);
+}
+:global(.ui-v2) .prefsOption input {
+  accent-color: var(--ui-primary);
+}
+:global(.ui-v2) .readOnly {
+  border-color: var(--ui-border);
+  border-left-color: var(--ui-warning);
+  background: var(--ui-card);
+  color: var(--ui-text);
+}

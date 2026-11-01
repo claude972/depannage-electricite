@@ -221,3 +221,65 @@
   font-size: 14px;
   color: #52627a;
 }
+
+/* ===== FASTSPLIT-SHARED-MODULE-THEME-001 — themed overrides ==================================
+   Opt-in: active only under ThemeSurface (`.ui-v2`). Same selectors as above +1 class, colour
+   declarations mapped to --ui-* tokens (light/dark); layout unchanged. Without a `.ui-v2`
+   ancestor nothing here applies and the legacy rendering above is untouched. */
+:global(.ui-v2) .summary,
+:global(.ui-v2) .rowMeta,
+:global(.ui-v2) .pagination,
+:global(.ui-v2) .note,
+:global(.ui-v2) .counter,
+:global(.ui-v2) .headerMeta,
+:global(.ui-v2) .eventHead,
+:global(.ui-v2) .more,
+:global(.ui-v2) .closedNote,
+:global(.ui-v2) .inlineHelp {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .list {
+  border-color: var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-card);
+}
+:global(.ui-v2) .list li + li {
+  border-top-color: var(--ui-border);
+}
+:global(.ui-v2) .row:hover {
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .rowTitle,
+:global(.ui-v2) .eventHead strong,
+:global(.ui-v2) .eventBody {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .rowArrow {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .counterOver {
+  color: var(--ui-danger);
+}
+:global(.ui-v2) .event {
+  border-color: var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-card);
+}
+:global(.ui-v2) .eventUser {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+  box-shadow: inset 3px 0 0 var(--ui-accent);
+}
+:global(.ui-v2) .eventSystem {
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .eventSystem .eventBody {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .conflict {
+  border-color: var(--ui-warning);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
