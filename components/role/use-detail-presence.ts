@@ -27,6 +27,8 @@ type PointState =
 const points = new Map<string, PointState>();
 /** Focus/visibility revalidation never re-reads a copy younger than this. */
 const FOCUS_MIN_AGE_MS = 15_000;
+/** Last PASSIVE (focus/visibility) attempt per id: the 15 s cooldown runs between attempts, even failed ones. */
+const lastPassive = new Map<string, number>();
 /** Ids point-read successfully in this context: revalidated on focus and when the cache expires. */
 const loadedOnce = new Set<string>();
 let pointsContext = "";
@@ -35,6 +37,7 @@ const usePointsContext = (context: string) => {
     pointsContext = context;
     points.clear();
     loadedOnce.clear();
+    lastPassive.clear();
   }
 };
 
@@ -137,7 +140,13 @@ export function useDetailPresence(
     // Background revalidation (the cached copy stays visible meanwhile), at most once per 15 s;
     // pointRead itself refuses while a Retry-After delay runs.
     const revalidate = () => {
-      if (cache.ageMs(id) >= FOCUS_MIN_AGE_MS) pointRead();
+      const now = Date.now();
+      const state = points.get(id);
+      if (state?.state === "signed_out" || state?.state === "pending") return; // 401 terminal for passive reads
+      if (state?.state === "failed" && now < state.retryAt) return;
+      if (cache.ageMs(id) < FOCUS_MIN_AGE_MS || now - (lastPassive.get(id) ?? -Infinity) < FOCUS_MIN_AGE_MS) return;
+      lastPassive.set(id, now);
+      pointRead();
     };
     const onFocus = () => revalidate();
     const onVisible = () => {
