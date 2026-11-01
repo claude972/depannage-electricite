@@ -302,3 +302,77 @@
   min-height: 44px;
   margin-top: 4px;
 }
+
+/* ---- Opt-in theme (artisan quote draft, after FASTSPLIT-DOCUMENTS-PLANNING-THEME-001) ---------
+   Active only under the parent ThemeSurface (`.ui-v2`): --ui-* tokens, light and dark, same
+   selectors +1 class so they win over the rules above; unthemed consumers are unchanged.
+   Draft / conflict / failure / read-only / hint states and the totals keep their structure; the
+   conflict and failure frames are global alerts repainted by the role skin. */
+:global(.ui-v2) .lead,
+:global(.ui-v2) .saved,
+:global(.ui-v2) .summary li span,
+:global(.ui-v2) .linesHead,
+:global(.ui-v2) .lineTotal,
+:global(.ui-v2) .emptyLines,
+:global(.ui-v2) .estimate,
+:global(.ui-v2) .hint {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .summaryEmpty,
+:global(.ui-v2) .summaryFooter {
+  color: var(--ui-text-muted) !important;
+}
+:global(.ui-v2) .note {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .note svg {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .conflictBody h3,
+:global(.ui-v2) .lineTotal strong,
+:global(.ui-v2) .totals strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .compare > div {
+  border-color: var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .summary li,
+:global(.ui-v2) .row,
+:global(.ui-v2) .totals > div {
+  border-bottom-color: var(--ui-border);
+}
+:global(.ui-v2) .row:last-child {
+  border-bottom: 0;
+}
+:global(.ui-v2) .linesCard,
+:global(.ui-v2) .totals {
+  border-color: var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-card);
+}
+:global(.ui-v2) .linesHead {
+  border-bottom-color: var(--ui-border);
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .remove {
+  border-color: var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .remove:hover:not(:disabled) {
+  border-color: var(--ui-danger);
+  color: var(--ui-danger);
+}
+/* Total TTC: emphasised by a surface band and a 1px accent rule (no blue tint). */
+:global(.ui-v2) .total {
+  border-top: 1px solid var(--ui-accent);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .fallback :global(.unavailable) {
+  background: var(--ui-card);
+}
