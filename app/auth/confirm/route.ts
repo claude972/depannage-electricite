@@ -1,29 +1,27 @@
-import { type EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { serverClient } from "@/lib/supabase/server";
+import { confirmEmail, parseEmailConfirmation } from "@/lib/features/auth/email-confirm";
+
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const tokenHash = url.searchParams.get("token_hash");
-  const type = url.searchParams.get("type");
-  if (tokenHash && type && ["signup", "email", "recovery"].includes(type)) {
+  const input = parseEmailConfirmation(url.searchParams);
+  let destination = "/?auth=expired";
+  if (input) {
     try {
       const db = await serverClient();
-      const { error } = await db.auth.verifyOtp({
-        token_hash: tokenHash,
-        type: type as EmailOtpType,
-      });
-      if (!error)
-        return NextResponse.redirect(
-          new URL(
-            type === "recovery"
-              ? "/auth/reset-password?verified=1"
-              : "/?auth=confirmed",
-            url.origin,
-          ),
-        );
+      if (await confirmEmail(input, db.auth)) {
+        destination = input.kind === "otp" && input.type === "recovery"
+          ? "/auth/reset-password?verified=1"
+          : "/?auth=confirmed";
+      }
     } catch {
-      /* Redirect to a recoverable error, never treat an invalid token as success. */
+      // Invalid/provider failures remain recoverable; no opaque code or provider text escapes.
     }
   }
-  return NextResponse.redirect(new URL("/?auth=expired", url.origin));
+  const response = NextResponse.redirect(new URL(destination, url.origin));
+  response.headers.set("Cache-Control", "private, no-store");
+  response.headers.set("Referrer-Policy", "no-referrer");
+  return response;
 }
