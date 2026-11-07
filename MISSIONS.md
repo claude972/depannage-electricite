@@ -52,3 +52,7 @@ Référence de travail [plan des 76 capacités](docs/PLAN_LIVRAISON_INTEGRALE.md
 ## ART-03 / ADM-02 — décision individuelle de justificatif
 
 Pilote seul auteur de la migration, API /api/artisan/credentials/[id]/reviews et tests. Historique immuable, motif, version attendue, rejeu par UUID, lecture par l'artisan propriétaire et l'administration actuelle. Une pièce revue garde son type et sa date déclarée, l'artisan peut joindre une nouvelle pièce pour corriger. Une décision sur une pièce ne modifie pas l'approbation globale du dossier. Le contrat UI expose uniquement la pièce, les décisions datées, le droit d'action et le curseur. Vérifier accès croisés, expiration, concurrence par version, zéro double audit et reprise après réponse perdue. Cloud après assemblage et revue.
+
+## PUB-06 / ADM-10 — conditions de garantie et activation, Astra backend
+
+Branche codex/warranty-activation depuis10ba87d, auteur backend exclusif : nouvelle migration versions de conditions/activation, lib/features/warranty-policy/**, APIs admin/public correspondantes, garde strict API garantie et tests. Texte fourni par opérateur uniquement ; publication distincte de l’activation app_settings, garde env conservé, commandes versionnées/rejouables, historique public des versions publiées et référence nullable sur nouvelles demandes. Refus et éligibilité historique conservés, anciens dossiers sans rattachement inventé. Aucun contenu juridique/durée ajouté, aucune activation réelle/cloud/UI ; mission corrective indépendante hors delta. Tests SQL/API ciblés puis push et revue groupée.
