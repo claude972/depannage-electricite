@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { ApiError, authenticatedClient, dbError } from "@/lib/supabase/server";
 import { clientInterventionInput, clientInterventionRow, clientInterventionSnapshot } from "@/lib/features/client-interventions/contract";
+import { comparePostgresTime } from "@/lib/shared/postgres-time-order";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -11,11 +12,8 @@ const cursorSchema = positionSchema.extend({ scope: z.string().regex(/^[a-f0-9]{
 type Position = z.infer<typeof positionSchema>;
 
 function earlier(row: Position, previous: Position) {
-  const ms = Date.parse(row.created_at) - Date.parse(previous.created_at);
-  if (ms) return ms < 0;
-  const fraction = (stamp: string) => (stamp.match(/\.(\d+)(?:Z|[+-]\d\d:\d\d)$/)?.[1] ?? "").slice(3).padEnd(3, "0");
-  const a = fraction(row.created_at), b = fraction(previous.created_at);
-  return a < b || (a === b && row.id < previous.id);
+  const order = comparePostgresTime(row.created_at, previous.created_at);
+  return order < 0 || (order === 0 && row.id < previous.id);
 }
 
 export async function POST(request: Request) {

@@ -97,6 +97,34 @@ assert.equal(await scalar('writer','select count(*)::int v from public.professio
 await assert.rejects(()=>scalar('writer','select count(*)::int v from public.professional_report($1)',[b]),e=>e.code==='P0002');
 await assert.rejects(()=>as('writer','select public.intervention_participants($1)',[jb.job]));
 console.log('PASS: real-site dossier helper scopes creator, quotes/payments, documents/Storage, chat, appointments/reports, approvals/compliance and exports; selected blocks organization-wide contracts/audit');
+await db.query(`insert into public.interventions(client_id,site_id,category,description,address,postal_code,city,urgency,estimate_min_cents,estimate_max_cents,created_at)
+ select $1,$2,'panel','Rare QA motif','Fixture address','97200','Test city','scheduled',100,200,
+   '2026-11-07 12:00:00+00'::timestamptz + n * interval '1 microsecond'
+ from generate_series(1,130) n`,[ids.writer,a]);
+const search = (actor, organization, siteId, category, status, needle, sort, page, exporting) =>
+ scalar(actor,'select public.enterprise_intervention_search($1,$2,$3,$4,$5,$6,$7,$8) v',
+   [organization,siteId,category,status,needle,sort,page,exporting]);
+const first = await search('reader',org,null,'panel','requested','rare QA','recent',1,false);
+const last = await search('reader',org,null,'panel','requested','rare QA','recent',13,false);
+const exported = await search('reader',org,a,'panel','requested','rare QA','recent',1,true);
+assert.equal(first.total,130);
+assert.equal(last.total,130);
+assert.equal(exported.items.length,130);
+assert.equal(new Set(exported.items.map(row=>row.id)).size,130);
+assert.deepEqual(first.items,exported.items.slice(0,10));
+assert.deepEqual(last.items,exported.items.slice(-10));
+assert.ok(exported.items.every(row=>row.site_id===a && !('client_id' in row) && !('description' in row)));
+assert.deepEqual((await search('reader',org,a,'panel','requested','rare QA','oldest',1,false)).items,exported.items.slice(-10).reverse());
+assert.equal((await search('global',org,null,null,null,'','recent',1,false)).total,132);
+assert.equal((await search('reader',org,null,null,null,'','recent',1,false)).total,131);
+assert.equal((await search('viewer',org,null,null,null,'','recent',1,false)).total,131);
+assert.equal((await search('reader',org,a,null,null,'rare%','recent',1,false)).total,0);
+for(const [actor,organization,siteId] of [['reader',org,b],['reader',otherOrg,null],['outside',org,null],['global',org,c]]) {
+ await assert.rejects(()=>search(actor,organization,siteId,null,null,'','recent',1,false),e=>e.code==='P0002');
+}
+await assert.rejects(()=>search('artisan',org,null,null,null,'','recent',1,false),e=>e.code==='42501');
+await db.query("delete from public.interventions where site_id=$1 and description='Rare QA motif'",[a]);
+console.log('PASS: enterprise list and export match 130 precisely ordered rows beyond bootstrap with site/RLS isolation, exact counts and minimal projection');
 for(const actor of ['reader','viewer','outside']){
  await assert.rejects(()=>as(actor,'select public.set_site_budget($1,1)',[a]));
  await assert.rejects(()=>as(actor,"select public.save_compliance($1,'Fixture','audit',current_date,'pending','')",[a]));

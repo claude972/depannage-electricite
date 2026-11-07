@@ -124,3 +124,5 @@ ROOT raccorde la reprise de la souscription courante après retour ou réponse p
 ### SYS-07 — recherche des demandes du client connecté
 
 ROOT ajoute une lecture paginée des demandes du compte, hors de la fenêtre de démarrage. Le filtre et la recherche s’appliquent avant pagination. La requête de lecture transporte les termes dans le corps et garde la projection minimale. Claude raccorde « Mes demandes » au même bouton d’ouverture des dossiers. Vérifier plus de 100 demandes, les références anciennes, les recherches littérales et le cloisonnement des comptes.
+
+ROOT ajoute la liste paginée des interventions entreprise et l’export CSV sur le même périmètre, sous RLS et contrôle des habilitations de site. Conserver les filtres et la navigation numérotée. L’export échoue explicitement au-delà de la borne technique de 5 000 dossiers filtrés. Vérifier que recherche et export dépassent la fenêtre de démarrage et excluent tout site révoqué ou étranger.
