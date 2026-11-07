@@ -43,6 +43,20 @@ test("1 · préférences de notification : cases jamais écrasées ni débordeme
   });
 });
 
+test("2 · titres : un seul h1 (celui de la coque) puis sans saut, sur l’assistance et les notifications", { skip }, async () => {
+  await withApp(async (open) => {
+    for (const route of ["client-support", "artisan-support", "manager-support", "admin-support-queue", "client-notifications", "artisan-notifications", "manager-notifications", "admin-notifications"])
+      for (const width of [390, 1280]) {
+        const { page, errors, api } = await themed(open, route, width, "light");
+        const hs = await headings(page);
+        assert.equal(hs.filter((h) => h === 1).length, 1, `${route} ${width}px: one h1 (${hs.join(",")})`);
+        assert.deepEqual(jumps(hs), [], `${route} ${width}px: heading order ${hs.join(",")}`);
+        assert.deepEqual([errors, api], [[], []]);
+        await page.context().close();
+      }
+  });
+});
+
 test("3 · état vide partagé : niveau de titre choisi par l’appelant (h1 quand c’est le contenu principal), h3 par défaut inchangé", () => {
   const ui = loadModule("components/app/ui.tsx") as { Empty: (p: Record<string, unknown>) => unknown; PageTitle: (p: Record<string, unknown>) => unknown };
   const html = (p: Record<string, unknown>) => renderToStaticMarkup(createElement(ui.Empty as never, { icon: "search", title: "Dossier introuvable", ...p } as never));
