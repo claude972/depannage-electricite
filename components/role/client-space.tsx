@@ -81,7 +81,7 @@ import { platformEntries } from "./anchors";
 import { UploadQueuePanel } from "../app/upload-queue";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
 import { AccountDataPanel } from "../features/account-data/account-data-panel";
-import { SEARCH_COPY, toListRows, useRequestsSearch } from "../features/requests-search/use-requests-search";
+import { SEARCH_COPY, rowsSignal, toListRows, useRequestsSearch } from "../features/requests-search/use-requests-search";
 import { ClientAddressesPanel, usePreferredAddress } from "../features/client-addresses/client-addresses-panel";
 import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
 import { AppointmentReminderPanel } from "../features/appointment-reminders/appointment-reminder-panel";
@@ -907,7 +907,9 @@ export function RequestsView({ session, rows }: { session: Session; rows: Interv
   const [search, setSearch] = useState("");
   // Live: server search over ALL the client's requests (not only the cached 100). Demo: local only, zero call.
   const live = session.mode === "live";
-  const remote = useRequestsSearch({ enabled: live, context: session.mutationContext, filter, search });
+  // Rows are bound to identity + filter + search AT RENDER (never an old frame). A real change of the
+  // mounted workspace rows (realtime / focus refresh) triggers a bounded re-read of page 1.
+  const remote = useRequestsSearch({ enabled: live, context: session.mutationContext, filter, search, signal: live ? rowsSignal(rows) : "" });
   let items = rows.filter(
     (i) =>
       filter === "all" ||
@@ -958,6 +960,11 @@ export function RequestsView({ session, rows }: { session: Session; rows: Interv
         </label>
       </div>
       <section className={`panel ${styles.listPanel}`} aria-busy={(live && remote.state.phase === "loading") || undefined} data-requests-search={live ? remote.state.phase : "demo"}>
+        {live && (remote.state.phase === "ready" || remote.state.phase === "error") && (
+          <button type="button" className="button" disabled={remote.state.refreshing || remote.state.loadingMore} onClick={() => remote.refresh()} data-requests-refresh="">
+            {remote.state.refreshing ? "Actualisation…" : "Actualiser"}
+          </button>
+        )}
         {live && remote.state.phase === "loading" && <p className="muted" role="status">{SEARCH_COPY.loading}</p>}
         {live && remote.state.phase === "forbidden" && <p role="alert">{remote.state.error}</p>}
         {live && remote.state.phase === "error" && (

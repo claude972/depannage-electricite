@@ -94,87 +94,133 @@ export const COPY = {
 } as const;
 
 export type SearchState = {
+  /** Render-time key (identity|filter|trimmed search) this state belongs to; "" = none. A view whose
+   *  current key differs must render loading/empty, never these rows. */
+  key: string;
   phase: "idle" | "loading" | "ready" | "error" | "forbidden";
   items: SearchItem[];
   total: number;
   cursor: string | null;
   loadingMore: boolean;
+  /** Page 1 is being re-read for the same key (« Actualiser » or a workspace change). */
+  refreshing: boolean;
   /** Which read failed (retry target). */
   failed: "first" | "more" | null;
   error: string;
 };
-export const SEARCH_INITIAL: SearchState = { phase: "idle", items: [], total: 0, cursor: null, loadingMore: false, failed: null, error: "" };
+export const SEARCH_INITIAL: SearchState = { key: "", phase: "idle", items: [], total: 0, cursor: null, loadingMore: false, refreshing: false, failed: null, error: "" };
 export type Context = { generation(): number; userId(): string | null };
 export type Timers = { set(f: () => void, ms: number): unknown; clear(handle: unknown): void };
+export const identityOf = (c: Context) => `${c.userId() ?? "-"}|${c.generation()}`;
+/** The key a render binds to: identity + filter + trimmed search. */
+export const viewKey = (c: Context, filter: Filter, search: string) => `${identityOf(c)}|${filter}|${search.trim()}`;
+/** What a render may show: the stored state only if it belongs to THIS render's key. */
+export const viewOf = (s: SearchState, key: string): SearchState => (s.key === key ? s : { ...SEARCH_INITIAL, key, phase: "loading" });
+/** Bounded revalidation on a workspace row change: debounce, then at most one read per interval. */
+export const REVALIDATE_DEBOUNCE_MS = 500;
+export const REVALIDATE_MIN_INTERVAL_MS = 10_000;
+/** Fingerprint of the mounted workspace rows (id, status, updated_at): changes only when a row does. */
+export const rowsSignal = (rows: { id: string; status: string; updated_at?: string; created_at: string }[]) => rows.map((r) => `${r.id}:${r.status}:${r.updated_at ?? r.created_at}`).sort().join(",");
 
-export function createSearchController({ api, context, set, timers, delayMs = DEBOUNCE_MS }: { api: () => SearchApi; context: Context; set: (s: SearchState) => void; timers: Timers; delayMs?: number }) {
+export function createSearchController({ api, context, set, timers, delayMs = DEBOUNCE_MS, now = () => Date.now() }: { api: () => SearchApi; context: Context; set: (s: SearchState) => void; timers: Timers; delayMs?: number; now?: () => number }) {
   let alive = true;
   let state: SearchState = { ...SEARCH_INITIAL };
   let seq = 0;
   let current: { filter: Filter; search: string } | null = null;
   let timer: unknown = null;
-  const identity = () => `${context.userId() ?? "-"}|${context.generation()}`;
-  const bound = identity();
+  let revalidateTimer: unknown = null;
+  let lastRead = -Infinity;
+  const bound = identityOf(context);
+  const keyOf = (k: { filter: Filter; search: string }) => `${bound}|${k.filter}|${k.search}`;
   const put = (s: SearchState) => {
     state = s;
     if (alive) set(s);
   };
-  const valid = (my: number, key: { filter: Filter; search: string }) => alive && my === seq && identity() === bound && current !== null && current.filter === key.filter && current.search === key.search;
+  const valid = (my: number, key: { filter: Filter; search: string }) => alive && my === seq && identityOf(context) === bound && current !== null && current.filter === key.filter && current.search === key.search;
   const cancelTimer = () => {
     if (timer !== null) timers.clear(timer);
     timer = null;
   };
+  const cancelRevalidate = () => {
+    if (revalidateTimer !== null) timers.clear(revalidateTimer);
+    revalidateTimer = null;
+  };
   const first = async (my: number, key: { filter: Filter; search: string }) => {
     if (!valid(my, key)) return;
+    lastRead = now();
     const r = await api().search({ filter: key.filter, search: key.search, cursor: null });
     if (!valid(my, key)) return; // stale sequence, other identity or other filters: dropped
-    if (r.status === 401 || r.status === 403) return put({ ...SEARCH_INITIAL, phase: "forbidden", error: COPY.forbidden });
+    const k = keyOf(key);
+    if (r.status === 401 || r.status === 403) return put({ ...SEARCH_INITIAL, key: k, phase: "forbidden", error: COPY.forbidden });
     const p = r.status === 200 ? parsePage(r.body) : null;
-    if (!p) return put({ ...SEARCH_INITIAL, phase: "error", failed: "first", error: COPY.failed });
-    put({ phase: "ready", items: p.items, total: p.total, cursor: p.page.next_cursor, loadingMore: false, failed: null, error: "" });
+    if (!p) return put({ ...SEARCH_INITIAL, key: k, phase: "error", failed: "first", error: COPY.failed });
+    put({ key: k, phase: "ready", items: p.items, total: p.total, cursor: p.page.next_cursor, loadingMore: false, refreshing: false, failed: null, error: "" });
   };
   const start = (key: { filter: Filter; search: string }, debounce: boolean) => {
     cancelTimer();
+    cancelRevalidate();
     current = key;
     const my = ++seq;
-    put({ ...SEARCH_INITIAL, phase: "loading" });
+    put({ ...SEARCH_INITIAL, key: keyOf(key), phase: "loading" });
     if (debounce) timer = timers.set(() => ((timer = null), void first(my, key)), delayMs);
     else void first(my, key);
   };
+  /** Re-reads page 1 of the SAME key, keeping the rows on screen until the reply. */
+  const refresh = () => {
+    if (!alive || !current || identityOf(context) !== bound || state.phase === "loading") return false;
+    cancelRevalidate();
+    const key = current;
+    const my = ++seq;
+    put({ ...state, refreshing: true, loadingMore: false });
+    void first(my, key);
+    return true;
+  };
   const more = async () => {
-      if (!alive || !current || state.phase !== "ready" || !state.cursor || state.loadingMore) return;
-      const my = seq, key = current, cursor = state.cursor;
-      put({ ...state, loadingMore: true, failed: null, error: "" });
-      const r = await api().search({ filter: key.filter, search: key.search, cursor });
-      if (!valid(my, key)) return;
-      if (r.status === 401 || r.status === 403) return put({ ...SEARCH_INITIAL, phase: "forbidden", error: COPY.forbidden });
-      const p = r.status === 200 ? parsePage(r.body) : null;
-      const seen = new Set(state.items.map((x) => x.id));
-      const merged = p ? [...state.items, ...p.items.filter((x) => !seen.has(x.id))] : [];
-      // total must cover every distinct item shown after the append.
-      if (!p || p.total < merged.length) return put({ ...state, loadingMore: false, failed: "more", error: COPY.moreFailed });
-      put({ ...state, loadingMore: false, items: merged, total: p.total, cursor: p.page.next_cursor });
-    };
+    if (!alive || !current || state.phase !== "ready" || !state.cursor || state.loadingMore || state.refreshing) return;
+    const my = seq, key = current, cursor = state.cursor;
+    put({ ...state, loadingMore: true, failed: null, error: "" });
+    const r = await api().search({ filter: key.filter, search: key.search, cursor });
+    if (!valid(my, key)) return;
+    if (r.status === 401 || r.status === 403) return put({ ...SEARCH_INITIAL, key: keyOf(key), phase: "forbidden", error: COPY.forbidden });
+    const p = r.status === 200 ? parsePage(r.body) : null;
+    const seen = new Set(state.items.map((x) => x.id));
+    const merged = p ? [...state.items, ...p.items.filter((x) => !seen.has(x.id))] : [];
+    // total must cover every distinct item shown after the append.
+    if (!p || p.total < merged.length) return put({ ...state, loadingMore: false, failed: "more", error: COPY.moreFailed });
+    put({ ...state, loadingMore: false, items: merged, total: p.total, cursor: p.page.next_cursor });
+  };
+  /** Commands run only for the key the user is looking at. */
+  const owns = (key: string) => alive && state.key === key && identityOf(context) === bound;
   return {
-    more,
     /** Filter change ⇒ immediate; search change ⇒ debounced; same query ⇒ nothing. */
     query(filter: Filter, search: string) {
-      if (!alive || identity() !== bound) return;
+      if (!alive || identityOf(context) !== bound) return;
       const key = { filter, search: search.trim() };
       if (current && current.filter === key.filter && current.search === key.search) return;
       start(key, !!current && current.filter === key.filter);
     },
-    retry() {
-      if (!current || state.loadingMore) return;
+    more: (key: string) => (owns(key) ? more() : Promise.resolve()),
+    retry(key: string) {
+      if (!owns(key) || !current || state.loadingMore) return;
       if (state.failed === "more") return void more();
-      const key = current;
+      const k = current;
       current = null;
-      start(key, false);
+      start(k, false);
+    },
+    /** « Actualiser »: explicit, immediate re-read of page 1. */
+    refresh: (key: string) => (owns(key) ? refresh() : false),
+    /** Workspace row change for the same identity: debounced, then throttled to one read per interval. */
+    revalidate() {
+      if (!alive || !current || identityOf(context) !== bound) return;
+      cancelRevalidate();
+      const wait = Math.max(REVALIDATE_DEBOUNCE_MS, lastRead + REVALIDATE_MIN_INTERVAL_MS - now());
+      revalidateTimer = timers.set(() => ((revalidateTimer = null), void refresh()), wait);
     },
     get: () => state,
     stop() {
       alive = false;
       cancelTimer();
+      cancelRevalidate();
     },
   };
 }

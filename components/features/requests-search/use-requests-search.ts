@@ -1,16 +1,19 @@
 "use client";
 // React binding of the « Mes demandes » server search (logic in ./model). Inactive (zero call) when
 // `enabled` is false — the demo keeps its local filtering. One controller per identity (uid +
-// generation): an identity change drops it and resets the results. StrictMode-safe (one controller
-// per effect run, stopped on cleanup).
+// generation). The returned state is bound AT RENDER to identity + filter + trimmed search: if the
+// stored state belongs to another key (first render after a prop change, before any effect), the
+// view is loading/empty — old rows are never shown, not even for one frame. Commands carry the same
+// key. `signal` (workspace row fingerprint) triggers a bounded re-read of page 1 when it changes.
 import { useEffect, useRef, useState } from "react";
-import { SEARCH_INITIAL, createSearchApi, createSearchController, type Context, type Filter, type SearchApi, type SearchState } from "./model";
+import { SEARCH_INITIAL, createSearchApi, createSearchController, identityOf, viewKey, viewOf, type Context, type Filter, type SearchApi, type SearchState } from "./model";
 
-export { COPY as SEARCH_COPY, toListRows } from "./model";
+export { COPY as SEARCH_COPY, rowsSignal, toListRows } from "./model";
 
-export function useRequestsSearch({ enabled, context, filter, search, api, delayMs }: { enabled: boolean; context: Context; filter: Filter; search: string; api?: SearchApi; delayMs?: number }) {
+export function useRequestsSearch({ enabled, context, filter, search, signal = "", api, delayMs }: { enabled: boolean; context: Context; filter: Filter; search: string; signal?: string; api?: SearchApi; delayMs?: number }) {
   const [state, setState] = useState<SearchState>(SEARCH_INITIAL);
-  const identity = `${context.userId() ?? "-"}|${context.generation()}`;
+  const identity = identityOf(context);
+  const key = viewKey(context, filter, search);
   const ctrl = useRef<ReturnType<typeof createSearchController> | null>(null);
   const latest = useRef({ api, context });
   latest.current = { api, context };
@@ -28,5 +31,22 @@ export function useRequestsSearch({ enabled, context, filter, search, api, delay
   useEffect(() => {
     if (enabled) ctrl.current?.query(filter, search);
   }, [enabled, identity, filter, search]);
-  return { state: enabled ? state : SEARCH_INITIAL, more: () => void ctrl.current?.more(), retry: () => ctrl.current?.retry() };
+  // Real row-change signal of the mounted workspace, same identity only (the controller is per identity).
+  const seenSignal = useRef<{ identity: string; signal: string } | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    const prev = seenSignal.current;
+    seenSignal.current = { identity, signal };
+    if (prev && prev.identity === identity && prev.signal !== signal) ctrl.current?.revalidate();
+  }, [enabled, identity, signal]);
+  const view = enabled ? viewOf(state, key) : SEARCH_INITIAL;
+  return {
+    state: view,
+    /** True only when the shown rows belong to this render's key (guard for row actions). */
+    owns: (k: string) => enabled && view.key === k && view.phase === "ready",
+    key,
+    more: () => void ctrl.current?.more(key),
+    retry: () => ctrl.current?.retry(key),
+    refresh: () => ctrl.current?.refresh(key),
+  };
 }
