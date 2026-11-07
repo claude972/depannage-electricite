@@ -115,6 +115,7 @@ import {
 } from "./artisan-lists";
 import { CredentialReviewPanel } from "../features/credential-reviews/credential-review-panel";
 import { AppointmentReminderPanel } from "../features/appointment-reminders/appointment-reminder-panel";
+import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-panel";
 
 // ---- Static definitions ---------------------------------------------------------------
 type Tone = "neutral" | "blue" | "green" | "amber" | "red" | "violet";
@@ -446,7 +447,17 @@ export function ArtisanSpace({ session }: { session: Session }) {
         );
         break;
       case "missions":
-        content = <Missions session={session} declinedIds={declinedIds} />;
+        content = (
+          <>
+            <Missions session={session} declinedIds={declinedIds} />
+            {/* ART-12: provider team (invitations, members, internal assignment, technician follow-up). */}
+            <ProviderTeamsPanel
+              key={`teams|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`}
+              context={session.mutationContext}
+              demo={session.mode === "demo"}
+            />
+          </>
+        );
         break;
       case "mission":
       case "detail":
