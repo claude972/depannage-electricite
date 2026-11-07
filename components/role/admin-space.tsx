@@ -94,6 +94,7 @@ import { PLATFORM_TITLES, PlatformPage } from "./platform-anchor";
 import { platformViewAllowed } from "../app/features";
 import { adminKpis, dashboardRows, loadedNote } from "./admin-lists";
 import { platformEntries } from "./anchors";
+import { OperatorProfileEditor } from "../features/public-operator-profile/operator-profile-editor";
 import { CredentialReviewPanel } from "../features/credential-reviews/credential-review-panel";
 
 type Tone = "neutral" | "blue" | "green" | "amber" | "red" | "violet";
@@ -864,9 +865,10 @@ export function AdminSpace({ session }: { session: Session }) {
     const audit = [...o.audit].sort(byNewest);
     return (
       <>
+        <OperatorProfileEditor demo={demo} superAdmin={session.platformAccess?.super_admin === true} />
         <Unavailable title="Paramètres de la plateforme" reason="Aucun réglage n’est modifiable depuis cette interface : les valeurs ci-dessous restent à définir par l’exploitant." blocker="ADM-08">
           <dl className={styles.definitions} style={{ padding: "12px 0 0" }}>
-            {["Taux de commission", "TVA par défaut", "Territoire couvert", "Identité de l’exploitant", "Barème public"].map((item) => (
+            {["Taux de commission", "TVA par défaut", "Territoire couvert", "Barème public"].map((item) => (
               <FragmentPair key={item} term={item} value="À définir par l’exploitant" />
             ))}
           </dl>
