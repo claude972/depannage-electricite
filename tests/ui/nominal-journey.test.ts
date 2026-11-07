@@ -72,7 +72,9 @@ test("devis accepté avec avenant : le texte ne prétend plus que les avenants a
     for (const route of ["client-quote.quote-demo-4", "artisan-detail.demo-004"]) {
       const { page, errors } = await open(route);
       const text = await page.locator("main").innerText();
-      assert.match(text, /AV-1-DEV-DEMO01/, `${route}: amendment panel rendered`);
+      // The demo amendment belongs to the quote actually shown (DEV-DEMO-4, 192 €), never a constant dossier.
+      assert.match(text, /AV-1-DEV-DEMO-4/, `${route}: amendment panel rendered`);
+      assert.doesNotMatch(text, /DEV-DEMO01|268,80/, `${route}: no other dossier`);
       // The platform checkout amount is the accepted quote PLUS its accepted amendments
       // (migration 20261107014010_platform_deferred_checkout.sql); saying otherwise is false.
       assert.doesNotMatch(text, /avenants acceptés ne sont pas encore reliés au paiement/, route);
