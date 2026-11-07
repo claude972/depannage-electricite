@@ -2,6 +2,13 @@
 
 Objectif : application entière ; seules liaisons fournisseur Stripe/SMS différées. Inventaire source, pas preuve de panne hébergée et pas reprise des anciens pourcentages. Référence initiale fe4f24c ; interfaces zones et backend copropriété intégrés depuis en3402f64.
 
+## Actualisation du 7 novembre, version `610b13f`
+
+- La demande générale connectée a été créée et rejouée sur la preview. Le parcours public a passé les contrôles des huit fiches et de leur bouton de poursuite. Le brouillon public a été repris après retour du réseau. [Recette](reviews/DELIVERY_610B_HOSTED.md)
+- L’historique des justificatifs, l’édition et l’archivage des sites, les liens entre dossier et équipements ou zones, l’éditeur de l’exploitant et l’unique carte de suivi sont intégrés. Il reste à vérifier les opérations par rôle sur ce déploiement. L’archivage ferme la création de nouvelles interventions. Certains anciens modules gardent leurs règles propres pour les données historiques.
+- Le remplacement d’empreinte et l’exécution des remboursements sont intégrés, avec leurs conditions et états explicites. Restent les vérifications Stripe sur autorisation, capture, remboursement et rapprochement, et les fonctions financières supplémentaires du plan.
+- La consolidation des relevés d’énergie, les versions de garantie et leurs autorisations côté serveur sont intégrées. Les interfaces de consolidation, les rappels et les essais de publication opérateur restent des lots séparés. Aucune condition opérateur n’a été publiée. [État courant](ETAT_LIVRAISON_COURANT.md)
+- Restent notamment les équipes prestataires, le payeur délégué et les approbations avancées, la tarification liée aux contrats, la mission corrective de garantie, la livraison externe de notifications, la gestion de fin de vie des données, le diagnostic photo et la distribution native. Les 76 capacités et leurs preuves de sortie sont listées dans le plan. [Plan complet](PLAN_LIVRAISON_INTEGRALE.md)
 
 ## Actualisation — 6 novembre23h19 Martinique
 
