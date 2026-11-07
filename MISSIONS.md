@@ -102,3 +102,6 @@ Astra réalise le serveur pour un compte particulier vérifié. Liste masquée, 
 ### SYS-04 — envoi e-mail configurable
 
 ROOT raccorde un adaptateur Resend optionnel à la file privée. L’adresse courante vérifiée et les paramètres exacts du message sont contrôlés avant chaque tentative. Une empreinte privée empêche la reprise avec un autre destinataire ou contenu. La reprise est bornée à une fenêtre inférieure à celle du fournisseur. Vérifier opt-in, porte, refus des appels non autorisés et réponses fournisseur injectées. Aucune activation ni opération sur le compte fournisseur. La livraison push conserve son propre parcours.
+
+## SYS-10 — photo-triage (Astra, exclusive)
+Baseb8d8a96. Triage enum uniquement, photo privée du client propriétaire/dossier personnel attribué ; consentement/commande/version avant appel, retrait avant transmission. OpenAI Responses fixe désactivé par défaut, store:false, aucun identifiant métier ajouté. Contrôles attribution/document/session avant/après, résultat caché au client jusqu’à validation artisan courant, incertitude durable sans renvoi automatique. SQL isolé + vrais handlers/fetch injecté ; aucun cloud ni appel réel.
