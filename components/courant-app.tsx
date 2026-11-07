@@ -44,10 +44,9 @@ import {
 import { resolveDisplayName } from "./app/display-name";
 import { draftNotice, getDraftStorage, readBootDraft } from "./app/request-draft-boot";
 import { BOOKING_DRAFT_KEY, PAYMENT_LABEL, clearBooking, ensureRequestId, readBooking, saveBooking, type BookingDraft } from "./app/booking-draft";
-import { DEFINITIVE_REFUSAL, REQUEST_KEY_STORAGE, prepareRequestKey, readRequestKey, settleRequestKey } from "./app/request-key";
-import { REVIEW_COPY, getPricesState, loadPrices, reviewDecision } from "./features/indicative-prices/model";
-// PUB-02: estimate version first sent with a booking key in this tab (a retry resends the SAME one).
-const bookingReviewed = new Map<string, number>();
+import { DEFINITIVE_REFUSAL, REQUEST_KEY_STORAGE, prepareRequestKey, readRequestKey, settleRequestKey, updateFrozenVersion } from "./app/request-key";
+import { ESTIMATE_REVIEW_CODE, REVIEW_SCOPES, clearReviewRequired, getPricesState, isReviewRequired, loadPrices, markReviewRequired, reviewDecision, shownVersion } from "./features/indicative-prices/model";
+import { sendReviewedBooking } from "./features/indicative-prices/review-submit";
 import { purgePrivateStorage } from "./app/private-storage";
 import { bookingForEditedRequest, bookingFromSignedRequest, readPhotoCount, writePhotoCount } from "./app/signed-booking";
 
@@ -1181,51 +1180,41 @@ export default function CourantApp() {
         ctx.when(setDemoBooking)(null);
         return;
       }
-      // PUB-02: a NEW booking (no key yet) is reviewed against the active estimate version right before
-      // the POST; a retry of an existing key reuses the version it was first sent with in this tab
-      // (or omits it: the server keeps the reserved snapshot of an existing nonce).
-      let reviewedVersion: number | undefined;
-      if (!current.request_id) {
-        const shown = getPricesState();
-        await loadPrices(undefined, true);
-        const decision = reviewDecision(shown, getPricesState());
-        if (decision.kind === "block") throw new Error(decision.message);
-        if (decision.kind === "send") reviewedVersion = decision.version;
-      }
-      const keyed = ensureRequestId(getDraftStorage(), current);
-      if (!keyed)
-        throw new Error(
-          "Votre demande n’a pas été envoyée : ce navigateur n’a pas pu préparer son envoi en toute sécurité. Réessayez ; si cela persiste, rechargez la page.",
-        );
-      if (keyed.booking !== current) ctx.when(setBooking)(keyed.booking);
-      const c = current.contact;
-      const body = {
-        request_id: keyed.request_id,
-        service_slug: current.slug,
-        category: draft.category,
-        description: draft.description,
-        address: draft.address,
-        postal_code: draft.postal_code,
-        city: draft.city,
-        urgency: draft.urgency,
-        contact: { first_name: c.first_name.trim(), last_name: c.last_name.trim(), email: c.email.trim(), phone: c.phone.trim() },
-        payment_choice: current.payment,
-        ...(() => {
-          if (reviewedVersion !== undefined) bookingReviewed.set(keyed.request_id, reviewedVersion);
-          const v = bookingReviewed.get(keyed.request_id);
-          return v !== undefined ? { reviewed_estimate_version: v } : {};
-        })(),
-      };
-      let result: BookingReceipt | { status: "authorization_required"; url: string };
+      // PUB-02 (ROOT final contract): review + version stored in the booking draft + same key on retry
+      // (components/features/indicative-prices/review-submit.ts).
+      let result: BookingReceipt | { status: "authorization_required"; url: string } | undefined;
       try {
-        result = await api<BookingReceipt | { status: "authorization_required"; url: string }>("/api/bookings", body);
+        result = await sendReviewedBooking({
+          current,
+          category: draft.category,
+          storage: getDraftStorage(),
+          alive: () => ctx.alive(),
+          onKeyed: (b) => ctx.when(setBooking)(b),
+          buildBody: (request_id) => {
+            const c = current.contact;
+            return {
+              request_id,
+              service_slug: current.slug,
+              category: draft.category,
+              description: draft.description,
+              address: draft.address,
+              postal_code: draft.postal_code,
+              city: draft.city,
+              urgency: draft.urgency,
+              contact: { first_name: c.first_name.trim(), last_name: c.last_name.trim(), email: c.email.trim(), phone: c.phone.trim() },
+              payment_choice: current.payment,
+            };
+          },
+          post: (body) => api<BookingReceipt | { status: "authorization_required"; url: string }>("/api/bookings", body),
+        });
       } catch (e) {
         if (e instanceof ApiRequestError && e.status === 409)
           throw new Error(
             "Cette demande a peut-être déjà été enregistrée avec un contenu différent. Vérifiez « Mes demandes » avant toute nouvelle demande.",
           );
-        throw e; // draft, booking and key kept: the next attempt replays the SAME key
+        throw e; // draft, booking, key and version kept: the next attempt replays the SAME key
       }
+      if (result === undefined) return; // identity changed during the review: nothing sent
       if (result?.status === "authorization_required") {
         // Card hold: the draft, booking and key stay in this tab; the provider page records an
         // authorisation (not a charge) and the return is verified by the server (finalize).
@@ -1424,21 +1413,34 @@ export default function CourantApp() {
       //    gains request_id. A legacy booking without a key gets one PROVEN stored first.
       // Key + frozen payload PROVEN stored before the POST (create_intervention_once). An
       // uncertain earlier attempt is replayed exactly (same key, original payload).
-      // PUB-02: a NEW request is reviewed against the active estimate version (forced re-read right
-      // before the POST); an uncertain earlier attempt replays its frozen payload unchanged.
-      let pendingReplay = false;
+      // PUB-02 (ROOT final contract): a NEW request is reviewed against the version RENDERED by the
+      // RequestForm review step (forced re-read just before). An uncertain earlier attempt replays its
+      // frozen payload unchanged — except after a 409 estimate_review_required and an explicit new click,
+      // where ONLY its frozen version is updated (same request_id).
+      const storageNow = getDraftStorage();
+      let stored: ReturnType<typeof readRequestKey> = null;
       try {
-        const storage = getDraftStorage();
-        pendingReplay = Boolean(storage && readRequestKey(storage.getItem(REQUEST_KEY_STORAGE)));
+        stored = storageNow ? readRequestKey(storageNow.getItem(REQUEST_KEY_STORAGE)) : null;
       } catch {}
       let reviewed: RequestValues = values;
-      if (!pendingReplay) {
-        const shown = getPricesState();
+      if (!stored || isReviewRequired(stored.request_id)) {
+        const rendered = shownVersion(REVIEW_SCOPES.requestForm);
         await loadPrices(undefined, true);
-        const decision = reviewDecision(shown, getPricesState());
+        if (!ctx.alive()) return; // identity changed during the read: no persist, no POST
+        const decision = reviewDecision(rendered, getPricesState());
         if (decision.kind === "block") throw new Error(decision.message);
-        if (decision.kind === "send") reviewed = { ...values, reviewed_estimate_version: decision.version } as RequestValues;
+        if (stored) {
+          if (decision.kind === "send" && !updateFrozenVersion(storageNow, stored.request_id, decision.version))
+            throw new Error("Votre demande n’a pas été envoyée : ce navigateur n’a pas pu enregistrer votre confirmation. Réessayez.");
+          clearReviewRequired(stored.request_id);
+        } else if (decision.kind === "send") reviewed = { ...values, reviewed_estimate_version: decision.version } as RequestValues;
       }
+      if (stored) {
+        // Replay: compare the content only (the frozen version is not « content »).
+        const frozen = (readRequestKey(storageNow?.getItem(REQUEST_KEY_STORAGE) ?? null)?.payload ?? stored.payload) as { reviewed_estimate_version?: number };
+        if (frozen.reviewed_estimate_version !== undefined) reviewed = { ...values, reviewed_estimate_version: frozen.reviewed_estimate_version } as RequestValues;
+      }
+      if (!ctx.alive()) return;
       const prepared = prepareRequestKey(getDraftStorage(), reviewed);
       if (!prepared)
         throw new Error(
@@ -1450,18 +1452,14 @@ export default function CourantApp() {
         result = await api<{ intervention: Intervention }>("/api/interventions", payload);
       } catch (e) {
         if (e instanceof ApiRequestError && DEFINITIVE_REFUSAL.has(e.status)) settleRequestKey(getDraftStorage(), prepared.request_id);
+        if (e instanceof ApiRequestError && e.status === 409 && e.code === ESTIMATE_REVIEW_CODE) {
+          // Same key and frozen payload kept; new range re-read for display; an explicit new click updates
+          // ONLY the frozen version. The decision comes from the response code, never from a later GET.
+          markReviewRequired(prepared.request_id);
+          void loadPrices(undefined, true);
+          throw new Error(e.message);
+        }
         if (e instanceof ApiRequestError && e.status === 409) {
-          // A reviewed version that is no longer the active one: honest message, fresh read, and the
-          // user re-confirms (new key, since the content changed). Never patches the frozen payload.
-          const sent = (prepared.payload as { reviewed_estimate_version?: number }).reviewed_estimate_version;
-          if (!prepared.replayed && sent !== undefined) {
-            await loadPrices(undefined, true);
-            const now = getPricesState();
-            if (now.phase === "ready" && now.data && now.data.version !== sent) {
-              settleRequestKey(getDraftStorage(), prepared.request_id);
-              throw new Error(REVIEW_COPY.conflict);
-            }
-          }
           throw new Error(
             "Cette demande a peut-être déjà été enregistrée avec un contenu différent. Vérifiez « Mes demandes » avant toute nouvelle demande.",
           );

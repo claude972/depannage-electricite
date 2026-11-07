@@ -68,5 +68,28 @@ export function settleRequestKey(storage: Pick<Storage, "getItem" | "removeItem"
   }
 }
 
+/** PUB-02 (ROOT final contract): after a 409 estimate_review_required and an EXPLICIT new click,
+ *  ONLY the frozen payload's reviewed_estimate_version of THIS key changes (same key, same content,
+ *  same savedAt); proven by read-back. Any other field or key is never touched. */
+export function updateFrozenVersion(
+  storage: Pick<Storage, "getItem" | "setItem"> | null | undefined,
+  request_id: string,
+  version: number,
+  now = Date.now(),
+): boolean {
+  if (!storage || !Number.isInteger(version) || version < 1) return false;
+  try {
+    const stored = readRequestKey(storage.getItem(REQUEST_KEY_STORAGE), now);
+    if (!stored || stored.request_id !== request_id.toLowerCase()) return false;
+    const entry: StoredRequestKey = { ...stored, payload: { ...stored.payload, reviewed_estimate_version: version } as RequestValues };
+    storage.setItem(REQUEST_KEY_STORAGE, JSON.stringify(entry));
+    const back = readRequestKey(storage.getItem(REQUEST_KEY_STORAGE), now);
+    // Same key, same savedAt, EXACT frozen payload with only the version changed.
+    return !!back && back.request_id === stored.request_id && back.savedAt === stored.savedAt && canonical(back.payload) === canonical(entry.payload);
+  } catch {
+    return false;
+  }
+}
+
 /** HTTP outcomes after which the request is known NOT to exist (key may be dropped). */
 export const DEFINITIVE_REFUSAL = new Set([400, 403, 422]);

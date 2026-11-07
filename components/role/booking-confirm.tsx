@@ -9,6 +9,8 @@ import { PAYMENT_LABEL, SLOT_LABEL, contactErrors, type BookingDraft, type Payme
 import { category, money } from "../app/format";
 import type { RequestValues } from "../app/types";
 import { serviceBySlug } from "./public-service-catalog";
+import { ReservedEstimate, ReviewEstimate } from "../features/indicative-prices/indicative-range";
+import { REVIEW_COPY, REVIEW_SCOPES } from "../features/indicative-prices/model";
 
 export function BookingConfirm({
   draft,
@@ -22,6 +24,7 @@ export function BookingConfirm({
   cardAvailable = false,
   verifyCardHold,
   cancelCardHold,
+  demo = false,
 }: {
   draft: RequestValues;
   booking: BookingDraft;
@@ -41,6 +44,8 @@ export function BookingConfirm({
   verifyCardHold?(requestId: string): Promise<boolean>;
   /** Cancels the card-hold attempt on the server; the mode/key only change after « cancelled ». */
   cancelCardHold?(): Promise<boolean>;
+  /** Demo: local estimate only, zero price reads. */
+  demo?: boolean;
 }) {
   const [sending, setSending] = useState(false);
   const [problem, setProblem] = useState("");
@@ -98,6 +103,9 @@ export function BookingConfirm({
       <p className="eyebrow">Dernière étape</p>
       <h1 id="booking-confirm-title">Confirmez l’envoi de votre demande</h1>
       <p>Rien n’a encore été envoyé. Vérifiez votre demande : elle sera transmise aux artisans disponibles après votre confirmation.</p>
+      {!demo && booking.estimate_review_required && (
+        <p className="alert" role="alert" data-estimate-review-required="">{REVIEW_COPY.conflict}</p>
+      )}
       <dl className="recap-list">
         <div>
           <dt>Prestation</dt>
@@ -106,7 +114,21 @@ export function BookingConfirm({
         <div>
           <dt>Estimation indicative</dt>
           <dd>
-            {money(c.min)} – {money(c.max)} <small>(fourchette, pas un prix garanti)</small>
+            {/* PUB-02: demo = local range (zero calls); live = the version RENDERED here (recorded for
+                the submit), or the version already stored with this request — never the static amount. */}
+            {demo ? (
+              <>{money(c.min)} – {money(c.max)}</>
+            ) : booking.request_id && booking.reviewed_estimate_version !== undefined && booking.reviewed_estimate_range && !booking.estimate_review_required ? (
+              // Amounts confirmed with THIS request (its version), never a later tariff.
+              <strong data-reserved-estimate={booking.reviewed_estimate_version}>
+                {money(booking.reviewed_estimate_range.min_cents)} – {money(booking.reviewed_estimate_range.max_cents)}
+              </strong>
+            ) : booking.request_id && booking.reviewed_estimate_version !== undefined && !booking.estimate_review_required ? (
+              <ReservedEstimate category={draft.category} version={booking.reviewed_estimate_version} />
+            ) : (
+              <ReviewEstimate category={draft.category} scope={REVIEW_SCOPES.bookingConfirm} />
+            )}{" "}
+            <small>(fourchette, pas un prix garanti)</small>
           </dd>
         </div>
         <div>

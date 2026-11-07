@@ -111,10 +111,12 @@ test("replay of the same key after a lost reply ⇒ ONE dossier (local idempoten
 test("controller: booking ⇒ POST /api/bookings (flat contract body, key proven first, 409 ⇒ « Mes demandes »), never the legacy route", () => {
   const src = readFileSync("components/courant-app.tsx", "utf8");
   const fn = src.slice(src.indexOf("async function confirmBooking()"), src.indexOf("async function finalizeBooking("));
-  const post = fn.search(/api<BookingReceipt[^>]*>\("\/api\/bookings", body\)/);
-  assert.ok(post > 0 && fn.indexOf("ensureRequestId(getDraftStorage(), current)") < post);
-  assert.match(fn, /if \(!keyed\)\s*throw new Error\(/, "not provable ⇒ local refusal, no POST");
-  for (const field of ["request_id: keyed.request_id", "service_slug: current.slug", "category: draft.category", "description: draft.description", "address: draft.address", "postal_code: draft.postal_code", "city: draft.city", "urgency: draft.urgency", "payment_choice: current.payment"])
+  // PUB-02: review + key + POST live in the shared sendReviewedBooking (same order, same refusal).
+  const shared = readFileSync("components/features/indicative-prices/review-submit.ts", "utf8");
+  assert.match(fn, /post: \(body\) => api<BookingReceipt[^>]*>\("\/api\/bookings", body\)/);
+  assert.ok(shared.indexOf("const keyed = ensureRequestId(storage, next);") > 0 && shared.indexOf("const keyed = ensureRequestId(storage, next);") < shared.indexOf("return await post(body);"));
+  assert.match(shared, /if \(!keyed\) throw new Error\(KEY_STORAGE_ERROR\);/, "not provable ⇒ local refusal, no POST");
+  for (const field of ["request_id,", "service_slug: current.slug", "category: draft.category", "description: draft.description", "address: draft.address", "postal_code: draft.postal_code", "city: draft.city", "urgency: draft.urgency", "payment_choice: current.payment"])
     assert.ok(fn.includes(field), field);
   assert.match(fn, /contact: \{ first_name: c\.first_name\.trim\(\), last_name: c\.last_name\.trim\(\), email: c\.email\.trim\(\), phone: c\.phone\.trim\(\) \}/);
   assert.match(fn, /e\.status === 409/);

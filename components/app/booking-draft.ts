@@ -46,6 +46,16 @@ export type BookingDraft = {
    *  payment to the artisan; « card_hold » = card authorisation (empreinte, NOT a charge).
    *  Optional for legacy drafts (then asked again). */
   payment?: PaymentChoice;
+  /** PUB-02: indicative estimate version reviewed and sent with THIS request_id (same storage, TTL and
+   *  fence as the draft). A retry of the same key resends it; it changes only after an explicit
+   *  re-confirmation following a 409 estimate_review_required. */
+  reviewed_estimate_version?: number;
+  /** PUB-02: amounts of that reviewed version for this request's category (what the user confirmed;
+   *  shown instead of any later tariff). */
+  reviewed_estimate_range?: { min_cents: number; max_cents: number };
+  /** PUB-02: this key was refused with estimate_review_required; survives a reload until the user
+   *  explicitly re-confirms with the SAME key. */
+  estimate_review_required?: true;
 };
 export const PAYMENT_CHOICES = ["on_site", "card_hold"] as const;
 export type PaymentChoice = (typeof PAYMENT_CHOICES)[number];
@@ -94,7 +104,21 @@ export function parseBooking(input: unknown): BookingDraft | null {
     if (!PAYMENT_CHOICES.includes(input.payment as PaymentChoice)) return null;
     payment = input.payment as PaymentChoice;
   }
-  return { slug, urgent: input.urgent, slot, notes, contact: { civility, first_name, last_name, email, phone, company: Boolean(c.company) }, ...(request_id ? { request_id } : {}), ...(payment ? { payment } : {}) };
+  let reviewed: number | undefined;
+  if (input.reviewed_estimate_version !== undefined) {
+    const v = input.reviewed_estimate_version;
+    if (typeof v !== "number" || !Number.isInteger(v) || v < 1 || v > 2147483647 || !request_id) return null;
+    reviewed = v;
+  }
+  let range: { min_cents: number; max_cents: number } | undefined;
+  if (input.reviewed_estimate_range !== undefined) {
+    const r = input.reviewed_estimate_range as { min_cents?: unknown; max_cents?: unknown } | null;
+    const ok = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= 2147483647;
+    if (!r || typeof r !== "object" || !ok(r.min_cents) || !ok(r.max_cents) || r.max_cents < r.min_cents || reviewed === undefined) return null;
+    range = { min_cents: r.min_cents, max_cents: r.max_cents };
+  }
+  if (input.estimate_review_required !== undefined && (input.estimate_review_required !== true || !request_id)) return null;
+  return { slug, urgent: input.urgent, slot, notes, contact: { civility, first_name, last_name, email, phone, company: Boolean(c.company) }, ...(request_id ? { request_id } : {}), ...(payment ? { payment } : {}), ...(reviewed !== undefined ? { reviewed_estimate_version: reviewed } : {}), ...(range ? { reviewed_estimate_range: range } : {}), ...(input.estimate_review_required === true ? { estimate_review_required: true as const } : {}) };
 }
 
 export const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

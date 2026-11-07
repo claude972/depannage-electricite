@@ -16,6 +16,7 @@ import { PUBLIC_DRAFT_KEY, parsePublicDraftValues, readPublicDraft, savePublicDr
 import { Field } from "../app/ui";
 import type { ServiceEntry } from "./public-service-catalog";
 import styles from "./public-booking.module.css";
+import { useIndicativeText } from "../features/indicative-prices/indicative-range";
 
 // ---- State and pure rules ------------------------------------------------------------------------
 export type BookingStep = 1 | 2 | 3 | 4 | 5;
@@ -257,6 +258,11 @@ export function BookingWizard({
   /** Tests only. */
   initialPhase?: "steps" | "phone";
 }) {
+  // PUB-02: the wizard shows the active version's range (public GET), never the static amount; the
+  // final explicit confirmation (BookingConfirm) records the version actually reviewed. `range` is
+  // kept only for compatibility.
+  void range;
+  const liveRange = useIndicativeText(service.category);
   // After the summary, the drafts are saved and the phone is verified inline (same page).
   const [phase, setPhase] = useState<"steps" | "phone">(initialPhase);
   const [phoneState, setPhoneState] = useState<PhoneState | null>(null);
@@ -315,7 +321,7 @@ export function BookingWizard({
       <div className={styles.layout}>
         <aside className={styles.summary} aria-label="Votre demande" data-booking-summary="">
           <strong>{service.title}</strong>
-          <span>Estimation indicative : {range}</span>
+          <span>Estimation indicative : {liveRange}</span>
           <span>Urgence : {urgencyLabel(state)}</span>
           {state.payment && <span>Règlement : {PAYMENT_COPY[state.payment].title}</span>}
         </aside>
@@ -463,7 +469,7 @@ export function BookingWizard({
               <>
                 <dl className={styles.recap} data-booking-recap="">
                   <div><dt>Prestation</dt><dd>{service.title}</dd></div>
-                  <div><dt>Estimation indicative</dt><dd>{range}</dd></div>
+                  <div><dt>Estimation indicative</dt><dd data-indicative-range={service.category}>{liveRange}</dd></div>
                   <div><dt>Urgence</dt><dd>{urgencyLabel(state)}</dd></div>
                   <div><dt>Adresse d’intervention</dt><dd>{state.address.address}<br />{state.address.postal_code} {state.address.city}</dd></div>
                   <div><dt>Vos coordonnées (privées)</dt><dd>{[CIVILITY_LABEL[state.contact.civility] === "Non précisé" ? "" : CIVILITY_LABEL[state.contact.civility], state.contact.first_name, state.contact.last_name].filter(Boolean).join(" ")}<br />{state.contact.email} · {state.contact.phone}{state.contact.company ? <><br />Demande pour une entreprise</> : null}</dd></div>
@@ -495,7 +501,7 @@ export function BookingWizard({
         </div>
       </div>
 
-      <BookingBar title={service.title} range={range}>
+      <BookingBar title={service.title} range={liveRange}>
         {phase === "phone" && phoneOn ? (
           phoneState?.stage !== "verified" && (
             <button type="submit" form={phoneFormId} className={styles.barButton} data-booking-submit="phone" disabled={phoneState?.stage === "sending" || phoneState?.stage === "verifying"}>
