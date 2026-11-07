@@ -8,6 +8,8 @@
 import { useEffect, useRef, useState } from "react";
 import { COPY, DETAIL_INITIAL, FAMILY_LABEL, OBSERVATION_LABEL, REASON_LABEL, STATE_LABEL, TYPE_LABEL, amountText, createDetail, listUrl, parsePage, statusError, tabStore, timed, type Context, type DetailView, type Observation, type StateFilter, type Store } from "./model";
 import styles from "./reconciliation.module.css";
+import { PayoutProofSection } from "../finance-proofs/proofs-panel";
+import { createProofApi } from "../finance-proofs/model";
 
 export type ReconciliationPanelProps = {
   demo: boolean;
@@ -213,6 +215,7 @@ function DetailPanel({ id, canWrite, context, fetcher, store, newId, onOpenDossi
             <div><dt>Compte source</dt><dd className={styles.mono}>{d.record.event.source_account ?? "compte plateforme"}</dd></div>
             <div><dt>Charge source / destinataire</dt><dd className={styles.mono}>{d.record.event.object.source_charge ?? "—"} → {d.record.event.object.destination ?? "—"}</dd></div>
           </dl>
+          {d.record.event.family === "payout" && <PayoutProofSection eventId={id} canWrite={canWrite} context={context} store={store} newId={newId} api={createProofApi(fetcher())} />}
           <button type="button" className={styles.secondary} onClick={() => void c.load()} disabled={view.busy}>{COPY.reread}</button>
           <h4>Revues ({d.history.length}{d.history_limited ? ", historique limité aux 50 dernières" : ""})</h4>
           {d.history.length === 0 ? (
