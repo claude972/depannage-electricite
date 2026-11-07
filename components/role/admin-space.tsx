@@ -89,6 +89,7 @@ import { ThemeSurface } from "../app/theme-provider";
 import { ThemeToggle } from "../app/theme-toggle";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { PLATFORM_TITLES, PlatformPage } from "./platform-anchor";
+import { platformViewAllowed } from "../app/features";
 import { adminKpis, dashboardRows, loadedNote } from "./admin-lists";
 import { platformEntries } from "./anchors";
 
@@ -804,7 +805,7 @@ export function AdminSpace({ session }: { session: Session }) {
           />
           <Basis>Avis présents dans l’espace de travail administrateur ; aucun avis n’est inventé ni pondéré.</Basis>
         </Panel>
-        <Unavailable title="Modération des avis" reason="Pas encore activé sur ce service : les avis sont affichés tels que publiés, sans masquage, réponse ni signalement." blocker="ADM-06" />
+        <ReviewsModeration session={session} onOpenModeration={() => go("platform-moderation")} />
       </>
     );
   };
@@ -4037,5 +4038,40 @@ function SupportTicketView({
         </div>
       </Panel>
     </>
+  );
+}
+
+// ---- ADM-06 : modération des avis dans « Avis & Notes » ----------------------------------------
+// The moderation leaf (PlatformModerationView via PlatformPage, contract platform-operations/reviews)
+// is embedded ONLY when the server reply to /me grants `reviews_moderation` (or super admin) —
+// the same fail-closed gate as the « Modération » entry. PlatformPage keeps its own loading, error,
+// empty, 503 and read-only states; nothing is loaded or simulated without that right.
+export const REVIEWS_MODERATION_NOT_ALLOWED =
+  "Vos droits d’opérateur, tels que vérifiés par la plateforme, ne couvrent pas la modération des avis. Les avis ci-dessus restent affichés tels que publiés.";
+export const REVIEWS_MODERATION_UNVERIFIED =
+  "Vos droits d’opérateur n’ont pas encore été vérifiés par la plateforme : la modération n’est pas chargée. Les avis ci-dessus restent affichés tels que publiés.";
+export function reviewsModerationMode(access: Session["platformAccess"]): "embedded" | "not_allowed" | "unverified" {
+  if (platformViewAllowed(access, "platform-moderation")) return "embedded";
+  return access ? "not_allowed" : "unverified";
+}
+export function ReviewsModeration({ session, onOpenModeration }: { session: Session; onOpenModeration(): void }) {
+  const mode = reviewsModerationMode(session.platformAccess);
+  if (mode === "embedded")
+    return (
+      <section className={styles.moderation} aria-labelledby="admin-reviews-moderation" data-reviews-moderation="embedded">
+        <h2 id="admin-reviews-moderation">Modération des avis</h2>
+        <PlatformPage session={session} view="platform-moderation" withTitle={false} />
+      </section>
+    );
+  return (
+    <Unavailable
+      title="Modération des avis"
+      reason={mode === "not_allowed" ? REVIEWS_MODERATION_NOT_ALLOWED : REVIEWS_MODERATION_UNVERIFIED}
+      blocker={`ADM-06:${mode}`}
+    >
+      <button type="button" className="button outline" onClick={onOpenModeration} data-reviews-moderation-link="">
+        Ouvrir la vue « Modération »
+      </button>
+    </Unavailable>
   );
 }

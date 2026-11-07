@@ -641,6 +641,23 @@ function useMessageHistory(live: boolean, profileId: string, interventionId: str
   }, [key, enabled, load, update]);
   return { state: state.key === key ? state : initialHistory(key), load, enabled };
 }
+/** Who wrote a thread message, from the dossier's own participants. An author who is neither the
+ *  dossier's client nor its artisan is never presented as the other party: on a private dossier it
+ *  can only be the operator; on a site dossier it may also be a member of the client organisation. */
+export function messageAuthorLabel(
+  authorId: string,
+  dossier: Pick<Intervention, "client_id" | "artisan_id" | "site_id"> | undefined,
+  role: Role,
+  profileId: string,
+): string {
+  if (authorId === profileId) return "Vous";
+  if (dossier?.artisan_id && authorId === dossier.artisan_id) return "Artisan";
+  if (dossier?.client_id && authorId === dossier.client_id) return "Client";
+  if (!dossier?.client_id || (role !== "client" && !dossier.artisan_id)) return "Participant";
+  if (dossier.site_id || role === "manager") return "Autre participant (équipe ou exploitant)";
+  return "Exploitant";
+}
+
 export function MessageCenter({
   interventions,
   messages,
@@ -777,11 +794,7 @@ export function MessageCenter({
                     data-message-id={m.id}
                   >
                     <span>
-                      {m.author_id === profileId
-                        ? "Vous"
-                        : role === "artisan"
-                          ? "Client"
-                          : "Artisan"}
+                      {messageAuthorLabel(m.author_id, target, role, profileId)}
                     </span>
                     <p>{m.body}</p>
                     <small>{date(m.created_at)}</small>
