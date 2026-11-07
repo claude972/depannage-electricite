@@ -1,6 +1,6 @@
 # PUB-06 / ADM-10 — conditions publiées et activation opérateur
 
-Base `10ba87d`, branche `codex/warranty-activation`, claim `b5271c1`. Aucun contenu juridique, durée commerciale nouvelle ni activation réelle. Migration `20261107143142_warranty_policy_activation.sql` sans données de conditions ou commande d’activation préchargées. Mission corrective liée indépendante hors de ce premier delta.
+Base `10ba87d`, branche `codex/warranty-activation`, claim `b5271c1`. Aucun contenu juridique, durée commerciale nouvelle ni activation réelle. Migration `20261107143142_warranty_policy_activation.sql` à la livraison du lot, enregistrée sur la base de test en `20261107144136_warranty_policy_activation.sql` sans données de conditions ou commande d’activation préchargées. Mission corrective liée indépendante hors de ce premier delta.
 
 ## Contrat opérateur
 

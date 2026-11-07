@@ -1,6 +1,6 @@
 # ENT-07/08 — liens explicites dossier / actif
 
-Branche backend fondée sur `64c9186` (cycle de vie des sites), claim `df3a2fc`. Migration `20261107142109_site_asset_intervention_links.sql`. Aucun fournisseur, secret, déploiement ou écran ajouté.
+Branche backend fondée sur `64c9186` (cycle de vie des sites), claim `df3a2fc`. Migration `20261107142109_site_asset_intervention_links.sql` à la livraison du lot, enregistrée sur la base de test en `20261107144131_site_asset_intervention_links.sql`. Aucun fournisseur, secret, déploiement ou écran ajouté.
 
 ## Contrat pour l’interface
 

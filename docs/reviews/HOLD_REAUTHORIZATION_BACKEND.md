@@ -1,6 +1,6 @@
 # Remplacement d’empreinte — backend pour intégration
 
-Base intégrée explicitement : `002de1a` (fusion `412e3b2`), sans doublon de la migration remboursement `20261107031755`. Une seule migration nouvelle, créée avec le CLI : `20261107141148_hold_reauthorization.sql`. Le brouillon non appliqué `20261107031354` a été remplacé ; ne pas appliquer les deux.
+Base intégrée explicitement : `002de1a` (fusion `412e3b2`), sans doublon de la migration remboursement `20261107031755`. Une seule migration nouvelle, créée avec le CLI : `20261107141148_hold_reauthorization.sql` à la livraison du lot, enregistrée sur la base de test en `20261107144127_hold_reauthorization.sql`. Le brouillon non appliqué `20261107031354` a été remplacé ; ne pas appliquer les deux.
 
 ## Contrat réalisé
 
