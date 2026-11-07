@@ -61,3 +61,12 @@ test("ENT-04: site sheet mounts SiteContactsPanel keyed by site + identity + gen
   assert.match(sheet, /session\.mode === "demo" \? \(\s*<Unavailable\s+title="Contacts du site"[\s\S]{0,300}?blocker="ENT-04"[\s\S]{0,40}?\) : \(\s*<SiteContactsPanel\s+key=\{`\$\{site\.id\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\}\s+siteId=\{site\.id\}\s+context=\{session\.mutationContext\}/);
   assert.doesNotMatch(src, /Aucun contact de site n’est modélisé/);
 });
+
+test("FIN-05/ENT-16: enterprise billing mounts the customer invoices panel scoped to org (+ site), service basis, never operator routes", () => {
+  const start = src.indexOf("function InvoicesView(");
+  const view = src.slice(start, src.indexOf("\nfunction ", start + 10));
+  assert.match(src, /import \{ CustomerInvoicesPanel \} from "\.\.\/features\/customer-invoices\/customer-invoices-panel";/);
+  assert.match(view, /<CustomerInvoicesPanel[\s\S]{0,80}?filters=\{\{ organization_id: c\.organization\.id, \.\.\.\(c\.activeSite \? \{ site_id: c\.activeSite\.id \} : \{\}\), basis: "service" \}\}\s+context=\{session\.mutationContext\}\s+demo=\{c\.demo\}/);
+  assert.doesNotMatch(view, /La facturation n’existe pas encore côté serveur/);
+  assert.doesNotMatch(view, /platform-operations\/invoices|\/api\/platform/);
+});
