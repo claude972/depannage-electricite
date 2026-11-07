@@ -275,6 +275,62 @@ try {
     );
     await db.exec("reset role");
   }
+  // A corrective dossier uses a normal request and cannot borrow another client's data.
+  async function createJob(client, created, status = "requested") {
+    return (await db.query(
+      `insert into public.interventions
+         (client_id,category,description,address,postal_code,city,urgency,
+          estimate_min_cents,estimate_max_cents,status,created_at,completed_at)
+       values($1,'socket','Synthetic corrective fixture','QA fixture address',
+          '97200','QA city','scheduled',100,200,$2,$3,
+          case when $2 = 'paid' then $3::timestamptz + interval '1 hour' else null end)
+       returning id`,
+      [ids[client], status, created],
+    )).rows[0].id;
+  }
+  ids.correctiveClient = crypto.randomUUID();
+  await db.query("insert into auth.users(id) values($1)", [ids.correctiveClient]);
+  const baseJob = await createJob("correctiveClient", "2026-01-01T10:00:00Z", "paid");
+  const targetJob = await createJob("correctiveClient", "2026-01-02T12:00:00Z");
+  const otherJob = await createJob("owner", "2026-01-03T12:00:00Z");
+  const cancelled = await createJob("correctiveClient", "2026-01-04T12:00:00Z", "cancelled");
+  const nextJob = await createJob("correctiveClient", "2026-01-05T12:00:00Z");
+  const { id: correctiveCase } = (await db.query(
+    `insert into public.warranty_cases(intervention_id,client_id,description)
+     values($1,$2,'Test de rattachement correctif') returning id`, [baseJob, ids.correctiveClient],
+  )).rows[0];
+  const readLink = (actor, caseId = correctiveCase) => as(actor,
+    "select public.read_warranty_corrective_intervention($1)v", [caseId]);
+  const linkJob = (actor, target = targetJob, caseId = correctiveCase) => as(actor,
+    "select public.link_warranty_corrective_intervention($1,$2)v", [caseId, target]);
+  await denied(() => readLink("anon"), "42501");
+  await denied(() => readLink("correctiveClient", crypto.randomUUID()), "P0002");
+  await denied(() => linkJob("correctiveClient"), "42501");
+  await denied(() => linkJob("owner"), "P0001");
+  await as("owner", "select public.resolve_warranty($1,'reviewing','Examen de recette')v", [correctiveCase]);
+  await denied(() => linkJob("owner", baseJob), "22023");
+  await denied(() => linkJob("owner", otherJob), "22023");
+  await denied(() => linkJob("owner", cancelled), "22023");
+  const ownerRead = await readLink("owner");
+  ok(ownerRead.link === null && !ownerRead.has_more &&
+    ownerRead.candidates.map((row) => row.id).join(",") === [nextJob, targetJob].join(","),
+    "candidate projection excludes original, foreign and cancelled jobs");
+  ok((await readLink("correctiveClient")).candidates.length === 0, "candidate list is admin only");
+  const firstLink = await linkJob("owner");
+  ok(firstLink.link.id === targetJob && !firstLink.replayed, "corrective link saved");
+  ok((await readLink("correctiveClient")).link.id === targetJob, "client can read the authorized corrective job");
+  await as("owner", "select public.resolve_warranty($1,'resolved','Résolution de recette')v", [correctiveCase]);
+  ok((await linkJob("owner")).replayed, "lost response can replay after case resolution");
+  await denied(() => linkJob("owner", nextJob), "23505");
+  ok((await db.query("select count(*)::int n from public.audit_log where action='warranty_corrective_linked'")).rows[0].n === 1,
+    "corrective link replay does not repeat audit");
+  const newOwner = crypto.randomUUID();
+  await db.query("insert into auth.users(id) values($1)", [newOwner]);
+  await db.query("update public.interventions set client_id=$1 where id=$2", [newOwner, targetJob]);
+  ok((await readLink("correctiveClient")).link === null, "access to both interventions is required to read the link");
+  await denied(() => as("correctiveClient",
+    "select linked_by v from public.warranty_corrective_interventions where case_id=$1", [correctiveCase]), "42501");
+
   // Keep another admin so the existing last-admin guard allows this revocation fixture.
   await db.query("update public.profiles set role='admin'where id=$1", [
     ids.outside,

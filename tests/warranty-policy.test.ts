@@ -264,3 +264,40 @@ test("existing intake GET accepts only real boolean gate and combines both switc
     );
   });
 });
+
+const corrective = "app/api/warranty/[id]/corrective/route.ts";
+const correctiveId = "10000000-0000-4000-8000-000000000002";
+const correctiveJob = {
+  id: correctiveId,
+  category: "socket",
+  status: "requested",
+  created_at: "2026-11-07T12:00:00+00:00",
+};
+const correctiveContext = { params: Promise.resolve({ id }) };
+
+test("corrective GET returns the scoped projection without caching", async () => {
+  const payload = { link: null, candidates: [correctiveJob], has_more: false };
+  const h = harness(corrective, payload);
+  const response = await h.GET(req(), correctiveContext);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "private, no-store");
+  assert.deepEqual(await response.json(), payload);
+  assert.deepEqual(structuredClone(h.calls), [["read_warranty_corrective_intervention", { p_case_id: id }]]);
+});
+
+test("corrective POST validates origin, payload and exact linked dossier", async () => {
+  const payload = { link: correctiveJob, replayed: true };
+  const h = harness(corrective, payload);
+  const body = { intervention_id: correctiveId };
+  assert.equal((await h.POST(post(body, "https://other.example"), correctiveContext)).status, 403);
+  assert.equal((await h.POST(post({ ...body, charged: true }), correctiveContext)).status, 422);
+  assert.deepEqual(h.calls, []);
+  const response = await h.POST(post(body), correctiveContext);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), payload);
+  assert.deepEqual(structuredClone(h.calls), [["link_warranty_corrective_intervention", {
+    p_case_id: id, p_intervention_id: correctiveId,
+  }]]);
+  const malformed = harness(corrective, { ...payload, link: { ...correctiveJob, id } });
+  assert.equal((await malformed.POST(post(body), correctiveContext)).status, 503);
+});
