@@ -158,6 +158,8 @@
 .prefsGroup {
   display: grid;
   gap: 4px;
+  /* A fieldset defaults to min-content width: let it shrink with narrow screens. */
+  min-width: 0;
   margin: 0;
   padding: 0;
   border: 0;
@@ -170,6 +172,7 @@
 }
 .prefsOption {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   min-height: 44px;
@@ -177,6 +180,7 @@
   color: #172b4d;
 }
 .prefsOption input {
+  flex: none;
   width: 20px;
   height: 20px;
 }
