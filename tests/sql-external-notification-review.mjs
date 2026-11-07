@@ -54,6 +54,11 @@ try {
  const historical=await notify();
  await q("insert into public.notification_preferences(user_id,email_enabled,push_enabled)values($1,true,true)",[user]);
  eq(await one('select count(*)::int v from notification_delivery_private.outbox'),0);
+ const inactive=await notify();
+ eq(await one('select count(*)::int v from notification_delivery_private.outbox'),0);
+ eq(await one("select public.claim_external_notification('email','test',true)v"),null);
+ await db.exec('update notification_delivery_private.control set enabled=true');
+ eq(await one("select public.claim_external_notification('email','test',true)v"),null); // no disabled-period backlog
  const id=await notify();
  eq(await one('select count(*)::int v from notification_delivery_private.outbox'),2);
  await q("update public.notifications set read_at=now()where id=$1",[id]);
@@ -62,8 +67,6 @@ try {
  const claim=async(channel='email',provider='test')=>one('select public.claim_external_notification($1,$2,true)v',[channel,provider]);
  const begin=async(l)=>one('select public.begin_external_notification($1,$2)v',[l.id,l.lease_token]);
  const finish=async(l,result,ref=null)=>one('select public.finish_external_notification($1,$2,$3,$4)v',[l.id,l.lease_token,result,ref]);
- eq(await claim(),null); // disabled
- await db.exec('reset role;update notification_delivery_private.control set enabled=true;set role service_role');
  const a=await claim(); eq(!!a.id,true);eq(await claim(),null); // no overlapping lease
  eq(await one("select public.claim_external_notification('email','other',true)v"),null);
  const payload=await begin(a);eq(Object.keys(payload).sort(),['channel','id','idempotency_key','provider','recipient_id']);eq(payload.recipient_id,user);
@@ -146,5 +149,16 @@ try {
  await db.exec("reset role;update notification_delivery_private.outbox set next_attempt_at=now()-interval '1 minute'where status='uncertain';set role service_role");
  eq((await processExternalNotifications(rpc,adapter)).accepted,1);
  eq(deliveries.length,2);eq(deliveries[0].idempotencyKey,deliveries[1].idempotencyKey);
+
+ // Deactivation/reactivation invalidates both pending work and an already reserved lease.
+ await db.exec('reset role');
+ const oldPending=await notify(); const oldLeased=await notify();
+ await db.exec('set role service_role');const stale=await claim();
+ await db.exec('reset role;update notification_delivery_private.control set enabled=false');
+ const whileOff=await notify();
+ await db.exec('update notification_delivery_private.control set enabled=true;set role service_role');
+ eq(await begin(stale),null);
+ eq(await claim(),{skipped:true});eq(await claim(),null);
+ eq(await one('select count(*)::int v from notification_delivery_private.outbox where notification_id=$1',[whileOff]),0);
  console.log(`PASS external notification outbox: ${checks} checks, full migrations, inactive gate, scoped revalidation, leases, bounded uncertain retry, enqueue isolation and ACL`);
 }catch(e){console.error(e.message,e.code,e.query,e.stack?.split("\n").slice(0,4).join("\n"));process.exitCode=1;}finally{await db.close()}

@@ -2,11 +2,12 @@ begin;
 create schema if not exists notification_delivery_private;
 revoke all on schema notification_delivery_private from public,anon,authenticated;
 grant usage on schema notification_delivery_private to service_role;
-create table notification_delivery_private.control(singleton boolean primary key default true check(singleton), enabled boolean not null default false);
-insert into notification_delivery_private.control values(true,false);
+create table notification_delivery_private.control(singleton boolean primary key default true check(singleton), enabled boolean not null default false, generation integer not null default 1 check(generation between 1 and 2147483647));
+insert into notification_delivery_private.control values(true,false,1);
 create table notification_delivery_private.outbox(
  id uuid primary key default gen_random_uuid(),
  notification_id uuid not null references public.notifications(id) on delete cascade,
+ activation_generation integer not null,
  channel text not null check(channel in('email','push')),
  status text not null default 'pending' check(status in('pending','leased','sending','uncertain','accepted','failed','cancelled')),
  may_have_been_accepted boolean not null default false,
@@ -30,6 +31,14 @@ alter table notification_delivery_private.enqueue_failures enable row level secu
 revoke all on all tables in schema notification_delivery_private from public,anon,authenticated,service_role;
 grant select on all tables in schema notification_delivery_private to service_role;
 -- No activation endpoint, no cron, no provider configuration. Control remains false.
+create function notification_delivery_private.control_generation()returns trigger language plpgsql set search_path=''as $$
+begin
+ new.generation=old.generation+case when new.enabled is distinct from old.enabled then 1 else 0 end;
+ return new;
+end;$$;
+revoke all on function notification_delivery_private.control_generation()from public,anon,authenticated,service_role;
+create trigger external_control_generation before update on notification_delivery_private.control for each row execute function notification_delivery_private.control_generation();
+
 
 -- Evaluate EXACT existing notification visibility as its recipient, then restore caller claims.
 -- Private helper: never an impersonation endpoint for API roles.
@@ -56,8 +65,8 @@ create function notification_delivery_private.enqueue()returns trigger language 
 begin
  -- AFTER INSERT only: no historical scan, no enqueue on mark-read or preference changes.
  begin
-  insert into notification_delivery_private.outbox(notification_id,channel)
-   select new.id,c from unnest(array['email','push'])c where notification_delivery_private.eligible(new.id,c)
+  insert into notification_delivery_private.outbox(notification_id,channel,activation_generation)
+   select new.id,c,ctl.generation from notification_delivery_private.control ctl cross join unnest(array['email','push'])c where ctl.enabled and notification_delivery_private.eligible(new.id,c)
    on conflict(notification_id,channel)do nothing;
  exception when others then
   -- The original in-app notification must commit even when this optional subsystem fails.
@@ -83,7 +92,7 @@ begin
  if r.status='sending' and r.attempts>=3 then
   update notification_delivery_private.outbox set status='uncertain',may_have_been_accepted=true,retry_stopped=true,lease_token=null,lease_until=null,updated_at=clock_timestamp()where id=r.id;return jsonb_build_object('skipped',true);
  end if;
- if not notification_delivery_private.eligible(r.notification_id,r.channel)then
+ if not exists(select 1 from notification_delivery_private.control where enabled and generation=r.activation_generation)or not notification_delivery_private.eligible(r.notification_id,r.channel)then
   update notification_delivery_private.outbox set status=case when r.status in('sending','uncertain')or r.may_have_been_accepted then 'uncertain'else 'cancelled'end,may_have_been_accepted=r.status in('sending','uncertain')or r.may_have_been_accepted,retry_stopped=true,lease_token=null,lease_until=null,updated_at=clock_timestamp()where id=r.id;
   return jsonb_build_object('skipped',true);
  end if;
@@ -97,7 +106,7 @@ begin
  select *into r from notification_delivery_private.outbox where id=p_id for update;
  if not found or r.status<>'leased'or r.lease_token is distinct from p_lease or r.lease_until<=clock_timestamp()then return null;end if;
  if not exists(select 1 from notification_delivery_private.control where enabled)then return null;end if;
- if not notification_delivery_private.eligible(r.notification_id,r.channel)then
+ if not exists(select 1 from notification_delivery_private.control where enabled and generation=r.activation_generation)or not notification_delivery_private.eligible(r.notification_id,r.channel)then
   update notification_delivery_private.outbox set status=case when may_have_been_accepted then 'uncertain'else 'cancelled'end,retry_stopped=true,lease_token=null,lease_until=null,updated_at=clock_timestamp()where id=r.id;return null;
  end if;
  if r.attempts>=3 then return null;end if;
