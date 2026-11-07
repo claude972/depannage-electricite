@@ -141,3 +141,4 @@ Claude raccorde le rapport entreprise au JSON de `/api/reports`, sur le même p�
 
 Astra possède la lecture serveur paginée des devis de l’artisan. Vérifier les anciens dossiers, les révisions et les refus d’accès avant de raccorder l’écran. Garder les lectures sous l’identité réelle et les écritures de devis sur les routes existantes. ROOT intègre et lance la recette sur la version exacte.
 - ART-10 (Claude, claude/artisan-performance-ui) : performance artisan lue depuis loadArtisanPerformance (serveur) dans PerformanceView et le bloc profil ; démo inchangée.
+- Claude (add7245) — ART-07 écran Devis artisan : GET /api/artisan/quotes paginé (status, cursor), ouverture exacte d’un devis hors bootstrap via GET /api/interventions/[id] puis quote_id. Leaf components/features/artisan-quotes/** + Quotes dans artisan-space.tsx. Aucune API/SQL/cloud ; démo sans appel.
