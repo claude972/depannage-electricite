@@ -124,3 +124,7 @@ ROOT raccorde la reprise de la souscription courante après retour ou réponse p
 ### SYS-07 — recherche des demandes du client connecté
 
 ROOT ajoute une lecture paginée des demandes du compte, hors de la fenêtre de démarrage. Le filtre et la recherche s’appliquent avant pagination. La requête de lecture transporte les termes dans le corps et garde la projection minimale. Claude raccorde « Mes demandes » au même bouton d’ouverture des dossiers. Vérifier plus de 100 demandes, les références anciennes, les recherches littérales et le cloisonnement des comptes.
+
+### ART — historique paginé des missions attribuées (UI)
+
+Claude, branche `claude/artisan-history-ui` (base d2e1446), contrat 6932c6f. Segments « En cours » et « Terminées » de `Missions` (artisan) : historique serveur paginé, compteurs `counts` du serveur, ouverture par `openIntervention`. Démo, offres, rayon et tri inchangés.
