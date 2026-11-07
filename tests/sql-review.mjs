@@ -143,6 +143,11 @@ await db.query('update public.interventions set site_id=null where id=$1',[job.i
 await assert.rejects(as('client1',"select public.request_warranty($1,'Le problème électrique est revenu après intervention.')",[job.id]));
 await assert.rejects(as('client1',"update public.app_settings set value='true' where key='warranty_requests_enabled'"));
 await db.exec("update public.app_settings set value='true' where key='warranty_requests_enabled'");
+// A raw switch no longer bypasses explicit publication/activation of operator-provided conditions.
+assert.equal((await as('admin','select public.warranty_requests_enabled() enabled')).rows[0].enabled,false);
+await as('admin',"select public.write_warranty_policy(gen_random_uuid(),0,'save','Conditions QA','Texte synthétique de test, sans valeur contractuelle.')");
+await as('admin',"select public.write_warranty_policy(gen_random_uuid(),1,'publish')");
+await as('admin',"select public.write_warranty_policy(gen_random_uuid(),2,'enable',null,null,2)");
 await assert.rejects(as('client2',"select public.request_warranty($1,'Je ne suis pas le client propriétaire de ce dossier.')",[job.id]));
 await db.query("update public.interventions set completed_at=now()-interval '1 year 1 day' where id=$1",[job.id]);
 await assert.rejects(as('client1',"select public.request_warranty($1,'Cette intervention est hors de la fenêtre annuelle.')",[job.id]));

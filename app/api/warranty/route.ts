@@ -1,3 +1,4 @@
+import process from "node:process";
 import { z } from "zod";
 import {
   authenticatedClient,
@@ -37,11 +38,15 @@ export async function GET() {
     ]);
     dbError(error);
     dbError(gate.error);
+    if (typeof gate.data !== "boolean")
+      throw new ApiError(
+        503,
+        "La disponibilité des demandes doit être vérifiée.",
+      );
     return Response.json(
       {
         cases: data,
-        enabled:
-          process.env.WARRANTY_REQUESTS_ENABLED === "true" && !!gate.data,
+        enabled: process.env.WARRANTY_REQUESTS_ENABLED === "true" && gate.data,
       },
       { headers: { "Cache-Control": "private, no-store" } },
     );
