@@ -124,3 +124,6 @@ ROOT raccorde la reprise de la souscription courante après retour ou réponse p
 ### SYS-07 — recherche des demandes du client connecté
 
 ROOT ajoute une lecture paginée des demandes du compte, hors de la fenêtre de démarrage. Le filtre et la recherche s’appliquent avant pagination. La requête de lecture transporte les termes dans le corps et garde la projection minimale. Claude raccorde « Mes demandes » au même bouton d’ouverture des dossiers. Vérifier plus de 100 demandes, les références anciennes, les recherches littérales et le cloisonnement des comptes.
+
+## SYS-09 — exercice de restauration local (Astra exclusive)
+Base d2e1446 ; branche codex/restore-verification. Sauvegardes fournisseur et Storage non prouvées, politique d'effacement non décidée : aucune opération réelle. Ajouter un exercice exécutable sur schéma migré et données synthétiques PGlite : archive réelle en mémoire, manifeste strict lié aux migrations/catalogue/données, restauration dans une instance neuve, refus d'altération et contrôle RLS/données après réouverture. Aucun accès réseau/base distante, durée légale ni promesse RPO/RTO. Tester nominal et falsifications ; les stubs Auth/Storage/cron demeurent explicites.
