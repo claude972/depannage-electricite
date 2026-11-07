@@ -221,3 +221,72 @@ test("409 ⇒ conflit honnête + « Actualiser la liste », jamais d’écraseme
   const src = (await import("node:fs")).readFileSync("components/features/energy/site-energy-panel.tsx", "utf8");
   assert.match(src, /data-energy-reload="">Actualiser la liste</);
 });
+
+// ---- Barrière d’écriture (revue ROOT) : une liste démarrée avant une écriture ne s’applique jamais après
+function raceHarness(initialRecords: unknown[]) {
+  const calls: { cursor: string | null }[] = [];
+  const pendingLists: ((r: Model.EnergyResult) => void)[] = [];
+  let reloadReply: Model.EnergyResult = res(200, page([]));
+  let commandReply: Model.EnergyResult = res(503);
+  let s = m.applyList(m.ENERGY_INITIAL, res(200, page(initialRecords, { page: { limit: 100, has_more: true, next_cursor: "c1" }, totals: { consumption_wh: null, cost_cents: null, complete: false, cost_complete: false } })), false, SITE);
+  const ctrl = m.createEnergyController({
+    api: () => ({
+      list: (_site, q) => {
+        calls.push({ cursor: q.cursor });
+        if (pendingLists.length < 1 && calls.length === 1) return new Promise((r) => pendingLists.push(r)); // A : en retard
+        return Promise.resolve(reloadReply); // rechargement causal
+      },
+      command: async () => commandReply,
+    }),
+    siteId: SITE,
+    get: () => s,
+    set: (n) => (s = n),
+  });
+  return { ctrl, get: () => s, calls, resolveA: (r: Model.EnergyResult) => pendingLists[0](r), setReload: (r: Model.EnergyResult) => (reloadReply = r), setCommand: (r: Model.EnergyResult) => (commandReply = r) };
+}
+const flush = () => new Promise((r) => setTimeout(r, 0));
+
+test("barrière : liste A démarrée → enregistrement réussi → A répond tard ⇒ enregistrement conservé, lignes de A ignorées, rechargement causal", async () => {
+  const h = raceHarness([rec(1)]);
+  const saved = rec(7, { meter_label: "Nouveau" });
+  h.setCommand(res(200, { record: saved }));
+  h.setReload(res(200, page([saved, rec(1)])));
+  const a = h.ctrl.load(); // A en vol (liste vidée, phase loading)
+  const form = { ...m.newForm(saved.id), meter_label: "Nouveau", period_start: "2026-10-01", period_end: "2026-10-31", consumption_kwh: "12,345", cost_euros: "25", source_reference: "F-7" };
+  const save = h.ctrl.save((m.formToCommand(form) as { command: Model.SaveCommand }).command);
+  assert.equal(await h.ctrl.load(), false); // aucune liste pendant l’écriture
+  await save;
+  h.resolveA(res(200, page([rec(90)]))); // A, périmée, sans l’enregistrement
+  assert.equal(await a, false);
+  await flush();
+  assert.ok(h.get().records.some((r) => r.id === saved.id), "enregistrement visible");
+  assert.ok(!h.get().records.some((r) => r.id === rec(90).id), "lignes de A non appliquées");
+  same([h.calls.length, h.calls[1].cursor, h.get().phase], [2, null, "ready"]); // rechargement causal depuis la page 1
+});
+
+test("barrière : même course avec un archivage (la ligne archivée ne revient pas) et avec « Afficher plus »", async () => {
+  const h = raceHarness([rec(8, { version: 2 }), rec(1)]);
+  h.setCommand(res(200, { record: rec(8, { version: 3, archived_at: NOW }) }));
+  h.setReload(res(200, page([rec(1)])));
+  const a = h.ctrl.load();
+  await h.ctrl.archive(m.parseEnergyPage(page([rec(8, { version: 2 })]), SITE)!.records[0]);
+  h.resolveA(res(200, page([rec(8, { version: 2 }), rec(1)]))); // A contient encore la ligne archivée
+  assert.equal(await a, false);
+  await flush();
+  same(h.get().records.map((r) => r.id), [rec(1).id]);
+  // « Afficher plus » en vol puis écriture : la page tardive n’est pas ajoutée.
+  const k = raceHarness([rec(1)]);
+  const saved = rec(7);
+  k.setCommand(res(200, { record: saved }));
+  k.setReload(res(200, page([saved, rec(1)])));
+  const more = k.ctrl.more();
+  assert.equal(k.calls[0].cursor, "c1");
+  const form = { ...m.newForm(saved.id), meter_label: "Compteur 7", period_start: "2026-10-01", period_end: "2026-10-31", consumption_kwh: "12,345", cost_euros: "25", source_reference: "F-7" };
+  await k.ctrl.save((m.formToCommand(form) as { command: Model.SaveCommand }).command);
+  assert.equal(k.get().loadingMore, false);
+  k.resolveA(res(200, page([rec(91)])));
+  assert.equal(await more, false);
+  await flush();
+  assert.ok(k.get().records.some((r) => r.id === saved.id));
+  assert.ok(!k.get().records.some((r) => r.id === rec(91).id));
+});
