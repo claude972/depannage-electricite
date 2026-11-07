@@ -4,6 +4,7 @@
 import { useCallback, useState, type ReactNode } from "react";
 import type { ContractState, Dispute, DisputeOutcome, FinanceConfig, FinanceReport, Invoice, InvoiceReadiness, LedgerEntry, Page, PlatformAccess, PlatformClient, PlatformViewScope, RefundRequest } from "../../../lib/features/platform-operations/types";
 import { COMMISSION_NOT_CONFIGURED, REFUND_EXECUTION_MESSAGE } from "../../../lib/features/platform-operations/config";
+import { RefundExecutionPanel } from "../refund-execution/refund-execution-panel";
 import { EMPTY_READINESS, UUID_RE, disputeActions, readinessFingerprint, readinessReduce, refundActions, refundStatusLabel, validateAmountCents, validateDisputeDecision, validateRefundDecision, validateText, type ReadinessTarget } from "../../../lib/features/platform-operations/state-machines";
 import type { PlatformDemo } from "../../../lib/features/platform-operations/demo";
 import { invoiceDocumentLinks } from "../../../lib/features/platform-operations/invoice-links";
@@ -105,7 +106,7 @@ export function LedgerBasis({ basis }: { basis: Record<string, unknown> | null |
   );
 }
 
-type Ctx = { client: PlatformClient; demo?: PlatformDemo; canWrite: boolean; superAdmin: boolean; notify: (m: { kind: "ok" | "error"; text: string } | null) => void; busy: boolean; act: (work: () => Promise<unknown | null>, done: string, after?: () => void) => Promise<void>; scopeKey: string; rendering: boolean };
+type Ctx = { client: PlatformClient; demo?: PlatformDemo; canWrite: boolean; superAdmin: boolean; notify: (m: { kind: "ok" | "error"; text: string } | null) => void; busy: boolean; act: (work: () => Promise<unknown | null>, done: string, after?: () => void) => Promise<void>; scopeKey: string; rendering: boolean; refundExecution: boolean; userId: string };
 
 export function PlatformFinanceView(props: PlatformFinanceViewProps) {
   return <Gate state={props.state} unavailableMessage={props.unavailableMessage} title="Finance plateforme"><Inner key={scopeKey(props.scope)} {...props} /></Gate>;
@@ -125,7 +126,7 @@ function Inner({ scope, client, demo }: PlatformFinanceViewProps) {
   if (me.loading && !me.data) return <Loading label="Chargement des droits…" />;
   if (me.error && !me.data) return <ErrorBox message={me.error} onRetry={me.reload} />;
   if (!me.data?.capabilities.finance) return <div className="forbidden"><strong>Cet espace nécessite le scope finance.</strong><p>Demandez l’habilitation à un super administrateur.</p></div>;
-  const ctx: Ctx = { client, demo, canWrite: scope.authority.canWrite && !demo && (me.data.super_admin || me.data.scopes.includes("finance_write")), superAdmin: !demo && scope.authority.canWrite && me.data.super_admin, notify, busy, act, scopeKey: scopeKey(scope), rendering: me.data.capabilities.invoice_rendering === true };
+  const ctx: Ctx = { client, demo, canWrite: scope.authority.canWrite && !demo && (me.data.super_admin || me.data.scopes.includes("finance_write")), superAdmin: !demo && scope.authority.canWrite && me.data.super_admin, notify, busy, act, scopeKey: scopeKey(scope), rendering: me.data.capabilities.invoice_rendering === true, refundExecution: !demo && me.data.capabilities.refund_execution === true, userId: scope.userId };
   return (
     <div className={styles.view} data-module="platform-operations" data-platform-view="finance">
       <div className={styles.head}><div><h2>Finance plateforme</h2><p>Ledger en centimes, rapprochement avec les paiements confirmés et suivi documentaire. Aucune action réelle auprès du fournisseur de paiement n’est disponible dans cette version.</p></div></div>
@@ -385,7 +386,11 @@ function Refunds({ ctx }: { ctx: Ctx }) {
   const [decision, setDecision] = useState<{ id: string; action: "approve" | "reject" | "cancel"; note: string; error: string } | null>(null);
   return (
     <>
-      <p className={styles.alert} role="note">{REFUND_EXECUTION_MESSAGE}</p>
+      <p className={styles.alert} role="note">
+        {ctx.refundExecution
+          ? "Une demande approuvée n’est pas un remboursement effectué : seul un remboursement confirmé par la plateforme (exécution réussie et demande soldée) l’est."
+          : REFUND_EXECUTION_MESSAGE}
+      </p>
       <Panel title="Demandes de remboursement" action={<div className={styles.toolbar}><label>Statut<select value={status} onChange={(e) => { setStatus(e.target.value); list.resetCursor(); }}><option value="">Tous</option>{(["requested", "approved", "rejected", "cancelled", "settled"] as const).map((s) => <option key={s} value={s}>{refundStatusLabel(s)}</option>)}</select></label></div>}>
         {list.loading && !list.data ? <Loading /> : list.error && !list.data ? <ErrorBox message={list.error} onRetry={list.reload} /> : !list.data?.requests.length ? <EmptyState title="Aucune demande">Une demande se crée pour un paiement confirmé, dans la limite du montant réglé.</EmptyState> : (
           <ul className={styles.list}>{list.data.requests.map((r) => (
@@ -400,6 +405,14 @@ function Refunds({ ctx }: { ctx: Ctx }) {
                   <div className={`${styles.actions} ${styles.full}`}><button type="submit" className={`${styles.button} ${styles.primary}`} disabled={ctx.busy}>Confirmer</button><button type="button" className={styles.button} onClick={() => setDecision(null)}>Fermer</button></div>
                 </form>
                 : <div className={styles.actions}><button type="button" className={styles.button} onClick={() => setDecision({ id: r.id, action: refundActions(r.status)[0], note: "", error: "" })}>Décider</button></div>)}
+              {(r.status === "approved" || r.status === "settled") && (
+                <RefundExecutionPanel
+                  request={{ id: r.id, payment_id: r.payment_id, amount_cents: r.amount_cents, currency: r.currency, status: r.status, version: r.version }}
+                  capability={ctx.refundExecution}
+                  context={{ userId: () => ctx.userId, generation: () => 0 }}
+                  demo={Boolean(ctx.demo)}
+                />
+              )}
             </li>))}</ul>
         )}
         {list.data && list.pager(list.data.page)}

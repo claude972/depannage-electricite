@@ -209,3 +209,12 @@ test("capacité révoquée sans changement d’identité (lue au moment de l’a
   same(b.calls.map((c) => c.kind), ["GET", "POST"]);
   assert.match(readFileSync("components/features/refund-execution/refund-execution.module.css", "utf8"), /\.button \{[^}]*min-height: 44px;/);
 });
+
+test("wiring: finance Refunds mounts the panel on approved/settled rows with the strict /me capability; demo never executes", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync("components/features/platform-operations/platform-finance-view.tsx", "utf8");
+  assert.match(src, /refundExecution: !demo && me\.data\.capabilities\.refund_execution === true, userId: scope\.userId/);
+  assert.match(src, /\(r\.status === "approved" \|\| r\.status === "settled"\) && \(\s*<RefundExecutionPanel\s+request=\{\{ id: r\.id, payment_id: r\.payment_id, amount_cents: r\.amount_cents, currency: r\.currency, status: r\.status, version: r\.version \}\}\s+capability=\{ctx\.refundExecution\}/);
+  assert.match(src, /demo=\{Boolean\(ctx\.demo\)\}/);
+  assert.match(src, /ctx\.refundExecution\s+\? "Une demande approuvée n’est pas un remboursement effectué/);
+});
