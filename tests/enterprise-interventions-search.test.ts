@@ -21,9 +21,10 @@ function setup(data: unknown, error: { code: string } | null = null) {
   const { POST } = loadModule("app/api/enterprise/interventions/search/route.ts", {
     "@/lib/supabase/server": fakeServerHelpers({ db }),
   });
-  const post = (body: unknown, from = origin, query = "") => POST(new Request(`${origin}/api/enterprise/interventions/search${query}`, {
+  const handler = POST as (request: Request) => Promise<Response>;
+  const post = (body: unknown, from = origin, query = "") => handler(new Request(`${origin}/api/enterprise/interventions/search${query}`, {
     method: "POST", headers: { Origin: from, "Content-Type": "application/json" }, body: JSON.stringify(body),
-  })) as Promise<Response>;
+  }));
   return { post, calls };
 }
 
