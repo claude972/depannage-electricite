@@ -63,6 +63,13 @@ try {
  await as('', 'postgres');await q('update public.interventions set artisan_id=$2 where id=$1',[moved.job,ids.other]);
  await as('artisan');eq(await one('select count(*)::integer v from public.quotes where id=$1',[moved.quoteId]),0);
  await as('other');eq((await page()).length,1); // newly assigned artisan never acquires old author's quote in this list
+ await as('', 'postgres');
+ const revisionJob=await insert(ids.artisan,'quoted');let oldest;
+ for(let n=0;n<35;n++){const revision=await quote(revisionJob,ids.artisan);await q("update public.quotes set status='rejected',created_at='2026-11-01T00:00:00Z'::timestamptz+($2::integer*interval '1 second')where id=$1",[revision,n]);if(n===0)oldest=revision;}
+ await as('artisan');
+ eq((await q('select id from public.quotes where intervention_id=$1 order by created_at desc limit 20',[revisionJob])).some(x=>x.id===oldest),false);
+ const exact=await q("select q.id from public.quotes q join public.interventions i on i.id=q.intervention_id join public.profiles p on p.id=q.artisan_id where q.id=$1 and q.artisan_id=auth.uid()and i.artisan_id=auth.uid()and p.role='artisan'limit 2",[oldest]);
+ eq(exact.map(x=>x.id),[oldest]);
  await as('', 'postgres');await q("update public.profiles set role='client'where id=$1",[ids.artisan]);await as('artisan');eq((await page()).length,0);
  await as('client');eq((await page()).length,0);await as('admin');eq((await page()).length,0);
  console.log(`artisan quotes: ${checks} real RLS assertions PASS (123 rows; no new migration)`);

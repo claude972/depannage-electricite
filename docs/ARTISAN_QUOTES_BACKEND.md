@@ -12,3 +12,9 @@ Portée : rôle profil courant artisan, auteur exact du devis et attribution act
 401 session absente ; 403 rôle non artisan ; 422 paramètres/curseur invalides ; 503 réponse invérifiable ou panne, Retry-After 2. Toutes réponses privées no-store. Pas de lignes du devis, identité client, adresse, contact, paiement, secret ou montant agrégé.
 
 Tests : vrai handler avec client injecté, pagination/projection/erreurs ; PGlite isolé exécutant les migrations et jointures sous rôle authenticated, 123 devis, autre compte, réaffectation, retrait de rôle. Ce test SQL valide RLS et forme relationnelle ; la syntaxe d'embedding PostgREST doit encore être exercée en recette hébergée par ROOT. Aucun cloud/fournisseur appelé.
+
+## Lecture du devis exact hors fenêtre 20
+
+GET `/api/artisan/quotes/[id]` → `{quote:{id,intervention_id,artisan_id,lines:[{label,quantity,unit_price_cents}],subtotal_cents,tax_rate,tax_cents,total_cents,status,created_at,accepted_at},intervention:{id,category,status}}`.
+Même portée que la liste, requête UUID exacte sans limite historique. Absence ou autre auteur/attribution : 404 identique. 401/403/422/503 et no-store identiques. Schéma du détail partagé réutilisé (normalisation des nombres décimaux stockés, TVA) ; contrôle des totaux par calculateQuote. Pas de total accepté avec avenants ni de statut paiement. Le front doit utiliser cette lecture pour le devis sélectionné, même s'il manque aux 20 devis du point-read dossier.
+Preuve ciblée : 35 devis rejetés d'un même dossier, plus ancien absent des20 mais lisible exactement sous RLS ; vrais handlers et refus.
