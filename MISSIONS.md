@@ -130,3 +130,6 @@ ROOT ajoute la liste paginée des interventions entreprise et l’export CSV sur
 ### PUB-04 — demande de rappel et file d’assistance
 
 ROOT possède le serveur, la migration et les tests. Une demande publique collecte le numéro saisi et le motif sélectionné, avec consentement à ce rappel. Le serveur renvoie un reçu minimal, protège le rejeu et borne les dépôts en base. Seuls les opérateurs d’assistance habilités consultent ou classent la demande. Le classement est tracé sans numéro dans l’audit et ne prouve aucun appel. Claude raccorde le formulaire et la file après publication du contrat. Vérifier dépôt, rejeu, quotas, refus, version et lecture privée. L’activation reste explicite après validation des modalités de traitement.
+
+## ENT-14 / SYS-07 — résumé professionnel exact (Astra exclusive)
+Base d235b3c, branche codex/enterprise-professional-overview. Endpoint séparé, manager courant/membre organisation/sites RLS. Agrégats snapshot unique : approbations pending, conformité non terminée due aujourd'hui..+30 jours Martinique, engagement devis acceptés+avenants acceptés avec identité027, budget de référence sites séparé. Aucun exercice fiscal/SLA redéfini, aucun PII ni liste par site. Tests >100, droits sélectionnés/retrait et chiffres exacts. Aucun UI/cloud.
