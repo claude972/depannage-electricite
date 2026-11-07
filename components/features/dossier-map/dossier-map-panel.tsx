@@ -5,7 +5,7 @@
 // tracking state with source and freshness, the artisan's position only when fresh and shared).
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { TrackingClient, TrackingSnapshot } from "../../../lib/features/tracking/types";
-import { MAP_COPY, externalMapsHref, mapView, type DeclaredAddress, type MapProvider } from "./dossier-map-model";
+import { MAP_COPY, externalMapsHref, mapView, nextTransitionMs, type DeclaredAddress, type MapProvider } from "./dossier-map-model";
 import styles from "./dossier-map.module.css";
 
 export type DossierMapProps = {
@@ -52,7 +52,17 @@ export function DossierMapPanel({ address, tracking, trackingState = "available"
     };
   }, [read]);
   const [consent, setConsent] = useState<"closed" | "asking" | "granted">("closed");
-  const view = load.snapshot ? mapView(load.snapshot, now()) : null;
+  // Local clock: re-render exactly when a shown position/snapshot crosses its freshness threshold,
+  // even if nothing else re-renders the page (a stale position is then removed, never left shown).
+  const [, setTick] = useState(0);
+  const snapshot = load.snapshot;
+  const wait = snapshot ? nextTransitionMs(snapshot, now()) : null;
+  useEffect(() => {
+    if (wait === null) return;
+    const id = setTimeout(() => setTick((n) => n + 1), wait);
+    return () => clearTimeout(id);
+  });
+  const view = snapshot ? mapView(snapshot, now()) : null;
 
   return (
     <div className={styles.panel} data-dossier-map={provider ? `provider:${provider.id}` : "none"}>

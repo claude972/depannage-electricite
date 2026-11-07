@@ -33,7 +33,7 @@ export const STAGE_LABEL: Record<TrackingSnapshot["tracking"]["travel_stage"], s
 export const MAP_COPY = {
   noProvider: "Carte non activée : aucun fournisseur de cartographie n’a encore été choisi. Votre adresse n’est envoyée à aucun service tiers.",
   declared: "Adresse déclarée dans votre demande, non vérifiée.",
-  noEta: "Aucune durée de trajet ni heure d’arrivée n’est calculée ici.",
+  noEta: "Ce panneau ne calcule aucune durée de trajet ni heure d’arrivée : une estimation n’existe que si un itinéraire récent est disponible, et elle figure alors dans « Suivi de l’artisan » ci-dessous.",
   notYet: "Le suivi du déplacement est proposé une fois l’intervention acceptée.",
   loading: "Lecture du suivi…",
   loadFailed: "Le suivi n’a pas pu être lu. Réessayez.",
@@ -62,6 +62,21 @@ export type MapView = {
   /** Only when the server returned a fresh, consented position. */
   position: { latitude: number; longitude: number; accuracyM: number; text: string } | null;
 };
+/** Milliseconds until the shown state must change on its own (a fresh position becoming stale, the
+ *  snapshot crossing « à actualiser ») — so the panel re-renders at the threshold even if nothing
+ *  else does. Capped at 60 s to keep « il y a … » honest; null when nothing is time-dependent. */
+export function nextTransitionMs(snapshot: TrackingSnapshot, now: number): number | null {
+  const deadlines: number[] = [];
+  const server = Date.parse(snapshot.server_time);
+  if (Number.isFinite(server)) deadlines.push(server + SNAPSHOT_STALE_MS);
+  const sampled = snapshot.tracking.position ? Date.parse(snapshot.tracking.position.sampled_at) : NaN;
+  // trackingDisplay rounds the age to whole seconds: « fresh » holds until age ≥ limit + 500 ms.
+  if (Number.isFinite(sampled)) deadlines.push(sampled + POSITION_STALE_MS + 500);
+  const future = deadlines.filter((d) => d > now).map((d) => d - now);
+  const ticking = Number.isFinite(server) ? 60_000 : null;
+  const candidates = [...future, ...(ticking ? [ticking] : [])];
+  return candidates.length ? Math.max(0, Math.min(...candidates)) + 1 : null;
+}
 /** Server snapshot → what can honestly be said. Never invents a position, ETA or distance. */
 export function mapView(snapshot: TrackingSnapshot, now: number): MapView {
   const t = snapshot.tracking;
