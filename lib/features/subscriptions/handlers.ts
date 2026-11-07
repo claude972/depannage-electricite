@@ -1,7 +1,8 @@
+import {createHash} from 'node:crypto';
 import {z} from 'zod';
 import type Stripe from 'stripe';
 export interface Db{rpc(name:string,args?:Record<string,unknown>):PromiseLike<{data:unknown;error:{code?:string}|null}>}
-export interface Dependencies{authenticate():Promise<{db:Db;userId:string}>;admin():Db;stripe():Pick<Stripe,'prices'|'customers'|'checkout'|'subscriptions'>;env():Record<string,string|undefined>;now?():number}
+export interface Dependencies{authenticate():Promise<{db:Db;userId:string}>;admin():Db;stripe():Pick<Stripe,'prices'|'customers'|'checkout'|'subscriptions'|'billingPortal'|'webhooks'>;env():Record<string,string|undefined>;now?():number}
 const uuid=z.uuid(),time=z.string().refine(x=>Number.isFinite(Date.parse(x))),sid=z.string().regex(/^cs_[A-Za-z0-9_]{1,240}$/),cid=z.string().regex(/^cus_[A-Za-z0-9]{1,200}$/),pid=z.string().regex(/^price_[A-Za-z0-9]{1,200}$/),subid=z.string().regex(/^sub_[A-Za-z0-9]{1,200}$/);
 const offer=z.object({id:uuid,version:z.number().int().positive(),live:z.boolean(),role:z.enum(['client','artisan']),label:z.string().min(1).max(160),active:z.boolean(),price_id:pid,amount_cents:z.number().int().min(0).max(2147483647),currency:z.string().regex(/^[a-z]{3}$/),interval:z.enum(['day','week','month','year']),interval_count:z.number().int().min(1).max(1000),tax_behavior:z.enum(['inclusive','exclusive','unspecified'])}).strict();
 type Offer=z.infer<typeof offer>;
@@ -29,7 +30,7 @@ export function createSubscriptionHandlers(deps:Dependencies){
  async function auth(operator=false){const a=await deps.authenticate();const role=await rpc(a.db,'subscription_guard',{p_operator:operator});if(!(operator?role==='operator':['client','artisan'].includes(String(role))))fail(403);return a}
  async function context(db:Db,actor:string,live:boolean,read=false){const c=parse(contextSchema,await rpc(db,'subscription_context',{p_actor:actor,p_live:live,p_read:read}));if(c.account&&(c.account.actor!==actor||c.account.live!==live))fail(503);if(c.attempt&&(!c.account||c.attempt.account_id!==c.account.id||c.attempt.id!==c.account.current_attempt||c.attempt.offer.live!==live))fail(503);if(c.offers.some(o=>o.live!==live||o.role!==c.role||!o.active))fail(503);return c}
  function current(c:Context,envEnabled:boolean,expected?:string){if(!c.enabled||!c.eligible||!envEnabled||!c.attempt||(expected&&c.attempt.id!==expected)||c.attempt.offer.role!==c.role||!c.offers.some(o=>o.id===c.attempt!.offer.id&&o.version===c.attempt!.offer.version))fail(409)}
- async function reconcile(db:Db,actor:string,live:boolean,stripe:ReturnType<Dependencies['stripe']>,c:Context){
+ async function reconcile(db:Db,actor:string,live:boolean,stripe:ReturnType<Dependencies['stripe']>,c:Context,event?:{id:string;token:string}){
   const a=c.account,t=c.attempt;if(!a?.customer_id||!t?.session_id)return c;
   checkCustomer(await stripe.customers.retrieve(a.customer_id),c);
   const session=checkSession(await stripe.checkout.sessions.retrieve(t.session_id),c);
@@ -41,12 +42,18 @@ export function createSubscriptionHandlers(deps:Dependencies){
    checkPrice(s.items.data[0].price,live,t.offer,false);checkPrice(await stripe.prices.retrieve(t.offer.price_id),live,t.offer,false);
    state=s.status;cancel=s.cancel_at_period_end;start=s.items.data[0].current_period_start;end=s.items.data[0].current_period_end;
   }else{if(session.subscription)fail(503);checkPrice(await stripe.prices.retrieve(t.offer.price_id),live,t.offer,false)}
-  await rpc(db,'observe_subscription',{p_actor:actor,p_live:live,p_attempt:t.id,p_sequence:a.read_seq,p_session:session.id,p_subscription:sub,p_status:state,p_cancel:cancel,p_start:start,p_end:end});
+  await rpc(db,event?'apply_subscription_billing_event':'observe_subscription',{...(event?{p_event:event.id,p_token:event.token}:{}),p_actor:actor,p_live:live,p_attempt:t.id,p_sequence:a.read_seq,p_session:session.id,p_subscription:sub,p_status:state,p_cancel:cancel,p_start:start,p_end:end});
   return context(db,actor,live,false);
  }
- function response(c:Context,available:boolean){const t=c.attempt;return Response.json({available,offers:available?c.offers.map(publicOffer):[],checkout_pending:!!t&&['preparing','open'].includes(t.status),subscription:t?.subscription_id?{status:t.status,cancel_at_period_end:t.cancel_at_period_end,current_period_start:t.period_start,current_period_end:t.period_end,observed_at:t.observed_at,offer:publicOffer(t.offer)}:null},{headers})}
- function error(e:unknown){const n=(e as {status?:number})?.status;const s=e instanceof Failure?e.status:n===401?401:503;const messages:Record<number,string>={401:'Connectez-vous à votre compte.',403:'Cet abonnement n’est pas accessible à votre compte.',409:'L’offre ou l’abonnement doit être relu avant de continuer.',422:'Vérifiez votre demande.',503:'Les abonnements optionnels sont indisponibles. Aucun droit existant n’est retiré.'};return Response.json({error:messages[s]},{status:s,headers})}
+ function response(c:Context,available:boolean,portalAvailable=false){const t=c.attempt;return Response.json({available,portal_available:portalAvailable,offers:available?c.offers.map(publicOffer):[],checkout_pending:!!t&&['preparing','open'].includes(t.status),subscription:t?.subscription_id?{status:t.status,cancel_at_period_end:t.cancel_at_period_end,current_period_start:t.period_start,current_period_end:t.period_end,observed_at:t.observed_at,offer:publicOffer(t.offer)}:null},{headers})}
+ function error(e:unknown){const n=(e as {status?:number})?.status;const s=e instanceof Failure?e.status:n===401?401:503;const messages:Record<number,string>={400:'Événement de facturation invalide.',413:'Événement trop volumineux.',401:'Connectez-vous à votre compte.',403:'Cet abonnement n’est pas accessible à votre compte.',409:'L’offre ou l’abonnement doit être relu avant de continuer.',422:'Vérifiez votre demande.',503:'Les abonnements optionnels sont indisponibles. Aucun droit existant n’est retiré.'};return Response.json({error:messages[s]},{status:s,headers})}
  async function body(request:Request){const origin=request.headers.get('origin');if(origin&&origin!==new URL(request.url).origin)fail(403);if(new URL(request.url).searchParams.size)fail(422);try{return await request.json()}catch{fail(422)}}
+ function manageable(c:Context){return !!c.account?.customer_id&&!!c.attempt?.subscription_id&&!['preparing','open','expired','canceled','incomplete_expired'].includes(c.attempt.status)}
+ function portalConfiguration(live:boolean){const value=deps.env()[live?'STRIPE_BILLING_PORTAL_CONFIGURATION_LIVE':'STRIPE_BILLING_PORTAL_CONFIGURATION_TEST'];if(!value)return null;if(!/^bpc_[A-Za-z0-9]{1,200}$/.test(value))fail(503);return value}
+ async function checkPortalConfiguration(id:string,live:boolean){
+  const p=parse(z.object({id:z.string(),object:z.literal('billing_portal.configuration'),active:z.literal(true),livemode:z.boolean(),features:z.object({subscription_cancel:z.object({enabled:z.literal(true)}),subscription_update:z.object({enabled:z.literal(false)})})}),await deps.stripe().billingPortal.configurations.retrieve(id));
+  if(p.id!==id||p.livemode!==live)fail(503);
+ }
  return {
   GET:async(request:Request)=>{try{
    if(new URL(request.url).searchParams.size)fail(422);const a=await auth();
@@ -54,7 +61,8 @@ export function createSubscriptionHandlers(deps:Dependencies){
    const configuration=cfg(deps.env()),db=deps.admin();let c=await context(db,a.userId,configuration.live,true);
    if(c.attempt?.session_id)c=await reconcile(db,a.userId,configuration.live,deps.stripe(),c);
    const available=c.enabled&&c.eligible&&configuration.enabled;if(available)for(const o of c.offers)checkPrice(await deps.stripe().prices.retrieve(o.price_id),configuration.live,o,true);
-   return response(c,available);
+   let portalAvailable=false;if(configuration.enabled&&c.enabled&&manageable(c)){const id=portalConfiguration(configuration.live);if(id){await checkPortalConfiguration(id,configuration.live);portalAvailable=true}}
+   return response(c,available,portalAvailable);
   }catch(e){return error(e)}},
   POST:async(request:Request)=>{try{
    const a=await auth(),input=checkoutInput.safeParse(await body(request));if(!input.success)fail(422);const i=input.data,configuration=cfg(deps.env());if(!configuration.enabled)fail(503);
@@ -75,6 +83,38 @@ export function createSubscriptionHandlers(deps:Dependencies){
     await rpc(db,'bind_subscription_provider',{p_actor:a.userId,p_live:configuration.live,p_attempt:t.id,p_kind:'session',p_value:session.id});
    }
    if(session.status!=='open')fail(409);current(await context(db,a.userId,configuration.live),true,t.id);return Response.json({url:url(session.url)},{headers});
+  }catch(e){return error(e)}},
+  PORTAL:async(request:Request)=>{try{
+   const a=await auth(),input=z.object({command_id:uuid}).strict().safeParse(await body(request));if(!input.success)fail(422);
+   const configuration=cfg(deps.env());if(!configuration.enabled)fail(503);const id=portalConfiguration(configuration.live);if(!id)fail(503);
+   const db=deps.admin(),stripe=deps.stripe();let c=await context(db,a.userId,configuration.live,true);
+   if(!c.enabled)fail(409);c=await reconcile(db,a.userId,configuration.live,stripe,c);if(!manageable(c))fail(409);
+   const expected=c.attempt!.id,customer=c.account!.customer_id!;await checkPortalConfiguration(id,configuration.live);
+   const returnUrl=`${configuration.origin}/?subscription=managed#profile`;
+   const command=parse(z.object({account_id:uuid,command_id:uuid,attempt_id:uuid,configuration:z.string(),return_url:z.string(),created_at:time}),await rpc(db,'begin_subscription_portal',{p_actor:a.userId,p_live:configuration.live,p_command:input.data.command_id,p_configuration:id,p_return:returnUrl}));
+   if(command.account_id!==c.account!.id||command.command_id!==input.data.command_id||command.attempt_id!==expected||command.configuration!==id||command.return_url!==returnUrl)fail(503);
+   window(command.created_at);checkCustomer(await stripe.customers.retrieve(customer),c);if((await auth()).userId!==a.userId)fail(403);
+   const session=parse(z.object({id:z.string().regex(/^bps_[A-Za-z0-9]+$/),object:z.literal('billing_portal.session'),customer:cid,configuration:z.string(),livemode:z.boolean(),return_url:z.string(),on_behalf_of:z.null(),url:z.string()}),await stripe.billingPortal.sessions.create({customer,configuration:id,return_url:returnUrl},{idempotencyKey:`subscription-portal:${command.account_id}:${command.command_id}`}));
+   if(session.customer!==customer||session.configuration!==id||session.livemode!==configuration.live||session.return_url!==returnUrl)fail(503);
+   let u:URL;try{u=new URL(session.url)}catch{fail(503)}if(u.protocol!=='https:'||u.hostname!=='billing.stripe.com'||u.username||u.password||(u.port&&u.port!=='443'))fail(503);
+   if((await auth()).userId!==a.userId)fail(403);c=await context(db,a.userId,configuration.live);if(!c.enabled||!manageable(c)||c.attempt!.id!==expected||c.account!.customer_id!==customer)fail(409);
+   await checkPortalConfiguration(id,configuration.live);return Response.json({url:session.url},{headers});
+  }catch(e){return error(e)}},
+  BILLING:async(request:Request)=>{try{
+   const configuration=cfg(deps.env()),secret=deps.env()[configuration.live?'STRIPE_BILLING_WEBHOOK_SECRET_LIVE':'STRIPE_BILLING_WEBHOOK_SECRET_TEST'];if(!configuration.enabled||!secret?.startsWith('whsec_'))fail(503);
+   const signature=request.headers.get('stripe-signature');if(!signature)fail(400);
+   if(Number(request.headers.get('content-length')??0)>262144)fail(413);const raw=await request.text();if(Buffer.byteLength(raw)>262144)fail(413);
+   let verified:unknown;try{verified=deps.stripe().webhooks.constructEvent(raw,signature,secret)}catch{fail(400)}
+   const event=parse(z.object({id:z.string().regex(/^evt_[A-Za-z0-9]{1,200}$/),livemode:z.boolean(),type:z.string(),account:z.string().nullish(),context:z.string().nullish(),data:z.object({object:z.object({id:z.string(),object:z.string()})})}),verified);
+   if(event.account||event.context||event.livemode!==configuration.live)fail(400);
+   const types=['checkout.session.completed','customer.subscription.created','customer.subscription.updated','customer.subscription.deleted','customer.subscription.paused','customer.subscription.resumed'];
+   if(!types.includes(event.type))return Response.json({received:true},{headers});
+   if(event.data.object.object!==(event.type==='checkout.session.completed'?'checkout.session':'subscription'))fail(400);
+   const db=deps.admin(),claimed=parse(z.union([z.object({done:z.literal(true)}),z.object({done:z.literal(false),token:uuid,context:contextSchema})]),await rpc(db,'claim_subscription_billing_event',{p_live:configuration.live,p_event:event.id,p_fingerprint:createHash('sha256').update(raw).digest('hex'),p_kind:event.type,p_object:event.data.object.id}));
+   if(!claimed.done){const c=claimed.context;if(!c.account||!c.attempt||c.account.live!==configuration.live||c.account.current_attempt!==c.attempt.id||c.attempt.account_id!==c.account.id||c.attempt.offer.live!==configuration.live||(event.type==='checkout.session.completed'?c.attempt.session_id:c.attempt.subscription_id)!==event.data.object.id)fail(503);
+    await reconcile(db,c.account.actor,configuration.live,deps.stripe(),c,{id:event.id,token:claimed.token});
+   }
+   return Response.json({received:true},{headers});
   }catch(e){return error(e)}},
   OFFER:async(request:Request)=>{try{
    const a=await auth(true),input=offerInput.safeParse(await body(request));if(!input.success)fail(422);const i=input.data,configuration=cfg(deps.env());

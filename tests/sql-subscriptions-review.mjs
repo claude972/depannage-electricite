@@ -74,13 +74,27 @@ try {
  const older=await context(users.client,false,true),newer=await context(users.client,false,true);
  const observe=(seq,status='active',end=2000,cancel=false)=>q('select public.observe_subscription($1,false,$2,$3,\'cs_test_QA\',\'sub_QA\',$4,$5,1000,$6)',[users.client,started.attempt.id,seq,status,cancel,end]);
  await deny(observe(older.account.read_seq),'P0001');await observe(newer.account.read_seq);eq((await context()).attempt.status,'active');await deny(observe(newer.account.read_seq),'P0001');
+ // Portal commands do not mutate billing state and bind immutable exact parameters.
+ const portalCmd=crypto.randomUUID();const portal=()=>one("select public.begin_subscription_portal($1,false,$2,'bpc_QA','https://app.test/?subscription=managed#profile')v",[users.client,portalCmd]);
+ eq((await portal()).attempt_id,started.attempt.id);eq((await portal()).command_id,portalCmd);
+ await deny(q("select public.begin_subscription_portal($1,false,$2,'bpc_other','https://app.test/?subscription=managed#profile')",[users.client,portalCmd]),'P0001');
+ await deny(q("select public.begin_subscription_portal($1,false,$2,'bpc_QA','https://app.test/')",[users.other,portalCmd]),'P0001');
+ const claim=(event='evt_QA',object='sub_QA',hash='a'.repeat(64))=>one("select public.claim_subscription_billing_event(false,$1,$2,'customer.subscription.updated',$3)v",[event,hash,object]);
+ const receipt=await claim();eq(receipt.done,false);await deny(claim(),'P0001');
+ const apply=(token=receipt.token,seq=receipt.context.account.read_seq)=>q("select public.apply_subscription_billing_event(false,'evt_QA',$1,$2,$3,$4,'cs_test_QA','sub_QA','past_due',false,1000,2000)",[token,users.client,started.attempt.id,seq]);
+ await deny(apply(crypto.randomUUID()),'P0001');await apply();eq((await context()).attempt.status,'past_due');eq((await claim()).done,true);await deny(apply(),'P0001');await deny(claim('evt_QA','sub_QA','b'.repeat(64)),'P0001');eq((await claim('evt_unknown','sub_foreign')).done,true);
+ const delayed=await claim('evt_delayed');await context(users.client,false,true);
+ await deny(q("select public.apply_subscription_billing_event(false,'evt_delayed',$1,$2,$3,$4,'cs_test_QA','sub_QA','active',false,1000,2000)",[delayed.token,users.client,started.attempt.id,delayed.context.account.read_seq]),'P0001');
+ await as('', 'postgres');await db.exec("update subscription_private.billing_events set lease_until=clock_timestamp()-interval '1 second'where event_id='evt_delayed'");await as('', 'service_role');const resumed=await claim('evt_delayed');eq(resumed.token!==delayed.token,true);
+ await q("select public.apply_subscription_billing_event(false,'evt_delayed',$1,$2,$3,$4,'cs_test_QA','sub_QA','active',false,1000,2000)",[resumed.token,users.client,started.attempt.id,resumed.context.account.read_seq]);
  for(const [state,end,cancel]of [['past_due',2000,false],['active',3000,false],['active',3000,true],['canceled',3000,true]]){const c=await context(users.client,false,true);await observe(c.account.read_seq,state,end,cancel);eq((await context()).attempt.status,state)}
  const terminal=await context(users.client,false,true);await deny(observe(terminal.account.read_seq,'active',3000),'P0001');
+ await as('', 'postgres');await q('update auth.users set email_confirmed_at=null where id=$1',[users.client]);await as('', 'service_role');await deny(claim('evt_revoked'));await as('', 'postgres');await q('update auth.users set email_confirmed_at=now() where id=$1',[users.client]);await as('', 'service_role');
  const fresh=await begin(crypto.randomUUID());eq(fresh.attempt.id!==started.attempt.id,true);
  // Immutable attempt terms survive catalogue edits; no premium/MVP entitlement tables modified.
  await configure(users.operator,crypto.randomUUID(),offer.id,1,false,{...terms,amount_cents:5678});eq((await context()).attempt.offer.amount_cents,1234);
- await as('', 'postgres');await q('update auth.users set email_confirmed_at=null where id=$1',[users.client]);await as('', 'service_role');await deny(context());
+ await as('', 'postgres');await q('update auth.users set email_confirmed_at=null where id=$1',[users.client]);await as('', 'service_role');await deny(context());await deny(portal());
  await as('', 'postgres');await q('update public.profiles set artisan_approved=false where id=$1',[users.artisan]);await as('', 'service_role');eq((await context(users.artisan)).eligible,false);await deny(begin(crypto.randomUUID(),users.artisan));
- await as('', 'anon');await deny(q('select public.subscription_guard(false)'));await deny(q('select public.subscription_context($1,false,false)',[users.other]));
+ await as('', 'anon');await deny(q("select public.claim_subscription_billing_event(false,'evt_denied',$1,'customer.subscription.updated','sub_QA')",['a'.repeat(64)]));await deny(q('select public.subscription_guard(false)'));await deny(q('select public.subscription_context($1,false,false)',[users.other]));
  console.log(`PASS subscriptions: ${checks} SQL checks, gate/ACL, explicit catalogue, exact commands, isolated accounts/modes and stale/terminal transitions`);
 }catch(e){console.error(e.message,e.code,e.query,e.stack?.split('\n').slice(0,5).join('\n'));process.exitCode=1}finally{await db.close()}
