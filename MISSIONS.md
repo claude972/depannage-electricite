@@ -78,3 +78,7 @@ ROOT réalise la lecture paginée des données du compte sous la session courant
 ### PUB-03 — vérification de couverture publiée
 
 ROOT implémente la publication versionnée de codes postaux exacts par le Super Admin et la lecture publique d'un seul code. Aucun code prérempli. Le retrait rend la couverture inconnue. La consultation renseigne le territoire publié ; le moteur d'attribution garde son éligibilité existante. Claude raccorde la vérification publique et l'éditeur. Tester retrait, conflit, rejeu et refus de rôle.
+
+### ENT-13 — appliquer une grille publiée au devis
+
+ROOT est seul auteur du serveur. L'artisan actuellement attribué sélectionne une grille de l'organisation du site, ses lignes et les quantités. Le serveur reprend les prix unitaires publiés et le brouillon versionné existant. Une édition manuelle ultérieure forme une autre version. À l'envoi, le serveur conserve la référence de la grille et refuse une grille devenue inapplicable. L'accord et les totaux restent ceux du moteur de devis. Claude raccordera l'interface du devis après stabilisation du contrat. Tester prix exact, conflits, périmètre, envoi et conservation de l'historique.

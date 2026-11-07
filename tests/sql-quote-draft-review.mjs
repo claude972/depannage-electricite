@@ -19,7 +19,7 @@ alter table storage.objects enable row level security;
 `);
 const migrationDir = new URL('../supabase/migrations/', import.meta.url);
 for (const name of (await readdir(migrationDir)).filter(n=>n.endsWith('.sql')).sort()) await db.exec((await isolatedMigrationSql(db, name, await readFile(new URL(name,migrationDir),'utf8'))).replace('create extension if not exists pgcrypto;','-- extension omitted only in this isolated harness'));
-console.log('PASS: all ten migrations execute with explicit Auth/Storage stubs');
+console.log('PASS: all migrations execute with explicit Auth/Storage stubs');
 const ids={};let index=1;
 for(const actor of ['client','otherClient','artisan','otherArtisan','manager','admin']) {
  ids[actor]=`20000000-0000-4000-8000-${String(index++).padStart(12,'0')}`;
@@ -143,4 +143,54 @@ assert.ok(definition.indexOf('public.lock_intervention_organization')<definition
 assert.ok(definition.indexOf('from public.interventions where id=p_id for update')<definition.indexOf('from public.profiles where id=auth.uid() for update'));
 assert.ok(definition.indexOf('from public.profiles where id=auth.uid() for update')<definition.indexOf('from public.artisan_profiles where user_id=auth.uid() for update'));
 console.log('PASS: enterprise owners/admins do not read private drafts, internal quote helpers remain denied and lock order follows organization/job/profile/dossier');
+// Apply a versioned published grid using the same draft and approval transitions.
+await db.query("delete from public.action_limits where actor_id=$1 and action='quote_draft'",[ids.artisan]);
+const gridPayload = (amount, from = null) => ({
+ label: 'Grille QA', lines: [{label:'Forfait QA', unit:'visit', amount_cents:amount, note:'Note commerciale interne QA'}],
+ ...(from ? {from_grid_id:from} : {}),
+});
+async function publishGrid(amount, from = null) {
+ const {rows:[{value:created}]}=await as('manager',
+  'select public.save_contract_grid($1,$2::jsonb) value',[site.organization_id,JSON.stringify(gridPayload(amount,from))]);
+ return (await as('manager','select public.publish_contract_grid($1,$2) value',[created.id,created.version])).rows[0].value;
+}
+const grid = await publishGrid(12500);
+const gridJob = await newJob('manager',site.id);
+const gridDraft = await draft('artisan',gridJob,'load');
+const options = async (actor,id=gridJob) => (await as(actor,'select public.read_quote_grid_options($1) value',[id])).rows[0].value;
+const apply = async (id, current, g=grid, picks=[{index:0,quantity:2}]) =>
+ (await as('artisan','select public.apply_quote_contract_grid($1,$2,$3,$4::jsonb,$5,$6,$7,$8) value',
+ [id,g.id,g.version_number,JSON.stringify(picks),current.version,current.assignment_token,current.current_quote_id,8.5])).rows[0].value;
+assert.deepEqual((await options('artisan')).grids[0].lines, [{index:0,label:'Forfait QA',unit:'visit',unit_price_cents:12500}]);
+assert.deepEqual((await options('artisan',reassignedJob)).grids, []);
+await rejectsCode(options('otherArtisan'),'42501');
+await rejectsCode(apply(gridJob,gridDraft,grid,[{index:0,quantity:2,unit_price_cents:1}]),'22023');
+await rejectsCode(apply(gridJob,gridDraft,grid,[{index:0,quantity:1},{index:0,quantity:2}]),'22023');
+const priced = await apply(gridJob,gridDraft);
+assert.equal(priced.version,1);
+assert.deepEqual(priced.draft.lines,[{label:'Forfait QA',quantity:2,unit_price_cents:12500}]);
+assert.deepEqual((await options('artisan')).current,{grid_id:grid.id,grid_version:1,grid_label:'Grille QA'});
+await rejectsCode(apply(gridJob,gridDraft),'P0001');
+const sentWithGrid = await draft('artisan',gridJob,'send',{version:priced.version,token:priced.assignment_token});
+const sourceOf = async (actor,id=sentWithGrid.quote_id) => (await as(actor,
+ 'select grid_id,grid_version,grid_label from public.quote_contract_sources where quote_id=$1',[id])).rows;
+assert.deepEqual(await sourceOf('manager'),[{grid_id:grid.id,grid_version:1,grid_label:'Grille QA'}]);
+assert.deepEqual(await sourceOf('otherClient'),[]);
+const confirmedQuote = (await as('manager','select subtotal_cents,total_cents from public.quotes where id=$1',[sentWithGrid.quote_id])).rows[0];
+assert.deepEqual(confirmedQuote,{subtotal_cents:25000,total_cents:27125});
+
+const outdatedJob = await newJob('manager',site.id);
+const outdated = await apply(outdatedJob,await draft('artisan',outdatedJob,'load'));
+const replacement = await publishGrid(13000,grid.id);
+await rejectsCode(draft('artisan',outdatedJob,'send',{version:outdated.version,token:outdated.assignment_token}),'P0001');
+assert.equal((await draft('artisan',outdatedJob,'load')).version,outdated.version);
+assert.equal((await db.query('select count(*)::int n from public.quotes where intervention_id=$1',[outdatedJob])).rows[0].n,0);
+const replaced = await apply(outdatedJob,outdated,replacement);
+assert.equal(replaced.draft.lines[0].unit_price_cents,13000);
+assert.equal((await sourceOf('manager'))[0].grid_version,1);
+const manual = await draft('artisan',outdatedJob,'save',{version:replaced.version,token:replaced.assignment_token,lines,tax:8.5});
+assert.equal((await options('artisan',outdatedJob)).current,null);
+const sentManual = await draft('artisan',outdatedJob,'send',{version:manual.version,token:manual.assignment_token});
+assert.deepEqual(await sourceOf('manager',sentManual.quote_id),[]);
+console.log('PASS: contractual rate calculation, private scope, provenance, stale grid refusal and unchanged history');
 await db.close();
