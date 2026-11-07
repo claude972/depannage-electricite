@@ -4,7 +4,7 @@
 // Visual references (addendum « pages publiques »): M11/M51 (home), M46/M70/M42 (help), M38
 // (pricing), M60 (join), V8-C03 (about), V8-C05 (privacy), M63 (legal), M49 (auth). Every number,
 // promise, team or contact of those mockups is an example and is never reproduced here.
-import { useEffect, type ReactNode } from "react";
+import { createContext, useContext, useEffect, type ReactNode } from "react";
 import type { PublicSession } from "../app/session-types";
 import type { Category, View } from "../app/types";
 import { Alerts, PageTitle, Unavailable } from "../app/ui";
@@ -17,13 +17,41 @@ import { PublicChrome, type HomeHandlers } from "./public-chrome";
 import formStyles from "./public-forms.module.css";
 import { ABOUT_VALUES, CONTACT_CHANNELS, FAQ, HELP_PROCESS, JOIN_FACTS, JOIN_REVIEW, JOIN_STEPS, JOIN_TILES, LEGAL_SECTIONS, OPERATOR_FIELDS, PENDING, PRICING_PENDING, PRIVACY_CONTROLS, PRIVACY_DATA, PRIVACY_THIRD_PARTIES, numbered, pricingRows } from "./public-lists";
 import styles from "./public.module.css";
+import { publishedStamp, publishedValue, type PublicProfileState } from "../features/public-operator-profile/model";
+import { usePublishedOperatorProfile } from "../features/public-operator-profile/use-published-profile";
+import type { OperatorField } from "../features/public-operator-profile/contract";
 import viewStyles from "./public-views.module.css";
 
 const PUBLIC_VIEWS: View[] = ["home", "new", "auth", "help", "pricing", "join", "join-organization", "demo", "about", "privacy", "legal"];
 
-export function PublicSite({ session }: { session: PublicSession }) {
+// The PUBLISHED operator profile (never the draft) feeds the informational pages; while it loads,
+// fails or is not published, every field keeps « À renseigner par l’exploitant ».
+const OperatorContext = createContext<PublicProfileState | null>(null);
+const OPERATOR_VIEWS: View[] = ["help", "pricing", "about", "privacy", "legal"];
+type Source = { fields: OperatorField[]; optional?: OperatorField[]; join?: string };
+/** Published value for a field label, or null ⇒ pending. Required parts must all be published. */
+function sourced(state: PublicProfileState | null, source: Source | undefined): string | null {
+  if (!source) return null;
+  const parts = source.fields.map((f) => publishedValue(state, f));
+  if (parts.some((p) => p === null)) return null;
+  const extra = (source.optional ?? []).map((f) => publishedValue(state, f)).filter((v): v is string => v !== null);
+  return [...(parts as string[]), ...extra].join(source.join ?? ", ");
+}
+/** Pending notices only while nothing is published (a publication carries every minimum field). */
+function WhenUnpublished({ children }: { children: ReactNode }) {
+  const state = useContext(OperatorContext);
+  return state?.phase === "ready" && state.published ? null : <>{children}</>;
+}
+function PublishedStamp() {
+  const stamp = publishedStamp(useContext(OperatorContext));
+  return stamp ? <p className={styles.footnote} data-operator-published-stamp="">{stamp}</p> : null;
+}
+
+export function PublicSite({ session, operatorProfile }: { session: PublicSession; /** Tests only. */ operatorProfile?: PublicProfileState }) {
   const known = PUBLIC_VIEWS.includes(session.view);
   const view: View = known ? session.view : "home";
+  const fetched = usePublishedOperatorProfile(operatorProfile === undefined && OPERATOR_VIEWS.includes(view));
+  const operator = operatorProfile ?? fetched;
 
   const navigate = (target: View) => {
     session.go(target);
@@ -101,6 +129,7 @@ export function PublicSite({ session }: { session: PublicSession }) {
       <div className={viewStyles.wrap}>
         {themedAlerts}
         <div className={viewStyles.skin} data-public-skin="info">
+          <OperatorContext.Provider value={operator}>
           {view === "help" ? (
             <HelpView onNew={() => newRequest()} onLogin={login} />
           ) : view === "pricing" ? (
@@ -118,6 +147,7 @@ export function PublicSite({ session }: { session: PublicSession }) {
           ) : view === "legal" ? (
             <LegalView onHome={() => navigate("home")} />
           ) : null}
+          </OperatorContext.Provider>
         </div>
       </div>
     </PublicChrome>
@@ -203,7 +233,12 @@ function AuthView({ session }: { session: PublicSession }) {
 
 // ---- Help (M46 process + M70 FAQ + M42 column) ---------------------------------------------
 // Contact (PUB-04): only real channels; the others say they are pending. No form pretends to send.
+const CONTACT_SOURCES: Record<string, { field: OperatorField; href: (v: string) => string }> = {
+  "Adresse e-mail de contact": { field: "public_email", href: (v) => `mailto:${v}` },
+  "Téléphone": { field: "public_phone", href: (v) => `tel:${v}` },
+};
 function ContactBlock({ onLogin, headingId }: { onLogin: () => void; headingId: string }) {
+  const operator = useContext(OperatorContext);
   return (
     <section className={`panel ${styles.block}`} aria-labelledby={headingId} data-public-contact="">
       <h3 id={headingId}>Contact</h3>
@@ -211,21 +246,30 @@ function ContactBlock({ onLogin, headingId }: { onLogin: () => void; headingId: 
         {CONTACT_CHANNELS.map((c) => (
           <div key={c.label} data-contact-channel={c.state}>
             <dt>{c.label} :</dt>
-            <dd>{c.state === "pending" ? <><strong>{c.label === "Demande de rappel" ? "En cours d’ouverture" : PENDING}</strong> — {c.text}</> : c.text}</dd>
+            <dd>
+              {(() => {
+                const src = CONTACT_SOURCES[c.label];
+                const value = src ? publishedValue(operator, src.field) : null;
+                if (src && value) return <a href={src.href(value)} data-operator-value={src.field}>{value}</a>;
+                return c.state === "pending" ? <><strong>{c.label === "Demande de rappel" ? "En cours d’ouverture" : PENDING}</strong> — {c.text}</> : c.text;
+              })()}
+            </dd>
           </div>
         ))}
       </dl>
       <button type="button" className="button outline" onClick={onLogin} data-contact-login="">Se connecter pour écrire à l’assistance</button>
+      <PublishedStamp />
     </section>
   );
 }
-function PendingFields({ fields, label }: { fields: string[]; label: string }) {
+function PendingFields({ fields, label, sources = {} }: { fields: string[]; label: string; sources?: Record<string, Source> }) {
+  const operator = useContext(OperatorContext);
   return (
     <dl className={styles.legalFields} aria-label={label} data-pending-fields="">
       {fields.map((field) => (
         <div key={field}>
           <dt>{field} :</dt>
-          <dd>{PENDING}</dd>
+          <dd>{sourced(operator, sources[field]) ?? PENDING}</dd>
         </div>
       ))}
     </dl>
@@ -291,7 +335,7 @@ function PricingView({ onNew }: { onNew: () => void }) {
         </div>
         <div>
           <Unavailable title="Barème officiel, frais de déplacement et majorations" reason="À définir par l’exploitant. Aucun tarif public, frais de déplacement ou majoration (soir, week-end, urgence) n’est publié tant que cette décision n’est pas prise." blocker="PUB-02" />
-          <PendingFields fields={PRICING_PENDING} label="Décisions tarifaires en attente" />
+          <PendingFields fields={PRICING_PENDING} label="Décisions tarifaires en attente" sources={{ "Zone desservie": { fields: ["service_area"] } }} />
         </div>
       </div>
       <section className={`panel ${styles.priceTableCard}`} aria-labelledby="pricing-table">
@@ -468,8 +512,21 @@ function AboutView({ onNew, onJoin, onLogin }: { onNew: () => void; onJoin: () =
       </div>
       <section className={`panel ${styles.block} ${styles.narrowBlock}`} aria-labelledby="about-operator">
         <h2 id="about-operator">Exploitant, équipe et histoire</h2>
-        <PendingFields fields={OPERATOR_FIELDS} label="Présentation de l’exploitant" />
-        <Unavailable title="Identité de l’exploitant, équipe et coordonnées à renseigner" reason="Le nom définitif, la société exploitante, les personnes responsables et les moyens de contact seront publiés avant l’ouverture commerciale. Aucune information de substitution n’est affichée." blocker="PUB-08 / PUB-09" />
+        <OperatorAbout />
+        <PendingFields
+          fields={OPERATOR_FIELDS}
+          label="Présentation de l’exploitant"
+          sources={{
+            "Nom de l’exploitant et forme juridique": { fields: ["legal_name", "legal_form"] },
+            "Personnes responsables": { fields: ["publication_director"] },
+            "Zone d’intervention couverte": { fields: ["service_area"] },
+            "Coordonnées de contact": { fields: ["public_email"], optional: ["public_phone"], join: " · " },
+          }}
+        />
+        <PublishedStamp />
+        <WhenUnpublished>
+          <Unavailable title="Identité de l’exploitant, équipe et coordonnées à renseigner" reason="Le nom définitif, la société exploitante, les personnes responsables et les moyens de contact seront publiés avant l’ouverture commerciale. Aucune information de substitution n’est affichée." blocker="PUB-08 / PUB-09" />
+        </WhenUnpublished>
       </section>
       <div className={styles.narrowBlock}>
         <ContactBlock onLogin={onLogin} headingId="about-contact" />
@@ -529,7 +586,12 @@ function PrivacyView({ onHome, onLogin }: { onHome: () => void; onLogin: () => v
       </section>
       <section className={styles.docSection} aria-labelledby="privacy-rights">
         <h2 id="privacy-rights">{numbered(5, sections[5])}</h2>
-        <PendingFields fields={["Responsable du traitement", "Contact pour l’exercice des droits (accès, rectification, suppression)", "Durées de conservation hors position partagée"]} label="Informations de confidentialité en attente" />
+        <PendingFields
+          fields={["Responsable du traitement", "Contact pour l’exercice des droits (accès, rectification, suppression)", "Durées de conservation hors position partagée"]}
+          label="Informations de confidentialité en attente"
+          sources={{ "Contact pour l’exercice des droits (accès, rectification, suppression)": { fields: ["privacy_email"] } }}
+        />
+        <PublishedStamp />
         <Unavailable title="Politique complète, contact DPO et préférences : à publier avant ouverture" reason="Les modalités d’accès, de rectification et de suppression, la durée de conservation, le contact du délégué à la protection des données et les préférences de confidentialité seront publiés avant l’ouverture commerciale." blocker="PUB-10" />
       </section>
       <p className={styles.docFoot}>
@@ -541,6 +603,31 @@ function PrivacyView({ onHome, onLogin }: { onHome: () => void; onLogin: () => v
 }
 
 // ---- Legal notice (M63) ----------------------------------------------------------------------
+const LEGAL_SOURCES: Record<string, Record<string, Source>> = {
+  "Éditeur": {
+    "Raison sociale et forme juridique": { fields: ["legal_name", "legal_form"] },
+    "Adresse du siège": { fields: ["hq_address"] },
+    "Numéro SIREN et numéro de TVA": { fields: ["siren"], optional: ["vat_number"], join: " · TVA " },
+    "Directeur ou directrice de la publication": { fields: ["publication_director"] },
+    "Adresse de contact": { fields: ["public_email"] },
+  },
+  "Hébergeur": { "Nom de l’hébergeur": { fields: ["host_name"] }, "Adresse": { fields: ["host_address"] }, "Coordonnées de contact": { fields: ["host_contact"] } },
+  "Propriété intellectuelle": { "Titulaire des droits sur le nom, le logo et les contenus": { fields: ["rights_holder"] } },
+  "Données personnelles": { "Contact pour l’exercice des droits": { fields: ["privacy_email"] } },
+};
+/** Published presentation text and display name, only when published. */
+function OperatorAbout() {
+  const operator = useContext(OperatorContext);
+  const name = publishedValue(operator, "display_name");
+  const about = publishedValue(operator, "about_text");
+  if (!name && !about) return null;
+  return (
+    <div data-operator-about="">
+      {name && <h3>{name}</h3>}
+      {about && <p>{about}</p>}
+    </div>
+  );
+}
 function LegalView({ onHome }: { onHome: () => void }) {
   return (
     <div className={`${styles.page} ${styles.document}`}>
@@ -550,17 +637,13 @@ function LegalView({ onHome }: { onHome: () => void }) {
       {LEGAL_SECTIONS.map((section, index) => (
         <section key={section.title} className={styles.docSection} aria-labelledby={`legal-section-${index}`}>
           <h2 id={`legal-section-${index}`}>{numbered(index, section.title)}</h2>
-          <dl className={styles.legalFields}>
-            {section.fields.map((field) => (
-              <div key={field}>
-                <dt>{field} :</dt>
-                <dd>{PENDING}</dd>
-              </div>
-            ))}
-          </dl>
+          <PendingFields fields={section.fields} label={section.title} sources={LEGAL_SOURCES[section.title]} />
         </section>
       ))}
-      <Unavailable title="Mentions légales à compléter" reason="Aucune société, adresse ou identifiant fictif n’est affiché. Les informations ci-dessus seront renseignées par l’exploitant avant l’ouverture commerciale." blocker="PUB-08" />
+      <PublishedStamp />
+      <WhenUnpublished>
+        <Unavailable title="Mentions légales à compléter" reason="Aucune société, adresse ou identifiant fictif n’est affiché. Les informations ci-dessus seront renseignées par l’exploitant avant l’ouverture commerciale." blocker="PUB-08" />
+      </WhenUnpublished>
     </div>
   );
 }
