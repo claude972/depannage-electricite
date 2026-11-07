@@ -26,24 +26,27 @@ import {
 } from "./energy-model";
 import styles from "./site-energy.module.css";
 
-const uuid = () => (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : "00000000-0000-4000-8000-000000000000");
+/** A stable client id is mandatory for idempotent creation: no constant fallback, null when unavailable. */
+export const energyUuid = (): string | null => (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : null);
+export const ENERGY_NO_UUID = "Ce navigateur ne permet pas de créer un identifiant sécurisé : la saisie d’une nouvelle période est impossible ici. Mettez à jour le navigateur ou utilisez-en un autre.";
 const dateFr = (d: string) => {
   const [y, m, day] = d.split("-");
   return `${day}/${m}/${y}`;
 };
 
-type PanelProps = { siteId: string; api?: EnergyApi; context?: EnergyContext; /** Tests only. */ initial?: EnergyState; newId?: () => string };
+type PanelProps = { siteId: string; api?: EnergyApi; context?: EnergyContext; /** Tests only. */ initial?: EnergyState; newId?: () => string | null };
 /** Keyed by site: another site is a fresh panel (no list, cursor or form carried over). */
 export function SiteEnergyPanel(props: PanelProps) {
   return <SitePanel key={props.siteId} {...props} />;
 }
-function SitePanel({ siteId, api, context = DEFAULT_ENERGY_CONTEXT, initial, newId = uuid }: PanelProps) {
+function SitePanel({ siteId, api, context = DEFAULT_ENERGY_CONTEXT, initial, newId = energyUuid }: PanelProps) {
   const [state, setStateRaw] = useState<EnergyState>(initial ?? ENERGY_INITIAL);
   const ref = useRef(state);
   const set = (next: EnergyState) => {
     ref.current = next;
     setStateRaw(next);
   };
+  const [noId, setNoId] = useState(false);
   const latest = useRef({ api, context });
   latest.current = { api, context };
   const controller = useRef<ReturnType<typeof createEnergyController> | null>(null);
@@ -95,11 +98,12 @@ function SitePanel({ siteId, api, context = DEFAULT_ENERGY_CONTEXT, initial, new
       <div className={styles.head}>
         <h2 id={`energy-${siteId}`}>Consommation électrique</h2>
         {state.canWrite && state.phase === "ready" && !form && (
-          <button type="button" className={styles.primary} onClick={() => { setErrors({}); setForm(newForm(newId())); }} data-energy-add="">
+          <button type="button" className={styles.primary} onClick={() => { const id = newId(); if (!id) { setNoId(true); return; } setNoId(false); setErrors({}); setForm(newForm(id)); }} data-energy-add="">
             Ajouter une période
           </button>
         )}
       </div>
+      {noId && <p role="alert" data-energy-no-uuid="">{ENERGY_NO_UUID}</p>}
       <p className={styles.hint}>Périodes déclarées à partir d’une facture, d’un relevé de compteur ou d’une saisie : aucun relevé automatique.</p>
 
       <form className={styles.filters} onSubmit={applyFilter} noValidate aria-label="Filtrer par période">

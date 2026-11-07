@@ -99,6 +99,7 @@ import { TrackingAnchor } from "./tracking-anchor";
 import { useDetailPresence } from "./use-detail-presence";
 import { PointReadState } from "./detail-read-view";
 import { SiteOperationsView } from "../features/site-operations/site-operations-view";
+import { SiteEnergyPanel } from "../features/energy/site-energy-panel";
 import { CONTRACT_MESSAGES } from "../app/api";
 import { demoReport } from "../../lib/features/site-operations/demo";
 import { leafScope, platformEntries } from "./anchors";
@@ -2723,8 +2724,20 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
         {vertical === "office" && (
           <>
             <Unavailable title="Étages & zones" reason="Le découpage des bâtiments en étages et zones n’est pas modélisé." blocker="ENT-08" />
-            <Unavailable title="Consommation électrique" reason="Aucune source de consommation (factures, compteurs) n’est raccordée." blocker="ENT-09" />
           </>
+        )}
+        {session.mode === "demo" ? (
+          <Unavailable
+            title="Consommation électrique"
+            reason="En démonstration, aucune période de consommation n’est enregistrée : connectez-vous à votre espace pour saisir vos relevés et factures."
+            blocker="ENT-09"
+          />
+        ) : (
+          <SiteEnergyPanel
+            key={`${site.id}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}
+            siteId={site.id}
+            context={session.mutationContext}
+          />
         )}
         {vertical === "erp" && (
           <section className="panel" aria-labelledby="site-audits">
@@ -3225,7 +3238,11 @@ function ReportsView({ c }: { c: Ctx }) {
         )}
       </section>
       <div className={styles.threeCol}>
-        <Unavailable title="Consommation d’énergie" reason="Aucune source énergétique n’est raccordée." blocker="ENT-09" />
+        <Unavailable
+          title="Consommation d’énergie (consolidé)"
+          reason="Les périodes de consommation (factures, relevés de compteur, saisies) se déclarent et se consultent site par site, dans la fiche de chaque site. Aucun total multi-sites n’est calculé ici."
+          blocker="ENT-09"
+        />
         <Unavailable title="Assemblées générales & appels de fonds" reason="Non modélisés pour les copropriétés." blocker="ENT-05" />
         <Unavailable
           title="Respect des SLA (consolidé)"
