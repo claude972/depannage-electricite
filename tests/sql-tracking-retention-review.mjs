@@ -16,7 +16,18 @@ export async function installCronStub(db){
  caller=nullif(current_setting('role',true),'none');if caller is null then caller=session_user;end if;
  insert into cron.schedule_calls values(1);
  insert into cron.job(jobname,schedule,command,username) values(name,cadence,sql,caller) on conflict(jobname,username) do update set schedule=excluded.schedule,command=excluded.command returning jobid into result;return result;
- end$$;alter function cron.schedule(text,text,text) owner to cron_owner;`);
+ end$$;alter function cron.schedule(text,text,text) owner to cron_owner;
+ create function cron.schedule_in_database(job_name text,cadence text,sql text,database_name text,username text default null,active boolean default true)
+ returns bigint language plpgsql security definer set search_path=pg_catalog as $$
+ declare result bigint; caller text;
+ begin
+  caller=coalesce(username,nullif(current_setting('role',true),'none'),session_user);
+  insert into cron.job(jobname,schedule,command,database,username,active)
+  values(job_name,cadence,sql,database_name,caller,active) returning jobid into result;
+  return result;
+ end$$;
+ alter function cron.schedule_in_database(text,text,text,text,text,boolean) owner to cron_owner;
+ revoke all on function cron.schedule_in_database(text,text,text,text,text,boolean) from public;`);
 }
 export function stubbedRetentionSql(source){if(!nativeInstallPattern.test(source))throw Error('Native extension block missing');return source.replace(nativeInstallPattern,'-- TEST ONLY: pg_cron install replaced by explicit metadata/schedule stub; NO worker exists.');}
 async function main(){

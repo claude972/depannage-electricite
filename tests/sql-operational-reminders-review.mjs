@@ -378,7 +378,8 @@ try {
   const scheduleFile = (await readdir(dir)).find((x) =>
     x.endsWith("_operational_reminders_schedule.sql"),
   );
-  await db.exec(await readFile(new URL(scheduleFile, dir), "utf8"));
+  const scheduleSql = await readFile(new URL(scheduleFile, dir), "utf8");
+  await db.exec(scheduleSql);
   eq(
     (
       await db.query(
@@ -387,6 +388,19 @@ try {
     ).rows[0].v,
     1,
   );
+  // Mirror hosted ACLs: the installer may read job metadata and call the extension,
+  // while UPDATE on cron.job stays forbidden. Only the expected installer name is adapted.
+  await db.exec(`
+    create role operational_installer nosuperuser;
+    grant usage on schema cron to operational_installer;
+    grant select on cron.job to operational_installer;
+    grant execute on function cron.schedule_in_database(text,text,text,text,text,boolean) to operational_installer;
+    set role operational_installer;
+  `);
+  eq((await db.query("select has_table_privilege(current_user,'cron.job','UPDATE') v")).rows[0].v, false);
+  await db.exec(scheduleSql.replace("current_user<>'postgres'", "current_user<>'operational_installer'"));
+  eq((await db.query("select active v from cron.job where jobname='depannage_operational_reminders_v1'")).rows[0].v, false);
+  await db.exec("reset role");
   // Seed an honestly overdue historical reminder without waiting a calendar day.
   const overdue = await compliance();
   await db.query(
