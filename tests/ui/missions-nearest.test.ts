@@ -20,8 +20,9 @@ export const offer = (n: number, band: number | null | undefined) => ({
 });
 export const cursor = (last: { id: string; created_at: string; distance_band_km?: number | null }, radiusVersion: number) =>
   Buffer.from(JSON.stringify({ actor_id: ACTOR, created_at: last.created_at, id: last.id, distance_band_km: last.distance_band_km ?? null, radius_version: radiusVersion })).toString("base64url");
-export function rankedPage(items: ReturnType<typeof offer>[], more: { radiusVersion: number } | null) {
-  return { items, eligible: true, captured_at: "2026-11-07T12:00:00.000Z", page: { limit: 50, has_more: Boolean(more), next_cursor: more ? cursor(items[items.length - 1], more.radiusVersion) : null }, projection: "anonymized", order: "nearest_first", distance: "commune_centre_bands" };
+export function rankedPage(items: ReturnType<typeof offer>[], more: { radiusVersion: number } | null, root: unknown = more?.radiusVersion ?? 7) {
+  const page = { items, eligible: true, captured_at: "2026-11-07T12:00:00.000Z", page: { limit: 50, has_more: Boolean(more), next_cursor: more ? cursor(items[items.length - 1], more.radiusVersion) : null }, projection: "anonymized", order: "nearest_first", distance: "commune_centre_bands" };
+  return root === "omit" ? page : { ...page, radius_version: root };
 }
 const chronoPage = (items: ReturnType<typeof offer>[]) => ({ items, eligible: true, captured_at: "2026-11-07T12:00:00.000Z", page: { limit: 50, has_more: false, next_cursor: null }, projection: "anonymized", order: "oldest_first", distance: "not_calculated" });
 const fifty = (from: number, band: number) => Array.from({ length: 50 }, (_, i) => offer(from + i, band));
@@ -49,7 +50,15 @@ test("page classée stricte : tranches valides, inconnues en dernier, jamais une
   const p = m.parseMissionsPage(rankedPage(fifty(1, 15), { radiusVersion: 7 }), "nearest_first")!;
   assert.equal(p.radius_version, 7, "radius_version read from the ranked cursor");
   assert.equal(m.cursorRadiusVersion("not-json"), null);
-  assert.equal(m.parseMissionsPage({ ...rankedPage(fifty(1, 15), { radiusVersion: 7 }), page: { limit: 50, has_more: true, next_cursor: "opaque" } }, "nearest_first"), null, "ranked cursor must carry its radius version");
+  // Root radius_version: mandatory, integer 1..2147483647, even on a single page without cursor.
+  for (const bad of ["omit", 0, -1, 1.5, 2147483648, "7", null])
+    assert.equal(m.parseMissionsPage(rankedPage([offer(1, 5)], null, bad), "nearest_first"), null, `root ${String(bad)}`);
+  assert.equal(m.parseMissionsPage(rankedPage([offer(1, 5)], null, 2147483647), "nearest_first")!.radius_version, 2147483647);
+  assert.equal(m.parseMissionsPage(rankedPage([offer(1, 5)], null, 3), "nearest_first")!.radius_version, 3, "single page, no cursor: root version used");
+  assert.equal(m.parseMissionsPage(rankedPage(fifty(1, 15), { radiusVersion: 7 }, 8), "nearest_first"), null, "cursor version ≠ root version");
+  assert.ok(m.parseMissionsPage(rankedPage(fifty(1, 15), { radiusVersion: 7 }, 7), "nearest_first"), "matching versions");
+  assert.equal(m.parseMissionsPage({ ...rankedPage([offer(1, 5)], null), radius_version: 7 }, "oldest_first"), null);
+  assert.ok(m.parseMissionsPage(chronoPage([offer(1, undefined)])), "chronological reply unchanged (no root version)");
 });
 
 test("libellés de tranche (SQL : greatest(5, ceil(km/5)×5)) ; jamais de GPS ni de durée", () => {
@@ -65,6 +74,7 @@ test("libellés de tranche (SQL : greatest(5, ceil(km/5)×5)) ; jamais de GPS ni
 
 function controller(order: Model.MissionsOrder, list: (cursor: string | null, order: Model.MissionsOrder | undefined, n: number) => Model.MissionsResult, radiusVersion: number | null = 7) {
   const calls: { cursor: string | null; order: Model.MissionsOrder | undefined }[] = [];
+  let stale = 0;
   let s: Model.MissionsState = m.MISSIONS_INITIAL;
   const c = m.createMissionsController({
     api: () => ({ list: async (cursor, o) => { calls.push({ cursor, order: o }); return list(cursor, o, calls.length); }, point: async () => ({ status: 404, body: null, retryAfter: null }) }),
@@ -73,8 +83,9 @@ function controller(order: Model.MissionsOrder, list: (cursor: string | null, or
     set: (n) => (s = n),
     order,
     radiusVersion,
+    onRadiusStale: () => stale++,
   });
-  return { c, calls, state: () => s };
+  return { c, calls, state: () => s, stale: () => stale };
 }
 const ok = (body: unknown): Model.MissionsResult => ({ status: 200, body, retryAfter: null });
 
@@ -115,4 +126,27 @@ test("chronologique : appels et comportement inchangés", async () => {
   assert.deepEqual(h.calls, [{ cursor: null, order: "oldest_first" }]);
   assert.equal(h.state().phase, "ready");
   assert.equal(h.state().nearestRefused, false);
+});
+
+test("version racine ≠ version confirmée (page 1 sans curseur) ⇒ liste refusée, réglage relu ; version égale ⇒ affichée", async () => {
+  const old = controller("nearest_first", () => ok(rankedPage([offer(1, 5), offer(2, 10)], null, 6)), 7);
+  await old.c.load();
+  assert.equal(old.state().phase, "error");
+  assert.equal(old.state().items.length, 0, "never shown");
+  assert.equal(old.state().error, m.NEAREST_COPY.stale);
+  assert.equal(old.stale(), 1, "the host is asked to re-read the preference");
+  const good = controller("nearest_first", () => ok(rankedPage([offer(1, 5), offer(2, 10)], null, 7)), 7);
+  await good.c.load();
+  assert.equal(good.state().phase, "ready");
+  assert.equal(good.state().items.length, 2);
+  assert.equal(good.stale(), 0);
+  for (const bad of ["omit", 0, 2147483648]) {
+    const h = controller("nearest_first", () => ok(rankedPage([offer(1, 5)], null, bad)), 7);
+    await h.c.load();
+    assert.equal(h.state().phase, "error", `root ${String(bad)}: honest error`);
+    assert.equal(h.state().items.length, 0);
+  }
+  const mismatch = controller("nearest_first", () => ok(rankedPage(fifty(1, 15), { radiusVersion: 7 }, 8)), 8);
+  await mismatch.c.load();
+  assert.equal(mismatch.state().phase, "error", "cursor version ≠ root version");
 });

@@ -40,6 +40,8 @@ export type AvailableMissionsProps = {
   /** Confirmed radius version (nearest: pages of another version are never shown). */
   radiusVersion?: number | null;
   onOrderChange?(order: MissionsOrder): void;
+  /** Nearest: a reply ranked with another radius version than the confirmed one (re-read it). */
+  onRadiusStale?(): void;
   /** Tests only. */
   initial?: MissionsState;
 };
@@ -78,6 +80,7 @@ export function AvailableMissionsPanel(props: AvailableMissionsProps) {
       set,
       order: props.demo ? "oldest_first" : props.order ?? "oldest_first",
       radiusVersion: props.radiusVersion ?? null,
+      onRadiusStale: () => latest.current.onRadiusStale?.(),
     });
   }
   const ctrl = controller.current;
