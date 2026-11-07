@@ -14,6 +14,7 @@ import { SERVICES, serviceEstimate, servicePath } from "./public-service-catalog
 import { FAQ } from "./public-lists";
 import { PublicChrome, actionButton, type HomeAction, type HomeHandlers } from "./public-chrome";
 import styles from "./public-home.module.css";
+import { IndicativeRange } from "../features/indicative-prices/indicative-range";
 
 // Actions live with the shared chrome (P1 extraction); re-exported for existing callers/tests.
 export { actionKey, parseActionKey, runHomeAction } from "./public-chrome";
@@ -204,7 +205,7 @@ export function PublicHome({ gated = false, handlers }: { gated?: boolean; handl
                     <span className={styles.chip}>{CATEGORIES.find((c) => c.id === card.category)?.label}</span>
                     <strong>{card.title}</strong>
                     <span className={styles.ivcPrice}>
-                      Estimation indicative : {money(card.min)} – {money(card.max)}
+                      <IndicativeRange category={card.category} />
                     </span>
                   </span>
                 </a>

@@ -10,6 +10,7 @@ import { PublicChrome, type HomeHandlers, type HomeTargetView } from "./public-c
 import { SERVICE_STEPS, relatedServices, serviceEstimate, servicePath, serviceRequestHref, type ServiceEntry } from "./public-service-catalog";
 import { Icon } from "../app/icons";
 import { BookingBar, BookingWizard } from "./public-booking";
+import { IndicativeRange, useIndicativeText } from "../features/indicative-prices/indicative-range";
 import bookingStyles from "./public-booking.module.css";
 import styles from "./public-service.module.css";
 
@@ -41,7 +42,10 @@ const COMMON_FAQ = {
 
 export function PublicServicePage({ service, initialOpen = false }: { service: ServiceEntry; initialOpen?: boolean }) {
   const estimate = serviceEstimate(service.category);
+  // Booking wizard: unchanged existing estimate (the server reserves its own snapshot). Public
+  // displays (hero, fixed bar, related cards): the five ranges of GET /api/public/indicative-prices.
   const range = `${money(estimate.min)} – ${money(estimate.max)}`;
+  const shownRange = useIndicativeText(service.category);
   // Main CTA, final band and the fixed bar's « Confirmer » share ONE action: open the wizard here.
   const [open, setOpen] = useState(initialOpen);
   // The server HTML shows « Confirmer » before React has hydrated: a click then would be lost
@@ -90,7 +94,7 @@ export function PublicServicePage({ service, initialOpen = false }: { service: S
           <h1 id="service-title" className={styles.heroTitle}>{service.title}</h1>
           <div className={styles.price} data-service-price="">
             <span>Estimation indicative</span>
-            <strong>{range}</strong>
+            <strong data-indicative-range={service.category}>{shownRange}</strong>
           </div>
           <div className={styles.pictoPanel}>
             <ul className={styles.pictos} aria-label="Précisés dans le devis" data-service-pictos="">
@@ -199,14 +203,13 @@ export function PublicServicePage({ service, initialOpen = false }: { service: S
           <h2 id="service-related">Autres dépannages</h2>
           <ul className={styles.relatedGrid}>
             {relatedServices(service.slug).map((other) => {
-              const e = serviceEstimate(other.category);
               return (
                 <li key={other.slug}>
                   <a className={styles.relatedCard} href={servicePath(other.slug)} data-related={other.slug}>
                     <img src={other.photo.src} alt="" width={other.photo.width} height={other.photo.height} loading="lazy" decoding="async" style={{ objectPosition: other.position }} />
                     <span className={styles.relatedBody}>
                       <strong>{other.title}</strong>
-                      <span>Estimation indicative : {money(e.min)} – {money(e.max)}</span>
+                      <IndicativeRange category={other.category} />
                     </span>
                   </a>
                 </li>
@@ -217,7 +220,7 @@ export function PublicServicePage({ service, initialOpen = false }: { service: S
 
         <p className={styles.credit}>Photo d’illustration (Pexels) : elle ne représente ni notre équipe ni un artisan de la plateforme.</p>
       </div>
-      <BookingBar title={service.title} range={range} compact>
+      <BookingBar title={service.title} range={shownRange} compact>
         <button type="button" className={bookingStyles.barButton} onClick={openBooking} {...confirmProps} data-booking-open="">
           Confirmer
         </button>

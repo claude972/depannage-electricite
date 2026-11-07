@@ -20,6 +20,7 @@ import styles from "./public.module.css";
 import { publishedStamp, publishedValue, type PublicProfileState } from "../features/public-operator-profile/model";
 import { usePublishedOperatorProfile } from "../features/public-operator-profile/use-published-profile";
 import { PublicCallbackForm } from "../features/public-callback/public-callback-form";
+import { IndicativeRange } from "../features/indicative-prices/indicative-range";
 import { PostalCoverageCheck } from "../features/coverage/postal-coverage-check";
 import { PublicWarrantyTerms } from "../features/warranty-policy/public-warranty-terms";
 import type { PublicTermsState } from "../features/warranty-policy/model";
@@ -248,7 +249,7 @@ function ContactBlock({ onLogin, headingId }: { onLogin: () => void; headingId: 
       <h3 id={headingId}>Contact</h3>
       <dl className={styles.legalFields}>
         {/* The callback channel is described only by its live form (« Être rappelé »), never statically. */}
-        {CONTACT_CHANNELS.filter((c) => c.label !== "Demande de rappel").map((c) => (
+        {CONTACT_CHANNELS.map((c) => (
           <div key={c.label} data-contact-channel={c.state}>
             <dt>{c.label} :</dt>
             <dd>
@@ -371,7 +372,7 @@ function PricingView({ onNew }: { onNew: () => void }) {
                     </span>
                   </span>
                 </th>
-                <td>{money(row.min)} – {money(row.max)}</td>
+                <td><IndicativeRange category={row.id as Category} bare /></td>
               </tr>
             ))}
           </tbody>

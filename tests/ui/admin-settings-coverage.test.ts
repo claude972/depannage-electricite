@@ -8,7 +8,7 @@ import { withApp, skip } from "./real-app-harness";
 test("source : plus d’entrée « Territoire couvert » à définir ; l’éditeur de zone reste monté", () => {
   const src = readFileSync("components/role/admin-space.tsx", "utf8");
   assert.doesNotMatch(src, /"Territoire couvert"/);
-  assert.match(src, /\["Taux de commission", "TVA par défaut", "Barème public"\]/);
+  assert.match(src, /\["Taux de commission", "TVA par défaut"\]/, "« Barème public » now shown read-only by IndicativePricesAdmin");
   assert.match(src, /<CoverageEditor key=/);
 });
 

@@ -46,7 +46,9 @@ test("page : barre fixe « Confirmer » = même action que le CTA principal (ouv
   assert.match(html, /data-booking-bar="compact"/);
   const bar = html.slice(html.indexOf("data-booking-bar"));
   assert.doesNotMatch(bar, new RegExp(service.title));
-  assert.match(text(bar), /80,00.*180,00.*Estimation indicative/);
+  // PUB-02: the bar's range comes from GET /api/public/indicative-prices at runtime (fallback in SSR).
+  assert.match(text(bar), /lecture en cours.*Estimation indicative/);
+  assert.doesNotMatch(text(bar), /\d+,\d{2}\s?€/);
   const opens = [...html.matchAll(/<button type="button" class="([^"]*)"[^>]*data-booking-open=""[^>]*>([^<]*)/g)].map((m) => m[2].trim());
   same(opens, ["Confirmer", "Confirmer"]); // héros + barre : même action
   assert.match(bar, /data-booking-open="">Confirmer<\/button>/); // libellé exact
