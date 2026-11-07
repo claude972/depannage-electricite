@@ -19,6 +19,8 @@ import { ABOUT_VALUES, CONTACT_CHANNELS, FAQ, HELP_PROCESS, JOIN_FACTS, JOIN_REV
 import styles from "./public.module.css";
 import { publishedStamp, publishedValue, type PublicProfileState } from "../features/public-operator-profile/model";
 import { usePublishedOperatorProfile } from "../features/public-operator-profile/use-published-profile";
+import { PublicWarrantyTerms } from "../features/warranty-policy/public-warranty-terms";
+import type { PublicTermsState } from "../features/warranty-policy/model";
 import type { OperatorField } from "../../lib/features/public-operator-profile/contract";
 import viewStyles from "./public-views.module.css";
 
@@ -276,7 +278,7 @@ function PendingFields({ fields, label, sources = {} }: { fields: string[]; labe
   );
 }
 
-function HelpView({ onNew, onLogin }: { onNew: () => void; onLogin: () => void }) {
+function HelpView({ onNew, onLogin, warrantyTerms }: { onNew: () => void; onLogin: () => void; /** Tests only. */ warrantyTerms?: PublicTermsState }) {
   return (
     <div className={styles.page}>
       <Kicker>Dépannage électrique</Kicker>
@@ -318,6 +320,10 @@ function HelpView({ onNew, onLogin }: { onNew: () => void; onLogin: () => void }
           <ContactBlock onLogin={onLogin} headingId="help-contact" />
           <InstallPanel />
         </aside>
+      </div>
+      {/* PUB-06: the PUBLISHED warranty conditions only, as plain text; none ⇒ pending sentence. */}
+      <div id="garantie" data-public-warranty="">
+        <PublicWarrantyTerms state={warrantyTerms} />
       </div>
     </div>
   );
