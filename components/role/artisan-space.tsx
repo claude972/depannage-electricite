@@ -119,6 +119,7 @@ import { CredentialReminderPanel } from "../features/operational-reminders/opera
 import { AppointmentReminderPanel } from "../features/appointment-reminders/appointment-reminder-panel";
 import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-panel";
 import { ContractSourceLine } from "../features/quote-grid/quote-grid";
+import { PhotoReviewPanel } from "../features/photo-review/photo-review-panel";
 
 // ---- Static definitions ---------------------------------------------------------------
 type Tone = "neutral" | "blue" | "green" | "amber" | "red" | "violet";
@@ -1518,6 +1519,15 @@ function WorkDossier({ session, intervention: i }: { session: Session; intervent
             demo={session.mode === "demo"}
             onRefresh={session.refresh}
             photoReview={session.mutationContext}
+          />
+          {/* SYS-10: photo review of this dossier (validate / reject per server flags). */}
+          <PhotoReviewPanel
+            key={`${i.id}|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`}
+            interventionId={i.id}
+            role="artisan"
+            photos={session.data.documents.filter((d) => d.intervention_id === i.id && d.mime_type.startsWith("image/")).map((d) => ({ id: d.id, name: d.name }))}
+            context={session.mutationContext}
+            demo={session.mode === "demo"}
           />
           <AppointmentPanel
             appointment={ops?.appointment ?? null}

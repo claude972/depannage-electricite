@@ -88,6 +88,7 @@ import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-pa
 import { ContractSourceLine } from "../features/quote-grid/quote-grid";
 import { PlatformPayAction } from "../app/platform-pay";
 import { SavedPaymentMethodsPanel } from "../features/saved-payment-methods/saved-payment-methods-panel";
+import { PhotoReviewPanel } from "../features/photo-review/photo-review-panel";
 
 const CLIENT_VIEWS: readonly View[] = [
   "overview",
@@ -1287,6 +1288,10 @@ function DetailView({
         <p className="form-note">
           Le téléchargement sécurisé des pièces se fait depuis la page Documents.
         </p>
+        {/* SYS-10: photo review (consent, request / withdraw; result only after the artisan's validation). */}
+        {photos.length > 0 && (
+          <PhotoReviewPanel key={`${i.id}|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`} interventionId={i.id} role="client" photos={photos.map((d) => ({ id: d.id, name: d.name }))} context={session.mutationContext} demo={session.mode === "demo"} />
+        )}
         {photos.length > 0 && i.artisan_id && i.status !== "cancelled" && (
           <button type="button" className="button outline" onClick={() => session.go("messages", i.id)}>
             <Icon name="message" />
