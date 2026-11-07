@@ -1593,6 +1593,7 @@ export default function CourantApp() {
             (!params.urgency || i.urgency === params.urgency) &&
             (!params.site_id || i.site_id === params.site_id) &&
             (!params.artisan_id || i.artisan_id === params.artisan_id) &&
+            (!params.client_id || i.client_id === params.client_id) &&
             (!params.q ||
               `${i.description} ${i.city} ${i.postal_code}`.toLowerCase().includes(params.q.toLowerCase())),
         )
@@ -1627,7 +1628,7 @@ export default function CourantApp() {
       const q = new URLSearchParams();
       q.set("limit", String(limit));
       if (params.cursor) q.set("cursor", params.cursor);
-      for (const key of ["status", "category", "urgency", "site_id", "artisan_id", "created_from", "created_to", "q"] as const) {
+      for (const key of ["status", "category", "urgency", "site_id", "artisan_id", "client_id", "created_from", "created_to", "q"] as const) {
         const value = params[key];
         if (value) q.set(key, String(value));
       }
