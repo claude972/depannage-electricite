@@ -19,6 +19,7 @@ import { ABOUT_VALUES, CONTACT_CHANNELS, FAQ, HELP_PROCESS, JOIN_FACTS, JOIN_REV
 import styles from "./public.module.css";
 import { publishedStamp, publishedValue, type PublicProfileState } from "../features/public-operator-profile/model";
 import { usePublishedOperatorProfile } from "../features/public-operator-profile/use-published-profile";
+import { PublicCallbackForm } from "../features/public-callback/public-callback-form";
 import { PostalCoverageCheck } from "../features/coverage/postal-coverage-check";
 import { PublicWarrantyTerms } from "../features/warranty-policy/public-warranty-terms";
 import type { PublicTermsState } from "../features/warranty-policy/model";
@@ -326,6 +327,7 @@ function HelpView({ onNew, onLogin, warrantyTerms }: { onNew: () => void; onLogi
       <div id="garantie" data-public-warranty="">
         <PublicWarrantyTerms state={warrantyTerms} />
       </div>
+      <PublicCallbackForm />
     </div>
   );
 }
