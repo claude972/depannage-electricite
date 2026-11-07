@@ -108,7 +108,7 @@ import { OrganizationSitesList, SiteSettingsPanel } from "../features/site-lifec
 import { SiteDirectLoader } from "../features/site-lifecycle/site-direct";
 import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-panel";
 import { DelegatedPayerCheckout, DelegatedPayerManager } from "../features/delegated-payer/delegated-payer";
-import { COUNTS_COPY, ENTERPRISE_SEARCH_COPY, ExportFeedback, useEnterpriseSearch, useOverviewCounts, type EnterpriseSearchFilters } from "../features/enterprise-search/use-enterprise-search";
+import { COUNTS_COPY, ENTERPRISE_SEARCH_COPY, ExportFeedback, PRO_COPY, useEnterpriseSearch, useOverviewCounts, useProfessionalOverview, type EnterpriseSearchFilters } from "../features/enterprise-search/use-enterprise-search";
 import { ContractSourceLine, QuoteGridAccessPanel } from "../features/quote-grid/quote-grid";
 import { QuoteApprovalPanel, SitePolicyPanel } from "../features/advanced-approvals/approvals";
 import { acceptanceDecision, timelineApproval as advancedTimelineApproval, type WorkflowStatus } from "../features/advanced-approvals/model";
@@ -1294,6 +1294,25 @@ function OverviewView({ c }: { c: Ctx }) {
     );
   const loaded = figures.professional === "loaded";
   const placeholder = figures.professional === "loaded" ? "" : FIGURE_PLACEHOLDER[figures.professional];
+  // Live : chiffres professionnels exacts du serveur (périmètre organisation + site global, sans limite
+  // de dossiers chargés) pour « Devis à approuver », « Échéances à 30 jours », « Budget engagé ».
+  // Chargement « … » / erreur « — » + Réessayer, jamais 0 ; démo inchangée ; graphiques inchangés.
+  const pro = useProfessionalOverview({ enabled: !c.demo, context: c.session.mutationContext, organizationId: c.organization?.id || null, siteId: c.activeSite?.id || null });
+  const proData = !c.demo && pro.state.phase === "ready" ? pro.state.data : null;
+  const proPending = pro.state.phase === "loading" || pro.state.phase === "idle" ? "…" : "—";
+  const proState =
+    c.demo || proData ? null : pro.state.phase === "loading" || pro.state.phase === "idle" ? (
+      PRO_COPY.loading
+    ) : (
+      <span role="alert" data-professional-overview-error="">
+        {pro.state.error}{" "}
+        {pro.state.phase === "error" && (
+          <button type="button" className="text-button" onClick={() => pro.retry()}>
+            Réessayer
+          </button>
+        )}
+      </span>
+    );
   const siteBars = loaded ? siteBudgetBars(scope.sites, scope.interventions, scope.quotes) : [];
   const pending = byDateDesc(
     scope.approvals.filter((a) => a.status === "pending").map((a) => ({ ...a, created_at: a.created_at || "" })),
@@ -1330,27 +1349,31 @@ function OverviewView({ c }: { c: Ctx }) {
           icon="receipt"
           tone="amber"
           label="Devis à approuver"
-          value={figures.approvalsPending ?? placeholder}
-          note={loaded ? "Approbations en attente parmi les données chargées" : "Données professionnelles non chiffrables"}
+          value={c.demo ? figures.approvalsPending ?? placeholder : proData ? proData.counts.approvals_pending : proPending}
+          note={c.demo ? (loaded ? "Approbations en attente parmi les données chargées" : "Données professionnelles non chiffrables") : proData ? PRO_COPY.approvals : proState}
         />
         <Stat
           icon="calendar"
           tone="violet"
           label="Échéances à 30 jours"
-          value={figures.deadlines30 ?? placeholder}
-          note={loaded ? "Contrôles et maintenances enregistrés, non terminés, parmi les données chargées" : "Données professionnelles non chiffrables"}
+          value={c.demo ? figures.deadlines30 ?? placeholder : proData ? proData.counts.deadlines30 : proPending}
+          note={c.demo ? (loaded ? "Contrôles et maintenances enregistrés, non terminés, parmi les données chargées" : "Données professionnelles non chiffrables") : proData ? PRO_COPY.deadlines(proData.window.from, proData.window.to) : proState}
         />
         <Stat
           icon="euro"
           tone="navy"
           label="Budget engagé"
-          value={figures.committedCents === null ? placeholder : money(figures.committedCents)}
+          value={c.demo ? (figures.committedCents === null ? placeholder : money(figures.committedCents)) : proData ? money(proData.amounts.accepted_commitment_cents) : proPending}
           note={
-            !loaded
-              ? "Données professionnelles non chiffrables"
-              : budget > 0
-                ? `sur ${money(budget)} de budget de référence · ${BASIS}`
-                : `Aucun budget de référence · ${BASIS}`
+            !c.demo
+              ? proData
+                ? PRO_COPY.commitment(proData.amounts.reference_budget_cents > 0 ? money(proData.amounts.reference_budget_cents) : null)
+                : proState
+              : !loaded
+                ? "Données professionnelles non chiffrables"
+                : budget > 0
+                  ? `sur ${money(budget)} de budget de référence · ${BASIS}`
+                  : `Aucun budget de référence · ${BASIS}`
           }
         />
         <Stat icon="building" tone="green" label="Sites suivis" value={scope.sites.length} note={c.activeSite ? "Site filtré" : "Organisation active"} />

@@ -13,10 +13,12 @@ import { loadModule } from "../documents/harness";
 import { withApp, skip as appSkip } from "./real-app-harness";
 import type * as Model from "../../components/features/enterprise-search/model";
 import type * as Counts from "../../components/features/enterprise-search/overview-counts";
+import type * as Pro from "../../components/features/enterprise-search/professional-overview";
 
 const m = loadModule("components/features/enterprise-search/model.ts") as unknown as typeof Model;
 const oc = loadModule("components/features/enterprise-search/overview-counts.ts") as unknown as typeof Counts;
 const ORG_B = "20000000-0000-4000-8000-000000000002";
+const po = loadModule("components/features/enterprise-search/professional-overview.ts") as unknown as typeof Pro;
 const same = (a: unknown, b: unknown, msg = "") => assert.equal(JSON.stringify(a), JSON.stringify(b), msg);
 const USER = "10000000-0000-4000-8000-000000000001";
 const ORG = "20000000-0000-4000-8000-000000000001";
@@ -280,6 +282,60 @@ test("compteurs du tableau de bord (e857e56) : lecture stricte, même périmètr
   assert.match(src, /const openValue = c\.demo \? open : counts\.state\.phase === "ready" \? counts\.state\.open : counts\.state\.phase === "loading" \? "…" : "—";/, "loading / error never shown as zero");
 });
 
+test("synthèse professionnelle (7c6eff1) : lecture stricte, fenêtre Martinique, même périmètre, clé au rendu, 401 tardif ignoré, jamais 0 non lu", async () => {
+  const body = po.proBody(ORG, S1)!;
+  // 2026-11-07T03:00Z is still 6 Nov in Martinique (UTC-4).
+  const ok = { organization_id: ORG, site_id: S1, counts: { approvals_pending: 4, deadlines30: 120 }, amounts: { accepted_commitment_cents: 12345, reference_budget_cents: 500000, currency: "eur" }, window: { from: "2026-11-06", to: "2026-12-06", time_zone: "America/Martinique" }, captured_at: "2026-11-07T03:00:00Z" };
+  same(po.parseProfessional(ok, body)?.counts, { approvals_pending: 4, deadlines30: 120 });
+  for (const bad of [
+    { ...ok, extra: 1 },
+    { ...ok, counts: { ...ok.counts, overdue: 1 } },
+    { ...ok, amounts: { ...ok.amounts, currency: "usd" } },
+    { ...ok, amounts: { ...ok.amounts, accepted_commitment_cents: -1 } },
+    { ...ok, window: { ...ok.window, from: "2026-11-07", to: "2026-12-07" } },
+    { ...ok, window: { ...ok.window, to: "2026-12-07" } },
+    { ...ok, window: { ...ok.window, time_zone: "UTC" } },
+    { ...ok, site_id: null },
+    { ...ok, organization_id: ORG_B },
+    { ...ok, counts: { approvals_pending: 1.5, deadlines30: 0 } },
+  ])
+    assert.equal(po.parseProfessional(bad, body), null, JSON.stringify(bad).slice(0, 100));
+  const ctx = { uid: USER as string | null, gen: 0 };
+  const context = { generation: () => ctx.gen, userId: () => ctx.uid };
+  const k = po.proKey(context, ORG, S1);
+  const st = { ...po.PRO_INITIAL, key: k, phase: "ready" as const, data: po.parseProfessional(ok, body) };
+  for (const other of [po.proKey(context, ORG, null), po.proKey(context, ORG_B, S1), po.proKey({ generation: () => 1, userId: () => USER }, ORG, S1)])
+    same([po.proView(st, other).phase, po.proView(st, other).data], ["loading", null], "another scope ⇒ loading, never old figures");
+  const calls: unknown[] = [];
+  const replies: (Pro.ProResult | Promise<Pro.ProResult>)[] = [];
+  let s: Pro.ProState = po.PRO_INITIAL;
+  const c = po.createProController({ api: () => ({ read: async (b) => (calls.push(b), replies.shift() ?? res(503)) }), context, set: (n) => (s = n) });
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+  let lateA!: (r: Pro.ProResult) => void;
+  replies.push(new Promise((r) => (lateA = r)), res(200, { ...ok, organization_id: ORG_B, site_id: null }));
+  c.query(ORG, S1);
+  c.query(ORG_B, null); await tick();
+  same([s.phase, s.data?.counts.deadlines30], ["ready", 120]);
+  lateA(res(403)); await tick();
+  same(s.phase, "ready", "late 403 of the old scope ignored");
+  replies.push(res(404), res(200, ok));
+  c.query(ORG, S1); await tick();
+  same([s.phase, s.error, s.data], ["error", po.PRO_COPY.scope, null], "404 ⇒ honest, never zero");
+  c.retry(s.key); await tick();
+  same([s.phase, s.data?.amounts.accepted_commitment_cents], ["ready", 12345]);
+  replies.push(res(401));
+  c.query(ORG_B, S1); await tick();
+  same([s.phase, s.data], ["forbidden", null], "401/403 ⇒ cleared");
+  assert.match(po.PRO_COPY.commitment("5 000,00 €"), /pas un solde disponible/);
+  assert.match(po.PRO_COPY.commitment(null), /non renseigné/);
+  assert.match(po.PRO_COPY.deadlines("2026-11-06", "2026-12-06"), /du 6 nov\. 2026 au 6 déc\. 2026 \(heure de Martinique\), hors échéances dépassées/);
+  const src = readFileSync("components/role/enterprise-space.tsx", "utf8");
+  assert.match(src, /useProfessionalOverview\(\{ enabled: !c\.demo, context: c\.session\.mutationContext, organizationId: c\.organization\?\.id \|\| null, siteId: c\.activeSite\?\.id \|\| null \}\)/);
+  assert.match(src, /const proPending = pro\.state\.phase === "loading" \|\| pro\.state\.phase === "idle" \? "…" : "—";/, "loading / error never 0");
+  assert.match(src, /value=\{c\.demo \? figures\.approvalsPending \?\? placeholder : proData \? proData\.counts\.approvals_pending : proPending\}/);
+  assert.match(src, /siteBudgetBars\(scope\.sites, scope\.interventions, scope\.quotes\)/, "charts still from the loaded data, untouched");
+});
+
 test("câblage : useInterventionList en direct ⇒ recherche serveur ; démo ⇒ liste locale ; KPI non touchés", () => {
   const src = readFileSync("components/role/enterprise-space.tsx", "utf8");
   const hook = src.slice(src.indexOf("function useInterventionList"), src.indexOf("function ExportButton"));
@@ -299,7 +355,7 @@ const ENTRY = `
 import { createElement as h, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RequestsView } from "./components/role/enterprise-space";
-import { useEnterpriseSearch, useOverviewCounts } from "./components/features/enterprise-search/use-enterprise-search";
+import { useEnterpriseSearch, useOverviewCounts, useProfessionalOverview } from "./components/features/enterprise-search/use-enterprise-search";
 const w = window;
 const tick = (ms) => new Promise((r) => setTimeout(r, ms));
 const ID = (n) => "a0000000-0000-4000-8000-" + String(n).padStart(12, "0");
@@ -315,6 +371,7 @@ w.frames = async () => {
   w.fetch = async (url, init) => {
     const b = JSON.parse(init.body);
     if (String(url).endsWith("/overview")) return Response.json({ organization_id: b.organization_id, site_id: b.site_id, counts: { open: b.site_id ? 3 : 9, urgent: 1 }, captured_at: "2026-11-07T00:00:00Z" });
+    if (String(url).endsWith("/professional")) return Response.json({ organization_id: b.organization_id, site_id: b.site_id, counts: { approvals_pending: b.site_id ? 2 : 7, deadlines30: 1 }, amounts: { accepted_commitment_cents: 100, reference_budget_cents: 0, currency: "eur" }, window: { from: "2026-11-06", to: "2026-12-06", time_zone: "America/Martinique" }, captured_at: "2026-11-07T03:00:00Z" });
     const base = b.organization_id === "${ORG}" ? 100 : 200;
     const total = 12;
     const start = (b.page - 1) * 10;
@@ -327,7 +384,8 @@ w.frames = async () => {
     const f = { organization_id: org, site_id: site, category: null, status: null, search: "", sort: "recent" };
     const r = useEnterpriseSearch({ enabled: true, context: ctxI, filters: f, page });
     const k = useOverviewCounts({ enabled: true, context: ctxI, organizationId: org, siteId: site });
-    frames.push({ org, site, page, phase: r.state.phase, ids: r.state.items.map((x) => x.id), countsPhase: k.state.phase, open: k.state.open });
+    const p = useProfessionalOverview({ enabled: true, context: ctxI, organizationId: org, siteId: site });
+    frames.push({ org, site, page, phase: r.state.phase, ids: r.state.items.map((x) => x.id), countsPhase: k.state.phase, open: k.state.open, proPhase: p.state.phase, approvals: p.state.data ? p.state.data.counts.approvals_pending : null });
     return null;
   }
   const div = document.createElement("div"); document.body.appendChild(div);
@@ -465,16 +523,16 @@ test("aucun ancien cadre (Chromium, StrictMode) : 1er rendu après changement de
     const exit = (await page.evaluate(() => (window as unknown as { scopeExit: () => Promise<unknown> }).scopeExit())) as { result: boolean; saved: number[] };
     same([exit.result, exit.saved], [false, []], "A → no scope → A during the export ⇒ no download (real hook)");
     const r = (await page.evaluate(() => (window as unknown as { frames: () => Promise<unknown> }).frames())) as Record<string, any>;
-    same([r.ready.phase, r.ready.ids.length, r.ready.countsPhase, r.ready.open], ["ready", 10, "ready", 9]);
+    same([r.ready.phase, r.ready.ids.length, r.ready.countsPhase, r.ready.open, r.ready.proPhase, r.ready.approvals], ["ready", 10, "ready", 9, "ready", 7]);
     let prevIds: string[] = r.ready.ids;
     let prevOpen = 9;
     for (const name of ["page", "site", "org"]) {
-      const frames = r[name] as { phase: string; ids: string[]; countsPhase: string; open: number }[];
+      const frames = r[name] as { phase: string; ids: string[]; countsPhase: string; open: number; proPhase: string; approvals: number | null }[];
       same([frames[0].phase, frames[0].ids], ["loading", []], `${name}: FIRST render after the change has no old row`);
       const firstReady = frames.findIndex((f) => f.phase === "ready");
       assert.ok(frames.slice(0, firstReady).every((f) => f.ids.length === 0), `${name}: ${JSON.stringify(frames)}`);
       assert.ok(frames.every((f) => JSON.stringify(f.ids) !== JSON.stringify(prevIds)), `${name}: never the previous rows`);
-      if (name !== "page") same([frames[0].countsPhase, frames[0].open], ["loading", 0], `${name}: FIRST render has no old counter`);
+      if (name !== "page") same([frames[0].countsPhase, frames[0].open, frames[0].proPhase, frames[0].approvals], ["loading", 0, "loading", null], `${name}: FIRST render has no old counter / professional figure`);
       else assert.ok(frames.every((f) => f.countsPhase === "ready" && f.open === prevOpen), "page change does not touch the scope counter");
       prevIds = frames[frames.length - 1].ids;
       prevOpen = frames[frames.length - 1].open;

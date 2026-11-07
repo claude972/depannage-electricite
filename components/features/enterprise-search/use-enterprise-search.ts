@@ -10,6 +10,8 @@ export { COPY as ENTERPRISE_SEARCH_COPY } from "./model";
 export { ExportFeedback } from "./export-feedback";
 export { useOverviewCounts } from "./use-overview-counts";
 export { COUNTS_COPY } from "./overview-counts";
+export { useProfessionalOverview } from "./use-professional-overview";
+export { PRO_COPY } from "./professional-overview";
 export type { EnterpriseRow, Filters as EnterpriseSearchFilters } from "./model";
 
 export function useEnterpriseSearch({ enabled, context, filters, page, api }: { enabled: boolean; context: Context; filters: Filters | null; page: number; api?: SearchApi }) {
