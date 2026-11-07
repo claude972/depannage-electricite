@@ -247,7 +247,8 @@ function ContactBlock({ onLogin, headingId }: { onLogin: () => void; headingId: 
     <section className={`panel ${styles.block}`} aria-labelledby={headingId} data-public-contact="">
       <h3 id={headingId}>Contact</h3>
       <dl className={styles.legalFields}>
-        {CONTACT_CHANNELS.map((c) => (
+        {/* The callback channel is described only by its live form (« Être rappelé »), never statically. */}
+        {CONTACT_CHANNELS.filter((c) => c.label !== "Demande de rappel").map((c) => (
           <div key={c.label} data-contact-channel={c.state}>
             <dt>{c.label} :</dt>
             <dd>
@@ -255,7 +256,7 @@ function ContactBlock({ onLogin, headingId }: { onLogin: () => void; headingId: 
                 const src = CONTACT_SOURCES[c.label];
                 const value = src ? publishedValue(operator, src.field) : null;
                 if (src && value) return <a href={src.href(value)} data-operator-value={src.field}>{value}</a>;
-                return c.state === "pending" ? <><strong>{c.label === "Demande de rappel" ? "En cours d’ouverture" : PENDING}</strong> — {c.text}</> : c.text;
+                return c.state === "pending" ? <><strong>{PENDING}</strong> — {c.text}</> : c.text;
               })()}
             </dd>
           </div>

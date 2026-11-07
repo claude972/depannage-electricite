@@ -40,6 +40,7 @@ const fetcher = async (url, init) => {
   }
   if (url.startsWith("/api/support/callbacks") && method === "GET") {
     if (cfg.forbidden) return json({}, 403);
+    if (S.holdGet) await new Promise((r) => (S.releaseGet = r));
     const u = new URL(url, location.href), st = u.searchParams.get("status"), pg = Number(u.searchParams.get("page"));
     if (st === "closed") return json({ items: [row(9, 2)], total: 1, can_close: cfg.canClose !== false, page: { number: 1, limit: 25, pages: 1 } });
     const total = 26 + (S.open.length - 2);
@@ -48,6 +49,7 @@ const fetcher = async (url, init) => {
   }
   if (url === "/api/support/callbacks") {
     S.closeBody = JSON.parse(init.body);
+    if (S.holdPost) await new Promise((r) => (S.releasePost = r));
     if (S.closeMode === "409") return json({}, 409);
     return json({ closed: true });
   }
@@ -65,7 +67,7 @@ function Host() {
 const div = document.createElement("div"); document.body.appendChild(div);
 createRoot(div).render(h(StrictMode, null, h(Host)));
 `;
-type S = { calls: string[]; posts: { request_id: string; phone: string; reason: string; consent: boolean }[]; closeBody?: unknown };
+type S = { holdGet?: boolean; holdPost?: boolean; releaseGet?: () => void; releasePost?: () => void; calls: string[]; posts: { request_id: string; phone: string; reason: string; consent: boolean }[]; closeBody?: unknown };
 
 async function serve() {
   const b = await build({ absWorkingDir: ROOT, stdin: { contents: ENTRY, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, outdir: "out", platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "local-css" }, define: { "process.env.NODE_ENV": '"development"' }, logLevel: "error" });
@@ -93,7 +95,9 @@ test("Chromium public : formulaire seulement si disponible ; consentement requis
   try {
     let { page } = await open(browser, base, { available: false });
     await page.waitForTimeout(300);
-    assert.equal(await page.locator("[data-public-callback]").count(), 0, "closed ⇒ no form");
+    await page.locator('[data-public-callback="closed"]').waitFor();
+    assert.match(await page.locator('[data-public-callback="closed"]').innerText(), /ne sont pas ouvertes actuellement/);
+    assert.equal(await page.locator("[data-public-callback] form, [data-public-callback] input").count(), 0, "closed ⇒ no form");
     assert.equal((await st(page)).calls.filter((c) => c.startsWith("POST")).length, 0);
     await page.context().close();
 
@@ -159,7 +163,9 @@ test("Chromium opérateur : « Classer » seulement si can_close ; 409 ⇒ relec
     let { page, errors } = await open(browser, base, { operator: true });
     await page.locator("[data-op-callback]").first().waitFor();
     assert.equal(await page.locator("[data-op-callback]").count(), 25);
-    await page.getByRole("button", { name: "2", exact: true }).click();
+    assert.equal(await page.locator("[data-op-callbacks-page]").innerText(), "Page 1 sur 2");
+    assert.equal(await page.getByRole("button", { name: "Précédent" }).isDisabled(), true);
+    await page.getByRole("button", { name: "Suivant" }).click();
     await page.locator('[data-op-callback="b0000000-0000-4000-8000-000000000040"]').waitFor();
     assert.ok((await st(page)).calls.includes("GET /api/support/callbacks?status=open&page=2"));
     const getsBefore = (await st(page)).calls.length;
@@ -195,6 +201,42 @@ test("Chromium opérateur : « Classer » seulement si can_close ; 409 ⇒ relec
     ({ page } = await open(browser, base, { operator: true, forbidden: true }));
     await page.locator("[data-op-callbacks-forbidden]").waitFor();
     await page.context().close();
+  } finally {
+    await browser.close();
+    server.close();
+  }
+});
+
+test("Chromium opérateur : GET et POST retardés, changement d’onglet pendant le POST ⇒ aucune ancienne ligne ni bouton, aucune relecture de l’ancien filtre", { skip }, async () => {
+  const { server, base } = await serve();
+  const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
+  const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true });
+  try {
+    const { page, errors } = await open(browser, base, { operator: true });
+    await page.locator("[data-op-callback-close]").first().waitFor();
+    // Delay the POST, then switch to « Classées » with a delayed GET.
+    await page.evaluate(() => { const w = window as unknown as { S: S }; w.S.holdPost = true; });
+    await page.locator("[data-op-callback-close]").first().click();
+    await page.waitForTimeout(100);
+    await page.evaluate(() => { const w = window as unknown as { S: S }; w.S.holdGet = true; });
+    await page.getByRole("tab", { name: "Classées" }).click();
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('[data-op-callbacks="loading"]').count(), 1, "new key ⇒ loading");
+    assert.equal(await page.locator("[data-op-callback], [data-op-callback-close]").count(), 0, "no old row or « Classer » while the new GET is pending");
+    const before = (await st(page)).calls.length;
+    // The late POST reply arrives: it must not re-read the old filter (open).
+    await page.evaluate(() => { const w = window as unknown as { S: S }; w.S.holdGet = false; w.S.releasePost!(); });
+    await page.waitForTimeout(150);
+    await page.evaluate(() => { const w = window as unknown as { S: S }; w.S.releaseGet!(); });
+    await page.locator('[data-op-callback="b0000000-0000-4000-8000-000000000009"]').waitFor();
+    await page.waitForTimeout(200);
+    const s = await st(page);
+    const after = s.calls.slice(before);
+    assert.ok(!after.some((c) => c.includes("status=open")), `no reload of the old filter: ${after.join(", ")}`);
+    assert.equal(await page.locator("[data-op-callback]").count(), 1, "only the closed tab's row, no old open row");
+    assert.equal(await page.locator("[data-op-callback-close]").count(), 0, "closed tab: no « Classer »");
+    assert.equal(await page.locator('[role=tab][aria-selected=true]').innerText(), "Classées");
+    assert.deepEqual(errors, []);
   } finally {
     await browser.close();
     server.close();

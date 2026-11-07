@@ -8,8 +8,7 @@ import { COPY, REASON_LABEL, SUPPORT_PATH, isClosure, parseQueue, queueUrl, time
 import styles from "./public-callback.module.css";
 
 export type OperatorCallbacksProps = { context: Context; fetcher?: typeof fetch };
-type View = { phase: "loading" | "ready" | "error" | "forbidden"; data: CallbackQueue | null; error: string; notice: string; busy: string | null };
-const INITIAL: View = { phase: "loading", data: null, error: "", notice: "", busy: null };
+type View = { key: string; phase: "loading" | "ready" | "error" | "forbidden"; data: CallbackQueue | null; error: string; notice: string; busy: string | null };
 const when = (iso: string) => new Date(iso).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Martinique" });
 
 export function OperatorCallbacks(props: OperatorCallbacksProps) {
@@ -19,7 +18,13 @@ export function OperatorCallbacks(props: OperatorCallbacksProps) {
 function Live({ context, fetcher }: OperatorCallbacksProps) {
   const [status, setStatus] = useState<Status>("open");
   const [page, setPage] = useState(1);
-  const [view, setRaw] = useState<View>(INITIAL);
+  const identity = () => `${latest.current.context.userId() ?? "-"}|${latest.current.context.generation()}`;
+  const latest = useRef({ fetcher, context, status, page });
+  latest.current = { fetcher, context, status, page };
+  // Everything shown or commanded is bound to identity + status + page AT RENDER.
+  const keyOf = (st: Status, pg: number) => `${identity()}|${st}|${pg}`;
+  const currentKey = keyOf(status, page);
+  const [view, setRaw] = useState<View>({ key: currentKey, phase: "loading", data: null, error: "", notice: "", busy: null });
   const ref = useRef(view);
   const set = (v: View) => {
     ref.current = v;
@@ -27,22 +32,17 @@ function Live({ context, fetcher }: OperatorCallbacksProps) {
   };
   const seq = useRef(0);
   const alive = useRef(true);
-  const latest = useRef({ fetcher, context });
-  latest.current = { fetcher, context };
   const doFetch = (): typeof fetch => latest.current.fetcher ?? ((...a) => fetch(...a));
-  const who = () => ({ uid: latest.current.context.userId(), gen: latest.current.context.generation() });
-  const same = (w: { uid: string | null; gen: number }) => alive.current && latest.current.context.userId() === w.uid && latest.current.context.generation() === w.gen;
-  const forbid = () => set({ ...INITIAL, phase: "forbidden", error: COPY.forbidden });
   const load = async (st: Status, pg: number, notice = "") => {
     const my = ++seq.current;
-    const w = who();
-    set({ ...ref.current, phase: ref.current.data ? ref.current.phase : "loading", notice, busy: null });
+    const key = keyOf(st, pg);
+    set({ key, phase: "loading", data: null, error: "", notice, busy: null });
     const r = await timed(doFetch(), queueUrl(st, pg), { method: "GET" });
-    if (my !== seq.current || !same(w)) return;
-    if (r.status === 401 || r.status === 403) return forbid();
+    if (!alive.current || my !== seq.current || keyOf(latest.current.status, latest.current.page) !== key) return; // stale: dropped
+    if (r.status === 401 || r.status === 403) return set({ key, phase: "forbidden", data: null, error: COPY.forbidden, notice: "", busy: null });
     const q = r.status === 200 ? parseQueue(r.body, st, pg) : null;
-    if (!q) return set({ ...INITIAL, phase: "error", error: COPY.loadFailed, notice });
-    set({ phase: "ready", data: q, error: "", notice, busy: null });
+    if (!q) return set({ key, phase: "error", data: null, error: COPY.loadFailed, notice, busy: null });
+    set({ key, phase: "ready", data: q, error: "", notice, busy: null });
   };
   useEffect(() => {
     alive.current = true;
@@ -53,42 +53,44 @@ function Live({ context, fetcher }: OperatorCallbacksProps) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, page]);
+  const shown = view.key === currentKey ? view : { key: currentKey, phase: "loading" as const, data: null, error: "", notice: "", busy: null };
   const close = async (id: string) => {
-    const d = ref.current.data;
-    const row = d?.items.find((i) => i.id === id);
-    if (!d?.can_close || !row || row.version !== 1 || ref.current.busy) return;
-    const w = who();
-    set({ ...ref.current, busy: id, notice: "", error: "" });
+    const v = ref.current;
+    const row = v.data?.items.find((i) => i.id === id);
+    if (v.key !== currentKey || !v.data?.can_close || !row || row.version !== 1 || v.busy) return;
+    const who = identity();
+    set({ ...v, busy: id, notice: "", error: "" });
     const r = await timed(doFetch(), SUPPORT_PATH, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, expected_version: 1 }) });
-    if (!same(w)) return;
-    if (r.status === 401 || r.status === 403) return forbid();
+    if (!alive.current || identity() !== who) return; // identity changed: nothing re-read, nothing shown
+    if (r.status === 401 || r.status === 403) return set({ key: keyOf(latest.current.status, latest.current.page), phase: "forbidden", data: null, error: COPY.forbidden, notice: "", busy: null });
     const notice = r.status === 200 && isClosure(r.body) ? COPY.closedOk : r.status === 409 ? COPY.conflict : COPY.uncertain;
-    await load(status, page, notice); // always re-read: success, conflict or uncertain reply
+    // Re-read the CURRENT tab / page only (never the one of the click if it changed meanwhile).
+    await load(latest.current.status, latest.current.page, notice);
   };
-  const d = view.data;
+  const d = shown.data;
   return (
-    <section className={styles.opPanel} aria-labelledby="op-callbacks-title" data-op-callbacks={view.phase}>
+    <section className={styles.opPanel} aria-labelledby="op-callbacks-title" data-op-callbacks={shown.phase} data-op-callbacks-key={`${status}|${page}`}>
       <h2 id="op-callbacks-title">{COPY.opTitle}</h2>
       <p className={styles.hint}>{COPY.opNote}</p>
       <div className={styles.tabs} role="tablist" aria-label="Demandes de rappel">
-        {(["open", "closed"] as const).map((s) => (
-          <button key={s} type="button" role="tab" aria-selected={status === s} className={styles.tab} onClick={() => { setStatus(s); setPage(1); }}>
-            {s === "open" ? COPY.open : COPY.closedTab}
+        {(["open", "closed"] as const).map((st) => (
+          <button key={st} type="button" role="tab" aria-selected={status === st} className={styles.tab} onClick={() => { if (st !== status) { setStatus(st); setPage(1); } }}>
+            {st === "open" ? COPY.open : COPY.closedTab}
           </button>
         ))}
       </div>
-      {view.phase === "loading" && <p className={styles.hint} role="status">{COPY.loading}</p>}
-      {view.phase === "forbidden" && <p className={styles.note} role="alert" data-op-callbacks-forbidden="">{view.error}</p>}
-      {view.phase === "error" && (
+      {shown.phase === "loading" && <p className={styles.hint} role="status">{COPY.loading}</p>}
+      {shown.phase === "forbidden" && <p className={styles.note} role="alert" data-op-callbacks-forbidden="">{shown.error}</p>}
+      {shown.phase === "error" && (
         <div className={styles.note} role="alert">
-          <p className={styles.error}>{view.error}</p>
+          <p className={styles.error}>{shown.error}</p>
           <button type="button" className={styles.secondary} onClick={() => void load(status, page)}>Réessayer</button>
         </div>
       )}
-      {view.notice && <p className={styles.hint} role="status" data-op-callbacks-notice="">{view.notice}</p>}
-      {view.phase === "ready" && d && (
+      {shown.notice && <p className={styles.hint} role="status" data-op-callbacks-notice="">{shown.notice}</p>}
+      {shown.phase === "ready" && d && (
         <>
-          <p className={styles.hint}>{d.total} demande(s) · page {d.page.number} / {d.page.pages}</p>
+          <p className={styles.hint}>{d.total} demande(s)</p>
           {d.items.length === 0 ? (
             <p className={styles.hint}>{COPY.empty}</p>
           ) : (
@@ -98,21 +100,19 @@ function Live({ context, fetcher }: OperatorCallbacksProps) {
                   <strong className={styles.phone}>{i.phone}</strong>
                   <span className={styles.meta}>{REASON_LABEL[i.reason]} · reçue le {when(i.created_at)}{i.closed_at ? ` · ${COPY.closedLabel} le ${when(i.closed_at)}` : ""}</span>
                   {d.can_close && i.version === 1 && (
-                    <button type="button" className={styles.secondary} disabled={view.busy !== null} onClick={() => void close(i.id)} data-op-callback-close={i.id}>
-                      {view.busy === i.id ? "Classement…" : COPY.close}
+                    <button type="button" className={styles.secondary} disabled={shown.busy !== null} onClick={() => void close(i.id)} data-op-callback-close={i.id}>
+                      {shown.busy === i.id ? "Classement…" : COPY.close}
                     </button>
                   )}
                 </li>
               ))}
             </ul>
           )}
-          {d.page.pages > 1 && (
-            <nav className={styles.pager} aria-label="Pages">
-              {Array.from({ length: d.page.pages }, (_, k) => k + 1).map((n) => (
-                <button key={n} type="button" className={styles.pageButton} aria-current={n === d.page.number ? "page" : undefined} onClick={() => setPage(n)}>{n}</button>
-              ))}
-            </nav>
-          )}
+          <nav className={styles.pager} aria-label="Pages">
+            <button type="button" className={styles.pageButton} disabled={d.page.number <= 1} onClick={() => setPage(d.page.number - 1)}>Précédent</button>
+            <span className={styles.pageInfo} aria-live="polite" data-op-callbacks-page="">Page {d.page.number} sur {d.page.pages}</span>
+            <button type="button" className={styles.pageButton} disabled={d.page.number >= d.page.pages} onClick={() => setPage(d.page.number + 1)}>Suivant</button>
+          </nav>
         </>
       )}
     </section>

@@ -49,13 +49,13 @@ test("états en attente explicites : exploitant (PUB-09), mentions (PUB-08), tar
   assert.match(privacy, new RegExp(`Contact pour l’exercice des droits \\(accès, rectification, suppression\\) : ${PENDING}`));
 });
 
-test("contact (PUB-04) : canaux réels seulement, aucun faux formulaire d’envoi ; rappel « en cours d’ouverture »", () => {
+test("contact (PUB-04) : canaux réels seulement, aucun faux formulaire d’envoi ; le rappel n’est décrit que par son formulaire vivant", () => {
   for (const view of ["help", "about"]) {
     const html = page(view);
     assert.match(html, /data-public-contact=""/, view);
     assert.match(html, /data-contact-channel="available"/);
     assert.match(text(html), /Assistance en ligne : Une fois connecté, écrivez à l’assistance depuis votre espace/);
-    assert.match(text(html), /Demande de rappel : En cours d’ouverture — Canal en cours d’ouverture : aucune demande de rappel n’est enregistrée depuis ce site\./);
+    assert.doesNotMatch(text(html), /Demande de rappel :|aucune demande de rappel n’est enregistrée/, "no static callback state (the live form informs)");
     assert.match(text(html), new RegExp(`Adresse e-mail de contact : ${PENDING}`));
     assert.match(text(html), new RegExp(`Téléphone : ${PENDING}`));
     const contact = html.slice(html.indexOf("data-public-contact"));

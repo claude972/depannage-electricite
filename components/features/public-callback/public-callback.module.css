@@ -24,3 +24,6 @@
 .primary:disabled, .secondary:disabled { opacity: 0.6; cursor: not-allowed; }
 .field input:focus-visible, .field select:focus-visible, .check input:focus-visible, .tab:focus-visible, .pageButton:focus-visible, .primary:focus-visible, .secondary:focus-visible { outline: 3px solid var(--ui-focus); outline-offset: 2px; }
 @media (max-width: 640px) { .primary, .secondary { justify-self: stretch; } }
+.pager { align-items: center; }
+.pageInfo { font-size: 14px; padding: 0 6px; }
+.pageButton:disabled { opacity: 0.5; cursor: not-allowed; }
