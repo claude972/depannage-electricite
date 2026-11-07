@@ -105,6 +105,7 @@ export function RequestForm({
   onSubmit,
   onDemo,
   preferredAddress = null,
+  finalStep,
 }: {
   initialCategory: Category;
   initialValues: RequestValues | null;
@@ -116,6 +117,9 @@ export function RequestForm({
   onDemo: () => void;
   /** Saved preferred address (client space only); never applied over a restored or typed draft. */
   preferredAddress?: PreferredAddress | null;
+  /** Booking path (signed-in client): the last step only hands over to the payment choice and the
+   *  final confirmation — nothing is sent here, so it must not read like « Enregistrer ». */
+  finalStep?: { label: string; note: string };
 }) {
   const [step, setStep] = useState(1);
   // On each step change (not on first render) move focus AND the viewport to the new step title,
@@ -383,6 +387,11 @@ export function RequestForm({
         ) : (
           <>
             <h2 ref={stepTitle} tabIndex={-1} style={STEP_TITLE_STYLE}>Votre demande, en clair.</h2>
+            {finalStep && (
+              <p className="muted" data-request-final-note="">
+                {finalStep.note}
+              </p>
+            )}
             <div className="recap-service">
               <span className="service-icon">
                 <Icon name={c.icon} size={27} />
@@ -463,12 +472,16 @@ export function RequestForm({
           )}
           <button type="submit" className="button primary" disabled={busy}>
             {busy
-              ? "Enregistrement…"
+              ? finalStep
+                ? "Veuillez patienter…"
+                : "Enregistrement…"
               : step < 3
                 ? "Continuer"
                 : mode === "public"
                   ? "Créer mon compte et continuer"
-                  : "Enregistrer la demande"}
+                  : finalStep
+                    ? finalStep.label
+                    : "Enregistrer la demande"}
             {!busy && <Icon name="arrow" size={16} />}
           </button>
         </div>

@@ -32,8 +32,12 @@ test("parcours interactif client ↔ artisan (démo) : demande → offre → dev
     await page.getByLabel("Code postal").fill("97200");
     await page.getByLabel("Ville").fill("Fort-de-France");
     await click(page, "Continuer");
-    assert.match(await main(page), /Votre demande, en clair\./);
-    await click(page, "Enregistrer la demande");
+    const recap = await main(page);
+    assert.match(recap, /Votre demande, en clair\./);
+    // Nothing is sent on the recap: no « Enregistrer », the next step is the payment choice.
+    assert.match(recap, /Rien n’est encore envoyé : vous choisirez ensuite le mode de règlement, puis vous confirmerez l’envoi de votre demande\./);
+    assert.equal(await page.getByRole("button", { name: /Enregistrer la demande/ }).count(), 0);
+    await click(page, "Continuer vers le règlement");
     await page.waitForTimeout(400);
     const confirm = await main(page);
     assert.match(confirm, /Confirmez l’envoi de votre demande/);
@@ -173,7 +177,7 @@ test("#new connecté : le choix de règlement est proposé après l’adresse ; 
     await page.getByLabel("Code postal").fill("97200");
     await page.getByLabel("Ville").fill("Fort-de-France");
     await click(page, "Continuer");
-    await click(page, "Enregistrer la demande");
+    await click(page, "Continuer vers le règlement");
     await page.waitForTimeout(400);
     assert.match(await main(page), /Après intervention — paiement sur la plateforme/);
     assert.match(await main(page), /Empreinte bancaire/);
