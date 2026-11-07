@@ -314,6 +314,7 @@ export function createSubscriptionsController({ api, store, newId, context, role
   let pendingFor: string | null = null;
   const identity = () => ({ uid: context.userId(), gen: context.generation() });
   const same = (a: { uid: string | null; gen: number }) => alive && context.userId() === a.uid && context.generation() === a.gen;
+  const mountedIdentity = identity();
   const safe = <T,>(f: () => T): T | undefined => {
     try {
       return f();
@@ -469,11 +470,13 @@ export function createSubscriptionsController({ api, store, newId, context, role
       return false;
     },
     takeResumeUrl(): string | null {
+      if (!same(mountedIdentity)) return null;
       const u = get().resumeUrl;
       if (u) set({ ...get(), resumeUrl: null });
       return u;
     },
     takePortalUrl(): string | null {
+      if (!same(mountedIdentity)) return null;
       const u = get().portalUrl;
       if (u) set({ ...get(), portalUrl: null });
       return u;
@@ -513,6 +516,7 @@ export function createSubscriptionsController({ api, store, newId, context, role
     },
     /** Consumes the in-memory URL (single use) for the click handler. */
     takeCheckoutUrl(): string | null {
+      if (!same(mountedIdentity)) return null;
       const u = get().checkoutUrl;
       if (u) set({ ...get(), checkoutUrl: null });
       return u;

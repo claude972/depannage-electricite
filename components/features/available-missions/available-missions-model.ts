@@ -128,7 +128,7 @@ export function parseMissionsPage(body: unknown, order: MissionsOrder = "oldest_
     if (p.items.some((o, i) => i > 0 && rank(o) < rank(p.items[i - 1]))) return null;
     // Root radius_version is mandatory (schema); a cursor carrying another version is invalid.
     const carried = cursorRadiusVersion(p.page.next_cursor);
-    if (carried !== null && carried !== p.radius_version) return null;
+    if (p.page.next_cursor !== null && carried !== p.radius_version) return null;
   }
   if (p.page.has_more !== (p.page.next_cursor !== null)) return null;
   if (!p.eligible && (p.items.length || p.page.has_more)) return null;

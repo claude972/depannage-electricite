@@ -84,6 +84,11 @@ test("configuration : consentement requis ; commande écrite et relue AVANT le P
   const real = harness({ posts: [() => res(200, { url: STRIPE_REAL })] });
   await real.c.load(); await real.c.setup(true);
   same(real.c.takeSetupUrl(), STRIPE_REAL, "the exact string, fragment included, is what the click opens");
+  const owner = { uid: USER, gen: 0 };
+  const switched = harness({ ctx: owner, posts: [() => res(200, { url: STRIPE_REAL })] });
+  await switched.c.load(); await switched.c.setup(true);
+  owner.gen++;
+  same(switched.c.takeSetupUrl(), null, "a prepared URL cannot outlive its session, even before the panel remounts");
   const evil = harness({ posts: [() => res(200, { url: "https://evil.test/pay" })] });
   await evil.c.load(); await evil.c.setup(true);
   same([evil.get().setupUrl, evil.get().error, evil.get().pending], [null, m.COPY.badUrl, null]);

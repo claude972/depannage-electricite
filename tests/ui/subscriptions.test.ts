@@ -120,6 +120,10 @@ test("souscription : consentement requis ; préconditions avant l’identifiant 
   same(JSON.parse(post.stored!).command, post.cmd, "persisted before the POST");
   same([h.get().checkoutUrl, mem.map.size, [...mem.map.values()].some((v) => v.includes("stripe"))], [STRIPE_REAL, 0, false]);
   same([h.c.takeCheckoutUrl(), h.c.takeCheckoutUrl()], [STRIPE_REAL, null], "single use, exact string with the #fid fragment");
+  const switched = harness({ posts: [() => res(200, { url: STRIPE_REAL })] });
+  await switched.c.load(); await switched.c.checkout(O1, true);
+  switched.ctx.gen++;
+  same(switched.c.takeCheckoutUrl(), null, "identity changed before remount");
   for (const url of ["https://billing.stripe.com/p/session/x", "http://checkout.stripe.com/c/pay/x", "https://checkout.stripe.com.evil.example/x", "https://user:pw@checkout.stripe.com/x", "https://checkout.stripe.com:8443/x", "javascript:alert(1)"]) {
     const e = harness({ posts: [() => res(200, { url })] });
     await e.c.load(); await e.c.checkout(O1, true);

@@ -165,6 +165,7 @@ export function createPmController({ api, store, newId, context, get, set }: { a
   let pendingFor: string | null = null;
   const identity = () => ({ uid: context.userId(), gen: context.generation() });
   const same = (a: { uid: string | null; gen: number }) => alive && context.userId() === a.uid && context.generation() === a.gen;
+  const mountedIdentity = identity();
   const safe = <T,>(f: () => T): T | undefined => {
     try {
       return f();
@@ -323,6 +324,7 @@ export function createPmController({ api, store, newId, context, get, set }: { a
     },
     /** Consumes the in-memory URL (single use) for the click handler. */
     takeSetupUrl(): string | null {
+      if (!same(mountedIdentity)) return null;
       const u = get().setupUrl;
       if (u) set({ ...get(), setupUrl: null });
       return u;
