@@ -108,6 +108,7 @@ import { OrganizationSitesList, SiteSettingsPanel } from "../features/site-lifec
 import { SiteDirectLoader } from "../features/site-lifecycle/site-direct";
 import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-panel";
 import { DelegatedPayerCheckout, DelegatedPayerManager } from "../features/delegated-payer/delegated-payer";
+import { REPORT_COPY, reportQuery, useEnterpriseReport } from "../features/enterprise-reports/use-enterprise-report";
 import { COUNTS_COPY, ENTERPRISE_SEARCH_COPY, ExportFeedback, PRO_COPY, useEnterpriseSearch, useOverviewCounts, useProfessionalOverview, type EnterpriseSearchFilters } from "../features/enterprise-search/use-enterprise-search";
 import { ContractSourceLine, QuoteGridAccessPanel } from "../features/quote-grid/quote-grid";
 import { QuoteApprovalPanel, SitePolicyPanel } from "../features/advanced-approvals/approvals";
@@ -3509,10 +3510,18 @@ function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
 }
 
 // ---- Rapports --------------------------------------------------------------------------------
-function ReportsView({ c }: { c: Ctx }) {
+/** Exported for tests only (live report wiring). */
+export function ReportsView({ c }: { c: Ctx }) {
   const { session, scope, demo } = c;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Live (ENT-15) : tableau et totaux UNIQUEMENT depuis le JSON serveur de /api/reports, même périmètre
+  // que l’export CSV (organisation choisie + site éventuel). Aucune organisation choisie ⇒ rien n’est lu
+  // et l’export est désactivé. Démo : calcul local inchangé, aucun appel.
+  const live = !demo;
+  const orgId = c.organization?.id ?? null;
+  const siteId = c.activeSite?.id ?? null;
+  const report = useEnterpriseReport({ enabled: live, context: session.mutationContext, organizationId: orgId, siteId });
   const rows = scope.sites.map((s) => ({ site: s, ...siteFigures(s, session.data) }));
   const totals = {
     budget: sum(rows.map((r) => r.budget)),
@@ -3521,6 +3530,7 @@ function ReportsView({ c }: { c: Ctx }) {
     declared: sum(rows.map((r) => r.declared)),
     count: sum(rows.map((r) => r.count)),
   };
+  const server = live && report.state.phase === "ready" ? report.state.data : null;
   async function downloadCsv() {
     setError("");
     if (demo) {
@@ -3541,9 +3551,10 @@ function ReportsView({ c }: { c: Ctx }) {
       );
       return;
     }
+    if (!orgId) return;
     setBusy(true);
     try {
-      const url = `/api/reports?format=csv${c.activeSite ? `&site_id=${encodeURIComponent(c.activeSite.id)}` : ""}`;
+      const url = reportQuery(orgId, siteId, "csv");
       const response = await fetch(url, { cache: "no-store" });
       if (!response.ok) {
         const result = await response.json().catch(() => ({}));
@@ -3560,9 +3571,9 @@ function ReportsView({ c }: { c: Ctx }) {
     <>
       <PageTitle
         title="Rapports"
-        subtitle={`Rapport consolidé de ${c.activeSite ? c.activeSite.name : "tous les sites"} · ${LOADED_NOTE}`}
+        subtitle={live ? `Rapport consolidé de ${c.activeSite ? c.activeSite.name : "tous les sites de l’organisation"} · ${REPORT_COPY.serverNote}` : `Rapport consolidé de ${c.activeSite ? c.activeSite.name : "tous les sites"} · ${LOADED_NOTE}`}
         action={
-          <button type="button" className="button primary" disabled={busy} onClick={() => void downloadCsv()}>
+          <button type="button" className="button primary" disabled={busy || (live && !orgId)} onClick={() => void downloadCsv()} data-report-csv="">
             <Icon name="download" size={17} />
             {busy ? "Préparation…" : "Télécharger le rapport CSV"}
           </button>
@@ -3574,14 +3585,78 @@ function ReportsView({ c }: { c: Ctx }) {
           <span>{error}</span>
         </div>
       )}
-      <section className={cx("panel", styles.tablePanel)} aria-labelledby="report-table-title">
+      <section className={cx("panel", styles.tablePanel)} aria-labelledby="report-table-title" data-report={live ? report.state.phase : "demo"}>
         <div className={styles.tableHead}>
           <div>
             <h2 id="report-table-title">Budget et engagements par site</h2>
-            <p className={styles.muted}>Totaux {BASIS} ; le CSV généré par le serveur fait foi.</p>
+            <p className={styles.muted}>{live ? (server && !server.scope.complete ? REPORT_COPY.partialNote : REPORT_COPY.totalsNote) : `Totaux ${BASIS} ; le CSV généré par le serveur fait foi.`}</p>
           </div>
         </div>
-        {rows.length ? (
+        {live && !orgId ? (
+          <p className={styles.muted} data-report-choose-org="">{REPORT_COPY.chooseOrg}</p>
+        ) : live && (report.state.phase === "loading" || report.state.phase === "idle") ? (
+          <p className={styles.muted} role="status">{REPORT_COPY.loading}</p>
+        ) : live && (report.state.phase === "error" || report.state.phase === "forbidden") ? (
+          <div role="alert" data-report-error="">
+            <p>{report.state.error}</p>
+            {report.state.phase === "error" && (
+              <button type="button" className="button outline" onClick={() => report.retry()}>
+                Réessayer
+              </button>
+            )}
+          </div>
+        ) : server ? (
+          server.sites.length ? (
+            <>
+              {!server.totals.financial_complete && <p className={styles.muted} data-report-unverified="">{REPORT_COPY.unverified(money(server.totals.unverified_paid_cents))}</p>}
+              <table className={styles.table}>
+                <caption className="sr-only">Budget et engagements par site</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Site</th>
+                    <th scope="col">Budget de référence</th>
+                    <th scope="col">Devis acceptés</th>
+                    <th scope="col">Réglé</th>
+                    <th scope="col">Interventions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {server.sites.map((r) => (
+                    <tr key={r.site_id} data-report-site={r.site_id}>
+                      <td data-label="Site">
+                        <strong>{r.name}</strong>
+                        <span className={styles.cellSub}>{SITE_TYPES[r.type] || "Site"}</span>
+                      </td>
+                      <td data-label="Budget">{r.budget_cents > 0 ? money(r.budget_cents) : "—"}</td>
+                      <td data-label="Devis acceptés">{money(r.accepted_cents)}</td>
+                      <td data-label="Réglé">
+                        {money(r.paid_cents)}
+                        {r.declared_paid_cents > 0 && <span className={styles.cellSub}>dont {money(r.declared_paid_cents)} déclarés reçus sur place</span>}
+                      </td>
+                      <td data-label="Interventions">{r.interventions}</td>
+                    </tr>
+                  ))}
+                  <tr data-report-total={server.scope.complete ? "complete" : "partial"}>
+                    <td data-label="Total">
+                      <strong>{server.scope.complete ? "Total" : "Somme des lignes reçues (non garantie complète)"}</strong>
+                    </td>
+                    <td data-label="Budget">{server.totals.budget_cents > 0 ? money(server.totals.budget_cents) : "—"}</td>
+                    <td data-label="Devis acceptés">{money(server.totals.accepted_cents)}</td>
+                    <td data-label="Réglé">
+                      {money(server.totals.paid_cents)}
+                      {server.totals.declared_paid_cents > 0 && <span className={styles.cellSub}>dont {money(server.totals.declared_paid_cents)} déclarés reçus sur place</span>}
+                    </td>
+                    <td data-label="Interventions">{server.sites.reduce((n, r) => n + r.interventions, 0)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </>
+          ) : (
+            <Empty icon="chart" title="Aucun site à consolider">
+              Ajoutez un site pour obtenir un rapport.
+            </Empty>
+          )
+        ) : rows.length ? (
           <table className={styles.table}>
             <caption className="sr-only">Budget et engagements par site</caption>
             <thead>
