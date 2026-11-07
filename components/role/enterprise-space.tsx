@@ -102,6 +102,7 @@ import { SiteOperationsView } from "../features/site-operations/site-operations-
 import { SiteEnergyPanel } from "../features/energy/site-energy-panel";
 import { SiteContactsPanel } from "../features/site-contacts/site-contacts-panel";
 import { SiteAreasPanel } from "../features/site-areas/site-areas-panel";
+import { CoOwnershipPanel } from "../features/co-ownership/co-ownership-panel";
 import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
 import { PlatformPayAction } from "../app/platform-pay";
 import { OrganizationSlaPanel } from "../features/organization-sla/organization-sla-panel";
@@ -2783,13 +2784,16 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
             )}
           </section>
         )}
-        {vertical === "syndic" && (
-          <Unavailable
-            title="Assemblées générales & appels de fonds"
-            reason="Les parties communes se déclarent ci-dessus (« Étages, zones et parties communes »). Les assemblées générales et appels de fonds ne sont pas encore gérés par l’application."
-            blocker="ENT-05"
-          />
-        )}
+        {vertical === "syndic" &&
+          (session.mode === "demo" ? (
+            <Unavailable
+              title="Assemblées générales & appels de fonds"
+              reason="En démonstration, aucune assemblée ni aucun appel de fonds n’est enregistré : connectez-vous à votre espace pour les consigner."
+              blocker="ENT-05"
+            />
+          ) : (
+            <CoOwnershipPanel siteId={site.id} context={session.mutationContext} demo={false} />
+          ))}
 
         {session.mode === "demo" ? (
           <Unavailable
@@ -3283,7 +3287,11 @@ function ReportsView({ c }: { c: Ctx }) {
           reason="Les périodes de consommation (factures, relevés de compteur, saisies) se déclarent et se consultent site par site, dans la fiche de chaque site. Aucun total multi-sites n’est calculé ici."
           blocker="ENT-09"
         />
-        <Unavailable title="Assemblées générales & appels de fonds" reason="Non modélisés pour les copropriétés." blocker="ENT-05" />
+        <Unavailable
+          title="Assemblées générales & appels de fonds (consolidé)"
+          reason="Les assemblées générales et appels de fonds se consignent copropriété par copropriété, dans la fiche de chaque site en syndic. Aucun total multi-sites n’est calculé ici ; l’application ne calcule aucun quorum et n’encaisse rien."
+          blocker="ENT-05"
+        />
       </div>
       {demo || !c.organization ? (
         <Unavailable
