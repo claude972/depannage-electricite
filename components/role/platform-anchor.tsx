@@ -106,7 +106,7 @@ export function PlatformPage({
       {view === "platform-operators" ? (
         <PlatformOperatorsView {...common} />
       ) : view === "platform-finance" ? (
-        <PlatformFinanceView {...common} />
+        <PlatformFinanceView {...common} context={session.mutationContext} />
       ) : (
         <PlatformModerationView {...common} />
       )}

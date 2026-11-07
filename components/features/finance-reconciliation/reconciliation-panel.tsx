@@ -33,7 +33,7 @@ export function ReconciliationPanel(props: ReconciliationPanelProps) {
     <section className={styles.panel} aria-labelledby="reconciliation-title" data-reconciliation={props.demo ? "demo" : ""}>
       <h3 id="reconciliation-title">{COPY.title}</h3>
       <p className={styles.hint}>{COPY.intro}</p>
-      {props.demo ? <p className={styles.note}>{COPY.demo}</p> : <Live {...props} />}
+      {props.demo ? <p className={styles.note}>{COPY.demo}</p> : <Live key={`${props.context.userId() ?? "-"}|${props.context.generation()}`} {...props} />}
     </section>
   );
 }

@@ -1,5 +1,5 @@
 // FIN-06 — provider transfer observations and operator reconciliation review. Pure model, no React.
-// Contract: ./contract (strict copy of ROOT dca415c) + docs/STRIPE_FINANCIAL_RECONCILIATION_BACKEND.md:
+// Contract: docs/STRIPE_FINANCIAL_RECONCILIATION_BACKEND.md:
 //   GET  /api/platform-operations/stripe-observations?after=<evt>&state=matched|needs_review
 //        → { records (≤ 50, ascending event id), next_after }   — finance_read
 //   GET  /api/platform-operations/stripe-observations/<evt> → { record, history (≤ 50, newest first), history_limited }
@@ -9,7 +9,7 @@
 //        no manual link, amount or state. 401 / 403 / 404 / 409 / 422 / 429 / 503 (+ Retry-After).
 // An observation is NEVER a payment, a payout or a refund; nothing here calls the provider.
 import { z } from "zod";
-import { detail, eventId, page, receipt, reviewCommand, type FinancialObservation } from "./contract";
+import { detail, eventId, page, receipt, reviewCommand, type FinancialObservation } from "../../../lib/features/stripe-reconciliation/contract";
 
 export const BASE_PATH = "/api/platform-operations/stripe-observations";
 export const FR_TIMEOUT_MS = 15_000;

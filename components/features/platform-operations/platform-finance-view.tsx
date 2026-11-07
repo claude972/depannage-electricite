@@ -6,6 +6,7 @@ import type { ContractState, Dispute, DisputeOutcome, FinanceConfig, FinanceRepo
 import { COMMISSION_NOT_CONFIGURED, REFUND_EXECUTION_MESSAGE } from "../../../lib/features/platform-operations/config";
 import { RefundExecutionPanel } from "../refund-execution/refund-execution-panel";
 import { ReconciliationPanel } from "../finance-reconciliation/reconciliation-panel";
+import type { Context as ReconciliationContext } from "../finance-reconciliation/model";
 import { EMPTY_READINESS, UUID_RE, disputeActions, readinessFingerprint, readinessReduce, refundActions, refundStatusLabel, validateAmountCents, validateDisputeDecision, validateRefundDecision, validateText, type ReadinessTarget } from "../../../lib/features/platform-operations/state-machines";
 import type { PlatformDemo } from "../../../lib/features/platform-operations/demo";
 import { invoiceDocumentLinks } from "../../../lib/features/platform-operations/invoice-links";
@@ -13,7 +14,7 @@ import { EmptyState, ErrorBox, Field, Gate, Loading, Pager, Panel, ReadOnly, dat
 import styles from "./platform-operations.module.css";
 import { TAX_RATE_OPTIONS, isTaxRate, parseTaxRateInput, taxRateLabel, type TaxRate } from "../../app/tax-rate";
 
-export type PlatformFinanceViewProps = { state: ContractState; unavailableMessage: string; scope: PlatformViewScope; client: PlatformClient; demo?: PlatformDemo; onNavigate?: (view: string, param?: string) => void };
+export type PlatformFinanceViewProps = { state: ContractState; unavailableMessage: string; scope: PlatformViewScope; client: PlatformClient; context: ReconciliationContext; demo?: PlatformDemo; onNavigate?: (view: string, param?: string) => void };
 type Tab = "overview" | "ledger" | "invoices" | "refunds" | "disputes" | "observations" | "settings";
 const TABS: { id: Tab; label: string }[] = [{ id: "overview", label: "Rapprochement" }, { id: "ledger", label: "Ledger" }, { id: "invoices", label: "Factures et avoirs" }, { id: "refunds", label: "Remboursements" }, { id: "disputes", label: "Litiges" }, { id: "observations", label: "Observations fournisseur" }, { id: "settings", label: "Paramètres" }];
 const DEMO_NOTE = "Mode démonstration : aucune action n’est envoyée.";
@@ -112,7 +113,7 @@ type Ctx = { client: PlatformClient; demo?: PlatformDemo; canWrite: boolean; sup
 export function PlatformFinanceView(props: PlatformFinanceViewProps) {
   return <Gate state={props.state} unavailableMessage={props.unavailableMessage} title="Finance plateforme"><Inner key={scopeKey(props.scope)} {...props} /></Gate>;
 }
-function Inner({ scope, client, demo, onNavigate }: PlatformFinanceViewProps) {
+function Inner({ scope, client, context, demo, onNavigate }: PlatformFinanceViewProps) {
   const [tab, setTab] = useState<Tab>("overview");
   const me = useLoad<PlatformAccess>(() => (demo ? Promise.resolve(demo.access) : client.load.me()), [demo]);
   const [message, notify] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
@@ -142,7 +143,7 @@ function Inner({ scope, client, demo, onNavigate }: PlatformFinanceViewProps) {
       {tab === "invoices" && <Invoices ctx={ctx} />}
       {tab === "refunds" && <Refunds ctx={ctx} />}
       {tab === "disputes" && <Disputes ctx={ctx} />}
-      {tab === "observations" && <ReconciliationPanel demo={Boolean(demo)} canRead={me.data.super_admin || me.data.scopes.includes("finance_read")} canWrite={scope.authority.canWrite && !demo && (me.data.super_admin || (me.data.scopes.includes("finance_read") && me.data.scopes.includes("finance_write")))} context={{ userId: () => scope.userId, generation: () => 0 }} onOpenDossier={onNavigate ? (id) => onNavigate("intervention", id) : undefined} />}
+      {tab === "observations" && <ReconciliationPanel demo={Boolean(demo)} canRead={me.data.super_admin || me.data.scopes.includes("finance_read")} canWrite={scope.authority.canWrite && !demo && (me.data.super_admin || (me.data.scopes.includes("finance_read") && me.data.scopes.includes("finance_write")))} context={context} onOpenDossier={onNavigate ? (id) => onNavigate("intervention", id) : undefined} />}
       {tab === "settings" && me.data.super_admin && <Settings ctx={ctx} onSaved={me.reload} />}
     </div>
   );

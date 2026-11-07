@@ -1,4 +1,4 @@
-// FIN-06 provider observations (contract ROOT dca415c copied strictly): exact list/detail URLs, the
+// FIN-06 provider observations: exact list/detail URLs, the
 // route's page/detail/receipt checks, wording that never presents an observation as a payment, payout
 // or refund, and the review command fenced under courant-private-reconciliation:<uid>:<gen>:<evt>
 // (read-back or 0 POST, strict restore, identity change ⇒ dropped, 401/403 clear, 409 honest + reload,
@@ -29,10 +29,10 @@ export function rec(n: number, o: { state?: "matched" | "needs_review"; reason?:
 }
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", ...headers } });
 
-test("contrat copié à l’identique de dca415c", () => {
-  const copy = readFileSync("components/features/finance-reconciliation/contract.ts", "utf8").split("\n").slice(3).join("\n");
-  assert.ok(copy.startsWith('import { z } from "zod";\nexport const eventId = z.string().regex(/^evt_[A-Za-z0-9_]{1,240}$/),'));
-  assert.match(copy, /export const reviewCommand = z\s*\.object\(\{\s*command_id: uuid,\s*expected_version: version\.max\(2147483646\),\s*note: z\.string\(\)\.trim\(\)\.min\(1\)\.max\(2000\),/);
+test("la vue finance utilise le contexte de session et le contrat partagé avec le serveur", () => {
+  assert.match(readFileSync("components/features/finance-reconciliation/model.ts", "utf8"), /lib\/features\/stripe-reconciliation\/contract/);
+  assert.match(readFileSync("components/role/platform-anchor.tsx", "utf8"), /<PlatformFinanceView[^>]*context=\{session\.mutationContext\}/);
+  assert.match(readFileSync("components/features/platform-operations/platform-finance-view.tsx", "utf8"), /<ReconciliationPanel[^>]*context=\{context\}/);
 });
 
 test("URLs exactes (after / state seulement si fournis) ; contrôles de page comme la route", () => {
