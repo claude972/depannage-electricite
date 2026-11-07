@@ -110,3 +110,6 @@ ROOT raccorde un adaptateur Resend optionnel à la file privée. L’adresse cou
 ### CLI-03 / ART-04 — rayon indicatif des offres
 
 Astra ajoute un réglage personnel facultatif fondé sur les centres publics des communes de Martinique. L’artisan choisit sa commune de référence et son rayon. Le réglage ne collecte aucune position GPS, conserve les conditions métier actuelles et s’applique avant pagination et lors de l’acceptation. Les zones sans centre déterminable suivent le filtre postal, avec cette limite indiquée. Vérifier absence de réglage, distances connues et inconnues, modification simultanée et confidentialité des offres. Le classement par distance est une étape distincte.
+
+## FIN-07 — optional-subscriptions (Astra, exclusive)
+Baseb760367, worktree propre réutilisé. Tranche serveur courte : catalogue explicite sans seed, Price Stripe attesté/mode/rôle, commande durable Checkout subscription, réconciliation par relecture serveur exacte et refus de preuve périmée. Gate SQL+env OFF ; aucun droit MVP modifié, aucune règle premium. Portail et endpoint événementiel Billing restent hors de cette première tranche s’ils ne sont pas entièrement vérifiables. Tests SQL/handlers injectés, aucun cloud ni fournisseur réel.
