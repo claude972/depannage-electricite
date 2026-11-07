@@ -93,6 +93,8 @@ export function PlatformPage({
     demo: session.mode === "demo" ? PLATFORM_DEMO : undefined,
     onNavigate: (target: string, param?: string) => {
       if (target === "intervention" && param) session.openIntervention(param);
+      else if (target === "client" && param) session.go("admin-clients", param);
+      else if (target === "artisan" && param) session.go("admin-artisan", param);
     },
   };
   return (
