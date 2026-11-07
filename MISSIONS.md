@@ -95,9 +95,13 @@ Astra réalise le lot serveur de file privée et de reprise pour les notificatio
 
 ROOT raccorde la section photo du particulier à la conversation du dossier attribué et donne à l’artisan attribué accès aux photos du même dossier par le téléchargement privé existant. Vérifier dossier exact, absence de photo, rôle et refus d’accès. La revue manuelle utilise la messagerie actuelle. L’analyse automatique reste suivie séparément.
 
+Astra réalise la préanalyse d’une image privée après consentement explicite, par un adaptateur OpenAI optionnel. La sortie décrit seulement une catégorie visible et la lisibilité. Elle est montrée au client après décision de l’artisan attribué. Les accès au dossier et au fichier sont revérifiés autour du fournisseur. Vérifier les refus, les changements d’affectation, la réponse incertaine et la continuité de la revue manuelle. Le fournisseur reste inactif jusqu’à validation de la configuration, de la notice et du jeu d’évaluation.
+
 ### FIN-08 — cartes enregistrées
 
 Astra réalise le serveur pour un compte particulier vérifié. Liste masquée, consentement explicite puis ajout via Stripe Checkout en mode setup, retrait du moyen prouvé rattaché au client Stripe du compte. L’identifiant client est établi côté serveur, isolé par mode et créé avec reprise bornée. Le retour navigateur déclenche une nouvelle lecture. Claude raccorde le profil à ce contrat. Vérifier la portée intercomptes, le refus sans consentement et la reprise après une réponse incertaine. Les opérations sont testées avec Stripe injecté. Le branchement aux règlements et la recette Stripe restent distincts.
+
+ROOT raccorde les cartes personnelles aux nouveaux règlements Checkout, après activation explicite. Le Customer du même compte vérifié et du même mode est fixé avec le dossier de paiement au premier début. Les comptes entreprise, mandats et commandes existantes restent sur leur trajectoire. Vérifier le mode, le rattachement et le rejeu exact, sans prélèvement automatique ni changement des montants.
 
 ### SYS-04 — envoi e-mail configurable
 

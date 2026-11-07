@@ -98,5 +98,34 @@ try {
  const listed=await h.GET(new Request('https://app.example.test/api/payments/methods'));eq(listed.status,200);eq(Object.keys((await listed.json()).methods[0]).sort(),['brand','exp_month','exp_year','id','last4']);
  const removeId=crypto.randomUUID();eq((await post({action:'remove',method_id:pm.id,command_id:removeId})).status,200);eq(detachCount,1);
  eq((await post({action:'remove',method_id:pm.id,command_id:removeId})).status,200);eq(detachCount,1);
+
+ // Only a new personal ledger in the configured mode can freeze a saved Customer.
+ await as('postgres');
+ await q("update public.profiles set artisan_approved=true,stripe_account_id='acct_QA' where id=$1",[users.artisan]);
+ await q("insert into public.artisan_profiles(user_id,application_status)values($1,'approved')",[users.artisan]);
+ const makeQuote=async()=>{
+  const job=(await q("insert into public.interventions(client_id,artisan_id,category,description,address,postal_code,city,urgency,estimate_min_cents,estimate_max_cents,status)values($1,$2,'panel','Fixture client','Adresse de test','97200','QA','scheduled',100,200,'completed')returning id",[users.client,users.artisan]))[0].id;
+  return (await q("insert into public.quotes(intervention_id,artisan_id,lines,subtotal_cents,tax_rate,tax_cents,total_cents,status)values($1,$2,'[{\"label\":\"QA\",\"quantity\":1,\"unit_price_cents\":10000}]',10000,20,2000,12000,'accepted')returning id",[job,users.artisan]))[0].id;
+ };
+ const legacyQuote=await makeQuote(), newQuote=await makeQuote();
+ await as('authenticated',users.client);
+ const beginCheckout=(quote,live=false)=>one('select public.begin_platform_checkout_with_saved_customer($1,$2)v',[quote,live]);
+ const oldCheckout=await beginCheckout(legacyQuote);
+ await as('postgres');await q('update saved_payment_private.checkout_control set live_mode=false');
+ await as('authenticated',users.client);
+ await denied('select public.begin_platform_checkout_with_saved_customer($1,true)',[newQuote]);
+ eq(await beginCheckout(legacyQuote),oldCheckout);
+ const newCheckout=await beginCheckout(newQuote);
+ eq(await beginCheckout(newQuote),newCheckout);
+ await denied('select public.platform_checkout_with_customer_private($1,$2,false)',[newCheckout,users.client]);
+ await as('service_role');
+ const readCheckout=(checkout,actor=users.client,live=false)=>one('select public.platform_checkout_with_customer_private($1,$2,$3)v',[checkout,actor,live]);
+ eq((await readCheckout(oldCheckout)).saved_customer,null);
+ eq((await readCheckout(newCheckout)).saved_customer,{id:'cus_one',binding_id:source.customer.id});
+ await denied('select public.platform_checkout_private($1,$2)',[newCheckout,users.client]);
+ await denied('select public.platform_checkout_with_customer_private($1,$2,false)',[newCheckout,users.other],'P0002');
+ await denied('select public.platform_checkout_with_customer_private($1,$2,true)',[newCheckout,users.client]);
+ await as('postgres');await q('update saved_payment_private.checkout_control set live_mode=null');
+ await as('service_role');eq((await readCheckout(newCheckout)).saved_customer.id,'cus_one');
  console.log(`PASS saved payment methods: ${checks} checks, full SQL migrations and actual handlers with injected Stripe`);
 }catch(e){console.error(e.message,e.code,e.query,e.stack?.split('\n').slice(0,5).join('\n'));process.exitCode=1}finally{await db.close()}

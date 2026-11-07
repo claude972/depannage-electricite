@@ -12,7 +12,7 @@ Compte personnel authentifié : profil `client`, Auth non anonyme, adresse e-mai
 - `POST` `{action:"remove",method_id:"pm_…",command_id:"uuid"}` → `{removed:true}`. Confirmation UI avant retrait : le détachement Stripe est irréversible. Réutiliser la même commande après réponse perdue.
 - États401 connexion,403 autorisation,409 opération à vérifier/relecture (pas remplacement automatique de commande),422 validation,503 indisponibilité/reprise même commande. Réponses privées `no-store`, erreurs fournisseur non exposées.
 
-L’UI reste dans Mon profil. Ce lot **ne sélectionne pas une carte pour un règlement**, ne définit pas de moyen par défaut et ne confère aucun pouvoir au payeur délégué. Le raccordement au checkout de paiement fait l’objet d’un lot séparé.
+La gestion des cartes se fait dans Mon profil. La sélection pour chaque règlement se fait dans Stripe Checkout après activation du raccordement ci-dessous.
 
 ## Preuves et garde-fous serveur
 
@@ -30,7 +30,7 @@ Tests `tests/saved-payment-methods.test.ts` : vrais handlers avec dépendances i
 
 `tests/sql-saved-payment-methods-review.mjs` : migrations complètes PGlite, ACL, rôles/Auth, liaison/mode, commandes/rejeu, fenêtre, reprise ; exécute aussi les vrais handlers reliés aux RPC SQL avec Stripe seul injecté. Les stubs historiques pg_cron ne valent pas preuve d’un scheduler ; ce lot n’en ajoute aucun.
 
-Aucun appel Stripe réel, clé, transaction, migration cloud ni changement aux parcours Checkout payeur/guest/webhooks. Pas de preuve hébergée ou d’enregistrement réel annoncée.
+Les tests utilisent Stripe injecté et PostgreSQL isolé. La recette hébergée et la vérification sur Stripe restent à faire.
 
 Sources officielles consultées : [Checkout setup](https://docs.stripe.com/payments/checkout/save-and-reuse), [idempotence](https://docs.stripe.com/api/idempotent_requests), [liste des méthodes](https://docs.stripe.com/api/payment_methods/list), [détachement](https://docs.stripe.com/api/payment_methods/detach). Stripe peut supprimer les clés API v1 après24h ; la fenêtre23h conserve une marge technique.
 
@@ -39,3 +39,9 @@ Sources officielles consultées : [Checkout setup](https://docs.stripe.com/payme
 La [réponse officielle Checkout Session](https://docs.stripe.com/api/checkout/sessions/object) contient une URL `checkout.stripe.com` avec fragment `#fid…`. Ce fragment est conservé à l’identique, opaque ; aucune lecture ni réécriture. Origine HTTPS exacte, absence d’identifiants et port standard restent contrôlés. Le garde d’origine de retour configurée reste séparé et refuse toujours son propre fragment.
 
 La même référence documente `amount_total` comme entier nullable ; aucune valeur0 spécifiquement documentée pour setup n’a été trouvée dans cette référence et le guide setup consulté. Le lot conserve donc `amount_total=null` pour setup, refuse les montants numériques et ne généralise pas l’exemple en mode payment. À confirmer contre la réponse réelle en recette Stripe autorisée ; aucun élargissement spéculatif.
+
+## Règlement d’un devis avec une carte personnelle
+
+`20261107211438_saved_customer_checkout_binding.sql` prépare le raccordement. Il est désactivé par défaut. Une fois le mode Stripe choisi, le premier règlement d’un devis personnel peut fixer le Customer vérifié du même compte et du même mode dans son registre privé. Stripe Checkout présente les cartes éligibles. Le client confirme chaque règlement sur Stripe.
+
+Une commande existante garde ses paramètres initiaux. Avant l’envoi, le serveur revérifie le compte, le droit de régler et la liaison du Customer. Les parcours avec site, payeur délégué et réservation invitée gardent leur traitement existant. Les tests couvrent le cloisonnement, la reprise du même Checkout et la coexistence avec les anciennes versions de la route. [Documentation Stripe](https://docs.stripe.com/payments/existing-customers?platform=web&ui=stripe-hosted)
