@@ -39,7 +39,7 @@ test("wiring: client « new » shows the confirmation only with a draft + bookin
   assert.match(client, /if \(session\.booking && session\.pendingDraft && !editBooking\)/);
   assert.match(client, /initialValues=\{session\.pendingDraft\}/);
   const app = readFileSync("components/courant-app.tsx", "utf8");
-  assert.match(app, /booking: mode === "live" && pendingDraft \? booking : null/);
+  assert.match(app, /booking: mode === "live" \? \(pendingDraft \? booking : null\) : demoBooking\?\.booking \?\? null/);
   assert.match(app, /clearBooking\(getDraftStorage\(\)\);\s*try \{\s*sessionStorage\.removeItem\(DRAFT_KEY\);/, "dropped on identity reset");
   assert.match(app, /bookingCarry\.current = pendingDraft \? booking : null;/);
   assert.match(app, /emailRedirectTo: `\$\{window\.location\.origin\}\/auth\/confirm`/);

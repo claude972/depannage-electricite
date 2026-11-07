@@ -72,6 +72,10 @@ export function BookingConfirm({
     inFlight.current = true;
     setSending(true);
     try {
+      if (!booking.payment) {
+        setProblem("Choisissez un mode de paiement avant d’envoyer ; rien n’a été envoyé.");
+        return;
+      }
       if (Object.keys(contactErrors(contact)).length) {
         setProblem("Vos coordonnées sont incomplètes ou trop longues. Modifiez-les avant d’envoyer ; rien n’a été envoyé.");
         setEditingContact(true);
@@ -113,10 +117,19 @@ export function BookingConfirm({
           <div>
             <dt>Paiement</dt>
             <dd data-booking-payment="">
-              À choisir.{" "}
-              <button type="button" className="text-button" disabled={sending || busy} onClick={() => { onPaymentChange("on_site"); setProblem(""); }}>
-                Paiement après intervention sur la plateforme
+              <span>Choisissez votre mode de règlement :</span>
+              <br />
+              <button type="button" className="text-button" disabled={sending || busy} onClick={() => { onPaymentChange("on_site"); setProblem(""); }} data-booking-choose="on_site">
+                {PAYMENT_LABEL.on_site}
               </button>
+              <br />
+              {cardAvailable ? (
+                <button type="button" className="text-button" disabled={sending || busy} onClick={() => { onPaymentChange("card_hold"); setProblem(""); }} data-booking-choose="card_hold">
+                  {PAYMENT_LABEL.card_hold}
+                </button>
+              ) : (
+                <small data-booking-choose="card_hold_unavailable">{PAYMENT_LABEL.card_hold} : pas encore disponible sur ce service.</small>
+              )}
             </dd>
           </div>
         )}
@@ -145,6 +158,14 @@ export function BookingConfirm({
                     </button>
                   )}
                 </span>
+              )}
+              {!booking.request_id && onPaymentChange && cardAvailable && (
+                <>
+                  <br />
+                  <button type="button" className="text-button" disabled={sending || busy} onClick={() => { onPaymentChange(booking.payment === "on_site" ? "card_hold" : "on_site"); setProblem(""); }} data-booking-switch="">
+                    {booking.payment === "on_site" ? `Choisir plutôt : ${PAYMENT_LABEL.card_hold}` : `Choisir plutôt : ${PAYMENT_LABEL.on_site}`}
+                  </button>
+                </>
               )}
               {booking.payment === "card_hold" && !booking.request_id && !cardAvailable && onPaymentChange && (
                 <>

@@ -276,7 +276,10 @@ export function ClientSpace({ session }: { session: Session }) {
                 setEditBooking(false);
                 return;
               }
-              await session.createIntervention(values, photos);
+              // The request goes through the booking confirmation (payment choice): live ⇒ idempotent
+              // POST /api/bookings; demo ⇒ same step, local labelled creation (no POST).
+              if (session.startBooking(values, photos)) return;
+              if (session.mode === "demo") await session.createIntervention(values, photos);
             }}
             onDemo={() => {}}
           />

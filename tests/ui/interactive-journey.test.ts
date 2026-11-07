@@ -24,7 +24,7 @@ const DESCRIPTION = "La prise du salon ne fonctionne plus depuis hier soir.";
 test("parcours interactif client ↔ artisan (démo) : demande → offre → devis 8,5 % → acceptation → intervention → règlement", { skip }, async () => {
   await withApp(async (open) => {
     const { page, errors, api } = await open("client-new");
-    // 1. Client request (3 steps as they are today).
+    // 1. Client request: problem → place → recap, then the booking confirmation with the payment choice.
     await page.getByRole("button", { name: /Prise ou interrupteur/ }).click();
     await page.getByLabel(/Décrivez le problème/).fill(DESCRIPTION);
     await click(page, "Continuer");
@@ -34,8 +34,27 @@ test("parcours interactif client ↔ artisan (démo) : demande → offre → dev
     await click(page, "Continuer");
     assert.match(await main(page), /Votre demande, en clair\./);
     await click(page, "Enregistrer la demande");
+    await page.waitForTimeout(400);
+    const confirm = await main(page);
+    assert.match(confirm, /Confirmez l’envoi de votre demande/);
+    assert.match(confirm, /Choisissez votre mode de règlement/);
+    assert.ok(!(await store(page)).data.interventions.some((i) => i.description === DESCRIPTION), "nothing created before the confirmation");
+    await page.locator('[data-booking-choose="on_site"]').click();
+    await page.locator("[data-booking-send]").click();
+    await page.waitForTimeout(300);
+    // The demo profile phone is an example, not a valid mobile: the existing validation asks for it.
+    assert.match(await main(page), /Vos coordonnées sont incomplètes/);
+    await page.locator('[data-booking-contact-edit] input[autocomplete="tel"]').fill("0696 12 34 56");
+    // No invented last name from a single-word profile name: the client completes it here.
+    const last = page.locator('[data-booking-contact-edit] input[autocomplete="family-name"]');
+    if (!(await last.inputValue())) await last.fill("Durand");
+    assert.equal(await page.locator('[data-booking-contact-edit] input[autocomplete="given-name"]').inputValue(), "Camille", "first name from the demo cast, not invented");
+    await click(page, "Enregistrer mes coordonnées");
+    await page.locator("[data-booking-send]").click();
     await page.waitForTimeout(600);
-    assert.match(await main(page), /Demande enregistrée dans la démonstration/);
+    const created = await main(page);
+    assert.match(created, /Demande enregistrée dans la démonstration/);
+    assert.match(created, /Règlement choisi : Après intervention — paiement sur la plateforme \(démonstration, rien n’est payé\)/);
     let s = await store(page);
     const job = s.data.interventions.find((i) => i.description === DESCRIPTION)!;
     assert.ok(job, "stored demo request");
@@ -143,8 +162,8 @@ test("parcours interactif client ↔ artisan (démo) : demande → offre → dev
   });
 });
 
-// Findings owned elsewhere, kept visible as TODO (they run, but do not gate the suite).
-test("FINDING (lead, not fixed here) : #new connecté n’offre aucun choix de règlement (empreinte vs après intervention)", { skip: skip || false, todo: "lead-owned: RequestForm / client #new payment choice" }, async () => {
+// Signed-in #new: payment choice step (lead fix, formerly a TODO finding).
+test("#new connecté : le choix de règlement est proposé après l’adresse ; envoi sans choix refusé, rien créé", { skip }, async () => {
   await withApp(async (open) => {
     const { page } = await open("client-new");
     await page.getByRole("button", { name: /Prise ou interrupteur/ }).click();
@@ -154,6 +173,12 @@ test("FINDING (lead, not fixed here) : #new connecté n’offre aucun choix de r
     await page.getByLabel("Code postal").fill("97200");
     await page.getByLabel("Ville").fill("Fort-de-France");
     await click(page, "Continuer");
-    assert.match(await main(page), /après l’intervention|empreinte/i, "a payment choice should be offered before sending");
+    await click(page, "Enregistrer la demande");
+    await page.waitForTimeout(400);
+    assert.match(await main(page), /Après intervention — paiement sur la plateforme/);
+    assert.match(await main(page), /Empreinte bancaire/);
+    await page.locator("[data-booking-send]").click();
+    await page.waitForTimeout(300);
+    assert.match(await main(page), /Choisissez un mode de paiement avant d’envoyer ; rien n’a été envoyé\./);
   });
 });

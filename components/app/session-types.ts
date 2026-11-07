@@ -203,6 +203,9 @@ export interface Session {
 
   /** Creates the dossier, then uploads the given photos one by one (live only). */
   createIntervention(values: RequestValues, photos?: File[]): Promise<boolean>;
+  /** Signed-in client « Nouvelle demande »: keeps the request as a booking draft (payment choice on
+   *  BookingConfirm, sent by confirmBooking). Sends nothing; false when not applicable/not stored. */
+  startBooking(values: RequestValues, photos?: File[]): boolean;
   /** Service booking: POST /api/bookings (idempotent key), never the legacy route. */
   confirmBooking(): Promise<boolean>;
   /** Cancels the current card-hold attempt on the server (releases it); the draft stays. */
