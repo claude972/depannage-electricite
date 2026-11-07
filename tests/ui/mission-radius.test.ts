@@ -183,7 +183,7 @@ test("aucune géolocalisation, aucun filtrage côté client ; libellés d’appr
   assert.match(demo, /aucun appel n’est fait/);
   assert.doesNotMatch(demo, /<button|<select|<input/);
   const artisan = readFileSync("components/role/artisan-space.tsx", "utf8");
-  assert.match(artisan, /<MissionRadiusPanel\s+demo=\{demo\}\s+context=\{session\.mutationContext\}\s+onConfirmed=/);
+  assert.match(artisan, /<MissionRadiusPanel\s+demo=\{demo\}\s+context=\{session\.mutationContext\}\s+recheck=\{radiusCheck\}\s+onConfirmed=/);
   assert.match(artisan, /\|\$\{confirmed\?\.rev \?\? 0\}\|\$\{shownOrder\}`\}/);
   const missions = readFileSync("components/features/available-missions/available-missions-panel.tsx", "utf8");
   const missionsModel = readFileSync("components/features/available-missions/available-missions-model.ts", "utf8");

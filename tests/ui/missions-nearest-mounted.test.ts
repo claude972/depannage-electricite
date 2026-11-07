@@ -49,7 +49,8 @@ const radiusApi = {
 };
 const page = (items, more, ranked, version) => ({ items, eligible: true, captured_at: "2026-11-07T12:00:00.000Z",
   page: { limit: 50, has_more: more, next_cursor: more ? b64({ actor_id: ACTOR, created_at: items[items.length - 1].created_at, id: items[items.length - 1].id, ...(ranked ? { distance_band_km: items[items.length - 1].distance_band_km, radius_version: version } : {}) }) : null },
-  projection: "anonymized", order: ranked ? "nearest_first" : "oldest_first", distance: ranked ? "commune_centre_bands" : "not_calculated" });
+  projection: "anonymized", order: ranked ? "nearest_first" : "oldest_first", distance: ranked ? "commune_centre_bands" : "not_calculated",
+  ...(ranked ? { radius_version: window.S.rankWith || version } : {}) });
 const missionsApi = {
   list: async (cursor, order) => {
     window.lists.push((order || "oldest_first") + "|" + (cursor === null ? "p1" : "next"));
@@ -57,6 +58,7 @@ const missionsApi = {
     if (order === "nearest_first") {
       if (p.radius_km === null) return { status: 422, body: {}, retryAfter: null };
       if (cursor !== null && unb64(cursor).radius_version !== p.version) return { status: 422, body: {}, retryAfter: null };
+      if (cursor === null && window.S.single) return { status: 200, body: page([offer(1, 5), offer(2, 10)], false, true, p.version), retryAfter: null };
       if (cursor === null) return { status: 200, body: page([offer(1, 5), offer(2, 10), ...Array.from({ length: 47 }, (_, i) => offer(10 + i, 15)), offer(60, 20)], true, true, p.version), retryAfter: null };
       return { status: 200, body: page([offer(70, 25), offer(71, null)], false, true, p.version), retryAfter: null };
     }
@@ -70,23 +72,26 @@ function Host() {
   window.switchIdentity = () => { window.gen++; setGen(window.gen); };
   const ctx = { userId: () => ACTOR, generation: () => window.gen };
   const [radius, setRadius] = useState(null);
-  const [order, setOrder] = useState("oldest_first");
   const ident = ACTOR + "|" + gen;
+  const [choice, setChoice] = useState({ ident, order: "oldest_first" });
+  const order = choice.ident === ident ? choice.order : "oldest_first";
+  const setOrder = (o) => setChoice({ ident, order: o });
+  const [radiusCheck, setRadiusCheck] = useState(0);
   const confirmed = radius && radius.ident === ident ? radius : null;
   const shownOrder = confirmed && confirmed.active ? order : "oldest_first";
   return h("div", null,
     h("button", { type: "button", onClick: () => window.switchIdentity(), "data-switch": "" }, "Changer d’identité"),
-    h(MissionRadiusPanel, { key: "r|" + gen, demo: false, context: ctx, api: radiusApi, onConfirmed: (p) => {
+    h(MissionRadiusPanel, { key: "r|" + gen, demo: false, context: ctx, api: radiusApi, recheck: radiusCheck, onConfirmed: (p) => {
       setRadius((prev) => ({ ident, ...p, rev: prev && prev.ident === ident && prev.version !== p.version ? prev.rev + 1 : prev ? prev.rev : 0 }));
       if (!p.active) setOrder("oldest_first");
     } }),
-    h(AvailableMissionsPanel, { key: ident + "|live|" + (confirmed ? confirmed.rev : 0) + "|" + shownOrder, context: ctx, api: missionsApi, order: shownOrder, nearestAvailable: Boolean(confirmed && confirmed.active), radiusVersion: confirmed ? confirmed.version : null, onOrderChange: setOrder, onAccept: async () => false, onOpenAccepted: () => {} }));
+    h(AvailableMissionsPanel, { key: ident + "|live|" + (confirmed ? confirmed.rev : 0) + "|" + shownOrder, context: ctx, api: missionsApi, order: shownOrder, nearestAvailable: Boolean(confirmed && confirmed.active), radiusVersion: confirmed ? confirmed.version : null, onOrderChange: setOrder, onRadiusStale: () => setRadiusCheck((n) => n + 1), onAccept: async () => false, onOpenAccepted: () => {} }));
 }
 document.documentElement.setAttribute("data-ui-theme", location.search.includes("dark") ? "dark" : "light");
 const div = document.createElement("div"); document.body.appendChild(div);
 createRoot(div).render(h(StrictMode, null, h(Host)));
 `;
-type W = { lists: string[]; posts: unknown[]; gets: number; S: { pref: { version: number }; postMode: string; hold: boolean }; release: () => void };
+type W = { lists: string[]; posts: unknown[]; gets: number; S: { pref: { version: number }; postMode: string; hold: boolean; rankWith?: number; single?: boolean }; release: () => void };
 
 async function serve() {
   const b = await build({ absWorkingDir: ROOT, stdin: { contents: ENTRY, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, outdir: "out", platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "local-css" }, define: { "process.env.NODE_ENV": '"development"' }, logLevel: "error" });
@@ -114,7 +119,7 @@ test("Chromium : sélecteur seulement après un rayon CONFIRMÉ ; tranches ; cha
       await page.goto(`${base}?${theme}#active-hold`);
       await page.locator('[data-available-missions="ready"]').waitFor();
       assert.equal(await page.locator("[data-available-sort]").count(), 0, "no selector before the radius GET is confirmed");
-      await page.evaluate(() => (window as unknown as W).release());
+      await page.evaluate(() => { const w = window as unknown as W; w.S.hold = false; w.release(); });
       await page.locator('[data-available-sort="oldest_first"]').waitFor();
       await sortButton(page, "Plus proches d’abord").click();
       await page.locator('[data-available-band="5"]').waitFor();
@@ -138,30 +143,59 @@ test("Chromium : sélecteur seulement après un rayon CONFIRMÉ ; tranches ; cha
       assert.equal(await page.locator("[data-available-band]").count(), 0);
       let l = await lists(page);
       assert.equal(l[l.length - 1], "oldest_first|p1");
-      // Back to nearest; the radius changes elsewhere (version 8): the next page is refused (422) ⇒
-      // restart ⇒ the new version's page is not the confirmed one ⇒ honest refusal, no auto-switch.
+      // Same uid, radius changed elsewhere (version 8): the next page is refused (422) ⇒ restart ⇒
+      // page 1 ranked with v8 ≠ confirmed v7 ⇒ hidden, preference re-read ⇒ v8 confirmed ⇒ reload,
+      // and the « nearest » choice is KEPT (same uid).
       await sortButton(page, "Plus proches d’abord").click();
       await page.locator('[data-available-band="5"]').waitFor();
       await page.evaluate(() => { (window as unknown as W).S.pref = { version: 8, reference_code: "97209", radius_km: 30 } as never; });
+      const gets0 = await page.evaluate(() => (window as unknown as W).gets);
       await page.getByRole("button", { name: "Afficher plus" }).click();
+      await page.waitForFunction((g: number) => (window as unknown as W).gets > g, gets0);
+      await page.locator('[data-available-band="5"]').waitFor();
+      assert.equal(await page.locator('[data-available-sort="nearest_first"]').count(), 1, "same-uid radius change: sort kept");
+      assert.equal(await page.locator('[data-available-band="25"]').count(), 0, "never mixes pages of two radius versions");
+      l = await lists(page);
+      const after = l.slice(l.lastIndexOf("nearest_first|next") + 1);
+      assert.ok(after.length >= 2 && after.every((x) => x === "nearest_first|p1"), `restart then reload, nearest only: ${after.join(",")}`);
+      // A page 1 (no cursor) ranked with an OLD root version is never shown; the re-read finds no new
+      // version, so the list stays hidden with an honest message.
+      await page.evaluate(() => { const w = window as unknown as W; w.S.rankWith = 5; w.S.single = true; });
+      await sortButton(page, "Chronologique").click();
+      await page.locator('[data-available-sort="oldest_first"]').waitFor();
+      await sortButton(page, "Plus proches d’abord").click();
+      await page.locator("[data-available-error]").waitFor();
+      assert.match(await page.locator("[data-available-error]").innerText(), /classées avec un autre rayon que celui confirmé : elles ne sont pas affichées/);
+      assert.equal(await page.locator("[data-available-offer]").count(), 0);
+      await page.evaluate(() => { const w = window as unknown as W; w.S.rankWith = 0; w.S.single = false; });
+      // 422 (radius disabled server-side): honest refusal, one click back to chronological.
+      await page.evaluate(() => { (window as unknown as W).S.pref = { version: 9, reference_code: null, radius_km: null } as never; });
+      await page.locator("[data-available-back]").click();
+      await page.locator('[data-available-sort="oldest_first"]').waitFor();
+      await sortButton(page, "Plus proches d’abord").click();
       await page.locator("[data-available-back]").waitFor();
-      assert.match(await page.locator("[data-available-error]").innerText(), /rayon de recherche a changé ou est désactivé[\s\S]*Rien n’a été basculé automatiquement/);
-      assert.equal(await page.locator("[data-available-offer]").count(), 0, "never mixes pages of two radius versions");
+      assert.match(await page.locator("[data-available-error]").innerText(), /Rien n’a été basculé automatiquement/);
       l = await lists(page);
       assert.equal(l[l.length - 1], "nearest_first|p1", "no chronological call behind the user's back");
       await page.locator("[data-available-back]").click();
       await page.locator('[data-available-sort="oldest_first"]').waitFor();
-      await page.locator("[data-available-offer]").first().waitFor();
       l = await lists(page);
       assert.equal(l[l.length - 1], "oldest_first|p1", "one click back to chronological");
-      // Identity change: everything restarts chronologically at page 1 until the radius is re-confirmed.
+      // Identity change: the « nearest » choice belonged to the previous uid/generation ⇒ chronological,
+      // even once the new identity confirms an active radius.
+      await page.evaluate(() => { (window as unknown as W).S.pref = { version: 10, reference_code: "97209", radius_km: 30 } as never; });
+      await page.locator("[data-switch]").click();
+      await page.locator('[data-mission-radius-current="30"]').waitFor();
+      await page.locator('[data-available-sort]').waitFor();
+      // Choose nearest under the new identity, then switch again: back to chronological.
       await sortButton(page, "Plus proches d’abord").click();
-      await page.locator('[data-available-missions="error"], [data-available-band]').first().waitFor();
+      await page.locator('[data-available-band="5"]').waitFor();
       const before = (await lists(page)).length;
       await page.locator("[data-switch]").click();
-      await page.waitForTimeout(250);
+      await page.locator('[data-available-sort="oldest_first"]').waitFor();
       l = await lists(page);
       assert.equal(l[before], "oldest_first|p1", "identity change ⇒ page 1, chronological");
+      assert.equal(await page.locator('[data-available-sort="oldest_first"]').count(), 1, "choice dropped for the new identity");
       assert.deepEqual(errors, []);
       await page.context().close();
     }

@@ -1105,8 +1105,12 @@ function Missions({ session, declinedIds }: { session: Session; declinedIds: str
   const demo = session.mode === "demo";
   // Radius as CONFIRMED by the server for this identity; rev bumps when its version changes.
   const [radius, setRadius] = useState<{ ident: string; version: number; active: boolean; rev: number } | null>(null);
-  const [order, setOrder] = useState<MissionsOrder>("oldest_first");
   const ident = `${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`;
+  // The « nearest » choice belongs to the uid + generation that made it: another identity ⇒ chronological.
+  const [choice, setChoice] = useState<{ ident: string; order: MissionsOrder }>({ ident, order: "oldest_first" });
+  const order: MissionsOrder = choice.ident === ident ? choice.order : "oldest_first";
+  const setOrder = (o: MissionsOrder) => setChoice({ ident, order: o });
+  const [radiusCheck, setRadiusCheck] = useState(0);
   const confirmed = radius?.ident === ident ? radius : null;
   const shownOrder: MissionsOrder = !demo && confirmed?.active ? order : "oldest_first";
   const m = artisanMissions(session.data.interventions, session.profileId);
@@ -1131,6 +1135,7 @@ function Missions({ session, declinedIds }: { session: Session; declinedIds: str
         <MissionRadiusPanel
           demo={demo}
           context={session.mutationContext}
+          recheck={radiusCheck}
           onConfirmed={(p) => {
             setRadius((prev) => ({ ident, ...p, rev: prev && prev.ident === ident && prev.version !== p.version ? prev.rev + 1 : prev?.rev ?? 0 }));
             if (!p.active) setOrder("oldest_first"); // no active radius: nearest is not offered any more
@@ -1144,6 +1149,7 @@ function Missions({ session, declinedIds }: { session: Session; declinedIds: str
           nearestAvailable={!demo && confirmed?.active === true}
           radiusVersion={confirmed?.version ?? null}
           onOrderChange={setOrder}
+          onRadiusStale={() => setRadiusCheck((n) => n + 1)}
           context={session.mutationContext}
           demo={demo}
           demoItems={demo ? offers.map(toDemoOffer) : undefined}

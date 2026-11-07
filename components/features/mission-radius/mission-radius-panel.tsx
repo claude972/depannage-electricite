@@ -16,6 +16,8 @@ export type MissionRadiusPanelProps = {
   /** Called with every preference the server CONFIRMED (never local edits): the host restarts the
    *  offers when the version changes and only offers « Plus proches d’abord » when active. */
   onConfirmed: (p: ConfirmedRadius) => void;
+  /** Bumped by the host to re-read the preference (GET), e.g. offers ranked with another version. */
+  recheck?: number;
   api?: RadiusApi;
   store?: () => Store | null;
 };
@@ -42,7 +44,7 @@ function useWait(seconds: number | null, key: unknown) {
   return waiting;
 }
 
-function Live({ context, onConfirmed, api, store = tabStore }: MissionRadiusPanelProps) {
+function Live({ context, onConfirmed, api, store = tabStore, recheck = 0 }: MissionRadiusPanelProps) {
   const [view, setRaw] = useState<View>(VIEW_INITIAL);
   const ref = useRef(view);
   const set = (v: View) => {
@@ -69,6 +71,11 @@ function Live({ context, onConfirmed, api, store = tabStore }: MissionRadiusPane
     void c.load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const firstCheck = useRef(recheck);
+  useEffect(() => {
+    if (recheck !== firstCheck.current) void c.load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recheck]);
   const [code, setCode] = useState<string | null>(null);
   const [radius, setRadius] = useState<string | null>(null);
   const wait = useWait(view.pending ? view.waitS : null, view.error);
