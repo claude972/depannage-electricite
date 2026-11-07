@@ -256,6 +256,7 @@ export const sameFilters = (a: EnergyFilters, b: EnergyFilters) => a.from === b.
  *  still attached. */
 export function createEnergyController({ api, siteId, context = DEFAULT_ENERGY_CONTEXT, get, set }: { api: () => EnergyApi; siteId: string; context?: EnergyContext; get: () => EnergyState; set: (s: EnergyState) => void }) {
   let loadSeq = 0;
+  let loadsInFlight = 0;
   let writing = false;
   let attached = true;
   const same = (gen: number, uid: string | null) => attached && context.generation() === gen && context.userId() === uid;
@@ -266,21 +267,29 @@ export function createEnergyController({ api, siteId, context = DEFAULT_ENERGY_C
     const cursor = append ? s.page?.next_cursor ?? null : null;
     const filters = { ...s.filters };
     let r: EnergyResult;
+    loadsInFlight++;
     try {
       r = await api().list(siteId, { ...filters, cursor });
     } catch {
       r = { status: 0, body: null, retryAfter: null };
+    } finally {
+      loadsInFlight--;
     }
     // Dropped if another load started, the identity changed, or the filters changed meanwhile.
     if (!same(gen, uid) || my !== loadSeq || !sameFilters(get().filters, filters)) return false;
     set(applyList(get(), r, append, siteId));
     return true;
   };
+  /** Write barrier: every list request started before (or during) a write is void — its reply
+   *  can never erase the written record. If a load was in flight, a causal reload starts after
+   *  the write so the list reflects the server state including that write. */
   const send = async (command: EnergyCommand) => {
     if (writing) return false;
     writing = true;
+    const hadLoad = loadsInFlight > 0 || get().phase === "loading";
+    loadSeq++; // barrier at the START of the write
     const gen = context.generation(), uid = context.userId();
-    set({ ...get(), busy: true, writeError: "", saved: "" });
+    set({ ...get(), busy: true, writeError: "", saved: "", loadingMore: false });
     let r: EnergyResult;
     try {
       r = await api().command(siteId, command);
@@ -289,8 +298,10 @@ export function createEnergyController({ api, siteId, context = DEFAULT_ENERGY_C
     } finally {
       writing = false;
     }
+    loadSeq++; // and again after the reply: nothing started meanwhile may apply
     if (!same(gen, uid)) return false;
     set(applyCommand(get(), r, command, siteId));
+    if (hadLoad) void fetchList(false); // causal reload
     return true;
   };
   return {
@@ -299,10 +310,12 @@ export function createEnergyController({ api, siteId, context = DEFAULT_ENERGY_C
     },
     /** New period (or reload): the cursor is dropped and the list restarts from page 1. */
     load(filters?: EnergyFilters) {
+      if (writing) return Promise.resolve(false); // no list request while a write is in flight
       set({ ...get(), ...(filters ? { filters: { ...filters } } : {}), phase: "loading", records: [], page: null, cursorFilters: null, totals: null, error: "", loadingMore: false });
       return fetchList(false);
     },
     more() {
+      if (writing) return Promise.resolve(false);
       const s = get();
       // Never reuse a cursor across filters: it must belong to the filters currently applied.
       if (s.loadingMore || !s.page?.has_more || !s.page.next_cursor || !s.cursorFilters || !sameFilters(s.cursorFilters, s.filters)) return Promise.resolve(false);
