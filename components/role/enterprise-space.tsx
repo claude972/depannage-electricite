@@ -104,6 +104,9 @@ import { SiteContactsPanel } from "../features/site-contacts/site-contacts-panel
 import { SiteAreasPanel } from "../features/site-areas/site-areas-panel";
 import { OrganizationSitesList, SiteSettingsPanel } from "../features/site-lifecycle/site-lifecycle-panels";
 import { SiteDirectLoader } from "../features/site-lifecycle/site-direct";
+import { SiteAssetLinksPanel } from "../features/site-asset-links/site-asset-links-panel";
+import type { AssetSource } from "../features/site-asset-links/asset-links-model";
+import { createAreasApi, parseAreasPage } from "../features/site-areas/areas-model";
 import { CoOwnershipPanel } from "../features/co-ownership/co-ownership-panel";
 import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
 import { PlatformPayAction } from "../app/platform-pay";
@@ -1661,6 +1664,18 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
 
           <EnterpriseTimeline steps={timeline} cancelled={intervention.status === "cancelled"} />
 
+          {/* ENT-07/08: explicit equipment / zone links of THIS dossier (site-scoped route). */}
+          {intervention.site_id && (
+            <SiteAssetLinksPanel
+              siteId={intervention.site_id}
+              interventionId={intervention.id}
+              assets={siteAssetSource(session, intervention.site_id)}
+              context={session.mutationContext}
+              demo={demo}
+              readOnly={!canOperate}
+            />
+          )}
+
           {["accepted", "in_progress"].includes(intervention.status) && (
             <TrackingAnchor
               session={c.session}
@@ -2920,6 +2935,26 @@ function DirectSiteSheet({ c, id }: { c: Ctx; id: string }) {
       }}
     />
   );
+}
+
+/** Asset labels and choices from the EXISTING APIs only (first page of active areas + the site
+ *  operations equipment). Partial lists are reported as such; nothing is guessed. */
+function siteAssetSource(session: Session, siteId: string): AssetSource {
+  return async () => {
+    const [areas, ops] = await Promise.all([
+      createAreasApi().list(siteId, null).catch(() => null),
+      session.features.siteOperations.load(siteId).catch(() => null),
+    ]);
+    const page = areas && areas.status === 200 ? parseAreasPage(areas.body, siteId, true) : null;
+    if (!page && !ops) return null;
+    return {
+      assets: [
+        ...(ops?.snapshot.equipment ?? []).map((e) => ({ kind: "equipment" as const, id: e.id, label: e.name, archived: e.status === "retired" })),
+        ...(page?.records ?? []).map((a) => ({ kind: "area" as const, id: a.id, label: a.label, archived: a.archived_at !== null })),
+      ],
+      complete: Boolean(page?.page.complete) && Boolean(ops) && !ops!.snapshot.limits.equipment_limited,
+    };
+  };
 }
 
 // ---- Approbations ----------------------------------------------------------------------------
