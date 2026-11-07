@@ -108,6 +108,7 @@ import { OrganizationSitesList, SiteSettingsPanel } from "../features/site-lifec
 import { SiteDirectLoader } from "../features/site-lifecycle/site-direct";
 import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-panel";
 import { DelegatedPayerCheckout, DelegatedPayerManager } from "../features/delegated-payer/delegated-payer";
+import { ENTERPRISE_SEARCH_COPY, ExportFeedback, useEnterpriseSearch, type EnterpriseSearchFilters } from "../features/enterprise-search/use-enterprise-search";
 import { ContractSourceLine, QuoteGridAccessPanel } from "../features/quote-grid/quote-grid";
 import { QuoteApprovalPanel, SitePolicyPanel } from "../features/advanced-approvals/approvals";
 import { acceptanceDecision, timelineApproval as advancedTimelineApproval, type WorkflowStatus } from "../features/advanced-approvals/model";
@@ -893,6 +894,8 @@ const timeOf = (value: string) =>
   new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 
 type InterventionList = ReturnType<typeof useInterventionList>;
+/** One table row, from the cached workspace (demo) or from the server search DTO (live). */
+type ListRow = Pick<Intervention, "id" | "category" | "address" | "postal_code" | "city" | "urgency" | "status" | "created_at"> & { siteLabel: string; assigned: boolean };
 function useInterventionList(c: Ctx) {
   const { scope } = c;
   const [filters, setFilters] = useState<InterventionFilters>(NO_FILTERS);
@@ -915,34 +918,81 @@ function useInterventionList(c: Ctx) {
   const siteName = (id?: string | null) => scope.sites.find((s) => s.id === id)?.name || "";
   // Le prédicat effectif ne croise jamais un site local avec un périmètre incompatible.
   const effective = reconciled.filters;
-  const rows = filterInterventions(scope.interventions, effective, (i) =>
+  // Live : recherche serveur sur tout le périmètre (pas seulement les 100 dossiers chargés). Démo :
+  // liste locale inchangée, aucun appel. Le site global (ou, à défaut, le filtre de site) donne site_id.
+  const live = !c.demo;
+  const serverFilters: EnterpriseSearchFilters | null = c.organization
+    ? {
+        organization_id: c.organization.id,
+        site_id: c.activeSite?.id || effective.site || null,
+        category: (effective.type || null) as EnterpriseSearchFilters["category"],
+        status: (effective.status || null) as EnterpriseSearchFilters["status"],
+        search: effective.search,
+        sort: effective.sort,
+      }
+    : null;
+  const remote = useEnterpriseSearch({ enabled: live, context: c.session.mutationContext, filters: serverFilters, page: reconciled.reset ? 1 : page });
+  const local = filterInterventions(scope.interventions, effective, (i) =>
     [siteName(i.site_id), i.description, shortId(i.id), fullAddress(i), category(i.category).label].join(" "),
   );
-  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-  const current = Math.min(reconciled.reset ? 1 : page, pages);
+  const toRow = (i: Intervention): ListRow => ({ ...i, siteLabel: siteName(i.site_id) || "Hors site", assigned: Boolean(i.artisan_id) });
+  const localPages = Math.max(1, Math.ceil(local.length / PAGE_SIZE));
+  const localCurrent = Math.min(reconciled.reset ? 1 : page, localPages);
+  const set = <K extends keyof InterventionFilters>(key: K, value: InterventionFilters[K]) => {
+    setFilters((f) => ({ ...f, [key]: value }));
+    setPage(1);
+  };
+  const reset = () => {
+    setFilters((f) => ({ ...NO_FILTERS, sort: f.sort }));
+    setPage(1);
+  };
+  if (live) {
+    const r = remote.state;
+    return {
+      live,
+      filters: effective,
+      total: r.total,
+      pageRows: r.items.map((i): ListRow => ({ ...i, siteLabel: i.site_name, assigned: i.artisan_assigned })),
+      current: r.page,
+      pages: r.pages,
+      filtered: isFiltered(effective),
+      phase: r.phase,
+      error: r.error,
+      retry: remote.retry,
+      footNote: ENTERPRISE_SEARCH_COPY.serverNote,
+      exportBusy: r.exporting,
+      exportNotice: r.exportNotice,
+      exportError: r.exportError,
+      setPage,
+      set,
+      reset,
+      exportCsv: () => void remote.exportCsv(),
+    };
+  }
   return {
+    live,
     filters: effective,
-    rows,
-    pageRows: rows.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE),
-    current,
-    pages,
+    total: local.length,
+    pageRows: local.slice((localCurrent - 1) * PAGE_SIZE, localCurrent * PAGE_SIZE).map(toRow),
+    current: localCurrent,
+    pages: localPages,
     filtered: isFiltered(effective),
-    siteName,
+    phase: "ready" as const,
+    error: "",
+    retry: () => {},
+    footNote: LOADED_NOTE.toLowerCase(),
+    exportBusy: false,
+    exportNotice: "",
+    exportError: "",
     setPage,
-    set: <K extends keyof InterventionFilters>(key: K, value: InterventionFilters[K]) => {
-      setFilters((f) => ({ ...f, [key]: value }));
-      setPage(1);
-    },
-    reset: () => {
-      setFilters((f) => ({ ...NO_FILTERS, sort: f.sort }));
-      setPage(1);
-    },
-    exportCsv: () =>
+    set,
+    reset,
+    exportCsv: () => {
       download(
         "interventions.csv",
         csv([
           ["Référence", "Site", "Type", "Statut", "Adresse", "Estimation min (EUR)", "Estimation max (EUR)", "Date"],
-          ...rows.map((i) => [
+          ...local.map((i) => [
             shortId(i.id),
             siteName(i.site_id) || "Hors site",
             category(i.category).label,
@@ -954,16 +1004,20 @@ function useInterventionList(c: Ctx) {
           ]),
         ]),
         "text/csv;charset=utf-8",
-      ),
+      );
+    },
   };
 }
 
 function ExportButton({ list }: { list: InterventionList }) {
   return (
-    <button type="button" className="button outline" onClick={list.exportCsv} disabled={!list.rows.length}>
-      <Icon name="download" size={17} />
-      Exporter
-    </button>
+    <span data-enterprise-export="">
+      <button type="button" className="button outline" onClick={list.exportCsv} disabled={!list.total || list.exportBusy || list.phase !== "ready"}>
+        <Icon name="download" size={17} />
+        {list.exportBusy ? ENTERPRISE_SEARCH_COPY.exporting : "Exporter"}
+      </button>
+      <ExportFeedback notice={list.exportNotice} error={list.exportError} />
+    </span>
   );
 }
 
@@ -1039,11 +1093,11 @@ function InterventionsTable({
   title: string;
   emptyAction?: ReactNode;
 }) {
-  const { rows, pageRows, current, pages, filtered, siteName } = list;
+  const { total, pageRows, current, pages, filtered } = list;
   const headingId = useId();
-  const count = `${rows.length} intervention${rows.length > 1 ? "s" : ""}`;
+  const count = `${total} intervention${total > 1 ? "s" : ""}`;
   return (
-    <section className={cx("panel", styles.tablePanel)} aria-labelledby={headingId}>
+    <section className={cx("panel", styles.tablePanel)} aria-labelledby={headingId} aria-busy={list.phase === "loading" || undefined} data-enterprise-list={list.live ? list.phase : "demo"}>
       <div className={styles.tableHead}>
         <h2 id={headingId}>
           {count}
@@ -1061,7 +1115,18 @@ function InterventionsTable({
           </select>
         </label>
       </div>
-      {rows.length === 0 ? (
+      {list.phase === "loading" || list.phase === "idle" ? (
+        <p className={styles.muted} role="status">{ENTERPRISE_SEARCH_COPY.loading}</p>
+      ) : list.phase === "error" || list.phase === "forbidden" ? (
+        <div role="alert" data-enterprise-list-error="">
+          <p>{list.error}</p>
+          {list.phase === "error" && (
+            <button type="button" className="button outline" onClick={() => list.retry()}>
+              Réessayer
+            </button>
+          )}
+        </div>
+      ) : total === 0 ? (
         <Empty
           icon="wrench"
           title={filtered ? "Aucun dossier ne correspond aux filtres" : "Aucune intervention sur ce périmètre"}
@@ -1106,17 +1171,17 @@ function InterventionsTable({
                     >
                       <Icon name="building" size={22} />
                       <span>
-                        <strong>{siteName(i.site_id) || "Hors site"}</strong>
-                        <small>{fullAddress(i)}</small>
+                        <strong>{i.siteLabel}</strong>
+                        <small>{[i.address, [i.postal_code, i.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")}</small>
                       </span>
                     </button>
                   </td>
                   <td className={styles.cellType}>
                     <span>{category(i.category).label}</span>
-                    {urgencyTag(i)}
+                    {i.urgency === "urgent" ? <Tag tone="amber">Urgent</Tag> : <Tag>Planifiée</Tag>}
                   </td>
                   <td className={styles.cellArtisan}>
-                    {i.artisan_id ? "Artisan attribué" : <span className={styles.muted}>Recherche en cours</span>}
+                    {i.assigned ? "Artisan attribué" : <span className={styles.muted}>Recherche en cours</span>}
                   </td>
                   <td className={styles.cellStatus}>
                     <Badge status={i.status} />
@@ -1144,7 +1209,7 @@ function InterventionsTable({
           </table>
           <div className={styles.tableFoot}>
             <span>
-              {count} · {LOADED_NOTE.toLowerCase()}
+              {count} · {list.footNote}
             </span>
             {pages > 1 && (
               <nav className={styles.pagination} aria-label="Pagination des interventions">
@@ -1392,7 +1457,8 @@ function ComplianceRow({ c, record }: { c: Ctx; record: ComplianceRecord }) {
 }
 
 // ---- Interventions -------------------------------------------------------------------------
-function RequestsView({ c }: { c: Ctx }) {
+/** Exported for tests only (live server search wiring). */
+export function RequestsView({ c }: { c: Ctx }) {
   const list = useInterventionList(c);
   return (
     <>

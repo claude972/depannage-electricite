@@ -1,0 +1,4 @@
+/* Enterprise search leaf — export feedback. --ui-* tokens only, light/dark. */
+.notice, .error { display: block; max-width: 36ch; font-size: 13px; overflow-wrap: anywhere; }
+.notice { color: var(--ui-text-muted); }
+.error { color: var(--ui-danger); }

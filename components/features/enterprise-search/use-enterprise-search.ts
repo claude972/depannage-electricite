@@ -1,0 +1,40 @@
+"use client";
+// React binding of the enterprise intervention search (logic in ./model). Inactive (zero call) when
+// `enabled` is false — the demo keeps its local list. One controller per identity (uid +
+// generation): an identity change drops it and resets the list. StrictMode-safe.
+import { useEffect, useRef, useState } from "react";
+import { SEARCH_INITIAL, createSearchApi, createSearchController, type Context, type Filters, type SearchApi, type SearchState } from "./model";
+
+export { COPY as ENTERPRISE_SEARCH_COPY } from "./model";
+export { ExportFeedback } from "./export-feedback";
+export type { EnterpriseRow, Filters as EnterpriseSearchFilters } from "./model";
+
+export function useEnterpriseSearch({ enabled, context, filters, page, api }: { enabled: boolean; context: Context; filters: Filters | null; page: number; api?: SearchApi }) {
+  const [state, setState] = useState<SearchState>(SEARCH_INITIAL);
+  const identity = `${context.userId() ?? "-"}|${context.generation()}`;
+  const ctrl = useRef<ReturnType<typeof createSearchController> | null>(null);
+  const latest = useRef({ api, context, filters });
+  latest.current = { api, context, filters };
+  useEffect(() => {
+    if (!enabled) return;
+    let client: SearchApi | null = null;
+    const c = createSearchController({ api: () => (client ??= latest.current.api ?? createSearchApi()), context: latest.current.context, set: setState, timers: { set: (f, ms) => setTimeout(f, ms), clear: (h) => clearTimeout(h as ReturnType<typeof setTimeout>) } });
+    ctrl.current = c;
+    return () => {
+      c.stop();
+      if (ctrl.current === c) ctrl.current = null;
+      setState(SEARCH_INITIAL);
+    };
+  }, [enabled, identity]);
+  const key = filters ? JSON.stringify([filters.organization_id, filters.site_id, filters.category, filters.status, filters.search.trim(), filters.sort, page]) : "";
+  useEffect(() => {
+    if (enabled && filters) ctrl.current?.query(filters, page);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, identity, key]);
+  return {
+    state: enabled ? state : SEARCH_INITIAL,
+    retry: () => ctrl.current?.retry(),
+    /** Snapshot of the filters at the click; the file is kept only if they still match after the await. */
+    exportCsv: () => (filters && ctrl.current ? ctrl.current.exportCsv(filters, () => latest.current.filters) : Promise.resolve(false)),
+  };
+}
