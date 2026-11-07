@@ -26,3 +26,13 @@ Les noms locaux sont alignés sur les versions attribuées par le connecteur ; c
 Thème B source d3f6bd8 intégré ; premier assemblage poussé 7b4eed7, CI42324648349 SUCCESS, preview GitSource READY dpl_5tXYP8FUKix8oBqd5sTj41Tvs1pS. Le contrôle public a trouvé un débordement réel de 7px à 1280px dans les deux thèmes ; correction Claude demandée. Tests sous charge : ancien sommeil fixe du test empreinte insuffisant ; attente bornée d’état UI ajoutée 7b4eed7, scénario Chromium ciblé 10/10 PASS, assertions financières inchangées. La première suite complète reste historisée 1149 PASS/1 FAIL/2 SKIP avant correction ; ne pas la renommer verte.
 
 Ni cette preview, ni les tests unitaires ne signifient application complète. Interface énergie/modération/préférences et autres modules en cours d’intégration ; Stripe/SMS toujours différés.
+
+## Contacts, adresses et administration
+
+Contacts 5e605c3 intégré c93042f : contre-revue ROOT handlers/SQL ; 6 tests HTTP et 52 SQL isolés passent. Migration réelle 20261107014437. Transaction réelle avec rollback : création, rejeu/audit unique, refus d’un second principal, lecture viewer/refus écriture, refus de lecture hors organisation, archivage et retrait du principal : PASS. Lecture indépendante Auth/profils/org/sites/contacts/événements QA : tous 0.
+
+Adresses 48a10e2 intégré bd5bdcc : contre-revue ROOT handlers/SQL ; 6 tests HTTP et 56 SQL isolés passent. Migration réelle 20261107014959. Transaction réelle avec rollback : création prénom/nom/adresse, rejeu/audit unique, préférence unique, géopoint incomplet refusé, refus lecture/écriture entre utilisateurs, archivage : PASS. Lecture indépendante Auth/profils/adresses/événements QA : tous 0. RLS self-only, aucun INSERT REST et aucune RPC anon autorisés. Le câblage des adresses dans le formulaire reste à livrer.
+
+Administration 70a9c5d/f47ba7f : revue indépendante Claude a trouvé une attribution erronée d’auteur dans le fil (P1) et une conversation potentiellement invisible avant attribution (P2). Auteur corrigé dans 028032a ; SQL rétablit dossier non annulé avec artisan attribué et normalise les espaces. 3 tests handlers +19 SQL isolés passent. Migration réelle 20261107014921 ; aucune promotion/création d’administrateur faite. Le parcours opérateur réel reste à vérifier sans compte substitut.
+
+Parcours public 7b4eed7 sur mobile390 : fiche service → urgence → coordonnées → adresse → paiement plateforme après intervention → récapitulatif PASS, validations vides bloquantes, bouton inline et barre basse visibles, aucun POST et aucune erreur JS. SMS absent annoncé honnêtement ; réservation non envoyée, aucun paiement tenté. Preuve locale /tmp/depannage-public-booking-b-proof.json, données QA synthétiques uniquement.
