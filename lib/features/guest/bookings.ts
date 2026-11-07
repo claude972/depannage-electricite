@@ -1,3 +1,4 @@
+import {estimateSnapshot,estimateMatchesCap} from './estimate-snapshot';
 import { TextDecoder } from "node:util";
 import { z } from "zod";
 import { ApiError, authenticatedClient, assertOrigin, dbError } from "@/lib/supabase/server";
@@ -27,14 +28,14 @@ async function identity() {
   if (!(result.user.phone_confirmed_at && phone) && !result.user.email_confirmed_at) throw new ApiError(403, "Confirmez votre identité avant de réserver.");
   return result;
 }
-const estimateSnapshot=z.object({version:z.number().int().min(1).max(2147483647),min_cents:z.number().int().positive().max(2147483647),max_cents:z.number().int().positive().max(2147483647),currency:z.literal('eur')}).strict().refine(x=>x.max_cents>=x.min_cents);
+
 function validResult(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw unavailable();
   const v = value as Record<string, any>;
   const estimate=v.estimate===undefined?undefined:estimateSnapshot.safeParse(v.estimate);
   if(estimate&&!estimate.success)throw unavailable();
   const extra=estimate?.success?{estimate:estimate.data}:{};
-  if(estimate?.success&&(v.status==='confirmed'?(estimate.data.min_cents!==v.intervention?.estimate_min_cents||estimate.data.max_cents!==v.intervention?.estimate_max_cents):estimate.data.max_cents!==v.expected_max_cents))throw unavailable();
+  if(estimate?.success&&(v.status==='confirmed'?(estimate.data.min_cents!==v.intervention?.estimate_min_cents||!estimateMatchesCap(estimate.data,v.intervention?.estimate_max_cents)):!estimateMatchesCap(estimate.data,v.expected_max_cents)))throw unavailable();
   if (!v.payment || !["on_site", "card_hold"].includes(v.payment.method)) throw unavailable();
   if (v.status === "confirmed") {
     if (v.payment.method === "on_site" ? v.payment.status !== "due_on_site" : (!["authorized", "authorization_recorded"].includes(v.payment.status) || typeof v.payment.checked_at !== "string" || !Number.isFinite(Date.parse(v.payment.checked_at)) || Date.parse(v.payment.checked_at) > Date.now() + 30000)) throw unavailable();
