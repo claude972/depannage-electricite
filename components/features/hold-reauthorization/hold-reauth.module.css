@@ -1,0 +1,98 @@
+/* Card-hold replacement leaf — tokens only, light/dark through --ui-*. */
+.panel {
+  display: grid;
+  gap: var(--ui-space-2);
+  margin-top: var(--ui-space-3);
+  padding: var(--ui-space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+.title {
+  margin: 0;
+  font-size: 16px;
+}
+.text,
+.note {
+  margin: 0;
+  color: var(--ui-text);
+}
+.muted {
+  margin: 0;
+  color: var(--ui-text-muted);
+}
+.warning {
+  margin: 0;
+  color: var(--ui-warning);
+}
+.error {
+  margin: 0;
+  color: var(--ui-danger);
+}
+.kv {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--ui-space-1) var(--ui-space-3);
+  margin: 0;
+}
+.kv dt {
+  color: var(--ui-text-muted);
+}
+.kv dd {
+  margin: 0;
+}
+.consent,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-2);
+}
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ui-space-2);
+  min-height: 44px;
+  cursor: pointer;
+}
+.check input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+  accent-color: var(--ui-primary);
+}
+.button {
+  justify-self: start;
+  min-height: 44px;
+  padding: 0 var(--ui-space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-card);
+  color: var(--ui-text);
+  font: inherit;
+  cursor: pointer;
+}
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.button:focus-visible,
+.check input:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+.primary {
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+@media (max-width: 390px) {
+  .kv {
+    grid-template-columns: 1fr;
+  }
+  .button {
+    width: 100%;
+  }
+}
