@@ -40,3 +40,7 @@ Frontend seul, base writer claude/ui-palette-b-full. QR généré LOCALEMENT (qr
 
 Responsable : Codex ROOT, un seul auteur backend. Périmètre : nouvelle RPC `available_missions_page` et GET `/api/artisan/missions`, schéma de projection anonyme et tests ciblés. L'éligibilité postale/catégorie/disponibilité et l'acceptation atomique existantes restent l'autorité. Pagination chronologique stable, curseur lié à l'identité, borne 50+1 ; aucune adresse/contact précis avant attribution, aucune distance inventée, aucun compteur exhaustif non prouvé. Backend d'abord puis feuille UI Claude séparée après contrat. Vérification : vrais handlers, SQL avec >100 offres et refus de rôle/éligibilité ; intégration puis preview et recette bornée. Aucune configuration de territoire inventée.
 
+
+## HOLD-REAUTHORIZATION — CONTRAT SEULEMENT
+
+Codex backend prépare depuis46708c7 un remplacement unique de l’empreinte initiale par une nouvelle autorisation du total accepté. Ownership/DTO dans docs/HOLD_REAUTHORIZATION_CONTRACT.md. Aucun codeapp/SQL avant GOexpliciteROOT ; snapshots/historique, barrières decapture et preuves deliberation indispensables.
