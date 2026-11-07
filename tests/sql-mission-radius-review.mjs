@@ -60,20 +60,26 @@ try {
  const save=(version,code,km)=>one('select public.save_artisan_mission_radius($1,$2,$3)v',[version,code,km]);
  const page=(after=null,id=null)=>one('select public.available_missions_page($1,$2)v',[after,id]);
  const selected=(id)=>one('select public.available_missions_page(null,null,$1)v',[id]);
+ const ranked=(cursor=null,version=null)=>one('select public.available_missions_by_distance($1,$2,$3,$4)v',[cursor?.created_at??null,cursor?.id??null,cursor?.distance_band_km??null,version]);
  const denied=async(p,code='42501')=>{await assert.rejects(p,e=>e.code===code);checks++};
  eq((await view()).preference,{version:0,reference_code:null,radius_km:null});
+ await denied(ranked(),'22023');
  eq((await view()).options.length,34);eq(Object.keys((await view()).options[0]).sort(),['code','name']);
  eq((await page()).items.length,4);eq((await selected(outside)).items.length,0);
  await denied(save(0,'97209',0),'22023');await denied(save(0,'97209',201),'22023');await denied(save(0,'75056',5),'22023');await denied(save(0,null,5),'22023');
  eq((await save(0,'97209',5)).preference,{version:1,reference_code:'97209',radius_km:5});
  eq((await selected(near)).items.length,1);eq((await selected(far)).items.length,0); // real official centres ~8.7 km apart
  eq((await selected(ambiguous)).items.length,1);eq((await selected(unknown)).items.length,1);
+ eq((await ranked()).items.map(i=>i.distance_band_km),[5,null,null]);
+ await denied(ranked({...((await ranked()).items[0]),distance_band_km:7},1),'22023');
  await denied(save(0,'97209',20),'P0001');
  await as(other);eq((await view()).preference.version,0);eq((await selected(far)).items.length,1);
- await as(client);await denied(view());await denied(save(0,null,null));
+ await as(client);await denied(view());await denied(save(0,null,null));await denied(ranked());
  await as();await denied(q('select *from mission_radius_private.commune_centres'));await denied(q('select *from mission_radius_private.preferences'));
  // Offer seen while broad radius; shrinking it is checked by the REAL acceptance RPC.
  await save(1,'97209',20);eq((await selected(far)).items.length,1);
+ const broad=await ranked();eq(broad.items.map(i=>i.distance_band_km),[5,10,null,null]);eq(broad.items[1].id,far);
+ await denied(ranked(broad.items[0],1),'22023');
  await save(2,'97209',5);
  await denied(q("select public.intervention_action($1,'accept_mission',null,20,null)",[far]));
  await save(3,'97209',20);
@@ -91,6 +97,11 @@ try {
   cursor=slice.at(-1);if(p.items.length<=50)break;
  }
  eq(new Set(seen).size,expected.length);eq(new Set(seen),new Set(expected));
+ const rankFirst=await ranked();eq(rankFirst.radius_version,6);eq(rankFirst.items.length,51);
+ eq(rankFirst.items.every(i=>i.distance_band_km===5&&!('latitude'in i)&&!('longitude'in i)&&!('address'in i)),true);
+ const rankNext=await ranked(rankFirst.items[49],6);eq(rankNext.items.length,13);eq(rankNext.items.slice(-2).map(i=>i.distance_band_km),[null,null]);
+ eq(new Set([...rankFirst.items.slice(0,50),...rankNext.items].map(i=>i.id)),new Set(expected));
+ const noDistanceBoundary=await ranked(rankNext.items.at(-2),6);eq(noDistanceBoundary.items.map(i=>i.id),[rankNext.items.at(-1).id]);
  await as('', 'postgres');await q('update public.artisan_profiles set available=false where user_id=$1',[actor]);await as();eq((await page()).items.length,0);
  await as('', 'postgres');await q('update public.artisan_profiles set available=true where user_id=$1',[actor]);
  const writer=await one("select pg_get_functiondef('public.save_artisan_mission_radius(integer,text,integer)'::regprocedure)v");eq(writer.indexOf('public.profiles')<writer.indexOf('public.artisan_profiles'),true);eq(writer.includes('public.interventions'),false);

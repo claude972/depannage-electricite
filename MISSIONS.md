@@ -110,3 +110,5 @@ ROOT raccorde un adaptateur Resend optionnel à la file privée. L’adresse cou
 ### CLI-03 / ART-04 — rayon indicatif des offres
 
 Astra ajoute un réglage personnel facultatif fondé sur les centres publics des communes de Martinique. L’artisan choisit sa commune de référence et son rayon. Le réglage ne collecte aucune position GPS, conserve les conditions métier actuelles et s’applique avant pagination et lors de l’acceptation. Les zones sans centre déterminable suivent le filtre postal, avec cette limite indiquée. Vérifier absence de réglage, distances connues et inconnues, modification simultanée et confidentialité des offres. Le classement par distance est une étape distincte.
+
+ROOT ajoute le tri facultatif des offres par tranches indicatives de 5 km, puis par ancienneté à l’intérieur d’une tranche. Les offres sans commune unique passent à la fin. Le curseur est lié au compte et à la version du rayon. Vérifier la pagination, le maintien du tri chronologique et l’absence de coordonnées privées.

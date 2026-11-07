@@ -11,3 +11,39 @@ test('unavailable is explicit empty eligibility; auth and permission failures re
 test('point read remains anonymized and unavailable is a nondisclosing404',async()=>{const a=setup({eligible:true,captured_at:'2026-11-06T12:30:00Z',items:[offer(111)]});assert.equal((await a.get(req('?id='+id(111)))).status,200);assert.equal((a.calls[0]as any).args.p_id,id(111));for(const data of [{eligible:true,captured_at:'2026-11-06T12:30:00Z',items:[]},{eligible:false,captured_at:'2026-11-06T12:30:00Z',items:[]}])assert.equal((await setup(data).get(req('?id='+id(111)))).status,404);assert.equal((await setup(null).get(req('?id='+id(111)+'&cursor=x'))).status,422);assert.equal((await setup(null).get(req('?id=invalid'))).status,422);assert.equal((await setup({eligible:true,captured_at:'2026-11-06T12:30:00Z',items:[offer(1)]}).get(req('?id='+id(111)))).status,503);});
 
 test('cursor UUID casing is normalized before ordering and binding',async()=>{const cursor=Buffer.from(JSON.stringify({actor_id:actor.toUpperCase(),created_at:offer(1).created_at,id:id(1).toUpperCase()})).toString('base64url');const a=setup({eligible:true,captured_at:'2026-11-06T12:30:00Z',items:[offer(2)]});assert.equal((await a.get(req('?cursor='+cursor))).status,200);assert.equal((a.calls[0]as any).args.p_after_id,id(1));});
+
+const rankedOffer = (n: number, band: number | null) => ({ ...offer(n), distance_band_km: band });
+const rankedData = (items: unknown[]) => ({ eligible: true, captured_at: '2026-11-06T12:30:00Z', items, radius_version: 3 });
+
+test('nearest feed pages within its radius version, including offers with unknown distance', async () => {
+  const first = setup(rankedData(Array.from({ length: 51 }, (_, i) => rankedOffer(i + 1, i < 49 ? 5 : null))));
+  const response = await first.get(req('?order=nearest'));
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.order, 'nearest_first');
+  assert.equal(body.distance, 'commune_centre_bands');
+  assert.equal(body.items.length, 50);
+  const cursor = body.page.next_cursor;
+  assert.deepEqual(JSON.parse(Buffer.from(cursor, 'base64url').toString()), {
+    actor_id: actor, created_at: offer(50).created_at, id: id(50), distance_band_km: null, radius_version: 3,
+  });
+  const next = setup(rankedData([rankedOffer(51, null)]));
+  assert.equal((await next.get(req(`?order=nearest&cursor=${cursor}`))).status, 200);
+  assert.deepEqual(JSON.parse(JSON.stringify(next.calls)), [{ name: 'available_missions_by_distance', args: {
+    p_after_at: offer(50).created_at, p_after_id: id(50), p_after_km_band: null, p_radius_version: 3,
+  } }]);
+  assert.equal((await next.get(req(`?cursor=${cursor}`))).status, 422);
+  assert.equal((await setup(null, { code: '22023' }).get(req(`?order=nearest&cursor=${cursor}`))).status, 422);
+  const staleResult = setup({ ...rankedData([rankedOffer(51, null)]), radius_version: 4 });
+  assert.equal((await staleResult.get(req(`?order=nearest&cursor=${cursor}`))).status, 503);
+});
+
+test('nearest feed rejects improper bands, private projection and reversed order', async () => {
+  for (const items of [[rankedOffer(1, 6)], [rankedOffer(1, null), rankedOffer(2, 5)], [{ ...rankedOffer(1, 5), address: 'private' }]]) {
+    assert.equal((await setup(rankedData(items)).get(req('?order=nearest'))).status, 503);
+  }
+  const ordered = [{ ...rankedOffer(2, 5), created_at: '2026-11-06T12:00:00.000001Z' }, { ...rankedOffer(1, 5), created_at: '2026-11-06T12:00:00.000002Z' }];
+  assert.equal((await setup(rankedData(ordered)).get(req('?order=nearest'))).status, 200);
+  assert.equal((await setup(rankedData(ordered.toReversed())).get(req('?order=nearest'))).status, 503);
+  assert.equal((await setup(null).get(req(`?order=nearest&id=${id(1)}`))).status, 422);
+});
