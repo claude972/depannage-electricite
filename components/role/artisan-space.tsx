@@ -1508,6 +1508,17 @@ function WorkDossier({ session, intervention: i }: { session: Session; intervent
             </dl>
           </section>
           <NextAction session={session} intervention={i} />
+          <DocumentManager
+            key={`${i.id}|${session.profileId}|${session.mutationContext.generation()}`}
+            documents={[]}
+            interventions={[]}
+            interventionId={i.id}
+            profileId={session.profileId}
+            live={session.mode === "live"}
+            demo={session.mode === "demo"}
+            onRefresh={session.refresh}
+            photoReview={session.mutationContext}
+          />
           <AppointmentPanel
             appointment={ops?.appointment ?? null}
             loaded={ops !== null}

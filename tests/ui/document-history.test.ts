@@ -112,6 +112,8 @@ import { createElement as h, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { DocumentManager } from "./components/app/forms";
 const kind = new URLSearchParams(location.search).get("case");
+const photoReview = kind.startsWith("photo");
+const dossier = ${JSON.stringify(A)};
 const TOTAL = kind === "empty" ? 0 : 137;
 const pad = (n) => String(n).padStart(4, "0");
 // Server truth, newest first; pairs share a created_at (tie broken by id DESC).
@@ -128,6 +130,11 @@ const fakeFetch = async (url, init) => {
   if (kind === "401") return new Response("{}", { status: 401 });
   if (kind === "401late" && cursor) return new Response("{}", { status: 401 });
   if (kind === "404") return new Response("{}", { status: 404 });
+  if (photoReview) {
+    if (kind === "photo-forbidden" || u.searchParams.get("intervention_id") !== dossier) return new Response("{}", { status: 404 });
+    const photos = [{ ...all[0], id: "photo-a", intervention_id: dossier, name: "Tableau.png", mime_type: "image/png" }, { ...all[1], intervention_id: dossier }];
+    return Response.json({ documents: photos, page: { limit, has_more: false, next_cursor: null } });
+  }
   if (kind === "503" && cursor && n503++ === 0) return new Response("{}", { status: 503, headers: { "retry-after": "2" } });
   const off = cursor ? Number(cursor.split(":")[1]) : 0;
   const rows = (late ? all.map((d) => ({ ...d, id: "late-" + d.id })) : all).slice(off, off + limit);
@@ -135,15 +142,28 @@ const fakeFetch = async (url, init) => {
   return new Response(JSON.stringify({ documents: rows, page: { limit, has_more: more, next_cursor: more ? "c:" + (off + limit) : null } }), { status: 200 });
 };
 const workspace = all.slice(0, 5); // workspace preview duplicated by page 1
+let generation = 1;
+window.invalidatePhotoSession = () => { generation++; };
+window.photoOpen = [];
+window.photoDownloads = [];
+window.open = (url) => { window.photoOpen.push(url); return null; };
+const browserFetch = window.fetch;
+window.fetch = async (url, init) => {
+  if (!photoReview || !String(url).startsWith("/api/documents?id=")) return browserFetch(url, init);
+  window.photoDownloads.push(String(url));
+  if (window.photoDownloads.length === 1) return Response.json({ error: "Ce document est introuvable." }, { status: 404 });
+  if (window.photoDownloads.length === 3) await new Promise((r) => { window.releasePhoto = r; });
+  return Response.json({ url: "https://storage.invalid/photo?token=fixture" });
+};
 function App() {
   const [profile, setProfile] = useState("u1");
   window.switchIdentity = () => setProfile("u2");
-  return h(DocumentManager, { documents: kind === "switch" && profile === "u2" ? [] : workspace, interventions: [], demo: kind === "demo", onRefresh: async () => {}, live: kind !== "demo", profileId: profile, fetchHistory: fakeFetch });
+  return h(DocumentManager, { documents: kind === "switch" && profile === "u2" ? [] : workspace, interventions: [], demo: kind === "demo", onRefresh: async () => {}, live: kind !== "demo", profileId: profile, fetchHistory: fakeFetch, ...(photoReview ? { interventionId: dossier, photoReview: { userId: () => profile, generation: () => generation } } : {}) });
 }
 createRoot(document.getElementById("app")).render(h(App));
 `;
 
-test("DocumentManager history in real React/Chromium: 137 docs over 6 pages, 503 Retry-After, 404, 401, empty, identity switch, demo", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
+test("DocumentManager in Chromium: history, recovery and read-only photos scoped to one dossier", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
   const out = await build({ absWorkingDir: ROOT, stdin: { contents: APP, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, outdir: "out", platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "local-css" }, define: { "process.env.NODE_ENV": '"development"' } });
   const js = out.outputFiles.find((f) => f.path.endsWith(".js"))!.text;
   const server = createServer((_rq, rs) => {
@@ -260,6 +280,34 @@ test("DocumentManager history in real React/Chromium: 137 docs over 6 pages, 503
       await page.waitForTimeout(200);
       assert.equal((await calls(page)).length, 0);
       assert.equal((await ids(page)).length, 5);
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    {
+      const { page, errors } = await open("photos");
+      const photo = page.getByRole("button", { name: "Ouvrir la photo Tableau.png" });
+      await photo.waitFor();
+      assert.deepEqual(await ids(page), ["photo-a"]);
+      assert.equal(await page.locator("input[type=file]").count(), 0, "read-only review");
+      await photo.click();
+      await page.getByRole("alert").filter({ hasText: "Ce document est introuvable." }).waitFor();
+      assert.deepEqual(await page.evaluate("window.photoOpen"), []);
+      await photo.click();
+      await page.waitForFunction("window.photoOpen.length === 1");
+      await photo.click();
+      await page.waitForFunction("typeof window.releasePhoto === 'function'");
+      await page.evaluate("window.invalidatePhotoSession(); window.releasePhoto();");
+      await page.waitForTimeout(100);
+      assert.deepEqual(await page.evaluate("window.photoOpen"), ["https://storage.invalid/photo?token=fixture"]);
+      assert.deepEqual(await page.evaluate("window.photoDownloads"), Array(3).fill("/api/documents?id=photo-a"));
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    {
+      const { page, errors } = await open("photo-forbidden");
+      await page.waitForSelector("[data-document-history=not_found]");
+      assert.deepEqual(await ids(page), []);
+      assert.deepEqual(await page.evaluate("window.photoDownloads"), []);
       assert.deepEqual(errors, []);
       await page.close();
     }

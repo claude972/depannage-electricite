@@ -86,3 +86,11 @@ ROOT est seul auteur du serveur. Le propriétaire de l’organisation autorise u
 - ENT-16 — Astra : propriétaire unique backend payeur B2B délégué, branche codex/delegated-payer base e541656 ; périmètre docs/missions/ENT16_DELEGATED_PAYER.md. Aucun cloud/UI.
 
 - ENT-12 — Astra : serveur des étapes ordonnées, compléments et décisions sur le devis exact. Contrat dans docs/ADVANCED_APPROVALS_BACKEND.md. Claude raccorde le parcours existant sans changer la règle d’acceptation.
+
+### SYS-04 — préparation de la livraison externe
+
+Astra réalise le lot serveur de file privée et de reprise pour les notifications e-mail et push, à partir des préférences explicites et des notifications existantes. Vérifier les accès à l’émission, les doublons, les changements de préférences et la reprise d’une tentative incertaine. Tests isolés avec adaptateur injecté. Aucun fournisseur sélectionné, aucune activation ni modification des parcours SMS.
+
+### SYS-10 — revue manuelle des photos du dossier
+
+ROOT raccorde la section photo du particulier à la conversation du dossier attribué et donne à l’artisan attribué accès aux photos du même dossier par le téléchargement privé existant. Vérifier dossier exact, absence de photo, rôle et refus d’accès. La revue manuelle utilise la messagerie actuelle. L’analyse automatique reste suivie séparément.

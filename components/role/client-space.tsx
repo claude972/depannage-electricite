@@ -1286,6 +1286,12 @@ function DetailView({
         <p className="form-note">
           Le téléchargement sécurisé des pièces se fait depuis la page Documents.
         </p>
+        {photos.length > 0 && i.artisan_id && i.status !== "cancelled" && (
+          <button type="button" className="button outline" onClick={() => session.go("messages", i.id)}>
+            <Icon name="message" />
+            Parler des photos avec mon artisan
+          </button>
+        )}
       </section>
 
       <div className={styles.cardHead}>

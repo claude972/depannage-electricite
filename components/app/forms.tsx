@@ -1380,6 +1380,7 @@ export function DocumentManager({
   profileId = "",
   interventionId = "",
   fetchHistory = browserDocumentFetch,
+  photoReview,
 }: {
   documents: StoredDocument[];
   interventions: Intervention[];
@@ -1393,18 +1394,27 @@ export function DocumentManager({
   interventionId?: string;
   /** Test seam for the history client. */
   fetchHistory?: DocumentFetch;
+  /** Read-only photos of the exact dossier, guarded by the current live identity. */
+  photoReview?: { userId(): string | null; generation(): number };
 }) {
-  const history = useDocumentHistory(live && !demo, profileId, interventionId, fetchHistory);
+  const historyOn = live && !demo && (!photoReview || Boolean(interventionId));
+  const history = useDocumentHistory(historyOn, profileId, interventionId, fetchHistory);
   const hs = history.state;
-  const historyOn = live && !demo;
   const unavailable = historyOn && hs.status === "not_found";
-  const rows = unavailable ? [] : historyOn ? mergeDocuments(interventionId, documents, hs.pages) : documents;
+  const scopedRows = unavailable ? [] : historyOn ? mergeDocuments(interventionId, documents, hs.pages) : documents;
+  const rows = photoReview
+    ? historyOn && !unavailable && hs.status !== "signed_out"
+      ? hs.pages.filter((d) => d.intervention_id === interventionId && PHOTO_TYPES.includes(d.mime_type))
+      : []
+    : scopedRows;
   const firstLoad = historyOn && !hs.loaded && (hs.status === "idle" || hs.status === "loading");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [selected, setSelected] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const pendingPhoto = useRef<AbortController | null>(null);
+  useEffect(() => () => pendingPhoto.current?.abort(), [interventionId, profileId]);
   async function upload(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!file || demo) return;
@@ -1441,12 +1451,41 @@ export function DocumentManager({
       setBusy(false);
     }
   }
+  async function openDocument(id: string) {
+    if (pendingPhoto.current) return;
+    const user = photoReview?.userId();
+    const generation = photoReview?.generation();
+    if (photoReview && (!user || user !== profileId)) return;
+    const controller = photoReview ? new AbortController() : null;
+    pendingPhoto.current = controller;
+    const current = () => !photoReview || (!controller?.signal.aborted && user === photoReview.userId() && generation === photoReview.generation());
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api<{ url: string }>(
+        `/api/documents?id=${encodeURIComponent(id)}`,
+        undefined,
+        "GET",
+        controller ? (path, init) => fetch(path, { ...init, signal: controller.signal }) : undefined,
+      );
+      if (!current()) return;
+      if (typeof result.url !== "string" || !result.url.startsWith("https://"))
+        throw new Error("Le lien de téléchargement est indisponible.");
+      window.open(result.url, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      if (current()) setError((e as Error).message);
+    } finally {
+      if (pendingPhoto.current === controller) pendingPhoto.current = null;
+      if (current()) setBusy(false);
+    }
+  }
   return (
     <section className="panel document-manager">
       <div className="section-heading">
-        <h2>Pièces et justificatifs</h2>
+        <h2>{photoReview ? "Photos du dossier" : "Pièces et justificatifs"}</h2>
         <Icon name="lock" />
       </div>
+      {photoReview && !demo && <p className="form-note">Consultez les photos du dossier et échangez avec le client dans la conversation.</p>}
       {error && (
         <div className="alert error" role="alert">
           {error}
@@ -1474,7 +1513,7 @@ export function DocumentManager({
           Votre session a expiré. Reconnectez-vous pour retrouver vos documents.
         </div>
       )}
-      {unavailable ? (
+      {photoReview && demo ? null : unavailable ? (
         <p className="document-empty" data-document-history="not_found">
           Ces documents ne sont pas accessibles depuis votre compte.
         </p>
@@ -1490,33 +1529,17 @@ export function DocumentManager({
               <button
                 className="button outline"
                 disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  setError("");
-                  try {
-                    const result = await api<{ url: string }>(
-                      `/api/documents?id=${encodeURIComponent(d.id)}`,
-                    );
-                    if (!result.url?.startsWith("https://"))
-                      throw new Error(
-                        "Le lien de téléchargement est indisponible.",
-                      );
-                    window.open(result.url, "_blank", "noopener,noreferrer");
-                  } catch (e) {
-                    setError((e as Error).message);
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
+                aria-label={photoReview ? `Ouvrir la photo ${d.name}` : undefined}
+                onClick={() => void openDocument(d.id)}
               >
                 <Icon name="download" />
-                Télécharger
+                {busy && photoReview ? "Ouverture…" : photoReview ? "Ouvrir la photo" : "Télécharger"}
               </button>
             </div>
           ))}
         </div>
-      ) : firstLoad ? null : (
-        <p className="document-empty">Aucune pièce jointe pour le moment.</p>
+      ) : firstLoad || (photoReview && ["signed_out", "error"].includes(hs.status)) ? null : (
+        <p className="document-empty">{photoReview ? "Aucune photo dans les documents chargés." : "Aucune pièce jointe pour le moment."}</p>
       )}
       {historyOn && hs.status === "loading" && (
         <p role="status" data-document-history="loading">
@@ -1532,12 +1555,10 @@ export function DocumentManager({
         <div className="inline-note">
           <Icon name="help" />
           <p>
-            Le dépôt de documents réels est désactivé dans la démonstration.
-            Connectez-vous à un compte réel pour déposer une pièce dans le
-            stockage privé.
+            {photoReview ? "Les photos privées sont accessibles dans un dossier réel qui vous est attribué." : "Le dépôt de documents réels est désactivé dans la démonstration. Connectez-vous à un compte réel pour déposer une pièce dans le stockage privé."}
           </p>
         </div>
-      ) : (
+      ) : photoReview ? null : (
         <form onSubmit={upload}>
           <Field label="Dossier associé (facultatif)">
             <select
