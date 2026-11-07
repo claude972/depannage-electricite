@@ -78,6 +78,7 @@ import { PlatformPage } from "./platform-anchor";
 import { platformEntries } from "./anchors";
 import { UploadQueuePanel } from "../app/upload-queue";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
+import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
 
 const CLIENT_VIEWS: readonly View[] = [
   "overview",
@@ -2006,6 +2007,8 @@ function DocumentsView({ session, rows }: { session: Session; rows: Intervention
         demo={session.mode === "demo"}
         onRefresh={session.refresh}
       />
+      {/* FIN-05: service invoices and credit notes issued to this account (read-only, private PDFs). */}
+      <CustomerInvoicesPanel filters={{ basis: "service" }} context={session.mutationContext} demo={session.mode === "demo"} />
       <div className="inline-note">
         <Icon name="lock" />
         <p>
