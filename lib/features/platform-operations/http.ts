@@ -1,3 +1,5 @@
+import { env } from 'node:process';
+import { refundPolicy } from '../refund-execution/policy';
 // Server helpers shared by app/api/platform-operations/** routes.
 import { createHash } from "node:crypto";
 import { z } from "zod";
@@ -42,10 +44,16 @@ export async function describeAccess(db: Database): Promise<PlatformAccess> {
       if (row.key === "invoice_issuer") issuer = true;
     }
   }
+  let refundExecution=false;
+  if(finance&&hasScope(access,"finance_write")&&refundPolicy(env)!==null){
+    // The RPC is installed by the execution migration. A flag/key alone never enables money actions.
+    const capability=await db.rpc("refund_execution_capability");
+    refundExecution=!capability.error&&capability.data===true;
+  }
   return {
     ...access,
-    capabilities: { support: hasScope(access, "support_read"), support_reply: hasScope(access, "support_read") && hasScope(access, "support_reply"), support_status: hasScope(access, "support_read") && hasScope(access, "support_status"), operators: access.super_admin, audit: hasScope(access, "audit_read"), finance, reviews_moderation: hasScope(access, "reviews_moderate"), refund_execution: false, invoice_rendering: INVOICE_RENDERING_AVAILABLE },
-    config: financeConfig(process.env, setting, issuer),
+    capabilities: { support: hasScope(access, "support_read"), support_reply: hasScope(access, "support_read") && hasScope(access, "support_reply"), support_status: hasScope(access, "support_read") && hasScope(access, "support_status"), operators: access.super_admin, audit: hasScope(access, "audit_read"), finance, reviews_moderation: hasScope(access, "reviews_moderate"), refund_execution: refundExecution, invoice_rendering: INVOICE_RENDERING_AVAILABLE },
+    config: financeConfig(env, setting, issuer),
   };
 }
 

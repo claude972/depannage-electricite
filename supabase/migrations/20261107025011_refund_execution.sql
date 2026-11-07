@@ -147,14 +147,21 @@ begin
 end;$$;
 revoke all on function public.apply_refund_execution_event(uuid,text,text,text,text,text,integer,text,text,boolean)from public,anon,authenticated,service_role;grant execute on function public.apply_refund_execution_event(uuid,text,text,text,text,text,integer,text,text,boolean)to service_role;
 -- Reading operational state does not contact Stripe or expose provider IDs.
+create function public.refund_execution_capability()returns boolean language sql stable security definer set search_path=''as $$select public.has_platform_scope('finance_write');$$;
+revoke all on function public.refund_execution_capability()from public,anon,authenticated,service_role;grant execute on function public.refund_execution_capability()to authenticated;
 create function public.read_refund_execution(p_request uuid)returns jsonb language plpgsql stable security definer set search_path=''as $$
 #variable_conflict use_column
-declare r public.platform_refund_requests;e public.platform_refund_executions;
+declare r public.platform_refund_requests;e public.platform_refund_executions;p public.payments;reason text;
 begin
  if not public.has_platform_scope('finance_read')then raise insufficient_privilege;end if;
  select *into r from public.platform_refund_requests where id=p_request;if not found then raise no_data_found;end if;
  select *into e from public.platform_refund_executions where request_id=p_request;
- return jsonb_build_object('request_status',r.status,'execution_status',e.state,'execution_id',e.id);
+ select *into p from public.payments where id=r.payment_id;
+ reason=case when not public.has_platform_scope('finance_write')then 'read_only'when r.status<>'approved'then 'approval_required'when e.actor_id is not null and e.actor_id<>auth.uid()then 'operator_mismatch'when e.request_version is not null and e.request_version<>r.version then 'revision_changed'when e.state='needs_review'then 'reconciliation_required'when e.state in('failed','canceled','succeeded')then 'terminal_execution'
+ when p.status<>'paid'or p.method<>'stripe'or p.paid_at is null then 'payment_unconfirmed'
+ when not exists(select 1 from public.platform_checkouts l where l.session_id=p.session_id and l.quote_id=p.quote_id and l.status='paid'and l.amount_cents=p.total_cents and l.account_id~'^acct_[A-Za-z0-9]{1,200}$'and l.fee_cents is not null)then 'legacy_binding_missing'
+ else 'provider_verification_required'end;
+ return jsonb_build_object('request_status',r.status,'execution_status',e.state,'execution_id',e.id,'eligible',reason='provider_verification_required','reason',reason);
 end;$$;
 revoke all on function public.read_refund_execution(uuid)from public,anon,authenticated,service_role;grant execute on function public.read_refund_execution(uuid)to authenticated;
 -- A qualified contradiction must not keep publishing a trustworthy financial net.
