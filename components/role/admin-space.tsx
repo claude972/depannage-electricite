@@ -910,7 +910,7 @@ export function AdminSpace({ session }: { session: Session }) {
         <CoverageEditor key={`coverage|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`} demo={demo} context={session.mutationContext} />
         <Unavailable title="Paramètres de la plateforme" reason="Aucun réglage n’est modifiable depuis cette interface : les valeurs ci-dessous restent à définir par l’exploitant." blocker="ADM-08">
           <dl className={styles.definitions} style={{ padding: "12px 0 0" }}>
-            {["Taux de commission", "TVA par défaut", "Territoire couvert", "Barème public"].map((item) => (
+            {["Taux de commission", "TVA par défaut", "Barème public"].map((item) => (
               <FragmentPair key={item} term={item} value="À définir par l’exploitant" />
             ))}
           </dl>
