@@ -106,12 +106,12 @@ export function LedgerBasis({ basis }: { basis: Record<string, unknown> | null |
   );
 }
 
-type Ctx = { client: PlatformClient; demo?: PlatformDemo; canWrite: boolean; superAdmin: boolean; notify: (m: { kind: "ok" | "error"; text: string } | null) => void; busy: boolean; act: (work: () => Promise<unknown | null>, done: string, after?: () => void) => Promise<void>; scopeKey: string; rendering: boolean; refundExecution: boolean; userId: string };
+type Ctx = { client: PlatformClient; demo?: PlatformDemo; canWrite: boolean; superAdmin: boolean; notify: (m: { kind: "ok" | "error"; text: string } | null) => void; busy: boolean; act: (work: () => Promise<unknown | null>, done: string, after?: () => void) => Promise<void>; scopeKey: string; rendering: boolean; refundExecution: boolean; userId: string; /** Opens the exact target (dossier by id) through the anchor. */ onNavigate?: (view: string, param?: string) => void };
 
 export function PlatformFinanceView(props: PlatformFinanceViewProps) {
   return <Gate state={props.state} unavailableMessage={props.unavailableMessage} title="Finance plateforme"><Inner key={scopeKey(props.scope)} {...props} /></Gate>;
 }
-function Inner({ scope, client, demo }: PlatformFinanceViewProps) {
+function Inner({ scope, client, demo, onNavigate }: PlatformFinanceViewProps) {
   const [tab, setTab] = useState<Tab>("overview");
   const me = useLoad<PlatformAccess>(() => (demo ? Promise.resolve(demo.access) : client.load.me()), [demo]);
   const [message, notify] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
@@ -126,7 +126,7 @@ function Inner({ scope, client, demo }: PlatformFinanceViewProps) {
   if (me.loading && !me.data) return <Loading label="Chargement des droits…" />;
   if (me.error && !me.data) return <ErrorBox message={me.error} onRetry={me.reload} />;
   if (!me.data?.capabilities.finance) return <div className="forbidden"><strong>Cet espace nécessite le scope finance.</strong><p>Demandez l’habilitation à un super administrateur.</p></div>;
-  const ctx: Ctx = { client, demo, canWrite: scope.authority.canWrite && !demo && (me.data.super_admin || me.data.scopes.includes("finance_write")), superAdmin: !demo && scope.authority.canWrite && me.data.super_admin, notify, busy, act, scopeKey: scopeKey(scope), rendering: me.data.capabilities.invoice_rendering === true, refundExecution: !demo && me.data.capabilities.refund_execution === true, userId: scope.userId };
+  const ctx: Ctx = { client, demo, canWrite: scope.authority.canWrite && !demo && (me.data.super_admin || me.data.scopes.includes("finance_write")), superAdmin: !demo && scope.authority.canWrite && me.data.super_admin, notify, busy, act, scopeKey: scopeKey(scope), rendering: me.data.capabilities.invoice_rendering === true, refundExecution: !demo && me.data.capabilities.refund_execution === true, userId: scope.userId, onNavigate };
   return (
     <div className={styles.view} data-module="platform-operations" data-platform-view="finance">
       <div className={styles.head}><div><h2>Finance plateforme</h2><p>Ledger en centimes, rapprochement avec les paiements confirmés et suivi documentaire. Aucune action réelle auprès du fournisseur de paiement n’est disponible dans cette version.</p></div></div>
@@ -220,6 +220,15 @@ function DocumentLinks({ ctx, invoiceId }: { ctx: Ctx; invoiceId: string }) {
   if (links.state === "demo") return <span className={styles.actions}><span role="link" aria-disabled="true" className={styles.disabledLink}>Ouvrir le PDF</span><span role="link" aria-disabled="true" className={styles.disabledLink}>Télécharger</span><span className={styles.hint}>{links.note}</span></span>;
   return <span className={styles.actions}><a className={styles.link} href={links.open} target="_blank" rel="noopener">Ouvrir le PDF</a><a className={styles.link} href={links.download}>Télécharger</a></span>;
 }
+/** Exact dossier of a finance row; without a navigator (or a valid id) the reference stays text. */
+function DossierLink({ ctx, id, attr }: { ctx: Ctx; id: string; attr: string }) {
+  if (!ctx.onNavigate || !UUID_RE.test(id)) return <span className={styles.mono}>{shortId(id)}</span>;
+  return (
+    <button type="button" className="text-button" onClick={() => ctx.onNavigate!("intervention", id)} {...{ [attr]: id }}>
+      Dossier {shortId(id)}
+    </button>
+  );
+}
 function InvoiceDetail({ ctx, id, onClose }: { ctx: Ctx; id: string; onClose: () => void }) {
   const detail = useLoad(() => (ctx.demo ? Promise.resolve({ invoice: ctx.demo.invoices.find((i) => i.id === id) as Invoice, credit_notes: [] as Invoice[], document: null }) : ctx.client.load.invoice(id)), [ctx.demo, id]);
   return (
@@ -231,6 +240,7 @@ function InvoiceDetail({ ctx, id, onClose }: { ctx: Ctx; id: string; onClose: ()
             <dt>Type</dt><dd>{detail.data.invoice.kind === "invoice" ? "Facture" : "Avoir"} · {detail.data.invoice.basis === "service" ? "prestation" : "commission"} · émis le {dateTime(detail.data.invoice.issued_at)}</dd>
             <dt>Émetteur</dt><dd>{detail.data.invoice.issuer.legal_name}{detail.data.invoice.issuer.siret && ` · SIRET ${detail.data.invoice.issuer.siret}`}<br />{detail.data.invoice.issuer.address}</dd>
             <dt>Destinataire</dt><dd>{detail.data.invoice.recipient.name ?? detail.data.invoice.recipient.legal_name}<br />{detail.data.invoice.recipient.address}</dd>
+            <dt>Dossier</dt><dd><DossierLink ctx={ctx} id={detail.data.invoice.intervention_id} attr="data-invoice-detail-open-dossier" /></dd>
             <dt>Montants</dt><dd>HT {money(detail.data.invoice.subtotal_cents)} · TVA {money(detail.data.invoice.tax_cents)} ({Number(detail.data.invoice.tax_rate)} %) · TTC {money(detail.data.invoice.total_cents)}</dd>
             {detail.data.invoice.reason && <><dt>Motif</dt><dd>{detail.data.invoice.reason}</dd></>}
             <dt>Document</dt><dd><DocumentLinks ctx={ctx} invoiceId={detail.data.invoice.id} /></dd>
@@ -251,7 +261,7 @@ function Invoices({ ctx }: { ctx: Ctx }) {
         {list.loading && !list.data ? <Loading /> : list.error && !list.data ? <ErrorBox message={list.error} onRetry={list.reload} /> : !list.data?.invoices.length ? <EmptyState title="Aucun document">Vérifiez d’abord les conditions d’émission pour un paiement confirmé.</EmptyState> : (
           <div className={styles.tableWrap}><table className={styles.table}><caption className={styles.srOnly}>Factures et avoirs</caption>
             <thead><tr><th>Numéro</th><th>Type</th><th>Émetteur</th><th>Destinataire</th><th className={styles.num}>HT</th><th className={styles.num}>TVA</th><th className={styles.num}>TTC</th><th>Émis</th><th>Document</th></tr></thead>
-            <tbody>{list.data.invoices.map((i) => <tr key={i.id}><td className={styles.mono}><button type="button" className="text-button" onClick={() => setSelected(i.id)}>{i.number}</button>{i.related_invoice_id && <div>sur {shortId(i.related_invoice_id)}</div>}</td><td>{i.kind === "invoice" ? "Facture" : "Avoir"} · {i.basis === "service" ? "prestation" : "commission"}</td><td>{i.issuer.legal_name}</td><td>{i.recipient.name ?? i.recipient.legal_name}</td><td className={styles.num}>{money(i.subtotal_cents)}</td><td className={styles.num}>{money(i.tax_cents)} ({Number(i.tax_rate)} %)</td><td className={styles.num}>{money(i.total_cents)}</td><td>{dateTime(i.issued_at)}</td><td><DocumentLinks ctx={ctx} invoiceId={i.id} /></td></tr>)}</tbody></table></div>
+            <tbody>{list.data.invoices.map((i) => <tr key={i.id}><td className={styles.mono}><button type="button" className="text-button" onClick={() => setSelected(i.id)}>{i.number}</button>{i.related_invoice_id && <div>sur {shortId(i.related_invoice_id)}</div>}<DossierLink ctx={ctx} id={i.intervention_id} attr="data-finance-open-dossier" /></td><td>{i.kind === "invoice" ? "Facture" : "Avoir"} · {i.basis === "service" ? "prestation" : "commission"}</td><td>{i.issuer.legal_name}</td><td>{i.recipient.name ?? i.recipient.legal_name}</td><td className={styles.num}>{money(i.subtotal_cents)}</td><td className={styles.num}>{money(i.tax_cents)} ({Number(i.tax_rate)} %)</td><td className={styles.num}>{money(i.total_cents)}</td><td>{dateTime(i.issued_at)}</td><td><DocumentLinks ctx={ctx} invoiceId={i.id} /></td></tr>)}</tbody></table></div>
         )}
         {list.data && list.pager(list.data.page)}
       </Panel>
@@ -448,7 +458,7 @@ function Disputes({ ctx }: { ctx: Ctx }) {
             <li key={d.id} className={styles.card}>
               <div className={styles.panelHead}><strong>{d.subject}</strong><span className="tag">{DISPUTE_LABEL[d.status]}</span></div>
               <p className={styles.hint}>{d.description}</p>
-              <dl className={styles.kv}><dt>Origine</dt><dd>{{ client: "Client", artisan: "Artisan", platform: "Plateforme" }[d.origin]} · paiement <span className={styles.mono}>{shortId(d.payment_id)}</span> · version {d.version}</dd>{d.resolved_at && <><dt>Issue</dt><dd>{{ none: "—", refund_requested: "remboursement demandé", no_refund: "sans remboursement", other: "autre" }[d.outcome]} — {d.resolution_note}</dd></>}</dl>
+              <dl className={styles.kv}><dt>Origine</dt><dd>{{ client: "Client", artisan: "Artisan", platform: "Plateforme" }[d.origin]} · paiement <span className={styles.mono}>{shortId(d.payment_id)}</span> · version {d.version}</dd><dt>Dossier</dt><dd><DossierLink ctx={ctx} id={d.intervention_id} attr="data-dispute-open-dossier" /></dd>{d.resolved_at && <><dt>Issue</dt><dd>{{ none: "—", refund_requested: "remboursement demandé", no_refund: "sans remboursement", other: "autre" }[d.outcome]} — {d.resolution_note}</dd></>}</dl>
               {ctx.canWrite && disputeActions(d.status).length > 0 && (decision?.id === d.id
                 ? <form className={styles.form} noValidate onSubmit={(e) => { e.preventDefault(); const err = validateDisputeDecision({ action: decision.action, note: decision.note, outcome: decision.action === "resolve" ? decision.outcome : null, refund_request_id: decision.action === "resolve" && decision.refund ? decision.refund : null }) ?? (decision.refund && !UUID_RE.test(decision.refund.trim()) ? "Identifiant de demande invalide." : null); if (err) { setDecision({ ...decision, error: err }); return; } void ctx.act(() => ctx.client.command.decideDispute(d.id, { action: decision.action, expected_version: d.version, note: decision.note.trim(), outcome: decision.action === "resolve" ? decision.outcome : undefined, refund_request_id: decision.action === "resolve" && decision.refund ? decision.refund.trim().toLowerCase() : null }), "Décision enregistrée.", () => { setDecision(null); list.reload(); }); }}>
                   <Field label="Action"><select value={decision.action} onChange={(e) => setDecision({ ...decision, action: e.target.value as typeof decision.action })}>{disputeActions(d.status).map((a) => <option key={a} value={a}>{{ review: "Passer en examen", resolve: "Résoudre", close: "Clore sans suite" }[a]}</option>)}</select></Field>
