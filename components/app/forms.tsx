@@ -30,6 +30,7 @@ import {
   type DocumentHistoryState,
 } from "./document-history";
 import { Icon } from "./icons";
+import { TAX_RATE_HINT, TAX_RATE_OPTIONS, TAX_RATE_PLACEHOLDER, TAX_RATE_REQUIRED, parseTaxRateInput, type TaxRate } from "./tax-rate";
 import { Empty, Field, ConfirmAction, Unavailable } from "./ui";
 import {
   CATEGORIES,
@@ -480,6 +481,17 @@ export function RequestForm({
     </div>
   );
 }
+/** Legacy direct send (draft route unavailable): explicit supported rate required, never a default. */
+export function validateQuoteEditor(lines: Line[], tax: TaxRate | null):
+  | { ok: true; payload: { lines: Line[]; tax_rate: TaxRate } }
+  | { ok: false; error: string; taxError?: string } {
+  const subtotal = lines.reduce((n, l) => n + Math.round(l.quantity * l.unit_price_cents), 0);
+  if (lines.some((l) => !l.label.trim() || !Number.isInteger(l.quantity) || l.quantity <= 0 || l.unit_price_cents < 0) || subtotal <= 0)
+    return { ok: false, error: "Renseignez les prestations, les quantités et un montant total supérieur à zéro." };
+  if (tax === null) return { ok: false, error: TAX_RATE_REQUIRED, taxError: TAX_RATE_REQUIRED };
+  return { ok: true, payload: { lines, tax_rate: tax } };
+}
+
 export function QuoteEditor({
   busy,
   demo,
@@ -493,8 +505,9 @@ export function QuoteEditor({
     { label: "Déplacement", quantity: 1, unit_price_cents: 0 },
     { label: "Main-d’œuvre", quantity: 1, unit_price_cents: 0 },
   ]);
-  const [tax, setTax] = useState(20);
+  const [tax, setTax] = useState<TaxRate | null>(null);
   const [err, setErr] = useState("");
+  const [taxErr, setTaxErr] = useState("");
   const subtotal = lines.reduce(
     (n, l) => n + Math.round(l.quantity * l.unit_price_cents),
     0,
@@ -504,23 +517,15 @@ export function QuoteEditor({
       className="panel quote-editor"
       onSubmit={(e) => {
         e.preventDefault();
-        if (
-          lines.some(
-            (l) =>
-              !l.label.trim() ||
-              !Number.isInteger(l.quantity) ||
-              l.quantity <= 0 ||
-              l.unit_price_cents < 0,
-          ) ||
-          subtotal <= 0
-        ) {
-          setErr(
-            "Renseignez les prestations, les quantités et un montant total supérieur à zéro.",
-          );
+        const checked = validateQuoteEditor(lines, tax);
+        if (!checked.ok) {
+          setErr(checked.error);
+          setTaxErr(checked.taxError ?? "");
           return;
         }
         setErr("");
-        onSubmit({ lines, tax_rate: tax });
+        setTaxErr("");
+        onSubmit(checked.payload);
       }}
     >
       <h2>Établir le devis</h2>
@@ -615,14 +620,17 @@ export function QuoteEditor({
         hint={
           demo
             ? "Taux de démonstration, sans validation fiscale."
-            : "Renseignez le taux applicable à votre prestation."
+            : TAX_RATE_HINT
         }
+        error={taxErr || undefined}
       >
-        <select value={tax} onChange={(e) => setTax(Number(e.target.value))}>
-          <option value="0">0 %</option>
-          <option value="5.5">5,5 %</option>
-          <option value="10">10 %</option>
-          <option value="20">20 %</option>
+        <select value={tax === null ? "" : String(tax)} onChange={(e) => { setTax(parseTaxRateInput(e.target.value)); setTaxErr(""); }} data-tax-rate="">
+          <option value="">{TAX_RATE_PLACEHOLDER}</option>
+          {TAX_RATE_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
         </select>
       </Field>
       <div className="quote-totals">
@@ -633,7 +641,7 @@ export function QuoteEditor({
         <div className="total">
           <span>Total TTC</span>
           <strong>
-            {money(subtotal + Math.round((subtotal * tax) / 100))}
+            {tax === null ? "—" : money(subtotal + Math.round((subtotal * tax) / 100))}
           </strong>
         </div>
       </div>

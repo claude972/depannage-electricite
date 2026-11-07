@@ -5,6 +5,7 @@
 // Amounts are shown exactly as stored (integer cents), nothing is recomputed, and an invoice's
 // document state never says anything about a payment.
 import { z } from "zod";
+import { taxRateSchema } from "../../../lib/tax-rates";
 
 export type InvoiceKind = "invoice" | "credit_note";
 export type InvoiceBasis = "service" | "platform_commission";
@@ -115,7 +116,7 @@ const invoiceSchema = z
     id: uuid, kind: z.enum(["invoice", "credit_note"]), basis: z.enum(["service", "platform_commission"]), number: z.string().min(1).max(40), issuer_key: z.string().min(1).max(80),
     issuer: party, recipient: party, payment_id: uuid, quote_id: uuid, intervention_id: uuid, related_invoice_id: uuid.nullable(),
     lines: z.array(z.object({ label: z.string().min(1).max(160), quantity: z.number().int().min(1).max(1000), unit_price_cents: cents }).strict()).min(1).max(30),
-    subtotal_cents: cents, tax_rate: z.union([z.literal(0), z.literal(5.5), z.literal(10), z.literal(20)]), tax_cents: cents, total_cents: cents.min(1), currency: z.literal("eur"), reason: z.string().max(1000), issued_at: instant,
+    subtotal_cents: cents, tax_rate: taxRateSchema, tax_cents: cents, total_cents: cents.min(1), currency: z.literal("eur"), reason: z.string().max(1000), issued_at: instant,
   })
   .strict();
 export type InvoiceDocument = z.infer<typeof invoiceSchema>;

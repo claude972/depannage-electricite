@@ -165,3 +165,12 @@ test("factures du dossier : client et entreprise filtrent par intervention_id, s
   // The real filter key differs per dossier: two dossiers never share a panel (cursor/detail).
   assert.notEqual(m.filtersKey({ intervention_id: JOB, basis: "service" }), m.filtersKey({ intervention_id: QUOTE, basis: "service" }));
 });
+
+test("EXPLICIT-TAX : le lecteur accepte 2,1 % et 8,5 % (lib/tax-rates), refuse un taux non pris en charge, affiche le taux stocké", () => {
+  for (const [rate, tax] of [[2.1, 420], [8.5, 1700], [20, 4000], [0, 0]] as const) {
+    const body = detail({ invoice: row({ tax_rate: rate, tax_cents: tax, total_cents: 20000 + tax }) });
+    assert.equal(m.parseInvoiceDetail(body, ID(1))?.invoice.tax_rate, rate, String(rate));
+  }
+  for (const rate of [7, 19.6, "20", null, -1]) assert.equal(m.parseInvoiceDetail(detail({ invoice: row({ tax_rate: rate }) }), ID(1)), null, String(rate));
+  same([m.formatRate(2.1), m.formatRate(8.5)], ["2,1 %", "8,5 %"]);
+});
