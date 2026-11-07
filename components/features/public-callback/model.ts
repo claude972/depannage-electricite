@@ -116,6 +116,8 @@ export const COPY = {
   reasonRequired: "Choisissez l’objet de la demande.",
   invalid: "Le numéro ou la demande n’a pas été accepté : vérifiez la saisie.",
   closed: "Les demandes de rappel sont actuellement fermées.",
+  closedState: "Les demandes de rappel ne sont pas ouvertes actuellement : aucune demande ne peut être enregistrée depuis ce site.",
+  failedState: "La disponibilité des demandes de rappel n’a pas pu être vérifiée : aucune demande ne peut être envoyée pour le moment.",
   retry: "La demande n’a pas été confirmée. Réessayez : la même demande sera renvoyée, sans doublon.",
   limited: (s: number) => `Trop de demandes pour le moment. Vous pourrez réessayer dans ${s} s.`,
   limitedDone: "Vous pouvez réessayer.",

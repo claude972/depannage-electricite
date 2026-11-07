@@ -13,7 +13,8 @@ const uuid = (): string | null => (typeof crypto !== "undefined" && typeof crypt
 export function PublicCallbackForm({ fetcher, newId = uuid }: PublicCallbackFormProps) {
   const id = useId();
   const doFetch = (): typeof fetch => fetcher ?? ((...a) => fetch(...a));
-  const [available, setAvailable] = useState<boolean | null>(null);
+  // null = reading; "failed" = the availability could not be verified.
+  const [available, setAvailable] = useState<boolean | "failed" | null>(null);
   const [phone, setPhone] = useState("");
   const [reason, setReason] = useState<Reason | "">("");
   const [consent, setConsent] = useState(false);
@@ -26,7 +27,9 @@ export function PublicCallbackForm({ fetcher, newId = uuid }: PublicCallbackForm
   useEffect(() => {
     alive.current = true;
     void timed(doFetch(), PUBLIC_PATH, { method: "GET" }).then((r) => {
-      if (alive.current) setAvailable(r.status === 200 ? parseAvailable(r.body) === true : false);
+      if (!alive.current) return;
+      const v = r.status === 200 ? parseAvailable(r.body) : null;
+      setAvailable(v === null ? "failed" : v);
     });
     return () => {
       alive.current = false;
@@ -38,7 +41,15 @@ export function PublicCallbackForm({ fetcher, newId = uuid }: PublicCallbackForm
     const t = setTimeout(() => setWait((w) => w - 1), 1000);
     return () => clearTimeout(t);
   }, [wait]);
-  if (available !== true) return null; // closed, unknown or unreadable: no form, no POST
+  if (available === null) return null; // reading: nothing claimed yet
+  if (available !== true)
+    // Closed or unverifiable: an honest state, no form and no POST.
+    return (
+      <section className={styles.panel} aria-labelledby={`${id}-title`} data-public-callback={available === false ? "closed" : "failed"}>
+        <h2 id={`${id}-title`}>{COPY.title}</h2>
+        <p className={styles.hint}>{available === false ? COPY.closedState : COPY.failedState}</p>
+      </section>
+    );
 
   // Any edit of the content drops the current attempt (next submit ⇒ new UUID).
   const edit = <T,>(setter: (v: T) => void) => (v: T) => {
