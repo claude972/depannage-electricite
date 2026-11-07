@@ -223,11 +223,11 @@ export function ClientSpace({ session }: { session: Session }) {
   // CLI-09: the preferred saved address is only read for the request form (explicit preselection).
   const preferredAddress = usePreferredAddress({ enabled: !demo && view === "new", context: session.mutationContext });
   const rows = mine(session);
-  const activeCount = rows.filter((i) => isOpen(i.status)).length;
-  const myIds = new Set(rows.map((i) => i.id));
-  const received = session.data.messages.filter(
-    (m) => myIds.has(m.intervention_id) && m.author_id !== session.profileId,
-  ).length;
+  const activeCount = demo ? rows.filter((i) => isOpen(i.status)).length : session.data.client_counts?.active_interventions ?? 0;
+  const demoIds = demo ? new Set(rows.map((i) => i.id)) : null;
+  const received = demoIds
+    ? session.data.messages.filter((m) => demoIds.has(m.intervention_id) && m.author_id !== session.profileId).length
+    : session.data.client_counts?.received_messages ?? 0;
   const goMessages = () => session.go("messages");
   // « Modifier » on the booking confirmation opens the regular form prefilled with the same draft.
   const [editBooking, setEditBooking] = useState(false);

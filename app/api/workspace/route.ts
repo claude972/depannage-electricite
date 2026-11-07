@@ -1,6 +1,7 @@
 import { enrichAcceptedTotals, AcceptedTotalsUnavailable } from "@/lib/features/workspace/accepted-totals";
 import { authenticatedClient, apiError, dbError } from "@/lib/supabase/server";
 import { DetailReadUnavailable, workspaceWindow } from "@/lib/features/workspace/detail-read";
+import { clientWorkspaceCounters } from "@/lib/features/client-interventions/contract";
 export const dynamic = "force-dynamic";
 export async function GET() {
   try {
@@ -75,11 +76,13 @@ export async function GET() {
     const enrichedQuotes = await enrichAcceptedTotals(db, quoteWindow.rows);
     const siteWindow = workspaceWindow(sites.data, 100);
     const orgWindow = workspaceWindow(organizations.data, 50);
-    const offers =
-      profile.data?.role === "artisan"
-        ? await db.rpc("available_missions")
-        : { data: [], error: null };
+    const [offers, counters] = await Promise.all([
+      profile.data?.role === "artisan" ? db.rpc("available_missions") : { data: [], error: null },
+      profile.data?.role === "client" ? Promise.resolve(db.rpc("client_workspace_counters")).catch(() => null) : null,
+    ]);
     dbError(offers.error);
+    // Optional counters must not turn a dashboard read failure into an inaccessible workspace.
+    const clientCounts = counters && !counters.error ? clientWorkspaceCounters.safeParse(counters.data) : null;
     // Latest saved appointments only for dossiers already readable/loaded in this response.
     // Unassigned offers never gain an address, note or participant through this projection.
     const loadedIds = jobWindow.rows.map(job => job.id);
@@ -93,6 +96,7 @@ export async function GET() {
     return Response.json(
       {
         profile: profile.data,
+        ...(clientCounts?.success ? { client_counts: clientCounts.data } : {}),
         interventions: [...jobWindow.rows, ...(offers.data ?? [])],
         quotes: enrichedQuotes,
         sites: siteWindow.rows,

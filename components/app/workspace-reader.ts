@@ -9,6 +9,7 @@ import { ApiRequestError } from "./api";
 import type { Role, Status, Workspace } from "./types";
 import type { ReadResult } from "./workspace-refresh";
 import { workspaceLimitsSchema } from "../../lib/features/workspace/detail-read";
+import { clientWorkspaceCounters } from "../../lib/features/client-interventions/contract";
 
 const ROLES: readonly Role[] = ["client", "artisan", "manager", "admin"];
 /** Same set as the database check constraint on interventions.status (migration 0001) and `Status`. */
@@ -66,6 +67,8 @@ export function validateWorkspace(raw: unknown): WorkspaceValidation {
   // Optional window metadata (older backends omit it). When present it must be exact: it decides
   // whether an absent dossier may be point-read, so a malformed value invalidates the reply.
   if (raw.limits !== undefined && !workspaceLimitsSchema.safeParse(raw.limits).success) return { ok: false, reason: "limits" };
+  if (raw.client_counts !== undefined && (profile.role !== "client" || !clientWorkspaceCounters.safeParse(raw.client_counts).success))
+    return { ok: false, reason: "client_counts" };
   return { ok: true, workspace: raw as unknown as Workspace };
 }
 

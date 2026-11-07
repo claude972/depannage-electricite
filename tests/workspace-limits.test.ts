@@ -47,3 +47,23 @@ test("offered artisan missions do not affect the readable dossier limit flag or 
   const body = await (await h.get()).json(); assert.equal(body.interventions.length, 101); assert.equal(body.limits.interventions.limited, false);
   const offer = body.interventions.find((r: { id: string }) => r.id === offers[0].id); assert.equal(offer.address, undefined); assert.equal(offer.client_id, undefined);
 });
+
+test("workspace counters come from the exact private scope, and an unavailable counter leaves the workspace usable", async () => {
+  const counters = { active_interventions: 137, received_messages: 502 };
+  const h = routeHarness("workspace", { intercept: call => call.table === "client_workspace_counters" ? Response.json(counters) : undefined });
+  const response = await h.get();
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.deepEqual(body.client_counts, counters);
+  assert.equal(validateWorkspace(body).ok, true);
+  for (const invalid of [null, { ...counters, received_messages: "502" }, { ...counters, user_id: USER }]) {
+    assert.equal(validateWorkspace({ ...body, client_counts: invalid }).ok, false);
+  }
+  assert.equal(validateWorkspace({ ...body, profile: { ...body.profile, role: "manager" } }).ok, false);
+  const unavailable = routeHarness("workspace", {
+    intercept: call => call.table === "client_workspace_counters" ? Response.json({ code: "PGRST202" }, { status: 404 }) : undefined,
+  });
+  const result = await unavailable.get();
+  assert.equal(result.status, 200);
+  assert.equal((await result.json()).client_counts, undefined);
+});

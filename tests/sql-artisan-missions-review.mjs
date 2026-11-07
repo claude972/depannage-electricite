@@ -72,4 +72,21 @@ ok((await clientPage(client,'all','int-'+ids[134].slice(0,6))).items.some(row=>r
 await assert.rejects(()=>clientPage(actor), e=>e.code==='42501'); checks++;
 await assert.rejects(()=>clientPage(client,'all','x'.repeat(121)), e=>e.code==='22023'); checks++;
 ok(!(await db.query("select has_function_privilege('anon','public.client_intervention_search(text,text,timestamptz,uuid)','execute')v")).rows[0].v,'no anonymous history access');
+await db.query("update public.interventions set status='requested' where client_id=$1",[client]);
+await db.query(`insert into public.messages(intervention_id,author_id,body)
+ select $1::uuid,$2::uuid,'Message synthétique' from generate_series(1,501)`,[ids[134],actor]);
+await db.query("insert into public.messages(intervention_id,author_id,body) values($1,$2,'Auteur du dossier')",[ids[134],client]);
+await db.query(`insert into public.messages(intervention_id,author_id,body)
+ select id,$1,'Autre compte' from public.interventions where client_id=$2`,[actor,foreignClient]);
+async function counters(uid) {
+ await db.exec('set role authenticated');
+ try {
+  await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uid]);
+  return (await db.query("select public.client_workspace_counters() v")).rows[0].v;
+ } finally { await db.exec('reset role'); }
+}
+assert.deepEqual(await counters(client),{active_interventions:137,received_messages:501}); checks++;
+assert.deepEqual(await counters(foreignClient),{active_interventions:1,received_messages:1}); checks++;
+await assert.rejects(()=>counters(actor),e=>e.code==='42501'); checks++;
+ok(!(await db.query("select has_function_privilege('anon','public.client_workspace_counters()','execute') v")).rows[0].v,'no anonymous counter access');
 await db.close();console.log(JSON.stringify({sql:'PASS',checks,auth_storage_cron:'SIMULATED',offers:135,concurrency_cloud_proof:false}));

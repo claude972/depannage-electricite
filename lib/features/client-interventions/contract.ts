@@ -16,6 +16,8 @@ export const clientInterventionRow = z.object({
 
 const cursor = z.string().regex(/^[A-Za-z0-9_-]{1,500}$/);
 const total = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+export const clientWorkspaceCounters = z.object({ active_interventions: total, received_messages: total }).strict();
+export type ClientWorkspaceCounters = z.infer<typeof clientWorkspaceCounters>;
 export const clientInterventionInput = z.object({
   filter: clientInterventionFilter,
   search: z.string().trim().max(120).refine(value => !/[\u0000-\u001f\u007f]/.test(value)),
