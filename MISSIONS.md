@@ -122,3 +122,6 @@ Base 44c35f2, branche codex/checkout-charge-proof, checkout propre réutilisé. 
 
 ## FIN-06 — preuve de commission sur Charge fixée (Astra exclusive)
 Depuis 0b8448b, même branche. Qualifier uniquement une observation signée application_fee.created/refunded par relecture Fee et recoupement exact id, mode, compte, montant EUR, originating_transaction et charge connectée. Reprise durable et historique daté des remboursements observés, aucun mouvement bancaire ni modification webhook/UI. Tests SQL/handlers, porte existante OFF.
+
+## FIN-06 — preuve de rapprochement payout automatique (Astra exclusive)
+Depuis 2e7172c, même branche. Source compte Connect issue seulement d’une observation signée et d’un artisan déjà lié ; relecture payout/transactions sous ce compte exact, pages complètes bornées, débit propre identifié séparément et somme nette vérifiée. Projection privée immuable, aucune banque/metadata ni allocation dossier sans preuve. Portes OFF, lecture Stripe seulement, tests SQL/handlers.
