@@ -11,3 +11,11 @@ Application `a18f507db16df2adf2343e48742f415b32de3986` sur `integration/web-pwa`
 - La reprise devis `8bc80c1ce9bb` avec le harnais `82a0622` réussit sept scénarios sur sept, dont l’acceptation d’avenant sans paiement, le PDF privé et le refus après réaffectation. Les 68 lectures indépendantes confirment le nettoyage. La recette entreprise après correction du débordement se suit séparément.
 
 Les raccordements Stripe et Vonage restent différés. Les résultats de localisation utilisent des coordonnées fournies. Les preuves de navigation concernent Chromium.
+
+## Correction de la fiche entreprise
+
+La preview `256ec5cb0a2b0352b63987e4c327010729953b7d` sert le correctif `13dae48` de Claude. Déploiement `dpl_EQMm21XaxheXU4MGcrSvn733AAt6`, Flight `VZ1FBbEFd3XJmnK2cnQAe`, HTTP 200 sans session Vercel. Aucun changement de schéma depuis `a18f507`. [Preview corrigée](https://depannage-electricite-g75a26xmo-brafas-projects.vercel.app)
+
+Les 25 tests ciblés passent. La fiche réelle tient à 360, 390 et 1 280 px en test local, au chargement et après un 503 simulé. En ligne, la reprise entreprise `e17d07d96322` passe sept scénarios sur sept. À 360 px, le site s’affiche sans débordement et « Réessayer » rétablit les données après le 503 injecté. Le test confirme aussi la lecture seule, le refus des écritures directes et le cloisonnement des organisations. Les 95 lectures indépendantes confirment le nettoyage.
+
+Les seize vérifications des fiches publiques passent également sur cette preview. Les preuves de réservation connectée, brouillon PWA et devis ci-dessus restent rattachées à `a18f507`.
