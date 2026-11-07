@@ -274,8 +274,9 @@ export const suite = {
           const audit = await db.select("audit_log", { intervention_id: `eq.${d1.id}`, action: "eq.amendment_accepted" }, "id");
           assert.equal(audit.length, 1, "audit_log amendment_accepted");
           noPayments(hc);
+          assert.equal(await db.count("payments", { quote_id: `eq.${q1.id}` }), 0, "acceptance creates no payment");
           const text = await bodyText(hc.page);
-          assert.ok(text.includes("ne sont pas encore reliés au paiement en ligne"), "the panel states amendments are not linked to online payment");
+          assert.ok(text.includes("Le règlement sur la plateforme porte sur le devis accepté et ses avenants acceptés."), "the panel explains the future payment basis");
           assert.ok(!/avenant[^\n]*pay[ée]/i.test(text), "no wording presents the amendment as paid");
           await capture(hc, out, "docs-client-amendment-accepted-1280", s);
           return { status: am.status };
@@ -360,6 +361,8 @@ export const suite = {
         });
         await s.step("former artisan refused everywhere; no new revision or event", async () => {
           const before = await db.count("quote_document_events", { intervention_id: `eq.${d1.id}` });
+          const beforeDocuments = await db.count("quote_documents", { quote_id: `eq.${q1.id}` });
+          assert.ok(beforeDocuments > 0, "at least one existing document is required");
           const overview = await api(h.page, `/api/quote-documents?intervention_id=${d1.id}`);
           assert.equal(overview.status, 403, `overview answered ${overview.status}`);
           const download = await h.context.request.get(`${base}/api/quote-documents/${state.documentId}`);
@@ -369,7 +372,7 @@ export const suite = {
           const propose = await post(h.page, "/api/quote-amendments", { action: "propose", base_quote_id: q1.id, lines: [{ label: "QA refus attendu", quantity: 1, unit_price_cents: 100 }], tax_rate: 20, reason: cohort.description("refus attendu"), valid_until: null });
           assert.equal(propose.status, 403);
           assert.equal(await db.count("quote_document_events", { intervention_id: `eq.${d1.id}` }), before, "no event added by the former artisan");
-          assert.equal(await db.count("quote_documents", { quote_id: `eq.${q1.id}` }), 2, "no new document (quote r1 + amendment r1 only)");
+          assert.equal(await db.count("quote_documents", { quote_id: `eq.${q1.id}` }), beforeDocuments, "no new document");
           return { overview: overview.status, download: download.status(), generate: generate.status, propose: propose.status, synthetic: "QA: état simulé par service_role, non produit par le circuit utilisateur" };
         });
         await s.step("replacement artisan: overview readable, but not the issuer of Q1 (can_generate=false)", async () => {

@@ -1103,9 +1103,12 @@ test("§20 bis driver POST 403 before the window ⇒ PASS; UI POST with response
   const net = await lib("network");
   const { h, emit } = fakeHandle([{ method: "GET", path: "/api/workspace", status: 200 }]);
   const before = h.network.length;
+  emit("POST", "/api/enterprise/overview").respond(200); // scoped read during the probes
   emit("POST", "/api/quote-documents").respond(403); // driver probe, before the window
   const window = await net.openUiWindow(h, { since: before, driverMutations: 1, origin: ORIGIN });
   emit("GET", "/api/workspace").respond(200);
+  emit("POST", "/api/enterprise/overview/professional").respond(200);
+  emit("POST", "/api/enterprise/interventions/search"); // scoped read even before its response
   assert.equal(net.assertNoUiWrites(h, window).emitted_writes, 0, "driver 403 before the window: PASS");
   const pending = emit("POST", "/api/site-operations"); // UI write emitted, no response yet
   assert.throws(() => net.assertNoUiWrites(h, window), (e: Error) => e.name === "AssertionError" && /emitted/.test(e.message), "pending response must already FAIL");
@@ -1113,7 +1116,7 @@ test("§20 bis driver POST 403 before the window ⇒ PASS; UI POST with response
   assert.throws(() => net.assertNoUiWrites(h, window), (e: Error) => e.name === "AssertionError", "UI 403 FAIL");
   const second = fakeHandle();
   const w2 = await net.openUiWindow(second.h, { origin: ORIGIN });
-  second.emit("PATCH", "/api/site-operations").respond(200);
+  second.emit("PATCH", "/api/enterprise/overview").respond(200);
   assert.throws(() => net.assertNoUiWrites(second.h, w2), (e: Error) => e.name === "AssertionError", "UI 200 FAIL");
   const third = fakeHandle();
   const w3 = await net.openUiWindow(third.h, { origin: ORIGIN });
@@ -1123,6 +1126,7 @@ test("§20 bis driver POST 403 before the window ⇒ PASS; UI POST with response
   net.closeUiWindow(third.h, w3);
   third.emit("POST", "/api/after-close");
   assert.equal(third.h.page.listenerCount("request"), 0, "listener detached on close");
+  assert.equal(net.mutationsIn([{ method: "POST", path: "/api/enterprise/overview/other" }]).length, 1);
 });
 test("§20 bis baseline is opaque and bound: foreign handle, forged {}, malformed or out-of-range ⇒ harness error, never PASS (root repro ported)", async () => {
   const net = await lib("network");

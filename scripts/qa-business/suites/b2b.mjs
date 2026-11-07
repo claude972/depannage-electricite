@@ -307,7 +307,7 @@ export const suite = {
       }
     });
 
-    await report.scenario(suite.name, "read-only member: facts visible, no write control on any tab, no POST, direct commands refused", async (s) => {
+    await report.scenario(suite.name, "read-only member: facts visible, no write control on any tab, no UI write, direct commands refused", async (s) => {
       const h = await ctx.openPage(s, {});
       try {
         await s.step("login read-only member", () => login(h, base, reader, projectRef));
@@ -332,7 +332,7 @@ export const suite = {
           }
           return seen;
         });
-        await s.step("browser: no POST /api/* issued", () => {
+        await s.step("browser: no write issued by the interface", () => {
           return assertNoUiWrites(h, readerWindow);
         });
         await s.step("server: save_equipment / save_fiscal_year / save_erp_checklist refused (403) through the application route", async () => {
@@ -388,7 +388,7 @@ export const suite = {
       }
     });
 
-    await report.scenario(suite.name, "third party (owner of organisation B): A1 refused, own site readable, no POST", async (s) => {
+    await report.scenario(suite.name, "third party (owner of organisation B): A1 refused, own site readable, no UI write", async (s) => {
       const h = await ctx.openPage(s, {});
       try {
         await s.step("login third party", () => login(h, base, outsider, projectRef));

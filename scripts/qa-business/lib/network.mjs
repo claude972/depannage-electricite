@@ -6,8 +6,16 @@
 // are excluded by construction.
 import assert from "node:assert/strict";
 
-const MUTATING = (method) => method !== "GET" && method !== "HEAD";
-export const mutationsIn = (list, prefix = "/api/") => list.filter((n) => MUTATING(n.method) && typeof n.path === "string" && n.path.startsWith(prefix));
+// These exact enterprise endpoints use POST for scoped reads, with no command branch.
+const READ_POST_PATHS = new Set([
+  "/api/enterprise/overview",
+  "/api/enterprise/overview/professional",
+  "/api/enterprise/interventions/search",
+]);
+const mutating = (method, path) =>
+  method !== "GET" && method !== "HEAD" && !(method === "POST" && READ_POST_PATHS.has(path));
+export const mutationsIn = (list, prefix = "/api/") =>
+  list.filter((n) => typeof n.path === "string" && n.path.startsWith(prefix) && mutating(n.method, n.path));
 
 const windows = new WeakMap();
 class WindowError extends Error {
@@ -50,7 +58,7 @@ export async function openUiWindow(h, { since = 0, driverMutations = 0, timeoutM
     try {
       const method = request.method();
       const path = pathOf(request.url(), origin);
-      if (path && path.startsWith(prefix) && MUTATING(method)) emitted.push(Object.freeze({ method, path }));
+      if (path && path.startsWith(prefix) && mutating(method, path)) emitted.push(Object.freeze({ method, path }));
     } catch {
       emitted.push(Object.freeze({ method: "UNKNOWN", path: "unreadable request" }));
     }
