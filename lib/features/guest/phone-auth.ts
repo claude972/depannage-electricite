@@ -14,13 +14,15 @@ class PhoneError extends Error {
   constructor(readonly status: number, readonly retryAfter?: number) { super("PHONE_AUTH"); }
 }
 function fail(status = 503, retryAfter?: number): never { throw new PhoneError(status, retryAfter); }
-export function normalizePhone(raw: string): string | null {
+function normalizedPhone(raw: string, martiniqueLandline: boolean): string | null {
   if (raw.length > 40 || !/^[+\d\s().-]+$/.test(raw)) return null;
   let n = raw.trim().replace(/[\s().-]/g, "");
-  if (/^069[67]\d{6}$/.test(n)) n = "+596" + n.slice(1);
+  if (/^069[67]\d{6}$/.test(n) || (martiniqueLandline && /^059[67]\d{6}$/.test(n))) n = "+596" + n.slice(1);
   else if (/^0[67]\d{8}$/.test(n)) n = "+33" + n.slice(1);
   return /^\+[1-9]\d{7,14}$/.test(n) ? n : null;
 }
+export const normalizePhone = (raw: string) => normalizedPhone(raw, false);
+export const normalizeCallbackPhone = (raw: string) => normalizedPhone(raw, true);
 const authPhone = (phone: unknown) => typeof phone === "string" ? normalizePhone(phone.startsWith("+") ? phone : "+" + phone) : null;
 const phone = z.string().max(40).transform((v, ctx) => {
   const n = normalizePhone(v); if (!n) { ctx.addIssue({ code: "custom", message: "phone" }); return z.NEVER; } return n;

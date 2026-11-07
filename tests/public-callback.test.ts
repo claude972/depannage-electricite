@@ -44,6 +44,11 @@ test("public callback intake gates, requires consent, normalizes locally and ret
   assert.deepEqual(service.calls, [{ name: "submit_public_callback", args: {
     p_request_id: id, p_phone: "+596696010203", p_reason: "existing_request", p_consent: true,
   } }]);
+  for (const [phone, normalized] of [["05 96 01 02 03", "+596596010203"], ["05 97 01 02 03", "+596597010203"]]) {
+    const landline = setup(true, { enabled: true });
+    assert.equal((await landline.submit(post(path, { ...command, phone }))).status, 200);
+    assert.equal((landline.calls[0].args as { p_phone: string }).p_phone, normalized);
+  }
   const throttled = await setup(null, { enabled: true, code: "53300" }).submit(post(path, command));
   assert.equal(throttled.status, 429);
   assert.equal(throttled.headers.get("retry-after"), "60");

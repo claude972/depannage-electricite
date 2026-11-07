@@ -2,7 +2,7 @@ import { env } from "node:process";
 import { z } from "zod";
 import { adminClient, ApiError, authenticatedClient, dbError } from "@/lib/supabase/server";
 import { validated } from "@/lib/supabase/validation";
-import { normalizePhone } from "@/lib/features/guest/phone-auth";
+import { normalizeCallbackPhone } from "@/lib/features/guest/phone-auth";
 import { comparePostgresTime } from "@/lib/shared/postgres-time-order";
 import { callbackPageNumber, callbackPageSize, callbackQueue, callbackReason } from "./contract";
 
@@ -38,7 +38,7 @@ export async function postPublicCallback(request: Request) {
     postRequest(request);
     if (!available()) throw new ApiError(503, "Les demandes de rappel sont actuellement fermées.");
     const input = await validated(request, intakeSchema);
-    const phone = normalizePhone(input.phone);
+    const phone = normalizeCallbackPhone(input.phone);
     if (!phone) throw new ApiError(422, "Saisissez un numéro de téléphone valide avec son indicatif si nécessaire.");
     const result = await adminClient().rpc("submit_public_callback", {
       p_request_id: input.request_id, p_phone: phone, p_reason: input.reason, p_consent: input.consent,

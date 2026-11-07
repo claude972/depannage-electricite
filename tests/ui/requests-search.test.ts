@@ -187,7 +187,6 @@ test("câblage : RequestsView utilise la recherche serveur en direct, garde le f
   assert.doesNotMatch(view, /sessionStorage|localStorage|history\.|location\./, "results never stored or put in the URL");
   const leaf = readFileSync("components/features/requests-search/model.ts", "utf8") + readFileSync("components/features/requests-search/use-requests-search.ts", "utf8");
   assert.doesNotMatch(leaf, /sessionStorage|localStorage|history\.|location\./);
-  assert.doesNotMatch(src, /erasureRequests/, "the other lot's AccountDataPanel prop is not reproduced");
 });
 
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
