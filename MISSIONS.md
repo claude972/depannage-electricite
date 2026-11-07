@@ -119,3 +119,6 @@ ROOT raccorde Web Push à la file privée et au service worker existants. L’ut
 
 ## FIN-06 — preuve Charge Checkout (Astra exclusive)
 Base 44c35f2, branche codex/checkout-charge-proof, checkout propre réutilisé. Tranche serveur : commande durable et preuve privée immuable session payée → PI réussi → Charge capturée, recoupée aux snapshots SQL ; lecture finance et association des observations de litige exactes sans toucher leurs résultats ou le webhook. Frais et payouts restent non associés faute de preuve complète. Porte OFF, aucune mutation Stripe, tests injectés et SQL.
+
+## FIN-06 — preuve de commission sur Charge fixée (Astra exclusive)
+Depuis 0b8448b, même branche. Qualifier uniquement une observation signée application_fee.created/refunded par relecture Fee et recoupement exact id, mode, compte, montant EUR, originating_transaction et charge connectée. Reprise durable et historique daté des remboursements observés, aucun mouvement bancaire ni modification webhook/UI. Tests SQL/handlers, porte existante OFF.
