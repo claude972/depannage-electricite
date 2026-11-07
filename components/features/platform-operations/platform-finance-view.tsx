@@ -7,6 +7,7 @@ import { COMMISSION_NOT_CONFIGURED, REFUND_EXECUTION_MESSAGE } from "../../../li
 import { RefundExecutionPanel } from "../refund-execution/refund-execution-panel";
 import { ReconciliationPanel } from "../finance-reconciliation/reconciliation-panel";
 import { SubscriptionsCatalogPanel } from "../subscriptions-catalog/catalog-panel";
+import { FinanceProofsTab } from "../finance-proofs/proofs-panel";
 import type { Context as ReconciliationContext } from "../finance-reconciliation/model";
 import { EMPTY_READINESS, UUID_RE, disputeActions, readinessFingerprint, readinessReduce, refundActions, refundStatusLabel, validateAmountCents, validateDisputeDecision, validateRefundDecision, validateText, type ReadinessTarget } from "../../../lib/features/platform-operations/state-machines";
 import type { PlatformDemo } from "../../../lib/features/platform-operations/demo";
@@ -16,8 +17,8 @@ import styles from "./platform-operations.module.css";
 import { TAX_RATE_OPTIONS, isTaxRate, parseTaxRateInput, taxRateLabel, type TaxRate } from "../../app/tax-rate";
 
 export type PlatformFinanceViewProps = { state: ContractState; unavailableMessage: string; scope: PlatformViewScope; client: PlatformClient; context: ReconciliationContext; demo?: PlatformDemo; onNavigate?: (view: string, param?: string) => void };
-type Tab = "overview" | "ledger" | "invoices" | "refunds" | "disputes" | "observations" | "subscriptions" | "settings";
-const TABS: { id: Tab; label: string }[] = [{ id: "overview", label: "Rapprochement" }, { id: "ledger", label: "Ledger" }, { id: "invoices", label: "Factures et avoirs" }, { id: "refunds", label: "Remboursements" }, { id: "disputes", label: "Litiges" }, { id: "observations", label: "Observations fournisseur" }, { id: "subscriptions", label: "Abonnements" }, { id: "settings", label: "Paramètres" }];
+type Tab = "overview" | "ledger" | "invoices" | "refunds" | "disputes" | "observations" | "proofs" | "subscriptions" | "settings";
+const TABS: { id: Tab; label: string }[] = [{ id: "overview", label: "Rapprochement" }, { id: "ledger", label: "Ledger" }, { id: "invoices", label: "Factures et avoirs" }, { id: "refunds", label: "Remboursements" }, { id: "disputes", label: "Litiges" }, { id: "observations", label: "Observations fournisseur" }, { id: "proofs", label: "Preuves" }, { id: "subscriptions", label: "Abonnements" }, { id: "settings", label: "Paramètres" }];
 const DEMO_NOTE = "Mode démonstration : aucune action n’est envoyée.";
 const KIND_LABEL: Record<LedgerEntry["entry_kind"], string> = { payment_settled: "Règlement enregistré", commission_estimated: "Commission estimée (non prélevée)", commission_withheld: "Commission prélevée (confirmée)", refund_settled: "Remboursement confirmé" };
 const MISSING_LABEL: Record<string, string> = { billing_contact: "coordonnées de facturation manquantes", payment_not_settled: "paiement non confirmé", quote_not_accepted: "devis non accepté", already_issued: "facture déjà émise pour ce paiement", artisan_company_name: "raison sociale de l’artisan manquante", artisan_siret: "SIRET de l’artisan manquant", artisan_legal_status: "forme juridique de l’artisan manquante", artisan_address: "adresse de l’artisan manquante", artisan_identity: "identité légale de l’artisan incomplète", platform_issuer: "émetteur plateforme non configuré", platform_commission_vat_rate: "taux de TVA de commission non configuré", commission_not_confirmed: "commission non confirmée par le fournisseur de paiement", payment_total_mismatch: "montant du règlement incohérent avec le devis", amendment_snapshot_mismatch: "versions des avenants à vérifier", invoice_mixed_tax_rates: "plusieurs taux de TVA : une facture adaptée est nécessaire", invoice_lines_limit: "trop de lignes pour ce document", invoice_tax_rounding_mismatch: "arrondi de TVA à vérifier", amendment_invalid: "avenant non exploitable" };
@@ -137,7 +138,7 @@ function Inner({ scope, client, context, demo, onNavigate }: PlatformFinanceView
       {scope.authority.canWrite && !ctx.canWrite && !demo && <ReadOnly reason="votre scope finance est en lecture seule." />}
       {demo && <p className={styles.alert}>{DEMO_NOTE}</p>}
       <ConfigNotices config={me.data.config} />
-      <div className={styles.tabs} role="tablist" aria-label="Sections finance">{TABS.filter((t) => (t.id !== "settings" || me.data?.super_admin) && (t.id !== "observations" || demo || me.data?.super_admin || me.data?.scopes.includes("finance_read")) && (t.id !== "subscriptions" || demo || me.data?.super_admin || me.data?.scopes.includes("finance_read"))).map((t) => <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={styles.tab} onClick={() => { setTab(t.id); notify(null); }}>{t.label}</button>)}</div>
+      <div className={styles.tabs} role="tablist" aria-label="Sections finance">{TABS.filter((t) => (t.id !== "settings" || me.data?.super_admin) && (t.id !== "observations" || demo || me.data?.super_admin || me.data?.scopes.includes("finance_read")) && (t.id !== "subscriptions" || demo || me.data?.super_admin || me.data?.scopes.includes("finance_read")) && (t.id !== "proofs" || demo || me.data?.super_admin || me.data?.scopes.includes("finance_read"))).map((t) => <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={styles.tab} onClick={() => { setTab(t.id); notify(null); }}>{t.label}</button>)}</div>
       {message && <p className={message.kind === "ok" ? styles.success : styles.error} role={message.kind === "ok" ? "status" : "alert"}>{message.text}</p>}
       {tab === "overview" && <Overview ctx={ctx} />}
       {tab === "ledger" && <Ledger ctx={ctx} />}
@@ -145,6 +146,7 @@ function Inner({ scope, client, context, demo, onNavigate }: PlatformFinanceView
       {tab === "refunds" && <Refunds ctx={ctx} />}
       {tab === "disputes" && <Disputes ctx={ctx} />}
       {tab === "observations" && <ReconciliationPanel demo={Boolean(demo)} canRead={me.data.super_admin || me.data.scopes.includes("finance_read")} canWrite={scope.authority.canWrite && !demo && (me.data.super_admin || (me.data.scopes.includes("finance_read") && me.data.scopes.includes("finance_write")))} context={context} onOpenDossier={onNavigate ? (id) => onNavigate("intervention", id) : undefined} />}
+      {tab === "proofs" && <FinanceProofsTab demo={Boolean(demo)} canRead={me.data.super_admin || me.data.scopes.includes("finance_read")} canWrite={scope.authority.canWrite && !demo && (me.data.super_admin || (me.data.scopes.includes("finance_read") && me.data.scopes.includes("finance_write")))} context={context} />}
       {tab === "subscriptions" && <SubscriptionsCatalogPanel demo={Boolean(demo)} canRead={me.data.super_admin || me.data.scopes.includes("finance_read")} sessionWritable={scope.authority.canWrite && !demo} context={context} />}
       {tab === "settings" && me.data.super_admin && <Settings ctx={ctx} onSaved={me.reload} />}
     </div>
