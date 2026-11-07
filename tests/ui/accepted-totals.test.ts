@@ -43,10 +43,11 @@ test("12000 + 3000 accepted amendment, paid 15000 ⇒ commitment 15000, « engag
   assert.equal(fig.committedCents, 15000);
 });
 
-test("enterprise-space: siteFigures and « Montant à régler » use the accepted total; « payé » stays the real payment", () => {
+test("enterprise-space: siteFigures and the payment block use the accepted total (server quote + amendments); « payé » stays the real payment", () => {
   const src = readFileSync("components/role/enterprise-space.tsx", "utf8");
   assert.match(src, /const committed = sum\(accepted\.map\(\(q\) => acceptedCommittedCents\(q\)\)\);/);
-  assert.match(src, /<span>Montant à régler<\/span>\s*<strong>\{money\(acceptedCommittedCents\(acceptedQuote\)\)\}<\/strong>/);
+  // Server accepted total when present; a base-only value is labelled « Devis initial accepté », never « à régler ».
+  assert.match(src, /<span>Devis et avenants acceptés \(calcul serveur\)<\/span>\s*<strong>\{money\(acceptedQuote\.accepted_total_cents\)\}<\/strong>/);
   assert.match(src, /const paid = sum\(paidRows\.map\(\(p\) => p\.total_cents\)\);/);
   assert.match(src, /remaining: budget - committed/);
 });

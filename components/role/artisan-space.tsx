@@ -2150,7 +2150,7 @@ function PaymentPanel({ session, intervention: i }: { session: Session; interven
     <section className="panel" aria-labelledby="dossier-payment">
       <h2 id="dossier-payment">Règlement</h2>
       <div className={styles.quoteHead}>
-        <strong>{accepted ? money(accepted.total_cents) : "Montant du devis accepté introuvable"}</strong>
+        <strong>{accepted ? `Devis initial accepté : ${money(accepted.total_cents)}` : "Montant du devis accepté introuvable"}</strong>
         {tag}
       </div>
       <p>{text}</p>

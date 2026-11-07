@@ -35,10 +35,11 @@ export type CustomerInvoicesPanelProps = {
   /** Tests only. */
   initial?: InvoicesState;
 };
-/** Keyed by scope + identity: any filter or account change starts a fresh panel (no cursor reuse). */
+/** Keyed by identity, generation, mode and scope: any change starts a fresh panel (no cursor/detail reuse). */
 export function CustomerInvoicesPanel(props: CustomerInvoicesPanelProps) {
-  const uid = (props.context ?? DEFAULT_INVOICES_CONTEXT).userId();
-  return <Panel key={`${uid ?? "-"}|${filtersKey(props.filters)}`} {...props} />;
+  const ctx = props.context ?? DEFAULT_INVOICES_CONTEXT;
+  // Identity + generation + mode + scope: a rights/scope change at constant uid empties at once.
+  return <Panel key={`${ctx.userId() ?? "-"}|${ctx.generation()}|${props.demo ? "demo" : "live"}|${filtersKey(props.filters)}`} {...props} />;
 }
 
 const dateFr = (iso: string) => new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(iso));
