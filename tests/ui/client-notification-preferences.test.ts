@@ -47,9 +47,9 @@ test("profile no longer claims that no notification preference is stored", () =>
   const src = readFileSync(path.join(ROOT, "components/role/client-space.tsx"), "utf8");
   assert.doesNotMatch(src, /ni préférence de notification n’est enregistré/);
   assert.match(src, /<ProfileNotificationPreferences session=\{session\} \/>/);
-  // Saved addresses are now the real CLI-09 leaf; payment methods stay explicitly unavailable.
+  // Saved addresses are the real CLI-09 leaf; saved payment methods are the real FIN-08 leaf.
   assert.match(src, /<ClientAddressesPanel key=/);
-  assert.match(src, /title="Moyens de paiement enregistrés"/);
+  assert.match(src, /<SavedPaymentMethodsPanel key=/);
 });
 
 test("live + available: the real panel loads through the injected client (loading state first)", async () => {

@@ -216,5 +216,5 @@ test("formulaire de demande : présélection de l’adresse préférée sur un b
   assert.match(space, /initialValues=\{session\.pendingDraft\}\s*preferredAddress=\{preferredAddress\}/);
   assert.match(space, /<ClientAddressesPanel key=/);
   assert.doesNotMatch(space, /title="Adresses enregistrées et moyens de paiement"/);
-  assert.match(space, /title="Moyens de paiement enregistrés"/);
+  assert.match(space, /<SavedPaymentMethodsPanel key=/); // FIN-08 replaced the unavailable block
 });

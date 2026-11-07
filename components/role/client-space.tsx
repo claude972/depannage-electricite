@@ -87,6 +87,7 @@ import { AppointmentReminderPanel } from "../features/appointment-reminders/appo
 import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-panel";
 import { ContractSourceLine } from "../features/quote-grid/quote-grid";
 import { PlatformPayAction } from "../app/platform-pay";
+import { SavedPaymentMethodsPanel } from "../features/saved-payment-methods/saved-payment-methods-panel";
 
 const CLIENT_VIEWS: readonly View[] = [
   "overview",
@@ -2109,11 +2110,7 @@ function ProfileView({ session }: { session: Session }) {
             context={session.mutationContext}
             onOpenTicket={(id) => session.go("support", id)}
           />
-          <Unavailable
-            title="Moyens de paiement enregistrés"
-            reason="Pas encore activé sur ce service : aucun moyen de paiement n’est mémorisé. Chaque règlement se fait sur la plateforme, au moment voulu."
-            blocker="CLI-09"
-          />
+          <SavedPaymentMethodsPanel key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} demo={demo} context={session.mutationContext} />
         </div>
         <aside className={styles.aside}>
           <section className={styles.asideCard}>
