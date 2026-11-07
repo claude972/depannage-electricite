@@ -52,3 +52,7 @@ Référence de travail [plan des 76 capacités](docs/PLAN_LIVRAISON_INTEGRALE.md
 ## ART-03 / ADM-02 — décision individuelle de justificatif
 
 Pilote seul auteur de la migration, API /api/artisan/credentials/[id]/reviews et tests. Historique immuable, motif, version attendue, rejeu par UUID, lecture par l'artisan propriétaire et l'administration actuelle. Une pièce revue garde son type et sa date déclarée, l'artisan peut joindre une nouvelle pièce pour corriger. Une décision sur une pièce ne modifie pas l'approbation globale du dossier. Le contrat UI expose uniquement la pièce, les décisions datées, le droit d'action et le curseur. Vérifier accès croisés, expiration, concurrence par version, zéro double audit et reprise après réponse perdue. Cloud après assemblage et revue.
+
+## ENT-09/15 — consolidation énergie, claim Astra backend
+
+Branche codex/energy-consolidation depuis3657bdd. Auteur exclusif : nouvelle migration de lecture énergie consolidée, lib/features/energy-consolidation/**, GET /api/organizations/[id]/energy, tests et contrat. Réutiliser site_energy_periods ; sites explicitement sélectionnés et autorisés, périodes inclusives entières sans proratisation ; comparer uniquement couvertures temporelles comparables des compteurs déclarés. Absence distincte de zéro, sommes de relevés sans prétendre à l’exhaustivité physique faute de registre/hiérarchie des compteurs. Aucun fournisseur, UI ou cloud. Tests HTTP/SQL ciblés et TypeScript, push pour revue groupée.
