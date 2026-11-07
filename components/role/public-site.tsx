@@ -15,7 +15,7 @@ import { CATEGORIES, category, money } from "../app/format";
 import { PublicHome } from "./public-home";
 import { PublicChrome, type HomeHandlers } from "./public-chrome";
 import formStyles from "./public-forms.module.css";
-import { ABOUT_VALUES, FAQ, HELP_PROCESS, JOIN_FACTS, JOIN_REVIEW, JOIN_STEPS, JOIN_TILES, LEGAL_SECTIONS, PENDING, PRIVACY_DATA, numbered, pricingRows } from "./public-lists";
+import { ABOUT_VALUES, CONTACT_CHANNELS, FAQ, HELP_PROCESS, JOIN_FACTS, JOIN_REVIEW, JOIN_STEPS, JOIN_TILES, LEGAL_SECTIONS, OPERATOR_FIELDS, PENDING, PRICING_PENDING, PRIVACY_CONTROLS, PRIVACY_DATA, PRIVACY_THIRD_PARTIES, numbered, pricingRows } from "./public-lists";
 import styles from "./public.module.css";
 import viewStyles from "./public-views.module.css";
 
@@ -102,7 +102,7 @@ export function PublicSite({ session }: { session: PublicSession }) {
         {themedAlerts}
         <div className={viewStyles.skin} data-public-skin="info">
           {view === "help" ? (
-            <HelpView onNew={() => newRequest()} />
+            <HelpView onNew={() => newRequest()} onLogin={login} />
           ) : view === "pricing" ? (
             <PricingView onNew={() => newRequest()} />
           ) : view === "join" ? (
@@ -112,9 +112,9 @@ export function PublicSite({ session }: { session: PublicSession }) {
           ) : view === "demo" ? (
             <DemoEntryView session={session} />
           ) : view === "about" ? (
-            <AboutView onNew={() => newRequest()} onJoin={() => navigate("join")} />
+            <AboutView onNew={() => newRequest()} onJoin={() => navigate("join")} onLogin={login} />
           ) : view === "privacy" ? (
-            <PrivacyView onHome={() => navigate("home")} />
+            <PrivacyView onHome={() => navigate("home")} onLogin={login} />
           ) : view === "legal" ? (
             <LegalView onHome={() => navigate("home")} />
           ) : null}
@@ -202,7 +202,37 @@ function AuthView({ session }: { session: PublicSession }) {
 }
 
 // ---- Help (M46 process + M70 FAQ + M42 column) ---------------------------------------------
-function HelpView({ onNew }: { onNew: () => void }) {
+// Contact (PUB-04): only real channels; the others say they are pending. No form pretends to send.
+function ContactBlock({ onLogin, headingId }: { onLogin: () => void; headingId: string }) {
+  return (
+    <section className={`panel ${styles.block}`} aria-labelledby={headingId} data-public-contact="">
+      <h3 id={headingId}>Contact</h3>
+      <dl className={styles.legalFields}>
+        {CONTACT_CHANNELS.map((c) => (
+          <div key={c.label} data-contact-channel={c.state}>
+            <dt>{c.label} :</dt>
+            <dd>{c.state === "pending" ? <><strong>{c.label === "Demande de rappel" ? "En cours d’ouverture" : PENDING}</strong> — {c.text}</> : c.text}</dd>
+          </div>
+        ))}
+      </dl>
+      <button type="button" className="button outline" onClick={onLogin} data-contact-login="">Se connecter pour écrire à l’assistance</button>
+    </section>
+  );
+}
+function PendingFields({ fields, label }: { fields: string[]; label: string }) {
+  return (
+    <dl className={styles.legalFields} aria-label={label} data-pending-fields="">
+      {fields.map((field) => (
+        <div key={field}>
+          <dt>{field} :</dt>
+          <dd>{PENDING}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function HelpView({ onNew, onLogin }: { onNew: () => void; onLogin: () => void }) {
   return (
     <div className={styles.page}>
       <Kicker>Dépannage électrique</Kicker>
@@ -241,11 +271,7 @@ function HelpView({ onNew }: { onNew: () => void }) {
             <p>Commencez par décrire le problème. Vous pourrez préciser le lieu et votre besoin.</p>
             <button type="button" className="button primary full" onClick={onNew}>Créer une demande</button>
           </section>
-          <section className={`panel ${styles.block}`}>
-            <h3>Contact et informations légales</h3>
-            <p>Les coordonnées de l’exploitant, les conditions de service et les mentions légales seront publiées avant l’ouverture commerciale.</p>
-            <p>Cette version ne fournit pas de ligne d’urgence.</p>
-          </section>
+          <ContactBlock onLogin={onLogin} headingId="help-contact" />
           <InstallPanel />
         </aside>
       </div>
@@ -263,7 +289,10 @@ function PricingView({ onNew }: { onNew: () => void }) {
           <h1 className={styles.title}>Les prix, <span className={styles.accent}>en trois montants</span></h1>
           <p className={styles.subtitle}>L’estimation indicative, le devis que vous acceptez et le montant effectivement réglé sont trois choses distinctes.</p>
         </div>
-        <Unavailable title="Barème officiel, frais de déplacement et majorations" reason="À définir par l’exploitant. Aucun tarif public, frais de déplacement ou majoration (soir, week-end, urgence) n’est publié tant que cette décision n’est pas prise." blocker="PUB-02" />
+        <div>
+          <Unavailable title="Barème officiel, frais de déplacement et majorations" reason="À définir par l’exploitant. Aucun tarif public, frais de déplacement ou majoration (soir, week-end, urgence) n’est publié tant que cette décision n’est pas prise." blocker="PUB-02" />
+          <PendingFields fields={PRICING_PENDING} label="Décisions tarifaires en attente" />
+        </div>
       </div>
       <section className={`panel ${styles.priceTableCard}`} aria-labelledby="pricing-table">
         <h2 id="pricing-table" className={styles.srOnly}>Fourchettes indicatives par type de panne</h2>
@@ -396,7 +425,7 @@ function JoinView({ onSignup, onDemo }: { onSignup: () => void; onDemo: () => vo
 }
 
 // ---- About (V8-C03) -------------------------------------------------------------------------
-function AboutView({ onNew, onJoin }: { onNew: () => void; onJoin: () => void }) {
+function AboutView({ onNew, onJoin, onLogin }: { onNew: () => void; onJoin: () => void; onLogin: () => void }) {
   return (
     <div className={styles.page}>
       <section className={styles.hero} aria-labelledby="about-title">
@@ -439,8 +468,12 @@ function AboutView({ onNew, onJoin }: { onNew: () => void; onJoin: () => void })
       </div>
       <section className={`panel ${styles.block} ${styles.narrowBlock}`} aria-labelledby="about-operator">
         <h2 id="about-operator">Exploitant, équipe et histoire</h2>
+        <PendingFields fields={OPERATOR_FIELDS} label="Présentation de l’exploitant" />
         <Unavailable title="Identité de l’exploitant, équipe et coordonnées à renseigner" reason="Le nom définitif, la société exploitante, les personnes responsables et les moyens de contact seront publiés avant l’ouverture commerciale. Aucune information de substitution n’est affichée." blocker="PUB-08 / PUB-09" />
       </section>
+      <div className={styles.narrowBlock}>
+        <ContactBlock onLogin={onLogin} headingId="about-contact" />
+      </div>
       <section className={`${styles.cta} ${styles.narrowBlock}`}>
         <div>
           <h2>Et maintenant ?</h2>
@@ -456,8 +489,8 @@ function AboutView({ onNew, onJoin }: { onNew: () => void; onJoin: () => void })
 }
 
 // ---- Privacy (V8-C05) -----------------------------------------------------------------------
-function PrivacyView({ onHome }: { onHome: () => void }) {
-  const sections = ["Données enregistrées par l’application", "Mode démonstration", "Traceurs et mesure d’audience", "Vos droits et le contact"];
+function PrivacyView({ onHome, onLogin }: { onHome: () => void; onLogin: () => void }) {
+  const sections = ["Données enregistrées par l’application", "Services tiers utilisés aujourd’hui", "Mode démonstration", "Traceurs et mesure d’audience", "Vos contrôles", "Vos droits et le contact"];
   return (
     <div className={`${styles.page} ${styles.document}`}>
       <Crumb onHome={onHome} current="Confidentialité" />
@@ -471,16 +504,32 @@ function PrivacyView({ onHome }: { onHome: () => void }) {
           ))}
         </ul>
       </section>
+      <section className={styles.docSection} aria-labelledby="privacy-third-parties" data-privacy-third-parties="">
+        <h2 id="privacy-third-parties">{numbered(1, sections[1])}</h2>
+        <ul className={styles.docList}>
+          {PRIVACY_THIRD_PARTIES.map((item) => (
+            <li key={item.name}><strong>{item.name} :</strong> {item.text}</li>
+          ))}
+        </ul>
+      </section>
       <section className={styles.docSection} aria-labelledby="privacy-demo">
-        <h2 id="privacy-demo">{numbered(1, sections[1])}</h2>
+        <h2 id="privacy-demo">{numbered(2, sections[2])}</h2>
         <p>La démonstration n’envoie rien à un serveur : ses exemples et vos modifications sont conservés uniquement dans ce navigateur (localStorage). Pour les effacer, utilisez le bouton « Réinitialiser » du bandeau de démonstration, ou supprimez les données de site de ce navigateur.</p>
       </section>
       <section className={styles.docSection} aria-labelledby="privacy-trackers">
-        <h2 id="privacy-trackers">{numbered(2, sections[2])}</h2>
+        <h2 id="privacy-trackers">{numbered(3, sections[3])}</h2>
         <p>Cette version ne contient aucun traceur publicitaire ni outil de mesure d’audience. Un brouillon de demande non envoyé peut être conservé localement dans votre navigateur jusqu’à votre connexion.</p>
       </section>
+      <section className={styles.docSection} aria-labelledby="privacy-controls" data-privacy-controls="">
+        <h2 id="privacy-controls">{numbered(4, sections[4])}</h2>
+        <ul className={styles.docList}>
+          {PRIVACY_CONTROLS.map((item) => <li key={item}>{item}</li>)}
+        </ul>
+        <button type="button" className="button outline" onClick={onLogin}>Se connecter à mon espace</button>
+      </section>
       <section className={styles.docSection} aria-labelledby="privacy-rights">
-        <h2 id="privacy-rights">{numbered(3, sections[3])}</h2>
+        <h2 id="privacy-rights">{numbered(5, sections[5])}</h2>
+        <PendingFields fields={["Responsable du traitement", "Contact pour l’exercice des droits (accès, rectification, suppression)", "Durées de conservation hors position partagée"]} label="Informations de confidentialité en attente" />
         <Unavailable title="Politique complète, contact DPO et préférences : à publier avant ouverture" reason="Les modalités d’accès, de rectification et de suppression, la durée de conservation, le contact du délégué à la protection des données et les préférences de confidentialité seront publiés avant l’ouverture commerciale." blocker="PUB-10" />
       </section>
       <p className={styles.docFoot}>

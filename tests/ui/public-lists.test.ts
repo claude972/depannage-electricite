@@ -34,6 +34,6 @@ test("legal and privacy documents keep their fields and number their sections li
   assert.equal(numbered(0, "Éditeur"), "1. Éditeur");
   assert.equal(numbered(3, "Données personnelles"), "4. Données personnelles");
   assert.deepEqual(LEGAL_SECTIONS.map((s) => s.fields.length), [5, 3, 1, 2]);
-  assert.equal(PRIVACY_DATA.length, 6);
+  assert.equal(PRIVACY_DATA.length, 11); // PUB-10: account…payments + verified phone, saved addresses, notification preferences, shared position, browser storage
   assert.ok(PRIVACY_DATA.every((d) => /^[a-zé]/i.test(d.text)));
 });
