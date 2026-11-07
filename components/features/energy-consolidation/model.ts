@@ -186,3 +186,91 @@ export function incompleteReasons(report: EnergyReport, siteName: (id: string) =
 }
 export const totalConsumption = (t: Total): string | null => (t.recorded_coverage_complete && t.recorded_consumption_wh !== null ? whToKwh(t.recorded_consumption_wh) : null);
 export const totalCost = (t: Total): string | null => (t.cost_complete && t.recorded_cost_cents !== null ? centsToEuros(t.recorded_cost_cents) : null);
+
+// ---- Private CSV export (ROOT b404b4f, read-only contract copied, not cherry-picked) ---------------
+//   GET /api/organizations/{id}/energy?<exactly the displayed filters>&format=csv
+// Success: 200, `text/csv; charset=utf-8`, `Content-Disposition: attachment; filename="rapport-energie.csv"`,
+// `Cache-Control: private, no-store`. Errors stay private JSON with the usual status (401/403/404/422/503),
+// never an empty « successful » download. Same caps as the JSON report.
+export const EXPORT_FALLBACK_NAME = "rapport-energie.csv";
+/** The CSV query is the displayed consolidation's query plus `format=csv` — nothing else changes. */
+export const energyCsvUrl = (sel: Selection): string => `${energyUrl(sel)}&format=csv`;
+
+/** Server filename from Content-Disposition, reduced to a safe local name ending in .csv. */
+export function exportFilename(disposition: string | null): string {
+  if (!disposition) return EXPORT_FALLBACK_NAME;
+  let raw: string | null = null;
+  const star = /filename\*\s*=\s*(?:UTF-8|utf-8)''([^;]+)/.exec(disposition);
+  if (star) {
+    try {
+      raw = decodeURIComponent(star[1].trim());
+    } catch {
+      raw = null;
+    }
+  }
+  if (raw === null) {
+    const plain = /filename\s*=\s*(?:"([^"]*)"|([^;]+))/.exec(disposition);
+    raw = plain ? (plain[1] ?? plain[2] ?? "").trim() : null;
+  }
+  if (!raw) return EXPORT_FALLBACK_NAME;
+  const base = raw.split(/[\\/]/).pop() ?? "";
+  const safe = base.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^[.-]+/, "").slice(0, 100);
+  return /^[A-Za-z0-9][A-Za-z0-9._-]*\.csv$/i.test(safe) ? safe : EXPORT_FALLBACK_NAME;
+}
+
+export type ExportOutcome =
+  | { kind: "file"; blob: Blob; filename: string }
+  | { kind: "error"; status: number; retryAfterS: number | null }
+  | { kind: "off-contract" };
+const retryAfter = (v: string | null): number | null => {
+  if (!v || !/^\d{1,5}$/.test(v.trim())) return null;
+  return Math.min(Number(v.trim()), 3600);
+};
+/** One private GET; a file only for a 200 text/csv non-empty body. Nothing is cached or persisted. */
+export async function fetchCsv(fetcher: typeof fetch, sel: Selection, timeoutMs = ENERGY_TIMEOUT_MS): Promise<ExportOutcome> {
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<ExportOutcome>((resolve) => {
+    timer = setTimeout(() => {
+      controller?.abort();
+      resolve({ kind: "error", status: ENERGY_TIMEOUT, retryAfterS: null });
+    }, timeoutMs);
+  });
+  const request = (async (): Promise<ExportOutcome> => {
+    try {
+      const r = await fetcher(energyCsvUrl(sel), { method: "GET", credentials: "same-origin", cache: "no-store", headers: { Accept: "text/csv" }, ...(controller ? { signal: controller.signal } : {}) });
+      if (r.status !== 200) return { kind: "error", status: r.status, retryAfterS: r.status === 503 ? retryAfter(r.headers.get("retry-after")) : null };
+      const type = (r.headers.get("content-type") ?? "").toLowerCase();
+      if (!/^text\/csv\s*(;|$)/.test(type)) return { kind: "off-contract" };
+      const blob = await r.blob();
+      if (!blob.size) return { kind: "off-contract" };
+      return { kind: "file", blob, filename: exportFilename(r.headers.get("content-disposition")) };
+    } catch {
+      return { kind: "error", status: controller?.signal.aborted ? ENERGY_TIMEOUT : 0, retryAfterS: null };
+    }
+  })();
+  try {
+    return await Promise.race([request, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+export const EXPORT_COPY = {
+  button: "Exporter en CSV",
+  busy: "Export en cours…",
+  needSelection: "L’export CSV devient disponible une fois une sélection valide consolidée et affichée.",
+  scope: "Le fichier reprend exactement la consolidation affichée (mêmes sites, mêmes périodes). Il est privé : téléchargé depuis votre session, jamais via un lien public.",
+  demo: "En démonstration, aucun export CSV n’est produit : connectez-vous pour exporter la consolidation de vos sites.",
+  done: (name: string) => `Fichier « ${name} » généré pour la consolidation affichée.`,
+  offContract: "Réponse inattendue du serveur : aucun fichier n’a été enregistré. Réessayez.",
+} as const;
+/** Honest message per status; `retryAfterS` only for 503. */
+export function exportError(status: number, retryAfterS: number | null): string {
+  if (status === 401) return "Session expirée : reconnectez-vous pour exporter. Aucun fichier n’a été enregistré.";
+  if (status === 403) return "Export refusé : ce périmètre n’est pas accessible avec vos droits actuels (un site non autorisé fait échouer tout l’export). Aucun fichier n’a été enregistré.";
+  if (status === 404) return "Organisation ou site introuvable dans votre périmètre : aucun fichier n’a été enregistré.";
+  if (status === 422) return "Export refusé par le serveur : 1 à 50 sites, 366 jours au plus par période, 500 compteurs déclarés au plus. Aucun fichier n’a été enregistré : ajustez la sélection puis consolidez-la à nouveau.";
+  if (status === 503) return retryAfterS ? `Service momentanément indisponible : réessayez dans ${retryAfterS} s. Aucun fichier n’a été enregistré.` : "Service momentanément indisponible : réessayez plus tard. Aucun fichier n’a été enregistré.";
+  if (status === ENERGY_TIMEOUT) return "Délai dépassé : l’export n’a pas abouti, aucun fichier n’a été enregistré. Réessayez.";
+  return "L’export n’a pas abouti : aucun fichier n’a été enregistré. Réessayez.";
+}
