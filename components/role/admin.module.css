@@ -1928,3 +1928,13 @@ button.row:hover {
   margin: 0;
   font-size: 18px;
 }
+/* Phase 8: inline text link used as a navigation target keeps a 44 px hit area. */
+.inlineLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+.inlineLink:focus-visible {
+  outline: 3px solid var(--ui-focus, currentColor);
+  outline-offset: 2px;
+}
