@@ -14,6 +14,7 @@ import { withApp, skip as appSkip } from "./real-app-harness";
 import type * as Model from "../../components/features/enterprise-search/model";
 
 const m = loadModule("components/features/enterprise-search/model.ts") as unknown as typeof Model;
+const ORG_B = "20000000-0000-4000-8000-000000000002";
 const same = (a: unknown, b: unknown, msg = "") => assert.equal(JSON.stringify(a), JSON.stringify(b), msg);
 const USER = "10000000-0000-4000-8000-000000000001";
 const ORG = "20000000-0000-4000-8000-000000000001";
@@ -166,6 +167,39 @@ test("clé au rendu : un état d’une autre identité / d’autres filtres / d�
   same(m.viewKey(ctx, F({ search: " x " }), 1), m.viewKey(ctx, F({ search: "x" }), 1), "trimmed search");
 });
 
+test("périmètre : un 401/403 tardif de l’organisation A ne vide pas B ; export A→B→A ⇒ aucun fichier ; export dont le scope a changé ⇒ 403 ignoré", async () => {
+  let lateA!: (r: Model.ListResult) => void;
+  const h = harness({ lists: [new Promise((r) => (lateA = r)), res(200, pageOf([row(7)], 1, 1))] });
+  h.c.query(F(), 1);
+  h.c.query(F({ organization_id: ORG_B }), 1); await h.tick();
+  same([h.get().phase, h.get().items.map((x) => x.id)], ["ready", [ID(7)]]);
+  lateA(res(401)); await h.tick();
+  same([h.get().phase, h.get().items.map((x) => x.id)], ["ready", [ID(7)]], "late 401 of org A leaves org B intact");
+  const blob = { kind: "blob" };
+  const ok = { status: 200, blob: blob as unknown as Blob, filename: "interventions.csv", csv: true };
+  let rel!: (r: Model.ExportResult) => void;
+  const aba = harness({ lists: [res(200, pageOf([row(1)], 1, 1)), res(200, pageOf([row(2)], 1, 1)), res(200, pageOf([row(1)], 1, 1))], exports: [new Promise((r) => (rel = r))] });
+  aba.c.query(F(), 1); await aba.tick();
+  let latest = F();
+  const p = aba.c.exportCsv(latest, () => latest, aba.get().key);
+  latest = F({ organization_id: ORG_B }); aba.c.query(latest, 1); await aba.tick();
+  latest = F(); aba.c.query(latest, 1); await aba.tick();
+  rel(ok);
+  same([await p, aba.saved, aba.get().exportError], [false, [], m.COPY.exportChanged], "A→B→A during the export ⇒ no download, said honestly");
+  let rel2!: (r: Model.ExportResult) => void;
+  const late403 = harness({ lists: [res(200, pageOf([row(1)], 1, 1)), res(200, pageOf([row(3)], 1, 1))], exports: [new Promise((r) => (rel2 = r))] });
+  late403.c.query(F(), 1); await late403.tick();
+  let l2 = F();
+  const q = late403.c.exportCsv(l2, () => l2, late403.get().key);
+  l2 = F({ organization_id: ORG_B }); late403.c.query(l2, 1); await late403.tick();
+  rel2({ status: 403, blob: null, filename: null, csv: false });
+  same([await q, late403.get().phase, late403.get().items.map((x) => x.id)], [false, "ready", [ID(3)]], "a late export 403 of the old scope never clears the new one");
+  const page2 = harness({ lists: [res(200, pageOf(Array.from({ length: 10 }, (_, i) => row(i + 1)), 1, 12)), res(200, pageOf([row(11), row(12)], 2, 12))], exports: [ok] });
+  page2.c.query(F(), 1); await page2.tick();
+  page2.c.query(F(), 2); await page2.tick();
+  same(await page2.c.exportCsv(F(), () => F(), page2.get().key), true, "a page change is not a scope change");
+});
+
 test("câblage : useInterventionList en direct ⇒ recherche serveur ; démo ⇒ liste locale ; KPI non touchés", () => {
   const src = readFileSync("components/role/enterprise-space.tsx", "utf8");
   const hook = src.slice(src.indexOf("function useInterventionList"), src.indexOf("function ExportButton"));
@@ -185,6 +219,7 @@ const ENTRY = `
 import { createElement as h, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RequestsView } from "./components/role/enterprise-space";
+import { useEnterpriseSearch } from "./components/features/enterprise-search/use-enterprise-search";
 const w = window;
 const tick = (ms) => new Promise((r) => setTimeout(r, ms));
 const ID = (n) => "a0000000-0000-4000-8000-" + String(n).padStart(12, "0");
@@ -196,6 +231,37 @@ const ctx = (gen, opened, activeSite = null) => ({
   scope: { sites, interventions: [], quotes: [], payments: [], approvals: [], compliance: [], documents: [], rules: [] },
   siteAccess: null, authority: { canWrite: true, readOnlyReason: null }, canCreateRequest: true, reloadSiteAccess: () => {}, go: () => {},
 });
+w.frames = async () => {
+  w.fetch = async (url, init) => {
+    const b = JSON.parse(init.body);
+    if (String(url).endsWith("/overview")) return Response.json({ organization_id: b.organization_id, site_id: b.site_id, counts: { open: b.site_id ? 3 : 9, urgent: 1 }, captured_at: "2026-11-07T00:00:00Z" });
+    const base = b.organization_id === "${ORG}" ? 100 : 200;
+    const total = 12;
+    const start = (b.page - 1) * 10;
+    const items = Array.from({ length: Math.min(10, total - start) }, (_, i) => row(base + start + i, b.site_id ? { site_id: b.site_id } : {}));
+    return Response.json({ items, total, page: { number: b.page, limit: 10, pages: 2 } });
+  };
+  const frames = [];
+  const ctxI = { userId: () => "${USER}", generation: () => 0 };
+  function Probe({ org, site, page }) {
+    const f = { organization_id: org, site_id: site, category: null, status: null, search: "", sort: "recent" };
+    const r = useEnterpriseSearch({ enabled: true, context: ctxI, filters: f, page });
+    frames.push({ org, site, page, phase: r.state.phase, ids: r.state.items.map((x) => x.id) });
+    return null;
+  }
+  const div = document.createElement("div"); document.body.appendChild(div);
+  const root = createRoot(div);
+  const show = (org, site, page) => root.render(h(StrictMode, null, h(Probe, { org, site, page })));
+  const steps = {};
+  show("${ORG}", null, 1); await tick(300);
+  steps.ready = frames[frames.length - 1];
+  for (const [name, org, site, page] of [["page", "${ORG}", null, 2], ["site", "${ORG}", "${S1}", 1], ["org", "${ORG_B}", "${S1}", 1]]) {
+    const mark = frames.length; show(org, site, page); await tick(300);
+    steps[name] = frames.slice(mark);
+  }
+  root.unmount();
+  return steps;
+};
 w.run = async () => {
   const bodies = [], opened = [], saved = [], revoked = [];
   let exportGate = null;
@@ -277,6 +343,36 @@ w.run = async () => {
   return out;
 };
 `;
+test("aucun ancien cadre (Chromium, StrictMode) : 1er rendu après changement de page / site / organisation sans anciennes lignes", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
+  const out = await build({ absWorkingDir: ROOT, stdin: { contents: ENTRY, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, outdir: "out", platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "local-css", ".svg": "dataurl", ".png": "dataurl" }, define: { "process.env.NODE_ENV": '"development"' }, logLevel: "error" });
+  const js = out.outputFiles.find((f) => f.path.endsWith(".js"))!.text;
+  const server: Server = createServer((_rq, rs) => { rs.setHeader("content-type", "text/html"); rs.end(`<!doctype html><div></div><script>${js}</script>`); });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
+  const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true, args: ["--single-process"] });
+  try {
+    const page = await (await browser.newContext()).newPage();
+    const errors: string[] = [];
+    page.on("pageerror", (e: Error) => errors.push(String(e)));
+    await page.goto(`http://127.0.0.1:${(server.address() as { port: number }).port}/`);
+    const r = (await page.evaluate(() => (window as unknown as { frames: () => Promise<unknown> }).frames())) as Record<string, any>;
+    same([r.ready.phase, r.ready.ids.length], ["ready", 10]);
+    let prevIds: string[] = r.ready.ids;
+    for (const name of ["page", "site", "org"]) {
+      const frames = r[name] as { phase: string; ids: string[] }[];
+      same([frames[0].phase, frames[0].ids], ["loading", []], `${name}: FIRST render after the change has no old row`);
+      const firstReady = frames.findIndex((f) => f.phase === "ready");
+      assert.ok(frames.slice(0, firstReady).every((f) => f.ids.length === 0), `${name}: ${JSON.stringify(frames)}`);
+      assert.ok(frames.every((f) => JSON.stringify(f.ids) !== JSON.stringify(prevIds)), `${name}: never the previous rows`);
+      prevIds = frames[frames.length - 1].ids;
+    }
+    same(errors, []);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+});
+
 for (const width of [390, 1280])
   test(`RequestsView entreprise réelle (Chromium ${width} px, StrictMode) : pages numérotées, site ⇒ site_id, filtre rapide sans réponse périmée, vide/erreur, CSV blob + nom, CSV jeté si filtres changés, site global, identité, ouverture hors cache`, { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
     const out = await build({ absWorkingDir: ROOT, stdin: { contents: ENTRY, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, outdir: "out", platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "local-css", ".svg": "dataurl", ".png": "dataurl" }, define: { "process.env.NODE_ENV": '"development"' }, logLevel: "error" });
