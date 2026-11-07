@@ -1,3 +1,4 @@
+import { TAX_RATES as SUPPORTED_TAX_RATES, type TaxRate } from "@/lib/tax-rates";
 // Pure state and validation of the QuoteDocumentsPanel leaf: everything the component decides
 // lives here so it can be tested without a DOM. Rules of WEB-SHARED-001: a `null` command result
 // is a stale chain (no notice, no update); write controls need canWrite AND the server permission.
@@ -155,7 +156,7 @@ export interface AmendmentFormErrors {
   validUntil?: string;
   form?: string;
 }
-export const TAX_RATES = ["0", "5.5", "10", "20"] as const;
+export const TAX_RATES = SUPPORTED_TAX_RATES.map(String);
 export const MAX_LINES = 30;
 export const emptyLine = (): LineInput => ({ label: "", quantity: "1", price: "" });
 
@@ -180,7 +181,7 @@ export function lineInputErrors(line: LineInput): LineInputErrors {
   return errors;
 }
 export function validateAmendmentForm(input: AmendmentFormInput, now: Date = new Date()):
-  | { ok: true; value: { lines: QuoteLine[]; tax_rate: 0 | 5.5 | 10 | 20; reason: string; valid_until: string | null } }
+  | { ok: true; value: { lines: QuoteLine[]; tax_rate: TaxRate; reason: string; valid_until: string | null } }
   | { ok: false; errors: AmendmentFormErrors } {
   const errors: AmendmentFormErrors = { lines: input.lines.map(lineInputErrors) };
   let failed = errors.lines.some((e) => Object.keys(e).length > 0);
@@ -211,7 +212,7 @@ export function validateAmendmentForm(input: AmendmentFormInput, now: Date = new
   if (failed || !validity.ok) return { ok: false, errors };
   const lines = input.lines.map((l) => ({ label: l.label.trim(), quantity: parseQuantity(l.quantity)!, unit_price_cents: parsePrice(l.price)! }));
   const subtotal = lines.reduce((s, l) => s + l.quantity * l.unit_price_cents, 0);
-  const taxRate = Number(input.taxRate) as 0 | 5.5 | 10 | 20;
+  const taxRate = Number(input.taxRate) as TaxRate;
   if (subtotal < 1) return { ok: false, errors: { ...errors, form: "Le montant de l’avenant doit être supérieur à zéro." } };
   if (subtotal + Math.round((subtotal * taxRate) / 100) > 10_000_000) return { ok: false, errors: { ...errors, form: "Le montant de l’avenant dépasse la limite autorisée." } };
   return { ok: true, value: { lines, tax_rate: taxRate, reason, valid_until: validity.value } };

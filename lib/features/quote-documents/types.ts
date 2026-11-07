@@ -1,3 +1,4 @@
+import type { TaxRate } from "@/lib/tax-rates";
 // ADV-DOCUMENTS-001 — types of the quote documents lot. Leaf components receive everything
 // through props (contract WEB-SHARED-001); nothing here imports the shared app files.
 
@@ -114,7 +115,7 @@ export type QuoteDocumentsCommand =
       action: "propose";
       base_quote_id: string;
       lines: QuoteLine[];
-      tax_rate: 0 | 5.5 | 10 | 20;
+      tax_rate: TaxRate;
       reason: string;
       valid_until: string | null;
     }

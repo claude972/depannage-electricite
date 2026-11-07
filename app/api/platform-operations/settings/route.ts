@@ -1,10 +1,11 @@
+import { taxRateSchema } from "@/lib/tax-rates";
 import { z } from "zod";
 import { authenticatedClient, assertOrigin, dbError } from "@/lib/supabase/server";
 import { validated } from "@/lib/supabase/validation";
 import { failed, invalidQuery, objectResult, ok, requireScope } from "@/lib/features/platform-operations/http";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-const issuer = z.object({ legal_name: z.string().trim().min(1).max(160), siret: z.string().regex(/^[0-9]{14}$/), address: z.string().trim().min(5).max(500), vat_number: z.string().regex(/^[A-Z]{2}[0-9A-Z]{2,13}$/).nullable(), commission_vat_rate: z.union([z.literal(0), z.literal(5.5), z.literal(10), z.literal(20)]).nullable() }).strict();
+const issuer = z.object({ legal_name: z.string().trim().min(1).max(160), siret: z.string().regex(/^[0-9]{14}$/), address: z.string().trim().min(5).max(500), vat_number: z.string().regex(/^[A-Z]{2}[0-9A-Z]{2,13}$/).nullable(), commission_vat_rate: taxRateSchema.nullable() }).strict();
 const schema = z.discriminatedUnion("key", [
   z.object({ key: z.literal("invoice_issuer"), value: issuer, expected_version: z.number().int().min(1).nullable() }).strict(),
   z.object({ key: z.literal("commission_bps"), value: z.object({ bps: z.number().int().min(0).max(10000) }).strict(), expected_version: z.number().int().min(1).nullable() }).strict(),

@@ -1,3 +1,4 @@
+import { isTaxRate } from "@/lib/tax-rates";
 export type Role = "client" | "artisan" | "manager" | "admin";
 export type InterventionStatus =
   | "requested"
@@ -39,7 +40,7 @@ export function calculateQuote(
   lines: QuoteLine[],
   taxRate: number,
 ): QuoteTotals {
-  if (!lines.length || lines.length > 30 || ![0, 5.5, 10, 20].includes(taxRate))
+  if (!lines.length || lines.length > 30 || !isTaxRate(taxRate))
     throw new Error("Devis invalide.");
   let subtotal = 0;
   for (const line of lines) {
