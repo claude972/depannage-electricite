@@ -35,7 +35,7 @@ export function createChargeProofHandlers(deps:Dependencies){
  return{
  GET:async(request:Request,ctx:{params:Promise<{id:string}>})=>{try{const a=await auth(),id=await payment(ctx),q=new URL(request.url).searchParams;for(const k of q.keys())if(k!=='after'||q.getAll(k).length!==1)fail(422);const after=q.get('after');if(after&&!stripeId('evt').safeParse(after).success)fail(422);return Response.json(await read(a.db,id,after),{headers})}catch(e){return error(e)}},
  POST:async(request:Request,ctx:{params:Promise<{id:string}>})=>{try{
-  const origin=request.headers.get('origin');if(origin&&origin!==new URL(request.url).origin)fail(403);if(new URL(request.url).searchParams.size)fail(422);
+  const origin=request.headers.get('origin');if(origin!==new URL(request.url).origin)fail(403);if(new URL(request.url).searchParams.size)fail(422);
   const a=await auth(true),id=await payment(ctx);let body:unknown;try{body=await request.json()}catch{fail(422)}const input=z.object({command_id:uuid}).strict().safeParse(body);if(!input.success)fail(422);
   const env=deps.env(),key=env.STRIPE_SECRET_KEY??'';if(env.STRIPE_CHARGE_PROOF_ENABLED!=='true'||!/^(sk|rk)_(test|live)_[A-Za-z0-9]+$/.test(key))fail(503);const live=/^(sk|rk)_live_/.test(key);if(live&&env.STRIPE_LIVE_PAYMENTS_ENABLED!=='true')fail(503);
   const db=deps.admin(),c=parse(z.object({source:sourceSchema,live:z.boolean()}).strict(),await rpc(db,'begin_checkout_charge_proof',{p_actor:a.userId,p_payment:id,p_command:input.data.command_id,p_live:live}));if(c.live!==live||c.source.payment_id!==id||c.source.fee_cents>=c.source.amount_cents)fail(503);

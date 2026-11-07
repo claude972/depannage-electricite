@@ -20,7 +20,7 @@ export function createPayoutProofHandlers(deps:Dependencies){
  return{
  GET:async(request:Request,ctx:Context)=>{try{const a=await auth(),id=await event(request,ctx);return Response.json(await read(a.db,id),{headers})}catch(e){return error(e)}},
  POST:async(request:Request,ctx:Context)=>{try{
-  const origin=request.headers.get('origin');if(origin&&origin!==new URL(request.url).origin)fail(403);const a=await auth(true),id=await event(request,ctx);let body:unknown;try{body=await request.json()}catch{fail(422)}const input=z.object({command_id:z.uuid()}).strict().safeParse(body);if(!input.success)fail(422);
+  const origin=request.headers.get('origin');if(origin!==new URL(request.url).origin)fail(403);const a=await auth(true),id=await event(request,ctx);let body:unknown;try{body=await request.json()}catch{fail(422)}const input=z.object({command_id:z.uuid()}).strict().safeParse(body);if(!input.success)fail(422);
   const env=deps.env(),key=env.STRIPE_SECRET_KEY??'';if(env.STRIPE_PAYOUT_PROOF_ENABLED!=='true'||!/^(sk|rk)_(test|live)_[A-Za-z0-9]+$/.test(key))fail(503);const live=/^(sk|rk)_live_/.test(key);if(live&&env.STRIPE_LIVE_PAYMENTS_ENABLED!=='true')fail(503);
   const db=deps.admin(),c=parse(z.object({source,completed:z.boolean()}).strict(),await rpc(db,'begin_automatic_payout_proof',{p_actor:a.userId,p_event:id,p_command:input.data.command_id,p_live:live})),s=c.source;if(s.event_id!==id||s.live!==live)fail(503);
   if(!c.completed){

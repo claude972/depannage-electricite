@@ -22,7 +22,7 @@ export function createFeeProofHandlers(deps:FeeDependencies){
  return{
  GET:async(request:Request,ctx:Context)=>{try{const a=await auth(),p=await ids(request,ctx);return Response.json(await read(a.db,p.id,p.eventId),{headers})}catch(e){return error(e)}},
  POST:async(request:Request,ctx:Context)=>{try{
-  const origin=request.headers.get('origin');if(origin&&origin!==new URL(request.url).origin)fail(403);const a=await auth(true),p=await ids(request,ctx);let body:unknown;try{body=await request.json()}catch{fail(422)}const input=z.object({command_id:uuid}).strict().safeParse(body);if(!input.success)fail(422);
+  const origin=request.headers.get('origin');if(origin!==new URL(request.url).origin)fail(403);const a=await auth(true),p=await ids(request,ctx);let body:unknown;try{body=await request.json()}catch{fail(422)}const input=z.object({command_id:uuid}).strict().safeParse(body);if(!input.success)fail(422);
   const env=deps.env(),key=env.STRIPE_SECRET_KEY??'';if(env.STRIPE_CHARGE_PROOF_ENABLED!=='true'||!/^(sk|rk)_(test|live)_[A-Za-z0-9]+$/.test(key))fail(503);const live=/^(sk|rk)_live_/.test(key);if(live&&env.STRIPE_LIVE_PAYMENTS_ENABLED!=='true')fail(503);
   const db=deps.admin(),c=parse(z.object({source:sourceSchema,completed:z.boolean()}).strict(),await rpc(db,'begin_checkout_fee_proof',{p_actor:a.userId,p_payment:p.id,p_event:p.eventId,p_command:input.data.command_id,p_live:live})),s=c.source;
   if(s.payment_id!==p.id||s.event_id!==p.eventId||s.live!==live)fail(503);

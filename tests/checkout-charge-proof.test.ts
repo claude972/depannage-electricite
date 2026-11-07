@@ -12,7 +12,7 @@ function fixture(o:any={}){
  const stripe:any={checkout:{sessions:{retrieve:async(id:string)=>{calls.push({name:'session.retrieve',id});return session}}},paymentIntents:{retrieve:async(id:string)=>{calls.push({name:'pi.retrieve',id});return pi}},charges:{retrieve:async(id:string)=>{calls.push({name:'charge.retrieve',id});if(o.revoke)o.denied=true;return charge}}};
  const deps:Dependencies={authenticate:async()=>{if(o.auth===false)throw {status:401};return{db,userId:id(9)}},admin:()=>db,stripe:()=>stripe,env:()=>({STRIPE_SECRET_KEY:o.live?'sk_live_injected':'sk_test_injected',STRIPE_CHARGE_PROOF_ENABLED:o.off?'false':'true',STRIPE_LIVE_PAYMENTS_ENABLED:o.allowLive?'true':'false'})};
  const h=createChargeProofHandlers(deps),url=`https://app.test/api/platform-operations/payments/${id(1)}/charge-proof`,ctx={params:Promise.resolve({id:id(1)})};
- return{calls,post:(body:any={command_id:id(8)},origin='https://app.test')=>h.POST(new Request(url,{method:'POST',headers:{origin},body:JSON.stringify(body)}),ctx),get:()=>h.GET(new Request(url),ctx)};
+ return{calls,post:(body:any={command_id:id(8)},origin:string|null='https://app.test')=>h.POST(new Request(url,{method:'POST',headers:origin===null?{}:{origin},body:JSON.stringify(body)}),ctx),get:()=>h.GET(new Request(url),ctx)};
 }
 test('qualifies exact paid Checkout/PI/Charge via retrieves only and stores no billing details',async()=>{const f=fixture();assert.equal((await f.post()).status,200);const data=await(await f.get()).json();assert.equal(data.proof.charge_id,'ch_QA');assert.equal(data.proof.source.amount_cents,12000);assert.equal(JSON.stringify(data).includes('SECRET'),false);assert.deepEqual(f.calls.filter(x=>x.name.endsWith('.retrieve')).map(x=>x.name),['session.retrieve','pi.retrieve','charge.retrieve']);const stored=f.calls.find(x=>x.name==='store_checkout_charge_proof');assert.deepEqual(stored.args.p_provider,{payment_intent_id:'pi_QA',charge_id:'ch_QA',charge_created:1700000200,session_created:1700000000,intent_created:1700000100})});
 test('incomplete, foreign, wrong amount/mode/destination and malformed charge never become proof',async()=>{for(const o of [{session:{payment_status:'unpaid'}},{session:{mode:'setup'}},{session:{id:'cs_foreign'}},{session:{amount_total:1}},{pi:{amount_received:1}},{pi:{livemode:true}},{pi:{transfer_data:{destination:'acct_other'}}},{pi:{application_fee_amount:1}},{charge:{captured:false}},{charge:{id:'ch_other'}},{charge:{payment_intent:'pi_other'}},{charge:{currency:'usd'}},{charge:{amount_captured:1}},{charge:{transfer_data:{destination:'acct_other'}}}]){const f=fixture(o);assert.ok([409,503].includes((await f.post()).status),JSON.stringify(o));assert.equal(f.calls.some(x=>x.name==='store_checkout_charge_proof'),false)}});
@@ -33,4 +33,10 @@ test('documented null application fee is accepted only for the exact frozen zero
   assert.ok([409, 503].includes((await broken.post()).status));
   assert.equal(broken.calls.some(call => call.name === 'store_checkout_charge_proof'), false);
  }
+});
+
+test('missing origin refuses Checkout qualification before any private read', async () => {
+ const f = fixture();
+ assert.equal((await f.post(undefined, null)).status, 403);
+ assert.deepEqual(f.calls, []);
 });
