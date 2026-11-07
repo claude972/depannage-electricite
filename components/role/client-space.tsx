@@ -149,7 +149,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "Que couvre la garantie ?",
-    "Seules les conditions de garantie publiées par l’exploitant s’appliquent ; elles figurent dans l’aide publique (section « Garantie »). Tant qu’elles ne sont pas publiées, aucune garantie n’est promise.",
+    "Les conditions de garantie de la plateforme figurent dans l’aide publique, section « Garantie », après publication par l’exploitant.",
   ],
   [
     "Puis-je gérer plusieurs établissements ?",

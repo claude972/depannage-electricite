@@ -57,6 +57,12 @@ Le pilote étend le contrat SQL de réservation aux cinq identifiants génériqu
 
 Astra fournit le contrat et le serveur dans `codex/warranty-activation`. Un auteur Claude réutilisé raccorde le texte publié côté public et l’éditeur au panneau Garantie. Le panneau sépare sauvegarde, publication et activation explicite. Les droits, versions, commandes persistées et états d’erreur suivent le contrat dans `docs/reviews/WARRANTY_POLICY_BACKEND.md`. Les textes viennent de l’exploitant. Le pilote assemble et recette sur le projet dédié avec le dépôt désactivé.
 
+### Énergie consolidée et rappel de rendez-vous
+
+Un auteur Claude réutilisé raccorde la lecture consolidée à l’espace entreprise depuis la version `610b13f`. Il affiche les sites et dates sélectionnés, les relevés déclarés, les données manquantes et les périodes effectivement comparables. Le contrat se trouve dans `docs/reviews/ENERGY_CONSOLIDATION_BACKEND.md`. Aucun changement serveur ni télémétrie inventée.
+
+Astra réalise le rappel de rendez-vous personnel côté serveur. Le participant autorisé choisit un horaire valide avant un créneau enregistré et peut annuler son rappel. Le traitement réévalue le créneau et l’accès et réutilise les notifications privées. Il reste borné et dédupliqué. Vérifier permissions, changement du créneau, annulation et rejeu. Aucun envoi externe ni mutation cloud par l’auteur.
+
 ## ART-03 / ADM-02 — décision individuelle de justificatif
 
 Pilote seul auteur de la migration, API /api/artisan/credentials/[id]/reviews et tests. Historique immuable, motif, version attendue, rejeu par UUID, lecture par l'artisan propriétaire et l'administration actuelle. Une pièce revue garde son type et sa date déclarée, l'artisan peut joindre une nouvelle pièce pour corriger. Une décision sur une pièce ne modifie pas l'approbation globale du dossier. Le contrat UI expose uniquement la pièce, les décisions datées, le droit d'action et le curseur. Vérifier accès croisés, expiration, concurrence par version, zéro double audit et reprise après réponse perdue. Cloud après assemblage et revue.
