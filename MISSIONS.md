@@ -86,3 +86,6 @@ ROOT est seul auteur du serveur. Le propriétaire de l’organisation autorise u
 - ENT-16 — Astra : propriétaire unique backend payeur B2B délégué, branche codex/delegated-payer base e541656 ; périmètre docs/missions/ENT16_DELEGATED_PAYER.md. Aucun cloud/UI.
 
 - ENT-12 — Astra : serveur des étapes ordonnées, compléments et décisions sur le devis exact. Contrat dans docs/ADVANCED_APPROVALS_BACKEND.md. Claude raccorde le parcours existant sans changer la règle d’acceptation.
+
+## SYS-04 — external-notification-outbox (Astra, exclusive)
+Base 436e168. Plan : outbox privée email/push sur nouvelles notifications uniquement ; opt-in et scopes courants revérifiés avant émission, baux et reprises bornés, résultat incertain distinct. Adaptateur injecté avec garantie d’idempotence obligatoire, contenu générique. Aucun fournisseur/scheduler/cloud/SMS ; porte SQL inactive. Vérification SQL isolée (ACL, scope, retries, panne enqueue) et worker injecté, TypeScript. Pas de modification UI.
