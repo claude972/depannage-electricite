@@ -130,3 +130,7 @@ ROOT ajoute la liste paginée des interventions entreprise et l’export CSV sur
 ### PUB-04 — demande de rappel et file d’assistance
 
 ROOT possède le serveur, la migration et les tests. Une demande publique collecte le numéro saisi et le motif sélectionné, avec consentement à ce rappel. Le serveur renvoie un reçu minimal, protège le rejeu et borne les dépôts en base. Seuls les opérateurs d’assistance habilités consultent ou classent la demande. Le classement est tracé sans numéro dans l’audit et ne prouve aucun appel. Claude raccorde le formulaire et la file après publication du contrat. Vérifier dépôt, rejeu, quotas, refus, version et lecture privée. L’activation reste explicite après validation des modalités de traitement.
+
+## FIN-06 — preuves finance (UI), claim Claude
+
+Claude (a5d83f5c) — preuves finance UI : affichage lecture des preuves Charge/Fee/Payout et de leur périmètre (CHECKOUT_CHARGE_PROOF_BACKEND.md, AUTOMATIC_PAYOUT_PROOF_BACKEND.md) dans Finance plateforme. Leaf components/features/finance-proofs/** + mount minimal : un onglet « Preuves » (Charge + commission par identifiant de paiement) dans `components/features/platform-operations/platform-finance-view.tsx`, et la preuve de payout dans le détail d’observation de `components/features/finance-reconciliation/reconciliation-panel.tsx` (famille payout). Aucun clic fournisseur automatique, aucune réception bancaire affirmée. Aucune API/SQL/cloud. Branche `claude/finance-proofs-ui` (base `a5ca404`).
