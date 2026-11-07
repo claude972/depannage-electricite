@@ -9,9 +9,8 @@ const row = (n: number) => ({
   id: id(n), author_id: actor, intervention_id: id(400), body: "Message personnel",
   created_at: "2026-11-07T00:00:00Z", unexpected_secret: "must not be exposed",
 });
-const receipt = (creator = actor) => ({
-  ticket: { id: id(300), status: "open", creator_id: creator }, replayed: true,
-});
+const requestRow=(owner=actor)=>({id:id(800),account_id:owner,ticket_id:id(300),state:'requested',execution_state:'not_started',version:1,created_at:'2026-11-07T00:00:00Z',updated_at:'2026-11-07T00:00:00Z'});
+const receipt = (creator = actor) => ({request:requestRow(creator),ticket_id:id(300),status:'open',replayed:true});
 
 function harness(data: unknown, authenticated = true) {
   const queries: unknown[][] = [];
@@ -68,9 +67,14 @@ test("erasure requires confirmation and records a single private support request
   assert.equal((await h.POST(post(true, "https://another.example"))).status, 403);
   assert.equal(h.queries.length, 0);
   const response = await h.POST(post(true));
-  assert.deepEqual(await response.json(), { ticket_id: id(300), status: "open", replayed: true });
-  assert.equal(h.queries[0]?.[1], "create_support_ticket");
+  const result=await response.json();assert.equal(result.ticket_id,id(300));assert.equal(result.status,'open');assert.equal(result.replayed,true);assert.equal(result.request.state,'requested');assert.equal(result.request.execution_state,'not_started');assert.equal(result.request.account_id,undefined);
+  assert.equal(h.queries[0]?.[1], "create_data_erasure_request");
   assert.equal((h.queries[0]?.[2] as { p_request_id: string }).p_request_id, id(2));
   const wrongUser = harness(receipt(id(500)));
   assert.equal((await wrongUser.POST(post(true))).status, 503);
+});
+
+test('personal erasure list is account scoped and strips all ticket content',async()=>{
+ const h=harness({rows:[{...requestRow(),subject:'SECRET',body:'SECRET'}],next_cursor:null});const r=await h.GET(new Request(url+'?section=erasure_requests'));assert.equal(r.status,200);const data=await r.json();assert.equal(data.rows[0].execution_state,'not_started');assert.equal(JSON.stringify(data).includes('SECRET'),false);assert.deepEqual(JSON.parse(JSON.stringify(h.queries)),[['rpc','list_data_erasure_requests',{p_all:false,p_after:null,p_limit:100}]]);
+ const other=harness({rows:[requestRow(id(500))],next_cursor:null});assert.equal((await other.GET(new Request(url+'?section=erasure_requests'))).status,503);
 });
