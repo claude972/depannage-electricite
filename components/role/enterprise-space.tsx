@@ -119,6 +119,7 @@ import { PlatformPage } from "./platform-anchor";
 import { FeatureUnavailable, useProbeWhenUnknown } from "./feature-unavailable";
 import { EnterpriseTimeline } from "../features/enterprise-timeline/enterprise-timeline";
 import { buildTimeline } from "../features/enterprise-timeline/timeline-model";
+import { AccountDataPanel } from "../features/account-data/account-data-panel";
 import type {
   Category,
   Approval,
@@ -4298,6 +4299,12 @@ function ProfileView({ c }: { c: Ctx }) {
         }}
       />
       <InstallPanel />
+      <AccountDataPanel
+        key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}
+        demo={demo}
+        context={session.mutationContext}
+        onOpenTicket={(id) => c.go("support", id)}
+      />
       <section className="panel" aria-labelledby="profile-role">
         <h2 id="profile-role">Votre rôle</h2>
         <p className={styles.description}>
