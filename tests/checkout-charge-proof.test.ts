@@ -1,9 +1,10 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {createChargeProofHandlers,type Dependencies} from '../lib/features/charge-proof/handlers';
 const id=(n:number)=>`10000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
-const source={payment_id:id(1),checkout_id:id(2),quote_id:id(3),intervention_id:id(4),session_id:'cs_test_QA',amount_cents:12000,fee_cents:2400,destination_account:'acct_QA',currency:'eur',paid_at:'2026-11-07T00:00:00Z'};
+const sourceFixture={payment_id:id(1),checkout_id:id(2),quote_id:id(3),intervention_id:id(4),session_id:'cs_test_QA',amount_cents:12000,fee_cents:2400,destination_account:'acct_QA',currency:'eur',paid_at:'2026-11-07T00:00:00Z'};
 function fixture(o:any={}){
  const calls:any[]=[];let stored:any=null,lost=o.lostStore;
+ const source={...sourceFixture,...o.source};
  const session:any={id:'cs_test_QA',object:'checkout.session',mode:'payment',status:'complete',payment_status:'paid',livemode:false,client_reference_id:id(3),metadata:{quote_id:id(3),platform_checkout_id:id(2)},amount_total:12000,currency:'eur',payment_intent:'pi_QA',created:1700000000,...o.session};
  const pi:any={id:'pi_QA',object:'payment_intent',status:'succeeded',livemode:false,amount:12000,amount_received:12000,currency:'eur',metadata:{quote_id:id(3),platform_checkout_id:id(2)},transfer_data:{destination:'acct_QA'},application_fee_amount:2400,latest_charge:'ch_QA',created:1700000100,...o.pi};
  const charge:any={id:'ch_QA',object:'charge',status:'succeeded',paid:true,captured:true,livemode:false,amount:12000,amount_captured:12000,currency:'eur',payment_intent:'pi_QA',transfer_data:{destination:'acct_QA'},application_fee_amount:2400,created:1700000200,billing_details:{email:'SECRET'},...o.charge};
@@ -18,3 +19,18 @@ test('incomplete, foreign, wrong amount/mode/destination and malformed charge ne
 test('gates, current scopes, live guard and origin refuse before provider reads',async()=>{for(const o of [{off:true},{sqlOff:true},{readOnly:true},{denied:true},{auth:false},{live:true}]){const f=fixture(o);assert.ok([401,403,409,503].includes((await f.post()).status));assert.equal(f.calls.some(x=>x.name.endsWith('.retrieve')),false)}const f=fixture();assert.equal((await f.post({command_id:id(8),amount:1})).status,422);assert.equal((await f.post(undefined,'https://evil.test')).status,403)});
 test('revocation during reads and changed SQL source cannot persist a proof',async()=>{const f=fixture({revoke:true});assert.equal((await f.post()).status,403);assert.equal(f.calls.some(x=>x.name==='store_checkout_charge_proof'),false);assert.equal((await fixture({changedSource:true}).post()).status,409)});
 test('lost persistence reply repeats exact command and immutable evidence; GET remains offline/read-only',async()=>{const f=fixture({lostStore:true});assert.equal((await f.post()).status,503);assert.equal((await f.post()).status,200);const saves=f.calls.filter(x=>x.name==='store_checkout_charge_proof');assert.deepEqual(saves[0],saves[1]);const offline=fixture({off:true,readOnly:true});const r=await offline.get();assert.equal(r.status,200);assert.equal((await r.json()).proof,null);assert.equal(offline.calls.some(x=>x.name.endsWith('.retrieve')),false)});
+
+test('documented null application fee is accepted only for the exact frozen zero', async () => {
+ const noFee = { application_fee_amount: null };
+ const zero = fixture({ source: { fee_cents: 0 }, pi: noFee, charge: noFee });
+ assert.equal((await zero.post()).status, 200);
+ assert.equal((await (await zero.get()).json()).proof.source.fee_cents, 0);
+ for (const broken of [
+  fixture({ pi: noFee }),
+  fixture({ charge: noFee }),
+  fixture({ source: { fee_cents: 0 }, pi: { application_fee_amount: undefined }, charge: noFee }),
+ ]) {
+  assert.ok([409, 503].includes((await broken.post()).status));
+  assert.equal(broken.calls.some(call => call.name === 'store_checkout_charge_proof'), false);
+ }
+});
