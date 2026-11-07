@@ -50,7 +50,7 @@ test("position fraîche partagée : « partagée par l’artisan à HH:MM », so
   assert.match(out, /data-map-sharing="fresh"/);
   assert.match(out, /Position partagée par l’artisan à \d{2}:\d{2} \(précision ±25 m\)\./);
   assert.match(out, /Mis à jour à \d{2}:\d{2} \(il y a moins d’une minute\)\. Source : suivi de la plateforme\./);
-  assert.match(out, /data-map-eta="none"[^>]*>Aucune durée de trajet ni heure d’arrivée n’est calculée ici\./);
+  assert.match(out, /data-map-eta="none"[^>]*>Ce panneau ne calcule aucune durée de trajet ni heure d’arrivée : une estimation n’existe que si un itinéraire récent est disponible, et elle figure alors dans « Suivi de l’artisan » ci-dessous\./);
   assert.doesNotMatch(out, /\d+ ?min(?:ute)?s? de trajet|arrivée estimée|\d+([,.]\d+)? ?km/i);
   assert.doesNotMatch(out, /14\.6161|-61\.0588/, "coordinates are never printed without a provider");
 });
@@ -119,7 +119,7 @@ test("app réelle (démo) : aucune requête externe ; consentement explicite ava
     assert.match(text, /Carte non activée/);
     assert.match(text, /Démonstration : suivi fictif/);
     assert.match(text, /Position partagée par l’artisan à \d{2}:\d{2}/);
-    assert.match(text, /Aucune durée de trajet ni heure d’arrivée n’est calculée ici\./);
+    assert.match(text, /Ce panneau ne calcule aucune durée de trajet ni heure d’arrivée/);
     assert.equal(await page.locator("[data-map-external-link]").count(), 0);
     await page.locator("[data-map-external-ask]").click();
     assert.match(await page.locator("[data-map-external-consent]").innerText(), /transmet l’adresse de l’intervention à cette application/);
