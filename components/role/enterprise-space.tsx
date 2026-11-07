@@ -101,6 +101,7 @@ import { PointReadState } from "./detail-read-view";
 import { SiteOperationsView } from "../features/site-operations/site-operations-view";
 import { SiteEnergyPanel } from "../features/energy/site-energy-panel";
 import { SiteContactsPanel } from "../features/site-contacts/site-contacts-panel";
+import { SiteAreasPanel } from "../features/site-areas/site-areas-panel";
 import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
 import { PlatformPayAction } from "../app/platform-pay";
 import { OrganizationSlaPanel } from "../features/organization-sla/organization-sla-panel";
@@ -2731,10 +2732,14 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
             blocker="ENT-07"
           />
         )}
-        {vertical === "office" && (
-          <>
-            <Unavailable title="Étages & zones" reason="Le découpage des bâtiments en étages et zones n’est pas modélisé." blocker="ENT-08" />
-          </>
+        {session.mode === "demo" ? (
+          <Unavailable
+            title="Étages, zones et parties communes"
+            reason="En démonstration, aucun découpage n’est enregistré : connectez-vous à votre espace pour déclarer les étages, zones et parties communes du site."
+            blocker="ENT-08"
+          />
+        ) : (
+          <SiteAreasPanel siteId={site.id} context={session.mutationContext} demo={false} />
         )}
         {session.mode === "demo" ? (
           <Unavailable
@@ -2770,7 +2775,11 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
           </section>
         )}
         {vertical === "syndic" && (
-          <Unavailable title="Parties communes & AG" reason="Les parties communes, assemblées générales et appels de fonds ne sont pas modélisés." blocker="ENT-05" />
+          <Unavailable
+            title="Assemblées générales & appels de fonds"
+            reason="Les parties communes se déclarent ci-dessus (« Étages, zones et parties communes »). Les assemblées générales et appels de fonds ne sont pas encore gérés par l’application."
+            blocker="ENT-05"
+          />
         )}
 
         {session.mode === "demo" ? (
