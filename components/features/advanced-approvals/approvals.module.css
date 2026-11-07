@@ -1,0 +1,146 @@
+/* Advanced approvals leaf — tokens only, light/dark through --ui-*. */
+.block {
+  display: grid;
+  gap: var(--ui-space-2);
+  margin: var(--ui-space-3) 0;
+  padding: var(--ui-space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  min-width: 0;
+}
+.title {
+  margin: 0;
+  font-size: 15px;
+}
+.text {
+  margin: 0;
+  color: var(--ui-text);
+  overflow-wrap: anywhere;
+}
+.muted {
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: 14px;
+}
+.warning {
+  margin: 0;
+  color: var(--ui-warning);
+}
+.error {
+  margin: 0;
+  color: var(--ui-danger);
+}
+.note {
+  color: var(--ui-text-muted);
+}
+.steps,
+.list {
+  margin: 0;
+  padding-left: var(--ui-space-4);
+}
+.chain {
+  display: grid;
+  gap: var(--ui-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.chain li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--ui-space-1) var(--ui-space-2);
+  padding: var(--ui-space-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-card);
+}
+.done,
+.approved {
+  border-color: var(--ui-success) !important;
+}
+.current,
+.changes_requested {
+  border-color: var(--ui-primary) !important;
+}
+.rejected {
+  border-color: var(--ui-danger) !important;
+}
+.locked {
+  color: var(--ui-text-muted);
+  border-style: dashed !important;
+}
+.form {
+  display: grid;
+  gap: var(--ui-space-2);
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-2);
+}
+.label {
+  font-weight: 600;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  min-height: 44px;
+}
+.input {
+  min-height: 44px;
+  min-width: 0;
+  max-width: 100%;
+  padding: var(--ui-space-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-card);
+  color: var(--ui-text);
+  font: inherit;
+}
+.button {
+  min-height: 44px;
+  padding: 0 var(--ui-space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-card);
+  color: var(--ui-text);
+  font: inherit;
+  cursor: pointer;
+}
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.button:focus-visible,
+.input:focus-visible,
+.events summary:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+.primary {
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+.confirm {
+  display: grid;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-card);
+}
+.confirm p {
+  margin: 0;
+}
+.events summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
