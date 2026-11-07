@@ -186,3 +186,12 @@ test("rendu éditeur, démo sans appel, câblage public, aucune formulation de g
   assert.doesNotMatch(css, /#[0-9a-f]{3,8}\b|rgb|hsl/i);
   assert.match(css, /\.button \{[^}]*min-height: 44px;/);
 });
+
+test("wiring: admin-warranty mounts the editor (identity-keyed) next to the panel; client FAQ promises no invented warranty", async () => {
+  const { readFileSync } = await import("node:fs");
+  const admin = readFileSync("components/role/admin-space.tsx", "utf8");
+  assert.match(admin, /case "admin-warranty":\s+content = \(\s+<>\s+<WarrantyPolicyEditor key=\{`\$\{session\.mutationContext\.userId\(\) \?\? "-"\}\|\$\{session\.mutationContext\.generation\(\)\}`\} context=\{session\.mutationContext\} demo=\{demo\} \/>\s+<WarrantyPanel demo=\{demo\} role="admin" \/>/);
+  const client = readFileSync("components/role/client-space.tsx", "utf8");
+  assert.doesNotMatch(client, /garantie d’un an/);
+  assert.match(client, /Seules les conditions de garantie publiées par l’exploitant s’appliquent/);
+});
