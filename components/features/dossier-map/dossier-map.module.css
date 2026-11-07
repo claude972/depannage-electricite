@@ -1,0 +1,138 @@
+/* Client dossier map / follow-up (CLI-05). --ui-* tokens only, light/dark, 1px borders, 44 px targets. */
+.panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+  color: var(--ui-text);
+}
+.declared,
+.hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ui-text-muted);
+}
+.error {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ui-danger);
+}
+.mock {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px dashed var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface);
+}
+.mock p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ui-text-muted);
+}
+.mockArt {
+  width: 100%;
+  max-height: 120px;
+}
+.mockFrame {
+  fill: var(--ui-card);
+  stroke: var(--ui-border);
+}
+.mockRoad {
+  fill: none;
+  stroke: var(--ui-border);
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+.mockPin {
+  fill: var(--ui-text-muted);
+}
+.map {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+.attribution {
+  font-size: 12px;
+  color: var(--ui-text-muted);
+}
+.follow {
+  display: grid;
+  gap: 8px;
+}
+.kv {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+.kv > div {
+  display: grid;
+  grid-template-columns: minmax(110px, 30%) 1fr;
+  gap: 8px;
+}
+.kv dt {
+  font-size: 13px;
+  color: var(--ui-text-muted);
+}
+.kv dd {
+  margin: 0;
+  font-size: 14px;
+}
+.external {
+  display: grid;
+  gap: 8px;
+}
+.consent {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface);
+}
+.consent p {
+  margin: 0;
+  font-size: 14px;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.primary,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.primary {
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+.secondary {
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+.primary:focus-visible,
+.secondary:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+@media (max-width: 640px) {
+  .kv > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .actions > *,
+  .external > * {
+    width: 100%;
+  }
+}
