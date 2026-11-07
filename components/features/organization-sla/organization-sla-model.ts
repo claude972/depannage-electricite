@@ -52,7 +52,9 @@ export function parseOrgSla(body: unknown, organizationId: string): OrgSlaReport
   if (r.state !== "complete" && r.state !== "partial") return null;
   if (!Array.isArray(r.reasons) || !r.reasons.every(str) || (r.state === "complete") !== (r.reasons.length === 0)) return null;
   if (typeof r.complete_for_visible_scope !== "boolean" || typeof r.complete_for_organization !== "boolean") return null;
-  if (r.complete_for_organization && (!r.complete_for_visible_scope || !r.scope.organization_wide)) return null;
+  // Completeness flags must agree exactly (a contradictory reply never titles « Toute l’organisation »).
+  const complete = r.state === "complete";
+  if (r.complete_for_visible_scope !== complete || r.complete_for_organization !== (complete && r.scope.organization_wide)) return null;
   const p = r.page;
   if (!p || !int(p.returned_sites) || !int(p.remaining_sites_total) || typeof p.has_more !== "boolean") return null;
   if (p.has_more !== (p.next_cursor !== null) || (p.next_cursor !== null && !/^[-A-Za-z0-9_]{1,200}$/.test(p.next_cursor))) return null;
@@ -65,7 +67,7 @@ export function parseOrgSla(body: unknown, organizationId: string): OrgSlaReport
     }
   }
   const m = r.summary;
-  if (!m || m.basis !== "returned_visible_sites" || typeof m.complete !== "boolean") return null;
+  if (!m || m.basis !== "returned_visible_sites" || m.complete !== complete) return null;
   for (const k of ["cases", "measurable", "not_measurable", "breached", "pending", "met", "indeterminate", "cases_evaluated", "cases_returned", "partially_measurable", "unavailable"] as const) if (!int(m[k])) return null;
   if (m.cases_returned !== r.sites.reduce((n, s) => n + s.cases.length, 0)) return null;
   return r;

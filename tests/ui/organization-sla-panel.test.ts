@@ -119,3 +119,21 @@ test("loading and error states render; reports view mounts the panel live, hones
   assert.match(src, /demo \|\| !c\.organization \? \(\s*<Unavailable\s+title="Respect des SLA \(consolidé\)"/);
   assert.doesNotMatch(src, /Le consolidé multi-sites n’est pas livré/);
 });
+
+test("negative: contradictory completeness flags are refused (never « Toute l’organisation »)", () => {
+  const ok = reply();
+  for (const bad of [
+    { ...ok, complete_for_visible_scope: false },
+    { ...ok, summary: { ...ok.summary, complete: false } },
+  ]) assert.equal(m.parseOrgSla(bad, org), null);
+});
+
+test("negative: complete_for_organization must equal complete && organization_wide", () => {
+  const x = seed();
+  x.organization_wide = false;
+  const visible = reply(x);
+  assert.equal(m.parseOrgSla({ ...visible, complete_for_organization: true }, org), null);
+  const partial = (() => { const y = seed(); y.calendars = []; y.calendars_total = 0; return reply(y); })();
+  assert.equal(m.parseOrgSla({ ...partial, complete_for_organization: true }, org), null);
+  assert.equal(m.parseOrgSla({ ...reply(), complete_for_organization: false }, org), null);
+});
