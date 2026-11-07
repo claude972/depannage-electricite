@@ -75,7 +75,8 @@ test("câblage : dérivé des données de la vue (aucun chargement), ancien suiv
   const src = readFileSync("components/role/enterprise-space.tsx", "utf8");
   assert.match(src, /<EnterpriseTimeline steps=\{timeline\} cancelled=\{intervention\.status === "cancelled"\} \/>/);
   assert.match(src, /appointment: opsLoading \|\| !ops \? undefined : ops\.appointment,/);
-  assert.match(src, /ruleApplies: c\.scope\.rules\.some\(\(r\) => r\.site_id === intervention\.site_id && r\.enabled\),/);
+  // ENT-12: an ordered approval required by the server also makes the approval step applicable.
+  assert.match(src, /ruleApplies: c\.scope\.rules\.some\(\(r\) => r\.site_id === intervention\.site_id && r\.enabled\) \|\| Boolean\(advanced\?\.required\),/);
   assert.doesNotMatch(src, /const TIMELINE|reachedIndex/);
   const leaf = readFileSync("components/features/enterprise-timeline/enterprise-timeline.tsx", "utf8") + readFileSync("components/features/enterprise-timeline/timeline-model.ts", "utf8");
   assert.doesNotMatch(leaf, /fetch\(|useEffect|session\./, "props only, no loading");
