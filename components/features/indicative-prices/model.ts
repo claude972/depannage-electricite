@@ -79,7 +79,9 @@ export function loadPrices(fetcher: typeof fetch = (...a) => fetch(...a), force 
     if (inflight) return inflight.promise;
   }
   const my = ++seq;
-  const promise = (async () => {
+  // The work starts in a microtask: `inflight` is always assigned BEFORE any completion (even a
+  // fetcher that throws synchronously), and cleared only by its own completion.
+  const promise = Promise.resolve().then(async () => {
     let next: PricesState;
     try {
       const r = await fetcher(PRICES_PATH, { method: "GET", credentials: "same-origin", cache: "no-store" });
@@ -88,11 +90,11 @@ export function loadPrices(fetcher: typeof fetch = (...a) => fetch(...a), force 
     } catch {
       next = { phase: "error", data: null };
     }
+    if (inflight?.seq === my) inflight = null;
     if (my !== seq) return; // a newer read was started: this (older) reply is dropped
-    inflight = null;
     if (next.phase === "ready") readAt = Date.now();
     emit(next);
-  })();
+  });
   inflight = { seq: my, promise };
   return promise;
 }
@@ -102,4 +104,25 @@ export function setPricesState(s: PricesState) {
   inflight = null;
   readAt = s.phase === "ready" ? Date.now() : 0;
   emit(s);
+}
+
+// ---- Live review before creating a request (9ff9009 + 8a2f9b6) ------------------------------------
+// reviewed_estimate_version: optional while the active version is 1, REQUIRED and exact when > 1.
+// `shown` = what the review step displayed; `fresh` = the forced re-read right before the POST.
+export type ReviewDecision = { kind: "send"; version: number } | { kind: "omit" } | { kind: "block"; message: string };
+export const REVIEW_COPY = {
+  unverified: "estimation non vérifiée",
+  changed: "L’estimation indicative a été mise à jour : vérifiez la nouvelle fourchette affichée puis confirmez à nouveau. Rien n’a été envoyé.",
+  blocked: "L’estimation indicative n’a pas pu être vérifiée : rien n’a été envoyé. Réessayez dans un instant.",
+  conflict: "L’estimation indicative a changé pendant l’envoi : rien n’a été enregistré. Vérifiez la nouvelle fourchette affichée puis confirmez à nouveau.",
+} as const;
+export function reviewDecision(shown: PricesState, fresh: PricesState): ReviewDecision {
+  const sv = shown.phase === "ready" && shown.data ? shown.data.version : null;
+  if (fresh.phase === "ready" && fresh.data) {
+    const v = fresh.data.version;
+    // The user must have seen this exact version, except V1 (the field may even be omitted there).
+    return v === 1 || sv === v ? { kind: "send", version: v } : { kind: "block", message: REVIEW_COPY.changed };
+  }
+  // Unverified read: never fabricate a version. Last seen > 1 ⇒ the server would refuse: block.
+  return sv !== null && sv > 1 ? { kind: "block", message: REVIEW_COPY.blocked } : { kind: "omit" };
 }

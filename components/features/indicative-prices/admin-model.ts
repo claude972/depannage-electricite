@@ -250,7 +250,7 @@ export const PUBLISH_COPY = {
 export type PublishView = { busy: boolean; error: string; notice: string; pending: PublishCommand | null };
 export const PUBLISH_INITIAL: PublishView = { busy: false, error: "", notice: "", pending: null };
 /** Identity-fenced publication; the caller re-reads the admin view after every outcome. */
-export function createPublication({ fetcher, store, newId, context, get, set, reload }: { fetcher: () => typeof fetch; store: () => Store | null; newId: () => string | null; context: Context; get: () => PublishView; set: (v: PublishView) => void; reload: () => Promise<void> }) {
+export function createPublication({ fetcher, store, newId, context, get, set, reload, onPublished }: { fetcher: () => typeof fetch; store: () => Store | null; newId: () => string | null; context: Context; get: () => PublishView; set: (v: PublishView) => void; reload: () => Promise<void>; /** Every CONFIRMED publication (direct or « Renvoyer »): refresh the public price store. */ onPublished?: () => void }) {
   let inFlight = false;
   let alive = true;
   const who = () => ({ uid: context.userId(), gen: context.generation() });
@@ -287,6 +287,7 @@ export function createPublication({ fetcher, store, newId, context, get, set, re
     if (done) {
       clear(w);
       set({ busy: false, pending: null, error: "", notice: done.replayed ? PUBLISH_COPY.replayed : PUBLISH_COPY.published(done.published_version) });
+      onPublished?.();
     } else if (r.status === 409 || r.status === 422 || r.status === 401 || r.status === 403) {
       clear(w);
       set({ busy: false, pending: null, notice: "", error: r.status === 409 ? PUBLISH_COPY.conflict : r.status === 422 ? ADMIN_COPY.invalid : ADMIN_COPY.forbidden });

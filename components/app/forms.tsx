@@ -32,6 +32,7 @@ import {
 import { Icon } from "./icons";
 import { TAX_RATE_HINT, TAX_RATE_OPTIONS, TAX_RATE_PLACEHOLDER, TAX_RATE_REQUIRED, parseTaxRateInput, type TaxRate } from "./tax-rate";
 import { Empty, Field, ConfirmAction, Unavailable } from "./ui";
+import { ReviewEstimate } from "../features/indicative-prices/indicative-range";
 import {
   CATEGORIES,
   ROLE_NAMES,
@@ -438,9 +439,15 @@ export function RequestForm({
             </div>
             <div className="estimate-box">
               <span>Estimation indicative</span>
-              <strong>
-                {money(c.min)} – {money(c.max)}
-              </strong>
+              {/* PUB-02: demo keeps the local V1 range; live shows the server's active version (or
+                  « estimation non vérifiée »), never the static amount presented as current. */}
+              {mode === "demo" ? (
+                <strong>
+                  {money(c.min)} – {money(c.max)}
+                </strong>
+              ) : (
+                <ReviewEstimate category={values.category} />
+              )}
               <p>
                 Ces montants sont des exemples de préparation du service. Le
                 prix final et les taxes applicables seront précisés dans un
