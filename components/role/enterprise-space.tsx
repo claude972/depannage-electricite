@@ -110,7 +110,7 @@ import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-pa
 import { DelegatedPayerCheckout, DelegatedPayerManager } from "../features/delegated-payer/delegated-payer";
 import { ContractSourceLine, QuoteGridAccessPanel } from "../features/quote-grid/quote-grid";
 import { QuoteApprovalPanel, SitePolicyPanel } from "../features/advanced-approvals/approvals";
-import { acceptanceBlocked, timelineApproval as advancedTimelineApproval, type WorkflowStatus } from "../features/advanced-approvals/model";
+import { acceptanceDecision, timelineApproval as advancedTimelineApproval, type WorkflowStatus } from "../features/advanced-approvals/model";
 import { SiteAssetLinksPanel } from "../features/site-asset-links/site-asset-links-panel";
 import type { AssetSource } from "../features/site-asset-links/asset-links-model";
 import { createAreasApi, parseAreasPage } from "../features/site-areas/areas-model";
@@ -1502,7 +1502,9 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState("");
   /** ENT-12: server state of the ordered approval of the displayed quote (undefined = not read). */
-  const [advanced, setAdvanced] = useState<WorkflowStatus | null | undefined>(undefined);
+  // Advanced approval state, kept WITH the quote it was read for: a quote switch never reuses the
+  // previous quote's answer (undetermined until the new quote's own validated read).
+  const [advancedRead, setAdvancedRead] = useState<{ quoteId: string; status: WorkflowStatus | null } | null>(null);
   const statusKey = intervention?.status || "";
   // Deep link to a dossier absent from the cached perimeter: one causal refresh before « introuvable ».
   // Presence is the active organisation/site perimeter (orgInterventions), never wider.
@@ -1580,8 +1582,11 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
   const approval = displayed
     ? session.professional.approvals.find((a) => a.quote_id === displayed.id)
     : undefined;
-  const advancedBlocked = acceptanceBlocked(advanced);
-  const blocking = Boolean(approval && approval.status !== "approved") || advancedBlocked;
+  const advanced: WorkflowStatus | null | undefined = displayed && advancedRead?.quoteId === displayed.id ? advancedRead.status : undefined;
+  // Advanced policy authoritative when active; simple rule otherwise or without a site; prudent while
+  // unknown (live, dossier with a site).
+  const acceptance = acceptanceDecision(Boolean(approval && approval.status !== "approved"), advanced, !demo && Boolean(displayed), Boolean(intervention.site_id));
+  const blocking = acceptance.blocked;
   const canDecide = displayed?.status === "sent" && intervention.status === "quoted";
   const payment = acceptedQuote
     ? session.data.payments.find((p) => p.quote_id === acceptedQuote.id)
@@ -1731,13 +1736,13 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
               )}
             </div>
             {/* ENT-12: ordered internal approval of the EXACT displayed quote (server state; never an acceptance). */}
-            {displayed && (
+            {displayed && intervention.site_id && (
               <QuoteApprovalPanel
                 key={displayed.id}
                 quoteId={displayed.id}
                 context={session.mutationContext}
                 demo={demo}
-                onStatus={setAdvanced}
+                onStatus={(st) => setAdvancedRead({ quoteId: displayed.id, status: st })}
                 loadMembers={c.organization ? () => session.loadOrganization(c.organization!.id).then((o) => o?.members.map((m) => ({ id: m.user_id, label: m.full_name || `Membre ${m.user_id.slice(0, 8)}` })) ?? null) : undefined}
               />
             )}
@@ -1843,9 +1848,11 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
                   <Unavailable
                     title="Acceptation suspendue à l’approbation"
                     reason={
-                      advancedBlocked
+                      acceptance.reason === "advanced"
                         ? "Le circuit d’approbation interne de ce devis n’est pas terminé (voir « Approbation interne du devis » ci-dessus)."
-                        : "Le devis affiché doit être approuvé dans « Devis & approbations » avant de pouvoir être accepté."
+                        : acceptance.reason === "unknown"
+                          ? "L’état de l’approbation interne de ce devis n’a pas encore pu être lu : l’acceptation reste suspendue tant qu’il n’est pas connu."
+                          : "Le devis affiché doit être approuvé dans « Devis & approbations » avant de pouvoir être accepté."
                     }
                   />
                 )}

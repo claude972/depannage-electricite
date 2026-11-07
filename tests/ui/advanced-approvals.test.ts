@@ -135,8 +135,9 @@ test("rendus : lecture seule sans action ; approbateur courant (version exacte) 
 
 test("câblage entreprise : chaîne du devis affiché, acceptation bloquée, frise, politique du site, emplacement des rappels ; app réelle démo sans appel /api", { skip }, async () => {
   const src = readFileSync("components/role/enterprise-space.tsx", "utf8");
-  assert.match(src, /<QuoteApprovalPanel\s+key=\{displayed\.id\}\s+quoteId=\{displayed\.id\}\s+context=\{session\.mutationContext\}\s+demo=\{demo\}\s+onStatus=\{setAdvanced\}/);
-  assert.match(src, /const blocking = Boolean\(approval && approval\.status !== "approved"\) \|\| advancedBlocked;/);
+  assert.match(src, /<QuoteApprovalPanel\s+key=\{displayed\.id\}\s+quoteId=\{displayed\.id\}\s+context=\{session\.mutationContext\}\s+demo=\{demo\}\s+onStatus=\{\(st\) => setAdvancedRead\(\{ quoteId: displayed\.id, status: st \}\)\}/);
+  // Acceptance blocking is decided by acceptanceDecision (see tests/ui/acceptance-decision.test.ts).
+  assert.match(src, /const blocking = acceptance\.blocked;/);
   assert.match(src, /approval: advancedApproval \?\? timelineApproval,/);
   assert.match(src, /<SitePolicyPanel\s+siteId=\{site\.id\}/);
   // The reserved spot is now filled by the compliance reminder panel, above « Échéances & conformité » rows.
