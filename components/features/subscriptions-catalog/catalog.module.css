@@ -1,0 +1,28 @@
+/* FIN-07 operator subscription catalog. --ui-* tokens only, light/dark, 1px borders, 44 px targets. */
+.panel { display: grid; gap: 12px; padding: 20px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-card); color: var(--ui-text); min-width: 0; }
+.panel h3 { margin: 0; font-size: 17px; }
+.live, .form { display: grid; gap: 10px; min-width: 0; }
+.hint { margin: 0; font-size: 13px; color: var(--ui-text-muted); }
+.note { margin: 0; padding: 10px 12px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); overflow-wrap: anywhere; }
+.error { margin: 0; color: var(--ui-danger); font-size: 14px; }
+.ok { margin: 0; color: var(--ui-success); font-size: 14px; }
+.modes, .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.modes [aria-pressed="true"] { border-color: var(--ui-primary); box-shadow: inset 0 0 0 1px var(--ui-primary); }
+.list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.item { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); min-width: 0; }
+.headline { margin: 0; overflow-wrap: anywhere; }
+.kv { display: grid; gap: 4px; margin: 0; }
+.kv > div { display: grid; grid-template-columns: minmax(140px, 30%) 1fr; gap: 8px; font-size: 14px; }
+.kv dt { color: var(--ui-text-muted); }
+.kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.mono { font-family: var(--ui-font-mono, ui-monospace, monospace); font-size: 12px; }
+.field { display: grid; gap: 4px; min-width: 0; font-size: 13px; color: var(--ui-text-muted); }
+.field input, .field select { min-height: 44px; padding: 8px 10px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-bg); color: var(--ui-text); font: inherit; color-scheme: var(--ui-scheme); min-width: 0; }
+.check { display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; }
+.check input { width: 22px; height: 22px; accent-color: var(--ui-primary); }
+.primary, .secondary { min-height: 44px; padding: 0 16px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); font: inherit; font-weight: 600; cursor: pointer; justify-self: start; }
+.primary { border-color: var(--ui-primary); background: var(--ui-primary); color: var(--ui-on-primary); }
+.secondary { background: var(--ui-card); color: var(--ui-text); }
+.primary:disabled, .secondary:disabled { opacity: 0.6; cursor: not-allowed; }
+.field input:focus-visible, .field select:focus-visible, .check input:focus-visible, .primary:focus-visible, .secondary:focus-visible { outline: 3px solid var(--ui-focus); outline-offset: 2px; }
+@media (max-width: 640px) { .kv > div { grid-template-columns: 1fr; gap: 2px; } .primary, .secondary { justify-self: stretch; } .actions > * { flex: 1 1 100%; } }
