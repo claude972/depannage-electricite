@@ -79,7 +79,38 @@ export const PRIVACY_DATA: { label: string; text: string }[] = [
   { label: "Messages", text: "les échanges liés à une intervention entre le client et l’artisan affecté." },
   { label: "Documents", text: "les fichiers déposés (justificatifs, pièces liées à une intervention) sont conservés dans un stockage privé, accessible uniquement aux rôles autorisés." },
   { label: "Paiements", text: "le règlement est traité avec Stripe. L’application conserve l’état du paiement et son montant ; elle ne stocke aucun numéro de carte." },
+  { label: "Téléphone vérifié", text: "si vous vérifiez votre numéro, un code à usage unique vous est envoyé par SMS par le service d’identité ; l’application ne conserve pas le code." },
+  { label: "Adresses enregistrées", text: "les adresses que vous choisissez de mémoriser dans votre profil (nom, prénom, adresse, éventuelle position déclarée par vous). Elles sont privées ; vous pouvez les modifier ou les archiver." },
+  { label: "Préférences de notification", text: "les canaux que vous activez ou désactivez dans votre profil." },
+  { label: "Position pendant le déplacement", text: "seulement si l’artisan accepte de la partager : dernière position, précision et heure de mesure. Elle est effacée automatiquement 60 secondes après sa mesure ; l’artisan peut arrêter le partage à tout moment." },
+  { label: "Dans votre navigateur", text: "un brouillon de demande non envoyé, le thème clair ou sombre choisi et, en démonstration, les exemples modifiés. Rien de cela n’est transmis à un tiers." },
 ];
+/** Third parties the code really calls today (no analytics, no advertising tracker). */
+export const PRIVACY_THIRD_PARTIES: { name: string; text: string }[] = [
+  { name: "Supabase", text: "base de données, authentification et stockage privé des fichiers de l’application." },
+  { name: "Stripe", text: "règlement par carte, une fois activé par l’exploitant ; les données de carte sont saisies chez Stripe, jamais dans l’application." },
+  { name: "OpenStreetMap (fonds de carte)", text: "lorsque la carte de suivi du déplacement est affichée, votre navigateur charge des tuiles de carte depuis tile.openstreetmap.org : le serveur de tuiles voit la zone affichée (autour de la position partagée par l’artisan et de la destination) et votre adresse IP. Le choix définitif d’un fournisseur de carte est en attente de décision de l’exploitant." },
+  { name: "IGN Géoplateforme", text: "appelée par le serveur de l’application pour calculer un itinéraire (position partagée par l’artisan et destination confirmée) et pour proposer des adresses à partir du texte saisi, lors de la confirmation de la destination." },
+];
+/** Real controls available in the signed-in space. */
+export const PRIVACY_CONTROLS: string[] = [
+  "Profil → informations du compte (nom, téléphone).",
+  "Profil → préférences de notification.",
+  "Profil → adresses enregistrées (modifier, choisir l’adresse préférée, archiver).",
+  "Artisan : arrêter le partage de position à tout moment depuis le dossier.",
+  "Démonstration : bouton « Réinitialiser » du bandeau pour effacer les exemples de ce navigateur.",
+];
+/** Contact channels (PUB-04): only what really exists; the others are explicitly pending. */
+export const CONTACT_CHANNELS: { label: string; state: "available" | "pending"; text: string }[] = [
+  { label: "Assistance en ligne", state: "available", text: "Une fois connecté, écrivez à l’assistance depuis votre espace ; la réponse s’affiche dans votre espace." },
+  { label: "Demande de rappel", state: "pending", text: "Canal en cours d’ouverture : aucune demande de rappel n’est enregistrée depuis ce site." },
+  { label: "Adresse e-mail de contact", state: "pending", text: "À renseigner par l’exploitant." },
+  { label: "Téléphone", state: "pending", text: "À renseigner par l’exploitant. Cette version ne fournit pas de ligne d’urgence." },
+];
+/** Operator presentation (PUB-09): fields the owner must provide; nothing is filled in by default. */
+export const OPERATOR_FIELDS: string[] = ["Nom de l’exploitant et forme juridique", "Personnes responsables", "Équipe", "Zone d’intervention couverte", "Coordonnées de contact"];
+/** Pricing decisions still pending (PUB-02). */
+export const PRICING_PENDING: string[] = ["Barème officiel", "Frais de déplacement", "Majorations (soir, week-end, urgence)", "Zone desservie"];
 export const LEGAL_SECTIONS: { title: string; fields: string[] }[] = [
   { title: "Éditeur", fields: ["Raison sociale et forme juridique", "Adresse du siège", "Numéro SIREN et numéro de TVA", "Directeur ou directrice de la publication", "Adresse de contact"] },
   { title: "Hébergeur", fields: ["Nom de l’hébergeur", "Adresse", "Coordonnées de contact"] },
@@ -129,6 +160,9 @@ export function publicStrings(): string[] {
   for (const list of [HOME_STEPS, HOME_FACTS, HELP_PROCESS, JOIN_STEPS, JOIN_FACTS, JOIN_TILES, ABOUT_VALUES]) for (const item of list) out.push(item.title, item.text);
   for (const item of FAQ) out.push(item.question, item.answer);
   for (const item of PRIVACY_DATA) out.push(item.label, item.text);
+  for (const item of PRIVACY_THIRD_PARTIES) out.push(item.name, item.text);
+  for (const item of CONTACT_CHANNELS) out.push(item.label, item.text);
+  out.push(...PRIVACY_CONTROLS, ...OPERATOR_FIELDS, ...PRICING_PENDING);
   for (const section of LEGAL_SECTIONS) out.push(section.title, ...section.fields);
   out.push(...JOIN_REVIEW, PENDING);
   return out;
