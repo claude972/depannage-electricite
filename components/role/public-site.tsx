@@ -19,7 +19,7 @@ import { ABOUT_VALUES, CONTACT_CHANNELS, FAQ, HELP_PROCESS, JOIN_FACTS, JOIN_REV
 import styles from "./public.module.css";
 import { publishedStamp, publishedValue, type PublicProfileState } from "../features/public-operator-profile/model";
 import { usePublishedOperatorProfile } from "../features/public-operator-profile/use-published-profile";
-import type { OperatorField } from "../features/public-operator-profile/contract";
+import type { OperatorField } from "../../lib/features/public-operator-profile/contract";
 import viewStyles from "./public-views.module.css";
 
 const PUBLIC_VIEWS: View[] = ["home", "new", "auth", "help", "pricing", "join", "join-organization", "demo", "about", "privacy", "legal"];

@@ -6,7 +6,7 @@
 // reply / 503 offers « Réessayer » with the SAME command; 409 ⇒ honest message + reload. Demo:
 // no call. Logic in ./model.
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import type { OperatorField } from "./contract";
+import type { OperatorField } from "../../../lib/features/public-operator-profile/contract";
 import { EDITOR_INITIAL, FIELD_LABELS, FIELD_ORDER, PROFILE_COPY, createEditorApi, createEditorController, formToProfile, missingMinimum, tabStore, type EditorApi, type EditorView, type Store } from "./model";
 import styles from "./operator-profile.module.css";
 
