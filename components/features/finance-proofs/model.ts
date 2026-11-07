@@ -208,7 +208,7 @@ export const PROOF_INITIAL: ProofState = { key: "", phase: "idle", data: null, b
 export const viewOf = (s: ProofState, key: string): ProofState => (s.key === key ? s : { ...PROOF_INITIAL, key, phase: key ? "loading" : "idle" });
 
 /** One controller per identity + proof target. */
-export function createProofController({ target, api, store, newId, context, set }: { target: Target; api: () => ProofApi; store: () => Store | null; newId: () => string | null; context: Context; set: (s: ProofState) => void }) {
+export function createProofController({ target, api, store, newId, context, set, onCursor }: { target: Target; api: () => ProofApi; store: () => Store | null; newId: () => string | null; context: Context; set: (s: ProofState) => void; /** The UI owns the cursor: told when the controller resets it. */ onCursor?: (after: string | null) => void }) {
   let alive = true;
   let seq = 0;
   let inFlight = false;
@@ -246,7 +246,9 @@ export function createProofController({ target, api, store, newId, context, set 
     const after = x.kind === "charge" ? x.after : null;
     const d = r.status === 200 ? parseFor(x, r.body, after) : null;
     if (!d) return put({ ...state, key: keyOf(x), phase: "error", data: null, error: r.status === 404 ? COPY.notFound : COPY.failed });
-    put({ ...state, key: keyOf(x), phase: "ready", data: d, pending: keepPending, error: state.phase === "ready" ? state.error : "", notice: notice ?? state.notice });
+    // A pending (uncertain) command keeps its retry message: loading never wipes what the explicit
+    // « Réessayer la même demande » button needs (e.g. after a remount).
+    put({ ...state, key: keyOf(x), phase: "ready", data: d, pending: keepPending, error: keepPending ? state.error || COPY.retry : state.phase === "ready" ? state.error : "", notice: notice ?? state.notice });
   };
   const persist = (commandId: string) => {
     if (!uid) return false;
@@ -282,7 +284,15 @@ export function createProofController({ target, api, store, newId, context, set 
       const d = parseFor(x.kind === "charge" ? { ...x, after: null } : x, r.body, null);
       if (d) {
         clearStored();
-        if (x.kind === "charge" && x.after) t = { ...x, after: null };
+        if (x.kind === "charge" && x.after) {
+          // Back to page 1 everywhere at once: internal cursor AND the UI cursor (one source of truth),
+          // then page 1 is re-read through the normal path so the rendered key always resolves.
+          t = { ...x, after: null };
+          put({ ...state, key: keyOf(t), phase: "loading", data: null, busy: false, pending: null, error: "", notice: COPY.qualified });
+          onCursor?.(null);
+          await load(COPY.qualified, null);
+          return true;
+        }
         put({ ...state, key: keyOf(t), phase: "ready", data: d, busy: false, pending: null, error: "", notice: COPY.qualified });
         return true;
       }
@@ -339,6 +349,8 @@ export function createProofController({ target, api, store, newId, context, set 
       }
       state = { ...state, pending: cid, error: COPY.retry };
     },
+    /** Current internal cursor (charge), to keep the UI cursor as the single source of truth. */
+    cursor: () => (t.kind === "charge" ? t.after : null),
     get: () => state,
     stop() {
       alive = false;
