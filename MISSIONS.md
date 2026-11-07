@@ -116,3 +116,6 @@ Baseb760367, worktree propre réutilisé. Tranche serveur courte : catalogue exp
 
 ## FIN-07 — gestion hébergée et événements Billing (Astra exclusive)
 Depuis bf3cdc8, même branche. Ajouter commandes durables de portail avec configuration explicite/mode/Customer et accès courant, sans état déduit du retour ; route signée distincte, événement dédupliqué et relecture fournisseur liée puis CAS. Aucun droit premium, porte OFF, aucune configuration réelle. Tests handlers injectés et SQL : rejeu, retard, refus intercompte et absence de session navigateur pour webhook.
+
+## FIN-07 — contre-revue EUR et service désactivé (Astra)
+Correctif court : catalogue et snapshots EUR exclusivement, Adaptive Pricing désactivé explicitement, GET désactivé sans fournisseur avec état indisponible distinct de non-abonné. Vérification SQL/handlers/TypeScript et sources Stripe officielles ; aucun appel fournisseur.
