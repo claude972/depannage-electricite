@@ -751,6 +751,8 @@ export function AdminSpace({ session }: { session: Session }) {
       limitNote={limitNote}
       onReloadOverview={() => void load()}
       reloadingOverview={reloading}
+      artisanName={artisanName}
+      onOpenDossier={openDossier}
     />
   );
 
@@ -2570,6 +2572,232 @@ type RoleFilter = "" | "client" | "manager";
 const DIRECTORY_TOTAL_NOTE =
   "Nombre total compté sur l’ensemble des fiches selon les filtres, pas seulement sur la page affichée. Les fiches créées ou modifiées pendant la consultation n’apparaissent qu’après une actualisation.";
 
+// ---- Client record (ADM-04) ----------------------------------------------------------------
+// Profile = GET /api/admin/directory?kind=clients&id=… (id, full_name, phone, role, created_at:
+// nothing else is transmitted). Dossiers = GET /api/admin/interventions?client_id=…, paginated
+// with a server cursor bound to that client. Every request carries a sequence number; a reply
+// whose sequence is no longer the current one (other client, other page, retry) is ignored.
+// undefined = loading, null = unavailable.
+export const CLIENT_DOSSIERS_LIMIT = 25;
+export type ClientRecordState = {
+  clientId: string | null;
+  seq: number;
+  profile: { seq: number; item: DirectoryClient | null | undefined };
+  dossiers: { seq: number; position: PagePosition; previous: PagePosition[]; page: AdminInterventionsPage | null | undefined };
+};
+export const CLIENT_RECORD_CLOSED: ClientRecordState = {
+  clientId: null,
+  seq: 0,
+  profile: { seq: 0, item: undefined },
+  dossiers: { seq: 0, position: FIRST_PAGE, previous: [], page: undefined },
+};
+// Opening (or switching to) a client restarts both requests and drops the previous cursor.
+export function clientRecordOpen(state: ClientRecordState, clientId: string): ClientRecordState {
+  return {
+    clientId,
+    seq: state.seq + 2,
+    profile: { seq: state.seq + 1, item: undefined },
+    dossiers: { seq: state.seq + 2, position: FIRST_PAGE, previous: [], page: undefined },
+  };
+}
+export function clientRecordClose(state: ClientRecordState): ClientRecordState {
+  return { ...CLIENT_RECORD_CLOSED, seq: state.seq };
+}
+export function clientRecordRetryProfile(state: ClientRecordState): ClientRecordState {
+  if (!state.clientId) return state;
+  return { ...state, seq: state.seq + 1, profile: { seq: state.seq + 1, item: undefined } };
+}
+function clientRecordDossiersAt(state: ClientRecordState, position: PagePosition, previous: PagePosition[]): ClientRecordState {
+  if (!state.clientId) return state;
+  return { ...state, seq: state.seq + 1, dossiers: { seq: state.seq + 1, position, previous, page: undefined } };
+}
+export function clientRecordRetryDossiers(state: ClientRecordState): ClientRecordState {
+  return clientRecordDossiersAt(state, state.dossiers.position, state.dossiers.previous);
+}
+export function clientRecordFirstPage(state: ClientRecordState): ClientRecordState {
+  return clientRecordDossiersAt(state, FIRST_PAGE, []);
+}
+export function clientRecordNext(state: ClientRecordState): ClientRecordState {
+  const { page, position, previous } = state.dossiers;
+  if (!page?.page.has_more || !page.page.next_cursor) return state;
+  return clientRecordDossiersAt(state, { cursor: page.page.next_cursor, offset: position.offset + page.interventions.length }, [...previous, position]);
+}
+export function clientRecordPrevious(state: ClientRecordState): ClientRecordState {
+  const { previous } = state.dossiers;
+  const last = previous[previous.length - 1];
+  if (!last) return state;
+  return clientRecordDossiersAt(state, last, previous.slice(0, -1));
+}
+export function clientRecordProfileReply(state: ClientRecordState, seq: number, item: DirectoryClient | null): ClientRecordState {
+  if (seq !== state.profile.seq || state.clientId === null) return state;
+  // A reply for another identity is not this client's record.
+  return { ...state, profile: { seq, item: item && item.id === state.clientId ? item : null } };
+}
+export function clientRecordDossiersReply(state: ClientRecordState, seq: number, page: AdminInterventionsPage | null): ClientRecordState {
+  if (seq !== state.dossiers.seq || state.clientId === null) return state;
+  const own = page && page.interventions.every((row) => row.client_id === state.clientId) ? page : null;
+  return { ...state, dossiers: { ...state.dossiers, page: own } };
+}
+// Parameters of the current dossiers request (the cursor belongs to this client's filter).
+export function clientDossiersQuery(state: ClientRecordState) {
+  return { client_id: state.clientId ?? undefined, limit: CLIENT_DOSSIERS_LIMIT, cursor: state.dossiers.position.cursor };
+}
+
+function useClientRecord(session: Session) {
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  const [state, setState] = useState<ClientRecordState>(CLIENT_RECORD_CLOSED);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const { clientId } = state;
+  const profileSeq = state.profile.seq;
+  const dossiersSeq = state.dossiers.seq;
+  useEffect(() => {
+    if (!clientId || !profileSeq) return;
+    void sessionRef.current
+      .loadAdminDirectoryItem("clients", clientId)
+      .then((item) => setState((s) => clientRecordProfileReply(s, profileSeq, item)));
+  }, [clientId, profileSeq]);
+  useEffect(() => {
+    if (!clientId || !dossiersSeq) return;
+    void sessionRef.current
+      .loadAdminInterventions(clientDossiersQuery(stateRef.current))
+      .then((page) => setState((s) => clientRecordDossiersReply(s, dossiersSeq, page)));
+  }, [clientId, dossiersSeq]);
+  return {
+    state,
+    open: (id: string) => setState((s) => clientRecordOpen(s, id)),
+    close: () => setState(clientRecordClose),
+    retryProfile: () => setState(clientRecordRetryProfile),
+    retryDossiers: () => setState(clientRecordRetryDossiers),
+    firstPage: () => setState(clientRecordFirstPage),
+    goNext: () => setState(clientRecordNext),
+    goPrevious: () => setState(clientRecordPrevious),
+  };
+}
+
+export function ClientRecord({
+  state,
+  directoryState,
+  listsState,
+  artisanName,
+  onOpenDossier,
+  onClose,
+  onRetryProfile,
+  onRetryDossiers,
+  onFirstPage,
+  onNext,
+  onPrevious,
+}: {
+  state: ClientRecordState;
+  directoryState: Session["capabilities"]["adminDirectory"];
+  listsState: Session["capabilities"]["adminLists"];
+  artisanName: (id: string | null | undefined) => string | undefined;
+  onOpenDossier: (id: string) => void;
+  onClose: () => void;
+  onRetryProfile: () => void;
+  onRetryDossiers: () => void;
+  onFirstPage: () => void;
+  onNext: () => void;
+  onPrevious: () => void;
+}) {
+  if (!state.clientId) return null;
+  const { item } = state.profile;
+  const { page, position, previous } = state.dossiers;
+  const rows = page?.interventions ?? [];
+  const name = item?.full_name || "ce client";
+
+  let profileBody: ReactNode;
+  if (item === undefined) profileBody = <Loader label="Chargement de la fiche client…" />;
+  else if (item === null)
+    profileBody = (
+      <div className={styles.panelBody}>
+        <Unavailable
+          title="Fiche client indisponible"
+          state={directoryState}
+          reason={directoryState === "available" ? "Ce client est introuvable dans l’annuaire ou l’annuaire n’a pas répondu." : undefined}
+          onRetry={onRetryProfile}
+        />
+      </div>
+    );
+  else
+    profileBody = (
+      <>
+        <dl className={styles.definitions}>
+          <dt>Nom</dt>
+          <dd>{item.full_name}</dd>
+          <dt>Téléphone</dt>
+          <dd>{item.phone || <span className={styles.muted}>Non renseigné</span>}</dd>
+          <dt>Type</dt>
+          <dd>{clientKind(item.role)}</dd>
+          <dt>Inscription</dt>
+          <dd>{date(item.created_at)}</dd>
+          <dt>Identifiant</dt>
+          <dd className={styles.mono}>{item.id}</dd>
+        </dl>
+        <Basis>Seuls le nom, le téléphone, le type et la date d’inscription sont transmis à l’administration ; l’adresse, l’e-mail et les sites du client ne le sont pas.</Basis>
+      </>
+    );
+
+  let dossiersBody: ReactNode;
+  if (page === undefined) dossiersBody = <Loader label="Chargement des dossiers du client…" />;
+  else if (page === null)
+    dossiersBody = (
+      <div className={styles.panelBody}>
+        <Unavailable
+          title="Dossiers du client indisponibles"
+          state={listsState}
+          reason={listsState === "available" ? "La liste des dossiers de ce client n’a pas pu être chargée. Réessayez dans un instant." : undefined}
+          onRetry={onRetryDossiers}
+        />
+      </div>
+    );
+  else if (!rows.length)
+    dossiersBody =
+      position.offset > 0 ? (
+        <Empty
+          icon="list"
+          title="Cette page ne contient plus de dossier"
+          action={
+            <button type="button" className="button outline" onClick={onFirstPage}>
+              Revenir au début de la liste
+            </button>
+          }
+        >
+          Des dossiers ont changé depuis le chargement de la page précédente.
+        </Empty>
+      ) : (
+        <Empty icon="list" title="Aucun dossier pour ce client">
+          Les demandes d’intervention de ce client apparaîtront ici.
+        </Empty>
+      );
+  else dossiersBody = <DossierTable rows={rows} caption={`Dossiers de ${name}`} artisanName={artisanName} onOpen={onOpenDossier} />;
+
+  return (
+    <div data-client-record={state.clientId}>
+      <Panel
+        title="Fiche client"
+        action={
+          <button type="button" className={styles.link} onClick={onClose}>
+            <Icon name="close" size={15} />
+            Fermer la fiche
+          </button>
+        }
+      >
+        {profileBody}
+      </Panel>
+      <Panel title={`Dossiers de ${name}`} count={page?.page.total}>
+        {dossiersBody}
+        <DirectoryPager
+          directory={{ page, rows, position, hasPrevious: previous.length > 0, goNext: onNext, goPrevious: onPrevious }}
+          noun={{ one: "dossier", many: "dossiers" }}
+        />
+        {page && <Basis>Total compté par le serveur sur tous les dossiers de ce client, du plus récent au plus ancien.</Basis>}
+      </Panel>
+    </div>
+  );
+}
+
 // Two server-paginated directories: clients (particuliers and entreprises clientes) and
 // organisations, each with its own pager and total. A client row can restrict the organisations
 // to those it owns (owner_id); the owner of an organisation is named from the loaded clients.
@@ -2580,6 +2808,8 @@ function ClientsView({
   limitNote,
   onReloadOverview,
   reloadingOverview,
+  artisanName,
+  onOpenDossier,
 }: {
   session: Session;
   overview: AdminOverview | null;
@@ -2587,8 +2817,16 @@ function ClientsView({
   limitNote: string;
   onReloadOverview: () => void;
   reloadingOverview: boolean;
+  artisanName: (id: string | null | undefined) => string | undefined;
+  onOpenDossier: (id: string) => void;
 }) {
   const clients = useDirectory(session, "clients");
+  const record = useClientRecord(session);
+  const recordPanel = useRef<HTMLDivElement>(null);
+  const openRecord = (c: DirectoryClient) => {
+    record.open(c.id);
+    recordPanel.current?.scrollIntoView({ block: "start" });
+  };
   const organizations = useDirectory(session, "organizations");
   const [owner, setOwner] = useState<{ id: string; name: string } | null>(null);
   const [showBounded, setShowBounded] = useState(false);
@@ -2656,10 +2894,16 @@ function ClientsView({
             key: "actions",
             label: "Actions",
             render: (c) => (
-              <button type="button" className={styles.rowAction} aria-pressed={ownerId === c.id} onClick={() => filterByOwner(c)}>
-                <Icon name="building" size={15} />
-                Organisations dont il est propriétaire
-              </button>
+              <div className={styles.actions}>
+                <button type="button" className={styles.rowAction} aria-pressed={record.state.clientId === c.id} onClick={() => openRecord(c)}>
+                  <Icon name="eye" size={15} />
+                  Fiche client
+                </button>
+                <button type="button" className={styles.rowAction} aria-pressed={ownerId === c.id} onClick={() => filterByOwner(c)}>
+                  <Icon name="building" size={15} />
+                  Organisations dont il est propriétaire
+                </button>
+              </div>
             ),
           },
         ]}
@@ -2728,6 +2972,21 @@ function ClientsView({
 
   return (
     <>
+      <div ref={recordPanel} tabIndex={-1}>
+        <ClientRecord
+          state={record.state}
+          directoryState={session.capabilities.adminDirectory}
+          listsState={session.capabilities.adminLists}
+          artisanName={artisanName}
+          onOpenDossier={onOpenDossier}
+          onClose={record.close}
+          onRetryProfile={record.retryProfile}
+          onRetryDossiers={record.retryDossiers}
+          onFirstPage={record.firstPage}
+          onNext={record.goNext}
+          onPrevious={record.goPrevious}
+        />
+      </div>
       <Panel title="Clients" count={clients.page?.page.total}>
         <form className={styles.filters} onSubmit={clients.submitSearch} noValidate>
           <DirectorySearch id="admin-client-search" label="Recherche (nom ou identifiant complet)" placeholder="Nom du client" directory={clients} />
@@ -2750,14 +3009,7 @@ function ClientsView({
         </form>
         {clientsBody}
         <DirectoryPager directory={clients} noun={{ one: "client", many: "clients" }} />
-        <Basis>{DIRECTORY_TOTAL_NOTE}</Basis>
-        <div className={styles.panelBody}>
-          <Unavailable
-            title="Fiche client détaillée non disponible"
-            reason="Coordonnées complètes, historique des dossiers et sites ne sont pas transmis à l’administration ; seuls le nom, le téléphone, le type et la date d’inscription le sont."
-            blocker="ADM-04"
-          />
-        </div>
+        <Basis>{DIRECTORY_TOTAL_NOTE} « Fiche client » ouvre le profil transmis par l’annuaire et tous les dossiers de ce client.</Basis>
       </Panel>
       <div ref={organizationsPanel} tabIndex={-1}>
         <Panel title="Organisations" count={organizations.page?.page.total}>

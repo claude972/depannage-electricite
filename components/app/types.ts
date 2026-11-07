@@ -625,6 +625,7 @@ export type AdminListFilters = {
   urgency?: Urgency;
   site_id?: string;
   artisan_id?: string;
+  client_id?: string;
   created_from?: string;
   created_to?: string;
   q?: string;
