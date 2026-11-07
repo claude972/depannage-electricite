@@ -27,3 +27,15 @@ test("F1 client « Mon profil » : aucun débordement horizontal à 360 / 390 px
       }
   });
 });
+
+test("F2 artisan « Aide » : chaque question de la FAQ est une cible d’au moins 44 px", { skip }, async () => {
+  await withApp(async (open) => {
+    for (const width of [360, 1280]) {
+      const { page } = await themed(open, "artisan-help", width, "light");
+      const heights: number[] = await page.evaluate(() => Array.from(document.querySelectorAll("main summary")).map((s) => Math.round(s.getBoundingClientRect().height)));
+      assert.ok(heights.length >= 3, "FAQ rendered");
+      for (const h of heights) assert.ok(h >= 44, `${width}px: summary ${h}px < 44px`);
+      await page.context().close();
+    }
+  });
+});
