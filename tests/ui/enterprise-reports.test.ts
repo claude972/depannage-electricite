@@ -111,6 +111,48 @@ const ctx = (org, mode = "live", gen = 0) => ({
   scope: { sites: cacheSites, interventions: cacheData.interventions, quotes: [], payments: [], approvals: [], compliance: [], documents: [], rules: [] },
   authority: { canWrite: true, readOnlyReason: null }, go: () => {},
 });
+window.exports = async () => {
+  let release = null, csvStatus = 200, downloads = 0;
+  window.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes("format=csv")) { await new Promise((r) => (release = r)); return csvStatus === 200 ? new Response("x;y", { status: 200, headers: { "content-type": "text/csv" } }) : Response.json({ error: "Le rapport est momentanément indisponible." }, { status: csvStatus }); }
+    if (u.startsWith("/api/reports")) return Response.json(u.includes(ORG_B) ? ${JSON.stringify(reply([site(S1)], ORG_B))} : reply);
+    return Response.json({ error: "x" }, { status: 503 });
+  };
+  const origCreate = URL.createObjectURL; URL.createObjectURL = (b) => { downloads++; return origCreate(b); };
+  const origClick = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function () {};
+  const div = document.createElement("div"); document.body.appendChild(div);
+  const root = createRoot(div);
+  let who = { uid: USER, gen: 0 };
+  const view = (org) => ({ ...ctx(org), session: { ...ctx(org).session, mutationContext: { userId: () => who.uid, generation: () => who.gen } } });
+  const show = (org) => root.render(h(StrictMode, null, h(ReportsView, { c: view(org) })));
+  const btn = () => div.querySelector("[data-report-csv]");
+  const state = () => ({ busy: btn().textContent.includes("Préparation"), alert: !!div.querySelector(".alert.error") });
+  const out = {};
+  const scenario = async (name, change, status = 200) => {
+    csvStatus = status; downloads = 0; who = { uid: USER, gen: 0 };
+    show(ORG); await tick(200);
+    btn().click(); await tick(50);
+    const busyBefore = state().busy;
+    await change();
+    release(); await tick(200);
+    out[name] = { busyBefore, downloads, ...state() };
+  };
+  await scenario("normal", async () => {});
+  await scenario("AtoB", async () => { show(ORG_B); await tick(100); });
+  await scenario("AtoBtoA", async () => { show(ORG_B); await tick(100); show(ORG); await tick(100); });
+  await scenario("logout", async () => { who = { uid: null, gen: 1 }; show(ORG); await tick(100); });
+  await scenario("lateError", async () => { show(ORG_B); await tick(100); }, 503);
+  await scenario("ownError", async () => {}, 503);
+  root.unmount();
+  URL.createObjectURL = origCreate; HTMLAnchorElement.prototype.click = origClick;
+  // Demo label says the CSV is generated locally.
+  const d = document.createElement("div"); document.body.appendChild(d);
+  const r2 = createRoot(d); r2.render(h(StrictMode, null, h(ReportsView, { c: ctx(ORG, "demo") }))); await tick(200);
+  out.demoLabel = d.querySelector("[data-report-csv]").textContent;
+  r2.unmount();
+  return out;
+};
 window.run = async () => {
   const calls = [];
   let downloads = 0;
@@ -168,6 +210,39 @@ window.run = async () => {
   return out;
 };
 `;
+test("export CSV (Chromium, ReportsView réelle, réponses retardées) : A→B, A→B→A, déconnexion ⇒ aucun téléchargement ni erreur/occupation dans le nouveau périmètre ; chemin normal télécharge ; démo dit « généré localement »", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
+  const out = await build({ absWorkingDir: ROOT, stdin: { contents: ENTRY, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, outdir: "out", platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "local-css", ".svg": "dataurl", ".png": "dataurl" }, define: { "process.env.NODE_ENV": '"development"', "process.env.NEXT_PUBLIC_SUPABASE_URL": "undefined", "process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "undefined" }, logLevel: "error" });
+  const js = out.outputFiles.find((f) => f.path.endsWith(".js"))!.text;
+  const server: Server = createServer((_rq, rs) => { rs.setHeader("content-type", "text/html"); rs.end(`<!doctype html><script>${js}</script>`); });
+  let browser: { close(): Promise<void>; newContext(o?: unknown): Promise<any> } | null = null;
+  try {
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
+    browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true });
+    const context = await browser!.newContext();
+    try {
+      const page = await context.newPage();
+      const errors: string[] = [];
+      page.on("pageerror", (e: Error) => errors.push(String(e)));
+      await page.goto(`http://127.0.0.1:${(server.address() as { port: number }).port}/`);
+      const r = (await page.evaluate(() => (window as unknown as { exports: () => Promise<unknown> }).exports())) as Record<string, any>;
+      same(r.normal, { busyBefore: true, downloads: 1, busy: false, alert: false }, "normal path downloads");
+      same(r.AtoB, { busyBefore: true, downloads: 0, busy: false, alert: false }, "A→B: no download, no busy/error on B");
+      same(r.AtoBtoA, { busyBefore: true, downloads: 0, busy: false, alert: false }, "A→B→A: the generation invalidates the original command");
+      same(r.logout, { busyBefore: true, downloads: 0, busy: false, alert: false }, "logout / identity change: no download");
+      same(r.lateError, { busyBefore: true, downloads: 0, busy: false, alert: false }, "a late CSV error after the switch is not shown");
+      same(r.ownError, { busyBefore: true, downloads: 0, busy: false, alert: true }, "an error of the current scope is shown");
+      assert.match(r.demoLabel, /démonstration \(CSV généré localement\)/);
+      same(errors, []);
+    } finally {
+      await context.close();
+    }
+  } finally {
+    await browser?.close();
+    server.close();
+  }
+});
+
 for (const width of [390, 1280])
   test(`ReportsView réelle (Chromium ${width} px) : chiffres du serveur (≠ cache de 100), CSV même périmètre, multi-organisation sans choix ⇒ désactivé 0 appel, démo 0 appel, aucun ancien cadre`, { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
     const out = await build({ absWorkingDir: ROOT, stdin: { contents: ENTRY, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, outdir: "out", platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "local-css", ".svg": "dataurl", ".png": "dataurl" }, define: { "process.env.NODE_ENV": '"development"', "process.env.NEXT_PUBLIC_SUPABASE_URL": "undefined", "process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "undefined" }, logLevel: "error" });
