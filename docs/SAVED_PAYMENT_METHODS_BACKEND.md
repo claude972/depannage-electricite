@@ -33,3 +33,9 @@ Tests `tests/saved-payment-methods.test.ts` : vrais handlers avec dépendances i
 Aucun appel Stripe réel, clé, transaction, migration cloud ni changement aux parcours Checkout payeur/guest/webhooks. Pas de preuve hébergée ou d’enregistrement réel annoncée.
 
 Sources officielles consultées : [Checkout setup](https://docs.stripe.com/payments/checkout/save-and-reuse), [idempotence](https://docs.stripe.com/api/idempotent_requests), [liste des méthodes](https://docs.stripe.com/api/payment_methods/list), [détachement](https://docs.stripe.com/api/payment_methods/detach). Stripe peut supprimer les clés API v1 après24h ; la fenêtre23h conserve une marge technique.
+
+### Compatibilité URL Checkout — correction de revue
+
+La [réponse officielle Checkout Session](https://docs.stripe.com/api/checkout/sessions/object) contient une URL `checkout.stripe.com` avec fragment `#fid…`. Ce fragment est conservé à l’identique, opaque ; aucune lecture ni réécriture. Origine HTTPS exacte, absence d’identifiants et port standard restent contrôlés. Le garde d’origine de retour configurée reste séparé et refuse toujours son propre fragment.
+
+La même référence documente `amount_total` comme entier nullable ; aucune valeur0 spécifiquement documentée pour setup n’a été trouvée dans cette référence et le guide setup consulté. Le lot conserve donc `amount_total=null` pour setup, refuse les montants numériques et ne généralise pas l’exemple en mode payment. À confirmer contre la réponse réelle en recette Stripe autorisée ; aucun élargissement spéculatif.

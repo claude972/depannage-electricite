@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createSavedMethodHandlers,type Dependencies} from '../lib/features/saved-payment-methods/handlers';
 const U='11111111-1111-4111-8111-111111111111',B='22222222-2222-4222-8222-222222222222',C='33333333-3333-4333-8333-333333333333',K='44444444-4444-4444-8444-444444444444';
-function fixture(options:{auth?:boolean;denied?:boolean;old?:boolean;live?:boolean;allowLive?:boolean;origin?:string;lostCustomer?:boolean;lostSetup?:boolean;lostDetach?:boolean;wrongCustomer?:boolean;wrongMode?:boolean;noCustomer?:boolean;badDetach?:boolean;badSession?:boolean;revoked?:boolean}={}){
+function fixture(options:{auth?:boolean;denied?:boolean;old?:boolean;live?:boolean;allowLive?:boolean;origin?:string;lostCustomer?:boolean;lostSetup?:boolean;lostDetach?:boolean;wrongCustomer?:boolean;wrongMode?:boolean;noCustomer?:boolean;badDetach?:boolean;badSession?:boolean;checkoutUrl?:string;setupAmount?:number;revoked?:boolean}={}){
  const calls:{name:string;args:any;key?:string}[]=[];
  const b:any={id:B,user_id:U,live:options.live??false,customer_id:options.noCustomer?'cus_existing':null,created_at:new Date(Date.now()-(options.old?24*3600000:0)).toISOString()};
  const commands=new Map<string,any>();let madeCustomer:any=null,madeSession:any=null;
@@ -21,7 +21,7 @@ function fixture(options:{auth?:boolean;denied?:boolean;old?:boolean;live?:boole
   if(name==='record_saved_method_proof'){const c=commands.get(args.p_command);if(args.p_kind==='setup')c.session_id=args.p_session;if(args.p_kind==='verified')c.verified_customer=args.p_customer;if(args.p_kind==='removed')c.removed=true}
   return {data:null,error:null};
  }};
- const stripe:any={customers:{create:async(args:any,o:any)=>{calls.push({name:'customer.create',args,key:o.idempotencyKey});madeCustomer??={id:'cus_existing',object:'customer',livemode:b.live,metadata:args.metadata};if(lostCustomer){lostCustomer=false;throw new Error('lost')}return madeCustomer},retrieve:async(id:string)=>({id,object:'customer',livemode:b.live,metadata:{saved_customer_binding:B}})},checkout:{sessions:{create:async(args:any,o:any)=>{calls.push({name:'setup.create',args,key:o.idempotencyKey});madeSession??={id:'cs_test_one',object:'checkout.session',...args,mode:options.badSession?'payment':args.mode,livemode:b.live,status:'open',url:'https://checkout.stripe.com/c/pay/test',amount_total:null,payment_intent:null,subscription:null};if(lostSetup){lostSetup=false;throw new Error('lost')}return madeSession},retrieve:async()=>madeSession}},paymentMethods:{list:async(args:any)=>{calls.push({name:'methods.list',args});return {object:'list',has_more:false,data:pm.customer?[pm]:[]}},retrieve:async(id:string)=>{calls.push({name:'method.retrieve',args:id});return {...pm,id}},detach:async(id:string,_:any,o:any)=>{calls.push({name:'method.detach',args:id,key:o.idempotencyKey});pm={...pm,customer:null};if(lostDetach){lostDetach=false;throw new Error('lost')}return options.badDetach?{...pm,id:'pm_other'}:pm}}};
+ const stripe:any={customers:{create:async(args:any,o:any)=>{calls.push({name:'customer.create',args,key:o.idempotencyKey});madeCustomer??={id:'cus_existing',object:'customer',livemode:b.live,metadata:args.metadata};if(lostCustomer){lostCustomer=false;throw new Error('lost')}return madeCustomer},retrieve:async(id:string)=>({id,object:'customer',livemode:b.live,metadata:{saved_customer_binding:B}})},checkout:{sessions:{create:async(args:any,o:any)=>{calls.push({name:'setup.create',args,key:o.idempotencyKey});madeSession??={id:'cs_test_one',object:'checkout.session',...args,mode:options.badSession?'payment':args.mode,livemode:b.live,status:'open',url:options.checkoutUrl??'https://checkout.stripe.com/c/pay/test',amount_total:options.setupAmount??null,payment_intent:null,subscription:null};if(lostSetup){lostSetup=false;throw new Error('lost')}return madeSession},retrieve:async()=>madeSession}},paymentMethods:{list:async(args:any)=>{calls.push({name:'methods.list',args});return {object:'list',has_more:false,data:pm.customer?[pm]:[]}},retrieve:async(id:string)=>{calls.push({name:'method.retrieve',args:id});return {...pm,id}},detach:async(id:string,_:any,o:any)=>{calls.push({name:'method.detach',args:id,key:o.idempotencyKey});pm={...pm,customer:null};if(lostDetach){lostDetach=false;throw new Error('lost')}return options.badDetach?{...pm,id:'pm_other'}:pm}}};
  const deps:Dependencies={authenticate:async()=>{if(options.auth===false)throw {status:401};return {userId:U,db}},admin:()=>db,stripe:()=>stripe,env:()=>({STRIPE_SECRET_KEY:options.live?'sk_live_injected':'sk_test_injected',STRIPE_LIVE_PAYMENTS_ENABLED:options.allowLive?'true':'false',NEXT_PUBLIC_APP_URL:options.origin??'https://app.example.test'})};
  const h=createSavedMethodHandlers(deps);
  const post=(body:any,origin='https://app.example.test')=>h.POST(new Request('https://app.example.test/api/payments/methods',{method:'POST',headers:{origin,'Content-Type':'application/json'},body:JSON.stringify(body)}));
@@ -77,4 +77,20 @@ test('second SQL authorization and wrong session mode prevent returning a checko
 });
 test('pagination validates cursor ownership and rejects unknown query keys',async()=>{
  const f=fixture({noCustomer:true});assert.equal((await f.get('?after=pm_card')).status,200);assert.equal(f.calls.find(c=>c.name==='methods.list')?.args.starting_after,'pm_card');assert.equal((await f.get('?limit=100')).status,422);assert.equal((await f.get('?after=x')).status,422);
+});
+
+// Published Stripe Checkout Session object URL; keep the opaque fragment byte-for-byte.
+// https://docs.stripe.com/api/checkout/sessions/object
+const documentedCheckoutUrl='https://checkout.stripe.com/c/pay/cs_test_a11YYufWQzNY63zpQ6QSNRQhkUpVph4WRmzW0zWJO2znZKdVujZ0N0S22u#fidkdWxOYHwnPyd1blpxYHZxWjA0SDdPUW5JbmFMck1wMmx9N2BLZjFEfGRUNWhqTmJ%2FM2F8bUA2SDRySkFdUV81T1BSV0YxcWJcTUJcYW5rSzN3dzBLPUE0TzRKTTxzNFBjPWZEX1NKSkxpNTVjRjN8VHE0YicpJ2N3amhWYHdzYHcnP3F3cGApJ2lkfGpwcVF8dWAnPyd2bGtiaWBabHFgaCcpJ2BrZGdpYFVpZGZgbWppYWB3dic%2FcXdwYHgl';
+test('official Stripe URL fragment survives creation and resumed session unchanged',async()=>{
+ const f=fixture({checkoutUrl:documentedCheckoutUrl});
+ for(let i=0;i<2;i++){const response=await f.setup();assert.equal(response.status,200);assert.deepEqual(await response.json(),{url:documentedCheckoutUrl})}
+});
+test('Stripe fragment does not relax origin, credentials or port checks',async()=>{
+ for(const checkoutUrl of ['https://evil.test/c/pay/#fid','https://checkout.stripe.com.evil.test/#fid','https://user:pass@checkout.stripe.com/#fid','https://checkout.stripe.com:444/#fid','http://checkout.stripe.com/#fid']){
+  assert.equal((await fixture({checkoutUrl}).setup()).status,503);
+ }
+});
+test('setup never accepts a nonzero amount',async()=>{
+ for(const setupAmount of [1,100,-1])assert.equal((await fixture({setupAmount}).setup()).status,503);
 });

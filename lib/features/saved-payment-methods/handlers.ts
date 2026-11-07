@@ -34,7 +34,7 @@ function checkout(value:unknown,b:Binding,c:Command){
  if(s.customer!==b.customer_id||s.livemode!==b.live||s.client_reference_id!==c.id||s.metadata.saved_method_command!==c.id||(c.session_id&&s.id!==c.session_id))fail(503);
  if(s.status!=='open')fail(409);
  if(!s.url)fail(503);let u:URL;try{u=new URL(s.url)}catch{fail(503)}
- if(u.protocol!=='https:'||u.hostname!=='checkout.stripe.com'||u.username||u.password||u.hash||(u.port&&u.port!=='443'))fail(503);return {...s,url:s.url};
+ if(u.protocol!=='https:'||u.hostname!=='checkout.stripe.com'||u.username||u.password||(u.port&&u.port!=='443'))fail(503);return {...s,url:s.url};
 }
 export function createSavedMethodHandlers(deps:Dependencies){
  const now=deps.now??Date.now;
