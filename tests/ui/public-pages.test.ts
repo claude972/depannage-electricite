@@ -79,6 +79,10 @@ test("confidentialité (PUB-10) : traitements réels, tiers réellement appelés
   assert.match(html, /data-privacy-third-parties=""/);
   for (const name of ["Supabase", "Stripe", "OpenStreetMap \\(fonds de carte\\)", "IGN Géoplateforme"]) assert.match(t, new RegExp(`${name} :`), name);
   assert.match(t, /tile\.openstreetmap\.org/);
+  assert.match(t, /Demande de rappel : si le formulaire est ouvert, le numéro saisi, le motif choisi et votre accord au rappel/);
+  assert.match(t, /Resend : si les notifications par e-mail sont ouvertes/);
+  assert.match(t, /OpenAI : si la préanalyse est ouverte et que vous la demandez/);
+  assert.match(t, /déposer une demande d’effacement auprès de l’assistance/);
   assert.match(t, /aucun traceur publicitaire ni outil de mesure d’audience/);
   assert.match(html, /data-privacy-controls=""/);
   for (const c of ["préférences de notification", "adresses enregistrées", "arrêter le partage de position"]) assert.match(t, new RegExp(c));

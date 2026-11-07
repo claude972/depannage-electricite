@@ -77,11 +77,14 @@ export const PRIVACY_DATA: { label: string; text: string }[] = [
   { label: "Demandes", text: "type de panne, description, adresse, code postal, ville, niveau d’urgence et état de la demande." },
   { label: "Devis", text: "lignes de prestation, montants, taux de TVA, état et date d’acceptation." },
   { label: "Messages", text: "les échanges liés à une intervention entre le client et l’artisan affecté." },
+  { label: "Demande de rappel", text: "si le formulaire est ouvert, le numéro saisi, le motif choisi et votre accord au rappel sont enregistrés pour l’assistance habilitée." },
   { label: "Documents", text: "les fichiers déposés (justificatifs, pièces liées à une intervention) sont conservés dans un stockage privé, accessible uniquement aux rôles autorisés." },
   { label: "Paiements", text: "le règlement est traité avec Stripe. L’application conserve l’état du paiement et son montant ; elle ne stocke aucun numéro de carte." },
   { label: "Téléphone vérifié", text: "si vous vérifiez votre numéro, un code à usage unique vous est envoyé par SMS par le service d’identité ; l’application ne conserve pas le code." },
   { label: "Adresses enregistrées", text: "les adresses que vous choisissez de mémoriser dans votre profil (nom, prénom, adresse, éventuelle position déclarée par vous). Elles sont privées ; vous pouvez les modifier ou les archiver." },
   { label: "Préférences de notification", text: "les canaux que vous activez ou désactivez dans votre profil." },
+  { label: "Notifications du navigateur", text: "si vous les activez, l’adresse technique et les clés de l’abonnement de ce navigateur servent à lui envoyer une notification chiffrée. Vous pouvez désactiver cet abonnement." },
+  { label: "Préanalyse d’une photo", text: "lorsque ce service est disponible, la photo choisie est envoyée avec votre accord. L’artisan attribué vérifie le résultat avant qu’il vous soit présenté." },
   { label: "Position pendant le déplacement", text: "seulement si l’artisan accepte de la partager : dernière position, précision et heure de mesure. Elle n’est plus lisible 60 secondes après sa mesure, puis elle est supprimée par une purge automatique du serveur, qui peut intervenir un peu plus tard ; l’artisan peut arrêter le partage à tout moment." },
   { label: "Dans votre navigateur", text: "un brouillon de demande non envoyé, le thème clair ou sombre choisi et, en démonstration, les exemples modifiés. Rien de cela n’est transmis à un tiers." },
 ];
@@ -89,6 +92,9 @@ export const PRIVACY_DATA: { label: string; text: string }[] = [
 export const PRIVACY_THIRD_PARTIES: { name: string; text: string }[] = [
   { name: "Supabase", text: "base de données, authentification et stockage privé des fichiers de l’application." },
   { name: "Stripe", text: "règlement par carte, une fois activé par l’exploitant ; les données de carte sont saisies chez Stripe, jamais dans l’application." },
+  { name: "Resend", text: "si les notifications par e-mail sont ouvertes et que vous les activez, ce service reçoit votre adresse vérifiée et le contenu de la notification pour la transmettre." },
+  { name: "Service de notifications du navigateur", text: "si vous inscrivez un navigateur, son service de notifications reçoit un message chiffré à transmettre à ce navigateur." },
+  { name: "OpenAI", text: "si la préanalyse est ouverte et que vous la demandez, ce service traite la photo choisie pour proposer une catégorie et une indication de lisibilité." },
   { name: "OpenStreetMap (fonds de carte)", text: "lorsque la carte de suivi du déplacement est affichée, votre navigateur charge des tuiles de carte depuis tile.openstreetmap.org : le serveur de tuiles voit la zone affichée (autour de la position partagée par l’artisan et de la destination) et votre adresse IP. Le choix définitif d’un fournisseur de carte est en attente de décision de l’exploitant." },
   { name: "IGN Géoplateforme", text: "appelée par le serveur de l’application pour calculer un itinéraire (position partagée par l’artisan et destination confirmée) et pour proposer des adresses à partir du texte saisi, lors de la confirmation de la destination." },
 ];
@@ -97,13 +103,13 @@ export const PRIVACY_CONTROLS: string[] = [
   "Profil → informations du compte (nom, téléphone).",
   "Profil → préférences de notification.",
   "Profil → adresses enregistrées (modifier, choisir l’adresse préférée, archiver).",
+  "Profil → Mes données (télécharger ses données personnelles et déposer une demande d’effacement auprès de l’assistance).",
   "Artisan : arrêter le partage de position à tout moment depuis le dossier.",
   "Démonstration : bouton « Réinitialiser » du bandeau pour effacer les exemples de ce navigateur.",
 ];
 /** Contact channels (PUB-04): only what really exists; the others are explicitly pending. */
 export const CONTACT_CHANNELS: { label: string; state: "available" | "pending"; text: string }[] = [
   { label: "Assistance en ligne", state: "available", text: "Une fois connecté, écrivez à l’assistance depuis votre espace ; la réponse s’affiche dans votre espace." },
-  { label: "Demande de rappel", state: "pending", text: "Canal en cours d’ouverture : aucune demande de rappel n’est enregistrée depuis ce site." },
   { label: "Adresse e-mail de contact", state: "pending", text: "À renseigner par l’exploitant." },
   { label: "Téléphone", state: "pending", text: "À renseigner par l’exploitant. Cette version ne fournit pas de ligne d’urgence." },
 ];
