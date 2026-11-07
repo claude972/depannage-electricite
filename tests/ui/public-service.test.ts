@@ -113,7 +113,10 @@ test("page : composition de référence (héros 2 colonnes, panneau 3 pictos, «
     assert.match(hero, new RegExp(`<img src="${s.photo.src}" alt="${s.alt.replace(/[()]/g, "\\$&")}"`), s.slug);
     assert.match(hero, new RegExp(`<h1 id="service-title" class="heroTitle">${s.title}</h1>`), s.slug);
     const price = hero.slice(hero.indexOf("data-service-price"), hero.indexOf("pictoPanel"));
-    assert.ok(text(price).includes(range(s.category)), s.slug);
+    // PUB-02: the range comes from GET /api/public/indicative-prices at runtime; the server HTML only
+    // carries the honest fallback (never a static number).
+    assert.ok(text(price).includes("lecture en cours"), s.slug);
+    assert.doesNotMatch(text(price), /\d+\s?€/, s.slug);
     assert.match(text(price), /Estimation indicative/);
     assert.doesNotMatch(t, /TTC/);
     assert.match(hero, /data-booking-open="">Confirmer<\/button>/, s.slug);
@@ -134,7 +137,7 @@ test("page : composition de référence (héros 2 colonnes, panneau 3 pictos, «
       assert.notEqual(slug, s.slug);
       assert.equal(href, `/prestations/${slug}`);
       const other = catalog.SERVICES.find((x) => x.slug === slug)!;
-      assert.ok(text(body).includes(`Estimation indicative : ${range(other.category)}`), slug);
+      assert.ok(text(body).includes("Estimation indicative : lecture en cours"), slug);
     }
     // Ouverture de l’assistant : héros + barre, les deux « Confirmer » ; jamais le formulaire générique.
     const opens = [...html.matchAll(/<button [^>]*data-booking-open=""[^>]*>([^<]*)/g)].map((m) => m[1].trim());
@@ -181,7 +184,8 @@ test("accueil : chaque carte est un lien vers sa prestation avec sa fourchette i
     const [, href, slug, body] = cards[i];
     assert.equal(href, `/prestations/${s.slug}`);
     assert.equal(slug, s.slug);
-    assert.ok(text(body).includes(`Estimation indicative : ${range(s.category)}`), s.slug);
+    assert.ok(text(body).includes("Estimation indicative : lecture en cours"), s.slug);
+    assert.match(body, new RegExp(`data-indicative-range="${s.category}"`), s.slug);
     assert.match(body, new RegExp(`src="${s.photo.src}"`), s.slug);
   }
   for (const card of home.HOME_CARDS.filter((c) => c.category === "socket")) assert.notEqual(card.image, "/home/section-socket.jpg", card.slug);

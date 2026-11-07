@@ -19,6 +19,7 @@ import { ABOUT_VALUES, CONTACT_CHANNELS, FAQ, HELP_PROCESS, JOIN_FACTS, JOIN_REV
 import styles from "./public.module.css";
 import { publishedStamp, publishedValue, type PublicProfileState } from "../features/public-operator-profile/model";
 import { usePublishedOperatorProfile } from "../features/public-operator-profile/use-published-profile";
+import { IndicativeRange } from "../features/indicative-prices/indicative-range";
 import { PostalCoverageCheck } from "../features/coverage/postal-coverage-check";
 import { PublicWarrantyTerms } from "../features/warranty-policy/public-warranty-terms";
 import type { PublicTermsState } from "../features/warranty-policy/model";
@@ -368,7 +369,7 @@ function PricingView({ onNew }: { onNew: () => void }) {
                     </span>
                   </span>
                 </th>
-                <td>{money(row.min)} – {money(row.max)}</td>
+                <td><IndicativeRange category={row.id as Category} bare /></td>
               </tr>
             ))}
           </tbody>
