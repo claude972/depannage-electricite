@@ -102,6 +102,7 @@ import { SiteOperationsView } from "../features/site-operations/site-operations-
 import { SiteEnergyPanel } from "../features/energy/site-energy-panel";
 import { SiteContactsPanel } from "../features/site-contacts/site-contacts-panel";
 import { SiteAreasPanel } from "../features/site-areas/site-areas-panel";
+import { OrganizationSitesList, SiteSettingsPanel } from "../features/site-lifecycle/site-lifecycle-panels";
 import { CoOwnershipPanel } from "../features/co-ownership/co-ownership-panel";
 import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
 import { PlatformPayAction } from "../app/platform-pay";
@@ -2302,6 +2303,17 @@ function SitesView({ c }: { c: Ctx }) {
         )}
       </section>
 
+      {/* Active / archived sites from the server (paged): the only place archived sites are listed. */}
+      {c.organization && (
+        <OrganizationSitesList
+          key={`${c.organization.id}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}
+          organizationId={c.organization.id}
+          context={session.mutationContext}
+          demo={session.mode === "demo"}
+          onOpen={(id) => c.go("site", id)}
+        />
+      )}
+
       {scope.sites.length > 0 && (
         <section className={styles.listSection} aria-labelledby="sites-recent-title">
           <div className={styles.sectionHead}>
@@ -2730,6 +2742,13 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
             blocker="ENT-07"
           />
         )}
+        <SiteSettingsPanel
+          key={`${site.id}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}
+          siteId={site.id}
+          context={session.mutationContext}
+          demo={session.mode === "demo"}
+          onChanged={() => void session.refresh()}
+        />
         {session.mode === "demo" ? (
           <Unavailable
             title="Étages, zones et parties communes"

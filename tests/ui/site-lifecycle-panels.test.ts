@@ -168,3 +168,11 @@ test("démo : zéro appel ; clés des panneaux, jetons, 44px, pas d’UUID const
   assert.match(css, /\.tab \{[^}]*min-height: 44px;/);
   assert.match(css, /\.textarea \{[^}]*min-height: 44px;/);
 });
+
+test("wiring: site sheet mounts SiteSettingsPanel; sites view lists active/archived from the server", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync("components/role/enterprise-space.tsx", "utf8");
+  assert.match(src, /import \{ OrganizationSitesList, SiteSettingsPanel \} from "\.\.\/features\/site-lifecycle\/site-lifecycle-panels";/);
+  assert.match(src, /<SiteSettingsPanel\s+key=\{`\$\{site\.id\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\}\s+siteId=\{site\.id\}\s+context=\{session\.mutationContext\}\s+demo=\{session\.mode === "demo"\}\s+onChanged=\{\(\) => void session\.refresh\(\)\}/);
+  assert.match(src, /<OrganizationSitesList\s+key=\{`\$\{c\.organization\.id\}:[\s\S]{0,120}?organizationId=\{c\.organization\.id\}[\s\S]{0,120}?onOpen=\{\(id\) => c\.go\("site", id\)\}/);
+});
