@@ -53,7 +53,7 @@ test("API : POST JSON exact, rien dans l’URL", async () => {
   assert.ok(!seen[0].url.includes("?") && !seen[0].url.includes("Lilas"), "query never in the URL");
 });
 
-function harness({ replies = [] as (Model.Result | Promise<Model.Result>)[], ctx = { uid: USER as string | null, gen: 0 } } = {}) {
+function harness({ replies = [] as (Model.Result | Promise<Model.Result>)[], ctx = { uid: USER as string | null, gen: 0 }, clock = { t: 0 } } = {}) {
   const calls: Model.SearchBody[] = [];
   const timers: { f: () => void; ms: number; id: number; cleared: boolean }[] = [];
   let s: Model.SearchState = { ...m.SEARCH_INITIAL };
@@ -62,10 +62,11 @@ function harness({ replies = [] as (Model.Result | Promise<Model.Result>)[], ctx
     context: { generation: () => ctx.gen, userId: () => ctx.uid },
     set: (n) => (s = n),
     timers: { set: (f, ms) => (timers.push({ f, ms, id: timers.length, cleared: false }), timers.length - 1), clear: (h) => void (timers[h as number].cleared = true) },
+    now: () => clock.t,
   });
   const flush = () => { for (const t of timers) if (!t.cleared) { t.cleared = true; t.f(); } };
   const tick = () => new Promise((r) => setTimeout(r, 0));
-  return { c, calls, timers, flush, tick, ctx, get: () => s };
+  return { c, calls, timers, flush, tick, ctx, clock, get: () => s };
 }
 
 test("filtre immédiat, recherche différée (~300 ms) et normalisée ; même requête ⇒ rien", async () => {
@@ -107,46 +108,78 @@ test("séquence périmée ignorée ; identité changée ⇒ aucune suite ; 401/4
   for (const st of [401, 403]) {
     const f = harness({ replies: [res(200, page([item(1)], "c1", 3)), res(st)] });
     f.c.query("active", ""); await f.tick();
-    await f.c.more();
+    await f.c.more(f.get().key);
     same([f.get().phase, f.get().items, f.get().cursor], ["forbidden", [], null], String(st));
   }
   const e = harness({ replies: [res(503), res(200, { junk: 1 }), res(200, page([]))] });
   e.c.query("active", ""); await e.tick();
   same([e.get().phase, e.get().failed], ["error", "first"]);
-  e.c.retry(); await e.tick();
+  e.c.retry(e.get().key); await e.tick();
   same(e.get().phase, "error", "invalid reply is an error, never empty");
-  e.c.retry(); await e.tick();
+  e.c.retry(e.get().key); await e.tick();
   same([e.get().phase, e.get().items, e.calls.length], ["ready", [], 3], "empty after retry");
 });
 
 test("« Afficher plus » : curseur, ajout dédupliqué, échec ⇒ réessai de la suite ; tout changement remet à zéro", async () => {
   const h = harness({ replies: [res(200, page([item(1), item(2)], "c1", 4)), res(500), res(200, page([item(2), item(3)], "c2", 4)), res(200, page([item(4)], null, 4)), res(200, page([item(9)]))] });
   h.c.query("all", ""); await h.tick();
-  await h.c.more();
+  await h.c.more(h.get().key);
   same([h.get().failed, h.get().items.length, h.get().cursor], ["more", 2, "c1"], "a failed page keeps what is shown");
-  h.c.retry(); await h.tick();
+  h.c.retry(h.get().key); await h.tick();
   same([h.calls[2], h.get().items.map((x) => x.id), h.get().cursor], [{ filter: "all", search: "", cursor: "c1" }, [ID(1), ID(2), ID(3)], "c2"]);
-  await h.c.more();
+  await h.c.more(h.get().key);
   same([h.get().items.length, h.get().cursor], [4, null]);
-  await h.c.more();
+  await h.c.more(h.get().key);
   same(h.calls.length, 4, "no cursor ⇒ no call");
   h.c.query("active", ""); await h.tick();
   same([h.calls[4], h.get().items.map((x) => x.id)], [{ filter: "active", search: "", cursor: null }, [ID(9)]], "filter change resets the cursor and the list");
   let release!: (r: Model.Result) => void;
   const r = harness({ replies: [res(200, page([item(1)], "c1", 5)), new Promise((x) => (release = x)), res(200, page([item(7)]))] });
   r.c.query("all", ""); await r.tick();
-  const p = r.c.more();
+  const p = r.c.more(r.get().key);
   r.c.query("past", ""); await r.tick();
   release(res(200, page([item(2)], null, 5)));
   await p;
   same(r.get().items.map((x) => x.id), [ID(7)], "a page for the old filter is dropped");
 });
 
+test("clé au rendu : état d’une autre clé ⇒ chargement vide ; commandes refusées pour une autre clé ; « Actualiser » ; revalidation bornée", async () => {
+  const ctx = { generation: () => 0, userId: () => USER };
+  const k = m.viewKey(ctx, "active", " tab ");
+  same(k, `${USER}|0|active|tab`);
+  const ready = { ...m.SEARCH_INITIAL, key: k, phase: "ready" as const, items: [item(1) as Model.SearchItem], total: 1 };
+  same(m.viewOf(ready, k).items.length, 1);
+  same([m.viewOf(ready, m.viewKey(ctx, "all", "tab")).phase, m.viewOf(ready, m.viewKey(ctx, "all", "tab")).items], ["loading", []], "another filter ⇒ never the old rows");
+  same(m.viewOf(ready, m.viewKey({ generation: () => 1, userId: () => USER }, "active", "tab")).items, [], "another generation ⇒ never the old rows");
+  const h = harness({ replies: [res(200, page([item(1)], "c1", 3)), res(200, page([item(2)], null, 3)), res(200, page([item(5)], null, 1))] });
+  h.c.query("active", ""); await h.tick();
+  await h.c.more("someone|0|active|");
+  same(h.calls.length, 1, "« Afficher plus » for another key ⇒ nothing");
+  same(h.c.refresh("someone|0|active|"), false);
+  same(h.c.refresh(h.get().key), true);
+  same([h.get().refreshing, h.get().items.length], [true, 1], "rows of the same key stay during the re-read");
+  await h.tick();
+  same([h.calls[1], h.get().items.map((x) => x.id), h.get().refreshing], [{ filter: "active", search: "", cursor: null }, [ID(2)], false], "« Actualiser » re-reads page 1");
+  h.clock.t = 1000;
+  h.c.revalidate(); h.c.revalidate();
+  const live = h.timers.filter((t) => !t.cleared);
+  same([live.length, live[0].ms], [1, 9000], "debounced, throttled to one read per 10 s after the last read");
+  h.flush(); await h.tick();
+  same([h.calls.length, h.get().items.map((x) => x.id)], [3, [ID(5)]]);
+  h.clock.t = 60_000;
+  h.c.revalidate();
+  same(h.timers.filter((t) => !t.cleared)[0].ms, 500);
+  h.c.query("past", "");
+  same(h.timers.filter((t) => !t.cleared).length, 0, "a new query cancels a pending revalidation");
+  same(m.rowsSignal([{ id: "b", status: "paid", created_at: "x" }, { id: "a", status: "requested", updated_at: "u", created_at: "x" }]), "a:requested:u,b:paid:x");
+});
+
 test("câblage : RequestsView utilise la recherche serveur en direct, garde le filtrage local en démo, ouvre par session.openIntervention", () => {
   const src = readFileSync("components/role/client-space.tsx", "utf8");
   const view = src.slice(src.indexOf("export function RequestsView"), src.indexOf("// ---- Détail d’intervention"));
   assert.match(view, /const live = session\.mode === "live";/);
-  assert.match(view, /useRequestsSearch\(\{ enabled: live, context: session\.mutationContext, filter, search \}\)/);
+  assert.match(view, /useRequestsSearch\(\{ enabled: live, context: session\.mutationContext, filter, search, signal: live \? rowsSignal\(rows\) : "" \}\)/);
+  assert.match(view, /data-requests-refresh=""/);
   assert.match(view, /if \(live\) items = toListRows\(remote\.state\.items\);/);
   assert.match(view, /<RequestList session=\{session\} items=\{items\} \/>/);
   assert.match(view, /Aucune demande dans cette liste/);
@@ -165,11 +198,63 @@ const ENTRY = `
 import { createElement as h, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RequestsView } from "./components/role/client-space";
+import { useRequestsSearch } from "./components/features/requests-search/use-requests-search";
 const w = window;
 const tick = (ms) => new Promise((r) => setTimeout(r, ms));
 const item = (n, over = {}) => (${item.toString().replace("ID(n)", "'a0000000-0000-4000-8000-' + String(n).padStart(12, '0')")})(n, over);
 const page = (items, cursor = null, total = items.length) => ({ items, total, page: { limit: 50, has_more: cursor !== null, next_cursor: cursor } });
 const session = (mode, opened, gen) => ({ mode, mutationContext: { userId: () => "${USER}", generation: () => gen.value }, go: () => {}, openIntervention: (id) => opened.push(id) });
+w.frames = async () => {
+  const bodies = [];
+  w.fetch = async (url, init) => {
+    const b = JSON.parse(init.body); bodies.push(b);
+    const n = b.filter === "active" ? 1 : b.filter === "past" ? 2 : 3;
+    return new Response(JSON.stringify(page([item(n + (b.search ? 10 : 0))])), { status: 200, headers: { "content-type": "application/json" } });
+  };
+  const frames = [];
+  const gen = { value: 0 };
+  const ctx = { userId: () => "${USER}", generation: () => gen.value };
+  function Probe({ filter, search, g }) {
+    const r = useRequestsSearch({ enabled: true, context: ctx, filter, search });
+    frames.push({ g, filter, search, phase: r.state.phase, ids: r.state.items.map((x) => x.id) });
+    return null;
+  }
+  const div = document.createElement("div"); document.body.appendChild(div);
+  const root = createRoot(div);
+  const show = (filter, search) => root.render(h(StrictMode, null, h(Probe, { filter, search, g: gen.value })));
+  const firstAfter = (pred) => frames.find(pred);
+  show("active", ""); await tick(200);
+  const readyActive = frames[frames.length - 1];
+  let mark = frames.length; show("past", ""); await tick(200);
+  const afterFilter = frames.slice(mark);
+  mark = frames.length; show("past", "tab"); await tick(500);
+  const afterSearch = frames.slice(mark);
+  mark = frames.length; gen.value = 1; show("past", "tab"); await tick(300);
+  const afterIdentity = frames.slice(mark);
+  root.unmount();
+  // Real RequestsView: « Actualiser » and the workspace row-change signal.
+  const d = document.createElement("div"); document.body.appendChild(d);
+  const r2 = createRoot(d);
+  const opened = [];
+  const sess = session("live", opened, gen);
+  const rows0 = [{ ...item(70), description: "" }];
+  r2.render(h(StrictMode, null, h(RequestsView, { session: sess, rows: rows0 })));
+  await tick(300);
+  const before = d.querySelectorAll(".request-row").length;
+  [...d.querySelectorAll("[aria-label='Filtrer les demandes'] button")].find((b) => b.textContent === "Terminées").click();
+  await tick(300);
+  const n0 = bodies.length;
+  d.querySelector("[data-requests-refresh]").click(); await tick(300);
+  const refreshBody = bodies.slice(n0);
+  // Same workspace content, new array ⇒ no re-read; a real row change ⇒ one bounded re-read.
+  const n1 = bodies.length;
+  r2.render(h(StrictMode, null, h(RequestsView, { session: sess, rows: [{ ...rows0[0] }] }))); await tick(800);
+  const sameSignal = bodies.length - n1;
+  r2.render(h(StrictMode, null, h(RequestsView, { session: sess, rows: [{ ...rows0[0], status: "paid", updated_at: "2025-02-01T00:00:00.000Z" }] }))); await tick(11000);
+  const changedSignal = bodies.slice(n1);
+  r2.unmount();
+  return { readyActive, afterFilter, afterSearch, afterIdentity, before, refreshBody, sameSignal, changedSignal };
+};
 w.run = async () => {
   const bodies = [], urls = [], opened = [];
   w.fetch = async (url, init) => {
@@ -214,6 +299,39 @@ w.run = async () => {
   return { firstRows, afterMore, moreGone, duringTyping, searchBodies, opened, filterBody, urls, storage, href: location.href, demoCalls: bodies.length - demoStart, demoRows: d.querySelectorAll(".request-row").length, heights, overflow };
 };
 `;
+test("aucun ancien cadre (Chromium, StrictMode) : 1er rendu après changement de filtre / recherche / identité sans anciennes lignes ; « Actualiser » relit ; signal d’espace de travail borné", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)", timeout: 60_000 }, async () => {
+  const out = await build({ absWorkingDir: ROOT, stdin: { contents: ENTRY, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, outdir: "out", platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "local-css", ".svg": "dataurl", ".png": "dataurl" }, define: { "process.env.NODE_ENV": '"development"' }, logLevel: "error" });
+  const js = out.outputFiles.find((f) => f.path.endsWith(".js"))!.text;
+  const css = readFileSync(path.join(ROOT, "app/globals.css"), "utf8") + "\n" + out.outputFiles.filter((f) => f.path.endsWith(".css")).map((f) => f.text).join("\n");
+  const server: Server = createServer((_rq, rs) => { rs.setHeader("content-type", "text/html"); rs.end(`<!doctype html><meta name="viewport" content="width=device-width"><style>${css}</style><div class="ui-v2"></div><script>${js}</script>`); });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
+  const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true, args: ["--single-process"] });
+  try {
+    const page = await (await browser.newContext({ viewport: { width: 390, height: 900 } })).newPage();
+    const errors: string[] = [];
+    page.on("pageerror", (e: Error) => errors.push(String(e)));
+    await page.goto(`http://127.0.0.1:${(server.address() as { port: number }).port}/`);
+    const r = (await page.evaluate(() => (window as unknown as { frames2: unknown; frames: () => Promise<unknown> }).frames())) as Record<string, any>;
+    same([r.readyActive.phase, r.readyActive.ids], ["ready", [ID(1)]]);
+    for (const [name, frames, oldIds] of [["filter", r.afterFilter, [ID(1)]], ["search", r.afterSearch, [ID(2)]], ["identity", r.afterIdentity, [ID(12)]]] as [string, { phase: string; ids: string[] }[], string[]][]) {
+      same([frames[0].phase, frames[0].ids], ["loading", []], `${name}: the FIRST render after the change shows no old row`);
+      const firstReady = frames.findIndex((f) => f.phase === "ready");
+      assert.ok(frames.slice(0, firstReady).every((f) => f.ids.length === 0), `${name}: no row before the new key's reply ${JSON.stringify(frames)}`);
+      if (name !== "identity") assert.ok(frames.every((f) => JSON.stringify(f.ids) !== JSON.stringify(oldIds)), `${name}: never an old frame ${JSON.stringify(frames)}`);
+    }
+    same(r.afterSearch[r.afterSearch.length - 1].ids, [ID(12)]);
+    same(r.before, 1, "RequestsView live list rendered from the keyed hook state (the per-render check is on the hook above)");
+    same(r.refreshBody, [{ filter: "past", search: "", cursor: null }], "« Actualiser » re-reads page 1");
+    same(r.sameSignal, 0, "same workspace rows ⇒ no re-read");
+    same(r.changedSignal, [{ filter: "past", search: "", cursor: null }], "a real row change ⇒ one throttled re-read");
+    same(errors, []);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+});
+
 test("RequestsView réelle (Chromium 390 px, StrictMode) : POST JSON sans rien dans l’URL, plus + dédup, recherche différée, ancien dossier ⇒ openIntervention, filtre ⇒ curseur remis, démo ⇒ 0 fetch", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
   const out = await build({ absWorkingDir: ROOT, stdin: { contents: ENTRY, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, outdir: "out", platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "local-css", ".svg": "dataurl", ".png": "dataurl" }, define: { "process.env.NODE_ENV": '"development"' }, logLevel: "error", alias: { "@": ROOT } });
   const js = out.outputFiles.find((f) => f.path.endsWith(".js"))!.text;
