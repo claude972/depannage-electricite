@@ -1,3 +1,4 @@
+import { energyCsv } from "@/lib/features/energy-consolidation/csv";
 import { authenticatedClient, ApiError, dbError } from "@/lib/supabase/server";
 import {
   selection,
@@ -20,12 +21,20 @@ export async function GET(
       request.url.length > 4096 ||
       [...q.keys()].some(
         (k) =>
-          !["site_ids", "from", "to", "previous_from", "previous_to"].includes(
-            k,
-          ) || q.getAll(k).length !== 1,
+          ![
+            "site_ids",
+            "from",
+            "to",
+            "previous_from",
+            "previous_to",
+            "format",
+          ].includes(k) || q.getAll(k).length !== 1,
       )
     )
       throw new ApiError(422, "Filtres énergie invalides.");
+    const format = q.get("format") ?? "json";
+    if (format !== "json" && format !== "csv")
+      throw new ApiError(422, "Format de rapport invalide.");
     const parsed = selection.safeParse({
       organization_id: (await context.params).id,
       site_ids: q.get("site_ids")?.split(","),
@@ -49,7 +58,17 @@ export async function GET(
       p_previous_to: s.previous_to,
     });
     dbError(result.error);
-    return Response.json(energyReport(result.data, s), { headers });
+    const report = energyReport(result.data, s);
+    if (format === "csv")
+      return new Response(energyCsv(report), {
+        headers: {
+          ...headers,
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": 'attachment; filename="rapport-energie.csv"',
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
+    return Response.json(report, { headers });
   } catch (e) {
     const status = e instanceof ApiError ? e.status : 503;
     return Response.json(
