@@ -13,6 +13,8 @@ export const NOTIFICATION_KINDS = [
   "mission_cancelled",
   "appointment_saved",
   "appointment_reminder",
+  "credential_reminder",
+  "compliance_reminder",
   "message_received",
   "account_approved",
   "account_suspended",
