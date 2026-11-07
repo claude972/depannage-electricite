@@ -279,11 +279,30 @@ export function createCollector({ fetcher, context, save, now = () => new Date()
 }
 
 // ---- Erasure request: identity-fenced command ------------------------------------------------------
-const receipt = z.object({ ticket_id: uuid, status: z.enum(["open", "in_progress", "awaiting_user", "resolved"]), replayed: z.boolean() }).strict();
-export type Receipt = z.infer<typeof receipt>;
+// SYS-07 (Astra c0df158 / 0ebab8f): the reply now also carries `request` — its own state, distinct
+// from the ticket status; execution always "not_started" (nothing is erased). Strict mirror below; a
+// bad `request` is ignored (the receipt stays valid), any other unknown key still refuses the reply.
+const erasureDate = z.string().refine((x) => Number.isFinite(Date.parse(x)));
+export const erasureRequest = z
+  .object({
+    id: uuid,
+    ticket_id: uuid,
+    state: z.enum(["requested", "in_review", "needs_information", "approved", "rejected"]),
+    execution_state: z.literal("not_started"),
+    version: z.number().int().min(1).max(100),
+    created_at: erasureDate,
+    updated_at: erasureDate,
+  })
+  .strict();
+export type ErasureRequestRecord = z.infer<typeof erasureRequest>;
+const receipt = z.object({ ticket_id: uuid, status: z.enum(["open", "in_progress", "awaiting_user", "resolved"]), replayed: z.boolean(), request: z.unknown().optional() }).strict();
+export type Receipt = { ticket_id: string; status: "open" | "in_progress" | "awaiting_user" | "resolved"; replayed: boolean; request?: ErasureRequestRecord };
 export const parseReceipt = (body: unknown): Receipt | null => {
   const r = receipt.safeParse(body);
-  return r.success ? r.data : null;
+  if (!r.success) return null;
+  const { request, ...base } = r.data;
+  const q = request === undefined ? null : erasureRequest.safeParse(request);
+  return q?.success && q.data.ticket_id === base.ticket_id ? { ...base, request: q.data } : base;
 };
 export type Store = { get(key: string): string | null; set(key: string, value: string): void; remove(key: string): void };
 export const PENDING_KEY = "account-erasure-pending";
