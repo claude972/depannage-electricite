@@ -111,6 +111,8 @@ import { demoReport } from "../../lib/features/site-operations/demo";
 import { leafScope, platformEntries } from "./anchors";
 import { PlatformPage } from "./platform-anchor";
 import { FeatureUnavailable, useProbeWhenUnknown } from "./feature-unavailable";
+import { EnterpriseTimeline } from "../features/enterprise-timeline/enterprise-timeline";
+import { buildTimeline } from "../features/enterprise-timeline/timeline-model";
 import type {
   Category,
   Approval,
@@ -144,15 +146,6 @@ const APPOINTMENT_STATUSES: Status[] = ["assigned", "quoted", "accepted"];
 const PAGE_SIZE = 10;
 const LOADED_NOTE = "Données chargées (100 derniers dossiers)";
 const BASIS = "calculé sur les dossiers chargés";
-const TIMELINE: [Status, string][] = [
-  ["requested", "Demande"],
-  ["assigned", "Artisan affecté"],
-  ["quoted", "Devis reçu"],
-  ["accepted", "Devis accepté"],
-  ["in_progress", "Intervention"],
-  ["completed", "À régler"],
-  ["paid", "Réglée"],
-];
 const APPROVAL_META: Record<string, { label: string; tone: "amber" | "green" | "red" }> = {
   pending: { label: "En attente", tone: "amber" },
   approved: { label: "Approuvé", tone: "green" },
@@ -1566,7 +1559,17 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
   const review = session.data.reviews.find((r) => r.intervention_id === id);
   const documents = session.data.documents.filter((d) => d.intervention_id === id);
   const artisan = ops?.participants.find((p) => p.role === "artisan");
-  const reachedIndex = TIMELINE.findIndex(([s]) => s === intervention.status);
+  // Chronology derived from what this view already holds (no extra loading).
+  const timelineApproval =
+    (acceptedQuote && session.professional.approvals.find((a) => a.quote_id === acceptedQuote.id)) || approval || null;
+  const timeline = buildTimeline({
+    intervention,
+    approval: timelineApproval,
+    ruleApplies: c.scope.rules.some((r) => r.site_id === intervention.site_id && r.enabled),
+    appointment: opsLoading || !ops ? undefined : ops.appointment,
+    report: opsLoading || !ops ? undefined : ops.report,
+    payment: payment ?? null,
+  });
   const isPayer = Boolean(intervention.client_id) && session.profileId === intervention.client_id;
   // Actions opérationnelles (devis, créneau, annulation) : écriture sur le site du dossier.
   const canOperate = c.authority.canWriteSite(intervention.site_id);
@@ -1654,22 +1657,7 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
             </div>
           </section>
 
-          <section className="panel timeline-panel" aria-labelledby="dossier-timeline">
-            <h2 id="dossier-timeline">Avancement</h2>
-            {intervention.status === "cancelled" ? (
-              <p className={styles.muted}>Dossier annulé. Aucune étape supplémentaire ne sera enregistrée.</p>
-            ) : (
-              <ol className="timeline">
-                {TIMELINE.map(([s, label], index) => (
-                  <li key={s} className={index <= reachedIndex ? "reached" : ""} aria-current={s === intervention.status ? "step" : undefined}>
-                    <span aria-hidden="true">{index <= reachedIndex ? <Icon name="check" size={13} /> : index + 1}</span>
-                    <strong>{label}</strong>
-                    {s === intervention.status && <small>Étape actuelle</small>}
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
+          <EnterpriseTimeline steps={timeline} cancelled={intervention.status === "cancelled"} />
 
           {["accepted", "in_progress"].includes(intervention.status) && (
             <TrackingAnchor

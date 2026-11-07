@@ -1,0 +1,111 @@
+/* Enterprise dossier chronology — tokens only, light/dark through --ui-* (no raw colour). */
+.panel h2 {
+  margin-bottom: var(--ui-space-3);
+}
+.note {
+  margin: 0 0 var(--ui-space-3);
+  color: var(--ui-text-muted);
+}
+.list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.step {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--ui-space-5) 1fr;
+  gap: var(--ui-space-3);
+  padding-bottom: var(--ui-space-4);
+}
+.step:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: var(--ui-space-5);
+  bottom: 0;
+  left: calc(var(--ui-space-5) / 2 - 1px);
+  width: 2px;
+  background: var(--ui-border);
+}
+.marker {
+  width: var(--ui-space-5);
+  height: var(--ui-space-5);
+  border: 2px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-card);
+}
+.body {
+  min-width: 0;
+}
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--ui-space-1) var(--ui-space-2);
+}
+.head strong {
+  color: var(--ui-text);
+}
+.badge {
+  padding: 0 var(--ui-space-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+  color: var(--ui-text-muted);
+  font-size: 13px;
+}
+.detail {
+  margin: var(--ui-space-1) 0 0;
+  color: var(--ui-text-muted);
+  overflow-wrap: anywhere;
+}
+.date {
+  display: block;
+  margin-top: var(--ui-space-1);
+  color: var(--ui-text-muted);
+}
+.done .marker {
+  border-color: var(--ui-success);
+  background: var(--ui-success);
+}
+.done:not(:last-child)::before {
+  background: var(--ui-success);
+}
+.done .badge {
+  border-color: var(--ui-success);
+  color: var(--ui-success);
+}
+.current .marker {
+  border-color: var(--ui-primary);
+  background: var(--ui-card);
+  box-shadow: inset 0 0 0 4px var(--ui-primary);
+}
+.current .badge {
+  border-color: var(--ui-primary);
+  color: var(--ui-accent);
+}
+.current .head strong {
+  color: var(--ui-text);
+}
+.not_applicable .marker {
+  border-style: dashed;
+}
+.not_applicable .head strong,
+.upcoming .head strong {
+  color: var(--ui-text-muted);
+}
+@media (max-width: 390px) {
+  .step {
+    grid-template-columns: var(--ui-space-4) 1fr;
+    gap: var(--ui-space-2);
+  }
+  .marker {
+    width: var(--ui-space-4);
+    height: var(--ui-space-4);
+  }
+  .step:not(:last-child)::before {
+    top: var(--ui-space-4);
+    left: calc(var(--ui-space-4) / 2 - 1px);
+  }
+}
