@@ -113,6 +113,7 @@ import {
   type AppointmentEntry,
   type MissionSegment,
 } from "./artisan-lists";
+import { CredentialReviewPanel } from "../features/credential-reviews/credential-review-panel";
 
 // ---- Static definitions ---------------------------------------------------------------
 type Tone = "neutral" | "blue" | "green" | "amber" | "red" | "violet";
@@ -2397,9 +2398,9 @@ function Documents({
           <div>
             <h2 id="documents-required">Documents obligatoires</h2>
             <p className={styles.sectionNote} style={{ margin: "4px 0 0" }}>
-              Nécessaires pour exercer sur la plateforme. L’opérateur examine le dossier dans son
-              ensemble : une pièce transmise reste « transmise », aucune validation individuelle
-              n’est enregistrée.
+              Nécessaires pour exercer sur la plateforme. L’opérateur rend une décision sur chaque
+              pièce (acceptée, modifications demandées ou refusée, avec son motif) ; une décision
+              n’approuve pas à elle seule votre candidature.
             </p>
           </div>
           {!pending && dossier && (
@@ -2408,7 +2409,7 @@ function Documents({
                 <Icon name="shield" size={20} />
                 {summary.label}
               </span>
-              {/* L’approbation porte sur le dossier ; aucune pièce n’est validée individuellement (non modélisé). */}
+              {/* L’approbation porte sur le dossier ; une décision par pièce ne l’approuve pas à elle seule (ART-03). */}
               {status && (
                 <Tag tone={APPLICATION_STATUS[status].tone}>
                   Candidature : {APPLICATION_STATUS[status].label.toLowerCase()}
@@ -2433,6 +2434,11 @@ function Documents({
                   document={session.data.documents.find((d) => d.id === s.state.credential?.document_id)}
                   busy={session.busy}
                   onLink={() => setLinking(s.kind)}
+                  review={
+                    s.state.credential ? (
+                      <CredentialReviewPanel credentialId={s.state.credential.id} mode="artisan" context={session.mutationContext} demo={session.mode === "demo"} />
+                    ) : undefined
+                  }
                 />
               ))}
             </div>
@@ -2484,6 +2490,7 @@ function CredentialCard({
   document,
   busy,
   onLink,
+  review,
 }: {
   title: string;
   description: string;
@@ -2491,6 +2498,8 @@ function CredentialCard({
   document: StoredDocument | undefined;
   busy: boolean;
   onLink: () => void;
+  /** ART-03: read-only decisions of this credential (history, current decision, reason). */
+  review?: ReactNode;
 }) {
   const iconClass = state.key === "pending" ? styles.credBlue : state.key === "expired" ? styles.credAmber : styles.credRed;
   const icon = state.key === "pending" ? "clock" : state.key === "expired" ? "refresh" : "warning";
@@ -2521,6 +2530,7 @@ function CredentialCard({
           {state.credential ? "Remplacer le document" : "Ajouter le document"}
         </button>
       </div>
+      {review && <div className={styles.credActions}>{review}</div>}
     </section>
   );
 }
