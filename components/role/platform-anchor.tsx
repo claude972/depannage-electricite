@@ -7,6 +7,7 @@ import { CONTRACT_MESSAGES } from "../app/api";
 import { operatorViewAllowed, platformViewAllowed, type OperatorView } from "../app/features";
 import { SupportCenter } from "./support-tickets";
 import { OperatorDataRequests } from "../features/data-requests/operator-data-requests";
+import { OperatorCallbacks } from "../features/public-callback/operator-callbacks";
 import { PageTitle, Unavailable } from "../app/ui";
 import type { Session } from "../app/session-types";
 import { PLATFORM_DEMO } from "../../lib/features/platform-operations/demo";
@@ -54,6 +55,7 @@ export function PlatformPage({
         {title}
         <SupportCenter session={session} interventions={[]} backView="support-queue" queue="all" />
         {session.mode !== "demo" && <OperatorDataRequests context={session.mutationContext} />}
+        {session.mode !== "demo" && <OperatorCallbacks context={session.mutationContext} />}
       </>
     );
   }
