@@ -3498,12 +3498,19 @@ function PerformanceView({ session }: { session: Session }) {
       {livePerf.phase !== "demo" ? (
         <LivePerformanceGrid perf={livePerf} since={since} />
       ) : (
-        <>
-      <PerfGrid perf={perf} since={since} />
-      <section className="panel" aria-labelledby="perf-paid">
+        <PerfGrid perf={perf} since={since} />
+      )}
+      {/* Detailed list from the loaded dossiers only: a distinct panel, never the server totals. */}
+      <section className="panel" aria-labelledby="perf-paid" data-perf-loaded-payments="">
         <h2 id="perf-paid" style={{ fontSize: 17, marginBottom: 8 }}>
-          Règlements confirmés ce mois-ci
+          {livePerf.phase === "demo" ? "Règlements confirmés ce mois-ci" : "Règlements sur les dossiers chargés"}
         </h2>
+        {livePerf.phase !== "demo" && (
+          <p className={styles.sectionNote}>
+            Détail des règlements de ce mois-ci présents dans vos dossiers chargés ; les totaux
+            ci-dessus sont calculés par le serveur sur l’ensemble de vos dossiers.
+          </p>
+        )}
         {paidThisMonth.length ? (
           <div className={styles.paidList}>
             {paidThisMonth.map((p) => {
@@ -3525,11 +3532,13 @@ function PerformanceView({ session }: { session: Session }) {
             })}
           </div>
         ) : (
-          <p>Aucun règlement confirmé ce mois-ci sur vos dossiers chargés.</p>
+          <p>
+            {livePerf.phase === "demo"
+              ? "Aucun règlement confirmé ce mois-ci sur vos dossiers chargés."
+              : "Aucun règlement confirmé parmi les dossiers chargés ce mois-ci."}
+          </p>
         )}
       </section>
-        </>
-      )}
       {session.mode === "demo" && (
         <DemoNote>Indicateurs calculés sur les données de démonstration.</DemoNote>
       )}

@@ -12,6 +12,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 import { withApp, skip as appSkip } from "./real-app-harness";
+import { serveLiveArtisan } from "./artisan-live-space-harness";
 
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
@@ -179,4 +180,79 @@ test("app réelle (démo, 390 px) : Accueil, Profil et Performance gardent leurs
       assert.deepEqual(errors, [], route);
     }
   });
+});
+
+// Real ArtisanSpace in live (fake Session): Performance shows the server totals AND, as a distinct
+// panel, the detailed payments of the loaded dossiers under its own title; Overview and Profile too.
+const LIVE_SETUP = `
+const now = new Date();
+const paidAt = new Date(now.getFullYear(), now.getMonth(), 1, 12).toISOString();
+const I = (n) => "a0000000-0000-4000-8000-" + String(n).padStart(12, "0");
+const Q = (n) => "b0000000-0000-4000-8000-" + String(n).padStart(12, "0");
+const interventions = Array.from({ length: 120 }, (_, n) => ({ id: I(n), client_id: "c1", artisan_id: "u1", site_id: null, category: "panel", description: "Tableau", address: "3 rue des Ateliers", city: "Fort-de-France", urgency: "scheduled", status: "paid", estimate_min_cents: 10000, estimate_max_cents: 20000, created_at: paidAt, completed_at: paidAt }));
+const quotes = interventions.map((i, n) => ({ id: Q(n), intervention_id: i.id, artisan_id: "u1", lines: [{ label: "Pose", quantity: 1, unit_price_cents: 10000 }], subtotal_cents: 10000, tax_rate: 0, tax_cents: 0, total_cents: 10000, status: "accepted", created_at: paidAt, accepted_at: paidAt }));
+const payments = quotes.map((q, n) => ({ id: "p" + n, quote_id: q.id, total_cents: 10000, currency: "eur", status: "paid", created_at: paidAt, paid_at: paidAt }));
+const p = (d) => new Date(d).toISOString();
+const report = { period: { current_start: p(new Date(now.getFullYear(), now.getMonth(), 1)), current_end: p(new Date(now.getFullYear(), now.getMonth() + 1, 1)), previous_start: p(new Date(now.getFullYear(), now.getMonth() - 1, 1)), previous_end: p(new Date(now.getFullYear(), now.getMonth(), 1)), boundary: "inclusive_start_exclusive_end" },
+  current: { paid_service_cents: 1234500, paid_count: 131, completed_missions_count: 118 }, previous: { paid_service_cents: 1000000, paid_count: 97, completed_missions_count: 90 },
+  rating: { average: 4.6, count: 212, period: "all_time" }, growth_percent: 23.5, punctuality_rate: null, currency: "eur", scope: "all_current_artisan_records", limited: false,
+  basis: { revenue: "Prestations TTC payées.", punctuality: "Non calculée." } };
+window.perfCalls = 0;
+window.view = "performance";
+window.seed = { data: { interventions, quotes, payments, reviews: [] }, session: { loadArtisanPerformance: async () => { window.perfCalls++; return JSON.parse(JSON.stringify(report)); } } };
+`;
+
+test("ArtisanSpace réel en live (390/1280) : totaux serveur + liste distincte « Règlements sur les dossiers chargés » ; Accueil et Profil lisent le serveur", { skip }, async () => {
+  const { server, url } = await serveLiveArtisan(LIVE_SETUP);
+  const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
+  const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true });
+  try {
+    for (const width of [390, 1280]) {
+      const page = await (await browser.newContext({ viewport: { width, height: 900 } })).newPage();
+      const errors: string[] = [];
+      page.on("pageerror", (e: Error) => errors.push(String(e)));
+      await page.goto(url);
+      await page.locator('[data-testid="perf-grid"]').waitFor();
+      const grid = text(await page.locator('[data-testid="perf-grid"]').innerText());
+      assert.ok(grid.includes("12 345,00 €"), "server total in the grid");
+      assert.ok(!grid.includes("12 000,00 €"), "cache sum never in the totals");
+      const list = page.locator("[data-perf-loaded-payments]");
+      assert.equal(await list.count(), 1, "detailed list restored in live");
+      assert.equal(text(await list.locator("h2").innerText()), "Règlements sur les dossiers chargés");
+      assert.match(text(await list.innerText()), /totaux ci-dessus sont calculés par le serveur/);
+      assert.equal(await list.locator("strong").count(), 120, "one row per loaded payment");
+      assert.ok(!/Règlements confirmés ce mois-ci/.test(await page.locator("main, body").first().innerText()), "demo title only in demo");
+      assert.equal(await page.evaluate("document.documentElement.scrollWidth"), width);
+      await page.screenshot({ path: `/tmp/art10/performance-${width}.png`, fullPage: false });
+      // Overview and Profile: same server source.
+      await page.evaluate("window.view = 'overview'; window.rerender()");
+      await page.locator('[data-testid="perf-current-paid"]').first().waitFor();
+      assert.equal(text(await page.locator('[data-testid="perf-current-paid"]').first().innerText()), "12 345,00 €");
+      await page.evaluate("window.view = 'profile'; window.rerender()");
+      await page.locator('[data-testid="perf-grid"]').waitFor();
+      assert.match(text(await page.locator("body").innerText()), /4,6 \/ 5 \(212 avis\)/);
+      assert.equal(await page.evaluate("document.documentElement.scrollWidth"), width);
+      assert.ok(((await page.evaluate("window.perfCalls")) as number) >= 3);
+      assert.deepEqual(errors, []);
+    }
+  } finally {
+    await browser.close();
+    server.close();
+  }
+});
+
+test("ArtisanSpace réel en live : liste vide ⇒ texte qui n’implique pas un zéro global", { skip }, async () => {
+  const { server, url } = await serveLiveArtisan(LIVE_SETUP + "window.seed.data = { interventions: [], quotes: [], payments: [], reviews: [] };");
+  const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
+  const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true });
+  try {
+    const page = await (await browser.newContext({ viewport: { width: 390, height: 900 } })).newPage();
+    await page.goto(url);
+    await page.locator('[data-testid="perf-grid"]').waitFor();
+    assert.ok(text(await page.locator('[data-testid="perf-grid"]').innerText()).includes("12 345,00 €"));
+    assert.match(text(await page.locator("[data-perf-loaded-payments]").innerText()), /Aucun règlement confirmé parmi les dossiers chargés ce mois-ci\./);
+  } finally {
+    await browser.close();
+    server.close();
+  }
 });
