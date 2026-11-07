@@ -1036,6 +1036,7 @@ function DetailView({
   if (!i)
     return (
       <Empty
+        level={1}
         title={presence.openAnyway ? "Dossier absent de vos demandes récentes" : "Intervention introuvable"}
         action={
           <>

@@ -67,3 +67,9 @@ test("3 · état vide partagé : niveau de titre choisi par l’appelant (h1 qua
   assert.match(title({}), /<h1>Assistance<\/h1>/);
   assert.match(title({ level: 2 }), /<h2>Assistance<\/h2>/);
 });
+
+test("not-found dossier pages render their title as the page h1 (enterprise + client)", async () => {
+  const { readFileSync } = await import("node:fs");
+  assert.match(readFileSync("components/role/enterprise-space.tsx", "utf8"), /<Empty\s+level=\{1\}\s+icon="search"\s+title=\{presence\.openAnyway \? "Dossier absent des interventions chargées" : "Dossier introuvable sur ce périmètre"\}/);
+  assert.match(readFileSync("components/role/client-space.tsx", "utf8"), /<Empty\s+level=\{1\}\s+title=\{presence\.openAnyway \? "Dossier absent de vos demandes récentes" : "Intervention introuvable"\}/);
+});
