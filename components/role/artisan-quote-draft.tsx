@@ -3,6 +3,7 @@
 // Saving a draft is never sending it: publication is a distinct, explicit command. Every
 // call goes through `session`; a 409 keeps the typed lines and offers an explicit reload.
 // When the draft route is unavailable, the direct send editor (forms.QuoteEditor) remains.
+// EXPLICIT-TAX (claim, Claude UI): rates come only from lib/tax-rates (TAX_RATES); never a default.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session } from "../app/session-types";
 import type { Line, Quote, QuoteDraftCommand, QuoteDraftEnvelope } from "../app/types";
@@ -12,6 +13,7 @@ import { QuoteEditor } from "../app/forms";
 import { dateTime, money, quoteRef } from "../app/format";
 import styles from "./artisan-quote-draft.module.css";
 import { quoteLineTotalCents, quoteTotals } from "./artisan-lists";
+import { TAX_RATE_HINT, TAX_RATE_OPTIONS, TAX_RATE_PLACEHOLDER, TAX_RATE_REQUIRED, parseTaxRateInput, taxRateLabel, type TaxRate } from "../app/tax-rate";
 
 type EditLine = { label: string; quantity: string; price: string };
 type LineErrors = { label?: string; quantity?: string; price?: string };
@@ -21,7 +23,6 @@ type Phase = "loading" | "unavailable" | "ready";
  *  re-read and differs from the typed lines: the artisan then chooses, never the browser. */
 type Conflict = { message: string; server?: QuoteDraftEnvelope };
 
-const TAX_RATES = [0, 5.5, 10, 20];
 const MAX_LINES = 30;
 const MAX_LABEL = 160;
 const MAX_QUANTITY = 1000;
@@ -91,7 +92,20 @@ function newestSent(quotes: Quote[], interventionId: string): Quote | undefined 
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
 }
 function taxLabel(rate: number | null) {
-  return rate === null ? "TVA : taux à choisir" : `TVA ${String(rate).replace(".", ",")} %`;
+  return rate === null ? "TVA : taux à choisir" : `TVA ${taxRateLabel(rate)}`;
+}
+/** What still blocks publication (send). A draft may be SAVED with no rate; sending needs an
+ *  explicit supported rate — never a default. */
+export function publishBlockers(lines: Line[] | null, taxRate: TaxRate | null): string[] {
+  const missing: string[] = [];
+  if (!lines) missing.push("des quantités et prix valides");
+  else {
+    if (lines.length === 0) missing.push("au moins une ligne");
+    if (lines.some((l) => !l.label.trim())) missing.push("un libellé sur chaque ligne");
+    if (quoteTotals(lines, null).subtotal <= 0) missing.push("un total HT supérieur à zéro");
+  }
+  if (taxRate === null) missing.push("un taux de TVA");
+  return missing;
 }
 
 function DraftSummary({
@@ -137,7 +151,7 @@ export function QuoteDraftEditor({
   const [phase, setPhase] = useState<Phase>("loading");
   const [envelope, setEnvelope] = useState<QuoteDraftEnvelope | null>(null);
   const [lines, setLines] = useState<EditLine[]>(DEFAULT_LINES);
-  const [taxRate, setTaxRate] = useState<number | null>(null);
+  const [taxRate, setTaxRate] = useState<TaxRate | null>(null);
   const [touched, setTouched] = useState(false);
   const [pending, setPending] = useState<Pending>(null);
   const [conflict, setConflict] = useState<Conflict | null>(null);
@@ -152,7 +166,7 @@ export function QuoteDraftEditor({
     setEnvelope(env);
     if (!resetLines) return;
     setLines(env.draft ? fromLines(env.draft.lines) : DEFAULT_LINES);
-    setTaxRate(env.draft ? env.draft.tax_rate : null);
+    setTaxRate(env.draft && env.draft.tax_rate !== null ? parseTaxRateInput(String(env.draft.tax_rate)) : null);
     setTouched(false);
   };
 
@@ -184,14 +198,7 @@ export function QuoteDraftEditor({
   const totals = quoteTotals(parsed ?? [], taxRate);
   const subtotal = totals.subtotal;
   const tax = totals.tax ?? 0;
-  const missing: string[] = [];
-  if (!parsed) missing.push("des quantités et prix valides");
-  else {
-    if (parsed.length === 0) missing.push("au moins une ligne");
-    if (parsed.some((l) => !l.label.trim())) missing.push("un libellé sur chaque ligne");
-    if (subtotal <= 0) missing.push("un total HT supérieur à zéro");
-  }
-  if (taxRate === null) missing.push("un taux de TVA");
+  const missing = publishBlockers(parsed, taxRate);
   const publishable = saveValid && missing.length === 0;
   const draft = envelope?.draft ?? null;
   const dirty = draft ? !sameDraft(parsed, taxRate, draft.lines, draft.tax_rate) : true;
@@ -585,18 +592,19 @@ export function QuoteDraftEditor({
           hint={
             session.mode === "demo"
               ? "Taux de démonstration, sans validation fiscale."
-              : "Renseignez le taux applicable à votre prestation."
+              : TAX_RATE_HINT
           }
-          error={touched && taxRate === null ? "Choisissez le taux pour pouvoir envoyer." : undefined}
+          error={touched && taxRate === null ? TAX_RATE_REQUIRED : undefined}
         >
           <select
             value={taxRate === null ? "" : String(taxRate)}
-            onChange={(ev) => setTaxRate(ev.target.value === "" ? null : Number(ev.target.value))}
+            onChange={(ev) => setTaxRate(parseTaxRateInput(ev.target.value))}
+            data-tax-rate=""
           >
-            <option value="">Choisir un taux</option>
-            {TAX_RATES.map((r) => (
-              <option key={r} value={String(r)}>
-                {String(r).replace(".", ",")} %
+            <option value="">{TAX_RATE_PLACEHOLDER}</option>
+            {TAX_RATE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
               </option>
             ))}
           </select>
@@ -609,7 +617,7 @@ export function QuoteDraftEditor({
           <strong>{parsed ? money(subtotal) : "—"}</strong>
         </div>
         <div>
-          <span>{taxRate === null ? "TVA (taux à choisir)" : `TVA (${String(taxRate).replace(".", ",")} %)`}</span>
+          <span>{taxRate === null ? "TVA (taux à choisir)" : `TVA (${taxRateLabel(taxRate)})`}</span>
           <strong>{parsed && taxRate !== null ? money(tax) : "—"}</strong>
         </div>
         <div className={styles.total}>

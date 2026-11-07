@@ -9,6 +9,7 @@ import type { PlatformDemo } from "../../../lib/features/platform-operations/dem
 import { invoiceDocumentLinks } from "../../../lib/features/platform-operations/invoice-links";
 import { EmptyState, ErrorBox, Field, Gate, Loading, Pager, Panel, ReadOnly, dateTime, errorText, money, newRequestId, scopeKey, shortId, useLoad } from "./shared";
 import styles from "./platform-operations.module.css";
+import { TAX_RATE_OPTIONS, isTaxRate, parseTaxRateInput, taxRateLabel, type TaxRate } from "../../app/tax-rate";
 
 export type PlatformFinanceViewProps = { state: ContractState; unavailableMessage: string; scope: PlatformViewScope; client: PlatformClient; demo?: PlatformDemo; onNavigate?: (view: string, param?: string) => void };
 type Tab = "overview" | "ledger" | "invoices" | "refunds" | "disputes" | "settings";
@@ -467,6 +468,13 @@ function DisputeForm({ ctx, onCreated }: { ctx: Ctx; onCreated: () => void }) {
   );
 }
 
+/** Commission VAT: empty = not configured (null, allowed); otherwise only a TAX_RATES value. */
+export function commissionVatRate(raw: string): { ok: true; value: TaxRate | null } | { ok: false } {
+  if (raw === "") return { ok: true, value: null };
+  const rate = parseTaxRateInput(raw);
+  return rate === null ? { ok: false } : { ok: true, value: rate };
+}
+
 // ---- Settings (super admin) ----------------------------------------------------------------
 function Settings({ ctx, onSaved }: { ctx: Ctx; onSaved: () => void }) {
   const settings = useLoad(() => (ctx.demo ? Promise.resolve({ invoice_issuer: null, commission_bps: null }) : ctx.client.load.settings()), [ctx.demo]);
@@ -497,12 +505,12 @@ function Settings({ ctx, onSaved }: { ctx: Ctx; onSaved: () => void }) {
         )}
       </Panel>
       <Panel title="Émetteur plateforme (factures de commission)" intro="Données légales saisies sous la responsabilité du super administrateur ; rien n’est pré-rempli.">
-        <form className={styles.form} noValidate onSubmit={(e) => { e.preventDefault(); const next: Record<string, string> = {}; const n = validateText(issuer.legal_name, 1, 160, "Raison sociale"); if (n) next.legal_name = n; if (!/^[0-9]{14}$/.test(issuer.siret)) next.siret = "14 chiffres attendus."; const a = validateText(issuer.address, 5, 500, "Adresse"); if (a) next.address = a; if (issuer.vat_number && !/^[A-Z]{2}[0-9A-Z]{2,13}$/.test(issuer.vat_number)) next.vat_number = "Numéro de TVA invalide."; if (issuer.commission_vat_rate && !["0", "5.5", "10", "20"].includes(issuer.commission_vat_rate)) next.commission_vat_rate = "Taux non pris en charge."; setErrors(next); if (Object.keys(next).length) return; void ctx.act(() => ctx.client.command.setSetting({ key: "invoice_issuer", value: { legal_name: issuer.legal_name.trim(), siret: issuer.siret, address: issuer.address.trim(), vat_number: issuer.vat_number || null, commission_vat_rate: issuer.commission_vat_rate === "" ? null : (Number(issuer.commission_vat_rate) as 0 | 5.5 | 10 | 20) }, expected_version: data?.invoice_issuer?.version ?? null }), "Émetteur enregistré et audité.", () => { settings.reload(); onSaved(); }); }}>
+        <form className={styles.form} noValidate onSubmit={(e) => { e.preventDefault(); const next: Record<string, string> = {}; const n = validateText(issuer.legal_name, 1, 160, "Raison sociale"); if (n) next.legal_name = n; if (!/^[0-9]{14}$/.test(issuer.siret)) next.siret = "14 chiffres attendus."; const a = validateText(issuer.address, 5, 500, "Adresse"); if (a) next.address = a; if (issuer.vat_number && !/^[A-Z]{2}[0-9A-Z]{2,13}$/.test(issuer.vat_number)) next.vat_number = "Numéro de TVA invalide."; const vat = commissionVatRate(issuer.commission_vat_rate); if (!vat.ok) next.commission_vat_rate = "Taux non pris en charge."; setErrors(next); if (Object.keys(next).length) return; void ctx.act(() => ctx.client.command.setSetting({ key: "invoice_issuer", value: { legal_name: issuer.legal_name.trim(), siret: issuer.siret, address: issuer.address.trim(), vat_number: issuer.vat_number || null, commission_vat_rate: vat.ok ? vat.value : null }, expected_version: data?.invoice_issuer?.version ?? null }), "Émetteur enregistré et audité.", () => { settings.reload(); onSaved(); }); }}>
           <Field label="Raison sociale" error={errors.legal_name}><input value={issuer.legal_name} onChange={(e) => setIssuer({ ...issuer, legal_name: e.target.value })} maxLength={160} /></Field>
           <Field label="SIRET" error={errors.siret}><input value={issuer.siret} onChange={(e) => setIssuer({ ...issuer, siret: e.target.value })} inputMode="numeric" /></Field>
           <Field label="Adresse" error={errors.address} full><input value={issuer.address} onChange={(e) => setIssuer({ ...issuer, address: e.target.value })} maxLength={500} /></Field>
           <Field label="N° TVA (facultatif)" error={errors.vat_number}><input value={issuer.vat_number} onChange={(e) => setIssuer({ ...issuer, vat_number: e.target.value.toUpperCase() })} /></Field>
-          <Field label="TVA sur commission" hint="Vide = non configuré : aucune facture de commission possible." error={errors.commission_vat_rate}><select value={issuer.commission_vat_rate} onChange={(e) => setIssuer({ ...issuer, commission_vat_rate: e.target.value })}><option value="">Non configuré</option><option value="0">0 %</option><option value="5.5">5,5 %</option><option value="10">10 %</option><option value="20">20 %</option></select></Field>
+          <Field label="TVA sur commission" hint="Vide = non configuré : aucune facture de commission possible." error={errors.commission_vat_rate}><select value={issuer.commission_vat_rate} onChange={(e) => setIssuer({ ...issuer, commission_vat_rate: e.target.value })}><option value="">Non configuré</option>{TAX_RATE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}{issuer.commission_vat_rate !== "" && !isTaxRate(Number(issuer.commission_vat_rate)) && <option value={issuer.commission_vat_rate}>{taxRateLabel(Number(issuer.commission_vat_rate))} (enregistré, non pris en charge)</option>}</select></Field>
           <div className={`${styles.actions} ${styles.full}`}><button type="submit" className={`${styles.button} ${styles.primary}`} disabled={ctx.busy}>{data?.invoice_issuer ? `Mettre à jour (version ${data.invoice_issuer.version})` : "Enregistrer"}</button></div>
         </form>
       </Panel>
