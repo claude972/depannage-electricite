@@ -82,7 +82,8 @@ test("wiring: client #new never posts the legacy route in live; manager create s
   assert.match(reset, /writePhotoCount\(getDraftStorage\(\), 0\)/);
   assert.match(app, /async function uploadBookingPhotos\([^\n]+\n\s*if \(!ctx\.alive\(\)\) return;\s*const files = bookingPhotos\.current;/);
   const create = app.slice(app.indexOf("async function createIntervention("), app.indexOf("async function retryUploads("));
-  const prep = create.indexOf("const prepared = prepareRequestKey(getDraftStorage(), values);");
+  // PUB-02: the prepared payload is the reviewed values (reviewed_estimate_version added only for a NEW key).
+  const prep = create.indexOf("const prepared = prepareRequestKey(getDraftStorage(), reviewed);");
   assert.ok(prep > 0 && prep < create.indexOf('api<{ intervention: Intervention }>("/api/interventions", payload)'), "key prepared before the POST");
   assert.match(create, /if \(!prepared\)\s+throw new Error\(/);
   assert.match(create, /const payload: RequestValues & \{ request_id: string \} = \{ \.\.\.prepared\.payload, request_id: prepared\.request_id \};/);

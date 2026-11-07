@@ -210,3 +210,44 @@ test("magasin partagé : une réponse V1 tardive après une lecture V2 forcée e
   const meta = readFileSync("app/prestations/[slug]/page.tsx", "utf8");
   assert.doesNotMatch(meta, /serviceEstimate|money\(/);
 });
+
+test("lecture qui lève une exception synchrone ⇒ la lecture suivante (non forcée) réessaie vraiment", async () => {
+  const store = loadModule("components/features/indicative-prices/model.ts") as unknown as typeof Model;
+  let n = 0;
+  const fetcher = ((..._a: unknown[]) => {
+    n++;
+    if (n === 1) throw new TypeError("sync failure");
+    return Promise.resolve(new Response(JSON.stringify(V1), { status: 200 }));
+  }) as unknown as typeof fetch;
+  await store.loadPrices(fetcher);
+  assert.equal(store.getPricesState().phase, "error");
+  await store.loadPrices(fetcher);
+  assert.equal(n, 2, "retried");
+  assert.equal(store.getPricesState().phase, "ready");
+});
+
+test("publication confirmée après « Renvoyer » ⇒ même chemin : rafraîchissement du magasin public", async () => {
+  const staged = a.parseStageView(STAGE({ latest_version: 2, staged: { version: 2, ranges: R, reason: "Révision annuelle", created_at: "2026-11-07T20:00:00Z" }, publication_available: true }))!;
+  const mem = memStore();
+  let pv: Admin.PublishView = a.PUBLISH_INITIAL;
+  let published = 0;
+  let mode = "lost";
+  const p = a.createPublication({
+    fetcher: () => (async () => (mode === "lost" ? Promise.reject(new TypeError("lost")) : new Response(JSON.stringify({ published_version: 2, active_version: 2, replayed: true }), { status: 200 }))) as unknown as typeof fetch,
+    store: () => mem.store,
+    newId: () => "e0000000-0000-4000-8000-00000000000a",
+    context: { generation: () => 1, userId: () => "admin-1" },
+    get: () => pv,
+    set: (v) => (pv = v),
+    reload: async () => {},
+    onPublished: () => void published++,
+  });
+  await p.publish(staged, "Publication validée");
+  assert.equal(published, 0, "uncertain: not confirmed");
+  assert.ok(pv.pending);
+  mode = "ok";
+  await p.retry();
+  assert.equal(published, 1, "confirmed after « Renvoyer » ⇒ the public store is re-read");
+  const src = readFileSync("components/features/indicative-prices/indicative-prices-admin.tsx", "utf8");
+  assert.match(src, /onPublished: \(\) => void loadPrices\(latest\.current\.fetcher, true\),/);
+});

@@ -44,7 +44,10 @@ import {
 import { resolveDisplayName } from "./app/display-name";
 import { draftNotice, getDraftStorage, readBootDraft } from "./app/request-draft-boot";
 import { BOOKING_DRAFT_KEY, PAYMENT_LABEL, clearBooking, ensureRequestId, readBooking, saveBooking, type BookingDraft } from "./app/booking-draft";
-import { DEFINITIVE_REFUSAL, prepareRequestKey, settleRequestKey } from "./app/request-key";
+import { DEFINITIVE_REFUSAL, REQUEST_KEY_STORAGE, prepareRequestKey, readRequestKey, settleRequestKey } from "./app/request-key";
+import { REVIEW_COPY, getPricesState, loadPrices, reviewDecision } from "./features/indicative-prices/model";
+// PUB-02: estimate version first sent with a booking key in this tab (a retry resends the SAME one).
+const bookingReviewed = new Map<string, number>();
 import { purgePrivateStorage } from "./app/private-storage";
 import { bookingForEditedRequest, bookingFromSignedRequest, readPhotoCount, writePhotoCount } from "./app/signed-booking";
 
@@ -1178,6 +1181,17 @@ export default function CourantApp() {
         ctx.when(setDemoBooking)(null);
         return;
       }
+      // PUB-02: a NEW booking (no key yet) is reviewed against the active estimate version right before
+      // the POST; a retry of an existing key reuses the version it was first sent with in this tab
+      // (or omits it: the server keeps the reserved snapshot of an existing nonce).
+      let reviewedVersion: number | undefined;
+      if (!current.request_id) {
+        const shown = getPricesState();
+        await loadPrices(undefined, true);
+        const decision = reviewDecision(shown, getPricesState());
+        if (decision.kind === "block") throw new Error(decision.message);
+        if (decision.kind === "send") reviewedVersion = decision.version;
+      }
       const keyed = ensureRequestId(getDraftStorage(), current);
       if (!keyed)
         throw new Error(
@@ -1196,6 +1210,11 @@ export default function CourantApp() {
         urgency: draft.urgency,
         contact: { first_name: c.first_name.trim(), last_name: c.last_name.trim(), email: c.email.trim(), phone: c.phone.trim() },
         payment_choice: current.payment,
+        ...(() => {
+          if (reviewedVersion !== undefined) bookingReviewed.set(keyed.request_id, reviewedVersion);
+          const v = bookingReviewed.get(keyed.request_id);
+          return v !== undefined ? { reviewed_estimate_version: v } : {};
+        })(),
       };
       let result: BookingReceipt | { status: "authorization_required"; url: string };
       try {
@@ -1405,7 +1424,22 @@ export default function CourantApp() {
       //    gains request_id. A legacy booking without a key gets one PROVEN stored first.
       // Key + frozen payload PROVEN stored before the POST (create_intervention_once). An
       // uncertain earlier attempt is replayed exactly (same key, original payload).
-      const prepared = prepareRequestKey(getDraftStorage(), values);
+      // PUB-02: a NEW request is reviewed against the active estimate version (forced re-read right
+      // before the POST); an uncertain earlier attempt replays its frozen payload unchanged.
+      let pendingReplay = false;
+      try {
+        const storage = getDraftStorage();
+        pendingReplay = Boolean(storage && readRequestKey(storage.getItem(REQUEST_KEY_STORAGE)));
+      } catch {}
+      let reviewed: RequestValues = values;
+      if (!pendingReplay) {
+        const shown = getPricesState();
+        await loadPrices(undefined, true);
+        const decision = reviewDecision(shown, getPricesState());
+        if (decision.kind === "block") throw new Error(decision.message);
+        if (decision.kind === "send") reviewed = { ...values, reviewed_estimate_version: decision.version } as RequestValues;
+      }
+      const prepared = prepareRequestKey(getDraftStorage(), reviewed);
       if (!prepared)
         throw new Error(
           "Votre demande n’a pas été envoyée : ce navigateur n’a pas pu préparer son envoi en toute sécurité. Réessayez ; si cela persiste, rechargez la page.",
@@ -1416,10 +1450,22 @@ export default function CourantApp() {
         result = await api<{ intervention: Intervention }>("/api/interventions", payload);
       } catch (e) {
         if (e instanceof ApiRequestError && DEFINITIVE_REFUSAL.has(e.status)) settleRequestKey(getDraftStorage(), prepared.request_id);
-        if (e instanceof ApiRequestError && e.status === 409)
+        if (e instanceof ApiRequestError && e.status === 409) {
+          // A reviewed version that is no longer the active one: honest message, fresh read, and the
+          // user re-confirms (new key, since the content changed). Never patches the frozen payload.
+          const sent = (prepared.payload as { reviewed_estimate_version?: number }).reviewed_estimate_version;
+          if (!prepared.replayed && sent !== undefined) {
+            await loadPrices(undefined, true);
+            const now = getPricesState();
+            if (now.phase === "ready" && now.data && now.data.version !== sent) {
+              settleRequestKey(getDraftStorage(), prepared.request_id);
+              throw new Error(REVIEW_COPY.conflict);
+            }
+          }
           throw new Error(
             "Cette demande a peut-être déjà été enregistrée avec un contenu différent. Vérifiez « Mes demandes » avant toute nouvelle demande.",
           );
+        }
         throw e; // uncertain: key and frozen payload kept, the next attempt replays the SAME key
       }
       settleRequestKey(getDraftStorage(), prepared.request_id);

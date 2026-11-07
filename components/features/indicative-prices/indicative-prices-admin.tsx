@@ -66,6 +66,8 @@ function Live({ context, fetcher, store = tabStore, newId = uuid }: IndicativePr
       get: () => pubRef.current,
       set: setPub,
       reload: () => c.load(),
+      // One code path for both the direct confirmation and « Renvoyer »: public displays re-read.
+      onPublished: () => void loadPrices(latest.current.fetcher, true),
     });
     pubCtrl.current = p;
     p.restorePending();
@@ -131,7 +133,7 @@ function Live({ context, fetcher, store = tabStore, newId = uuid }: IndicativePr
                   <textarea value={pubReason} maxLength={1000} onChange={(e) => setPubReason(e.target.value)} disabled={pub.busy} />
                 </label>
                 <div className={styles.actions}>
-                  <button type="button" className={styles.primary} disabled={pub.busy} onClick={async () => { if (await pubCtrl.current?.publish(d, pubReason)) { setConfirming(false); setPubReason(""); void loadPrices(latest.current.fetcher, true); /* confirmed publication: public displays re-read */ } }}>
+                  <button type="button" className={styles.primary} disabled={pub.busy} onClick={async () => { if (await pubCtrl.current?.publish(d, pubReason)) { setConfirming(false); setPubReason(""); } }}>
                     {PUBLISH_COPY.confirm(d.latest_version)}
                   </button>
                   <button type="button" className={styles.button} onClick={() => setConfirming(false)}>Annuler</button>
