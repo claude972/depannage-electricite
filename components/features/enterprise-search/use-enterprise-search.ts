@@ -1,9 +1,10 @@
 "use client";
 // React binding of the enterprise intervention search (logic in ./model). Inactive (zero call) when
 // `enabled` is false — the demo keeps its local list. One controller per identity (uid +
-// generation): an identity change drops it and resets the list. StrictMode-safe.
+// generation). The returned state is bound AT RENDER to identity + filters + page: a stored state of
+// another key renders as loading (never an old frame). Commands carry the same key. StrictMode-safe.
 import { useEffect, useRef, useState } from "react";
-import { SEARCH_INITIAL, createSearchApi, createSearchController, type Context, type Filters, type SearchApi, type SearchState } from "./model";
+import { SEARCH_INITIAL, createSearchApi, createSearchController, identityOf, viewKey, viewOf, type Context, type Filters, type SearchApi, type SearchState } from "./model";
 
 export { COPY as ENTERPRISE_SEARCH_COPY } from "./model";
 export { ExportFeedback } from "./export-feedback";
@@ -11,7 +12,8 @@ export type { EnterpriseRow, Filters as EnterpriseSearchFilters } from "./model"
 
 export function useEnterpriseSearch({ enabled, context, filters, page, api }: { enabled: boolean; context: Context; filters: Filters | null; page: number; api?: SearchApi }) {
   const [state, setState] = useState<SearchState>(SEARCH_INITIAL);
-  const identity = `${context.userId() ?? "-"}|${context.generation()}`;
+  const identity = identityOf(context);
+  const viewK = viewKey(context, filters, page);
   const ctrl = useRef<ReturnType<typeof createSearchController> | null>(null);
   const latest = useRef({ api, context, filters });
   latest.current = { api, context, filters };
@@ -32,9 +34,10 @@ export function useEnterpriseSearch({ enabled, context, filters, page, api }: { 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, identity, key]);
   return {
-    state: enabled ? state : SEARCH_INITIAL,
-    retry: () => ctrl.current?.retry(),
+    // Bound AT RENDER: a state of another identity / filters / page is never shown (loading instead).
+    state: enabled ? viewOf(state, viewK) : SEARCH_INITIAL,
+    retry: () => ctrl.current?.retry(viewK),
     /** Snapshot of the filters at the click; the file is kept only if they still match after the await. */
-    exportCsv: () => (filters && ctrl.current ? ctrl.current.exportCsv(filters, () => latest.current.filters) : Promise.resolve(false)),
+    exportCsv: () => (filters && ctrl.current ? ctrl.current.exportCsv(filters, () => latest.current.filters, viewK) : Promise.resolve(false)),
   };
 }

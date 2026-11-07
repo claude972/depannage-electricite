@@ -109,6 +109,9 @@ export const COPY = {
 } as const;
 
 export type SearchState = {
+  /** Render-time key (identity + filters + page) this state belongs to; "" = none. A render whose key
+   *  differs shows loading/empty, never these rows (not even for one frame). */
+  key: string;
   phase: "idle" | "loading" | "ready" | "error" | "forbidden";
   items: EnterpriseRow[];
   total: number;
@@ -119,8 +122,14 @@ export type SearchState = {
   exportNotice: string;
   exportError: string;
 };
-export const SEARCH_INITIAL: SearchState = { phase: "idle", items: [], total: 0, page: 1, pages: 1, error: "", exporting: false, exportNotice: "", exportError: "" };
+export const SEARCH_INITIAL: SearchState = { key: "", phase: "idle", items: [], total: 0, page: 1, pages: 1, error: "", exporting: false, exportNotice: "", exportError: "" };
 export type Context = { generation(): number; userId(): string | null };
+export const identityOf = (c: Context) => `${c.userId() ?? "-"}|${c.generation()}`;
+const keyFor = (identity: string, f: Filters, page: number) => `${identity}|${JSON.stringify([f.organization_id, f.site_id, f.category, f.status, f.search.trim(), f.sort, page])}`;
+/** The key a render binds to (identity + filters + page). */
+export const viewKey = (c: Context, f: Filters | null, page: number) => (f ? keyFor(identityOf(c), f, page) : "");
+/** What a render may show: the stored state only if it belongs to THIS render's key. */
+export const viewOf = (s: SearchState, key: string): SearchState => (s.key === key ? s : { ...SEARCH_INITIAL, key, phase: key ? "loading" : "idle" });
 export type Timers = { set(f: () => void, ms: number): unknown; clear(handle: unknown): void };
 export type Saver = (blob: Blob, filename: string) => void;
 /** Browser saver: object URL from the blob, one click, revoked right after. Nothing persisted. */
@@ -145,8 +154,9 @@ export function createSearchController({ api, context, set, timers, save = saveB
   let seq = 0;
   let current: ListBody | null = null;
   let timer: unknown = null;
-  const identity = () => `${context.userId() ?? "-"}|${context.generation()}`;
+  const identity = () => identityOf(context);
   const bound = identity();
+  const keyOf = (req: ListBody) => keyFor(bound, req, req.page);
   const put = (s: SearchState) => {
     state = s;
     if (alive) set(s);
@@ -160,16 +170,16 @@ export function createSearchController({ api, context, set, timers, save = saveB
     if (!valid(my, req)) return;
     const r = await api().list(req);
     if (!valid(my, req)) return; // stale sequence, other identity, other filters or page: dropped
-    if (r.status === 401 || r.status === 403) return put({ ...SEARCH_INITIAL, phase: "forbidden", error: COPY.forbidden });
+    if (r.status === 401 || r.status === 403) return put({ ...SEARCH_INITIAL, key: keyOf(req), phase: "forbidden", error: COPY.forbidden });
     const p = r.status === 200 ? parseListPage(r.body, req) : null;
-    if (!p) return put({ ...state, phase: "error", items: [], error: COPY.failed });
-    put({ ...state, phase: "ready", items: p.items, total: p.total, page: p.page.number, pages: p.page.pages, error: "" });
+    if (!p) return put({ ...state, key: keyOf(req), phase: "error", items: [], error: COPY.failed });
+    put({ ...state, key: keyOf(req), phase: "ready", items: p.items, total: p.total, page: p.page.number, pages: p.page.pages, error: "" });
   };
   const start = (req: ListBody, debounce: boolean) => {
     cancelTimer();
     current = req;
     const my = ++seq;
-    put({ ...state, phase: "loading", items: [], error: "", exportNotice: "", exportError: "" });
+    put({ ...state, key: keyOf(req), phase: "loading", items: [], error: "", exportNotice: "", exportError: "" });
     if (debounce) timer = timers.set(() => ((timer = null), void read(my, req)), delayMs);
     else void read(my, req);
   };
@@ -178,20 +188,21 @@ export function createSearchController({ api, context, set, timers, save = saveB
     query(f: Filters, page: number) {
       if (!alive || identity() !== bound) return;
       const req = listBody(f, page);
-      if (!req) return put({ ...SEARCH_INITIAL, phase: "error", error: COPY.failed });
+      if (!req) return put({ ...SEARCH_INITIAL, key: keyFor(bound, f, page), phase: "error", error: COPY.failed });
       if (current && sameFilters(current, req) && current.page === req.page) return;
       const onlySearch = !!current && current.page === req.page && current.organization_id === req.organization_id && current.site_id === req.site_id && current.category === req.category && current.status === req.status && current.sort === req.sort;
       start(req, onlySearch);
     },
-    retry() {
-      if (!current) return;
+    retry(key: string) {
+      if (!current || state.key !== key) return;
       const req = current;
       current = null;
       start(req, false);
     },
     /** Saves the CSV only if identity and filters still match the click at the end of the await. */
-    async exportCsv(f: Filters, latest: () => Filters | null): Promise<boolean> {
-      if (!alive || state.exporting) return false;
+    async exportCsv(f: Filters, latest: () => Filters | null, key: string): Promise<boolean> {
+      // Only from the list the user is looking at (same identity + filters).
+      if (!alive || state.exporting || state.key !== key || !current || !sameFilters(current, f)) return false;
       const who = identity();
       const body = exportBody(f);
       if (!body || who !== bound) return false;
@@ -201,7 +212,7 @@ export function createSearchController({ api, context, set, timers, save = saveB
       if (!alive) return false;
       if (identity() !== who) return false; // another identity: nothing shown, nothing saved
       if (r.status === 401 || r.status === 403) {
-        put({ ...SEARCH_INITIAL, phase: "forbidden", error: COPY.forbidden });
+        put({ ...SEARCH_INITIAL, key: state.key, phase: "forbidden", error: COPY.forbidden });
         return false;
       }
       if (!still) {
