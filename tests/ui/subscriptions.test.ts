@@ -57,7 +57,7 @@ test("lecture stricte du contrat gelé (bf3cdc8) ; marqueur de retour ; purge ce
     overview({ subscription: sub({ current_period_start: null }) }),
   ])
     assert.equal(m.parseOverview(bad), null, JSON.stringify(bad).slice(0, 120));
-  same([m.returnMarker("?subscription=returned"), m.returnMarker("?a=1&subscription=cancelled"), m.returnMarker("?subscription=paid"), m.returnMarker("?subscription=managed"), m.returnMarker("")], ["returned", "cancelled", null, null, null]);
+  same([m.returnMarker("?subscription=returned"), m.returnMarker("?a=1&subscription=cancelled"), m.returnMarker("?subscription=paid"), m.returnMarker("?subscription=managed"), m.returnMarker("")], ["returned", "cancelled", null, "managed", null]);
   assert.ok(priv.PRIVATE_STORAGE_PREFIXES.some((p) => m.pendingKey(USER, 0).startsWith(p)), "covered by the central purge");
   assert.ok(m.pendingKey(USER, 0).startsWith("courant-private-subscriptions:"));
 });
@@ -98,7 +98,7 @@ function harness({ reads = [] as Model.Result[], posts = [] as ((c: Model.SubCom
   let drawn = 0;
   let s: Model.SubState = { ...m.SUB_INITIAL };
   const c = m.createSubscriptionsController({
-    api: () => ({ read: async () => (calls.push({ kind: "GET" }), reads.shift() ?? res(200, overview())), post: async (cmd) => (calls.push({ kind: "POST", cmd, stored: store?.get(m.pendingKey(who.uid, who.gen)) ?? null }), (posts.shift() ?? (() => res(503)))(cmd)) }),
+    api: () => ({ read: async () => (calls.push({ kind: "GET" }), reads.shift() ?? res(200, overview())), post: async (cmd) => (calls.push({ kind: "POST", cmd, stored: store?.get(m.pendingKey(who.uid, who.gen)) ?? null }), (posts.shift() ?? (() => res(503)))(cmd)), portal: async (cmd) => (calls.push({ kind: "PORTAL", cmd, stored: store?.get(m.pendingKey(who.uid, who.gen)) ?? null }), (posts.shift() ?? (() => res(503)))(cmd)) }),
     store: () => store,
     newId: () => (drawn++, ids.shift() ?? null),
     context: { generation: () => who.gen, userId: () => who.uid },
@@ -241,13 +241,56 @@ test("états : abonnement attesté (statut fixe, période, fin programmée, arr�
   assert.match(m.COPY.returned, /Un retour ne prouve pas qu’un abonnement a été souscrit/);
 });
 
-test("montages : profil client après les moyens de paiement, profil artisan après les données du compte ; aucun bouton d’arrêt", () => {
+const PORTAL_REAL = "https://billing.stripe.com/p/session/test_YWNjdF8xTzJ#fidPortalOpaque";
+test("portail (dec2594) : bouton seulement si portal_available ; origine EXACTE https://billing.stripe.com, fragment gardé, mémoire seule ; commande clôturée ; retour « managed » ⇒ relecture seulement", async () => {
+  same([m.safePortalUrl(PORTAL_REAL), m.safePortalUrl("https://billing.stripe.com:443/p/session/x?a=1#f")], [PORTAL_REAL, "https://billing.stripe.com:443/p/session/x?a=1#f"]);
+  for (const bad of ["https://checkout.stripe.com/c/pay/x", "http://billing.stripe.com/p/x", "https://billing.stripe.com.evil.example/p", "https://user:pw@billing.stripe.com/p", "https://billing.stripe.com:8443/p", "https://stripe.com/billing", " https://billing.stripe.com/p", "javascript:alert(1)"])
+    assert.equal(m.safePortalUrl(bad), null, bad);
+  same([m.safeCheckoutUrl(PORTAL_REAL), m.parsePortalReply({ url: PORTAL_REAL, extra: 1 }), m.returnMarker("?subscription=managed")], [null, null, "managed"]);
+  const view = (o: unknown) => renderToString(createElement(ui.SubscriptionsPanel, { role: "client", context: ctx, initial: { ...m.SUB_INITIAL, phase: "ready", overview: m.parseOverview(o) } }));
+  const off = view(overview({ subscription: sub() }));
+  assert.doesNotMatch(off, /data-subscriptions-portal|Gérer mon abonnement/, "portal_available false ⇒ no button");
+  assert.match(text(off), /pour l’arrêter, contactez l’assistance/);
+  const on = view(overview({ portal_available: true, subscription: sub() }));
+  assert.match(on, /data-subscriptions-portal=""/);
+  assert.match(text(on), /Gérer mon abonnement/);
+  assert.match(text(on), /La gestion de votre abonnement se fait sur la page sécurisée de Stripe\./);
+  assert.doesNotMatch(text(on), /résili|annul|arrêter en un clic|remboursé|débit stoppé/i, "no cancellation promise");
+  assert.doesNotMatch(text(view(UNAVAILABLE)), /Gérer mon abonnement/);
+  const mem = memStore();
+  const h = harness({ store: mem.store, reads: [res(200, overview({ subscription: sub() }))] });
+  await h.c.load();
+  same([await h.c.manage(), h.drawn(), h.calls.map((x) => x.kind)], [false, 0, ["GET"]], "portal_available false ⇒ no id, no POST");
+  const p = harness({ store: mem.store, reads: [res(200, overview({ portal_available: true, subscription: sub() }))], posts: [() => res(m.SUB_TIMEOUT), () => res(200, { url: PORTAL_REAL })] });
+  await p.c.load();
+  same(await p.c.manage(), false);
+  const first = p.calls.find((x) => x.kind === "PORTAL")!;
+  same([first.cmd, JSON.parse(first.stored!).command], [{ command_id: CID(1) }, { command_id: CID(1) }], "persisted before the POST");
+  same(await p.c.checkout(O1, true), false, "nothing new while uncertain");
+  same(await p.c.retry(), true);
+  same(p.calls.filter((x) => x.kind === "PORTAL").map((x) => JSON.stringify(x.cmd)), Array(2).fill(JSON.stringify({ command_id: CID(1) })), "uncertain reply ⇒ the same command");
+  same([p.get().portalUrl, p.get().checkoutUrl, mem.map.size, p.get().notice], [PORTAL_REAL, null, 0, m.COPY.portalReady]);
+  same([p.c.takePortalUrl(), p.c.takePortalUrl()], [PORTAL_REAL, null], "single use");
+  const bad = harness({ reads: [res(200, overview({ portal_available: true, subscription: sub() }))], posts: [() => res(200, { url: "https://checkout.stripe.com/c/pay/x" })] });
+  await bad.c.load(); await bad.c.manage();
+  same([bad.get().portalUrl, bad.get().error], [null, m.COPY.badUrl]);
+  const conflict = harness({ reads: [res(200, overview({ portal_available: true, subscription: sub() })), res(200, overview({ subscription: sub({ status: "canceled" }) }))], posts: [() => res(409)] });
+  await conflict.c.load(); await conflict.c.manage();
+  same([conflict.get().error, conflict.get().pending, conflict.calls.map((x) => x.kind)], [m.COPY.conflict, null, ["GET", "PORTAL", "GET"]], "409 ⇒ re-read, no replay");
+  const restored = harness({ store: (() => { const x = memStore(); x.map.set(m.pendingKey(USER, 0), JSON.stringify({ uid: USER, gen: 0, command: { command_id: CID(5) } })); return x.store; })() });
+  restored.c.restorePending();
+  same([restored.get().pending, restored.calls.length], [{ command_id: CID(5) }, 0], "restored portal command never sent by itself");
+  assert.doesNotMatch(m.COPY.managed, /modifié avec succès|résilié|annulé|a été arrêté/);
+  assert.match(m.COPY.managed, /Un retour ne prouve aucune modification/);
+});
+
+test("montages : profil client après les moyens de paiement, profil artisan après les données du compte ; aucune action de résiliation propre", () => {
   const client = readFileSync("components/role/client-space.tsx", "utf8");
   assert.match(client, /<SavedPaymentMethodsPanel [^\n]*\/>\n\s*<SubscriptionsPanel key=\{`\$\{session\.mode\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\} role="client" demo=\{demo\} context=\{session\.mutationContext\} \/>/);
   const artisan = readFileSync("components/role/artisan-space.tsx", "utf8");
   assert.match(artisan, /onOpenTicket=\{\(id\) => session\.go\("support", id\)\}\n\s*\/>\n\s*<SubscriptionsPanel\n\s*key=\{`\$\{session\.mode\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\}\n\s*role="artisan"\n\s*demo=\{session\.mode === "demo"\}\n\s*context=\{session\.mutationContext\}\n\s*\/>\n\s*<div className=\{styles\.profileActions\}>/);
   const src = readFileSync("components/features/subscriptions/subscriptions-panel.tsx", "utf8") + readFileSync("components/features/subscriptions/model.ts", "utf8");
-  assert.doesNotMatch(src, /billing\.stripe\.com|\/portal|cancel_subscription|action: "cancel"|Gérer mon abonnement|data-subscriptions-portal/i, "no management action in slice 1");
+  assert.doesNotMatch(src, /cancel_subscription|action: "cancel"|Résilier|résiliation|annuler l’abonnement/i, "no own cancel action, no cancellation promise (the portal is Stripe's page)");
 });
 
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
@@ -261,11 +304,33 @@ import { SubscriptionsPanel } from "./components/features/subscriptions/subscrip
 const w = window;
 const tick = (ms) => new Promise((r) => setTimeout(r, ms));
 const offer = { id: "${O1}", version: 1, label: "Offre QA", role: "artisan", amount_cents: 1234, currency: "eur", interval: "month", interval_count: 1, tax_behavior: "inclusive" };
+w.portal = async () => {
+  const calls = [], navigated = [];
+  const sub = { status: "active", cancel_at_period_end: false, current_period_start: 1788000000, current_period_end: 1790600000, observed_at: "2026-11-07T20:00:00.000Z", offer };
+  const api = {
+    read: async () => (calls.push("GET"), { status: 200, body: { state: "ready", available: true, portal_available: true, offers: [offer], checkout_pending: false, subscription: sub } }),
+    post: async () => (calls.push("POST"), { status: 503, body: null }),
+    portal: async (cmd) => (calls.push("PORTAL:" + Object.keys(cmd).join(",")), { status: 200, body: { url: "${PORTAL_REAL}" } }),
+  };
+  const map = new Map();
+  const store = () => ({ get: (k) => map.get(k) ?? null, set: (k, v) => map.set(k, v), remove: (k) => map.delete(k) });
+  const div = document.createElement("div"); document.body.appendChild(div);
+  createRoot(div).render(h(StrictMode, null, h(SubscriptionsPanel, { role: "artisan", context: { generation: () => 0, userId: () => "${USER}" }, api, store, search: "?subscription=managed", navigate: (u) => navigated.push(u), newId: () => crypto.randomUUID() })));
+  await tick(300);
+  const notice = div.querySelector("[data-subscriptions-notice]")?.textContent ?? null;
+  const before = calls.slice();
+  div.querySelector("[data-subscriptions-portal]").click(); await tick(200);
+  const navigatedBeforeClick = navigated.length;
+  const heights = [...div.querySelectorAll("button, label")].map((b) => Math.round(b.getBoundingClientRect().height)).filter((x) => x > 0);
+  div.querySelector("[data-subscriptions-portal-open]").click(); await tick(50);
+  return { notice, before, calls, navigatedBeforeClick, navigated, heights, stored: [...map.values()], overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+};
 w.run = async (search) => {
   const calls = [], navigated = [];
   const api = {
     read: async () => (calls.push("GET"), { status: 200, body: { state: "ready", available: true, portal_available: false, offers: [offer], checkout_pending: false, subscription: null } }),
     post: async (cmd) => (calls.push("POST:" + cmd.action + ":" + cmd.consent), { status: 200, body: { url: "${STRIPE_REAL}" } }),
+    portal: async () => (calls.push("PORTAL"), { status: 503, body: null }),
   };
   const map = new Map();
   const store = () => ({ get: (k) => map.get(k) ?? null, set: (k, v) => map.set(k, v), remove: (k) => map.delete(k) });
@@ -307,6 +372,15 @@ test("panneau monté (Chromium, StrictMode) : aucun POST sans consentement, Stri
     assert.ok(r.heights.every((x) => x >= 44), `targets ${r.heights.join(",")}`);
     assert.ok(r.stored.every((v) => !v.includes("checkout.stripe.com") && !v.includes("fid")), "the URL is never persisted");
     assert.ok(r.overflow <= 0);
+    assert.ok(!r.calls.includes("PORTAL"), "no portal without portal_available");
+    const q = (await page.evaluate(() => (window as unknown as { portal: () => Promise<unknown> }).portal())) as { notice: string; before: string[]; calls: string[]; navigatedBeforeClick: number; navigated: string[]; heights: number[]; stored: string[]; overflow: number };
+    assert.match(q.notice, /Un retour ne prouve aucune modification/);
+    same(q.before.filter((c) => c !== "GET"), [], "managed return ⇒ re-read only, zero POST without click");
+    same(q.calls.filter((c) => c !== "GET"), ["PORTAL:command_id"]);
+    same([q.navigatedBeforeClick, q.navigated], [0, [PORTAL_REAL]], "portal opened only on the click, exact URL");
+    assert.ok(q.heights.every((x) => x >= 44), `targets ${q.heights.join(",")}`);
+    assert.ok(q.stored.every((v) => !v.includes("billing.stripe.com")), "the portal URL is never persisted");
+    assert.ok(q.overflow <= 0);
     same(errors, []);
   } finally {
     await browser.close();

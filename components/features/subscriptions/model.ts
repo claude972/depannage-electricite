@@ -14,8 +14,11 @@
 // whose interval or tax_behavior is not in those mappings is NOT shown (nothing guessed).
 // amount_cents is the configured Price, not a collected invoice; no status is a bank confirmation.
 // Return /?subscription=returned|cancelled#profile ⇒ re-read only (proves nothing).
-// Slice 1 has no management / cancellation action: the screen says stopping is not available here yet
-// (assistance). `portal_available` is parsed (contract) but not used by this slice.
+// Billing portal (dec2594): POST /api/subscriptions/portal { command_id } → { url }, offered ONLY when
+// the server says `portal_available: true`; URL origin EXACTLY https://billing.stripe.com (same rules
+// as Checkout, fragment kept, memory only, opened on click). The portal is Stripe's page: no wording
+// promises a cancellation. Return /?subscription=managed#profile ⇒ re-read only (proves no change).
+// Without the portal, the screen says stopping is not available here yet (assistance).
 // Identity fence: the command is written + read back under `courant-private-subscriptions:` BEFORE
 // the POST (else 0 POST), keyed by uid + generation, restored only by strict parse for the same
 // identity (never sent by itself), never replayed after an identity change; 401/403 clear.
@@ -70,7 +73,12 @@ export type Overview = z.infer<typeof overviewSchema>;
 const checkoutCommand = z
   .object({ action: z.literal("checkout"), offer_id: z.string().regex(UUID), offer_version: z.number().int().positive(), command_id: z.string().regex(UUID), consent: z.literal(true) })
   .strict();
-export type SubCommand = z.infer<typeof checkoutCommand>;
+const portalCommand = z.object({ command_id: z.string().regex(UUID) }).strict();
+const command = z.union([checkoutCommand, portalCommand]);
+export type CheckoutCommand = z.infer<typeof checkoutCommand>;
+export type PortalCommand = z.infer<typeof portalCommand>;
+export type SubCommand = z.infer<typeof command>;
+export const isPortal = (c: SubCommand): c is PortalCommand => !("action" in c);
 
 export function parseOverview(body: unknown): Overview | null {
   const r = overviewSchema.safeParse(body);
@@ -149,14 +157,29 @@ export function safeCheckoutUrl(raw: unknown): string | null {
     return null;
   }
 }
+/** Same rules, origin EXACTLY https://billing.stripe.com (the backend checks the same host). */
+export function safePortalUrl(raw: unknown): string | null {
+  if (typeof raw !== "string" || raw.length > 4096 || raw !== raw.trim()) return null;
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "https:" || u.hostname !== "billing.stripe.com" || u.port !== "" || u.username || u.password || u.origin !== "https://billing.stripe.com") return null;
+    return raw;
+  } catch {
+    return null;
+  }
+}
+export function parsePortalReply(body: unknown): string | null {
+  const r = z.object({ url: z.string() }).strict().safeParse(body);
+  return r.success ? safePortalUrl(r.data.url) : null;
+}
 export function parseCheckoutReply(body: unknown): string | null {
   const r = z.object({ url: z.string() }).strict().safeParse(body);
   return r.success ? safeCheckoutUrl(r.data.url) : null;
 }
 /** Stripe return marker in the page URL (never a proof of anything). */
-export function returnMarker(search: string): "returned" | "cancelled" | null {
-  const m = /(?:^\?|&)subscription=(returned|cancelled)(?:&|$)/.exec(search);
-  return m ? (m[1] as "returned" | "cancelled") : null;
+export function returnMarker(search: string): "returned" | "cancelled" | "managed" | null {
+  const m = /(?:^\?|&)subscription=(returned|cancelled|managed)(?:&|$)/.exec(search);
+  return m ? (m[1] as "returned" | "cancelled" | "managed") : null;
 }
 
 async function timed(fetcher: typeof fetch, url: string, init: RequestInit, timeoutMs: number): Promise<Result> {
@@ -182,18 +205,20 @@ async function timed(fetcher: typeof fetch, url: string, init: RequestInit, time
     clearTimeout(timer);
   }
 }
-export type SubApi = { read(): Promise<Result>; post(cmd: SubCommand): Promise<Result> };
+export const PORTAL_PATH = "/api/subscriptions/portal";
+export type SubApi = { read(): Promise<Result>; post(cmd: CheckoutCommand): Promise<Result>; portal(cmd: PortalCommand): Promise<Result> };
 export function createSubscriptionsApi(fetcher: typeof fetch = (...a) => fetch(...a)): SubApi {
   return {
     read: () => timed(fetcher, SUB_PATH, { method: "GET" }, SUB_TIMEOUT_MS),
     post: (cmd) => timed(fetcher, SUB_PATH, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cmd) }, SUB_TIMEOUT_MS),
+    portal: (cmd) => timed(fetcher, PORTAL_PATH, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cmd) }, SUB_TIMEOUT_MS),
   };
 }
 export type Store = { get(key: string): string | null; set(key: string, value: string): void; remove(key: string): void };
 export type Context = { generation(): number; userId(): string | null };
 export const PENDING_PREFIX = "courant-private-subscriptions:";
 export const pendingKey = (uid: string | null, gen: number) => `${PENDING_PREFIX}${uid ?? "-"}:${gen}`;
-const storedSchema = z.object({ uid: z.string().min(1), gen: z.number().int().nonnegative(), command: checkoutCommand }).strict();
+const storedSchema = z.object({ uid: z.string().min(1), gen: z.number().int().nonnegative(), command }).strict();
 export function tabStore(): Store | null {
   try {
     const s = window.sessionStorage;
@@ -224,6 +249,11 @@ export const COPY = {
   subscribe: "Souscrire sur Stripe",
   open: "Ouvrir la page sécurisée de Stripe",
   ready: "La page sécurisée est prête : ouvrez-la pour confirmer le premier paiement.",
+  manage: "Gérer mon abonnement",
+  manageNote: "La gestion de votre abonnement se fait sur la page sécurisée de Stripe.",
+  openPortal: "Ouvrir la page de gestion Stripe",
+  portalReady: "La page de gestion Stripe est prête : ouvrez-la.",
+  managed: "Retour de la page de gestion Stripe : l’état a été relu. Un retour ne prouve aucune modification ; seul l’état ci-dessous, relu par le serveur, fait foi.",
   returned: "Retour de la page Stripe : l’état a été relu. Un retour ne prouve pas qu’un abonnement a été souscrit ; seul l’état ci-dessous, relu par le serveur, fait foi.",
   cancelled: "Souscription interrompue sur la page Stripe : l’état a été relu.",
   observed: (when: string) => `État relu auprès de Stripe le ${when}. Le montant affiché est le tarif de l’offre, pas une facture encaissée.`,
@@ -251,10 +281,12 @@ export type SubState = {
   pending: SubCommand | null;
   /** Validated Checkout URL, kept in memory only until the user clicks (never persisted). */
   checkoutUrl: string | null;
+  /** Validated portal URL, same rules (memory only, single use, opened on click). */
+  portalUrl: string | null;
   error: string;
   notice: string;
 };
-export const SUB_INITIAL: SubState = { phase: "loading", overview: null, busy: false, pending: null, checkoutUrl: null, error: "", notice: "" };
+export const SUB_INITIAL: SubState = { phase: "loading", overview: null, busy: false, pending: null, checkoutUrl: null, portalUrl: null, error: "", notice: "" };
 
 export function createSubscriptionsController({ api, store, newId, context, role, get, set }: { api: () => SubApi; store: () => Store | null; newId: () => string | null; context: Context; role: () => "client" | "artisan"; get: () => SubState; set: (s: SubState) => void }) {
   let alive = true;
@@ -302,16 +334,16 @@ export function createSubscriptionsController({ api, store, newId, context, role
   const send = async (cmd: SubCommand): Promise<boolean> => {
     if (inFlight) return false;
     const who = identity();
-    if (!same(who) || !checkoutCommand.safeParse(cmd).success || !persist(cmd, who)) {
+    if (!same(who) || !command.safeParse(cmd).success || !persist(cmd, who)) {
       set({ ...get(), error: COPY.storage });
       return false;
     }
     inFlight = true;
     seq++;
-    set({ ...get(), busy: true, error: "", notice: "", checkoutUrl: null });
+    set({ ...get(), busy: true, error: "", notice: "", checkoutUrl: null, portalUrl: null });
     let r: Result;
     try {
-      r = await api().post(cmd);
+      r = isPortal(cmd) ? await api().portal(cmd) : await api().post(cmd);
     } finally {
       inFlight = false;
     }
@@ -321,11 +353,11 @@ export function createSubscriptionsController({ api, store, newId, context, role
       return false;
     }
     if (r.status === 200) {
-      const url = parseCheckoutReply(r.body);
+      const url = isPortal(cmd) ? parsePortalReply(r.body) : parseCheckoutReply(r.body);
       if (url) {
         clearStored(who);
         pendingFor = null;
-        set({ ...get(), busy: false, pending: null, checkoutUrl: url, notice: COPY.ready });
+        set({ ...get(), busy: false, pending: null, ...(isPortal(cmd) ? { portalUrl: url, notice: COPY.portalReady } : { checkoutUrl: url, notice: COPY.ready }) });
         return true;
       }
       if (z.object({ url: z.string() }).strict().safeParse(r.body).success) {
@@ -362,6 +394,22 @@ export function createSubscriptionsController({ api, store, newId, context, role
         return Promise.resolve(false);
       }
       return send({ action: "checkout", offer_id: offer.id, offer_version: offer.version, command_id: cid.toLowerCase(), consent: true });
+    },
+    /** Only when the server says portal_available; every precondition before an id is drawn. */
+    manage(): Promise<boolean> {
+      const s = get();
+      if (s.phase !== "ready" || s.busy || s.pending || inFlight || s.overview?.state !== "ready" || !s.overview.portal_available) return Promise.resolve(false);
+      const cid = newId();
+      if (!cid || !UUID.test(cid)) {
+        set({ ...s, error: COPY.noUuid });
+        return Promise.resolve(false);
+      }
+      return send({ command_id: cid.toLowerCase() });
+    },
+    takePortalUrl(): string | null {
+      const u = get().portalUrl;
+      if (u) set({ ...get(), portalUrl: null });
+      return u;
     },
     retry() {
       const p = get().pending;
