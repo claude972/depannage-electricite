@@ -67,6 +67,9 @@ import { ThemeSurface } from "../app/theme-provider";
 import { ThemeToggle } from "../app/theme-toggle";
 import { CLIENT_STEPS, currentStepIndex, detailHistory, quoteDecisionState, quoteLineCells, recentRowDescriptor } from "./client-lists";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
+import { PreferencesPanel } from "../features/notifications/notification-center";
+import { FeatureUnavailable, useProbeWhenUnknown } from "./feature-unavailable";
+import { demoPreferences } from "../../lib/features/notifications/demo";
 import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
 import { TrackingAnchor } from "./tracking-anchor";
 import { useDetailPresence } from "./use-detail-presence";
@@ -2013,6 +2016,27 @@ function DocumentsView({ session, rows }: { session: Session; rows: Intervention
 }
 
 // ---- Profil ----------------------------------------------------------------------------
+// CLI-09: the notification preferences are stored by /api/notifications/preferences. The profile
+// mounts the SAME panel as the notification centre (load/save/version conflict/channel states come
+// from the server; an external channel is only « Actif » when the server reports it available).
+export function ProfileNotificationPreferences({ session }: { session: Session }) {
+  const demo = session.mode === "demo";
+  const state = session.capabilities.notifications;
+  useProbeWhenUnknown(session, "notifications", undefined, !demo);
+  if (!demo && state !== "available") {
+    if (state === "unknown") return <Loader label="Vérification des préférences de notification…" />;
+    return <FeatureUnavailable session={session} featureKey="notifications" title="Préférences de notification indisponibles" />;
+  }
+  return (
+    <PreferencesPanel
+      key={`${session.mode}:${session.profileId}`}
+      client={session.features.notifications}
+      demo={demo ? demoPreferences() : undefined}
+      writable={!demo}
+    />
+  );
+}
+
 function ProfileView({ session }: { session: Session }) {
   const demo = session.mode === "demo";
   return (
@@ -2030,10 +2054,11 @@ function ProfileView({ session }: { session: Session }) {
               await session.updateProfile(values);
             }}
           />
+          <ProfileNotificationPreferences session={session} />
           <InstallPanel />
           <Unavailable
-            title="Adresses enregistrées, moyens de paiement et préférences"
-            reason="Pas encore activé sur ce service : aucune adresse supplémentaire, aucun moyen de paiement mémorisé ni préférence de notification n’est enregistré. Chaque règlement se fait sur la plateforme, au moment voulu."
+            title="Adresses enregistrées et moyens de paiement"
+            reason="Pas encore activé sur ce service : aucune adresse supplémentaire ni aucun moyen de paiement n’est mémorisé. Chaque règlement se fait sur la plateforme, au moment voulu."
             blocker="CLI-09"
           />
         </div>
