@@ -3,7 +3,8 @@
 // subscription read by the server (status, period, scheduled end), or the server's offers with their
 // terms taken ONLY from server fields. Subscribing needs an explicit consent that states the automatic
 // renewal and that stopping is not available here yet (assistance), then an explicit click on the
-// validated Stripe URL. No cancellation / portal button in this slice. A Stripe return only re-reads.
+// validated Stripe URL. « Gérer mon abonnement » (Stripe Billing portal) only when the server says
+// portal_available; no wording promises a cancellation. A Stripe return only re-reads.
 // Logic and identity fence in ./model.
 import { useEffect, useId, useRef, useState } from "react";
 import { COPY, SUB_INITIAL, STATUS_LABEL, canOffer, createSubscriptionsApi, createSubscriptionsController, formatDay, formatMoment, isTerminal, offerTerms, returnMarker, tabStore, visibleOffers, type Context, type RawOffer, type ReadyOverview, type Store, type SubApi, type SubState } from "./model";
@@ -48,7 +49,7 @@ function Terms({ offer }: { offer: RawOffer }) {
   );
 }
 
-function Current({ s }: { s: NonNullable<ReadyOverview["subscription"]> }) {
+function Current({ s, portal }: { s: NonNullable<ReadyOverview["subscription"]>; portal: boolean }) {
   return (
     <div className={styles.current} data-subscription-status={s.status}>
       <p className={styles.row}>
@@ -61,7 +62,7 @@ function Current({ s }: { s: NonNullable<ReadyOverview["subscription"]> }) {
       {!isTerminal(s.status) && <p className={styles.note}>{COPY.period(formatDay(s.current_period_start), formatDay(s.current_period_end))}</p>}
       {s.cancel_at_period_end && !isTerminal(s.status) && <p className={styles.note} data-subscription-ends="">{COPY.endsAt(formatDay(s.current_period_end))}</p>}
       <p className={styles.muted}>{COPY.observed(formatMoment(s.observed_at))}</p>
-      {!isTerminal(s.status) && <p className={styles.note} data-subscription-stop="">{COPY.stop}</p>}
+      {portal ? <p className={styles.note} data-subscription-manage-note="">{COPY.manageNote}</p> : !isTerminal(s.status) && <p className={styles.note} data-subscription-stop="">{COPY.stop}</p>}
     </div>
   );
 }
@@ -85,7 +86,7 @@ function Live({ role, context, api, store = tabStore, newId = uuid, navigate, se
       c.restorePending();
       // A Stripe return is only a reason to re-read: it proves nothing.
       const marker = returnMarker(search ?? (typeof window !== "undefined" ? window.location.search : ""));
-      void c.load(marker === "returned" ? COPY.returned : marker === "cancelled" ? COPY.cancelled : undefined);
+      void c.load(marker === "returned" ? COPY.returned : marker === "cancelled" ? COPY.cancelled : marker === "managed" ? COPY.managed : undefined);
     }
     return () => {
       c.stop();
@@ -101,6 +102,12 @@ function Live({ role, context, api, store = tabStore, newId = uuid, navigate, se
   const terms = selected ? offerTerms(selected) : null;
   const locked = state.busy || !!state.pending;
   const o = state.overview;
+  const openPortal = () => {
+    const url = ctrl.current?.takePortalUrl();
+    if (!url) return;
+    if (latest.current.navigate) latest.current.navigate(url);
+    else window.location.assign(url);
+  };
   const open = () => {
     const url = ctrl.current?.takeCheckoutUrl();
     if (!url) return;
@@ -133,7 +140,18 @@ function Live({ role, context, api, store = tabStore, newId = uuid, navigate, se
       {state.phase === "ready" && o?.state === "unavailable" && <p className={styles.note} data-subscriptions-not-read="">{COPY.notRead}</p>}
       {state.phase === "ready" && o?.state === "ready" && (
         <>
-          {o.subscription && <Current s={o.subscription} />}
+          {o.subscription && <Current s={o.subscription} portal={o.portal_available} />}
+          {(o.portal_available || state.portalUrl) && (
+            <div className={styles.add} data-subscriptions-manage="">
+              {state.portalUrl ? (
+                <button type="button" className={`${styles.button} ${styles.primary}`} onClick={openPortal} data-subscriptions-portal-open="">{COPY.openPortal}</button>
+              ) : (
+                <button type="button" className={styles.button} disabled={locked} onClick={() => void ctrl.current?.manage()} data-subscriptions-portal="">
+                  {state.busy ? "Préparation…" : COPY.manage}
+                </button>
+              )}
+            </div>
+          )}
           {o.checkout_pending && !state.checkoutUrl && <p className={styles.note} data-subscriptions-pending="">{COPY.pending}</p>}
           {o.subscription && !isTerminal(o.subscription.status) && <p className={styles.muted} data-subscriptions-running="">{COPY.running}</p>}
           {canOffer(o) && offers.length === 0 && <p className={styles.note} data-subscriptions-none="">{COPY.none}</p>}
