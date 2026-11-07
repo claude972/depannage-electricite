@@ -12,8 +12,9 @@ create schema storage;create table storage.buckets(id text primary key,name text
 create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text);alter table storage.objects enable row level security;`);
 const dir=new URL('../supabase/migrations/',import.meta.url);
 const names=(await readdir(dir)).filter(n=>n.endsWith('.sql')).sort();
-for(const name of names)await db.exec((await isolatedMigrationSql(db, name, await readFile(new URL(name,dir),'utf8'))).replace('create extension if not exists pgcrypto;','-- extension omitted only in local harness'));
-console.log(`PASS: all ${names.length} migrations execute under isolated PostgreSQL/Auth/Storage stubs`);
+const executionMigration=names.find(n=>n.endsWith('_refund_execution.sql'));assert.ok(executionMigration,'reviewed refundexecution migration required');
+for(const name of names.filter(n=>n<executionMigration))await db.exec((await isolatedMigrationSql(db, name, await readFile(new URL(name,dir),'utf8'))).replace('create extension if not exists pgcrypto;','-- extension omitted only in local harness'));
+console.log(`PASS: historical baseline ${names.filter(n=>n<executionMigration).length} migrations executes before legacy settlement fixtures; execution guard is applied after them`);
 const ids={};let i=1;
 for(const actor of['client','other','manager','artisan','otherArtisan','admin','admin2','finRead','finWrite','moderator','auditor']){
  ids[actor]=`30000000-0000-4000-8000-${String(i++).padStart(12,'0')}`;
@@ -302,4 +303,13 @@ await db.exec('set local role authenticated');await db.query("select set_config(
 await denied(db.query('select public.platform_reconcile(100)'),'53300');
 await db.exec('rollback');
 console.log('PASS: per-account platform limits reject excess atomically');
+// Legacy commission/refund/invoice fixtures intentionally execute their historical contract.
+// New operations still require the durable intent: do not relax the production wrapper.
+const historicalRefunds=(await db.query('select row_to_json(r)v from public.platform_refund_requests r order by id')).rows;
+const historicalLedger=(await db.query("select row_to_json(l)v from public.platform_ledger_entries l where entry_kind='refund_settled'order by id")).rows;
+for(const name of names.filter(n=>n>=executionMigration))await db.exec((await isolatedMigrationSql(db,name,await readFile(new URL(name,dir),'utf8'))).replace('create extension if not exists pgcrypto;','-- extension omitted only in local harness'));
+assert.deepEqual((await db.query('select row_to_json(r)v from public.platform_refund_requests r order by id')).rows,historicalRefunds);
+assert.deepEqual((await db.query("select row_to_json(l)v from public.platform_ledger_entries l where entry_kind='refund_settled'order by id")).rows,historicalLedger);
+await denied(service(settle,[rr.request.id,'evt_NEW_UNQUALIFIED_QA','refund.updated','cs_test_1','re_NEW_UNQUALIFIED_QA','succeeded',5000,'eur']),'P0001');
+console.log(`PASS: all ${names.length} migrations applied; historical refunds/ledger unchanged and new unqualified settlement refused`);
 await db.close();
