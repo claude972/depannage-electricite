@@ -90,6 +90,7 @@ import { PlatformPayAction } from "../app/platform-pay";
 import { SavedPaymentMethodsPanel } from "../features/saved-payment-methods/saved-payment-methods-panel";
 import { PhotoReviewPanel } from "../features/photo-review/photo-review-panel";
 import { reviewImage } from "../features/photo-review/model";
+import { SubscriptionsPanel } from "../features/subscriptions/subscriptions-panel";
 
 const CLIENT_VIEWS: readonly View[] = [
   "overview",
@@ -2118,6 +2119,7 @@ function ProfileView({ session }: { session: Session }) {
             onOpenTicket={(id) => session.go("support", id)}
           />
           <SavedPaymentMethodsPanel key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} demo={demo} context={session.mutationContext} />
+          <SubscriptionsPanel key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} role="client" demo={demo} context={session.mutationContext} />
         </div>
         <aside className={styles.aside}>
           <section className={styles.asideCard}>

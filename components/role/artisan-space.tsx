@@ -54,6 +54,7 @@ import {
 } from "../app/ui";
 import { DocumentManager, MessageCenter, ProfileForm } from "../app/forms";
 import { AccountDataPanel } from "../features/account-data/account-data-panel";
+import { SubscriptionsPanel } from "../features/subscriptions/subscriptions-panel";
 import {
   ARTISAN_STATUS,
   CATEGORIES,
@@ -3375,6 +3376,12 @@ function Profile({
         demo={session.mode === "demo"}
         context={session.mutationContext}
         onOpenTicket={(id) => session.go("support", id)}
+      />
+      <SubscriptionsPanel
+        key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}
+        role="artisan"
+        demo={session.mode === "demo"}
+        context={session.mutationContext}
       />
       <div className={styles.profileActions}>
         <button
