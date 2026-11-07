@@ -23,6 +23,11 @@ const ACCESS: Record<string, Access> = {
 };
 const audit: Row[] = Array.from({ length: 57 }, (_, i) => ({ id: 57 - i, actor_id: uuid(1), action: i % 2 ? "operator_scope_granted" : "refund_requested", target_kind: i % 2 ? "operator" : "refund_request", target_id: uuid(2), details: {}, created_at: "2026-10-30T10:00:00Z" }));
 const refunds: Row[] = Array.from({ length: 31 }, (_, i) => ({ id: uuid(i + 1, "60000000"), request_id: uuid(i + 1, "61000000"), payment_id: uuid(1, "70000000"), amount_cents: 1000 + i, currency: "eur", reason: "Motif de démonstration suffisant.", status: ["requested", "approved", "settled"][i % 3], version: 1, requested_by: uuid(1), created_at: `2026-10-30T10:00:${String(59 - i).padStart(2, "0")}.000000+00:00`, updated_at: "2026-10-30T10:00:00Z", decided_by: null, decided_at: null, decision_note: "", provider_reference: null, settled_event_id: null, settled_at: null }));
+const operatorGrants: Row[] = [21, 22, 23].map(n => ({ id: uuid(n + 100), user_id: uuid(n), scope: "finance_read", status: "active", note: "", granted_at: "2026-10-30T10:00:00Z" }));
+const operatorProfiles: Row[] = [
+  { id: uuid(21), full_name: "Artisan de test", role: "artisan" },
+  { id: uuid(22), full_name: "Gestionnaire de test", role: "manager" },
+];
 function harness(actor: keyof typeof ACCESS | null, env: Record<string, string> = {}) {
   const calls: { rpc?: string; args?: Row; table?: string; url: URL; method: string }[] = [];
   const fetch: typeof globalThis.fetch = async (input, init) => {
@@ -35,6 +40,8 @@ function harness(actor: keyof typeof ACCESS | null, env: Record<string, string> 
     }
     calls.push({ table, url, method });
     let rows: Row[] = table === "platform_audit" ? audit : table === "platform_refund_requests" ? refunds : table === "platform_settings" ? [{ key: "commission_bps", value: { bps: 1500 }, version: 2 }] : [];
+    if (table === "platform_operator_grants") rows = operatorGrants;
+    if (table === "profiles") rows = operatorProfiles;
     for (const [key, value] of url.searchParams) {
       if (key === "or") { const m = /^\(created_at\.lt\."([^"]+)",and\(created_at\.eq\."([^"]+)",id\.lt\.([^)]+)\)\)$/.exec(value); assert.ok(m, value); rows = rows.filter((r) => String(r.created_at) < m[1] || (String(r.created_at) === m[2] && String(r.id) < m[3])); }
       else if (["select", "order", "limit"].includes(key)) continue;
@@ -95,6 +102,16 @@ test("every route requires a session and the matching server-side scope; menus g
       if (!allowed.includes(actor)) assert.ok(!h.calls.some((c) => c.rpc && c.rpc !== "platform_access" || c.table), `${path} as ${actor} must not touch data`);
     }
   }
+});
+test("operator list returns the profile role and leaves absent profiles without a destination", async () => {
+  const h = harness("admin");
+  const response = await h.route("operators").GET(h.request("/operators"));
+  assert.equal(response.status, 200);
+  const result = await response.json() as { grants: { user_id: string; account_role: string | null }[] };
+  assert.deepEqual(Object.fromEntries(result.grants.map(g => [g.user_id, g.account_role])), {
+    [uuid(21)]: "artisan", [uuid(22)]: "manager", [uuid(23)]: null,
+  });
+  assert.equal(h.calls.find(c => c.table === "profiles")?.url.searchParams.get("select"), "id,full_name,role");
 });
 test("mutations enforce origin, strict bodies and never accept a commission rate or a refund execution", async () => {
   const h = harness("finWrite");

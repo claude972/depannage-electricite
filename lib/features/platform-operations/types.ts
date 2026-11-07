@@ -30,6 +30,7 @@ export type ListQuery = { limit?: number; cursor?: string | null } & Record<stri
 
 export type OperatorGrant = {
   id: string; user_id: string; full_name?: string | null; scope: PlatformScopeKey; status: "active" | "revoked"; note: string;
+  account_role?: "client" | "manager" | "artisan" | "admin" | null;
   granted_by: string; granted_at: string; revoked_by: string | null; revoked_at: string | null; revoke_note: string;
 };
 export type AuditEntry = { id: number; actor_id: string | null; action: string; target_kind: string; target_id: string; details: Record<string, unknown>; created_at: string };
