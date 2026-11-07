@@ -78,3 +78,5 @@ ROOT réalise la lecture paginée des données du compte sous la session courant
 ### PUB-03 — vérification de couverture publiée
 
 ROOT implémente la publication versionnée de codes postaux exacts par le Super Admin et la lecture publique d'un seul code. Aucun code prérempli. Le retrait rend la couverture inconnue. La consultation renseigne le territoire publié ; le moteur d'attribution garde son éligibilité existante. Claude raccorde la vérification publique et l'éditeur. Tester retrait, conflit, rejeu et refus de rôle.
+
+- ENT-12 — Astra, backend exclusif circuits explicites d’approbations, branche codex/advanced-approvals base 4c9d7a1 ; docs/missions/ENT12_ADVANCED_APPROVALS.md. Aucun cloud/UI.
