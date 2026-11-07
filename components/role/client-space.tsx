@@ -86,6 +86,7 @@ import { ClientAddressesPanel, usePreferredAddress } from "../features/client-ad
 import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
 import { AppointmentReminderPanel } from "../features/appointment-reminders/appointment-reminder-panel";
 import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-panel";
+import { ContractSourceLine } from "../features/quote-grid/quote-grid";
 import { PlatformPayAction } from "../app/platform-pay";
 
 const CLIENT_VIEWS: readonly View[] = [
@@ -1741,6 +1742,8 @@ function QuoteView({
         subtitle={`Reçu le ${dateTime(quote.created_at)} — ${category(i.category).label}, ${shortId(i.id)}`}
         back={{ label: "Retour au dossier", onClick: () => session.openIntervention(i.id, quote.id) }}
       />
+      {/* ENT-13: contract source only when the server states it. */}
+      <ContractSourceLine key={quote.id} quoteId={quote.id} demo={session.mode === "demo"} />
       <div className={styles.quoteNote}>
         <Icon name="shield" size={26} />
         <div>

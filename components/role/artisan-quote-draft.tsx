@@ -14,6 +14,8 @@ import { dateTime, money, quoteRef } from "../app/format";
 import styles from "./artisan-quote-draft.module.css";
 import { quoteLineTotalCents, quoteTotals } from "./artisan-lists";
 import { TAX_RATE_HINT, TAX_RATE_OPTIONS, TAX_RATE_PLACEHOLDER, TAX_RATE_REQUIRED, parseTaxRateInput, taxRateLabel, type TaxRate } from "../app/tax-rate";
+import { QuoteGridPicker } from "../features/quote-grid/quote-grid";
+import { COPY as GRID_COPY, type GridSource } from "../features/quote-grid/model";
 
 type EditLine = { label: string; quantity: string; price: string };
 type LineErrors = { label?: string; quantity?: string; price?: string };
@@ -157,6 +159,8 @@ export function QuoteDraftEditor({
   const [conflict, setConflict] = useState<Conflict | null>(null);
   const [failure, setFailure] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  /** ENT-13: grid the draft version `version` comes from (server-stated); dropped by any manual edit. */
+  const [gridLink, setGridLink] = useState<{ source: GridSource; version: number } | null>(null);
   // Callbacks read the latest session without re-running the load effect on every render.
   const sessionRef = useRef(session);
   sessionRef.current = session;
@@ -202,6 +206,9 @@ export function QuoteDraftEditor({
   const publishable = saveValid && missing.length === 0;
   const draft = envelope?.draft ?? null;
   const dirty = draft ? !sameDraft(parsed, taxRate, draft.lines, draft.tax_rate) : true;
+  // Grid-derived draft, untouched: « Enregistrer » would only re-save the same draft (disabled).
+  const gridLinked = !!gridLink && !!envelope && envelope.version === gridLink.version && !dirty;
+  const gridDropped = !!gridLink && !gridLinked;
   const sent = newestSent(session.data.quotes, interventionId);
   // A quote published outside this draft (other tab, direct send): the server would answer
   // 409 anyway; say it before the attempt and require a reload.
@@ -258,6 +265,7 @@ export function QuoteDraftEditor({
     );
     if (result.ok) {
       setEnvelope(result.envelope);
+      setGridLink(null);
       setLines(DEFAULT_LINES);
       setTaxRate(null);
       setTouched(false);
@@ -421,6 +429,28 @@ export function QuoteDraftEditor({
           </span>
         </p>
       )}
+
+      {/* ENT-13: only the grid the organisation owner attached to THIS dossier is offered. */}
+      {phase === "ready" && envelope && (
+        <QuoteGridPicker
+          interventionId={interventionId}
+          artisanId={session.profileId}
+          envelope={envelope}
+          taxRate={taxRate}
+          dirty={!!draft && dirty}
+          disabled={locked}
+          demo={session.mode === "demo"}
+          onCurrent={(source) => setGridLink(source && envelope ? { source, version: envelope.version } : null)}
+          onApplied={(env, source) => {
+            applyEnvelope(env, true);
+            setConflict(null);
+            setGridLink({ source, version: env.version });
+          }}
+          onConflict={(message) => setConflict({ message })}
+        />
+      )}
+      {gridLinked && gridLink && <p className={styles.note} data-quote-grid-linked="">{GRID_COPY.linked(gridLink.source)}</p>}
+      {gridDropped && <p className={styles.note} role="status" data-quote-grid-dropped="">{GRID_COPY.unlinked}</p>}
 
       {conflict && (
         <div className={`alert warning ${styles.conflict}`} role="alert">
@@ -633,8 +663,9 @@ export function QuoteDraftEditor({
         <button
           type="button"
           className="button outline"
-          disabled={locked || !saveValid}
+          disabled={locked || !saveValid || gridLinked}
           onClick={() => void save()}
+          data-quote-draft-save=""
         >
           {pending === "save" ? "Enregistrement…" : "Enregistrer le brouillon"}
         </button>
