@@ -174,7 +174,7 @@ test("démo : offres locales, aucun appel réseau, résumé depuis les offres de
 test("wiring: the « available » segment mounts the paged leaf (live: no exhaustive count; demo: anonymized local offers)", async () => {
   const { readFileSync } = await import("node:fs");
   const src = readFileSync("components/role/artisan-space.tsx", "utf8");
-  assert.match(src, /<AvailableMissionsPanel\s+key=\{`\$\{session\.mutationContext\.userId\(\) \?\? "-"\}\|\$\{session\.mutationContext\.generation\(\)\}\|\$\{demo \? "demo" : "live"\}`\}/);
+  assert.match(src, /<AvailableMissionsPanel\s+key=\{`\$\{session\.mutationContext\.userId\(\) \?\? "-"\}\|\$\{session\.mutationContext\.generation\(\)\}\|\$\{demo \? "demo" : "live"\}\|\$\{radiusRev\}`\}/, "keyed by identity + the mission-radius revision (a confirmed radius restarts the offers)");
   assert.match(src, /onAccept=\{\(id\) => session\.action\(id, "accept_mission"\)\}/);
   assert.match(src, /onOpenAccepted=\{\(id\) => session\.openIntervention\(id\)\}/);
   assert.match(src, /demoItems=\{demo \? offers\.map\(toDemoOffer\) : undefined\}/);
