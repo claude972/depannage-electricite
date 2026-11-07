@@ -35,12 +35,13 @@ export type MissionSegment = "available" | "active" | "done";
 
 /** Segments de la liste Missions avec leurs compteurs réels (offres visibles, en cours, terminées). */
 export function missionSegmentOptions(counts: {
-  offers: number;
+  /** null = offers are paged by the server (no exhaustive count is known): label without a number. */
+  offers: number | null;
   active: number;
   done: number;
 }): readonly (readonly [MissionSegment, string])[] {
   return [
-    ["available", `Disponibles (${counts.offers})`],
+    ["available", counts.offers === null ? "Disponibles" : `Disponibles (${counts.offers})`],
     ["active", `En cours (${counts.active})`],
     ["done", `Terminées (${counts.done})`],
   ] as const;

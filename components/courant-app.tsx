@@ -132,6 +132,7 @@ import { ClientSpace } from "./role/client-space";
 import { ArtisanSpace } from "./role/artisan-space";
 import { EnterpriseSpace } from "./role/enterprise-space";
 import { AdminSpace } from "./role/admin-space";
+import { isTaxRate } from "./app/tax-rate";
 
 const DRAFT_KEY = "courant-request-draft";
 const INVITE_KEY = "courant-invitation-code";
@@ -757,7 +758,9 @@ export default function CourantApp() {
     }
     if (name === "send_quote") {
       const lines = extra?.lines as Line[];
-      const rate = Number(extra?.tax_rate);
+      // Explicit supported rate only: no coercion (Number(null) would be 0), no default.
+      const rate = extra?.tax_rate;
+      if (!isTaxRate(rate)) throw new Error("Choisissez le taux de TVA applicable avant d’envoyer le devis.");
       const subtotal = lines.reduce(
         (n, l) => n + Math.round(l.quantity * l.unit_price_cents),
         0,

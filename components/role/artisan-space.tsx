@@ -94,6 +94,8 @@ import { anchorEntryVisible, leafScope, platformEntries } from "./anchors";
 import { PlatformPage } from "./platform-anchor";
 import { FeatureUnavailable } from "./feature-unavailable";
 import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
+import { AvailableMissionsPanel } from "../features/available-missions/available-missions-panel";
+import type { MissionOffer } from "../features/available-missions/available-missions-model";
 import {
   applicationSteps,
   appointmentSlotState,
@@ -1065,6 +1067,20 @@ function Overview({
 }
 
 // ---- Missions list -------------------------------------------------------------------------
+/** Demo only: the anonymized offer shape of the paged feed (never address, contact or full postcode). */
+function toDemoOffer(i: Intervention): MissionOffer {
+  return {
+    id: i.id,
+    category: i.category,
+    city: i.city,
+    postal_code: `${i.postal_code.slice(0, 3)}**`,
+    urgency: i.urgency,
+    status: "requested",
+    estimate_min_cents: i.estimate_min_cents,
+    estimate_max_cents: i.estimate_max_cents,
+    created_at: i.created_at,
+  };
+}
 function Missions({ session, declinedIds }: { session: Session; declinedIds: string[] }) {
   const [segment, setSegment] = useState<MissionSegment>("available");
   const m = artisanMissions(session.data.interventions, session.profileId);
@@ -1073,7 +1089,9 @@ function Missions({ session, declinedIds }: { session: Session; declinedIds: str
   const done = [...m.awaitingPayment, ...m.done].sort(
     (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
   );
-  const options = missionSegmentOptions({ offers: offers.length, active: m.active.length, done: done.length });
+  const demo = session.mode === "demo";
+  // Live: offers come from the paged server feed (beyond 100), so no exhaustive count is shown.
+  const options = missionSegmentOptions({ offers: demo ? offers.length : null, active: m.active.length, done: done.length });
   const open = (id: string) => session.go("mission", id);
   return (
     <>
@@ -1084,21 +1102,17 @@ function Missions({ session, declinedIds }: { session: Session; declinedIds: str
       <div className={styles.segmentsWrap}>
         <Segments label="Filtrer les missions" value={segment} options={options} onChange={setSegment} />
       </div>
-      {segment === "available" &&
-        (offers.length ? (
-          <div className={styles.rows}>
-            {offers.map((o) => (
-              <OfferRow key={o.id} intervention={o} onOpen={() => open(o.id)} />
-            ))}
-          </div>
-        ) : (
-          <section className="panel">
-            <Empty icon="search" title="Aucune mission disponible">
-              Les demandes sans artisan affecté apparaîtront ici, anonymisées jusqu’à l’acceptation.
-            </Empty>
-          </section>
-        ))}
-      {segment === "available" && hidden > 0 && (
+      {segment === "available" && (
+        <AvailableMissionsPanel
+          key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${demo ? "demo" : "live"}`}
+          context={session.mutationContext}
+          demo={demo}
+          demoItems={demo ? offers.map(toDemoOffer) : undefined}
+          onAccept={(id) => session.action(id, "accept_mission")}
+          onOpenAccepted={(id) => session.openIntervention(id)}
+        />
+      )}
+      {segment === "available" && demo && hidden > 0 && (
         <p className={styles.sectionNote}>
           {hidden} offre{hidden > 1 ? "s" : ""} refusée{hidden > 1 ? "s" : ""} pendant cette
           session, masquée{hidden > 1 ? "s" : ""}.
