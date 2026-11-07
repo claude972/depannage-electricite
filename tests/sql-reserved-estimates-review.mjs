@@ -68,9 +68,9 @@ try {
  await deny(q("select indicative_price_private.create_reserved_intervention('socket','QA description','QA adresse','97200','QA ville','scheduled',null,1,1,2)"));
  await as(admin);const baseline=await one('select public.read_indicative_prices()v');const changed=structuredClone(baseline.ranges);for(const r of Object.values(changed)){r.min_cents+=1000;r.max_cents+=1000}
  await q('select public.stage_indicative_prices($1,1,$2,$3)',[crypto.randomUUID(),changed,'QA changement futur non publié']);
- await as(null,'postgres');await deny(q('update indicative_price_private.control set active_version=2'),'23514');
+ await as(null,'postgres');await as(admin);await deny(q('select public.publish_indicative_prices($1,1,2,$2)',[crypto.randomUUID(),'QA publication disabled']),'P0001');await as(null,'postgres');
  // Test-only simulated future publication, rolled back. Production has no activation path.
- await db.exec('begin');await db.exec('alter table indicative_price_private.control drop constraint control_active_version_check');await db.exec('update indicative_price_private.control set active_version=2');
+ await db.exec('begin');await db.exec('update indicative_price_private.publication_gate set enabled=true');await as(admin);await q('select public.publish_indicative_prices($1,1,2,$2)',[crypto.randomUUID(),'QA publication transaction annulée']);
  await as(actor);{const now=await prepare();eq(now.estimate,{version:1,min_cents:8000,max_cents:18000,currency:'eur'});delete now.estimate;eq(now,before);}
  await as(null,'service_role');await q("select public.record_phone_booking_provider($1,$2,'cs_test_QAreserved','pi_QAreserved','session')",[actor,key]);await q("select public.record_phone_booking_provider($1,$2,'cs_test_QAreserved','pi_QAreserved','authorize',18000,'eur','requires_capture')",[actor,key]);
  await as(actor);const completed=await one('select public.submit_phone_booking($1)v',[key]);eq([completed.intervention.estimate_min_cents,completed.intervention.estimate_max_cents],[8000,18000]);
@@ -79,7 +79,7 @@ try {
  await as(null,'postgres');await deny(q('update public.interventions set estimate_max_cents=19000 where id=$1',[once.id]),'P0001');
  // An expected failure aborts the test transaction; use rollback and start a fresh simulation.
  await db.exec('rollback');
- await db.exec('begin');await db.exec('alter table indicative_price_private.control drop constraint control_active_version_check');await db.exec('update indicative_price_private.control set active_version=2');
+ await db.exec('begin');await db.exec('update indicative_price_private.publication_gate set enabled=true');await as(admin);await q('select public.publish_indicative_prices($1,1,2,$2)',[crypto.randomUUID(),'QA publication transaction annulée']);
  const guardActor=crypto.randomUUID();await as(null,'postgres');await q("insert into auth.users(id,raw_user_meta_data,email_confirmed_at)values($1,'{\"full_name\":\"QA stale\"}',now())",[guardActor]);
  for(const action of ['create_intervention','prepare_phone_booking'])await q("insert into public.action_limits(actor_id,action,window_start,count)values($1,$2,date_trunc('minute',now()),100)",[guardActor,action]);
  const refuse=async(sql,args=[])=>{await db.exec('savepoint reviewed_refusal');await deny(q(sql,args),'P0001');await db.exec('rollback to savepoint reviewed_refusal');await db.exec('release savepoint reviewed_refusal')};
