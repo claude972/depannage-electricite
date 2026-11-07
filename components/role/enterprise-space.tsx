@@ -103,6 +103,10 @@ import { SiteEnergyPanel } from "../features/energy/site-energy-panel";
 import { SiteContactsPanel } from "../features/site-contacts/site-contacts-panel";
 import { SiteAreasPanel } from "../features/site-areas/site-areas-panel";
 import { OrganizationSitesList, SiteSettingsPanel } from "../features/site-lifecycle/site-lifecycle-panels";
+import { SiteDirectLoader } from "../features/site-lifecycle/site-direct";
+import { SiteAssetLinksPanel } from "../features/site-asset-links/site-asset-links-panel";
+import type { AssetSource } from "../features/site-asset-links/asset-links-model";
+import { createAreasApi, parseAreasPage } from "../features/site-areas/areas-model";
 import { CoOwnershipPanel } from "../features/co-ownership/co-ownership-panel";
 import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
 import { PlatformPayAction } from "../app/platform-pay";
@@ -1660,6 +1664,18 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
 
           <EnterpriseTimeline steps={timeline} cancelled={intervention.status === "cancelled"} />
 
+          {/* ENT-07/08: explicit equipment / zone links of THIS dossier (site-scoped route). */}
+          {intervention.site_id && (
+            <SiteAssetLinksPanel
+              siteId={intervention.site_id}
+              interventionId={intervention.id}
+              assets={siteAssetSource(session, intervention.site_id)}
+              context={session.mutationContext}
+              demo={demo}
+              readOnly={!canOperate}
+            />
+          )}
+
           {["accepted", "in_progress"].includes(intervention.status) && (
             <TrackingAnchor
               session={c.session}
@@ -2416,18 +2432,8 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
   // « Tous les sites » too, where no global active site triggers the controller probe).
   useProbeWhenUnknown(c.session, "siteOperations", { siteId: id }, Boolean(site));
   const [tab, setTab] = useState<"open" | "past">("open");
-  if (!site)
-    return (
-      <Empty
-        icon="building"
-        title="Site introuvable dans l’organisation active"
-        action={
-          <button type="button" className="button outline" onClick={() => c.go("sites")}>
-            Retour aux sites
-          </button>
-        }
-      />
-    );
+  // Absent from the workspace cache (portfolio page > 1, archived site): exact server read.
+  if (!site) return <DirectSiteSheet c={c} id={id} />;
   const f = siteFigures(site, session.data);
   const interventions = byDateDesc(session.data.interventions.filter((i) => i.site_id === site.id));
   const open = interventions.filter((i) => OPEN_STATUSES.includes(i.status));
@@ -2840,6 +2846,115 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
       </div>
     </>
   );
+}
+
+/** Site opened by id but absent from the workspace: read by GET /api/sites/:id/settings under the
+ *  current identity, refused for another organisation. An archived site is strictly read-only;
+ *  dossiers listed are only those already loaded (never claimed exhaustive). */
+function DirectSiteSheet({ c, id }: { c: Ctx; id: string }) {
+  const { session } = c;
+  const back = (
+    <button type="button" className="button outline" onClick={() => c.go("sites")}>
+      Retour aux sites
+    </button>
+  );
+  return (
+    <SiteDirectLoader
+      siteId={id}
+      organizationId={c.organization?.id ?? null}
+      context={session.mutationContext}
+      demo={session.mode === "demo"}
+      back={back}
+      render={(site, state, reload) => {
+        const archived = site.archived_at !== null;
+        const loaded = byDateDesc(session.data.interventions.filter((i) => i.site_id === site.id));
+        return (
+          <div data-site-sheet="direct" data-site-archived={archived ? "" : undefined}>
+            <button type="button" className="back-link" onClick={() => c.go("sites")}>
+              <Icon name="back" size={17} />
+              Retour aux sites
+            </button>
+            <div className={styles.sheetHeader}>
+              <div>
+                <span className={styles.kicker}>Fiche de site</span>
+                <h1>
+                  {site.name}
+                  <Tag tone="blue">{SITE_TYPES[site.type] || "Site"}</Tag>
+                  {archived && <Tag tone="neutral">Archivé</Tag>}
+                </h1>
+                <p>
+                  <Icon name="location" size={15} />
+                  {site.address}
+                </p>
+              </div>
+              <div className={styles.sheetActions}>
+                <ReadOnlyNote
+                  reason={
+                    archived
+                      ? "Site archivé : consultation seule, aucune demande ni modification."
+                      : "Site absent des données chargées : seules ses informations serveur sont affichées ici."
+                  }
+                />
+              </div>
+            </div>
+            <div className={styles.twoCol}>
+              <section className="panel" aria-labelledby="site-direct-interventions">
+                <h2 id="site-direct-interventions">Interventions chargées</h2>
+                {loaded.length ? (
+                  loaded.map((i) => (
+                    <button key={i.id} type="button" className={cx(styles.listRow, styles.listRowButton, styles.datedRow)} onClick={() => session.openIntervention(i.id)}>
+                      <time dateTime={i.created_at}>{date(i.created_at)}</time>
+                      <section>
+                        <strong>{category(i.category).label}</strong>
+                        <small>{shortId(i.id)} · {dateTime(i.created_at)}</small>
+                      </section>
+                      <Badge status={i.status} />
+                      <Icon name="arrow" size={16} />
+                    </button>
+                  ))
+                ) : (
+                  <p className={styles.muted}>Aucun dossier de ce site parmi les interventions chargées.</p>
+                )}
+                <p className={styles.note}>Seuls les dossiers déjà chargés sont listés : la liste peut être incomplète.</p>
+              </section>
+              <SiteSettingsPanel
+                siteId={site.id}
+                context={session.mutationContext}
+                demo={false}
+                initial={state}
+                onChanged={() => {
+                  reload();
+                  void session.refresh();
+                }}
+              />
+              {!archived && <SiteAreasPanel siteId={site.id} context={session.mutationContext} demo={false} />}
+              {!archived && <SiteContactsPanel siteId={site.id} context={session.mutationContext} />}
+            </div>
+          </div>
+        );
+      }}
+    />
+  );
+}
+
+/** Asset labels and choices from the EXISTING APIs only (first page of active areas + the site
+ *  operations equipment). Partial lists are reported as such; nothing is guessed. */
+function siteAssetSource(session: Session, siteId: string): AssetSource {
+  return async () => {
+    const [areas, ops] = await Promise.all([
+      createAreasApi().list(siteId, null).catch(() => null),
+      session.features.siteOperations.load(siteId).catch(() => null),
+    ]);
+    const page = areas && areas.status === 200 ? parseAreasPage(areas.body, siteId, true) : null;
+    if (!page && !ops) return null;
+    return {
+      assets: [
+        ...(ops?.snapshot.equipment ?? []).map((e) => ({ kind: "equipment" as const, id: e.id, label: e.name, archived: e.status === "retired" })),
+        ...(page?.records ?? []).map((a) => ({ kind: "area" as const, id: a.id, label: a.label, archived: a.archived_at !== null })),
+      ],
+      complete: Boolean(page?.page.complete) && Boolean(ops) && !ops!.snapshot.limits.equipment_limited,
+    };
+  };
 }
 
 // ---- Approbations ----------------------------------------------------------------------------
