@@ -4,7 +4,6 @@
 import { useId, useState, type FormEvent } from "react";
 import {
   MAX_LINES,
-  TAX_RATES,
   emptyLine,
   lineInputErrors,
   previewTotals,
@@ -13,8 +12,20 @@ import {
   type AmendmentFormInput,
   type LineInput,
 } from "../../../lib/features/quote-documents/panel-model";
-import type { QuoteLine } from "../../../lib/features/quote-documents/types";
+import { TAX_RATE_OPTIONS, TAX_RATE_PLACEHOLDER, TAX_RATE_HINT, TAX_RATE_REQUIRED, parseTaxRateInput } from "../../app/tax-rate";
 import styles from "./quote-documents.module.css";
+
+/** The submitted value is exactly what the (backend-owned) validator returns: no rate literal is
+ *  restated here, so the type follows the canonical list once the backend widens it. */
+export type AmendmentValue = Extract<ReturnType<typeof validateAmendmentForm>, { ok: true }>["value"];
+/** Starts with NO rate: the issuer chooses explicitly. */
+export const initialAmendmentInput = (): AmendmentFormInput => ({ lines: [emptyLine()], taxRate: "", reason: "", validUntil: "" });
+/** Submit guard: an explicit supported rate (lib/tax-rates) first, then the shared validator. */
+export function checkAmendment(input: AmendmentFormInput, now: Date = new Date()): { ok: true; value: AmendmentValue } | { ok: false; errors: AmendmentFormErrors } {
+  const result = validateAmendmentForm(input, now);
+  if (parseTaxRateInput(input.taxRate) === null) return { ok: false, errors: { ...(result.ok ? { lines: input.lines.map(() => ({})) } : result.errors), taxRate: TAX_RATE_REQUIRED } };
+  return result;
+}
 
 export function AmendmentForm({
   quoteReference,
@@ -24,11 +35,11 @@ export function AmendmentForm({
 }: {
   quoteReference: string;
   busy: boolean;
-  onSubmit: (value: { lines: QuoteLine[]; tax_rate: 0 | 5.5 | 10 | 20; reason: string; valid_until: string | null }) => Promise<void>;
+  onSubmit: (value: AmendmentValue) => Promise<void>;
   onCancel: () => void;
 }) {
   const id = useId();
-  const [input, setInput] = useState<AmendmentFormInput>({ lines: [emptyLine()], taxRate: "20", reason: "", validUntil: "" });
+  const [input, setInput] = useState<AmendmentFormInput>(initialAmendmentInput);
   const [errors, setErrors] = useState<AmendmentFormErrors | null>(null);
   const [touched, setTouched] = useState(false);
   const preview = previewTotals(input);
@@ -37,7 +48,7 @@ export function AmendmentForm({
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setTouched(true);
-    const result = validateAmendmentForm(input);
+    const result = checkAmendment(input);
     if (!result.ok) {
       setErrors(result.errors);
       return;
@@ -103,14 +114,15 @@ export function AmendmentForm({
         <div className={styles.inline}>
           <div className={`field ${errors?.taxRate ? "field-invalid" : ""}`}>
             <label htmlFor={`${id}-tax`}>TVA</label>
-            <select id={`${id}-tax`} value={input.taxRate} onChange={(e) => setInput((s) => ({ ...s, taxRate: e.target.value }))}>
-              {TAX_RATES.map((rate) => (
-                <option key={rate} value={rate}>
-                  {rate.replace(".", ",")} %
+            <select id={`${id}-tax`} value={input.taxRate} onChange={(e) => setInput((s) => ({ ...s, taxRate: e.target.value }))} aria-invalid={errors?.taxRate ? true : undefined} data-tax-rate="">
+              <option value="">{TAX_RATE_PLACEHOLDER}</option>
+              {TAX_RATE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
                 </option>
               ))}
             </select>
-            {errors?.taxRate && <small className="field-error">{errors.taxRate}</small>}
+            {errors?.taxRate ? <small className="field-error">{errors.taxRate}</small> : <small>{TAX_RATE_HINT}</small>}
           </div>
           <div className={`field ${errors?.validUntil ? "field-invalid" : ""}`}>
             <label htmlFor={`${id}-valid`}>Valable jusqu’au (facultatif)</label>
