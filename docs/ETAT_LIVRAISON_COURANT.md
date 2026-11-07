@@ -4,6 +4,10 @@ Objectif : application entière, seuls raccordements Stripe et SMS différés. P
 
 ## Référence en ligne
 
+La version de recette assemblée `a18f507` est disponible. Les fiches, la réservation connectée avec rejeu, le brouillon PWA et les devis privés sont vérifiés. Le premier essai entreprise a relevé un débordement à 360 px, suivi dans le rapport. [Preview](https://depannage-electricite-2gs193aoe-brafas-projects.vercel.app) · [Recette et limites](reviews/DELIVERY_A18_HOSTED.md)
+
+### Version précédente `610b13f`
+
 https://depannage-electricite-2jcup0522-brafas-projects.vercel.app
 
 Version `610b13f1a4c03b861d57915ef5c324501a274b52` intégrée et poussée, 1 509 tests réussis, 2 tests facultatifs ignorés, TypeScript strict et compilation webpack réussis. Preview READY `dpl_FzQDRm7B3KRL1dT9dZwizHD9FTyM`, build `sMd0H5MCAOCFLc3pUAiks`. Les deux jobs de [la CI](https://github.com/claude972/depannage-electricite/actions/runs/42383082429) passent sur ce SHA.
