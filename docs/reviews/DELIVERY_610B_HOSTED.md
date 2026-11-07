@@ -1,0 +1,13 @@
+# Recette hébergée du lot `610b13f`
+
+Le 7 novembre 2026 en Martinique. Version `610b13f1a4c03b861d57915ef5c324501a274b52` de `integration/web-pwa`, prévisualisation `dpl_FzQDRm7B3KRL1dT9dZwizHD9FTyM`, build Flight `sMd0H5MCAOCFLc3pUAiks`. L’API Vercel authentifiée et la page publique ont établi le reçu de provenance juste avant la recette. L’accès public est limité à ce déploiement. [Preview vérifiée](https://depannage-electricite-2jcup0522-brafas-projects.vercel.app)
+
+- Suite locale au commit exact. 1 509 réussites, 0 échec, 2 tests facultatifs ignorés faute du HTML historique 4c. TypeScript non incrémental et compilation webpack réussis. CI sur les deux jobs réussie. [Exécution GitHub Actions](https://github.com/claude972/depannage-electricite/actions/runs/42383082429)
+- Chromium à 390 px en sombre. Connexion réelle avec un client temporaire, demande générale de prise, adresse, aucun POST avant choix du règlement, paiement prévu après les travaux sur la plateforme, envoi HTTP 201, dossier visible, aucun débordement ni erreur JavaScript. Le même POST avec la même clé rend HTTP 201 et le même identifiant de dossier.
+- Lecture de la base indépendante du navigateur. Un dossier, une réservation confirmée, un événement de création, zéro paiement et zéro document. Après nettoyage ciblé, Auth, identités, sessions, profils, réservations, interventions, clés, audit, limites, documents et Storage sont à zéro sur les identifiants de recette.
+- Les API publiques des informations de l’exploitant et de la garantie retournent 200, `published: null`, `no-store`. Les routes privées de l’éditeur et du suivi retournent 401 sans session, avec `no-store`.
+- Les huit fiches publiques passent chacune à 360 px en clair et à 1440 px en sombre. Intitulé, fourchette, photo décodée, bouton fixe de confirmation puis bouton de poursuite jusqu’aux coordonnées, sans écriture ni erreur JavaScript.
+
+La migration de réservation a réparé un écart entre le formulaire connecté, qui émettait les identifiants `demande-*`, et le serveur, qui acceptait seulement ceux du catalogue. Les cinq catégories passent en PostgreSQL hébergé dans une transaction annulée. L’audit avancé obtient 346 contrôles réussis sur le schéma de 49 migrations en PostgreSQL isolé. Le nettoyage de la recette SQL et celui de la recette navigateur sont deux vérifications distinctes.
+
+Les nouvelles opérations d’administration, les écrans B2B et la finance fournisseur restent à recetter dans leurs environnements respectifs. Stripe et Vonage sont différés, le compte propriétaire Super Admin et le dépôt de demandes de garantie restent désactivés. Aucune transaction réelle, publication de contenu opérateur ni distribution native pendant cette recette.
