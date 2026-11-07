@@ -75,6 +75,7 @@ export async function GET(request: Request) {
     return Response.json({ items, eligible: data.eligible, captured_at: data.captured_at,
       page: { limit: 50, has_more: hasMore, next_cursor: next ? Buffer.from(JSON.stringify(next)).toString("base64url") : null },
       projection: "anonymized", order: ranked ? "nearest_first" : "oldest_first", distance: ranked ? "commune_centre_bands" : "not_calculated",
+      ...(ranked ? { radius_version: version } : {}),
     }, { headers });
   } catch (error) {
     const status = error instanceof ApiError ? error.status : 503;

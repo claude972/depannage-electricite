@@ -22,13 +22,16 @@ test('nearest feed pages within its radius version, including offers with unknow
   const body = await response.json();
   assert.equal(body.order, 'nearest_first');
   assert.equal(body.distance, 'commune_centre_bands');
+  assert.equal(body.radius_version, 3);
   assert.equal(body.items.length, 50);
   const cursor = body.page.next_cursor;
   assert.deepEqual(JSON.parse(Buffer.from(cursor, 'base64url').toString()), {
     actor_id: actor, created_at: offer(50).created_at, id: id(50), distance_band_km: null, radius_version: 3,
   });
   const next = setup(rankedData([rankedOffer(51, null)]));
-  assert.equal((await next.get(req(`?order=nearest&cursor=${cursor}`))).status, 200);
+  const second = await next.get(req(`?order=nearest&cursor=${cursor}`));
+  assert.equal(second.status, 200);
+  assert.equal((await second.json()).radius_version, 3);
   assert.deepEqual(JSON.parse(JSON.stringify(next.calls)), [{ name: 'available_missions_by_distance', args: {
     p_after_at: offer(50).created_at, p_after_id: id(50), p_after_km_band: null, p_radius_version: 3,
   } }]);
