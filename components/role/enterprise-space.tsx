@@ -108,7 +108,7 @@ import { OrganizationSitesList, SiteSettingsPanel } from "../features/site-lifec
 import { SiteDirectLoader } from "../features/site-lifecycle/site-direct";
 import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-panel";
 import { DelegatedPayerCheckout, DelegatedPayerManager } from "../features/delegated-payer/delegated-payer";
-import { ENTERPRISE_SEARCH_COPY, ExportFeedback, useEnterpriseSearch, type EnterpriseSearchFilters } from "../features/enterprise-search/use-enterprise-search";
+import { COUNTS_COPY, ENTERPRISE_SEARCH_COPY, ExportFeedback, useEnterpriseSearch, useOverviewCounts, type EnterpriseSearchFilters } from "../features/enterprise-search/use-enterprise-search";
 import { ContractSourceLine, QuoteGridAccessPanel } from "../features/quote-grid/quote-grid";
 import { QuoteApprovalPanel, SitePolicyPanel } from "../features/advanced-approvals/approvals";
 import { acceptanceDecision, timelineApproval as advancedTimelineApproval, type WorkflowStatus } from "../features/advanced-approvals/model";
@@ -1268,6 +1268,30 @@ function OverviewView({ c }: { c: Ctx }) {
   const professionalState = c.session.capabilities.professional;
   const figures = dashboardFigures(professionalState, scope, new Date().toISOString().slice(0, 10), (status) => OPEN_STATUSES.includes(status));
   const open = figures.open;
+  // Live : compteurs exacts du serveur pour la carte « Interventions en cours » (périmètre organisation
+  // + site global, sans limite des 100 dossiers). Chargement / erreur ne valent jamais zéro. Démo inchangée.
+  const counts = useOverviewCounts({ enabled: !c.demo, context: c.session.mutationContext, organizationId: c.organization?.id || null, siteId: c.activeSite?.id || null });
+  const openValue = c.demo ? open : counts.state.phase === "ready" ? counts.state.open : counts.state.phase === "loading" ? "…" : "—";
+  const urgentCount = c.demo ? figures.urgent : counts.state.urgent;
+  const openNote =
+    !c.demo && counts.state.phase !== "ready" ? (
+      counts.state.phase === "loading" || counts.state.phase === "idle" ? (
+        COUNTS_COPY.loading
+      ) : (
+        <span role="alert" data-overview-counts-error="">
+          {counts.state.error}{" "}
+          {counts.state.phase === "error" && (
+            <button type="button" className="text-button" onClick={() => counts.retry()}>
+              Réessayer
+            </button>
+          )}
+        </span>
+      )
+    ) : urgentCount > 0 ? (
+      `dont ${urgentCount} urgente${urgentCount > 1 ? "s" : ""} · hors terminées et annulées`
+    ) : (
+      "Demandes ouvertes, hors terminées et annulées"
+    );
   const loaded = figures.professional === "loaded";
   const placeholder = figures.professional === "loaded" ? "" : FIGURE_PLACEHOLDER[figures.professional];
   const siteBars = loaded ? siteBudgetBars(scope.sites, scope.interventions, scope.quotes) : [];
@@ -1299,8 +1323,8 @@ function OverviewView({ c }: { c: Ctx }) {
         <Stat
           icon="wrench"
           label="Interventions en cours"
-          value={open}
-          note={figures.urgent > 0 ? `dont ${figures.urgent} urgente${figures.urgent > 1 ? "s" : ""} · hors terminées et annulées` : "Demandes ouvertes, hors terminées et annulées"}
+          value={openValue}
+          note={openNote}
         />
         <Stat
           icon="receipt"

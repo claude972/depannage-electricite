@@ -8,6 +8,8 @@ import { SEARCH_INITIAL, createSearchApi, createSearchController, identityOf, vi
 
 export { COPY as ENTERPRISE_SEARCH_COPY } from "./model";
 export { ExportFeedback } from "./export-feedback";
+export { useOverviewCounts } from "./use-overview-counts";
+export { COUNTS_COPY } from "./overview-counts";
 export type { EnterpriseRow, Filters as EnterpriseSearchFilters } from "./model";
 
 export function useEnterpriseSearch({ enabled, context, filters, page, api }: { enabled: boolean; context: Context; filters: Filters | null; page: number; api?: SearchApi }) {

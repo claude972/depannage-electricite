@@ -12,8 +12,10 @@ import { build } from "esbuild";
 import { loadModule } from "../documents/harness";
 import { withApp, skip as appSkip } from "./real-app-harness";
 import type * as Model from "../../components/features/enterprise-search/model";
+import type * as Counts from "../../components/features/enterprise-search/overview-counts";
 
 const m = loadModule("components/features/enterprise-search/model.ts") as unknown as typeof Model;
+const oc = loadModule("components/features/enterprise-search/overview-counts.ts") as unknown as typeof Counts;
 const ORG_B = "20000000-0000-4000-8000-000000000002";
 const same = (a: unknown, b: unknown, msg = "") => assert.equal(JSON.stringify(a), JSON.stringify(b), msg);
 const USER = "10000000-0000-4000-8000-000000000001";
@@ -200,6 +202,47 @@ test("périmètre : un 401/403 tardif de l’organisation A ne vide pas B ; expo
   same(await page2.c.exportCsv(F(), () => F(), page2.get().key), true, "a page change is not a scope change");
 });
 
+test("compteurs du tableau de bord (e857e56) : lecture stricte, même périmètre, urgent ≤ open, clé au rendu, 401 tardif ignoré", async () => {
+  const body = oc.countsBody(ORG, S1)!;
+  const ok = { organization_id: ORG, site_id: S1, counts: { open: 123, urgent: 61 }, captured_at: "2026-11-07T00:00:00Z" };
+  same(oc.parseCounts(ok, body)?.counts, { open: 123, urgent: 61 });
+  for (const bad of [{ ...ok, extra: 1 }, { ...ok, counts: { open: 1, urgent: 2 } }, { ...ok, counts: { open: 1.5, urgent: 0 } }, { ...ok, counts: { open: 1, urgent: 0, closed: 3 } }, { ...ok, site_id: null }, { ...ok, organization_id: ORG_B }, { ...ok, captured_at: "hier" }, { ...ok, counts: { open: -1, urgent: 0 } }])
+    assert.equal(oc.parseCounts(bad, body), null, JSON.stringify(bad).slice(0, 90));
+  same(oc.countsBody(ORG, null), { organization_id: ORG, site_id: null });
+  same([oc.countsBody("x", null), oc.countsBody(ORG, "y")], [null, null]);
+  const ctx = { uid: USER as string | null, gen: 0 };
+  const context = { generation: () => ctx.gen, userId: () => ctx.uid };
+  const k = oc.countsKey(context, ORG, S1);
+  const st = { ...oc.COUNTS_INITIAL, key: k, phase: "ready" as const, open: 5, urgent: 1 };
+  same(oc.countsView(st, k).open, 5);
+  for (const other of [oc.countsKey(context, ORG, null), oc.countsKey(context, ORG_B, S1), oc.countsKey({ generation: () => 1, userId: () => USER }, ORG, S1)])
+    same([oc.countsView(st, other).phase, oc.countsView(st, other).open], ["loading", 0], "another scope ⇒ loading, never an old figure");
+  const calls: unknown[] = [];
+  const replies: (Counts.CountsResult | Promise<Counts.CountsResult>)[] = [];
+  let s: Counts.CountsState = oc.COUNTS_INITIAL;
+  const c = oc.createCountsController({ api: () => ({ read: async (b) => (calls.push(b), replies.shift() ?? res(503)) }), context, set: (n) => (s = n) });
+  let lateA!: (r: Counts.CountsResult) => void;
+  replies.push(new Promise((r) => (lateA = r)), res(200, { ...ok, organization_id: ORG_B, site_id: null }));
+  c.query(ORG, S1);
+  c.query(ORG_B, null);
+  await new Promise((r) => setTimeout(r, 0));
+  same([s.phase, s.open, calls], ["ready", 123, [{ organization_id: ORG, site_id: S1 }, { organization_id: ORG_B, site_id: null }]]);
+  lateA(res(401)); await new Promise((r) => setTimeout(r, 0));
+  same([s.phase, s.open], ["ready", 123], "late 401 of the old scope ignored");
+  replies.push(res(404), res(200, ok));
+  c.query(ORG, S1); await new Promise((r) => setTimeout(r, 0));
+  same([s.phase, s.error], ["error", oc.COUNTS_COPY.scope], "404 ⇒ honest scope error, never zero");
+  c.retry(s.key); await new Promise((r) => setTimeout(r, 0));
+  same([s.phase, s.open, s.urgent], ["ready", 123, 61]);
+  replies.push(res(403));
+  c.query(ORG_B, S1); await new Promise((r) => setTimeout(r, 0));
+  same([s.phase, s.open], ["forbidden", 0], "401/403 ⇒ cleared");
+  const src = readFileSync("components/role/enterprise-space.tsx", "utf8");
+  assert.match(src, /useOverviewCounts\(\{ enabled: !c\.demo, context: c\.session\.mutationContext, organizationId: c\.organization\?\.id \|\| null, siteId: c\.activeSite\?\.id \|\| null \}\)/);
+  assert.match(src, /value=\{openValue\}\n\s*note=\{openNote\}/);
+  assert.match(src, /const openValue = c\.demo \? open : counts\.state\.phase === "ready" \? counts\.state\.open : counts\.state\.phase === "loading" \? "…" : "—";/, "loading / error never shown as zero");
+});
+
 test("câblage : useInterventionList en direct ⇒ recherche serveur ; démo ⇒ liste locale ; KPI non touchés", () => {
   const src = readFileSync("components/role/enterprise-space.tsx", "utf8");
   const hook = src.slice(src.indexOf("function useInterventionList"), src.indexOf("function ExportButton"));
@@ -219,7 +262,7 @@ const ENTRY = `
 import { createElement as h, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RequestsView } from "./components/role/enterprise-space";
-import { useEnterpriseSearch } from "./components/features/enterprise-search/use-enterprise-search";
+import { useEnterpriseSearch, useOverviewCounts } from "./components/features/enterprise-search/use-enterprise-search";
 const w = window;
 const tick = (ms) => new Promise((r) => setTimeout(r, ms));
 const ID = (n) => "a0000000-0000-4000-8000-" + String(n).padStart(12, "0");
@@ -246,7 +289,8 @@ w.frames = async () => {
   function Probe({ org, site, page }) {
     const f = { organization_id: org, site_id: site, category: null, status: null, search: "", sort: "recent" };
     const r = useEnterpriseSearch({ enabled: true, context: ctxI, filters: f, page });
-    frames.push({ org, site, page, phase: r.state.phase, ids: r.state.items.map((x) => x.id) });
+    const k = useOverviewCounts({ enabled: true, context: ctxI, organizationId: org, siteId: site });
+    frames.push({ org, site, page, phase: r.state.phase, ids: r.state.items.map((x) => x.id), countsPhase: k.state.phase, open: k.state.open });
     return null;
   }
   const div = document.createElement("div"); document.body.appendChild(div);
@@ -343,7 +387,7 @@ w.run = async () => {
   return out;
 };
 `;
-test("aucun ancien cadre (Chromium, StrictMode) : 1er rendu après changement de page / site / organisation sans anciennes lignes", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
+test("aucun ancien cadre (Chromium, StrictMode) : 1er rendu après changement de page / site / organisation sans anciennes lignes ni ancien compteur", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
   const out = await build({ absWorkingDir: ROOT, stdin: { contents: ENTRY, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, outdir: "out", platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "local-css", ".svg": "dataurl", ".png": "dataurl" }, define: { "process.env.NODE_ENV": '"development"' }, logLevel: "error" });
   const js = out.outputFiles.find((f) => f.path.endsWith(".js"))!.text;
   const server: Server = createServer((_rq, rs) => { rs.setHeader("content-type", "text/html"); rs.end(`<!doctype html><div></div><script>${js}</script>`); });
@@ -356,15 +400,19 @@ test("aucun ancien cadre (Chromium, StrictMode) : 1er rendu après changement de
     page.on("pageerror", (e: Error) => errors.push(String(e)));
     await page.goto(`http://127.0.0.1:${(server.address() as { port: number }).port}/`);
     const r = (await page.evaluate(() => (window as unknown as { frames: () => Promise<unknown> }).frames())) as Record<string, any>;
-    same([r.ready.phase, r.ready.ids.length], ["ready", 10]);
+    same([r.ready.phase, r.ready.ids.length, r.ready.countsPhase, r.ready.open], ["ready", 10, "ready", 9]);
     let prevIds: string[] = r.ready.ids;
+    let prevOpen = 9;
     for (const name of ["page", "site", "org"]) {
-      const frames = r[name] as { phase: string; ids: string[] }[];
+      const frames = r[name] as { phase: string; ids: string[]; countsPhase: string; open: number }[];
       same([frames[0].phase, frames[0].ids], ["loading", []], `${name}: FIRST render after the change has no old row`);
       const firstReady = frames.findIndex((f) => f.phase === "ready");
       assert.ok(frames.slice(0, firstReady).every((f) => f.ids.length === 0), `${name}: ${JSON.stringify(frames)}`);
       assert.ok(frames.every((f) => JSON.stringify(f.ids) !== JSON.stringify(prevIds)), `${name}: never the previous rows`);
+      if (name !== "page") same([frames[0].countsPhase, frames[0].open], ["loading", 0], `${name}: FIRST render has no old counter`);
+      else assert.ok(frames.every((f) => f.countsPhase === "ready" && f.open === prevOpen), "page change does not touch the scope counter");
       prevIds = frames[frames.length - 1].ids;
+      prevOpen = frames[frames.length - 1].open;
     }
     same(errors, []);
   } finally {
