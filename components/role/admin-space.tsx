@@ -94,6 +94,7 @@ import { PLATFORM_TITLES, PlatformPage } from "./platform-anchor";
 import { platformViewAllowed } from "../app/features";
 import { adminKpis, dashboardRows, loadedNote } from "./admin-lists";
 import { platformEntries } from "./anchors";
+import { CredentialReviewPanel } from "../features/credential-reviews/credential-review-panel";
 
 type Tone = "neutral" | "blue" | "green" | "amber" | "red" | "violet";
 type OverviewArtisan = AdminOverview["artisans"][number];
@@ -1278,6 +1279,8 @@ function ArtisanDossierPanel({
                         {" · relié le "}
                         {date(c.created_at)}
                       </span>
+                      {/* ART-03 / ADM-02: decision form only when the server says can_review. */}
+                      <CredentialReviewPanel credentialId={c.id} mode="admin" context={session.mutationContext} demo={session.mode === "demo"} />
                     </div>
                     {expired ? <Tag tone="amber">Expiré</Tag> : <Tag tone="neutral">Transmis</Tag>}
                   </li>
@@ -1288,7 +1291,7 @@ function ArtisanDossierPanel({
             <p className={styles.formNote}>Aucun justificatif relié. L’artisan les ajoute depuis son espace « Mes documents ».</p>
           )}
           <p className={styles.formNote}>
-            Un justificatif transmis n’est pas validé automatiquement : l’examen des pièces vous revient avant l’approbation.
+            Un justificatif transmis n’est pas validé automatiquement : chaque pièce reçoit votre décision, qui n’approuve pas à elle seule la candidature.
           </p>
         </div>
       </>
