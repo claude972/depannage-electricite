@@ -134,3 +134,6 @@ ROOT complète les compteurs de navigation du particulier dans la lecture de l�
 ROOT possède le serveur, la migration et les tests. Une demande publique collecte le numéro saisi et le motif sélectionné, avec consentement à ce rappel. Le serveur renvoie un reçu minimal, protège le rejeu et borne les dépôts en base. Seuls les opérateurs d’assistance habilités consultent ou classent la demande. Le classement est tracé sans numéro dans l’audit et ne prouve aucun appel. Claude raccorde le formulaire et la file après publication du contrat. Vérifier dépôt, rejeu, quotas, refus, version et lecture privée. L’activation reste explicite après validation des modalités de traitement.
 
 ## ENT — débordement 360 px fiche de site (UI), claim Claude : `.twoCol` mobile et bloc d’approbation avancée en `minmax(0, 1fr)` (branche `claude/enterprise-overflow-fix`, base `a18f507`).
+
+## ART-07 / SYS-07 — liste privée des devis artisan (Astra)
+Ownership exclusif : app/api/artisan/quotes, lib/features/artisan-quotes, tests ciblés et contrat. Base 256ec5c. Plan : conserver RLS quotes + attribution actuelle du dossier et auteur exact artisan ; GET keyset borné 1–50, sans lignes/PII ni droits nouveaux ; vérifier vrai handler (nominal, curseur, refus, erreurs, projection). Aucune migration si jointure RLS suffisante. Aucun cloud ni UI.
