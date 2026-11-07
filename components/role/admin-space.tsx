@@ -203,7 +203,7 @@ export function actorLabel(
   actorId: string | null | undefined,
   ctx: { selfId: string; participants?: Pick<Participant, "id" | "full_name" | "role">[]; overview?: Pick<AdminOverview, "artisans" | "clients"> | null },
 ): string {
-  if (!actorId) return "Plateforme (automatique)";
+  if (!actorId) return "Acteur non renseigné";
   if (actorId === ctx.selfId) return "Vous (administrateur)";
   const p = ctx.participants?.find((x) => x.id === actorId);
   if (p) return `${p.full_name} (${ROLE_NAMES[p.role as Role] || p.role})`;

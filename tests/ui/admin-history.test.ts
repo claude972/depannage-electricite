@@ -28,7 +28,7 @@ test("acteur d’un événement : nom + rôle depuis les données chargées, sin
   assert.equal(a.actorLabel("art-1", { selfId: "me", overview }), "Alex Martin (Artisan)");
   assert.match(a.actorLabel("cli-1", { selfId: "me", overview }), /^Camille Dupont \(/);
   assert.equal(a.actorLabel("10000000-0000-4000-8000-000000000009", { selfId: "me" }), "10000000…");
-  assert.equal(a.actorLabel(null, { selfId: "me" }), "Plateforme (automatique)");
+  assert.equal(a.actorLabel(null, { selfId: "me" }), "Acteur non renseigné");
 });
 
 test("câblage : journal d’audit (acteur libellé + lien dossier), historique du dossier, règlements → dossier", () => {
