@@ -1101,6 +1101,8 @@
 }
 .twoColumns {
   display: grid;
+  /* A single shrinkable track on phones: the implicit auto track took the form's min-content width. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
 }
 .aside {
@@ -1781,4 +1783,15 @@
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+/* Phase 8 F1: grouped options (e.g. notification preferences in « Mon profil ») never widen the
+   page on phones: a fieldset defaults to min-content width; long tags wrap, boxes keep their size. */
+.space fieldset {
+  min-width: 0;
+}
+.space fieldset label {
+  flex-wrap: wrap;
+}
+.space fieldset label > input[type="checkbox"] {
+  flex: none;
 }
