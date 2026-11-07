@@ -113,3 +113,6 @@ Astra ajoute un réglage personnel facultatif fondé sur les centres publics des
 
 ## FIN-07 — optional-subscriptions (Astra, exclusive)
 Baseb760367, worktree propre réutilisé. Tranche serveur courte : catalogue explicite sans seed, Price Stripe attesté/mode/rôle, commande durable Checkout subscription, réconciliation par relecture serveur exacte et refus de preuve périmée. Gate SQL+env OFF ; aucun droit MVP modifié, aucune règle premium. Portail et endpoint événementiel Billing restent hors de cette première tranche s’ils ne sont pas entièrement vérifiables. Tests SQL/handlers injectés, aucun cloud ni fournisseur réel.
+
+## FIN-07 — gestion hébergée et événements Billing (Astra exclusive)
+Depuis bf3cdc8, même branche. Ajouter commandes durables de portail avec configuration explicite/mode/Customer et accès courant, sans état déduit du retour ; route signée distincte, événement dédupliqué et relecture fournisseur liée puis CAS. Aucun droit premium, porte OFF, aucune configuration réelle. Tests handlers injectés et SQL : rejeu, retard, refus intercompte et absence de session navigateur pour webhook.
