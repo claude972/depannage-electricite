@@ -40,3 +40,11 @@ Frontend seul, base writer claude/ui-palette-b-full. QR généré LOCALEMENT (qr
 
 Responsable : Codex ROOT, un seul auteur backend. Périmètre : nouvelle RPC `available_missions_page` et GET `/api/artisan/missions`, schéma de projection anonyme et tests ciblés. L'éligibilité postale/catégorie/disponibilité et l'acceptation atomique existantes restent l'autorité. Pagination chronologique stable, curseur lié à l'identité, borne 50+1 ; aucune adresse/contact précis avant attribution, aucune distance inventée, aucun compteur exhaustif non prouvé. Backend d'abord puis feuille UI Claude séparée après contrat. Vérification : vrais handlers, SQL avec >100 offres et refus de rôle/éligibilité ; intégration puis preview et recette bornée. Aucune configuration de territoire inventée.
 
+## LIVRAISON-INTÉGRALE — assemblage par lots, recette commune
+
+Référence de travail [plan des 76 capacités](docs/PLAN_LIVRAISON_INTEGRALE.md), base intégrée 002de1a. Coder en parallèle, puis traiter les constats de la revue commune par lot. Le statut livré nécessite la recette sur le commit déployé.
+
+- **Pilote** : intégration sélective du formulaire client et du panneau remboursement déjà écrits. Adaptation de la recette SQL avancée au contrat actuel de remboursement et exécution sur PostgreSQL isolé. Conserver les preuves négatives et le rollback. Aucune duplication de la migration déjà appliquée.
+- **Astra** : reprise du WIP existant de remplacement d'empreinte dans la branche codex/hold-reauthorization. Seul auteur des fichiers de ce lot. Terminer tests et contrat sur la base actualisée. Aucun cloud ni accès fournisseur.
+- **Claude** : réutiliser la session et les auteurs UI existants. Carte et localisation du dossier client, avec données autorisées et aucun envoi d'adresse privée à un fournisseur tiers sans décision. Ownership de la feuille carte, du câblage UI local et des tests UI ciblés. Développer sans éditer les fichiers de finance, de formulaire et de session en cours d'assemblage.
+- **Raccordement final** : Stripe et Vonage restent au dernier lot de recette. Le pilote applique les migrations de test et exécute la recette en ligne. L'identité du premier Super Admin, le lancement public et les boutiques relèvent de leurs décisions existantes.
