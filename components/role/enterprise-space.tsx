@@ -461,7 +461,6 @@ export function EnterpriseSpace({ session }: { session: Session }) {
             <NewRequestView key={param} c={c} siteId={param} />
           );
         case "detail":
-        case "quote":
           return (
             <DossierView
               key={`${param || session.selectedId}-${session.selectedQuoteId}`}
@@ -469,6 +468,14 @@ export function EnterpriseSpace({ session }: { session: Session }) {
               id={param || session.selectedId}
             />
           );
+        case "quote": {
+          // #quote/<quote id> (deep links, notifications) opens the dossier of THAT quote; an id that
+          // is not a loaded quote is treated as a dossier id, as before (unknown ⇒ honest not-found).
+          const ref = param || session.selectedId;
+          const quote = session.data.quotes.find((q) => q.id === ref);
+          const dossierId = quote ? quote.intervention_id : ref;
+          return <DossierView key={`${dossierId}-${quote?.id ?? session.selectedQuoteId}`} c={c} id={dossierId} />;
+        }
         case "sites":
           return <SitesView c={c} />;
         case "site":
