@@ -2,6 +2,7 @@
 // Artisan space (role "artisan"). Presentational: every mutation goes through `session`.
 // Master references: M35 (shell + dashboard), M67 (offer), M34 (quote), M14 (documents),
 // M65 (application), M36 (profile). Structure is reproduced, example figures are not.
+import { PaymentLinkPanel } from "./payment-link";
 import {
   useCallback,
   useEffect,
@@ -2127,6 +2128,7 @@ function PaymentPanel({ session, intervention: i }: { session: Session; interven
   const { accepted, payment } = paymentFor(session.data.quotes, session.data.payments, i.id);
   let tag: ReactNode;
   let text: string;
+  let awaiting = false;
   if (i.status === "paid" || payment?.status === "paid") {
     tag = <Tag tone="green">Réglé{payment?.paid_at ? ` le ${date(payment.paid_at)}` : ""}</Tag>;
     text = isDeclaredOnSite(payment)
@@ -2140,7 +2142,8 @@ function PaymentPanel({ session, intervention: i }: { session: Session; interven
     text = "Le dernier paiement n’a pas abouti selon Stripe. Le règlement reste attendu ; aucune nouvelle tentative n’est lancée automatiquement.";
   } else {
     tag = <Tag tone="neutral">Règlement attendu du client</Tag>;
-    text = "Le client règle le devis accepté sur la plateforme après l’intervention (carte via son suivi, lien sécurisé ou QR code). N’acceptez aucun paiement direct : espèces, terminal ou virement personnel.";
+    awaiting = true;
+    text = "Le client règle le devis accepté (avenants acceptés compris) sur la plateforme après l’intervention, par carte depuis le suivi du dossier ; vous pouvez lui transmettre le lien de suivi ci-dessous. N’acceptez aucun paiement direct : espèces, terminal ou virement personnel.";
   }
   return (
     <section className="panel" aria-labelledby="dossier-payment">
@@ -2150,6 +2153,10 @@ function PaymentPanel({ session, intervention: i }: { session: Session; interven
         {tag}
       </div>
       <p>{text}</p>
+      {/* Follow-up link only (GET /api/payments/link): never a Checkout for the artisan, never a collect action. */}
+      {awaiting && session.mode === "live" && (
+        <PaymentLinkPanel key={`${session.profileId}|${i.id}`} interventionId={i.id} viewer="artisan" amountCents={null} />
+      )}
       {session.mode === "demo" && (
         <DemoNote>En démonstration, le règlement est simulé par le rôle client.</DemoNote>
       )}

@@ -128,7 +128,7 @@ export function BookingConfirm({
               <br />
               <small>
                 {booking.payment === "on_site"
-                  ? "Rien n’est payé à la réservation. Après les travaux, vous réglez le montant du devis accepté sur la plateforme (carte via votre suivi, lien sécurisé ou QR code) — jamais directement à l’artisan."
+                  ? "Rien n’est payé à la réservation. Après les travaux, vous réglez le montant du devis accepté sur la plateforme (par carte depuis le suivi du dossier) — jamais directement à l’artisan."
                   : "Une empreinte n’est pas un débit ; seul le montant du devis accepté peut être prélevé."}
               </small>
               {booking.payment === "card_hold" && booking.request_id && (verifyCardHold || cancelCardHold) && (
