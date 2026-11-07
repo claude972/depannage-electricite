@@ -18,6 +18,28 @@ create function public.provider_assignment_audit()returns trigger language plpgs
  insert into public.provider_team_assignment_events(intervention_id,version,team_id,actor_id,record)values(new.intervention_id,new.version,new.team_id,auth.uid(),to_jsonb(new));return new;end;$$;
 revoke all on function public.provider_assignment_audit()from public,anon,authenticated,service_role;
 create trigger provider_assignment_audit after insert or update on public.provider_team_assignments for each row execute function public.provider_assignment_audit();
+-- Leaving and later returning to a team requires a fresh internal assignment.
+create function public.revoke_provider_assignment_on_scope_change()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  update public.provider_team_assignments
+  set technician_id = null, state = 'unassigned', note = '',
+      version = version + 1, updated_at = clock_timestamp()
+  where intervention_id = new.id and technician_id is not null;
+  return new;
+end;
+$$;
+revoke all on function public.revoke_provider_assignment_on_scope_change()
+  from public, anon, authenticated, service_role;
+create trigger provider_assignment_scope_change
+  after update of artisan_id, client_id, site_id, status on public.interventions
+  for each row
+  when (old.artisan_id is distinct from new.artisan_id
+    or old.client_id is distinct from new.client_id
+    or old.site_id is distinct from new.site_id
+    or (new.status = 'cancelled' and old.status is distinct from new.status))
+  execute function public.revoke_provider_assignment_on_scope_change();
+
 create function public.provider_team_active(p_owner uuid)returns boolean language sql stable security definer set search_path=''as $$select exists(select 1 from public.profiles p join public.artisan_profiles a on a.user_id=p.id where p.id=p_owner and p.role='artisan'and p.artisan_approved and a.application_status='approved');$$;
 revoke all on function public.provider_team_active(uuid)from public,anon,authenticated,service_role;
 create function public.provider_team_role(p_team uuid)returns text language sql stable security definer set search_path=''as $$select role from public.provider_team_members where team_id=p_team and user_id=auth.uid()and active;$$;

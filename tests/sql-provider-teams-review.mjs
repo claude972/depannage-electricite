@@ -549,6 +549,15 @@ try {
       second.records.every((x) => x.id > first.next_after),
     "stable continuation without duplicates",
   );
+  // Reassignment away and back never resurrects old technician access.
+  await db.query("update public.interventions set artisan_id=$1 where id=$2", [ids.owner, j]);
+  await denied(() => detail("otherTech", j, teamB), "P0002");
+  await db.query("update public.interventions set artisan_id=$1 where id=$2", [ids.otherOwner, j]);
+  await denied(() => detail("otherTech", j, teamB), "P0002");
+  const returned = (await detail("otherOwner", j, teamB)).assignment;
+  ok(returned.state === "unassigned" && returned.note === "" && returned.version === 7,
+    "returning dossier requires a fresh assignment and does not restore previous notes");
+
   for (const role of ["anon", "service_role"]) {
     await db.exec("set role " + role);
     try {
