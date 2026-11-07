@@ -232,7 +232,8 @@ export function createRxController({
 }: {
   api: () => RxApi;
   request: RefundRequestView;
-  capability: boolean;
+  /** Read at ACTION time (latest props): a revoked capability never posts. */
+  capability: boolean | (() => boolean);
   context?: RxContext;
   store: () => RxStore;
   newId?: () => string | null;
@@ -240,6 +241,7 @@ export function createRxController({
   set: (s: RxState) => void;
   demo?: boolean;
 }) {
+  const cap = typeof capability === "function" ? capability : () => capability;
   const gen = context.generation();
   const uid = context.userId();
   const alive = () => context.generation() === gen && context.userId() === uid;
@@ -273,6 +275,7 @@ export function createRxController({
     return { command_id: id.toLowerCase(), expected_version: request.version };
   }
   async function send(cmd: RxCommand): Promise<boolean> {
+    if (!cap() || !ok()) return false; // last gate, synchronously before the POST
     writing = true;
     seq++;
     set({ ...get(), writing: true, writeError: "", conflict: "" });
@@ -286,13 +289,13 @@ export function createRxController({
     if (!ok()) return false;
     const out = applyExecute(get(), r, cmd);
     set(out.state);
-    if (out.reload) await load();
+    if (out.reload && cap()) await load();
     return true;
   }
   return {
     load,
     confirm() {
-      if (!canExecute(capability, demo, request, get()) || writing) return false;
+      if (!canExecute(cap(), demo, request, get()) || writing) return false;
       set({ ...get(), confirming: true, writeError: "", conflict: "" });
       return true;
     },
@@ -301,7 +304,7 @@ export function createRxController({
     },
     /** Explicit, confirmed, single-flight. Never called on mount or after a GET. */
     async execute(): Promise<boolean> {
-      if (writing || !get().confirming || !canExecute(capability, demo, request, get())) return false;
+      if (writing || !get().confirming || !canExecute(cap(), demo, request, get())) return false;
       const cmd = resolveCommand();
       if ("error" in cmd) {
         set({ ...get(), confirming: false, writeError: cmd.error });
@@ -312,8 +315,11 @@ export function createRxController({
     /** Replays EXACTLY the pending command (same id + version). Never after a 409. */
     async retry(): Promise<boolean> {
       const cmd = get().pending;
-      if (writing || demo || !cmd || !capability) return false;
+      if (writing || demo || !cmd || !cap()) return false;
       return send(cmd);
+    },
+    attach() {
+      attached = true;
     },
     detach() {
       attached = false;

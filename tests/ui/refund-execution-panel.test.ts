@@ -24,7 +24,7 @@ const res = (status: number, body: unknown = null) => ({ status, body, retryAfte
 const ready = (over: Record<string, unknown> = {}) => m.applyRead(m.RX_INITIAL, res(200, read(over)));
 const ctx = (uid: string | null = USER) => { let g = 0, u = uid; return { context: { generation: () => g, userId: () => u }, bump: () => g++, switchUser: (x: string | null) => (u = x) }; };
 function memStore() { const map = new Map<string, string>(); return { map, store: { get: (k: string) => map.get(k) ?? null, set: (k: string, v: string) => (map.set(k, v), true) } }; }
-function harness({ reads = [] as Model.RxResult[], posts = [] as (Model.RxResult | Promise<Model.RxResult>)[], store = memStore().store, ids = [NEW(1), NEW(2), NEW(3)], context = ctx().context, capability = true, req = request(), demo = false } = {}) {
+function harness({ reads = [] as Model.RxResult[], posts = [] as (Model.RxResult | Promise<Model.RxResult>)[], store = memStore().store, ids = [NEW(1), NEW(2), NEW(3)], context = ctx().context, capability = true as boolean | (() => boolean), req = request(), demo = false } = {}) {
   const calls: { kind: string; body?: Model.RxCommand }[] = [];
   let s: Model.RxState = { ...m.RX_INITIAL };
   const issued: string[] = [];
@@ -190,4 +190,22 @@ test("clé du panneau, pas d’UUID constant, jetons CSS uniquement, vocabulaire
   assert.match(model, /crypto\.randomUUID\(\) : null\)/);
   assert.doesNotMatch(view + model, /00000000-0000-4000-8000-000000000000|setInterval|amount_cents: (request|props)/);
   assert.doesNotMatch(readFileSync("components/features/refund-execution/refund-execution.module.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, ""), /#[0-9a-f]{3,8}\b|rgb|hsl/i);
+});
+
+test("capacité révoquée sans changement d’identité (lue au moment de l’action) ⇒ aucun POST, ni après confirmation ni en reprise", async () => {
+  let cap = true;
+  const a = harness({ capability: () => cap });
+  await a.c.load();
+  assert.ok(a.c.confirm());
+  cap = false;
+  assert.equal(await a.c.execute(), false);
+  same(a.calls.map((c) => c.kind), ["GET"]);
+  cap = true;
+  const b = harness({ capability: () => cap, posts: [res(503)] });
+  await b.c.load(); b.c.confirm(); await b.c.execute();
+  assert.ok(b.get().pending);
+  cap = false;
+  assert.equal(await b.c.retry(), false);
+  same(b.calls.map((c) => c.kind), ["GET", "POST"]);
+  assert.match(readFileSync("components/features/refund-execution/refund-execution.module.css", "utf8"), /\.button \{[^}]*min-height: 44px;/);
 });

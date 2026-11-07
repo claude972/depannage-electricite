@@ -52,31 +52,45 @@ function Inner({ request, capability, api, context = DEFAULT_RX_CONTEXT, demo = 
     ref.current = next;
     setRaw(next);
   };
-  const latest = useRef({ api, store });
-  latest.current = { api, store };
+  const latest = useRef({ api, store, capability });
+  latest.current = { api, store, capability };
+  // One controller PER EFFECT RUN (StrictMode mounts twice): the discarded run's controller is
+  // detached, so its GET never applies; the live run's GET does.
   const controller = useRef<ReturnType<typeof createRxController> | null>(null);
-  if (!controller.current) {
+  useEffect(() => {
     let client: RxApi | null = null;
     let tab: RxStore | null = null;
-    controller.current = createRxController({
+    const c = createRxController({
       api: () => (client ??= latest.current.api ?? createRxApi()),
       store: () => (tab ??= latest.current.store ?? tabStore()),
       request,
-      capability,
+      capability: () => latest.current.capability,
       context,
       newId,
       demo,
       get: () => ref.current,
       set,
     });
-  }
-  useEffect(() => {
-    const c = controller.current!;
+    controller.current = c;
     if (!initial) void c.load(); // GET only: never a POST on mount
-    return () => c.detach();
+    return () => {
+      c.detach();
+      if (controller.current === c) controller.current = null;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const c = controller.current;
+  // Capability revoked (same identity): close any confirmation; actions re-check it themselves.
+  useEffect(() => {
+    if (!capability && ref.current.confirming) set({ ...ref.current, confirming: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [capability]);
+  const c = {
+    load: () => void controller.current?.load(),
+    confirm: () => controller.current?.confirm(),
+    cancel: () => controller.current?.cancel(),
+    execute: () => void controller.current?.execute(),
+    retry: () => void controller.current?.retry(),
+  };
 
   if (state.phase === "demo") return <p className={styles.note} role="note" data-rx="demo">{RX_COPY.demo}</p>;
   if (state.phase === "loading") return <p className={styles.muted} role="status" data-rx="loading">{RX_COPY.loading}</p>;
@@ -85,7 +99,7 @@ function Inner({ request, capability, api, context = DEFAULT_RX_CONTEXT, demo = 
     return (
       <div data-rx="error">
         <p className={styles.error} role="alert">{state.error || RX_COPY.loadFailed}</p>
-        <button type="button" className={styles.button} onClick={() => void c.load()} data-rx-reload="">Réessayer la lecture</button>
+        <button type="button" className={styles.button} onClick={c.load} data-rx-reload="">Réessayer la lecture</button>
       </div>
     );
 
@@ -110,18 +124,18 @@ function Inner({ request, capability, api, context = DEFAULT_RX_CONTEXT, demo = 
       {state.conflict && (
         <div role="alert" data-rx-conflict="">
           <p className={styles.error}>{state.conflict}</p>
-          <button type="button" className={styles.button} onClick={() => void c.load()} data-rx-reload="">Actualiser</button>
+          <button type="button" className={styles.button} onClick={c.load} data-rx-reload="">Actualiser</button>
         </div>
       )}
       {state.writeError && (
         <div role="alert" data-rx-write-error="">
           <p className={styles.error}>{state.writeError}</p>
-          {state.pending ? (
-            <button type="button" className={styles.button} disabled={state.writing} onClick={() => void c.retry()} data-rx-retry="">
+          {state.pending && capability ? (
+            <button type="button" className={styles.button} disabled={state.writing} onClick={c.retry} data-rx-retry="">
               {state.writing ? "Envoi…" : "Réessayer (même commande)"}
             </button>
           ) : (
-            <button type="button" className={styles.button} onClick={() => void c.load()} data-rx-reload="">Actualiser</button>
+            <button type="button" className={styles.button} onClick={c.load} data-rx-reload="">Actualiser</button>
           )}
         </div>
       )}
@@ -130,14 +144,14 @@ function Inner({ request, capability, api, context = DEFAULT_RX_CONTEXT, demo = 
           {resume ? "Vérifier / reprendre" : "Émettre le remboursement…"}
         </button>
       )}
-      {state.confirming && (
+      {state.confirming && actionable && (
         <div className={styles.confirm} role="alertdialog" aria-labelledby={`rx-${request.id}`} data-rx-confirm="">
           <strong id={`rx-${request.id}`}>{RX_COPY.confirmTitle}</strong>
           <p>Montant approuvé : <strong>{money(request.amount_cents)}</strong></p>
           <p>{RX_COPY.recipient(short(request.payment_id))}</p>
           <p>{resume ? RX_COPY.resumeNote : RX_COPY.irreversible}</p>
           <div className={styles.actions}>
-            <button type="button" className={`${styles.button} ${styles.primary}`} disabled={state.writing} onClick={() => void c.execute()} data-rx-execute="">
+            <button type="button" className={`${styles.button} ${styles.primary}`} disabled={state.writing} onClick={c.execute} data-rx-execute="">
               {state.writing ? "Envoi…" : resume ? "Confirmer la vérification / reprise" : "Confirmer l’émission"}
             </button>
             <button type="button" className={styles.button} disabled={state.writing} onClick={() => c.cancel()}>Annuler</button>
