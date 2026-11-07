@@ -139,7 +139,9 @@ test("câblage entreprise : chaîne du devis affiché, acceptation bloquée, fri
   assert.match(src, /const blocking = Boolean\(approval && approval\.status !== "approved"\) \|\| advancedBlocked;/);
   assert.match(src, /approval: advancedApproval \?\? timelineApproval,/);
   assert.match(src, /<SitePolicyPanel\s+siteId=\{site\.id\}/);
-  assert.match(src, /MOUNT POINT \(reserved\): operational reminders leaf/);
+  // The reserved spot is now filled by the compliance reminder panel, above « Échéances & conformité » rows.
+  assert.doesNotMatch(src, /MOUNT POINT \(reserved\)/);
+  assert.match(src, /<ComplianceReminderPanel complianceId=\{r\.id\}/);
   await withApp(async (open) => {
     for (const route of ["manager-detail.demo-001", "manager-site.site-1"]) {
       const { page, errors, api } = await open(route, 390);
