@@ -106,6 +106,7 @@ export function RequestForm({
   onDemo,
   preferredAddress = null,
   finalStep,
+  initialPhotos,
 }: {
   initialCategory: Category;
   initialValues: RequestValues | null;
@@ -121,6 +122,8 @@ export function RequestForm({
    *  payment choice and the single final recap/confirmation (BookingConfirm). The form's own recap
    *  step is skipped and nothing is sent here, so it never reads like « Enregistrer ». */
   finalStep?: { label: string; note: string };
+  /** Photos already chosen for a kept booking (edit): shown and editable, same 6-photo cap. */
+  initialPhotos?: File[];
 }) {
   const [step, setStep] = useState(1);
   // On each step change (not on first render) move focus AND the viewport to the new step title,
@@ -143,7 +146,7 @@ export function RequestForm({
   useEffect(() => {
     setGeolocation(typeof navigator !== "undefined" && navigator.geolocation ? navigator.geolocation : null);
   }, []);
-  const [photos, setPhotos] = useState<File[]>([]);
+  const [photos, setPhotos] = useState<File[]>(() => (initialPhotos ?? []).slice(0, 6));
   const [photoError, setPhotoError] = useState("");
   function addPhotos(list: FileList | null) {
     if (!list) return;
@@ -207,7 +210,7 @@ export function RequestForm({
         <p>Le bon point de départ pour résoudre votre problème électrique.</p>
       </div>
       <ol className="stepper">
-        {["Le problème", "Le lieu et le besoin", "Le récapitulatif"].map(
+        {["Le problème", "Le lieu et le besoin", finalStep ? "Règlement et confirmation" : "Le récapitulatif"].map(
           (s, i) => (
             <li key={s} className={step >= i + 1 ? "current" : ""}>
               <span>
