@@ -1,4 +1,5 @@
 "use client";
+// PHASE8 (claim, Claude UI): finding-driven quality pass on the client and artisan spaces.
 // Espace particulier (rôle "client"). Présentation uniquement : chaque mutation passe par
 // `session.*`. Références : M61 (accueil mobile), V8-C07 (détail d’intervention), V8-C06
 // (devis), M7 (suivi). Mobile < 1024 px : navigation basse ; desktop : barre latérale.
