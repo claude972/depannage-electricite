@@ -1,0 +1,24 @@
+/* Account data (SYS-09 / PUB-10). --ui-* tokens only, light/dark, 1px borders, 44 px targets. */
+.panel { display: grid; gap: 12px; padding: 20px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-card); color: var(--ui-text); min-width: 0; }
+.panel h2, .panel h3 { margin: 0; }
+.panel h3 { font-size: 15px; }
+.hint { margin: 0; font-size: 13px; color: var(--ui-text-muted); }
+.note { margin: 0; padding: 10px 12px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); }
+.error { margin: 0; color: var(--ui-danger); font-size: 14px; }
+.ok { margin: 0; color: var(--ui-success); font-size: 14px; }
+.block { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--ui-border); }
+.progress { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 14px; }
+.progress li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; padding: 6px 0; border-bottom: 1px solid var(--ui-border); }
+.state { color: var(--ui-text-muted); }
+.progress li[data-status="done"] .state { color: var(--ui-success); }
+.progress li[data-status="error"] .state { color: var(--ui-danger); }
+.confirm { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); }
+.confirm p { margin: 0; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.primary, .secondary, .danger { min-height: 44px; padding: 0 16px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); font: inherit; font-weight: 600; cursor: pointer; justify-self: start; }
+.primary { border-color: var(--ui-primary); background: var(--ui-primary); color: var(--ui-on-primary); }
+.secondary { background: var(--ui-card); color: var(--ui-text); }
+.danger { border-color: var(--ui-danger); background: var(--ui-card); color: var(--ui-danger); }
+.primary:disabled, .secondary:disabled, .danger:disabled { opacity: 0.6; cursor: not-allowed; }
+.primary:focus-visible, .secondary:focus-visible, .danger:focus-visible { outline: 3px solid var(--ui-focus); outline-offset: 2px; }
+@media (max-width: 640px) { .primary, .secondary, .danger { justify-self: stretch; } .actions > * { flex: 1 1 100%; } }
