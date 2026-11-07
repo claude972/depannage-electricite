@@ -54,3 +54,11 @@ Processus terminé, navigateur fermé puis cleanup transactionnel exact. Readbac
 Factures customer e9edb30 intégré 1f52c92 : revue ROOT des audiences, projections et renderer existant ; 6 tests HTTP/PDF et 40 SQL isolés PASS, tsc PASS. Migration 20261107020603 appliquée, registre et routes opérateur inchangés. L’accès client/artisan/org vise uniquement leurs factures déjà émises ; aucune émission ni confirmation bancaire créée pour tester. UI et nouvelle recette à suivre.
 
 Site areas 1e1bb6c intégré fa0c7fe : contre-revue ROOT API/schema/SQL, 6 tests HTTP et58 SQL isolés PASS +tsc. Migration réelle 20261107021512 appliquée : étages/zones/parties communes, profondeur maximale4, anti-cycle et parent même site, quota1000, versions/rejeu/archivage. Aucun remap d’équipements ou intervention ni règle réglementaire inventée. UI et recette navigateur restent à livrer.
+
+## Assemblage B2B suivant — 6 novembre 22h30 AST
+
+Source fe4f24c : **1297 tests PASS, zéro échec/skip**, TypeScript strict non incrémental PASS. Cette suite inclut les nouvelles interfaces adresses/préférences, contacts, SLA, factures et le libellé de paiement qui ne présente plus le devis de base comme la somme à régler après avenants. Elle ne vaut pas recette hébergée de ces ajouts.
+
+Étages/zones/parties communes : feuille17244cc et câblage89e9542 relus ROOT et intégrés ;8 tests ciblés PASS. Tous types de sites, lecture seule et arborescence paginée explicite. Aucun lien équipement/dossier inventé.
+
+Copropriété3893ac8 :6 handlers HTTP et69 assertions SQL PGlite indépendants PASS ; source SQL/API relue. Migration réelle20261107022649 appliquée. Transaction réelle intégralement rollback : AG documentaire, reprise/audit unique, appel lié, refus archivage AG avec dépendance, montant gelé après émission, lecture viewer/refus écriture et cloisonnement extérieur PASS. Readback indépendant six périmètres Auth/profils/org/sites/records/events tous0. Pas de quorum, validation juridique, avis envoyé ni encaissement revendiqués. Interface en cours chez Claude.
