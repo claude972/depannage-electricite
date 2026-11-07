@@ -185,7 +185,7 @@ test("layout: neutral theme-color per scheme, aligned with the manifest and THEM
   const { readFileSync } = await import("node:fs");
   const layout = readFileSync("app/layout.tsx", "utf8");
   assert.match(layout, /media: "\(prefers-color-scheme: light\)", color: "#FFFFFF"/);
-  assert.match(layout, /media: "\(prefers-color-scheme: dark\)", color: "#000000"/);
+  assert.match(layout, /media: "\(prefers-color-scheme: dark\)", color: "#121417"/);
   assert.doesNotMatch(layout, /#102a43/);
   assert.match(readFileSync("app/manifest.ts", "utf8"), /theme_color: "#ffffff"/i);
 });
@@ -336,7 +336,7 @@ test("real React (StrictMode) in Chromium: script + provider + toggle, persisten
     const toggle = p.getByRole("button", { name: "Thème sombre" });
     await toggle.waitFor();
     assert.equal(await toggle.getAttribute("aria-pressed"), "true");
-    assert.equal(await p.evaluate(() => document.querySelector('meta[name="theme-color"]')!.getAttribute("content")), "#000000");
+    assert.equal(await p.evaluate(() => document.querySelector('meta[name="theme-color"]')!.getAttribute("content")), "#121417");
     const box = await toggle.boundingBox();
     assert.ok(box && box.height >= 44, `toggle height ${box?.height}`);
     await toggle.press("Enter");

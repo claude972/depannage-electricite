@@ -39,7 +39,7 @@ export const viewport: Viewport = {
   // Themed surfaces override every variant with the explicit choice while mounted.
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },
-    { media: "(prefers-color-scheme: dark)", color: "#000000" },
+    { media: "(prefers-color-scheme: dark)", color: "#121417" },
   ],
 };
 export default function RootLayout({

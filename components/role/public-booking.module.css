@@ -303,7 +303,7 @@
   cursor: pointer;
 }
 .barButton:hover {
-  background: #136640;
+  background: var(--ui-primary-hover);
 }
 .back:focus-visible,
 .barButton:focus-visible,
