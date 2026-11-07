@@ -136,7 +136,8 @@ function NotificationItem({ notification: n, pending, writable, error, onMark, o
     </article>
   );
 }
-function PreferencesPanel({ client, demo, writable, onClose }: { client: NotificationsClient; demo?: PreferencesView; writable: boolean; onClose: () => void }) {
+/** Also mounted on its own (client profile, CLI-09): same load/save contract, no copy of the form. */
+export function PreferencesPanel({ client, demo, writable, onClose }: { client: NotificationsClient; demo?: PreferencesView; writable: boolean; onClose?: () => void }) {
   const id = useId();
   const [view, setView] = useState<PreferencesView | null | undefined>(demo ?? undefined);
   const [loadError, setLoadError] = useState("");
@@ -195,7 +196,7 @@ function PreferencesPanel({ client, demo, writable, onClose }: { client: Notific
       {saved && <p className={styles.notice} role="status">{saved}</p>}
       <div className={styles.prefsActions}>
         {writable && <button type="submit" className="button primary" disabled={busy}>{busy ? "Enregistrement…" : "Enregistrer"}</button>}
-        <button type="button" className="text-button" onClick={onClose}>Fermer</button>
+        {onClose && <button type="button" className="text-button" onClick={onClose}>Fermer</button>}
       </div>
     </form>
   );
