@@ -43,10 +43,10 @@ export const STEP_ACTIONS: Record<BookingStep, string> = { 1: "Continuer", 2: "C
 /** Payment copy: honest, no « payé », no guarantee. */
 export const STEP_ACTION = STEP_ACTIONS;
 export const PAYMENT_COPY: Record<PaymentChoice, { title: string; text: string }> = {
-  on_site: { title: "Règlement sur place", text: "Vous réglez l’artisan après l’intervention. La demande reste non payée jusque-là." },
+  on_site: { title: "Après intervention, sur la plateforme", text: "Réglez après les travaux sur notre plateforme, par carte via votre suivi, un lien sécurisé ou un QR code. Aucun paiement direct à l’artisan." },
   card_hold: { title: "Empreinte bancaire", text: "Une autorisation sur votre carte, sans débit à la réservation. Seul le montant du devis accepté pourra être prélevé ensuite." },
 };
-export const CARD_UNAVAILABLE = "Bientôt disponible. En attendant, choisissez le règlement sur place.";
+export const CARD_UNAVAILABLE = "Bientôt disponible. En attendant, choisissez le paiement après intervention sur la plateforme.";
 export const METHOD_UNAVAILABLE = "Ce mode de règlement n’est pas disponible pour le moment.";
 export const OPTIONS_FAILED = "Options de paiement momentanément indisponibles, réessayez.";
 export const SMS_OFF = "La vérification par SMS n’est pas encore disponible.";

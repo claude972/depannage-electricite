@@ -315,7 +315,7 @@ function PricingView({ onNew }: { onNew: () => void }) {
             <span className={styles.stepNumber}>3</span>
             <div>
               <strong>Le montant réglé</strong>
-              <p>Proposé une fois l’intervention terminée, sur la base du devis accepté. Le règlement est traité avec Stripe ; il n’est considéré comme encaissé qu’après confirmation de la plateforme, jamais sur la seule redirection.</p>
+              <p>Proposé une fois l’intervention terminée, sur la base du devis accepté. Le paiement se fait toujours sur la plateforme (carte via votre suivi, lien sécurisé ou QR code), jamais directement à l’artisan ; il n’est considéré comme encaissé qu’après confirmation de la plateforme, jamais sur la seule redirection.</p>
             </div>
           </li>
         </ol>

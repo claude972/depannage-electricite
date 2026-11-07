@@ -66,7 +66,7 @@ export function BookingConfirm({
     if (inFlight.current || busy) return; // one POST only
     if (booking.payment === "card_hold" && !cardAvailable) {
       // Never a fake card form or a request presented as covered by an authorisation.
-      setProblem("L’empreinte bancaire n’est pas encore disponible. Choisissez le règlement sur place pour envoyer votre demande ; rien n’a été envoyé.");
+      setProblem("L’empreinte bancaire n’est pas encore disponible. Choisissez le paiement après intervention sur la plateforme pour envoyer votre demande ; rien n’a été envoyé.");
       return;
     }
     inFlight.current = true;
@@ -115,7 +115,7 @@ export function BookingConfirm({
             <dd data-booking-payment="">
               À choisir.{" "}
               <button type="button" className="text-button" disabled={sending || busy} onClick={() => { onPaymentChange("on_site"); setProblem(""); }}>
-                Règlement sur place
+                Paiement après intervention sur la plateforme
               </button>
             </dd>
           </div>
@@ -128,7 +128,7 @@ export function BookingConfirm({
               <br />
               <small>
                 {booking.payment === "on_site"
-                  ? "Rien n’est payé à la réservation ; le montant final figure dans le devis détaillé."
+                  ? "Rien n’est payé à la réservation. Après les travaux, vous réglez le montant du devis accepté sur la plateforme (carte via votre suivi, lien sécurisé ou QR code) — jamais directement à l’artisan."
                   : "Une empreinte n’est pas un débit ; seul le montant du devis accepté peut être prélevé."}
               </small>
               {booking.payment === "card_hold" && booking.request_id && (verifyCardHold || cancelCardHold) && (
@@ -150,7 +150,7 @@ export function BookingConfirm({
                 <>
                   <br />
                   <button type="button" className="text-button" disabled={sending || busy} onClick={() => { onPaymentChange("on_site"); setProblem(""); }}>
-                    Choisir le règlement sur place
+                    Choisir le paiement après intervention sur la plateforme
                   </button>
                 </>
               )}

@@ -25,7 +25,9 @@ test("fetch: intervention_id only, 404 ⇒ legacy, other errors ⇒ unavailable"
 
 test("wording: on site never « payé »; card dated, not a charge, not forever", () => {
   const onSite = bookingPaymentText({ method: "on_site", status: "due_on_site" }, (d) => d);
-  assert.match(onSite, /Aucun encaissement n’a été confirmé/);
+  assert.match(onSite, /Aucun paiement n’a encore été confirmé/);
+  assert.match(onSite, /sur la plateforme/);
+  assert.match(onSite, /ne réglez jamais l’artisan directement/);
   assert.doesNotMatch(onSite, /\bpayé\b/);
   const card = bookingPaymentText({ method: "card_hold", status: "authorization_recorded", checked_at: "2026-11-01" }, (d) => `le ${d}`.replace("le ", ""));
   assert.match(card, /vérifiée le 2026-11-01/);
@@ -66,12 +68,12 @@ test("settlement leaf: mounted only for a completed card-hold booking with an ac
   assert.match(app, /const cardContext = \{ generation: \(\) => guard\.generation\(\), userId: \(\) => userId\.current \};/);
 });
 
-test("on-site cash: client widget on completed|paid replaces the « aucun encaissement » line; artisan widget in the dossier; refresh only while not paid", () => {
+test("after-intervention: client widget on completed|paid replaces the generic line; NO artisan widget; refresh only while not paid", () => {
   const client = readFileSync("components/role/client-space.tsx", "utf8");
   assert.match(client, /currentBookingStatus\.payment\.method === "on_site" && \(i\.status === "completed" \|\| i\.status === "paid"\) && \(\s*<OnsiteSettlement[\s\S]*?viewer="client"[\s\S]*?onSettled=\{i\.status === "paid" \? undefined : \(\) => void session\.refresh\(\)\}/);
   assert.match(client, /currentBookingStatus\?\.kind === "booking" && !\(currentBookingStatus\.payment\.method === "on_site" && \(i\.status === "completed" \|\| i\.status === "paid"\)\) && \(\s*<p className=\{styles\.paymentLine\}/, "no contradictory sentence next to the cash widget");
   const artisan = readFileSync("components/role/artisan-space.tsx", "utf8");
-  assert.match(artisan, /\["completed", "paid"\]\.includes\(i\.status\) && session\.mode === "live" && \(\s*<OnsiteSettlement[\s\S]*?viewer="artisan"[\s\S]*?context=\{session\.mutationContext\}[\s\S]*?onSettled=\{i\.status === "paid" \? undefined : \(\) => void session\.refresh\(\)\}/);
+  assert.doesNotMatch(artisan, /<OnsiteSettlement/, "platform-only: no artisan declaration widget for new operations");
   assert.doesNotMatch(client, /viewer="artisan"/, "a client never gets the artisan declaration");
 });
 

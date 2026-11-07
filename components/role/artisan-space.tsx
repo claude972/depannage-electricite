@@ -78,7 +78,6 @@ import theme from "./artisan-theme.module.css";
 import { ThemeSurface } from "../app/theme-provider";
 import { ThemeToggle } from "../app/theme-toggle";
 import { QuoteDraftEditor } from "./artisan-quote-draft";
-import { OnsiteSettlement } from "./onsite-settlement";
 import { isDeclaredOnSite } from "../app/booking-status";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
@@ -1516,17 +1515,8 @@ function WorkDossier({ session, intervention: i }: { session: Session; intervent
         </div>
         <aside className={styles.dossierSide}>
           <ParticipantsPanel ops={ops} pending={pending} state={state} />
-          {/* On-site receipt declaration (booking dossiers only: the leaf renders nothing on 404).
-              A declaration, never a bank payment. */}
-          {["completed", "paid"].includes(i.status) && session.mode === "live" && (
-            <OnsiteSettlement
-              key={`${session.profileId}|${i.id}`}
-              interventionId={i.id}
-              viewer="artisan"
-              context={session.mutationContext}
-              onSettled={i.status === "paid" ? undefined : () => void session.refresh()}
-            />
-          )}
+          {/* Platform-only payment: no artisan declaration of a payment received on site. The
+              payment panel below shows the state (and keeps historical declarations honest). */}
           {["completed", "paid"].includes(i.status) && (
             <PaymentPanel session={session} intervention={i} />
           )}
@@ -2150,7 +2140,7 @@ function PaymentPanel({ session, intervention: i }: { session: Session; interven
     text = "Le dernier paiement n’a pas abouti selon Stripe. Le règlement reste attendu ; aucune nouvelle tentative n’est lancée automatiquement.";
   } else {
     tag = <Tag tone="neutral">Règlement attendu du client</Tag>;
-    text = "Le client est invité à régler le devis accepté. Un paiement en ligne est déclenché par le client, jamais depuis cet espace ; pour une réservation réglée sur place, déclarez le montant reçu dans le bloc dédié.";
+    text = "Le client règle le devis accepté sur la plateforme après l’intervention (carte via son suivi, lien sécurisé ou QR code). N’acceptez aucun paiement direct : espèces, terminal ou virement personnel.";
   }
   return (
     <section className="panel" aria-labelledby="dossier-payment">

@@ -67,7 +67,7 @@ test("guest checkout: payment line shown; card hold not available ⇒ honest ref
   assert.doesNotMatch(onSite, /\bpayé\b(?! à la réservation)/, "never « payé »");
   const card = renderToStaticMarkup(createElement(BookingConfirm, { draft, booking: { ...booking, payment: "card_hold" }, busy: false, profileId: "u1", confirmBooking: async () => true, onEdit() {}, onContactChange() {}, onPaymentChange() {} }));
   assert.match(card, /Une empreinte n’est pas un débit/);
-  assert.match(card, /Choisir le règlement sur place/);
+  assert.match(card, /Choisir le paiement après intervention sur la plateforme/);
   const src = readFileSync("components/role/booking-confirm.tsx", "utf8");
   const send = src.slice(src.indexOf("async function send()"));
   assert.ok(send.indexOf('booking.payment === "card_hold" && !cardAvailable') < send.indexOf("await confirmBooking()"), "refused before the POST");
@@ -78,5 +78,5 @@ test("card hold with a key: « Vérifier mon empreinte » (server finalize) and 
   assert.match(card, /data-booking-card-actions=""/);
   assert.match(card, /Vérifier mon empreinte/);
   assert.match(card, /Annuler la réservation par carte/);
-  assert.doesNotMatch(card, /Choisir le règlement sur place/, "the mode/key change only after a server « cancelled »");
+  assert.doesNotMatch(card, /Choisir le paiement après intervention sur la plateforme/, "the mode/key change only after a server « cancelled »");
 });
