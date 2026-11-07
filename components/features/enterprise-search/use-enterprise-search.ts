@@ -19,8 +19,11 @@ export function useEnterpriseSearch({ enabled, context, filters, page, api }: { 
   const ctrl = useRef<ReturnType<typeof createSearchController> | null>(null);
   const latest = useRef({ api, context, filters });
   latest.current = { api, context, filters };
+  // No scope (filters null) ⇒ no controller at all: leaving the scope stops it, so an export in flight
+  // is dropped and A → none → A never saves the original file.
+  const active = enabled && filters !== null;
   useEffect(() => {
-    if (!enabled) return;
+    if (!active) return;
     let client: SearchApi | null = null;
     const c = createSearchController({ api: () => (client ??= latest.current.api ?? createSearchApi()), context: latest.current.context, set: setState, timers: { set: (f, ms) => setTimeout(f, ms), clear: (h) => clearTimeout(h as ReturnType<typeof setTimeout>) } });
     ctrl.current = c;
@@ -29,7 +32,7 @@ export function useEnterpriseSearch({ enabled, context, filters, page, api }: { 
       if (ctrl.current === c) ctrl.current = null;
       setState(SEARCH_INITIAL);
     };
-  }, [enabled, identity]);
+  }, [active, identity]);
   const key = filters ? JSON.stringify([filters.organization_id, filters.site_id, filters.category, filters.status, filters.search.trim(), filters.sort, page]) : "";
   useEffect(() => {
     if (enabled && filters) ctrl.current?.query(filters, page);

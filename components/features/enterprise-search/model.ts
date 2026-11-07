@@ -173,7 +173,10 @@ export function createSearchController({ api, context, set, timers, save = saveB
     if (!valid(my, req)) return;
     const r = await api().list(req);
     if (!valid(my, req)) return; // stale sequence, other identity, other filters or page: dropped
-    if (r.status === 401 || r.status === 403) return put({ ...SEARCH_INITIAL, key: keyOf(req), phase: "forbidden", error: COPY.forbidden });
+    if (r.status === 401 || r.status === 403) {
+      epoch++; // authorisation refused: any export in flight is invalidated (its CSV is never saved)
+      return put({ ...SEARCH_INITIAL, key: keyOf(req), phase: "forbidden", error: COPY.forbidden });
+    }
     const p = r.status === 200 ? parseListPage(r.body, req) : null;
     if (!p) return put({ ...state, key: keyOf(req), phase: "error", items: [], error: COPY.failed });
     put({ ...state, key: keyOf(req), phase: "ready", items: p.items, total: p.total, page: p.page.number, pages: p.page.pages, error: "" });
@@ -221,6 +224,11 @@ export function createSearchController({ api, context, set, timers, save = saveB
         return false;
       }
       if (r.status === 401 || r.status === 403) {
+        // Authorisation refused: invalidate any list read in flight (and its debounce) so an earlier
+        // authorised 200 can never re-show rows.
+        seq++;
+        cancelTimer();
+        epoch++;
         put({ ...SEARCH_INITIAL, key: state.key, phase: "forbidden", error: COPY.forbidden });
         return false;
       }
