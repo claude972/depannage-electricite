@@ -1,0 +1,138 @@
+/* Provider teams leaf — tokens only, light/dark through --ui-*. */
+.panel {
+  display: grid;
+  gap: var(--ui-space-3);
+  margin-top: var(--ui-space-4);
+  padding: var(--ui-space-4);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-card);
+  color: var(--ui-text);
+  min-width: 0;
+}
+.title {
+  margin: 0;
+  font-size: 18px;
+}
+.subtitle {
+  margin: 0;
+  font-size: 15px;
+}
+.note,
+.text {
+  margin: 0;
+  color: var(--ui-text);
+  overflow-wrap: anywhere;
+}
+.muted {
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: 14px;
+}
+.error {
+  margin: 0;
+  color: var(--ui-danger);
+}
+.block,
+.team,
+.form {
+  display: grid;
+  gap: var(--ui-space-2);
+  min-width: 0;
+}
+.team,
+.mission {
+  padding: var(--ui-space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+}
+.mission {
+  display: grid;
+  gap: var(--ui-space-2);
+  background: var(--ui-surface);
+}
+.list {
+  display: grid;
+  gap: var(--ui-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-2);
+  overflow-wrap: anywhere;
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-2);
+}
+.label {
+  font-weight: 600;
+}
+.input {
+  min-height: 44px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 var(--ui-space-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font: inherit;
+}
+textarea.input {
+  padding: var(--ui-space-2);
+}
+.button {
+  min-height: 44px;
+  padding: 0 var(--ui-space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-card);
+  color: var(--ui-text);
+  font: inherit;
+  cursor: pointer;
+}
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.button:focus-visible,
+.input:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+.primary {
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+.tabActive {
+  border-color: var(--ui-primary);
+  color: var(--ui-accent);
+  font-weight: 600;
+}
+.kv {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--ui-space-1) var(--ui-space-3);
+  margin: 0;
+}
+.kv dt {
+  color: var(--ui-text-muted);
+}
+.kv dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 390px) {
+  .kv {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
