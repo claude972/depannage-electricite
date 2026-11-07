@@ -15,7 +15,7 @@ const DEMO_NOTE = "Mode démonstration : aucune action n’est envoyée.";
 export function PlatformOperatorsView(props: PlatformOperatorsViewProps) {
   return <Gate state={props.state} unavailableMessage={props.unavailableMessage} title="Opérateurs de plateforme"><Inner key={scopeKey(props.scope)} {...props} /></Gate>;
 }
-function Inner({ scope, client, demo }: PlatformOperatorsViewProps) {
+function Inner({ scope, client, demo, onNavigate }: PlatformOperatorsViewProps) {
   const [status, setStatus] = useState<"" | "active" | "revoked">("active");
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const cursor = cursors[cursors.length - 1] ?? null;
@@ -42,7 +42,7 @@ function Inner({ scope, client, demo }: PlatformOperatorsViewProps) {
       {message && <p className={message.kind === "ok" ? styles.success : styles.error} role={message.kind === "ok" ? "status" : "alert"}>{message.text}</p>}
       <Panel title="Scopes accordés" intro={`Super administrateurs actifs : ${me.data.super_admin_count ?? "—"}. Un super administrateur détient tout implicitement et ne reçoit aucun scope.`}
         action={<div className={styles.toolbar}><label>Statut<select value={status} onChange={(e) => { setStatus(e.target.value as typeof status); setCursors([null]); }}><option value="">Tous</option><option value="active">Actifs</option><option value="revoked">Révoqués</option></select></label></div>}>
-        <GrantTable list={list} canWrite={canWrite} busy={busy} onRevoke={(grant) => act(() => client.command.revoke({ grant_id: grant.id, note: "" }), "Scope révoqué ; l’historique est conservé.")} />
+        <GrantTable list={list} canWrite={canWrite} busy={busy} onNavigate={onNavigate} onRevoke={(grant) => act(() => client.command.revoke({ grant_id: grant.id, note: "" }), "Scope révoqué ; l’historique est conservé.")} />
         {list.data && <Pager page={list.data.page} canPrev={cursors.length > 1} onPrev={() => setCursors((c) => c.slice(0, -1))} onNext={() => list.data?.page.next_cursor && setCursors((c) => [...c, list.data!.page.next_cursor])} />}
       </Panel>
       {canWrite && <GrantForm busy={busy} grants={list.data?.grants ?? []} onSubmit={(input) => act(() => client.command.grant(input), "Scope accordé et audité.")} />}
@@ -50,7 +50,26 @@ function Inner({ scope, client, demo }: PlatformOperatorsViewProps) {
     </div>
   );
 }
-function GrantTable({ list, canWrite, busy, onRevoke }: { list: ReturnType<typeof useLoad<{ grants: OperatorGrant[]; page: { limit: number; total: number; has_more: boolean; next_cursor: string | null } }>>; canWrite: boolean; busy: boolean; onRevoke: (grant: OperatorGrant) => void }) {
+/** The account's record, ONLY from the profile role the server may send with the grant (optional,
+ *  strict values): client / manager ⇒ client record, artisan ⇒ artisan record. Admin, absent or
+ *  unknown ⇒ no link (a scope can be granted to any non-admin profile; never guessed). */
+export function grantAccountTarget(grant: OperatorGrant): { target: "client" | "artisan"; id: string } | null {
+  const role = (grant as OperatorGrant & { role?: unknown }).role;
+  if (role === "client" || role === "manager") return { target: "client", id: grant.user_id };
+  if (role === "artisan") return { target: "artisan", id: grant.user_id };
+  return null;
+}
+export function GrantAccount({ grant, onNavigate }: { grant: OperatorGrant; onNavigate?: (view: string, param?: string) => void }) {
+  const name = grant.full_name || "Compte";
+  const t = grantAccountTarget(grant);
+  if (!t || !onNavigate) return <>{name}</>;
+  return (
+    <button type="button" className="text-button" onClick={() => onNavigate(t.target, t.id)} data-grant-open-account={t.id} data-grant-target={t.target}>
+      {name} · {t.target === "artisan" ? "dossier artisan" : "fiche client"}
+    </button>
+  );
+}
+function GrantTable({ list, canWrite, busy, onRevoke, onNavigate }: { onNavigate?: (view: string, param?: string) => void; list: ReturnType<typeof useLoad<{ grants: OperatorGrant[]; page: { limit: number; total: number; has_more: boolean; next_cursor: string | null } }>>; canWrite: boolean; busy: boolean; onRevoke: (grant: OperatorGrant) => void }) {
   const [confirm, setConfirm] = useState<string | null>(null);
   if (list.loading && !list.data) return <Loading />;
   if (list.error && !list.data) return <ErrorBox message={list.error} onRetry={list.reload} />;
@@ -60,7 +79,7 @@ function GrantTable({ list, canWrite, busy, onRevoke }: { list: ReturnType<typeo
       <thead><tr><th>Compte</th><th>Scope</th><th>Statut</th><th>Accordé</th><th>Révoqué</th>{canWrite && <th>Action</th>}</tr></thead>
       <tbody>{list.data.grants.map((g) => (
         <tr key={g.id}>
-          <td>{g.full_name || "Compte"} <span className={styles.mono}>{shortId(g.user_id)}</span>{g.note && <div className={styles.hint}>{g.note}</div>}</td>
+          <td><GrantAccount grant={g} onNavigate={onNavigate} /> <span className={styles.mono}>{shortId(g.user_id)}</span>{g.note && <div className={styles.hint}>{g.note}</div>}</td>
           <td>{SCOPE_LABELS[g.scope]}<div className={styles.hint}>{SCOPE_DESCRIPTIONS[g.scope]}</div></td>
           <td><span className={`tag ${g.status === "active" ? "tag-green" : "tag-amber"}`}>{g.status === "active" ? "Actif" : "Révoqué"}</span></td>
           <td>{dateTime(g.granted_at)}</td>

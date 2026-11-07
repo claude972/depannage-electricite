@@ -32,10 +32,11 @@ test("demo never calls the energy route and says so", () => {
   assert.doesNotMatch(src, /Aucune source (de consommation|énergétique) n’est raccordée/);
 });
 
-test("reports point to per-site energy and compute no consolidated total", () => {
+test("reports consolidate declared energy through the read-only leaf (ENT-09/15), no per-site editor and no local total", () => {
   const start = src.indexOf("function ReportsView(");
   const reports = src.slice(start, src.indexOf("\nfunction ", start + 10));
-  assert.match(reports, /title="Consommation d’énergie \(consolidé\)"[\s\S]{0,300}?site par site[\s\S]{0,200}?Aucun total multi-sites n’est calculé ici\./);
+  assert.match(reports, /<EnergyConsolidationPanel/);
+  assert.doesNotMatch(reports, /title="Consommation d’énergie \(consolidé\)"/, "the old pointer is gone");
   assert.doesNotMatch(reports, /SiteEnergyPanel|consumption_wh/);
 });
 

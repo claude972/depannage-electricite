@@ -100,6 +100,7 @@ import { useDetailPresence } from "./use-detail-presence";
 import { PointReadState } from "./detail-read-view";
 import { SiteOperationsView } from "../features/site-operations/site-operations-view";
 import { SiteEnergyPanel } from "../features/energy/site-energy-panel";
+import { EnergyConsolidationPanel } from "../features/energy-consolidation/energy-consolidation-panel";
 import { SiteContactsPanel } from "../features/site-contacts/site-contacts-panel";
 import { SiteAreasPanel } from "../features/site-areas/site-areas-panel";
 import { OrganizationSitesList, SiteSettingsPanel } from "../features/site-lifecycle/site-lifecycle-panels";
@@ -461,7 +462,6 @@ export function EnterpriseSpace({ session }: { session: Session }) {
             <NewRequestView key={param} c={c} siteId={param} />
           );
         case "detail":
-        case "quote":
           return (
             <DossierView
               key={`${param || session.selectedId}-${session.selectedQuoteId}`}
@@ -469,6 +469,14 @@ export function EnterpriseSpace({ session }: { session: Session }) {
               id={param || session.selectedId}
             />
           );
+        case "quote": {
+          // #quote/<quote id> (deep links, notifications) opens the dossier of THAT quote; an id that
+          // is not a loaded quote is treated as a dossier id, as before (unknown ⇒ honest not-found).
+          const ref = param || session.selectedId;
+          const quote = session.data.quotes.find((q) => q.id === ref);
+          const dossierId = quote ? quote.intervention_id : ref;
+          return <DossierView key={`${dossierId}-${quote?.id ?? session.selectedQuoteId}`} c={c} id={dossierId} />;
+        }
         case "sites":
           return <SitesView c={c} />;
         case "site":
@@ -3403,12 +3411,14 @@ function ReportsView({ c }: { c: Ctx }) {
           </Empty>
         )}
       </section>
+      <EnergyConsolidationPanel
+        key={`${c.organization?.id ?? "-"}|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`}
+        organizationId={c.organization?.id ?? null}
+        sites={c.orgSites.map((x) => ({ id: x.id, name: x.name, archived: Boolean((x as { archived_at?: string | null }).archived_at) }))}
+        demo={demo}
+        context={session.mutationContext}
+      />
       <div className={styles.threeCol}>
-        <Unavailable
-          title="Consommation d’énergie (consolidé)"
-          reason="Les périodes de consommation (factures, relevés de compteur, saisies) se déclarent et se consultent site par site, dans la fiche de chaque site. Aucun total multi-sites n’est calculé ici."
-          blocker="ENT-09"
-        />
         <Unavailable
           title="Assemblées générales & appels de fonds (consolidé)"
           reason="Les assemblées générales et appels de fonds se consignent copropriété par copropriété, dans la fiche de chaque site en syndic. Aucun total multi-sites n’est calculé ici ; l’application ne calcule aucun quorum et n’encaisse rien."
