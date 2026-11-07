@@ -100,6 +100,7 @@ import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-in
 import { AvailableMissionsPanel } from "../features/available-missions/available-missions-panel";
 import type { MissionsOrder } from "../features/available-missions/available-missions-model";
 import { MissionRadiusPanel } from "../features/mission-radius/mission-radius-panel";
+import { MissionHistoryPanel, historyLabel, type HistoryCounts, type HistoryItem } from "../features/mission-history/mission-history-panel";
 import type { MissionOffer } from "../features/available-missions/available-missions-model";
 import {
   applicationSteps,
@@ -1122,9 +1123,62 @@ function Missions({ session, declinedIds }: { session: Session; declinedIds: str
   const done = [...m.awaitingPayment, ...m.done].sort(
     (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
   );
+  // Live « En cours » / « Terminées »: paged server history; counts only from the server's `counts`
+  // (same identity), never from the 100-row cache — no number until read.
+  const [historyCounts, setHistoryCounts] = useState<{ ident: string; counts: HistoryCounts } | null>(null);
+  const liveCounts = historyCounts?.ident === ident ? historyCounts.counts : null;
   // Live: offers come from the paged server feed (beyond 100), so no exhaustive count is shown.
-  const options = missionSegmentOptions({ offers: demo ? offers.length : null, active: m.active.length, done: done.length });
+  const baseOptions = missionSegmentOptions({ offers: demo ? offers.length : null, active: m.active.length, done: done.length });
+  const options = demo ? baseOptions : baseOptions.map(([k, label]) => [k, k === "available" ? label : historyLabel(k, liveCounts)] as const);
   const open = (id: string) => session.go("mission", id);
+  const activeRight = (i: { id: string; urgency: string }) => (
+    <>
+      <strong>{shortId(i.id)}</strong>
+      <span>{i.urgency === "urgent" ? "Urgente" : "À planifier"}</span>
+    </>
+  );
+  const doneRight = (i: { id: string; paid_at?: string | null; completed_at?: string | null }) => (
+    <>
+      <strong>{shortId(i.id)}</strong>
+      <span>
+        {i.paid_at
+          ? `Réglée le ${date(i.paid_at)}`
+          : i.completed_at
+            ? `Terminée le ${date(i.completed_at)}`
+            : "Terminée"}
+      </span>
+    </>
+  );
+  const activeEmpty = (
+    <section className="panel">
+      <Empty
+        icon="briefcase"
+        title="Aucune mission en cours"
+        action={
+          <button
+            type="button"
+            className="button outline"
+            onClick={() => setSegment("available")}
+          >
+            Voir les missions disponibles
+          </button>
+        }
+      >
+        Acceptez une mission disponible pour commencer un dossier.
+      </Empty>
+    </section>
+  );
+  const doneEmpty = (
+    <section className="panel">
+      <Empty icon="check" title="Aucune intervention terminée">
+        Les interventions terminées et réglées seront listées ici.
+      </Empty>
+    </section>
+  );
+  // History rows reuse MissionRow, which only reads category / address / city / status / id.
+  const historyRow = (i: HistoryItem, right: ReactNode) => (
+    <MissionRow intervention={i as unknown as Intervention} right={right} onOpen={() => session.openIntervention(i.id)} />
+  );
   return (
     <>
       <PageTitle
@@ -1166,71 +1220,45 @@ function Missions({ session, declinedIds }: { session: Session; declinedIds: str
           session, masquée{hidden > 1 ? "s" : ""}.
         </p>
       )}
-      {segment === "active" &&
+      {segment === "active" && !demo && (
+        <MissionHistoryPanel
+          key={`${ident}|active`}
+          filter="active"
+          context={session.mutationContext}
+          onCounts={(counts) => setHistoryCounts({ ident, counts })}
+          empty={activeEmpty}
+          renderRow={(i) => historyRow(i, activeRight(i))}
+        />
+      )}
+      {segment === "done" && !demo && (
+        <MissionHistoryPanel
+          key={`${ident}|done`}
+          filter="done"
+          context={session.mutationContext}
+          onCounts={(counts) => setHistoryCounts({ ident, counts })}
+          empty={doneEmpty}
+          renderRow={(i) => historyRow(i, doneRight(i))}
+        />
+      )}
+      {segment === "active" && demo &&
         (m.active.length ? (
           <div className={styles.rows}>
             {m.active.map((i) => (
-              <MissionRow
-                key={i.id}
-                intervention={i}
-                right={
-                  <>
-                    <strong>{shortId(i.id)}</strong>
-                    <span>{i.urgency === "urgent" ? "Urgente" : "À planifier"}</span>
-                  </>
-                }
-                onOpen={() => open(i.id)}
-              />
+              <MissionRow key={i.id} intervention={i} right={activeRight(i)} onOpen={() => open(i.id)} />
             ))}
           </div>
         ) : (
-          <section className="panel">
-            <Empty
-              icon="briefcase"
-              title="Aucune mission en cours"
-              action={
-                <button
-                  type="button"
-                  className="button outline"
-                  onClick={() => setSegment("available")}
-                >
-                  Voir les missions disponibles
-                </button>
-              }
-            >
-              Acceptez une mission disponible pour commencer un dossier.
-            </Empty>
-          </section>
+          activeEmpty
         ))}
-      {segment === "done" &&
+      {segment === "done" && demo &&
         (done.length ? (
           <div className={styles.rows}>
             {done.map((i) => (
-              <MissionRow
-                key={i.id}
-                intervention={i}
-                right={
-                  <>
-                    <strong>{shortId(i.id)}</strong>
-                    <span>
-                      {i.paid_at
-                        ? `Réglée le ${date(i.paid_at)}`
-                        : i.completed_at
-                          ? `Terminée le ${date(i.completed_at)}`
-                          : "Terminée"}
-                    </span>
-                  </>
-                }
-                onOpen={() => open(i.id)}
-              />
+              <MissionRow key={i.id} intervention={i} right={doneRight(i)} onOpen={() => open(i.id)} />
             ))}
           </div>
         ) : (
-          <section className="panel">
-            <Empty icon="check" title="Aucune intervention terminée">
-              Les interventions terminées et réglées seront listées ici.
-            </Empty>
-          </section>
+          doneEmpty
         ))}
       {session.mode === "demo" && (
         <DemoNote>Offres et dossiers de démonstration : aucun client réel n’est concerné.</DemoNote>
