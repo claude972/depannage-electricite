@@ -328,7 +328,7 @@ export function ClientSpace({ session }: { session: Session }) {
           type="button"
           className={styles.sidebarBrand}
           onClick={() => session.go("overview")}
-          aria-label="Courant, vue d’ensemble"
+          aria-label="Vue d’ensemble"
         >
           <Brand />
         </button>
@@ -470,7 +470,7 @@ export function ClientSpace({ session }: { session: Session }) {
           <button
             type="button"
             onClick={() => session.go("overview")}
-            aria-label="Courant, accueil"
+            aria-label="Accueil"
           >
             <Brand compact />
           </button>

@@ -14,7 +14,7 @@ export function InstallPanel() {
         <div>
           <h2 id="install-title">Installer l’application</h2>
           <p>
-            Ajoutez Courant à l’écran d’accueil pour l’ouvrir en plein écran. Vos
+            Ajoutez l’application à l’écran d’accueil pour l’ouvrir en plein écran. Vos
             dossiers restent chargés depuis le serveur : hors connexion, seule une
             page d’information s’affiche.
           </p>

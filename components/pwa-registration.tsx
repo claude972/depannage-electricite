@@ -333,7 +333,7 @@ export function PwaInstallControl() {
       <PwaStyles />
       {available ? (
         <button type="button" disabled={busy} onClick={install} className="pwa-button">
-          {busy ? "Ouverture…" : "Installer Courant"}
+          {busy ? "Ouverture…" : "Installer l’application"}
         </button>
       ) : (
         <details>

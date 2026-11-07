@@ -228,7 +228,7 @@ test("/suivi : SMS désactivé ⇒ aucun formulaire téléphone, message honnêt
   // La page réelle (chargement initial) n’affiche aucun formulaire avant la réponse du serveur.
   const page = render(createElement(suivi.default as never));
   assert.doesNotMatch(page, /data-phone-access/);
-  assert.equal(suivi.metadata.title, "Suivre ma demande — Courant");
+  assert.equal(suivi.metadata.title, "Suivre ma demande — Dépannage électrique");
 });
 
 test("/suivi : SMS activé ⇒ PhoneAccess « lookup » (téléphone + nom + prénom), rien de listé avant vérification", () => {

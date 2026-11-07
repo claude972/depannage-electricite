@@ -1821,7 +1821,7 @@ export function ProfessionalOperations({
           ]),
         ];
         download(
-          "courant-suivi-demo.csv",
+          "suivi-demo.csv",
           "\uFEFF" +
             rows
               .map((row) =>
@@ -1845,7 +1845,7 @@ export function ProfessionalOperations({
         throw new Error(result.error || "Le rapport n’est pas disponible.");
       }
       download(
-        "courant-rapport.csv",
+        "rapport.csv",
         await response.text(),
         "text/csv;charset=utf-8",
       );
