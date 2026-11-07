@@ -16,6 +16,7 @@ const filtersSchema = z.object({
   urgency: z.enum(["urgent", "scheduled"]).nullable(),
   site_id: uuid.nullable(),
   artisan_id: uuid.nullable(),
+  client_id: uuid.nullable(),
   created_from: timestamp.nullable(),
   created_to: timestamp.nullable(),
   q: z.string().max(80).nullable(),
@@ -39,7 +40,7 @@ function readFilters(params: URLSearchParams): Filters {
   if (search && (search.length < 2 || search.length > 80 || !/^[\p{L}\p{M}\p{N} '\u2019-]+$/u.test(search))) invalidQuery();
   const parsed = filtersSchema.safeParse({
     status: params.get("status"), category: params.get("category"), urgency: params.get("urgency"),
-    site_id: params.get("site_id"), artisan_id: params.get("artisan_id"),
+    site_id: params.get("site_id"), artisan_id: params.get("artisan_id"), client_id: params.get("client_id"),
     created_from: params.get("created_from"), created_to: params.get("created_to"),
     q: search && uuid.safeParse(search).success ? search.toLowerCase() : search,
   });
@@ -68,7 +69,7 @@ function nextCursor(row: { id: unknown; created_at: unknown }, fingerprint: stri
 }
 function filteredQuery(db: Database, filters: Filters, head = false, cursor: z.infer<typeof cursorSchema> | null = null) {
   let query = db.from("interventions").select(listFields, { count: "exact", head });
-  for (const field of ["status", "category", "urgency", "site_id", "artisan_id"] as const) {
+  for (const field of ["status", "category", "urgency", "site_id", "artisan_id", "client_id"] as const) {
     if (filters[field]) query = query.eq(field, filters[field]);
   }
   if (filters.created_from) query = query.gte("created_at", filters.created_from);

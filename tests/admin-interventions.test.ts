@@ -160,3 +160,18 @@ test("admin detail finds a dossier beyond workspace and returns bounded exact qu
   assert.equal((await h.get(`id=${identifier(99999)}`)).status, 404);
   assert.equal((await h.get(`id=${fixtures[0].id}&limit=2`)).status, 422);
 });
+
+
+test("client dossier filtering is server-side, rejects malformed UUID and binds its cursor", async () => {
+ const h=harness();
+ const client=identifier(1,"20000000");
+ const response=await h.get(`client_id=${client}&limit=2`);
+ assert.equal(response.status,200);
+ const body=await response.json();
+ assert.ok(body.interventions.every((r:Row)=>r.client_id===client));
+ assert.ok(h.requests.filter(r=>r.table==='interventions').every(r=>r.url.searchParams.get('client_id')===`eq.${client}`));
+ const foreign=await h.get(`client_id=${identifier(9,"20000000")}&cursor=${body.page.next_cursor}&limit=2`);
+ assert.equal(foreign.status,422);
+ const invalid=await h.get('client_id=not-a-uuid');assert.equal(invalid.status,422);
+ const absent=await h.get(`client_id=${identifier(9,"20000000")}`);assert.equal(absent.status,200);assert.equal((await absent.json()).interventions.length,0);
+});

@@ -269,6 +269,10 @@ import { createElement as h } from "react";
 import { createRoot } from "react-dom/client";
 import { BookingSettlement } from "./components/role/booking-settlement";
 const tick = (ms) => new Promise((r) => setTimeout(r, ms));
+const waitFor = async (predicate) => {
+  const deadline = Date.now() + 5000;
+  while (!predicate()) { if (Date.now() >= deadline) throw new Error("Settlement UI state timed out"); await tick(10); }
+};
 const DTO = ${JSON.stringify(dto())};
 window.run = async () => {
   const posts = [];
@@ -276,21 +280,21 @@ window.run = async () => {
   const api = { status: async () => ({ status: 200, body: DTO, retryAfter: null }), capture: async (id) => (posts.push(id), await tick(30), replies.shift()) };
   const div = document.createElement("div"); document.body.appendChild(div);
   createRoot(div).render(h(BookingSettlement, { interventionId: "${ID}", api }));
-  await tick(50);
+  await waitFor(() => div.querySelector("[data-settlement-pay]"));
   const steps = [];
-  div.querySelector("[data-settlement-pay]").click(); await tick(30);
+  div.querySelector("[data-settlement-pay]").click(); await waitFor(() => div.querySelector("[data-settlement-capture]"));
   steps.push(div.textContent);
   const confirm = div.querySelector("[data-settlement-capture]");
   confirm.click(); confirm.click(); // double clic, même tick
-  await tick(100);
+  await waitFor(() => div.textContent.includes("Réessayer"));
   steps.push(div.textContent);
   div.querySelector("[data-settlement-capture]").click(); // Réessayer
-  await tick(100);
+  await waitFor(() => div.querySelector("[data-settlement-resume]"));
   steps.push(div.textContent);
   const resume = div.querySelector("[data-settlement-resume]");
   steps.push(resume ? resume.textContent : "");
   resume.click(); resume.click(); // reprise, double clic
-  await tick(100);
+  await waitFor(() => div.textContent.includes("Réglé ("));
   steps.push(div.textContent);
   return { posts, steps, buttons: div.querySelectorAll("button").length };
 };

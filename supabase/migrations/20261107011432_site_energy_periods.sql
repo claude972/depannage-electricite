@@ -82,7 +82,7 @@ begin
   if current_row.meter_label=label and current_row.period_start=first_day and current_row.period_end=last_day
    and current_row.consumption_wh=wh and current_row.cost_cents is not distinct from cost
    and current_row.source_kind=src and current_row.source_reference=ref and current_row.note=notes
-   and (p_expected_version is null and current_row.version=1 or p_expected_version is not null and current_row.version in(p_expected_version,p_expected_version+1))
+   and (p_expected_version is null and current_row.version=1 and current_row.created_by=actor or p_expected_version is not null and (current_row.version=p_expected_version or current_row.version=p_expected_version+1 and current_row.updated_by=actor))
   then return to_jsonb(current_row);end if;
   if p_expected_version is null or current_row.version<>p_expected_version or current_row.version=2147483647
   then raise exception 'Energy period changed' using errcode='P0001';end if;

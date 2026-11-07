@@ -24,9 +24,9 @@ test('remote origins, credentials and control flags are refused',()=>{
   for(const flag of ['--headless','--test-type','--app=anything','--ignore-certificate-errors'])assert.throws(()=>parseArgs([...args,flag]));
 });
 test('checkout and served build mismatches are rejected before any browser dependency',()=>{
-  const facts={expectedSha:'a'.repeat(40),expectedBuildId:'build-123456',head:'a'.repeat(40),diskBuildId:'build-123456',html:'<title>Courant</title>build-123456'};
+  const facts={expectedSha:'a'.repeat(40),expectedBuildId:'build-123456',head:'a'.repeat(40),diskBuildId:'build-123456',html:'<title>Dépannage électrique</title>build-123456'};
   assert.equal(verifyBuild(facts),true);
-  for(const delta of [{head:'b'.repeat(40)},{diskBuildId:'other-build'},{html:'<title>Courant</title>old-build'},{html:'build-123456 unrelated app'}])assert.throws(()=>verifyBuild({...facts,...delta}));
+  for(const delta of [{head:'b'.repeat(40)},{diskBuildId:'other-build'},{html:'<title>Dépannage électrique</title>old-build'},{html:'build-123456 unrelated app'}])assert.throws(()=>verifyBuild({...facts,...delta}));
 });
 test('manifest identity resolves relative values and refuses another app or origin',()=>{
   assert.equal(id.manifestId,`${origin}/`);

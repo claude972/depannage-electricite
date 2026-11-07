@@ -23,6 +23,9 @@ test("actual energy GET fails closed on anonymous, invisible site, malformed row
 });
 test("cursor pages cannot pretend to be complete totals, including the final page",async()=>{
  const records=Array.from({length:100},(_,i)=>row(i+1));const first=await harness({records,count:101}).GET(get(),context);assert.equal(first.status,200);const b=await first.json();assert.equal(b.page.has_more,true);assert.equal(b.totals.complete,false);assert.equal(b.totals.consumption_wh,null);
+ assert.equal((await harness().GET(get('?cursor='+b.page.next_cursor+'&from=2026-01-01'),context)).status,422);
+ const foreign={params:Promise.resolve({id:'10000000-0000-4000-8000-000000000003'})};
+ assert.equal((await harness().GET(get('?cursor='+b.page.next_cursor),foreign)).status,422);
  const last=await harness({records:[row(101)],count:1}).GET(get('?cursor='+b.page.next_cursor),context);const end=await last.json();assert.equal(last.status,200);assert.equal(end.page.has_more,false);assert.equal(end.page.next_cursor,null);assert.equal(end.totals.complete,false);assert.equal(end.totals.cost_cents,null);
 });
 test("filters and cursor reject malformed or duplicate input before querying periods",async()=>{

@@ -153,7 +153,7 @@ export function servedBuildIdMarkers(html, candidates) {
 }
 
 /** Markers of the public landing of the app (no account): what a reload must come back to. */
-export const PUBLIC_LANDING = { offlineTitle: "La connexion est indisponible", titlePattern: /Courant/, bodyPattern: /Connectez-vous|Se connecter/ };
+export const PUBLIC_LANDING = { offlineTitle: "La connexion est indisponible", titlePattern: /Dépannage électrique/, bodyPattern: /Connectez-vous|Se connecter/ };
 
 /**
  * Phase 10 online recovery (pilot diagnosis): the demo (`#demo/client-new`) lives in MEMORY only,
