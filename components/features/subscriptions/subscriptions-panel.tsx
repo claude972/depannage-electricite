@@ -7,7 +7,7 @@
 // portal_available; no wording promises a cancellation. A Stripe return only re-reads.
 // Logic and identity fence in ./model.
 import { useEffect, useId, useRef, useState } from "react";
-import { COPY, SUB_INITIAL, STATUS_LABEL, canOffer, createSubscriptionsApi, createSubscriptionsController, formatDay, formatMoment, isTerminal, offerTerms, returnMarker, tabStore, visibleOffers, type Context, type RawOffer, type ReadyOverview, type Store, type SubApi, type SubState } from "./model";
+import { COPY, SUB_INITIAL, STATUS_LABEL, canOffer, canResume, createSubscriptionsApi, createSubscriptionsController, formatDay, formatMoment, isTerminal, offerTerms, returnMarker, tabStore, visibleOffers, type Context, type RawOffer, type ReadyOverview, type Store, type SubApi, type SubState } from "./model";
 import styles from "./subscriptions.module.css";
 
 const uuid = (): string | null => (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : null);
@@ -102,6 +102,12 @@ function Live({ role, context, api, store = tabStore, newId = uuid, navigate, se
   const terms = selected ? offerTerms(selected) : null;
   const locked = state.busy || !!state.pending;
   const o = state.overview;
+  const openResume = () => {
+    const url = ctrl.current?.takeResumeUrl();
+    if (!url) return;
+    if (latest.current.navigate) latest.current.navigate(url);
+    else window.location.assign(url);
+  };
   const openPortal = () => {
     const url = ctrl.current?.takePortalUrl();
     if (!url) return;
@@ -152,7 +158,18 @@ function Live({ role, context, api, store = tabStore, newId = uuid, navigate, se
               )}
             </div>
           )}
-          {o.checkout_pending && !state.checkoutUrl && <p className={styles.note} data-subscriptions-pending="">{COPY.pending}</p>}
+          {o.checkout_pending && !state.checkoutUrl && <p className={styles.note} data-subscriptions-pending="">{canResume(o) ? COPY.resumeNote : COPY.pending}</p>}
+          {(canResume(o) || state.resumeUrl) && (
+            <div className={styles.add} data-subscriptions-resume-box="">
+              {state.resumeUrl ? (
+                <button type="button" className={`${styles.button} ${styles.primary}`} onClick={openResume} data-subscriptions-resume-open="">{COPY.open}</button>
+              ) : (
+                <button type="button" className={`${styles.button} ${styles.primary}`} disabled={locked} onClick={() => void ctrl.current?.resume()} data-subscriptions-resume="">
+                  {state.busy ? "Préparation…" : state.resumeRetry ? "Réessayer" : COPY.resume}
+                </button>
+              )}
+            </div>
+          )}
           {o.subscription && !isTerminal(o.subscription.status) && <p className={styles.muted} data-subscriptions-running="">{COPY.running}</p>}
           {canOffer(o) && offers.length === 0 && <p className={styles.note} data-subscriptions-none="">{COPY.none}</p>}
           {!o.available && !o.subscription && <p className={styles.note} data-subscriptions-none="">{COPY.none}</p>}
