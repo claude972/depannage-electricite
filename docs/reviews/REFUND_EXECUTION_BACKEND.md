@@ -1,0 +1,13 @@
+# Exécution des remboursements — backend
+
+Scope livré pour contre-revueROOT : demandes opérateur déjà approuvées → préparation durable → qualification Charge/PaymentIntent/session et destination/commission historiques → émission idempotente → confirmation par webhook individuel. Appel bancaire et configurationStripe toujours différés. Aucune politique reverse_transfer/refund_application_fee choisie : version et deux booléens serveur explicites obligatoires ; live interdit sans activation explicite. Les familles application_fee/transfer/payout restentOPEN.
+
+POST/GET `/api/platform-operations/finance/refund-requests/[id]/execution`. POST corps strict `{command_id,expected_version}`, finance_write/JWT/Origin et revalidation après attentes ; aucun montant, destinataire, taux ou politique navigateur. GET finance_read, état local seulement. No-store et réponses privées. HTTPStripe `succeeded` reste submitted ; seul le webhook qualifié solde la demande. Une session historique sans ledger suffisant devient needs_review plutôt que reprendre le compte artisan actuel.
+
+SQLnouvelle25011 uniquement : tables privées execution/events, RPCétroites, verrou paiement→demande→execution, politique et binding figés, annulation locale bloquée durant émission/unknown. Idempotence durable par executionUUID/request, même clé et paramètres pendant23h ; après, récupérationREADpaginée bornée et aucun nouveauPOST. Ambiguïté conserve la réservation. Refund.created/updated/failed : état courant récupéré pour neutraliser les événements retardés, signature brute/taille/account/livemode contrôlés, montant/devise/PI/charge/metadata exacts, eventID+refundID+demande uniques. Aucun montantagrégécharge.refunded utilisé comme remboursement individuel.
+
+Contradiction terminale réellement courante après un succès : incident needs_review ; ledger historique non modifié, rapport financier du site concerné refuse503 plutôt que publier un net fiable. Aucun transfert compensatoire ni avoir inventé. Les remboursements historiques restent inchangés.
+
+Preuves locales :33tests de vrais handlers/helpers (providerinjecté), incluant régressionsCheckout/holds/liens ;31contrôlesSQLPGlite0.5.13. Auth/Storage/cron simulés et événements bancaires synthétiques, aucune preuveStripe/cloud/concurrence réelle. tscstrict nonincrementalPASS avec fixUIexistant a8bf14c repris séparément9145588 (ROOT possède déjà son équivalent ; ne pas cherry-pick en double).
+
+Limite intégration : UI d’exécution non câblée dans ce lot ; caprefund_execution encorefalse dans ancien contrat plateforme, message frontend indisponible. Endpoint prêt à raccorder après contre-revue ; aucun déploiement/migrationcloud par le worker.
