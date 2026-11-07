@@ -89,6 +89,7 @@ import { ContractSourceLine } from "../features/quote-grid/quote-grid";
 import { PlatformPayAction } from "../app/platform-pay";
 import { SavedPaymentMethodsPanel } from "../features/saved-payment-methods/saved-payment-methods-panel";
 import { PhotoReviewPanel } from "../features/photo-review/photo-review-panel";
+import { reviewImage } from "../features/photo-review/model";
 
 const CLIENT_VIEWS: readonly View[] = [
   "overview",
@@ -1079,6 +1080,7 @@ function DetailView({
   const photos = session.data.documents.filter(
     (d) => d.intervention_id === i.id && d.mime_type.startsWith("image/"),
   );
+  const reviewPhotos = photos.filter((d) => reviewImage(d.mime_type));
   const stepIndex = currentStepIndex(i.status, i.paid_at);
   const canSchedule = ["assigned", "quoted", "accepted"].includes(i.status);
   const travelStage = ops?.travel_stage || i.travel_stage || "planned";
@@ -1289,8 +1291,8 @@ function DetailView({
           Le téléchargement sécurisé des pièces se fait depuis la page Documents.
         </p>
         {/* SYS-10: photo review (consent, request / withdraw; result only after the artisan's validation). */}
-        {photos.length > 0 && (
-          <PhotoReviewPanel key={`${i.id}|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`} interventionId={i.id} role="client" photos={photos.map((d) => ({ id: d.id, name: d.name }))} context={session.mutationContext} demo={session.mode === "demo"} />
+        {reviewPhotos.length > 0 && i.artisan_id && !i.site_id && i.status !== "cancelled" && (
+          <PhotoReviewPanel key={`${i.id}|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`} interventionId={i.id} role="client" photos={reviewPhotos.map((d) => ({ id: d.id, name: d.name }))} context={session.mutationContext} demo={session.mode === "demo"} />
         )}
         {photos.length > 0 && i.artisan_id && i.status !== "cancelled" && (
           <button type="button" className="button outline" onClick={() => session.go("messages", i.id)}>

@@ -121,6 +121,7 @@ import { AppointmentReminderPanel } from "../features/appointment-reminders/appo
 import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-panel";
 import { ContractSourceLine } from "../features/quote-grid/quote-grid";
 import { PhotoReviewPanel } from "../features/photo-review/photo-review-panel";
+import { reviewImage } from "../features/photo-review/model";
 
 // ---- Static definitions ---------------------------------------------------------------
 type Tone = "neutral" | "blue" | "green" | "amber" | "red" | "violet";
@@ -1526,14 +1527,14 @@ function WorkDossier({ session, intervention: i }: { session: Session; intervent
             photoReview={session.mutationContext}
           />
           {/* SYS-10: photo review of this dossier (validate / reject per server flags). */}
-          <PhotoReviewPanel
+          {!i.site_id && i.status !== "cancelled" && <PhotoReviewPanel
             key={`${i.id}|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`}
             interventionId={i.id}
             role="artisan"
-            photos={session.data.documents.filter((d) => d.intervention_id === i.id && d.mime_type.startsWith("image/")).map((d) => ({ id: d.id, name: d.name }))}
+            photos={session.data.documents.filter((d) => d.intervention_id === i.id && reviewImage(d.mime_type)).map((d) => ({ id: d.id, name: d.name }))}
             context={session.mutationContext}
             demo={session.mode === "demo"}
-          />
+          />}
           <AppointmentPanel
             appointment={ops?.appointment ?? null}
             loaded={ops !== null}

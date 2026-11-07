@@ -51,14 +51,10 @@ function Live({ interventionId, role, photos, context, api, store = tabStore, ne
   const [consent, setConsent] = useState(false);
   const v = state.view;
   const locked = state.busy || !!state.pending;
-  const itemsByDoc = new Map<string, PrItem>();
-  for (const it of v?.items ?? []) {
-    const prev = itemsByDoc.get(it.document_id.toLowerCase());
-    if (!prev || it.version > prev.version || ACTIVE.has(it.status)) itemsByDoc.set(it.document_id.toLowerCase(), it);
-  }
+  const itemsByDoc = new Map((v?.items ?? []).map((it) => [it.document_id.toLowerCase(), it]));
   const rows: { doc: PhotoRef; item: PrItem | undefined }[] = photos.map((doc) => ({ doc, item: itemsByDoc.get(doc.id.toLowerCase()) }));
   for (const it of v?.items ?? []) if (!photos.some((d) => d.id.toLowerCase() === it.document_id.toLowerCase())) rows.push({ doc: { id: it.document_id, name: "Photo" }, item: it });
-  const requestable = (it: PrItem | undefined) => !!v?.can_request && (!it || !ACTIVE.has(it.status));
+  const requestable = (it: PrItem | undefined) => !!v?.can_request && (!it || it.status === "withdrawn");
   return (
     <section className={styles.panel} aria-labelledby={`${uid}-t`} aria-busy={state.busy || undefined} data-photo-review={state.phase} data-photo-review-role={role}>
       <h3 id={`${uid}-t`} className={styles.title}>{COPY.title}</h3>
@@ -107,7 +103,7 @@ function Live({ interventionId, role, photos, context, api, store = tabStore, ne
                   {role === "client" && item && item.status !== "validated" && ACTIVE.has(item.status) && <span className={styles.muted}>{COPY.pendingHuman}</span>}
                   <span className={styles.row}>
                     {requestable(item) && (
-                      <button type="button" className={`${styles.button} ${styles.primary}`} disabled={locked || !consent} onClick={() => void ctrl.current?.request(doc.id, consent)} data-photo-review-request={doc.id}>Demander une revue</button>
+                      <button type="button" className={`${styles.button} ${styles.primary}`} disabled={locked || !consent} onClick={async () => { if (await ctrl.current?.request(doc.id, consent)) setConsent(false); }} data-photo-review-request={doc.id}>Demander une revue</button>
                     )}
                     {item?.can_withdraw && (
                       <button type="button" className={styles.button} disabled={locked} onClick={() => void ctrl.current?.withdraw(item.id)} data-photo-review-withdraw={item.id}>Retirer la demande</button>

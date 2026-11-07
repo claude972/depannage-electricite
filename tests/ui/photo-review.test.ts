@@ -97,6 +97,25 @@ test("demande : consentement explicite + can_request de premier niveau ; écrite
   }
 });
 
+test("une demande retirée repart de sa version courante et un rejeu après lecture confirme la commande exacte", async () => {
+  const mem = memStore();
+  const withdrawn = view({ items: [item({ version: 2, status: "withdrawn" })] });
+  const readyForReview = view({ items: [item({ version: 5, status: "awaiting_review" })] });
+  const first = harness({ store: mem.store, reads: [res(200, withdrawn)], posts: [() => res(m.PR_TIMEOUT)] });
+  await first.ctrl.load();
+  same(await first.ctrl.request(DOC, true), false);
+  const sent = first.calls.find((call) => call.kind === "POST")!.cmd;
+  same(sent, { action: "request", document_id: DOC, command_id: U("c", 1), expected_version: 2, consent: true });
+  const restored = harness({ store: mem.store, reads: [res(200, readyForReview)], posts: [() => res(200, readyForReview)] });
+  restored.ctrl.restorePending();
+  await restored.ctrl.load();
+  same(await restored.ctrl.retry(), true);
+  same(restored.calls.find((call) => call.kind === "POST")!.cmd, sent);
+  same([restored.get().pending, restored.get().view?.items[0].version, mem.map.size], [null, 5, 0]);
+  same(await restored.ctrl.request(DOC, true), false);
+  same(restored.calls.map((call) => call.kind), ["GET", "POST"]);
+});
+
 test("retrait / revue : drapeaux par élément, version exacte, statut cohérent ; incertain ⇒ même commande ; 409 relu sans rejeu ; identité changée ⇒ aucun rejeu ; 401/403 effacé", async () => {
   const h = harness({ reads: [res(200, view({ can_request: false, items: [item({ can_review: true, result: RESULT })] }))], posts: [() => res(200, view({ can_request: false, items: [item({ version: 3, status: "validated", result: RESULT })] }))] });
   await h.ctrl.load();
@@ -144,8 +163,8 @@ test("démo : aucun appel ; câblage client (zone Photos) et artisan (après les
   const api = { read: async () => (calls++, res(200)), send: async () => (calls++, res(200)) };
   assert.match(text(renderToString(createElement(ui.PhotoReviewPanel, { interventionId: JOB, role: "client", photos, context: ctx, demo: true, api }))), /aucune photo n’est analysée ni transmise.*revue manuelle des pièces reste disponible/);
   same(calls, 0);
-  assert.match(readFileSync("components/role/client-space.tsx", "utf8"), /<PhotoReviewPanel key=\{`\$\{i\.id\}\|[^`]+`\} interventionId=\{i\.id\} role="client" photos=\{photos\.map/);
-  assert.match(readFileSync("components/role/artisan-space.tsx", "utf8"), /photoReview=\{session\.mutationContext\}\s+\/>\s+\{\/\* SYS-10[^}]*\*\/\}\s+<PhotoReviewPanel[\s\S]{0,300}role="artisan"/);
+  assert.match(readFileSync("components/role/client-space.tsx", "utf8"), /reviewPhotos\.length > 0 && i\.artisan_id && !i\.site_id && i\.status !== "cancelled" && \([\s\S]{0,240}<PhotoReviewPanel[^\n]*role="client" photos=\{reviewPhotos\.map/);
+  assert.match(readFileSync("components/role/artisan-space.tsx", "utf8"), /photoReview=\{session\.mutationContext\}\s+\/>\s+\{\/\* SYS-10[^}]*\*\/\}\s+\{!i\.site_id && i\.status !== "cancelled" && <PhotoReviewPanel[\s\S]{0,300}role="artisan"/);
 });
 
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";

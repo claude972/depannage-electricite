@@ -3,7 +3,7 @@
 // app/api/interventions/[id]/photo-review/route.ts):
 //   GET  /api/interventions/:id/photo-review → View
 //   POST same path → View (the SAME shape), with
-//        { action:"request", document_id, command_id, expected_version: 0, consent: true }
+//        { action:"request", document_id, command_id, expected_version, consent: true }
 //        { action:"withdraw", review_id, command_id, expected_version }
 //        { action:"review", review_id, command_id, expected_version, decision: "validate"|"reject" }
 //   View = { provider_available, can_request, items:[{ id, document_id, version, status, can_withdraw,
@@ -37,30 +37,32 @@ const item = z
 export type PrItem = z.infer<typeof item>;
 const view = z.object({ provider_available: z.boolean(), can_request: z.boolean(), items: z.array(item).max(20) }).strict();
 export type PrView = z.infer<typeof view>;
-const requestCmd = z.object({ action: z.literal("request"), document_id: uuid, command_id: uuid, expected_version: z.literal(0), consent: z.literal(true) }).strict();
+const writableVersion = z.number().int().min(0).max(2147483646);
+const requestCmd = z.object({ action: z.literal("request"), document_id: uuid, command_id: uuid, expected_version: writableVersion, consent: z.literal(true) }).strict();
 const withdrawCmd = z.object({ action: z.literal("withdraw"), review_id: uuid, command_id: uuid, expected_version: z.number().int().min(0).max(2147483646) }).strict();
 const reviewCmd = z.object({ action: z.literal("review"), review_id: uuid, command_id: uuid, expected_version: z.number().int().min(0).max(2147483646), decision: z.enum(["validate", "reject"]) }).strict();
 const command = z.union([requestCmd, withdrawCmd, reviewCmd]);
 export type PrCommand = z.infer<typeof command>;
 const lower = (v: string) => v.toLowerCase();
+export const reviewImage = (mime: string) => ["image/jpeg", "image/png", "image/webp"].includes(mime);
 
 export function parseView(body: unknown): PrView | null {
   const r = view.safeParse(body);
   if (!r.success) return null;
   const ids = r.data.items.map((x) => lower(x.id));
   if (new Set(ids).size !== ids.length) return null;
+  if (new Set(r.data.items.map((x) => lower(x.document_id))).size !== ids.length) return null;
   // Same invariant as the server render(): a result is present exactly when the photo is validated,
   // or awaiting review for a viewer who cannot request (the assigned artisan).
   if (r.data.items.some((x) => (x.result !== null) !== (x.status === "validated" || (!r.data.can_request && x.status === "awaiting_review")))) return null;
   return r.data;
 }
 /** The returned view must reflect THIS command (right item, version bumped, coherent status). */
-export function viewMatches(v: PrView, cmd: PrCommand, before: PrView | null): boolean {
+export function viewMatches(v: PrView, cmd: PrCommand): boolean {
   if (cmd.action === "request") {
-    // The request item of this document (new, or the exact replay); the provider step may already
-    // have advanced it (uncertain → awaiting review), so only its existence and liveness are checked.
-    const prior = new Map((before?.items ?? []).map((x) => [lower(x.id), x.version]));
-    return v.items.some((x) => lower(x.document_id) === lower(cmd.document_id) && x.status !== "withdrawn" && x.status !== "invalidated" && (!prior.has(lower(x.id)) || x.version > (prior.get(lower(x.id)) ?? 0)));
+    // The server verifies this exact command. A prior GET may already have observed it.
+    const it = v.items.find((x) => lower(x.document_id) === lower(cmd.document_id));
+    return v.can_request && !!it && it.version > cmd.expected_version && it.status !== "withdrawn" && it.status !== "invalidated";
   }
   const it = v.items.find((x) => lower(x.id) === lower(cmd.review_id));
   if (!it || it.version !== cmd.expected_version + 1) return false;
@@ -203,7 +205,6 @@ export function createPrController({ api, interventionId, store, newId, context,
     }
     inFlight = true;
     seq++;
-    const before = get().view;
     set({ ...get(), busy: true, error: "", notice: "" });
     let r: Result;
     try {
@@ -217,7 +218,7 @@ export function createPrController({ api, interventionId, store, newId, context,
       return false;
     }
     const v = r.status === 200 ? parseView(r.body) : null;
-    if (v && viewMatches(v, cmd, before)) {
+    if (v && viewMatches(v, cmd)) {
       clearStored(who);
       pendingFor = null;
       set({ ...get(), busy: false, pending: null, view: v, phase: "ready", notice: COPY.done[cmd.action] });
@@ -250,8 +251,11 @@ export function createPrController({ api, interventionId, store, newId, context,
     /** Only with the server's top-level can_request AND the explicit consent. */
     request(documentId: string, consent: boolean) {
       // Preconditions BEFORE any identifier is created: explicit consent + server can_request.
-      if (!consent || !get().view?.can_request || !UUID.test(documentId)) return Promise.resolve(false);
-      return fresh((cid) => ({ action: "request", document_id: lower(documentId), command_id: cid, expected_version: 0, consent: true }));
+      const v = get().view;
+      if (!consent || !v?.can_request || !UUID.test(documentId)) return Promise.resolve(false);
+      const previous = v.items.find((x) => lower(x.document_id) === lower(documentId));
+      if (previous && previous.status !== "withdrawn") return Promise.resolve(false);
+      return fresh((cid) => ({ action: "request", document_id: lower(documentId), command_id: cid, expected_version: previous?.version ?? 0, consent: true }));
     },
     withdraw(reviewId: string) {
       const it = get().view?.items.find((x) => lower(x.id) === lower(reviewId));
