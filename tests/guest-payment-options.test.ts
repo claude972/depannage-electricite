@@ -24,3 +24,8 @@ test("phone disabled, unknown and enabled remain distinct; response never includ
   assert.equal(unavailable.phone_auth.available, null);
   assert.equal((await bookingOptions({})).payment_methods[1].available, false);
 });
+test("deferred booking means platform-only collection; unavailable card hold never offers direct artisan settlement",async()=>{
+ const options=await bookingOptions({});const deferred=options.payment_methods.find(m=>m.id==="on_site")!;
+ assert.equal(deferred.available,true);assert.match(deferred.label,/plateforme/);assert.match(deferred.description,/Aucun paiement direct/);
+ assert.doesNotMatch(deferred.label,/sur place/i);assert.match(options.payment_methods[1].reason!,/plateforme après l’intervention/);
+});
