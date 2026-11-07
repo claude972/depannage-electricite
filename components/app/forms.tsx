@@ -69,6 +69,31 @@ const addressApi = createAddressApi();
 /** Keeps the focused step title clear of a sticky header when scrolled into view. */
 const STEP_TITLE_STYLE = { scrollMarginTop: 88 } as const;
 
+/** CLI-09: the client's saved preferred address, offered as an explicit, visible preselection. */
+export type PreferredAddress = { label: string; address: string; postal_code: string; city: string };
+/**
+ * Preselection rule: only a FRESH draft (no restored/typed draft) whose three address fields are
+ * still empty is prefilled; anything the user typed or restored is never overwritten. Pure.
+ */
+export function preferredPrefill(values: RequestValues, restored: RequestValues | null, preferred: PreferredAddress | null | undefined): RequestValues | null {
+  if (!preferred || restored) return null;
+  if (values.address.trim() || values.postal_code.trim() || values.city.trim()) return null;
+  return { ...values, address: preferred.address, postal_code: preferred.postal_code, city: preferred.city };
+}
+/** The prefilled address is « préselectionnée » only while the fields still equal it. */
+export const isPreferredSelection = (values: RequestValues, preferred: PreferredAddress | null) =>
+  !!preferred && values.address === preferred.address && values.postal_code === preferred.postal_code && values.city === preferred.city;
+export function PreferredAddressNote({ preferred, onClear }: { preferred: PreferredAddress; onClear: () => void }) {
+  return (
+    <p className="inline-note" role="status" data-preferred-address="">
+      Adresse préférée « {preferred.label} » présélectionnée : vous pouvez la modifier ci-dessous.{" "}
+      <button type="button" className="text-button" onClick={onClear} data-preferred-address-clear="">
+        Ne pas l’utiliser
+      </button>
+    </p>
+  );
+}
+
 export function RequestForm({
   initialCategory,
   initialValues,
@@ -78,6 +103,7 @@ export function RequestForm({
   onBack,
   onSubmit,
   onDemo,
+  preferredAddress = null,
 }: {
   initialCategory: Category;
   initialValues: RequestValues | null;
@@ -87,6 +113,8 @@ export function RequestForm({
   onBack: () => void;
   onSubmit: (values: RequestValues, photos: File[]) => Promise<void>;
   onDemo: () => void;
+  /** Saved preferred address (client space only); never applied over a restored or typed draft. */
+  preferredAddress?: PreferredAddress | null;
 }) {
   const [step, setStep] = useState(1);
   // On each step change (not on first render) move focus AND the viewport to the new step title,
@@ -127,16 +155,23 @@ export function RequestForm({
     setPhotos(next);
     setPhotoError(problems.join(" "));
   }
-  const [values, setValues] = useState<RequestValues>(
-    initialValues || {
-      category: initialCategory,
-      description: "",
-      address: "",
-      postal_code: "",
-      city: "",
-      urgency: "scheduled",
-    },
-  );
+  const [values, setValues] = useState<RequestValues>(() => {
+    const fresh: RequestValues = initialValues || { category: initialCategory, description: "", address: "", postal_code: "", city: "", urgency: "scheduled" };
+    return preferredPrefill(fresh, initialValues, preferredAddress) ?? fresh;
+  });
+  // The preferred address may arrive after mount: same rule, applied once, never over typed text.
+  const [preselected, setPreselected] = useState<PreferredAddress | null>(() => (preferredPrefill({ category: initialCategory, description: "", address: "", postal_code: "", city: "", urgency: "scheduled" }, initialValues, preferredAddress) ? preferredAddress : null));
+  const prefillTried = useRef(preselected !== null);
+  useEffect(() => {
+    if (prefillTried.current || !preferredAddress) return;
+    prefillTried.current = true;
+    setValues((current) => {
+      const next = preferredPrefill(current, initialValues, preferredAddress);
+      if (next) setPreselected(preferredAddress);
+      return next ?? current;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preferredAddress]);
   const [validation, setValidation] = useState("");
   const c = category(values.category);
   function next(e: FormEvent<HTMLFormElement>) {
@@ -284,6 +319,15 @@ export function RequestForm({
                   ))}
                 </select>
               </Field>
+            )}
+            {preselected && isPreferredSelection(values, preselected) && (
+              <PreferredAddressNote
+                preferred={preselected}
+                onClear={() => {
+                  setPreselected(null);
+                  setValues((current) => ({ ...current, address: "", postal_code: "", city: "" }));
+                }}
+              />
             )}
             <AddressField
               value={{ address: values.address, postal_code: values.postal_code, city: values.city }}

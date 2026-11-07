@@ -1,0 +1,252 @@
+/* CLI-09 client saved addresses. --ui-* tokens only (palette B), light/dark, 44 px+ targets, focus. */
+.panel {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg, 16px);
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.head h2 {
+  margin: 0;
+  color: var(--ui-text);
+  font-size: 20px;
+  font-weight: 700;
+}
+.hint {
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.note,
+.ok {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--ui-radius-md, 12px);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font-size: 14px;
+}
+.ok {
+  color: var(--ui-success);
+  font-weight: 600;
+}
+.error {
+  margin: 0;
+  color: var(--ui-danger);
+  font-size: 14px;
+  font-weight: 600;
+}
+div.error,
+p.error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-danger);
+  border-radius: var(--ui-radius-md, 12px);
+  background: var(--ui-surface);
+}
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 14px;
+}
+.filters label,
+.field {
+  display: grid;
+  gap: 6px;
+  color: var(--ui-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+.filters small {
+  flex-basis: 100%;
+}
+.panel input,
+.panel textarea {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md, 12px);
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  color-scheme: var(--ui-scheme);
+}
+.form input,
+.form textarea {
+  width: 100%;
+}
+.panel input[type="radio"] {
+  width: 20px;
+  min-height: 20px;
+  accent-color: var(--ui-primary);
+}
+
+.form {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--ui-radius-md, 12px);
+  background: var(--ui-surface);
+}
+.form h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.choices legend {
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.choices label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+.totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md, 12px);
+}
+.totals dt,
+.kv dt {
+  color: var(--ui-text-muted);
+  font-size: 13px;
+}
+.totals dd,
+.kv dd {
+  margin: 0;
+  color: var(--ui-text);
+  font-weight: 600;
+}
+.totals p {
+  flex-basis: 100%;
+}
+.list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.row {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md, 12px);
+  background: var(--ui-card);
+}
+.rowHead {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+.rowHead span {
+  color: var(--ui-text-muted);
+  font-size: 14px;
+}
+.kv {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  margin: 0;
+}
+.confirm {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--ui-radius-md, 12px);
+  background: var(--ui-surface);
+}
+.confirm p {
+  margin: 0;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.primary,
+.secondary,
+.danger {
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.primary {
+  border: 0;
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+.primary:hover:not(:disabled) {
+  background: var(--ui-primary-hover, var(--ui-primary));
+}
+.secondary {
+  border: 1px solid var(--ui-border);
+  background: transparent;
+  color: var(--ui-text);
+}
+.danger {
+  border: 1px solid var(--ui-danger);
+  background: transparent;
+  color: var(--ui-danger);
+}
+.primary:disabled,
+.secondary:disabled,
+.danger:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.panel :focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .primary,
+  .secondary,
+  .danger {
+    width: 100%;
+  }
+}
