@@ -351,6 +351,13 @@ do $$
 declare run text := pg_temp.qa_get('run'); payA uuid := pg_temp.qa_id('payA'); payC uuid := pg_temp.qa_id('payC'); sess text := pg_temp.qa_get('sessionA');
  r1 uuid := gen_random_uuid(); r2 uuid := gen_random_uuid(); r3 uuid := gen_random_uuid(); r4 uuid := gen_random_uuid(); r5 uuid := gen_random_uuid(); r6 uuid := gen_random_uuid(); d1 uuid := gen_random_uuid();
  v jsonb; rr uuid; second uuid; third uuid; foreign_req uuid; dispute uuid;
+ execution_id uuid := gen_random_uuid();
+ charge_id text := 'ch_qa_'||run;
+ intent_id text := 'pi_qa_'||run;
+ refund_event text := 'evt_qa_rf_'||run;
+ refund_id text := 're_qa_1';
+ operator_id uuid := pg_temp.qa_id('finWrite');
+ test_policy jsonb := '{"version":"qa-rollback-v1","reverse_transfer":true,"refund_application_fee":false,"livemode":false}';
 begin
  perform pg_temp.qa_reset_limits();
  perform pg_temp.qa_refused(pg_temp.qa_id('finRead'),'authenticated',format($q$select public.platform_request_refund(%L,%L,5000,'Prestation partiellement non réalisée (QA).')$q$,r1,payA),'42501','014 remboursement demandé sans finance_write');
@@ -379,16 +386,51 @@ begin
  v := pg_temp.qa_call(pg_temp.qa_id('finWrite'),'authenticated',format($q$select public.platform_request_refund(%L,%L,25000,'Le montant redevient disponible après annulation (QA).') v$q$,r5,payA));
  third := (v->'request'->>'id')::uuid;
  perform pg_temp.qa_check(v->'request'->>'status'='requested', '014 nouvelle demande acceptée après annulation');
- perform pg_temp.qa_refused(pg_temp.qa_id('finWrite'),'authenticated',format($q$select public.platform_settle_refund(%L,%L,'charge.refunded',%L,'re_qa_1','succeeded',5000,'eur')$q$,rr,'evt_qa_rf_'||run,sess),'42501','014 règlement de remboursement par un opérateur');
- perform pg_temp.qa_refused(pg_temp.qa_id('admin'),'authenticated',format($q$select public.platform_settle_refund(%L,%L,'charge.refunded',%L,'re_qa_1','succeeded',5000,'eur')$q$,rr,'evt_qa_rf_'||run,sess),'42501','014 règlement de remboursement par un super admin');
- perform pg_temp.qa_refused(null,'service_role',format($q$select public.platform_settle_refund(%L,%L,'charge.refunded',%L,'re_qa_1','failed',5000,'eur')$q$,rr,'evt_qa_rf_'||run,sess),'P0001','014 règlement statut fournisseur failed');
- perform pg_temp.qa_refused(null,'service_role',format($q$select public.platform_settle_refund(%L,%L,'charge.refunded',%L,'re_qa_1','succeeded',4999,'eur')$q$,rr,'evt_qa_rf_'||run,sess),'P0001','014 règlement montant incohérent');
- perform pg_temp.qa_refused(null,'service_role',format($q$select public.platform_settle_refund(%L,%L,'charge.refunded','cs_qa_wrong','re_qa_1','succeeded',5000,'eur')$q$,rr,'evt_qa_rf_'||run),'P0001','014 règlement session incohérente');
- perform pg_temp.qa_refused(null,'service_role',format($q$select public.platform_settle_refund(%L,%L,'charge.refunded',%L,'re_qa_1','succeeded',25000,'eur')$q$,third,'evt_qa_rf_'||run,sess),'P0001','014 règlement d’une demande non approuvée');
- perform pg_temp.qa_check((select count(*) from public.stripe_events where id='evt_qa_rf_'||run)=0, '014 aucun événement enregistré par les règlements refusés');
- v := pg_temp.qa_call(null,'service_role',format($q$select public.platform_settle_refund(%L,%L,'charge.refunded',%L,'re_qa_1','succeeded',5000,'eur') v$q$,rr,'evt_qa_rf_'||run,sess));
- perform pg_temp.qa_check(v::text='true', '014 remboursement réglé par le service (événement simulé)');
- perform pg_temp.qa_check((pg_temp.qa_call(null,'service_role',format($q$select public.platform_settle_refund(%L,%L,'charge.refunded',%L,'re_qa_1','succeeded',5000,'eur') v$q$,rr,'evt_qa_rf_'||run,sess)))::text='false', '014 règlement rejoué → false');
+ -- Keep the service-only boundary and test the durable execution path with synthetic evidence.
+ perform pg_temp.qa_refused(operator_id,'authenticated',format(
+  'select public.platform_settle_refund(%L,%L,%L,%L,%L,%L,5000,%L)',
+  rr,refund_event,'refund.updated',sess,refund_id,'succeeded','eur'),'42501','014 règlement de remboursement par un opérateur');
+ perform pg_temp.qa_refused(pg_temp.qa_id('admin'),'authenticated',format(
+  'select public.platform_settle_refund(%L,%L,%L,%L,%L,%L,5000,%L)',
+  rr,refund_event,'refund.updated',sess,refund_id,'succeeded','eur'),'42501','014 règlement de remboursement par un super admin');
+ perform pg_temp.qa_refused(null,'service_role',format(
+  'select public.platform_settle_refund(%L,%L,%L,%L,%L,%L,5000,%L)',
+  rr,refund_event,'refund.updated',sess,refund_id,'succeeded','eur'),'P0001','014 règlement sans exécution qualifiée');
+ perform pg_temp.qa_refused(operator_id,'authenticated',format(
+  'select public.begin_refund_execution(%L,%L,1)',third,gen_random_uuid()),'P0001','014 exécution d’une demande non approuvée');
+ v := pg_temp.qa_call(operator_id,'authenticated',format(
+  'select public.begin_refund_execution(%L,%L,2) v',rr,execution_id));
+ perform pg_temp.qa_check(v #>> '{}' = execution_id::text, '014 identifiant durable préparé');
+ perform pg_temp.qa_exec(null,'service_role',format(
+  'select public.qualify_refund_execution(%L,%L,%L,%L,%L)',execution_id,operator_id,test_policy,charge_id,intent_id));
+ perform pg_temp.qa_exec(operator_id,'authenticated',format(
+  'select public.authorize_refund_execution(%L)',execution_id));
+ perform pg_temp.qa_exec(null,'service_role',format(
+  'select public.bind_refund_execution(%L,%L,%L,%L)',execution_id,operator_id,refund_id,'submitted'));
+ perform pg_temp.qa_check((select status from public.platform_refund_requests where id=rr)='approved',
+  '014 émission soumise sans confirmation bancaire');
+ perform pg_temp.qa_refused(null,'service_role',format(
+  'select public.apply_refund_execution_event(%L,%L,%L,%L,%L,%L,4999,%L,%L,false)',
+  execution_id,refund_event,'refund.updated',refund_id,charge_id,intent_id,'eur','succeeded'),'P0001','014 règlement montant incohérent');
+ perform pg_temp.qa_refused(null,'service_role',format(
+  'select public.platform_settle_refund(%L,%L,%L,%L,%L,%L,5000,%L)',
+  rr,refund_event,'refund.updated','cs_qa_wrong',refund_id,'succeeded','eur'),'P0001','014 règlement session incohérente');
+ perform pg_temp.qa_check((select count(*) from public.stripe_events where id=refund_event)=0,
+  '014 aucun événement enregistré par les règlements refusés');
+ v := pg_temp.qa_call(null,'service_role',format(
+  'select public.apply_refund_execution_event(%L,%L,%L,%L,%L,%L,5000,%L,%L,false) v',
+  execution_id,'evt_qa_pending_'||run,'refund.updated',refund_id,charge_id,intent_id,'eur','pending'));
+ perform pg_temp.qa_check(v->>'state'='pending' and (select status from public.platform_refund_requests where id=rr)='approved',
+  '014 événement pending sans règlement');
+ v := pg_temp.qa_call(null,'service_role',format(
+  'select public.apply_refund_execution_event(%L,%L,%L,%L,%L,%L,5000,%L,%L,false) v',
+  execution_id,refund_event,'refund.updated',refund_id,charge_id,intent_id,'eur','succeeded'));
+ perform pg_temp.qa_check(v->>'state'='succeeded' and v->>'replayed'='false',
+  '014 remboursement réglé par le service (événement simulé)');
+ v := pg_temp.qa_call(null,'service_role',format(
+  'select public.apply_refund_execution_event(%L,%L,%L,%L,%L,%L,5000,%L,%L,false) v',
+  execution_id,refund_event,'refund.updated',refund_id,charge_id,intent_id,'eur','succeeded'));
+ perform pg_temp.qa_check(v->>'state'='succeeded' and v->>'replayed'='true', '014 règlement rejoué sans double effet');
  perform pg_temp.qa_check((select status||'/'||settled_event_id||'/'||provider_reference from public.platform_refund_requests where id=rr)='settled/evt_qa_rf_'||run||'/re_qa_1', '014 demande settled avec événement et référence fournisseur');
  perform pg_temp.qa_check((select amount_cents from public.platform_ledger_entries where payment_id=payA and entry_kind='refund_settled')=5000, '014 ledger refund_settled 5000');
  perform pg_temp.qa_refused(pg_temp.qa_id('finWrite'),'authenticated',format('delete from public.platform_refund_requests where id=%L',rr),'42501','014 delete demande de remboursement');
