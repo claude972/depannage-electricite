@@ -137,3 +137,6 @@ ROOT possède le serveur, la migration et les tests. Une demande publique collec
 
 ## ART-07 / SYS-07 — liste privée des devis artisan (Astra)
 Ownership exclusif : app/api/artisan/quotes, lib/features/artisan-quotes, tests ciblés et contrat. Base 256ec5c. Plan : conserver RLS quotes + attribution actuelle du dossier et auteur exact artisan ; GET keyset borné 1–50, sans lignes/PII ni droits nouveaux ; vérifier vrai handler (nominal, curseur, refus, erreurs, projection). Aucune migration si jointure RLS suffisante. Aucun cloud ni UI.
+
+### ART-07 lecture exacte (Astra)
+Plan : GET /api/artisan/quotes/[id], indépendant de la fenêtre détail20 ; auteur + attribution actuelle + profil artisan sous RLS. Réutiliser schéma devis existant, projeter uniquement lignes/montants/statut et dossier minimal ; 404 sans divulgation. Tests handler et ancien UUID hors20. Aucun changement liste/migration/UI/cloud.
