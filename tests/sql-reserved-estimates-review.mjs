@@ -32,7 +32,7 @@ try {
       previousJobs = (
         await db.query("select to_jsonb(j)v from cron.job j order by jobname")
       ).rows;
-    if(name.endsWith('_reserved_indicative_estimates.sql')||name.endsWith('_indicative_estimate_authorization_order.sql'))continue;
+    if(name.endsWith('_reserved_indicative_estimates.sql')||name.endsWith('_indicative_estimate_authorization_order.sql')||name.endsWith('_pending_booking_estimate.sql'))continue;
     const migration = await isolatedMigrationSql(
       db,
       name,
@@ -60,7 +60,7 @@ try {
  const prepare=()=>one('select public.prepare_phone_booking($1,$2,$3,$4)v',[key,payload,contact,'card_hold']);
  await as(actor);const before=await prepare();eq(before.expected_max_cents,18000);
  const old=await one("select to_jsonb(public.create_intervention_once($1,'socket','QA panne synthétique','QA adresse','97200','QA ville','scheduled',null))v",[oldkey]);
- await as(null,'postgres');const migration=await readFile(new URL('20261107222548_reserved_indicative_estimates.sql',dir),'utf8');await db.exec(migration);await db.exec(await readFile(new URL('20261107223002_indicative_estimate_authorization_order.sql',dir),'utf8'));
+ await as(null,'postgres');const migration=await readFile(new URL('20261107222548_reserved_indicative_estimates.sql',dir),'utf8');await db.exec(migration);await db.exec(await readFile(new URL('20261107223002_indicative_estimate_authorization_order.sql',dir),'utf8'));await db.exec(await readFile(new URL('20261107223132_pending_booking_estimate.sql',dir),'utf8'));
  eq(await one('select indicative_price_version v from public.interventions where id=$1',[old.id]),null);
  eq(await one('select estimate_max_cents v from public.interventions where id=$1',[old.id]),18000);
  eq(await one('select jsonb_build_array(indicative_price_version,expected_min_cents,expected_max_cents)v from public.phone_booking_requests where actor_id=$1 and request_id=$2',[actor,key]),[1,8000,18000]);
@@ -96,6 +96,7 @@ try {
  await as(manager);await deny(siteCreate());await as(null,'postgres');await q("update public.organization_members set role='manager'where user_id=$1",[manager]);await as(manager);eq((await siteCreate()).indicative_price_version,1);
  await as(null,'postgres');await q('update public.sites set archived_at=now()where id=$1',[site]);await as(manager);await deny(siteCreate(),'P0001');await as(null,'postgres');
  eq((await one("select pg_get_functiondef('indicative_price_private.current_range(text)'::regprocedure)v")).includes('for share'),true);
+ await as(actor);const pending=(await one('select public.guest_booking_pending()v')).pending;eq(pending.estimate,{version:1,min_cents:8000,max_cents:18000,currency:'eur'});eq(Object.keys(pending).sort(),['request_id','method','status','expected_max_cents','created_at','estimate'].sort());await as(null,'postgres');
  // Current-schema privileged synthetic duplicate, distinct from the historical 022/023 fixture.
  const duplicate=crypto.randomUUID();await q("insert into public.phone_booking_requests(actor_id,request_id,payload,contact,method,expected_max_cents,phone_verified,indicative_price_version,expected_min_cents)select actor_id,$1,payload,contact,method,expected_max_cents,phone_verified,1,8000 from public.phone_booking_requests where actor_id=$2 and request_id=$3",[duplicate,actor,key]);
  await as(actor);await deny(one('select public.guest_booking_pending()v'),'55000');await as(null,'postgres');await q('delete from public.phone_booking_requests where actor_id=$1 and request_id=$2',[actor,duplicate]);

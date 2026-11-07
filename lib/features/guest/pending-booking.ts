@@ -1,3 +1,4 @@
+import {estimateSnapshot,estimateMatchesCap} from './estimate-snapshot';
 import { z } from "zod";
 import { ApiError, authenticatedClient, assertOrigin, dbError } from "@/lib/supabase/server";
 import { normalizePhone } from "./phone-auth";
@@ -6,8 +7,9 @@ const pending = z.object({
   request_id: z.string().uuid(), method: z.literal("card_hold"),
   status: z.enum(["prepared", "checkout_open", "authorized", "cancelling"]),
   expected_max_cents: z.number().int().positive().max(2147483647),
+  estimate: estimateSnapshot.optional(),
   created_at: z.string().max(64).refine(v => /^\d{4}-\d{2}-\d{2}T/.test(v) && Number.isFinite(Date.parse(v))),
-}).strict();
+}).strict().refine(value => !value.estimate || estimateMatchesCap(value.estimate,value.expected_max_cents));
 const result = z.object({ pending: pending.nullable() }).strict();
 const unavailable = () => new ApiError(503, "La tentative en cours n’a pas pu être vérifiée. Réessayez.");
 export async function pendingBooking(request: Request) {

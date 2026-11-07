@@ -13,3 +13,11 @@ test("lost tab recovery without request key: same actor RPC, exact minimal paylo
 test("anonymous/unverified/professional/foreign profile cannot call recovery RPC",async()=>{for(const [options,status]of [[{auth:false},401],[{verified:false},403],[{role:"artisan"},409],[{role:"admin"},409],[{foreignProfile:true},503]] as const){const f=fixture(options);await check(await f.request(),status);assert.equal(f.calls.length,0)}});
 test("no query/global lookup accepted, foreign origin refused",async()=>{for(const suffix of [`?actor_id=${ID}`,`?request_id=${KEY}`,"?phone=0696000000","?limit=25"]){const f=fixture();await check(await f.request(suffix),422);assert.equal(f.calls.length,0)}await check(await fixture().request("","https://foreign.test"),403)});
 test("malformed, extra private fields, multiple rows and provider failure are unknown not pending null",async()=>{for(const body of [null,{},[],{pending:[value,value]},{pending:{...value,method:"on_site"}},{pending:{...value,status:"confirmed"}},{pending:{...value,expected_max_cents:0}},{pending:{...value,created_at:"invalid"}},{pending:{...value,request_id:"bad"}},{pending:{...value,contact:{first_name:"PRIVATE"}}},{pending:null,stripe_session_id:"PRIVATE"}])await check(await fixture({body}).request(),503);await check(await fixture({error:"55000"}).request(),503);await check(await fixture({transport:true}).request(),503)});
+
+test('reserved snapshot projected exactly; legacy optional during migration skew',async()=>{
+ const estimate={version:1,min_cents:8000,max_cents:18000,currency:'eur'};
+ const body={pending:{...value,estimate}};
+ assert.deepEqual(await check(await fixture({body}).request(),200),body);
+ assert.deepEqual(await check(await fixture({body:{pending:value}}).request(),200),{pending:value});
+ for(const invalid of [{...estimate,max_cents:19000},{...estimate,min_cents:19000},{...estimate,version:0},{...estimate,currency:'usd'},{...estimate,extra:'private'},null])await check(await fixture({body:{pending:{...value,estimate:invalid}}}).request(),503);
+});
