@@ -6,8 +6,8 @@
 // reply / 503 offers « Réessayer » with the SAME command; 409 ⇒ honest message + reload. Demo:
 // no call. Logic in ./model.
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import type { OperatorField } from "./contract";
-import { EDITOR_INITIAL, FIELD_LABELS, FIELD_ORDER, PROFILE_COPY, createEditorApi, createEditorController, formToProfile, missingMinimum, tabStore, type EditorApi, type EditorView, type Store } from "./model";
+import type { OperatorField } from "../../../lib/features/public-operator-profile/contract";
+import { EDITOR_INITIAL, FIELD_LABELS, FIELD_ORDER, PROFILE_COPY, createEditorApi, createEditorController, formToProfile, missingMinimum, tabStore, type EditorApi, type EditorContext, type EditorView, type Store } from "./model";
 import styles from "./operator-profile.module.css";
 
 const uuid = (): string | null => (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : null);
@@ -16,6 +16,8 @@ export type OperatorProfileEditorProps = {
   demo: boolean;
   /** From the server's /me reply (session.platformAccess.super_admin); the server enforces it again. */
   superAdmin: boolean;
+  /** Session mutation context: storage key and every reply are bound to uid + generation. */
+  context: EditorContext;
   api?: EditorApi;
   store?: () => Store | null;
   newId?: () => string | null;
@@ -41,15 +43,15 @@ export function OperatorProfileEditor(props: OperatorProfileEditorProps) {
   return <Editor {...props} />;
 }
 
-function Editor({ api, store = tabStore, newId = uuid, initial }: OperatorProfileEditorProps) {
+function Editor({ api, store = tabStore, newId = uuid, context, initial }: OperatorProfileEditorProps) {
   const [view, setRaw] = useState<EditorView>(initial ?? EDITOR_INITIAL);
   const ref = useRef(view);
   const set = (next: EditorView) => {
     ref.current = next;
     setRaw(next);
   };
-  const latest = useRef({ api, store, newId });
-  latest.current = { api, store, newId };
+  const latest = useRef({ api, store, newId, context });
+  latest.current = { api, store, newId, context };
   const ctrl = useRef<ReturnType<typeof createEditorController> | null>(null);
   if (!ctrl.current) {
     let client: EditorApi | null = null;
@@ -57,6 +59,7 @@ function Editor({ api, store = tabStore, newId = uuid, initial }: OperatorProfil
       api: () => (client ??= latest.current.api ?? createEditorApi()),
       store: () => latest.current.store(),
       newId: () => latest.current.newId(),
+      context: { generation: () => latest.current.context.generation(), userId: () => latest.current.context.userId() },
       get: () => ref.current,
       set,
     });
@@ -75,6 +78,10 @@ function Editor({ api, store = tabStore, newId = uuid, initial }: OperatorProfil
   const [errors, setErrors] = useState<Partial<Record<OperatorField, string>>>({});
   const [withdrawing, setWithdrawing] = useState(false);
   const missing = data ? missingMinimum(data.draft) : [];
+  // 401 / 403: the typed draft values are dropped along with the controller's copies.
+  useEffect(() => {
+    if (view.phase === "forbidden") setValues(null);
+  }, [view.phase]);
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();

@@ -6,7 +6,7 @@
 // « À renseigner par l’exploitant ». The editor sends one command at a time; its command_id is
 // stored in tab storage BEFORE the POST so a lost reply / 503 replays the same command.
 import { z } from "zod";
-import { MINIMUM_FIELDS, editor, operatorProfile, publication, type EditorState, type OperatorField, type OperatorProfile, type ProfileCommand, type Publication } from "./contract";
+import { MINIMUM_FIELDS, command, editor, operatorProfile, publication, type EditorState, type OperatorField, type OperatorProfile, type ProfileCommand, type Publication } from "../../../lib/features/public-operator-profile/contract";
 
 export const PUBLIC_PROFILE_PATH = "/api/public/operator-profile";
 export const EDITOR_PATH = "/api/platform-operations/public-profile";
@@ -86,7 +86,11 @@ export function createEditorApi(fetcher: typeof fetch = (...a) => fetch(...a)): 
   };
 }
 export type Store = { get(key: string): string | null; set(key: string, value: string): void; remove(key: string): void };
+export type EditorContext = { generation(): number; userId(): string | null };
 export const PENDING_KEY = "operator-profile-pending-command";
+/** The stored command is bound to the account and identity generation that created it. */
+export const pendingKey = (uid: string | null, generation: number) => `${PENDING_KEY}:${uid ?? "-"}:${generation}`;
+const storedSchema = z.object({ uid: z.string().min(1), gen: z.number().int().nonnegative(), command }).strict();
 export function tabStore(): Store | null {
   try {
     const s = window.sessionStorage;
@@ -103,6 +107,7 @@ export const PROFILE_COPY = {
   retry: "L’enregistrement n’est pas confirmé. Réessayez : la même commande sera renvoyée.",
   demo: "En démonstration, la configuration de l’exploitant n’est ni lue ni enregistrée.",
   noUuid: "Ce navigateur ne permet pas de créer un identifiant sécurisé : l’enregistrement est impossible ici.",
+  storage: "Le stockage de cet onglet est indisponible : rien n’a été envoyé. Sans lui, une réponse perdue ne pourrait pas être rejouée à l’identique ; autorisez le stockage du site ou utilisez un autre onglet.",
 } as const;
 export type EditorView = {
   phase: "loading" | "ready" | "error" | "forbidden";
@@ -132,24 +137,60 @@ export function formToProfile(values: Partial<Record<OperatorField, string>>): {
   return { errors };
 }
 
-export function createEditorController({ api, store, newId, get, set }: { api: () => EditorApi; store: () => Store | null; newId: () => string | null; get: () => EditorView; set: (s: EditorView) => void }) {
+export function createEditorController({ api, store, newId, context, get, set }: { api: () => EditorApi; store: () => Store | null; newId: () => string | null; context: EditorContext; get: () => EditorView; set: (s: EditorView) => void }) {
   let inFlight = false;
   let loadSeq = 0;
+  /** Identity the in-memory pending command belongs to. */
+  let pendingFor: string | null = null;
+  const identity = () => ({ uid: context.userId(), gen: context.generation() });
+  const sameIdentity = (a: { uid: string | null; gen: number }) => context.userId() === a.uid && context.generation() === a.gen;
+  const safe = <T,>(f: () => T): T | undefined => {
+    try {
+      return f();
+    } catch {
+      return undefined;
+    }
+  };
+  const clearStored = (id = identity()) => safe(() => store()?.remove(pendingKey(id.uid, id.gen)));
+  /** 401 / 403: every sensitive copy is dropped (draft, published, pending command). */
+  const forbid = () => {
+    clearStored();
+    pendingFor = null;
+    set({ ...EDITOR_INITIAL, phase: "forbidden" });
+  };
   const load = async () => {
     const my = ++loadSeq;
+    const id = identity();
     set({ ...get(), phase: get().data ? get().phase : "loading", error: "" });
     const r = await api().load();
-    if (my !== loadSeq) return;
-    if (r.status === 401 || r.status === 403) return set({ ...get(), phase: "forbidden", data: null });
+    if (my !== loadSeq || !sameIdentity(id)) return;
+    if (r.status === 401 || r.status === 403) return forbid();
     const parsed = r.status === 200 ? editor.safeParse(r.body) : null;
     if (!parsed?.success) return set({ ...get(), phase: "error", error: PROFILE_COPY.loadFailed });
     set({ ...get(), phase: "ready", data: parsed.data, error: "" });
   };
+  /** Writes the command, reads it back; anything else (null store, throw, mismatch) refuses the POST. */
+  const persist = (cmd: ProfileCommand, id: { uid: string | null; gen: number }): boolean => {
+    if (!id.uid) return false;
+    const s = store();
+    if (!s) return false;
+    const key = pendingKey(id.uid, id.gen);
+    const value = JSON.stringify({ uid: id.uid, gen: id.gen, command: cmd });
+    const ok = safe(() => {
+      s.set(key, value);
+      return s.get(key) === value;
+    });
+    return ok === true;
+  };
   const send = async (cmd: ProfileCommand) => {
     if (inFlight) return false;
+    const id = identity();
+    if (!persist(cmd, id)) {
+      set({ ...get(), error: PROFILE_COPY.storage });
+      return false;
+    }
     inFlight = true;
-    loadSeq++; // a list read started before this write never overwrites its outcome
-    store()?.set(PENDING_KEY, JSON.stringify(cmd)); // persisted BEFORE the POST
+    loadSeq++; // a read started before this write never overwrites its outcome
     set({ ...get(), busy: true, error: "", notice: "" });
     let r: Result;
     try {
@@ -157,61 +198,79 @@ export function createEditorController({ api, store, newId, get, set }: { api: (
     } finally {
       inFlight = false;
     }
+    // Account or rights changed while waiting: the reply belongs to another context, ignore it.
+    if (!sameIdentity(id)) return false;
     const okBody = r.status === 200 ? z.object({ version: z.number().int(), action: z.enum(["save", "publish", "withdraw"]) }).strict().safeParse(r.body) : null;
     if (okBody?.success && okBody.data.version === cmd.expected_version + 1 && okBody.data.action === cmd.action) {
-      store()?.remove(PENDING_KEY);
+      clearStored(id);
+      pendingFor = null;
       set({ ...get(), busy: false, pending: null, notice: cmd.action === "save" ? "Brouillon enregistré." : cmd.action === "publish" ? "Informations publiées." : "Publication retirée." });
       await load();
       return true;
     }
-    if (r.status === 409) {
-      store()?.remove(PENDING_KEY);
-      set({ ...get(), busy: false, pending: null, error: PROFILE_COPY.conflict });
-      return false;
-    }
-    if (r.status === 422 || r.status === 400) {
-      store()?.remove(PENDING_KEY);
-      set({ ...get(), busy: false, pending: null, error: PROFILE_COPY.invalid });
-      return false;
-    }
     if (r.status === 401 || r.status === 403) {
-      store()?.remove(PENDING_KEY);
-      set({ ...get(), busy: false, pending: null, phase: "forbidden" });
+      forbid();
+      return false;
+    }
+    if (r.status === 409 || r.status === 422 || r.status === 400) {
+      clearStored(id);
+      pendingFor = null;
+      set({ ...get(), busy: false, pending: null, error: r.status === 409 ? PROFILE_COPY.conflict : PROFILE_COPY.invalid });
       return false;
     }
     // Lost reply, 503, timeout, unverifiable 200: keep the exact command for an explicit retry.
+    pendingFor = `${id.uid}|${id.gen}`;
     set({ ...get(), busy: false, pending: cmd, error: PROFILE_COPY.retry });
     return false;
   };
-  const fresh = (build: (id: string, version: number) => ProfileCommand): Promise<boolean> => {
+  const fresh = (build: (cid: string, version: number) => ProfileCommand): Promise<boolean> => {
     const data = get().data;
     if (!data || get().pending) return Promise.resolve(false);
-    const id = newId();
-    if (!id) {
+    const cid = newId();
+    if (!cid) {
       set({ ...get(), error: PROFILE_COPY.noUuid });
       return Promise.resolve(false);
     }
-    return send(build(id, data.version));
+    return send(build(cid, data.version));
   };
   return {
     load,
-    /** A command left by a reload of this tab is offered again, never resent automatically. */
+    /** A command stored by this tab for the SAME uid + generation is offered again (never sent
+     *  automatically); anything malformed or from another identity is removed / ignored. */
     restorePending() {
-      const raw = store()?.get(PENDING_KEY);
-      if (!raw) return;
+      const id = identity();
+      if (!id.uid) return;
+      const key = pendingKey(id.uid, id.gen);
+      const raw = safe(() => store()?.get(key) ?? null) ?? null;
+      if (raw === null) return;
+      let parsed: z.infer<typeof storedSchema> | null = null;
       try {
-        const cmd = JSON.parse(raw) as ProfileCommand;
-        set({ ...get(), pending: cmd, error: PROFILE_COPY.retry });
+        const r = storedSchema.safeParse(JSON.parse(raw));
+        parsed = r.success ? r.data : null;
       } catch {
-        store()?.remove(PENDING_KEY);
+        parsed = null;
       }
+      if (!parsed || parsed.uid !== id.uid || parsed.gen !== id.gen) {
+        safe(() => store()?.remove(key));
+        return;
+      }
+      pendingFor = `${id.uid}|${id.gen}`;
+      set({ ...get(), pending: parsed.command, error: PROFILE_COPY.retry });
     },
-    save: (profile: OperatorProfile) => fresh((id, v) => ({ action: "save", command_id: id, expected_version: v, profile })),
-    publish: () => (get().data && missingMinimum(get().data!.draft).length ? Promise.resolve(false) : fresh((id, v) => ({ action: "publish", command_id: id, expected_version: v }))),
-    withdraw: () => fresh((id, v) => ({ action: "withdraw", command_id: id, expected_version: v })),
+    save: (profile: OperatorProfile) => fresh((cid, v) => ({ action: "save", command_id: cid, expected_version: v, profile })),
+    publish: () => (get().data && missingMinimum(get().data!.draft).length ? Promise.resolve(false) : fresh((cid, v) => ({ action: "publish", command_id: cid, expected_version: v }))),
+    withdraw: () => fresh((cid, v) => ({ action: "withdraw", command_id: cid, expected_version: v })),
+    /** Replays the pending command only under the identity that created it. */
     retry: () => {
       const p = get().pending;
-      return p ? send(p) : Promise.resolve(false);
+      if (!p) return Promise.resolve(false);
+      const id = identity();
+      if (pendingFor !== `${id.uid}|${id.gen}`) {
+        pendingFor = null;
+        set({ ...get(), pending: null, error: "" });
+        return Promise.resolve(false);
+      }
+      return send(p);
     },
     get inFlight() {
       return inFlight;
