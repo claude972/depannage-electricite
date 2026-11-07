@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import { PhoneLookupPage } from "@/components/role/phone-access";
 
 export const metadata: Metadata = {
-  title: "Suivre ma demande — Courant",
+  title: "Suivre ma demande — Dépannage électrique",
   description: "Retrouvez vos demandes avec votre téléphone vérifié par un code.",
 };
 

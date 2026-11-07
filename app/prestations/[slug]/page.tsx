@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!service) return {};
   const e = serviceEstimate(service.category);
   return {
-    title: `${service.title} — Courant`,
+    title: `${service.title} — Dépannage électrique`,
     description: `${service.intro} Estimation indicative : ${money(e.min)} – ${money(e.max)}, confirmée par un devis.`,
   };
 }

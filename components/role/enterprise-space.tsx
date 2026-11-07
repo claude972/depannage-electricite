@@ -913,7 +913,7 @@ function useInterventionList(c: Ctx) {
     },
     exportCsv: () =>
       download(
-        "courant-interventions.csv",
+        "interventions.csv",
         csv([
           ["Référence", "Site", "Type", "Statut", "Adresse", "Estimation min (EUR)", "Estimation max (EUR)", "Date"],
           ...rows.map((i) => [
@@ -3120,7 +3120,7 @@ function ReportsView({ c }: { c: Ctx }) {
     setError("");
     if (demo) {
       download(
-        "courant-rapport-demo.csv",
+        "rapport-demo.csv",
         csv([
           ["Site", "Activité", "Budget EUR", "Payé EUR", "Engagé non payé EUR", "Interventions"],
           ...rows.map((r) => [
@@ -3144,7 +3144,7 @@ function ReportsView({ c }: { c: Ctx }) {
         const result = await response.json().catch(() => ({}));
         throw new Error((result as { error?: string }).error || "Le rapport n’est pas disponible.");
       }
-      download("courant-rapport.csv", await response.text(), "text/csv;charset=utf-8");
+      download("rapport.csv", await response.text(), "text/csv;charset=utf-8");
     } catch (e) {
       setError((e as Error).message);
     } finally {

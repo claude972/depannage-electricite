@@ -8,7 +8,7 @@ export default function NotFound() {
   return (
     <ThemeSurface className={styles.page}>
       <header className={styles.bar}>
-        <Link className={styles.home} href="/" aria-label="Courant, retour à l’accueil">
+        <Link className={styles.home} href="/" aria-label="Retour à l’accueil">
           <Brand compact />
         </Link>
         <ThemeToggle />

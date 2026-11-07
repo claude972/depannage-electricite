@@ -9,7 +9,7 @@ export default function ErrorPage({ reset }: { reset: () => void }) {
   return (
     <ThemeSurface className={styles.page}>
       <header className={styles.bar}>
-        <a className={styles.home} href="/" aria-label="Courant, retour à l’accueil">
+        <a className={styles.home} href="/" aria-label="Retour à l’accueil">
           <Brand compact />
         </a>
         <ThemeToggle />

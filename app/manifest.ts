@@ -5,8 +5,8 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "Courant — Dépannage électrique",
-    short_name: "Courant",
+    name: "Dépannage électrique",
+    short_name: "Dépannage",
     description:
       "Vos demandes, devis et interventions électriques. Une connexion est nécessaire pour accéder aux dossiers.",
     lang: "fr",

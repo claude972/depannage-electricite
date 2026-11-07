@@ -18,7 +18,7 @@ export function Brand({ compact = false }: { compact?: boolean }) {
         <Icon name="bolt" size={23} />
       </span>
       <span>
-        courant<span className="brand-dot">.</span>
+        Dépannage électrique
         {!compact && <small>Le dépannage électrique, au clair.</small>}
       </span>
     </span>

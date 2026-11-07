@@ -23,7 +23,7 @@ function renderChrome(props: Record<string, unknown>) {
 test("chrome accueil : sections en boutons, marque courante, note de pied", () => {
   const html = renderChrome({ current: "home", sections: [{ id: "a", label: "Interventions" }], footerNote: "Crédits" });
   assert.match(html, /class="ui-v2 /);
-  assert.match(html, /aria-label="Courant, accueil" aria-current="page"/);
+  assert.match(html, /aria-label="Accueil" aria-current="page"/);
   assert.match(html, /data-home-anchor="a"[^>]*>Interventions/);
   assert.doesNotMatch(html, />Accueil</);
   assert.match(html, /<main id="main"[^>]*><p>contenu<\/p><\/main>/);
@@ -35,7 +35,7 @@ test("chrome hors accueil : « Accueil » au lieu des sections, page courante ma
   const html = renderChrome({ current: "new", sections: [{ id: "a", label: "Interventions" }] });
   assert.doesNotMatch(html, /data-home-anchor/); // pas de sections hors accueil
   assert.match(html, /data-chrome-home=""[^>]*>Accueil</);
-  assert.doesNotMatch(html, /aria-label="Courant, accueil" aria-current/);
+  assert.doesNotMatch(html, /aria-label="Accueil" aria-current/);
   assert.match(html, /aria-current="page"[^>]*data-home-action="new"[^>]*>Décrire ma panne/);
   assert.doesNotMatch(html, /Crédits photo/);
   const auth = renderChrome({ current: "auth" });

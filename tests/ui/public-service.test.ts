@@ -95,7 +95,7 @@ test("route : 8 paramètres statiques, dynamicParams désactivé, métadonnées,
   same(page.generateStaticParams(), catalog.SERVICES.map((s) => ({ slug: s.slug })));
   for (const s of catalog.SERVICES) {
     const meta = await page.generateMetadata({ params: Promise.resolve({ slug: s.slug }) });
-    assert.equal(meta.title, `${s.title} — Courant`);
+    assert.equal(meta.title, `${s.title} — Dépannage électrique`);
     assert.ok(meta.description.replace(/\s+/g, " ").includes(range(s.category)));
   }
   same(await page.generateMetadata({ params: Promise.resolve({ slug: "inconnu" }) }), {});
