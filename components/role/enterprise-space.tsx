@@ -101,6 +101,7 @@ import { PointReadState } from "./detail-read-view";
 import { SiteOperationsView } from "../features/site-operations/site-operations-view";
 import { SiteEnergyPanel } from "../features/energy/site-energy-panel";
 import { SiteContactsPanel } from "../features/site-contacts/site-contacts-panel";
+import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
 import { OrganizationSlaPanel } from "../features/organization-sla/organization-sla-panel";
 import { CONTRACT_MESSAGES } from "../app/api";
 import { demoReport } from "../../lib/features/site-operations/demo";
@@ -3283,11 +3284,17 @@ function InvoicesView({ c }: { c: Ctx }) {
   return (
     <>
       <PageTitle title="Facturation" subtitle="Trace financière réelle des dossiers chargés" />
-      <Unavailable
-        title="Factures, avoirs et relances non disponibles"
-        reason="La facturation n’existe pas encore côté serveur ; seuls les règlements Stripe confirmés sont listés."
-        blocker="FIN-05"
-      />
+      {c.organization ? (
+        <CustomerInvoicesPanel
+          title="Factures et avoirs émis"
+          filters={{ organization_id: c.organization.id, ...(c.activeSite ? { site_id: c.activeSite.id } : {}), basis: "service" }}
+          context={session.mutationContext}
+          demo={c.demo}
+        />
+      ) : (
+        <Unavailable title="Factures et avoirs" reason="Choisissez une organisation pour consulter ses factures et avoirs émis." blocker="FIN-05" />
+      )}
+      <p className={styles.muted}>Les relances de paiement ne sont pas envoyées par l’application : aucune relance automatique n’est configurée.</p>
       <section className="panel" aria-labelledby="payments-title">
         <h2 id="payments-title">Règlements</h2>
         {payments.length ? (
