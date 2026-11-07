@@ -1,7 +1,7 @@
 -- Audited support reply. Existing dossier/message SELECT RLS stays authoritative.
 create function public.admin_send_message(p_id uuid,p_intervention_id uuid,p_body text)
 returns public.messages language plpgsql security definer set search_path='' as $$
-declare actor uuid:=auth.uid(); result public.messages; content text:=btrim(p_body);
+declare actor uuid:=auth.uid(); result public.messages; content text:=regexp_replace(p_body,'^[[:space:]]+|[[:space:]]+$','','g');
 begin
  if actor is null or not public.is_admin() then raise insufficient_privilege; end if;
  if p_id is null or p_intervention_id is null or content is null or char_length(content) not between 1 and 4000
@@ -12,6 +12,8 @@ begin
  if not found then raise insufficient_privilege;end if;
  perform 1 from public.interventions where id=p_intervention_id for update;
  if not found then raise no_data_found;end if;
+ if not exists(select 1 from public.interventions where id=p_intervention_id and artisan_id is not null and status<>'cancelled') then
+  raise exception 'Conversation unavailable' using errcode='P0001';end if;
  select * into result from public.messages where id=p_id;
  if found then
    if result.author_id=actor and result.intervention_id=p_intervention_id and result.body=content

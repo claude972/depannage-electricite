@@ -27,10 +27,10 @@ for (const file of (await readdir(dir)).filter((name) => name.endsWith('.sql')).
 
 
 let checks=0;
-const ids={admin:'10000000-0000-4000-8000-000000000001',client:'10000000-0000-4000-8000-000000000002',other:'10000000-0000-4000-8000-000000000003'};
-for(const [name,id]of Object.entries(ids))await db.query('insert into auth.users(id,raw_user_meta_data,email,email_confirmed_at)values($1,$2,$3,now())',[id,JSON.stringify({role:'client',full_name:'QA '+name}),name+'@example.invalid']);
+const ids={admin:'10000000-0000-4000-8000-000000000001',client:'10000000-0000-4000-8000-000000000002',other:'10000000-0000-4000-8000-000000000003',artisan:'10000000-0000-4000-8000-000000000004'};
+for(const [name,id]of Object.entries(ids))await db.query('insert into auth.users(id,raw_user_meta_data,email,email_confirmed_at)values($1,$2,$3,now())',[id,JSON.stringify({role:name==='artisan'?'artisan':'client',full_name:'QA '+name}),name+'@example.invalid']);
 await db.query("update public.profiles set role='admin' where id=$1",[ids.admin]);
-const job=(await db.query("insert into public.interventions(client_id,category,urgency,description,address,city,postal_code,estimate_min_cents,estimate_max_cents)values($1,'socket','scheduled','QA issue fixture','QA address','QA city','97200',10000,20000)returning id",[ids.client])).rows[0].id;
+const job=(await db.query("insert into public.interventions(client_id,artisan_id,category,urgency,description,address,city,postal_code,estimate_min_cents,estimate_max_cents)values($1,$2,'socket','scheduled','QA issue fixture','QA address','QA city','97200',10000,20000)returning id",[ids.client,ids.artisan])).rows[0].id;
 async function as(actor,sql,args=[]){await db.exec('set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[ids[actor]||'']);try{return await db.query(sql,args);}finally{await db.exec('reset role');}}
 async function send(actor,id,body='Support reply',target=job){return(await as(actor,'select to_jsonb(public.admin_send_message($1,$2,$3))v',[id,target,body])).rows[0].v;}
 function ok(value,label){assert.ok(value,label);checks++;}
@@ -43,12 +43,15 @@ ok((await db.query('select count(*)::int n from public.messages')).rows[0].n===1
 ok((await db.query("select count(*)::int n from public.audit_log where action=$1",['admin_message:'+id])).rows[0].n===1,'one audit without body');
 await denied(()=>send('admin',id,'Changed'),'P0001');
 await denied(()=>send('admin','20000000-0000-4000-8000-000000000002','  '),'22023');
+await denied(()=>send('admin','20000000-0000-4000-8000-000000000002','\t\n'),'22023');
 await denied(()=>send('admin','20000000-0000-4000-8000-000000000002','x'.repeat(4001)),'22023');
 await denied(()=>send('admin','20000000-0000-4000-8000-000000000002','test','20000000-0000-4000-8000-000000000099'),'P0002');
 ok((await as('client','select count(*)::int n from public.messages')).rows[0].n===1,'requester reads reply');
 ok((await as('other','select count(*)::int n from public.messages')).rows[0].n===0,'unrelated reader denied');
 await denied(()=>as('admin',"insert into public.messages(intervention_id,author_id,body)values($1,$2,'direct')",[job,ids.admin]),'42501');
 await as('admin','select public.send_message($1,$2)',[job,'Legacy caller audited']);ok((await db.query("select count(*)::int n from public.audit_log where action like 'admin_message:%'")).rows[0].n===2,'old command also audited');
+await db.query("update public.interventions set status='cancelled' where id=$1",[job]);await denied(()=>send('admin','20000000-0000-4000-8000-000000000002'),'P0001');
+await db.query("update public.interventions set status='requested',artisan_id=null where id=$1",[job]);await denied(()=>send('admin','20000000-0000-4000-8000-000000000002'),'P0001');
 await db.query("update public.profiles set role='admin' where id=$1",[ids.other]);await db.query("update public.profiles set role='client' where id=$1",[ids.admin]);await denied(()=>send('admin',id),'42501');
 await db.exec('set role anon');await denied(()=>db.query('select public.admin_send_message($1,$2,$3)',[id,job,'test']),'42501');await db.exec('reset role');
 console.log(JSON.stringify({sql:'PASS',checks,runtime:'PGlite',auth_storage_cron:'SIMULATED',concurrency_cloud_proof:false}));await db.close();
