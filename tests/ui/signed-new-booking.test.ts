@@ -5,7 +5,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { DEFINITIVE_REFUSAL, REQUEST_KEY_STORAGE, prepareRequestKey, readRequestKey, settleRequestKey } from "../../components/app/request-key";
-import { bookingFromSignedRequest, readPhotoCount, signedSlug, splitFullName, writePhotoCount } from "../../components/app/signed-booking";
+import { bookingForEditedRequest, bookingFromSignedRequest, readPhotoCount, signedSlug, splitFullName, writePhotoCount } from "../../components/app/signed-booking";
 import type { RequestValues } from "../../components/app/types";
 
 const K1 = "11111111-1111-4111-8111-111111111111";
@@ -77,6 +77,10 @@ test("booking draft: neutral slug, no catalogue service, no invented last name, 
 
 test("wiring: client #new never posts the legacy route in live; manager create sends the persisted key; confirm checks payment first", () => {
   const app = readFileSync("components/courant-app.tsx", "utf8");
+  const reset = app.slice(app.indexOf("const clearSessionState"), app.indexOf("const navigate"));
+  assert.match(reset, /bookingPhotos\.current = \[\];/);
+  assert.match(reset, /writePhotoCount\(getDraftStorage\(\), 0\)/);
+  assert.match(app, /async function uploadBookingPhotos\([^\n]+\n\s*if \(!ctx\.alive\(\)\) return;\s*const files = bookingPhotos\.current;/);
   const create = app.slice(app.indexOf("async function createIntervention("), app.indexOf("async function retryUploads("));
   const prep = create.indexOf("const prepared = prepareRequestKey(getDraftStorage(), values);");
   assert.ok(prep > 0 && prep < create.indexOf('api<{ intervention: Intervention }>("/api/interventions", payload)'), "key prepared before the POST");
@@ -93,6 +97,13 @@ test("wiring: client #new never posts the legacy route in live; manager create s
   const bc = readFileSync("components/role/booking-confirm.tsx", "utf8");
   const send = bc.slice(bc.indexOf("async function send()"), bc.indexOf("return (", bc.indexOf("async function send()")));
   assert.ok(send.indexOf("if (!booking.payment)") < send.indexOf("contactErrors(contact)"), "payment choice checked before the contact");
+});
+
+test("editing a booking keeps the catalogue identity until the category changes", () => {
+  const booking = { ...bookingFromSignedRequest(values, null), slug: "plusieurs-prises-sans-courant", request_id: K1, payment: "on_site" as const, slot: "tomorrow" as const };
+  assert.deepEqual(bookingForEditedRequest(booking, "socket", { ...values, urgency: "scheduled" }), booking);
+  const edited = bookingForEditedRequest(booking, "socket", { ...values, category: "panel", urgency: "urgent" });
+  assert.deepEqual(edited, { ...booking, slug: "demande-panel", urgent: true, slot: null });
 });
 
 test("wording: the client booking path never shows « Enregistrer » before the payment choice; managers keep their direct creation", () => {

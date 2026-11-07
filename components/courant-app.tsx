@@ -45,7 +45,7 @@ import { resolveDisplayName } from "./app/display-name";
 import { draftNotice, getDraftStorage, readBootDraft } from "./app/request-draft-boot";
 import { BOOKING_DRAFT_KEY, PAYMENT_LABEL, clearBooking, ensureRequestId, readBooking, saveBooking, type BookingDraft } from "./app/booking-draft";
 import { DEFINITIVE_REFUSAL, prepareRequestKey, settleRequestKey } from "./app/request-key";
-import { bookingFromSignedRequest, readPhotoCount, writePhotoCount } from "./app/signed-booking";
+import { bookingForEditedRequest, bookingFromSignedRequest, readPhotoCount, writePhotoCount } from "./app/signed-booking";
 
 type BookingReceipt = {
   status: "confirmed";
@@ -239,11 +239,14 @@ export default function CourantApp() {
     setNotice("");
     setPendingDraft(null);
     setBooking(null);
+    setDemoBooking(null);
+    bookingPhotos.current = [];
     setCardReturn(null);
     setPendingLookup("idle");
     pendingCheckedFor.current = null;
     setUploads([]);
     clearBooking(getDraftStorage());
+    writePhotoCount(getDraftStorage(), 0);
     try {
       sessionStorage.removeItem(DRAFT_KEY);
       // Pending private content (unsent assistance request) of the outgoing user never survives
@@ -1235,6 +1238,7 @@ export default function CourantApp() {
   /** After a CONFIRMED creation only: the photos kept in memory are uploaded through the existing
    *  queue; if they were lost (reload, bank return), say so — never a silent or fake upload. */
   async function uploadBookingPhotos(ctx: RunContext, interventionId: string, confirmedText: string) {
+    if (!ctx.alive()) return;
     const files = bookingPhotos.current;
     const announced = readPhotoCount(getDraftStorage());
     bookingPhotos.current = [];
@@ -2756,12 +2760,18 @@ export default function CourantApp() {
     // tab storage), nothing is sent; the confirmation then shows it again.
     updatePendingDraft(values: RequestValues) {
       if (modeRef.current === "demo") {
-        setDemoBooking((d) => (d ? { ...d, draft: values } : d));
+        setDemoBooking((d) => (d ? { draft: values, booking: bookingForEditedRequest(d.booking, d.draft.category, values) } : d));
         return;
       }
       if (modeRef.current !== "live") return;
       setPendingDraft(values);
-      savePublicDraft(getDraftStorage(), values);
+      const storage = getDraftStorage();
+      savePublicDraft(storage, values);
+      if (booking && pendingDraft) {
+        const updated = bookingForEditedRequest(booking, pendingDraft.category, values);
+        setBooking(updated);
+        saveBooking(storage, updated);
+      }
     },
     updateBookingPayment(payment: NonNullable<BookingDraft["payment"]>) {
       if (modeRef.current === "demo") {

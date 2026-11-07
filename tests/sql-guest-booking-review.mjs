@@ -66,5 +66,26 @@ try{
  await denied(status('a',key),'P0002');
  await denied(as('a','select public.phone_booking_status(null,$1) v',[job]),'P0002');
  eq(await scalar('select count(*)::int v from public.payments'),0);eq(await scalar('select count(*)::int v from public.payment_attempts'),0);
- console.log(JSON.stringify({sql:'PASS',checks,migrations:22,auth_storage_cron:'STUBS',provider:'NO REAL STRIPE OR SMS',real_concurrency_proved:false}));
+ // The signed-in client form uses a generic slug, with no catalogue service inferred from the category.
+ actors.signed={id:randomUUID(),phone:'+596696999901'};
+ await db.query("insert into auth.users(id,email,email_confirmed_at) values($1,'signed-qa@example.invalid',now())",[actors.signed.id]);
+ const signedPayload=category=>({...payload,category,service_slug:`demande-${category}`});
+ await denied(prepare('signed',randomUUID(),'on_site',signedPayload('socket')),'22023');
+ const categoryMigrations=(await readdir(dir)).filter(name=>name.endsWith('_signed_booking_categories.sql'));
+ eq(categoryMigrations.length,1);
+ await db.exec(await readFile(new URL(categoryMigrations[0],dir),'utf8'));
+ eq(await defs(),before);
+ for(const category of ['outage','panel','socket','lighting','diagnostic']){
+  const command=randomUUID(),input=signedPayload(category);
+  const confirm=()=>as('signed','select public.create_on_site_booking($1,$2,$3) v',[command,JSON.stringify(input),JSON.stringify(contact('signed'))]);
+  const receipt=(await confirm()).rows[0].v;
+  eq(receipt.status,'confirmed');
+  eq(receipt.payment.status,'due_on_site');
+  eq(await scalar('select category v from public.interventions where id=$1',[receipt.intervention.id]),category);
+  eq((await confirm()).rows[0].v.intervention.id,receipt.intervention.id);
+ }
+ await denied(prepare('signed',randomUUID(),'on_site',{...signedPayload('panel'),category:'socket'}),'22023');
+ await denied(prepare('artisan',randomUUID(),'on_site',signedPayload('socket')),'42501');
+ eq(await scalar('select count(*)::int v from public.payments'),0);
+ console.log(JSON.stringify({sql:'PASS',checks,migrations:23,auth_storage_cron:'STUBS',provider:'NO REAL STRIPE OR SMS',real_concurrency_proved:false}));
 }finally{await db.close()}

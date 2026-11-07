@@ -24,6 +24,16 @@ export function bookingFromSignedRequest(values: RequestValues, profile: Pick<Pr
   };
 }
 
+export function bookingForEditedRequest(current: BookingDraft, previousCategory: RequestValues["category"], values: RequestValues): BookingDraft {
+  const urgent = values.urgency === "urgent";
+  return {
+    ...current,
+    slug: previousCategory === values.category ? current.slug : signedSlug(values.category),
+    urgent,
+    slot: urgent ? null : current.slot,
+  };
+}
+
 /** Number of photos chosen before confirmation (File objects themselves are never stored). */
 export const PHOTO_COUNT_KEY = "courant-booking-photos-v1";
 export function writePhotoCount(storage: Pick<Storage, "setItem" | "removeItem"> | null | undefined, count: number): void {

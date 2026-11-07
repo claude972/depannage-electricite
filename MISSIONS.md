@@ -49,6 +49,10 @@ Référence de travail [plan des 76 capacités](docs/PLAN_LIVRAISON_INTEGRALE.md
 - **Claude** : réutiliser la session et les auteurs UI existants. Carte et localisation du dossier client, avec données autorisées et aucun envoi d'adresse privée à un fournisseur tiers sans décision. Ownership de la feuille carte, du câblage UI local et des tests UI ciblés. Développer sans éditer les fichiers de finance, de formulaire et de session en cours d'assemblage.
 - **Raccordement final** : Stripe et Vonage restent au dernier lot de recette. Le pilote applique les migrations de test et exécute la recette en ligne. L'identité du premier Super Admin, le lancement public et les boutiques relèvent de leurs décisions existantes.
 
+### Correction du dépôt depuis l’espace client
+
+Le pilote étend le contrat SQL de réservation aux cinq identifiants génériques déjà émis par le formulaire connecté. La catégorie doit correspondre à l’identifiant. Les fiches catalogue, les permissions et les clés de rejeu gardent leurs contrôles. À la modification du brouillon, l’identifiant suit un éventuel changement de catégorie. Le changement de compte invalide les photos en mémoire et les anciennes réponses. Vérifier une création SQL par catégorie, une paire incohérente, le rejeu et le parcours navigateur.
+
 ## ART-03 / ADM-02 — décision individuelle de justificatif
 
 Pilote seul auteur de la migration, API /api/artisan/credentials/[id]/reviews et tests. Historique immuable, motif, version attendue, rejeu par UUID, lecture par l'artisan propriétaire et l'administration actuelle. Une pièce revue garde son type et sa date déclarée, l'artisan peut joindre une nouvelle pièce pour corriger. Une décision sur une pièce ne modifie pas l'approbation globale du dossier. Le contrat UI expose uniquement la pièce, les décisions datées, le droit d'action et le curseur. Vérifier accès croisés, expiration, concurrence par version, zéro double audit et reprise après réponse perdue. Cloud après assemblage et revue.
