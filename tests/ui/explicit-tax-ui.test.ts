@@ -82,3 +82,17 @@ test("aucun taux par défaut ni liste en dur dans les composants touchés", () =
     assert.doesNotMatch(src, /useState<[^>]*>\((0|5\.5|10|20|2\.1|8\.5)\)/, f);
   }
 });
+
+test("demo send_quote: explicit supported rate required before any mutation, no coercion (null never becomes 0)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync("components/courant-app.tsx", "utf8");
+  const start = src.indexOf('if (name === "send_quote") {');
+  const block = src.slice(start, src.indexOf("qs = [...qs, quote];", start));
+  assert.doesNotMatch(src, /Number\(extra\?\.tax_rate\)/);
+  const guard = block.indexOf("if (!isTaxRate(rate)) throw new Error(");
+  assert.ok(guard > 0, "guard present");
+  assert.ok(guard < block.indexOf("qs = qs.map("), "guard runs before the demo quotes are mutated");
+  const { isTaxRate } = await import("../../lib/tax-rates");
+  for (const bad of [null, undefined, "20", 0.2, 7, Number(null) === 0 ? "0" : 0]) assert.equal(isTaxRate(bad), false, String(bad));
+  for (const ok of [0, 2.1, 5.5, 8.5, 10, 20]) assert.equal(isTaxRate(ok), true);
+});
