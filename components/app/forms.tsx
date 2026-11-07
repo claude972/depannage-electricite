@@ -117,8 +117,9 @@ export function RequestForm({
   onDemo: () => void;
   /** Saved preferred address (client space only); never applied over a restored or typed draft. */
   preferredAddress?: PreferredAddress | null;
-  /** Booking path (signed-in client): the last step only hands over to the payment choice and the
-   *  final confirmation — nothing is sent here, so it must not read like « Enregistrer ». */
+  /** Booking path (signed-in client): after the validated ADDRESS step the form hands over to the
+   *  payment choice and the single final recap/confirmation (BookingConfirm). The form's own recap
+   *  step is skipped and nothing is sent here, so it never reads like « Enregistrer ». */
   finalStep?: { label: string; note: string };
 }) {
   const [step, setStep] = useState(1);
@@ -184,6 +185,12 @@ export function RequestForm({
     setValidation("");
     if (step === 1 && values.description.trim().length < 15) {
       setValidation("Décrivez le problème en au moins 15 caractères.");
+      return;
+    }
+    // Booking hand-off: the address step (native validation passed) goes straight to the payment
+    // choice; the form's recap would duplicate the final confirmation.
+    if (finalStep && step === 2) {
+      void onSubmit(values, photos);
       return;
     }
     if (step < 3) setStep(step + 1);
@@ -383,15 +390,16 @@ export function RequestForm({
               La disponibilité et les délais seront précisés après prise en
               charge. Aucune affectation immédiate n’est garantie.
             </p>
-          </>
-        ) : (
-          <>
-            <h2 ref={stepTitle} tabIndex={-1} style={STEP_TITLE_STYLE}>Votre demande, en clair.</h2>
             {finalStep && (
               <p className="muted" data-request-final-note="">
                 {finalStep.note}
               </p>
             )}
+          </>
+        ) : (
+          <>
+            <h2 ref={stepTitle} tabIndex={-1} style={STEP_TITLE_STYLE}>Votre demande, en clair.</h2>
+
             <div className="recap-service">
               <span className="service-icon">
                 <Icon name={c.icon} size={27} />
@@ -475,7 +483,9 @@ export function RequestForm({
               ? finalStep
                 ? "Veuillez patienter…"
                 : "Enregistrement…"
-              : step < 3
+              : finalStep && step === 2
+                ? finalStep.label
+                : step < 3
                 ? "Continuer"
                 : mode === "public"
                   ? "Créer mon compte et continuer"
