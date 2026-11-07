@@ -97,6 +97,7 @@ import { PlatformPage } from "./platform-anchor";
 import { FeatureUnavailable } from "./feature-unavailable";
 import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
 import { AvailableMissionsPanel } from "../features/available-missions/available-missions-panel";
+import { MissionRadiusPanel } from "../features/mission-radius/mission-radius-panel";
 import type { MissionOffer } from "../features/available-missions/available-missions-model";
 import {
   applicationSteps,
@@ -1100,6 +1101,7 @@ function toDemoOffer(i: Intervention): MissionOffer {
 }
 function Missions({ session, declinedIds }: { session: Session; declinedIds: string[] }) {
   const [segment, setSegment] = useState<MissionSegment>("available");
+  const [radiusRev, setRadiusRev] = useState(0);
   const m = artisanMissions(session.data.interventions, session.profileId);
   const offers = m.offers.filter((o) => !declinedIds.includes(o.id));
   const hidden = m.offers.length - offers.length;
@@ -1120,8 +1122,11 @@ function Missions({ session, declinedIds }: { session: Session; declinedIds: str
         <Segments label="Filtrer les missions" value={segment} options={options} onChange={setSegment} />
       </div>
       {segment === "available" && (
+        <MissionRadiusPanel demo={demo} context={session.mutationContext} onSaved={() => setRadiusRev((n) => n + 1)} />
+      )}
+      {segment === "available" && (
         <AvailableMissionsPanel
-          key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${demo ? "demo" : "live"}`}
+          key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${demo ? "demo" : "live"}|${radiusRev}`}
           context={session.mutationContext}
           demo={demo}
           demoItems={demo ? offers.map(toDemoOffer) : undefined}
