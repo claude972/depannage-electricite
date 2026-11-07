@@ -116,3 +116,6 @@ ROOT ajoute le tri facultatif des offres par tranches indicatives de 5 km, puis 
 ### SYS-04 — notifications push Web
 
 ROOT raccorde Web Push à la file privée et au service worker existants. L’utilisateur choisit un navigateur destinataire et confirme l’autorisation. Une session Supabase courante, la préférence active et l’accès à la notification sont revérifiés avant un envoi générique. Une tentative dont la réponse est incertaine reste sans rejeu. Vérifier changement de compte, désinscription, absence de données du dossier, protection de l’URL de destination et reprise du service worker. La configuration VAPID et l’exécution du worker restent désactivées pour la recette.
+
+## FIN-06 — preuve Charge Checkout (Astra exclusive)
+Base 44c35f2, branche codex/checkout-charge-proof, checkout propre réutilisé. Tranche serveur : commande durable et preuve privée immuable session payée → PI réussi → Charge capturée, recoupée aux snapshots SQL ; lecture finance et association des observations de litige exactes sans toucher leurs résultats ou le webhook. Frais et payouts restent non associés faute de preuve complète. Porte OFF, aucune mutation Stripe, tests injectés et SQL.
