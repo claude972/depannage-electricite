@@ -24,20 +24,19 @@ const DESCRIPTION = "La prise du salon ne fonctionne plus depuis hier soir.";
 test("parcours interactif client ↔ artisan (démo) : demande → offre → devis 8,5 % → acceptation → intervention → règlement", { skip }, async () => {
   await withApp(async (open) => {
     const { page, errors, api } = await open("client-new");
-    // 1. Client request: problem → place → recap, then the booking confirmation with the payment choice.
+    // 1. Client request: problem → validated address → payment choice → single final recap/confirmation.
     await page.getByRole("button", { name: /Prise ou interrupteur/ }).click();
     await page.getByLabel(/Décrivez le problème/).fill(DESCRIPTION);
     await click(page, "Continuer");
     await page.getByLabel("Adresse d’intervention").fill("8 rue Victor Hugo");
     await page.getByLabel("Code postal").fill("97200");
     await page.getByLabel("Ville").fill("Fort-de-France");
-    await click(page, "Continuer");
-    const recap = await main(page);
-    assert.match(recap, /Votre demande, en clair\./);
-    // Nothing is sent on the recap: no « Enregistrer », the next step is the payment choice.
-    assert.match(recap, /Rien n’est encore envoyé : vous choisirez ensuite le mode de règlement, puis vous confirmerez l’envoi de votre demande\./);
+    const place = await main(page);
+    // Nothing is sent on the address step: no « Enregistrer », the next step is the payment choice.
+    assert.match(place, /Rien n’est encore envoyé : vous choisirez ensuite le mode de règlement, puis vous confirmerez l’envoi de votre demande\./);
     assert.equal(await page.getByRole("button", { name: /Enregistrer la demande/ }).count(), 0);
     await click(page, "Continuer vers le règlement");
+    assert.doesNotMatch(await main(page), /Votre demande, en clair\./, "no intermediate recap duplicating the final confirmation");
     await page.waitForTimeout(400);
     const confirm = await main(page);
     assert.match(confirm, /Confirmez l’envoi de votre demande/);
@@ -175,8 +174,12 @@ test("#new connecté : le choix de règlement est proposé après l’adresse ; 
     await click(page, "Continuer");
     await page.getByLabel("Adresse d’intervention").fill("8 rue Victor Hugo");
     await page.getByLabel("Code postal").fill("97200");
+    // Revalidation: an empty city blocks the hand-off (native validation), nothing moves forward.
+    await page.getByLabel("Ville").fill("");
+    await click(page, "Continuer vers le règlement");
+    await page.waitForTimeout(200);
+    assert.match(await main(page), /Où faut-il intervenir \?/, "still on the address step");
     await page.getByLabel("Ville").fill("Fort-de-France");
-    await click(page, "Continuer");
     await click(page, "Continuer vers le règlement");
     await page.waitForTimeout(400);
     assert.match(await main(page), /Après intervention — paiement sur la plateforme/);
@@ -184,5 +187,21 @@ test("#new connecté : le choix de règlement est proposé après l’adresse ; 
     await page.locator("[data-booking-send]").click();
     await page.waitForTimeout(300);
     assert.match(await main(page), /Choisissez un mode de paiement avant d’envoyer ; rien n’a été envoyé\./);
+    // Back / edit: « Modifier la demande » reopens the form with the kept values; a changed address
+    // comes back to the SAME final confirmation (choice kept), nothing created in between.
+    await page.locator('[data-booking-choose="on_site"]').click();
+    await click(page, "Modifier la demande");
+    await page.waitForTimeout(300);
+    assert.equal(await page.getByLabel(/Décrivez le problème/).inputValue(), DESCRIPTION, "kept problem text");
+    await click(page, "Continuer");
+    assert.equal(await page.getByLabel("Adresse d’intervention").inputValue(), "8 rue Victor Hugo", "kept address");
+    await page.getByLabel("Adresse d’intervention").fill("12 rue Lamartine");
+    await click(page, "Revenir à la confirmation");
+    await page.waitForTimeout(400);
+    const again = await main(page);
+    assert.match(again, /Confirmez l’envoi de votre demande/);
+    assert.match(again, /12 rue Lamartine, 97200 Fort-de-France/);
+    assert.match(again, /Après intervention — paiement sur la plateforme/, "payment choice kept");
+    assert.equal((await store(page)).data.interventions.filter((i) => i.description === DESCRIPTION).length, 0, "nothing created between the steps");
   });
 });
