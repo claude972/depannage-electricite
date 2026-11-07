@@ -2,6 +2,7 @@
 // Point d’ancrage commun des documents de devis (ADV-DOCUMENTS-001) : panneau artisan, client et
 // entreprise. État de capacité, client injecté et démo isolée viennent de la session ; l’autorité
 // est fournie par la coque appelante (vrai pour client/artisan, autorité entreprise fail-closed).
+// DEMO-QUOTE-DOCS (claim, Claude UI): la démo est construite à partir du dossier/devis réellement affiché.
 import { QuoteDocumentsPanel } from "../features/quote-documents";
 import { CONTRACT_MESSAGES } from "../app/api";
 import { FeatureUnavailable, useProbeWhenUnknown } from "./feature-unavailable";
