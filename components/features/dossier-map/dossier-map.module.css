@@ -16,40 +16,25 @@
   font-size: 14px;
   color: var(--ui-danger);
 }
-.mock {
-  display: grid;
-  gap: 8px;
-  padding: 12px;
-  border: 1px dashed var(--ui-border);
-  border-radius: var(--ui-radius-md);
-  background: var(--ui-surface);
-}
-.mock p {
-  margin: 0;
-  font-size: 13px;
-  color: var(--ui-text-muted);
-}
-.mockArt {
-  width: 100%;
-  max-height: 120px;
-}
-.mockFrame {
-  fill: var(--ui-card);
-  stroke: var(--ui-border);
-}
-.mockRoad {
-  fill: none;
-  stroke: var(--ui-border);
-  stroke-width: 6;
-  stroke-linecap: round;
-}
-.mockPin {
-  fill: var(--ui-text-muted);
-}
 .map {
   margin: 0;
   display: grid;
   gap: 6px;
+}
+.link {
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--ui-accent);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.link:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
 }
 .attribution {
   font-size: 12px;
