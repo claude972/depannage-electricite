@@ -44,3 +44,7 @@ Responsable : Codex ROOT, un seul auteur backend. Périmètre : nouvelle RPC `av
 ## HOLD-REAUTHORIZATION — CONTRAT SEULEMENT
 
 Codex backend prépare depuis46708c7 un remplacement unique de l’empreinte initiale par une nouvelle autorisation du total accepté. Ownership/DTO dans docs/HOLD_REAUTHORIZATION_CONTRACT.md. Aucun codeapp/SQL avant GOexpliciteROOT ; snapshots/historique, barrières decapture et preuves deliberation indispensables.
+
+## HOLD-REAUTHORIZATION — GO CODE ROOT explicite
+
+GO reçu aprèsd7597fa : replacementtotal + retirementprocessing borné, historiqueconservé, générationactiveunique, preuvesbancairesstrictes etDTOducontrat. Codex backend unique sur lesfichiersréservés ; aucunprovider/cloud/credentials/UI. Touscallersguest_settlements àqualifieractive avantretirement. Code/tests déjàautorisés sansnouvellepermission.
