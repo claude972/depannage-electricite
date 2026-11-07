@@ -328,6 +328,9 @@ export function usePreferredAddress({ enabled, context, api }: { enabled: boolea
   const gen = context.generation();
   const key = `${uid ?? ""}:${gen}`;
   useEffect(() => {
+    // Leaving the new-request view (or no identity) clears the cached choice: a later visit never
+    // shows an old preferred address before its own fresh reply (ROOT review of 18e44ff).
+    setValue(null);
     if (!enabled || !uid) return;
     let alive = true;
     void (api ?? createAddressApi())
