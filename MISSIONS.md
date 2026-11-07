@@ -123,3 +123,5 @@ ROOT raccorde la reprise de la souscription courante après retour ou réponse p
 
 ## SYS-07 / ART — historique missions attribuées (Astra exclusive)
 Base c98783a, branche codex/artisan-mission-history, checkout réutilisé. Endpoint séparé des offres et du point-read ; rôle artisan exact, SQL invoker sous RLS et artisan_id courant. Filtres active assigned/quoted/accepted/in_progress ; done completed/paid selon onglet Missions existant. Cartes minimales, ordre created_at/id décroissant, pages 50+1, curseur lié compte/filtre ; tests >100, intercomptes/scopes/transitions. Aucun UI/cloud.
+
+Suite ART-04/SYS-07 : Astra ajoute les compteurs active/done complets dans le même snapshot SQL invoker que la page. Projection/cursor/status conservés ; vérifier 123/112 indépendamment de la page, transition réelle, réattribution et validation HTTP stricte. Aucun UI/cloud.
