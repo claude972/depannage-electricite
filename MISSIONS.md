@@ -120,3 +120,6 @@ ROOT raccorde Web Push à la file privée et au service worker existants. L’ut
 ### FIN-07 — reprise et catalogue des abonnements
 
 ROOT raccorde la reprise de la souscription courante après retour ou réponse perdue au même Checkout, à partir du consentement et des identifiants serveur existants. Le catalogue opérateur montre les offres explicites par mode et vérifie le prix fournisseur lors d’un changement. Claude raccorde les boutons aux parcours existants. Vérifier le rejeu, le mode, les droits, les états indisponibles et les offres modifiées. Aucun abonnement ni avantage n’est publié par défaut.
+
+## SYS-07 / ART — historique missions attribuées (Astra exclusive)
+Base c98783a, branche codex/artisan-mission-history, checkout réutilisé. Endpoint séparé des offres et du point-read ; rôle artisan exact, SQL invoker sous RLS et artisan_id courant. Filtres active assigned/quoted/accepted/in_progress ; done completed/paid selon onglet Missions existant. Cartes minimales, ordre created_at/id décroissant, pages 50+1, curseur lié compte/filtre ; tests >100, intercomptes/scopes/transitions. Aucun UI/cloud.
