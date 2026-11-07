@@ -74,6 +74,10 @@ try {
   assert.ok(closed.items[0].closed_at);
   const audit = (await db.query("select target_kind, details from public.platform_audit where action='callback_closed' and target_id=$1", [target])).rows;
   assert.deepEqual(audit, [{ target_kind: "public_callback", details: { version: 2 } }]);
+  const grant = (await db.query("select id from public.platform_operator_grants where user_id=$1 and scope='support_status'", [actors.closer])).rows[0];
+  await operator("admin", "select public.platform_revoke_scope($1,'Isolated callback QA') v", [grant.id]);
+  assert.equal((await operator("closer", queue, [false, 1])).can_close, false);
+  await assert.rejects(() => operator("closer", close, [items[0].id, 1]), { code: "42501" });
   for (let i = 1; i <= 27; i++) {
     const phone = "+120255501" + String(i).padStart(2, "0");
     await as("service_role", null, submit, [randomUUID(), phone, "other", true]);

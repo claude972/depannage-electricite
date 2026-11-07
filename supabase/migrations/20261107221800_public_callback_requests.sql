@@ -78,6 +78,9 @@ returns boolean language plpgsql security definer set search_path = '' as $$
 declare
   previous public.public_callback_requests;
 begin
+  -- Hold the current profile role before the grant locks, including implicit Super Admin authority.
+  perform 1 from public.profiles where id = auth.uid() for share;
+  if not found then raise insufficient_privilege; end if;
   if not public.lock_support_operator_permissions('set_status') then raise insufficient_privilege; end if;
   if p_id is null or p_expected_version is distinct from 1 then raise invalid_parameter_value; end if;
   select * into previous from public.public_callback_requests where id = p_id for update;

@@ -23,9 +23,13 @@ async function main(){
  const {PGlite}=await import(process.env.PGLITE_MODULE||'@electric-sql/pglite');const db=new PGlite();
  try{
  await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb default '{}',email_confirmed_at timestamptz,phone text,phone_confirmed_at timestamptz);create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema auth to anon,authenticated,service_role;grant execute on function auth.uid() to anon,authenticated,service_role;create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text);alter table storage.objects enable row level security;`);
- const dir=new URL('../supabase/migrations/',import.meta.url),names=(await readdir(dir)).filter(n=>n.endsWith('.sql')&&!n.includes('020_')).sort();
+ const dir = new URL('../supabase/migrations/', import.meta.url);
+ const retention = '202610310020_tracking_retention.sql';
+ // Install only prerequisites here so the original 020 still exercises an engine without pg_cron.
+ // The all-migration suites separately install the scheduler stub in chronological order.
+ const names = (await readdir(dir)).filter(name => name.endsWith('.sql') && name < retention).sort();
  for(const name of names){if(name.includes('019_')&&!names.some(n=>n.includes('018_')))await db.exec(execFileSync('git',['show','6062f92cef83f54c0af1f6713a050fa62a7baeb2:supabase/migrations/202610310018_scoped_support_operators.sql'],{encoding:'utf8'}));await db.exec((await readFile(new URL(name,dir),'utf8')).replace('create extension if not exists pgcrypto;','-- Auth/Storage local stub only'));}
- const original=await readFile(new URL('202610310020_tracking_retention.sql',dir),'utf8');
+ const original = await readFile(new URL(retention, dir), 'utf8');
  // The unmodified native install must fail explicitly when pg_cron is unavailable in this engine.
  await assert.rejects(db.exec(original),e=>e.code==='P0001'&&e.message.includes('pg_cron is unavailable'));await db.exec('rollback');
  assert.equal((await db.query("select to_regclass('cron.job') v")).rows[0].v,null);
