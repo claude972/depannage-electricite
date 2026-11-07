@@ -74,7 +74,6 @@ import { demoPreferences } from "../../lib/features/notifications/demo";
 import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
 import { TrackingAnchor } from "./tracking-anchor";
 import { DossierMapPanel } from "../features/dossier-map/dossier-map-panel";
-import { trackingDemo } from "../app/tracking-demo";
 import { useDetailPresence } from "./use-detail-presence";
 import { PointReadState } from "./detail-read-view";
 import { PlatformPage } from "./platform-anchor";
@@ -1213,10 +1212,11 @@ function DetailView({
         <DossierMapPanel
           key={`${i.id}:${session.mode}:${session.profileId}`}
           address={{ address: i.address, postal_code: i.postal_code, city: i.city }}
-          tracking={["accepted", "in_progress"].includes(i.status) ? session.features.tracking(i.id) : null}
+          // The « Suivi de l’artisan » card below renders the map for accepted / in_progress dossiers
+          // (same condition as its TrackingAnchor): no second map and no second tracking read here.
+          trackingCardShown={["accepted", "in_progress"].includes(i.status)}
+          tracking={null}
           trackingState={session.capabilities.tracking}
-          demoSnapshot={session.mode === "demo" ? (["accepted", "in_progress"].includes(i.status) ? trackingDemo(i.id, session.role) : null) : undefined}
-          provider={null}
         />
       </section>
 

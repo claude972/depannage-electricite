@@ -1,11 +1,14 @@
 "use client";
-// Client dossier map / follow-up (CLI-05). Logic in ./dossier-map-model. The map is an owner
-// decision (`provider`, null by default): without it nothing is sent to a third party and the
-// panel says « carte non activée », while still showing what is real (declared address, server
-// tracking state with source and freshness, the artisan's position only when fresh and shared).
+// Client dossier map / follow-up (CLI-05). Logic in ./dossier-map-model. Reuses the tracking leaf's
+// TrackingMap (the one authorized map flow, OSM tiles with visible attribution) — only with a fresh
+// consented position and/or a confirmed destination from the server. When the « Suivi de
+// l’artisan » card already shows the map on the page (`trackingCardShown`), no second map and no
+// duplicate tracking read: the declared address + a pointer to the card. No ETA here (the card
+// alone shows one, through routeMatches). The declared address is never geocoded or sent.
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { TrackingClient, TrackingSnapshot } from "../../../lib/features/tracking/types";
-import { MAP_COPY, externalMapsHref, mapView, nextTransitionMs, type DeclaredAddress, type MapProvider } from "./dossier-map-model";
+import { MAP_COPY, externalMapsHref, mapView, nextTransitionMs, type DeclaredAddress } from "./dossier-map-model";
+import { TrackingMap } from "../tracking/tracking-map";
 import styles from "./dossier-map.module.css";
 
 export type DossierMapProps = {
@@ -14,14 +17,41 @@ export type DossierMapProps = {
   tracking: TrackingClient | null;
   /** Contract state of the tracking capability as observed by the session. */
   trackingState?: "unknown" | "available" | "missing" | "unavailable";
-  provider?: MapProvider | null;
+  /** True when the page already renders the tracking card (with its map) for this dossier. */
+  trackingCardShown?: boolean;
   /** Demo: the demo snapshot, never a request. */
   demoSnapshot?: TrackingSnapshot | null;
   now?: () => number;
 };
 type Load = { phase: "idle" | "loading" | "ready" | "error" | "offline"; snapshot: TrackingSnapshot | null };
 
-export function DossierMapPanel({ address, tracking, trackingState = "available", provider = null, demoSnapshot, now = Date.now }: DossierMapProps) {
+export function DossierMapPanel(props: DossierMapProps) {
+  if (props.trackingCardShown) return <InCard address={props.address} />;
+  return <StandalonePanel {...props} />;
+}
+
+/** The tracking card shows the map on this page: declared address + pointer, nothing duplicated. */
+function InCard({ address }: { address: DeclaredAddress }) {
+  return (
+    <div className={styles.panel} data-dossier-map="in-card">
+      <p className={styles.declared}>{MAP_COPY.declared}</p>
+      <p className={styles.hint} data-map-in-card="">
+        {MAP_COPY.inCard}{" "}
+        <button
+          type="button"
+          className={styles.link}
+          onClick={() => document.getElementById("tracking-card-title")?.scrollIntoView({ block: "start" })}
+          data-map-go-card=""
+        >
+          Voir le suivi de l’artisan
+        </button>
+      </p>
+      <ExternalMapsLink address={address} />
+    </div>
+  );
+}
+
+function StandalonePanel({ address, tracking, trackingState = "available", demoSnapshot, now = Date.now }: DossierMapProps) {
   const demo = demoSnapshot !== undefined;
   const [load, setLoad] = useState<Load>(() => (demo ? { phase: "ready", snapshot: demoSnapshot ?? null } : { phase: tracking ? "loading" : "idle", snapshot: null }));
   const seq = useRef(0);
@@ -51,7 +81,6 @@ export function DossierMapPanel({ address, tracking, trackingState = "available"
       seq.current++;
     };
   }, [read]);
-  const [consent, setConsent] = useState<"closed" | "asking" | "granted">("closed");
   // Local clock: re-render exactly when a shown position/snapshot crosses its freshness threshold,
   // even if nothing else re-renders the page (a stale position is then removed, never left shown).
   const [, setTick] = useState(0);
@@ -63,29 +92,35 @@ export function DossierMapPanel({ address, tracking, trackingState = "available"
     return () => clearTimeout(id);
   });
   const view = snapshot ? mapView(snapshot, now()) : null;
+  // Same conditions as the tracking card's map: a fresh consented position and/or a confirmed
+  // destination, both from the server. Nothing else (never the declared address) is mapped.
+  const destination = snapshot?.tracking.destination ?? null;
+  const mapPoints =
+    view && (view.position || destination)
+      ? {
+          position: view.position ? { latitude: view.position.latitude, longitude: view.position.longitude, accuracyM: view.position.accuracyM } : null,
+          destination: destination ? { latitude: destination.latitude, longitude: destination.longitude } : null,
+          description: `Carte : ${view.position ? "position partagée par l’artisan" : "aucune position récente"}${destination ? `, destination confirmée ${destination.label}` : ""}.`,
+        }
+      : null;
 
   return (
-    <div className={styles.panel} data-dossier-map={provider ? `provider:${provider.id}` : "none"}>
+    <div className={styles.panel} data-dossier-map={mapPoints ? "map" : "none"}>
       <p className={styles.declared}>
         <span>{MAP_COPY.declared}</span>
       </p>
 
-      {provider ? (
-        <figure className={styles.map}>
-          {provider.render({ address, position: view?.position ? { latitude: view.position.latitude, longitude: view.position.longitude, accuracyM: view.position.accuracyM } : null })}
-          <figcaption className={styles.attribution} data-map-attribution="">{provider.attribution}</figcaption>
+      {mapPoints ? (
+        <figure className={styles.map} data-map-reused="tracking-map">
+          <TrackingMap
+            position={mapPoints.position}
+            destination={mapPoints.destination}
+            description={mapPoints.description}
+          />
+          <figcaption className={styles.attribution} data-map-tiles-notice="">{MAP_COPY.tiles}</figcaption>
         </figure>
       ) : (
-        <div className={styles.mock} role="note" data-map-provider="none">
-          {/* Clean placeholder drawn locally: no tiles, no geocoding, no network. */}
-          <svg viewBox="0 0 320 120" className={styles.mockArt} aria-hidden="true" focusable="false">
-            <rect x="0.5" y="0.5" width="319" height="119" rx="12" className={styles.mockFrame} />
-            <path d="M0 80 C 80 60, 140 100, 220 70 S 300 40, 320 50" className={styles.mockRoad} />
-            <path d="M60 0 L 90 120" className={styles.mockRoad} />
-            <circle cx="200" cy="62" r="7" className={styles.mockPin} />
-          </svg>
-          <p>{MAP_COPY.noProvider}</p>
-        </div>
+        <p className={styles.hint} data-map-none="">{MAP_COPY.noMap}</p>
       )}
 
       <section className={styles.follow} aria-label="Suivi du déplacement" data-map-follow={load.phase}>
@@ -114,7 +149,16 @@ export function DossierMapPanel({ address, tracking, trackingState = "available"
         )}
       </section>
 
-      <div className={styles.external}>
+      <ExternalMapsLink address={address} />
+    </div>
+  );
+}
+
+/** User-initiated only: the address goes to the device map app after an explicit consent click. */
+function ExternalMapsLink({ address }: { address: DeclaredAddress }) {
+  const [consent, setConsent] = useState<"closed" | "asking" | "granted">("closed");
+  return (
+    <div className={styles.external}>
         {consent === "closed" && (
           <button type="button" className={styles.secondary} onClick={() => setConsent("asking")} data-map-external-ask="">
             Ouvrir dans mon application de cartes
@@ -135,6 +179,5 @@ export function DossierMapPanel({ address, tracking, trackingState = "available"
           </a>
         )}
       </div>
-    </div>
   );
 }

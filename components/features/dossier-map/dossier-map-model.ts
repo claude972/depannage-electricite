@@ -1,24 +1,14 @@
-// Client dossier map (CLI-05) — pure model (no React). Provider-agnostic: the map itself is a
-// `MapProvider` chosen by the owner; until then `provider = null` and NOTHING leaves the browser
-// (no tile server, no geocoder, no iframe). What is real is still shown: the declared address
-// (as declared, not verified), the server tracking state (travel stage, sharing/consent, the
-// artisan's position ONLY when the server returns it fresh, with its time), and its freshness.
-// Data source: the existing tracking contract (lib/features/tracking/types.ts), read through the
-// session's TrackingClient — reused, not duplicated (trackingDisplay from ../tracking/model).
-import type { ReactNode } from "react";
+// Client dossier map (CLI-05) — pure model (no React). There is ONE map concept in the app: the
+// tracking leaf's TrackingMap (OSM raster tiles, already the authorized flow), shown under the
+// tracking card's rules. This panel reuses it — only with a fresh consented position and/or a
+// confirmed destination from the server — and never renders a second map when the « Suivi de
+// l’artisan » card already shows it on the same page. The declared address stays text, never
+// geocoded or sent anywhere automatically. Data: the tracking contract (lib/features/tracking/
+// types.ts) through the session's TrackingClient; trackingDisplay reused from ../tracking/model.
 import type { TrackingSnapshot } from "../../../lib/features/tracking/types";
 import { MAX_SAMPLE_AGE_MS, trackingDisplay, type TrackingDisplay } from "../tracking/model";
 
 export type DeclaredAddress = { address: string; postal_code: string; city: string };
-/** A map provider decided by the owner (licence, terms, privacy). Null by default. */
-export type MapProvider = {
-  id: string;
-  name: string;
-  /** Rendered in the attribution slot whenever the provider is active. */
-  attribution: ReactNode;
-  /** Renders the map; receives only what the dossier already exposes. */
-  render(input: { address: DeclaredAddress; position: { latitude: number; longitude: number; accuracyM: number } | null }): ReactNode;
-};
 
 /** Server snapshot older than this ⇒ the shown state is labelled « à actualiser ». */
 export const SNAPSHOT_STALE_MS = 2 * 60_000;
@@ -31,7 +21,9 @@ export const STAGE_LABEL: Record<TrackingSnapshot["tracking"]["travel_stage"], s
   on_site: "Artisan sur place",
 };
 export const MAP_COPY = {
-  noProvider: "Carte non activée : aucun fournisseur de cartographie n’a encore été choisi. Votre adresse n’est envoyée à aucun service tiers.",
+  noMap: "Pas de carte pour l’instant : ni position partagée récente ni destination confirmée par le serveur. Votre adresse n’est envoyée à aucun service.",
+  tiles: "Fond de carte chargé depuis OpenStreetMap (tile.openstreetmap.org) : ce service voit la zone affichée. Votre adresse déclarée ne lui est pas transmise.",
+  inCard: "La carte, la position partagée, la destination et l’heure d’arrivée estimée sont affichées dans la section « Suivi de l’artisan » de ce dossier.",
   declared: "Adresse déclarée dans votre demande, non vérifiée.",
   noEta: "Ce panneau ne calcule aucune durée de trajet ni heure d’arrivée : une estimation n’existe que si un itinéraire récent est disponible, et elle figure alors dans « Suivi de l’artisan » ci-dessous.",
   notYet: "Le suivi du déplacement est proposé une fois l’intervention acceptée.",
