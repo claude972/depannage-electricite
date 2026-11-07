@@ -7,7 +7,7 @@ import { cardHoldContext, openCardHold, authorizeCardHold, releaseCardHold } fro
 
 const uuid = z.string().uuid();
 const contact = z.object({ first_name: z.string().trim().min(1).max(60), last_name: z.string().trim().min(1).max(60), email: z.string().trim().max(254).refine(v => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)), phone: z.string().max(64).transform(normalizePhone).refine(v => v !== null) }).strict().refine(v => `${v.first_name} ${v.last_name}`.length <= 120);
-const schema = z.object({ request_id: uuid, service_slug: z.string().max(80), category: z.enum(["outage", "panel", "socket", "lighting", "diagnostic"]), description: z.string().trim().min(10).max(4000), address: z.string().trim().min(5).max(500), postal_code: z.string().regex(/^\d{5}$/), city: z.string().trim().min(2).max(120), urgency: z.enum(["urgent", "scheduled"]), contact, payment_choice: z.enum(["on_site", "card_hold"]) }).strict();
+const schema = z.object({ request_id: uuid, service_slug: z.string().max(80), category: z.enum(["outage", "panel", "socket", "lighting", "diagnostic"]), description: z.string().trim().min(10).max(4000), address: z.string().trim().min(5).max(500), postal_code: z.string().regex(/^\d{5}$/), city: z.string().trim().min(2).max(120), urgency: z.enum(["urgent", "scheduled"]), contact, payment_choice: z.enum(["on_site", "card_hold"]), reviewed_estimate_version:z.number().int().min(1).max(2147483647).optional() }).strict();
 const keySchema = z.object({ request_id: uuid }).strict();
 const headers = { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" };
 const unavailable = () => new ApiError(503, "La réservation est momentanément indisponible. Réessayez.");
@@ -73,13 +73,13 @@ export async function bookingRoute(request: Request, operation: "create" | "stat
     if (operation === "create") {
       const data = schema.parse(parsed.data);
       const card = data.payment_choice === "card_hold" ? cardHoldContext() : null; // Before prepare/quota/provider mutation.
-      const { request_id, contact, payment_choice, ...payload } = data;
+      const { request_id, contact, payment_choice, reviewed_estimate_version, ...payload } = data;
       if (!card) {
-        const submitted = await db.rpc("create_on_site_booking", { p_request_id: request_id, p_payload: payload, p_contact: { ...contact, email: contact.email.toLowerCase() } }); dbError(submitted.error);
+        const submitted = await db.rpc("create_on_site_booking_reviewed", { p_reviewed_estimate_version:reviewed_estimate_version??null, p_request_id: request_id, p_payload: payload, p_contact: { ...contact, email: contact.email.toLowerCase() } }); dbError(submitted.error);
         const result = validResult(submitted.data); if (result.status !== "confirmed" || result.payment.method !== "on_site") throw unavailable();
         return Response.json(result, { status: 201, headers });
       }
-      const prepared = await db.rpc("prepare_phone_booking", { p_request_id: request_id, p_payload: payload, p_contact: { ...contact, email: contact.email.toLowerCase() }, p_method: payment_choice }); dbError(prepared.error);
+      const prepared = await db.rpc("prepare_phone_booking_reviewed", { p_reviewed_estimate_version:reviewed_estimate_version??null, p_request_id: request_id, p_payload: payload, p_contact: { ...contact, email: contact.email.toLowerCase() }, p_method: payment_choice }); dbError(prepared.error);
       const ready = validResult(prepared.data); if (ready.payment.method !== payment_choice) throw unavailable();
       if (ready.status === "confirmed") return Response.json(ready, { status: 201, headers });
       return Response.json(await openCardHold(user.id, request_id, card), { headers });

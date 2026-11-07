@@ -11,15 +11,15 @@ function setup({ authenticated = true, error = null as { code: string } | null }
   const post = (value: unknown, origin = "https://preview.example.test") => (mod.POST as (r: Request) => Promise<Response>)(new Request("https://preview.example.test/api/interventions", { method: "POST", headers: { "Content-Type": "application/json", Origin: origin }, body: JSON.stringify(value) }));
   return { calls, post };
 }
-test("omitted request_id preserves old RPC/payload/201; present UUID chooses once RPC only", async () => {
+test("optional reviewed version uses explicit unambiguous RPCs; nonce selects once", async () => {
   for (const keyed of [false, true]) {
     const r = setup();
     const response = await r.post({ ...payload, description: "  " + payload.description + "  ", ...(keyed ? { request_id: ID } : {}) });
     assert.equal(response.status, 201);
     assert.deepEqual(await response.json(), { intervention: { id: ID } });
     assert.equal(r.calls.length, 1);
-    assert.equal(r.calls[0].name, keyed ? "create_intervention_once" : "create_intervention");
-    assert.equal(JSON.stringify(r.calls[0].args), JSON.stringify({ ...(keyed ? { p_request_id: ID } : {}), p_category: payload.category, p_description: payload.description, p_address: payload.address, p_postal_code: payload.postal_code, p_city: payload.city, p_urgency: payload.urgency, p_site_id: null }));
+    assert.equal(r.calls[0].name, keyed ? "create_intervention_once_reviewed" : "create_intervention_reviewed");
+    assert.equal(JSON.stringify(r.calls[0].args), JSON.stringify({ ...(keyed ? { p_request_id: ID } : {}), p_category: payload.category, p_description: payload.description, p_address: payload.address, p_postal_code: payload.postal_code, p_city: payload.city, p_urgency: payload.urgency, p_site_id: null, p_reviewed_estimate_version:null }));
   }
 });
 test("request_id is optional but never null/empty/malformed; unknown fields and Auth/origin refusals do not call RPC", async () => {
@@ -40,3 +40,5 @@ test("existing DB conflict/access/unavailable status mapping is retained for key
     assert.equal(response.status, expected);
   }
 });
+
+test('reviewed version is int32 optional and forwarded without money',async()=>{const valid=setup();assert.equal((await valid.post({...payload,reviewed_estimate_version:2})).status,201);assert.equal(valid.calls[0].args.p_reviewed_estimate_version,2);for(const value of [null,0,-1,1.5,2147483648,"1"]){const h=setup();assert.equal((await h.post({...payload,reviewed_estimate_version:value})).status,422);assert.equal(h.calls.length,0)}});
