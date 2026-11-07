@@ -6,7 +6,7 @@
 // « À renseigner par l’exploitant ». The editor sends one command at a time; its command_id is
 // stored in tab storage BEFORE the POST so a lost reply / 503 replays the same command.
 import { z } from "zod";
-import { MINIMUM_FIELDS, editor, operatorProfile, publication, type EditorState, type OperatorField, type OperatorProfile, type ProfileCommand, type Publication } from "./contract";
+import { MINIMUM_FIELDS, editor, operatorProfile, publication, type EditorState, type OperatorField, type OperatorProfile, type ProfileCommand, type Publication } from "../../../lib/features/public-operator-profile/contract";
 
 export const PUBLIC_PROFILE_PATH = "/api/public/operator-profile";
 export const EDITOR_PATH = "/api/platform-operations/public-profile";
