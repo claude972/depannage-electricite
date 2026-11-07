@@ -51,9 +51,12 @@ export function displayFor(state: PricesState, category: PriceCategory): string 
   return state.phase === "error" ? COPY.failed : COPY.loading;
 }
 
-// ---- Shared store: one GET per page load, shared by every display --------------------------------
+// ---- Shared store: one read at a time per page, sequenced (only the LATEST read may publish) -------
+export const PRICES_TTL_MS = 5 * 60_000;
 let state: PricesState = { phase: "loading", data: null };
-let inflight: Promise<void> | null = null;
+let readAt = 0;
+let seq = 0;
+let inflight: { seq: number; promise: Promise<void> } | null = null;
 const listeners = new Set<(s: PricesState) => void>();
 const emit = (s: PricesState) => {
   state = s;
@@ -64,24 +67,39 @@ export function subscribePrices(l: (s: PricesState) => void) {
   listeners.add(l);
   return () => void listeners.delete(l);
 }
-export function loadPrices(fetcher: typeof fetch = (...a) => fetch(...a), force = false): Promise<void> {
-  if (!force && (state.phase === "ready" || inflight)) return inflight ?? Promise.resolve();
-  if (force) emit({ phase: "loading", data: null });
-  inflight = (async () => {
+/**
+ * Reads the public prices. Without `force`: reuses a fresh ready state (TTL) or the read in flight.
+ * With `force` (review step before a request, after a confirmed publication): a NEW read; any older
+ * reply still in flight is dropped (never overwrites a newer version), and the current values stay
+ * shown until the new read lands.
+ */
+export function loadPrices(fetcher: typeof fetch = (...a) => fetch(...a), force = false, now = Date.now()): Promise<void> {
+  if (!force) {
+    if (state.phase === "ready" && now - readAt < PRICES_TTL_MS) return Promise.resolve();
+    if (inflight) return inflight.promise;
+  }
+  const my = ++seq;
+  const promise = (async () => {
+    let next: PricesState;
     try {
       const r = await fetcher(PRICES_PATH, { method: "GET", credentials: "same-origin", cache: "no-store" });
       const d = r.status === 200 ? parsePrices(await r.json().catch(() => null)) : null;
-      emit(d ? { phase: "ready", data: d } : { phase: "error", data: null });
+      next = d ? { phase: "ready", data: d } : { phase: "error", data: null };
     } catch {
-      emit({ phase: "error", data: null });
-    } finally {
-      inflight = null;
+      next = { phase: "error", data: null };
     }
+    if (my !== seq) return; // a newer read was started: this (older) reply is dropped
+    inflight = null;
+    if (next.phase === "ready") readAt = Date.now();
+    emit(next);
   })();
-  return inflight;
+  inflight = { seq: my, promise };
+  return promise;
 }
 /** Tests / server rendering only: set the store directly (e.g. a primed reply). */
 export function setPricesState(s: PricesState) {
+  seq++;
   inflight = null;
+  readAt = s.phase === "ready" ? Date.now() : 0;
   emit(s);
 }

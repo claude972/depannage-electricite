@@ -145,6 +145,8 @@ test("Chromium 390 : « Publier » seulement si le serveur l’autorise ; versio
     assert.equal(pub.expected_active_version, 3);
     assert.equal(pub.expected_latest_version, 4);
     await page.waitForFunction(() => /Version active 4/.test(document.querySelector("[data-indicative-admin-version]")?.textContent ?? ""));
+    // Confirmed publication ⇒ the public displays re-read (a new public GET).
+    await page.waitForFunction(() => (window as unknown as { S: { calls: string[] } }).S.calls.filter((c) => c === "GET /api/public/indicative-prices").length >= 2);
     assert.deepEqual(errors, []);
   } finally {
     await browser.close();

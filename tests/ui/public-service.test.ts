@@ -96,7 +96,9 @@ test("route : 8 paramètres statiques, dynamicParams désactivé, métadonnées,
   for (const s of catalog.SERVICES) {
     const meta = await page.generateMetadata({ params: Promise.resolve({ slug: s.slug }) });
     assert.equal(meta.title, `${s.title} — Dépannage électrique`);
-    assert.ok(meta.description.replace(/\s+/g, " ").includes(range(s.category)));
+    // PUB-02: no static amount in the metadata (the active version is read at runtime).
+    assert.match(meta.description, /Estimation indicative affichée sur la page, confirmée par un devis\./);
+    assert.doesNotMatch(meta.description, /\d+[\s\u202f\u00a0]?€/);
   }
   same(await page.generateMetadata({ params: Promise.resolve({ slug: "inconnu" }) }), {});
   for (const slug of ["inconnu", "", "PANNE-TABLEAU-ELECTRIQUE", "../admin"]) await assert.rejects(() => page.default({ params: Promise.resolve({ slug }) }), new RegExp(NOT_FOUND), slug);

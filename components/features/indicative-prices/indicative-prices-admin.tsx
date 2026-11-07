@@ -7,7 +7,7 @@
 // versions shown and an explicit confirmation step (never automatic). Demo: honest note, zero calls.
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { CATEGORIES } from "../../../lib/domain";
-import { COPY, PRICE_CATEGORIES, rangeText, type PriceCategory } from "./model";
+import { COPY, PRICE_CATEGORIES, loadPrices, rangeText, type PriceCategory } from "./model";
 import { ADMIN_COPY, ADMIN_INITIAL, EMPTY_INPUTS, PUBLISH_COPY, PUBLISH_INITIAL, createPublication, createStaging, tabStore, type AdminView, type Context, type PublishView, type RangeInputs, type Store } from "./admin-model";
 import styles from "./indicative-prices.module.css";
 
@@ -131,7 +131,7 @@ function Live({ context, fetcher, store = tabStore, newId = uuid }: IndicativePr
                   <textarea value={pubReason} maxLength={1000} onChange={(e) => setPubReason(e.target.value)} disabled={pub.busy} />
                 </label>
                 <div className={styles.actions}>
-                  <button type="button" className={styles.primary} disabled={pub.busy} onClick={async () => { if (await pubCtrl.current?.publish(d, pubReason)) { setConfirming(false); setPubReason(""); } }}>
+                  <button type="button" className={styles.primary} disabled={pub.busy} onClick={async () => { if (await pubCtrl.current?.publish(d, pubReason)) { setConfirming(false); setPubReason(""); void loadPrices(latest.current.fetcher, true); /* confirmed publication: public displays re-read */ } }}>
                     {PUBLISH_COPY.confirm(d.latest_version)}
                   </button>
                   <button type="button" className={styles.button} onClick={() => setConfirming(false)}>Annuler</button>

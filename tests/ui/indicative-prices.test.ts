@@ -183,3 +183,30 @@ test("publication : seulement si autorisée par le serveur, versions attendues e
   assert.equal(pv.notice, a.PUBLISH_COPY.replayed);
   assert.equal(reloads, 5, "re-read after every outcome");
 });
+
+test("magasin partagé : une réponse V1 tardive après une lecture V2 forcée est ignorée ; TTL ; métadonnées sans montant", async () => {
+  const store = loadModule("components/features/indicative-prices/model.ts") as unknown as typeof Model;
+  const V2 = { ...V1, version: 2, source: "operator_version", ranges: { ...R, outage: { min_cents: 17000, max_cents: 27000 } } };
+  let releaseOld!: () => void;
+  let n = 0;
+  const fetcher = (async () => {
+    n++;
+    if (n === 1) {
+      await new Promise<void>((r) => (releaseOld = r));
+      return new Response(JSON.stringify(V1), { status: 200 });
+    }
+    return new Response(JSON.stringify(V2), { status: 200 });
+  }) as unknown as typeof fetch;
+  const old = store.loadPrices(fetcher);
+  await store.loadPrices(fetcher, true); // newer read (e.g. after a confirmed publication)
+  assert.equal(store.getPricesState().data!.version, 2);
+  releaseOld();
+  await old;
+  assert.equal(store.getPricesState().data!.version, 2, "the late V1 reply never overwrites V2");
+  await store.loadPrices(fetcher);
+  assert.equal(n, 2, "fresh ready state reused (TTL)");
+  await store.loadPrices(fetcher, false, Date.now() + store.PRICES_TTL_MS + 1);
+  assert.equal(n, 3, "re-read after the TTL");
+  const meta = readFileSync("app/prestations/[slug]/page.tsx", "utf8");
+  assert.doesNotMatch(meta, /serviceEstimate|money\(/);
+});
