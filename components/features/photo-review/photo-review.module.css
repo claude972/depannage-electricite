@@ -1,0 +1,95 @@
+/* Photo review leaf — tokens only, light/dark through --ui-*. */
+.panel {
+  display: grid;
+  gap: var(--ui-space-2);
+  margin: var(--ui-space-3) 0;
+  padding: var(--ui-space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  min-width: 0;
+}
+.title {
+  margin: 0;
+  font-size: 15px;
+}
+.note {
+  margin: 0;
+  color: var(--ui-text);
+}
+.muted {
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: 14px;
+}
+.error {
+  margin: 0;
+  color: var(--ui-danger);
+}
+.result {
+  font-weight: 600;
+  color: var(--ui-text);
+}
+.list {
+  display: grid;
+  gap: var(--ui-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.item {
+  display: grid;
+  gap: var(--ui-space-1);
+  padding: var(--ui-space-2) var(--ui-space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-card);
+  overflow-wrap: anywhere;
+}
+.name {
+  font-weight: 600;
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-space-2);
+}
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ui-space-2);
+  min-height: 44px;
+  cursor: pointer;
+}
+.check input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+  accent-color: var(--ui-primary);
+}
+.button {
+  min-height: 44px;
+  padding: 0 var(--ui-space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-card);
+  color: var(--ui-text);
+  font: inherit;
+  cursor: pointer;
+}
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.button:focus-visible,
+.check input:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+.primary {
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
