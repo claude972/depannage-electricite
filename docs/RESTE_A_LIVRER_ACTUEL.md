@@ -2,6 +2,18 @@
 
 Objectif : application entière ; seules liaisons fournisseur Stripe/SMS différées. Inventaire source, pas preuve de panne hébergée et pas reprise des anciens pourcentages. Référence initiale fe4f24c ; interfaces zones et backend copropriété intégrés depuis en3402f64.
 
+## Assemblage de code du 7 novembre avant la recette
+
+La branche `codex/full-delivery-assembly` regroupe les ajouts destinés à la recette par parcours. La dernière version vérifiée en ligne reste `610b13f`.
+
+- L'énergie consolidée et son CSV, les rappels de rendez-vous, le rattachement d'un dossier correctif et le téléchargement des données du compte sont câblés. La demande d'effacement ouvre un ticket privé. L'effacement effectif, les règles de conservation et la restauration restent à traiter séparément.
+- Les équipes prestataires ont leur accès depuis les espaces artisan, client et entreprise. Les invitations et tâches internes respectent le rôle global existant. Une réaffectation du dossier retire la tâche précédente. La déconnexion et le changement de compte purgent les commandes privées de l’onglet.
+- Les serveurs de couverture, de payeur délégué, de grille tarifaire autorisée par dossier, d'approbations ordonnées et de rappels d'échéance sont assemblés. Leurs écrans, la revue et la recette hébergée restent suivis par parcours. La vérification du territoire informe sur la zone publiée. Elle ne promet pas une disponibilité et ne change pas le moteur de classement.
+- Une URL Stripe déjà transmise relève de l'expiration du fournisseur. Le retrait d'un mandat ferme la reprise de la session de paiement dans l'application. La recette Stripe/Vonage reste la dernière étape fournisseur.
+- Les modules restants incluent le classement géographique, les notifications externes, les fonctions financières avancées, le diagnostic photo et les applications natives. Les règles commerciales, les traitements de conservation et l'ouverture publique nécessitent leurs propres décisions et contrôles.
+
+La suite complète du commit `0cf7166` a donné 1 613 succès, deux contrôles facultatifs ignorés et aucun échec. Des tests ciblés couvrent les écrans et les rappels ajoutés ensuite. Les suites PostgreSQL isolées simulent Auth, Storage et les tâches planifiées. Voir les preuves en ligne du commit effectivement déployé dans le rapport de recette.
+
 ## Actualisation du 7 novembre, version `610b13f`
 
 - La demande générale connectée a été créée et rejouée sur la preview. Le parcours public a passé les contrôles des huit fiches et de leur bouton de poursuite. Le brouillon public a été repris après retour du réseau. [Recette](reviews/DELIVERY_610B_HOSTED.md)
