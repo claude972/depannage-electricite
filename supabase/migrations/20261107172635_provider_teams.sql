@@ -1,6 +1,6 @@
 begin;
 create table public.provider_teams(id uuid primary key,owner_id uuid not null unique references public.profiles(id),name text not null check(char_length(btrim(name))between 1 and 160),version integer not null default 1 check(version>0),created_at timestamptz not null default clock_timestamp());
-create table public.provider_team_members(team_id uuid not null references public.provider_teams(id),user_id uuid not null references public.profiles(id),role text not null check(role in('owner','coordinator','technician')),active boolean not null default true,version integer not null default 1 check(version>0),primary key(team_id,user_id));
+create table public.provider_team_members(team_id uuid not null references public.provider_teams(id),user_id uuid not null references public.profiles(id),role text not null check(role in('owner','coordinator','technician')),active boolean not null default true,removed_at timestamptz,version integer not null default 1 check(version>0),primary key(team_id,user_id),check(active=(removed_at is null)));
 create table public.provider_team_invitations(id uuid primary key,team_id uuid not null references public.provider_teams(id),email text not null check(char_length(email)between 3 and 254),role text not null check(role in('coordinator','technician')),expires_at timestamptz not null,status text not null default 'pending'check(status in('pending','accepted','declined','revoked')),accepted_by uuid references public.profiles(id),created_at timestamptz not null default clock_timestamp());
 create unique index provider_team_pending_email on public.provider_team_invitations(team_id,email)where status='pending';
 create index provider_team_invitation_email on public.provider_team_invitations(email,id)where status='pending';
@@ -109,6 +109,9 @@ begin
   elsif p_action='invite'then
    entity=(p_values->>'invitation_id')::uuid;email_value=lower(btrim(p_values->>'email'));role_value=p_values->>'role';expiry=(p_values->>'expires_at')::timestamptz;
    if entity is null or email_value is null or char_length(email_value)>254 or email_value!~'^[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+$'or role_value is null or role_value not in('coordinator','technician')or expiry is null or not isfinite(expiry)or expiry<=clock_timestamp()then raise invalid_parameter_value;end if;
+   if exists(select 1 from public.provider_team_members m join auth.users u on u.id=m.user_id
+    where m.team_id=t.id and m.active and u.email_confirmed_at is not null and lower(btrim(u.email))=email_value)
+   then raise exception 'Already a team member'using errcode='P0001';end if;
    if(select count(*)from public.provider_team_invitations where team_id=t.id and status='pending'and expires_at>clock_timestamp())>=100 then raise exception 'Pending invitation limit reached'using errcode='P0001';end if;
    update public.provider_team_invitations set status='revoked'where team_id=t.id and provider_team_invitations.email=email_value and status='pending'and expires_at<=clock_timestamp();
    insert into public.provider_team_invitations(id,team_id,email,role,expires_at)values(entity,t.id,email_value,role_value,expiry);state='pending';
@@ -119,8 +122,18 @@ begin
    entity=(p_values->>'user_id')::uuid;role_value=p_values->>'role';
    if entity is null or entity=t.owner_id then raise invalid_parameter_value;end if;
    if p_action='set_role'and(role_value is null or role_value not in('coordinator','technician'))then raise invalid_parameter_value;end if;
-   update public.provider_team_members set active=p_action<>'remove_member',role=case when p_action='set_role'then role_value else role end,version=version+1 where team_id=t.id and user_id=entity and active returning version into entity_version;
+   update public.provider_team_members set active=p_action<>'remove_member',
+    removed_at=case when p_action='remove_member' then clock_timestamp() else null end,role=case when p_action='set_role'then role_value else role end,version=version+1 where team_id=t.id and user_id=entity and active returning version into entity_version;
    if not found then raise no_data_found;end if;
+   if p_action='remove_member'then
+    update public.provider_team_invitations pending set status='revoked'
+    where pending.team_id=t.id and pending.status='pending' and (
+      exists(select 1 from auth.users u where u.id=entity and u.email_confirmed_at is not null
+        and lower(btrim(u.email))=pending.email)
+      or exists(select 1 from public.provider_team_invitations old where old.team_id=t.id
+        and old.accepted_by=entity and old.email=pending.email)
+    );
+   end if;
    -- Existing task history stays immutable; current assignments lose access immediately.
    update public.provider_team_assignments set technician_id=null,state='unassigned',note='',version=version+1,updated_at=clock_timestamp()where team_id=t.id and technician_id=entity and(p_action='remove_member'or role_value<>'technician');
    state=case when p_action='remove_member'then'inactive'else role_value end;
@@ -132,8 +145,11 @@ begin
   entity=inv.id;
   if p_action='accept_invitation'then
    if member_role is not null then raise exception 'Already a team member'using errcode='P0001';end if;
+   if exists(select 1 from public.provider_team_members m where m.team_id=t.id and m.user_id=actor
+      and m.removed_at is not null and inv.created_at<=m.removed_at)
+   then raise exception 'A new invitation is required'using errcode='P0001';end if;
    if(select count(*)from public.provider_team_members where team_id=t.id and active)>=100 or(select count(*)from public.provider_team_members where user_id=actor and active)>=50 then raise exception 'Membership limit reached'using errcode='P0001';end if;
-   insert into public.provider_team_members(team_id,user_id,role)values(t.id,actor,inv.role)on conflict(team_id,user_id)do update set role=excluded.role,active=true,version=provider_team_members.version+1 returning version into entity_version;
+   insert into public.provider_team_members(team_id,user_id,role)values(t.id,actor,inv.role)on conflict(team_id,user_id)do update set role=excluded.role,active=true,removed_at=null,version=provider_team_members.version+1 returning version into entity_version;
    update public.provider_team_invitations set status='accepted',accepted_by=actor where id=inv.id;state='accepted';
   else update public.provider_team_invitations set status='declined'where id=inv.id;state='declined';end if;
   update public.provider_teams set version=version+1 where id=t.id returning *into t;
@@ -183,7 +199,10 @@ begin
  select lower(btrim(email))into email_value from auth.users where id=auth.uid()and email_confirmed_at is not null;
  if email_value is null then raise insufficient_privilege;end if;
  select coalesce(jsonb_agg(to_jsonb(x)order by x.id),'[]'::jsonb)into rows from(
- select i.id,i.team_id,t.name team_name,i.role,i.expires_at,public.provider_team_active(t.owner_id)team_active from public.provider_team_invitations i join public.provider_teams t on t.id=i.team_id where i.email=email_value and i.status='pending'and i.expires_at>statement_timestamp()and(p_after is null or i.id>p_after)order by i.id limit 51)x;
+ select i.id,i.team_id,t.name team_name,i.role,i.expires_at,public.provider_team_active(t.owner_id)team_active from public.provider_team_invitations i join public.provider_teams t on t.id=i.team_id where i.email=email_value and i.status='pending'and i.expires_at>statement_timestamp()
+ and not exists(select 1 from public.provider_team_members m where m.team_id=i.team_id
+   and m.user_id=auth.uid() and m.removed_at is not null and i.created_at<=m.removed_at)
+ and(p_after is null or i.id>p_after)order by i.id limit 51)x;
  return jsonb_build_object('records',case when jsonb_array_length(rows)>50 then rows-50 else rows end,'next_after',case when jsonb_array_length(rows)>50 then rows->49->>'id'else null end);
 end;$$;
 revoke all on function public.provider_team_invitation_page(uuid)from public,anon,authenticated,service_role;

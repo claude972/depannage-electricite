@@ -232,6 +232,8 @@ try {
   await deny(cmd("delegate", a.q, "approve", 3), "P0001");
   await cmd("delegate", a.q, "approve", 4);
   eq((await get("manager", a.q)).approved_current, true);
+  eq((await get("manager", a.q)).permissions.can_submit, false);
+  await deny(cmd("manager", a.q, "submit", 5), "P0001");
   // Terms are part of the exact proposal; an old approval must not authorize changed validity.
   await as(
     "artisan",

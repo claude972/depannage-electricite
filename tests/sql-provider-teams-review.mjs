@@ -522,6 +522,41 @@ try {
       ),
     "42501",
   );
+  // A previously sent invitation must not undo an explicit member removal.
+  const currentEmail = (await db.query("select email from auth.users where id=$1", [ids.coord])).rows[0].email;
+  await denied(() => write("owner", team, "invite", {
+    invitation_id: crypto.randomUUID(), email: currentEmail, role: "technician",
+    expires_at: new Date(Date.now() + 86400000).toISOString(), expected_version: version,
+  }), "P0001");
+  const stale = crypto.randomUUID();
+  await db.query(
+    "insert into public.provider_team_invitations(id,team_id,email,role,expires_at) values($1,$2,$3,'technician',now()+interval '1 day')",
+    [stale, team, currentEmail],
+  );
+  await write("owner", team, "remove_member", { user_id: ids.coord, expected_version: version });
+  version++;
+  ok((await db.query("select status from public.provider_team_invitations where id=$1", [stale])).rows[0].status === "revoked",
+    "an outstanding invitation to the removed member is revoked");
+  await denied(() => accept("coord", stale), "P0001");
+  const staleAlias = crypto.randomUUID();
+  await db.query(
+    "insert into public.provider_team_invitations(id,team_id,email,role,expires_at,created_at) values($1,$2,$3,'technician',now()+interval '1 day',now()-interval '1 day')",
+    [staleAlias, team, "changed-coord@example.invalid"],
+  );
+  await db.query("update auth.users set email=$1 where id=$2", ["changed-coord@example.invalid", ids.coord]);
+  await denied(() => accept("coord", staleAlias), "P0001");
+  ok(!(await as("coord","select public.provider_team_invitation_page()v")).records.some(row=>row.id===staleAlias),
+    "an invitation preceding removal is absent from the invitee's queue");
+  await write("owner", team, "revoke_invitation", { invitation_id: staleAlias, expected_version: version });
+  version++;
+  const freshInvitation = await write("owner", team, "invite", {
+    invitation_id: crypto.randomUUID(), email: "changed-coord@example.invalid", role: "technician",
+    expires_at: new Date(Date.now() + 86400000).toISOString(), expected_version: version,
+  });
+  version++;
+  await accept("coord", freshInvitation.entity_id);
+  version++;
+  ok((await list("coord")).team.role === "technician", "fresh invitation after removal can be accepted");
   // New owning team can dispatch without learning a previous team's internal revision.
   const bInvite = await invite("otherTech", "technician", teamB, "otherOwner");
   await accept("otherTech", bInvite, teamB);

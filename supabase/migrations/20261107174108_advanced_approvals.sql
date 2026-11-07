@@ -91,6 +91,9 @@ begin
  if exists(select 1 from public.sites where id=j.site_id and archived_at is not null)then raise exception 'Site archived'using errcode='P0001';end if;
  if w.version is distinct from p_expected_version then raise exception 'Workflow version changed'using errcode='P0001';end if;
  if p_action='submit'then
+  if public.advanced_approval_current(q.id) then
+   raise exception 'The current quote is already approved'using errcode='P0001';
+  end if;
   insert into public.advanced_approval_workflows(quote_id,site_id,version,policy_version,steps,snapshot,state,current_step)values(q.id,j.site_id,1,p.version,p.steps,public.advanced_approval_snapshot(q.id),'pending',1)
   on conflict(quote_id)do update set site_id=excluded.site_id,version=advanced_approval_workflows.version+1,policy_version=excluded.policy_version,steps=excluded.steps,snapshot=excluded.snapshot,state='pending',current_step=1,approvals='[]'returning *into w;
  else
@@ -173,7 +176,7 @@ begin
  return jsonb_build_object('quote_id',q.id,'site_id',j.site_id,'required',required,'approved_current',public.advanced_approval_current(q.id),
  'policy',case when p.site_id is null then null else jsonb_build_object('version',p.version,'enabled',p.enabled,'threshold_cents',p.threshold_cents,'steps',p.steps)end,
  'workflow',case when w.quote_id is null then null else jsonb_build_object('version',w.version,'policy_version',w.policy_version,'state',w.state,'current_step',w.current_step,'steps',w.steps,'snapshot_matches',matches)end,
- 'permissions',jsonb_build_object('can_submit',required and q.status='sent'and j.status='quoted'and public.can_manage_site(j.site_id)and not exists(select 1 from public.sites where id=j.site_id and archived_at is not null),
+ 'permissions',jsonb_build_object('can_submit',required and not public.advanced_approval_current(q.id) and q.status='sent'and j.status='quoted'and public.can_manage_site(j.site_id)and not exists(select 1 from public.sites where id=j.site_id and archived_at is not null),
  'can_decide',coalesce(current and w.state='pending'and public.advanced_approval_reviewer(j.site_id,w.steps->(w.current_step-1),auth.uid()),false),
  'can_respond',coalesce(current and w.state='changes_requested'and(public.can_manage_site(j.site_id)or(j.artisan_id=auth.uid()and exists(select 1 from public.profiles where id=auth.uid()and role='artisan'and artisan_approved)and not exists(select 1 from public.artisan_profiles where user_id=auth.uid()and application_status<>'approved'))),false)),
  'events',case when jsonb_array_length(rows)>50 then rows-50 else rows end,'next_after',case when jsonb_array_length(rows)>50 then(rows->49->>'version')::integer else null end);
