@@ -1,3 +1,4 @@
+import {financialEventType,dispatchFinancialEvent} from "@/lib/features/stripe-reconciliation/webhook";
 import Stripe from "stripe";
 import { dispatchRefundEvent } from "@/lib/features/refund-execution/server";
 import { env } from "node:process";
@@ -32,7 +33,12 @@ export async function POST(request: Request) {
       throw new ApiError(400, "Signature de paiement invalide.");
     }
     const live=/^(sk|rk)_live_/.test(env.STRIPE_SECRET_KEY??"");
-    if(event.livemode!==live||event.account)throw new ApiError(400,"Contexte du paiement invalide.");
+    if(event.livemode!==live)throw new ApiError(400,"Contexte du paiement invalide.");
+    if(financialEventType(event.type)){
+      await dispatchFinancialEvent(event,body,adminClient(),live);
+      return Response.json({received:true},{headers:PAYMENT_HEADERS});
+    }
+    if(event.account)throw new ApiError(400,"Contexte du paiement invalide.");
     if(["refund.created","refund.updated","refund.failed"].includes(event.type)){
       await dispatchRefundEvent(event,stripe,adminClient(),live);
       return Response.json({received:true},{headers:PAYMENT_HEADERS});
