@@ -54,3 +54,10 @@ test("no constant UUID fallback: creation refuses explicitly when crypto.randomU
   assert.match(leaf, /if \(!id\) \{ setNoId\(true\); return; \}/);
   assert.match(mod.ENERGY_NO_UUID, /impossible/);
 });
+
+test("ENT-04: site sheet mounts SiteContactsPanel keyed by site + identity + generation; demo never calls the route", () => {
+  const sheet = siteSheet();
+  assert.match(src, /import \{ SiteContactsPanel \} from "\.\.\/features\/site-contacts\/site-contacts-panel";/);
+  assert.match(sheet, /session\.mode === "demo" \? \(\s*<Unavailable\s+title="Contacts du site"[\s\S]{0,300}?blocker="ENT-04"[\s\S]{0,40}?\) : \(\s*<SiteContactsPanel\s+key=\{`\$\{site\.id\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\}\s+siteId=\{site\.id\}\s+context=\{session\.mutationContext\}/);
+  assert.doesNotMatch(src, /Aucun contact de site n’est modélisé/);
+});

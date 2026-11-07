@@ -115,7 +115,7 @@ test("loading and error states render; reports view mounts the panel live, hones
   assert.match(err, /role="alert"/);
   assert.match(err, /Réessayer/);
   const src = readFileSync("components/role/enterprise-space.tsx", "utf8");
-  assert.match(src, /<OrganizationSlaPanel key=\{`\$\{c\.organization\.id\}:\$\{session\.refreshContext\}`\} organizationId=\{c\.organization\.id\} context=\{session\.mutationContext\} \/>/);
+  assert.match(src, /<OrganizationSlaPanel key=\{`\$\{c\.organization\.id\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\} organizationId=\{c\.organization\.id\} context=\{session\.mutationContext\} \/>/);
   assert.match(src, /demo \|\| !c\.organization \? \(\s*<Unavailable\s+title="Respect des SLA \(consolidé\)"/);
   assert.doesNotMatch(src, /Le consolidé multi-sites n’est pas livré/);
 });

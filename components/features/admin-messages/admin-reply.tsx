@@ -69,7 +69,7 @@ export function AdminReplyComposer({ intervention, demo, context, onSent, onRefr
     inFlight.current = false;
     if (!mounted.current || context.generation() !== gen || context.userId() !== uid) return;
     setBusy(false);
-    const outcome = replyOutcome(result, command);
+    const outcome = replyOutcome(result, command, uid);
     if (outcome.kind === "sent") {
       pending.current = null;
       setDraft("");

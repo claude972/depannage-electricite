@@ -100,6 +100,7 @@ import { useDetailPresence } from "./use-detail-presence";
 import { PointReadState } from "./detail-read-view";
 import { SiteOperationsView } from "../features/site-operations/site-operations-view";
 import { SiteEnergyPanel } from "../features/energy/site-energy-panel";
+import { SiteContactsPanel } from "../features/site-contacts/site-contacts-panel";
 import { OrganizationSlaPanel } from "../features/organization-sla/organization-sla-panel";
 import { CONTRACT_MESSAGES } from "../app/api";
 import { demoReport } from "../../lib/features/site-operations/demo";
@@ -2764,7 +2765,19 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
           <Unavailable title="Parties communes & AG" reason="Les parties communes, assemblées générales et appels de fonds ne sont pas modélisés." blocker="ENT-05" />
         )}
 
-        <Unavailable title="Contacts du site" reason="Aucun contact de site n’est modélisé." blocker="ENT-04" />
+        {session.mode === "demo" ? (
+          <Unavailable
+            title="Contacts du site"
+            reason="En démonstration, aucun contact n’est enregistré : connectez-vous à votre espace pour déclarer les contacts et consignes du site."
+            blocker="ENT-04"
+          />
+        ) : (
+          <SiteContactsPanel
+            key={`${site.id}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}
+            siteId={site.id}
+            context={session.mutationContext}
+          />
+        )}
 
         <section className="panel" aria-labelledby="site-docs">
           <h2 id="site-docs">Documents</h2>
@@ -3257,7 +3270,7 @@ function ReportsView({ c }: { c: Ctx }) {
           blocker="ENT-11"
         />
       ) : (
-        <OrganizationSlaPanel key={`${c.organization.id}:${session.refreshContext}`} organizationId={c.organization.id} context={session.mutationContext} />
+        <OrganizationSlaPanel key={`${c.organization.id}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} organizationId={c.organization.id} context={session.mutationContext} />
       )}
     </>
   );

@@ -43,7 +43,7 @@ export function replyUuid(): string | null {
 }
 
 /** Strict: the reply must be exactly the command that was sent (id, dossier, body). */
-export function parseReply(body: unknown, command: ReplyCommand): Message | null {
+export function parseReply(body: unknown, command: ReplyCommand, authorId: string | null): Message | null {
   if (!body || typeof body !== "object") return null;
   const keys = Object.keys(body);
   if (keys.length !== 1 || keys[0] !== "message") return null;
@@ -52,13 +52,15 @@ export function parseReply(body: unknown, command: ReplyCommand): Message | null
   const r = m as Record<string, unknown>;
   if (Object.keys(r).sort().join(",") !== "author_id,body,created_at,id,intervention_id") return null;
   if (r.id !== command.id || r.intervention_id !== command.intervention_id || r.body !== command.body) return null;
+  // The author must be the identity that sent it (the route checks it too: aligned guard).
+  if (!authorId || r.author_id !== authorId) return null;
   if (typeof r.author_id !== "string" || !UUID.test(r.author_id) || typeof r.created_at !== "string" || !ISO.test(r.created_at)) return null;
   return { id: command.id, intervention_id: command.intervention_id, body: command.body, author_id: r.author_id, created_at: r.created_at };
 }
 
-export function replyOutcome(r: ReplyResult, command: ReplyCommand): ReplyOutcome {
+export function replyOutcome(r: ReplyResult, command: ReplyCommand, authorId: string | null): ReplyOutcome {
   if (r.status === 200) {
-    const message = parseReply(r.body, command);
+    const message = parseReply(r.body, command, authorId);
     return message ? { kind: "sent", message } : { kind: "retry", text: REPLY_COPY.retry };
   }
   if (r.status === 409) return { kind: "conflict", text: REPLY_COPY.conflict };
