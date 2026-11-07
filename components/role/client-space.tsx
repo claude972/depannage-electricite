@@ -78,6 +78,7 @@ import { PlatformPage } from "./platform-anchor";
 import { platformEntries } from "./anchors";
 import { UploadQueuePanel } from "../app/upload-queue";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
+import { ClientAddressesPanel, usePreferredAddress } from "../features/client-addresses/client-addresses-panel";
 
 const CLIENT_VIEWS: readonly View[] = [
   "overview",
@@ -206,6 +207,8 @@ export function ClientSpace({ session }: { session: Session }) {
   const view = session.view;
   const inSpace = CLIENT_VIEWS.includes(view);
   const demo = session.mode === "demo";
+  // CLI-09: the preferred saved address is only read for the request form (explicit preselection).
+  const preferredAddress = usePreferredAddress({ enabled: !demo && view === "new", context: session.mutationContext });
   const rows = mine(session);
   const activeCount = rows.filter((i) => isOpen(i.status)).length;
   const myIds = new Set(rows.map((i) => i.id));
@@ -258,6 +261,7 @@ export function ClientSpace({ session }: { session: Session }) {
             key={session.param}
             initialCategory={session.pendingDraft?.category ?? (isCategory(session.param) ? session.param : "panel")}
             initialValues={session.pendingDraft}
+            preferredAddress={preferredAddress}
             sites={[]}
             mode={session.mode}
             busy={session.busy}
@@ -2058,9 +2062,10 @@ function ProfileView({ session }: { session: Session }) {
           />
           <ProfileNotificationPreferences session={session} />
           <InstallPanel />
+          <ClientAddressesPanel key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} demo={demo} context={session.mutationContext} />
           <Unavailable
-            title="Adresses enregistrées et moyens de paiement"
-            reason="Pas encore activé sur ce service : aucune adresse supplémentaire ni aucun moyen de paiement n’est mémorisé. Chaque règlement se fait sur la plateforme, au moment voulu."
+            title="Moyens de paiement enregistrés"
+            reason="Pas encore activé sur ce service : aucun moyen de paiement n’est mémorisé. Chaque règlement se fait sur la plateforme, au moment voulu."
             blocker="CLI-09"
           />
         </div>

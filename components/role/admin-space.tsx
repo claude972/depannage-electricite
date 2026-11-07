@@ -3470,7 +3470,7 @@ function DossierView({
             )}
             <div className={styles.panelBody}>
               <AdminReplyComposer
-                key={`${id}:${session.refreshContext}`}
+                key={`${id}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}
                 intervention={intervention}
                 demo={demo}
                 context={session.mutationContext}

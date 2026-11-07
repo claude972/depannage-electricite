@@ -18,7 +18,7 @@ const cmd = { id: ID, intervention_id: DOSSIER, body: "Bonjour, nous relançons 
 const reply = { message: { ...cmd, author_id: ADMIN, created_at: "2026-11-06T22:00:00.000Z" } };
 
 test("200 with exactly the sent command is a confirmed message; anything else is never a success", () => {
-  assert.equal(J(m.replyOutcome({ status: 200, body: reply, retryAfter: null }, cmd)), J({ kind: "sent", message: reply.message }));
+  assert.equal(J(m.replyOutcome({ status: 200, body: reply, retryAfter: null }, cmd, ADMIN)), J({ kind: "sent", message: reply.message }));
   for (const bad of [
     { message: { ...reply.message, body: "autre" } },
     { message: { ...reply.message, id: ID2 } },
@@ -27,11 +27,11 @@ test("200 with exactly the sent command is a confirmed message; anything else is
     { message: { ...reply.message, extra: 1 } },
     { ...reply, more: 1 },
     null,
-  ]) assert.equal(m.replyOutcome({ status: 200, body: bad, retryAfter: null }, cmd).kind, "retry");
+  ]) assert.equal(m.replyOutcome({ status: 200, body: bad, retryAfter: null }, cmd, ADMIN).kind, "retry");
 });
 
 test("status mapping: 409 conflict (refresh, no auto-retry), 429/503/network retry, 4xx honest", () => {
-  const k = (status: number) => m.replyOutcome({ status, body: { error: "x" }, retryAfter: null }, cmd).kind;
+  const k = (status: number) => m.replyOutcome({ status, body: { error: "x" }, retryAfter: null }, cmd, ADMIN).kind;
   assert.equal(k(409), "conflict");
   for (const s of [0, 429, 500, 503]) assert.equal(k(s), "retry");
   for (const s of [400, 422]) assert.equal(k(s), "invalid");
@@ -112,7 +112,21 @@ test("component: demo and closed conversations never offer a send; open shows th
 test("admin dossier thread mounts the composer (ADM-07 block removed) and merges confirmed replies", () => {
   const src = readFileSync("components/role/admin-space.tsx", "utf8");
   assert.doesNotMatch(src, /blocker="ADM-07"/);
-  assert.match(src, /<AdminReplyComposer\s+key=\{`\$\{id\}:\$\{session\.refreshContext\}`\}\s+intervention=\{intervention\}\s+demo=\{demo\}\s+context=\{session\.mutationContext\}/);
+  assert.match(src, /<AdminReplyComposer\s+key=\{`\$\{id\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\}\s+intervention=\{intervention\}\s+demo=\{demo\}\s+context=\{session\.mutationContext\}/);
   assert.match(src, /const messages = mergeThread\(session\.data\.messages, sentReplies, id\);/);
   assert.match(src, /setSentReplies\(\(list\) => \[\.\.\.list, message\]\);\s+void sessionRef\.current\.ensureFresh\(\);/);
+});
+
+test("negative: a well-formed reply authored by another identity is never a success", () => {
+  const OTHER = "55555555-5555-4555-8555-555555555555";
+  const foreign = { message: { ...reply.message, author_id: OTHER } };
+  assert.equal(m.replyOutcome({ status: 200, body: foreign, retryAfter: null }, cmd, ADMIN).kind, "retry");
+  assert.equal(m.parseReply(foreign, cmd, ADMIN), null);
+});
+
+test("negative: no captured identity (signed out mid-flight) → reply not accepted", () => {
+  assert.equal(m.parseReply(reply, cmd, null), null);
+  assert.equal(m.replyOutcome({ status: 200, body: reply, retryAfter: null }, cmd, null).kind, "retry");
+  const ui = readFileSync("components/features/admin-messages/admin-reply.tsx", "utf8");
+  assert.match(ui, /const outcome = replyOutcome\(result, command, uid\);/);
 });
