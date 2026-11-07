@@ -12,7 +12,7 @@ try {
     create schema auth;
     create table auth.users(
       id uuid primary key, raw_user_meta_data jsonb default '{}', email text,
-      email_confirmed_at timestamptz, phone text, phone_confirmed_at timestamptz
+      email_confirmed_at timestamptz, phone text, phone_confirmed_at timestamptz, is_anonymous boolean default false
     );
     create function auth.uid() returns uuid language sql stable as
       $$select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid$$;
@@ -190,5 +190,59 @@ try {
  await db.exec('reset role;set role authenticated');
  await assert.rejects(authorize(disabled),e=>e.code==='42501');checks++;
  await assert.rejects(db.query('select public.external_notification_dispatch_enabled()'),e=>e.code==='42501');checks++;
+ // Web Push selects the current browser without granting access to its endpoint or keys.
+ const session = crypto.randomUUID(), otherSession = crypto.randomUUID();
+ const scope = 'c'.repeat(64), otherScope = 'd'.repeat(64);
+ const endpoint = 'https://fcm.googleapis.com/fcm/send/synthetic-endpoint';
+ const enrollment = (action = 'read', version = null, device = session, actor = user) => one(
+   'select public.web_push_enrollment($1,$2,$3,$4,$5,$6,$7,$8)v', [actor, device, scope, action, version,
+     action === 'register' ? endpoint : null, action === 'register' ? 'A'.repeat(87) : null, action === 'register' ? 'B'.repeat(22) : null],
+ );
+ const pushClaim = (key = scope) => one('select public.claim_web_push($1)v', [key]);
+ const pushFinish = (value, outcome) => one('select public.finish_web_push($1,$2,$3,$4)v', [value.id, value.lease_token, outcome, value.enrollment_version]);
+ await assert.rejects(enrollment(), e => e.code === '42501'); checks++;
+ await assert.rejects(pushClaim(), e => e.code === '42501'); checks++;
+ await db.exec('reset role');
+ await q('insert into auth.sessions(id,user_id) values ($1,$2),($3,$4)', [session, user, otherSession, foreign]);
+ await q('update public.notification_preferences set push_enabled=true where user_id=$1', [user]);
+ await db.exec("update notification_delivery_private.outbox set status='cancelled' where channel='push' and status='pending'; set role service_role");
+ eq(await enrollment(), { version: 0, opted_in: true, dispatch_enabled: false, browser: 'none' });
+ await assert.rejects(enrollment('register', 0), e => e.code === '42501'); checks++;
+ await assert.rejects(enrollment('read', null, otherSession), e => e.code === '42501'); checks++;
+ await db.exec('reset role;update notification_delivery_private.control set enabled=true;set role service_role');
+ const selectedBrowser = await enrollment('register', 0);
+ eq(selectedBrowser, { version: 1, opted_in: true, dispatch_enabled: true, browser: 'current' });
+ eq(await enrollment('register', 0), selectedBrowser); // same command after a lost response
+ await assert.rejects(q('select endpoint from notification_delivery_private.push_enrollments'), e => e.code === '42501'); checks++;
+ await db.exec('reset role'); await notify(); await db.exec('set role service_role');
+ eq(await pushClaim(otherScope), null); // another preview must not consume this browser's job
+ const single = await pushClaim();
+ eq(single.endpoint, endpoint); eq(single.enrollment_version, 1);
+ eq(await pushClaim(), null);
+ eq(await pushFinish({ ...single, lease_token: crypto.randomUUID() }, 'accepted'), false);
+ eq(await pushFinish(single, 'uncertain'), true);
+ eq(await pushClaim(), null);
+ eq(await claim('push', 'webpush'), null); // the generic worker cannot retry this attempt
+ eq(await one('select attempts v from notification_delivery_private.outbox where id=$1', [single.id]), 1);
+ await db.exec('reset role'); await notify(); await db.exec('set role service_role');
+ const crashed = await pushClaim();
+ await db.exec("reset role;update notification_delivery_private.outbox set lease_until=now()-interval '1 second' where status='sending' and provider='webpush';set role service_role");
+ eq(await pushClaim(), { skipped: true });
+ eq(await one('select status v from notification_delivery_private.outbox where id=$1', [crashed.id]), 'uncertain');
+ eq(await pushFinish(crashed, 'accepted'), false);
+ await db.exec('reset role'); await notify(); await db.exec('set role service_role');
+ eq(await pushFinish(await pushClaim(), 'expired'), true);
+ eq(await enrollment(), { version: 2, opted_in: true, dispatch_enabled: true, browser: 'none' });
+ await assert.rejects(enrollment('register', 0), e => e.code === 'P0001'); checks++;
+ eq((await enrollment('register', 2)).version, 3);
+ await db.exec('reset role; update public.notification_preferences set push_enabled=false; update public.notification_preferences set push_enabled=true; set role service_role');
+ eq(await enrollment(), { version: 4, opted_in: true, dispatch_enabled: true, browser: 'none' });
+ eq((await enrollment('register', 4)).version, 5);
+ await db.exec('reset role'); await notify();
+ await q('delete from auth.sessions where id=$1', [session]);
+ eq(await one('select endpoint v from notification_delivery_private.push_enrollments where recipient_id=$1', [user]), null);
+ await db.exec('set role service_role');
+ eq(await pushClaim(), null);
+ await assert.rejects(enrollment('register', 5), e => e.code === '42501'); checks++;
  console.log(`PASS external notification outbox: ${checks} checks, full migrations, inactive gate, scoped revalidation, leases, bounded uncertain retry, enqueue isolation and ACL`);
 }catch(e){console.error(e.message,e.code,e.query,e.stack?.split("\n").slice(0,4).join("\n"));process.exitCode=1;}finally{await db.close()}

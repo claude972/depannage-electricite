@@ -3,7 +3,7 @@
 const PUBLIC_CACHE_PREFIX = "courant-pwa-public-";
 // A generation is immutable and may be created only once. Bump it whenever this worker
 // or any of the three public assets changes; a reused generation fails closed.
-const PUBLIC_CACHE = `${PUBLIC_CACHE_PREFIX}v5`;
+const PUBLIC_CACHE = `${PUBLIC_CACHE_PREFIX}v6`;
 const OFFLINE_URL = "/offline.html";
 const FORM_URL = "/offline-request.html";
 const SCRIPT_URL = "/offline-request.js";
@@ -58,6 +58,27 @@ self.addEventListener("activate", event => {
 });
 self.addEventListener("message", event => {
   if (event.data?.type === "ACTIVATE_UPDATE") event.waitUntil(self.skipWaiting());
+  if (event.data?.type === "CHECK_PRIVATE_PUSH") event.ports?.[0]?.postMessage({ type: "PRIVATE_PUSH_READY" });
+});
+self.addEventListener("push", event => {
+  let payload;
+  try { payload = event.data?.json(); } catch { return; }
+  if (payload?.type !== "private-notice-v1") return;
+  event.waitUntil(self.registration.showNotification("Une notification est disponible", {
+    body: "Connectez-vous à votre espace pour la consulter.",
+    tag: "private-notice-v1",
+  }));
+});
+self.addEventListener("notificationclick", event => {
+  if (event.notification.tag !== "private-notice-v1") return;
+  event.notification.close();
+  event.waitUntil((async () => {
+    const target = new URL("/#notifications", self.location.origin).href;
+    const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const existing = windows.find(client => client.url === target);
+    if (existing) await existing.focus();
+    else await self.clients.openWindow(target);
+  })());
 });
 function unavailable() {
   return new Response("Connexion indisponible. Reconnectez-vous pour retrouver vos dossiers.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });

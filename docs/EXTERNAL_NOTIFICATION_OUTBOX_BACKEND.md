@@ -32,4 +32,12 @@ La migration `20261107210516_external_email_delivery.sql` et le point d’entré
 
 La dernière autorisation lit uniquement l’adresse confirmée courante du destinataire de la ligne verrouillée. Elle lie une empreinte du contenu et de l’adresse au bail, sans copie de l’adresse dans la file. Un changement de destinataire, d’expéditeur, de contenu ou de clé empêche la reprise. La limite de 23 heures depuis l’enfilement reste sous la durée de déduplication de 24 heures du fournisseur. Une réponse ambiguë préserve l’état incertain. [Déduplication Resend](https://resend.com/docs/dashboard/emails/idempotency-keys)
 
-Les tests vérifient refus d’accès, demande exacte avec fournisseur injecté, bail, changement d’adresse, désactivation et expiration. Aucune clé, activation, tâche planifiée ou livraison réelle. Le push requiert toujours son propre raccordement.
+Les tests vérifient refus d’accès, demande exacte avec fournisseur injecté, bail, changement d’adresse, désactivation et expiration. La configuration, le déclenchement planifié et la livraison réelle restent à recetter.
+
+## Notifications du navigateur
+
+Le Web Push utilise l’origine HTTPS exacte de `NEXT_PUBLIC_APP_URL`, `NOTIFICATIONS_PUSH_PROVIDER=webpush`, une paire VAPID et un contact `mailto:` réel. Il est désactivé sans ces paramètres et sans la porte SQL de la file. L’interface ne reçoit que la clé publique et l’état du navigateur. La même paire est requise pour l’inscription et l’envoi. [Web Push et VAPID](https://www.rfc-editor.org/rfc/rfc8292.html)
+
+Le membre choisit un navigateur après avoir enregistré sa préférence push. Le choix remplace le précédent, et la déconnexion Supabase ou le retrait de la préférence efface les données de destination. Le service revérifie la session, la préférence, la visibilité de la notification et l’état non lu avant de réserver une tentative. La réservation prive définitivement ce message de rejeu. Le résultat incertain est distinct de l’acceptation et de la réception. Une expiration signalée par le service retire uniquement l’inscription de la version concernée.
+
+`POST /api/internal/notifications/push` traite jusqu’à quatre entrées avec le secret serveur existant. Une entrée reste éligible cinq minutes et l’envoi demande un TTL de 60 secondes. Le message chiffré contient un marqueur fixe. Le service worker affiche un texte générique et ouvre la rubrique authentifiée des notifications. Le fournisseur, la configuration VAPID, les permissions sur appareils et le déclenchement planifié restent à recetter. [Notifications Web Push dans Safari](https://developer.apple.com/documentation/usernotifications/sending-web-push-notifications-in-web-apps-and-browsers)

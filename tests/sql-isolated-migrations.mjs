@@ -30,5 +30,11 @@ export async function isolatedMigrationSql(db, name, source, { install = install
     announce('ISOLATED SQL: 020 native installation is an explicit pg_cron STUB; remaining migration executes. NOT real scheduler/timing proof. Dedicated retention CI test is mandatory.');
     await install(db);
   }
+  if (name === '20261107213026_web_push_notifications.sql') {
+    // Only the FK and live-session read are simulated. Logout tests delete the exact session row.
+    await db.exec(`create table if not exists auth.sessions (
+      id uuid primary key, user_id uuid not null references auth.users(id) on delete cascade, not_after timestamptz
+    );`);
+  }
   return adapted;
 }
