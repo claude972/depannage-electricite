@@ -81,6 +81,7 @@ import { platformEntries } from "./anchors";
 import { UploadQueuePanel } from "../app/upload-queue";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
 import { AccountDataPanel } from "../features/account-data/account-data-panel";
+import { SEARCH_COPY, toListRows, useRequestsSearch } from "../features/requests-search/use-requests-search";
 import { ClientAddressesPanel, usePreferredAddress } from "../features/client-addresses/client-addresses-panel";
 import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
 import { AppointmentReminderPanel } from "../features/appointment-reminders/appointment-reminder-panel";
@@ -900,9 +901,13 @@ function RequestList({ session, items }: { session: Session; items: Intervention
 
 // ---- Mes demandes --------------------------------------------------------------------
 type RequestFilter = "active" | "all" | "past";
-function RequestsView({ session, rows }: { session: Session; rows: Intervention[] }) {
+/** Exported for tests only (the live server search wiring). */
+export function RequestsView({ session, rows }: { session: Session; rows: Intervention[] }) {
   const [filter, setFilter] = useState<RequestFilter>("active");
   const [search, setSearch] = useState("");
+  // Live: server search over ALL the client's requests (not only the cached 100). Demo: local only, zero call.
+  const live = session.mode === "live";
+  const remote = useRequestsSearch({ enabled: live, context: session.mutationContext, filter, search });
   let items = rows.filter(
     (i) =>
       filter === "all" ||
@@ -916,6 +921,8 @@ function RequestsView({ session, rows }: { session: Session; rows: Intervention[
         .toLowerCase()
         .includes(needle),
     );
+  if (live) items = toListRows(remote.state.items);
+  const settled = !live || remote.state.phase === "ready";
   return (
     <>
       <PageTitle
@@ -950,10 +957,18 @@ function RequestsView({ session, rows }: { session: Session; rows: Intervention[
           />
         </label>
       </div>
-      <section className={`panel ${styles.listPanel}`}>
+      <section className={`panel ${styles.listPanel}`} aria-busy={(live && remote.state.phase === "loading") || undefined} data-requests-search={live ? remote.state.phase : "demo"}>
+        {live && remote.state.phase === "loading" && <p className="muted" role="status">{SEARCH_COPY.loading}</p>}
+        {live && remote.state.phase === "forbidden" && <p role="alert">{remote.state.error}</p>}
+        {live && remote.state.phase === "error" && (
+          <div role="alert">
+            <p>{remote.state.error}</p>
+            <button type="button" className="button" onClick={() => remote.retry()} data-requests-retry="">Réessayer</button>
+          </div>
+        )}
         {items.length ? (
           <RequestList session={session} items={items} />
-        ) : (
+        ) : settled ? (
           <Empty
             title="Aucune demande dans cette liste"
             action={
@@ -970,6 +985,17 @@ function RequestsView({ session, rows }: { session: Session; rows: Intervention[
               ? "Aucune intervention ne correspond à votre recherche."
               : "Vous retrouverez ici les interventions correspondant à ce filtre."}
           </Empty>
+        ) : null}
+        {live && remote.state.failed === "more" && (
+          <div role="alert">
+            <p>{remote.state.error}</p>
+            <button type="button" className="button" onClick={() => remote.retry()} data-requests-retry="">Réessayer</button>
+          </div>
+        )}
+        {live && remote.state.phase === "ready" && remote.state.cursor && remote.state.failed !== "more" && (
+          <button type="button" className="button" disabled={remote.state.loadingMore} onClick={() => remote.more()} data-requests-more="">
+            {remote.state.loadingMore ? "Chargement…" : SEARCH_COPY.more}
+          </button>
         )}
       </section>
     </>
