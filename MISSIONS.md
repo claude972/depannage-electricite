@@ -60,3 +60,7 @@ Astra fournit le contrat et le serveur dans `codex/warranty-activation`. Un aute
 ## ART-03 / ADM-02 — décision individuelle de justificatif
 
 Pilote seul auteur de la migration, API /api/artisan/credentials/[id]/reviews et tests. Historique immuable, motif, version attendue, rejeu par UUID, lecture par l'artisan propriétaire et l'administration actuelle. Une pièce revue garde son type et sa date déclarée, l'artisan peut joindre une nouvelle pièce pour corriger. Une décision sur une pièce ne modifie pas l'approbation globale du dossier. Le contrat UI expose uniquement la pièce, les décisions datées, le droit d'action et le curseur. Vérifier accès croisés, expiration, concurrence par version, zéro double audit et reprise après réponse perdue. Cloud après assemblage et revue.
+
+## ENT-15 — export privé du consolidé énergie, Astra backend
+
+Branche codex/energy-export depuis610b13f. Demande confirmée dans COUVERTURE_PLAN.csv ENT-15 et PLAN_LIVRAISON_INTEGRALE lot4 : énergie/reporting/export, filtres et totaux réconciliés. Un seul auteur backend : format CSV de la route énergie existante, sérialiseur utilisant csvCell et le rapport validé commun, tests vrais handlers et contrat. Aucun nouveau calcul SQL, périmètre ou droit ; JSON par défaut conservé, absences distinctes de zéro, aucune consommation physique exhaustive inventée, aucun cloud/UI.
