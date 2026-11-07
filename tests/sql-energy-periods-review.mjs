@@ -1,6 +1,6 @@
 import { isolatedMigrationSql } from './sql-isolated-migrations.mjs';
 process.on('uncaughtException',error=>{console.error(error.message,error.query||'',error.detail||'');process.exit(1)});
-// ADV-B2B-OPERATIONS-001 — isolated PostgreSQL verification of migration 017 (not live Supabase).
+// ENT-09 — isolated PostgreSQL execution of all versioned migrations, with explicit Auth/Storage/cron stubs.
 // Install pinned @electric-sql/pglite@0.5.13 outside the app; PGLITE_MODULE selects its dist/index.js.
 // Every fixture below is synthetic QA data: no real site, rate, delay, calendar or regulation.
 import { readFile, readdir } from 'node:fs/promises';
@@ -57,6 +57,7 @@ await denied(()=>save('owner',other,null,{...values,source_reference:''}),'22023
 r=await save('writer',id,1,{...values,consumption_wh:1500000,cost_cents:23000});ok(r.version===2&&r.updated_by===ids.writer,'authorized scoped writer updates with version');
 r=await save('writer',id,1,{...values,consumption_wh:1500000,cost_cents:23000});ok(r.version===2,'update lost reply replay');
 await denied(()=>save('owner',id,1,{...values,consumption_wh:5000}),'P0001');
+await denied(()=>save('owner',id,1,{...values,consumption_wh:1500000,cost_cents:23000}),'P0001'); // identical result written by a different actor is not this actor's replay
 await denied(()=>save('owner',id,2,values,siteB),'P0002');
 r=await archive('owner',id,2);ok(r.version===3&&r.archived_at!==null,'archive keeps record and audit');
 r=await archive('owner',id,2);ok(r.version===3,'archive replay stays idempotent');
