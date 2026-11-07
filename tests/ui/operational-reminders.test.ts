@@ -213,6 +213,7 @@ test("démo : note honnête, aucun bouton ; montage artisan minimal ; point d’
   const artisan = readFileSync("components/role/artisan-space.tsx", "utf8");
   assert.match(artisan, /import \{ CredentialReminderPanel \} from "\.\.\/features\/operational-reminders\/operational-reminder-panel";/);
   assert.match(artisan, /<CredentialReviewPanel credentialId=\{s\.state\.credential\.id\} mode="artisan" context=\{session\.mutationContext\} demo=\{session\.mode === "demo"\} \/>\s*<CredentialReminderPanel credentialId=\{s\.state\.credential\.id\} context=\{session\.mutationContext\} demo=\{session\.mode === "demo"\} \/>/);
-  assert.doesNotMatch(readFileSync("components/role/enterprise-space.tsx", "utf8"), /ComplianceReminderPanel/, "enterprise mount left to its owner");
+  // Enterprise mount done by the enterprise-space owner: one panel per OPEN due date of the site.
+  assert.match(readFileSync("components/role/enterprise-space.tsx", "utf8"), /\{r\.status !== "completed" && \(\s*<ComplianceReminderPanel complianceId=\{r\.id\} context=\{session\.mutationContext\} demo=\{session\.mode === "demo"\} \/>/);
   assert.ok(readFileSync("components/features/appointment-reminders/appointment-reminder-panel.tsx", "utf8").length > 0, "appointment reminders kept");
 });

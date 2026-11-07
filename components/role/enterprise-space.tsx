@@ -103,6 +103,7 @@ import { SiteEnergyPanel } from "../features/energy/site-energy-panel";
 import { EnergyConsolidationPanel } from "../features/energy-consolidation/energy-consolidation-panel";
 import { SiteContactsPanel } from "../features/site-contacts/site-contacts-panel";
 import { SiteAreasPanel } from "../features/site-areas/site-areas-panel";
+import { ComplianceReminderPanel } from "../features/operational-reminders/operational-reminder-panel";
 import { OrganizationSitesList, SiteSettingsPanel } from "../features/site-lifecycle/site-lifecycle-panels";
 import { SiteDirectLoader } from "../features/site-lifecycle/site-direct";
 import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-panel";
@@ -2691,7 +2692,6 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
           )}
         </section>
 
-        {/* MOUNT POINT (reserved): operational reminders leaf — site compliance due dates (other worker). */}
         <section className="panel" aria-labelledby="site-compliance">
           <div className={styles.panelTitle}>
             <h2 id="site-compliance">Échéances & conformité</h2>
@@ -2706,7 +2706,8 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
           </div>
           {compliance.length ? (
             compliance.map((r) => (
-              <div key={r.id} className={styles.listRow}>
+              <Fragment key={r.id}>
+              <div className={styles.listRow}>
                 <section>
                   <strong>{r.title}</strong>
                   <small>
@@ -2737,6 +2738,11 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
                   </button>
                 )}
               </div>
+              {/* Internal reminder of this due date (server state and rights; no external send). */}
+              {r.status !== "completed" && (
+                <ComplianceReminderPanel complianceId={r.id} context={session.mutationContext} demo={session.mode === "demo"} />
+              )}
+              </Fragment>
             ))
           ) : (
             <p className={styles.muted}>Aucune échéance enregistrée pour ce site.</p>
