@@ -191,6 +191,20 @@
   font-size: 12px;
   color: var(--ui-text-muted);
 }
+/* Header fit (hosted QA 7b4eed7: 7 px overflow at 1280). Each step frees room before anything can
+   overflow; nothing is clipped: the theme label stays the toggle's accessible name, the section
+   links and « Se connecter » move into the menu. Widths verified in Chromium with Plus Jakarta
+   Sans (tests/ui/public-header-overflow.test.ts). */
+@media (max-width: 1400px) {
+  .themeToggle > span:last-child {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
 @media (max-width: 1320px) {
   .navLink {
     padding: 0 9px;
@@ -200,7 +214,7 @@
     gap: 14px;
   }
 }
-@media (max-width: 1100px) {
+@media (max-width: 1240px) {
   .nav {
     display: none;
   }
@@ -219,6 +233,14 @@
     position: relative;
   }
   .menuButton {
+    display: inline-flex;
+  }
+}
+@media (max-width: 768px) {
+  .loginButton {
+    display: none;
+  }
+  .navLogin {
     display: inline-flex;
   }
 }
@@ -241,13 +263,5 @@
   }
   .navLogin {
     display: inline-flex;
-  }
-  .themeToggle > span:last-child {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
   }
 }
