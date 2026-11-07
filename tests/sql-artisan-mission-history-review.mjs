@@ -62,15 +62,15 @@ try {
  const foreign=await insert(ids.other,'assigned',site);
  const page=(f='active',at=null,id=null)=>one('select public.artisan_mission_history_page($1,$2,$3)v',[f,at,id]);
  await as('artisan');eq(await one('select public.can_access_intervention($1)v',[foreign]),true);
- for(const[f,count]of [['active',123],['done',112]]){let cursor=null,all=[];for(let n=0;n<5;n++){const data=await page(f,cursor?.created_at,cursor?.id);eq(data.items.length<=51,true);const visible=data.items.slice(0,50);all.push(...visible);if(data.items.length<=50)break;cursor=visible.at(-1)}eq(all.length,count);eq(new Set(all.map(x=>x.id)).size,count);eq(all.some(x=>x.id===foreign),false);eq(Object.keys(all[0]).sort(),['id','category','address','city','urgency','status','created_at','completed_at','paid_at'].sort());eq(all.map(x=>x.id),all.map(x=>x.id).sort().reverse())}
+ for(const[f,count]of [['active',123],['done',112]]){let cursor=null,all=[];for(let n=0;n<5;n++){const data=await page(f,cursor?.created_at,cursor?.id);eq(data.counts,{active:123,done:112});eq(data.items.length<=51,true);const visible=data.items.slice(0,50);all.push(...visible);if(data.items.length<=50)break;cursor=visible.at(-1)}eq(all.length,count);eq(new Set(all.map(x=>x.id)).size,count);eq(all.some(x=>x.id===foreign),false);eq(Object.keys(all[0]).sort(),['id','category','address','city','urgency','status','created_at','completed_at','paid_at'].sort());eq(all.map(x=>x.id),all.map(x=>x.id).sort().reverse())}
  await deny(page('unknown'),'22023');await deny(page('active','infinity',foreign),'22023');await deny(page('active',null,foreign),'22023');
  for(const who of ['client','manager','admin']){await as(who);await deny(page())}
- await as('other');eq((await page()).items.map(x=>x.id),[foreign]);await as('', 'anon');await deny(page());
+ await as('other');eq((await page()).counts,{active:1,done:0});eq((await page()).items.map(x=>x.id),[foreign]);await as('', 'anon');await deny(page());
  await as('', 'postgres');eq(await one("select prosecdef v from pg_proc where oid='public.artisan_mission_history_page(text,timestamptz,uuid)'::regprocedure"),false);
- const moving=await insert(ids.artisan,'in_progress');await q("update public.interventions set created_at='2026-11-08T00:00:00Z' where id=$1",[moving]);await as('artisan');eq((await page()).items.some(x=>x.id===moving),true);
+ const moving=await insert(ids.artisan,'in_progress');await q("update public.interventions set created_at='2026-11-08T00:00:00Z' where id=$1",[moving]);await as('artisan');eq((await page()).counts,{active:124,done:112});eq((await page()).items.some(x=>x.id===moving),true);
  await q("select public.intervention_action($1,'complete','{}',0,null)",[moving]);
- eq((await page()).items.some(x=>x.id===moving),false);eq((await page('done')).items.some(x=>x.id===moving),true);
- await as('', 'postgres');await q('update public.interventions set artisan_id=$2 where id=$1',[moving,ids.other]);await as('artisan');eq((await page('done')).items.some(x=>x.id===moving),false);
+ eq((await page()).counts,{active:123,done:113});eq((await page()).items.some(x=>x.id===moving),false);eq((await page('done')).items.some(x=>x.id===moving),true);
+ await as('', 'postgres');await q('update public.interventions set artisan_id=$2 where id=$1',[moving,ids.other]);await as('artisan');eq((await page('done')).counts,{active:123,done:112});eq((await page('done')).items.some(x=>x.id===moving),false);
  await as('', 'postgres');await q("update public.profiles set role='client' where id=$1",[ids.artisan]);await as('artisan');await deny(page());
  console.log(`artisan mission history: ${checks} SQL assertions PASS`);
 }finally{await db.close()}
