@@ -93,6 +93,7 @@ import { PLANNING_TIME_ZONE } from "../../lib/features/planning/types";
 import { anchorEntryVisible, leafScope, platformEntries } from "./anchors";
 import { PlatformPage } from "./platform-anchor";
 import { FeatureUnavailable } from "./feature-unavailable";
+import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
 import {
   applicationSteps,
   appointmentSlotState,
@@ -2456,6 +2457,8 @@ function Documents({
         demo={session.mode === "demo"}
         onRefresh={session.refresh}
       />
+      {/* FIN-05: platform commission invoices addressed to this artisan (read-only, private PDFs). */}
+      <CustomerInvoicesPanel filters={{ basis: "platform_commission" }} context={session.mutationContext} demo={session.mode === "demo"} title="Factures de commission de la plateforme" />
     </>
   );
 }
