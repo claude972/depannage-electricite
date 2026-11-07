@@ -73,7 +73,7 @@ try {
  eq(await one('select public.read_indicative_prices()v'),baseline);await as('client');eq(await prepare(),prepared);
  // New real private interventions still receive the baseline, never the staged amounts.
  await as('client');for(const[k,v]of Object.entries(expected)){const job=await one("select to_jsonb(public.create_intervention($1,'QA panne synthétique','QA adresse','97200','QA ville','scheduled',null))v",[k]);eq([job.estimate_min_cents,job.estimate_max_cents],v)}
- await as('', 'postgres');eq(await one('select count(*)::integer v from indicative_price_private.versions'),3);eq(await one('select ranges v from indicative_price_private.versions where version=2'),changed);await deny(q("update indicative_price_private.versions set reason='changed reason'where version=2"),'P0001');await deny(q('update indicative_price_private.control set active_version=2'),'23514');
+ await as('', 'postgres');eq(await one('select count(*)::integer v from indicative_price_private.versions'),3);eq(await one('select ranges v from indicative_price_private.versions where version=2'),changed);await deny(q("update indicative_price_private.versions set reason='changed reason'where version=2"),'P0001');await as('admin');await deny(q('update indicative_price_private.control set active_version=2'));await deny(q('select public.publish_indicative_prices($1,1,3,$2)',[crypto.randomUUID(),'QA publication disabled']),'P0001');await as('', 'postgres');
  await q("update public.profiles set role='client'where id=$1",[ids.admin]);await as('admin');await deny(stage());
  console.log(`indicative prices: ${checks} SQL assertions PASS`);
 }finally{await db.close()}
