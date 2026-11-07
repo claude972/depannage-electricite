@@ -13,7 +13,6 @@ import { toIsoWithOffset, weekRange } from "../../lib/features/planning/time";
 import { PLANNING_TIME_ZONE } from "../../lib/features/planning/types";
 import { demoNotificationPage, demoPreferences } from "../../lib/features/notifications/demo";
 import { demoClient as demoSiteOperationsClient, demoReport } from "../../lib/features/site-operations/demo";
-import { quoteDocumentsDemo } from "../../lib/features/quote-documents/demo";
 import { PLATFORM_DEMO } from "../../lib/features/platform-operations/demo";
 import type { PlanningClient } from "../../lib/features/planning/leaf";
 import type { PlanningCommand, PlanningCommandResponse, PlanningCommandResult, PlanningView } from "../../lib/features/planning/types";
@@ -417,7 +416,10 @@ export function createDemoFeatureClients(role: Role): FeatureClients {
     },
     siteOperations: demoSiteOperationsClient(demoReport()),
     quoteDocuments: {
-      load: async () => quoteDocumentsDemo(role),
+      // The demo overview of a shown dossier is built by the anchor from the demo workspace
+      // (quoteDocumentsDemoFor). This client has no workspace: any direct load (reload, prefetch)
+      // is an explicit empty state, never the constant seed of another dossier.
+      load: async () => null,
       command: refusal,
       documentHref: (documentId, inline) => `/api/quote-documents/${enc(documentId)}${inline ? "?inline=1" : ""}`,
     },

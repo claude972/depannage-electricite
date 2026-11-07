@@ -94,6 +94,14 @@ test("parcours interactif client ↔ artisan (démo) : demande → offre → dev
     assert.doesNotMatch(quotePage, /8\.5 %/);
     await click(page, "Accepter le devis");
     await page.waitForTimeout(800);
+    // The demo quote documents are built from THIS dossier only: its own reference, never the
+    // seed dossier's DEV-DEMO01 / AV-1-DEV-DEMO01 (nor any other dossier's data).
+    const ownRef = `DEV-${quotes[0].id.slice(0, 6).toUpperCase()}`;
+    const afterAccept = await main(page);
+    assert.match(afterAccept, new RegExp(`Devis ${ownRef}`));
+    assert.doesNotMatch(afterAccept, /DEV-DEMO01|AV-1-DEV-DEMO01|DEV-DEMO-\d/, "no seed/other dossier data on the new dossier");
+    const refs = [...afterAccept.matchAll(/\b(?:AV-\d+-)?DEV-[A-Z0-9-]+/g)].map((m) => m[0]);
+    assert.ok(refs.length > 0 && refs.every((r) => r === ownRef || r === `AV-1-${ownRef}`), `only this dossier's references: ${[...new Set(refs)].join(", ")}`);
     s = await store(page);
     assert.equal(s.data.quotes.find((q) => q.id === quotes[0].id)!.status, "accepted");
     assert.equal(s.data.interventions.find((i) => i.id === job.id)!.status, "accepted");
