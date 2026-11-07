@@ -98,6 +98,7 @@ import { adminKpis, dashboardRows, loadedNote } from "./admin-lists";
 import { platformEntries } from "./anchors";
 import { OperatorProfileEditor } from "../features/public-operator-profile/operator-profile-editor";
 import { CredentialReviewPanel } from "../features/credential-reviews/credential-review-panel";
+import { WarrantyCorrectivePanel } from "../features/warranty-corrective/warranty-corrective-panel";
 
 type Tone = "neutral" | "blue" | "green" | "amber" | "red" | "violet";
 type OverviewArtisan = AdminOverview["artisans"][number];
@@ -1082,6 +1083,14 @@ export function AdminSpace({ session }: { session: Session }) {
           <>
             <WarrantyPolicyEditor key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`} context={session.mutationContext} demo={demo} />
             <WarrantyPanel demo={demo} role="admin" />
+            {/* ADM-10: corrective dossier of each case (existing dossier only; opens #detail/<id>). */}
+            <WarrantyCorrectivePanel
+              key={`corrective|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`}
+              context={session.mutationContext}
+              superAdmin={session.platformAccess?.super_admin === true}
+              onOpenDossier={(id) => go("detail", id)}
+              demo={demo}
+            />
           </>
         );
         break;
