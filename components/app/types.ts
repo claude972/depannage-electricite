@@ -1,3 +1,4 @@
+import type { TaxRate } from "@/lib/tax-rates";
 // Shared frontend types. Server contracts: app/api/* and docs/WEB_PWA_CONTRACTS.md (Codex branch).
 import type { WorkspaceLimits } from "../../lib/features/workspace/detail-read";
 export type Role = "client" | "artisan" | "manager" | "admin";
@@ -52,7 +53,7 @@ export type Quote = {
   tax_cents: number;
   total_cents: number;
   accepted_total_cents?: number;
-  tax_rate: number;
+  tax_rate: TaxRate;
   status: "sent" | "accepted" | "rejected" | string;
   created_at: string;
   accepted_at?: string | null;
@@ -664,7 +665,7 @@ export type QuoteDraft = {
   assignment_token: string;
   base_quote_id: string | null;
   lines: Line[];
-  tax_rate: number | null;
+  tax_rate: TaxRate | null;
   updated_at: string;
 };
 export type QuoteDraftEnvelope = {
@@ -683,7 +684,7 @@ export type QuoteDraftCommand =
       assignment_token: string;
       base_quote_id: string | null;
       lines: Line[];
-      tax_rate: number | null;
+      tax_rate: TaxRate | null;
     }
   | { action: "discard"; expected_version: number; assignment_token: string }
   | { action: "send"; expected_version: number; assignment_token: string };

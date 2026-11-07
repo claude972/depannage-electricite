@@ -1,3 +1,4 @@
+import { taxRateSchema } from "@/lib/tax-rates";
 // The stored snapshot (migration 015, quote_document_snapshot) is the document. Before rendering,
 // it is parsed strictly and its arithmetic is re-checked: a PDF is never produced from a snapshot
 // whose totals do not follow from its lines.
@@ -9,7 +10,7 @@ const line = z.object({
   quantity: z.number().int().min(1).max(1000),
   unit_price_cents: money,
 });
-const taxRate = z.union([z.literal(0), z.literal(5.5), z.literal(10), z.literal(20)]);
+const taxRate = taxRateSchema;
 const terms = z.object({
   valid_until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
   validity: z.enum(["unspecified", "valid", "expired"]),

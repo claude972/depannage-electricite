@@ -1,3 +1,4 @@
+import { isTaxRate } from "@/lib/tax-rates";
 import type { LedgerEntry, LedgerKind } from "./types";
 const MAX = 9007199254740991;
 function cents(value: number, label: string): number {
@@ -13,7 +14,7 @@ export function commissionCents(totalCents: number, bps: number): number {
 /** VAT extracted from a tax-inclusive amount (never added on top): tax = total − round(total / (1 + rate/100)). */
 export function extractVat(totalCents: number, rate: number): { subtotal_cents: number; tax_cents: number; total_cents: number } {
   cents(totalCents, "Le montant");
-  if (![0, 5.5, 10, 20].includes(rate)) throw new Error("Taux de TVA non pris en charge.");
+  if (!isTaxRate(rate)) throw new Error("Taux de TVA non pris en charge.");
   const tax = totalCents - Math.round(totalCents / (1 + rate / 100));
   return { subtotal_cents: totalCents - tax, tax_cents: tax, total_cents: totalCents };
 }

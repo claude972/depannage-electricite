@@ -1,3 +1,4 @@
+import { taxRateSchema } from "@/lib/tax-rates";
 import { z } from "zod";
 import { calculateQuote } from "@/lib/domain";
 import {
@@ -20,8 +21,7 @@ const schema = z
     ]),
     quote_id: uuid.optional(),
     lines: z.array(quoteLine).min(1).max(30).optional(),
-    tax_rate: z
-      .union([z.literal(0), z.literal(5.5), z.literal(10), z.literal(20)])
+    tax_rate: taxRateSchema
       .optional(),
   })
   .strict();
@@ -56,7 +56,7 @@ export async function POST(
       p_id: id,
       p_action: data.action,
       p_lines: data.lines ?? null,
-      p_tax_rate: data.tax_rate ?? 20,
+      p_tax_rate: data.tax_rate ?? null,
       p_quote_id: data.quote_id ?? null,
     });
     dbError(error);

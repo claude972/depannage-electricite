@@ -1,3 +1,4 @@
+import { taxRateSchema } from "@/lib/tax-rates";
 // ADV-DOCUMENTS-001 — versioned amendments on an accepted quote. Amounts are recomputed by the
 // SQL command; the decider sends only the exact amendment id displayed (like accept_quote).
 import { z } from "zod";
@@ -15,7 +16,7 @@ const schema = z.discriminatedUnion("action", [
       action: z.literal("propose"),
       base_quote_id: uuid,
       lines: z.array(quoteLine).min(1).max(30),
-      tax_rate: z.union([z.literal(0), z.literal(5.5), z.literal(10), z.literal(20)]),
+      tax_rate: taxRateSchema,
       reason: text(2000).min(1),
       valid_until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
     })
