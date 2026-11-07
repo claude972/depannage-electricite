@@ -1,21 +1,15 @@
 # État courant — 6 novembre 2026, Martinique
 
-Objectif : application complète, tous rôles et modules ; seules connexions Stripe/SMS différées. Aucun cron de suivi, aucune production/main/store/transaction réelle. Palette B cobalt/orange, clair/sombre, Jakarta, aucun nom de marque choisi.
+Objectif : application entière, seuls raccordements Stripe et SMS différés. PaletteB cobalt/orange, clair/sombre, Jakarta, aucun nom de marque retenu. Aucun cron de suivi, aucune production/main/store/transaction réelle.
 
-## Livré et vérifié en ligne
+## Référence en ligne
 
-App de référence : https://depannage-electricite-xlc5a4rx5-brafas-projects.vercel.app
+https://depannage-electricite-hz1nc1lkc-brafas-projects.vercel.app
 
-Source 8ca6eede1223120c663c45cd0d16bae53550471c ; preview Git liée READY, CI42326684303 SUCCESS ; 1222 tests PASS sans skip et tsc strict. 12 contrôles publics PASS ; parcours public prestation→urgence→coordonnées→adresse→paiement→récapitulatif contrôlé sur le précédent assemblage 7b4eed7, avec bouton inline + barre basse et aucun POST de réservation/paiement.
+Source3402f6484b11bdfe8ef11f5a5a2549a6cc9348af, preview GitSource READY, CI42329385949 SUCCESS. Assemblage précédent fe4 :1297 tests0skip+tscPASS ; ajouts3402 :22 tests ciblés+tscPASS.12 contrôles publics PASS. Recette authentifiée : contacts/zones/readonly/SLA/factures vides/adresse préférée et actualisation réellement contrôlés ; les interruptions de harnais et reprises sont conservées distinctes dans docs/reviews/DELIVERY_PLATFORM_ENERGY_20261106.md, pas de verdict global inventé. Nettoyage terminé et22 lectures indépendantes toutes0.
 
-Recette réelle 8ca : login, énergie, reprise sans doublon, contact, adresse préférée, SLA et refus RLS entre deux comptes : 15 contrôles PASS. Nettoyage terminé ; 18 readbacks indépendants tous0. Aucun compte QA connu actif. Voir docs/reviews/DELIVERY_PLATFORM_ENERGY_20261106.md pour la portée exacte ; ne pas extrapoler ces preuves à tous les parcours.
+37 migrations appliquées. Contacts, énergie, adresses et préférence, SLA consolidé, factures privées, admin réponse auditée/fiche client, lien paiement et zones intégrés. Copropriété backend appliqué et vérifié SQL réel avec rollback ; interface en revue. Ancienne preview8ca/CI42326684303 et sa recette15PASS/18readbacks0 restent bornées à leur SHA.
 
-## Intégré depuis cette preview, encore à redéployer/recetter
+## Travail actif et limites
 
-Réponse opérateur auditée et attribution explicite des auteurs ; fiche client admin ; lien de suivi artisan et paiement client sous son identité ; contacts dans fiche site ; SLA consolidé ; carnet d’adresses avec prénom/nom et préselection. Tests ciblés passants ; contre-revue en cours des petits correctifs et du câblage. Factures privées client/artisan/organisation : backend et RPC revus/appliqués, UI en cours.
-
-35 migrations sont appliquées sur kcpyjzndybfdlnhvscbs, dont huit nouvelles depuis001–027 (déclarations directes fermées, énergie, Checkout différé, contacts, réponse admin, adresses, SLA consolidé, lecteurs factures). Stripe/SMS non raccordés ; aucun faux paiement ou OTP permis.
-
-## Travail restant connu
-
-Terminer et recetter les UI ci-dessus ; étages/zones/parties communes en implémentation backend ; AG/appels de fonds et autres capacités avancées encore à compléter depuis leur modèle fonctionnel. Vérifier les capacités du catalogue une à une depuis le code actuel, pas les anciens statuts CSV. Paramètres d’exploitation/identité légale/commission/barème restent des valeurs à configurer, sans invention. Activation propriétaire SuperAdmin différée : aucun compte substitut créé. Maquettes complètes et preuves mobile physique ne sont pas acquises par héritage. Aucune déclaration d’application entière terminée à ce stade.
+Reporting financier corrigé en cours Codex (avenants/paiements/remboursements distincts). Interface copropriété/QR local et contrôle client-artisan chez Claude. TVA2,1/8,5 à rendre représentable sans choisir automatiquement le taux applicable. Inventaire actuel source : docs/RESTE_A_LIVRER_ACTUEL.md ; il distingue fonctions non codées, code partiel, paramètres et preuves manquantes. Il reste des fonctions au-delà des clés Stripe/SMS : ne pas annoncer application entière complète. Activation propriétaire SuperAdmin différée sans compte substitut. Aucun compte QA connu actif.
