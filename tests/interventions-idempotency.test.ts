@@ -4,7 +4,7 @@ import { fakeServerHelpers, loadModule } from "./documents/harness";
 
 const ID = "10000000-0000-4000-8000-000000000001";
 const payload = { category: "socket", description: "Une prise ne fonctionne plus", address: "Adresse de test", postal_code: "97200", city: "Commune", urgency: "scheduled" };
-function setup({ authenticated = true, error = null as { code: string } | null } = {}) {
+function setup({ authenticated = true, error = null as { code: string; message?: string } | null } = {}) {
   const calls: { name: string; args: Record<string, unknown> }[] = [];
   const db = { rpc: async (name: string, args: Record<string, unknown>) => { calls.push({ name, args }); return { data: { id: ID }, error }; } };
   const mod = loadModule("app/api/interventions/route.ts", { "@/lib/supabase/server": fakeServerHelpers({ db, authenticated }), "../workspace/route": { GET: () => "unchanged" } });
@@ -42,3 +42,17 @@ test("existing DB conflict/access/unavailable status mapping is retained for key
 });
 
 test('reviewed version is int32 optional and forwarded without money',async()=>{const valid=setup();assert.equal((await valid.post({...payload,reviewed_estimate_version:2})).status,201);assert.equal(valid.calls[0].args.p_reviewed_estimate_version,2);for(const value of [null,0,-1,1.5,2147483648,"1"]){const h=setup();assert.equal((await h.post({...payload,reviewed_estimate_version:value})).status,422);assert.equal(h.calls.length,0)}});
+
+test("only a definitive estimate refusal has the recovery code", async () => {
+  for (const [message, expectedCode] of [
+    ["Estimate review required", "estimate_review_required"],
+    ["Reserved estimate conflict", undefined],
+    ["Request key already used for another payload", undefined],
+  ] as const) {
+    const route = setup({ error: { code: "P0001", message } });
+    const response = await route.post({ ...payload, request_id: ID, reviewed_estimate_version: 2 });
+    assert.equal(response.status, 409);
+    assert.equal((await response.json()).code, expectedCode);
+    assert.equal(route.calls.length, 1);
+  }
+});

@@ -2,6 +2,7 @@ import {estimateSnapshot,estimateMatchesCap} from './estimate-snapshot';
 import { TextDecoder } from "node:util";
 import { z } from "zod";
 import { ApiError, authenticatedClient, assertOrigin, dbError } from "@/lib/supabase/server";
+import { estimateReviewRefusal } from "@/lib/features/indicative-prices/review-refusal";
 import { normalizePhone } from "./phone-auth";
 import { cardHoldContext, openCardHold, authorizeCardHold, releaseCardHold } from "./card-hold";
 
@@ -75,11 +76,17 @@ export async function bookingRoute(request: Request, operation: "create" | "stat
       const card = data.payment_choice === "card_hold" ? cardHoldContext() : null; // Before prepare/quota/provider mutation.
       const { request_id, contact, payment_choice, reviewed_estimate_version, ...payload } = data;
       if (!card) {
-        const submitted = await db.rpc("create_on_site_booking_reviewed", { p_reviewed_estimate_version:reviewed_estimate_version??null, p_request_id: request_id, p_payload: payload, p_contact: { ...contact, email: contact.email.toLowerCase() } }); dbError(submitted.error);
+        const submitted = await db.rpc("create_on_site_booking_reviewed", { p_reviewed_estimate_version:reviewed_estimate_version??null, p_request_id: request_id, p_payload: payload, p_contact: { ...contact, email: contact.email.toLowerCase() } });
+        const refusal = estimateReviewRefusal(submitted.error);
+        if (refusal) return refusal;
+        dbError(submitted.error);
         const result = validResult(submitted.data); if (result.status !== "confirmed" || result.payment.method !== "on_site") throw unavailable();
         return Response.json(result, { status: 201, headers });
       }
-      const prepared = await db.rpc("prepare_phone_booking_reviewed", { p_reviewed_estimate_version:reviewed_estimate_version??null, p_request_id: request_id, p_payload: payload, p_contact: { ...contact, email: contact.email.toLowerCase() }, p_method: payment_choice }); dbError(prepared.error);
+      const prepared = await db.rpc("prepare_phone_booking_reviewed", { p_reviewed_estimate_version:reviewed_estimate_version??null, p_request_id: request_id, p_payload: payload, p_contact: { ...contact, email: contact.email.toLowerCase() }, p_method: payment_choice });
+      const refusal = estimateReviewRefusal(prepared.error);
+      if (refusal) return refusal;
+      dbError(prepared.error);
       const ready = validResult(prepared.data); if (ready.payment.method !== payment_choice) throw unavailable();
       if (ready.status === "confirmed") return Response.json(ready, { status: 201, headers });
       return Response.json(await openCardHold(user.id, request_id, card), { headers });

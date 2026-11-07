@@ -55,7 +55,17 @@ test('snapshot consumer never forwards extra top-level, payment or intervention 
 test('reviewed version is outside booking payload; stale SQL refusal prevents provider call',async()=>{
  const f=fixture();await check(await f.request({...payload,reviewed_estimate_version:1}),201);assert.equal(f.calls[0].args.p_reviewed_estimate_version,1);assert.equal(Object.hasOwn(f.calls[0].args.p_payload,'reviewed_estimate_version'),false);
  for(const version of [null,0,1.5,2147483648,'1']){const h=fixture();await check(await h.request({...payload,reviewed_estimate_version:version}),422);assert.equal(h.calls.length,0)}
- let opened=0;const calls:any[]=[];const db={from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{id:ID,role:'client'},error:null})})})}),rpc:async(name:string,args:unknown)=>{calls.push({name,args});return{data:null,error:{code:'P0001'}}}};
+ let opened=0;let message='Estimate review required';const calls:any[]=[];const db={from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{id:ID,role:'client'},error:null})})})}),rpc:async(name:string,args:unknown)=>{calls.push({name,args});return{data:null,error:{code:'P0001',message}}}};
  const helper=fakeServerHelpers({db});const m=loadModule('app/api/bookings/route.ts',{'@/lib/supabase/server':{...helper,authenticatedClient:async()=>({db,user:{id:ID,email_confirmed_at:'2026-11-01T00:00:00Z'}})},'@/lib/features/guest/card-hold':{cardHoldContext:()=>({}),openCardHold:async()=>{opened++;throw Error('Must not call provider')}}});
- const r=await(m.POST as(r:Request)=>Promise<Response>)(new Request(ORIGIN,{method:'POST',body:JSON.stringify({...payload,payment_choice:'card_hold',reviewed_estimate_version:1})}));await check(r,409);assert.equal(opened,0);assert.equal(calls[0].name,'prepare_phone_booking_reviewed');assert.equal(calls[0].args.p_reviewed_estimate_version,1);
+ const post = (payment_choice: string) => (m.POST as (r: Request) => Promise<Response>)(new Request(ORIGIN+'/api/bookings', {
+  method: 'POST',
+  body: JSON.stringify({ ...payload, payment_choice, reviewed_estimate_version: 1 }),
+ }));
+ assert.equal((await check(await post('card_hold'),409)).code,'estimate_review_required');
+ assert.equal((await check(await post('on_site'),409)).code,'estimate_review_required');
+ message = 'Reserved estimate conflict';
+ assert.equal((await check(await post('card_hold'),409)).code,undefined);
+ assert.equal(opened,0);
+ assert.deepEqual(calls.map(call => call.name), ['prepare_phone_booking_reviewed', 'create_on_site_booking_reviewed', 'prepare_phone_booking_reviewed']);
+ assert.equal(calls[0].args.p_reviewed_estimate_version,1);
 });

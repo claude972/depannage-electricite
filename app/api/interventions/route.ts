@@ -6,6 +6,7 @@ import {
   dbError,
 } from "@/lib/supabase/server";
 import { uuid, validated } from "@/lib/supabase/validation";
+import { estimateReviewRefusal } from "@/lib/features/indicative-prices/review-refusal";
 export { GET } from "../workspace/route";
 const schema = z
   .object({
@@ -36,6 +37,8 @@ export async function POST(request: Request) {
       p_site_id: data.site_id ?? null,
       p_reviewed_estimate_version:data.reviewed_estimate_version??null,
     });
+    const refusal = estimateReviewRefusal(error);
+    if (refusal) return refusal;
     dbError(error);
     return Response.json({ intervention: result }, { status: 201 });
   } catch (error) {
