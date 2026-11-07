@@ -68,6 +68,7 @@ test("opérateurs : sans rôle serveur, le compte reste du texte ; file d’assi
 
 test("câblage : le point d’ancrage mappe dossier, client et artisan vers leurs vues exactes", () => {
   const src = readFileSync("components/role/platform-anchor.tsx", "utf8");
+  assert.match(src, /onNavigate: session\.role === "admin" && access\?\.super_admin/);
   assert.match(src, /if \(target === "intervention" && param\) session\.openIntervention\(param\);/);
   assert.match(src, /else if \(target === "client" && param\) session\.go\("admin-clients", param\);/);
   assert.match(src, /else if \(target === "artisan" && param\) session\.go\("admin-artisan", param\);/);

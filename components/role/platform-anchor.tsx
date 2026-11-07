@@ -91,11 +91,14 @@ export function PlatformPage({
     scope: { userId: session.profileId, role: session.role, authority: platformAuthority(access, view) },
     client: session.features.platform,
     demo: session.mode === "demo" ? PLATFORM_DEMO : undefined,
-    onNavigate: (target: string, param?: string) => {
-      if (target === "intervention" && param) session.openIntervention(param);
-      else if (target === "client" && param) session.go("admin-clients", param);
-      else if (target === "artisan" && param) session.go("admin-artisan", param);
-    },
+    // Scoped finance/moderation operators may read these rows without access to the admin directory.
+    onNavigate: session.role === "admin" && access?.super_admin
+      ? (target: string, param?: string) => {
+          if (target === "intervention" && param) session.openIntervention(param);
+          else if (target === "client" && param) session.go("admin-clients", param);
+          else if (target === "artisan" && param) session.go("admin-artisan", param);
+        }
+      : undefined,
   };
   return (
     <>
