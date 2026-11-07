@@ -74,3 +74,7 @@ Assembler les feuilles énergie, rappels et accessibilité déjà poussées sur 
 ### SYS-09 / PUB-10 — données du compte
 
 ROOT réalise la lecture paginée des données du compte sous la session courante et la demande explicite d'effacement via le circuit d'assistance existant. Les dossiers d'organisation et les messages de tiers sont exclus du téléchargement personnel. Le dépôt ouvre un ticket consultable et garde son identifiant au rejeu. L'effacement effectif et la durée de conservation restent des opérations distinctes à définir. Claude raccorde les actions et leurs états à l'espace connecté. Tests de portée, réponse invalide, pagination et rejeu avant assemblage.
+
+### PUB-03 — vérification de couverture publiée
+
+ROOT implémente la publication versionnée de codes postaux exacts par le Super Admin et la lecture publique d'un seul code. Aucun code prérempli. Le retrait rend la couverture inconnue. La consultation renseigne le territoire publié ; le moteur d'attribution garde son éligibilité existante. Claude raccorde la vérification publique et l'éditeur. Tester retrait, conflit, rejeu et refus de rôle.

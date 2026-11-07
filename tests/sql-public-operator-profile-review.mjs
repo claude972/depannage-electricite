@@ -79,7 +79,33 @@ try {
   assert.equal(await published(), null);
   assert.deepEqual(await write("owner",withdraw,4,"withdraw"), { version: 5, action: "withdraw" });
   assert.equal((await db.query("select count(*)::int v from public.audit_log where action like 'public_operator_profile:%'")).rows[0].v, 5);
-  console.log("PASS: public operator profile isolated — draft privacy, explicit publication, version checks, replay, withdrawal and audit");
+  const coverage = (postal) => as("anon", "select public.read_public_coverage($1) v", [postal]);
+  const coverageEditor = (actor) => as(actor, "select public.read_coverage_editor() v");
+  const publishCodes = (actor, command, version, action, codes = null) =>
+    as(actor, "select public.write_coverage($1,$2,$3,$4) v", [command, version, action, codes]);
+  const coverageKey = crypto.randomUUID();
+  assert.deepEqual(await coverage("97200"), { status: "unknown", version: null });
+  assert.deepEqual(await coverageEditor("owner"), { version: 0, postal_codes: [] });
+  await rejects(() => coverage("972"), "22023");
+  await rejects(() => coverageEditor("outside"), "42501");
+  await rejects(() => publishCodes("outside", coverageKey, 0, "publish", ["97200"]), "42501");
+  await rejects(() => publishCodes("owner", coverageKey, 0, "publish", ["97200", "97200"]), "22023");
+  await rejects(() => publishCodes("owner", coverageKey, 0, "publish", ["97200", null]), "22023");
+  await rejects(() => publishCodes("owner", coverageKey, 0, "publish", []), "22023");
+  await rejects(() => publishCodes("owner", coverageKey, 0, "withdraw", []), "22023");
+  assert.deepEqual(await publishCodes("owner", coverageKey, 0, "publish", ["97202", "97200"]),
+    { version: 1, postal_codes: ["97200", "97202"], replayed: false });
+  assert.deepEqual(await coverage("97200"), { status: "covered", version: 1 });
+  assert.deepEqual(await coverage("97201"), { status: "not_covered", version: 1 });
+  await rejects(() => publishCodes("owner", coverageKey, 0, "publish", ["97201"]), "23505");
+  await rejects(() => publishCodes("owner", crypto.randomUUID(), 0, "withdraw"), "P0001");
+  const withdrawCodes = await publishCodes("owner", crypto.randomUUID(), 1, "withdraw");
+  assert.deepEqual(withdrawCodes, { version: 2, postal_codes: [], replayed: false });
+  assert.equal((await publishCodes("owner", coverageKey, 0, "publish", ["97200", "97202"])).replayed, true);
+  assert.deepEqual(await coverage("97200"), { status: "unknown", version: null });
+  await rejects(() => as("outside", "select count(*) v from public.platform_coverage_versions"), "42501");
+  assert.equal((await db.query("select count(*)::int v from public.audit_log where action like 'platform_postal_coverage:%'")).rows[0].v, 2);
+  console.log("PASS: operator profile and postal coverage isolated — permissions, publication, withdrawal, version and audit");
 } catch (error) {
   console.error(error.code || "", error.message);
   process.exitCode = 1;

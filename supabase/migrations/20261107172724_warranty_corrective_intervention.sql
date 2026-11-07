@@ -69,7 +69,8 @@ declare
   linked_id uuid;
   replayed boolean;
 begin
-  if auth.uid() is null or not public.is_admin() then raise insufficient_privilege; end if;
+  perform 1 from public.profiles where id = auth.uid() and role = 'admin' for share;
+  if not found then raise insufficient_privilege; end if;
   if p_case_id is null or p_intervention_id is null then raise invalid_parameter_value; end if;
 
   select * into source from public.warranty_cases where id = p_case_id for update;
