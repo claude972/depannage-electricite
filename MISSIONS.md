@@ -126,3 +126,7 @@ ROOT raccorde la reprise de la souscription courante après retour ou réponse p
 ROOT ajoute une lecture paginée des demandes du compte, hors de la fenêtre de démarrage. Le filtre et la recherche s’appliquent avant pagination. La requête de lecture transporte les termes dans le corps et garde la projection minimale. Claude raccorde « Mes demandes » au même bouton d’ouverture des dossiers. Vérifier plus de 100 demandes, les références anciennes, les recherches littérales et le cloisonnement des comptes.
 
 ROOT ajoute la liste paginée des interventions entreprise et l’export CSV sur le même périmètre, sous RLS et contrôle des habilitations de site. Conserver les filtres et la navigation numérotée. L’export échoue explicitement au-delà de la borne technique de 5 000 dossiers filtrés. Vérifier que recherche et export dépassent la fenêtre de démarrage et excluent tout site révoqué ou étranger.
+
+### PUB-04 — demande de rappel et file d’assistance
+
+ROOT possède le serveur, la migration et les tests. Une demande publique collecte le numéro saisi et le motif sélectionné, avec consentement à ce rappel. Le serveur renvoie un reçu minimal, protège le rejeu et borne les dépôts en base. Seuls les opérateurs d’assistance habilités consultent ou classent la demande. Le classement est tracé sans numéro dans l’audit et ne prouve aucun appel. Claude raccorde le formulaire et la file après publication du contrat. Vérifier dépôt, rejeu, quotas, refus, version et lecture privée. L’activation reste explicite après validation des modalités de traitement.

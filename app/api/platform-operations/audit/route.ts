@@ -5,7 +5,7 @@ import { failed, listRows, ok, requireScope } from "@/lib/features/platform-oper
 import type { AuditEntry } from "@/lib/features/platform-operations/types";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-const targetKind = z.enum(["operator", "super_admin", "setting", "reconciliation", "ledger", "invoice", "refund_request", "dispute", "review"]);
+const targetKind = z.enum(["operator", "super_admin", "setting", "reconciliation", "ledger", "invoice", "refund_request", "dispute", "review", "public_callback"]);
 export async function GET(request: Request) {
   try {
     const { db } = await authenticatedClient();
