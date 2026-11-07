@@ -43,3 +43,11 @@ test('reserved estimate DTO is additive, strict and matches the durable booking 
   if(supplied===estimate)assert.deepEqual((await check(r,200)).estimate,estimate);else await check(r,503);
  }
 });
+
+test('snapshot consumer never forwards extra top-level, payment or intervention fields',async()=>{
+ for(const response of [prepared,confirmed]){
+  const db={from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{id:ID,role:'client'},error:null})})})}),rpc:async()=>({data:{...response,private_field:'PRIVATE_PROVIDER_DETAILS',payment:{...response.payment,secret:'PRIVATE_PROVIDER_DETAILS'},...('intervention'in response?{intervention:{...response.intervention,secret:'PRIVATE_PROVIDER_DETAILS'}}:{}),estimate:{version:1,min_cents:8000,max_cents:18000,currency:'eur'}},error:null})};
+  const helpers=fakeServerHelpers({db});const m=loadModule('app/api/bookings/status/route.ts',{'@/lib/supabase/server':{...helpers,authenticatedClient:async()=>({db,user:{id:ID,email_confirmed_at:'2026-11-01T00:00:00Z'}})}});
+  const r=await(m.GET as(r:Request)=>Promise<Response>)(new Request(ORIGIN+'/api/bookings/status?request_id='+ID));const body=await check(r,200);assert.deepEqual(body,{...response,estimate:{version:1,min_cents:8000,max_cents:18000,currency:'eur'}});
+ }
+});
