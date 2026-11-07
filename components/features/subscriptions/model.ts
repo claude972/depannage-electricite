@@ -261,7 +261,7 @@ export const COPY = {
   resume: "Reprendre la souscription",
   resumeNote: "La souscription commencée n’est pas terminée : vous pouvez reprendre la même demande sur la page sécurisée de Stripe.",
   resumeReady: "La page sécurisée est prête : ouvrez-la pour reprendre la souscription.",
-  resumeRetry: "La reprise n’est pas confirmée. Réessayez : la même demande vide sera renvoyée.",
+  resumeRetry: "La reprise n’est pas confirmée. Réessayez pour retrouver la souscription en cours.",
   resumeConflict: "La souscription en cours a changé ou a expiré : rien n’est renvoyé automatiquement. L’état a été relu.",
   managed: "Retour de la page de gestion Stripe : l’état a été relu. Un retour ne prouve aucune modification ; seul l’état ci-dessous, relu par le serveur, fait foi.",
   returned: "Retour de la page Stripe : l’état a été relu. Un retour ne prouve pas qu’un abonnement a été souscrit ; seul l’état ci-dessous, relu par le serveur, fait foi.",
@@ -330,7 +330,7 @@ export function createSubscriptionsController({ api, store, newId, context, role
   const load = async (notice?: string) => {
     const my = ++seq;
     const who = identity();
-    set({ ...get(), phase: get().phase === "ready" ? "ready" : "loading" });
+    set({ ...get(), phase: get().phase === "ready" ? "ready" : "loading", checkoutUrl: null, portalUrl: null, resumeUrl: null, resumeRetry: false });
     const r = await api().read();
     if (my !== seq || !same(who)) return;
     if (r.status === 401 || r.status === 403) return forbid();
