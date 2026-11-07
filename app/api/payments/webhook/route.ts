@@ -3,12 +3,12 @@ import { env } from "node:process";
 import {
   adminClient,
   ApiError,
-  apiError,
   dbError,
 } from "@/lib/supabase/server";
 import { stripeClient } from "@/lib/supabase/stripe";
 import { checkoutEventOutcome, isBookingHoldSession } from "@/lib/payment-events";
 import { uuid } from "@/lib/supabase/validation";
+import { PAYMENT_HEADERS } from "@/lib/features/payments/checkout";
 export const runtime = "nodejs";
 export async function POST(request: Request) {
   try {
@@ -33,9 +33,9 @@ export async function POST(request: Request) {
     const session = event.data.object as Stripe.Checkout.Session;
     // Signed booking-hold events have no quote_id and must not enter the legacy payment writer.
     // Acknowledging them never confirms a booking, capture, transfer or payment.
-    if (isBookingHoldSession(session)) return Response.json({ received: true });
+    if (isBookingHoldSession(session)) return Response.json({ received: true }, { headers: PAYMENT_HEADERS });
     const outcome = checkoutEventOutcome(event.type, session);
-    if (outcome === "ignore") return Response.json({ received: true });
+    if (outcome === "ignore") return Response.json({ received: true }, { headers: PAYMENT_HEADERS });
     const quoteId = session.metadata?.quote_id;
     if (
       !uuid.safeParse(quoteId).success ||
@@ -50,6 +50,12 @@ export async function POST(request: Request) {
         "Les références du paiement ne correspondent pas.",
       );
     const admin = adminClient();
+    const checkoutId = session.metadata?.platform_checkout_id;
+    if (checkoutId !== undefined) {
+      if (!uuid.safeParse(checkoutId).success) throw new ApiError(400, "La référence du paiement ne correspond pas.");
+      const match = await admin.rpc("assert_platform_checkout_event", { p_id: checkoutId, p_quote: quoteId, p_session: session.id, p_amount: session.amount_total });
+      dbError(match.error);
+    }
     const { error } = await admin.rpc(outcome === "paid" ? "confirm_stripe_payment" : "record_stripe_payment_failure", {
       p_event_id: event.id,
       p_event_type: event.type,
@@ -60,8 +66,9 @@ export async function POST(request: Request) {
     });
     // Failure leaves the event unprocessed; Stripe retries until the transaction commits.
     dbError(error);
-    return Response.json({ received: true });
+    return Response.json({ received: true }, { headers: PAYMENT_HEADERS });
   } catch (error) {
-    return apiError(error);
+    const status = error instanceof ApiError ? error.status : 503;
+    return Response.json({ error: error instanceof ApiError ? error.message : "Le paiement doit être vérifié. Réessayez." }, { status, headers: { ...PAYMENT_HEADERS, ...(status === 503 ? { "Retry-After": "2" } : {}) } });
   }
 }
