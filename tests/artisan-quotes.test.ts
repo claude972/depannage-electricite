@@ -26,3 +26,15 @@ test('current role denied; malformed/foreign/reassigned rows fail closed; unavai
  for(const rows of [[{...item(1),artisan_id:other}],[{...item(1),intervention:{...item(1).intervention,artisan_id:other}}],[{...item(1),author:{role:'client'}}],[item(1),item(1)],[item(1),item(2)],[{...item(1),total_cents:0}]]){const r=await harness({rows}).get();assert.equal(r.status,503);assert.equal(r.headers.get('retry-after'),'2');assert.ok(!(await r.text()).includes('PRIVATE'));}
  assert.equal((await harness({error:true}).get()).status,503);
 });
+test('PostgreSQL microseconds and explicit foreign-key embeds remain exact', async () => {
+ const rows = [
+  { ...item(1), created_at: '2026-11-01T12:00:00.000002Z' },
+  { ...item(2), created_at: '2026-11-01T08:00:00.000001-04:00' },
+ ];
+ const h = harness({ rows });
+ assert.equal((await h.get()).status, 200);
+ const projection = h.calls.find(c => c[0] === 'select' && String(c[1]).includes('intervention:'))?.[1];
+ assert.match(String(projection), /interventions!quotes_intervention_id_fkey!inner/);
+ assert.match(String(projection), /profiles!quotes_artisan_id_fkey!inner/);
+ assert.equal((await harness({ rows: [...rows].reverse() }).get()).status, 503);
+});
