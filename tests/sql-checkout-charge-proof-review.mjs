@@ -69,11 +69,26 @@ try {
  const event=(id,patch={})=>({id,type:'charge.dispute.created',family:'dispute',livemode:false,source_account:null,created:'2026-11-07T00:00:00Z',object:{id:'du_QA',amount:3000,currency:'eur',source_charge:'ch_QA',destination:null,amount_reversed:null,reversed:null,status:'needs_response'},...patch});
  async function ingest(e){await q('select public.ingest_stripe_financial_observation($1,$2)',[e,'a'.repeat(64)])}
  await ingest(event('evt_dispute'));await ingest(event('evt_wrongmode',{livemode:true}));await ingest(event('evt_connected',{source_account:'acct_QA'}));await ingest(event('evt_excess',{object:{...event('x').object,amount:12001}}));await ingest(event('evt_foreign',{object:{...event('x').object,source_charge:'ch_other'}}));await ingest(event('evt_currency',{object:{...event('x').object,currency:'usd'}}));
- await ingest(event('evt_fee',{type:'application_fee.created',family:'fee',object:{...event('x').object,id:'fee_QA',amount:2400,status:null}}));
+ await ingest(event('evt_fee',{type:'application_fee.created',family:'fee',object:{...event('x').object,id:'fee_QA',amount:2400,source_charge:'ch_connected',status:null}}));
  await as('reader');const found=await read();eq(found.proof.charge_id,'ch_QA');eq(found.dispute_observations.map(x=>x.event_id),['evt_dispute']);eq(found.dispute_observations[0].disputed_amount_cents,3000);eq(found.proof.source.amount_cents,12000);
  const historic=await one("select public.stripe_financial_observation_detail('evt_dispute')v");eq(historic.record.result.reason,'dispute_reference_not_bound');eq(historic.record.version,1);
  await as('client');await deny(read());await as('', 'anon');await deny(read());
  await as('', 'postgres');eq(await one('select status v from public.payments where id=$1',[payment]),'paid');eq(await one('select status v from public.interventions where id=$1',[job]),'paid');eq(await one('select count(*)::integer v from charge_proof_private.proofs'),1);
- await q("update public.platform_operator_grants set status='revoked',revoked_at=now(),revoked_by=user_id where user_id=$1 and scope='finance_write'",[ids.operator]);await as('', 'service_role');await deny(store());await deny(begin());
+ // Fee requires an existing signed observation and all provider references, never fee_refund alone.
+ await as('', 'service_role');const feeCommand=crypto.randomUUID();
+ const beginFee=(eventId='evt_fee',cmd=feeCommand,live=false)=>one('select public.begin_checkout_fee_proof($1,$2,$3,$4,$5)v',[ids.operator,payment,eventId,cmd,live]);
+ const fs=(await beginFee()).source;eq(fs.connected_charge_id,'ch_connected');eq((await beginFee()).completed,false);await deny(beginFee('evt_dispute'),'P0001');await deny(beginFee('evt_missing'), 'P0002');await deny(beginFee('evt_fee',crypto.randomUUID(),true),'P0001');
+ const fee={id:'fee_QA',object:'application_fee',livemode:false,currency:'eur',account:'acct_QA',amount:2400,charge:'ch_connected',originating_transaction:'ch_QA',amount_refunded:600,refunded:false,created:1700000300,observed_at:new Date().toISOString()};
+ const storeFee=(value=fee,src=fs,cmd=feeCommand)=>q('select public.store_checkout_fee_proof($1,$2,$3,$4)',[ids.operator,cmd,src,value]);
+ for(const patch of [{account:'acct_foreign'},{originating_transaction:'ch_foreign'},{charge:'ch_QA'},{amount:1},{livemode:true},{currency:'usd'}])await deny(storeFee({...fee,...patch}),'P0001');
+ await deny(storeFee({...fee,amount_refunded:2401}),'22023');await storeFee();eq((await beginFee()).completed,true);await storeFee({...fee,amount_refunded:2400,refunded:true});
+ await as('reader');const readFee=(eventId='evt_fee')=>one('select public.read_checkout_fee_proof($1,$2)v',[payment,eventId]);const qualified=await readFee();eq(qualified.qualification.provider_amount_refunded_cents,600);eq(qualified.qualification.provider_refunded,false);
+ await as('', 'service_role');await ingest(event('evt_fee_refunded',{type:'application_fee.refunded',family:'fee',object:{...event('x').object,id:'fee_QA',amount:2400,source_charge:'ch_connected',status:null}}));
+ const second=crypto.randomUUID(),secondSource=(await beginFee('evt_fee_refunded',second)).source;await storeFee({...fee,amount_refunded:2400,refunded:true,observed_at:new Date().toISOString()},secondSource,second);
+ await ingest(event('evt_fee_child',{type:'application_fee.refund.updated',family:'fee',object:{...event('x').object,id:'fr_QA',amount:2400,source_charge:'ch_connected',status:null}}));await deny(beginFee('evt_fee_child',crypto.randomUUID()),'P0001');
+ await as('reader');eq((await readFee()).qualification.provider_amount_refunded_cents,600);eq((await readFee('evt_fee_refunded')).qualification.provider_amount_refunded_cents,2400);
+ await as('client');await deny(readFee());await as('', 'anon');await deny(readFee());
+ await as('', 'postgres');eq(await one('select status v from public.payments where id=$1',[payment]),'paid');
+ await q("update public.platform_operator_grants set status='revoked',revoked_at=now(),revoked_by=user_id where user_id=$1 and scope='finance_write'",[ids.operator]);await as('', 'service_role');await deny(store());await deny(begin());await deny(beginFee());await deny(storeFee());
  console.log(`PASS Checkout charge proof: ${checks} SQL checks; paid frozen source, private ACL, immutable replay/mode, exact dispute observation and no financial state mutation`);
 }catch(e){console.error(e.message,e.code,e.where,e.stack?.split('\n').slice(0,5).join('\n'));process.exitCode=1}finally{await db.close()}

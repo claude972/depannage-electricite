@@ -48,8 +48,22 @@ La page contient au plus 50 observations exactes, ordonnées par event_id. Chaqu
 
 ## Limites assumées
 
-**Frais non associés dans cette tranche.** Pour une destination charge, la Charge connectée portée par `application_fee.charge` peut différer de la Charge plateforme ; une suite devra relire la Fee et recouper son `originating_transaction`, son account, son mode, son montant et sa monnaie avec cette preuve. Le normaliseur existant ne conserve pas toutes ces données : aucune association par supposition ou par metadata. Aucun payout agrégé ni transfert automatique Checkout n’est réparti par ce lot.
+La suite commission décrite ci-dessous est désormais incluse. `fee_refund` sans parent attesté, payout agrégé et transfert automatique Checkout restent hors qualification ; aucune répartition n’est inférée.
 
 Qualification fournisseur et données de test restent injectées. Tests SQL réels isolés (Auth/Storage/cron simulés) : permissions/retrait, snapshot payé, rejeu/conflit de mode, immutabilité, litige partiel exact, refus compte/mode/devise/montant/Charge étrangers et absence de mutation financière. Tests des vrais handlers : chaîne des références, erreurs fournisseur, réponse de persistance perdue, portes et revalidation d’accès. Aucune recette hébergée ou transaction réelle.
 
 Sources primaires consultées : [Charge](https://docs.stripe.com/api/charges/object), [Dispute](https://docs.stripe.com/api/disputes/object), [Application Fee](https://docs.stripe.com/api/application_fees/object). Un litige peut porter sur une partie du montant ou différer ; les cas hors du contrat conservateur sont laissés à examiner.
+
+## Complément commission — migration `20261107215452_checkout_fee_proof.sql`
+
+`GET|POST /api/platform-operations/payments/[payment_id]/charge-proof/fees/[eventId]`. POST strict `{command_id:uuid}`, scopes finance_read + finance_write, mêmes portes SQL et `STRIPE_CHARGE_PROOF_ENABLED` désactivées. GET exige finance_read et ne contacte jamais Stripe. Réponse `{qualification:null|{event_id,payment_id,source,provider_amount_refunded_cents:number|null,provider_refunded:boolean,fee_created:number,provider_observed_at:string,qualified_at:string}}`.
+
+`source` contient uniquement `{payment_id,event_id,live,fee_id,charge_id,connected_charge_id,destination_account,amount_cents,currency:'eur',observation_fingerprint,observation_created}`. `charge_id` est la Charge plateforme prouvée ; `connected_charge_id` est la Charge portée par l’événement signé. Ces identifiants peuvent être différents et ne sont jamais confondus.
+
+La qualification exige une preuve Charge déjà fixée et une observation persistée `application_fee.created` ou `application_fee.refunded`, source plateforme, même mode, Fee ID, montant total de commission et EUR exacts. Une commande durable lie ce contexte avant toute relecture. Le serveur récupère uniquement cette Fee par `applicationFees.retrieve(id)` et valide objet, id, mode, EUR, `account=destination_account`, `amount=fee_cents`, `charge=connected_charge_id` et `originating_transaction=charge_id`. La persistance SQL répète ces égalités et les habilitations courantes ; ni metadata ni note opérateur ne remplacent une preuve.
+
+`amount_refunded` est lu à l’instant fournisseur de qualification, et non attribué à la date de l’événement historique. Une valeur nulle reste inconnue. Un montant présent doit être entre zéro et le montant de commission, cohérent avec l’indicateur de remboursement intégral. Le premier enregistrement de chaque événement reste immuable : une réponse perdue retourne cet enregistrement sans relecture fournisseur ; des appels concurrents conservent la première qualification validée. Un événement ultérieur de la même Fee peut conserver une nouvelle observation datée, sans écraser l’ancienne. **Ne pas additionner ces observations cumulatives** pour fabriquer un montant remboursé.
+
+Le registre signé et ses résultats historiques restent inchangés. Ce lien supplémentaire n’atteste pas un solde bancaire, un remboursement déclenché par l’application ou une écriture de ledger. Aucune méthode de mutation Stripe n’est appelée. L’endpoint n’accepte pas `application_fee.refund.updated` : le parent Fee n’est pas déduit de ce seul événement.
+
+Sources : [objet Application Fee](https://docs.stripe.com/api/application_fees/object), notamment originating_transaction et remboursement partiel, et [relecture de la Fee](https://docs.stripe.com/api/application_fees/retrieve). Tests injectés sans accès fournisseur ; SQL isolé vérifie la séparation des charges, les égalités, le rejeu, deux observations datées, les refus de modes/scopes et le maintien des paiements.
