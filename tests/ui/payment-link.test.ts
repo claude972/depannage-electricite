@@ -57,14 +57,14 @@ test("client: pay action only for checkout_required with the server amount; hone
   }
 });
 
-test("artisan: follow-up link + copy only, never a pay/Checkout action; QR explicitly unavailable", () => {
+test("artisan: follow-up link + copy + local QR only, never a pay/Checkout action", () => {
   for (const reason of ["checkout_required", "configuration_required"]) {
     const html = view(ready(reason), "artisan", { onPay: noop });
     assert.match(html, new RegExp(`data-payment-link-url="">${ORIGIN.replace(/\./g, "\\.")}/#detail/${ID}<`));
     assert.match(html, /data-payment-link-copy=""[^>]*>Copier le lien de suivi/);
     assert.doesNotMatch(html, /data-payment-pay|Payer /, "no payment initiated by or for the artisan");
-    assert.match(html, /data-payment-qr="unavailable"/);
-    assert.doesNotMatch(html, /<svg|<canvas|<img/, "no fake QR");
+    assert.match(html, /<figure[^>]*data-payment-qr=""><svg[^>]*role="img"/, "QR rendered locally as inline SVG");
+    assert.doesNotMatch(html, /<canvas|<img|href=/, "no image service, no external resource");
   }
   assert.match(view(ready("configuration_required"), "artisan"), /le client ne peut pas encore régler/);
   assert.equal(view({ phase: "hidden" }, "artisan"), "");

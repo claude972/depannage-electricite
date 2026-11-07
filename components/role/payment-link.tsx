@@ -9,11 +9,16 @@
 //   /api/payments/checkout under the client's own identity), offered only for checkout_required.
 // - Artisan: may copy / share the follow-up link. No Checkout is ever created by or for the artisan,
 //   and there is no « received » / collect action.
-// No QR code is rendered: no QR library exists in this project, so the state says so.
+// QR code (PAY-QR): generated LOCALLY with qrcode-generator (MIT, pinned) from the exact share URL
+// (this page's origin + the contract's relative /#detail/<UUID>) — nothing else: no token, no
+// tracking parameter, no image service. Rendered as inline SVG from the module matrix, only when the
+// link parsed and the share URL is valid; otherwise the existing honest states.
 // 401/403/404 ⇒ nothing rendered; 503 / network / malformed ⇒ error with « Réessayer », never paid.
 import { useCallback, useEffect, useRef, useState } from "react";
+import qrcode from "qrcode-generator";
 import { money } from "../app/format";
 import styles from "./onsite-settlement.module.css";
+import qrStyles from "./payment-link.module.css";
 
 export const PAYMENT_LINK_PATH = "/api/payments/link";
 export type PaymentLinkReason = "not_completed" | "already_settled" | "configuration_required" | "checkout_required";
@@ -42,7 +47,61 @@ export function shareUrl(link: PaymentLink, origin: string): string | null {
   }
 }
 
-export type PaymentLinkLoad = { phase: "loading" } | { phase: "hidden" } | { phase: "error" } | { phase: "ready"; link: PaymentLink };
+/** QR module matrix (true = dark) of EXACTLY `url`: type number auto (0), error correction M.
+ *  Only for an absolute http(s) share URL of the follow-up path; anything else ⇒ null (no QR). */
+export function qrMatrix(url: string): boolean[][] | null {
+  const m = /^https?:\/\/[^/?#\s]+\/#detail\/([0-9a-f-]{36})$/.exec(url);
+  if (!m || !UUID.test(m[1])) return null;
+  try {
+    const qr = qrcode(0, "M");
+    qr.addData(url, "Byte");
+    qr.make();
+    const n = qr.getModuleCount();
+    return Array.from({ length: n }, (_, r) => Array.from({ length: n }, (_, c) => qr.isDark(r, c)));
+  } catch {
+    return null;
+  }
+}
+/** Quiet zone in modules (QR spec: 4). */
+export const QR_QUIET = 4;
+/** SVG path of the dark modules, in module units, offset by the quiet zone. */
+export function qrPath(matrix: boolean[][]): string {
+  let d = "";
+  matrix.forEach((row, r) => row.forEach((dark, c) => { if (dark) d += `M${c + QR_QUIET} ${r + QR_QUIET}h1v1h-1z`; }));
+  return d;
+}
+
+/** Copy the exact share URL; false on any refusal (the visible URL stays selectable). */
+export async function copyShareUrl(url: string, clipboard: { writeText(text: string): Promise<void> } | undefined): Promise<boolean> {
+  try {
+    if (!clipboard) return false;
+    await clipboard.writeText(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function PaymentQr({ url }: { url: string }) {
+  const matrix = qrMatrix(url);
+  if (!matrix) return null;
+  const size = matrix.length + QR_QUIET * 2;
+  return (
+    <figure className={qrStyles.qr} data-payment-qr="">
+      <svg className={qrStyles.code} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`${PAYMENT_LINK_COPY.qrLabel} ${url}`} shapeRendering="crispEdges" data-payment-qr-size={size}>
+        <rect className={qrStyles.quiet} width={size} height={size} />
+        <path className={qrStyles.modules} d={qrPath(matrix)} />
+      </svg>
+      <figcaption className={qrStyles.caption}>{PAYMENT_LINK_COPY.qrCaption}</figcaption>
+    </figure>
+  );
+}
+
+export type PaymentLinkLoad = { phase: "loading" } | { phase: "hidden" } | { phase: "error" } | { phase: "demo" } | { phase: "ready"; link: PaymentLink };
+/** Demo never calls the route (no session, no dossier on the server). */
+export async function resolvePaymentLink(api: PaymentLinkApi, interventionId: string, demo: boolean): Promise<PaymentLinkLoad> {
+  return demo ? { phase: "demo" } : loadPaymentLink(api, interventionId);
+}
 export async function loadPaymentLink(api: PaymentLinkApi, interventionId: string): Promise<PaymentLinkLoad> {
   let r: PaymentLinkReply;
   try {
@@ -86,7 +145,9 @@ export const PAYMENT_LINK_COPY = {
   clientNoQuote: "Le devis accepté de ce dossier n’est pas encore chargé : actualisez le dossier pour régler.",
   artisanShare: "Lien de suivi à transmettre au client : il s’y connecte avec son compte pour régler sur la plateforme. Ce lien ne déclenche aucun paiement.",
   artisanConfiguration: "Le paiement en ligne n’est pas encore activé : le client ne peut pas encore régler par ce lien.",
-  qrUnavailable: "Le QR code n’est pas disponible sur ce service ; transmettez le lien.",
+  qrLabel: "QR code du lien de suivi :",
+  qrCaption: "QR code du lien de suivi ci-dessus : le client le scanne puis se connecte à son compte. Il ne déclenche aucun paiement.",
+  demo: "En démonstration, aucun lien de paiement n’est vérifié.",
   copied: "Lien copié.",
   copyFailed: "Copie impossible : sélectionnez le lien ci-dessus.",
 } as const;
@@ -99,6 +160,7 @@ export function PaymentLinkPanel({
   busy = false,
   api = DEFAULT_API,
   origin,
+  demo = false,
 }: {
   interventionId: string;
   viewer: "client" | "artisan";
@@ -108,15 +170,17 @@ export function PaymentLinkPanel({
   busy?: boolean;
   api?: PaymentLinkApi;
   origin?: string;
+  /** Demo: no route call, honest note only. */
+  demo?: boolean;
 }) {
   const [load, setLoad] = useState<PaymentLinkLoad>({ phase: "loading" });
   const seq = useRef(0);
   const reload = useCallback(async () => {
     const mine = ++seq.current;
     setLoad({ phase: "loading" });
-    const out = await loadPaymentLink(api, interventionId);
+    const out = await resolvePaymentLink(api, interventionId, demo);
     if (seq.current === mine) setLoad(out);
-  }, [api, interventionId]);
+  }, [api, interventionId, demo]);
   useEffect(() => {
     void reload();
     return () => { seq.current += 1; };
@@ -140,6 +204,7 @@ export function PaymentLinkView({ load, viewer, amountCents, onPay, busy = false
 }) {
   const [copy, setCopy] = useState("");
   if (load.phase === "hidden") return null;
+  if (load.phase === "demo") return <p className={styles.muted} role="status" data-payment-link="demo">{PAYMENT_LINK_COPY.demo}</p>;
   if (load.phase === "loading") return <p className={styles.muted} role="status" data-payment-link="loading">{PAYMENT_LINK_COPY.loading}</p>;
   if (load.phase === "error")
     return (
@@ -183,23 +248,18 @@ export function PaymentLinkView({ load, viewer, amountCents, onPay, busy = false
               className="button outline"
               data-payment-link-copy=""
               onClick={() => {
-                const done = (ok: boolean) => setCopy(ok ? PAYMENT_LINK_COPY.copied : PAYMENT_LINK_COPY.copyFailed);
-                try {
-                  void navigator.clipboard.writeText(url).then(() => done(true), () => done(false));
-                } catch {
-                  done(false);
-                }
+                void copyShareUrl(url, typeof navigator !== "undefined" ? navigator.clipboard : undefined).then((ok) => setCopy(ok ? PAYMENT_LINK_COPY.copied : PAYMENT_LINK_COPY.copyFailed));
               }}
             >
               Copier le lien de suivi
             </button>
           </div>
           {copy && <p className={styles.muted} role="status">{copy}</p>}
+          <PaymentQr url={url} />
         </>
       ) : (
         <p className={styles.error} role="alert">{PAYMENT_LINK_COPY.error}</p>
       )}
-      <p className={styles.muted} data-payment-qr="unavailable">{PAYMENT_LINK_COPY.qrUnavailable}</p>
     </div>
   );
 }
