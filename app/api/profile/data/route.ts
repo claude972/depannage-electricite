@@ -8,10 +8,12 @@ import {
 } from "@/lib/supabase/server";
 import { uuid, validated } from "@/lib/supabase/validation";
 
+import {requestSchema,checked,publicRequest,checkedPage} from "@/lib/features/data-requests/contracts";
+
 export const dynamic = "force-dynamic";
 
 const headers = { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" };
-const sections = z.enum(["account", "addresses", "requests", "messages", "documents", "support"]);
+const sections = z.enum(["account", "addresses", "requests", "messages", "documents", "support", "erasure_requests"]);
 const pageSize = 100;
 const records = {
   addresses: {
@@ -47,14 +49,7 @@ const erasure = z.object({
   request_id: uuid,
   confirmed: z.literal(true),
 }).strict();
-const ticketReceipt = z.object({
-  ticket: z.object({
-    id: uuid,
-    creator_id: uuid,
-    status: z.enum(["open", "in_progress", "awaiting_user", "resolved"]),
-  }),
-  replayed: z.boolean(),
-});
+const ticketReceipt = z.object({request:requestSchema,ticket_id:uuid,status:z.enum(['open','in_progress','awaiting_user','resolved']),replayed:z.boolean()});
 
 function projection(row: unknown, fields: string, ownerField: string, owner: string) {
   if (typeof row !== "object" || row === null || Array.isArray(row))
@@ -85,6 +80,11 @@ export async function GET(request: Request) {
     const after = uuid.nullable().safeParse(query.get("after"));
     if (!section.success || !after.success || (section.data === "account" && after.data))
       throw new ApiError(422, "Paramètres de téléchargement invalides.");
+
+    if(section.data==='erasure_requests'){
+      const result=await db.rpc('list_data_erasure_requests',{p_all:false,p_after:after.data,p_limit:100});dbError(result.error);
+      return Response.json({section:section.data,...checkedPage(result.data,after.data,user.id)},{headers});
+    }
 
     if (section.data === "account") {
       const [profile, preferences] = await Promise.all([
@@ -142,21 +142,12 @@ export async function POST(request: Request) {
     if (new URL(request.url).searchParams.size)
       throw new ApiError(422, "Paramètres inattendus.");
     const input = await validated(request, erasure);
-    const result = await db.rpc("create_support_ticket", {
-      p_request_id: input.request_id,
-      p_subject: "Demande d’effacement de données personnelles",
-      p_body: "Je demande l’examen de l’effacement des données personnelles associées à mon compte.",
-      p_intervention_id: null,
-    });
+    const result = await db.rpc("create_data_erasure_request", {p_request_id: input.request_id});
     dbError(result.error);
-    const receipt = ticketReceipt.safeParse(result.data);
-    if (!receipt.success || receipt.data.ticket.creator_id !== user.id)
-      throw new ApiError(503, "Vérifiez votre demande avant de réessayer.");
-    return Response.json({
-      ticket_id: receipt.data.ticket.id,
-      status: receipt.data.ticket.status,
-      replayed: receipt.data.replayed,
-    }, { headers });
+    const receipt = checked(ticketReceipt,result.data);
+    if(receipt.request.account_id!==user.id||receipt.ticket_id!==receipt.request.ticket_id)
+      throw new ApiError(503,"Vérifiez votre demande avant de réessayer.");
+    return Response.json({ticket_id:receipt.ticket_id,status:receipt.status,replayed:receipt.replayed,request:publicRequest(receipt.request)},{headers});
   } catch (error) {
     return failure(error);
   }
