@@ -136,3 +136,18 @@ textarea.input {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+.confirm {
+  display: grid;
+  flex: 1 1 100%;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface);
+}
+.confirm p {
+  margin: 0;
+}
+.panel[hidden] {
+  display: none;
+}

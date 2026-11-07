@@ -41,6 +41,10 @@ import styles from "./provider-teams.module.css";
 
 export type ProviderTeamsPanelProps = {
   context: Context;
+  /** "artisan": full entry (team creation for an approved holder). "member": client / manager accounts
+   *  invited into a team — no creation, and the block exists only when the server returns an
+   *  invitation or a membership for this account (no promotion, no new right). */
+  audience?: "artisan" | "member";
   demo?: boolean;
   api?: PtApi;
   store?: () => Store | null;
@@ -52,6 +56,7 @@ const when = (iso: string) => new Date(iso).toLocaleString("fr-FR", { dateStyle:
 const jobLabel = (c: string, s: string, city: string) => `${category(c).label} · ${STATUS[s as Status] ?? s}${city ? ` · ${city}` : ""}`;
 
 export function ProviderTeamsPanel(props: ProviderTeamsPanelProps) {
+  if (props.demo && props.audience === "member") return null; // nothing to show without server data
   if (props.demo)
     return (
       <section className={styles.panel} aria-labelledby="provider-teams-demo" data-provider-teams="demo">
@@ -104,7 +109,9 @@ function RunnerFeedback({ state, onRetry }: { state: RunnerState; onRetry: () =>
   );
 }
 
-function Live({ context, api, store = tabStore, newId = ptUuid, now = Date.now }: ProviderTeamsPanelProps) {
+function Live({ context, audience = "artisan", api, store = tabStore, newId = ptUuid, now = Date.now }: ProviderTeamsPanelProps) {
+  const member = audience === "member";
+  const [invitationCount, setInvitationCount] = useState<number | null>(null);
   const latest = useRef({ api, store, newId, now });
   latest.current = { api, store, newId, now };
   const client = useRef<PtApi | null>(null);
@@ -146,11 +153,13 @@ function Live({ context, api, store = tabStore, newId = ptUuid, now = Date.now }
     if (!teamId || !commandId) return;
     if ((await create.run({ kind: "create", body: { action: "create", team_id: teamId.toLowerCase(), command_id: commandId.toLowerCase(), name: n } })) === "ok") setName("");
   };
+  // Member accounts: the block exists only when the server returns something for this account.
+  const hidden = member && (invitationCount === null || teams.phase === "loading" || (invitationCount === 0 && teams.records.length === 0 && teams.phase !== "error"));
   return (
-    <section className={styles.panel} aria-labelledby={`${uid}-title`} data-provider-teams="live">
+    <section className={styles.panel} aria-labelledby={`${uid}-title`} data-provider-teams="live" data-pt-audience={audience} hidden={hidden || undefined}>
       <h2 id={`${uid}-title`} className={styles.title}>{COPY.title}</h2>
       <p className={styles.muted}>{COPY.roleNote}</p>
-      <MyInvitations deps={deps} onAccepted={() => void loadTeams()} />
+      <MyInvitations deps={deps} onAccepted={() => void loadTeams()} onCount={setInvitationCount} />
       {teams.phase === "loading" && <p className={styles.muted} role="status">{COPY.loading}</p>}
       {teams.phase === "forbidden" && <p className={styles.muted}>{COPY.forbidden}</p>}
       {teams.phase === "error" && (
@@ -176,6 +185,7 @@ function Live({ context, api, store = tabStore, newId = ptUuid, now = Date.now }
             ))}
           </ul>
           {teams.next && <button type="button" className={styles.button} onClick={() => void loadTeams(teams.next)}>{COPY.more}</button>}
+          {!member && (
           <form className={styles.form} onSubmit={(e) => void submitCreate(e)} noValidate data-pt-create="">
             <label className={styles.label} htmlFor={`${uid}-name`}>Créer une équipe (titulaire artisan approuvé)</label>
             <span className={styles.row}>
@@ -183,6 +193,7 @@ function Live({ context, api, store = tabStore, newId = ptUuid, now = Date.now }
               <button type="submit" className={styles.button} disabled={!name.trim() || create.state.busy || !!create.state.pending}>Créer</button>
             </span>
           </form>
+          )}
           <RunnerFeedback state={create.state} onRetry={create.retry} />
         </>
       )}
@@ -191,7 +202,7 @@ function Live({ context, api, store = tabStore, newId = ptUuid, now = Date.now }
   );
 }
 
-function MyInvitations({ deps, onAccepted }: { deps: Deps; onAccepted: () => void }) {
+function MyInvitations({ deps, onAccepted, onCount }: { deps: Deps; onAccepted: () => void; onCount?: (n: number) => void }) {
   const [state, setState] = useState<{ phase: "loading" | "ready" | "error" | "forbidden"; records: MyInvitation[] }>({ phase: "loading", records: [] });
   const load = async () => {
     const gen = deps.context.generation(), uid = deps.context.userId();
@@ -200,6 +211,7 @@ function MyInvitations({ deps, onAccepted }: { deps: Deps; onAccepted: () => voi
     if (r.status === 401 || r.status === 403) return setState({ phase: "forbidden", records: [] });
     const p = r.status === 200 ? parseMyInvitations(r.body, null) : null;
     setState(p ? { phase: "ready", records: p.records } : { phase: "error", records: [] });
+    onCount?.(p ? p.records.length : -1); // -1: read failed ⇒ the block shows the honest error
   };
   useEffect(() => {
     void load();
@@ -288,6 +300,7 @@ function TeamDetail({ deps, initialTeam, onTeamChanged }: { deps: Deps; initialT
   const [inviteError, setInviteError] = useState("");
   const [rename, setRename] = useState("");
   const [assignTo, setAssignTo] = useState<Record<string, string>>({});
+  const [removing, setRemoving] = useState<string | null>(null);
   if (phase === "forbidden") return <p className={styles.muted} data-pt-team-forbidden="">{COPY.forbidden}</p>;
   const technicians = activeTechnicians(pages.members);
   const tabs: [Section, string][] = [["missions", "Interventions"], ["members", "Membres"], ...(actions.invitationsVisible ? ([["invitations", "Invitations envoyées"]] as [Section, string][]) : [])];
@@ -319,10 +332,21 @@ function TeamDetail({ deps, initialTeam, onTeamChanged }: { deps: Deps; initialT
                     <button type="button" className={styles.button} disabled={locked} onClick={() => void run((cid) => ({ kind: "team", teamId: team.id, body: { action: "set_role", command_id: cid, expected_version: team.version, user_id: m.id, role: m.role === "technician" ? "coordinator" : "technician" } }))} data-pt-setrole={m.id}>
                       Passer {m.role === "technician" ? "coordinateur" : "technicien"}
                     </button>
-                    <button type="button" className={styles.button} disabled={locked} onClick={() => window.confirm(`Retirer ${m.full_name || "ce membre"} de l’équipe ? Son affectation courante sera retirée ; l’historique est conservé.`) && void run((cid) => ({ kind: "team", teamId: team.id, body: { action: "remove_member", command_id: cid, expected_version: team.version, user_id: m.id } }))} data-pt-remove={m.id}>
-                      Retirer
+                    <button type="button" className={styles.button} disabled={locked || removing === m.id} onClick={() => setRemoving(m.id)} data-pt-remove={m.id}>
+                      Retirer…
                     </button>
                   </span>
+                )}
+                {removing === m.id && (
+                  <div className={styles.confirm} role="alertdialog" aria-labelledby={`${uid}-rm-${m.id}`} data-pt-remove-confirm={m.id}>
+                    <p id={`${uid}-rm-${m.id}`}>Retirer {m.full_name || "ce membre"} de l’équipe ? Son affectation courante sera retirée ; l’historique est conservé.</p>
+                    <span className={styles.row}>
+                      <button type="button" className={`${styles.button} ${styles.primary}`} disabled={locked} onClick={() => void run((cid) => ({ kind: "team", teamId: team.id, body: { action: "remove_member", command_id: cid, expected_version: team.version, user_id: m.id } })).then(() => setRemoving(null))} data-pt-remove-execute={m.id}>
+                        Confirmer le retrait
+                      </button>
+                      <button type="button" className={styles.button} disabled={runner.state.busy} onClick={() => setRemoving(null)}>Annuler</button>
+                    </span>
+                  </div>
                 )}
               </li>
             ))}
