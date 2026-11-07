@@ -70,10 +70,10 @@ test("A→B→A: late replies of unmounted mounts never reach the parent; the cu
   }
 });
 
-test("source: quote switch clears the parent state; write 401/403 reports null", () => {
+test("source: only a different quote clears the parent; write 401/403 invalidates earlier reads", () => {
   const ent = readFileSync("components/role/enterprise-space.tsx", "utf8");
-  assert.match(ent, /onClick=\{\(\) => \{\s+setAdvancedRead\(null\);[^\n]*\n\s+setVersionId\(q\.id\);/);
+  assert.match(ent, /onClick=\{\(\) => \{\s+if \(displayed\?\.id === q\.id\) return;\s+setAdvancedRead\(null\);[^\n]*\n\s+setVersionId\(q\.id\);/);
   const ap = readFileSync("components/features/advanced-approvals/approvals.tsx", "utf8");
-  assert.match(ap, /onForbidden: \(\) => \{\s+setStatus\("forbidden"\);\s+report\(null\);/);
+  assert.match(ap, /onForbidden: \(\) => \{\s+loadSeq\.current\+\+;\s+setStatus\("forbidden"\);\s+report\(null\);/);
   assert.match(ap, /return \(\) => \{\s+alive\.current = false;\s+loadSeq\.current\+\+;/);
 });

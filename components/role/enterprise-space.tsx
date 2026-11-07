@@ -1758,6 +1758,7 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
                     className={cx(styles.versionButton, displayed?.id === q.id && styles.versionSelected)}
                     aria-pressed={displayed?.id === q.id}
                     onClick={() => {
+                      if (displayed?.id === q.id) return;
                       setAdvancedRead(null); // undetermined until the new quote's own read
                       setVersionId(q.id);
                     }}

@@ -285,6 +285,7 @@ function Quote({ quoteId, context, api, store = tabStore, newId = uuid, loadMemb
   }, []);
   const writer = useWriter<WorkflowCommand>((get, set) =>
     createWriter({ scope: `quote:${quoteId.toLowerCase()}`, schema: schemas.workflowCommand, post: (c) => getApi().act(quoteId, c), receipt: (b, c) => parseWorkflowReceipt(b, quoteId, c), store: () => store(), context, get, set, after: load, onForbidden: () => {
+      loadSeq.current++;
       setStatus("forbidden");
       report(null); // a 401/403 on a write makes the state undetermined for the parent too
     }, notice: (c) => ACTION_DONE[c.action] }),
