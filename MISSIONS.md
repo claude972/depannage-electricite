@@ -66,3 +66,7 @@ Astra réalise le rappel de rendez-vous personnel côté serveur. Le participant
 ## ART-03 / ADM-02 — décision individuelle de justificatif
 
 Pilote seul auteur de la migration, API /api/artisan/credentials/[id]/reviews et tests. Historique immuable, motif, version attendue, rejeu par UUID, lecture par l'artisan propriétaire et l'administration actuelle. Une pièce revue garde son type et sa date déclarée, l'artisan peut joindre une nouvelle pièce pour corriger. Une décision sur une pièce ne modifie pas l'approbation globale du dossier. Le contrat UI expose uniquement la pièce, les décisions datées, le droit d'action et le curseur. Vérifier accès croisés, expiration, concurrence par version, zéro double audit et reprise après réponse perdue. Cloud après assemblage et revue.
+
+## Finition du code et préparation de la recette par parcours
+
+Assembler les feuilles énergie, rappels et accessibilité déjà poussées sur la branche de livraison, puis compléter les parcours manquants. Astra est responsable du serveur équipes prestataires (ART-12). Le lead Claude répartit les interfaces entre les auteurs existants, sur des fichiers disjoints. ROOT est responsable de l'assemblage et du serveur de garantie corrective (ADM-10). Réutiliser les transitions et autorisations du dossier existant. Vérifier au fil du code avec les suites ciblées, dont les refus intercomptes. La recette de livraison en ligne se fera ensuite par parcours. Stripe et Vonage restent au dernier lot.
