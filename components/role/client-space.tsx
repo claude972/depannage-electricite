@@ -21,6 +21,7 @@ import {
 } from "../app/format";
 import { canAccess, pickQuote, quoteVersions } from "../app/session";
 import { Icon } from "../app/icons";
+import { taxRateLabel } from "../app/tax-rate";
 import { InstallPanel } from "../app/install-panel";
 import {
   Alerts,
@@ -196,7 +197,7 @@ function recapText(q: Quote, i: Intervention | undefined, demo: boolean) {
     ),
     "",
     `Sous-total HT : ${money(q.subtotal_cents)}`,
-    `TVA (${q.tax_rate} %) : ${money(q.tax_cents)}`,
+    `TVA (${taxRateLabel(q.tax_rate)}) : ${money(q.tax_cents)}`,
     `Total TTC : ${money(q.total_cents)}`,
     `Statut : ${quoteStatusLabel(q)}`,
     q.accepted_at ? `Accepté le ${dateTime(q.accepted_at)}` : "",
@@ -1290,7 +1291,7 @@ function DetailView({
                 <span>{money(shown.subtotal_cents)}</span>
               </div>
               <div>
-                <span>TVA ({shown.tax_rate} %)</span>
+                <span>TVA ({taxRateLabel(shown.tax_rate)})</span>
                 <span>{money(shown.tax_cents)}</span>
               </div>
               <div className={styles.grand}>
@@ -1782,7 +1783,7 @@ function QuoteView({
             <td>{money(quote.subtotal_cents)}</td>
           </tr>
           <tr>
-            <td colSpan={2}>TVA ({quote.tax_rate} %)</td>
+            <td colSpan={2}>TVA ({taxRateLabel(quote.tax_rate)})</td>
             <td>{money(quote.tax_cents)}</td>
           </tr>
           <tr className={styles.grand}>
