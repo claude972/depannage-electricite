@@ -47,23 +47,29 @@ export function Tag({
 }) {
   return <span className={`tag tag-${tone}`}>{children}</span>;
 }
+export type HeadingLevel = 1 | 2 | 3 | 4;
 export function Empty({
   icon = "list",
   title,
   children,
   action,
+  level = 3,
 }: {
   icon?: string;
   title: string;
   children?: ReactNode;
   action?: ReactNode;
+  /** Heading level of the title: 1 when this state IS the page's main content (e.g. a not-found
+   *  page), otherwise the level under the surrounding heading. Default 3 (unchanged uses). */
+  level?: HeadingLevel;
 }) {
+  const Heading = `h${level}` as "h1" | "h2" | "h3" | "h4";
   return (
     <div className="empty-state">
       <span className="empty-icon">
         <Icon name={icon} size={30} />
       </span>
-      <h3>{title}</h3>
+      <Heading>{title}</Heading>
       {children && <p>{children}</p>}
       {action}
     </div>
@@ -126,12 +132,16 @@ export function PageTitle({
   subtitle,
   action,
   back,
+  level = 1,
 }: {
   title: string;
   subtitle?: string;
   action?: ReactNode;
   back?: { label: string; onClick: () => void };
+  /** 2 when the surrounding shell already renders the page h1 (embedded page). Default 1. */
+  level?: 1 | 2;
 }) {
+  const Heading = level === 2 ? "h2" : "h1";
   return (
     <>
       {back && (
@@ -142,7 +152,7 @@ export function PageTitle({
       )}
       <div className="page-title">
         <div>
-          <h1>{title}</h1>
+          <Heading>{title}</Heading>
           {subtitle && <p>{subtitle}</p>}
         </div>
         {action}

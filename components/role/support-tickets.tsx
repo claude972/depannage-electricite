@@ -111,8 +111,12 @@ export function DossierHelpLink({ session, interventionId }: { session: Session;
 }
 
 // ---- Liste ------------------------------------------------------------------------------
+/** The operator queue is embedded under the platform shell's own h1: its titles start at h2. */
+const titleLevel = (queue: SupportQueue): 1 | 2 => (queue === "all" ? 2 : 1);
+
 function TicketList({ session, queue }: { session: Session; queue: SupportQueue }) {
   const listView = supportListView(queue);
+  const level = titleLevel(queue);
   const [status, setStatus] = useState<"" | SupportStatus>("");
   const [search, setSearch] = useState("");
   const [searchError, setSearchError] = useState("");
@@ -193,6 +197,7 @@ function TicketList({ session, queue }: { session: Session; queue: SupportQueue 
   return (
     <>
       <PageTitle
+        level={level}
         title="Assistance"
         subtitle="Vos demandes à l’équipe de la plateforme et leur historique."
         action={
@@ -284,6 +289,7 @@ function TicketList({ session, queue }: { session: Session; queue: SupportQueue 
       ) : page.tickets.length === 0 ? (
         filtered ? (
           <Empty
+            level={level === 1 ? 2 : 3}
             icon="search"
             title="Aucune demande ne correspond à ces filtres"
             action={
@@ -295,7 +301,7 @@ function TicketList({ session, queue }: { session: Session; queue: SupportQueue 
             {`${page.page.total} demande(s) au total ; modifiez l’état ou la recherche.`}
           </Empty>
         ) : (
-          <Empty icon="help" title="Aucune demande d’assistance" action={newButton}>
+          <Empty level={level === 1 ? 2 : 3} icon="help" title="Aucune demande d’assistance" action={newButton}>
             Décrivez votre question ; l’équipe de la plateforme vous répond ici.
           </Empty>
         )
@@ -546,6 +552,7 @@ function TicketDetail({
   queue: SupportQueue;
 }) {
   const listView = supportListView(queue);
+  const level = titleLevel(queue);
   const [detail, setDetail] = useState<SupportDetail | null | undefined>(undefined);
   const [events, setEvents] = useState<SupportEvent[]>([]);
   const [messages, setMessages] = useState<SupportMessage[]>([]);
@@ -672,9 +679,10 @@ function TicketDetail({
     const state = session.capabilities.support;
     return (
       <>
-        <PageTitle back={{ label: "Assistance", onClick: () => session.go(listView) }} title="Demande d’assistance" />
+        <PageTitle level={level} back={{ label: "Assistance", onClick: () => session.go(listView) }} title="Demande d’assistance" />
         {state === "available" ? (
           <Empty
+            level={level === 1 ? 2 : 3}
             icon="search"
             title="Demande introuvable"
             action={
@@ -717,6 +725,7 @@ function TicketDetail({
   return (
     <>
       <PageTitle
+        level={level}
         back={{ label: "Assistance", onClick: () => session.go(listView) }}
         title={ticket.subject}
         subtitle={`Créée le ${dateTime(ticket.created_at)} · dernière activité le ${dateTime(ticket.last_message_at)}`}
