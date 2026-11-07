@@ -62,6 +62,7 @@ try {
  eq((await context()).offers,[]);eq((await context()).enabled,false);
  const terms={role:'client',label:'Explicit synthetic QA',active:true,price_id:'price_QA',amount_cents:1234,currency:'eur',interval:'month',interval_count:2,tax_behavior:'inclusive'};
  const offerCmd=crypto.randomUUID();const configure=(actor=users.operator,cmd=offerCmd,id=null,ver=0,live=false,v=terms)=>one('select public.save_subscription_offer($1,$2,$3,$4,$5,$6)v',[actor,cmd,id,ver,live,v]);
+ for(const currency of ['jpy','usd'])await deny(configure(users.operator,crypto.randomUUID(),null,0,false,{...terms,currency}),'23514');eq((await context()).offers,[]);
  await deny(configure(users.client));const offer=await configure();eq((await configure()).id,offer.id);await deny(configure(users.operator,offerCmd,null,0,false,{...terms,amount_cents:1}),'P0001');
  eq((await context(users.artisan)).offers,[]);eq((await context(users.client,true)).offers,[]);
  const cmd=crypto.randomUUID();const begin=(command=cmd,actor=users.client)=>one('select public.begin_subscription_checkout($1,false,$2,$3,1,\'https://app.test\')v',[actor,command,offer.id]);

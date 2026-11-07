@@ -14,9 +14,10 @@ Complément serveur : portail Billing hébergé pour gestion/résiliation et rou
 
 ```ts
 {
+ state:'ready',
  available:boolean,
  portal_available:boolean,
- offers:Array<{id:string;version:number;label:string;role:'client'|'artisan';amount_cents:number;currency:string;interval:'day'|'week'|'month'|'year';interval_count:number;tax_behavior:'inclusive'|'exclusive'|'unspecified'}>,
+ offers:Array<{id:string;version:number;label:string;role:'client'|'artisan';amount_cents:number;currency:'eur';interval:'day'|'week'|'month'|'year';interval_count:number;tax_behavior:'inclusive'|'exclusive'|'unspecified'}>,
  checkout_pending:boolean,
  subscription:null|{
   status:'incomplete'|'incomplete_expired'|'trialing'|'active'|'past_due'|'canceled'|'unpaid'|'paused';
@@ -26,7 +27,7 @@ Complément serveur : portail Billing hébergé pour gestion/résiliation et rou
 }
 ```
 
-Les périodes sont les timestamps Unix Stripe de l’unique ligne d’abonnement, pas un calendrier reconstitué. `amount_cents` correspond au montant unitaire du Price configuré, **pas à une facture effectivement encaissée** ; aucun statut n’est une confirmation bancaire. L’absence de clé/configuration donne 503 ; avec configuration mais portes fermées, `available:false`, offres vides. Un compte vérifié conserve la lecture de son abonnement même quand la porte est fermée. Un artisan non approuvé ne peut plus souscrire ; sa propre lecture reste disponible, sans nouveaux droits métier.
+Les périodes sont les timestamps Unix Stripe de l’unique ligne d’abonnement, pas un calendrier reconstitué. `amount_cents` correspond au montant unitaire du Price configuré, **pas à une facture effectivement encaissée** ; aucun statut n’est une confirmation bancaire. Si `SUBSCRIPTIONS_ENABLED` n’est pas `true`, GET authentifie puis répond 200 `{state:'unavailable',available:false,portal_available:false,offers:[],checkout_pending:null,subscription:null}` sans ouvrir Stripe. Ces valeurs nulles signifient non lu, jamais non abonné. Si activé mais clé/configuration manquante, GET échoue 503. Le schéma ci-dessus décrit `state:'ready'` : la lecture a abouti, même si la porte SQL désactive les nouvelles offres. Un artisan non approuvé ne peut plus souscrire ; sa propre lecture reste disponible, sans nouveaux droits métier.
 
 `POST /api/subscriptions` : `{action:'checkout',offer_id,offer_version,command_id,consent:true}` → `{url}`. Conserver l’UUID de commande avant appel et après 503. Un abonnement/Checkout encore non terminal interdit une deuxième commande. Le retour `/?subscription=returned#profile` et l’annulation `/?subscription=cancelled#profile` signalent seulement de relire GET. Le navigateur n’envoie jamais Customer, Subscription, montant, intervalle ou statut.
 
@@ -71,3 +72,9 @@ Reçu privé `(mode,event_id)` et empreinte du corps, bail atomique de 60 s, tok
 Validation locale du complément : 14 tests handlers (véritables signatures SDK générées localement, aucun réseau), tests SQL de bail/rejeu/CAS, révocation et portail, TypeScript. La facture n’est pas présentée comme payée à partir d’un statut d’abonnement ; aucun droit premium ne découle des événements.
 
 Sources primaires consultées : [abonnements Checkout](https://docs.stripe.com/billing/subscriptions/build-subscriptions), [Price](https://docs.stripe.com/api/prices/object), [Subscription](https://docs.stripe.com/api/subscriptions/object), [portail Billing](https://docs.stripe.com/customer-management/integrate-customer-portal). Sources additionnelles : [session portail](https://docs.stripe.com/api/customer_portal/sessions/create), [configuration portail](https://docs.stripe.com/api/customer_portal/configurations/object), [webhooks signés et livraisons](https://docs.stripe.com/webhooks). Aucun portail réel ni endpoint fournisseur n’a été configuré.
+
+## Contre-revue EUR
+
+Migration `20261107214235_subscription_eur_only.sql` : catalogue et snapshots exclusivement EUR, aucune conversion silencieuse d’une donnée antérieure. Le serveur refuse les Price non EUR avant écriture du catalogue et avant mutation Stripe. `amount_cents` désigne donc les centimes d’euro. Checkout transmet explicitement `currency:'eur'` et `adaptive_pricing:{enabled:false}` (paramètres supportés par le SDK épinglé). Les preuves de session restent montant et devise exacts ; la projection conserve le CAS de lecture et le reçu atomique existants.
+
+[Adaptive Pricing officiel](https://docs.stripe.com/payments/currencies/localize-prices/adaptive-pricing.md?payment-ui=stripe-hosted) précise que la devise d’intégration d’une session peut différer de celle présentée au client : la désactivation explicite évite de confondre ces valeurs. [Objet session portail](https://docs.stripe.com/api/customer_portal/sessions/object) : URL éphémère, Customer, mode et configuration vérifiés ; son retour n’atteste aucune annulation.
