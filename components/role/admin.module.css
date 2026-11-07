@@ -1918,3 +1918,13 @@ button.row:hover {
     text-align: left;
   }
 }
+/* ADM-06: moderation embedded under « Avis & Notes » (PlatformModerationView keeps its own frame). */
+.moderation {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+}
+.moderation > h2 {
+  margin: 0;
+  font-size: 18px;
+}
