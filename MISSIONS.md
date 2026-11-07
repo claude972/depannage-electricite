@@ -48,3 +48,7 @@ Référence de travail [plan des 76 capacités](docs/PLAN_LIVRAISON_INTEGRALE.md
 - **Astra** : reprise du WIP existant de remplacement d'empreinte dans la branche codex/hold-reauthorization. Seul auteur des fichiers de ce lot. Terminer tests et contrat sur la base actualisée. Aucun cloud ni accès fournisseur.
 - **Claude** : réutiliser la session et les auteurs UI existants. Carte et localisation du dossier client, avec données autorisées et aucun envoi d'adresse privée à un fournisseur tiers sans décision. Ownership de la feuille carte, du câblage UI local et des tests UI ciblés. Développer sans éditer les fichiers de finance, de formulaire et de session en cours d'assemblage.
 - **Raccordement final** : Stripe et Vonage restent au dernier lot de recette. Le pilote applique les migrations de test et exécute la recette en ligne. L'identité du premier Super Admin, le lancement public et les boutiques relèvent de leurs décisions existantes.
+
+## PUB-08 / PUB-09 / PUB-10 / ADM-08 — contenu public de l’exploitant
+
+Pilote seul auteur du backend. Informations d’exploitant et coordonnées saisies comme brouillon versionné, publication/retrait explicites, projection publique de la dernière version publiée uniquement. Écriture réservée au Super Admin actuel avec idempotence, journal et contrôle de version. Aucun nom, prix, garantie ou autre engagement inventé. UI publique et éditeur séparés après contrat. Vérifier confidentialité du brouillon, rejet des champs étrangers, rejeu, retrait et permissions.
