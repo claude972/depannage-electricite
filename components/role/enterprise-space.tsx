@@ -1011,7 +1011,7 @@ function useInterventionList(c: Ctx) {
 
 function ExportButton({ list }: { list: InterventionList }) {
   return (
-    <span data-enterprise-export="">
+    <span data-enterprise-export="" style={{ display: "contents" }}>
       <button type="button" className="button outline" onClick={list.exportCsv} disabled={!list.total || list.exportBusy || list.phase !== "ready"}>
         <Icon name="download" size={17} />
         {list.exportBusy ? ENTERPRISE_SEARCH_COPY.exporting : "Exporter"}
