@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { dispatchRefundEvent } from "@/lib/features/refund-execution/server";
 import { env } from "node:process";
 import {
   adminClient,
@@ -30,6 +31,13 @@ export async function POST(request: Request) {
     } catch {
       throw new ApiError(400, "Signature de paiement invalide.");
     }
+    const live=/^(sk|rk)_live_/.test(env.STRIPE_SECRET_KEY??"");
+    if(event.livemode!==live||event.account)throw new ApiError(400,"Contexte du paiement invalide.");
+    if(["refund.created","refund.updated","refund.failed"].includes(event.type)){
+      await dispatchRefundEvent(event,stripe,adminClient(),live);
+      return Response.json({received:true},{headers:PAYMENT_HEADERS});
+    }
+    // Other event families are acknowledged as transport only; no finance mutation is claimed.
     const session = event.data.object as Stripe.Checkout.Session;
     // Signed booking-hold events have no quote_id and must not enter the legacy payment writer.
     // Acknowledging them never confirms a booking, capture, transfer or payment.

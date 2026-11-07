@@ -44,3 +44,11 @@ Responsable : Codex ROOT, un seul auteur backend. Périmètre : nouvelle RPC `av
 ## SIGNED-NEW — demande connectée : choix de paiement + clé idempotente, claim Claude lead
 
 Décision ROOT : client connecté #new ⇒ même parcours que la réservation (pendingDraft + booking ⇒ BookingConfirm ⇒ POST /api/bookings avec payment_choice, service_slug neutre `demande-<catégorie>`, libellé de catégorie affiché) ; gestionnaire ⇒ POST /api/interventions avec request_id persisté AVANT envoi (create_intervention_once), charge utile gelée et clé identique après réponse incertaine, jamais de nouvel UUID. « Modifier » une réservation reste updatePendingDraft + BookingConfirm (pas de création). Photos gardées en mémoire et envoyées APRÈS confirmation par processUploads ; perdues au rechargement/retour bancaire ⇒ message explicite. Échec de stockage ⇒ aucun POST. Démo : aucun POST. Fichiers : components/** (courant-app, session-types, client-space, booking-confirm, request-key) + tests ; aucun backend.
+
+## REFUND-EXECUTION-CONTRACT — PLAN SEULEMENT, Codex backend
+
+Basee6aa35a ; branchecodex/refund-execution ; contratdocs/REFUND_EXECUTION_CONTRACT.md à contre-revoir ROOT AVANT toutcode. Première trancheproposée remboursement approuvé→émission idempotente→confirmationwebhook, fournisseurinjecté sanscloud. application_fee/transfer/payout restentOPEN, pas de faux virement confirmé. Aucun fichierapp/SQL modifié dansceclaimdoc.
+
+## REFUND-EXECUTION — GO CODE ROOT
+
+GO explicite reçu après contratdc58, basead069641 ; Codex backend unique, scope et ownership du contrat conservés. Code/SQL/tests seulement, aucun fournisseur réel/cloud/credentials. Refus explicites configuration/policy/live ; autresfamilles restentOPEN.

@@ -22,6 +22,7 @@ export async function GET(request: Request) {
         const bytes = Buffer.from(raw, "base64url");
         if (bytes.toString("base64url") !== raw) throw Error();
         cursor = missionCursorSchema.parse(JSON.parse(bytes.toString("utf8")));
+        cursor = { ...cursor, actor_id: cursor.actor_id.toLowerCase(), id: cursor.id.toLowerCase() };
         if (cursor.actor_id !== user.id) throw Error();
       } catch { throw new ApiError(422, "Curseur invalide. Actualisez les offres."); }
     }

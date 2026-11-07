@@ -1,0 +1,74 @@
+/* Refund execution leaf — tokens only. */
+.panel {
+  display: grid;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+.kv {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--ui-space-1) var(--ui-space-3);
+  margin: 0;
+}
+.kv dt {
+  color: var(--ui-text-muted);
+}
+.kv dd {
+  margin: 0;
+}
+.muted {
+  margin: 0;
+  color: var(--ui-text-muted);
+}
+.note {
+  margin: 0;
+  color: var(--ui-text);
+}
+.warning {
+  margin: 0;
+  color: var(--ui-warning);
+}
+.error {
+  margin: 0;
+  color: var(--ui-danger);
+}
+.confirm {
+  display: grid;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface);
+}
+.confirm p {
+  margin: 0;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-space-2);
+}
+.button {
+  justify-self: start;
+  min-height: 44px;
+  padding: 0 var(--ui-space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-card);
+  color: var(--ui-text);
+  font: inherit;
+  cursor: pointer;
+}
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.primary {
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
