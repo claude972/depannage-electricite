@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 const HEADERS = { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" };
 const COLUMNS = "id,site_id,meter_label,period_start,period_end,consumption_wh,cost_cents,source_kind,source_reference,note,version,created_by,created_at,updated_by,updated_at,archived_at";
 type Context = { params: Promise<{ id: string }> };
-const cursorSchema = z.object({ day: energyDate, id: z.uuid() }).strict();
+const cursorSchema = z.object({ day: energyDate, id: z.uuid(), site_id: z.uuid(), from: energyDate.nullable(), to: energyDate.nullable() }).strict();
 function failed(error: unknown) {
   const status = error instanceof ApiError ? error.status : 503;
   return Response.json({ error: error instanceof ApiError ? error.message : "Les consommations n’ont pas pu être vérifiées. Réessayez." },
@@ -19,7 +19,7 @@ async function siteId(context: Context) {
   if (!parsed.success) throw new ApiError(422, "Référence de site invalide.");
   return parsed.data;
 }
-function query(request: Request) {
+function query(request: Request, site: string) {
   const params = new URL(request.url).searchParams;
   if (request.url.length > 2048 || [...params.keys()].some(k => !["from", "to", "cursor"].includes(k)) ||
     ["from", "to", "cursor"].some(k => params.getAll(k).length > 1)) throw new ApiError(422, "Vérifiez les filtres de consommation.");
@@ -34,6 +34,7 @@ function query(request: Request) {
       const decoded = Buffer.from(raw, "base64url");
       if (decoded.toString("base64url") !== raw) throw Error();
       cursor = cursorSchema.parse(JSON.parse(decoded.toString("utf8")));
+      if (cursor.site_id !== site || cursor.from !== from || cursor.to !== to) throw Error();
     } catch { throw new ApiError(422, "Le curseur est invalide. Rechargez la liste."); }
   }
   return { from, to, cursor };
@@ -41,7 +42,7 @@ function query(request: Request) {
 export async function GET(request: Request, context: Context) {
   try {
     const { db } = await authenticatedClient();
-    const id = await siteId(context), filters = query(request);
+    const id = await siteId(context), filters = query(request, id);
     const site = await db.from("sites").select("id").eq("id", id).maybeSingle();
     dbError(site.error);
     if (!site.data) throw new ApiError(404, "Ce site est introuvable.");
@@ -61,7 +62,7 @@ export async function GET(request: Request, context: Context) {
     if (!Number.isSafeInteger(result.count) || result.count === null || result.count < 0 || records.length !== Math.min(result.count, 100) || new Set(records.map(r => r.id)).size !== records.length)
       throw new ApiError(503, "La liste des consommations est incomplète. Réessayez.");
     const hasMore = result.count > 100, visible = records, last = visible.at(-1);
-    const next = hasMore && last ? Buffer.from(JSON.stringify({ day: last.period_start, id: last.id })).toString("base64url") : null;
+    const next = hasMore && last ? Buffer.from(JSON.stringify({ day: last.period_start, id: last.id, site_id: id, from: filters.from, to: filters.to })).toString("base64url") : null;
     // A later page never becomes a total for the full selected period.
     const page = energyPage(visible, hasMore || filters.cursor !== null, next, rights.data);
     page.page.has_more = hasMore;

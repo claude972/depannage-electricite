@@ -153,7 +153,7 @@ export class PdfDocument {
       const swapped = hex.slice(4).replace(/(..)(..)/g, "$2$1");
       return `<FEFF${swapped}>`;
     };
-    const infoParts = [`/Title ${literal(info.title)}`, `/Producer ${literal(info.producer ?? "Courant quote documents")}`];
+    const infoParts = [`/Title ${literal(info.title)}`, `/Producer ${literal(info.producer ?? "Documents de devis")}`];
     if (info.subject) infoParts.push(`/Subject ${literal(info.subject)}`);
     const created = pdfDate(info.createdAt);
     if (created) infoParts.push(`/CreationDate (${created})`);
