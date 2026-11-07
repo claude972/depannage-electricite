@@ -27,3 +27,7 @@ Ajouter POST /api/admin/messages avec UUID de message stable, intervention et te
 ## ADM-04 — dossiers d’un client, ROOT Codex auteur
 
 Compléter le filtre serveur client_id de l’annuaire interventions administrateur ; UUID strict, empreinte curseur incluant le client, comptage et pagination existants conservés, aucune projection privée ajoutée ni droits élargis. Le point de lecture profil existe déjà via /api/admin/directory?kind=clients&id=UUID. Claude raccorde la fiche client à ces deux routes après tests.
+
+## ENT-11 — SLA consolidé multi-sites, claim Codex backend
+
+Base f47ba7f ; branche codex/organization-sla. Writer lib/features/organization-sla/**, GET app/api/organizations/[id]/sla/route.ts, migration snapshot lecture seule et tests. RPC STABLE SECURITY INVOKER sous JWT/RLS : un snapshot SQL/captured_at unique, sites VISIBLES paginés20 par UUID, count exact de cet univers visible uniquement, can_access_organization_wide explicite. Cent cas/site, vingt pauses/cas, cent calendriers référencés/page ; caps et dépendances absentes donnent partial, jamais zéro substitué. Réutiliser evaluateSlaCase/summarize existants, aucun nouveau moteur calendrier ; absence de calendrier/cible donne not_measurable. Complétude du périmètre visible et organisation entière distinctes ; curseur n’autorise aucune donnée et la dernière page ne vaut pas rapport global. Pas d’écriture/credentials/cloud/UI, anciens modules SLA inchangés. Vérification vrais handlers, calcul métier/références étrangères/partial/503 et SQL PGlite isolé puis tsc, contre-revue ROOT.
