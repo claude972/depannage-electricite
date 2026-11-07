@@ -91,7 +91,8 @@ test("wiring: client #new never posts the legacy route in live; manager create s
   assert.doesNotMatch(start, /api\(|api</, "startBooking sends nothing");
   assert.match(start, /if \(!saveBooking\(storage, next\) \|\| !savePublicDraft\(storage, values\)\.ok\) \{/);
   const confirm = app.slice(app.indexOf("async function confirmBooking("), app.indexOf("async function uploadBookingPhotos("));
-  const demoBranch = confirm.slice(confirm.indexOf("if (demo) {"), confirm.indexOf("const keyed = ensureRequestId("));
+  // PUB-02: the live path now goes through sendReviewedBooking (review + key + POST).
+  const demoBranch = confirm.slice(confirm.indexOf("if (demo) {"), confirm.indexOf("sendReviewedBooking("));
   assert.doesNotMatch(demoBranch, /api\(|api</, "demo never posts");
   const client = readFileSync("components/role/client-space.tsx", "utf8");
   assert.match(client, /if \(session\.startBooking\(values, photos\)\) return;\s+if \(session\.mode === "demo"\) await session\.createIntervention\(values, photos\);/);

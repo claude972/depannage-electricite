@@ -106,23 +106,39 @@ export function setPricesState(s: PricesState) {
   emit(s);
 }
 
-// ---- Live review before creating a request (9ff9009 + 8a2f9b6) ------------------------------------
+// ---- Live review before creating a request (9ff9009 + 8a2f9b6 + ROOT final contract) ---------------
 // reviewed_estimate_version: optional while the active version is 1, REQUIRED and exact when > 1.
-// `shown` = what the review step displayed; `fresh` = the forced re-read right before the POST.
+// `shownVersion` = the version ACTUALLY RENDERED by the review step (recorded at render, never read
+// from the global store at submit); `fresh` = the forced re-read right before the POST.
 export type ReviewDecision = { kind: "send"; version: number } | { kind: "omit" } | { kind: "block"; message: string };
+/** Stable server code (409) after a CERTAIN SQL refusal 'Estimate review required'. */
+export const ESTIMATE_REVIEW_CODE = "estimate_review_required";
 export const REVIEW_COPY = {
   unverified: "estimation non vérifiée",
   changed: "L’estimation indicative a été mise à jour : vérifiez la nouvelle fourchette affichée puis confirmez à nouveau. Rien n’a été envoyé.",
   blocked: "L’estimation indicative n’a pas pu être vérifiée : rien n’a été envoyé. Réessayez dans un instant.",
-  conflict: "L’estimation indicative a changé pendant l’envoi : rien n’a été enregistré. Vérifiez la nouvelle fourchette affichée puis confirmez à nouveau.",
+  conflict: "L’estimation indicative a changé. Vérifiez la nouvelle fourchette puis confirmez à nouveau.",
+  reserved: (v: number) => `Estimation de votre demande : version ${v}, dont les montants restent ceux de cette version.`,
 } as const;
-export function reviewDecision(shown: PricesState, fresh: PricesState): ReviewDecision {
-  const sv = shown.phase === "ready" && shown.data ? shown.data.version : null;
+export function reviewDecision(shownVersion: number | null, fresh: PricesState): ReviewDecision {
   if (fresh.phase === "ready" && fresh.data) {
     const v = fresh.data.version;
-    // The user must have seen this exact version, except V1 (the field may even be omitted there).
-    return v === 1 || sv === v ? { kind: "send", version: v } : { kind: "block", message: REVIEW_COPY.changed };
+    // The user must have SEEN this exact version, except V1 (the field may even be omitted there).
+    return v === 1 || shownVersion === v ? { kind: "send", version: v } : { kind: "block", message: REVIEW_COPY.changed };
   }
-  // Unverified read: never fabricate a version. Last seen > 1 ⇒ the server would refuse: block.
-  return sv !== null && sv > 1 ? { kind: "block", message: REVIEW_COPY.blocked } : { kind: "omit" };
+  // Unverified read: never fabricate a version. Last rendered > 1 ⇒ the server would refuse: block.
+  return shownVersion !== null && shownVersion > 1 ? { kind: "block", message: REVIEW_COPY.blocked } : { kind: "omit" };
 }
+
+/** Version actually rendered by each review step (written at render commit by ReviewEstimate). */
+const shown = new Map<string, number | null>();
+export const recordShown = (scope: string, version: number | null) => void shown.set(scope, version);
+export const shownVersion = (scope: string): number | null => shown.get(scope) ?? null;
+export const REVIEW_SCOPES = { requestForm: "request-form", bookingConfirm: "booking-confirm" } as const;
+
+/** A key (booking nonce / request_id) refused with ESTIMATE_REVIEW_CODE: its next EXPLICIT click
+ *  re-reviews and updates ONLY its stored version, then re-sends the SAME key. One at a time. */
+let reviewRequired: string | null = null;
+export const markReviewRequired = (key: string) => void (reviewRequired = key.toLowerCase());
+export const isReviewRequired = (key: string | undefined | null) => !!key && reviewRequired === key.toLowerCase();
+export const clearReviewRequired = (key: string) => void (reviewRequired === key.toLowerCase() && (reviewRequired = null));

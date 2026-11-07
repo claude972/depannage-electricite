@@ -446,7 +446,7 @@ export function RequestForm({
                   {money(c.min)} – {money(c.max)}
                 </strong>
               ) : (
-                <ReviewEstimate category={values.category} />
+                <ReviewEstimate category={values.category} scope="request-form" />
               )}
               <p>
                 Ces montants sont des exemples de préparation du service. Le

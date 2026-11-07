@@ -138,12 +138,13 @@ test("résumé visible à chaque étape ; récapitulatif complet et rien d’env
     const html = wizard({ ...filled(), step });
     const summary = html.slice(html.indexOf("data-booking-summary"), html.indexOf("</aside>"));
     assert.match(summary, new RegExp(service.title), `étape ${step}`);
-    assert.match(text(summary), /Estimation indicative : 80 € – 180 €/);
+    // PUB-02: the live range is read at runtime (fallback in the server HTML), never the static amount.
+    assert.match(text(summary), /Estimation indicative : lecture en cours/);
     assert.match(text(summary), /Urgence : Après-demain \(créneau souhaité\)/);
   }
   const recap = wizard({ ...filled(), step: 5 });
   const t = text(recap);
-  for (const part of [service.title, "80 € – 180 €", "Après-demain", "12 rue des Lilas", "97200 Fort-de-France", "Vos coordonnées (privées)", "Camille Durand", "Demande pour une entreprise", "Règlement", "Après intervention — paiement sur la plateforme"]) assert.ok(t.includes(part), part);
+  for (const part of [service.title, "lecture en cours", "Après-demain", "12 rue des Lilas", "97200 Fort-de-France", "Vos coordonnées (privées)", "Camille Durand", "Demande pour une entreprise", "Règlement", "Après intervention — paiement sur la plateforme"]) assert.ok(t.includes(part), part);
   assert.match(t, /Rien n’est encore envoyé\. À l’étape suivante, vous vérifiez votre téléphone avec un code \(sans créer de compte\), puis vous confirmez l’envoi/);
   assert.match(recap, /form="booking-step-5"[^>]*>Vérifier mon téléphone<\/button>/);
   assert.match(recap, /data-booking-inline-submit="5">Vérifier mon téléphone<\/button>/);

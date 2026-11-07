@@ -273,6 +273,7 @@ export function ClientSpace({ session }: { session: Session }) {
               cardAvailable={cardAvailable}
               verifyCardHold={session.finalizeBooking}
               cancelCardHold={session.cancelBooking}
+              demo={session.mode === "demo"}
             />
           );
         return (

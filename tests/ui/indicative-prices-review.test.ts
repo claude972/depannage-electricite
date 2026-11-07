@@ -16,16 +16,23 @@ const ready = (version: number) => ({ phase: "ready" as const, data: m.parsePric
 const loading = { phase: "loading" as const, data: null };
 const error = { phase: "error" as const, data: null };
 
-test("décision de revue : version affichée envoyée ; V1 tolérée ; V>1 jamais non vue ; lecture invérifiable ⇒ aucune version fabriquée", () => {
-  assert.equal(JSON.stringify(m.reviewDecision(ready(3), ready(3))), JSON.stringify({ kind: "send", version: 3 }), "V>1: exact version");
-  assert.equal(JSON.stringify(m.reviewDecision(ready(1), ready(1))), JSON.stringify({ kind: "send", version: 1 }));
-  assert.equal(JSON.stringify(m.reviewDecision(loading, ready(1))), JSON.stringify({ kind: "send", version: 1 }), "V1 may proceed");
-  assert.equal(m.reviewDecision(ready(2), ready(3)).kind, "block", "the user saw another version");
-  assert.equal(m.reviewDecision(error, ready(3)).kind, "block", "never a version the user did not see");
-  assert.equal(JSON.stringify(m.reviewDecision(error, error)), JSON.stringify({ kind: "omit" }), "unverified at V1 ⇒ omit (doc)");
-  assert.equal(JSON.stringify(m.reviewDecision(ready(1), error)), JSON.stringify({ kind: "omit" }));
-  assert.equal(m.reviewDecision(ready(3), error).kind, "block", "unverified while last seen > 1 ⇒ blocked");
-  assert.equal((m.reviewDecision(ready(3), error) as { message: string }).message, m.REVIEW_COPY.blocked);
+test("décision de revue : version RENDUE envoyée ; V1 tolérée ; V>1 jamais non vue ; lecture invérifiable ⇒ aucune version fabriquée", () => {
+  assert.equal(JSON.stringify(m.reviewDecision(3, ready(3))), JSON.stringify({ kind: "send", version: 3 }), "V>1: exact version");
+  assert.equal(JSON.stringify(m.reviewDecision(1, ready(1))), JSON.stringify({ kind: "send", version: 1 }));
+  assert.equal(JSON.stringify(m.reviewDecision(null, ready(1))), JSON.stringify({ kind: "send", version: 1 }), "V1 may proceed");
+  assert.equal(m.reviewDecision(2, ready(3)).kind, "block", "an unseen V3 is never approved");
+  assert.equal(m.reviewDecision(null, ready(3)).kind, "block", "never a version the user did not see");
+  assert.equal(JSON.stringify(m.reviewDecision(null, error)), JSON.stringify({ kind: "omit" }), "unverified at V1 ⇒ omit (doc)");
+  assert.equal(JSON.stringify(m.reviewDecision(1, error)), JSON.stringify({ kind: "omit" }));
+  assert.equal(m.reviewDecision(3, error).kind, "block", "unverified while last rendered > 1 ⇒ blocked");
+  assert.equal(m.ESTIMATE_REVIEW_CODE, "estimate_review_required");
+  m.recordShown("x", 3);
+  assert.equal(m.shownVersion("x"), 3);
+  m.markReviewRequired("F0000000-0000-4000-8000-000000000001");
+  assert.equal(m.isReviewRequired("f0000000-0000-4000-8000-000000000001"), true);
+  m.clearReviewRequired("f0000000-0000-4000-8000-000000000001");
+  assert.equal(m.isReviewRequired("f0000000-0000-4000-8000-000000000001"), false);
+  void loading;
 });
 
 test("rejeu de clé de demande : la charge figée (avec sa version) est renvoyée telle quelle, jamais repatchée", () => {
@@ -38,22 +45,52 @@ test("rejeu de clé de demande : la charge figée (avec sa version) est renvoyé
   assert.equal(replay.request_id, "f0000000-0000-4000-8000-000000000001", "same key");
   assert.equal((replay.payload as { reviewed_estimate_version?: number }).reviewed_estimate_version, 2, "frozen version kept");
   assert.equal(replay.replayed, true);
+  // After estimate_review_required + explicit click: ONLY the frozen version of THIS key changes.
+  const savedAt = JSON.parse(store.get(k.REQUEST_KEY_STORAGE)!).savedAt;
+  assert.equal(k.updateFrozenVersion(storage, "f0000000-0000-4000-8000-000000000002", 3), false, "another key is never touched");
+  assert.equal(k.updateFrozenVersion(storage, "f0000000-0000-4000-8000-000000000001", 3), true);
+  const after = JSON.parse(store.get(k.REQUEST_KEY_STORAGE)!);
+  assert.equal(after.request_id, "f0000000-0000-4000-8000-000000000001", "same request_id");
+  assert.equal(after.payload.reviewed_estimate_version, 3);
+  assert.equal(after.payload.description, base.description, "same content");
+  assert.equal(after.savedAt, savedAt, "same TTL anchor");
+  // Read-back must match the EXACT frozen payload (only the version changed): a storage that alters
+  // anything else on write ⇒ false (the caller then sends nothing).
+  const lying = { getItem: storage.getItem, setItem: (key: string, v: string) => void store.set(key, v.replace("Disjoncteur", "Fusible")), removeItem: storage.removeItem };
+  assert.equal(k.updateFrozenVersion(lying, "f0000000-0000-4000-8000-000000000001", 4), false);
 });
 
-test("câblage : création = relecture forcée + décision, rejeu sans revue ; 409 + version changée ⇒ clé réglée ; réservations ; démo inchangée", () => {
+test("brouillon de réservation : la version revue est stockée à côté de la clé (même stockage / TTL), relue au rechargement", () => {
+  const d = loadModule("components/app/booking-draft.ts") as Record<string, (...a: unknown[]) => unknown>;
+  const draft = { slug: "panne-tableau-electrique", urgent: true, slot: null, notes: "", contact: { civility: "", first_name: "A", last_name: "B", email: "a@b.fr", phone: "+596696000001", company: false }, request_id: "f0000000-0000-4000-8000-000000000009", payment: "on_site", reviewed_estimate_version: 3 };
+  const parsed = d.parseBooking(draft) as { reviewed_estimate_version?: number };
+  assert.equal(parsed.reviewed_estimate_version, 3);
+  assert.equal(d.parseBooking({ ...draft, reviewed_estimate_version: 0 }), null);
+  assert.equal(d.parseBooking({ ...draft, request_id: undefined }), null, "a version only exists next to its key");
+  const store = new Map<string, string>();
+  const storage = { getItem: (key: string) => store.get(key) ?? null, setItem: (key: string, v: string) => void store.set(key, v), removeItem: (key: string) => void store.delete(key) };
+  assert.equal(d.saveBooking(storage, draft), true);
+  const back = d.readBooking(storage.getItem("courant-booking-draft")) as { booking: { reviewed_estimate_version?: number } } | null;
+  assert.equal(back?.booking.reviewed_estimate_version, 3, "reload ⇒ version restored");
+});
+
+test("câblage : création = version rendue + relecture forcée ; rejeu = charge figée ; 409 estimate_review_required ⇒ même clé, version changée seulement après un nouveau clic ; démo inchangée", () => {
   const app = readFileSync("components/courant-app.tsx", "utf8");
-  const create = app.slice(app.indexOf("async function createIntervention"), app.indexOf("settleRequestKey(getDraftStorage(), prepared.request_id);\n      const replayNote"));
-  assert.match(create, /if \(modeRef\.current === "demo"\) \{\s*demoCreate/, "demo unchanged (returns before any read)");
-  assert.match(create, /pendingReplay = Boolean\(storage && readRequestKey\(storage\.getItem\(REQUEST_KEY_STORAGE\)\)\);/);
-  assert.match(create, /if \(!pendingReplay\) \{\s*const shown = getPricesState\(\);\s*await loadPrices\(undefined, true\);\s*const decision = reviewDecision\(shown, getPricesState\(\)\);/);
-  assert.match(create, /if \(decision\.kind === "send"\) reviewed = \{ \.\.\.values, reviewed_estimate_version: decision\.version \} as RequestValues;/);
-  assert.match(create, /const prepared = prepareRequestKey\(getDraftStorage\(\), reviewed\);/);
-  assert.match(create, /if \(now\.phase === "ready" && now\.data && now\.data\.version !== sent\) \{\s*settleRequestKey\(getDraftStorage\(\), prepared\.request_id\);\s*throw new Error\(REVIEW_COPY\.conflict\);/);
-  const booking = app.slice(app.indexOf("async function confirmBooking"), app.indexOf('result = await api<BookingReceipt'));
-  assert.match(booking, /if \(demo\) \{[\s\S]*?return;\s*\}\s*\/\/ PUB-02/, "demo booking unchanged");
-  assert.match(booking, /if \(!current\.request_id\) \{\s*const shown = getPricesState\(\);\s*await loadPrices\(undefined, true\);/, "only a NEW booking is reviewed");
-  assert.match(booking, /return v !== undefined \? \{ reviewed_estimate_version: v \} : \{\};/);
+  const create = app.slice(app.indexOf("async function createIntervention"), app.indexOf("const replayNote"));
+  assert.match(create, /if \(modeRef\.current === "demo"\) \{\s*demoCreate/, "demo unchanged");
+  assert.match(create, /const rendered = shownVersion\(REVIEW_SCOPES\.requestForm\);\s*await loadPrices\(undefined, true\);\s*if \(!ctx\.alive\(\)\) return;/);
+  assert.match(create, /if \(!stored \|\| isReviewRequired\(stored\.request_id\)\)/);
+  assert.match(create, /updateFrozenVersion\(storageNow, stored\.request_id, decision\.version\)/);
+  assert.match(create, /e\.status === 409 && e\.code === ESTIMATE_REVIEW_CODE\) \{\s*\/\/[^\n]*\n[^\n]*\n\s*markReviewRequired\(prepared\.request_id\);/);
+  assert.doesNotMatch(create, /settleRequestKey\(getDraftStorage\(\), prepared\.request_id\);\s*throw new Error\(REVIEW_COPY/, "never a new key after the code");
+  assert.doesNotMatch(app, /bookingReviewed/, "no unbounded in-memory map");
+  const booking = app.slice(app.indexOf("async function confirmBooking"), app.indexOf("async function uploadBookingPhotos"));
+  assert.match(booking, /result = await sendReviewedBooking\(\{/);
+  assert.match(booking, /if \(result === undefined\) return;/);
   const forms = readFileSync("components/app/forms.tsx", "utf8");
-  assert.match(forms, /\{mode === "demo" \? \(\s*<strong>\s*\{money\(c\.min\)\} – \{money\(c\.max\)\}\s*<\/strong>\s*\) : \(\s*<ReviewEstimate category=\{values\.category\} \/>\s*\)\}/);
+  assert.match(forms, /<ReviewEstimate category=\{values\.category\} scope="request-form" \/>/);
+  const confirm = readFileSync("components/role/booking-confirm.tsx", "utf8");
+  assert.match(confirm, /\{demo \? \(\s*<>\{money\(c\.min\)\} – \{money\(c\.max\)\}<\/>/);
+  assert.match(readFileSync("components/role/client-space.tsx", "utf8"), /cancelCardHold=\{session\.cancelBooking\}\s+demo=\{session\.mode === "demo"\}/);
   assert.equal(m.REVIEW_COPY.unverified, "estimation non vérifiée");
 });
