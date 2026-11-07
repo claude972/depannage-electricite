@@ -25,3 +25,11 @@ Texte externe constant : « Une notification est disponible » / « Connectez-vo
 `tests/external-notification-worker.test.ts` couvre le contenu exact, porte inactive, retrait, refus d’adaptateur non idempotent, timeout/exception/réponse invalide, résultat non confirmé et bornes.
 
 Ces contrôles ne prouvent ni un envoi externe réel, ni un déploiement, ni une recette hébergée. Le stub pg_cron du banc de migrations concerne uniquement les installations existantes ; ce lot ne change aucun job.
+
+## Raccordement e-mail optionnel
+
+La migration `20261107210516_external_email_delivery.sql` et le point d’entrée `POST /api/internal/notifications/email` ajoutent l’adaptateur Resend. La route accepte uniquement un secret de service et aucun paramètre. Elle traite jusqu’à quatre lignes, renvoie des compteurs et garde la porte de la base inactive à l’installation. Les paramètres serveur sont indiqués dans `.env.example`. La disponibilité e-mail dans les préférences exige configuration complète, porte active et adresse confirmée.
+
+La dernière autorisation lit uniquement l’adresse confirmée courante du destinataire de la ligne verrouillée. Elle lie une empreinte du contenu et de l’adresse au bail, sans copie de l’adresse dans la file. Un changement de destinataire, d’expéditeur, de contenu ou de clé empêche la reprise. La limite de 23 heures depuis l’enfilement reste sous la durée de déduplication de 24 heures du fournisseur. Une réponse ambiguë préserve l’état incertain. [Déduplication Resend](https://resend.com/docs/dashboard/emails/idempotency-keys)
+
+Les tests vérifient refus d’accès, demande exacte avec fournisseur injecté, bail, changement d’adresse, désactivation et expiration. Aucune clé, activation, tâche planifiée ou livraison réelle. Le push requiert toujours son propre raccordement.

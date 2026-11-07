@@ -12,7 +12,8 @@ function fixture(send:IdempotentAdapter['send']=async()=>({outcome:'accepted',re
 test('real worker sends only generic content and opaque identity after begin; acceptance is persisted',async()=>{
  const f=fixture(async(input)=>{
   assert.equal(f.calls.at(-1)?.name,'begin_external_notification');
-  assert.deepEqual(Object.keys(input).sort(),['body','idempotencyKey','recipientId','signal','title']);
+  assert.deepEqual(Object.keys(input).sort(),['body','deliveryId','idempotencyKey','leaseToken','recipientId','signal','title']);
+  assert.equal(input.deliveryId,id);assert.equal(input.leaseToken,lease);
   assert.equal(input.title,GENERIC_MESSAGE.title);assert.equal(input.body,GENERIC_MESSAGE.body);assert.equal(input.recipientId,recipient);
   return {outcome:'accepted',reference:'ref'};
  });

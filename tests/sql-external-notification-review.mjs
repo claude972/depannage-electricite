@@ -135,7 +135,7 @@ try {
  await db.exec('set role service_role');
  const {processExternalNotifications,GENERIC_MESSAGE}=await import('../lib/features/notifications/external-delivery/worker.ts');
  const rpc={async rpc(name,args){
-  const keys={claim_external_notification:['p_channel','p_provider','p_idempotent'],begin_external_notification:['p_id','p_lease'],finish_external_notification:['p_id','p_lease','p_outcome','p_reference']}[name];
+  const keys={claim_external_notification:['p_channel','p_provider','p_idempotent'],begin_external_notification:['p_id','p_lease'],finish_external_notification:['p_id','p_lease','p_outcome','p_reference'],authorize_external_email:['p_id','p_lease','p_payload_tag']}[name];
   assert.ok(keys);
   return {error:null,data:await one(`select public.${name}(${keys.map((_,i)=>'$'+(i+1)).join(',')})v`,keys.map(k=>args[k]))};
  }};
@@ -160,5 +160,35 @@ try {
  eq(await begin(stale),null);
  eq(await claim(),{skipped:true});eq(await claim(),null);
  eq(await one('select count(*)::int v from notification_delivery_private.outbox where notification_id=$1',[whileOff]),0);
+
+ // The provider boundary binds current verified address and body, and expires before provider deduplication.
+ const authorize=(l,tag='a'.repeat(64))=>one('select public.authorize_external_email($1,$2,$3)v',[l.id,l.lease_token,tag]);
+ await db.exec('reset role');await notify();await db.exec('set role service_role');
+ const emailLease=await claim('email','resend');
+ eq(await authorize(emailLease),null); // reservation alone cannot disclose an address
+ await begin(emailLease);
+ eq(await authorize({...emailLease,lease_token:crypto.randomUUID()}),null);
+ eq(await authorize(emailLease),`${user}@example.test`);
+ eq(await authorize(emailLease,'b'.repeat(64)),null);
+ eq(await finish(emailLease,'uncertain'),true);
+ await db.exec("reset role;update notification_delivery_private.outbox set next_attempt_at=now()-interval '1 minute'where status='uncertain'");
+ await q("update auth.users set email='changed@example.test' where id=$1",[user]);
+ await db.exec('set role service_role');
+ const newLease=await claim('email','resend');await begin(newLease);
+ eq(await authorize(newLease),null);
+ eq(await finish(newLease,'failed'),true);
+ eq(await one('select status v from notification_delivery_private.outbox where id=$1',[newLease.id]),'uncertain');
+ await db.exec('reset role');const oldEmail=await notify();
+ await q("update notification_delivery_private.outbox set created_at=now()-interval '23 hours 1 second' where notification_id=$1",[oldEmail]);
+ await db.exec('set role service_role');
+ const expired=await claim('email','resend');await begin(expired);eq(await authorize(expired),null);await finish(expired,'failed');
+ await db.exec('reset role');await notify();await db.exec('set role service_role');
+ const disabled=await claim('email','resend');await begin(disabled);
+ await db.exec('reset role;update notification_delivery_private.control set enabled=false;set role service_role');
+ eq(await authorize(disabled),null);
+ eq(await one('select public.external_notification_dispatch_enabled()v'),false);
+ await db.exec('reset role;set role authenticated');
+ await assert.rejects(authorize(disabled),e=>e.code==='42501');checks++;
+ await assert.rejects(db.query('select public.external_notification_dispatch_enabled()'),e=>e.code==='42501');checks++;
  console.log(`PASS external notification outbox: ${checks} checks, full migrations, inactive gate, scoped revalidation, leases, bounded uncertain retry, enqueue isolation and ACL`);
 }catch(e){console.error(e.message,e.code,e.query,e.stack?.split("\n").slice(0,4).join("\n"));process.exitCode=1;}finally{await db.close()}

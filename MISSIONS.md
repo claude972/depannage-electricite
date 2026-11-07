@@ -94,3 +94,11 @@ Astra réalise le lot serveur de file privée et de reprise pour les notificatio
 ### SYS-10 — revue manuelle des photos du dossier
 
 ROOT raccorde la section photo du particulier à la conversation du dossier attribué et donne à l’artisan attribué accès aux photos du même dossier par le téléchargement privé existant. Vérifier dossier exact, absence de photo, rôle et refus d’accès. La revue manuelle utilise la messagerie actuelle. L’analyse automatique reste suivie séparément.
+
+### FIN-08 — cartes enregistrées
+
+Astra réalise le serveur pour un compte particulier vérifié. Liste masquée, consentement explicite puis ajout via Stripe Checkout en mode setup, retrait du moyen prouvé rattaché au client Stripe du compte. L’identifiant client est établi côté serveur, isolé par mode et créé avec reprise bornée. Le retour navigateur déclenche une nouvelle lecture. Claude raccorde le profil à ce contrat. Vérifier la portée intercomptes, le refus sans consentement et la reprise après une réponse incertaine. Les opérations sont testées avec Stripe injecté. Le branchement aux règlements et la recette Stripe restent distincts.
+
+### SYS-04 — envoi e-mail configurable
+
+ROOT raccorde un adaptateur Resend optionnel à la file privée. L’adresse courante vérifiée et les paramètres exacts du message sont contrôlés avant chaque tentative. Une empreinte privée empêche la reprise avec un autre destinataire ou contenu. La reprise est bornée à une fenêtre inférieure à celle du fournisseur. Vérifier opt-in, porte, refus des appels non autorisés et réponses fournisseur injectées. Aucune activation ni opération sur le compte fournisseur. La livraison push conserve son propre parcours.

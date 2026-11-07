@@ -2,9 +2,8 @@ import { z } from "zod";
 
 export type Channel = "email" | "push";
 export type Outcome = { outcome: "accepted"; reference: string } | { outcome: "retryable" | "failed" | "uncertain" };
-/** No provider implements this contract in this build. This is stronger than channels.ts:
- * the SAME key must permanently deduplicate the SAME recipient and generic payload, even after
- * a timeout/process crash. Resolve current verified delivery endpoints privately; never accept
+/** The provider must deduplicate the same recipient and payload across the entire eligible
+ * retry window, even after a timeout or crash. Resolve verified delivery endpoints privately; never accept
  * an address/token from the caller. An endpoint change must not redirect a replay to a new target.
  * `accepted` means provider acceptance, NOT delivery/read. Retryable proves no acceptance.
  */
@@ -12,7 +11,7 @@ export interface IdempotentAdapter {
   channel: Channel;
   provider: string;
   durableIdempotency: true;
-  send(input: { recipientId: string; idempotencyKey: string; title: string; body: string; signal: AbortSignal }): Promise<Outcome>;
+  send(input: { deliveryId: string; leaseToken: string; recipientId: string; idempotencyKey: string; title: string; body: string; signal: AbortSignal }): Promise<Outcome>;
 }
 export interface RpcClient {
   rpc(name: string, args: Record<string, unknown>): PromiseLike<{ data: unknown; error: unknown }>;
@@ -26,19 +25,19 @@ async function call(db: RpcClient, name: string, args: Record<string, unknown>) 
   if (r.error) throw new Error("External notification persistence unavailable");
   return r.data;
 }
-async function emit(adapter: IdempotentAdapter, recipientId: string, idempotencyKey: string, timeoutMs: number): Promise<Outcome> {
+async function emit(adapter: IdempotentAdapter, deliveryId: string, leaseToken: string, recipientId: string, idempotencyKey: string, timeoutMs: number): Promise<Outcome> {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
-      Promise.resolve().then(() => adapter.send({ recipientId, idempotencyKey, ...GENERIC_MESSAGE, signal: controller.signal }))
+      Promise.resolve().then(() => adapter.send({ deliveryId, leaseToken, recipientId, idempotencyKey, ...GENERIC_MESSAGE, signal: controller.signal }))
         .then((r): Outcome => outcome.safeParse(r).success ? outcome.parse(r) : { outcome: "uncertain" })
         .catch((): Outcome => ({ outcome: "uncertain" })),
       new Promise<Outcome>((resolve) => { timer = setTimeout(() => { controller.abort(); resolve({ outcome: "uncertain" }); }, timeoutMs); }),
     ]);
   } finally { clearTimeout(timer); }
 }
-/** Explicit invocation only. No production caller, cron or registered adapter. SQL gate is false.
+/** Explicit invocation only. No cron. The SQL gate starts inactive.
  * Every iteration claims a fresh lease, then rechecks scope/preferences immediately before send.
  * Persistence failure stops the batch; a crashed in-flight send remains uncertain, never "sent".
  */
@@ -55,7 +54,7 @@ export async function processExternalNotifications(db: RpcClient, adapter: Idemp
     const item = source.parse(await call(db, "begin_external_notification", { p_id: lease.id, p_lease: lease.lease_token }));
     if (!item) { report.skipped++; continue; }
     if (item.id !== lease.id || item.channel !== adapter.channel || item.provider !== adapter.provider || item.idempotency_key !== `notification:${item.id}`) throw new Error("External delivery identity mismatch");
-    const result = await emit(adapter, item.recipient_id, item.idempotency_key, timeoutMs);
+    const result = await emit(adapter, item.id, lease.lease_token, item.recipient_id, item.idempotency_key, timeoutMs);
     const saved = await call(db, "finish_external_notification", { p_id: lease.id, p_lease: lease.lease_token, p_outcome: result.outcome, p_reference: result.outcome === "accepted" ? result.reference : null });
     if (saved !== true) { report.unconfirmed++; break; }
     if (result.outcome === "accepted") report.accepted++;
