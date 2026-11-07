@@ -215,3 +215,124 @@ export function createStaging({ fetcher, store, newId, context, get, set }: { fe
     },
   };
 }
+
+// ---- Publication (8a2f9b6 publication.ts): shown ONLY when the admin GET says publication_available
+//   POST /api/admin/indicative-prices/publication { command_id, expected_active_version,
+//        expected_latest_version (> active), reason 10–1000 } → { published_version (= expected latest),
+//        active_version, replayed }   503 while the server gate is off. Explicit confirmation, never automatic.
+export const PUBLISH_PATH = "/api/admin/indicative-prices/publication";
+export const publishCommand = z
+  .object({ command_id: z.uuid(), expected_active_version: version, expected_latest_version: version, reason: z.string().trim().min(10).max(1000) })
+  .strict()
+  .refine((x) => x.expected_latest_version > x.expected_active_version);
+export type PublishCommand = z.infer<typeof publishCommand>;
+const publishReceipt = z.object({ published_version: version, active_version: version, replayed: z.boolean() }).strict();
+export function parsePublishReceipt(body: unknown, cmd: PublishCommand) {
+  const r = publishReceipt.safeParse(body);
+  if (!r.success) return null;
+  const d = r.data;
+  return d.published_version === cmd.expected_latest_version && d.active_version >= d.published_version && (d.replayed || d.active_version === d.published_version) ? d : null;
+}
+export const publishKey = (uid: string | null, gen: number) => `${PENDING_PREFIX}publish:${uid ?? "-"}:${gen}`;
+const storedPublish = z.object({ uid: z.string().min(1), gen: z.number().int().nonnegative(), command: publishCommand }).strict();
+export const PUBLISH_COPY = {
+  title: "Publier la version préparée",
+  note: (active: number, latest: number) => `Version active : ${active}. Version préparée : ${latest}. La publication rend la version préparée active pour les nouvelles demandes ; les réservations et dossiers existants gardent leur estimation.`,
+  confirm: (latest: number) => `Confirmer la publication de la version ${latest}`,
+  published: (v: number) => `Version ${v} publiée : elle est maintenant active.`,
+  replayed: "Publication déjà enregistrée (même commande) : état relu.",
+  conflict: "Les versions ont changé entre-temps : rien n’est renvoyé automatiquement. L’état a été relu.",
+  closed: "La publication est désactivée côté serveur : rien n’a été publié. L’état a été relu.",
+  retry: "La publication n’est pas confirmée. L’état a été relu ; vous pouvez renvoyer la même commande.",
+  restored: "Une publication envoyée depuis cet onglet n’a pas été confirmée : renvoyez-la (même commande) ou abandonnez-la.",
+} as const;
+
+export type PublishView = { busy: boolean; error: string; notice: string; pending: PublishCommand | null };
+export const PUBLISH_INITIAL: PublishView = { busy: false, error: "", notice: "", pending: null };
+/** Identity-fenced publication; the caller re-reads the admin view after every outcome. */
+export function createPublication({ fetcher, store, newId, context, get, set, reload }: { fetcher: () => typeof fetch; store: () => Store | null; newId: () => string | null; context: Context; get: () => PublishView; set: (v: PublishView) => void; reload: () => Promise<void> }) {
+  let inFlight = false;
+  let alive = true;
+  const who = () => ({ uid: context.userId(), gen: context.generation() });
+  const same = (w: { uid: string | null; gen: number }) => alive && context.userId() === w.uid && context.generation() === w.gen;
+  const safe = <T,>(f: () => T): T | undefined => {
+    try {
+      return f();
+    } catch {
+      return undefined;
+    }
+  };
+  const clear = (w = who()) => safe(() => store()?.remove(publishKey(w.uid, w.gen)));
+  const send = async (cmd: PublishCommand): Promise<boolean> => {
+    if (inFlight) return false;
+    const w = who();
+    if (!w.uid) return false;
+    const s = safe(store);
+    const value = JSON.stringify({ uid: w.uid, gen: w.gen, command: cmd });
+    const ok = s && safe(() => (s.set(publishKey(w.uid, w.gen), value), s.get(publishKey(w.uid, w.gen)) === value)) === true;
+    if (!ok) return set({ ...get(), error: ADMIN_COPY.storage }), false;
+    inFlight = true;
+    set({ ...get(), busy: true, error: "", notice: "" });
+    let r: Result;
+    try {
+      const res = await fetcher()(PUBLISH_PATH, { method: "POST", credentials: "same-origin", cache: "no-store", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cmd) });
+      r = { status: res.status, body: await res.json().catch(() => null) };
+    } catch {
+      r = { status: 0, body: null };
+    } finally {
+      inFlight = false;
+    }
+    if (!same(w)) return false;
+    const done = r.status === 200 ? parsePublishReceipt(r.body, cmd) : null;
+    if (done) {
+      clear(w);
+      set({ busy: false, pending: null, error: "", notice: done.replayed ? PUBLISH_COPY.replayed : PUBLISH_COPY.published(done.published_version) });
+    } else if (r.status === 409 || r.status === 422 || r.status === 401 || r.status === 403) {
+      clear(w);
+      set({ busy: false, pending: null, notice: "", error: r.status === 409 ? PUBLISH_COPY.conflict : r.status === 422 ? ADMIN_COPY.invalid : ADMIN_COPY.forbidden });
+    } else if (r.status === 503 && (r.body as { error?: string } | null)?.error === "La publication des fourchettes est désactivée.") {
+      clear(w);
+      set({ busy: false, pending: null, notice: "", error: PUBLISH_COPY.closed });
+    } else {
+      set({ busy: false, pending: cmd, notice: "", error: PUBLISH_COPY.retry });
+    }
+    await reload(); // always re-read: success, conflict, closed gate or uncertain reply
+    return Boolean(done);
+  };
+  return {
+    dispose() {
+      alive = false;
+    },
+    restorePending() {
+      const w = who();
+      if (!w.uid) return;
+      const raw = safe(() => store()?.get(publishKey(w.uid, w.gen)) ?? null) ?? null;
+      if (raw === null) return;
+      let parsed: z.infer<typeof storedPublish> | null = null;
+      try {
+        const r = storedPublish.safeParse(JSON.parse(raw));
+        parsed = r.success ? r.data : null;
+      } catch {
+        parsed = null;
+      }
+      if (!parsed || parsed.uid !== w.uid || parsed.gen !== w.gen) return void safe(() => store()?.remove(publishKey(w.uid, w.gen)));
+      set({ ...get(), pending: parsed.command, error: PUBLISH_COPY.restored });
+    },
+    publish(view: StageView, reason: string): Promise<boolean> {
+      if (!view.publication_available || view.latest_version <= view.active.version || get().pending || inFlight) return Promise.resolve(false);
+      const text = reason.trim();
+      if (text.length < 10 || text.length > 1000) return set({ ...get(), error: ADMIN_COPY.reasonRequired }), Promise.resolve(false);
+      const cid = safe(newId) ?? null;
+      if (!cid) return set({ ...get(), error: ADMIN_COPY.noUuid }), Promise.resolve(false);
+      return send({ command_id: cid, expected_active_version: view.active.version, expected_latest_version: view.latest_version, reason: text });
+    },
+    retry(): Promise<boolean> {
+      const p = get().pending;
+      return p ? send(p) : Promise.resolve(false);
+    },
+    discard() {
+      clear();
+      set({ ...get(), pending: null, error: "" });
+    },
+  };
+}
