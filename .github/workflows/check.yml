@@ -27,6 +27,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+          cache: npm
+      - run: npm ci
       - name: Install pinned isolated PostgreSQL runtime outside application
         run: npm install --prefix "$RUNNER_TEMP/courant-sql" --no-save --no-package-lock @electric-sql/pglite@0.5.13
       - name: Mandatory 020 retention checks (native absence refusal and explicit scheduler stub, not a real worker)
