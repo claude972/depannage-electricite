@@ -1,5 +1,5 @@
 // After-intervention payment leaf (historical code « on_site »), PLATFORM-ONLY decision: read-only,
-// no declaration control for any viewer, no invented payment link / QR (explicit unavailable state),
+// no declaration control for any viewer, payment link/action only from the contract leaf (no QR),
 // historical declarations stay worded as declarations (never bank payments), strict DTO parse,
 // 404 renders nothing, stale replies ignored. Pure / SSR tests (no network).
 import test from "node:test";
@@ -28,17 +28,24 @@ test("parser: contract due (platform_only) and historical declared parse; garbag
     assert.equal(m.parseOnsiteSettlement(bad), null, JSON.stringify(bad));
 });
 
-test("due: client and artisan both see platform-only wording, NO declaration control, explicit link/QR unavailable state", () => {
+test("due: client and artisan both see platform-only wording, NO declaration control; the payment slot comes only from the contract leaf", () => {
   for (const viewer of ["client", "artisan"] as const) {
     const html = view(ready(DUE), viewer);
     assert.match(html, /sur la plateforme/);
-    assert.match(html, /data-onsite-payment-link="unavailable"/);
-    assert.match(html, /seront proposés ici dès que le paiement en ligne sera activé/);
-    assert.doesNotMatch(html, /<button/, `${viewer}: no button at all (no declaration, no fake pay link)`);
+    assert.doesNotMatch(html, /seront proposés ici dès que le paiement en ligne sera activé/, "no static promise any more");
+    assert.doesNotMatch(html, /QR code/, "no QR promised");
+    assert.doesNotMatch(html, /<button/, `${viewer}: no button without the contract leaf (no declaration, no fake pay link)`);
     assert.doesNotMatch(html, /Déclarer|Je confirme avoir reçu|data-onsite-declare|data-onsite-confirm/);
+    // The due state hands the server amount to the payment slot (PaymentLinkPanel in OnsiteSettlement).
+    let seen: unknown = undefined;
+    const slotted = renderToString(createElement(m.OnsiteView as never, { load: ready(DUE), viewer, onReload: noop, payment: (due: { amount_cents: number | null }) => { seen = due.amount_cents; return createElement("i", { "data-slot": "" }); } } as never));
+    assert.match(slotted, /data-slot=""/);
+    assert.equal(seen, 18000);
   }
   assert.match(view(ready(DUE), "client"), /Ne payez jamais l’artisan directement/);
   assert.match(view(ready(DUE), "artisan"), /n’acceptez ni espèces, ni terminal ou virement personnel/);
+  const src = readFileSync("components/role/onsite-settlement.tsx", "utf8");
+  assert.match(src, /<PaymentLinkPanel interventionId=\{interventionId\} viewer=\{viewer\} amountCents=\{due\.amount_cents\} onPay=\{viewer === "client" \? onPay : undefined\}/, "artisan never receives the pay callback");
 });
 
 test("historical declaration: shown as a past declaration, never as a bank payment", () => {

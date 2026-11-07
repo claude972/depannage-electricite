@@ -1,7 +1,7 @@
 "use client";
 // After-intervention payment status of a booking dossier (historical code « on_site »). Platform-only
 // payment decision (DESIGN.md, palette B): every payment is collected BY THE PLATFORM (client
-// follow-up, secure link or QR code tied to the dossier) — never cash / personal terminal / personal
+// follow-up or the secure follow-up link of the dossier) — never cash / personal terminal / personal
 // transfer / artisan « received » declaration for new operations. This leaf is READ-ONLY:
 //   GET /api/bookings/settlement/onsite?intervention_id=UUID   (owner client OR assigned artisan)
 // The declaration POST is retired server-side (410) and has no UI here. A 404 means « not a booking
@@ -9,7 +9,8 @@
 // Historical « on_site_declared » rows stay visible, worded as a past declaration — never as a bank
 // payment. `onSettled` (lead passes session.refresh) fires at most once per mount when a verified
 // historical declaration is read under the unchanged identity (the parent dossier may be stale).
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { PaymentLinkPanel, type PaymentLinkApi } from "./payment-link";
 import { money } from "../app/format";
 import styles from "./onsite-settlement.module.css";
 
@@ -49,13 +50,12 @@ export const ONSITE_COPY = {
     cents === null
       ? "Paiement après l’intervention, sur la plateforme — montant à confirmer par le devis accepté."
       : `Paiement après l’intervention, sur la plateforme (${money(cents)}).`,
-  clientHow: "Vous réglerez par carte via votre suivi, un lien sécurisé ou un QR code. Ne payez jamais l’artisan directement.",
+  clientHow: "Vous réglez par carte depuis le suivi de ce dossier, sur la plateforme. Ne payez jamais l’artisan directement.",
   artisanDue: (cents: number | null) =>
     cents === null
       ? "Le client règle sur la plateforme après l’intervention — montant à confirmer par le devis accepté."
       : `Le client règle sur la plateforme après l’intervention (${money(cents)}).`,
   artisanHow: "Aucun encaissement direct : n’acceptez ni espèces, ni terminal ou virement personnel. Le paiement est encaissé par la plateforme.",
-  linkPending: "Le lien de paiement sécurisé et le QR code seront proposés ici dès que le paiement en ligne sera activé. Aucun paiement n’est demandé pour l’instant.",
   declared: (cents: number | null) =>
     cents === null
       ? "Ancienne déclaration de l’artisan : règlement déclaré reçu sur place. Ce n’est pas un paiement bancaire."
@@ -114,12 +114,19 @@ export function OnsiteSettlement({
   api = DEFAULT_API,
   context = DEFAULT_ONSITE_CONTEXT,
   onSettled,
+  onPay,
+  busy,
+  linkApi,
 }: {
   interventionId: string;
   viewer: Viewer;
   api?: OnsiteApi;
   context?: OnsiteContext;
   onSettled?: () => void;
+  /** Client only: explicit platform Checkout of the accepted quote (parent: session.checkout). */
+  onPay?: () => void;
+  busy?: boolean;
+  linkApi?: PaymentLinkApi;
 }) {
   const [load, setLoad] = useState<OnsiteLoad>({ phase: "loading" });
   const mounted = useRef(true);
@@ -154,12 +161,21 @@ export function OnsiteSettlement({
     };
   }, [reload]);
 
-  return <OnsiteView load={load} viewer={viewer} onReload={() => void reload()} />;
+  return (
+    <OnsiteView
+      load={load}
+      viewer={viewer}
+      onReload={() => void reload()}
+      payment={(due) => (
+        <PaymentLinkPanel interventionId={interventionId} viewer={viewer} amountCents={due.amount_cents} onPay={viewer === "client" ? onPay : undefined} busy={busy} api={linkApi} />
+      )}
+    />
+  );
 }
 
-/** Stateless view (exported for SSR tests). No declaration control exists for any viewer, and no
- *  payment link / QR is invented: until the platform payment is available the state says so. */
-export function OnsiteView({ load, viewer, onReload }: { load: OnsiteLoad; viewer: Viewer; onReload(): void }) {
+/** Stateless view (exported for SSR tests). No declaration control exists for any viewer. The
+ *  payment action / follow-up link comes ONLY from the server contract (payment-link leaf). */
+export function OnsiteView({ load, viewer, onReload, payment }: { load: OnsiteLoad; viewer: Viewer; onReload(): void; payment?: (due: OnsiteDue) => ReactNode }) {
   if (load.phase === "hidden") return null;
   if (load.phase === "loading")
     return (
@@ -195,9 +211,7 @@ export function OnsiteView({ load, viewer, onReload }: { load: OnsiteLoad; viewe
     <section className={styles.root} data-onsite-settlement="due_on_site">
       <p className={styles.text}>{viewer === "client" ? ONSITE_COPY.clientDue(s.amount_cents) : ONSITE_COPY.artisanDue(s.amount_cents)}</p>
       <p className={styles.muted}>{viewer === "client" ? ONSITE_COPY.clientHow : ONSITE_COPY.artisanHow}</p>
-      <p className={styles.muted} role="status" data-onsite-payment-link="unavailable">
-        {ONSITE_COPY.linkPending}
-      </p>
+      {payment?.(s)}
     </section>
   );
 }

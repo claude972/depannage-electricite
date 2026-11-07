@@ -132,7 +132,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "Quand dois-je régler l’intervention ?",
-    "Le paiement intervient une fois l’intervention terminée, sur la base du devis accepté, et toujours sur la plateforme : par carte via votre suivi, un lien sécurisé ou un QR code. Ne payez jamais l’artisan directement. Une redirection de paiement ne suffit pas à confirmer un encaissement ; les anciennes déclarations « reçu sur place » restent affichées comme des déclarations, pas comme des paiements bancaires.",
+    "Le paiement intervient une fois l’intervention terminée, sur la base du devis accepté (avenants acceptés compris), et toujours sur la plateforme : par carte depuis le suivi du dossier. Ne payez jamais l’artisan directement. Une redirection de paiement ne suffit pas à confirmer un encaissement ; les anciennes déclarations « reçu sur place » restent affichées comme des déclarations, pas comme des paiements bancaires.",
   ],
   [
     "Comment suivre ma demande ?",
@@ -1509,6 +1509,8 @@ function DetailView({
           viewer="client"
           context={session.mutationContext}
           onSettled={i.status === "paid" ? undefined : () => void session.refresh()}
+          onPay={!demo && accepted && i.status === "completed" ? () => void session.checkout(accepted.id) : undefined}
+          busy={session.busy}
         />
       )}
       {currentBookingStatus?.kind === "booking" && !(currentBookingStatus.payment.method === "on_site" && (i.status === "completed" || i.status === "paid")) && (
