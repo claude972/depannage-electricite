@@ -112,10 +112,10 @@ const ctx = (org, mode = "live", gen = 0) => ({
   authority: { canWrite: true, readOnlyReason: null }, go: () => {},
 });
 window.exports = async () => {
-  let release = null, csvStatus = 200, downloads = 0;
+  let release = null, csvStatus = 200, csvType = "text/csv", downloads = 0;
   window.fetch = async (url) => {
     const u = String(url);
-    if (u.includes("format=csv")) { await new Promise((r) => (release = r)); return csvStatus === 200 ? new Response("x;y", { status: 200, headers: { "content-type": "text/csv" } }) : Response.json({ error: "Le rapport est momentanément indisponible." }, { status: csvStatus }); }
+    if (u.includes("format=csv")) { await new Promise((r) => (release = r)); return csvStatus === 200 ? new Response(csvType === "text/csv" ? "x;y" : "<html>login</html>", { status: 200, headers: { "content-type": csvType } }) : Response.json({ error: "Le rapport est momentanément indisponible." }, { status: csvStatus }); }
     if (u.startsWith("/api/reports")) return Response.json(u.includes(ORG_B) ? ${JSON.stringify(reply([site(S1)], ORG_B))} : reply);
     return Response.json({ error: "x" }, { status: 503 });
   };
@@ -129,14 +129,16 @@ window.exports = async () => {
   const btn = () => div.querySelector("[data-report-csv]");
   const state = () => ({ busy: btn().textContent.includes("Préparation"), alert: !!div.querySelector(".alert.error") });
   const out = {};
-  const scenario = async (name, change, status = 200) => {
-    csvStatus = status; downloads = 0; who = { uid: USER, gen: 0 };
+  const scenario = async (name, change, status = 200, type = "text/csv", after = async () => {}) => {
+    csvStatus = status; csvType = type; downloads = 0; who = { uid: USER, gen: 0 };
     show(ORG); await tick(200);
     btn().click(); await tick(50);
     const busyBefore = state().busy;
     await change();
     release(); await tick(200);
-    out[name] = { busyBefore, downloads, ...state() };
+    const downloadsAtReply = downloads;
+    await after();
+    out[name] = { busyBefore, downloads: Math.max(downloads, downloadsAtReply), ...state() };
   };
   await scenario("normal", async () => {});
   await scenario("AtoB", async () => { show(ORG_B); await tick(100); });
@@ -144,6 +146,11 @@ window.exports = async () => {
   await scenario("logout", async () => { who = { uid: null, gen: 1 }; show(ORG); await tick(100); });
   await scenario("lateError", async () => { show(ORG_B); await tick(100); }, 503);
   await scenario("ownError", async () => {}, 503);
+  // Logout applied in the context BEFORE any rerender bumps the generation.
+  // The reply arrives while the context already says « logged out » but nothing has re-rendered yet;
+  // the rerender comes after.
+  await scenario("contextLogout", async () => { who.uid = null; who.gen = 1; }, 200, "text/csv", async () => { show(ORG); await tick(100); });
+  await scenario("html200", async () => {}, 200, "text/html; charset=utf-8");
   root.unmount();
   URL.createObjectURL = origCreate; HTMLAnchorElement.prototype.click = origClick;
   // Demo label says the CSV is generated locally.
@@ -232,6 +239,8 @@ test("export CSV (Chromium, ReportsView réelle, réponses retardées) : A→B, 
       same(r.logout, { busyBefore: true, downloads: 0, busy: false, alert: false }, "logout / identity change: no download");
       same(r.lateError, { busyBefore: true, downloads: 0, busy: false, alert: false }, "a late CSV error after the switch is not shown");
       same(r.ownError, { busyBefore: true, downloads: 0, busy: false, alert: true }, "an error of the current scope is shown");
+      same(r.contextLogout, { busyBefore: true, downloads: 0, busy: false, alert: false }, "logout already in the context ⇒ no download");
+      same(r.html200, { busyBefore: true, downloads: 0, busy: false, alert: true }, "HTML 200 ⇒ no download + error in the current scope");
       assert.match(r.demoLabel, /démonstration \(CSV généré localement\)/);
       same(errors, []);
     } finally {
@@ -267,6 +276,10 @@ for (const width of [390, 1280])
         assert.match(r.text, /données du serveur, tous dossiers/);
         assert.ok(r.reportCalls.includes(`/api/reports?organization_id=${ORG}`) && r.reportCalls.includes(`/api/reports?organization_id=${ORG}&format=csv`), `JSON and CSV share the scope: ${JSON.stringify(r.reportCalls)}`);
         same(r.downloads, 1, "CSV download behaviour unchanged");
+        assert.match(r.text, /Paiements Stripe enregistrés/);
+        assert.match(r.text, /Historiques déclarés sur place : 200,00/, "declared shown separately");
+        assert.match(r.text, /Historiques déclarés sur place : 400,00/, "total declared shown separately");
+        assert.doesNotMatch(r.text.replace(/Aucun[^.]*\./g, ""), /dont [0-9].*déclarés|déclarés reçus sur place/, "never « dont » (declared is not a subset of Stripe payments)");
         same(r.noOrg, { calls: 0, disabled: true, text: "Choisissez une organisation pour obtenir son rapport et son export CSV." });
         same([r.demo.calls, r.demo.subtitle, r.demo.state], [0, true, "demo"], "demo unchanged, zero fetch");
         for (const [name, frames] of [["org", r.afterOrg], ["identity", r.afterIdentity]] as [string, { phase: string; n: number | null }[]][]) {

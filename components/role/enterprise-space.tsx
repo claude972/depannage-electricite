@@ -3547,7 +3547,10 @@ export function ReportsView({ c }: { c: Ctx }) {
   const server = live && report.state.phase === "ready" ? report.state.data : null;
   async function downloadCsv() {
     const gen = scopeGen.current.gen;
-    const current = () => scopeGen.current.mounted && scopeGen.current.gen === gen;
+    // Identity captured at click and re-read LIVE (a logout applied in the context before the
+    // rerender bumps the generation still invalidates the export).
+    const uid = session.mutationContext.userId(), mgen = session.mutationContext.generation();
+    const current = () => scopeGen.current.mounted && scopeGen.current.gen === gen && session.mutationContext.userId() === uid && session.mutationContext.generation() === mgen;
     setExportState({ gen, busy: false, error: "" });
     if (demo) {
       download(
@@ -3577,10 +3580,13 @@ export function ReportsView({ c }: { c: Ctx }) {
         const result = await response.json().catch(() => ({}));
         throw new Error((result as { error?: string }).error || "Le rapport n’est pas disponible.");
       }
+      // A success must be the server CSV: an HTML (or any non-CSV) 200 is refused.
+      if (!/^text\/csv\b/i.test(response.headers.get("content-type") ?? "")) throw new Error("La réponse du serveur n’est pas un fichier CSV : rien n’a été téléchargé.");
+      const disposition = response.headers.get("content-disposition");
+      if (disposition !== null && !/^attachment;\s*filename="[A-Za-z0-9._-]{1,120}\.csv"$/i.test(disposition)) throw new Error("La réponse du serveur n’est pas un fichier CSV : rien n’a été téléchargé.");
       const body = await response.text();
       if (!current()) return; // scope changed while reading the body: no download
       download("rapport.csv", body, "text/csv;charset=utf-8");
-      setExportState({ gen, busy: false, error: "" });
     } catch (e) {
       if (current()) setExportState({ gen, busy: false, error: (e as Error).message });
     } finally {
@@ -3609,7 +3615,7 @@ export function ReportsView({ c }: { c: Ctx }) {
         <div className={styles.tableHead}>
           <div>
             <h2 id="report-table-title">Budget et engagements par site</h2>
-            <p className={styles.muted}>{live ? (server && !server.scope.complete ? REPORT_COPY.partialNote : REPORT_COPY.totalsNote) : `Totaux ${BASIS} ; le CSV généré par le serveur fait foi.`}</p>
+            <p className={styles.muted}>{live ? (server && !server.scope.complete ? REPORT_COPY.partialNote : REPORT_COPY.totalsNote) : `Totaux ${BASIS} (démonstration) ; l’export CSV de démonstration est généré localement à partir de ces données.`}</p>
           </div>
         </div>
         {live && !orgId ? (
@@ -3636,7 +3642,7 @@ export function ReportsView({ c }: { c: Ctx }) {
                     <th scope="col">Site</th>
                     <th scope="col">Budget de référence</th>
                     <th scope="col">Devis acceptés</th>
-                    <th scope="col">Réglé</th>
+                    <th scope="col">Paiements Stripe enregistrés</th>
                     <th scope="col">Interventions</th>
                   </tr>
                 </thead>
@@ -3649,9 +3655,9 @@ export function ReportsView({ c }: { c: Ctx }) {
                       </td>
                       <td data-label="Budget">{r.budget_cents > 0 ? money(r.budget_cents) : "—"}</td>
                       <td data-label="Devis acceptés">{money(r.accepted_cents)}</td>
-                      <td data-label="Réglé">
+                      <td data-label="Paiements Stripe enregistrés">
                         {money(r.paid_cents)}
-                        {r.declared_paid_cents > 0 && <span className={styles.cellSub}>dont {money(r.declared_paid_cents)} déclarés reçus sur place</span>}
+                        {r.declared_paid_cents > 0 && <span className={styles.cellSub} data-report-declared="">Historiques déclarés sur place : {money(r.declared_paid_cents)}</span>}
                       </td>
                       <td data-label="Interventions">{r.interventions}</td>
                     </tr>
@@ -3662,9 +3668,9 @@ export function ReportsView({ c }: { c: Ctx }) {
                     </td>
                     <td data-label="Budget">{server.totals.budget_cents > 0 ? money(server.totals.budget_cents) : "—"}</td>
                     <td data-label="Devis acceptés">{money(server.totals.accepted_cents)}</td>
-                    <td data-label="Réglé">
+                    <td data-label="Paiements Stripe enregistrés">
                       {money(server.totals.paid_cents)}
-                      {server.totals.declared_paid_cents > 0 && <span className={styles.cellSub}>dont {money(server.totals.declared_paid_cents)} déclarés reçus sur place</span>}
+                      {server.totals.declared_paid_cents > 0 && <span className={styles.cellSub} data-report-declared="">Historiques déclarés sur place : {money(server.totals.declared_paid_cents)}</span>}
                     </td>
                     <td data-label="Interventions">{server.sites.reduce((n, r) => n + r.interventions, 0)}</td>
                   </tr>
