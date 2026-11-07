@@ -51,6 +51,7 @@ const fetcher = async (url, init) => {
     S.closeBody = JSON.parse(init.body);
     if (S.holdPost) await new Promise((r) => (S.releasePost = r));
     if (S.closeMode === "409") return json({}, 409);
+    if (S.closeMode === "403") return json({}, 403);
     return json({ closed: true });
   }
   return json({}, 404);
@@ -236,6 +237,33 @@ test("Chromium opérateur : GET et POST retardés, changement d’onglet pendant
     assert.equal(await page.locator("[data-op-callback]").count(), 1, "only the closed tab's row, no old open row");
     assert.equal(await page.locator("[data-op-callback-close]").count(), 0, "closed tab: no « Classer »");
     assert.equal(await page.locator('[role=tab][aria-selected=true]').innerText(), "Classées");
+    assert.deepEqual(errors, []);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+});
+
+test("Chromium opérateur : POST « Classer » refusé (403) pendant le GET du nouvel onglet ⇒ le GET 200 tardif ne réaffiche aucun numéro", { skip }, async () => {
+  const { server, base } = await serve();
+  const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
+  const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true });
+  try {
+    const { page, errors } = await open(browser, base, { operator: true, closeMode: "403" });
+    await page.locator("[data-op-callback-close]").first().waitFor();
+    await page.evaluate(() => { const w = window as unknown as { S: S }; w.S.holdPost = true; });
+    await page.locator("[data-op-callback-close]").first().click();
+    await page.waitForTimeout(100);
+    await page.evaluate(() => { const w = window as unknown as { S: S }; w.S.holdGet = true; });
+    await page.getByRole("tab", { name: "Classées" }).click();
+    await page.waitForTimeout(150);
+    // The POST is refused while the new tab's GET (authorised earlier) is still pending.
+    await page.evaluate(() => { const w = window as unknown as { S: S }; w.S.releasePost!(); });
+    await page.locator("[data-op-callbacks-forbidden]").waitFor();
+    await page.evaluate(() => { const w = window as unknown as { S: S }; w.S.releaseGet!(); });
+    await page.waitForTimeout(250);
+    assert.equal(await page.locator('[data-op-callbacks="forbidden"]').count(), 1, "refusal kept after the late GET 200");
+    assert.equal(await page.locator("[data-op-callback], [data-op-callback-close]").count(), 0, "no phone number re-shown after the refusal");
     assert.deepEqual(errors, []);
   } finally {
     await browser.close();

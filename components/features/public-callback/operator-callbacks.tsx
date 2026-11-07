@@ -62,7 +62,11 @@ function Live({ context, fetcher }: OperatorCallbacksProps) {
     set({ ...v, busy: id, notice: "", error: "" });
     const r = await timed(doFetch(), SUPPORT_PATH, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, expected_version: 1 }) });
     if (!alive.current || identity() !== who) return; // identity changed: nothing re-read, nothing shown
-    if (r.status === 401 || r.status === 403) return set({ key: keyOf(latest.current.status, latest.current.page), phase: "forbidden", data: null, error: COPY.forbidden, notice: "", busy: null });
+    if (r.status === 401 || r.status === 403) {
+      // Refused: invalidate every GET already in flight (an earlier 200 must not re-show the rows).
+      seq.current++;
+      return set({ key: keyOf(latest.current.status, latest.current.page), phase: "forbidden", data: null, error: COPY.forbidden, notice: "", busy: null });
+    }
     const notice = r.status === 200 && isClosure(r.body) ? COPY.closedOk : r.status === 409 ? COPY.conflict : COPY.uncertain;
     // Re-read the CURRENT tab / page only (never the one of the click if it changed meanwhile).
     await load(latest.current.status, latest.current.page, notice);
