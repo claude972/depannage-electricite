@@ -140,3 +140,5 @@ ROOT possède le serveur, la migration et les tests. Une demande publique collec
 Claude raccorde le rapport entreprise au JSON de `/api/reports`, sur le même périmètre que le CSV. Vérifier les totaux au-delà de 100 dossiers, les états vides et l’effacement au changement d’habilitation. Un second worker Claude raccorde le profil et l’écran performance artisan à la lecture serveur existante. Vérifier les périodes en Martinique, l’erreur de lecture et le changement d’identité.
 
 Astra possède la lecture serveur paginée des devis de l’artisan. Vérifier les anciens dossiers, les révisions et les refus d’accès avant de raccorder l’écran. Garder les lectures sous l’identité réelle et les écritures de devis sur les routes existantes. ROOT intègre et lance la recette sur la version exacte.
+
+## ENT-15 — rapport entreprise à l’écran depuis le JSON serveur (UI), claim Claude : `ReportsView` de `components/role/enterprise-space.tsx` + feuille `components/features/enterprise-reports/**`, mêmes paramètres que le CSV (branche `claude/enterprise-reports-ui`, base `482cabe`).
