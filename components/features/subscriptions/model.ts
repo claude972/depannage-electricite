@@ -19,6 +19,9 @@
 // as Checkout, fragment kept, memory only, opened on click). The portal is Stripe's page: no wording
 // promises a cancellation. Return /?subscription=managed#profile ⇒ re-read only (proves no change).
 // Without the portal, the screen says stopping is not available here yet (assistance).
+// Resume (ROOT): POST /api/subscriptions/resume with body EXACTLY {} → { url } — the server reuses the
+// current attempt (consent, version); no client id, no command id, nothing stored. Only on an explicit
+// click, only when state "ready" + checkout_pending + eligible; same Checkout URL validator.
 // Identity fence: the command is written + read back under `courant-private-subscriptions:` BEFORE
 // the POST (else 0 POST), keyed by uid + generation, restored only by strict parse for the same
 // identity (never sent by itself), never replayed after an identity change; 401/403 clear.
@@ -206,11 +209,13 @@ async function timed(fetcher: typeof fetch, url: string, init: RequestInit, time
   }
 }
 export const PORTAL_PATH = "/api/subscriptions/portal";
-export type SubApi = { read(): Promise<Result>; post(cmd: CheckoutCommand): Promise<Result>; portal(cmd: PortalCommand): Promise<Result> };
+export const RESUME_PATH = "/api/subscriptions/resume";
+export type SubApi = { read(): Promise<Result>; post(cmd: CheckoutCommand): Promise<Result>; portal(cmd: PortalCommand): Promise<Result>; resume(): Promise<Result> };
 export function createSubscriptionsApi(fetcher: typeof fetch = (...a) => fetch(...a)): SubApi {
   return {
     read: () => timed(fetcher, SUB_PATH, { method: "GET" }, SUB_TIMEOUT_MS),
     post: (cmd) => timed(fetcher, SUB_PATH, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cmd) }, SUB_TIMEOUT_MS),
+    resume: () => timed(fetcher, RESUME_PATH, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }, SUB_TIMEOUT_MS),
     portal: (cmd) => timed(fetcher, PORTAL_PATH, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cmd) }, SUB_TIMEOUT_MS),
   };
 }
@@ -253,6 +258,11 @@ export const COPY = {
   manageNote: "La gestion de votre abonnement se fait sur la page sécurisée de Stripe.",
   openPortal: "Ouvrir la page de gestion Stripe",
   portalReady: "La page de gestion Stripe est prête : ouvrez-la.",
+  resume: "Reprendre la souscription",
+  resumeNote: "La souscription commencée n’est pas terminée : vous pouvez reprendre la même demande sur la page sécurisée de Stripe.",
+  resumeReady: "La page sécurisée est prête : ouvrez-la pour reprendre la souscription.",
+  resumeRetry: "La reprise n’est pas confirmée. Réessayez : la même demande vide sera renvoyée.",
+  resumeConflict: "La souscription en cours a changé ou a expiré : rien n’est renvoyé automatiquement. L’état a été relu.",
   managed: "Retour de la page de gestion Stripe : l’état a été relu. Un retour ne prouve aucune modification ; seul l’état ci-dessous, relu par le serveur, fait foi.",
   returned: "Retour de la page Stripe : l’état a été relu. Un retour ne prouve pas qu’un abonnement a été souscrit ; seul l’état ci-dessous, relu par le serveur, fait foi.",
   cancelled: "Souscription interrompue sur la page Stripe : l’état a été relu.",
@@ -274,6 +284,11 @@ export const COPY = {
 export function canOffer(o: Overview | null): boolean {
   return !!o && o.state === "ready" && o.available && !o.checkout_pending && !(o.subscription && !isTerminal(o.subscription.status));
 }
+/** Resume is offered only for a ready read, a pending Checkout, and the same eligibility as the
+ *  subscribe CTA (gate open for this profile, no running subscription). */
+export function canResume(o: Overview | null): boolean {
+  return !!o && o.state === "ready" && o.checkout_pending === true && o.available && !(o.subscription && !isTerminal(o.subscription.status));
+}
 export type SubState = {
   phase: "loading" | "ready" | "error" | "unavailable" | "forbidden";
   overview: Overview | null;
@@ -283,10 +298,14 @@ export type SubState = {
   checkoutUrl: string | null;
   /** Validated portal URL, same rules (memory only, single use, opened on click). */
   portalUrl: string | null;
+  /** Validated Checkout URL from a resume (memory only, single use, opened on click). */
+  resumeUrl: string | null;
+  /** A resume reply was lost / 5xx: offer an explicit « Réessayer ». */
+  resumeRetry: boolean;
   error: string;
   notice: string;
 };
-export const SUB_INITIAL: SubState = { phase: "loading", overview: null, busy: false, pending: null, checkoutUrl: null, portalUrl: null, error: "", notice: "" };
+export const SUB_INITIAL: SubState = { phase: "loading", overview: null, busy: false, pending: null, checkoutUrl: null, portalUrl: null, resumeUrl: null, resumeRetry: false, error: "", notice: "" };
 
 export function createSubscriptionsController({ api, store, newId, context, role, get, set }: { api: () => SubApi; store: () => Store | null; newId: () => string | null; context: Context; role: () => "client" | "artisan"; get: () => SubState; set: (s: SubState) => void }) {
   let alive = true;
@@ -405,6 +424,54 @@ export function createSubscriptionsController({ api, store, newId, context, role
         return Promise.resolve(false);
       }
       return send({ command_id: cid.toLowerCase() });
+    },
+    /** Explicit click only. Body {} — no id drawn, nothing persisted, never a subscribe POST. */
+    async resume(): Promise<boolean> {
+      const s = get();
+      if (s.phase !== "ready" || s.busy || s.pending || inFlight || !canResume(s.overview)) return false;
+      const who = identity();
+      if (!same(who)) return false;
+      inFlight = true;
+      seq++;
+      set({ ...get(), busy: true, error: "", notice: "", resumeUrl: null, resumeRetry: false });
+      let r: Result;
+      try {
+        r = await api().resume();
+      } finally {
+        inFlight = false;
+      }
+      if (!same(who)) return false;
+      if (r.status === 401 || r.status === 403) {
+        forbid();
+        return false;
+      }
+      if (r.status === 200) {
+        const url = parseCheckoutReply(r.body);
+        if (url) {
+          set({ ...get(), busy: false, resumeUrl: url, notice: COPY.resumeReady });
+          return true;
+        }
+        if (z.object({ url: z.string() }).strict().safeParse(r.body).success) {
+          set({ ...get(), busy: false, error: COPY.badUrl });
+          return false;
+        }
+      }
+      if (r.status === 409) {
+        set({ ...get(), busy: false, error: COPY.resumeConflict });
+        await load();
+        return false;
+      }
+      if ([400, 404, 422, 429].includes(r.status)) {
+        set({ ...get(), busy: false, error: r.status === 429 ? COPY.limited : COPY.invalid });
+        return false;
+      }
+      set({ ...get(), busy: false, resumeRetry: true, error: COPY.resumeRetry });
+      return false;
+    },
+    takeResumeUrl(): string | null {
+      const u = get().resumeUrl;
+      if (u) set({ ...get(), resumeUrl: null });
+      return u;
     },
     takePortalUrl(): string | null {
       const u = get().portalUrl;

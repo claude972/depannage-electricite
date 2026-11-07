@@ -98,7 +98,7 @@ function harness({ reads = [] as Model.Result[], posts = [] as ((c: Model.SubCom
   let drawn = 0;
   let s: Model.SubState = { ...m.SUB_INITIAL };
   const c = m.createSubscriptionsController({
-    api: () => ({ read: async () => (calls.push({ kind: "GET" }), reads.shift() ?? res(200, overview())), post: async (cmd) => (calls.push({ kind: "POST", cmd, stored: store?.get(m.pendingKey(who.uid, who.gen)) ?? null }), (posts.shift() ?? (() => res(503)))(cmd)), portal: async (cmd) => (calls.push({ kind: "PORTAL", cmd, stored: store?.get(m.pendingKey(who.uid, who.gen)) ?? null }), (posts.shift() ?? (() => res(503)))(cmd)) }),
+    api: () => ({ read: async () => (calls.push({ kind: "GET" }), reads.shift() ?? res(200, overview())), post: async (cmd) => (calls.push({ kind: "POST", cmd, stored: store?.get(m.pendingKey(who.uid, who.gen)) ?? null }), (posts.shift() ?? (() => res(503)))(cmd)), portal: async (cmd) => (calls.push({ kind: "PORTAL", cmd, stored: store?.get(m.pendingKey(who.uid, who.gen)) ?? null }), (posts.shift() ?? (() => res(503)))(cmd)), resume: async () => (calls.push({ kind: "RESUME", stored: store?.get(m.pendingKey(who.uid, who.gen)) ?? null }), (posts.shift() ?? (() => res(503)))(undefined as never)) }),
     store: () => store,
     newId: () => (drawn++, ids.shift() ?? null),
     context: { generation: () => who.gen, userId: () => who.uid },
@@ -203,7 +203,8 @@ test("états : abonnement attesté (statut fixe, période, fin programmée, arr�
   assert.match(ended, /Terminé/);
   assert.doesNotMatch(ended, /Période en cours|aucune autre offre/);
   assert.match(ended, /Je souscris à l’offre/, "the server's offers come back after a terminal subscription");
-  assert.match(view(overview({ checkout_pending: true })), /Une souscription est en cours de confirmation/);
+  assert.match(view(overview({ checkout_pending: true, available: false, offers: [] })), /Une souscription est en cours de confirmation/);
+  assert.match(view(overview({ checkout_pending: true })), /vous pouvez reprendre la même demande/);
   assert.doesNotMatch(view(overview({ checkout_pending: true })), /Je souscris/);
   assert.match(view(overview({ available: false, offers: [] })), /Aucune offre d’abonnement disponible pour votre compte\./);
   assert.match(view(overview({ offers: [] })), /Aucune offre d’abonnement disponible/);
@@ -284,6 +285,58 @@ test("portail (dec2594) : bouton seulement si portal_available ; origine EXACTE 
   assert.match(m.COPY.managed, /Un retour ne prouve aucune modification/);
 });
 
+test("reprise (ROOT /api/subscriptions/resume) : bouton seulement si ready + checkout_pending + éligible ; corps {} ; URL Checkout validée, ouverte au clic ; 409 relecture sans rejeu ; 503 ⇒ Réessayer ; jamais de POST de souscription", async () => {
+  same([m.canResume(m.parseOverview(overview({ checkout_pending: true }))), m.canResume(m.parseOverview(overview())), m.canResume(m.parseOverview(overview({ checkout_pending: true, available: false, offers: [] }))), m.canResume(m.parseOverview(overview({ checkout_pending: true, subscription: sub() }))), m.canResume(m.parseOverview(UNAVAILABLE)), m.canResume(null)], [true, false, false, false, false, false]);
+  const view = (o: unknown) => renderToString(createElement(ui.SubscriptionsPanel, { role: "client", context: ctx, initial: { ...m.SUB_INITIAL, phase: "ready", overview: m.parseOverview(o) } }));
+  assert.match(view(overview({ checkout_pending: true })), /data-subscriptions-resume=""/);
+  assert.match(text(view(overview({ checkout_pending: true }))), /Reprendre la souscription/);
+  for (const o of [overview(), overview({ checkout_pending: true, available: false, offers: [] }), UNAVAILABLE]) {
+    const html = view(o);
+    assert.doesNotMatch(html, /data-subscriptions-resume/, JSON.stringify(o).slice(0, 80));
+    assert.doesNotMatch(text(html), /non abonné/);
+  }
+  let seen: { url: string; init: RequestInit } | null = null;
+  const api = m.createSubscriptionsApi((async (url: string, init: RequestInit) => ((seen = { url, init }), { status: 200, json: async () => ({ url: STRIPE_REAL }) })) as unknown as typeof fetch);
+  same(await api.resume(), { status: 200, body: { url: STRIPE_REAL } });
+  same([seen!.url, seen!.init.method, seen!.init.body], ["/api/subscriptions/resume", "POST", "{}"], "body exactly {}");
+  const mem = memStore();
+  const ok = harness({ store: mem.store, reads: [res(200, overview({ checkout_pending: true }))], posts: [() => res(200, { url: STRIPE_REAL })] });
+  await ok.c.load();
+  same(ok.calls.map((x) => x.kind), ["GET"], "nothing sent on load");
+  same([await ok.c.resume(), ok.drawn(), mem.map.size, ok.get().resumeUrl, ok.get().checkoutUrl], [true, 0, 0, STRIPE_REAL, null], "no id drawn, nothing stored");
+  same(ok.calls.map((x) => x.kind), ["GET", "RESUME"], "never a subscribe POST");
+  same([ok.c.takeResumeUrl(), ok.c.takeResumeUrl()], [STRIPE_REAL, null], "single use, fragment kept");
+  for (const url of ["https://billing.stripe.com/p/x", "https://evil.test/c/pay", "https://user:pw@checkout.stripe.com/c", "http://checkout.stripe.com/c"]) {
+    const bad = harness({ reads: [res(200, overview({ checkout_pending: true }))], posts: [() => res(200, { url })] });
+    await bad.c.load(); await bad.c.resume();
+    same([bad.get().resumeUrl, bad.get().error], [null, m.COPY.badUrl], url);
+  }
+  const conflict = harness({ reads: [res(200, overview({ checkout_pending: true })), res(200, overview())], posts: [() => res(409)] });
+  await conflict.c.load(); await conflict.c.resume();
+  same([conflict.get().error, conflict.calls.map((x) => x.kind), conflict.get().resumeRetry], [m.COPY.resumeConflict, ["GET", "RESUME", "GET"], false], "409 ⇒ re-read, no replay");
+  const down = harness({ reads: [res(200, overview({ checkout_pending: true }))], posts: [() => res(503), () => res(m.SUB_TIMEOUT), () => res(200, { url: STRIPE_REAL })] });
+  await down.c.load(); await down.c.resume();
+  same([down.get().resumeRetry, down.calls.map((x) => x.kind)], [true, ["GET", "RESUME"]], "503 ⇒ no automatic resend");
+  assert.match(renderToString(createElement(ui.SubscriptionsPanel, { role: "client", context: ctx, initial: down.get() })), /data-subscriptions-resume="">Réessayer</);
+  await down.c.resume(); await down.c.resume();
+  same([down.get().resumeUrl, down.calls.filter((x) => x.kind === "RESUME").length, down.calls.some((x) => x.kind === "POST")], [STRIPE_REAL, 3, false]);
+  for (const st of [401, 403]) {
+    const f = harness({ reads: [res(200, overview({ checkout_pending: true }))], posts: [() => res(st)] });
+    await f.c.load(); await f.c.resume();
+    same([f.get().phase, f.get().overview], ["forbidden", null], String(st));
+  }
+  let release!: (r: Model.Result) => void;
+  const g = harness({ reads: [res(200, overview({ checkout_pending: true }))], posts: [() => new Promise((r) => (release = r))] });
+  await g.c.load();
+  const pr = g.c.resume();
+  g.ctx.uid = "10000000-0000-4000-8000-000000000002";
+  release(res(200, { url: STRIPE_REAL }));
+  same([await pr, g.get().resumeUrl, g.get().notice], [false, null, ""], "identity changed ⇒ no follow-up");
+  const off = harness({ reads: [res(200, UNAVAILABLE)] });
+  await off.c.load();
+  same([await off.c.resume(), off.calls.length], [false, 1]);
+});
+
 test("montages : profil client après les moyens de paiement, profil artisan après les données du compte ; aucune action de résiliation propre", () => {
   const client = readFileSync("components/role/client-space.tsx", "utf8");
   assert.match(client, /<SavedPaymentMethodsPanel [^\n]*\/>\n\s*<SubscriptionsPanel key=\{`\$\{session\.mode\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\} role="client" demo=\{demo\} context=\{session\.mutationContext\} \/>/);
@@ -311,6 +364,7 @@ w.portal = async () => {
     read: async () => (calls.push("GET"), { status: 200, body: { state: "ready", available: true, portal_available: true, offers: [offer], checkout_pending: false, subscription: sub } }),
     post: async () => (calls.push("POST"), { status: 503, body: null }),
     portal: async (cmd) => (calls.push("PORTAL:" + Object.keys(cmd).join(",")), { status: 200, body: { url: "${PORTAL_REAL}" } }),
+    resume: async () => (calls.push("RESUME"), { status: 503, body: null }),
   };
   const map = new Map();
   const store = () => ({ get: (k) => map.get(k) ?? null, set: (k, v) => map.set(k, v), remove: (k) => map.delete(k) });
@@ -325,12 +379,33 @@ w.portal = async () => {
   div.querySelector("[data-subscriptions-portal-open]").click(); await tick(50);
   return { notice, before, calls, navigatedBeforeClick, navigated, heights, stored: [...map.values()], overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
 };
+w.resume = async () => {
+  const calls = [], navigated = [];
+  const api = {
+    read: async () => (calls.push("GET"), { status: 200, body: { state: "ready", available: true, portal_available: false, offers: [offer], checkout_pending: true, subscription: null } }),
+    post: async () => (calls.push("POST"), { status: 503, body: null }),
+    portal: async () => (calls.push("PORTAL"), { status: 503, body: null }),
+    resume: async () => (calls.push("RESUME"), { status: 200, body: { url: "${STRIPE_REAL}" } }),
+  };
+  const map = new Map();
+  const store = () => ({ get: (k) => map.get(k) ?? null, set: (k, v) => map.set(k, v), remove: (k) => map.delete(k) });
+  const div = document.createElement("div"); document.body.appendChild(div);
+  createRoot(div).render(h(StrictMode, null, h(SubscriptionsPanel, { role: "artisan", context: { generation: () => 0, userId: () => "${USER}" }, api, store, search: "?subscription=cancelled", navigate: (u) => navigated.push(u), newId: () => crypto.randomUUID() })));
+  await tick(300);
+  const before = calls.slice();
+  div.querySelector("[data-subscriptions-resume]").click(); await tick(200);
+  const navigatedBeforeClick = navigated.length;
+  const domHasUrl = div.innerHTML.includes("checkout.stripe.com");
+  div.querySelector("[data-subscriptions-resume-open]").click(); await tick(50);
+  return { before, calls, navigatedBeforeClick, domHasUrl, navigated, stored: [...map.values()] };
+};
 w.run = async (search) => {
   const calls = [], navigated = [];
   const api = {
     read: async () => (calls.push("GET"), { status: 200, body: { state: "ready", available: true, portal_available: false, offers: [offer], checkout_pending: false, subscription: null } }),
     post: async (cmd) => (calls.push("POST:" + cmd.action + ":" + cmd.consent), { status: 200, body: { url: "${STRIPE_REAL}" } }),
     portal: async () => (calls.push("PORTAL"), { status: 503, body: null }),
+    resume: async () => (calls.push("RESUME"), { status: 503, body: null }),
   };
   const map = new Map();
   const store = () => ({ get: (k) => map.get(k) ?? null, set: (k, v) => map.set(k, v), remove: (k) => map.delete(k) });
@@ -381,6 +456,10 @@ test("panneau monté (Chromium, StrictMode) : aucun POST sans consentement, Stri
     assert.ok(q.heights.every((x) => x >= 44), `targets ${q.heights.join(",")}`);
     assert.ok(q.stored.every((v) => !v.includes("billing.stripe.com")), "the portal URL is never persisted");
     assert.ok(q.overflow <= 0);
+    const z = (await page.evaluate(() => (window as unknown as { resume: () => Promise<unknown> }).resume())) as { before: string[]; calls: string[]; navigatedBeforeClick: number; domHasUrl: boolean; navigated: string[]; stored: string[] };
+    same([z.before.length > 0, z.before.filter((c) => c !== "GET")], [true, []], "a « cancelled » return re-reads only (StrictMode may read twice), never resumes by itself");
+    same(z.calls.filter((c) => c !== "GET"), ["RESUME"], "one explicit click ⇒ one resume POST, never a subscribe POST");
+    same([z.navigatedBeforeClick, z.domHasUrl, z.navigated, z.stored], [0, false, [STRIPE_REAL], []], "URL kept out of DOM/storage, opened on click with the fragment");
     same(errors, []);
   } finally {
     await browser.close();
