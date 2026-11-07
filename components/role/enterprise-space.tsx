@@ -1919,6 +1919,15 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
             )}
           </section>
 
+          {(intervention.status === "completed" || intervention.status === "paid") && (
+            <CustomerInvoicesPanel
+              title="Factures et avoirs de ce dossier"
+              filters={{ intervention_id: intervention.id, basis: "service", ...(c.organization ? { organization_id: c.organization.id } : {}) }}
+              context={session.mutationContext}
+              demo={demo}
+            />
+          )}
+
           <section className="panel" aria-labelledby="dossier-docs">
             <h2 id="dossier-docs">Pièces du dossier</h2>
             {documents.length ? (

@@ -1526,6 +1526,10 @@ function DetailView({
           onSettled={i.status === "paid" ? undefined : () => void session.refresh()}
         />
       )}
+      {/* Invoices / credit notes issued for THIS dossier (customer routes only; issuing ≠ payment). */}
+      {(i.status === "completed" || i.status === "paid") && (
+        <CustomerInvoicesPanel title="Factures et avoirs de ce dossier" filters={{ intervention_id: i.id, basis: "service" }} context={session.mutationContext} demo={demo} />
+      )}
       {/* After a booking: optional email access (self-hides unless phone-verified, client, no email account). */}
       {currentBookingStatus?.kind === "booking" && <AccountUpgrade />}
       {accepted && payment && (
