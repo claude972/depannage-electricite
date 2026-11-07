@@ -184,3 +184,17 @@ test("wiring: the « available » segment mounts the paged leaf (live: no exhaus
   assert.equal(lists.missionSegmentOptions({ offers: null, active: 2, done: 0 })[0][1], "Disponibles");
   assert.equal(lists.missionSegmentOptions({ offers: 3, active: 2, done: 0 })[0][1], "Disponibles (3)");
 });
+
+test("demo-only openDemo: local summary for demo-* ids, no API call; live open() still refuses non-UUID ids", async () => {
+  let calls = 0;
+  let s: Model.MissionsState = { ...m.MISSIONS_INITIAL };
+  const ctrl = m.createMissionsController({ api: () => ({ list: async () => (calls++, { status: 503, body: null, retryAfter: null }), point: async () => (calls++, { status: 503, body: null, retryAfter: null }) }), get: () => s, set: (n) => (s = n) });
+  const demoOffer = { id: "demo-001", category: "outage", city: "Fort-de-France", postal_code: "972**", urgency: "urgent", status: "requested", estimate_min_cents: 9000, estimate_max_cents: 18000, created_at: "2026-11-01T10:00:00Z" } as Model.MissionOffer;
+  assert.equal(await ctrl.open("demo-001"), false, "live path stays strict UUID");
+  assert.equal(ctrl.openDemo("demo-001", [demoOffer]), true);
+  assert.equal(s.point?.phase, "ready");
+  assert.equal(s.point?.offer?.id, "demo-001");
+  assert.equal(ctrl.openDemo("demo-404", [demoOffer]), false);
+  assert.equal(s.point?.phase, "gone");
+  assert.equal(calls, 0, "no request at all");
+});

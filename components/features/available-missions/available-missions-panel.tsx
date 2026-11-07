@@ -106,7 +106,7 @@ export function AvailableMissionsPanel(props: AvailableMissionsProps) {
           {point.phase === "error" && (
             <p className={styles.error} role="alert">
               {MISSIONS_COPY.loadFailed}{" "}
-              <button type="button" className={styles.secondary} onClick={() => void ctrl.open(point.id)}>Réessayer</button>
+              <button type="button" className={styles.secondary} onClick={() => (props.demo ? ctrl.openDemo(point.id, props.demoItems ?? []) : void ctrl.open(point.id))}>Réessayer</button>
             </p>
           )}
           {point.phase === "ready" && point.offer && (
@@ -139,7 +139,7 @@ export function AvailableMissionsPanel(props: AvailableMissionsProps) {
         <ul className={styles.list}>
           {state.items.map((o) => (
             <li key={o.id}>
-              <button type="button" className={styles.row} aria-current={point?.id === o.id ? "true" : undefined} onClick={() => void ctrl.open(o.id)} data-available-offer={o.id}>
+              <button type="button" className={styles.row} aria-current={point?.id === o.id ? "true" : undefined} onClick={() => (props.demo ? ctrl.openDemo(o.id, props.demoItems ?? []) : void ctrl.open(o.id))} data-available-offer={o.id}>
                 <span className={styles.rowHead}>
                   <strong>{category(o.category).label}</strong>
                   <span className={o.urgency === "urgent" ? styles.urgent : styles.meta}>{o.urgency === "urgent" ? "Urgent" : "À planifier"}</span>
