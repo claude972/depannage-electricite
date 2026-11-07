@@ -267,6 +267,11 @@ export function ClientSpace({ session }: { session: Session }) {
             initialCategory={session.pendingDraft?.category ?? (isCategory(session.param) ? session.param : "panel")}
             initialValues={session.pendingDraft}
             preferredAddress={preferredAddress}
+            finalStep={
+              editBooking && session.booking
+                ? { label: "Revenir à la confirmation", note: "Vos modifications remplacent la demande en attente ; rien n’est envoyé avant votre confirmation finale." }
+                : { label: "Continuer vers le règlement", note: "Rien n’est encore envoyé : vous choisirez ensuite le mode de règlement, puis vous confirmerez l’envoi de votre demande." }
+            }
             sites={[]}
             mode={session.mode}
             busy={session.busy}

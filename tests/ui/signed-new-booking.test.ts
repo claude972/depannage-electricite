@@ -94,3 +94,13 @@ test("wiring: client #new never posts the legacy route in live; manager create s
   const send = bc.slice(bc.indexOf("async function send()"), bc.indexOf("return (", bc.indexOf("async function send()")));
   assert.ok(send.indexOf("if (!booking.payment)") < send.indexOf("contactErrors(contact)"), "payment choice checked before the contact");
 });
+
+test("wording: the client booking path never shows « Enregistrer » before the payment choice; managers keep their direct creation", () => {
+  const client = readFileSync("components/role/client-space.tsx", "utf8");
+  assert.match(client, /label: "Continuer vers le règlement", note: "Rien n’est encore envoyé/);
+  assert.match(client, /label: "Revenir à la confirmation"/);
+  const forms = readFileSync("components/app/forms.tsx", "utf8");
+  assert.match(forms, /: finalStep\s+\? finalStep\.label\s+: "Enregistrer la demande"/);
+  const ent = readFileSync("components/role/enterprise-space.tsx", "utf8");
+  assert.doesNotMatch(ent, /finalStep=/, "manager flow unchanged (direct, idempotent creation)");
+});
