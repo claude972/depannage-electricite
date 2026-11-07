@@ -19,11 +19,11 @@ test("site sheet mounts SiteEnergyPanel for every site type with the session mut
   const sheet = siteSheet();
   // Keyed by site + identity + generation: no list, cursor or form survives a site or identity change.
   assert.match(sheet, /<SiteEnergyPanel\s+key=\{`\$\{site\.id\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\}\s+siteId=\{site\.id\}\s+context=\{session\.mutationContext\}\s+\/>/);
-  // Not nested in a vertical-only branch.
-  const officeStart = sheet.indexOf('vertical === "office"');
-  const officeBlock = sheet.slice(officeStart, sheet.indexOf(")}", officeStart));
-  assert.match(officeBlock, /ENT-08/);
-  assert.doesNotMatch(officeBlock, /SiteEnergyPanel|ENT-09/);
+  // Not nested in a vertical-only branch: no `vertical === "…" && (` block contains it.
+  for (const m of sheet.matchAll(/vertical === "[a-z]+" && \(/g)) {
+    const block = sheet.slice(m.index!, sheet.indexOf("\n        )}", m.index!));
+    assert.doesNotMatch(block, /SiteEnergyPanel|ENT-09/);
+  }
 });
 
 test("demo never calls the energy route and says so", () => {
@@ -69,4 +69,13 @@ test("FIN-05/ENT-16: enterprise billing mounts the customer invoices panel scope
   assert.match(view, /<CustomerInvoicesPanel[\s\S]{0,80}?filters=\{\{ organization_id: c\.organization\.id, \.\.\.\(c\.activeSite \? \{ site_id: c\.activeSite\.id \} : \{\}\), basis: "service" \}\}\s+context=\{session\.mutationContext\}\s+demo=\{c\.demo\}/);
   assert.doesNotMatch(view, /La facturation n’existe pas encore côté serveur/);
   assert.doesNotMatch(view, /platform-operations\/invoices|\/api\/platform/);
+});
+
+test("ENT-08/ENT-05: site areas panel for every site type (not office-only), demo honest, AG still unavailable", () => {
+  const sheet = siteSheet();
+  assert.match(src, /import \{ SiteAreasPanel \} from "\.\.\/features\/site-areas\/site-areas-panel";/);
+  assert.match(sheet, /session\.mode === "demo" \? \(\s*<Unavailable\s+title="Étages, zones et parties communes"[\s\S]{0,300}?blocker="ENT-08"[\s\S]{0,40}?\) : \(\s*<SiteAreasPanel siteId=\{site\.id\} context=\{session\.mutationContext\} demo=\{false\} \/>/);
+  assert.doesNotMatch(sheet, /vertical === "office" && \(/);
+  assert.doesNotMatch(src, /Le découpage des bâtiments en étages et zones n’est pas modélisé/);
+  assert.match(sheet, /title="Assemblées générales & appels de fonds"[\s\S]{0,300}?blocker="ENT-05"/);
 });
