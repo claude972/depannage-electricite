@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { uuid } from "@/lib/supabase/validation";
 
+const uuid = z.string().uuid();
 const text = (max: number) => z.string().trim().min(1).max(max);
 const email = text(254).regex(/^[^@\s]+@[^@\s]+\.[^@\s]+$/);
 export const operatorProfile = z.object({
@@ -12,24 +12,30 @@ export const operatorProfile = z.object({
   public_phone: z.string().regex(/^\+[1-9][0-9]{6,14}$/),
   vat_number: z.string().regex(/^[A-Z]{2}[0-9A-Z]{2,14}$/),
 }).partial().strict();
+export type OperatorProfile = z.infer<typeof operatorProfile>;
+export type OperatorField = keyof OperatorProfile;
+export const MINIMUM_FIELDS: readonly OperatorField[] = [
+  "legal_name", "legal_form", "siren", "hq_address", "publication_director",
+  "public_email", "privacy_email", "host_name", "host_address", "host_contact", "rights_holder",
+];
 
 export const publication = z.object({
   version: z.number().int().positive(),
   profile: operatorProfile,
   published_at: z.iso.datetime({ offset: true }),
-}).strict().refine(({ profile }) => [
-  profile.legal_name, profile.legal_form, profile.siren, profile.hq_address, profile.publication_director,
-  profile.public_email, profile.privacy_email, profile.host_name, profile.host_address, profile.host_contact, profile.rights_holder,
-].every(Boolean));
+}).strict().refine(({ profile }) => MINIMUM_FIELDS.every(field => Boolean(profile[field])));
+export type Publication = z.infer<typeof publication>;
 
 export const editor = z.object({
   version: z.number().int().nonnegative(),
   draft: operatorProfile,
   published: publication.nullable(),
 }).strict().refine(value => value.published === null || value.published.version <= value.version);
+export type EditorState = z.infer<typeof editor>;
 
 export const command = z.discriminatedUnion("action", [
   z.object({ action: z.literal("save"), command_id: uuid, expected_version: z.number().int().min(0).max(2147483646), profile: operatorProfile }).strict(),
   z.object({ action: z.literal("publish"), command_id: uuid, expected_version: z.number().int().min(1).max(2147483646) }).strict(),
   z.object({ action: z.literal("withdraw"), command_id: uuid, expected_version: z.number().int().min(1).max(2147483646) }).strict(),
 ]);
+export type ProfileCommand = z.infer<typeof command>;
