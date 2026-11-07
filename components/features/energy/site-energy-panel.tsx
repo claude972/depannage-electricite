@@ -32,7 +32,12 @@ const dateFr = (d: string) => {
   return `${day}/${m}/${y}`;
 };
 
-export function SiteEnergyPanel({ siteId, api, context = DEFAULT_ENERGY_CONTEXT, initial, newId = uuid }: { siteId: string; api?: EnergyApi; context?: EnergyContext; /** Tests only. */ initial?: EnergyState; newId?: () => string }) {
+type PanelProps = { siteId: string; api?: EnergyApi; context?: EnergyContext; /** Tests only. */ initial?: EnergyState; newId?: () => string };
+/** Keyed by site: another site is a fresh panel (no list, cursor or form carried over). */
+export function SiteEnergyPanel(props: PanelProps) {
+  return <SitePanel key={props.siteId} {...props} />;
+}
+function SitePanel({ siteId, api, context = DEFAULT_ENERGY_CONTEXT, initial, newId = uuid }: PanelProps) {
   const [state, setStateRaw] = useState<EnergyState>(initial ?? ENERGY_INITIAL);
   const ref = useRef(state);
   const set = (next: EnergyState) => {
@@ -137,6 +142,7 @@ export function SiteEnergyPanel({ siteId, api, context = DEFAULT_ENERGY_CONTEXT,
             <p className={styles.error} role="alert">
               {state.writeError}{" "}
               {state.pending && <button type="button" className={styles.secondary} disabled={state.busy} onClick={() => void ctrl.retry()} data-energy-retry="">Réessayer</button>}
+              {!state.pending && <button type="button" className={styles.secondary} disabled={state.busy} onClick={() => void ctrl.load()} data-energy-reload="">Actualiser la liste</button>}
             </p>
           )}
           <div className={styles.actions}>

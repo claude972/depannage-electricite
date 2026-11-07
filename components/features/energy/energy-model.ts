@@ -203,6 +203,8 @@ export type EnergyState = {
   phase: "loading" | "ready" | "error" | "unavailable";
   records: EnergyRecord[];
   page: EnergyPageDTO["page"] | null;
+  /** The filters the current next_cursor belongs to (the cursor is bound to site + from/to). */
+  cursorFilters: EnergyFilters | null;
   totals: EnergyPageDTO["totals"] | null;
   canWrite: boolean;
   filters: EnergyFilters;
@@ -215,7 +217,7 @@ export type EnergyState = {
   pending: EnergyCommand | null;
   saved: string;
 };
-export const ENERGY_INITIAL: EnergyState = { phase: "loading", records: [], page: null, totals: null, canWrite: false, filters: { from: null, to: null }, loadingMore: false, error: "", busy: false, writeError: "", pending: null, saved: "" };
+export const ENERGY_INITIAL: EnergyState = { phase: "loading", records: [], page: null, cursorFilters: null, totals: null, canWrite: false, filters: { from: null, to: null }, loadingMore: false, error: "", busy: false, writeError: "", pending: null, saved: "" };
 
 export function applyList(s: EnergyState, r: EnergyResult, append: boolean, siteId: string): EnergyState {
   if (r.status === 200) {
@@ -225,7 +227,7 @@ export function applyList(s: EnergyState, r: EnergyResult, append: boolean, site
     const records = [...(append ? s.records : []), ...p.records.filter((x) => !seen.has(x.id) && (seen.add(x.id), true))];
     // Totals: the server's for the FIRST page of the selection (incomplete when more pages exist);
     // loading later pages never turns them into an exhaustive client-side sum.
-    return { ...s, phase: "ready", records, page: p.page, totals: append ? s.totals : p.totals, canWrite: p.permissions.can_write, loadingMore: false, error: "" };
+    return { ...s, phase: "ready", records, page: p.page, cursorFilters: { ...s.filters }, totals: append ? s.totals : p.totals, canWrite: p.permissions.can_write, loadingMore: false, error: "" };
   }
   if (r.status === 404) return { ...ENERGY_INITIAL, filters: s.filters, phase: "unavailable", error: ENERGY_COPY.unavailable };
   const error = r.status === 401 || r.status === 403 ? ENERGY_COPY.session : ENERGY_COPY.loadFailed;
@@ -248,6 +250,7 @@ export function applyCommand(s: EnergyState, r: EnergyResult, command: EnergyCom
   return { ...base, writeError: r.status === ENERGY_TIMEOUT ? ENERGY_COPY.timeout : ENERGY_COPY.retry, pending: command };
 }
 
+export const sameFilters = (a: EnergyFilters, b: EnergyFilters) => a.from === b.from && a.to === b.to;
 /** Loads (generation counter) and writes (single flight, ref) outside React; every reply is
  *  applied only if the generation + uid are unchanged since the request started and the view is
  *  still attached. */
@@ -261,13 +264,15 @@ export function createEnergyController({ api, siteId, context = DEFAULT_ENERGY_C
     const gen = context.generation(), uid = context.userId();
     const s = get();
     const cursor = append ? s.page?.next_cursor ?? null : null;
+    const filters = { ...s.filters };
     let r: EnergyResult;
     try {
-      r = await api().list(siteId, { ...s.filters, cursor });
+      r = await api().list(siteId, { ...filters, cursor });
     } catch {
       r = { status: 0, body: null, retryAfter: null };
     }
-    if (!same(gen, uid) || my !== loadSeq) return false;
+    // Dropped if another load started, the identity changed, or the filters changed meanwhile.
+    if (!same(gen, uid) || my !== loadSeq || !sameFilters(get().filters, filters)) return false;
     set(applyList(get(), r, append, siteId));
     return true;
   };
@@ -292,13 +297,15 @@ export function createEnergyController({ api, siteId, context = DEFAULT_ENERGY_C
     get writing() {
       return writing;
     },
+    /** New period (or reload): the cursor is dropped and the list restarts from page 1. */
     load(filters?: EnergyFilters) {
-      set({ ...get(), ...(filters ? { filters } : {}), phase: "loading", records: [], page: null, totals: null, error: "" });
+      set({ ...get(), ...(filters ? { filters: { ...filters } } : {}), phase: "loading", records: [], page: null, cursorFilters: null, totals: null, error: "", loadingMore: false });
       return fetchList(false);
     },
     more() {
       const s = get();
-      if (s.loadingMore || !s.page?.has_more || !s.page.next_cursor) return Promise.resolve(false);
+      // Never reuse a cursor across filters: it must belong to the filters currently applied.
+      if (s.loadingMore || !s.page?.has_more || !s.page.next_cursor || !s.cursorFilters || !sameFilters(s.cursorFilters, s.filters)) return Promise.resolve(false);
       set({ ...s, loadingMore: true });
       return fetchList(true);
     },

@@ -176,3 +176,48 @@ test("pagination : « Afficher plus » renvoie le curseur opaque tel quel, dédo
   await m.createEnergyApi((async (u: string) => (urls.push(u), new Response("{}", { status: 200 }))) as unknown as typeof fetch).list(SITE, { from: "2026-01-01", to: null, cursor });
   same(urls, [`/api/sites/${SITE}/energy?from=2026-01-01&cursor=${cursor}`]);
 });
+
+test("curseur lié aux filtres : changer de période repart de la page 1 ; jamais de curseur réutilisé ; réponse d’un ancien filtre ignorée", async () => {
+  const cursor = "eyJkYXkiOiIyMDI2LTEwLTAxIn0";
+  const queries: (Model.EnergyFilters & { cursor: string | null })[] = [];
+  let resolveOld!: (r: Model.EnergyResult) => void;
+  const replies: (Model.EnergyResult | Promise<Model.EnergyResult>)[] = [
+    res(200, page([rec(1)], { page: { limit: 100, has_more: true, next_cursor: cursor }, totals: { consumption_wh: null, cost_cents: null, complete: false, cost_complete: false } })),
+    new Promise((r) => (resolveOld = r)), // « Afficher plus » de l’ancien filtre, en vol
+    res(200, page([rec(5)])), // nouveau filtre, page 1
+  ];
+  let s: Model.EnergyState = { ...m.ENERGY_INITIAL, filters: { from: "2026-01-01", to: "2026-06-30" } };
+  const ctrl = m.createEnergyController({ api: () => ({ list: async (_site, q) => (queries.push(q), replies.shift()!), command: async () => res(503) }), siteId: SITE, get: () => s, set: (n) => (s = n) });
+  await ctrl.load();
+  const more = ctrl.more();
+  await ctrl.load({ from: "2026-07-01", to: "2026-12-31" }); // changement de période
+  resolveOld(res(200, page([rec(2)])));
+  assert.equal(await more, false);
+  same(queries.map((q) => q.cursor), [null, cursor, null]);
+  same(queries[2], { from: "2026-07-01", to: "2026-12-31", cursor: null });
+  same(s.records.map((r) => r.id), [rec(5).id]); // rien de l’ancien filtre
+  same([s.page?.next_cursor, s.cursorFilters], [null, { from: "2026-07-01", to: "2026-12-31" }]);
+  // Curseur d’un filtre différent du filtre appliqué ⇒ « Afficher plus » refusé (aucune requête).
+  const before = queries.length;
+  s = { ...s, page: { limit: 100, has_more: true, next_cursor: cursor }, cursorFilters: { from: "2026-01-01", to: "2026-06-30" } };
+  assert.equal(await ctrl.more(), false);
+  assert.equal(queries.length, before);
+  // Autre site ⇒ panneau neuf (clé = site).
+  const src = (await import("node:fs")).readFileSync("components/features/energy/site-energy-panel.tsx", "utf8");
+  assert.match(src, /<SitePanel key=\{props\.siteId\} \{\.\.\.props\} \/>/);
+});
+
+test("409 ⇒ conflit honnête + « Actualiser la liste », jamais d’écrasement automatique ni de rejeu", async () => {
+  let calls = 0;
+  let s = m.applyList(m.ENERGY_INITIAL, res(200, page([rec(7, { version: 4 })])), false, SITE);
+  const ctrl = m.createEnergyController({ api: () => ({ list: async () => res(200, page([rec(7, { version: 6 })])), command: async () => (calls++, res(409)) }), siteId: SITE, get: () => s, set: (n) => (s = n) });
+  const cmd = (m.formToCommand(m.editForm(s.records[0])) as { command: Model.SaveCommand }).command;
+  await ctrl.save(cmd);
+  same([s.writeError, s.pending, calls], [m.ENERGY_COPY.conflict, null, 1]);
+  assert.equal(await ctrl.retry(), false); // aucun rejeu automatique d’un 409
+  assert.equal(calls, 1);
+  await ctrl.load(); // Actualiser : nouvelle version lue, rien n’est réécrit
+  same([s.records[0].version, calls], [6, 1]);
+  const src = (await import("node:fs")).readFileSync("components/features/energy/site-energy-panel.tsx", "utf8");
+  assert.match(src, /data-energy-reload="">Actualiser la liste</);
+});
