@@ -88,6 +88,7 @@ import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-pa
 import { ContractSourceLine } from "../features/quote-grid/quote-grid";
 import { PlatformPayAction } from "../app/platform-pay";
 import { SavedPaymentMethodsPanel } from "../features/saved-payment-methods/saved-payment-methods-panel";
+import { SubscriptionsPanel } from "../features/subscriptions/subscriptions-panel";
 
 const CLIENT_VIEWS: readonly View[] = [
   "overview",
@@ -2111,6 +2112,7 @@ function ProfileView({ session }: { session: Session }) {
             onOpenTicket={(id) => session.go("support", id)}
           />
           <SavedPaymentMethodsPanel key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} demo={demo} context={session.mutationContext} />
+          <SubscriptionsPanel key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} role="client" demo={demo} context={session.mutationContext} />
         </div>
         <aside className={styles.aside}>
           <section className={styles.asideCard}>
