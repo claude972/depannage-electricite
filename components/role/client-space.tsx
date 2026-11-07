@@ -83,6 +83,7 @@ import { UploadQueuePanel } from "../app/upload-queue";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
 import { ClientAddressesPanel, usePreferredAddress } from "../features/client-addresses/client-addresses-panel";
 import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
+import { AppointmentReminderPanel } from "../features/appointment-reminders/appointment-reminder-panel";
 import { PlatformPayAction } from "../app/platform-pay";
 
 const CLIENT_VIEWS: readonly View[] = [
@@ -1390,6 +1391,13 @@ function DetailView({
             ) : (
               <p className={styles.description}>Aucun créneau proposé pour le moment.</p>
             )}
+            <AppointmentReminderPanel
+              key={`${i.id}|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`}
+              interventionId={i.id}
+              role="client"
+              context={session.mutationContext}
+              demo={session.mode === "demo"}
+            />
             {canSchedule ? (
               <AppointmentForm
                 key={ops.appointment?.updated_at || "new"}

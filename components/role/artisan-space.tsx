@@ -114,6 +114,7 @@ import {
   type MissionSegment,
 } from "./artisan-lists";
 import { CredentialReviewPanel } from "../features/credential-reviews/credential-review-panel";
+import { AppointmentReminderPanel } from "../features/appointment-reminders/appointment-reminder-panel";
 
 // ---- Static definitions ---------------------------------------------------------------
 type Tone = "neutral" | "blue" | "green" | "amber" | "red" | "violet";
@@ -1503,6 +1504,15 @@ function WorkDossier({ session, intervention: i }: { session: Session; intervent
             onSave={(starts_at, ends_at, note) =>
               operate({ action: "save_appointment", starts_at, ends_at, note })
             }
+            reminder={
+              <AppointmentReminderPanel
+                key={`${i.id}|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`}
+                interventionId={i.id}
+                role="artisan"
+                context={session.mutationContext}
+                demo={session.mode === "demo"}
+              />
+            }
           />
           {canTravel && (
             <TravelPanel
@@ -1621,6 +1631,7 @@ function AppointmentPanel({
   editable,
   busy,
   onSave,
+  reminder,
 }: {
   appointment: Appointment | null;
   loaded: boolean;
@@ -1629,6 +1640,8 @@ function AppointmentPanel({
   editable: boolean;
   busy: boolean;
   onSave: (starts_at: string, ends_at: string, note: string) => Promise<boolean>;
+  /** Personal appointment reminder (shared leaf), shown after the slot. */
+  reminder?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [start, setStart] = useState("");
@@ -1681,6 +1694,7 @@ function AppointmentPanel({
       ) : (
         <p>Aucun créneau proposé pour le moment.</p>
       )}
+      {reminder}
       {loaded && !pending && editable && !open && (
         <div className={styles.formActions}>
           <button type="button" className="button outline" disabled={busy} onClick={edit}>
