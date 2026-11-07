@@ -2637,7 +2637,8 @@ function ContractsView({ c }: { c: Ctx }) {
 }
 
 // ---- Fiche de site (V5-C01 / M50, données réelles uniquement) -------------------------------
-function SiteSheet({ c, id }: { c: Ctx; id: string }) {
+/** Exported for tests only (real-mount layout checks). */
+export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
   const { session } = c;
   const site = c.orgSites.find((s) => s.id === id);
   // Live: probe the site-operations contract for THIS site once while it is unknown (works with
