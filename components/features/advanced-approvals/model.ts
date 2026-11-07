@@ -98,6 +98,26 @@ export function timelineApproval(s: WorkflowStatus | null | undefined): { status
 /** Client acceptance stays blocked while the server requires an approval not yet current. */
 export const acceptanceBlocked = (s: WorkflowStatus | null | undefined) => !!s && s.required && !s.approved_current;
 
+/** Whether the client acceptance of the displayed quote is blocked (Astra review of ddc34c7).
+ *  - An ACTIVE advanced policy (server policy.enabled) is authoritative: blocked only while the
+ *    server says required && !approved_current. An old simple approval still « pending » no longer
+ *    blocks, and a quote under the advanced threshold (required false) is not blocked.
+ *  - No advanced policy (absent or disabled): the simple rule applies unchanged.
+ *  - Live and the advanced state still loading (undefined) or unreadable (null): prudent block.
+ *  - Demo (no server state): the simple rule. */
+export type AcceptanceDecision = { blocked: boolean; reason: "advanced" | "simple" | "unknown" | null };
+/** `advanced` must be the state read FOR THE DISPLAYED QUOTE (callers reset it per quote_id).
+ *  `hasSite` false ⇒ no site policy can apply (the route answers 404 for a site-less dossier) ⇒
+ *  simple rule. Only a validated 200 (WorkflowStatus) with policy null/disabled confirms the simple
+ *  rule for a dossier WITH a site; 401/403/404/error/loading stay undetermined (blocked). */
+export function acceptanceDecision(simplePending: boolean, advanced: WorkflowStatus | null | undefined, live: boolean, hasSite = true): AcceptanceDecision {
+  const simple: AcceptanceDecision = simplePending ? { blocked: true, reason: "simple" } : { blocked: false, reason: null };
+  if (!live || !hasSite) return simple;
+  if (advanced === undefined || advanced === null) return { blocked: true, reason: "unknown" };
+  if (advanced.policy?.enabled) return advanced.required && !advanced.approved_current ? { blocked: true, reason: "advanced" } : { blocked: false, reason: null };
+  return simple;
+}
+
 // ---- API ------------------------------------------------------------------------------------------
 async function timed(fetcher: typeof fetch, url: string, init: RequestInit, timeoutMs: number): Promise<Result> {
   const controller = typeof AbortController === "function" ? new AbortController() : null;
