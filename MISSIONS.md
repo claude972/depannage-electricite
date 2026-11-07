@@ -39,3 +39,7 @@ Responsable : Codex ROOT, un seul auteur backend. Périmètre : nouvelle RPC `av
 ## PAY-QR — QR du lien de paiement plateforme, claim Claude (lead + worker existant)
 
 Frontend seul, base writer claude/ui-palette-b-full. QR généré LOCALEMENT (qrcode-generator 2.0.4 MIT épinglé, sans dépendance ; jsqr 1.4.0 Apache-2.0 en devDependency pour décoder dans les tests) à partir de l’URL déjà produite et validée par GET /api/payments/link : origine de la page + chemin relatif /#detail/UUID du contrat, rien d’autre. Aucun service d’image, traceur ou jeton ajouté ; jamais d’ouverture automatique de Checkout, jamais de « payé » déclaré ; artisan en lecture (afficher/copier). package.json/package-lock.json : lead seul. Leaf components/role/payment-link.* + tests/ui/payment-link*.test.ts : worker. Backend, rapport professionnel et taux de TVA hors périmètre (ROOT). Tests : décodage du QR = URL exacte, copie, aucun POST.
+
+## REFUND-EXECUTION-CONTRACT — PLAN SEULEMENT, Codex backend
+
+Basee6aa35a ; branchecodex/refund-execution ; contratdocs/REFUND_EXECUTION_CONTRACT.md à contre-revoir ROOT AVANT toutcode. Première trancheproposée remboursement approuvé→émission idempotente→confirmationwebhook, fournisseurinjecté sanscloud. application_fee/transfer/payout restentOPEN, pas de faux virement confirmé. Aucun fichierapp/SQL modifié dansceclaimdoc.
