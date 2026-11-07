@@ -27,3 +27,7 @@ Ajouter POST /api/admin/messages avec UUID de message stable, intervention et te
 ## ADM-04 — dossiers d’un client, ROOT Codex auteur
 
 Compléter le filtre serveur client_id de l’annuaire interventions administrateur ; UUID strict, empreinte curseur incluant le client, comptage et pagination existants conservés, aucune projection privée ajoutée ni droits élargis. Le point de lecture profil existe déjà via /api/admin/directory?kind=clients&id=UUID. Claude raccorde la fiche client à ces deux routes après tests.
+
+## ENT-04 — contacts de site, claim Codex backend
+
+Base 21cd76d ; branche codex/site-contacts, writer unique backend. Propriété lib/features/site-contacts/**, app/api/sites/[id]/contacts/route.ts, migration nouvelle et tests dédiés. GET privé sous RLS can_access_site, pagination stricte 100/curseur lié au site, count exact et état incomplet honnête. POST save/archive sous JWT, can_manage_site revalidé après verrous organisation/site ; readonly interdit. Nom/prénom/fonction requis, téléphone/email facultatifs mais un moyen de contact requis, notes bornées. Un contact principal actif maximum/site ; conflit explicite, aucune rétrogradation silencieuse. UUID contact + UUID commande stable, version optimiste, rejeu exact sans nouvel audit ; archive, aucun DELETE. Aucun profil/auth/invitation, cloud ou UI. Vérification HTTP nominal/refus/rejeu/erreurs, SQL réellement exécuté en PGlite (Auth/Storage/cron simulés), tsc strict, puis contre-revue ROOT avant migration/preview.
