@@ -32,7 +32,7 @@ try {
       previousJobs = (
         await db.query("select to_jsonb(j)v from cron.job j order by jobname")
       ).rows;
-    if(name.endsWith('_reserved_indicative_estimates.sql')||name.endsWith('_indicative_estimate_authorization_order.sql')||name.endsWith('_pending_booking_estimate.sql'))continue;
+    if(name.endsWith('_reserved_indicative_estimates.sql')||name.endsWith('_indicative_estimate_authorization_order.sql')||name.endsWith('_pending_booking_estimate.sql')||name.endsWith('_reviewed_estimate_guard.sql'))continue;
     const migration = await isolatedMigrationSql(
       db,
       name,
@@ -60,7 +60,7 @@ try {
  const prepare=()=>one('select public.prepare_phone_booking($1,$2,$3,$4)v',[key,payload,contact,'card_hold']);
  await as(actor);const before=await prepare();eq(before.expected_max_cents,18000);
  const old=await one("select to_jsonb(public.create_intervention_once($1,'socket','QA panne synthétique','QA adresse','97200','QA ville','scheduled',null))v",[oldkey]);
- await as(null,'postgres');const migration=await readFile(new URL('20261107222548_reserved_indicative_estimates.sql',dir),'utf8');await db.exec(migration);await db.exec(await readFile(new URL('20261107223002_indicative_estimate_authorization_order.sql',dir),'utf8'));await db.exec(await readFile(new URL('20261107223132_pending_booking_estimate.sql',dir),'utf8'));
+ await as(null,'postgres');const migration=await readFile(new URL('20261107222548_reserved_indicative_estimates.sql',dir),'utf8');await db.exec(migration);await db.exec(await readFile(new URL('20261107223002_indicative_estimate_authorization_order.sql',dir),'utf8'));await db.exec(await readFile(new URL('20261107223132_pending_booking_estimate.sql',dir),'utf8'));await db.exec(await readFile(new URL('20261107223324_reviewed_estimate_guard.sql',dir),'utf8'));
  eq(await one('select indicative_price_version v from public.interventions where id=$1',[old.id]),null);
  eq(await one('select estimate_max_cents v from public.interventions where id=$1',[old.id]),18000);
  eq(await one('select jsonb_build_array(indicative_price_version,expected_min_cents,expected_max_cents)v from public.phone_booking_requests where actor_id=$1 and request_id=$2',[actor,key]),[1,8000,18000]);
@@ -80,10 +80,24 @@ try {
  // An expected failure aborts the test transaction; use rollback and start a fresh simulation.
  await db.exec('rollback');
  await db.exec('begin');await db.exec('alter table indicative_price_private.control drop constraint control_active_version_check');await db.exec('update indicative_price_private.control set active_version=2');
+ const guardActor=crypto.randomUUID();await as(null,'postgres');await q("insert into auth.users(id,raw_user_meta_data,email_confirmed_at)values($1,'{\"full_name\":\"QA stale\"}',now())",[guardActor]);
+ for(const action of ['create_intervention','prepare_phone_booking'])await q("insert into public.action_limits(actor_id,action,window_start,count)values($1,$2,date_trunc('minute',now()),100)",[guardActor,action]);
+ const refuse=async(sql,args=[])=>{await db.exec('savepoint reviewed_refusal');await deny(q(sql,args),'P0001');await db.exec('rollback to savepoint reviewed_refusal');await db.exec('release savepoint reviewed_refusal')};
+ await as(guardActor);
+ await refuse("select public.create_intervention('socket','QA description','QA adresse','97200','QA ville','scheduled',null)");
+ await refuse("select public.create_intervention_reviewed('socket','QA description','QA adresse','97200','QA ville','scheduled',null,1)");
+ await refuse("select public.create_intervention_once($1,'socket','QA description','QA adresse','97200','QA ville','scheduled',null)",[crypto.randomUUID()]);
+ await refuse('select public.prepare_phone_booking($1,$2,$3,$4)',[crypto.randomUUID(),payload,contact,'card_hold']);
+ await refuse('select public.prepare_phone_booking_reviewed($1,$2,$3,$4,1)',[crypto.randomUUID(),payload,contact,'card_hold']);
+ await refuse('select public.create_on_site_booking($1,$2,$3)',[crypto.randomUUID(),payload,contact]);
+ await as(actor);await refuse('select public.prepare_phone_booking_reviewed($1,$2,$3,$4,2)',[key,payload,contact,'card_hold']);
+ eq((await one('select public.prepare_phone_booking_reviewed($1,$2,$3,$4,1)v',[key,payload,contact,'card_hold'])).estimate.version,1);
+ const legacyReplay=await one("select to_jsonb(public.create_intervention_once_reviewed($1,'socket','QA panne synthétique','QA adresse','97200','QA ville','scheduled',null,1))v",[oldkey]);eq(legacyReplay.id,old.id);
+ await as(null,'postgres');eq(await one('select count(*)::integer v from public.interventions where client_id=$1',[guardActor]),0);eq(await one('select count(*)::integer v from public.phone_booking_requests where actor_id=$1',[guardActor]),0);
  for(const[category,range]of Object.entries(expected)){
   await as(null,'postgres');const id=crypto.randomUUID();await q("insert into auth.users(id,raw_user_meta_data,email_confirmed_at,phone,phone_confirmed_at)values($1,'{\"full_name\":\"QA\"}',now(),'596696000000',now())",[id]);await as(id);
-  const job=await one("select to_jsonb(public.create_intervention_once($1,$2,'QA panne synthétique','QA adresse','97200','QA ville','scheduled',null))v",[crypto.randomUUID(),category]);eq([job.indicative_price_version,job.estimate_min_cents,job.estimate_max_cents],[2,range[0]+1000,range[1]+1000]);
-  const guest=await one('select public.create_on_site_booking($1,$2,$3)v',[crypto.randomUUID(),{...payload,service_slug:'demande-'+category,category},contact]);eq([guest.intervention.estimate_min_cents,guest.intervention.estimate_max_cents],[range[0]+1000,range[1]+1000]);
+  const job=await one("select to_jsonb(public.create_intervention_once_reviewed($1,$2,'QA panne synthétique','QA adresse','97200','QA ville','scheduled',null,2))v",[crypto.randomUUID(),category]);eq([job.indicative_price_version,job.estimate_min_cents,job.estimate_max_cents],[2,range[0]+1000,range[1]+1000]);
+  const guest=await one('select public.create_on_site_booking_reviewed($1,$2,$3,2)v',[crypto.randomUUID(),{...payload,service_slug:'demande-'+category,category},contact]);eq([guest.intervention.estimate_min_cents,guest.intervention.estimate_max_cents],[range[0]+1000,range[1]+1000]);
  }
  await as(null,'postgres');await db.exec('rollback');eq(await one('select active_version v from indicative_price_private.control'),1);
  eq(await one("select count(*)::integer v from public.interventions where indicative_price_version=2"),0);
