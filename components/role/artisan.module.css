@@ -1716,14 +1716,18 @@
 }
 .helpList details {
   border-bottom: 1px solid var(--a-line);
-  padding: 12px 0;
+  padding: 6px 0;
 }
+/* Phase 8 F2: the whole question row is a ≥44 px target (was 32 px). */
 .helpList summary {
   cursor: pointer;
   font-size: 15px;
   font-weight: 600;
   color: var(--a-navy);
-  min-height: 32px;
+  /* Stays a list item: the native disclosure marker is kept. */
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 10px 0;
 }
 .helpList details p {
   margin-top: 8px;
