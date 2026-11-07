@@ -29,9 +29,9 @@ export async function bookingOptions(
   const card = cardHoldConfigured(env);
   return {
     payment_methods: [
-      { id: "on_site", available: true, label: "Paiement sur place", description: "À régler après l’intervention, sur la base du devis accepté." },
+      { id: "on_site", available: true, label: "Après intervention — paiement sur la plateforme", description: "Réglez après les travaux sur notre plateforme, par carte via votre suivi, un lien sécurisé ou un QR code. Aucun paiement direct à l’artisan." },
       { id: "card_hold", available: card, label: "Empreinte de carte", description: "Préautorisation bancaire, sans débit à la réservation.",
-        ...(!card ? { reason: "L’empreinte bancaire n’est pas encore configurée. Le paiement sur place reste proposé." } : {}) },
+        ...(!card ? { reason: "L’empreinte bancaire n’est pas encore configurée. Vous pouvez choisir de payer sur la plateforme après l’intervention." } : {}) },
     ],
     phone_auth: { available: phoneAvailable,
       ...(phoneAvailable !== true ? { reason: phoneAvailable === false
