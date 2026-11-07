@@ -73,6 +73,8 @@ import { FeatureUnavailable, useProbeWhenUnknown } from "./feature-unavailable";
 import { demoPreferences } from "../../lib/features/notifications/demo";
 import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
 import { TrackingAnchor } from "./tracking-anchor";
+import { DossierMapPanel } from "../features/dossier-map/dossier-map-panel";
+import { trackingDemo } from "../app/tracking-demo";
 import { useDetailPresence } from "./use-detail-presence";
 import { PointReadState } from "./detail-read-view";
 import { PlatformPage } from "./platform-anchor";
@@ -1208,13 +1210,14 @@ function DetailView({
           <br />
           {i.postal_code} {i.city}
         </address>
-        <div className={styles.compactUnavailable}>
-          <Unavailable
-            title="Carte non disponible"
-            reason="Aucun fournisseur de cartographie n’a été choisi."
-            blocker="CLI-05"
-          />
-        </div>
+        <DossierMapPanel
+          key={`${i.id}:${session.mode}:${session.profileId}`}
+          address={{ address: i.address, postal_code: i.postal_code, city: i.city }}
+          tracking={["accepted", "in_progress"].includes(i.status) ? session.features.tracking(i.id) : null}
+          trackingState={session.capabilities.tracking}
+          demoSnapshot={session.mode === "demo" ? (["accepted", "in_progress"].includes(i.status) ? trackingDemo(i.id, session.role) : null) : undefined}
+          provider={null}
+        />
       </section>
 
       <div className={styles.cardHead}>
