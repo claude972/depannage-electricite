@@ -1532,6 +1532,7 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
   if (!intervention)
     return (
       <Empty
+        level={1}
         icon="search"
         title={presence.openAnyway ? "Dossier absent des interventions chargées" : "Dossier introuvable sur ce périmètre"}
         action={
