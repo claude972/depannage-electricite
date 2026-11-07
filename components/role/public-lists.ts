@@ -82,7 +82,7 @@ export const PRIVACY_DATA: { label: string; text: string }[] = [
   { label: "Téléphone vérifié", text: "si vous vérifiez votre numéro, un code à usage unique vous est envoyé par SMS par le service d’identité ; l’application ne conserve pas le code." },
   { label: "Adresses enregistrées", text: "les adresses que vous choisissez de mémoriser dans votre profil (nom, prénom, adresse, éventuelle position déclarée par vous). Elles sont privées ; vous pouvez les modifier ou les archiver." },
   { label: "Préférences de notification", text: "les canaux que vous activez ou désactivez dans votre profil." },
-  { label: "Position pendant le déplacement", text: "seulement si l’artisan accepte de la partager : dernière position, précision et heure de mesure. Elle est effacée automatiquement 60 secondes après sa mesure ; l’artisan peut arrêter le partage à tout moment." },
+  { label: "Position pendant le déplacement", text: "seulement si l’artisan accepte de la partager : dernière position, précision et heure de mesure. Elle n’est plus lisible 60 secondes après sa mesure, puis elle est supprimée par une purge automatique du serveur, qui peut intervenir un peu plus tard ; l’artisan peut arrêter le partage à tout moment." },
   { label: "Dans votre navigateur", text: "un brouillon de demande non envoyé, le thème clair ou sombre choisi et, en démonstration, les exemples modifiés. Rien de cela n’est transmis à un tiers." },
 ];
 /** Third parties the code really calls today (no analytics, no advertising tracker). */

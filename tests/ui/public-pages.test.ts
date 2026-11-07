@@ -73,7 +73,9 @@ test("confidentialité (PUB-10) : traitements réels, tiers réellement appelés
   const html = page("privacy");
   const t = text(html);
   for (const label of ["Compte", "Demandes", "Devis", "Messages", "Documents", "Paiements", "Téléphone vérifié", "Adresses enregistrées", "Préférences de notification", "Position pendant le déplacement", "Dans votre navigateur"]) assert.match(t, new RegExp(`${label} :`), label);
-  assert.match(t, /effacée automatiquement 60 secondes après sa mesure/);
+  // Retention proofs: unreadable at 60 s, then an ASYNCHRONOUS server purge — never claimed as a hard erase at 60 s.
+  assert.match(t, /n’est plus lisible 60 secondes après sa mesure, puis elle est supprimée par une purge automatique du serveur, qui peut intervenir un peu plus tard/);
+  assert.doesNotMatch(t, /effacée automatiquement 60 secondes/);
   assert.match(html, /data-privacy-third-parties=""/);
   for (const name of ["Supabase", "Stripe", "OpenStreetMap \\(fonds de carte\\)", "IGN Géoplateforme"]) assert.match(t, new RegExp(`${name} :`), name);
   assert.match(t, /tile\.openstreetmap\.org/);
