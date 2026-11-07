@@ -1,6 +1,6 @@
 import { isolatedMigrationSql } from './sql-isolated-migrations.mjs';
 process.on('uncaughtException',error=>{console.error(error.message,error.query||'',error.detail||'');process.exit(1)});
-// ENT-09 — isolated PostgreSQL execution of all versioned migrations, with explicit Auth/Storage/cron stubs.
+// ADM-07 — isolated PostgreSQL execution of all versioned migrations, with explicit Auth/Storage/cron stubs.
 // Install pinned @electric-sql/pglite@0.5.13 outside the app; PGLITE_MODULE selects its dist/index.js.
 // Every fixture below is synthetic QA data: no real site, rate, delay, calendar or regulation.
 import { readFile, readdir } from 'node:fs/promises';
