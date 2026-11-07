@@ -11,6 +11,8 @@
 // command_id is persisted in tab storage (uid|intervention|snapshot_id) BEFORE the POST; a lost
 // reply / 503 / reload resends the same command.
 import { z } from "zod";
+import { safeCheckoutUrl } from "../../../lib/shared/stripe-checkout-url";
+export { safeCheckoutUrl };
 
 export const HR_PATH = "/api/bookings/settlement/reauthorization";
 export const HR_TIMEOUT_MS = 15_000;
@@ -55,16 +57,6 @@ export function parseHrRead(body: unknown): HrRead | null {
   if ((d.attempt_id === null) !== (d.status === "eligible")) return null;
   if (d.replacement_authorized_cents !== d.accepted_total_cents) return null;
   return d;
-}
-/** Bank page URL exactly as the server accepts it (https checkout.stripe.com, no credentials/hash). */
-export function safeCheckoutUrl(raw: unknown): string | null {
-  if (typeof raw !== "string") return null;
-  try {
-    const u = new URL(raw);
-    return u.protocol === "https:" && u.hostname === "checkout.stripe.com" && !u.username && !u.password && !u.hash ? u.toString() : null;
-  } catch {
-    return null;
-  }
 }
 const replySchema = z
   .object({ status: z.enum(HR_STATUSES), attempt_id: z.string().regex(UUID), intervention_id: z.string().regex(UUID), currency: z.literal("eur"), accepted_total_cents: cents, url: z.string().optional() })

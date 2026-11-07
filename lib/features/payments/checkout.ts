@@ -3,6 +3,7 @@ import { z } from "zod";
 import { authenticatedClient, adminClient, ApiError, assertOrigin, dbError } from "@/lib/supabase/server";
 import { uuid, validated } from "@/lib/supabase/validation";
 import { stripeClient, appUrl, commissionBps } from "@/lib/supabase/stripe";
+import { safeCheckoutUrl } from "@/lib/shared/stripe-checkout-url";
 
 export const PAYMENT_HEADERS={"Cache-Control":"private, no-store","Referrer-Policy":"no-referrer"};
 const cents=z.number().int().positive().max(2147483647);
@@ -20,7 +21,6 @@ export function checkoutConfigurationAvailable(env:Record<string,string|undefine
  const key=env.STRIPE_SECRET_KEY??"",rate=Number(env.PLATFORM_FEE_BPS);let origin:string|null=null;try{origin=new URL(env.NEXT_PUBLIC_APP_URL??"").origin;}catch{}
  return /^(sk|rk)_(test|live)_/.test(key)&&(!/^(sk|rk)_live_/.test(key)||env.STRIPE_LIVE_PAYMENTS_ENABLED==="true")&&!!env.PLATFORM_FEE_BPS&&Number.isInteger(rate)&&rate>=0&&rate<10000&&!!origin&&safeOrigin(origin);
 }
-function safeCheckoutUrl(value:unknown):value is string{try{if(typeof value!=="string")return false;const u=new URL(value);return u.protocol==="https:"&&u.hostname==="checkout.stripe.com"&&!u.username&&!u.password&&!u.hash&&(!u.port||u.port==="443");}catch{return false}}
 function ledger(value:unknown,actor:string,id:string,quote:string){const p=source.safeParse(value);if(!p.success||p.data.actor_id!==actor||p.data.id!==id||p.data.quote_id!==quote||Date.parse(p.data.created_at)>Date.now()+30000)throw unavailable();return p.data;}
 
 type Db=ReturnType<typeof adminClient>;

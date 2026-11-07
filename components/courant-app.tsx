@@ -1653,9 +1653,10 @@ export default function CourantApp() {
       if (modeRef.current !== "live")
         throw new Error("Le règlement Stripe nécessite un compte réel. Utilisez la simulation de la démonstration.");
       const result = await api<{ url: string }>("/api/payments/checkout", { quote_id: quoteId });
-      if (!result.url?.startsWith("https://checkout.stripe.com/"))
+      const url = safeCheckoutUrl(result.url);
+      if (!url)
         throw new Error("La session de paiement n’est pas disponible.");
-      if (ctx.alive()) window.location.assign(result.url);
+      if (ctx.alive()) window.location.assign(url);
     });
   }
   async function connectStripe() {

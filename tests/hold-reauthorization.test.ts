@@ -167,7 +167,7 @@ function fixture(o: Options = {}) {
             amount_total: 22000,
             status: "open",
             payment_intent: null,
-            url: "https://checkout.stripe.com/c/pay/test_QA",
+            url: "https://checkout.stripe.com/c/pay/test_QA#fidkdWxOYH%2FM2F8",
             ...o.badSession,
           };
           if (lostCreate) {
@@ -360,7 +360,7 @@ async function dto(r: Response, status: number) {
 test("nominal: consent -> exact manual Checkout -> independent new proof -> old cancellation -> adoption, never capture", async () => {
   const f = fixture();
   const opened = await dto(await f.request(), 200);
-  assert.equal(opened.url, "https://checkout.stripe.com/c/pay/test_QA");
+  assert.equal(opened.url, "https://checkout.stripe.com/c/pay/test_QA#fidkdWxOYH%2FM2F8");
   assert.equal(
     f.calls.some((c) => c.op === "cancel"),
     false,

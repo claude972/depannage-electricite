@@ -1,5 +1,6 @@
 import type Stripe from "stripe";
 import { ApiError } from "@/lib/supabase/server";
+import { safeCheckoutUrl } from "@/lib/shared/stripe-checkout-url";
 export type Attempt = {
   id: string;
   intervention_id: string;
@@ -195,19 +196,9 @@ export function fresh(a: Attempt) {
   return Number.isFinite(age) && age >= -30000 && age < 23 * 3600000;
 }
 export function checkoutUrl(s: any) {
-  try {
-    const u = new URL(s.url);
-    if (
-      u.protocol === "https:" &&
-      u.hostname === "checkout.stripe.com" &&
-      !u.username &&
-      !u.password &&
-      !u.hash &&
-      (!u.port || u.port === "443")
-    )
-      return u.href;
-  } catch {}
-  throw unavailable();
+  const url = safeCheckoutUrl(s?.url);
+  if (!url) throw unavailable();
+  return url;
 }
 
 /** Recover a lost creation response without creating another Checkout after the key window. */

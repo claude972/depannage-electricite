@@ -102,3 +102,7 @@ Astra réalise le serveur pour un compte particulier vérifié. Liste masquée, 
 ### SYS-04 — envoi e-mail configurable
 
 ROOT raccorde un adaptateur Resend optionnel à la file privée. L’adresse courante vérifiée et les paramètres exacts du message sont contrôlés avant chaque tentative. Une empreinte privée empêche la reprise avec un autre destinataire ou contenu. La reprise est bornée à une fenêtre inférieure à celle du fournisseur. Vérifier opt-in, porte, refus des appels non autorisés et réponses fournisseur injectées. Aucune activation ni opération sur le compte fournisseur. La livraison push conserve son propre parcours.
+
+### CLI-03 / ART-04 — rayon indicatif des offres
+
+Astra ajoute un réglage personnel facultatif fondé sur les centres publics des communes de Martinique. L’artisan choisit sa commune de référence et son rayon. Le réglage ne collecte aucune position GPS, conserve les conditions métier actuelles et s’applique avant pagination et lors de l’acceptation. Les zones sans centre déterminable suivent le filtre postal, avec cette limite indiquée. Vérifier absence de réglage, distances connues et inconnues, modification simultanée et confidentialité des offres. Le classement par distance est une étape distincte.

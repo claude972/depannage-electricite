@@ -17,7 +17,7 @@ const USER = "10000000-0000-4000-8000-000000000001";
 const ATT = "e0000000-0000-4000-8000-000000000001";
 const NEW = (n: number) => `c0000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const SNAP = "a".repeat(64), SNAP2 = "b".repeat(64);
-const URL_OK = "https://checkout.stripe.com/c/pay/cs_test_123";
+const URL_OK = "https://checkout.stripe.com/c/pay/cs_test_123#fidkdWxOYH%2FM2F8";
 const read = (over: Record<string, unknown> = {}) => ({ status: "eligible", reason: null, attempt_id: null, snapshot_id: SNAP, accepted_total_cents: 24000, original_authorized_cents: 18000, replacement_authorized_cents: 24000, currency: "eur", available: true, consent_required: true, ...over });
 const res = (status: number, body: unknown = null) => ({ status, body, retryAfter: null });
 const reply = (attempt: string, status = "awaiting_authorization", url?: string) => res(url ? 200 : 202, { status, attempt_id: attempt, intervention_id: JOB, currency: "eur", accepted_total_cents: 24000, ...(url ? { url } : {}) });
@@ -45,7 +45,8 @@ test("lecture stricte : champs exacts, available ⇔ reason null, tentative ⇔ 
   for (const bad of [null, {}, { ...read(), extra: 1 }, read({ available: true, reason: "manual_review" }), read({ available: false }), read({ attempt_id: ATT }), read({ status: "opening" }),
     read({ replacement_authorized_cents: 1 }), read({ consent_required: false }), read({ status: "paid" }), read({ snapshot_id: "x" }), read({ currency: "usd" })])
     assert.equal(m.parseHrRead(bad), null, JSON.stringify(bad).slice(0, 90));
-  for (const u of ["http://checkout.stripe.com/x", "https://evil.test/x", "https://u:p@checkout.stripe.com/x", "https://checkout.stripe.com/x#frag"]) assert.equal(m.safeCheckoutUrl(u), null, u);
+  assert.equal(m.safeCheckoutUrl(URL_OK), URL_OK);
+  for (const u of ["http://checkout.stripe.com/x", "https://evil.test/x", "https://u:p@checkout.stripe.com/x", "https://checkout.stripe.com:444/x#frag", "blob:https://checkout.stripe.com/x"]) assert.equal(m.safeCheckoutUrl(u), null, u);
 });
 
 test("CTA : seulement si available ET consentement explicite ; jamais au montage ; raisons explicites", async () => {

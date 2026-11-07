@@ -37,16 +37,7 @@ export function bookingPaymentText(p: BookingPayment, formatDate: (iso: string) 
   return `Empreinte bancaire enregistrée${when}. Ce n’est pas un débit ; seul le montant du devis accepté pourra être prélevé, et une empreinte n’est pas valable indéfiniment.`;
 }
 
-/** Checkout URL from the server: strict HTTPS on the provider origin only (never anything else). */
-export function safeCheckoutUrl(raw: unknown): string | null {
-  if (typeof raw !== "string") return null;
-  try {
-    const u = new URL(raw);
-    return u.protocol === "https:" && u.origin === "https://checkout.stripe.com" && !u.username && !u.password ? u.toString() : null;
-  } catch {
-    return null;
-  }
-}
+export { safeCheckoutUrl } from "../../lib/shared/stripe-checkout-url";
 
 /** Payment provenance: « on_site_declared » = received in cash/on site as DECLARED by the assigned
  *  artisan (business « paid », never a bank confirmation). Read loosely: the projection field is
