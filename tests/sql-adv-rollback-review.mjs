@@ -16,7 +16,7 @@ create schema auth;
 create table auth.users(
  id uuid primary key, instance_id uuid, aud varchar(255), role varchar(255), email varchar(255), encrypted_password varchar(255),
  email_confirmed_at timestamptz, raw_app_meta_data jsonb, raw_user_meta_data jsonb default '{}', created_at timestamptz, updated_at timestamptz,
- is_sso_user boolean not null default false, is_anonymous boolean not null default false);
+ is_sso_user boolean not null default false, is_anonymous boolean not null default false,phone text,phone_confirmed_at timestamptz);
 create unique index users_email_partial_key on auth.users(lower(email)) where is_sso_user=false;
 -- Supabase auth.uid(): request.jwt.claim.sub first, then request.jwt.claims->>'sub'.
 create function auth.uid() returns uuid language sql stable as $$

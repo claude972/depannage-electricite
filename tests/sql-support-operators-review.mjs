@@ -153,7 +153,7 @@ if(process.argv[2]==='--emit-rollback'){
  const {PGlite}=await import(process.env.PGLITE_MODULE||'@electric-sql/pglite');const db=new PGlite();
  try{
  await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;
- create schema auth;create table auth.users(id uuid primary key,aud text,role text,raw_user_meta_data jsonb default '{}',email text,email_confirmed_at timestamptz,created_at timestamptz,updated_at timestamptz);
+ create schema auth;create table auth.users(id uuid primary key,aud text,role text,raw_user_meta_data jsonb default '{}',email text,email_confirmed_at timestamptz,created_at timestamptz,updated_at timestamptz,phone text,phone_confirmed_at timestamptz);
  create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
  grant usage on schema auth to authenticated,anon,service_role;grant execute on function auth.uid() to authenticated,anon,service_role;
  create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
