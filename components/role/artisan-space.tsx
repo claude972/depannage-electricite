@@ -35,6 +35,7 @@ import type {
   View,
 } from "../app/types";
 import { Icon } from "../app/icons";
+import { taxRateLabel } from "../app/tax-rate";
 import { InstallPanel } from "../app/install-panel";
 import {
   Alerts,
@@ -1855,7 +1856,7 @@ function QuotePanel({
                 <span>{money(current.subtotal_cents)}</span>
               </div>
               <div>
-                <span>TVA ({current.tax_rate} %)</span>
+                <span>TVA ({taxRateLabel(current.tax_rate)})</span>
                 <span>{money(current.tax_cents)}</span>
               </div>
               <div className={styles.quoteTotal}>
