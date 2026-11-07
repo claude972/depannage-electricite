@@ -10,6 +10,8 @@ import { KIND_ICONS, KIND_LABELS } from "../../../lib/features/notifications/kin
 import { CHANNEL_LABELS, type ExternalChannel } from "../../../lib/features/notifications/channels";
 import type { Notification, NotificationKind, NotificationMarkCommand, NotificationPage, PreferencesView } from "../../../lib/features/notifications/types";
 import styles from "./notifications.module.css";
+import { WebPushPanel } from "../web-push/web-push-panel";
+import { TAG_LABEL, type PushTag } from "../web-push/model";
 
 export type NotificationCenterProps = {
   state: ContractState;
@@ -18,6 +20,8 @@ export type NotificationCenterProps = {
   client: NotificationsClient;
   demo?: { page: NotificationPage; preferences: PreferencesView };
   onNavigate?: (view: string, param?: string) => void;
+  /** Session mutation context (uid + generation): identity fence of the web push enrollment. */
+  context?: { generation(): number; userId(): string | null };
 };
 const PAGE_SIZE = 25;
 const when = (value: string) => new Intl.DateTimeFormat("fr-FR", { timeZone: "America/Martinique", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(value));
@@ -25,7 +29,7 @@ const when = (value: string) => new Intl.DateTimeFormat("fr-FR", { timeZone: "Am
 export function NotificationCenter(props: NotificationCenterProps) {
   return <CenterBody key={scopeKey(props.scope)} {...props} />;
 }
-function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate }: NotificationCenterProps) {
+function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate, context }: NotificationCenterProps) {
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [list, setList] = useState<ListState>(demo ? reducePage({ status: "loading", items: [] }, demo.page, false) : { status: "loading", items: [] });
   const [reloadKey, setReloadKey] = useState(0);
@@ -88,7 +92,7 @@ function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate
         </div>
       </div>
       <p className={styles.summary}>Aucun e-mail, SMS ni notification push n’est envoyé : les notifications se consultent dans cet espace.</p>
-      {showPreferences && <PreferencesPanel client={client} demo={demo?.preferences} writable={writable} onClose={() => setShowPreferences(false)} />}
+      {showPreferences && <PreferencesPanel client={client} demo={demo?.preferences} writable={writable} context={context} onClose={() => setShowPreferences(false)} />}
       {list.status === "loading" && list.items.length === 0 && <Loader label="Chargement des notifications…" />}
       {list.status === "error" && (
         <div className="alert" role="alert">
@@ -139,7 +143,7 @@ function NotificationItem({ notification: n, pending, writable, error, onMark, o
   );
 }
 /** Also mounted on its own (client profile, CLI-09): same load/save contract, no copy of the form. */
-export function PreferencesPanel({ client, demo, writable, onClose }: { client: NotificationsClient; demo?: PreferencesView; writable: boolean; onClose?: () => void }) {
+export function PreferencesPanel({ client, demo, writable, onClose, context }: { client: NotificationsClient; demo?: PreferencesView; writable: boolean; onClose?: () => void; context?: { generation(): number; userId(): string | null } }) {
   const id = useId();
   const [view, setView] = useState<PreferencesView | null | undefined>(demo ?? undefined);
   const [loadError, setLoadError] = useState("");
@@ -148,6 +152,7 @@ export function PreferencesPanel({ client, demo, writable, onClose }: { client: 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState("");
+  const [pushTagState, setPushTag] = useState<PushTag>(null);
   useEffect(() => {
     if (demo) return;
     let active = true;
@@ -189,11 +194,18 @@ export function PreferencesPanel({ client, demo, writable, onClose }: { client: 
           <label key={channel} className={styles.prefsOption}>
             <input type="checkbox" checked={channels[channel]} onChange={(e) => setChannels((prev) => ({ ...prev, [channel]: e.target.checked }))} />
             {CHANNEL_LABELS[channel]}
-            <Tag tone={view.channels[channel] === "available" ? "green" : "amber"}>{view.channels[channel] === "available" ? "Actif" : NOTIFICATION_COPY.channelsUnavailable}</Tag>
+            {channel === "push" && pushTagState ? (
+              <Tag tone="green">{TAG_LABEL[pushTagState]}</Tag>
+            ) : channel === "push" ? (
+              <Tag tone="amber">{view.channels.push === "available" ? "Non activé sur ce navigateur" : NOTIFICATION_COPY.channelsUnavailable}</Tag>
+            ) : (
+              <Tag tone={view.channels[channel] === "available" ? "green" : "amber"}>{view.channels[channel] === "available" ? "Actif" : NOTIFICATION_COPY.channelsUnavailable}</Tag>
+            )}
           </label>
         ))}
         <small className={styles.demoNote}>{view.channels_note}</small>
       </fieldset>
+      {(demo || (context && writable)) && <WebPushPanel demo={Boolean(demo)} pushSaved={view.preferences.push_enabled} context={context ?? { generation: () => 0, userId: () => null }} onTag={setPushTag} />}
       {error && <p className={styles.error} role="alert">{error}</p>}
       {saved && <p className={styles.notice} role="status">{saved}</p>}
       <div className={styles.prefsActions}>
