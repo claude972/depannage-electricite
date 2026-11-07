@@ -16,18 +16,20 @@ export type MissionHistoryPanelProps = {
   /** Existing empty state of the segment. */
   empty: ReactNode;
   onCounts: (counts: Counts) => void;
+  /** 401/403: the host clears the exact counts it holds (labels back to no number). */
+  onForbidden?: () => void;
   fetcher?: typeof fetch;
 };
 
-export function MissionHistoryPanel({ filter, context, renderRow, empty, onCounts, fetcher }: MissionHistoryPanelProps) {
+export function MissionHistoryPanel({ filter, context, renderRow, empty, onCounts, onForbidden, fetcher }: MissionHistoryPanelProps) {
   const [state, setRaw] = useState<HistoryState>(HISTORY_INITIAL);
   const ref = useRef(state);
   const set = (s: HistoryState) => {
     ref.current = s;
     setRaw(s);
   };
-  const latest = useRef({ fetcher, context, onCounts });
-  latest.current = { fetcher, context, onCounts };
+  const latest = useRef({ fetcher, context, onCounts, onForbidden });
+  latest.current = { fetcher, context, onCounts, onForbidden };
   const ctrl = useRef<ReturnType<typeof createHistory> | null>(null);
   useEffect(() => {
     const c = createHistory({
@@ -37,6 +39,7 @@ export function MissionHistoryPanel({ filter, context, renderRow, empty, onCount
       get: () => ref.current,
       set,
       onCounts: (x) => latest.current.onCounts(x),
+      onForbidden: () => latest.current.onForbidden?.(),
     });
     ctrl.current = c;
     void c.load();
@@ -45,6 +48,13 @@ export function MissionHistoryPanel({ filter, context, renderRow, empty, onCount
   const c = ctrl.current;
   return (
     <div data-mission-history={state.phase} data-filter={filter} aria-busy={state.phase === "loading" || state.loadingMore || undefined}>
+      {(state.phase === "ready" || state.phase === "error") && (
+        // Re-reads page 1 and the counts (same identity + segment, new sequence). No workspace signal:
+        // the session cache is capped at 100 rows, so it cannot tell whether a history row changed.
+        <button type="button" className={styles.button} disabled={state.loadingMore} onClick={() => void c?.load()} data-mission-history-refresh="">
+          {COPY.refresh}
+        </button>
+      )}
       {state.notice && <p className={styles.note} role="status" data-mission-history-notice="">{state.notice}</p>}
       {state.phase === "loading" && <p className={styles.hint} role="status">{COPY.loading}</p>}
       {state.phase === "forbidden" && <p className={styles.error} role="alert">{state.error}</p>}

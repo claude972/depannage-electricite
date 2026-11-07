@@ -23,11 +23,12 @@ import { createRoot } from "react-dom/client";
 import { MissionHistoryPanel, historyLabel } from "./components/features/mission-history/mission-history-panel";
 const U = (n) => "a0000000-0000-4000-8000-" + String(n).padStart(12, "0");
 const item = (n, status) => ({ id: U(n), category: "panel", address: "3 rue des Ateliers", city: "Fort-de-France", urgency: "scheduled", status, created_at: "2026-11-0" + (9 - (n % 8)) + "T10:00:00.000Z", completed_at: status === "paid" || status === "completed" ? "2026-11-07T10:00:00Z" : null, paid_at: status === "paid" ? "2026-11-07T11:00:00Z" : null });
-window.calls = []; window.opened = []; window.hold = true;
-const reply = (filter, items, next) => ({ items, counts: { active: 123, done: 112 }, filter, order: "newest_first", captured_at: "2026-11-07T12:00:00.000Z", page: { limit: 50, has_more: next !== null, next_cursor: next } });
+window.calls = []; window.opened = []; window.hold = true; window.st = 200; window.n = 0;
+const reply = (filter, items, next) => ({ items, counts: { active: 123 + window.n, done: 112 }, filter, order: "newest_first", captured_at: "2026-11-07T12:00:00.000Z", page: { limit: 50, has_more: next !== null, next_cursor: next } });
 const fetcher = async (url) => {
   window.calls.push(String(url));
   if (window.hold) await new Promise((r) => (window.release = r));
+  if (window.st !== 200) return new Response("{}", { status: window.st });
   const u = new URL(url, location.href), f = u.searchParams.get("filter"), c = u.searchParams.get("cursor");
   const st = f === "active" ? "in_progress" : "paid";
   const body = c ? reply(f, [item(3, st), item(150, st)], null) : reply(f, Array.from({ length: 50 }, (_, i) => item(i + 1, st)), "CUR");
@@ -39,7 +40,7 @@ function Host() {
   const [counts, setCounts] = useState(null);
   return h("div", null,
     h("div", { role: "group" }, ["active", "done"].map((k) => h("button", { key: k, type: "button", "aria-pressed": segment === k, onClick: () => setSegment(k), "data-seg": k }, historyLabel(k, counts)))),
-    h(MissionHistoryPanel, { key: "u1|1|" + segment, filter: segment, context: ctx, fetcher, onCounts: setCounts, empty: h("p", null, "vide"),
+    h(MissionHistoryPanel, { key: "u1|1|" + segment, filter: segment, context: ctx, fetcher, onCounts: setCounts, onForbidden: () => setCounts(null), empty: h("p", null, "vide"),
       renderRow: (i) => h("button", { type: "button", style: { minHeight: "44px", width: "100%" }, onClick: () => window.opened.push(i.id) }, i.city + " · " + (i.paid_at ? "Réglée" : "Terminée")) }));
 }
 const div = document.createElement("div"); document.body.appendChild(div);
@@ -81,6 +82,18 @@ test("Chromium : pas de nombre avant lecture, puis compteurs serveur ; « Affich
     const small = await page.evaluate(`[...document.querySelectorAll("[data-mission-history] > button, [data-mission-history] .note button")].filter((b) => b.getBoundingClientRect().height > 0 && b.getBoundingClientRect().height < 43.5).length`);
     assert.equal(small, 0);
     assert.equal(await page.evaluate("document.documentElement.scrollWidth"), 390);
+    // « Actualiser »: page 1 + fresh counts, same segment.
+    await page.evaluate(() => { (window as unknown as { n: number }).n = 5; });
+    await page.locator("[data-mission-history-refresh]").click();
+    await page.waitForFunction(() => document.querySelector('[data-seg="active"]')?.textContent === "En cours (128)");
+    const after = await page.evaluate(() => (window as unknown as W).calls);
+    assert.equal(after[after.length - 1], "/api/artisan/mission-history?filter=done", "re-read page 1 of the same segment");
+    // 401 on « Actualiser » ⇒ the parent's counts are cleared (labels without numbers).
+    await page.evaluate(() => { (window as unknown as { st: number }).st = 401; });
+    await page.locator("[data-mission-history-refresh]").click();
+    await page.locator('[data-mission-history="forbidden"]').waitFor();
+    assert.equal(await page.locator('[data-seg="active"]').innerText(), "En cours");
+    assert.equal(await page.locator('[data-seg="done"]').innerText(), "Terminées");
     assert.deepEqual(errors, []);
   } finally {
     await browser.close();

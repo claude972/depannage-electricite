@@ -87,6 +87,7 @@ export const HISTORY_COPY = {
   session: "Votre session a expiré. Reconnectez-vous.",
   forbidden: "Cet historique est réservé aux comptes artisans.",
   more: "Afficher plus",
+  refresh: "Actualiser",
   moreFailed: "La suite n’a pas pu être chargée. Réessayez.",
 } as const;
 /** Live labels: the server's exact counts once read, otherwise no number (never the 100-row cache). */
@@ -108,17 +109,21 @@ export type HistoryState = {
 export const HISTORY_INITIAL: HistoryState = { phase: "loading", items: [], next: null, loadingMore: false, error: "", moreError: "", notice: "" };
 
 /** One controller per (identity, segment) mount; every reply is bound to identity + sequence. */
-export function createHistory({ fetcher, filter, context, get, set, onCounts }: { fetcher: () => typeof fetch; filter: HistoryFilter; context: Context; get: () => HistoryState; set: (s: HistoryState) => void; onCounts: (c: Counts) => void }) {
+export function createHistory({ fetcher, filter, context, get, set, onCounts, onForbidden }: { fetcher: () => typeof fetch; filter: HistoryFilter; context: Context; get: () => HistoryState; set: (s: HistoryState) => void; onCounts: (c: Counts) => void; /** 401/403: the host drops the counts it holds. */ onForbidden?: () => void }) {
   let seq = 0;
   let alive = true;
   const fail = (status: number) => (status === 401 ? HISTORY_COPY.session : status === 403 ? HISTORY_COPY.forbidden : HISTORY_COPY.loadFailed);
+  const forbid = (status: number) => {
+    onForbidden?.();
+    set({ ...HISTORY_INITIAL, phase: "forbidden", error: fail(status) });
+  };
   const first = async (notice = ""): Promise<void> => {
     const my = ++seq;
     const uid = context.userId(), gen = context.generation();
     set({ ...HISTORY_INITIAL, notice });
     const r = await fetchHistory(fetcher(), filter, null);
     if (!alive || my !== seq || context.userId() !== uid || context.generation() !== gen) return; // stale: dropped
-    if (r.status === 401 || r.status === 403) return set({ ...HISTORY_INITIAL, phase: "forbidden", error: fail(r.status) });
+    if (r.status === 401 || r.status === 403) return forbid(r.status);
     const p = r.status === 200 ? parseHistory(r.body, filter) : null;
     if (!p) return set({ ...HISTORY_INITIAL, phase: "error", error: fail(r.status), notice });
     onCounts(p.counts);
@@ -140,7 +145,7 @@ export function createHistory({ fetcher, filter, context, get, set, onCounts }: 
       const r = await fetchHistory(fetcher(), filter, cursor);
       if (!alive || my !== seq || context.userId() !== uid || context.generation() !== gen) return;
       if (r.status === 422) return first(HISTORY_COPY.cursor); // cursor refused: honest restart at page 1
-      if (r.status === 401 || r.status === 403) return set({ ...HISTORY_INITIAL, phase: "forbidden", error: fail(r.status) });
+      if (r.status === 401 || r.status === 403) return forbid(r.status);
       const p = r.status === 200 ? parseHistory(r.body, filter) : null;
       if (!p) return set({ ...get(), loadingMore: false, moreError: HISTORY_COPY.moreFailed });
       onCounts(p.counts);

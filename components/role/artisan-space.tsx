@@ -854,7 +854,8 @@ function MissionRow({
   right,
   onOpen,
 }: {
-  intervention: Intervention;
+  /** Only the fields the row reads (a cached Intervention or a live history item). */
+  intervention: Pick<Intervention, "category" | "address" | "city" | "status">;
   right: ReactNode;
   onOpen: () => void;
 }) {
@@ -1175,15 +1176,14 @@ function Missions({ session, declinedIds }: { session: Session; declinedIds: str
       </Empty>
     </section>
   );
-  // History rows reuse MissionRow, which only reads category / address / city / status / id.
   const historyRow = (i: HistoryItem, right: ReactNode) => (
-    <MissionRow intervention={i as unknown as Intervention} right={right} onOpen={() => session.openIntervention(i.id)} />
+    <MissionRow intervention={i} right={right} onOpen={() => session.openIntervention(i.id)} />
   );
   return (
     <>
       <PageTitle
         title="Missions"
-        subtitle="Offres, dossiers en cours et terminés, sur les dossiers chargés."
+        subtitle={demo ? "Offres, dossiers en cours et terminés, sur les dossiers chargés." : "Offres disponibles, dossiers en cours et terminés."}
       />
       <div className={styles.segmentsWrap}>
         <Segments label="Filtrer les missions" value={segment} options={options} onChange={setSegment} />
@@ -1226,6 +1226,7 @@ function Missions({ session, declinedIds }: { session: Session; declinedIds: str
           filter="active"
           context={session.mutationContext}
           onCounts={(counts) => setHistoryCounts({ ident, counts })}
+          onForbidden={() => setHistoryCounts(null)}
           empty={activeEmpty}
           renderRow={(i) => historyRow(i, activeRight(i))}
         />
@@ -1236,6 +1237,7 @@ function Missions({ session, declinedIds }: { session: Session; declinedIds: str
           filter="done"
           context={session.mutationContext}
           onCounts={(counts) => setHistoryCounts({ ident, counts })}
+          onForbidden={() => setHistoryCounts(null)}
           empty={doneEmpty}
           renderRow={(i) => historyRow(i, doneRight(i))}
         />

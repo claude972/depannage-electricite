@@ -50,6 +50,7 @@ type Call = { url: string };
 function ctrl(filter: "active" | "done", reply: (url: string, n: number) => Response | Promise<Response>, ctx = { uid: "u1" as string | null, gen: 1 }) {
   const calls: Call[] = [];
   const counts: unknown[] = [];
+  let forbidden = 0;
   let s: Model.HistoryState = m.HISTORY_INITIAL;
   const c = m.createHistory({
     fetcher: () => (async (url: string) => { calls.push({ url }); return reply(url, calls.length); }) as unknown as typeof fetch,
@@ -58,8 +59,9 @@ function ctrl(filter: "active" | "done", reply: (url: string, n: number) => Resp
     get: () => s,
     set: (n) => (s = n),
     onCounts: (x) => counts.push(x),
+    onForbidden: () => forbidden++,
   });
-  return { c, calls, counts, ctx, state: () => s };
+  return { c, calls, counts, ctx, state: () => s, forbidden: () => forbidden };
 }
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
@@ -109,6 +111,7 @@ test("422 sur le curseur ⇒ message honnête + reprise page 1 ; 503 ⇒ erreur 
     await f.c.load();
     assert.equal(f.state().phase, "forbidden");
     assert.equal(f.state().items.length, 0);
+    assert.equal(f.forbidden(), 1, `${st}: the host is told to clear its counts`);
   }
   const empty = ctrl("done", () => json(reply("done", [], null, { active: 0, done: 0 })));
   await empty.c.load();
@@ -123,4 +126,21 @@ test("câblage : live ⇒ historique serveur + openIntervention ; démo ⇒ list
   assert.match(src, /onOpen=\{\(\) => session\.openIntervention\(i\.id\)\}/);
   assert.match(src, /\{segment === "active" && demo &&\s+\(m\.active\.length \?/);
   assert.match(src, /\{segment === "done" && demo &&\s+\(done\.length \?/);
+});
+
+test("« Actualiser » relit la page 1 et les compteurs ; 401/403 ⇒ compteurs du parent effacés ; sous-titre live sans « dossiers chargés » ; MissionRow typé par Pick", async () => {
+  let n = 0;
+  const h = ctrl("active", (url) => (url.includes("cursor=") ? json(reply("active", [item(3)], null)) : json(reply("active", [item(1), item(2)], "CUR", { active: 120 + ++n, done: 1 }))));
+  await h.c.load();
+  await h.c.more();
+  await h.c.load(); // « Actualiser »
+  assert.equal(h.calls[h.calls.length - 1].url, "/api/artisan/mission-history?filter=active", "page 1 again");
+  assert.equal(h.state().items.length, 2, "page 1 only");
+  assert.equal((h.counts[h.counts.length - 1] as { active: number }).active, 122, "fresh counts");
+  const src = readFileSync("components/role/artisan-space.tsx", "utf8");
+  assert.match(src, /onForbidden=\{\(\) => setHistoryCounts\(null\)\}/);
+  assert.match(src, /subtitle=\{demo \? "Offres, dossiers en cours et terminés, sur les dossiers chargés\." : "Offres disponibles, dossiers en cours et terminés\."\}/);
+  assert.match(src, /intervention: Pick<Intervention, "category" \| "address" \| "city" \| "status">;/);
+  assert.doesNotMatch(src, /as unknown as Intervention/);
+  assert.match(readFileSync("components/features/mission-history/mission-history-panel.tsx", "utf8"), /data-mission-history-refresh/);
 });
