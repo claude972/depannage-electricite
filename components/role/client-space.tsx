@@ -2117,6 +2117,7 @@ function ProfileView({ session }: { session: Session }) {
             demo={demo}
             context={session.mutationContext}
             onOpenTicket={(id) => session.go("support", id)}
+            erasureRequests
           />
           <SavedPaymentMethodsPanel key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} demo={demo} context={session.mutationContext} />
           <SubscriptionsPanel key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} role="client" demo={demo} context={session.mutationContext} />

@@ -6,6 +6,8 @@
 import { useEffect, useRef, useState } from "react";
 import { COLLECT_INITIAL, COPY, ERASURE_INITIAL, SECTIONS, SECTION_LABEL, TICKET_STATUS, createCollector, createErasure, tabStore, type CollectState, type Context, type ErasureState, type Store } from "./model";
 import styles from "./account-data.module.css";
+import { MyErasureRequests } from "../data-requests/my-erasure-requests";
+import { EXECUTION_LABEL, STATE_LABEL } from "../data-requests/contract";
 
 export type AccountDataPanelProps = {
   demo: boolean;
@@ -15,6 +17,8 @@ export type AccountDataPanelProps = {
   fetcher?: typeof fetch;
   store?: () => Store | null;
   newId?: () => string | null;
+  /** SYS-07: private list « Mes demandes d’effacement » (opt-in; client space only). */
+  erasureRequests?: boolean;
 };
 
 /** Private, uncached save: object URL for this blob only, revoked right after the download starts. */
@@ -46,7 +50,7 @@ function useWait(seconds: number | null, key: unknown) {
   return waiting;
 }
 
-export function AccountDataPanel({ demo, context, onOpenTicket, fetcher, store, newId }: AccountDataPanelProps) {
+export function AccountDataPanel({ demo, context, onOpenTicket, fetcher, store, newId, erasureRequests = false }: AccountDataPanelProps) {
   const [collect, setCollect] = useState<CollectState>(COLLECT_INITIAL);
   const [erasure, setErasure] = useState<ErasureState>(ERASURE_INITIAL);
   const collector = useRef<ReturnType<typeof createCollector> | null>(null);
@@ -68,6 +72,11 @@ export function AccountDataPanel({ demo, context, onOpenTicket, fetcher, store, 
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demo]);
+  // SYS-07: every confirmed POST (with or without a valid `request`) re-reads the private list.
+  const [listRev, setListRev] = useState(0);
+  useEffect(() => {
+    if (erasure.phase === "done") setListRev((n) => n + 1);
+  }, [erasure.phase, erasure.receipt]);
   const collectWait = useWait(collect.phase === "error" ? collect.waitS : null, collect.error);
   const erasureWait = useWait(erasure.phase === "error" ? erasure.waitS : null, erasure.error);
 
@@ -139,6 +148,11 @@ export function AccountDataPanel({ demo, context, onOpenTicket, fetcher, store, 
           <div className={styles.confirm} role="status" data-account-erasure-ticket={erasure.receipt.ticket_id}>
             <p className={styles.ok}>{erasure.receipt.replayed ? COPY.erasureReplayed : COPY.erasureDone}</p>
             <p className={styles.hint}>Statut du ticket : {TICKET_STATUS[erasure.receipt.status]}.</p>
+            {erasure.receipt.request && (
+              <p className={styles.hint} data-account-erasure-request={erasure.receipt.request.state}>
+                État de la demande : {STATE_LABEL[erasure.receipt.request.state]} · {EXECUTION_LABEL[erasure.receipt.request.execution_state]}.
+              </p>
+            )}
             {onOpenTicket && (
               <button type="button" className={styles.secondary} onClick={() => onOpenTicket(erasure.receipt!.ticket_id)}>
                 {COPY.openTicket}
@@ -160,6 +174,7 @@ export function AccountDataPanel({ demo, context, onOpenTicket, fetcher, store, 
             )}
           </div>
         )}
+        {erasureRequests && <MyErasureRequests context={context} onOpenTicket={onOpenTicket} refresh={listRev} fetcher={fetcher} />}
       </div>
     </section>
   );
