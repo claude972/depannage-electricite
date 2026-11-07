@@ -2855,6 +2855,11 @@ export default function CourantApp() {
     loadPaymentStatus,
     createIntervention,
     startBooking,
+    bookingPhotos: () => bookingPhotos.current,
+    updateBookingPhotos(photos: File[]) {
+      bookingPhotos.current = photos.slice(0, 6);
+      if (modeRef.current === "live") writePhotoCount(getDraftStorage(), bookingPhotos.current.length);
+    },
     confirmBooking,
     cancelBooking,
     finalizeBooking,

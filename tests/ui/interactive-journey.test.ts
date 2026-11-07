@@ -171,6 +171,11 @@ test("#new connecté : le choix de règlement est proposé après l’adresse ; 
     const { page } = await open("client-new");
     await page.getByRole("button", { name: /Prise ou interrupteur/ }).click();
     await page.getByLabel(/Décrivez le problème/).fill(DESCRIPTION);
+    // Stepper announces the real third step on the booking path.
+    assert.match(await page.locator("ol.stepper").innerText(), /Règlement et confirmation/);
+    assert.doesNotMatch(await page.locator("ol.stepper").innerText(), /Le récapitulatif/);
+    const png = (name: string) => ({ name, mimeType: "image/png", buffer: Buffer.from("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da63f8ffff3f0005fe02fea7d6a4d40000000049454e44ae426082", "hex") });
+    await page.locator('input[type="file"]').setInputFiles([png("tableau.png")]);
     await click(page, "Continuer");
     await page.getByLabel("Adresse d’intervention").fill("8 rue Victor Hugo");
     await page.getByLabel("Code postal").fill("97200");
@@ -193,6 +198,12 @@ test("#new connecté : le choix de règlement est proposé après l’adresse ; 
     await click(page, "Modifier la demande");
     await page.waitForTimeout(300);
     assert.equal(await page.getByLabel(/Décrivez le problème/).inputValue(), DESCRIPTION, "kept problem text");
+    // Photos already chosen are kept, shown and editable (contract: same 6-photo cap).
+    const photosList = () => page.locator('ul[aria-label="Photos sélectionnées"]').innerText();
+    assert.match(await photosList(), /tableau\.png/, "existing photo shown in edit");
+    await page.getByRole("button", { name: "Retirer tableau.png" }).click();
+    await page.locator('input[type="file"]').setInputFiles([png("prise.png")]);
+    assert.match(await photosList(), /prise\.png/);
     await click(page, "Continuer");
     assert.equal(await page.getByLabel("Adresse d’intervention").inputValue(), "8 rue Victor Hugo", "kept address");
     await page.getByLabel("Adresse d’intervention").fill("12 rue Lamartine");
@@ -203,5 +214,11 @@ test("#new connecté : le choix de règlement est proposé après l’adresse ; 
     assert.match(again, /12 rue Lamartine, 97200 Fort-de-France/);
     assert.match(again, /Après intervention — paiement sur la plateforme/, "payment choice kept");
     assert.equal((await store(page)).data.interventions.filter((i) => i.description === DESCRIPTION).length, 0, "nothing created between the steps");
+    // The edited photo set is what the kept booking now holds.
+    await click(page, "Modifier la demande");
+    await page.waitForTimeout(300);
+    const kept = await photosList();
+    assert.match(kept, /prise\.png/);
+    assert.doesNotMatch(kept, /tableau\.png/, "removed photo not resurrected");
   });
 });

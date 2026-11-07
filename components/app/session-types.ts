@@ -206,6 +206,10 @@ export interface Session {
   /** Signed-in client « Nouvelle demande »: keeps the request as a booking draft (payment choice on
    *  BookingConfirm, sent by confirmBooking). Sends nothing; false when not applicable/not stored. */
   startBooking(values: RequestValues, photos?: File[]): boolean;
+  /** Photos kept in memory for the pending booking (never stored; lost on reload). */
+  bookingPhotos(): File[];
+  /** « Modifier » on a kept booking: replaces the in-memory photos (nothing sent). */
+  updateBookingPhotos(photos: File[]): void;
   /** Service booking: POST /api/bookings (idempotent key), never the legacy route. */
   confirmBooking(): Promise<boolean>;
   /** Cancels the current card-hold attempt on the server (releases it); the draft stays. */

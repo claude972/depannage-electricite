@@ -266,6 +266,7 @@ export function ClientSpace({ session }: { session: Session }) {
             initialCategory={session.pendingDraft?.category ?? (isCategory(session.param) ? session.param : "panel")}
             initialValues={session.pendingDraft}
             preferredAddress={preferredAddress}
+            initialPhotos={editBooking && session.booking ? session.bookingPhotos() : undefined}
             finalStep={
               editBooking && session.booking
                 ? { label: "Revenir à la confirmation", note: "Vos modifications remplacent la demande en attente ; rien n’est envoyé avant votre confirmation finale." }
@@ -277,8 +278,10 @@ export function ClientSpace({ session }: { session: Session }) {
             onBack={() => session.go("requests")}
             onSubmit={async (values, photos) => {
               if (editBooking && session.booking) {
-                // Editing a booking: replace the kept draft and return to its confirmation.
+                // Editing a booking: replace the kept draft AND its in-memory photos, then return to
+                // its confirmation (nothing sent).
                 session.updatePendingDraft(values);
+                session.updateBookingPhotos(photos);
                 setEditBooking(false);
                 return;
               }
