@@ -44,6 +44,7 @@ export function useEnterpriseSearch({ enabled, context, filters, page, api }: { 
     // Bound AT RENDER: a state of another identity / filters / page is never shown (loading instead).
     state: enabled ? viewOf(state, viewK) : SEARCH_INITIAL,
     retry: () => ctrl.current?.retry(viewK),
+    refresh: () => ctrl.current?.refresh(viewK) ?? false,
     /** Snapshot of the filters at the click; the file is kept only if they still match after the await. */
     exportCsv: () => (filters && ctrl.current ? ctrl.current.exportCsv(filters, () => latest.current.filters, viewK) : Promise.resolve(false)),
   };

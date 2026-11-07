@@ -959,6 +959,7 @@ function useInterventionList(c: Ctx) {
       phase: r.phase,
       error: r.error,
       retry: remote.retry,
+      refresh: remote.refresh,
       footNote: ENTERPRISE_SEARCH_COPY.serverNote,
       exportBusy: r.exporting,
       exportNotice: r.exportNotice,
@@ -980,6 +981,7 @@ function useInterventionList(c: Ctx) {
     phase: "ready" as const,
     error: "",
     retry: () => {},
+    refresh: () => false,
     footNote: LOADED_NOTE.toLowerCase(),
     exportBusy: false,
     exportNotice: "",
@@ -1087,11 +1089,14 @@ function InterventionsTable({
   list,
   title,
   emptyAction,
+  refreshable = false,
 }: {
   c: Ctx;
   list: InterventionList;
   title: string;
   emptyAction?: ReactNode;
+  /** Interventions page only: one « Actualiser » re-reading the same key (live). */
+  refreshable?: boolean;
 }) {
   const { total, pageRows, current, pages, filtered } = list;
   const headingId = useId();
@@ -1104,6 +1109,12 @@ function InterventionsTable({
           {filtered ? " après filtres" : ""}
           <span className="sr-only"> — {title}</span>
         </h2>
+        {refreshable && list.live && (
+          <button type="button" className="button outline" disabled={list.phase === "loading"} onClick={() => list.refresh()} data-enterprise-list-refresh="">
+            <Icon name="refresh" size={16} />
+            Actualiser
+          </button>
+        )}
         <label className={styles.sortField}>
           Trier par :
           <select
@@ -1259,7 +1270,8 @@ function InterventionsTable({
 }
 
 // ---- Tableau de bord ---------------------------------------------------------------------
-function OverviewView({ c }: { c: Ctx }) {
+/** Exported for tests only (live KPI + refresh wiring). */
+export function OverviewView({ c }: { c: Ctx }) {
   const { scope } = c;
   const list = useInterventionList(c);
   // V5-C05 : chiffres réels seulement (ouverts, dont urgentes). Les chiffres qui dépendent des données
@@ -1300,19 +1312,14 @@ function OverviewView({ c }: { c: Ctx }) {
   const pro = useProfessionalOverview({ enabled: !c.demo, context: c.session.mutationContext, organizationId: c.organization?.id || null, siteId: c.activeSite?.id || null });
   const proData = !c.demo && pro.state.phase === "ready" ? pro.state.data : null;
   const proPending = pro.state.phase === "loading" || pro.state.phase === "idle" ? "…" : "—";
-  const proState =
-    c.demo || proData ? null : pro.state.phase === "loading" || pro.state.phase === "idle" ? (
-      PRO_COPY.loading
-    ) : (
-      <span role="alert" data-professional-overview-error="">
-        {pro.state.error}{" "}
-        {pro.state.phase === "error" && (
-          <button type="button" className="text-button" onClick={() => pro.retry()}>
-            Réessayer
-          </button>
-        )}
-      </span>
-    );
+  // Une seule alerte (et un seul « Réessayer ») sous les indicateurs ; les cartes disent seulement l’état.
+  const proState = c.demo || proData ? null : pro.state.phase === "loading" || pro.state.phase === "idle" ? PRO_COPY.loading : PRO_COPY.failed;
+  const refreshAll = () => {
+    // Même périmètre, mêmes gardes : chaque lecture ne repart que si sa clé est celle affichée.
+    list.refresh();
+    counts.refresh();
+    pro.refresh();
+  };
   const siteBars = loaded ? siteBudgetBars(scope.sites, scope.interventions, scope.quotes) : [];
   const pending = byDateDesc(
     scope.approvals.filter((a) => a.status === "pending").map((a) => ({ ...a, created_at: a.created_at || "" })),
@@ -1378,6 +1385,22 @@ function OverviewView({ c }: { c: Ctx }) {
         />
         <Stat icon="building" tone="green" label="Sites suivis" value={scope.sites.length} note={c.activeSite ? "Site filtré" : "Organisation active"} />
       </div>
+      {!c.demo && (pro.state.phase === "error" || pro.state.phase === "forbidden") && (
+        <div role="alert" className={styles.muted} data-professional-overview-error="">
+          {pro.state.error}{" "}
+          {pro.state.phase === "error" && (
+            <button type="button" className="text-button" onClick={() => pro.retry()}>
+              Réessayer
+            </button>
+          )}
+        </div>
+      )}
+      {!c.demo && (
+        <button type="button" className="button outline" onClick={refreshAll} data-overview-refresh="">
+          <Icon name="refresh" size={16} />
+          Actualiser
+        </button>
+      )}
       <InterventionFiltersCard c={c} list={list} />
       <InterventionsTable
         c={c}
@@ -1531,6 +1554,7 @@ export function RequestsView({ c }: { c: Ctx }) {
         c={c}
         list={list}
         title="Toutes les interventions"
+        refreshable
         emptyAction={
           c.canCreateRequest ? (
             <button type="button" className="button primary" onClick={() => c.go("new")}>

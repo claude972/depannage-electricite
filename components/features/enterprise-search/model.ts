@@ -200,6 +200,14 @@ export function createSearchController({ api, context, set, timers, save = saveB
       const onlySearch = !!current && current.page === req.page && current.organization_id === req.organization_id && current.site_id === req.site_id && current.category === req.category && current.status === req.status && current.sort === req.sort;
       start(req, onlySearch);
     },
+    /** « Actualiser »: re-read the SAME key (same guards; no scope change, epoch unchanged). */
+    refresh(key: string) {
+      if (!alive || !current || state.key !== key || state.phase === "loading" || identity() !== bound) return false;
+      const req = current;
+      current = null;
+      start(req, false);
+      return true;
+    },
     retry(key: string) {
       if (!current || state.key !== key) return;
       const req = current;

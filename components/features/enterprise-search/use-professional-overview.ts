@@ -27,5 +27,5 @@ export function useProfessionalOverview({ enabled, context, organizationId, site
   useEffect(() => {
     if (active) ctrl.current?.query(organizationId, siteId);
   }, [active, identity, organizationId, siteId]);
-  return { state: enabled ? proView(state, key) : PRO_INITIAL, retry: () => ctrl.current?.retry(key) };
+  return { state: enabled ? proView(state, key) : PRO_INITIAL, retry: () => ctrl.current?.retry(key), refresh: () => ctrl.current?.refresh(key) ?? false };
 }

@@ -114,6 +114,12 @@ export function createProController({ api, context, set }: { api: () => ProApi; 
     retry(key: string) {
       if (current && state.key === key && state.phase === "error") void run(current);
     },
+    /** « Actualiser »: re-read the SAME scope (same guards). */
+    refresh(key: string) {
+      if (!alive || !current || state.key !== key || state.phase === "loading") return false;
+      void run(current);
+      return true;
+    },
     get: () => state,
     stop() {
       alive = false;
