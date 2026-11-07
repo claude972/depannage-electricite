@@ -20,7 +20,7 @@ const PAY = "30000000-0000-4000-8000-000000000031";
 
 test("F1 : plus de « aucune facture… Stripe seule pièce » ; lien factuel vers l’espace Finance plateforme", () => {
   assert.doesNotMatch(admin, /aucune facture ni avoir n’est généré|seule pièce disponible|règlements Stripe ci-dessus font foi/);
-  assert.match(admin, /<a href="#platform-finance">Factures, avoirs et registre : espace Finance plateforme<\/a>/);
+  assert.match(admin, /<a(?: [^>]+)? href="#platform-finance"(?: [^>]+)?>Factures, avoirs et registre : espace Finance plateforme<\/a>/);
 });
 
 test("F2 : prêt mais montants absents / non sûrs ⇒ erreur bloquante, pas d’« Émettre », jamais 0,00 €", () => {

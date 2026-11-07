@@ -81,6 +81,8 @@ ROOT implémente la publication versionnée de codes postaux exacts par le Super
 
 ### ENT-13 — appliquer une grille publiée au devis
 
-ROOT est seul auteur du serveur. L'artisan actuellement attribué sélectionne une grille de l'organisation du site, ses lignes et les quantités. Le serveur reprend les prix unitaires publiés et le brouillon versionné existant. Une édition manuelle ultérieure forme une autre version. À l'envoi, le serveur conserve la référence de la grille et refuse une grille devenue inapplicable. L'accord et les totaux restent ceux du moteur de devis. Claude raccordera l'interface du devis après stabilisation du contrat. Tester prix exact, conflits, périmètre, envoi et conservation de l'historique.
+ROOT est seul auteur du serveur. Le propriétaire de l’organisation autorise une grille pour le dossier. L’artisan actuellement attribué peut alors appliquer ses lignes et quantités. Le serveur reprend les prix unitaires publiés et le brouillon versionné existant. Une édition manuelle ultérieure forme une autre version. À l'envoi, le serveur conserve la référence de la grille et refuse une grille devenue inapplicable. L'accord et les totaux restent ceux du moteur de devis. Claude raccordera l'interface du devis après stabilisation du contrat. Tester prix exact, conflits, périmètre, envoi et conservation de l'historique.
 
 - ENT-16 — Astra : propriétaire unique backend payeur B2B délégué, branche codex/delegated-payer base e541656 ; périmètre docs/missions/ENT16_DELEGATED_PAYER.md. Aucun cloud/UI.
+
+- ENT-12 — Astra : serveur des étapes ordonnées, compléments et décisions sur le devis exact. Contrat dans docs/ADVANCED_APPROVALS_BACKEND.md. Claude raccorde le parcours existant sans changer la règle d’acceptation.

@@ -161,6 +161,18 @@ const options = async (actor,id=gridJob) => (await as(actor,'select public.read_
 const apply = async (id, current, g=grid, picks=[{index:0,quantity:2}]) =>
  (await as('artisan','select public.apply_quote_contract_grid($1,$2,$3,$4::jsonb,$5,$6,$7,$8) value',
  [id,g.id,g.version_number,JSON.stringify(picks),current.version,current.assignment_token,current.current_quote_id,8.5])).rows[0].value;
+const grantGrid = async (id,g,version=null,key=crypto.randomUUID(),actor='manager') =>
+ (await as(actor,'select public.write_quote_grid_access($1,$2,$3,$4) value',[id,key,g?.id ?? null,version])).rows[0].value;
+assert.deepEqual((await options('artisan')).grids,[]);
+assert.equal((await as('manager','select public.read_quote_grid_access($1) v',[gridJob])).rows[0].v.grids[0].id,grid.id);
+await rejectsCode(grantGrid(gridJob,grid,null,crypto.randomUUID(),'artisan'),'P0002');
+await rejectsCode(apply(gridJob,gridDraft),'P0002');
+const firstAccessKey=crypto.randomUUID();
+assert.equal((await grantGrid(gridJob,grid,null,firstAccessKey)).version,1);
+assert.equal((await grantGrid(gridJob,grid,null,firstAccessKey)).replayed,true);
+const anotherGrid = await publishGrid(22222);
+assert.deepEqual((await options('artisan')).grids.map(row=>row.id),[grid.id]);
+await rejectsCode(apply(gridJob,gridDraft,anotherGrid),'P0002');
 assert.deepEqual((await options('artisan')).grids[0].lines, [{index:0,label:'Forfait QA',unit:'visit',unit_price_cents:12500}]);
 assert.deepEqual((await options('artisan',reassignedJob)).grids, []);
 await rejectsCode(options('otherArtisan'),'42501');
@@ -180,14 +192,21 @@ const confirmedQuote = (await as('manager','select subtotal_cents,total_cents fr
 assert.deepEqual(confirmedQuote,{subtotal_cents:25000,total_cents:27125});
 
 const outdatedJob = await newJob('manager',site.id);
+await grantGrid(outdatedJob,grid);
 const outdated = await apply(outdatedJob,await draft('artisan',outdatedJob,'load'));
 const replacement = await publishGrid(13000,grid.id);
 await rejectsCode(draft('artisan',outdatedJob,'send',{version:outdated.version,token:outdated.assignment_token}),'P0001');
 assert.equal((await draft('artisan',outdatedJob,'load')).version,outdated.version);
 assert.equal((await db.query('select count(*)::int n from public.quotes where intervention_id=$1',[outdatedJob])).rows[0].n,0);
+assert.equal((await grantGrid(outdatedJob,replacement,1)).version,2);
 const replaced = await apply(outdatedJob,outdated,replacement);
 assert.equal(replaced.draft.lines[0].unit_price_cents,13000);
 assert.equal((await sourceOf('manager'))[0].grid_version,1);
+assert.equal((await grantGrid(outdatedJob,null,2)).version,3);
+assert.deepEqual((await options('artisan',outdatedJob)).grids,[]);
+await rejectsCode(draft('artisan',outdatedJob,'send',{version:replaced.version,token:replaced.assignment_token}),'P0001');
+assert.equal((await grantGrid(outdatedJob,replacement,3)).version,4);
+await rejectsCode(draft('artisan',outdatedJob,'send',{version:replaced.version,token:replaced.assignment_token}),'P0001');
 const manual = await draft('artisan',outdatedJob,'save',{version:replaced.version,token:replaced.assignment_token,lines,tax:8.5});
 assert.equal((await options('artisan',outdatedJob)).current,null);
 const sentManual = await draft('artisan',outdatedJob,'send',{version:manual.version,token:manual.assignment_token});
