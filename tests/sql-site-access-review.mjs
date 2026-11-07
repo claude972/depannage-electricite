@@ -94,7 +94,7 @@ assert.equal(await scalar('artisan','select public.can_access_intervention($1) v
 for(const table of ['contracts','professional_audit'])assert.equal(await scalar('writer',`select count(*)::int v from public.${table}`),0);
 assert.equal(await scalar('global','select count(*)::int v from public.contracts'),1);
 assert.equal(await scalar('writer','select count(*)::int v from public.professional_report(null)'),1);
-assert.equal(await scalar('writer','select count(*)::int v from public.professional_report($1)',[b]),0);
+await assert.rejects(()=>scalar('writer','select count(*)::int v from public.professional_report($1)',[b]),e=>e.code==='P0002');
 await assert.rejects(()=>as('writer','select public.intervention_participants($1)',[jb.job]));
 console.log('PASS: real-site dossier helper scopes creator, quotes/payments, documents/Storage, chat, appointments/reports, approvals/compliance and exports; selected blocks organization-wide contracts/audit');
 for(const actor of ['reader','viewer','outside']){

@@ -136,8 +136,8 @@ const report=(await as('manager','select * from public.professional_report($1)',
 assert.equal(Number(report.paid_cents),24000);
 assert.equal(Number(report.committed_cents),24000);
 assert.equal(Number(report.interventions),3);
-assert.equal((await as('client1','select * from public.professional_report($1)',[site.id])).rows.length,0);
-console.log('PASS: report aggregates paid/accepted quotes, excludes estimates, and respects site RLS');
+await assert.rejects(as('client1','select * from public.professional_report($1)',[site.id]),e=>e.code==='P0002');
+console.log('PASS: report separates registered paid facts and accepted commitments, excludes estimates, and refuses a foreign site');
 // Restore this private fixture to its original ownership before warranty tests.
 await db.query('update public.interventions set site_id=null where id=$1',[job.id]);
 await assert.rejects(as('client1',"select public.request_warranty($1,'Le problème électrique est revenu après intervention.')",[job.id]));
