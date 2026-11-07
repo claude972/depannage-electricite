@@ -66,3 +66,7 @@ Astra réalise le rappel de rendez-vous personnel côté serveur. Le participant
 ## ART-03 / ADM-02 — décision individuelle de justificatif
 
 Pilote seul auteur de la migration, API /api/artisan/credentials/[id]/reviews et tests. Historique immuable, motif, version attendue, rejeu par UUID, lecture par l'artisan propriétaire et l'administration actuelle. Une pièce revue garde son type et sa date déclarée, l'artisan peut joindre une nouvelle pièce pour corriger. Une décision sur une pièce ne modifie pas l'approbation globale du dossier. Le contrat UI expose uniquement la pièce, les décisions datées, le droit d'action et le curseur. Vérifier accès croisés, expiration, concurrence par version, zéro double audit et reprise après réponse perdue. Cloud après assemblage et revue.
+
+## ART-12 — équipes prestataires, Astra backend
+
+Claim exclusif branche codex/provider-teams depuis cb90544 ; plan et ownership dans docs/missions/ART12_PROVIDER_TEAMS.md. Dirigeant/planificateur/technicien internes distincts du rôle global, invitations vérifiées, affectation et suivi interne après attribution existante, refus après retrait. Aucun devis/finance délégué, aucune modification de l’attribution atomique. API/tests/SQL isolé puis push, pas de cloud.
