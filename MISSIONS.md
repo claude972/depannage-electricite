@@ -27,3 +27,7 @@ Ajouter POST /api/admin/messages avec UUID de message stable, intervention et te
 ## ADM-04 — dossiers d’un client, ROOT Codex auteur
 
 Compléter le filtre serveur client_id de l’annuaire interventions administrateur ; UUID strict, empreinte curseur incluant le client, comptage et pagination existants conservés, aucune projection privée ajoutée ni droits élargis. Le point de lecture profil existe déjà via /api/admin/directory?kind=clients&id=UUID. Claude raccorde la fiche client à ces deux routes après tests.
+
+## CLI-09 — adresses enregistrées, claim Codex backend
+
+Base 21cd76d ; branche codex/client-addresses, worker unique. Propriété lib/features/client-addresses/**, app/api/profile/addresses/route.ts, migration nouvelle/tests dédiés. Liste privée sous JWT et RLS user_id=auth.uid(), count exact et plafond SQL 50 adresses actives ; aucune prétendue exhaustivité sur réponse tronquée. Nom/prénom contact, libellé et adresse complète/code postal/ville/pays saisis ; géopoint facultatif paire latitude/longitude et provenance explicite, aucune coordonnée inférée. Préférée unique/user avec conflit409 explicite ; versions optimistes, command UUID durable, rejeu exact sous droits actuels, archive et audit sans PII recopiée. Verrou du profil pour sérialiser quota/préférence ; pas de modification du profil/auth, invitation, fournisseur, cloud ou UI. HTTP nominal/refus/rejeu/erreurs, SQL réel PGlite (Auth/Storage/cron simulés), tsc strict puis revue ROOT.
