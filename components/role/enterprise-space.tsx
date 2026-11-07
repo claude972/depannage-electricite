@@ -100,6 +100,7 @@ import { useDetailPresence } from "./use-detail-presence";
 import { PointReadState } from "./detail-read-view";
 import { SiteOperationsView } from "../features/site-operations/site-operations-view";
 import { SiteEnergyPanel } from "../features/energy/site-energy-panel";
+import { EnergyConsolidationPanel } from "../features/energy-consolidation/energy-consolidation-panel";
 import { SiteContactsPanel } from "../features/site-contacts/site-contacts-panel";
 import { SiteAreasPanel } from "../features/site-areas/site-areas-panel";
 import { OrganizationSitesList, SiteSettingsPanel } from "../features/site-lifecycle/site-lifecycle-panels";
@@ -3410,12 +3411,14 @@ function ReportsView({ c }: { c: Ctx }) {
           </Empty>
         )}
       </section>
+      <EnergyConsolidationPanel
+        key={`${c.organization?.id ?? "-"}|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`}
+        organizationId={c.organization?.id ?? null}
+        sites={c.orgSites.map((x) => ({ id: x.id, name: x.name, archived: Boolean((x as { archived_at?: string | null }).archived_at) }))}
+        demo={demo}
+        context={session.mutationContext}
+      />
       <div className={styles.threeCol}>
-        <Unavailable
-          title="Consommation d’énergie (consolidé)"
-          reason="Les périodes de consommation (factures, relevés de compteur, saisies) se déclarent et se consultent site par site, dans la fiche de chaque site. Aucun total multi-sites n’est calculé ici."
-          blocker="ENT-09"
-        />
         <Unavailable
           title="Assemblées générales & appels de fonds (consolidé)"
           reason="Les assemblées générales et appels de fonds se consignent copropriété par copropriété, dans la fiche de chaque site en syndic. Aucun total multi-sites n’est calculé ici ; l’application ne calcule aucun quorum et n’encaisse rien."
