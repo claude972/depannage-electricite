@@ -76,7 +76,10 @@ try {
  await as(users.artisan);eq((await list()).items[0].result,{category:'socket',readability:'limited'});const reviewCmd=crypto.randomUUID();await command(reviewCmd,'review',5,null,id,null,'validate');eq(await command(reviewCmd,'review',5,null,id,null,'validate'),id);
  await as();eq((await list()).items[0].result,{category:'socket',readability:'limited'});
  // Assignment A→B→A never revives validated classification.
- await as('', 'postgres');await q('update public.interventions set artisan_id=$1 where id=$2',[users.other,job]);await q('update public.interventions set artisan_id=$1 where id=$2',[users.artisan,job]);await as();eq((await list()).items[0].status,'invalidated');eq((await list()).items[0].result,null);await deny(source(id));
+ await as('', 'postgres');await q('update public.interventions set artisan_id=$1 where id=$2',[users.other,job]);
+ await as(users.other);eq(await list(),{can_request:false,items:[]});
+ await as('', 'postgres');await q('update public.interventions set artisan_id=$1 where id=$2',[users.artisan,job]);
+ await as();eq((await list()).items[0].status,'invalidated');eq((await list()).items[0].result,null);await deny(source(id));
  // New photo: mutation of document identity between provider reservation and finish invalidates proof.
  await as('', 'postgres');const doc2=await one("insert into public.documents(owner_id,intervention_id,name,path,mime_type)values($1,$2,'QA','private/second.png','image/png')returning id v",[users.client,job]);
  await as();const req3=crypto.randomUUID(),id2=await command(req3,'request',0,doc2,null,true);
@@ -84,6 +87,9 @@ try {
  await as('', 'postgres');await q("update public.documents set path='private/replaced.png'where id=$1",[doc2]);
  await as('', 'service_role');await deny(proof(id2,'finish',null,null,'panel','readable'));
  await as();eq((await list()).items.find(i=>i.id===id2).result,null);
+ await as('', 'postgres');await q('update public.interventions set client_id=$1 where id=$2',[users.foreign,job]);
+ await as(users.foreign);eq(await list(),{can_request:true,items:[]});
+ await as(users.artisan);eq(await list(),{can_request:false,items:[]});
  await as('', 'anon');await deny(list());
  console.log(`PASS photo triage: ${checks} checks, consent/version/ACL, no provider-proof forgery, current artisan validation and irreversible invalidation`);
 }catch(e){console.error(e.message,e.code,e.query,e.stack?.split('\n').slice(0,5).join('\n'));process.exitCode=1}finally{await db.close()}

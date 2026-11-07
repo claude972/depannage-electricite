@@ -29,7 +29,12 @@ async function image(s:Session,p:z.infer<typeof source>){
 }
 export function createPhotoReviewHandlers(deps:Dependencies){
  async function same(original:Session){const s=await deps.authenticate();if(!s.sessionKey||s.userId!==original.userId||s.sessionKey!==original.sessionKey)fail(403);return s}
- async function render(s:Session,job:string){const v=parse(view,await rpc(s.db,'photo_review_list',{p_job:job}));if(new Set(v.items.map(i=>i.id)).size!==v.items.length)fail(503);if(v.can_request&&v.items.some(i=>i.status!=='validated'&&i.result!==null))fail(503);return Response.json({...v,provider_available:configuration(deps.env())!==null},{headers})}
+ async function render(s:Session,job:string){
+  const v=parse(view,await rpc(s.db,'photo_review_list',{p_job:job}));
+  if(new Set(v.items.map(i=>i.id)).size!==v.items.length)fail(503);
+  if(v.items.some(i=>(i.result!==null)!==(i.status==='validated'||(!v.can_request&&i.status==='awaiting_review'))))fail(503);
+  return Response.json({...v,provider_available:configuration(deps.env())!==null},{headers});
+ }
  async function readSource(s:Session,job:string,id:string){const p=parse(source,await rpc(s.db,'photo_review_source',{p_job:job,p_review:id}));if(p.id!==id)fail(503);return p}
  async function run(request:Request,job:string,write:boolean){try{
   if(!uuid.safeParse(job).success||new URL(request.url).searchParams.size)fail(422);
@@ -53,6 +58,6 @@ export function createPhotoReviewHandlers(deps:Dependencies){
   current=await same(session);
   if(await rpc(deps.admin(),'photo_review_provider',{p_actor:current.userId,p_job:job,p_review:id,p_action:'finish',p_command:null,p_version:null,p_sha256:sha,p_category:result.category,p_readability:result.readability})!==true)fail(409);
   return await render(await same(session),job);
- }catch(e){const known=e as {status?:number};const status=e instanceof Failure?e.status:known?.status===401?401:503;const messages:Record<number,string>={401:'Connectez-vous pour consulter cette photo.',403:'Cette photo n’est pas accessible avec vos droits actuels.',409:'La photo ou son attribution a changé. Relisez son état avant de continuer.',422:'Choisissez une photo JPEG, PNG ou WebP de moins de 4 Mo et confirmez votre choix.',503:'Le classement n’a pas pu être confirmé. Aucun nouvel envoi automatique n’est effectué.'};return Response.json({error:messages[status]},{status,headers})}}
+ }catch(e){const known=e as {status?:number};const status=e instanceof Failure?e.status:known?.status===401||known?.status===403?known.status:503;const messages:Record<number,string>={401:'Connectez-vous pour consulter cette photo.',403:'Cette photo n’est pas accessible avec vos droits actuels.',409:'La photo ou son attribution a changé. Relisez son état avant de continuer.',422:'Choisissez une photo JPEG, PNG ou WebP de moins de 4 Mo et confirmez votre choix.',503:'Le classement n’a pas pu être confirmé. Aucun nouvel envoi automatique n’est effectué.'};return Response.json({error:messages[status]},{status,headers})}}
  return {GET:(r:Request,job:string)=>run(r,job,false),POST:(r:Request,job:string)=>run(r,job,true)};
 }

@@ -35,7 +35,9 @@ begin
  return jsonb_build_object('can_request',owner,'items',coalesce((select jsonb_agg(jsonb_build_object('id',r.id,'document_id',r.document_id,'version',r.version,'status',case when not photo_triage_private.current(r)then'invalidated'else r.status end,
  'can_withdraw',owner and r.status='requested'and photo_triage_private.current(r),
  'can_review',not owner and r.status='awaiting_review'and photo_triage_private.current(r),
- 'result',case when photo_triage_private.current(r)and(r.status='validated'or(not owner and r.status='awaiting_review'))then jsonb_build_object('category',r.category,'readability',r.readability)else null end)order by r.created_at,r.id)from photo_triage_private.reviews r where r.intervention_id=p_job),'[]'::jsonb));
+ 'result',case when photo_triage_private.current(r)and(r.status='validated'or(not owner and r.status='awaiting_review'))then jsonb_build_object('category',r.category,'readability',r.readability)else null end)order by r.created_at,r.id)
+ from photo_triage_private.reviews r join public.interventions i on i.id=r.intervention_id
+ where i.id=p_job and r.owner_id=i.client_id and (owner or r.artisan_id=auth.uid())),'[]'::jsonb));
 end;$$;
 create function public.photo_review_command(p_job uuid,p_command uuid,p_action text,p_expected_version integer,p_document uuid default null,p_review uuid default null,p_consent boolean default null,p_decision text default null)returns uuid language plpgsql security definer set search_path=''as $$
 declare owner boolean;r photo_triage_private.reviews;d public.documents;i public.interventions;previous photo_triage_private.commands;payload jsonb;
