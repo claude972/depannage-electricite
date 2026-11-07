@@ -102,6 +102,7 @@ import { SiteOperationsView } from "../features/site-operations/site-operations-
 import { SiteEnergyPanel } from "../features/energy/site-energy-panel";
 import { SiteContactsPanel } from "../features/site-contacts/site-contacts-panel";
 import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
+import { PlatformPayAction } from "../app/platform-pay";
 import { OrganizationSlaPanel } from "../features/organization-sla/organization-sla-panel";
 import { CONTRACT_MESSAGES } from "../app/api";
 import { demoReport } from "../../lib/features/site-operations/demo";
@@ -1870,10 +1871,17 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
               </>
             ) : intervention.status === "completed" && acceptedQuote ? (
               <>
-                <div className={styles.keyValue}>
-                  <span>Montant à régler</span>
-                  <strong>{money(acceptedCommittedCents(acceptedQuote))}</strong>
-                </div>
+                {acceptedQuote.accepted_total_cents !== undefined ? (
+                  <div className={styles.keyValue}>
+                    <span>Devis et avenants acceptés (calcul serveur)</span>
+                    <strong>{money(acceptedQuote.accepted_total_cents)}</strong>
+                  </div>
+                ) : (
+                  <div className={styles.keyValue}>
+                    <span>Devis initial accepté</span>
+                    <strong>{money(acceptedQuote.total_cents)}</strong>
+                  </div>
+                )}
                 {payment?.status === "failed" && (
                   <p className={cx("alert error")} role="alert">
                     Le dernier paiement n’a pas abouti selon Stripe. Le règlement reste à effectuer ; vérifiez auprès de votre banque avant de recommencer.
@@ -1889,14 +1897,13 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
                     {session.busy ? "Enregistrement…" : "Simuler le règlement"}
                   </button>
                 ) : isPayer ? (
-                  <button
-                    type="button"
+                  <PlatformPayAction
+                    demo={false}
+                    busy={session.busy}
+                    busyLabel="Redirection…"
                     className="button primary full"
-                    disabled={session.busy}
-                    onClick={() => void session.checkout(acceptedQuote.id)}
-                  >
-                    {session.busy ? "Redirection…" : "Régler avec Stripe"}
-                  </button>
+                    onPay={() => void session.checkout(acceptedQuote.id)}
+                  />
                 ) : (
                   <Unavailable
                     title="Règlement réservé au demandeur"

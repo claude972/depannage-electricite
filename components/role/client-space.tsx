@@ -80,6 +80,7 @@ import { UploadQueuePanel } from "../app/upload-queue";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
 import { ClientAddressesPanel, usePreferredAddress } from "../features/client-addresses/client-addresses-panel";
 import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
+import { PlatformPayAction } from "../app/platform-pay";
 
 const CLIENT_VIEWS: readonly View[] = [
   "overview",
@@ -1096,23 +1097,12 @@ function DetailView({
           />
         );
       return (
-        <button
-          type="button"
-          className="button primary"
-          disabled={session.busy}
-          onClick={() =>
-            demo
-              ? void session.action(i.id, "simulate_payment")
-              : void session.checkout(accepted.id)
-          }
-        >
-          <Icon name="lock" />
-          {session.busy
-            ? "Veuillez patienter…"
-            : demo
-              ? `Simuler le règlement (${money(accepted.total_cents)})`
-              : `Régler avec Stripe (${money(accepted.total_cents)})`}
-        </button>
+        <PlatformPayAction
+          demo={demo}
+          busy={session.busy}
+          busyLabel="Veuillez patienter…"
+          onPay={() => (demo ? void session.action(i.id, "simulate_payment") : void session.checkout(accepted.id))}
+        />
       );
     }
     return null;
