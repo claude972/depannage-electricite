@@ -43,7 +43,9 @@ import {
 } from "./app/demo";
 import { resolveDisplayName } from "./app/display-name";
 import { draftNotice, getDraftStorage, readBootDraft } from "./app/request-draft-boot";
-import { BOOKING_DRAFT_KEY, clearBooking, ensureRequestId, readBooking, saveBooking, type BookingDraft } from "./app/booking-draft";
+import { BOOKING_DRAFT_KEY, PAYMENT_LABEL, clearBooking, ensureRequestId, readBooking, saveBooking, type BookingDraft } from "./app/booking-draft";
+import { DEFINITIVE_REFUSAL, prepareRequestKey, settleRequestKey } from "./app/request-key";
+import { bookingFromSignedRequest, readPhotoCount, writePhotoCount } from "./app/signed-booking";
 
 type BookingReceipt = {
   status: "confirmed";
@@ -178,6 +180,11 @@ export default function CourantApp() {
   // Card verify/cancel bypass run(ctx): their own single flight + identity/session generation check.
   const cardFlight = useRef(false);
   const bookingRef = useRef<BookingDraft | null>(null);
+  /** Photos chosen on the signed-in request form: kept IN MEMORY only (File objects cannot be
+   *  stored), uploaded after the booking is confirmed; lost on reload / bank return (announced). */
+  const bookingPhotos = useRef<File[]>([]);
+  /** Demo only: the same booking confirmation step, kept in memory (never in tab storage, never sent). */
+  const [demoBooking, setDemoBooking] = useState<{ draft: RequestValues; booking: BookingDraft } | null>(null);
   bookingRef.current = booking;
   const cardContext = { generation: () => guard.generation(), userId: () => userId.current };
   // Pending card attempt lookup: once per identity (after login / opening the requests), no polling.
@@ -1154,12 +1161,19 @@ export default function CourantApp() {
   // proven stored before the POST; the draft and booking are consumed only on 201 « confirmed ».
   async function confirmBooking() {
     return run(async (ctx) => {
-      const draft = pendingDraft;
-      const current = booking;
+      const demo = modeRef.current === "demo";
+      const draft = demo ? demoBooking?.draft ?? null : pendingDraft;
+      const current = demo ? demoBooking?.booking ?? null : booking;
       if (!draft || !current) throw new Error("Aucune demande en attente de confirmation dans cet onglet.");
       if (!current.payment) throw new Error("Choisissez un mode de paiement avant d’envoyer votre demande ; rien n’a été envoyé.");
-      if (modeRef.current === "demo")
-        throw new Error("La réservation n’est pas disponible en démonstration ; rien n’a été envoyé.");
+      if (demo) {
+        // Demo: same step, local creation only (no POST, no bank, no stored key).
+        const photos = bookingPhotos.current.length;
+        bookingPhotos.current = [];
+        demoCreate(ctx, draft, photos, ` Règlement choisi : ${PAYMENT_LABEL[current.payment]} (démonstration, rien n’est payé).`);
+        ctx.when(setDemoBooking)(null);
+        return;
+      }
       const keyed = ensureRequestId(getDraftStorage(), current);
       if (!keyed)
         throw new Error(
@@ -1211,12 +1225,64 @@ export default function CourantApp() {
       })();
       ctx.when(setSelectedId)(result.intervention.id);
       ctx.when(navigate)("detail", result.intervention.id);
-      ctx.notice(
+      const confirmedText =
         result.payment?.method === "on_site"
           ? "Demande confirmée. Paiement après l’intervention, sur la plateforme : rien n’est payé maintenant."
-          : "Demande confirmée.",
-      );
+          : "Demande confirmée.";
+      await uploadBookingPhotos(ctx, result.intervention.id, confirmedText);
     });
+  }
+  /** After a CONFIRMED creation only: the photos kept in memory are uploaded through the existing
+   *  queue; if they were lost (reload, bank return), say so — never a silent or fake upload. */
+  async function uploadBookingPhotos(ctx: RunContext, interventionId: string, confirmedText: string) {
+    const files = bookingPhotos.current;
+    const announced = readPhotoCount(getDraftStorage());
+    bookingPhotos.current = [];
+    writePhotoCount(getDraftStorage(), 0);
+    if (!files.length) {
+      ctx.notice(
+        announced > 0
+          ? `${confirmedText} ${announced} photo${announced > 1 ? "s" : ""} choisie${announced > 1 ? "s" : ""} avant le rechargement n’${announced > 1 ? "ont" : "a"} pas pu être conservée${announced > 1 ? "s" : ""} : ajoutez-${announced > 1 ? "les" : "la"} depuis le dossier.`
+          : confirmedText,
+      );
+      return;
+    }
+    const queue: UploadQueue = {
+      interventionId,
+      startedAt: new Date().toISOString(),
+      items: files.map((file, index) => ({ key: `${index}-${file.name}-${file.size}`, file, status: "pending" })),
+    };
+    ctx.when((q: UploadQueue) => setUploads((all) => upsertQueue(all, q)))(queue);
+    const finished = await processUploads(ctx, queue);
+    if (!ctx.alive()) return;
+    await refresh();
+    if (allUploaded(finished)) ctx.when(() => setUploads((all) => removeQueue(all, interventionId)))();
+    ctx.notice(`${confirmedText} ${uploadSummary(finished)}`);
+  }
+  /** Signed-in client « Nouvelle demande » (ROOT decision): the request becomes a booking draft
+   *  confirmed on BookingConfirm (payment choice) and sent by confirmBooking (POST /api/bookings).
+   *  Nothing is sent here; storage must work or nothing is kept. */
+  function startBooking(values: RequestValues, photos: File[] = []): boolean {
+    if (roleRef.current !== "client") return false;
+    if (modeRef.current === "demo") {
+      bookingPhotos.current = photos;
+      // Demo has no server profile: the demo cast name (never a made-up phone or last name).
+      setDemoBooking({ draft: values, booking: bookingFromSignedRequest(values, data.profile ?? { full_name: DEMO_NAMES.client, phone: "" }) });
+      return true;
+    }
+    if (modeRef.current !== "live") return false;
+    const next = bookingFromSignedRequest(values, data.profile);
+    const storage = getDraftStorage();
+    if (!saveBooking(storage, next) || !savePublicDraft(storage, values).ok) {
+      setError("Votre demande n’a pas été préparée : ce navigateur ne permet pas de la conserver en sécurité. Rien n’a été envoyé ; réessayez ou rechargez la page.");
+      return false;
+    }
+    bookingPhotos.current = photos;
+    writePhotoCount(storage, photos.length);
+    setPendingDraft(values);
+    setBooking(next);
+    setError("");
+    return true;
   }
   // Card hold verification (return, « Vérifier mon empreinte », retry): the URL proves nothing;
   // the server finalize decides. The dedicated return state is cleared ONLY on « confirmed ».
@@ -1294,51 +1360,67 @@ export default function CourantApp() {
       return true;
     });
   }
+  /** Demo creation (local, labelled; never a POST). */
+  function demoCreate(ctx: RunContext, values: RequestValues, photoCount: number, extra: string) {
+    const c = category(values.category);
+    const intervention: Intervention = {
+      ...values,
+      id: uid(),
+      status: "requested",
+      client_id: roleRef.current === "manager" ? DEMO_IDS.manager : DEMO_IDS.client,
+      created_at: new Date().toISOString(),
+      estimate_min_cents: c.min,
+      estimate_max_cents: c.max,
+      travel_stage: "planned",
+    };
+    ctx.when(setData)({ ...data, interventions: [intervention, ...data.interventions] });
+    ctx.when(setPendingDraft)(null);
+    ctx.when(setBooking)(null);
+    clearBooking(getDraftStorage());
+    try {
+      sessionStorage.removeItem(DRAFT_KEY);
+    } catch {}
+    ctx.when(setSelectedId)(intervention.id);
+    ctx.when(navigate)("detail", intervention.id);
+    ctx.notice(
+      (photoCount
+        ? "Demande enregistrée dans la démonstration ; les photos ne sont pas envoyées en démonstration."
+        : "Demande enregistrée dans la démonstration, sans envoi à un artisan réel.") + extra,
+    );
+  }
   async function createIntervention(values: RequestValues, photos: File[] = []) {
     return run(async (ctx) => {
       if (modeRef.current === "demo") {
-        const c = category(values.category);
-        const intervention: Intervention = {
-          ...values,
-          id: uid(),
-          status: "requested",
-          client_id: roleRef.current === "manager" ? DEMO_IDS.manager : DEMO_IDS.client,
-          created_at: new Date().toISOString(),
-          estimate_min_cents: c.min,
-          estimate_max_cents: c.max,
-          travel_stage: "planned",
-        };
-        ctx.when(setData)({ ...data, interventions: [intervention, ...data.interventions] });
-        ctx.when(setPendingDraft)(null);
-        ctx.when(setBooking)(null);
-        clearBooking(getDraftStorage());
-        try {
-          sessionStorage.removeItem(DRAFT_KEY);
-        } catch {}
-        ctx.when(setSelectedId)(intervention.id);
-        ctx.when(navigate)("detail", intervention.id);
-        ctx.notice(
-          photos.length
-            ? "Demande enregistrée dans la démonstration ; les photos ne sont pas envoyées en démonstration."
-            : "Demande enregistrée dans la démonstration, sans envoi à un artisan réel.",
-        );
+        demoCreate(ctx, values, photos.length, "");
         return;
       }
       // 1. Create the dossier exactly once. A service booking carries its idempotency key: the
       //    server returns the SAME dossier for a replay of that key (lost reply, retry, reload).
       //    The canonical RequestValues / offline draft format is unchanged; only the API payload
       //    gains request_id. A legacy booking without a key gets one PROVEN stored first.
-      const payload: RequestValues & { request_id?: string } = values;
+      // Key + frozen payload PROVEN stored before the POST (create_intervention_once). An
+      // uncertain earlier attempt is replayed exactly (same key, original payload).
+      const prepared = prepareRequestKey(getDraftStorage(), values);
+      if (!prepared)
+        throw new Error(
+          "Votre demande n’a pas été envoyée : ce navigateur n’a pas pu préparer son envoi en toute sécurité. Réessayez ; si cela persiste, rechargez la page.",
+        );
+      const payload: RequestValues & { request_id: string } = { ...prepared.payload, request_id: prepared.request_id };
       let result: { intervention: Intervention };
       try {
         result = await api<{ intervention: Intervention }>("/api/interventions", payload);
       } catch (e) {
-        if (payload.request_id && e instanceof ApiRequestError && e.status === 409)
+        if (e instanceof ApiRequestError && DEFINITIVE_REFUSAL.has(e.status)) settleRequestKey(getDraftStorage(), prepared.request_id);
+        if (e instanceof ApiRequestError && e.status === 409)
           throw new Error(
             "Cette demande a peut-être déjà été enregistrée avec un contenu différent. Vérifiez « Mes demandes » avant toute nouvelle demande.",
           );
-        throw e; // draft and key kept: the next attempt replays the SAME key
+        throw e; // uncertain: key and frozen payload kept, the next attempt replays the SAME key
       }
+      settleRequestKey(getDraftStorage(), prepared.request_id);
+      const replayNote = prepared.replayed
+        ? " Il s’agit de votre demande précédente, dont l’envoi n’avait pas été confirmé, enregistrée telle qu’envoyée : vos dernières modifications n’ont pas été transmises."
+        : "";
       if (ctx.alive()) await refresh();
       ctx.when(setPendingDraft)(null);
       ctx.when(setBooking)(null);
@@ -1354,7 +1436,7 @@ export default function CourantApp() {
         ctx.when(navigate)("detail", id);
       } else ctx.when(navigate)("requests");
       if (!id || !photos.length) {
-        ctx.notice("Votre demande a été enregistrée.");
+        ctx.notice(`Votre demande a été enregistrée.${replayNote}`);
         return;
       }
       // 2. Then upload the photos; a failure never recreates the dossier.
@@ -1368,7 +1450,7 @@ export default function CourantApp() {
       if (!ctx.alive()) return;
       await refresh();
       if (allUploaded(finished)) ctx.when(() => setUploads((all) => removeQueue(all, id)))();
-      ctx.notice(`Votre demande a été enregistrée. ${uploadSummary(finished)}`);
+      ctx.notice(`Votre demande a été enregistrée.${replayNote} ${uploadSummary(finished)}`);
     });
   }
   async function retryUploads(interventionId: string, options: { resendUncertain?: boolean } = {}) {
@@ -2669,27 +2751,39 @@ export default function CourantApp() {
     firstName,
     // Live: only the draft adopted by THIS identity chain (clearSessionState drops it on any
     // identity change); demo never inherits a public draft.
-    pendingDraft: mode === "live" ? pendingDraft : null,
+    pendingDraft: mode === "live" ? pendingDraft : demoBooking?.draft ?? null,
     // « Modifier » on the booking confirmation: the edited request replaces the kept draft (same
     // tab storage), nothing is sent; the confirmation then shows it again.
     updatePendingDraft(values: RequestValues) {
+      if (modeRef.current === "demo") {
+        setDemoBooking((d) => (d ? { ...d, draft: values } : d));
+        return;
+      }
       if (modeRef.current !== "live") return;
       setPendingDraft(values);
       savePublicDraft(getDraftStorage(), values);
     },
     updateBookingPayment(payment: NonNullable<BookingDraft["payment"]>) {
+      if (modeRef.current === "demo") {
+        setDemoBooking((d) => (d ? { ...d, booking: { ...d.booking, payment } } : d));
+        return;
+      }
       if (modeRef.current !== "live" || !booking) return;
       const next = { ...booking, payment };
       setBooking(next);
       saveBooking(getDraftStorage(), next);
     },
     updateBookingContact(contact: BookingDraft["contact"]) {
+      if (modeRef.current === "demo") {
+        setDemoBooking((d) => (d ? { ...d, booking: { ...d.booking, contact } } : d));
+        return;
+      }
       if (modeRef.current !== "live" || !booking) return;
       const next = { ...booking, contact };
       setBooking(next);
       saveBooking(getDraftStorage(), next);
     },
-    booking: mode === "live" && pendingDraft ? booking : null,
+    booking: mode === "live" ? (pendingDraft ? booking : null) : demoBooking?.booking ?? null,
     cardReturn: mode === "live" ? cardReturn : null,
     mutationContext: cardContext,
     pendingLookupFailed: mode === "live" && pendingLookup === "error",
@@ -2760,6 +2854,7 @@ export default function CourantApp() {
     loadArtisanPerformance,
     loadPaymentStatus,
     createIntervention,
+    startBooking,
     confirmBooking,
     cancelBooking,
     finalizeBooking,
