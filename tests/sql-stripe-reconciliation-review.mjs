@@ -328,7 +328,7 @@ try {
         family === "fee" ? "application_fee.created" : "charge.dispute.created",
       object: {
         ...e.object,
-        id: family === "fee" ? "fee_QA" : "dp_QA",
+        id: family === "fee" ? "fee_QA" : "du_QA",
         amount_reversed: null,
         reversed: null,
         destination: null,

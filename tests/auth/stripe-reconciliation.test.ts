@@ -152,7 +152,7 @@ test("payout contains no bank destination, no dossier inference, and keeps sourc
 test("fees and disputes are recorded as their own observations", async () => {
   for (const [type, object, id, family] of [
     ["application_fee.created", "application_fee", "fee_QA", "fee"],
-    ["charge.dispute.created", "dispute", "dp_QA", "dispute"],
+    ["charge.dispute.created", "dispute", "du_QA", "dispute"],
   ]) {
     const f = webhook();
     assert.equal(

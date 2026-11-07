@@ -75,7 +75,7 @@ export function normalizeFinancialEvent(event: any, live: boolean) {
         : family === "payout"
           ? /^po_/
           : family === "dispute"
-            ? /^dp_/
+            ? /^du_/
             : event.type === "application_fee.refund.updated"
               ? /^fr_/
               : /^fee_/
