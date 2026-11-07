@@ -52,7 +52,7 @@
   color: var(--ui-on-primary);
 }
 .btn.btnPrimary:hover {
-  background: #136640;
+  background: var(--ui-primary-hover);
 }
 .btn.btnGhost {
   background: transparent;

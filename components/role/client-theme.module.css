@@ -588,7 +588,7 @@
 
 /* ---- Manual corrections ----------------------------------------------------------------- */
 .clientSkin :global(.primary):hover:not(:disabled) {
-  background: #136640;
+  background: var(--ui-primary-hover);
 }
 /* Destructive: outlined in the danger token (a filled --ui-danger would fail AA with white). */
 .clientSkin :global(.destructive-button),
@@ -730,7 +730,7 @@
   color: var(--ui-on-primary);
 }
 .clientSkin :global(.button.primary):hover:not(:disabled) {
-  background: #136640;
+  background: var(--ui-primary-hover);
 }
 .clientSkin :global(.button.primary):disabled {
   opacity: 0.6;

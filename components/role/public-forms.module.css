@@ -197,7 +197,7 @@
 }
 .requestSkin :global(.button.primary):hover:not(:disabled),
 .authSkin :global(.button.primary):hover:not(:disabled) {
-  background: #136640;
+  background: var(--ui-primary-hover);
 }
 .requestSkin :global(.button.primary):disabled,
 .authSkin :global(.button.primary):disabled {
