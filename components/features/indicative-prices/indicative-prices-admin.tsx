@@ -3,11 +3,12 @@
 // prepared version, « publication fermée » while the server says so, and « Préparer une version »
 // (explicit form, reason required; staging never changes the active version). Command fenced under
 // courant-private-indicative-prices:<uid>:<gen>; same-UUID retry; re-read after success / uncertain /
-// 409. No « Publier » here. Demo: honest note, zero calls.
+// 409. « Publier » ONLY when the server says publication_available, with the active and latest
+// versions shown and an explicit confirmation step (never automatic). Demo: honest note, zero calls.
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { CATEGORIES } from "../../../lib/domain";
 import { COPY, PRICE_CATEGORIES, rangeText, type PriceCategory } from "./model";
-import { ADMIN_COPY, ADMIN_INITIAL, EMPTY_INPUTS, createStaging, tabStore, type AdminView, type Context, type RangeInputs, type Store } from "./admin-model";
+import { ADMIN_COPY, ADMIN_INITIAL, EMPTY_INPUTS, PUBLISH_COPY, PUBLISH_INITIAL, createPublication, createStaging, tabStore, type AdminView, type Context, type PublishView, type RangeInputs, type Store } from "./admin-model";
 import styles from "./indicative-prices.module.css";
 
 export type IndicativePricesAdminProps = { demo?: boolean; context?: Context; fetcher?: typeof fetch; store?: () => Store | null; newId?: () => string | null };
@@ -36,6 +37,15 @@ function Live({ context, fetcher, store = tabStore, newId = uuid }: IndicativePr
   const latest = useRef({ fetcher, store, newId, context });
   latest.current = { fetcher, store, newId, context };
   const ctrl = useRef<ReturnType<typeof createStaging> | null>(null);
+  const [pub, setPubRaw] = useState<PublishView>(PUBLISH_INITIAL);
+  const pubRef = useRef(pub);
+  const setPub = (v: PublishView) => {
+    pubRef.current = v;
+    setPubRaw(v);
+  };
+  const pubCtrl = useRef<ReturnType<typeof createPublication> | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [pubReason, setPubReason] = useState("");
   useEffect(() => {
     const c = createStaging({
       fetcher: () => latest.current.fetcher ?? ((...a) => fetch(...a)),
@@ -48,7 +58,21 @@ function Live({ context, fetcher, store = tabStore, newId = uuid }: IndicativePr
     ctrl.current = c;
     c.restorePending();
     void c.load();
-    return () => c.dispose();
+    const p = createPublication({
+      fetcher: () => latest.current.fetcher ?? ((...a) => fetch(...a)),
+      store: () => latest.current.store(),
+      newId: () => latest.current.newId(),
+      context: { generation: () => latest.current.context.generation(), userId: () => latest.current.context.userId() },
+      get: () => pubRef.current,
+      set: setPub,
+      reload: () => c.load(),
+    });
+    pubCtrl.current = p;
+    p.restorePending();
+    return () => {
+      c.dispose();
+      p.dispose();
+    };
   }, []);
   const c = ctrl.current;
   const [inputs, setInputs] = useState<RangeInputs>(EMPTY_INPUTS);
@@ -90,6 +114,31 @@ function Live({ context, fetcher, store = tabStore, newId = uuid }: IndicativePr
             ))}
           </dl>
           {!d.publication_available && <p className={styles.note} data-indicative-admin-closed="">{COPY.closed}</p>}
+          {d.publication_available && d.staged && !pub.pending && (
+            !confirming ? (
+              <button type="button" className={styles.button} onClick={() => setConfirming(true)} data-indicative-publish-open="">{PUBLISH_COPY.title}</button>
+            ) : (
+              <div className={styles.form} role="group" aria-labelledby="indicative-publish-title" data-indicative-publish-confirm="">
+                <h3 id="indicative-publish-title">{PUBLISH_COPY.title}</h3>
+                <p className={styles.hint}>{PUBLISH_COPY.note(d.active.version, d.latest_version)}</p>
+                <dl className={styles.kv}>
+                  {PRICE_CATEGORIES.map((cat) => (
+                    <div key={cat}><dt>{label(cat)}</dt><dd>{rangeText(d.active.ranges[cat])} → {rangeText(d.staged!.ranges[cat])}</dd></div>
+                  ))}
+                </dl>
+                <label className={styles.field}>
+                  Motif de publication (obligatoire, 10 à 1000 caractères)
+                  <textarea value={pubReason} maxLength={1000} onChange={(e) => setPubReason(e.target.value)} disabled={pub.busy} />
+                </label>
+                <div className={styles.actions}>
+                  <button type="button" className={styles.primary} disabled={pub.busy} onClick={async () => { if (await pubCtrl.current?.publish(d, pubReason)) { setConfirming(false); setPubReason(""); } }}>
+                    {PUBLISH_COPY.confirm(d.latest_version)}
+                  </button>
+                  <button type="button" className={styles.button} onClick={() => setConfirming(false)}>Annuler</button>
+                </div>
+              </div>
+            )
+          )}
           {!open && !view.pending && (
             <button type="button" className={styles.button} onClick={() => setOpen(true)} data-indicative-stage-open="">{ADMIN_COPY.stageTitle}</button>
           )}
@@ -119,7 +168,19 @@ function Live({ context, fetcher, store = tabStore, newId = uuid }: IndicativePr
           )}
         </>
       )}
-      {view.busy && <p className={styles.hint} role="status">Envoi…</p>}
+      {(view.busy || pub.busy) && <p className={styles.hint} role="status">Envoi…</p>}
+      {pub.notice && <p className={styles.ok} role="status" data-indicative-publish-notice="">{pub.notice}</p>}
+      {pub.error && (
+        <div className={styles.note} role="alert" data-indicative-publish-error="">
+          <p className={styles.error}>{pub.error}</p>
+          {pub.pending && (
+            <div className={styles.actions}>
+              <button type="button" className={styles.button} onClick={() => void pubCtrl.current?.retry()} disabled={pub.busy}>Renvoyer la même publication</button>
+              <button type="button" className={styles.button} onClick={() => pubCtrl.current?.discard()} disabled={pub.busy}>Abandonner</button>
+            </div>
+          )}
+        </div>
+      )}
       {view.notice && <p className={styles.ok} role="status" data-indicative-stage-notice="">{view.notice}</p>}
       {view.phase === "ready" && view.error && (
         <div className={styles.note} role="alert" data-indicative-stage-error="">

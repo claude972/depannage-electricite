@@ -134,6 +134,52 @@ test("montages : affichages publics lus depuis le GET, réservation inchangée, 
   assert.match(page, /<strong data-indicative-range=\{service\.category\}>\{shownRange\}<\/strong>/);
   assert.match(readFileSync("components/role/public-site.tsx", "utf8"), /<td><IndicativeRange category=\{row\.id as Category\} bare \/><\/td>/);
   const admin = readFileSync("components/features/indicative-prices/indicative-prices-admin.tsx", "utf8").split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
-  assert.doesNotMatch(admin, /Publier/);
+  assert.match(admin, /\{d\.publication_available && d\.staged && !pub\.pending && \(/, "« Publier » only when the server allows it");
   assert.match(readFileSync("components/role/admin-space.tsx", "utf8"), /<IndicativePricesAdmin key=\{`prices\|\$\{session\.mutationContext\.userId\(\) \?\? "-"\}\|\$\{session\.mutationContext\.generation\(\)\}`\} demo=\{demo\} context=\{session\.mutationContext\} \/>/);
+});
+
+test("publication : seulement si autorisée par le serveur, versions attendues exactes, confirmation explicite, relecture après chaque issue", async () => {
+  const cmd = { command_id: "e0000000-0000-4000-8000-000000000009", expected_active_version: 1, expected_latest_version: 2, reason: "Publication validée" };
+  assert.ok(a.parsePublishReceipt({ published_version: 2, active_version: 2, replayed: false }, cmd));
+  assert.ok(a.parsePublishReceipt({ published_version: 2, active_version: 3, replayed: true }, cmd), "old replay: a newer active is possible");
+  assert.equal(a.parsePublishReceipt({ published_version: 2, active_version: 3, replayed: false }, cmd), null);
+  assert.equal(a.parsePublishReceipt({ published_version: 3, active_version: 3, replayed: false }, cmd), null);
+  const staged = a.parseStageView(STAGE({ latest_version: 2, staged: { version: 2, ranges: R, reason: "Révision annuelle", created_at: "2026-11-07T20:00:00Z" }, publication_available: true }))!;
+  const closed = a.parseStageView(STAGE({ latest_version: 2, staged: { version: 2, ranges: R, reason: "Révision annuelle", created_at: "2026-11-07T20:00:00Z" }, publication_available: false }))!;
+  const mem = memStore();
+  const calls: { body: unknown }[] = [];
+  let reloads = 0;
+  let pv: Admin.PublishView = a.PUBLISH_INITIAL;
+  let reply: () => Response = () => new Response(JSON.stringify({ published_version: 2, active_version: 2, replayed: false }), { status: 200 });
+  const p = a.createPublication({
+    fetcher: () => (async (_u: string, init: RequestInit) => { calls.push({ body: JSON.parse(String(init.body)) }); return reply(); }) as unknown as typeof fetch,
+    store: () => mem.store,
+    newId: () => "e0000000-0000-4000-8000-000000000009",
+    context: { generation: () => 1, userId: () => "admin-1" },
+    get: () => pv,
+    set: (v) => (pv = v),
+    reload: async () => void reloads++,
+  });
+  assert.equal(await p.publish(closed, "Publication validée"), false, "closed ⇒ never sent");
+  assert.equal(await p.publish(staged, "court"), false);
+  assert.equal(calls.length, 0);
+  assert.equal(await p.publish(staged, "Publication validée"), true);
+  assert.equal(JSON.stringify(calls[0].body), JSON.stringify(cmd));
+  assert.equal(reloads, 1, "re-read after success");
+  assert.equal(mem.map.size, 0);
+  reply = () => new Response(JSON.stringify({ error: "La publication des fourchettes est désactivée." }), { status: 503 });
+  await p.publish(staged, "Publication validée");
+  assert.equal(pv.error, a.PUBLISH_COPY.closed);
+  assert.equal(pv.pending, null);
+  reply = () => new Response("{}", { status: 409 });
+  await p.publish(staged, "Publication validée");
+  assert.equal(pv.error, a.PUBLISH_COPY.conflict);
+  reply = () => new Response("{}", { status: 502 });
+  await p.publish(staged, "Publication validée");
+  assert.equal(pv.error, a.PUBLISH_COPY.retry);
+  assert.ok(pv.pending);
+  reply = () => new Response(JSON.stringify({ published_version: 2, active_version: 2, replayed: true }), { status: 200 });
+  await p.retry();
+  assert.equal(pv.notice, a.PUBLISH_COPY.replayed);
+  assert.equal(reloads, 5, "re-read after every outcome");
 });

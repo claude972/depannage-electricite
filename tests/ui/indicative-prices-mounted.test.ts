@@ -32,7 +32,9 @@ window.fetch = async (url, init) => {
   S.calls.push(method + " " + url);
   if (cfg.fail) return new Response("{}", { status: 503 });
   if (url === "/api/public/indicative-prices") return new Response(JSON.stringify(PUBLIC), { status: 200 });
-  if (method === "GET") return new Response(JSON.stringify({ active: PUBLIC, latest_version: S.latest, staged: S.latest > 3 ? { version: S.latest, ranges: R, reason: "Révision annuelle des fourchettes", created_at: "2026-11-07T20:00:00Z" } : null, publication_available: false }), { status: 200 });
+  if (url === "/api/admin/indicative-prices/publication") { S.publish = JSON.parse(init.body); S.active = S.publish.expected_latest_version; return new Response(JSON.stringify({ published_version: S.active, active_version: S.active, replayed: false }), { status: 200 }); }
+  const active = { ...PUBLIC, version: S.active || 3 };
+  if (method === "GET") return new Response(JSON.stringify({ active, latest_version: S.latest, staged: S.latest > active.version ? { version: S.latest, ranges: R, reason: "Révision annuelle des fourchettes", created_at: "2026-11-07T20:00:00Z" } : null, publication_available: Boolean(cfg.publish) }), { status: 200 });
   S.stored = sessionStorage.getItem("courant-private-indicative-prices:admin-1:1");
   const b = JSON.parse(init.body);
   S.post = b; S.latest = b.expected_version + 1;
@@ -115,4 +117,37 @@ test("app réelle (390 px, API coupée) : l’accueil public affiche le repli ho
     }
     assert.deepEqual(errors, []);
   });
+});
+
+test("Chromium 390 : « Publier » seulement si le serveur l’autorise ; versions affichées ; confirmation explicite ; un seul POST", { skip }, async () => {
+  const { server, base } = await serve();
+  const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
+  const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true });
+  try {
+    const page = await (await browser.newContext({ viewport: { width: 390, height: 1200 } })).newPage();
+    const errors: string[] = [];
+    page.on("pageerror", (e: Error) => errors.push(String(e)));
+    await page.goto(`${base}#${encodeURIComponent(JSON.stringify({ admin: true, publish: true }))}`);
+    await page.locator('[data-indicative-admin="ready"]').waitFor();
+    assert.equal(await page.locator("[data-indicative-publish-open]").count(), 0, "nothing prepared yet ⇒ no publish");
+    await page.locator("[data-indicative-stage-open]").click();
+    await page.getByRole("button", { name: "Partir de la version active" }).click();
+    await page.getByLabel("Motif (obligatoire, 10 à 1000 caractères)").fill("Révision annuelle des fourchettes");
+    await page.locator("[data-indicative-stage-form] button[type=submit]").click();
+    await page.locator("[data-indicative-publish-open]").waitFor();
+    await page.locator("[data-indicative-publish-open]").click();
+    assert.match(await page.locator("[data-indicative-publish-confirm]").innerText(), /Version active : 3\. Version préparée : 4/);
+    assert.equal((await page.evaluate(() => (window as unknown as { S: { publish?: unknown } }).S.publish)) ?? null, null, "no automatic call");
+    await page.getByLabel("Motif de publication (obligatoire, 10 à 1000 caractères)").fill("Publication validée par l’exploitant");
+    await page.getByRole("button", { name: "Confirmer la publication de la version 4" }).click();
+    await page.locator("[data-indicative-publish-notice]").waitFor();
+    const pub = (await page.evaluate(() => (window as unknown as { S: { publish: unknown } }).S.publish)) as Record<string, unknown>;
+    assert.equal(pub.expected_active_version, 3);
+    assert.equal(pub.expected_latest_version, 4);
+    await page.waitForFunction(() => /Version active 4/.test(document.querySelector("[data-indicative-admin-version]")?.textContent ?? ""));
+    assert.deepEqual(errors, []);
+  } finally {
+    await browser.close();
+    server.close();
+  }
 });
