@@ -34,6 +34,7 @@ import type {
   Intervention,
   Message,
   Operations,
+  Participant,
   Quote,
   Role,
   Status,
@@ -184,11 +185,33 @@ function applicationTag(status: ArtisanApplicationStatus | null | undefined) {
   const a = APPLICATION[status];
   return <Tag tone={a.tone}>{a.label}</Tag>;
 }
-function authorLabel(message: Message, intervention: Intervention | undefined, adminId: string) {
+/** Author of a dossier message. Uses the server's participant roles when known (another admin is
+ *  then « Exploitant »); without a role source it stays « Participant », never a guessed role. */
+export function authorLabel(message: Pick<Message, "author_id">, intervention: Pick<Intervention, "artisan_id" | "client_id"> | undefined, adminId: string, participants: Pick<Participant, "id" | "role">[] = []) {
   if (message.author_id === adminId || message.author_id === "demo-admin") return "Exploitant";
   if (intervention?.artisan_id && message.author_id === intervention.artisan_id) return "Artisan";
   if (intervention?.client_id && message.author_id === intervention.client_id) return "Client";
+  const role = participants.find((p) => p.id === message.author_id)?.role;
+  if (role === "admin") return "Exploitant";
+  if (role === "artisan") return "Artisan";
+  if (role === "client" || role === "manager") return "Client";
   return "Participant";
+}
+/** Actor of an audit / history event: a name and role from data already loaded, else the short id
+ *  (never an invented name). */
+export function actorLabel(
+  actorId: string | null | undefined,
+  ctx: { selfId: string; participants?: Pick<Participant, "id" | "full_name" | "role">[]; overview?: Pick<AdminOverview, "artisans" | "clients"> | null },
+): string {
+  if (!actorId) return "Plateforme (automatique)";
+  if (actorId === ctx.selfId) return "Vous (administrateur)";
+  const p = ctx.participants?.find((x) => x.id === actorId);
+  if (p) return `${p.full_name} (${ROLE_NAMES[p.role as Role] || p.role})`;
+  const a = ctx.overview?.artisans.find((x) => x.id === actorId);
+  if (a) return `${a.full_name} (${ROLE_NAMES.artisan})`;
+  const c = ctx.overview?.clients.find((x) => x.id === actorId);
+  if (c) return `${c.full_name} (${ROLE_NAMES[c.role as Role] || ROLE_NAMES.client})`;
+  return shortUser(actorId);
 }
 
 // ---- Local building blocks -----------------------------------------------------------------
@@ -650,6 +673,8 @@ export function AdminSpace({ session }: { session: Session }) {
       overviewFailed={overviewFailed}
       onBack={() => go("admin-interventions")}
       artisanName={artisanName}
+      onOpenClient={(clientId) => go("admin-clients", clientId)}
+      onOpenArtisan={(artisanId) => go("admin-artisan", artisanId)}
     />
   );
 
@@ -707,7 +732,20 @@ export function AdminSpace({ session }: { session: Session }) {
             rows={payments}
             keyOf={(p) => p.id}
             columns={[
-              { key: "quote", label: "Devis", render: (p) => <span className={styles.mono}>{quoteRef(p.quote_id)}</span> },
+              {
+                key: "quote",
+                label: "Devis",
+                render: (p) => {
+                  const q = session.data.quotes.find((x) => x.id === p.quote_id);
+                  return q ? (
+                    <button type="button" className={styles.link} onClick={() => openDossier(q.intervention_id)} data-payment-open={q.intervention_id}>
+                      {quoteRef(p.quote_id)}
+                    </button>
+                  ) : (
+                    <span className={styles.mono} title="Dossier de ce devis non chargé dans cette vue">{quoteRef(p.quote_id)}</span>
+                  );
+                },
+              },
               { key: "amount", label: "Montant", render: (p) => <span className={styles.mono}>{money(p.total_cents)}</span> },
               {
                 key: "status",
@@ -919,8 +957,19 @@ export function AdminSpace({ session }: { session: Session }) {
             keyOf={(e) => String(e.id)}
             columns={[
               { key: "action", label: "Action", wide: true, render: (e) => e.action },
-              { key: "actor", label: "Acteur", render: (e) => <span className={styles.mono}>{shortUser(e.actor_id)}</span> },
-              { key: "intervention", label: "Intervention", render: (e) => (e.intervention_id ? <span className={styles.mono}>{shortId(e.intervention_id)}</span> : "—") },
+              { key: "actor", label: "Acteur", render: (e) => actorLabel(e.actor_id, { selfId: session.profileId, overview: o }) },
+              {
+                key: "intervention",
+                label: "Intervention",
+                render: (e) =>
+                  e.intervention_id ? (
+                    <button type="button" className={styles.link} onClick={() => openDossier(e.intervention_id!)} data-audit-open={e.intervention_id}>
+                      {shortId(e.intervention_id)}
+                    </button>
+                  ) : (
+                    "—"
+                  ),
+              },
               { key: "date", label: "Date", render: (e) => dateTime(e.created_at) },
             ]}
             empty={
@@ -989,8 +1038,17 @@ export function AdminSpace({ session }: { session: Session }) {
         content = renderDossier(session.param);
         break;
       case "quote": {
+        // A quote id is never opened as a dossier id: unknown here ⇒ honest state, not a wrong page.
         const q = session.data.quotes.find((x) => x.id === session.param);
-        content = renderDossier(q ? q.intervention_id : session.param);
+        content = q ? (
+          renderDossier(q.intervention_id)
+        ) : (
+          <div data-admin-quote-unresolved={session.param}>
+            <Empty icon="document" title="Devis non chargé" action={<button type="button" className="button outline" onClick={() => go("admin-quotes")}>Voir les devis chargés</button>}>
+              Ce devis ne fait pas partie des données chargées : son dossier ne peut pas être ouvert depuis ce lien. Ouvrez le dossier depuis la liste des interventions.
+            </Empty>
+          </div>
+        );
         break;
       }
       case "admin-quotes":
@@ -2828,6 +2886,12 @@ function ClientsView({
   const clients = useDirectory(session, "clients");
   const record = useClientRecord(session);
   const recordPanel = useRef<HTMLDivElement>(null);
+  // #admin-clients/<client id> (e.g. from a dossier) opens that exact client record.
+  const routeClient = session.view === "admin-clients" ? session.param : "";
+  useEffect(() => {
+    if (/^[0-9a-f-]{8,}$|^demo-[\w-]+$/i.test(routeClient)) record.open(routeClient);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeClient]);
   const openRecord = (c: DirectoryClient) => {
     record.open(c.id);
     recordPanel.current?.scrollIntoView({ block: "start" });
@@ -3162,6 +3226,8 @@ function DossierView({
   overviewFailed,
   onBack,
   artisanName,
+  onOpenClient,
+  onOpenArtisan,
 }: {
   id: string;
   session: Session;
@@ -3169,6 +3235,8 @@ function DossierView({
   overviewFailed: boolean;
   onBack: () => void;
   artisanName: (id: string | null | undefined) => string | undefined;
+  onOpenClient: (clientId: string) => void;
+  onOpenArtisan: (artisanId: string) => void;
 }) {
   const demo = session.mode === "demo";
   const sessionRef = useRef(session);
@@ -3301,11 +3369,27 @@ function DossierView({
               </div>
               <div>
                 <small>Artisan</small>
-                <strong>{intervention.artisan_id ? artisanName(intervention.artisan_id) || "Attribué" : "Non attribué"}</strong>
+                <strong>
+                  {intervention.artisan_id ? (
+                    <button type="button" className={styles.link} onClick={() => onOpenArtisan(intervention.artisan_id!)} data-dossier-open-artisan={intervention.artisan_id}>
+                      {artisanName(intervention.artisan_id) || "Dossier artisan"}
+                    </button>
+                  ) : (
+                    "Non attribué"
+                  )}
+                </strong>
               </div>
               <div>
                 <small>Client</small>
-                <strong className={styles.mono}>{shortUser(intervention.client_id)}</strong>
+                <strong>
+                  {intervention.client_id ? (
+                    <button type="button" className={styles.link} onClick={() => onOpenClient(intervention.client_id!)} data-dossier-open-client={intervention.client_id}>
+                      {actorLabel(intervention.client_id, { selfId: session.profileId, participants: operations?.participants, overview })}
+                    </button>
+                  ) : (
+                    "—"
+                  )}
+                </strong>
               </div>
               <div>
                 <small>Créée</small>
@@ -3439,7 +3523,7 @@ function DossierView({
                         {operations.history.map((event) => (
                           <li key={String(event.id)}>
                             <span>
-                              {event.kind === "appointment" ? "Rendez-vous" : "Compte rendu"} · {shortUser(event.actor_id)}
+                              {event.kind === "appointment" ? "Rendez-vous" : "Compte rendu"} · {actorLabel(event.actor_id, { selfId: session.profileId, participants: operations.participants, overview })}
                             </span>
                             <span>{dateTime(event.created_at)}</span>
                           </li>
@@ -3461,7 +3545,7 @@ function DossierView({
                 {messages.map((m) => (
                   <article className={styles.message} key={m.id}>
                     <header>
-                      <strong>{authorLabel(m, intervention, session.profileId)}</strong>
+                      <strong>{authorLabel(m, intervention, session.profileId, operations?.participants ?? [])}</strong>
                       <span>{dateTime(m.created_at)}</span>
                     </header>
                     <p>{m.body}</p>
