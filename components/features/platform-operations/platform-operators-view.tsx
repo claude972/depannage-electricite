@@ -50,6 +50,25 @@ function Inner({ scope, client, demo, onNavigate }: PlatformOperatorsViewProps) 
     </div>
   );
 }
+/** The account's record, ONLY from the profile role the server may send with the grant (optional,
+ *  strict values): client / manager ⇒ client record, artisan ⇒ artisan record. Admin, absent or
+ *  unknown ⇒ no link (a scope can be granted to any non-admin profile; never guessed). */
+export function grantAccountTarget(grant: OperatorGrant): { target: "client" | "artisan"; id: string } | null {
+  const role = (grant as OperatorGrant & { role?: unknown }).role;
+  if (role === "client" || role === "manager") return { target: "client", id: grant.user_id };
+  if (role === "artisan") return { target: "artisan", id: grant.user_id };
+  return null;
+}
+export function GrantAccount({ grant, onNavigate }: { grant: OperatorGrant; onNavigate?: (view: string, param?: string) => void }) {
+  const name = grant.full_name || "Compte";
+  const t = grantAccountTarget(grant);
+  if (!t || !onNavigate) return <>{name}</>;
+  return (
+    <button type="button" className="text-button" onClick={() => onNavigate(t.target, t.id)} data-grant-open-account={t.id} data-grant-target={t.target}>
+      {name} · {t.target === "artisan" ? "dossier artisan" : "fiche client"}
+    </button>
+  );
+}
 function GrantTable({ list, canWrite, busy, onRevoke, onNavigate }: { onNavigate?: (view: string, param?: string) => void; list: ReturnType<typeof useLoad<{ grants: OperatorGrant[]; page: { limit: number; total: number; has_more: boolean; next_cursor: string | null } }>>; canWrite: boolean; busy: boolean; onRevoke: (grant: OperatorGrant) => void }) {
   const [confirm, setConfirm] = useState<string | null>(null);
   if (list.loading && !list.data) return <Loading />;
@@ -60,7 +79,7 @@ function GrantTable({ list, canWrite, busy, onRevoke, onNavigate }: { onNavigate
       <thead><tr><th>Compte</th><th>Scope</th><th>Statut</th><th>Accordé</th><th>Révoqué</th>{canWrite && <th>Action</th>}</tr></thead>
       <tbody>{list.data.grants.map((g) => (
         <tr key={g.id}>
-          <td>{onNavigate ? <button type="button" className="text-button" onClick={() => onNavigate("client", g.user_id)} data-grant-open-account={g.user_id}>{g.full_name || "Compte"} · fiche</button> : g.full_name || "Compte"} <span className={styles.mono}>{shortId(g.user_id)}</span>{g.note && <div className={styles.hint}>{g.note}</div>}</td>
+          <td><GrantAccount grant={g} onNavigate={onNavigate} /> <span className={styles.mono}>{shortId(g.user_id)}</span>{g.note && <div className={styles.hint}>{g.note}</div>}</td>
           <td>{SCOPE_LABELS[g.scope]}<div className={styles.hint}>{SCOPE_DESCRIPTIONS[g.scope]}</div></td>
           <td><span className={`tag ${g.status === "active" ? "tag-green" : "tag-amber"}`}>{g.status === "active" ? "Actif" : "Révoqué"}</span></td>
           <td>{dateTime(g.granted_at)}</td>

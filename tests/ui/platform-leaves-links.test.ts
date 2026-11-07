@@ -52,10 +52,12 @@ test("modération : l’auteur de l’avis ouvre sa fiche client ; le dossier ou
   });
 });
 
-test("opérateurs : le compte d’un scope ouvre sa fiche (annuaire clients) ; file d’assistance chargée", { skip }, async () => {
+test("opérateurs : sans rôle serveur, le compte reste du texte ; file d’assistance chargée", { skip }, async () => {
   await withApp(async (open) => {
     const { page, errors, api } = await open("admin-platform-operators");
-    await clickAndExpect(page, "[data-grant-open-account]", "data-grant-open-account", "#admin-clients/");
+    // Demo grants carry no profile role: the account stays text (never a guessed record).
+    await page.locator("table").first().waitFor();
+    assert.equal(await page.locator("[data-grant-open-account]").count(), 0);
     const q = await open("admin-support-queue");
     await q.page.waitForTimeout(800);
     assert.match(await q.page.locator("main").innerText(), /assistance/i);
