@@ -4,8 +4,11 @@
 // server reports — a missing measurement is « non déclaré / manquant », a declared 0 is 0; totals
 // only with complete recorded coverage (otherwise the reasons); comparison only when the server
 // says the periods are comparable. Identity-guarded after the await; demo: no call. Logic: ./model.
-import { useRef, useState, type FormEvent } from "react";
-import { COMPARISON_REASON, COPY, EMPTY_FORM, centsToEuros, fetchReport, formToSelection, incompleteReasons, parseReport, totalConsumption, totalCost, whToKwh, type EnergyReport, type Form, type Result, type Selection } from "./model";
+// « Exporter en CSV » (ROOT b404b4f): private download of exactly the displayed consolidation —
+// same-origin GET with credentials, no-store, blob + object URL (revoked), server filename; one export
+// at a time; a reply after an identity / consolidation change is dropped and nothing is saved.
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { COMPARISON_REASON, COPY, EMPTY_FORM, EXPORT_COPY, centsToEuros, exportError, fetchCsv, fetchReport, formToSelection, incompleteReasons, parseReport, totalConsumption, totalCost, whToKwh, type EnergyReport, type Form, type Result, type Selection } from "./model";
 import styles from "./energy-consolidation.module.css";
 
 export type EnergyConsolidationProps = {
@@ -19,6 +22,24 @@ export type EnergyConsolidationProps = {
   initial?: { form: Form; report: EnergyReport | null; selection: Selection | null };
 };
 type Phase = "idle" | "loading" | "ready" | "error";
+type ExportState = { phase: "idle" } | { phase: "busy" } | { phase: "done"; filename: string } | { phase: "error"; message: string; waitS: number | null };
+
+/** Private, uncached save: object URL for this blob only, revoked right after the download starts. */
+function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.rel = "noopener";
+  a.style.display = "none";
+  document.body.appendChild(a);
+  try {
+    a.click();
+  } finally {
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+}
 
 export function EnergyConsolidationPanel({ organizationId, sites, demo, context, fetcher, initial }: EnergyConsolidationProps) {
   const [form, setForm] = useState<Form>(initial?.form ?? EMPTY_FORM);
@@ -28,6 +49,11 @@ export function EnergyConsolidationPanel({ organizationId, sites, demo, context,
   const [shown, setShown] = useState<Selection | null>(initial?.selection ?? null);
   const [error, setError] = useState("");
   const seq = useRef(0);
+  const [exp, setExp] = useState<ExportState>({ phase: "idle" });
+  const [retryWait, setRetryWait] = useState(false);
+  const exporting = useRef(false);
+  const waitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(waitTimer.current), []);
   const name = (id: string) => sites.find((s) => s.id === id)?.name ?? "Site";
 
   if (demo)
@@ -35,6 +61,7 @@ export function EnergyConsolidationPanel({ organizationId, sites, demo, context,
       <section className={styles.panel} aria-labelledby="energy-consolidation-title" data-energy-consolidation="demo">
         <h2 id="energy-consolidation-title">Consommation d’énergie (consolidé)</h2>
         <p className={styles.note}>{COPY.demo}</p>
+        <p className={styles.hint} data-energy-export="demo">{EXPORT_COPY.demo}</p>
       </section>
     );
 
@@ -43,6 +70,11 @@ export function EnergyConsolidationPanel({ organizationId, sites, demo, context,
     const gen = context.generation(), uid = context.userId();
     setPhase("loading");
     setError("");
+    // A new consolidation replaces the displayed one: any export in flight belongs to the old one.
+    exporting.current = false;
+    clearTimeout(waitTimer.current);
+    setRetryWait(false);
+    setExp({ phase: "idle" });
     const r: Result = await fetchReport(fetcher ?? ((...a) => fetch(...a)), sel);
     // StrictMode / identity guard: only the latest request, under the same identity, applies.
     if (my !== seq.current) return;
@@ -72,6 +104,34 @@ export function EnergyConsolidationPanel({ organizationId, sites, demo, context,
     if ("error" in out) return setFormError(out.error);
     setFormError("");
     void run(out.selection);
+  };
+  const exportCsv = async () => {
+    // Single flight, and only for the consolidation on screen (exactly its filters).
+    if (exporting.current || phase !== "ready" || !shown) return;
+    exporting.current = true;
+    const sel = shown, my = seq.current;
+    const gen = context.generation(), uid = context.userId();
+    clearTimeout(waitTimer.current);
+    setRetryWait(false);
+    setExp({ phase: "busy" });
+    const out = await fetchCsv(fetcher ?? ((...a) => fetch(...a)), sel);
+    if (my !== seq.current) return; // another consolidation was displayed meanwhile: drop, save nothing
+    exporting.current = false;
+    if (context.generation() !== gen || context.userId() !== uid) {
+      setExp({ phase: "idle" }); // identity changed: the file is dropped, nothing is saved
+      return;
+    }
+    if (out.kind === "file") {
+      saveBlob(out.blob, out.filename);
+      setExp({ phase: "done", filename: out.filename });
+      return;
+    }
+    if (out.kind === "off-contract") return setExp({ phase: "error", message: EXPORT_COPY.offContract, waitS: null });
+    setExp({ phase: "error", message: exportError(out.status, out.retryAfterS), waitS: out.retryAfterS });
+    if (out.retryAfterS) {
+      setRetryWait(true);
+      waitTimer.current = setTimeout(() => setRetryWait(false), out.retryAfterS * 1000);
+    }
   };
   const toggle = (id: string) => setForm((f) => ({ ...f, site_ids: f.site_ids.includes(id) ? f.site_ids.filter((x) => x !== id) : [...f.site_ids, id] }));
 
@@ -116,6 +176,21 @@ export function EnergyConsolidationPanel({ organizationId, sites, demo, context,
         <div className={styles.note} role="alert" data-energy-error="">
           <p className={styles.error}>{error}</p>
           <button type="button" className={styles.secondary} onClick={() => { const out = organizationId ? formToSelection(organizationId, form) : null; if (out && "selection" in out) void run(out.selection); }}>Réessayer</button>
+        </div>
+      )}
+      {sites.length > 0 && (
+        <div className={styles.exportBar} data-energy-export={exp.phase}>
+          <p className={styles.hint}>{phase === "ready" && shown ? EXPORT_COPY.scope : EXPORT_COPY.needSelection}</p>
+          <button type="button" className={styles.secondary} onClick={() => void exportCsv()} disabled={!(phase === "ready" && shown) || exp.phase === "busy" || exp.phase === "error"} aria-busy={exp.phase === "busy" || undefined}>
+            {exp.phase === "busy" ? EXPORT_COPY.busy : EXPORT_COPY.button}
+          </button>
+          {exp.phase === "done" && <p className={styles.ok} role="status">{EXPORT_COPY.done(exp.filename)}</p>}
+          {exp.phase === "error" && (
+            <div className={styles.note} role="alert" data-energy-export-error="">
+              <p className={styles.error}>{exp.message}</p>
+              <button type="button" className={styles.secondary} onClick={() => void exportCsv()} disabled={retryWait}>Réessayer</button>
+            </div>
+          )}
         </div>
       )}
       {phase === "ready" && report && shown && <ReportView report={report} selection={shown} name={name} />}
