@@ -94,3 +94,6 @@ Astra réalise le lot serveur de file privée et de reprise pour les notificatio
 ### SYS-10 — revue manuelle des photos du dossier
 
 ROOT raccorde la section photo du particulier à la conversation du dossier attribué et donne à l’artisan attribué accès aux photos du même dossier par le téléchargement privé existant. Vérifier dossier exact, absence de photo, rôle et refus d’accès. La revue manuelle utilise la messagerie actuelle. L’analyse automatique reste suivie séparément.
+
+## FIN-08 — saved-payment-methods (Astra, exclusive)
+Base42845d3. Customer personnel lié au compte client confirmé et au mode Stripe ; commandes stables avant mutation, fenêtre23h, Checkout setup sans paiement et retrait privé vérifié. Contrat GET/POST méthodes, aucune modification paiement existant. Preuves SQL isolées et vrais handlers avec Stripe injecté, tsc. Pas cloud/clé/opération Stripe réelle.
