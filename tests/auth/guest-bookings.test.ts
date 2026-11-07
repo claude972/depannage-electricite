@@ -33,3 +33,13 @@ test("configured card HTTP branches: prepare before Checkout, fresh finalize bef
   if(operation==="finalize")assert.equal(result.payment.status,"authorized");
  }
 });
+
+test('reserved estimate DTO is additive, strict and matches the durable booking ceiling',async()=>{
+ const estimate={version:1,min_cents:8000,max_cents:18000,currency:'eur'};
+ for(const supplied of [estimate,{...estimate,max_cents:19000},{...estimate,version:0},{...estimate,currency:'usd'},{...estimate,private_field:'no'}]){
+  const db={from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{id:ID,role:'client'},error:null})})})}),rpc:async()=>({data:{...prepared,estimate:supplied},error:null})};
+  const helpers=fakeServerHelpers({db});const m=loadModule('app/api/bookings/status/route.ts',{'@/lib/supabase/server':{...helpers,authenticatedClient:async()=>({db,user:{id:ID,email_confirmed_at:'2026-11-01T00:00:00Z'}})}});
+  const r=await(m.GET as(r:Request)=>Promise<Response>)(new Request(ORIGIN+'/api/bookings/status?request_id='+ID));
+  if(supplied===estimate)assert.deepEqual((await check(r,200)).estimate,estimate);else await check(r,503);
+ }
+});
