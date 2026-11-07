@@ -72,3 +72,77 @@ export function quoteDocumentsDemo(role: QuoteDocumentsScope["role"]): QuoteDocu
     ],
   };
 }
+
+// ---- Demo overview of the dossier ACTUALLY shown --------------------------------------------------
+// Built only from the demo workspace the page displays (never a constant dossier). The reference is
+// supplied by the caller (the app's quoteRef) so this module stays free of app imports. Stored
+// amounts and the stored rate are copied as stored, never recomputed.
+export type DemoQuoteSource = {
+  id: string;
+  reference: string;
+  status: string;
+  created_at: string;
+  accepted_at: string | null;
+  lines: { label: string; quantity: number; unit_price_cents: number }[];
+  subtotal_cents: number;
+  tax_rate: number;
+  tax_cents: number;
+  total_cents: number;
+};
+export type DemoDossierSource = {
+  intervention: { id: string; status: string; artisan_id: string | null; site_id: string | null };
+  quotes: DemoQuoteSource[];
+};
+
+const DEMO_AMENDMENT_LINE = { label: "Départ supplémentaire 16 A (démonstration)", quantity: 1, unit_price_cents: 8000 };
+
+/** null when the shown dossier cannot be resolved (the caller then states it, never substitutes). */
+export function quoteDocumentsDemoFor(role: QuoteDocumentsScope["role"], source: DemoDossierSource | null): QuoteDocumentsOverview | null {
+  if (!source || !source.intervention.id || source.quotes.length === 0) return null;
+  const { intervention } = source;
+  const isArtisan = role === "artisan";
+  const canManage = role === "client" || role === "manager";
+  const actor = intervention.artisan_id ?? "demo-artisan";
+  const history: QuoteDocumentsOverview["history"] = [];
+  let eventId = 0;
+  const quotes = [...source.quotes]
+    .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))
+    .map((q) => {
+      const documentId = `demo-document-${q.id}`;
+      const generatedAt = q.accepted_at ?? q.created_at;
+      history.push({ id: ++eventId, intervention_id: intervention.id, quote_id: q.id, amendment_id: null, document_id: documentId, actor_id: actor, action: "document_generated", details: { revision: 1 }, created_at: generatedAt });
+      // An amendment exists ONLY on an accepted quote; its totals are consistent with its own lines
+      // and the base quote's stored rate.
+      const amendments: QuoteDocumentsOverview["quotes"][number]["amendments"] = [];
+      if (q.status === "accepted" && q.accepted_at) {
+        const subtotal = DEMO_AMENDMENT_LINE.quantity * DEMO_AMENDMENT_LINE.unit_price_cents;
+        const tax = Math.round((subtotal * q.tax_rate) / 100);
+        const amendmentId = `demo-amendment-${q.id}`;
+        const createdAt = new Date(Date.parse(q.accepted_at) + 60 * 60 * 1000).toISOString();
+        amendments.push({
+          id: amendmentId, intervention_id: intervention.id, base_quote_id: q.id, artisan_id: actor, version: 1, reference: `AV-1-${q.reference}`, status: "proposed",
+          reason: "Un second départ est nécessaire pour alimenter la cuisine en sécurité (démonstration).",
+          lines: [{ ...DEMO_AMENDMENT_LINE }], subtotal_cents: subtotal, tax_rate: q.tax_rate, tax_cents: tax, total_cents: subtotal + tax,
+          terms: { valid_until: null, validity: "unspecified" }, decision_note: "", decided_by: null, created_at: createdAt, decided_at: null,
+          permissions: { can_decide: canManage, can_withdraw: isArtisan, can_generate: isArtisan || canManage }, documents: [],
+        });
+        history.push({ id: ++eventId, intervention_id: intervention.id, quote_id: q.id, amendment_id: amendmentId, document_id: null, actor_id: actor, action: "amendment_proposed", details: { version: 1, total_cents: subtotal + tax }, created_at: createdAt });
+      }
+      return {
+        id: q.id, reference: q.reference, status: q.status, created_at: q.created_at, accepted_at: q.accepted_at,
+        lines: q.lines.map((l) => ({ ...l })), subtotal_cents: q.subtotal_cents, tax_rate: q.tax_rate, tax_cents: q.tax_cents, total_cents: q.total_cents,
+        terms: { valid_until: null, validity: "unspecified" as const },
+        permissions: { can_set_terms: false, can_generate: isArtisan || canManage, can_propose: false },
+        documents: [{ id: documentId, kind: "quote" as const, reference: q.reference, revision: 1, quote_id: q.id, amendment_id: null, generated_at: generatedAt, snapshot_sha256: "d".repeat(64) }],
+        amendments,
+      };
+    });
+  return {
+    intervention: { ...intervention },
+    viewer: { role, is_artisan: isArtisan, can_manage: canManage, is_admin: role === "admin" },
+    issuer: { ready: true, missing: [] },
+    settlement: "not_connected",
+    quotes,
+    history: history.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id),
+  };
+}
