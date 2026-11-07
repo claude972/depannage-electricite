@@ -129,15 +129,26 @@
 }
 .mobileHeaderTools {
   display: flex;
+  flex: none;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
+/* The brand shrinks and wraps (never clipped) so the three 44 px tools always fit, down to 360 px. */
 .mobileHeader > button:first-child {
   display: inline-flex;
+  flex: 1 1 auto;
   align-items: center;
+  min-width: 0;
   min-height: 44px;
+  margin-right: 8px;
   padding: 0;
   text-align: left;
+}
+.mobileHeader > button:first-child :global(.brand) {
+  min-width: 0;
+  font-size: 20px;
+  letter-spacing: -0.4px;
+  overflow-wrap: anywhere;
 }
 .bellButton {
   position: relative;
