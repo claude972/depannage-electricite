@@ -317,6 +317,10 @@
   color: #526178;
 }
 .attribution a {
+  /* 44 px hit area around the 12 px credit: the text keeps its size and stays visible. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   color: #1457d9;
   text-decoration: underline;
 }
