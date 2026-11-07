@@ -1,3 +1,4 @@
+import { taxRateSchema } from "@/lib/tax-rates";
 import { z } from "zod";
 import { authenticatedClient, apiError, ApiError, assertOrigin, dbError } from "@/lib/supabase/server";
 import { uuid, validated } from "@/lib/supabase/validation";
@@ -9,7 +10,7 @@ const revision = {
 };
 const draftLine = z.object({ label: z.string().max(160), quantity: z.number().int().min(1).max(1000), unit_price_cents: z.number().int().min(0).max(10000000) }).strict();
 const schema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("save"), ...revision, base_quote_id: uuid.nullable(), lines: z.array(draftLine).max(30), tax_rate: z.union([z.literal(0),z.literal(5.5),z.literal(10),z.literal(20)]).nullable() }).strict(),
+  z.object({ action: z.literal("save"), ...revision, base_quote_id: uuid.nullable(), lines: z.array(draftLine).max(30), tax_rate: taxRateSchema.nullable() }).strict(),
   z.object({ action: z.literal("discard"), ...revision }).strict(),
   z.object({ action: z.literal("send"), ...revision }).strict(),
 ]);

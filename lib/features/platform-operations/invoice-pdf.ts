@@ -1,3 +1,4 @@
+import { taxRateSchema } from "@/lib/tax-rates";
 // CODEX-INVOICE-PDF-001: renders only the immutable invoice register snapshot.
 // Reuses the canonical document writer; no live issuer/payment lookup or invented legal text.
 import { z } from "zod";
@@ -17,7 +18,7 @@ const inputSchema = z.object({
   issuer: z.object({ legal_name: text(160), siret: z.string().regex(/^[0-9]{14}$/), address: text(500), vat_number: optionalText(80).default(null), legal_status: optionalText(80) }),
   recipient: z.object({ name: text(160), address: text(500), siret: optionalText(14), vat_number: optionalText(80), organization: optionalText(160) }),
   lines: z.array(z.object({ label: text(160), quantity: z.number().int().min(1).max(1000), unit_price_cents: cents })).min(1).max(30),
-  subtotal_cents: cents, tax_rate: z.union([z.literal(0), z.literal(5.5), z.literal(10), z.literal(20)]),
+  subtotal_cents: cents, tax_rate: taxRateSchema,
   tax_cents: cents, total_cents: cents.min(1), related_number: text(80).nullable(), reason: z.string().max(1000),
   quote_reference: text(80), intervention_id: z.string().uuid(),
 });
