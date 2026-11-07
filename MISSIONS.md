@@ -53,6 +53,10 @@ Référence de travail [plan des 76 capacités](docs/PLAN_LIVRAISON_INTEGRALE.md
 
 Le pilote étend le contrat SQL de réservation aux cinq identifiants génériques déjà émis par le formulaire connecté. La catégorie doit correspondre à l’identifiant. Les fiches catalogue, les permissions et les clés de rejeu gardent leurs contrôles. À la modification du brouillon, l’identifiant suit un éventuel changement de catégorie. Le changement de compte invalide les photos en mémoire et les anciennes réponses. Vérifier une création SQL par catégorie, une paire incohérente, le rejeu et le parcours navigateur.
 
+### Conditions de garantie versionnées
+
+Astra fournit le contrat et le serveur dans `codex/warranty-activation`. Un auteur Claude réutilisé raccorde le texte publié côté public et l’éditeur au panneau Garantie. Le panneau sépare sauvegarde, publication et activation explicite. Les droits, versions, commandes persistées et états d’erreur suivent le contrat dans `docs/reviews/WARRANTY_POLICY_BACKEND.md`. Les textes viennent de l’exploitant. Le pilote assemble et recette sur le projet dédié avec le dépôt désactivé.
+
 ## ART-03 / ADM-02 — décision individuelle de justificatif
 
 Pilote seul auteur de la migration, API /api/artisan/credentials/[id]/reviews et tests. Historique immuable, motif, version attendue, rejeu par UUID, lecture par l'artisan propriétaire et l'administration actuelle. Une pièce revue garde son type et sa date déclarée, l'artisan peut joindre une nouvelle pièce pour corriger. Une décision sur une pièce ne modifie pas l'approbation globale du dossier. Le contrat UI expose uniquement la pièce, les décisions datées, le droit d'action et le curseur. Vérifier accès croisés, expiration, concurrence par version, zéro double audit et reprise après réponse perdue. Cloud après assemblage et revue.
