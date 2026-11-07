@@ -77,6 +77,7 @@ export type Site = {
   address: string;
   budget_cents?: number;
   created_at?: string;
+  archived_at?: string | null;
 };
 export type Organization = {
   id: string;

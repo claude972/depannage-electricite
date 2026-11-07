@@ -93,7 +93,8 @@ test("site archivé ouvert directement : lecture seule, aucune action d’éditi
   assert.match(text(panel), /Site archivé : il reste consultable en lecture seule/);
   assert.doesNotMatch(panel, /data-sl-form|data-sl-archive=|<input|<textarea/);
   const src = readFileSync("components/role/enterprise-space.tsx", "utf8");
-  assert.match(src, /if \(!site\) return <DirectSiteSheet c=\{c\} id=\{id\} \/>;/);
+  assert.match(src, /if \(!site \|\| site\.archived_at\) return <DirectSiteSheet c=\{c\} id=\{id\} \/>;/);
+  assert.match(src, /writableSites = c\.orgSites\.filter\(\(s\) => !s\.archived_at/);
   const body = src.slice(src.indexOf("function DirectSiteSheet"), src.indexOf("function siteAssetSource"));
   assert.match(body, /organizationId=\{c\.organization\?\.id \?\? null\}/);
   assert.match(body, /initial=\{state\}/, "the settings panel is seeded: no second GET");

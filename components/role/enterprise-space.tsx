@@ -1413,8 +1413,8 @@ const isRequestCategory = (value: string): value is Category => CATEGORIES.some(
 
 function NewRequestView({ c, siteId, initialCategory = "panel" }: { c: Ctx; siteId: string; initialCategory?: Category }) {
   const site = c.orgSites.find((s) => s.id === siteId) || null;
-  const writableSites = c.orgSites.filter((s) => c.authority.canWriteSite(s.id));
-  const allowed = site ? c.authority.canWriteSite(site.id) : c.canCreateRequest;
+  const writableSites = c.orgSites.filter((s) => !s.archived_at && c.authority.canWriteSite(s.id));
+  const allowed = siteId ? writableSites.some((s) => s.id === siteId) : c.canCreateRequest;
   if (!allowed)
     return (
       <>
@@ -1425,7 +1425,7 @@ function NewRequestView({ c, siteId, initialCategory = "panel" }: { c: Ctx; site
         />
         <Unavailable
           title="Création de demande non autorisée sur ce périmètre"
-          reason={c.authority.readOnlyReason || "Vos droits ne permettent pas de créer une demande ici."}
+          reason={site?.archived_at ? "Le site est archivé et ne peut plus recevoir de demande." : c.authority.readOnlyReason || "Ce site est indisponible ou vos droits ne permettent pas de créer une demande ici."}
         />
       </>
     );
@@ -2430,10 +2430,10 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
   const site = c.orgSites.find((s) => s.id === id);
   // Live: probe the site-operations contract for THIS site once while it is unknown (works with
   // « Tous les sites » too, where no global active site triggers the controller probe).
-  useProbeWhenUnknown(c.session, "siteOperations", { siteId: id }, Boolean(site));
+  useProbeWhenUnknown(c.session, "siteOperations", { siteId: id }, Boolean(site && !site.archived_at));
   const [tab, setTab] = useState<"open" | "past">("open");
   // Absent from the workspace cache (portfolio page > 1, archived site): exact server read.
-  if (!site) return <DirectSiteSheet c={c} id={id} />;
+  if (!site || site.archived_at) return <DirectSiteSheet c={c} id={id} />;
   const f = siteFigures(site, session.data);
   const interventions = byDateDesc(session.data.interventions.filter((i) => i.site_id === site.id));
   const open = interventions.filter((i) => OPEN_STATUSES.includes(i.status));
@@ -2891,7 +2891,7 @@ function DirectSiteSheet({ c, id }: { c: Ctx; id: string }) {
                 <ReadOnlyNote
                   reason={
                     archived
-                      ? "Site archivé : consultation seule, aucune demande ni modification."
+                      ? "Site archivé : ses paramètres et les dossiers chargés restent consultables. Ce site ne reçoit plus de nouvelle demande."
                       : "Site absent des données chargées : seules ses informations serveur sont affichées ici."
                   }
                 />
