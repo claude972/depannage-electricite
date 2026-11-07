@@ -50,6 +50,7 @@ import type {
 import { Icon } from "../app/icons";
 import { InstallPanel } from "../app/install-panel";
 import { AdminReplyComposer } from "../features/admin-messages/admin-reply";
+import { WarrantyPolicyEditor } from "../features/warranty-policy/warranty-policy-editor";
 import { mergeThread } from "../features/admin-messages/admin-reply-model";
 import {
   Alerts,
@@ -1077,7 +1078,12 @@ export function AdminSpace({ session }: { session: Session }) {
         content = withOverview(renderSettings);
         break;
       case "admin-warranty":
-        content = <WarrantyPanel demo={demo} role="admin" />;
+        content = (
+          <>
+            <WarrantyPolicyEditor key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`} context={session.mutationContext} demo={demo} />
+            <WarrantyPanel demo={demo} role="admin" />
+          </>
+        );
         break;
       case "documents":
         content = (

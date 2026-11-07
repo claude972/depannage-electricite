@@ -148,8 +148,8 @@ const FAQ: [string, string][] = [
     "Un artisan éligible accepte une demande disponible. L’attribution est contrôlée pour qu’une même mission ne soit pas acceptée par plusieurs artisans. Aucun délai n’est garanti à ce stade.",
   ],
   [
-    "Que couvre la garantie prévue ?",
-    "Le projet prévoit un suivi de garantie d’un an. Ses conditions commerciales et son périmètre doivent être définis avant le lancement réel. Aucune couverture supplémentaire n’est promise dans cette version.",
+    "Que couvre la garantie ?",
+    "Seules les conditions de garantie publiées par l’exploitant s’appliquent ; elles figurent dans l’aide publique (section « Garantie »). Tant qu’elles ne sont pas publiées, aucune garantie n’est promise.",
   ],
   [
     "Puis-je gérer plusieurs établissements ?",
