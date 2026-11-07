@@ -8,6 +8,7 @@
 // both are unchanged since the request started.
 import { useEffect, useRef, useState } from "react";
 import { money } from "../app/format";
+import { HoldReauthorizationPanel } from "../features/hold-reauthorization/hold-reauth-panel";
 import styles from "./booking-settlement.module.css";
 
 export const SETTLEMENT_STATUSES = ["not_started", "processing", "captured_transfer_pending", "paid", "needs_review"] as const;
@@ -73,6 +74,8 @@ export function parseSettlement(body: unknown): SettlementDTO | null {
   if (body.reason !== undefined && typeof body.reason !== "string") return null;
   return { method: "card_hold", status: body.status as SettlementStatus, amount_cents: amount as number | null, currency: "eur", available: body.available, ...(typeof body.reason === "string" ? { reason: body.reason } : {}) };
 }
+/** Settlement reasons meaning the current hold is missing, expired or below the accepted total. */
+export const HOLD_REPLACEMENT_REASONS: readonly string[] = ["quote_exceeds_hold", "authorization_missing", "authorization_unavailable"];
 export const SETTLEMENT_COPY = {
   notAvailable: "Le règlement par carte n’est pas encore disponible.",
   amountPending: "Montant en cours de vérification.",
@@ -273,6 +276,10 @@ export function BookingSettlement({ interventionId, api, context = DEFAULT_CONTE
             )}
           </div>
         </div>
+      )}
+      {/* CLI-07 / FIN-01: expired or insufficient hold ⇒ replacement leaf (its own GET; CTA only if available + consent). */}
+      {state.phase === "ready" && dto && HOLD_REPLACEMENT_REASONS.includes(dto.reason ?? "") && (
+        <HoldReauthorizationPanel interventionId={interventionId} context={context} />
       )}
       {state.error && <p className={styles.error} role="alert">{state.error}</p>}
       {(state.retry === "load" || state.retry === "refresh" || state.retry === "capture" || view?.action === "resume" || (view?.action === "refresh" && !state.error)) && (
