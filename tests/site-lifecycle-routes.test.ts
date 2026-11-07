@@ -19,7 +19,9 @@ const cmd = { command_id: key, expected_version: 1, action: "save", values };
 const post = (payload: unknown) => new Request(settingsPath, { method: "POST", body: JSON.stringify(payload) });
 
 function load(path: string, db: object) {
-  return loadModule(path, { "@/lib/supabase/server": fakeServerHelpers({ authenticated: true, db }) });
+  const handlers = loadModule(path, { "@/lib/supabase/server": fakeServerHelpers({ authenticated: true, db }) });
+  type Handler = (request: Request, context: ReturnType<typeof ctx>) => Promise<Response>;
+  return { GET: handlers.GET as Handler, POST: handlers.POST as Handler };
 }
 
 test("site settings saves exact expected version and rejects an incomplete or overlapping write", async () => {
