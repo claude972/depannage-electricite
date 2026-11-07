@@ -1,6 +1,6 @@
 # Refund-execution — contrat à valider AVANT code
 
-Base e6aa35a ; owner Codex backend unique. **PLAN SEULEMENT, aucun GO d’implémentation reçu.** Première tranche complète : émission et suivi d’un remboursement d’une demande opérateur approuvée. Dispatch application_fee/transfer/payout reste OPEN séparé : ces objets n’ont pas de ledger de correction/soldes ou de liaison fiable par paiement ; aucune sortieHTTP ne vaut un virement bancaire.
+Base e6aa35a ; owner Codex backend unique. **GO CODE ROOT explicite reçu ; base intégrationad069641.** Première tranche complète : émission et suivi d’un remboursement d’une demande opérateur approuvée. Dispatch application_fee/transfer/payout reste OPEN séparé : ces objets n’ont pas de ledger de correction/soldes ou de liaison fiable par paiement ; aucune sortieHTTP ne vaut un virement bancaire.
 
 ## Sources vérifiées et décision d’exploitation
 

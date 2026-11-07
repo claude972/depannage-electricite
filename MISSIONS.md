@@ -43,3 +43,7 @@ Frontend seul, base writer claude/ui-palette-b-full. QR généré LOCALEMENT (qr
 ## REFUND-EXECUTION-CONTRACT — PLAN SEULEMENT, Codex backend
 
 Basee6aa35a ; branchecodex/refund-execution ; contratdocs/REFUND_EXECUTION_CONTRACT.md à contre-revoir ROOT AVANT toutcode. Première trancheproposée remboursement approuvé→émission idempotente→confirmationwebhook, fournisseurinjecté sanscloud. application_fee/transfer/payout restentOPEN, pas de faux virement confirmé. Aucun fichierapp/SQL modifié dansceclaimdoc.
+
+## REFUND-EXECUTION — GO CODE ROOT
+
+GO explicite reçu après contratdc58, basead069641 ; Codex backend unique, scope et ownership du contrat conservés. Code/SQL/tests seulement, aucun fournisseur réel/cloud/credentials. Refus explicites configuration/policy/live ; autresfamilles restentOPEN.
