@@ -1,3 +1,4 @@
+import { refundPolicy } from "../../lib/features/refund-execution/policy";
 // HTTP-layer refusal matrix for app/api/platform-operations/** with a mocked PostgREST, no network.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -59,7 +60,7 @@ function harness(actor: keyof typeof ACCESS | null, env: Record<string, string> 
   const validation = compile("../../lib/supabase/validation.ts", { "./server": helpers });
   const types = compile("../../lib/features/platform-operations/types.ts", {});
   const config = compile("../../lib/features/platform-operations/config.ts", { "./types": types });
-  const http = compile("../../lib/features/platform-operations/http.ts", { "@/lib/supabase/server": helpers, "@/lib/supabase/validation": validation, "./types": types, "./config": config });
+  const http = compile("../../lib/features/platform-operations/http.ts", { "../refund-execution/policy": { refundPolicy }, "node:process": { env }, "@/lib/supabase/server": helpers, "@/lib/supabase/validation": validation, "./types": types, "./config": config });
   const document = compile("../../lib/features/platform-operations/invoice-document.ts", { "./types": types });
   const imports = { "@/lib/supabase/server": helpers, "@/lib/supabase/validation": validation, "@/lib/features/platform-operations/http": http, "@/lib/features/platform-operations/types": types, "@/lib/features/platform-operations/invoice-document": document, "@/lib/features/platform-operations/config": config };
   const route = (path: string) => compile(`../../app/api/platform-operations/${path}/route.ts`, imports) as Record<string, (r: Request, c?: { params: Promise<{ id: string }> }) => Promise<Response>>;
