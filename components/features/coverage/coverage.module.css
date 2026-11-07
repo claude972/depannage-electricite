@@ -1,0 +1,29 @@
+/* Postal coverage (PUB-03). --ui-* tokens only, light/dark, 1px borders, 44 px targets. */
+.panel { display: grid; gap: 12px; padding: 20px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-card); color: var(--ui-text); min-width: 0; }
+.panel h2, .panel h3 { margin: 0; }
+.panel h2 { font-size: 18px; }
+.panel h3 { font-size: 15px; }
+.hint { margin: 0; font-size: 13px; color: var(--ui-text-muted); }
+.note { display: grid; gap: 8px; margin: 0; padding: 10px 12px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); }
+.error { margin: 0; color: var(--ui-danger); font-size: 14px; }
+.ok { margin: 0; color: var(--ui-success); font-size: 14px; }
+.block { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--ui-border); }
+.row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.field { display: grid; gap: 4px; flex: 1 1 200px; min-width: 0; font-size: 13px; color: var(--ui-text-muted); }
+.field input { min-height: 44px; padding: 0 10px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-bg); color: var(--ui-text); font: inherit; font-variant-numeric: tabular-nums; }
+.result { display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); }
+.result p { margin: 0; }
+.codes { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.code { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 0 0 10px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); font-variant-numeric: tabular-nums; font-size: 14px; }
+.code:not(:has(button)) { padding-right: 10px; }
+.remove { width: 44px; height: 44px; border: 0; background: transparent; color: var(--ui-text-muted); font: inherit; font-size: 20px; cursor: pointer; }
+.confirm { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); }
+.confirm p { margin: 0; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.primary, .secondary, .danger { min-height: 44px; padding: 0 16px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); font: inherit; font-weight: 600; cursor: pointer; }
+.primary { border-color: var(--ui-primary); background: var(--ui-primary); color: var(--ui-on-primary); }
+.secondary { background: var(--ui-card); color: var(--ui-text); }
+.danger { border-color: var(--ui-danger); background: var(--ui-card); color: var(--ui-danger); }
+.primary:disabled, .secondary:disabled, .danger:disabled, .remove:disabled { opacity: 0.6; cursor: not-allowed; }
+.field input:focus-visible, .primary:focus-visible, .secondary:focus-visible, .danger:focus-visible, .remove:focus-visible { outline: 3px solid var(--ui-focus); outline-offset: 2px; }
+@media (max-width: 640px) { .actions > *, .row > button { flex: 1 1 100%; } }
