@@ -481,7 +481,7 @@
 :global(.ui-v2) .root :global(.field-invalid) textarea { border-color: var(--ui-danger); }
 :global(.ui-v2) .root :global(.field-error) { color: var(--ui-danger); }
 :global(.ui-v2) .root :global(.button.primary) { border-color: var(--ui-primary); background: var(--ui-primary); color: var(--ui-on-primary); }
-:global(.ui-v2) .root :global(.button.primary):hover:not(:disabled) { background: #136640; }
+:global(.ui-v2) .root :global(.button.primary):hover:not(:disabled) { background: var(--ui-primary-hover); }
 :global(.ui-v2) .root :global(.button.outline) { border-color: var(--ui-border); background: transparent; color: var(--ui-text); }
 :global(.ui-v2) .root :global(.button.outline):hover:not(:disabled) { border-color: var(--ui-accent); background: var(--ui-surface); }
 :global(.ui-v2) .root :global(.empty-state) h3 { color: var(--ui-text); }

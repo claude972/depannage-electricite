@@ -113,7 +113,7 @@
 :global(.ui-v2) .button { border-color: var(--ui-border); border-radius: var(--ui-radius-md); background: transparent; color: var(--ui-text); font-weight: 600; }
 :global(.ui-v2) .button:hover:not(:disabled) { border-color: var(--ui-accent); }
 :global(.ui-v2) .primary { border-color: var(--ui-primary); background: var(--ui-primary); color: var(--ui-on-primary); }
-:global(.ui-v2) .primary:hover:not(:disabled) { border-color: var(--ui-primary); background: #136640; }
+:global(.ui-v2) .primary:hover:not(:disabled) { border-color: var(--ui-primary); background: var(--ui-primary-hover); }
 :global(.ui-v2) .destructive { border-color: var(--ui-danger); background: transparent; color: var(--ui-danger); }
 :global(.ui-v2) .link { color: var(--ui-accent); }
 :global(.ui-v2) .disabledLink { color: var(--ui-text-muted); }

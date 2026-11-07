@@ -198,7 +198,7 @@
   cursor: pointer;
 }
 .cta:hover {
-  background: #136640;
+  background: var(--ui-primary-hover);
 }
 .topFaq {
   border-top: 1px solid var(--ui-border);
