@@ -19,6 +19,7 @@ import { ABOUT_VALUES, CONTACT_CHANNELS, FAQ, HELP_PROCESS, JOIN_FACTS, JOIN_REV
 import styles from "./public.module.css";
 import { publishedStamp, publishedValue, type PublicProfileState } from "../features/public-operator-profile/model";
 import { usePublishedOperatorProfile } from "../features/public-operator-profile/use-published-profile";
+import { PostalCoverageCheck } from "../features/coverage/postal-coverage-check";
 import { PublicWarrantyTerms } from "../features/warranty-policy/public-warranty-terms";
 import type { PublicTermsState } from "../features/warranty-policy/model";
 import type { OperatorField } from "../../lib/features/public-operator-profile/contract";
@@ -344,6 +345,7 @@ function PricingView({ onNew }: { onNew: () => void }) {
           <PendingFields fields={PRICING_PENDING} label="Décisions tarifaires en attente" sources={{ "Zone desservie": { fields: ["service_area"] } }} />
         </div>
       </div>
+      <PostalCoverageCheck />
       <section className={`panel ${styles.priceTableCard}`} aria-labelledby="pricing-table">
         <h2 id="pricing-table" className={styles.srOnly}>Fourchettes indicatives par type de panne</h2>
         <table className={styles.table}>
