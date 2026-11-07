@@ -97,6 +97,7 @@ import { platformViewAllowed } from "../app/features";
 import { adminKpis, dashboardRows, loadedNote } from "./admin-lists";
 import { platformEntries } from "./anchors";
 import { OperatorProfileEditor } from "../features/public-operator-profile/operator-profile-editor";
+import { CoverageEditor } from "../features/coverage/coverage-editor";
 import { CredentialReviewPanel } from "../features/credential-reviews/credential-review-panel";
 import { WarrantyCorrectivePanel } from "../features/warranty-corrective/warranty-corrective-panel";
 
@@ -906,6 +907,7 @@ export function AdminSpace({ session }: { session: Session }) {
     return (
       <>
         <OperatorProfileEditor key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`} demo={demo} superAdmin={session.platformAccess?.super_admin === true} context={session.mutationContext} />
+        <CoverageEditor key={`coverage|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`} demo={demo} context={session.mutationContext} />
         <Unavailable title="Paramètres de la plateforme" reason="Aucun réglage n’est modifiable depuis cette interface : les valeurs ci-dessous restent à définir par l’exploitant." blocker="ADM-08">
           <dl className={styles.definitions} style={{ padding: "12px 0 0" }}>
             {["Taux de commission", "TVA par défaut", "Territoire couvert", "Barème public"].map((item) => (
