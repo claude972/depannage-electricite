@@ -122,10 +122,37 @@ test("filtres / identité : changement de type ⇒ page 1, réponse de l’ancie
   await c3.openDetail(ID(1));
   same([d.phase, demoCalls], ["demo", 0]);
   assert.match(text(renderToString(createElement(panel.CustomerInvoicesPanel, { filters: FILTERS, initial: d, demo: true }))), /En démonstration, aucune facture n’est émise/);
-  assert.match(readFileSync("components/features/customer-invoices/customer-invoices-panel.tsx", "utf8"), /<Panel key=\{`\$\{uid \?\? "-"\}\|\$\{filtersKey\(props\.filters\)\}`\} \{\.\.\.props\} \/>/);
+  assert.match(readFileSync("components/features/customer-invoices/customer-invoices-panel.tsx", "utf8"), /<Panel key=\{`\$\{ctx\.userId\(\) \?\? "-"\}\|\$\{ctx\.generation\(\)\}\|\$\{props\.demo \? "demo" : "live"\}\|\$\{filtersKey\(props\.filters\)\}`\} \{\.\.\.props\} \/>/);
 });
 
 test("câblage : client = factures de prestation, artisan = commissions qui lui sont adressées ; pas d’enterprise-space", () => {
   assert.match(readFileSync("components/role/client-space.tsx", "utf8"), /<CustomerInvoicesPanel filters=\{\{ basis: "service" \}\} context=\{session\.mutationContext\} demo=\{session\.mode === "demo"\} \/>/);
   assert.match(readFileSync("components/role/artisan-space.tsx", "utf8"), /<CustomerInvoicesPanel filters=\{\{ basis: "platform_commission" \}\} context=\{session\.mutationContext\} demo=\{session\.mode === "demo"\} title="Factures de commission de la plateforme" \/>/);
+});
+
+test("ROOT : détail A ouvert → load d’un autre type → A répond tard ⇒ le détail reste null", async () => {
+  let s: Model.InvoicesState = { ...m.INVOICES_INITIAL };
+  let resolveDetail: (v: ReturnType<typeof res>) => void = () => {};
+  const lists = [res(200, list([summary(1)])), res(200, list([], {}, { ...FILTERS, kind: "credit_note" }))];
+  const ctrl = m.createInvoicesController({
+    api: () => ({ list: async () => lists.shift()!, detail: () => new Promise((r) => (resolveDetail = r)) }),
+    context: { generation: () => 0, userId: () => "u" },
+    get: () => s,
+    set: (n) => (s = n),
+  });
+  await ctrl.load(FILTERS);
+  const opening = ctrl.openDetail(ID(1)); // A pending
+  assert.equal(s.detail?.id, ID(1));
+  await ctrl.load({ ...FILTERS, kind: "credit_note" }); // filter change
+  assert.equal(s.detail, null);
+  resolveDetail(res(200, detail()));
+  assert.equal(await opening, false, "late A reply dropped");
+  assert.equal(s.detail, null, "A never reappears after the filter change");
+});
+
+test("ROOT : clé du panneau = uid + génération + mode + filtres (vidage immédiat à uid constant)", () => {
+  const src = readFileSync("components/features/customer-invoices/customer-invoices-panel.tsx", "utf8");
+  assert.match(src, /key=\{`\$\{ctx\.userId\(\) \?\? "-"\}\|\$\{ctx\.generation\(\)\}\|\$\{props\.demo \? "demo" : "live"\}\|\$\{filtersKey\(props\.filters\)\}`\}/);
+  const model = readFileSync("components/features/customer-invoices/invoices-model.ts", "utf8");
+  assert.match(model, /load\(filters\?: InvoiceFilters\) \{\s+detailSeq\+\+;/);
 });

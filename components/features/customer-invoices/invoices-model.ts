@@ -228,6 +228,7 @@ export function createInvoicesController({ api, context = DEFAULT_INVOICES_CONTE
   return {
     /** New filters (or reload): cursor dropped, list restarts from page 1. */
     load(filters?: InvoiceFilters) {
+      detailSeq++; // a detail opened before this load can never reappear after it (ROOT review)
       if (filters) applied = { ...filters };
       if (demo) {
         set({ ...INVOICES_INITIAL, phase: "demo" });
