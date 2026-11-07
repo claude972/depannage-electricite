@@ -115,6 +115,7 @@ import {
   type MissionSegment,
 } from "./artisan-lists";
 import { CredentialReviewPanel } from "../features/credential-reviews/credential-review-panel";
+import { CredentialReminderPanel } from "../features/operational-reminders/operational-reminder-panel";
 import { AppointmentReminderPanel } from "../features/appointment-reminders/appointment-reminder-panel";
 import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-panel";
 import { ContractSourceLine } from "../features/quote-grid/quote-grid";
@@ -2465,7 +2466,10 @@ function Documents({
                   onLink={() => setLinking(s.kind)}
                   review={
                     s.state.credential ? (
-                      <CredentialReviewPanel credentialId={s.state.credential.id} mode="artisan" context={session.mutationContext} demo={session.mode === "demo"} />
+                      <>
+                        <CredentialReviewPanel credentialId={s.state.credential.id} mode="artisan" context={session.mutationContext} demo={session.mode === "demo"} />
+                        <CredentialReminderPanel credentialId={s.state.credential.id} context={session.mutationContext} demo={session.mode === "demo"} />
+                      </>
                     ) : undefined
                   }
                 />
