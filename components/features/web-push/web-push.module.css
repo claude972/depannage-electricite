@@ -1,0 +1,15 @@
+/* Web push enrollment. --ui-* tokens only, light/dark, 1px borders, 44 px targets. */
+.panel { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); color: var(--ui-text); min-width: 0; }
+.hint { margin: 0; font-size: 13px; color: var(--ui-text-muted); }
+.line { margin: 0; font-size: 14px; }
+.note { display: grid; gap: 8px; margin: 0; padding: 10px 12px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-card); font-size: 14px; }
+.note p { margin: 0; }
+.error { margin: 0; color: var(--ui-danger); font-size: 14px; }
+.ok { margin: 0; color: var(--ui-success); font-size: 14px; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.primary, .secondary { min-height: 44px; padding: 0 16px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); font: inherit; font-weight: 600; cursor: pointer; }
+.primary { border-color: var(--ui-primary); background: var(--ui-primary); color: var(--ui-on-primary); }
+.secondary { background: var(--ui-card); color: var(--ui-text); }
+.primary:disabled, .secondary:disabled { opacity: 0.6; cursor: not-allowed; }
+.primary:focus-visible, .secondary:focus-visible { outline: 3px solid var(--ui-focus); outline-offset: 2px; }
+@media (max-width: 640px) { .actions > button { flex: 1 1 100%; } }

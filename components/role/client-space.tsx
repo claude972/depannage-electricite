@@ -2088,6 +2088,7 @@ export function ProfileNotificationPreferences({ session }: { session: Session }
       client={session.features.notifications}
       demo={demo ? demoPreferences() : undefined}
       writable={!demo}
+      context={session.mutationContext}
     />
   );
 }

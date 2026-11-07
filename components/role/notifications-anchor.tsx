@@ -57,6 +57,7 @@ export function NotificationsPage({
             ? { page: demoNotificationPage({}), preferences: demoPreferences() }
             : undefined
         }
+        context={session.mutationContext}
         onNavigate={(view, param) => {
           if (view === "intervention" && param) session.openIntervention(param);
         }}
