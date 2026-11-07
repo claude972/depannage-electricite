@@ -106,6 +106,7 @@ import { SiteAreasPanel } from "../features/site-areas/site-areas-panel";
 import { OrganizationSitesList, SiteSettingsPanel } from "../features/site-lifecycle/site-lifecycle-panels";
 import { SiteDirectLoader } from "../features/site-lifecycle/site-direct";
 import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-panel";
+import { DelegatedPayerCheckout, DelegatedPayerManager } from "../features/delegated-payer/delegated-payer";
 import { SiteAssetLinksPanel } from "../features/site-asset-links/site-asset-links-panel";
 import type { AssetSource } from "../features/site-asset-links/asset-links-model";
 import { createAreasApi, parseAreasPage } from "../features/site-areas/areas-model";
@@ -757,7 +758,7 @@ function HelpContent({ onSupport }: { onSupport: () => void }) {
       <li>Choisissez l’organisation puis, si besoin, un site : toutes les listes, indicateurs et exports suivent ce périmètre.</li>
       <li>Les indicateurs sont calculés sur les dossiers chargés (100 derniers) ; le rapport CSV du serveur fait foi.</li>
       <li>Un devis soumis à une règle d’approbation doit être approuvé depuis « Devis & approbations » avant d’être accepté.</li>
-      <li>Le règlement Stripe est réservé au demandeur du dossier ; la délégation de payeur n’est pas définie.</li>
+      <li>Le règlement sur la plateforme est réservé au demandeur du dossier ou au membre que le propriétaire de l’organisation désigne explicitement comme payeur de ce dossier.</li>
       <li>Les fonctions absentes (factures, invitations, équipements, SLA…) sont signalées avec leur bloqueur plutôt que simulées.</li>
     </ul>
     <p className={styles.description} style={{ marginTop: 12 }}>
@@ -1929,9 +1930,19 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
                     onPay={() => void session.checkout(acceptedQuote.id)}
                   />
                 ) : (
-                  <Unavailable
-                    title="Règlement réservé au demandeur"
-                    reason="Le règlement est réservé au demandeur du dossier ; la délégation de payeur n’est pas définie."
+                  // ENT-16: a delegated member sees the SAME Checkout CTA only while the server says so.
+                  <DelegatedPayerCheckout
+                    interventionId={intervention.id}
+                    context={session.mutationContext}
+                    renderCheckout={() => (
+                      <PlatformPayAction
+                        demo={false}
+                        busy={session.busy}
+                        busyLabel="Redirection…"
+                        className="button primary full"
+                        onPay={() => void session.checkout(acceptedQuote.id)}
+                      />
+                    )}
                   />
                 )}
               </>
@@ -1939,6 +1950,15 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
               <p className={styles.muted}>
                 Le règlement est proposé une fois l’intervention terminée par l’artisan, sur la base du devis accepté.
               </p>
+            )}
+            {/* ENT-16: owner grants / revokes the payer mandate (shown only when the server says can_manage). */}
+            {intervention.status !== "paid" && (
+              <DelegatedPayerManager
+                interventionId={intervention.id}
+                context={session.mutationContext}
+                demo={demo}
+                loadMembers={c.organization ? () => session.loadOrganization(c.organization!.id).then((o) => o?.members.map((m) => ({ id: m.user_id, label: m.full_name || `Membre ${m.user_id.slice(0, 8)}` })) ?? null) : undefined}
+              />
             )}
           </section>
 
