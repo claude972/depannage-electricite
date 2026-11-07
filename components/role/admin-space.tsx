@@ -865,7 +865,7 @@ export function AdminSpace({ session }: { session: Session }) {
     const audit = [...o.audit].sort(byNewest);
     return (
       <>
-        <OperatorProfileEditor demo={demo} superAdmin={session.platformAccess?.super_admin === true} />
+        <OperatorProfileEditor key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`} demo={demo} superAdmin={session.platformAccess?.super_admin === true} context={session.mutationContext} />
         <Unavailable title="Paramètres de la plateforme" reason="Aucun réglage n’est modifiable depuis cette interface : les valeurs ci-dessous restent à définir par l’exploitant." blocker="ADM-08">
           <dl className={styles.definitions} style={{ padding: "12px 0 0" }}>
             {["Taux de commission", "TVA par défaut", "Territoire couvert", "Barème public"].map((item) => (

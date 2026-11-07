@@ -82,10 +82,11 @@ function harness(replies: Model.Result[], data: Data = { version: 2, draft: { ..
   const ctrl = m.createEditorController({
     api: () => ({
       load: async () => { loads++; return { status: 200, body: current }; },
-      command: async (body) => { posts.push({ body: json(body), storedBefore: mem.get(m.PENDING_KEY) ?? null }); const r = replies.shift() ?? { status: 503, body: null }; if (r.status === 200) current = { ...current, version: current.version + 1 }; return r; },
+      command: async (body) => { posts.push({ body: json(body), storedBefore: mem.get(m.pendingKey("admin-1", 1)) ?? null }); const r = replies.shift() ?? { status: 503, body: null }; if (r.status === 200) current = { ...current, version: current.version + 1 }; return r; },
     }),
     store: () => store,
     newId: () => ids.shift() ?? null,
+    context: { userId: () => "admin-1", generation: () => 1 },
     get: () => state,
     set: (s) => { state = s; },
   });
@@ -97,13 +98,13 @@ test("éditeur : command_id mémorisé AVANT le POST ; réponse perdue ⇒ la m�
   await h.ctrl.load();
   await h.ctrl.save({ legal_name: "Exploitant QA SAS" });
   assert.equal(h.posts.length, 1);
-  assert.equal(h.posts[0].storedBefore, JSON.stringify(h.posts[0].body), "command persisted in tab storage before the POST");
+  assert.deepEqual(JSON.parse(h.posts[0].storedBefore ?? "null").command, h.posts[0].body, "command persisted in tab storage before the POST");
   assert.equal(h.get().error, m.PROFILE_COPY.retry);
   assert.equal(await h.ctrl.save({ legal_name: "autre" }), false, "no new command while one is pending");
   await h.ctrl.retry();
   assert.equal(h.posts.length, 2);
   assert.deepEqual(h.posts[1].body, h.posts[0].body, "identical replay (same command_id, version, profile)");
-  assert.equal(h.mem.get(m.PENDING_KEY), undefined, "cleared after the verified success");
+  assert.equal(h.mem.get(m.pendingKey("admin-1", 1)), undefined, "cleared after the verified success");
   assert.equal(h.get().notice, "Brouillon enregistré.");
 });
 
@@ -113,7 +114,7 @@ test("éditeur : 409 ⇒ message honnête, aucune relance, commande oubliée", a
   await h.ctrl.save({ legal_name: "X" });
   assert.equal(h.get().error, m.PROFILE_COPY.conflict);
   assert.equal(h.get().pending, null);
-  assert.equal(h.mem.get(m.PENDING_KEY), undefined);
+  assert.equal(h.mem.get(m.pendingKey("admin-1", 1)), undefined);
   assert.equal(await h.ctrl.retry(), false);
   assert.equal(h.posts.length, 1, "never replayed");
 });
@@ -147,5 +148,5 @@ test("non super-admin ⇒ refus honnête, aucun éditeur ; démo ⇒ aucun appel
   assert.match(demo, /data-operator-editor="demo"/);
   assert.equal(calls, 0);
   const admin = readFileSync("components/role/admin-space.tsx", "utf8");
-  assert.match(admin, /<OperatorProfileEditor demo=\{demo\} superAdmin=\{session\.platformAccess\?\.super_admin === true\} \/>/);
+  assert.match(admin, /<OperatorProfileEditor key=\{[^}]*mutationContext[^}]*\}[^>]*superAdmin=\{session\.platformAccess\?\.super_admin === true\} context=\{session\.mutationContext\} \/>/);
 });
