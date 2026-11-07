@@ -264,7 +264,7 @@ export function QuoteDocumentsPanel(props: QuoteDocumentsPanelProps) {
       ))}
       {overview && overview.quotes.length > 0 && (
         <p className={styles.note}>
-          Le règlement en ligne porte sur le devis accepté ; les avenants acceptés ne sont pas encore reliés au paiement en ligne.
+          Le règlement sur la plateforme porte sur le devis accepté et ses avenants acceptés.
         </p>
       )}
       {overview && overview.history.length > 0 && (

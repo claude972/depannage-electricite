@@ -66,7 +66,7 @@ test("demo seeds render synchronously, labelled, with disabled downloads and rol
   assert.doesNotMatch(client.html, /Retirer la proposition/);
   assert.match(client.html, /Valable jusqu’au 05\/11\/2026 inclus/);
   assert.match(client.html, /Historique \(4\)/);
-  assert.match(client.html, /ne sont pas encore reliés au paiement en ligne/);
+  assert.match(client.html, /Le règlement sur la plateforme porte sur le devis accepté et ses avenants acceptés\./);
 });
 test("canWrite=false hides every write control, shows the reason, and keeps downloads of existing documents", () => {
   const overview = quoteDocumentsDemo("client");

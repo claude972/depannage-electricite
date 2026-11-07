@@ -71,11 +71,18 @@ test("FIN-05/ENT-16: enterprise billing mounts the customer invoices panel scope
   assert.doesNotMatch(view, /platform-operations\/invoices|\/api\/platform/);
 });
 
-test("ENT-08/ENT-05: site areas panel for every site type (not office-only), demo honest, AG still unavailable", () => {
+test("ENT-08/ENT-05: site areas panel for every site type; co-ownership panel on syndic sites only, demo honest", () => {
   const sheet = siteSheet();
   assert.match(src, /import \{ SiteAreasPanel \} from "\.\.\/features\/site-areas\/site-areas-panel";/);
   assert.match(sheet, /session\.mode === "demo" \? \(\s*<Unavailable\s+title="Étages, zones et parties communes"[\s\S]{0,300}?blocker="ENT-08"[\s\S]{0,40}?\) : \(\s*<SiteAreasPanel siteId=\{site\.id\} context=\{session\.mutationContext\} demo=\{false\} \/>/);
   assert.doesNotMatch(sheet, /vertical === "office" && \(/);
   assert.doesNotMatch(src, /Le découpage des bâtiments en étages et zones n’est pas modélisé/);
-  assert.match(sheet, /title="Assemblées générales & appels de fonds"[\s\S]{0,300}?blocker="ENT-05"/);
+  assert.match(sheet, /vertical === "syndic" &&\s+\(session\.mode === "demo" \? \(\s*<Unavailable\s+title="Assemblées générales & appels de fonds"[\s\S]{0,300}?blocker="ENT-05"[\s\S]{0,40}?\) : \(\s*<CoOwnershipPanel siteId=\{site\.id\} context=\{session\.mutationContext\} demo=\{false\} \/>/);
+});
+
+test("ENT-05 reports: no consolidated AG/fund total, no quorum or collection claim", () => {
+  const start = src.indexOf("function ReportsView(");
+  const reports = src.slice(start, src.indexOf("\nfunction ", start + 10));
+  assert.match(reports, /Assemblées générales & appels de fonds \(consolidé\)[\s\S]{0,400}?l’application ne calcule aucun quorum et n’encaisse rien/);
+  assert.doesNotMatch(reports, /CoOwnershipPanel/);
 });

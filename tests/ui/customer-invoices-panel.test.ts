@@ -156,3 +156,12 @@ test("ROOT : clé du panneau = uid + génération + mode + filtres (vidage immé
   const model = readFileSync("components/features/customer-invoices/invoices-model.ts", "utf8");
   assert.match(model, /load\(filters\?: InvoiceFilters\) \{\s+detailSeq\+\+;/);
 });
+
+test("factures du dossier : client et entreprise filtrent par intervention_id, seulement terminé/réglé", () => {
+  const client = readFileSync("components/role/client-space.tsx", "utf8");
+  assert.match(client, /\(i\.status === "completed" \|\| i\.status === "paid"\) && \(\s*<CustomerInvoicesPanel title="Factures et avoirs de ce dossier" filters=\{\{ intervention_id: i\.id, basis: "service" \}\} context=\{session\.mutationContext\} demo=\{demo\} \/>/);
+  const ent = readFileSync("components/role/enterprise-space.tsx", "utf8");
+  assert.match(ent, /\(intervention\.status === "completed" \|\| intervention\.status === "paid"\) && \(\s*<CustomerInvoicesPanel\s+title="Factures et avoirs de ce dossier"\s+filters=\{\{ intervention_id: intervention\.id, basis: "service", \.\.\.\(c\.organization \? \{ organization_id: c\.organization\.id \} : \{\}\) \}\}/);
+  // The real filter key differs per dossier: two dossiers never share a panel (cursor/detail).
+  assert.notEqual(m.filtersKey({ intervention_id: JOB, basis: "service" }), m.filtersKey({ intervention_id: QUOTE, basis: "service" }));
+});
