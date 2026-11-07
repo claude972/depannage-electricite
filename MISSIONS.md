@@ -86,3 +86,5 @@ ROOT est seul auteur du serveur. Le propriétaire de l’organisation autorise u
 - ENT-16 — Astra : propriétaire unique backend payeur B2B délégué, branche codex/delegated-payer base e541656 ; périmètre docs/missions/ENT16_DELEGATED_PAYER.md. Aucun cloud/UI.
 
 - ENT-12 — Astra : serveur des étapes ordonnées, compléments et décisions sur le devis exact. Contrat dans docs/ADVANCED_APPROVALS_BACKEND.md. Claude raccorde le parcours existant sans changer la règle d’acceptation.
+
+- FIN-06 — Astra, rapprochement complémentaire Stripe signé, branche codex/stripe-financial-reconciliation base e4dd8e1 ; docs/missions/FIN06_STRIPE_RECONCILIATION.md. Aucun cloud/UI/fournisseur réel.
