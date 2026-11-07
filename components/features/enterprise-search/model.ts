@@ -154,6 +154,9 @@ export function createSearchController({ api, context, set, timers, save = saveB
   let seq = 0;
   let current: ListBody | null = null;
   let timer: unknown = null;
+  /** Scope epoch: +1 on every organization / site / filter / search change (not on a page change).
+   *  An export is applied only if the epoch at the end equals the epoch at the click (A→B→A drops it). */
+  let epoch = 0;
   const identity = () => identityOf(context);
   const bound = identity();
   const keyOf = (req: ListBody) => keyFor(bound, req, req.page);
@@ -190,6 +193,7 @@ export function createSearchController({ api, context, set, timers, save = saveB
       const req = listBody(f, page);
       if (!req) return put({ ...SEARCH_INITIAL, key: keyFor(bound, f, page), phase: "error", error: COPY.failed });
       if (current && sameFilters(current, req) && current.page === req.page) return;
+      if (!current || !sameFilters(current, req)) epoch++;
       const onlySearch = !!current && current.page === req.page && current.organization_id === req.organization_id && current.site_id === req.site_id && current.category === req.category && current.status === req.status && current.sort === req.sort;
       start(req, onlySearch);
     },
@@ -206,17 +210,18 @@ export function createSearchController({ api, context, set, timers, save = saveB
       const who = identity();
       const body = exportBody(f);
       if (!body || who !== bound) return false;
+      const myEpoch = epoch;
       put({ ...state, exporting: true, exportNotice: "", exportError: "" });
       const r = await api().exportCsv(body);
-      const still = alive && identity() === who && sameFilters(latest(), f);
       if (!alive) return false;
       if (identity() !== who) return false; // another identity: nothing shown, nothing saved
-      if (r.status === 401 || r.status === 403) {
-        put({ ...SEARCH_INITIAL, key: state.key, phase: "forbidden", error: COPY.forbidden });
+      // Scope check BEFORE applying any reply (a late 401/403 of another scope never clears this one).
+      if (epoch !== myEpoch || !sameFilters(latest(), f) || !current || !sameFilters(current, f)) {
+        put({ ...state, exporting: false, exportError: COPY.exportChanged });
         return false;
       }
-      if (!still) {
-        put({ ...state, exporting: false, exportError: COPY.exportChanged });
+      if (r.status === 401 || r.status === 403) {
+        put({ ...SEARCH_INITIAL, key: state.key, phase: "forbidden", error: COPY.forbidden });
         return false;
       }
       if (r.status === 409) {
