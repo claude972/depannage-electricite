@@ -1,0 +1,19 @@
+/* Appointment reminder (shared client / artisan). --ui-* tokens only, light/dark, 44 px targets. */
+.panel { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-card); color: var(--ui-text); }
+.panel h3 { margin: 0; font-size: 16px; }
+.panel p { margin: 0; }
+.hint { font-size: 13px; color: var(--ui-text-muted); }
+.note { padding: 10px 12px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-surface); font-size: 14px; }
+.error { color: var(--ui-danger); font-size: 14px; }
+.ok { color: var(--ui-success); font-size: 14px; }
+.status { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-surface); }
+.form { display: grid; gap: 8px; }
+.fields { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.fields label { display: grid; gap: 4px; font-size: 13px; color: var(--ui-text-muted); }
+.fields input { min-height: 44px; padding: 0 10px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-card); color: var(--ui-text); font: inherit; }
+.primary, .secondary { min-height: 44px; padding: 0 16px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); font: inherit; font-weight: 600; cursor: pointer; justify-self: start; }
+.primary { border-color: var(--ui-primary); background: var(--ui-primary); color: var(--ui-on-primary); }
+.secondary { background: var(--ui-card); color: var(--ui-text); }
+.primary:disabled, .secondary:disabled { opacity: 0.6; cursor: not-allowed; }
+.fields input:focus-visible, .primary:focus-visible, .secondary:focus-visible { outline: 3px solid var(--ui-focus); outline-offset: 2px; }
+@media (max-width: 640px) { .primary, .secondary { justify-self: stretch; } }
