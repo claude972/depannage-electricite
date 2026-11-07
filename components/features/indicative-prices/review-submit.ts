@@ -5,10 +5,9 @@
 // same key resends it unchanged; the key never changes. Identity is re-checked after the async read and
 // before any persist or POST. Only the response code estimate_review_required marks the key for review.
 import { ApiRequestError } from "../../app/api";
-import { ensureRequestId, saveBooking, type BookingDraft } from "../../app/booking-draft";
-import { ESTIMATE_REVIEW_CODE, REVIEW_SCOPES, getPricesState, loadPrices, reviewDecision, shownVersion, type PriceCategory } from "./model";
+import { ensureRequestId, type BookingDraft } from "../../app/booking-draft";
+import { ESTIMATE_REVIEW_CODE, REVIEW_COPY, REVIEW_SCOPES, getPricesState, loadPrices, reviewDecision, shownVersion, type PriceCategory } from "./model";
 
-export const REVIEW_STORAGE_ERROR = "Votre demande n’a pas été envoyée : ce navigateur n’a pas pu enregistrer votre confirmation. Réessayez.";
 export const KEY_STORAGE_ERROR =
   "Votre demande n’a pas été envoyée : ce navigateur n’a pas pu préparer son envoi en toute sécurité. Réessayez ; si cela persiste, rechargez la page.";
 
@@ -43,13 +42,13 @@ export async function sendReviewedBooking<T>({
     const fresh = getPricesState();
     const decision = reviewDecision(rendered, fresh);
     if (decision.kind === "block") throw new Error(decision.message);
+    if (current.estimate_review_required && decision.kind === "omit") throw new Error(REVIEW_COPY.blocked);
     const { reviewed_estimate_version: _v, reviewed_estimate_range: _r, estimate_review_required: _f, ...rest } = current;
     void _v, void _r, void _f;
     next =
       decision.kind === "send" && fresh.data
         ? { ...rest, reviewed_estimate_version: decision.version, reviewed_estimate_range: { ...fresh.data.ranges[category] } }
         : rest;
-    if (current.request_id && !saveBooking(storage, next)) throw new Error(REVIEW_STORAGE_ERROR);
   }
   if (!alive()) return undefined;
   const keyed = ensureRequestId(storage, next);
@@ -65,7 +64,7 @@ export async function sendReviewedBooking<T>({
       // range is re-read for display; only an explicit new click changes the version.
       if (alive()) {
         const flagged: BookingDraft = { ...keyed.booking, estimate_review_required: true };
-        if (saveBooking(storage, flagged)) onKeyed(flagged);
+        if (ensureRequestId(storage, flagged)) onKeyed(flagged);
         void loadPrices(fetcher, true);
       }
       throw new Error(e.message);

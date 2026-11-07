@@ -126,9 +126,8 @@ export function newRequestId(): string {
   return crypto.randomUUID();
 }
 
-/** The booking's idempotency key, PROVEN present in this tab's storage before any POST (so a
- *  reload/resume replays the same key). An existing key is NEVER replaced: it is re-written as is
- *  when storage lost it, then read back. A key is generated only for a legacy booking without one.
+/** The booking and its key are proven in this tab's storage before any POST, so a reload
+ *  can recover the same reviewed estimate. An existing key is never replaced.
  *  null ⇒ not provable (no storage, refused write, readback mismatch): the caller sends nothing. */
 export function ensureRequestId(
   storage: Pick<Storage, "getItem" | "setItem"> | null | undefined,
@@ -139,16 +138,19 @@ export function ensureRequestId(
   const existing = booking.request_id && REQUEST_ID.test(booking.request_id) ? booking.request_id.toLowerCase() : null;
   const request_id = existing ?? newRequestId();
   const next = existing ? booking : { ...booking, request_id };
-  const stored = () => {
+  const expected = parseBooking(next);
+  if (!expected) return null;
+  const matchesStorage = () => {
     try {
-      return readBooking(storage.getItem(BOOKING_DRAFT_KEY), now)?.booking.request_id ?? null;
+      const stored = readBooking(storage.getItem(BOOKING_DRAFT_KEY), now)?.booking;
+      return JSON.stringify(stored) === JSON.stringify(expected);
     } catch {
-      return null;
+      return false;
     }
   };
-  if (existing && stored() === existing) return { booking: next, request_id };
-  if (!saveBooking(storage, next, now)) return null;
-  return stored() === request_id ? { booking: next, request_id } : null;
+  if (existing && matchesStorage()) return { booking: next, request_id };
+  if (!saveBooking(storage, next, now) || !matchesStorage()) return null;
+  return { booking: next, request_id };
 }
 
 export function readBooking(raw: unknown, now = Date.now()): StoredBooking | null {

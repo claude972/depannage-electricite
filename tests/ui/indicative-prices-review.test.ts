@@ -28,10 +28,6 @@ test("décision de revue : version RENDUE envoyée ; V1 tolérée ; V>1 jamais n
   assert.equal(m.ESTIMATE_REVIEW_CODE, "estimate_review_required");
   m.recordShown("x", 3);
   assert.equal(m.shownVersion("x"), 3);
-  m.markReviewRequired("F0000000-0000-4000-8000-000000000001");
-  assert.equal(m.isReviewRequired("f0000000-0000-4000-8000-000000000001"), true);
-  m.clearReviewRequired("f0000000-0000-4000-8000-000000000001");
-  assert.equal(m.isReviewRequired("f0000000-0000-4000-8000-000000000001"), false);
   void loading;
 });
 
@@ -47,6 +43,10 @@ test("rejeu de clé de demande : la charge figée (avec sa version) est renvoyé
   assert.equal(replay.replayed, true);
   // After estimate_review_required + explicit click: ONLY the frozen version of THIS key changes.
   const savedAt = JSON.parse(store.get(k.REQUEST_KEY_STORAGE)!).savedAt;
+  assert.equal(k.updateFrozenVersion(storage, first.request_id, 3), false, "no confirmed refusal");
+  assert.equal(k.markRequestEstimateReview(storage, first.request_id), true);
+  assert.equal(JSON.parse(store.get(k.REQUEST_KEY_STORAGE)!).estimate_review_required, true);
+  assert.equal(k.prepareRequestKey(storage, base as never), null, "reopen: no stale replay before reconfirmation");
   assert.equal(k.updateFrozenVersion(storage, "f0000000-0000-4000-8000-000000000002", 3), false, "another key is never touched");
   assert.equal(k.updateFrozenVersion(storage, "f0000000-0000-4000-8000-000000000001", 3), true);
   const after = JSON.parse(store.get(k.REQUEST_KEY_STORAGE)!);
@@ -54,9 +54,11 @@ test("rejeu de clé de demande : la charge figée (avec sa version) est renvoyé
   assert.equal(after.payload.reviewed_estimate_version, 3);
   assert.equal(after.payload.description, base.description, "same content");
   assert.equal(after.savedAt, savedAt, "same TTL anchor");
+  assert.equal(after.estimate_review_required, undefined);
   // Read-back must match the EXACT frozen payload (only the version changed): a storage that alters
   // anything else on write ⇒ false (the caller then sends nothing).
   const lying = { getItem: storage.getItem, setItem: (key: string, v: string) => void store.set(key, v.replace("Disjoncteur", "Fusible")), removeItem: storage.removeItem };
+  assert.equal(k.markRequestEstimateReview(storage, first.request_id), true);
   assert.equal(k.updateFrozenVersion(lying, "f0000000-0000-4000-8000-000000000001", 4), false);
 });
 
@@ -79,9 +81,9 @@ test("câblage : création = version rendue + relecture forcée ; rejeu = charge
   const create = app.slice(app.indexOf("async function createIntervention"), app.indexOf("const replayNote"));
   assert.match(create, /if \(modeRef\.current === "demo"\) \{\s*demoCreate/, "demo unchanged");
   assert.match(create, /const rendered = shownVersion\(REVIEW_SCOPES\.requestForm\);\s*await loadPrices\(undefined, true\);\s*if \(!ctx\.alive\(\)\) return;/);
-  assert.match(create, /if \(!stored \|\| isReviewRequired\(stored\.request_id\)\)/);
+  assert.match(create, /if \(!stored \|\| stored\.estimate_review_required\)/);
   assert.match(create, /updateFrozenVersion\(storageNow, stored\.request_id, decision\.version\)/);
-  assert.match(create, /e\.status === 409 && e\.code === ESTIMATE_REVIEW_CODE\) \{\s*\/\/[^\n]*\n[^\n]*\n\s*markReviewRequired\(prepared\.request_id\);/);
+  assert.match(create, /e\.status === 409 && e\.code === ESTIMATE_REVIEW_CODE\) \{\s*\/\/[^\n]*\n[^\n]*\n\s*markRequestEstimateReview\(storageNow, prepared\.request_id\);/);
   assert.doesNotMatch(create, /settleRequestKey\(getDraftStorage\(\), prepared\.request_id\);\s*throw new Error\(REVIEW_COPY/, "never a new key after the code");
   assert.doesNotMatch(app, /bookingReviewed/, "no unbounded in-memory map");
   const booking = app.slice(app.indexOf("async function confirmBooking"), app.indexOf("async function uploadBookingPhotos"));

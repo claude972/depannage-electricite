@@ -135,10 +135,3 @@ const shown = new Map<string, number | null>();
 export const recordShown = (scope: string, version: number | null) => void shown.set(scope, version);
 export const shownVersion = (scope: string): number | null => shown.get(scope) ?? null;
 export const REVIEW_SCOPES = { requestForm: "request-form", bookingConfirm: "booking-confirm" } as const;
-
-/** A key (booking nonce / request_id) refused with ESTIMATE_REVIEW_CODE: its next EXPLICIT click
- *  re-reviews and updates ONLY its stored version, then re-sends the SAME key. One at a time. */
-let reviewRequired: string | null = null;
-export const markReviewRequired = (key: string) => void (reviewRequired = key.toLowerCase());
-export const isReviewRequired = (key: string | undefined | null) => !!key && reviewRequired === key.toLowerCase();
-export const clearReviewRequired = (key: string) => void (reviewRequired === key.toLowerCase() && (reviewRequired = null));

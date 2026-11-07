@@ -43,9 +43,9 @@ import {
 } from "./app/demo";
 import { resolveDisplayName } from "./app/display-name";
 import { draftNotice, getDraftStorage, readBootDraft } from "./app/request-draft-boot";
-import { BOOKING_DRAFT_KEY, PAYMENT_LABEL, clearBooking, ensureRequestId, readBooking, saveBooking, type BookingDraft } from "./app/booking-draft";
-import { DEFINITIVE_REFUSAL, REQUEST_KEY_STORAGE, prepareRequestKey, readRequestKey, settleRequestKey, updateFrozenVersion } from "./app/request-key";
-import { ESTIMATE_REVIEW_CODE, REVIEW_SCOPES, clearReviewRequired, getPricesState, isReviewRequired, loadPrices, markReviewRequired, reviewDecision, shownVersion } from "./features/indicative-prices/model";
+import { BOOKING_DRAFT_KEY, PAYMENT_LABEL, clearBooking, readBooking, saveBooking, type BookingDraft } from "./app/booking-draft";
+import { DEFINITIVE_REFUSAL, REQUEST_KEY_STORAGE, markRequestEstimateReview, prepareRequestKey, readRequestKey, settleRequestKey, updateFrozenVersion } from "./app/request-key";
+import { ESTIMATE_REVIEW_CODE, REVIEW_COPY, REVIEW_SCOPES, getPricesState, loadPrices, reviewDecision, shownVersion } from "./features/indicative-prices/model";
 import { sendReviewedBooking } from "./features/indicative-prices/review-submit";
 import { purgePrivateStorage } from "./app/private-storage";
 import { bookingForEditedRequest, bookingFromSignedRequest, readPhotoCount, writePhotoCount } from "./app/signed-booking";
@@ -1364,8 +1364,13 @@ export default function CourantApp() {
       setCardReturn((c) => (c?.requestId === requestId ? null : c));
       const current = bookingRef.current;
       if (current?.request_id === requestId) {
-        const { request_id: _drop, ...rest } = current;
-        void _drop;
+        const {
+          request_id: _requestId,
+          reviewed_estimate_version: _version,
+          reviewed_estimate_range: _range,
+          estimate_review_required: _review,
+          ...rest
+        } = current;
         setBooking(rest);
         saveBooking(getDraftStorage(), rest);
       }
@@ -1423,16 +1428,16 @@ export default function CourantApp() {
         stored = storageNow ? readRequestKey(storageNow.getItem(REQUEST_KEY_STORAGE)) : null;
       } catch {}
       let reviewed: RequestValues = values;
-      if (!stored || isReviewRequired(stored.request_id)) {
+      if (!stored || stored.estimate_review_required) {
         const rendered = shownVersion(REVIEW_SCOPES.requestForm);
         await loadPrices(undefined, true);
         if (!ctx.alive()) return; // identity changed during the read: no persist, no POST
         const decision = reviewDecision(rendered, getPricesState());
         if (decision.kind === "block") throw new Error(decision.message);
         if (stored) {
-          if (decision.kind === "send" && !updateFrozenVersion(storageNow, stored.request_id, decision.version))
+          if (decision.kind === "omit") throw new Error(REVIEW_COPY.blocked);
+          if (!updateFrozenVersion(storageNow, stored.request_id, decision.version))
             throw new Error("Votre demande n’a pas été envoyée : ce navigateur n’a pas pu enregistrer votre confirmation. Réessayez.");
-          clearReviewRequired(stored.request_id);
         } else if (decision.kind === "send") reviewed = { ...values, reviewed_estimate_version: decision.version } as RequestValues;
       }
       if (stored) {
@@ -1451,11 +1456,12 @@ export default function CourantApp() {
       try {
         result = await api<{ intervention: Intervention }>("/api/interventions", payload);
       } catch (e) {
+        if (!ctx.alive()) return;
         if (e instanceof ApiRequestError && DEFINITIVE_REFUSAL.has(e.status)) settleRequestKey(getDraftStorage(), prepared.request_id);
         if (e instanceof ApiRequestError && e.status === 409 && e.code === ESTIMATE_REVIEW_CODE) {
           // Same key and frozen payload kept; new range re-read for display; an explicit new click updates
           // ONLY the frozen version. The decision comes from the response code, never from a later GET.
-          markReviewRequired(prepared.request_id);
+          markRequestEstimateReview(storageNow, prepared.request_id);
           void loadPrices(undefined, true);
           throw new Error(e.message);
         }

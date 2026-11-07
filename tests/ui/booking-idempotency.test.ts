@@ -56,6 +56,12 @@ test("ensureRequestId: no storage / refused write / write not read back ⇒ null
   const liar = new Mem();
   liar.lie = true;
   assert.equal(ensureRequestId(liar, base, NOW), null, "legacy key not provable ⇒ refused");
+  liar.lie = false;
+  assert.ok(saveBooking(liar, { ...base, request_id: id, reviewed_estimate_version: 2 }, NOW));
+  liar.lie = true;
+  assert.equal(ensureRequestId(liar, { ...base, request_id: id, reviewed_estimate_version: 3 }, NOW), null);
+  assert.equal(ensureRequestId(liar, { ...base, request_id: id, reviewed_estimate_version: 2, estimate_review_required: true }, NOW), null);
+  assert.equal(readBooking(liar.getItem(BOOKING_DRAFT_KEY), NOW)?.booking.reviewed_estimate_version, 2);
 });
 
 test("ensureRequestId: legacy booking gets ONE key, stored, then reused on retry", () => {
