@@ -119,6 +119,7 @@ import {
   type MissionSegment,
 } from "./artisan-lists";
 import { CredentialReviewPanel } from "../features/credential-reviews/credential-review-panel";
+import { useArtisanPerformance, LivePerformanceSummary, LivePerformanceGrid, LiveRatingLine, livePerformanceSubtitle } from "../features/artisan-performance";
 import { CredentialReminderPanel } from "../features/operational-reminders/operational-reminder-panel";
 import { AppointmentReminderPanel } from "../features/appointment-reminders/appointment-reminder-panel";
 import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-panel";
@@ -993,6 +994,7 @@ function Overview({
     profileId,
     now,
   );
+  const livePerf = useArtisanPerformance(session);
   const today = missions.active.slice(0, 6);
   const appointments = useAppointments(
     session,
@@ -1071,7 +1073,11 @@ function Overview({
           </Empty>
         </section>
       )}
-      <PerformanceSummary perf={perf} onDetail={() => session.go("performance")} />
+      {livePerf.phase === "demo" ? (
+        <PerformanceSummary perf={perf} onDetail={() => session.go("performance")} />
+      ) : (
+        <LivePerformanceSummary perf={livePerf} onDetail={() => session.go("performance")} />
+      )}
       <button
         type="button"
         className={`button primary ${styles.block} ${styles.cta}`}
@@ -3292,6 +3298,7 @@ function Profile({
   const { data, profileId } = session;
   const now = new Date();
   const perf = artisanPerformance(data.interventions, data.quotes, data.payments, data.reviews, profileId, now);
+  const livePerf = useArtisanPerformance(session);
   const artisan = dossier?.artisan_profile ?? null;
   const verified = session.profile?.artisan_approved === true;
   const today = localDate(now);
@@ -3310,7 +3317,9 @@ function Profile({
           <h2 className={styles.profileName}>{artisan?.company_name || session.displayName}</h2>
           {artisan?.company_name && <p className={styles.profileSub}>{session.displayName}</p>}
           <div className={styles.profileLine}>
-            {perf.rating ? (
+            {livePerf.phase !== "demo" ? (
+              <LiveRatingLine perf={livePerf} />
+            ) : perf.rating ? (
               <span>
                 <Icon name="star" size={16} /> {fmtRating(perf.rating.average)} / 5 ({perf.rating.count} avis)
               </span>
@@ -3350,7 +3359,11 @@ function Profile({
       <div className={styles.sectionHead} style={{ marginTop: 8 }}>
         <h2>Performance</h2>
       </div>
-      <PerfGrid perf={perf} since={since} />
+      {livePerf.phase === "demo" ? (
+        <PerfGrid perf={perf} since={since} />
+      ) : (
+        <LivePerformanceGrid perf={livePerf} since={since} />
+      )}
       <div className={styles.profileActions}>
         <button
           type="button"
@@ -3457,6 +3470,7 @@ function PerformanceView({ session }: { session: Session }) {
   const { data, profileId } = session;
   const now = new Date();
   const perf = artisanPerformance(data.interventions, data.quotes, data.payments, data.reviews, profileId, now);
+  const livePerf = useArtisanPerformance(session);
   const since = seniority(session.profile?.created_at, now);
   const mineIds = new Set(data.interventions.filter((i) => i.artisan_id === profileId).map((i) => i.id));
   const quoteById = new Map(data.quotes.map((q) => [q.id, q]));
@@ -3475,8 +3489,16 @@ function PerformanceView({ session }: { session: Session }) {
       <PageTitle
         back={{ label: "Profil", onClick: () => session.go("profile") }}
         title="Performance"
-        subtitle={`Période : ${perf.period} — sur vos dossiers chargés.`}
+        subtitle={
+          livePerf.phase === "demo"
+            ? `Période : ${perf.period} — sur vos dossiers chargés.`
+            : livePerformanceSubtitle(livePerf)
+        }
       />
+      {livePerf.phase !== "demo" ? (
+        <LivePerformanceGrid perf={livePerf} since={since} />
+      ) : (
+        <>
       <PerfGrid perf={perf} since={since} />
       <section className="panel" aria-labelledby="perf-paid">
         <h2 id="perf-paid" style={{ fontSize: 17, marginBottom: 8 }}>
@@ -3506,6 +3528,8 @@ function PerformanceView({ session }: { session: Session }) {
           <p>Aucun règlement confirmé ce mois-ci sur vos dossiers chargés.</p>
         )}
       </section>
+        </>
+      )}
       {session.mode === "demo" && (
         <DemoNote>Indicateurs calculés sur les données de démonstration.</DemoNote>
       )}
