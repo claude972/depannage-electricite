@@ -1,0 +1,1 @@
+import{payoutProofHandlers}from'@/lib/features/payout-proof/runtime';export const runtime='nodejs';export const dynamic='force-dynamic';export const GET=payoutProofHandlers.GET;export const POST=payoutProofHandlers.POST;

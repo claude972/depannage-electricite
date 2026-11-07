@@ -48,7 +48,7 @@ La page contient au plus 50 observations exactes, ordonnées par event_id. Chaqu
 
 ## Limites assumées
 
-La suite commission décrite ci-dessous est désormais incluse. `fee_refund` sans parent attesté, payout agrégé et transfert automatique Checkout restent hors qualification ; aucune répartition n’est inférée.
+La suite commission décrite ci-dessous est désormais incluse. `fee_refund` sans parent attesté, allocation des payouts agrégés et transfert automatique Checkout restent hors qualification ; aucune répartition n’est inférée.
 
 Qualification fournisseur et données de test restent injectées. Tests SQL réels isolés (Auth/Storage/cron simulés) : permissions/retrait, snapshot payé, rejeu/conflit de mode, immutabilité, litige partiel exact, refus compte/mode/devise/montant/Charge étrangers et absence de mutation financière. Tests des vrais handlers : chaîne des références, erreurs fournisseur, réponse de persistance perdue, portes et revalidation d’accès. Aucune recette hébergée ou transaction réelle.
 
@@ -67,3 +67,5 @@ La qualification exige une preuve Charge déjà fixée et une observation persis
 Le registre signé et ses résultats historiques restent inchangés. Ce lien supplémentaire n’atteste pas un solde bancaire, un remboursement déclenché par l’application ou une écriture de ledger. Aucune méthode de mutation Stripe n’est appelée. L’endpoint n’accepte pas `application_fee.refund.updated` : le parent Fee n’est pas déduit de ce seul événement.
 
 Sources : [objet Application Fee](https://docs.stripe.com/api/application_fees/object), notamment originating_transaction et remboursement partiel, et [relecture de la Fee](https://docs.stripe.com/api/application_fees/retrieve). Tests injectés sans accès fournisseur ; SQL isolé vérifie la séparation des charges, les égalités, le rejeu, deux observations datées, les refus de modes/scopes et le maintien des paiements.
+
+Le rapprochement borné du payout automatique lui-même, sans allocation aux dossiers, est décrit dans [AUTOMATIC_PAYOUT_PROOF_BACKEND.md](AUTOMATIC_PAYOUT_PROOF_BACKEND.md).
