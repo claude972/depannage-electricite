@@ -179,6 +179,7 @@ function Picker({ interventionId, artisanId, envelope, taxRate, dirty, disabled,
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [pending, setPending] = useState<ReturnType<typeof buildApply>>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const client = useRef<QgApi | null>(null);
   const getApi = () => (client.current ??= api ?? createQgApi());
@@ -223,6 +224,12 @@ function Picker({ interventionId, artisanId, envelope, taxRate, dirty, disabled,
       onConflict(COPY.applyConflict);
       return;
     }
+    if (r.status === 401) {
+      setPending(null);
+      setSessionExpired(true);
+      setError("Votre session a expiré. Reconnectez-vous pour appliquer la grille.");
+      return;
+    }
     if ([400, 403, 404, 422, 429].includes(r.status)) {
       setPending(null);
       setError(COPY.applyRefused);
@@ -248,7 +255,7 @@ function Picker({ interventionId, artisanId, envelope, taxRate, dirty, disabled,
         {grid.lines.map((l) => (
           <li key={l.index} className={styles.item} data-quote-grid-line={l.index}>
             <label htmlFor={`${uid}-q${l.index}`}>{l.label} · {money(l.unit_price_cents)} HT / {UNIT_LABEL[l.unit]}</label>
-            <input id={`${uid}-q${l.index}`} className={styles.qty} inputMode="numeric" placeholder="Qté" value={qty[l.index] ?? ""} onChange={(e) => setQty({ ...qty, [l.index]: e.target.value.replace(/[^0-9]/g, "") })} disabled={disabled || busy} aria-label={`Quantité pour ${l.label}`} />
+            <input id={`${uid}-q${l.index}`} className={styles.qty} inputMode="numeric" placeholder="Qté" value={qty[l.index] ?? ""} onChange={(e) => setQty({ ...qty, [l.index]: e.target.value.replace(/[^0-9]/g, "") })} disabled={disabled || busy || sessionExpired} aria-label={`Quantité pour ${l.label}`} />
           </li>
         ))}
       </ul>
@@ -261,7 +268,7 @@ function Picker({ interventionId, artisanId, envelope, taxRate, dirty, disabled,
             {busy ? "Envoi…" : "Réessayer la même demande"}
           </button>
         ) : (
-          <button type="button" className={`${styles.button} ${styles.primary}`} disabled={busy || disabled} onClick={apply} data-quote-grid-apply="">
+          <button type="button" className={`${styles.button} ${styles.primary}`} disabled={busy || disabled || sessionExpired} onClick={apply} data-quote-grid-apply="">
             {busy ? "Application…" : confirm ? "Remplacer par la grille" : "Appliquer la grille au brouillon"}
           </button>
         )}

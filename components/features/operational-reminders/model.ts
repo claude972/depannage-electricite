@@ -1,5 +1,5 @@
 // Operational reminders (SYS-04 / ART-03 / ENT-14) — pure model, no React. Separate from the
-// appointment reminders. Contract: ./contract (strict copy of Astra eb138d6) + docs/OPERATIONAL_REMINDERS_BACKEND.md:
+// appointment reminders. Contract: docs/OPERATIONAL_REMINDERS_BACKEND.md:
 //   GET  /api/artisan/credentials/<id>/reminder | /api/compliance/<id>/reminder
 //        → { kind, record_id, source: { version, due_on }, record | null, eligibility, can_schedule, scheduled_for_current_source }
 //   POST same path { action: "schedule", command_id, expected_version (null first), source_version, due_on, remind_at }
@@ -8,7 +8,7 @@
 // in-app reminder only: it certifies nothing and its emission is never promised by this UI.
 // 401 / 404 (source not accessible) / 409 / 422 / 429 / 503 (+ Retry-After).
 import { z } from "zod";
-import { command, receipt, state, type ReminderCommand, type ReminderState } from "./contract";
+import { command, receipt, state, type ReminderCommand, type ReminderState } from "../../../lib/features/operational-reminders/contract";
 
 export type Kind = "credential" | "compliance";
 export type { ReminderCommand, ReminderState };

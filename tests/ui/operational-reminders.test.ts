@@ -23,10 +23,8 @@ const json = (body: unknown, status = 200, headers: Record<string, string> = {})
 const record = (o: Partial<Record<string, unknown>> = {}) => ({ id: U(900), kind: "credential", record_id: CRED, source_version: 2, due_on: "2026-12-31", remind_at: "2026-12-20T09:00:00-04:00", version: 1, status: "scheduled", notification_id: null, processed_at: null, updated_at: "2026-11-07T10:00:00Z", ...o });
 const stateOf = (o: Partial<Record<string, unknown>> = {}) => ({ kind: "credential", record_id: CRED, source: { version: 2, due_on: "2026-12-31" }, record: null, eligibility: "available", can_schedule: true, scheduled_for_current_source: false, ...o });
 
-test("contrat copié à l’identique d’eb138d6 ; chemins exacts", () => {
-  const copy = readFileSync("components/features/operational-reminders/contract.ts", "utf8").split("\n").slice(3).join("\n");
-  assert.ok(copy.startsWith('import { z } from "zod";\nexport const uuid = z.uuid().transform((v) => v.toLowerCase());'));
-  assert.match(copy, /\.refine\(\(s\) => s\.can_schedule === \(s\.eligibility === "available"\)\);/);
+test("contrat partagé avec le serveur et chemins exacts", () => {
+  assert.match(readFileSync("components/features/operational-reminders/model.ts", "utf8"), /lib\/features\/operational-reminders\/contract/);
   assert.equal(m.reminderPath("credential", CRED), `/api/artisan/credentials/${CRED}/reminder`);
   assert.equal(m.reminderPath("compliance", CRED), `/api/compliance/${CRED}/reminder`);
 });

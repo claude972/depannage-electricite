@@ -28,7 +28,7 @@ const U = (p, n) => p + "0000000-0000-4000-8000-" + String(n).padStart(12, "0");
 const JOB = U("2", 1), ME = U("1", 1), GRID = U("6", 1);
 const TOKEN = "a".repeat(64), AT = "2026-11-07T10:00:00.000Z";
 const draft = (version, lines, tax_rate = 8.5) => ({ intervention_id: JOB, artisan_id: ME, version, assignment_token: TOKEN, base_quote_id: null, lines, tax_rate, updated_at: AT });
-function setup() {
+function setup(expired = false) {
   const fetched = [];
   const commands = [];
   let current = null; // the server's statement of the grid the CURRENT draft comes from
@@ -39,6 +39,7 @@ function setup() {
     if (String(url).endsWith("/quote-grid") && (init?.method ?? "GET") === "GET")
       return ok({ current, grids: [{ id: GRID, label: "Contrat 2026", version: 3, lines: [{ index: 0, label: "Déplacement", unit: "visit", unit_price_cents: 4500 }, { index: 1, label: "Main-d’œuvre", unit: "hour", unit_price_cents: 6000 }] }], next_cursor: null });
     if (String(url).endsWith("/quote-grid") && init?.method === "POST") {
+      if (expired) return new Response("{}", { status: 401 });
       const b = JSON.parse(init.body);
       env = { version: b.expected_version + 1, assignment_token: TOKEN, current_quote_id: null, draft: draft(b.expected_version + 1, [{ label: "Déplacement", quantity: 2, unit_price_cents: 4500 }], b.tax_rate) };
       current = { grid_id: GRID, grid_version: 3, grid_label: "Contrat 2026" };
@@ -91,6 +92,13 @@ w.scenarios = {
     await tick(300);
     return { ...state, commands };
   },
+  async expired() {
+    const { div, fetched } = setup(true);
+    await applied(div);
+    const button = div.querySelector("[data-quote-grid-apply]");
+    button.click();
+    return { error: div.querySelector("[data-quote-grid-apply-error]")?.textContent, disabled: button.disabled, labels: labels(div), posts: fetched.filter((f) => f.method === "POST").length };
+  },
 };
 `;
 
@@ -118,6 +126,7 @@ test("éditeur de brouillon avec grille (Chromium, StrictMode) : enveloppe exact
     const b = (await run("edited")) as { saveDisabled: boolean; linked: boolean; dropped: boolean; commands: string[] };
     same([b.saveDisabled, b.linked, b.dropped], [false, false, true], "manual edit: Enregistrer enabled, link dropped and said");
     same(b.commands, ["save", "send"], "dirty ⇒ saved (new version, no grid link) then sent");
+    same(await run("expired"), { error: "Votre session a expiré. Reconnectez-vous pour appliquer la grille.", disabled: true, labels: ["Libre"], posts: 1 });
     same(errors, []);
   } finally {
     await browser.close();
