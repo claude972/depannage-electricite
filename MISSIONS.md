@@ -52,3 +52,12 @@ Basee6aa35a ; branchecodex/refund-execution ; contratdocs/REFUND_EXECUTION_CONTR
 ## REFUND-EXECUTION — GO CODE ROOT
 
 GO explicite reçu après contratdc58, basead069641 ; Codex backend unique, scope et ownership du contrat conservés. Code/SQL/tests seulement, aucun fournisseur réel/cloud/credentials. Refus explicites configuration/policy/live ; autresfamilles restentOPEN.
+
+## LOTS UI INDÉPENDANTS — une branche writer par fichier (claim Claude lead, plan ae74baf)
+
+Base 4c7852c. Un seul propriétaire par fichier pendant le lot ; aucun backend/lib/app/SQL ; pas de retouche formulaire/session/finance en assemblage.
+- `claude/client-dossier-map` — CLI-05 carte privée du dossier : nouvelle feuille components/features/dossier-map/** + câblage local client-space. Fournisseur de carte = null par défaut (décision propriétaire), aucun envoi d’adresse/coordonnées à un tiers sans décision, aucune position/ETA/carte inventée. Worker UI existant (en cours).
+- `claude/lot-enterprise-timeline` — phase 4 : chronologie du dossier entreprise selon le statut réel (approbation → planification → travaux → réception → règlement). Propriétaire unique enterprise-space.tsx pendant le lot. Worker UI existant (en cours).
+- `claude/lot-public-pages` — phase 5 : contact/rappel, présentation de l’exploitant, mentions, confidentialité (public-site.tsx, public-lists.ts) ; valeurs légales/commerciales UNIQUEMENT depuis la configuration propriétaire, jamais inventées. En attente d’un worker libre.
+- `claude/lot-admin-history` — phase 5 : menus, bons dossiers, historique des actions administrateur (admin-space.tsx). En attente d’un worker libre.
+- `claude/lot-artisan-application` — phase 3 : candidature, correction de pièces, statuts (artisan-space.tsx candidature) ; dépend du contrat backend justificatifs d’Astra. Préparé, non démarré.
