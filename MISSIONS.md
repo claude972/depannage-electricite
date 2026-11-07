@@ -116,3 +116,6 @@ ROOT ajoute le tri facultatif des offres par tranches indicatives de 5 km, puis 
 ### SYS-04 — notifications push Web
 
 ROOT raccorde Web Push à la file privée et au service worker existants. L’utilisateur choisit un navigateur destinataire et confirme l’autorisation. Une session Supabase courante, la préférence active et l’accès à la notification sont revérifiés avant un envoi générique. Une tentative dont la réponse est incertaine reste sans rejeu. Vérifier changement de compte, désinscription, absence de données du dossier, protection de l’URL de destination et reprise du service worker. La configuration VAPID et l’exécution du worker restent désactivées pour la recette.
+
+## SYS-07 / ADM — demandes d’effacement (Astra exclusive)
+Base 140fede, checkout existant réutilisé, branche codex/data-erasure-requests. Conserver export et POST existants, liaison UUID privée vers ticket via mécanisme idempotent existant, liste personnelle et examen opérateur support_read + support_status. Décision versionnée et journal avec motif distincts d’une exécution toujours not_started ; aucun effacement ni délai légal. Tests SQL vrais et routes : reprise, refus intercompte/scopes, concurrence et ticket clos sans effacement.
