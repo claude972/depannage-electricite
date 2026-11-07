@@ -1,6 +1,8 @@
 /* Advanced approvals leaf — tokens only, light/dark through --ui-*. */
 .block {
   display: grid;
+  /* One shrinkable column: long member names in the step selects never widen the block. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--ui-space-2);
   margin: var(--ui-space-3) 0;
   padding: var(--ui-space-3);
@@ -74,6 +76,7 @@
 }
 .form {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--ui-space-2);
 }
 .row {

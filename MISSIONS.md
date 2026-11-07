@@ -132,3 +132,5 @@ ROOT complète les compteurs de navigation du particulier dans la lecture de l�
 ### PUB-04 — demande de rappel et file d’assistance
 
 ROOT possède le serveur, la migration et les tests. Une demande publique collecte le numéro saisi et le motif sélectionné, avec consentement à ce rappel. Le serveur renvoie un reçu minimal, protège le rejeu et borne les dépôts en base. Seuls les opérateurs d’assistance habilités consultent ou classent la demande. Le classement est tracé sans numéro dans l’audit et ne prouve aucun appel. Claude raccorde le formulaire et la file après publication du contrat. Vérifier dépôt, rejeu, quotas, refus, version et lecture privée. L’activation reste explicite après validation des modalités de traitement.
+
+## ENT — débordement 360 px fiche de site (UI), claim Claude : `.twoCol` mobile et bloc d’approbation avancée en `minmax(0, 1fr)` (branche `claude/enterprise-overflow-fix`, base `a18f507`).
