@@ -130,3 +130,7 @@ ROOT ajoute la liste paginée des interventions entreprise et l’export CSV sur
 ### PUB-04 — demande de rappel et file d’assistance
 
 ROOT possède le serveur, la migration et les tests. Une demande publique collecte le numéro saisi et le motif sélectionné, avec consentement à ce rappel. Le serveur renvoie un reçu minimal, protège le rejeu et borne les dépôts en base. Seuls les opérateurs d’assistance habilités consultent ou classent la demande. Le classement est tracé sans numéro dans l’audit et ne prouve aucun appel. Claude raccorde le formulaire et la file après publication du contrat. Vérifier dépôt, rejeu, quotas, refus, version et lecture privée. L’activation reste explicite après validation des modalités de traitement.
+
+### PUB-02 / ADM-08 — prix indicatifs (UI)
+
+Claude (add7245) — prix indicatifs UI : affichages publics lisent les 5 fourchettes de GET /api/public/indicative-prices ; réservations gardent leur estimate version/min/max existant ; barème admin en lecture seule tant que publication_available=false. Leaf components/features/indicative-prices/** + mounts minimaux. Aucune API/SQL/cloud.
