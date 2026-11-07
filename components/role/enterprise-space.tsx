@@ -105,6 +105,7 @@ import { SiteContactsPanel } from "../features/site-contacts/site-contacts-panel
 import { SiteAreasPanel } from "../features/site-areas/site-areas-panel";
 import { OrganizationSitesList, SiteSettingsPanel } from "../features/site-lifecycle/site-lifecycle-panels";
 import { SiteDirectLoader } from "../features/site-lifecycle/site-direct";
+import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-panel";
 import { SiteAssetLinksPanel } from "../features/site-asset-links/site-asset-links-panel";
 import type { AssetSource } from "../features/site-asset-links/asset-links-model";
 import { createAreasApi, parseAreasPage } from "../features/site-areas/areas-model";
@@ -450,7 +451,13 @@ export function EnterpriseSpace({ session }: { session: Session }) {
     const body = (() => {
       switch (view) {
         case "overview":
-          return <OverviewView c={c} />;
+          return (
+            <>
+              <OverviewView c={c} />
+              {/* ART-12: shown only when the server returns a team invitation or membership for this account. */}
+              <ProviderTeamsPanel key={`teams|${c.session.mutationContext.userId() ?? "-"}|${c.session.mutationContext.generation()}`} audience="member" context={c.session.mutationContext} demo={c.session.mode === "demo"} />
+            </>
+          );
         case "requests":
           return <RequestsView c={c} />;
         case "new":

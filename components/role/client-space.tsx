@@ -84,6 +84,7 @@ import { DossierHelpLink, SupportCenter } from "./support-tickets";
 import { ClientAddressesPanel, usePreferredAddress } from "../features/client-addresses/client-addresses-panel";
 import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
 import { AppointmentReminderPanel } from "../features/appointment-reminders/appointment-reminder-panel";
+import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-panel";
 import { PlatformPayAction } from "../app/platform-pay";
 
 const CLIENT_VIEWS: readonly View[] = [
@@ -242,7 +243,13 @@ export function ClientSpace({ session }: { session: Session }) {
     if (!inSpace) return <Forbidden onHome={() => session.go("overview")} />;
     switch (view) {
       case "overview":
-        return <OverviewView session={session} rows={rows} />;
+        return (
+          <>
+            <OverviewView session={session} rows={rows} />
+            {/* ART-12: shown only when the server returns a team invitation or membership for this account. */}
+            <ProviderTeamsPanel key={`teams|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`} audience="member" context={session.mutationContext} demo={session.mode === "demo"} />
+          </>
+        );
       case "requests":
         return <RequestsView session={session} rows={rows} />;
       case "new":

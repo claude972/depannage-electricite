@@ -35,19 +35,20 @@ const missions = (role) => role === "technician"
 const mission = { team_id: TEAM, intervention: { id: JOB, category: "panel", status: "in_progress", description: "Le tableau disjoncte à chaque orage.", address: "12 rue des Alizés", postal_code: "97200", city: "Fort-de-France" }, appointment: { starts_at: AT, ends_at: AT }, assignment: { version: 2, technician_id: TECH, state: "assigned", updated_at: AT, note: "" }, permissions: { can_assign: false, can_acknowledge: true, can_complete: false } };
 const ok = (body) => Promise.resolve({ status: 200, body });
 function setup(role, opts = {}) {
+  const audience = opts.audience ?? "artisan";
   const calls = { get: [], post: [], stored: [] };
   const map = new Map();
   const store = () => ({ get: (k) => map.get(k) ?? null, set: (k, v) => map.set(k, v), remove: (k) => map.delete(k) });
   let teamsCalls = 0;
   const api = {
-    teams: () => (calls.get.push("teams"), teamsCalls++, ok({ records: role === "invitee" && teamsCalls === 1 ? [] : [team(role === "invitee" ? "technician" : role)], next_after: null })),
+    teams: () => (calls.get.push("teams"), teamsCalls++, ok({ records: role === "nobody" || (role === "invitee" && calls.post.length === 0) ? [] : [team(role === "invitee" ? "technician" : role)], next_after: null })),
     invitations: () => (calls.get.push("invitations"), ok({ records: role === "invitee" && calls.post.length === 0 ? [{ id: INV, team_id: TEAM, team_name: "Équipe Nord", role: "technician", expires_at: AT, team_active: true }] : [], next_after: null })),
-    team: (id, section) => (calls.get.push("team:" + section), section === "invitations" && role !== "owner" ? Promise.resolve({ status: 403, body: null }) : ok({ team: team(role === "invitee" ? "technician" : role), section, records: section === "members" ? (role === "technician" ? [members[2]] : members) : section === "missions" ? missions(role) : [{ id: INV, email: "tom@example.test", role: "technician", status: "pending", expires_at: AT, expired: false }], next_after: null })),
+    team: (id, section) => (calls.get.push("team:" + section), section === "invitations" && role !== "owner" ? Promise.resolve({ status: 403, body: null }) : ok({ team: team(role === "invitee" ? "technician" : role), section, records: section === "members" ? (role === "technician" || role === "invitee" ? [members[2]] : members) : section === "missions" ? missions(role === "invitee" ? "technician" : role) : [{ id: INV, email: "tom@example.test", role: "technician", status: "pending", expires_at: AT, expired: false }], next_after: null })),
     mission: () => (calls.get.push("mission"), ok(mission)),
-    send: (cmd) => { calls.post.push(cmd); calls.stored.push([...map.values()][0] ?? null); const c = cmd.body; return ok({ team_id: cmd.kind === "team" ? cmd.teamId : c.team_id, action: c.action, team_version: 4, entity_id: c.invitation_id ?? c.intervention_id ?? TEAM, entity_version: c.action === "assign" ? 1 : null, state: c.action === "accept_invitation" ? "accepted" : c.action === "assign" ? "assigned" : "x", replayed: false }); },
+    send: (cmd) => { calls.post.push(cmd); calls.stored.push([...map.values()][0] ?? null); const c = cmd.body; return ok({ team_id: cmd.kind === "team" ? cmd.teamId : c.team_id, action: c.action, team_version: c.action === "remove_member" ? 5 : 4, entity_id: c.invitation_id ?? c.user_id ?? c.intervention_id ?? TEAM, entity_version: c.action === "assign" ? 1 : null, state: c.action === "accept_invitation" ? "accepted" : c.action === "assign" ? "assigned" : c.action === "remove_member" ? "inactive" : "x", replayed: false }); },
   };
   const div = document.createElement("div"); document.body.appendChild(div);
-  createRoot(div).render(h(StrictMode, null, h(ProviderTeamsPanel, { context: { generation: () => 0, userId: () => OWNER }, api, store, newId: () => crypto.randomUUID(), now: () => Date.parse(AT) })));
+  createRoot(div).render(h(StrictMode, null, h(ProviderTeamsPanel, { audience, context: { generation: () => 0, userId: () => OWNER }, api, store, newId: () => crypto.randomUUID(), now: () => Date.parse(AT) })));
   return { div, calls };
 }
 const has = (div, sel) => div.querySelectorAll(sel).length;
@@ -72,6 +73,37 @@ w.scenarios = {
     const follow = div.querySelector("[data-pt-followup]");
     const m = metrics(div);
     return { missionsTab, membersTab, invitationsTab, inviteForm, revoke, follow: follow ? { ack: has(follow, "[data-pt-ack]"), done: has(follow, "[data-pt-done]"), text: follow.textContent } : null, posts: calls.post.length, gets: calls.get, ...m, text: div.textContent };
+  },
+  async member(kind) {
+    // A CLIENT or MANAGER account (audience "member"): no creation, block only with server data.
+    const { div, calls } = setup(kind === "empty" ? "nobody" : "invitee", { audience: "member" });
+    await tick(300);
+    const section = div.querySelector("[data-provider-teams]");
+    const visible = !!section && !section.hidden && section.getBoundingClientRect().height > 0;
+    const out = { visible, create: has(div, "[data-pt-create]"), buttons: [...div.querySelectorAll("button")].filter((b) => b.getBoundingClientRect().height > 0).length };
+    if (kind === "empty") return { ...out, posts: calls.post.length };
+    await click(div, "[data-pt-accept]");
+    await tick(300);
+    const posts = calls.post.map((p) => ({ kind: p.kind, action: p.body.action }));
+    const storedAtPost = calls.stored[0];
+    await click(div, "[data-pt-open]");
+    await tick(300);
+    await click(div, "[data-pt-mission-open]");
+    await tick(250);
+    const follow = div.querySelector("[data-pt-followup]");
+    return { ...out, posts, storedAtPost, commandId: calls.post[0]?.body.command_id, follow: follow ? { ack: has(follow, "[data-pt-ack]"), text: div.textContent } : null, assign: has(div, "[data-pt-assign]") };
+  },
+  async removeFlow() {
+    const { div, calls } = setup("owner");
+    await tick(250);
+    await click(div, "[data-pt-open]");
+    await tick(250);
+    await tab(div, "members");
+    await click(div, "[data-pt-remove]");
+    const afterOpen = { posts: calls.post.length, dialog: has(div, "[data-pt-remove-confirm]") };
+    await click(div, "[data-pt-remove-execute]");
+    await tick(250);
+    return { afterOpen, posts: calls.post.map((p) => p.body.action), dialog: has(div, "[data-pt-remove-confirm]") };
   },
   async invitee() {
     const { div, calls } = setup("invitee");
@@ -122,12 +154,39 @@ test("équipes prestataires montées (Chromium, StrictMode, faux api par rôle s
     same([inv.before, inv.posts.length, inv.posts[0].kind, inv.posts[0].body.action, inv.posts[0].body.invitation_id], [1, 1, "invitation", "accept_invitation", "90000000-0000-4000-8000-000000000001"]);
     assert.equal(JSON.parse(inv.storedAtPost!).command.body.command_id, inv.posts[0].body.command_id, "persisted before the POST");
     same([inv.teams, inv.notice], [1, "Invitation acceptée."]);
+    // Client / manager accounts (audience "member"): invitation → accept (fence) → technician follow-up.
+    type M = { visible: boolean; create: number; buttons: number; posts: { kind: string; action: string }[]; storedAtPost: string | null; commandId: string; follow: { ack: number; text: string } | null; assign: number };
+    const member = (await run("member", "invited")) as M;
+    same([member.visible, member.create, member.posts], [true, 0, [{ kind: "invitation", action: "accept_invitation" }]], "member invitee: visible, no creation, one POST");
+    assert.equal(JSON.parse(member.storedAtPost!).command.body.command_id, member.commandId, "persisted before the POST");
+    same([member.follow?.ack, member.assign], [1, 0], "member technician follow-up, no assignment action");
+    assert.doesNotMatch(member.follow!.text.replace("ni prix, ni paiement, ni documents", ""), /€|Payer|payé|Facture|Document|PDF|Devis/i, "no finance / documents for a member account either");
+    const empty = (await run("member", "empty")) as { visible: boolean; create: number; buttons: number; posts: number };
+    same([empty.visible, empty.create, empty.buttons, empty.posts], [false, 0, 0, 0], "no invitation / membership ⇒ no block, no team action");
+    const rm = (await run("removeFlow")) as { afterOpen: { posts: number; dialog: number }; posts: string[]; dialog: number };
+    same([rm.afterOpen, rm.posts, rm.dialog], [{ posts: 0, dialog: 1 }, ["remove_member"], 0], "inline confirmation, then exactly one POST");
     same(errors, []);
     same(requests.filter((u) => u.startsWith("/api/")), []);
   } finally {
     await browser.close();
     server.close();
   }
+});
+
+test("câblage réel (démo client / gestionnaire « Vue d’ensemble ») : aucun bloc sans données serveur, aucun appel /api, pas de débordement à 390", { skip }, async () => {
+  const client = readFileSync("components/role/client-space.tsx", "utf8");
+  assert.match(client, /<ProviderTeamsPanel key=\{`teams\|\$\{session\.mutationContext\.userId\(\) \?\? "-"\}\|\$\{session\.mutationContext\.generation\(\)\}`\} audience="member" context=\{session\.mutationContext\} demo=\{session\.mode === "demo"\} \/>/);
+  const enterprise = readFileSync("components/role/enterprise-space.tsx", "utf8");
+  assert.match(enterprise, /<ProviderTeamsPanel key=\{`teams\|\$\{c\.session\.mutationContext\.userId\(\) \?\? "-"\}\|\$\{c\.session\.mutationContext\.generation\(\)\}`\} audience="member" context=\{c\.session\.mutationContext\} demo=\{c\.session\.mode === "demo"\} \/>/);
+  assert.doesNotMatch(readFileSync("components/features/provider-teams/provider-teams-panel.tsx", "utf8"), /window\.confirm/);
+  await withApp(async (open) => {
+    for (const route of ["client-overview", "manager-overview"]) {
+      const { page, errors, api } = await open(route, 390);
+      const r = await page.evaluate(() => ({ block: !!document.querySelector("[data-provider-teams]"), overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
+      same([r.block, r.overflow <= 0, api, errors], [false, true, [], []], route);
+      await page.context().close();
+    }
+  });
 });
 
 test("câblage réel (démo artisan « Missions ») : note honnête, aucun appel /api", { skip }, async () => {
