@@ -16,18 +16,18 @@ const unix = (s: number) => at(new Date(s * 1000).toISOString());
 
 type Deps = { api?: ProofApi; store?: () => Store | null; newId?: () => string | null };
 
-function useProof(target: Target | null, context: Context, deps: Deps) {
+function useProof(target: Target | null, context: Context, deps: Deps, onCursor?: (after: string | null) => void) {
   const [state, setState] = useState<ProofState>(PROOF_INITIAL);
   const identity = identityOf(context);
   const proofId = target && validTarget(target) ? targetId(target) : "";
   const key = viewKey(context, target);
   const ctrl = useRef<ReturnType<typeof createProofController> | null>(null);
-  const latest = useRef({ deps, context, target });
-  latest.current = { deps, context, target };
+  const latest = useRef({ deps, context, target, onCursor });
+  latest.current = { deps, context, target, onCursor };
   useEffect(() => {
     if (!proofId) return;
     let client: ProofApi | null = null;
-    const c = createProofController({ target: latest.current.target!, api: () => (client ??= latest.current.deps.api ?? createProofApi()), store: () => (latest.current.deps.store ?? tabStore)(), newId: () => (latest.current.deps.newId ?? uuid)(), context: latest.current.context, set: setState });
+    const c = createProofController({ target: latest.current.target!, api: () => (client ??= latest.current.deps.api ?? createProofApi()), store: () => (latest.current.deps.store ?? tabStore)(), newId: () => (latest.current.deps.newId ?? uuid)(), context: latest.current.context, set: setState, onCursor: (a) => latest.current.onCursor?.(a) });
     ctrl.current = c;
     c.restorePending();
     void c.load();
@@ -39,8 +39,13 @@ function useProof(target: Target | null, context: Context, deps: Deps) {
   }, [identity, proofId]);
   const after = target?.kind === "charge" ? target.after : null;
   const first = useRef(true);
+  const lastAfter = useRef(after);
   useEffect(() => {
-    if (first.current) return void (first.current = false);
+    if (first.current) return void ((first.current = false), (lastAfter.current = after));
+    if (lastAfter.current === after) return;
+    lastAfter.current = after;
+    // A reset coming FROM the controller (after a qualification) already re-reads page 1.
+    if (ctrl.current && ctrl.current.cursor() === after) return;
     void ctrl.current?.page(after);
   }, [after]);
   // Bound AT RENDER: a state of another identity / target / cursor is never shown.
@@ -134,7 +139,7 @@ export function ProofSection({ target, title, canWrite, context, ...deps }: { ta
   const uid = useId();
   const [after, setAfter] = useState<string | null>(null);
   const effective: Target | null = target && target.kind === "charge" ? { ...target, after } : target;
-  const { state, key, ctrl } = useProof(effective, context, deps);
+  const { state, key, ctrl } = useProof(effective, context, deps, setAfter);
   const [confirming, setConfirming] = useState(false);
   useEffect(() => {
     setAfter(null);

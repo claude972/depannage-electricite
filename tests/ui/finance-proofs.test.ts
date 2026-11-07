@@ -167,6 +167,59 @@ const tick = (ms) => new Promise((r) => setTimeout(r, ms));
 const charge = ${JSON.stringify(chargePage())};
 const fee = ${JSON.stringify({ qualification: feeQ() })};
 const payout = ${JSON.stringify({ qualification: payoutQ() })};
+w.remount = async () => {
+  const calls = [];
+  const api = { read: async (t) => (calls.push("GET:" + t.kind), { status: 200, body: payout }), qualify: async (t, cmd) => (calls.push("POST:" + cmd), { status: 200, body: payout }) };
+  const map = new Map();
+  const store = () => ({ get: (k) => map.get(k) ?? null, set: (k, v) => map.set(k, v), remove: (k) => map.delete(k) });
+  const ctx = { userId: () => "${USER}", generation: () => 0 };
+  const mount = () => { const d = document.createElement("div"); document.body.appendChild(d); const r = createRoot(d); r.render(h(StrictMode, null, h(PayoutProofSection, { eventId: "evt_po1", canWrite: true, context: ctx, api, store, newId: () => "${CID(4)}" }))); return { d, r }; };
+  // First mount: a lost reply leaves the SAME command pending in storage.
+  api.qualify = async (t, cmd) => (calls.push("POST:" + cmd), { status: 0, body: null });
+  let m1 = mount(); await tick(300);
+  m1.d.querySelector("[data-proof-qualify-open]").click(); await tick(30);
+  m1.d.querySelector("[data-proof-qualify-confirm]").click(); await tick(300);
+  const firstRetry = !!m1.d.querySelector("[data-proof-retry]");
+  m1.r.unmount();
+  const postsBefore = calls.filter((c) => c.startsWith("POST")).length;
+  // Remount (same identity + target): the explicit retry must be visible, nothing sent by itself.
+  const m2 = mount(); await tick(400);
+  const retryVisible = !!m2.d.querySelector("[data-proof-retry]");
+  const phase = m2.d.querySelector("[data-proof]")?.getAttribute("data-proof-phase");
+  const autoPosts = calls.filter((c) => c.startsWith("POST")).length - postsBefore;
+  m2.r.unmount();
+  return { firstRetry, retryVisible, phase, autoPosts, stored: [...map.values()] };
+};
+w.page2 = async () => {
+  const calls = [];
+  const obs = (n) => ({ event_id: "evt_" + String(n).padStart(4, "0"), observation_version: 1, dispute_id: "du_1", observed_status: "needs_response", disputed_amount_cents: 5000, currency: "eur", observed_at: "2026-11-03T10:00:00Z" });
+  const p1 = { ...charge, dispute_observations: Array.from({ length: 50 }, (_, i) => obs(i + 1)), next_after: "evt_0050" };
+  const p2 = { ...charge, dispute_observations: [obs(51)], next_after: null };
+  const api = {
+    read: async (t) => (calls.push("GET:" + (t.after ?? "first")), { status: 200, body: t.after === "evt_0050" ? p2 : p1 }),
+    qualify: async (t, cmd) => (calls.push("POST"), { status: 200, body: p1 }),
+  };
+  const map = new Map();
+  const store = () => ({ get: (k) => map.get(k) ?? null, set: (k, v) => map.set(k, v), remove: (k) => map.delete(k) });
+  const ctx = { userId: () => "${USER}", generation: () => 0 };
+  const d = document.createElement("div"); document.body.appendChild(d);
+  const r = createRoot(d);
+  r.render(h(StrictMode, null, h(FinanceProofsTab, { demo: false, canRead: true, canWrite: true, context: ctx, api, store, newId: () => crypto.randomUUID() })));
+  await tick(200);
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+  const el = d.querySelector("[data-proofs-payment]"); setter.call(el, "${PAY}"); el.dispatchEvent(new Event("input", { bubbles: true }));
+  await tick(30);
+  d.querySelector("[data-proofs-open]").click(); await tick(300);
+  d.querySelector("[data-proof-next]").click(); await tick(300);
+  const onPage2 = d.querySelectorAll("[data-proof-dispute]").length;
+  d.querySelector("[data-proof-qualify-open]").click(); await tick(30);
+  d.querySelector("[data-proof-qualify-confirm]").click(); await tick(800);
+  const phase = d.querySelector("[data-proof='charge']")?.getAttribute("data-proof-phase");
+  const rows = d.querySelectorAll("[data-proof-dispute]").length;
+  const nextVisible = !!d.querySelector("[data-proof-next]");
+  r.unmount();
+  return { onPage2, phase, rows, nextVisible, calls };
+};
 w.run = async () => {
   const calls = [];
   let postCount = 0;
@@ -237,6 +290,42 @@ for (const width of [390, 1280])
       server.close();
     }
   });
+
+async function inBrowser<T>(fn: string): Promise<T> {
+  const out = await build({ absWorkingDir: ROOT, stdin: { contents: ENTRY, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, outdir: "out", platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "local-css" }, define: { "process.env.NODE_ENV": '"development"' }, logLevel: "error" });
+  const js = out.outputFiles.find((f) => f.path.endsWith(".js"))!.text;
+  const server: Server = createServer((_rq, rs) => { rs.setHeader("content-type", "text/html"); rs.end(`<!doctype html><div></div><script>${js}</script>`); });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
+  const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true, args: ["--single-process"] });
+  try {
+    const page = await (await browser.newContext()).newPage();
+    const errors: string[] = [];
+    page.on("pageerror", (e: Error) => errors.push(String(e)));
+    await page.goto(`http://127.0.0.1:${(server.address() as { port: number }).port}/`);
+    const r = (await page.evaluate((name: string) => (window as unknown as Record<string, () => Promise<unknown>>)[name](), fn)) as T;
+    same(errors, []);
+    return r;
+  } finally {
+    await browser.close();
+    server.close();
+  }
+}
+
+test("remontage avec une commande incertaine (Chromium, composant réel) : le bouton « Réessayer la même demande » est visible, aucun POST automatique", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
+  const r = await inBrowser<{ firstRetry: boolean; retryVisible: boolean; phase: string; autoPosts: number; stored: string[] }>("remount");
+  same(r.firstRetry, true, "lost reply ⇒ retry offered");
+  same(r.stored.length, 1, "the command survives the remount");
+  same([r.phase, r.retryVisible, r.autoPosts], ["ready", true, 0], "after the remount: retry visible, never sent by itself");
+});
+
+test("qualification depuis la page 2 des litiges (Chromium, composant réel) : page 1 relue, état prêt, jamais de chargement bloqué", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
+  const r = await inBrowser<{ onPage2: number; phase: string; rows: number; nextVisible: boolean; calls: string[] }>("page2");
+  same(r.onPage2, 1, "on page 2");
+  same([r.phase, r.rows, r.nextVisible], ["ready", 50, true], "page 1 shown, ready (no stuck loading)");
+  assert.ok(r.calls.includes("POST"), JSON.stringify(r.calls));
+  same(r.calls[r.calls.length - 1], "GET:first", "page 1 re-read after the qualification");
+});
 
 test("app réelle : finance plateforme (démo) — onglet « Preuves », note honnête, aucun /api", { skip: appSkip }, async () => {
   await withApp(async (open) => {
