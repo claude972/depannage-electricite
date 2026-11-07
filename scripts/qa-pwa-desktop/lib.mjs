@@ -36,7 +36,7 @@ export function parseArgs(args) {
 }
 export function verifyBuild({ expectedSha, expectedBuildId, head, diskBuildId, html }) {
   if (head !== expectedSha || diskBuildId !== expectedBuildId) throw new Blocked('checkout SHA or disk BUILD_ID mismatch');
-  if (!html.includes(expectedBuildId) || !/Courant/.test(html)) throw new Blocked('served HTML build/app mismatch');
+  if (!html.includes(expectedBuildId) || !/Dépannage électrique/.test(html)) throw new Blocked('served HTML build/app mismatch');
   return true;
 }
 export function identity(manifest, manifestUrl, origin) {

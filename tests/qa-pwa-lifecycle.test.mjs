@@ -234,10 +234,10 @@ test("REV-004: NEW child refusing SIGTERM → SIGKILL → ok only when the port 
 });
 
 test("phase 10 classifier: the public landing after the online reload is a PASS; the offline heading is a FAIL; no demo textbox required", () => {
-  const landing = { status: 200, contentType: "text/html; charset=utf-8", title: "Courant — Dépannage électrique", bodyText: "Courant\nDépannage électrique\nConnectez-vous pour accéder à vos dossiers", offlineHeadingCount: 0 };
+  const landing = { status: 200, contentType: "text/html; charset=utf-8", title: "Dépannage électrique", bodyText: "Dépannage électrique\nDépannage électrique\nConnectez-vous pour accéder à vos dossiers", offlineHeadingCount: 0 };
   assert.deepEqual(classifyOnlineRecovery(landing), { ok: true, reasons: [] });
-  assert.equal(classifyOnlineRecovery({ ...landing, bodyText: "Courant\nSe connecter" }).ok, true, "either sign-in wording");
-  const offline = classifyOnlineRecovery({ ...landing, offlineHeadingCount: 1, bodyText: "Courant\nLa connexion est indisponible\nRéessayer" });
+  assert.equal(classifyOnlineRecovery({ ...landing, bodyText: "Dépannage électrique\nSe connecter" }).ok, true, "either sign-in wording");
+  const offline = classifyOnlineRecovery({ ...landing, offlineHeadingCount: 1, bodyText: "Dépannage électrique\nLa connexion est indisponible\nRéessayer" });
   assert.equal(offline.ok, false);
   assert.ok(offline.reasons.some((r) => /offline heading/.test(r)) && offline.reasons.some((r) => /markers .* absent/.test(r)));
   assert.equal(classifyOnlineRecovery({ ...landing, status: 503 }).ok, false);

@@ -367,7 +367,7 @@ async function main(argv) {
       state.phase=`${label}:verify-page`;await save();gate.check();
       await p.waitForLoadState('domcontentloaded',{timeout:15000});gate.check();
       await p.waitForFunction(()=>document.readyState!=='loading'&&document.visibilityState==='visible'&&matchMedia('(display-mode: standalone)').matches,{},{timeout:15000});gate.check();
-      if (p.url()!==state.identity.startUrl || !/Courant/.test(await p.title())) throw new Error('launched page is not product');
+      if (p.url()!==state.identity.startUrl || !/Dépannage électrique/.test(await p.title())) throw new Error('launched page is not product');
       const selectedSession=await p.context().newCDPSession(p);gate.check();
       try{const manifest=await bounded(selectedSession.send('Page.getAppManifest',{manifestId:state.identity.manifestId}),8000,`${label}:selected-manifest`);gate.check();if(manifest.url!==pf.manifestUrl||!manifest.data||identity(JSON.parse(manifest.data),manifest.url,o.origin).manifestId!==state.identity.manifestId)throw new Blocked('selected app manifest mismatch');}finally{await selectedSession.detach();}
       const w=await bounded(cdp.send('Browser.getWindowForTarget',{targetId:target}),8000,'window identity');gate.check();
