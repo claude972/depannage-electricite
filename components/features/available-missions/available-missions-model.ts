@@ -191,6 +191,14 @@ export function createMissionsController({ api, context = DEFAULT_MISSIONS_CONTE
       set({ ...get(), point: { id, phase: offer ? "ready" : "error", offer } });
       return true;
     },
+    /** DEMO ONLY: summary from the local demo offers (ids « demo-* »), never a GET and never the
+     *  live parser; the live open() keeps its strict UUID + parsePoint path unchanged. */
+    openDemo(id: string, items: MissionOffer[]): boolean {
+      pointSeq++;
+      const offer = items.find((o) => o.id === id) ?? null;
+      set({ ...get(), point: { id, phase: offer ? "ready" : "gone", offer }, acceptError: "" });
+      return offer !== null;
+    },
     close() {
       pointSeq++;
       set({ ...get(), point: null, acceptError: "" });

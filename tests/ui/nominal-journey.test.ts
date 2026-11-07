@@ -83,3 +83,27 @@ test("devis accepté avec avenant : le texte ne prétend plus que les avenants a
     }
   });
 });
+
+test("démo artisan, offres : clic sur une offre demo-* ⇒ résumé local ⇒ acceptation simulée ⇒ dossier de démo ; aucun appel API", { skip }, async () => {
+  await withApp(async (open) => {
+    const { page, errors, api } = await open("artisan-missions");
+    const p = page as unknown as {
+      locator(s: string): { first(): { getAttribute(n: string): Promise<string | null>; click(): Promise<void>; waitFor(): Promise<void> }; count(): Promise<number>; innerText(): Promise<string> };
+      evaluate(f: string): Promise<unknown>;
+    };
+    assert.ok((await p.locator("[data-available-offer]").count()) > 0, "demo offers listed");
+    const id = await p.locator("[data-available-offer]").first().getAttribute("data-available-offer");
+    assert.match(String(id), /^demo-/, "real demo ids are not UUIDs");
+    await p.locator("[data-available-offer]").first().click();
+    await p.locator('[data-available-point="ready"]').first().waitFor();
+    const summary = await p.locator('[data-available-point="ready"]').innerText();
+    assert.match(summary, /Distance\s*non calculée/);
+    assert.match(summary, /\d{3}\*\*/, "masked postal code");
+    await p.locator("[data-available-accept]").first().click();
+    await page.waitForTimeout(800);
+    const hash = String(await p.evaluate("location.hash"));
+    assert.match(hash, new RegExp(`${String(id)}$`), `opened the accepted demo dossier (${hash})`);
+    assert.deepEqual(api, [], "no API call in demo");
+    assert.deepEqual(errors, []);
+  });
+});
