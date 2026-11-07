@@ -102,3 +102,6 @@ Astra réalise le serveur pour un compte particulier vérifié. Liste masquée, 
 ### SYS-04 — envoi e-mail configurable
 
 ROOT raccorde un adaptateur Resend optionnel à la file privée. L’adresse courante vérifiée et les paramètres exacts du message sont contrôlés avant chaque tentative. Une empreinte privée empêche la reprise avec un autre destinataire ou contenu. La reprise est bornée à une fenêtre inférieure à celle du fournisseur. Vérifier opt-in, porte, refus des appels non autorisés et réponses fournisseur injectées. Aucune activation ni opération sur le compte fournisseur. La livraison push conserve son propre parcours.
+
+## CLI-03 / ART-04 — mission-radius (Astra, exclusive)
+Baseb8d8a96. Rayon optionnel explicite depuis un centre de commune officiel, jamais GPS/coordonnée personnelle. Snapshot34communes Martinique vérifié ; code postal ambigu/inconnu conserve éligibilité postale. Wrapper de mission_eligible avant pagination et acceptation, ordre/cursor inchangés. Préférence/version sous verrou profile→artisan_profiles ; aucun verrou dossier dans cette écriture. API privée artisan et tests SQL/handlers, aucun cloud.
