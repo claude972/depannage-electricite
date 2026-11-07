@@ -41,15 +41,16 @@ export type BookingDraft = {
    *  lifetime, carried across login/reload/back/errors). Legacy drafts may lack it: a key is then
    *  created and PROVEN persisted before the first POST. */
   request_id?: string;
-  /** Guest checkout (docs/GUEST_CHECKOUT_CONTRACT.md): the customer's choice. « on_site » =
-   *  pay the artisan on site (the request stays UNPAID); « card_hold » = card authorisation
-   *  (empreinte, NOT a charge). Optional for legacy drafts (then asked again). */
+  /** Guest checkout: the customer's choice. « on_site » (historical code) = pay AFTER the
+   *  intervention ON THE PLATFORM (card via the follow-up, secure link or QR code) — never a direct
+   *  payment to the artisan; « card_hold » = card authorisation (empreinte, NOT a charge).
+   *  Optional for legacy drafts (then asked again). */
   payment?: PaymentChoice;
 };
 export const PAYMENT_CHOICES = ["on_site", "card_hold"] as const;
 export type PaymentChoice = (typeof PAYMENT_CHOICES)[number];
 export const PAYMENT_LABEL: Record<PaymentChoice, string> = {
-  on_site: "Règlement sur place, après l’intervention",
+  on_site: "Après intervention — paiement sur la plateforme",
   card_hold: "Empreinte bancaire (aucun débit à la réservation)",
 };
 

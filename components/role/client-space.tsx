@@ -129,7 +129,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "Quand dois-je régler l’intervention ?",
-    "Le paiement intervient une fois l’intervention terminée, sur la base du devis accepté : en ligne par carte, ou sur place auprès de l’artisan si vous l’avez choisi (l’artisan déclare alors l’avoir reçu ; ce n’est pas une confirmation bancaire). Une redirection de paiement ne suffit pas à confirmer un encaissement.",
+    "Le paiement intervient une fois l’intervention terminée, sur la base du devis accepté, et toujours sur la plateforme : par carte via votre suivi, un lien sécurisé ou un QR code. Ne payez jamais l’artisan directement. Une redirection de paiement ne suffit pas à confirmer un encaissement ; les anciennes déclarations « reçu sur place » restent affichées comme des déclarations, pas comme des paiements bancaires.",
   ],
   [
     "Comment suivre ma demande ?",
@@ -328,7 +328,7 @@ export function ClientSpace({ session }: { session: Session }) {
           type="button"
           className={styles.sidebarBrand}
           onClick={() => session.go("overview")}
-          aria-label="Courant, vue d’ensemble"
+          aria-label="Vue d’ensemble"
         >
           <Brand />
         </button>
@@ -470,7 +470,7 @@ export function ClientSpace({ session }: { session: Session }) {
           <button
             type="button"
             onClick={() => session.go("overview")}
-            aria-label="Courant, accueil"
+            aria-label="Accueil"
           >
             <Brand compact />
           </button>
@@ -2033,7 +2033,7 @@ function ProfileView({ session }: { session: Session }) {
           <InstallPanel />
           <Unavailable
             title="Adresses enregistrées, moyens de paiement et préférences"
-            reason="Pas encore activé sur ce service : aucune adresse supplémentaire, aucun moyen de paiement mémorisé ni préférence de notification n’est enregistré. Chaque règlement se fait au moment voulu, par carte ou sur place selon votre réservation."
+            reason="Pas encore activé sur ce service : aucune adresse supplémentaire, aucun moyen de paiement mémorisé ni préférence de notification n’est enregistré. Chaque règlement se fait sur la plateforme, au moment voulu."
             blocker="CLI-09"
           />
         </div>

@@ -315,7 +315,7 @@ function PricingView({ onNew }: { onNew: () => void }) {
             <span className={styles.stepNumber}>3</span>
             <div>
               <strong>Le montant réglé</strong>
-              <p>Proposé une fois l’intervention terminée, sur la base du devis accepté. Le règlement est traité avec Stripe ; il n’est considéré comme encaissé qu’après confirmation de la plateforme, jamais sur la seule redirection.</p>
+              <p>Proposé une fois l’intervention terminée, sur la base du devis accepté. Le paiement se fait toujours sur la plateforme (carte via votre suivi, lien sécurisé ou QR code), jamais directement à l’artisan ; il n’est considéré comme encaissé qu’après confirmation de la plateforme, jamais sur la seule redirection.</p>
             </div>
           </li>
         </ol>
@@ -402,7 +402,7 @@ function AboutView({ onNew, onJoin }: { onNew: () => void; onJoin: () => void })
       <section className={styles.hero} aria-labelledby="about-title">
         <div className={styles.heroInner}>
           <div className={styles.heroCopy}>
-            <h1 id="about-title" className={styles.title}>À propos de Courant</h1>
+            <h1 id="about-title" className={styles.title}>À propos de l’application</h1>
             <p>Une application de dépannage électrique en préparation. Cette page décrit ce qu’elle fait, pas plus.</p>
             <span className={styles.rule} aria-hidden="true" />
           </div>

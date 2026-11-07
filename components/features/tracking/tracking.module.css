@@ -496,7 +496,7 @@
 :global(.ui-v2) .draft { border-color: var(--ui-accent); }
 /* Global primitives rendered by the tracking panels, scoped to their root. */
 :global(.ui-v2) .panel :global(.button.primary) { border-color: var(--ui-primary); background: var(--ui-primary); color: var(--ui-on-primary); }
-:global(.ui-v2) .panel :global(.button.primary):hover:not(:disabled) { background: #136640; }
+:global(.ui-v2) .panel :global(.button.primary):hover:not(:disabled) { background: var(--ui-primary-hover); }
 :global(.ui-v2) .panel :global(.button.outline) { border-color: var(--ui-border); background: transparent; color: var(--ui-text); }
 :global(.ui-v2) .panel :global(.button.outline):hover:not(:disabled) { border-color: var(--ui-accent); background: var(--ui-surface); }
 :global(.ui-v2) .panel :global(.field) input,

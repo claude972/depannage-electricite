@@ -20,13 +20,13 @@ const jakarta = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Courant — Dépannage électrique",
+  title: "Dépannage électrique",
   description:
     "Votre demande, votre devis et votre intervention électrique, au même endroit.",
   robots: { index: false, follow: false },
   manifest: "/manifest.webmanifest",
-  applicationName: "Courant",
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "Courant" },
+  applicationName: "Dépannage électrique",
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "Dépannage" },
   icons: {
     icon: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
     apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
@@ -39,7 +39,7 @@ export const viewport: Viewport = {
   // Themed surfaces override every variant with the explicit choice while mounted.
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },
-    { media: "(prefers-color-scheme: dark)", color: "#000000" },
+    { media: "(prefers-color-scheme: dark)", color: "#121417" },
   ],
 };
 export default function RootLayout({

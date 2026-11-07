@@ -1190,7 +1190,7 @@ export default function CourantApp() {
         // Card hold: the draft, booking and key stay in this tab; the provider page records an
         // authorisation (not a charge) and the return is verified by the server (finalize).
         const url = safeCheckoutUrl(result.url);
-        if (!url) throw new ApiRequestError(502, "Le lien de paiement reçu n’est pas sûr ; rien n’a été débité. Réessayez ou choisissez le règlement sur place.");
+        if (!url) throw new ApiRequestError(502, "Le lien de paiement reçu n’est pas sûr ; rien n’a été débité. Réessayez ou choisissez le paiement après intervention sur la plateforme.");
         ctx.notice("Redirection vers la page sécurisée de votre banque… Aucun débit n’est effectué.");
         window.location.assign(url);
         return;
@@ -1210,7 +1210,7 @@ export default function CourantApp() {
       ctx.when(navigate)("detail", result.intervention.id);
       ctx.notice(
         result.payment?.method === "on_site"
-          ? "Demande confirmée. Règlement sur place après l’intervention : rien n’est payé maintenant."
+          ? "Demande confirmée. Paiement après l’intervention, sur la plateforme : rien n’est payé maintenant."
           : "Demande confirmée.",
       );
     });

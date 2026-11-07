@@ -141,7 +141,7 @@ test("résumé visible à chaque étape ; récapitulatif complet et rien d’env
   }
   const recap = wizard({ ...filled(), step: 5 });
   const t = text(recap);
-  for (const part of [service.title, "80 € – 180 €", "Après-demain", "12 rue des Lilas", "97200 Fort-de-France", "Vos coordonnées (privées)", "Camille Durand", "Demande pour une entreprise", "Règlement", "Règlement sur place, après l’intervention"]) assert.ok(t.includes(part), part);
+  for (const part of [service.title, "80 € – 180 €", "Après-demain", "12 rue des Lilas", "97200 Fort-de-France", "Vos coordonnées (privées)", "Camille Durand", "Demande pour une entreprise", "Règlement", "Après intervention — paiement sur la plateforme"]) assert.ok(t.includes(part), part);
   assert.match(t, /Rien n’est encore envoyé\. À l’étape suivante, vous vérifiez votre téléphone avec un code \(sans créer de compte\), puis vous confirmez l’envoi/);
   assert.match(recap, /form="booking-step-5"[^>]*>Vérifier mon téléphone<\/button>/);
   assert.match(recap, /data-booking-inline-submit="5">Vérifier mon téléphone<\/button>/);

@@ -147,11 +147,10 @@ export function PublicChrome({
     <ThemeSurface className={className ? `${styles.chrome} ${className}` : styles.chrome}>
       <header className={styles.topbar}>
         <div className={`${styles.wrap} ${styles.topbarInner}`}>
-          <button type="button" className={styles.brand} aria-label="Courant, accueil" aria-current={current === "home" ? "page" : undefined} data-chrome-home="" onClick={home}>
+          <button type="button" className={styles.brand} aria-label="Accueil" aria-current={current === "home" ? "page" : undefined} data-chrome-home="" onClick={home}>
             <BrandMark />
             <span className={styles.brandText}>
-              <strong>Courant</strong>
-              <small>Nom de travail</small>
+              <strong>Dépannage électrique</strong>
             </span>
           </button>
           <nav id={navId} className={`${styles.nav} ${menuOpen ? styles.navOpen : ""}`} aria-label="Navigation principale">
@@ -208,8 +207,8 @@ export function PublicChrome({
       <footer className={styles.footer}>
         <div className={`${styles.wrap} ${styles.footerInner}`}>
           <span className={styles.brandText}>
-            <strong>Courant</strong>
-            <small>Nom de travail. Application en préparation.</small>
+            <strong>Dépannage électrique</strong>
+            <small>Application en préparation.</small>
           </span>
           <nav className={styles.footerNav} aria-label="Informations">
             {FOOTER_VIEWS.map((item) => (

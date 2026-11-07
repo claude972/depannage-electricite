@@ -474,7 +474,7 @@
 
 /* ---- Manual corrections ---------------------------------------------------------------- */
 .artisanSkin :global(.primary):hover:not(:disabled) {
-  background: #136640;
+  background: var(--ui-primary-hover);
 }
 /* Destructive: outlined in the danger token (a filled --ui-danger would fail AA with white). */
 .artisanSkin :global(.destructive-button),

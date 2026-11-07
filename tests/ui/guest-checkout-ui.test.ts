@@ -57,7 +57,7 @@ test("paiement : 2 choix depuis les options ; carte indisponible désactivée av
   assert.doesNotMatch(radios[0], /disabled/);
   assert.match(radios[1], /disabled=""/);
   const t = text(step);
-  assert.match(t, /Règlement sur place Vous réglez l’artisan après l’intervention\. La demande reste non payée jusque-là\./);
+  assert.match(t, /Après intervention, sur la plateforme Réglez après les travaux sur notre plateforme, par carte via votre suivi, un lien sécurisé ou un QR code\. Aucun paiement direct à l’artisan\./);
   assert.match(t, /Empreinte bancaire Une autorisation sur votre carte, sans débit à la réservation\. Seul le montant du devis accepté pourra être prélevé ensuite\./);
   assert.match(t, /Le paiement par carte n’est pas encore activé\./); // raison du serveur
   assert.doesNotMatch(t.replace("reste non payée", ""), /payé|garanti|numéro de carte|cvc|cryptogramme/i);
@@ -65,7 +65,7 @@ test("paiement : 2 choix depuis les options ; carte indisponible désactivée av
   // Sans raison serveur : copie honnête de repli.
   const fallback = OPTS();
   (fallback as { options: Phone.BookingOptions }).options.payment_methods[1] = { id: "card_hold", available: false };
-  assert.match(text(radiosOf(wizard({ initial: state({ step: 4 }), initialOptions: fallback })).step), /Bientôt disponible\. En attendant, choisissez le règlement sur place\./);
+  assert.match(text(radiosOf(wizard({ initial: state({ step: 4 }), initialOptions: fallback })).step), /Bientôt disponible\. En attendant, choisissez le paiement après intervention sur la plateforme\./);
   // Disponible côté serveur ⇒ sélectionnable.
   assert.doesNotMatch(radiosOf(wizard({ initial: state({ step: 4 }), initialOptions: OPTS({ card: true }) })).radios[1], /disabled/);
   // Règles : choix requis ; disponibilité = options serveur uniquement.
@@ -228,7 +228,7 @@ test("/suivi : SMS désactivé ⇒ aucun formulaire téléphone, message honnêt
   // La page réelle (chargement initial) n’affiche aucun formulaire avant la réponse du serveur.
   const page = render(createElement(suivi.default as never));
   assert.doesNotMatch(page, /data-phone-access/);
-  assert.equal(suivi.metadata.title, "Suivre ma demande — Courant");
+  assert.equal(suivi.metadata.title, "Suivre ma demande — Dépannage électrique");
 });
 
 test("/suivi : SMS activé ⇒ PhoneAccess « lookup » (téléphone + nom + prénom), rien de listé avant vérification", () => {

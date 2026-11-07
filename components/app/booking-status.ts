@@ -32,7 +32,7 @@ export async function fetchBookingStatus(interventionId: string, call: typeof ap
 
 /** Honest wording: on site ⇒ planned, nothing collected; card ⇒ recorded at a date, not a charge, not forever. */
 export function bookingPaymentText(p: BookingPayment, formatDate: (iso: string) => string): string {
-  if (p.method === "on_site") return "Règlement sur place prévu après l’intervention. Aucun encaissement n’a été confirmé.";
+  if (p.method === "on_site") return "Paiement prévu après l’intervention, sur la plateforme (carte via votre suivi, lien sécurisé ou QR code). Aucun paiement n’a encore été confirmé ; ne réglez jamais l’artisan directement.";
   const when = p.checked_at ? ` (vérifiée le ${formatDate(p.checked_at)})` : "";
   return `Empreinte bancaire enregistrée${when}. Ce n’est pas un débit ; seul le montant du devis accepté pourra être prélevé, et une empreinte n’est pas valable indéfiniment.`;
 }

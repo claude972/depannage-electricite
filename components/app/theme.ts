@@ -8,7 +8,7 @@ export const UI_THEME_ATTRIBUTE = "data-ui-theme";
 /** Theme used when neither a stored choice nor a system preference is available (Delivo canonical). */
 export const DEFAULT_THEME: ThemeName = "dark";
 /** Browser chrome colour while an opt-in surface is mounted (DESIGN.md backgrounds). */
-export const THEME_COLOR: Record<ThemeName, string> = { dark: "#000000", light: "#FFFFFF" };
+export const THEME_COLOR: Record<ThemeName, string> = { dark: "#121417", light: "#FFFFFF" }; // palette B: anthracite dark bg
 
 export const isThemeName = (value: unknown): value is ThemeName => value === "light" || value === "dark";
 

@@ -3,15 +3,15 @@
    ThemeSurface (.ui-v2) for both themes. 44 px targets, 1 px borders, visible focus. */
 .root {
   --af-bg: #ffffff;
-  --af-surface: #f4f6f5;
+  --af-surface: #f4f6fa;
   --af-text: #111111;
   --af-muted: #4b5563;
   --af-border: #c9d2ce;
-  --af-accent: #0f5c3a;
-  --af-primary: #18794e;
+  --af-accent: #2246e5;
+  --af-primary: #2246e5;
   --af-on-primary: #ffffff;
   --af-danger: #b42318;
-  --af-focus: #0f5c3a;
+  --af-focus: #2246e5;
   display: grid;
   gap: 12px;
   margin-bottom: 20px;
