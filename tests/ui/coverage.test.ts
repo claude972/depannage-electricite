@@ -1,4 +1,4 @@
-// Postal coverage (PUB-03), contract of ROOT d2831c8 copied strictly. Public check: 5 digits, exact
+// Postal coverage (PUB-03), same contract as the server. Public check: 5 digits, exact
 // query, honest informative wording (unknown = « zone non encore publiée »), no guarantee wording.
 // Admin editor: never prefilled, parse/dedupe/limit, publish/withdraw commands fenced under
 // `courant-private-coverage:<uid>:<gen>` (read-back or 0 POST), strict restore, no replay after an
@@ -20,12 +20,8 @@ const UID = "10000000-0000-4000-8000-0000000000ad";
 const CID = (n: number) => `40000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", ...headers } });
 
-test("contrat copié à l’identique de d2831c8", () => {
-  const copy = readFileSync("components/features/coverage/contract.ts", "utf8").split("\n").slice(3).join("\n");
-  const expected = `import { z } from "zod";\n\nexport const postalCode = z.string().regex(/^[0-9]{5}$/);`;
-  assert.ok(copy.startsWith(expected));
-  assert.match(copy, /postal_codes: postalCodes\.refine\(\(codes\) => codes\.length > 0\)/);
-  assert.match(copy, /z\.object\(\{ status: z\.literal\("unknown"\), version: z\.null\(\) \}\)\.strict\(\)/);
+test("interface et API partagent le contrat de couverture", () => {
+  assert.match(readFileSync("components/features/coverage/model.ts", "utf8"), /from "\.\.\/\.\.\/\.\.\/lib\/features\/coverage\/contract"/);
 });
 
 test("vérification publique : 5 chiffres, URL exacte, libellés honnêtes, aucune promesse", () => {
@@ -42,7 +38,7 @@ test("vérification publique : 5 chiffres, URL exacte, libellés honnêtes, aucu
   const all = [unknown, m.publicMessage("1", { status: "covered", version: 1 }), m.publicMessage("1", { status: "not_covered", version: 1 }), m.PUBLIC_COPY.informative, m.PUBLIC_COPY.intro].join(" ");
   assert.doesNotMatch(all, /garanti|assuré|sous \d|en moins de|disponible immédiatement|\d+\s*(min|h)\b/i, "no promise of an artisan or a delay");
   assert.match(m.PUBLIC_COPY.informative, /ne bloque jamais le dépôt d’une demande/);
-  assert.match(m.PUBLIC_COPY.intro, /ni enregistré ni conservé/);
+  assert.match(m.PUBLIC_COPY.intro, /liste publiée/);
   assert.equal(m.publicError(422, null), m.PUBLIC_COPY.invalid);
   assert.match(m.publicError(503, 9), /réessayez dans 9 s/);
 });

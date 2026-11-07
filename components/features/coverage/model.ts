@@ -1,11 +1,11 @@
-// Postal coverage (PUB-03) — pure model, no React. Contract: ./contract (strict copy of ROOT d2831c8).
+// Postal coverage (PUB-03) — pure model, no React. Contract shared with the API.
 //   GET  /api/public/coverage?postal_code=NNNNN → { status: unknown|covered|not_covered, version }
 //        informative only: never promises an artisan or a delay, never blocks a request.
 //   GET  /api/admin/coverage → { version, postal_codes }   (platform admin, server-enforced)
 //   POST /api/admin/coverage { action: publish|withdraw, command_id, expected_version, postal_codes? }
 //        → { version, postal_codes, replayed }. Explicit publication; nothing prefilled.
 import { z } from "zod";
-import { coverageCommand, coverageEditor, coverageReceipt, postalCode, publicCoverage } from "./contract";
+import { coverageCommand, coverageEditor, coverageReceipt, postalCode, publicCoverage } from "../../../lib/features/coverage/contract";
 
 export const PUBLIC_PATH = "/api/public/coverage";
 export const ADMIN_PATH = "/api/admin/coverage";
@@ -48,7 +48,7 @@ export const parsePublic = (body: unknown): PublicCoverage | null => {
 };
 export const PUBLIC_COPY = {
   title: "Ma commune est-elle dans la zone publiée ?",
-  intro: "Indiquez un code postal pour savoir s’il figure dans la liste publiée par l’exploitant. Le code n’est ni enregistré ni conservé.",
+  intro: "Indiquez un code postal pour savoir s’il figure dans la liste publiée par l’exploitant.",
   label: "Code postal",
   check: "Vérifier",
   checking: "Vérification…",
@@ -58,8 +58,8 @@ export const PUBLIC_COPY = {
 } as const;
 export function publicMessage(code: string, r: PublicCoverage): string {
   if (r.status === "covered") return `Le code postal ${code} figure dans la zone publiée par l’exploitant.`;
-  if (r.status === "not_covered") return `Le code postal ${code} ne figure pas dans la zone publiée par l’exploitant. Vous pouvez tout de même déposer une demande : elle sera examinée.`;
-  return "Zone non encore publiée : l’exploitant n’a pas encore publié la liste des codes postaux desservis. Vous pouvez déposer une demande : elle sera examinée.";
+  if (r.status === "not_covered") return `Le code postal ${code} ne figure pas dans la zone publiée par l’exploitant. Vous pouvez tout de même déposer une demande.`;
+  return "Zone non encore publiée : l’exploitant n’a pas encore publié la liste des codes postaux desservis. Vous pouvez déposer une demande.";
 }
 export function publicError(status: number, retryAfterS: number | null): string {
   if (status === 422) return PUBLIC_COPY.invalid;
