@@ -1,4 +1,5 @@
 "use client";
+// SHARED-A11Y (claim, Claude UI): prefs layout and heading order findings from phase 8.
 // Leaf component: persistent notification centre of the connected account (contract
 // ADV-PLANNING-NOTIFICATIONS-001, amendment A1). Lists, marks read/unread and edits preferences
 // through the injected client only. External channels are shown unavailable, never simulated.
