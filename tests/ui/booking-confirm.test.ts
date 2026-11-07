@@ -52,7 +52,7 @@ test("« Modifier »: contact edited inside the confirmation (bounded), request 
   assert.match(confirm, /disabled=\{Object\.keys\(contactProblems\)\.length > 0\}/, "no save of an invalid / >120 contact");
   assert.match(confirm, /onContactChange\(contactDraft\)/);
   const client = readFileSync("components/role/client-space.tsx", "utf8");
-  assert.match(client, /if \(editBooking && session\.booking\) \{\s*\/\/[^\n]*\n\s*session\.updatePendingDraft\(values\);\s*setEditBooking\(false\);\s*return;/, "edit never POSTs");
+  assert.match(client, /if \(editBooking && session\.booking\) \{\s*(?:\/\/[^\n]*\n\s*)+session\.updatePendingDraft\(values\);\s*session\.updateBookingPhotos\(photos\);\s*setEditBooking\(false\);\s*return;/, "edit never POSTs");
 });
 
 test("return from the signup email (same tab, ?auth=confirmed) resumes the confirmation, never POSTs", () => {
