@@ -108,6 +108,8 @@ import { SiteDirectLoader } from "../features/site-lifecycle/site-direct";
 import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-panel";
 import { DelegatedPayerCheckout, DelegatedPayerManager } from "../features/delegated-payer/delegated-payer";
 import { ContractSourceLine, QuoteGridAccessPanel } from "../features/quote-grid/quote-grid";
+import { QuoteApprovalPanel, SitePolicyPanel } from "../features/advanced-approvals/approvals";
+import { acceptanceBlocked, timelineApproval as advancedTimelineApproval, type WorkflowStatus } from "../features/advanced-approvals/model";
 import { SiteAssetLinksPanel } from "../features/site-asset-links/site-asset-links-panel";
 import type { AssetSource } from "../features/site-asset-links/asset-links-model";
 import { createAreasApi, parseAreasPage } from "../features/site-areas/areas-model";
@@ -1498,6 +1500,8 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState("");
+  /** ENT-12: server state of the ordered approval of the displayed quote (undefined = not read). */
+  const [advanced, setAdvanced] = useState<WorkflowStatus | null | undefined>(undefined);
   const statusKey = intervention?.status || "";
   // Deep link to a dossier absent from the cached perimeter: one causal refresh before « introuvable ».
   // Presence is the active organisation/site perimeter (orgInterventions), never wider.
@@ -1575,7 +1579,8 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
   const approval = displayed
     ? session.professional.approvals.find((a) => a.quote_id === displayed.id)
     : undefined;
-  const blocking = Boolean(approval && approval.status !== "approved");
+  const advancedBlocked = acceptanceBlocked(advanced);
+  const blocking = Boolean(approval && approval.status !== "approved") || advancedBlocked;
   const canDecide = displayed?.status === "sent" && intervention.status === "quoted";
   const payment = acceptedQuote
     ? session.data.payments.find((p) => p.quote_id === acceptedQuote.id)
@@ -1586,10 +1591,12 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
   // Chronology derived from what this view already holds (no extra loading).
   const timelineApproval =
     (acceptedQuote && session.professional.approvals.find((a) => a.quote_id === acceptedQuote.id)) || approval || null;
+  // ENT-12: when an ordered approval exists for the displayed quote, the timeline shows the server state.
+  const advancedApproval = advancedTimelineApproval(advanced);
   const timeline = buildTimeline({
     intervention,
-    approval: timelineApproval,
-    ruleApplies: c.scope.rules.some((r) => r.site_id === intervention.site_id && r.enabled),
+    approval: advancedApproval ?? timelineApproval,
+    ruleApplies: c.scope.rules.some((r) => r.site_id === intervention.site_id && r.enabled) || Boolean(advanced?.required),
     appointment: opsLoading || !ops ? undefined : ops.appointment,
     report: opsLoading || !ops ? undefined : ops.report,
     payment: payment ?? null,
@@ -1722,6 +1729,17 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
                 </Tag>
               )}
             </div>
+            {/* ENT-12: ordered internal approval of the EXACT displayed quote (server state; never an acceptance). */}
+            {displayed && (
+              <QuoteApprovalPanel
+                key={displayed.id}
+                quoteId={displayed.id}
+                context={session.mutationContext}
+                demo={demo}
+                onStatus={setAdvanced}
+                loadMembers={c.organization ? () => session.loadOrganization(c.organization!.id).then((o) => o?.members.map((m) => ({ id: m.user_id, label: m.full_name || `Membre ${m.user_id.slice(0, 8)}` })) ?? null) : undefined}
+              />
+            )}
             {/* ENT-13: contract source of the displayed quote (server-stated) and the owner's grid access. */}
             {displayed && <ContractSourceLine key={displayed.id} quoteId={displayed.id} demo={demo} />}
             <QuoteGridAccessPanel interventionId={intervention.id} context={session.mutationContext} demo={demo} />
@@ -1823,7 +1841,11 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
                 {canDecide && blocking && (
                   <Unavailable
                     title="Acceptation suspendue à l’approbation"
-                    reason="Le devis affiché doit être approuvé dans « Devis & approbations » avant de pouvoir être accepté."
+                    reason={
+                      advancedBlocked
+                        ? "Le circuit d’approbation interne de ce devis n’est pas terminé (voir « Approbation interne du devis » ci-dessus)."
+                        : "Le devis affiché doit être approuvé dans « Devis & approbations » avant de pouvoir être accepté."
+                    }
                   />
                 )}
                 {canDecide && !blocking && !canOperate && (
@@ -2669,6 +2691,7 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
           )}
         </section>
 
+        {/* MOUNT POINT (reserved): operational reminders leaf — site compliance due dates (other worker). */}
         <section className="panel" aria-labelledby="site-compliance">
           <div className={styles.panelTitle}>
             <h2 id="site-compliance">Échéances & conformité</h2>
@@ -2752,6 +2775,13 @@ function SiteSheet({ c, id }: { c: Ctx; id: string }) {
           ) : (
             <ReadOnlyNote reason={c.authority.readOnlyReason} />
           )}
+          {/* ENT-12: explicit ordered policy of this site (edit only when the server says can_manage). */}
+          <SitePolicyPanel
+            siteId={site.id}
+            context={session.mutationContext}
+            demo={session.mode === "demo"}
+            loadMembers={c.organization ? () => session.loadOrganization(c.organization!.id).then((o) => o?.members.map((m) => ({ id: m.user_id, label: m.full_name || `Membre ${m.user_id.slice(0, 8)}` })) ?? null) : undefined}
+          />
         </section>
 
         <section className={cx("panel", styles.operationsPanel)} aria-labelledby="site-operations">
