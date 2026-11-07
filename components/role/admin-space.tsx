@@ -48,6 +48,8 @@ import type {
 } from "../app/types";
 import { Icon } from "../app/icons";
 import { InstallPanel } from "../app/install-panel";
+import { AdminReplyComposer } from "../features/admin-messages/admin-reply";
+import { mergeThread } from "../features/admin-messages/admin-reply-model";
 import {
   Alerts,
   Badge,
@@ -2919,6 +2921,8 @@ function DossierView({
   const [detail, setDetail] = useState<AdminInterventionDetail | null | undefined>(undefined);
   const [detailStale, setDetailStale] = useState(false);
   const [detailAttempt, setDetailAttempt] = useState(0);
+  // ADM-07: replies confirmed by the server, shown at once while the workspace re-reads.
+  const [sentReplies, setSentReplies] = useState<Message[]>([]);
   const lastDetail = useRef<AdminInterventionDetail | null>(null);
   useEffect(() => {
     let active = true;
@@ -2997,7 +3001,7 @@ function DossierView({
   const c = category(intervention.category);
   // Server quotes when the detail is available (bounded to quotes_limit), workspace otherwise.
   const quotes = [...(detail ? detail.quotes : quoteVersions(session.data.quotes, id))].sort(byNewest);
-  const messages = session.data.messages.filter((m) => m.intervention_id === id).sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+  const messages = mergeThread(session.data.messages, sentReplies, id);
   const reached = STEP_ORDER.indexOf(intervention.status);
   const caps = overview?.capabilities;
   const approvedArtisans = (overview?.artisans || []).filter(isApprovedArtisan);
@@ -3194,7 +3198,7 @@ function DossierView({
             )}
           </Panel>
 
-          <Panel title="Messages du dossier" count={messages.length} intro="Lecture seule des échanges entre le client et l’artisan.">
+          <Panel title="Messages du dossier" count={messages.length} intro="Échanges entre le client, l’artisan et l’exploitant.">
             {messages.length ? (
               <div className={styles.messages}>
                 {messages.map((m) => (
@@ -3213,7 +3217,20 @@ function DossierView({
               </div>
             )}
             <div className={styles.panelBody}>
-              <Unavailable title="Réponse de l’exploitant dans le fil" reason="Pas encore activé pour l’administration : le fil est en lecture seule." blocker="ADM-07" />
+              <AdminReplyComposer
+                key={`${id}:${session.refreshContext}`}
+                intervention={intervention}
+                demo={demo}
+                context={session.mutationContext}
+                onSent={(message) => {
+                  setSentReplies((list) => [...list, message]);
+                  void sessionRef.current.ensureFresh();
+                }}
+                onRefresh={() => {
+                  setDetailAttempt((n) => n + 1);
+                  void sessionRef.current.ensureFresh();
+                }}
+              />
             </div>
           </Panel>
 
