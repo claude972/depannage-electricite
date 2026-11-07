@@ -124,6 +124,8 @@ test("app réelle (démo, dossier accepté) : une seule carte sur la page, seule
     assert.equal(await page.locator("[data-dossier-map]").getAttribute("data-dossier-map"), "in-card");
     assert.equal(await page.locator("figure").count(), 1, "exactly one map on the page (the tracking card's)");
     assert.match(await page.locator("[aria-labelledby=tracking-card-title]").innerText(), /OpenStreetMap/);
+    await page.locator("[data-map-go-card]").click();
+    assert.equal(await page.evaluate(() => document.activeElement?.id), "client-dossier-tracking");
     await page.locator("[data-map-external-ask]").click();
     assert.equal(await page.locator("[data-map-external-link]").count(), 0);
     await page.locator("[data-map-external-accept]").click();

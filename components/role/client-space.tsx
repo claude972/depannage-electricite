@@ -1432,7 +1432,9 @@ function DetailView({
                 : "Étape déclarée par l’artisan. Aucune géolocalisation ni heure d’arrivée estimée n’est disponible."}
             </p>
           </section>
-          <TrackingAnchor session={session} variant="viewer" interventionId={i.id} authority={{ canWrite: true }} />
+          <div id="client-dossier-tracking" tabIndex={-1}>
+            <TrackingAnchor session={session} variant="viewer" interventionId={i.id} authority={{ canWrite: true }} />
+          </div>
         </>
       )}
 

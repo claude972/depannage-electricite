@@ -40,7 +40,11 @@ function InCard({ address }: { address: DeclaredAddress }) {
         <button
           type="button"
           className={styles.link}
-          onClick={() => document.getElementById("tracking-card-title")?.scrollIntoView({ block: "start" })}
+          onClick={() => {
+            const target = document.getElementById("client-dossier-tracking");
+            target?.focus({ preventScroll: true });
+            target?.scrollIntoView({ block: "start" });
+          }}
           data-map-go-card=""
         >
           Voir le suivi de l’artisan
