@@ -94,6 +94,7 @@ import { ThemeToggle } from "../app/theme-toggle";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { PLATFORM_TITLES, PlatformPage } from "./platform-anchor";
 import { platformViewAllowed } from "../app/features";
+import { useAdminDashboard, shownSnapshot, DASH_COPY, dashStyles } from "../features/admin-dashboard/admin-dashboard";
 import { adminKpis, dashboardRows, loadedNote } from "./admin-lists";
 import { platformEntries } from "./anchors";
 import { OperatorProfileEditor } from "../features/public-operator-profile/operator-profile-editor";
@@ -335,7 +336,7 @@ function InterventionRow({
   onOpen,
   artisanName,
 }: {
-  intervention: Intervention;
+  intervention: Pick<Intervention, "id" | "category" | "city" | "artisan_id" | "status" | "created_at">;
   onOpen: () => void;
   artisanName?: string;
 }) {
@@ -381,6 +382,9 @@ export function AdminSpace({ session }: { session: Session }) {
   const [staleNote, setStaleNote] = useState("");
   // Name of the artisan opened from the directory when the bounded overview does not hold it.
   const [detailName, setDetailName] = useState("");
+  // ADM-01: bounded snapshot (live), bound to role + identity at render.
+  const dashIdent = `${session.role}|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`;
+  const dash = useAdminDashboard({ live: !demo, ident: dashIdent });
   const load = useCallback(async () => {
     setReloading(true);
     const result = await sessionRef.current.loadAdminOverview();
@@ -529,10 +533,29 @@ export function AdminSpace({ session }: { session: Session }) {
 
   // ---- Views -------------------------------------------------------------------------------
   const renderDashboard = (o: AdminOverview) => {
+    // ADM-01 live: lists + their three counts come from the bounded snapshot of the CURRENT role +
+    // identity; « Non vérifié » until read (never « aucune … » from an unread or bounded list).
+    const snap = demo ? null : shownSnapshot(dash.view, dashIdent);
+    const unread = !demo && !snap;
     const { pending, active } = dashboardRows(o);
-    const kpis = adminKpis(o);
+    const SNAP_KPIS = ["interventions", "active", "pending"];
+    const kpis = adminKpis(snap ? { ...o, counts: { ...o.counts, ...snap.counts } } : o).map((k) =>
+      unread && SNAP_KPIS.includes(k.id) ? { ...k, value: DASH_COPY.unverified, note: dash.view.phase === "loading" ? DASH_COPY.loading : dash.view.error || DASH_COPY.unverified } : k,
+    );
+    const unverified = (
+      <div className={dashStyles.unverified} role="status" data-admin-dashboard-unverified={dash.view.phase}>
+        <strong>{DASH_COPY.unverified}</strong>
+        <span>{dash.view.phase === "loading" ? DASH_COPY.loading : dash.view.error}</span>
+      </div>
+    );
     return (
       <>
+        {!demo && (
+          <div className={dashStyles.bar} data-admin-dashboard={snap ? "ready" : dash.view.phase}>
+            <span>{snap ? DASH_COPY.readAt(snap.captured_at) : dash.view.phase === "loading" ? DASH_COPY.loading : DASH_COPY.unverified}</span>
+            <button type="button" className={dashStyles.refresh} onClick={() => void dash.reload()} data-admin-dashboard-refresh="">{DASH_COPY.refresh}</button>
+          </div>
+        )}
         <div className={styles.kpis}>
           {kpis.map((k) => (
             <Kpi key={k.id} icon={k.icon} tone={k.tone} label={k.label} value={k.value} note={k.note} />
@@ -549,73 +572,132 @@ export function AdminSpace({ session }: { session: Session }) {
         <div className={styles.columns}>
           <Panel
             title="Validations artisans en attente"
-            count={o.counts.pending_applications}
+            count={demo ? o.counts.pending_applications : snap?.counts.pending_applications}
             action={
               <button type="button" className={styles.link} onClick={() => go("admin-artisans")}>
                 Voir toutes les candidatures
               </button>
             }
           >
-            <DataTable
-              caption="Candidatures artisans en attente"
-              rows={pending}
-              keyOf={(a) => a.id}
-              columns={[
-                {
-                  key: "name",
-                  label: "Artisan",
-                  wide: true,
-                  render: (a) => <Person name={a.full_name} sub={a.company_name || "Société non renseignée"} />,
-                },
-                { key: "status", label: "Dossier", render: (a) => applicationTag(a.application_status) },
-                {
-                  key: "actions",
-                  label: "Actions",
-                  className: styles.actions,
-                  render: (a) => (
-                    <button
-                      type="button"
-                      className={styles.rowAction}
-                      aria-label={`Examiner la candidature de ${a.full_name}`}
-                      onClick={() => go("admin-artisan", a.id)}
-                    >
-                      <Icon name="eye" size={15} />
-                      <span className={styles.rowActionLabel}>Examiner</span>
-                    </button>
-                  ),
-                },
-              ]}
-              empty={
-                <Empty icon="shield" title="Aucune candidature soumise">
-                  Les dossiers artisans soumis à examen apparaîtront ici.
-                </Empty>
-              }
-            />
-            <Basis>
-              Dossiers au statut « soumis » {loadedNote(o.capabilities.list_limit).replace("chargés", "artisans chargés")}, dans l’ordre transmis ; le compteur est global. La date de soumission n’est pas transmise dans cette vue : elle figure dans le dossier.
-            </Basis>
+            {demo ? (
+              <>
+                <DataTable
+                  caption="Candidatures artisans en attente"
+                  rows={pending}
+                  keyOf={(a) => a.id}
+                  columns={[
+                    {
+                      key: "name",
+                      label: "Artisan",
+                      wide: true,
+                      render: (a) => <Person name={a.full_name} sub={a.company_name || "Société non renseignée"} />,
+                    },
+                    { key: "status", label: "Dossier", render: (a) => applicationTag(a.application_status) },
+                    {
+                      key: "actions",
+                      label: "Actions",
+                      className: styles.actions,
+                      render: (a) => (
+                        <button
+                          type="button"
+                          className={styles.rowAction}
+                          aria-label={`Examiner la candidature de ${a.full_name}`}
+                          onClick={() => go("admin-artisan", a.id)}
+                        >
+                          <Icon name="eye" size={15} />
+                          <span className={styles.rowActionLabel}>Examiner</span>
+                        </button>
+                      ),
+                    },
+                  ]}
+                  empty={
+                    <Empty icon="shield" title="Aucune candidature soumise">
+                      Les dossiers artisans soumis à examen apparaîtront ici.
+                    </Empty>
+                  }
+                />
+                <Basis>
+                  Dossiers au statut « soumis » {loadedNote(o.capabilities.list_limit).replace("chargés", "artisans chargés")}, dans l’ordre transmis ; le compteur est global. La date de soumission n’est pas transmise dans cette vue : elle figure dans le dossier.
+                </Basis>
+              </>
+            ) : !snap ? (
+              unverified
+            ) : snap.pending.length === 0 && snap.counts.pending_applications === 0 ? (
+              <Empty icon="shield" title="Aucune candidature soumise">
+                Les dossiers artisans soumis à examen apparaîtront ici.
+              </Empty>
+            ) : (
+              <>
+                {snap.pending.length > 0 && (
+                  <DataTable
+                    caption="Candidatures artisans en attente"
+                    rows={snap.pending}
+                    keyOf={(a) => a.id}
+                    columns={[
+                      { key: "name", label: "Artisan", wide: true, render: (a) => <Person name={a.full_name} sub={a.company_name || "Société non renseignée"} /> },
+                      { key: "status", label: "Dossier", render: (a) => applicationTag(a.application_status) },
+                      { key: "account", label: DASH_COPY.accountDate, render: (a) => date(a.account_created_at) },
+                      {
+                        key: "actions",
+                        label: "Actions",
+                        className: styles.actions,
+                        render: (a) => (
+                          <button type="button" className={styles.rowAction} aria-label={`Examiner la candidature de ${a.full_name}`} onClick={() => go("admin-artisan", a.id)}>
+                            <Icon name="eye" size={15} />
+                            <span className={styles.rowActionLabel}>Examiner</span>
+                          </button>
+                        ),
+                      },
+                    ]}
+                    empty={null}
+                  />
+                )}
+                {snap.counts.pending_applications > snap.pending.length && <p className={dashStyles.more} data-admin-dashboard-more-pending="">{DASH_COPY.morePending(snap.counts.pending_applications, snap.pending.length)}</p>}
+                <Basis>Six candidatures soumises les plus récentes par date de création du compte (pas une date de soumission) ; compteur serveur global.</Basis>
+              </>
+            )}
           </Panel>
           <Panel
             title="Interventions en cours"
-            count={o.counts.active_interventions}
+            count={demo ? o.counts.active_interventions : snap?.counts.active_interventions}
             action={
               <button type="button" className={styles.link} onClick={() => go("admin-interventions")}>
                 Voir toutes les interventions
               </button>
             }
           >
-            {active.length ? (
-              <div className={styles.rowList}>
-                {active.map((i) => (
-                  <InterventionRow key={i.id} intervention={i} artisanName={artisanName(i.artisan_id)} onOpen={() => openDossier(i.id)} />
-                ))}
-              </div>
-            ) : (
+            {demo ? (
+              <>
+                {active.length ? (
+                  <div className={styles.rowList}>
+                    {active.map((i) => (
+                      <InterventionRow key={i.id} intervention={i} artisanName={artisanName(i.artisan_id)} onOpen={() => openDossier(i.id)} />
+                    ))}
+                  </div>
+                ) : (
+                  <Empty icon="list" title="Aucune intervention en cours">
+                    Les dossiers actifs apparaîtront ici dès qu’une demande sera enregistrée.
+                  </Empty>
+                )}
+                <Basis>Six dossiers non clos les plus récents {loadedNote(o.capabilities.list_limit)}. Les noms des clients ne sont pas transmis dans cette vue.</Basis>
+              </>
+            ) : !snap ? (
+              unverified
+            ) : snap.active.length === 0 && snap.counts.active_interventions === 0 ? (
               <Empty icon="list" title="Aucune intervention en cours">
                 Les dossiers actifs apparaîtront ici dès qu’une demande sera enregistrée.
               </Empty>
+            ) : (
+              <>
+                <div className={styles.rowList}>
+                  {snap.active.map((i) => (
+                    <InterventionRow key={i.id} intervention={i} artisanName={artisanName(i.artisan_id)} onOpen={() => openDossier(i.id)} />
+                  ))}
+                </div>
+                {snap.counts.active_interventions > snap.active.length && <p className={dashStyles.more}>{DASH_COPY.moreActive(snap.counts.active_interventions, snap.active.length)}</p>}
+                <Basis>Six dossiers non clos les plus récents sur toute la plateforme (instantané serveur). Les noms des clients ne sont pas transmis dans cette vue.</Basis>
+              </>
             )}
-            <Basis>Six dossiers non clos les plus récents {loadedNote(o.capabilities.list_limit)}. Les noms des clients ne sont pas transmis dans cette vue.</Basis>
           </Panel>
         </div>
       </>
@@ -772,16 +854,19 @@ export function AdminSpace({ session }: { session: Session }) {
         <p className="inline-note" data-admin-finance-link="">
           <a className={styles.inlineLink} href="#platform-finance">Factures, avoirs et registre : espace Finance plateforme</a>
         </p>
-        <Unavailable
-          title="Remboursements et litiges"
-          reason={
-            caps?.refunds
-              ? "Fonction annoncée mais pas encore activée dans cette interface : attendez son activation."
-              : "Pas encore activé sur ce service : aucun remboursement ni litige ne se traite depuis cette interface. Un remboursement se fait directement dans Stripe."
-          }
-          blocker="FIN-04"
-        />
-        <Unavailable title="Commission plateforme" reason="Taux de commission non défini par l’exploitant. Aucun montant de commission n’est calculé ni affiché." blocker="Q-C3" />
+        {/* Refunds, disputes and commissions are handled in the platform finance space, never here. */}
+        <p className="inline-note" data-admin-finance-moved="">
+          Remboursements, litiges et commissions : ces actions se traitent dans l’espace « Finance plateforme », selon vos habilitations ; cette vue ne permet aucune action financière.
+        </p>
+        {platformViewAllowed(session.platformAccess, "platform-finance") ? (
+          <p className="inline-note" data-admin-finance-links="">
+            <a className={styles.inlineLink} href="#platform-finance">Remboursements et litiges : espace Finance plateforme</a>
+            {" · "}
+            <a className={styles.inlineLink} href="#platform-finance">Commissions : espace Finance plateforme</a>
+          </p>
+        ) : (
+          <p className="inline-note" data-admin-finance-neutral="">L’accès à l’espace Finance plateforme dépend des habilitations accordées à votre compte.</p>
+        )}
       </>
     );
   };
