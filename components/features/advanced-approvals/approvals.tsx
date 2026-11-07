@@ -243,19 +243,27 @@ function Quote({ quoteId, context, api, store = tabStore, newId = uuid, loadMemb
   const members = useMembers(loadMembers);
   const cb = useRef(onStatus);
   cb.current = onStatus;
+  // Callbacks only while THIS mount is alive (A→B→A, or a late reply of an unmounted A, never
+  // reaches the parent); only the latest load of this mount applies (causal order kept).
+  const alive = useRef(true);
+  const loadSeq = useRef(0);
+  const report = (st: WorkflowStatus | null) => {
+    if (alive.current) cb.current?.(st);
+  };
   const load = async () => {
+    const my = ++loadSeq.current;
     const gen = context.generation(), who = context.userId();
     const r = await getApi().workflow(quoteId, null);
-    if (context.generation() !== gen || context.userId() !== who) return;
+    if (!alive.current || my !== loadSeq.current || context.generation() !== gen || context.userId() !== who) return;
     if (r.status === 401 || r.status === 403) {
       setStatus("forbidden");
-      cb.current?.(null);
+      report(null);
       return;
     }
     const s = r.status === 200 ? parseWorkflowStatus(r.body, quoteId, 0) : null;
     setStatus(s ?? "error");
     if (s) setEvents(s.events);
-    cb.current?.(s);
+    report(s);
   };
   const more = async (after: number) => {
     const r = await getApi().workflow(quoteId, after);
@@ -266,12 +274,20 @@ function Quote({ quoteId, context, api, store = tabStore, newId = uuid, loadMemb
     }
   };
   useEffect(() => {
+    alive.current = true;
     if (initial === undefined) void load();
-    else cb.current?.(initial);
+    else report(initial);
+    return () => {
+      alive.current = false;
+      loadSeq.current++;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const writer = useWriter<WorkflowCommand>((get, set) =>
-    createWriter({ scope: `quote:${quoteId.toLowerCase()}`, schema: schemas.workflowCommand, post: (c) => getApi().act(quoteId, c), receipt: (b, c) => parseWorkflowReceipt(b, quoteId, c), store: () => store(), context, get, set, after: load, onForbidden: () => setStatus("forbidden"), notice: (c) => ACTION_DONE[c.action] }),
+    createWriter({ scope: `quote:${quoteId.toLowerCase()}`, schema: schemas.workflowCommand, post: (c) => getApi().act(quoteId, c), receipt: (b, c) => parseWorkflowReceipt(b, quoteId, c), store: () => store(), context, get, set, after: load, onForbidden: () => {
+      setStatus("forbidden");
+      report(null); // a 401/403 on a write makes the state undetermined for the parent too
+    }, notice: (c) => ACTION_DONE[c.action] }),
   );
   const [note, setNote] = useState("");
   const [confirm, setConfirm] = useState<Action | null>(null);
