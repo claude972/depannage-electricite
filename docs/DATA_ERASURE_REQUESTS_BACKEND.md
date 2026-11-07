@@ -1,4 +1,4 @@
-# SYS-07 / ADM — examen des demandes d’effacement
+# SYS-09 / ADM — examen des demandes d’effacement
 
 Base `140fede`, branche `codex/data-erasure-requests`, migration CLI `20261107214517_data_erasure_requests.sql`. Aucun fournisseur, suppression ou exécution de rétention. L’export de données personnel existant reste inchangé pour ses sections précédentes ; ce lot ne prétend pas étendre sa couverture à toutes les données du système.
 

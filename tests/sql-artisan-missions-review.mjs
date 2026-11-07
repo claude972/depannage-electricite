@@ -39,4 +39,37 @@ await db.exec('set role authenticated');await db.query("select set_config('reque
 ok(!(await db.query("select has_function_privilege('anon','public.available_missions_page(timestamptz,uuid,uuid)','execute')v")).rows[0].v,'anon cannot execute');
 await db.exec('set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[actor]);let selected=(await db.query('select public.available_missions_page(null,null,$1)v',[ids[130]])).rows[0].v;ok(selected.items.length===1&&selected.items[0].id===ids[130],'selected eligible offer beyond100');selected=(await db.query('select public.available_missions_page(null,null,$1)v',[ids[0]])).rows[0].v;ok(selected.items.length===0,'selected declined hidden');await db.exec('reset role');
 for(const count of [49,50,51]){await db.query("update public.interventions set status=case when id=any($1::uuid[])then 'requested'else 'cancelled'end",[ids.slice(1,count+1)]);ok((await page(actor)).items.length===count,'exact RPC boundary '+count);}
+
+// The separate client search stays under RLS and can recover dossiers beyond the bootstrap window.
+const foreignClient = crypto.randomUUID();
+await db.query('insert into auth.users(id,raw_user_meta_data,email,email_confirmed_at) values($1,$2,$3,now())',
+  [foreignClient, JSON.stringify({role:'client',full_name:'QA other'}), `${foreignClient}@example.invalid`]);
+await db.query("insert into public.interventions(client_id,category,description,address,postal_code,city,urgency,estimate_min_cents,estimate_max_cents) values($1,'socket','QA description synthétique','Adresse étrangère 100%','97200','QA ville','scheduled',100,200)",[foreignClient]);
+async function clientPage(uid, filter='all', search='', after=null) {
+  await db.exec('set role authenticated');
+  await db.query("select set_config('request.jwt.claim.sub',$1,false)", [uid]);
+  try {
+    return (await db.query('select public.client_intervention_search($1,$2,$3,$4)v', [filter,search,after?.created_at??null,after?.id??null])).rows[0].v;
+  } finally { await db.exec('reset role'); }
+}
+const customerIds = [];
+cursor = null;
+for (let index=0; index<3; index++) {
+  const history = await clientPage(client,'all','',cursor);
+  ok(history.total===137 && history.items.length<=51,'exact account total and bounded client page');
+  const rows=history.items.slice(0,50);
+  ok(rows.every(row=>row.address==='QA adresse privée'&&row.client_id===undefined&&row.description===undefined),'private list projects only required fields');
+  customerIds.push(...rows.map(row=>row.id));
+  cursor=rows.at(-1);
+}
+ok(new Set(customerIds).size===137 && ids.every(id=>customerIds.includes(id)), 'all client history, including old tied dates, is found once');
+ok((await clientPage(client,'active')).total===51,'active filter before pagination');
+ok((await clientPage(client,'past')).total===86,'closed filter before pagination');
+ok((await clientPage(client,'all','PRISE OU INTERRUPTEUR')).total===136,'search on public category label');
+ok((await clientPage(client,'all','100%')).total===0,'search does not match a foreign customer');
+ok((await clientPage(foreignClient,'all','100%')).total===1,'percent is searched literally for the owner');
+ok((await clientPage(client,'all','int-'+ids[134].slice(0,6))).items.some(row=>row.id===ids[134]),'short reference searches older dossiers');
+await assert.rejects(()=>clientPage(actor), e=>e.code==='42501'); checks++;
+await assert.rejects(()=>clientPage(client,'all','x'.repeat(121)), e=>e.code==='22023'); checks++;
+ok(!(await db.query("select has_function_privilege('anon','public.client_intervention_search(text,text,timestamptz,uuid)','execute')v")).rows[0].v,'no anonymous history access');
 await db.close();console.log(JSON.stringify({sql:'PASS',checks,auth_storage_cron:'SIMULATED',offers:135,concurrency_cloud_proof:false}));

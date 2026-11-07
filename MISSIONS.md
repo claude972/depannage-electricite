@@ -120,3 +120,7 @@ ROOT raccorde Web Push à la file privée et au service worker existants. L’ut
 ### FIN-07 — reprise et catalogue des abonnements
 
 ROOT raccorde la reprise de la souscription courante après retour ou réponse perdue au même Checkout, à partir du consentement et des identifiants serveur existants. Le catalogue opérateur montre les offres explicites par mode et vérifie le prix fournisseur lors d’un changement. Claude raccorde les boutons aux parcours existants. Vérifier le rejeu, le mode, les droits, les états indisponibles et les offres modifiées. Aucun abonnement ni avantage n’est publié par défaut.
+
+### SYS-07 — recherche des demandes du client connecté
+
+ROOT ajoute une lecture paginée des demandes du compte, hors de la fenêtre de démarrage. Le filtre et la recherche s’appliquent avant pagination. La requête de lecture transporte les termes dans le corps et garde la projection minimale. Claude raccorde « Mes demandes » au même bouton d’ouverture des dossiers. Vérifier plus de 100 demandes, les références anciennes, les recherches littérales et le cloisonnement des comptes.
