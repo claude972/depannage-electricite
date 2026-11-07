@@ -70,3 +70,7 @@ Pilote seul auteur de la migration, API /api/artisan/credentials/[id]/reviews et
 ## Finition du code et préparation de la recette par parcours
 
 Assembler les feuilles énergie, rappels et accessibilité déjà poussées sur la branche de livraison, puis compléter les parcours manquants. Astra est responsable du serveur équipes prestataires (ART-12). Le lead Claude répartit les interfaces entre les auteurs existants, sur des fichiers disjoints. ROOT est responsable de l'assemblage et du serveur de garantie corrective (ADM-10). Réutiliser les transitions et autorisations du dossier existant. Vérifier au fil du code avec les suites ciblées, dont les refus intercomptes. La recette de livraison en ligne se fera ensuite par parcours. Stripe et Vonage restent au dernier lot.
+
+### SYS-09 / PUB-10 — données du compte
+
+ROOT réalise la lecture paginée des données du compte sous la session courante et la demande explicite d'effacement via le circuit d'assistance existant. Les dossiers d'organisation et les messages de tiers sont exclus du téléchargement personnel. Le dépôt ouvre un ticket consultable et garde son identifiant au rejeu. L'effacement effectif et la durée de conservation restent des opérations distinctes à définir. Claude raccorde les actions et leurs états à l'espace connecté. Tests de portée, réponse invalide, pagination et rejeu avant assemblage.
