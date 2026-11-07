@@ -35,6 +35,8 @@ end;$$;
 create function public.save_subscription_offer(p_actor uuid,p_command uuid,p_id uuid,p_version integer,p_live boolean,p_values jsonb)returns jsonb language plpgsql security definer set search_path=''as $$
 declare receipt subscription_private.offer_commands;r subscription_private.offers;payload jsonb;
 begin
+ perform 1 from public.profiles where id=p_actor for share;
+ perform 1 from public.platform_operator_grants where user_id=p_actor and scope='finance_write' and status='active' for share;
  if not coalesce(subscription_private.operator(p_actor),false)then raise insufficient_privilege;end if;
  if p_command is null or p_version is null or p_version not between 0 and 2147483646 or p_live is null or p_values is null or jsonb_typeof(p_values)<>'object'or(p_values-array['role','label','active','price_id','amount_cents','currency','interval','interval_count','tax_behavior'])<>'{}'::jsonb then raise invalid_parameter_value;end if;
  payload=jsonb_build_object('id',p_id,'version',p_version,'live',p_live,'values',p_values);

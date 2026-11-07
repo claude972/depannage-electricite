@@ -31,11 +31,15 @@ Les périodes sont les timestamps Unix Stripe de l’unique ligne d’abonnement
 
 `POST /api/subscriptions` : `{action:'checkout',offer_id,offer_version,command_id,consent:true}` → `{url}`. Conserver l’UUID de commande avant appel et après 503. Un abonnement/Checkout encore non terminal interdit une deuxième commande. Le retour `/?subscription=returned#profile` et l’annulation `/?subscription=cancelled#profile` signalent seulement de relire GET. Le navigateur n’envoie jamais Customer, Subscription, montant, intervalle ou statut.
 
+`POST /api/subscriptions/resume` reçoit `{}`. Le serveur retrouve la tentative courante du compte et du mode. Il reprend sa commande et son consentement d’origine, sous réserve de l’offre encore courante et des mêmes paramètres Stripe. Une session déjà ouverte est relue. Une création non confirmée ne peut être rejouée que dans la fenêtre d’idempotence initiale. La fermeture de Stripe ne vaut ni annulation ni souscription.
+
 401 connexion, 403 compte/rôle inéligible, 409 offre/version/commande ou preuve périmée à relire, 422 validation, 503 indisponibilité. Les actions authentifiées n’acceptent aucun corps événementiel comme preuve ; seule la route Billing dédiée vérifie la signature et déclenche une relecture.
 
 ## Configuration opérateur explicite
 
-`POST /api/subscriptions/offers` sous scope courant `finance_write` : `{command_id,id:null|uuid,expected_version,label,role,active,price_id}`. Mode déduit du secret serveur courant, jamais du navigateur. Le serveur récupère **ce Price exact**, confirme livemode et schéma récurrent simple, puis dérive montant entier, monnaie, intervalle et nombre d’intervalles ainsi que tax_behavior. Offre créée/modifiée à version optimiste et commande durable ; un rejeu divergent est refusé. Maximum 50 offres par mode, aucune valeur commerciale par défaut. Response `{offer:<DTO public>,active}`.
+`GET /api/subscriptions/offers?mode=test|live` sous scope courant `finance_read` renvoie `{mode,configured_mode,can_write,catalog_enabled,offers}`. Les offres incluent `active` et `price_id` pour l’opérateur. Le serveur lit le catalogue sans appel Stripe. L’édition est proposée lorsque le mode configuré correspond à celui affiché et que le droit d’écriture est présent.
+
+`POST /api/subscriptions/offers` sous scope courant `finance_write` reçoit `{mode,command_id,id:null|uuid,expected_version,label,role,active,price_id}`. Le mode soumis doit correspondre à celui du secret serveur. Le serveur récupère le Price exact, confirme son mode et son schéma récurrent, puis dérive le montant, la monnaie, l’intervalle et le traitement de la taxe. L’offre est créée ou modifiée avec contrôle de version et commande durable. La limite est de 50 offres par mode. Réponse `{offer:<DTO public>,active}`.
 
 Seuls les Price récurrents `per_unit`, `licensed`, quantité 1, montant entier, sans transformation ni montant personnalisable sont pris en charge dans cette tranche. Les autres formes exigent un lot dédié. Label fourni explicitement par l’opérateur ; aucun texte d’avantage inventé. Les snapshots des tentatives existantes ne changent pas quand le catalogue évolue.
 

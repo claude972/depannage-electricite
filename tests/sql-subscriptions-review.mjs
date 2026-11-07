@@ -64,6 +64,14 @@ try {
  const offerCmd=crypto.randomUUID();const configure=(actor=users.operator,cmd=offerCmd,id=null,ver=0,live=false,v=terms)=>one('select public.save_subscription_offer($1,$2,$3,$4,$5,$6)v',[actor,cmd,id,ver,live,v]);
  for(const currency of ['jpy','usd'])await deny(configure(users.operator,crypto.randomUUID(),null,0,false,{...terms,currency}),'23514');eq((await context()).offers,[]);
  await deny(configure(users.client));const offer=await configure();eq((await configure()).id,offer.id);await deny(configure(users.operator,offerCmd,null,0,false,{...terms,amount_cents:1}),'P0001');
+ await as(users.client);await deny(q('select public.subscription_operator_catalog(false)'));
+ await as(users.operator);await deny(q('select public.subscription_operator_catalog(false)')); // write scope alone is not a read scope
+ await as('', 'postgres');
+ await q("insert into public.platform_operator_grants(user_id,scope,note,granted_by)values($1,'finance_read','QA fixture',$1),($2,'finance_read','QA fixture',$1)",[users.operator,users.other]);
+ await as(users.operator);eq(await one('select public.subscription_operator_catalog(false)v'),{catalog_enabled:false,can_write:true,offers:[offer]});
+ eq(await one('select public.subscription_operator_catalog(true)v'),{catalog_enabled:false,can_write:true,offers:[]});
+ await as(users.other);eq((await one('select public.subscription_operator_catalog(false)v')).can_write,false);
+ await as('', 'service_role');await deny(q('select public.subscription_operator_catalog(false)'));
  eq((await context(users.artisan)).offers,[]);eq((await context(users.client,true)).offers,[]);
  const cmd=crypto.randomUUID();const begin=(command=cmd,actor=users.client)=>one('select public.begin_subscription_checkout($1,false,$2,$3,1,\'https://app.test\')v',[actor,command,offer.id]);
  await deny(begin(),'P0001');

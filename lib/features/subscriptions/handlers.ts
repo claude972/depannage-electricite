@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {z} from 'zod';
 import type Stripe from 'stripe';
+import { safeCheckoutUrl } from '../../shared/stripe-checkout-url';
 export interface Db{rpc(name:string,args?:Record<string,unknown>):PromiseLike<{data:unknown;error:{code?:string}|null}>}
 export interface Dependencies{authenticate():Promise<{db:Db;userId:string}>;admin():Db;stripe():Pick<Stripe,'prices'|'customers'|'checkout'|'subscriptions'|'billingPortal'|'webhooks'>;env():Record<string,string|undefined>;now?():number}
 const uuid=z.uuid(),time=z.string().refine(x=>Number.isFinite(Date.parse(x))),sid=z.string().regex(/^cs_[A-Za-z0-9_]{1,240}$/),cid=z.string().regex(/^cus_[A-Za-z0-9]{1,200}$/),pid=z.string().regex(/^price_[A-Za-z0-9]{1,200}$/),subid=z.string().regex(/^sub_[A-Za-z0-9]{1,200}$/);
@@ -11,7 +12,8 @@ const status=z.enum(['preparing','open','expired','incomplete','incomplete_expir
 const attempt=z.object({id:uuid,account_id:uuid,command_id:uuid,offer,return_origin:z.string(),created_at:time,session_id:sid.nullable(),subscription_id:subid.nullable(),status,cancel_at_period_end:z.boolean(),period_start:z.number().int().nonnegative().nullable(),period_end:z.number().int().nonnegative().nullable(),observed_at:time.nullable()}).strict();
 const contextSchema=z.object({enabled:z.boolean(),eligible:z.boolean(),role:z.enum(['client','artisan']),offers:z.array(offer).max(50),account:account.nullable(),attempt:attempt.nullable()}).strict();type Context=z.infer<typeof contextSchema>;
 const checkoutInput=z.object({action:z.literal('checkout'),offer_id:uuid,offer_version:z.number().int().positive(),command_id:uuid,consent:z.literal(true)}).strict();
-const offerInput=z.object({command_id:uuid,id:uuid.nullable(),expected_version:z.number().int().min(0).max(2147483646),label:z.string().trim().min(1).max(160),role:z.enum(['client','artisan']),active:z.boolean(),price_id:pid}).strict();
+const mode = z.enum(['test', 'live']);
+const offerInput=z.object({command_id:uuid,id:uuid.nullable(),expected_version:z.number().int().min(0).max(2147483646),label:z.string().trim().min(1).max(160),role:z.enum(['client','artisan']),active:z.boolean(),price_id:pid,mode:mode.optional()}).strict();
 const priceSchema=z.object({id:pid,object:z.literal('price'),active:z.boolean(),livemode:z.boolean(),type:z.literal('recurring'),billing_scheme:z.literal('per_unit'),custom_unit_amount:z.null(),transform_quantity:z.null(),unit_amount:z.number().int().min(0).max(2147483647),currency:z.string().regex(/^[a-z]{3}$/),tax_behavior:offer.shape.tax_behavior,recurring:z.object({interval:offer.shape.interval,interval_count:offer.shape.interval_count,usage_type:z.literal('licensed')})});
 const headers={'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer'};
 class Failure extends Error{status:number;constructor(status:number){super();this.status=status}}
@@ -23,7 +25,6 @@ function checkPrice(value:unknown,live:boolean,expected?:Offer,active=true){cons
 function publicOffer(o:Offer){return {id:o.id,version:o.version,label:o.label,role:o.role,amount_cents:o.amount_cents,currency:o.currency,interval:o.interval,interval_count:o.interval_count,tax_behavior:o.tax_behavior}}
 function checkCustomer(value:unknown,c:Context){const p=parse(z.object({id:cid,object:z.literal('customer'),livemode:z.boolean(),metadata:z.record(z.string(),z.string())}),value);if(!c.account||p.livemode!==c.account.live||p.metadata.subscription_account!==c.account.id||(c.account.customer_id&&c.account.customer_id!==p.id))fail(503);return p}
 function checkSession(value:unknown,c:Context){const s=parse(z.object({id:sid,object:z.literal('checkout.session'),mode:z.literal('subscription'),customer:cid,livemode:z.boolean(),client_reference_id:uuid,metadata:z.record(z.string(),z.string()),status:z.enum(['open','complete','expired']),subscription:subid.nullable(),url:z.string().nullable(),currency:z.string(),amount_total:z.number().int().nonnegative()}),value);const a=c.account!,t=c.attempt!;if(s.customer!==a.customer_id||s.livemode!==a.live||s.client_reference_id!==t.id||s.metadata.subscription_attempt!==t.id||(t.session_id&&s.id!==t.session_id)||s.currency!==t.offer.currency||s.amount_total!==t.offer.amount_cents)fail(409);return s}
-function url(value:string|null){if(!value)fail(503);let u:URL;try{u=new URL(value)}catch{fail(503)}if(u.protocol!=='https:'||u.hostname!=='checkout.stripe.com'||u.username||u.password||(u.port&&u.port!=='443'))fail(503);return value}
 export function createSubscriptionHandlers(deps:Dependencies){
  const now=deps.now??Date.now;
  function window(stamp:string){const age=now()-Date.parse(stamp);if(age< -30000)fail(503);if(age>=23*3600000)fail(409)}
@@ -54,6 +55,66 @@ export function createSubscriptionHandlers(deps:Dependencies){
   const p=parse(z.object({id:z.string(),object:z.literal('billing_portal.configuration'),active:z.literal(true),livemode:z.boolean(),features:z.object({subscription_cancel:z.object({enabled:z.literal(true)}),subscription_update:z.object({enabled:z.literal(false)})})}),await deps.stripe().billingPortal.configurations.retrieve(id));
   if(p.id!==id||p.livemode!==live)fail(503);
  }
+ async function openCheckout(actor: string, i: z.infer<typeof checkoutInput>, configuration: ReturnType<typeof cfg>) {
+  const db = deps.admin();
+  await rpc(db, 'begin_subscription_checkout', {
+   p_actor: actor, p_live: configuration.live, p_command: i.command_id, p_offer: i.offer_id,
+   p_version: i.offer_version, p_origin: configuration.origin,
+  });
+  let c = await context(db, actor, configuration.live);
+  current(c, configuration.enabled);
+  const t = c.attempt!;
+  let account = c.account!;
+  if (t.command_id !== i.command_id || t.offer.id !== i.offer_id || t.offer.version !== i.offer_version) fail(409);
+  const stripe = deps.stripe();
+  checkPrice(await stripe.prices.retrieve(t.offer.price_id), configuration.live, t.offer, true);
+  if (!account.customer_id) {
+   c = await context(db, actor, configuration.live);
+   current(c, configuration.enabled, t.id);
+   account = c.account!;
+   if (!account.customer_id) {
+    window(account.created_at);
+    window(t.created_at);
+    const customer = checkCustomer(await stripe.customers.create({ metadata: { subscription_account: account.id } },
+     { idempotencyKey: `subscription-customer:${account.id}` }), c);
+    await rpc(db, 'bind_subscription_provider', {
+     p_actor: actor, p_live: configuration.live, p_attempt: t.id, p_kind: 'customer', p_value: customer.id,
+    });
+    c = await context(db, actor, configuration.live);
+    account = c.account!;
+   }
+   if (!account.customer_id) fail(503);
+  }
+  checkCustomer(await stripe.customers.retrieve(account.customer_id), c);
+  let session;
+  if (t.session_id) {
+   session = checkSession(await stripe.checkout.sessions.retrieve(t.session_id), c);
+  } else {
+   c = await context(db, actor, configuration.live);
+   current(c, configuration.enabled, t.id);
+   // A parallel request might already have bound the same Checkout after the first read.
+   const existing = c.attempt!.session_id;
+   if (existing) session = checkSession(await stripe.checkout.sessions.retrieve(existing), c);
+   else {
+    window(t.created_at);
+    session = checkSession(await stripe.checkout.sessions.create({
+     mode: 'subscription', currency: 'eur', adaptive_pricing: { enabled: false },
+     customer: account.customer_id, allowed_payment_method_types: ['card'],
+     line_items: [{ price: t.offer.price_id, quantity: 1 }], client_reference_id: t.id,
+     metadata: { subscription_attempt: t.id }, subscription_data: { metadata: { subscription_attempt: t.id } },
+     success_url: `${t.return_origin}/?subscription=returned#profile`, cancel_url: `${t.return_origin}/?subscription=cancelled#profile`,
+    }, { idempotencyKey: `subscription-checkout:${t.id}` }), c);
+    await rpc(db, 'bind_subscription_provider', {
+     p_actor: actor, p_live: configuration.live, p_attempt: t.id, p_kind: 'session', p_value: session.id,
+    });
+   }
+  }
+  if (session.status !== 'open') fail(409);
+  current(await context(db, actor, configuration.live), configuration.enabled, t.id);
+  const url = safeCheckoutUrl(session.url);
+  if (!url) fail(503);
+  return Response.json({ url }, { headers });
+ }
  return {
   GET:async(request:Request)=>{try{
    if(new URL(request.url).searchParams.size)fail(422);const a=await auth();
@@ -67,24 +128,22 @@ export function createSubscriptionHandlers(deps:Dependencies){
   }catch(e){return error(e)}},
   POST:async(request:Request)=>{try{
    const a=await auth(),input=checkoutInput.safeParse(await body(request));if(!input.success)fail(422);const i=input.data,configuration=cfg(deps.env());if(!configuration.enabled)fail(503);
-   const db=deps.admin(),stripe=deps.stripe();let c=parse(contextSchema,await rpc(db,'begin_subscription_checkout',{p_actor:a.userId,p_live:configuration.live,p_command:i.command_id,p_offer:i.offer_id,p_version:i.offer_version,p_origin:configuration.origin}));
-   c=await context(db,a.userId,configuration.live);current(c,true);let t=c.attempt!,account=c.account!;
-   if(t.command_id!==i.command_id||t.offer.id!==i.offer_id||t.offer.version!==i.offer_version)fail(409);
-   checkPrice(await stripe.prices.retrieve(t.offer.price_id),configuration.live,t.offer,true);
-   if(!account.customer_id){c=await context(db,a.userId,configuration.live);current(c,true,t.id);window(account.created_at);window(t.created_at);
-    const customer=checkCustomer(await stripe.customers.create({metadata:{subscription_account:account.id}},{idempotencyKey:`subscription-customer:${account.id}`}),c);
-    await rpc(db,'bind_subscription_provider',{p_actor:a.userId,p_live:configuration.live,p_attempt:t.id,p_kind:'customer',p_value:customer.id});
-    c=await context(db,a.userId,configuration.live);account=c.account!;if(!account.customer_id)fail(503);
-   }
-   checkCustomer(await stripe.customers.retrieve(account.customer_id!),c);let session;
-   if(t.session_id)session=checkSession(await stripe.checkout.sessions.retrieve(t.session_id),c);
-   else{
-    c=await context(db,a.userId,configuration.live);current(c,true,t.id);window(t.created_at);
-    session=checkSession(await stripe.checkout.sessions.create({mode:'subscription',currency:'eur',adaptive_pricing:{enabled:false},customer:account.customer_id!,allowed_payment_method_types:['card'],line_items:[{price:t.offer.price_id,quantity:1}],client_reference_id:t.id,metadata:{subscription_attempt:t.id},subscription_data:{metadata:{subscription_attempt:t.id}},success_url:`${t.return_origin}/?subscription=returned#profile`,cancel_url:`${t.return_origin}/?subscription=cancelled#profile`},{idempotencyKey:`subscription-checkout:${t.id}`}),c);
-    await rpc(db,'bind_subscription_provider',{p_actor:a.userId,p_live:configuration.live,p_attempt:t.id,p_kind:'session',p_value:session.id});
-   }
-   if(session.status!=='open')fail(409);current(await context(db,a.userId,configuration.live),true,t.id);return Response.json({url:url(session.url)},{headers});
+   return await openCheckout(a.userId, i, configuration);
   }catch(e){return error(e)}},
+  RESUME: async (request: Request) => {
+   try {
+    const a = await auth();
+    if (!z.object({}).strict().safeParse(await body(request)).success) fail(422);
+    const configuration = cfg(deps.env());
+    if (!configuration.enabled) fail(503);
+    const c = await context(deps.admin(), a.userId, configuration.live);
+    current(c, true);
+    const t = c.attempt!;
+    if (!['preparing', 'open'].includes(t.status) || t.return_origin !== configuration.origin) fail(409);
+    return await openCheckout(a.userId, { action: 'checkout', offer_id: t.offer.id,
+     offer_version: t.offer.version, command_id: t.command_id, consent: true }, configuration);
+   } catch (e) { return error(e); }
+  },
   PORTAL:async(request:Request)=>{try{
    const a=await auth(),input=z.object({command_id:uuid}).strict().safeParse(await body(request));if(!input.success)fail(422);
    const configuration=cfg(deps.env());if(!configuration.enabled)fail(503);const id=portalConfiguration(configuration.live);if(!id)fail(503);
@@ -117,8 +176,24 @@ export function createSubscriptionHandlers(deps:Dependencies){
    }
    return Response.json({received:true},{headers});
   }catch(e){return error(e)}},
+  OFFERS: async (request: Request) => {
+   try {
+    const identity = await deps.authenticate();
+    const params = new URL(request.url).searchParams;
+    const input = mode.safeParse(params.get('mode'));
+    if (!input.success || params.size !== 1) fail(422);
+    const value = parse(z.object({ can_write: z.boolean(), catalog_enabled: z.boolean(), offers: z.array(offer).max(50) }).strict(),
+     await rpc(identity.db, 'subscription_operator_catalog', { p_live: input.data === 'live' }));
+    if (value.offers.some(o => o.live !== (input.data === 'live')) || new Set(value.offers.map(o => o.id)).size !== value.offers.length) fail(503);
+    let configured: 'test' | 'live' | null = null;
+    try { configured = cfg(deps.env()).live ? 'live' : 'test'; } catch { /* Existing catalogue remains readable without provider keys. */ }
+    return Response.json({ mode: input.data, configured_mode: configured, can_write: value.can_write && configured === input.data,
+     catalog_enabled: value.catalog_enabled, offers: value.offers.map(o => ({ ...publicOffer(o), active: o.active, price_id: o.price_id })) }, { headers });
+   } catch (e) { return error(e); }
+  },
   OFFER:async(request:Request)=>{try{
    const a=await auth(true),input=offerInput.safeParse(await body(request));if(!input.success)fail(422);const i=input.data,configuration=cfg(deps.env());
+   if (i.mode && (i.mode === 'live') !== configuration.live) fail(409);
    const p=checkPrice(await deps.stripe().prices.retrieve(i.price_id),configuration.live,undefined,i.active);if(p.id!==i.price_id)fail(503);
    const result=parse(offer,await rpc(deps.admin(),'save_subscription_offer',{p_actor:a.userId,p_command:i.command_id,p_id:i.id,p_version:i.expected_version,p_live:configuration.live,p_values:{role:i.role,label:i.label,active:i.active,price_id:p.id,amount_cents:p.unit_amount,currency:p.currency,interval:p.recurring.interval,interval_count:p.recurring.interval_count,tax_behavior:p.tax_behavior}}));
    if(result.live!==configuration.live||result.role!==i.role||result.price_id!==p.id||result.version!==i.expected_version+1)fail(503);return Response.json({offer:publicOffer(result),active:result.active},{headers});

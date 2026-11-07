@@ -116,3 +116,7 @@ ROOT ajoute le tri facultatif des offres par tranches indicatives de 5 km, puis 
 ### SYS-04 — notifications push Web
 
 ROOT raccorde Web Push à la file privée et au service worker existants. L’utilisateur choisit un navigateur destinataire et confirme l’autorisation. Une session Supabase courante, la préférence active et l’accès à la notification sont revérifiés avant un envoi générique. Une tentative dont la réponse est incertaine reste sans rejeu. Vérifier changement de compte, désinscription, absence de données du dossier, protection de l’URL de destination et reprise du service worker. La configuration VAPID et l’exécution du worker restent désactivées pour la recette.
+
+### FIN-07 — reprise et catalogue des abonnements
+
+ROOT raccorde la reprise de la souscription courante après retour ou réponse perdue au même Checkout, à partir du consentement et des identifiants serveur existants. Le catalogue opérateur montre les offres explicites par mode et vérifie le prix fournisseur lors d’un changement. Claude raccorde les boutons aux parcours existants. Vérifier le rejeu, le mode, les droits, les états indisponibles et les offres modifiées. Aucun abonnement ni avantage n’est publié par défaut.

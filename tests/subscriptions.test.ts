@@ -10,6 +10,7 @@ function fixture(o:any={}){
  const context=()=>({enabled:o.gate!==false,eligible:true,role:'client',offers:[offer],account:structuredClone(account),attempt:attempt?structuredClone(attempt):null});
  const db:any={async rpc(name:string,args:any){calls.push({name,args});if(o.denied)return {data:null,error:{code:'42501'}};
   if(name==='subscription_guard')return {data:args.p_operator?'operator':'client',error:null};
+  if(name==='subscription_operator_catalog')return {data:{can_write:o.catalogWritable!==false,catalog_enabled:o.gate!==false,offers:args.p_live===live||o.catalogWrongMode?[offer]:[]},error:null};
   if(name==='subscription_context'){if(args.p_read)account.read_seq++;return {data:context(),error:null}}
   if(name==='begin_subscription_checkout'){
    if(o.gate===false)return {data:null,error:{code:'P0001'}};
@@ -40,6 +41,27 @@ test('subscription Checkout exact Price, amount/currency/period proof and safe f
 test('lost Customer/Checkout replies reuse exact durable keys and parameters',async()=>{
  for(const [option,name]of [[{lostCustomer:true},'customer.create'],[{lostSession:true},'checkout.create']]as const){const f=fixture(option);assert.equal((await f.checkout()).status,503);assert.equal((await f.checkout()).status,200);const c=f.calls.filter(x=>x.name===name);assert.deepEqual(c[0],c[1])}
 });
+test('resuming a subscription reuses the server-side command without a browser UUID', async () => {
+ const resume = (h: ReturnType<typeof createSubscriptionHandlers>, body = {}, requestOrigin = 'https://app.test') => h.RESUME(new Request('https://app.test/api/subscriptions/resume', {
+  method: 'POST', headers: { origin: requestOrigin }, body: JSON.stringify(body),
+ }));
+ const f = fixture();
+ assert.equal((await resume(f.h)).status, 409);
+ assert.equal((await resume(f.h, { command_id: C })).status, 422);
+ assert.equal((await resume(f.h, {}, 'https://other.test')).status, 403);
+ assert.equal(f.calls.some(c => c.name === 'checkout.create'), false);
+ const first = await (await f.checkout()).json();
+ assert.deepEqual(await (await resume(f.h)).json(), first);
+ assert.equal(f.calls.filter(c => c.name === 'checkout.create').length, 1);
+ assert.deepEqual(f.calls.filter(c => c.name === 'begin_subscription_checkout').map(c => c.args.p_command), [C, C]);
+ f.complete();
+ assert.equal((await resume(f.h)).status, 409);
+ const lost = fixture({ lostSession: true });
+ assert.equal((await lost.checkout()).status, 503);
+ assert.equal((await resume(lost.h)).status, 200);
+ const sends = lost.calls.filter(c => c.name === 'checkout.create');
+ assert.deepEqual(sends[0], sends[1]);
+});
 test('window, current mode, foreign Customer and changed Price fail before checkout',async()=>{
  for(const o of [{old:true},{wrongPrice:true},{wrongMode:true},{wrongCustomer:true}]){const f=fixture(o);assert.ok([409,503].includes((await f.checkout()).status));assert.equal(f.calls.some(c=>c.name==='checkout.create'),false)}
 });
@@ -52,6 +74,27 @@ test('foreign subscription and stale observation cannot change visible state',as
 });
 test('operator offer fields derive from retrieved Stripe Price, never input amount',async()=>{
  const f=fixture();const r=await f.operator();assert.equal(r.status,200);const saved=f.calls.find(c=>c.name==='save_subscription_offer').args.p_values;assert.equal(saved.amount_cents,1234);assert.equal(saved.interval_count,2);assert.equal(saved.currency,'eur');assert.equal((await fixture({denied:true}).operator()).status,403);
+});
+test('finance catalogue lists one private mode without Stripe and refuses a write in the wrong configured mode', async () => {
+ const list = (f: ReturnType<typeof fixture>, query: string) => f.h.OFFERS(new Request(`https://app.test/api/subscriptions/offers${query}`));
+ const f = fixture();
+ const response = await list(f, '?mode=test');
+ assert.equal(response.status, 200);
+ assert.match(response.headers.get('cache-control')!, /private, no-store/);
+ const data = await response.json();
+ assert.equal(data.mode, 'test');
+ assert.equal(data.configured_mode, 'test');
+ assert.equal(data.can_write, true);
+ assert.equal(data.offers[0].price_id, 'price_QA');
+ assert.equal(f.calls.some(x => x.name === 'stripe.client'), false);
+ assert.equal((await (await list(f, '?mode=live')).json()).can_write, false);
+ assert.equal((await (await list(fixture({ noKeys: true }), '?mode=test')).json()).configured_mode, null);
+ assert.equal((await list(fixture({ denied: true }), '?mode=test')).status, 403);
+ assert.equal((await list(fixture({ catalogWrongMode: true }), '?mode=live')).status, 503);
+ assert.equal((await list(f, '?mode=test&mode=live')).status, 422);
+ const wrongMode = await f.h.OFFER(new Request('https://app.test/api/subscriptions/offers', { method: 'POST', body: JSON.stringify({ mode: 'live', command_id: C, id: null, expected_version: 0, label: 'QA', role: 'client', active: true, price_id: 'price_QA' }) }));
+ assert.equal(wrongMode.status, 409);
+ assert.equal(f.calls.some(x => x.name === 'price.retrieve'), false);
 });
 test('auth, consent and event-shaped input cannot bypass the subscription action endpoint',async()=>{
  assert.equal((await fixture({auth:false}).checkout()).status,401);assert.equal((await fixture({denied:true}).checkout()).status,403);
