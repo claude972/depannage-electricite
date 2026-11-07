@@ -1,8 +1,7 @@
 import type { ChannelReport, ChannelState } from "./types";
 // External delivery adapters (email, SMS, push). NO provider is configured in this project:
-// detection reads the environment and reports "unavailable" with a reason. There is no fake send,
-// no queue and no default provider. A real adapter would implement NotificationChannelAdapter and be
-// registered in ADAPTERS after its provider, credentials and legal conditions are decided.
+// detection reads the environment and reports "unavailable" with a reason. The email and push
+// outbox in external-delivery is inactive and requires an idempotent worker adapter.
 export type ExternalChannel = "email" | "sms" | "push";
 export type ChannelDetection = { state: ChannelState; reason: string };
 export interface NotificationChannelAdapter {
