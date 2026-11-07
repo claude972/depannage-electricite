@@ -181,6 +181,17 @@ function CardBody({ state, unavailableMessage, scope, client, demo, onNavigate, 
       </div>
 
       <div className={styles.layout}>
+        {/* The map comes first in the DOM, as drawn on narrow screens (Tab order = visual order). */}
+        <TrackingMap
+          position={display.position ? { latitude: display.position.latitude, longitude: display.position.longitude, accuracyM: display.position.accuracyM } : null}
+          destination={dest ? { latitude: dest.latitude, longitude: dest.longitude } : null}
+          draft={editable ? draft : null}
+          snappedEnd={shownRoute?.snapped_end ?? null}
+          route={shownRoute?.geometry.coordinates ?? null}
+          routeAttribution={shownRoute?.attribution ?? null}
+          description={description}
+          onPick={editable ? setDraft : undefined}
+        />
         <div className={styles.status}>
           <dl className={styles.facts}>
             <div>
@@ -255,16 +266,6 @@ function CardBody({ state, unavailableMessage, scope, client, demo, onNavigate, 
           />
         </div>
 
-        <TrackingMap
-          position={display.position ? { latitude: display.position.latitude, longitude: display.position.longitude, accuracyM: display.position.accuracyM } : null}
-          destination={dest ? { latitude: dest.latitude, longitude: dest.longitude } : null}
-          draft={editable ? draft : null}
-          snappedEnd={shownRoute?.snapped_end ?? null}
-          route={shownRoute?.geometry.coordinates ?? null}
-          routeAttribution={shownRoute?.attribution ?? null}
-          description={description}
-          onPick={editable ? setDraft : undefined}
-        />
       </div>
     </section>
   );

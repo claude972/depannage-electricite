@@ -161,6 +161,15 @@
   .layout {
     grid-template-columns: minmax(300px, 2fr) minmax(0, 3fr);
   }
+  /* The map is first in the DOM; on wide screens it stays drawn on the right. */
+  .layout > .map {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .layout > .status {
+    grid-column: 1;
+    grid-row: 1;
+  }
 }
 .status {
   display: grid;
@@ -438,12 +447,8 @@
     font-size: 12px;
   }
 }
-/* < 1024 px : carte directement sous l’état et l’arrivée, avant les détails et la destination. */
-@media (max-width: 1023px) {
-  .layout > .map {
-    order: -1;
-  }
-}
+/* < 1024 px : carte directement sous l’état et l’arrivée, avant les détails et la destination —
+   c’est l’ordre du DOM (aucun `order`), donc aussi l’ordre de tabulation. */
 
 /* FASTSPLIT site/tracking theme — opt-in Delivo theme. Applies only inside a ThemeSurface
    (`.ui-v2`, --ui-* tokens for light and dark); unthemed consumers keep the rules above.
