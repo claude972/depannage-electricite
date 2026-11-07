@@ -71,8 +71,8 @@ export function retrievedLabel(at: string): string {
 export const COPY = {
   title: "Rayon des offres de missions",
   intro: "Choisissez une commune de référence et un rayon : le serveur ne vous propose alors que les offres dans ce rayon. Rien n’est filtré dans votre navigateur.",
-  basis: "Les distances sont une approximation entre centres de communes — ni votre position, ni l’adresse exacte des demandes. Votre position n’est jamais utilisée ici.",
-  unknownPostal: "Une demande dont le code postal n’a pas de centre de commune connu est rapprochée uniquement par code postal, sans distance.",
+  basis: "Rayon indicatif entre centres de communes : une approximation entre centres de communes, pas une distance de trajet ni une mesure depuis votre position. Votre position n’est jamais utilisée ici.",
+  unknownPostal: "Les offres dont le code postal ne permet pas d’identifier une commune unique restent soumises à vos zones postales (rapprochement par code postal uniquement).",
   none: "Aucun rayon enregistré : les offres ne sont pas limitées par distance.",
   current: (name: string, km: number) => `Rayon enregistré : ${km} km autour du centre de ${name}.`,
   noOptions: "Aucune commune de référence n’est disponible pour le moment : le rayon ne peut pas être choisi.",
@@ -89,6 +89,7 @@ export const COPY = {
   restored: "Un réglage envoyé depuis cet onglet n’a pas été confirmé : renvoyez-le (même commande) ou abandonnez-le.",
   storage: "Le stockage de cet onglet est indisponible : rien n’a été envoyé. Sans lui, une réponse perdue ne pourrait pas être renvoyée à l’identique.",
   saved: "Rayon enregistré. Les offres repartent de la première page.",
+  reread: "Réglage relu : voici l’état enregistré par le serveur. L’envoi précédent a pu être pris en compte ou non ; les offres suivent ce réglage.",
   cleared: "Rayon effacé. Les offres repartent de la première page.",
 } as const;
 export function statusError(status: number, retryAfterS: number | null): string {
@@ -118,7 +119,9 @@ export function tabStore(): Store | null {
 export type View = { phase: "loading" | "ready" | "error" | "forbidden"; data: RadiusView | null; busy: boolean; error: string; notice: string; pending: RadiusCommand | null; waitS: number | null };
 export const VIEW_INITIAL: View = { phase: "loading", data: null, busy: false, error: "", notice: "", pending: null, waitS: null };
 
-export function createRadiusController({ api, store, context, get, set, onSaved }: { api: () => RadiusApi; store: () => Store | null; context: Context; get: () => View; set: (v: View) => void; onSaved: () => void }) {
+/** What the host may rely on: a preference CONFIRMED by the server (GET or save reply). */
+export type ConfirmedRadius = { version: number; active: boolean };
+export function createRadiusController({ api, store, context, get, set, onConfirmed }: { api: () => RadiusApi; store: () => Store | null; context: Context; get: () => View; set: (v: View) => void; onConfirmed: (p: ConfirmedRadius) => void }) {
   let inFlight = false;
   let loadSeq = 0;
   let pendingFor: string | null = null;
@@ -137,16 +140,20 @@ export function createRadiusController({ api, store, context, get, set, onSaved 
     pendingFor = null;
     set({ ...VIEW_INITIAL, phase: "forbidden", error: statusError(status, null) });
   };
-  const load = async () => {
+  const confirm = (v: RadiusView) => onConfirmed({ version: v.preference.version, active: v.preference.radius_km !== null });
+  /** true only for a confirmed read under the same identity (then reported to the host). */
+  const load = async (): Promise<boolean> => {
     const my = ++loadSeq;
     const who = identity();
     set({ ...get(), phase: get().data ? get().phase : "loading" });
     const r = await api().load();
-    if (my !== loadSeq || !same(who)) return;
-    if (r.status === 401 || r.status === 403) return forbid(r.status);
+    if (my !== loadSeq || !same(who)) return false;
+    if (r.status === 401 || r.status === 403) return forbid(r.status), false;
     const v = r.status === 200 ? parseView(r.body) : null;
-    if (!v) return set({ ...get(), phase: get().data ? get().phase : "error", error: statusError(r.status === 200 ? 0 : r.status, r.retryAfterS) });
+    if (!v) return set({ ...get(), phase: get().data ? get().phase : "error", error: statusError(r.status === 200 ? 0 : r.status, r.retryAfterS) }), false;
     set({ ...get(), phase: "ready", data: v, error: get().phase === "error" ? "" : get().error });
+    confirm(v);
+    return true;
   };
   const persist = (cmd: RadiusCommand, who: { uid: string | null; gen: number }): boolean => {
     if (!who.uid) return false;
@@ -181,7 +188,7 @@ export function createRadiusController({ api, store, context, get, set, onSaved 
       clearStored(who);
       pendingFor = null;
       set({ ...get(), phase: "ready", data: v, busy: false, pending: null, notice: cmd.radius_km === null ? COPY.cleared : COPY.saved });
-      onSaved(); // the server now filters with the new radius: offers restart at page 1
+      confirm(v); // the server now filters with the new radius: the host restarts the offers
       return true;
     }
     if (r.status === 401 || r.status === 403) {
@@ -247,10 +254,17 @@ export function createRadiusController({ api, store, context, get, set, onSaved 
       }
       return send(p);
     },
-    discard() {
-      clearStored();
+    /** Uncertain reply: re-read the setting. A confirmed read replaces the unconfirmed command (it
+     *  is no longer offered for replay) WITHOUT claiming the save was cancelled. */
+    async reread(): Promise<boolean> {
+      if (inFlight) return false;
+      const who = identity();
+      const ok = await load();
+      if (!ok || !same(who)) return false;
+      clearStored(who);
       pendingFor = null;
-      set({ ...get(), pending: null, error: "", waitS: null });
+      set({ ...get(), pending: null, error: "", waitS: null, notice: COPY.reread });
+      return true;
     },
   };
 }

@@ -2,18 +2,20 @@
 // Artisan mission radius (Missions › Disponibles). Reference commune chosen from the server's list +
 // radius 1–200 km, or « Effacer » (both null). Approximation between commune centres, unknown postal
 // codes matched by postal code only, data source + retrieval date — all as returned by the server.
-// No geolocation, no client-side filtering: after a confirmed save, onSaved() lets the host restart
+// No geolocation, no client-side filtering: every CONFIRMED preference (GET, 409 re-read, « Relire
+// le réglage », save) is reported through onConfirmed so the host can restart
 // the offers at page 1. Command fenced under courant-private-mission-radius:. Demo: note, zero calls.
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { RADIUS_MAX, RADIUS_MIN } from "./contract";
-import { COPY, VIEW_INITIAL, createRadiusApi, createRadiusController, retrievedLabel, tabStore, type Context, type RadiusApi, type Store, type View } from "./model";
+import { COPY, VIEW_INITIAL, createRadiusApi, createRadiusController, retrievedLabel, tabStore, type Context, type ConfirmedRadius, type RadiusApi, type Store, type View } from "./model";
 import styles from "./mission-radius.module.css";
 
 export type MissionRadiusPanelProps = {
   demo: boolean;
   context: Context;
-  /** Called once per confirmed save: the host restarts the offers (page 1). */
-  onSaved: () => void;
+  /** Called with every preference the server CONFIRMED (never local edits): the host restarts the
+   *  offers when the version changes and only offers « Plus proches d’abord » when active. */
+  onConfirmed: (p: ConfirmedRadius) => void;
   api?: RadiusApi;
   store?: () => Store | null;
 };
@@ -40,15 +42,15 @@ function useWait(seconds: number | null, key: unknown) {
   return waiting;
 }
 
-function Live({ context, onSaved, api, store = tabStore }: MissionRadiusPanelProps) {
+function Live({ context, onConfirmed, api, store = tabStore }: MissionRadiusPanelProps) {
   const [view, setRaw] = useState<View>(VIEW_INITIAL);
   const ref = useRef(view);
   const set = (v: View) => {
     ref.current = v;
     setRaw(v);
   };
-  const latest = useRef({ api, store, context, onSaved });
-  latest.current = { api, store, context, onSaved };
+  const latest = useRef({ api, store, context, onConfirmed });
+  latest.current = { api, store, context, onConfirmed };
   const ctrl = useRef<ReturnType<typeof createRadiusController> | null>(null);
   if (!ctrl.current) {
     let client: RadiusApi | null = null;
@@ -58,7 +60,7 @@ function Live({ context, onSaved, api, store = tabStore }: MissionRadiusPanelPro
       context: { generation: () => latest.current.context.generation(), userId: () => latest.current.context.userId() },
       get: () => ref.current,
       set,
-      onSaved: () => latest.current.onSaved(),
+      onConfirmed: (p) => latest.current.onConfirmed(p),
     });
   }
   const c = ctrl.current;
@@ -144,7 +146,7 @@ function Live({ context, onSaved, api, store = tabStore }: MissionRadiusPanelPro
           {view.pending && (
             <div className={styles.actions}>
               <button type="button" className={styles.secondary} onClick={() => void c.retry()} disabled={view.busy || wait}>Réessayer</button>
-              <button type="button" className={styles.secondary} onClick={() => c.discard()} disabled={view.busy}>Abandonner</button>
+              <button type="button" className={styles.secondary} onClick={() => void c.reread()} disabled={view.busy}>Relire le réglage</button>
             </div>
           )}
         </div>

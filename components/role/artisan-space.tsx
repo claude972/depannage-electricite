@@ -97,6 +97,7 @@ import { PlatformPage } from "./platform-anchor";
 import { FeatureUnavailable } from "./feature-unavailable";
 import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
 import { AvailableMissionsPanel } from "../features/available-missions/available-missions-panel";
+import type { MissionsOrder } from "../features/available-missions/available-missions-model";
 import { MissionRadiusPanel } from "../features/mission-radius/mission-radius-panel";
 import type { MissionOffer } from "../features/available-missions/available-missions-model";
 import {
@@ -1101,14 +1102,19 @@ function toDemoOffer(i: Intervention): MissionOffer {
 }
 function Missions({ session, declinedIds }: { session: Session; declinedIds: string[] }) {
   const [segment, setSegment] = useState<MissionSegment>("available");
-  const [radiusRev, setRadiusRev] = useState(0);
+  const demo = session.mode === "demo";
+  // Radius as CONFIRMED by the server for this identity; rev bumps when its version changes.
+  const [radius, setRadius] = useState<{ ident: string; version: number; active: boolean; rev: number } | null>(null);
+  const [order, setOrder] = useState<MissionsOrder>("oldest_first");
+  const ident = `${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`;
+  const confirmed = radius?.ident === ident ? radius : null;
+  const shownOrder: MissionsOrder = !demo && confirmed?.active ? order : "oldest_first";
   const m = artisanMissions(session.data.interventions, session.profileId);
   const offers = m.offers.filter((o) => !declinedIds.includes(o.id));
   const hidden = m.offers.length - offers.length;
   const done = [...m.awaitingPayment, ...m.done].sort(
     (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
   );
-  const demo = session.mode === "demo";
   // Live: offers come from the paged server feed (beyond 100), so no exhaustive count is shown.
   const options = missionSegmentOptions({ offers: demo ? offers.length : null, active: m.active.length, done: done.length });
   const open = (id: string) => session.go("mission", id);
@@ -1122,11 +1128,22 @@ function Missions({ session, declinedIds }: { session: Session; declinedIds: str
         <Segments label="Filtrer les missions" value={segment} options={options} onChange={setSegment} />
       </div>
       {segment === "available" && (
-        <MissionRadiusPanel demo={demo} context={session.mutationContext} onSaved={() => setRadiusRev((n) => n + 1)} />
+        <MissionRadiusPanel
+          demo={demo}
+          context={session.mutationContext}
+          onConfirmed={(p) => {
+            setRadius((prev) => ({ ident, ...p, rev: prev && prev.ident === ident && prev.version !== p.version ? prev.rev + 1 : prev?.rev ?? 0 }));
+            if (!p.active) setOrder("oldest_first"); // no active radius: nearest is not offered any more
+          }}
+        />
       )}
       {segment === "available" && (
         <AvailableMissionsPanel
-          key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${demo ? "demo" : "live"}|${radiusRev}`}
+          key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${demo ? "demo" : "live"}|${confirmed?.rev ?? 0}|${shownOrder}`}
+          order={shownOrder}
+          nearestAvailable={!demo && confirmed?.active === true}
+          radiusVersion={confirmed?.version ?? null}
+          onOrderChange={setOrder}
           context={session.mutationContext}
           demo={demo}
           demoItems={demo ? offers.map(toDemoOffer) : undefined}

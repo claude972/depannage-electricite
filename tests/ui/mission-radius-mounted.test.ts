@@ -46,10 +46,10 @@ const missionsApi = {
 };
 const ctx = { userId: () => "${UID}", generation: () => 1 };
 function Host() {
-  const [radiusRev, setRadiusRev] = useState(0);
+  const [radiusRev, setRadiusRev] = useState({ v: null, n: 0 });
   return h("div", null,
-    h(MissionRadiusPanel, { demo: false, context: ctx, api: radiusApi, onSaved: () => setRadiusRev((n) => n + 1) }),
-    h(AvailableMissionsPanel, { key: "uid|1|live|" + radiusRev, context: ctx, api: missionsApi, onAccept: async () => false, onOpenAccepted: () => {} }));
+    h(MissionRadiusPanel, { demo: false, context: ctx, api: radiusApi, onConfirmed: (p) => setRadiusRev((prev) => (prev.v !== null && prev.v !== p.version ? { v: p.version, n: prev.n + 1 } : { v: p.version, n: prev.n })) }),
+    h(AvailableMissionsPanel, { key: "uid|1|live|" + radiusRev.n, context: ctx, api: missionsApi, onAccept: async () => false, onOpenAccepted: () => {} }));
 }
 document.documentElement.setAttribute("data-ui-theme", location.search.includes("dark") ? "dark" : "light");
 const div = document.createElement("div"); document.body.appendChild(div);
@@ -81,7 +81,7 @@ test("Chromium : bornes refusées sans appel, enregistrement ⇒ offres relancé
       await page.locator('[data-mission-radius-current="none"]').waitFor();
       const text = await page.locator("[data-mission-radius]").innerText();
       assert.match(text, /approximation entre centres de communes/);
-      assert.match(text, /uniquement par code postal/);
+      assert.match(text, /commune unique restent soumises à vos zones postales/);
       assert.match(text, /geo\.api\.gouv\.fr[\s\S]*1 novembre 2026/);
       const layout = (await page.evaluate(SMALL)) as { sw: number; small: string[] };
       assert.equal(layout.sw, 360, theme);
