@@ -40,3 +40,10 @@ Frontend seul, base writer claude/ui-palette-b-full. QR généré LOCALEMENT (qr
 
 Responsable : Codex ROOT, un seul auteur backend. Périmètre : nouvelle RPC `available_missions_page` et GET `/api/artisan/missions`, schéma de projection anonyme et tests ciblés. L'éligibilité postale/catégorie/disponibilité et l'acceptation atomique existantes restent l'autorité. Pagination chronologique stable, curseur lié à l'identité, borne 50+1 ; aucune adresse/contact précis avant attribution, aucune distance inventée, aucun compteur exhaustif non prouvé. Backend d'abord puis feuille UI Claude séparée après contrat. Vérification : vrais handlers, SQL avec >100 offres et refus de rôle/éligibilité ; intégration puis preview et recette bornée. Aucune configuration de territoire inventée.
 
+## REFUND-EXECUTION-CONTRACT — PLAN SEULEMENT, Codex backend
+
+Basee6aa35a ; branchecodex/refund-execution ; contratdocs/REFUND_EXECUTION_CONTRACT.md à contre-revoir ROOT AVANT toutcode. Première trancheproposée remboursement approuvé→émission idempotente→confirmationwebhook, fournisseurinjecté sanscloud. application_fee/transfer/payout restentOPEN, pas de faux virement confirmé. Aucun fichierapp/SQL modifié dansceclaimdoc.
+
+## REFUND-EXECUTION — GO CODE ROOT
+
+GO explicite reçu après contratdc58, basead069641 ; Codex backend unique, scope et ownership du contrat conservés. Code/SQL/tests seulement, aucun fournisseur réel/cloud/credentials. Refus explicites configuration/policy/live ; autresfamilles restentOPEN.

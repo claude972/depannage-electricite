@@ -26,7 +26,7 @@ function fixture(object: Record<string, unknown>, type = "checkout.session.expir
     "@/lib/supabase/stripe": { stripeClient: () => ({ webhooks: { constructEvent: () => {
       calls.push("signature");
       if (!signed) throw Error("Bad signature");
-      return { id: "evt_FAKE_LOCAL_ONLY", type, data: { object } };
+      return { id: "evt_FAKE_LOCAL_ONLY", livemode: false, type, data: { object } };
     } } }) },
     "@/lib/supabase/server": { ...helpers, adminClient: () => {
       calls.push("admin");
