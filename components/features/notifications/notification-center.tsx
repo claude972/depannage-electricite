@@ -97,10 +97,12 @@ function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate
           <button type="button" className="button outline" onClick={() => setReloadKey((k) => k + 1)}>Réessayer</button>
         </div>
       )}
-      {list.status === "ready" && list.items.length === 0 && <Empty icon="bell" title={unreadOnly ? NOTIFICATION_COPY.emptyUnread : NOTIFICATION_COPY.empty}>Les événements de vos dossiers apparaîtront ici. Aucun e-mail ni SMS n’est envoyé.</Empty>}
+      {list.status === "ready" && list.items.length === 0 && <Empty level={2} icon="bell" title={unreadOnly ? NOTIFICATION_COPY.emptyUnread : NOTIFICATION_COPY.empty}>Les événements de vos dossiers apparaîtront ici. Aucun e-mail ni SMS n’est envoyé.</Empty>}
       {list.items.length > 0 && (
         <>
           {page && <p className={styles.summary}>{page.total} notification{page.total > 1 ? "s" : ""}{unreadOnly ? " non lue" + (page.total > 1 ? "s" : "") : ""} · {list.items.length} affichée{list.items.length > 1 ? "s" : ""}</p>}
+          {/* Section heading under the page h1 so each notification title (h3) never skips a level. */}
+          <h2 className="sr-only">Notifications reçues</h2>
           <ul className={styles.list}>
             {list.items.map((n) => (
               <li key={n.id}>
