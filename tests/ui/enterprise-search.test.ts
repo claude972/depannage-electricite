@@ -202,6 +202,43 @@ test("périmètre : un 401/403 tardif de l’organisation A ne vide pas B ; expo
   same(await page2.c.exportCsv(F(), () => F(), page2.get().key), true, "a page change is not a scope change");
 });
 
+test("autorisation refusée entre la liste et l’export du même périmètre ; sortie du périmètre pendant l’export", async () => {
+  const blob = { kind: "blob" };
+  const ok = { status: 200, blob: blob as unknown as Blob, filename: "interventions.csv", csv: true };
+  // export 403 while a list GET of the same scope is held ⇒ the late list 200 shows nothing
+  let hold2!: (r: Model.ListResult) => void;
+  const b = harness({ lists: [res(200, pageOf([row(1)], 1, 1)), new Promise((r) => (hold2 = r))], exports: [{ status: 403, blob: null, filename: null, csv: false }] });
+  b.c.query(F(), 1); await b.tick();
+  const k = b.get().key;
+  const exp = b.c.exportCsv(F(), () => F(), k);
+  b.c.retry(k); // a list GET of the same scope is now in flight (held)
+  same(await exp, false);
+  same(b.get().phase, "forbidden");
+  hold2(res(200, pageOf([row(9)], 1, 1))); await b.tick();
+  same([b.get().phase, b.get().items], ["forbidden", []], "export 403 ⇒ the late list 200 shows nothing");
+  // list 403 while an export is held ⇒ the late CSV 200 is not saved
+  let holdExp!: (r: Model.ExportResult) => void;
+  const c = harness({ lists: [res(200, pageOf([row(1)], 1, 1)), res(403)], exports: [new Promise((r) => (holdExp = r))] });
+  c.c.query(F(), 1); await c.tick();
+  const k2 = c.get().key;
+  const exp2 = c.c.exportCsv(F(), () => F(), k2);
+  c.c.retry(k2); await c.tick();
+  same(c.get().phase, "forbidden");
+  holdExp(ok);
+  same([await exp2, c.saved], [false, []], "list 403 ⇒ the late CSV 200 is never saved");
+  // A → no scope → A: the controller is stopped when leaving the scope ⇒ no download
+  let holdExp3!: (r: Model.ExportResult) => void;
+  const d = harness({ lists: [res(200, pageOf([row(1)], 1, 1))], exports: [new Promise((r) => (holdExp3 = r))] });
+  d.c.query(F(), 1); await d.tick();
+  const exp3 = d.c.exportCsv(F(), () => F(), d.get().key);
+  d.c.stop(); // what the hook does when filters become null
+  holdExp3(ok);
+  same([await exp3, d.saved], [false, []]);
+  const hook = readFileSync("components/features/enterprise-search/use-enterprise-search.ts", "utf8");
+  assert.match(hook, /const active = enabled && filters !== null;/);
+  assert.match(hook, /\}, \[active, identity\]\);/, "the controller lives only while a scope exists");
+});
+
 test("compteurs du tableau de bord (e857e56) : lecture stricte, même périmètre, urgent ≤ open, clé au rendu, 401 tardif ignoré", async () => {
   const body = oc.countsBody(ORG, S1)!;
   const ok = { organization_id: ORG, site_id: S1, counts: { open: 123, urgent: 61 }, captured_at: "2026-11-07T00:00:00Z" };
@@ -306,6 +343,32 @@ w.frames = async () => {
   root.unmount();
   return steps;
 };
+w.scopeExit = async () => {
+  let release;
+  const saved = [];
+  const origCreate = URL.createObjectURL;
+  URL.createObjectURL = (b) => { saved.push(b.size); return origCreate(b); };
+  w.fetch = async (url, init) => {
+    const b = JSON.parse(init.body);
+    if (b.action === "export") { await new Promise((r) => (release = r)); return new Response("x", { status: 200, headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": 'attachment; filename="interventions.csv"' } }); }
+    return Response.json({ items: [row(1)], total: 1, page: { number: 1, limit: 10, pages: 1 } });
+  };
+  const ctxI = { userId: () => "${USER}", generation: () => 0 };
+  const A = { organization_id: "${ORG}", site_id: null, category: null, status: null, search: "", sort: "recent" };
+  let api = null;
+  function Probe({ f }) { api = useEnterpriseSearch({ enabled: true, context: ctxI, filters: f, page: 1 }); return null; }
+  const div = document.createElement("div"); document.body.appendChild(div);
+  const root = createRoot(div);
+  root.render(h(StrictMode, null, h(Probe, { f: A }))); await tick(300);
+  const p = api.exportCsv();
+  await tick(50);
+  root.render(h(StrictMode, null, h(Probe, { f: null }))); await tick(100);
+  root.render(h(StrictMode, null, h(Probe, { f: { ...A } }))); await tick(300);
+  release(); const result = await p; await tick(100);
+  URL.createObjectURL = origCreate;
+  root.unmount();
+  return { result, saved };
+};
 w.run = async () => {
   const bodies = [], opened = [], saved = [], revoked = [];
   let exportGate = null;
@@ -399,6 +462,8 @@ test("aucun ancien cadre (Chromium, StrictMode) : 1er rendu après changement de
     const errors: string[] = [];
     page.on("pageerror", (e: Error) => errors.push(String(e)));
     await page.goto(`http://127.0.0.1:${(server.address() as { port: number }).port}/`);
+    const exit = (await page.evaluate(() => (window as unknown as { scopeExit: () => Promise<unknown> }).scopeExit())) as { result: boolean; saved: number[] };
+    same([exit.result, exit.saved], [false, []], "A → no scope → A during the export ⇒ no download (real hook)");
     const r = (await page.evaluate(() => (window as unknown as { frames: () => Promise<unknown> }).frames())) as Record<string, any>;
     same([r.ready.phase, r.ready.ids.length, r.ready.countsPhase, r.ready.open], ["ready", 10, "ready", 9]);
     let prevIds: string[] = r.ready.ids;
