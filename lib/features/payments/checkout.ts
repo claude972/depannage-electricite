@@ -50,7 +50,7 @@ export async function createQuoteCheckout(request:Request){
    if(["needs_review","awaiting_bank","paid","expired"].includes(l.status))throw conflict();
    if(l.session_id){
     const s=checkSession(await stripe.checkout.sessions.retrieve(l.session_id),l,live);
-    if(s.status==="open"&&s.payment_status==="unpaid"){if(!safeCheckoutUrl(s.url))throw unavailable();return Response.json({url:s.url},{headers:PAYMENT_HEADERS});}
+    if(s.status==="open"&&s.payment_status==="unpaid"){if(!safeCheckoutUrl(s.url))throw unavailable();await read(admin,user.id,l.id,quote_id);return Response.json({url:s.url},{headers:PAYMENT_HEADERS});}
     if(s.status==="expired"&&s.payment_status==="unpaid"){await reconcile(admin,l,"expired");continue;}
     if(s.status==="complete"){await reconcile(admin,l,"awaiting_bank");throw conflict();}
     throw unavailable();
@@ -70,6 +70,7 @@ export async function createQuoteCheckout(request:Request){
    if(s.status!=="open"||s.payment_status!=="unpaid"){await reconcile(admin,l,"needs_review");throw conflict();}
    if(!safeCheckoutUrl(s.url))throw unavailable();
    const bound=await admin.rpc("bind_platform_checkout",{p_id:l.id,p_actor:user.id,p_session:s.id,p_amount:l.amount_cents,p_currency:l.currency,p_expires:new Date(s.expires_at*1000).toISOString()});dbError(bound.error);
+   await read(admin,user.id,l.id,quote_id);
    return Response.json({url:s.url},{headers:PAYMENT_HEADERS});
   }
   throw conflict();
