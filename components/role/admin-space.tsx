@@ -768,7 +768,7 @@ export function AdminSpace({ session }: { session: Session }) {
         </Panel>
         {/* Invoices, credit notes and the register live in the platform finance space. */}
         <p className="inline-note" data-admin-finance-link="">
-          <a href="#platform-finance">Factures, avoirs et registre : espace Finance plateforme</a>
+          <a className={styles.inlineLink} href="#platform-finance">Factures, avoirs et registre : espace Finance plateforme</a>
         </p>
         <Unavailable
           title="Remboursements et litiges"
