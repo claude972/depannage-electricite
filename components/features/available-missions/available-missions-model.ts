@@ -4,13 +4,22 @@
 //   GET /api/artisan/missions[?cursor=<opaque>|?id=<uuid>] → { items ≤50 (anonymized), eligible,
 //   captured_at, page: { limit: 50, has_more, next_cursor }, projection: "anonymized",
 //   order: "oldest_first", distance: "not_calculated" }
-// No total count, no distance, no private field (address, contact, description) before acceptance.
+// No total count, no private field (address, contact, description) before acceptance.
+// « Plus proches d’abord » (ROOT 12f62f2, same route): GET ?order=nearest[&cursor=…] → same reply with
+//   order: "nearest_first", distance: "commune_centre_bands", items + distance_band_km (5–200, ×5, or
+//   null = no unique commune centre, listed last). Band = greatest(5, ceil(km / 5) × 5) between commune
+//   centres (SQL available_missions_by_distance) ⇒ d = 5 means ≤ 5 km, d > 5 means ]d−5, d] km. The
+//   ranked cursor carries radius_version; no active radius or another radius version ⇒ 422. The ?id
+//   point read stays chronological (no band): the summary keeps the list-row band.
 import { z } from "zod";
-import { missionOfferSchema, type MissionOffer } from "../../../lib/features/artisan-missions/schema";
+import { missionOfferSchema, rankedCursorSchema, rankedOfferSchema, type MissionOffer } from "../../../lib/features/artisan-missions/schema";
 
 export type { MissionOffer };
+export type MissionsOrder = "oldest_first" | "nearest_first";
+/** An offer as listed: ranked pages add the band (null = unknown distance). */
+export type ListedOffer = MissionOffer & { distance_band_km?: number | null };
 export type MissionsResult = { status: number; body: unknown; retryAfter: number | null };
-export type MissionsApi = { list(cursor: string | null): Promise<MissionsResult>; point(id: string): Promise<MissionsResult> };
+export type MissionsApi = { list(cursor: string | null, order?: MissionsOrder): Promise<MissionsResult>; point(id: string): Promise<MissionsResult> };
 export type MissionsContext = { generation(): number; userId(): string | null };
 export const DEFAULT_MISSIONS_CONTEXT: MissionsContext = { generation: () => 0, userId: () => null };
 export const MISSIONS_PATH = "/api/artisan/missions";
@@ -44,10 +53,17 @@ async function timed(fetcher: typeof fetch, url: string, timeoutMs: number): Pro
     clearTimeout(timer);
   }
 }
+/** Chronological URLs unchanged; nearest adds order=nearest. The cursor is sent exactly as received. */
+export function listUrl(cursor: string | null, order: MissionsOrder = "oldest_first"): string {
+  const q: string[] = [];
+  if (order === "nearest_first") q.push("order=nearest");
+  if (cursor !== null) q.push(`cursor=${encodeURIComponent(cursor)}`);
+  return q.length ? `${MISSIONS_PATH}?${q.join("&")}` : MISSIONS_PATH;
+}
 /** Same-origin GET only; the cursor is sent exactly as received (opaque base64url). */
 export function createMissionsApi(fetcher: typeof fetch = (...a) => fetch(...a), { timeoutMs = MISSIONS_TIMEOUT_MS } = {}): MissionsApi {
   return {
-    list: (cursor) => timed(fetcher, cursor === null ? MISSIONS_PATH : `${MISSIONS_PATH}?cursor=${encodeURIComponent(cursor)}`, timeoutMs),
+    list: (cursor, order = "oldest_first") => timed(fetcher, listUrl(cursor, order), timeoutMs),
     point: (id) => timed(fetcher, `${MISSIONS_PATH}?id=${encodeURIComponent(id)}`, timeoutMs),
   };
 }
@@ -64,17 +80,71 @@ const pageSchema = z
     distance: z.literal("not_calculated"),
   })
   .strict();
-export type MissionsPageDTO = z.infer<typeof pageSchema>;
-/** Anything off-contract ⇒ null (an error, never an empty list). */
-export function parseMissionsPage(body: unknown): MissionsPageDTO | null {
-  const parsed = pageSchema.safeParse(body);
+const rankedPageSchema = z
+  .object({
+    items: z.array(rankedOfferSchema).max(50),
+    eligible: z.boolean(),
+    captured_at: z.iso.datetime({ offset: true }),
+    page: z.object({ limit: z.literal(50), has_more: z.boolean(), next_cursor: z.string().min(1).max(400).nullable() }).strict(),
+    projection: z.literal("anonymized"),
+    order: z.literal("nearest_first"),
+    distance: z.literal("commune_centre_bands"),
+  })
+  .strict();
+export type MissionsPageDTO = { items: ListedOffer[]; eligible: boolean; captured_at: string; page: { limit: 50; has_more: boolean; next_cursor: string | null }; radius_version?: number | null };
+/** radius_version carried by a ranked cursor (base64url JSON, strict); null if absent/undecodable. */
+export function cursorRadiusVersion(cursor: string | null): number | null {
+  if (!cursor || !/^[A-Za-z0-9_-]{1,400}$/.test(cursor)) return null;
+  try {
+    // Plain base64url → ASCII (the cursor holds ids, timestamps and integers only); no atob/Buffer.
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    let bits = 0, acc = 0, json = "";
+    for (const ch of cursor) {
+      acc = (acc << 6) | alphabet.indexOf(ch);
+      bits += 6;
+      if (bits >= 8) {
+        bits -= 8;
+        const code = (acc >> bits) & 0xff;
+        if (code > 0x7e) return null;
+        json += String.fromCharCode(code);
+      }
+    }
+    const c = rankedCursorSchema.safeParse(JSON.parse(json));
+    return c.success ? c.data.radius_version : null;
+  } catch {
+    return null;
+  }
+}
+/** Anything off-contract — including a page of the OTHER order — ⇒ null (an error, never an empty list). */
+export function parseMissionsPage(body: unknown, order: MissionsOrder = "oldest_first"): MissionsPageDTO | null {
+  const parsed = (order === "nearest_first" ? rankedPageSchema : pageSchema).safeParse(body);
   if (!parsed.success) return null;
-  const p = parsed.data;
+  const p: MissionsPageDTO = { ...parsed.data };
+  if (order === "nearest_first") {
+    // Bands ascending, unknown (null) last — as the server orders them.
+    const rank = (o: ListedOffer) => o.distance_band_km ?? 201;
+    if (p.items.some((o, i) => i > 0 && rank(o) < rank(p.items[i - 1]))) return null;
+    p.radius_version = cursorRadiusVersion(p.page.next_cursor);
+    if (p.page.next_cursor !== null && p.radius_version === null) return null;
+  }
   if (p.page.has_more !== (p.page.next_cursor !== null)) return null;
   if (!p.eligible && (p.items.length || p.page.has_more)) return null;
   if (new Set(p.items.map((i) => i.id)).size !== p.items.length) return null;
   return p;
 }
+/** « 5–10 km » / « jusqu’à 5 km » / « distance inconnue » — approximation between commune centres. */
+export function bandLabel(band: number | null | undefined): string {
+  if (band === null || band === undefined) return "distance inconnue";
+  return band <= 5 ? "jusqu’à 5 km" : `${band - 5}–${band} km`;
+}
+export const NEAREST_COPY = {
+  oldest: "Chronologique",
+  nearest: "Plus proches d’abord",
+  label: "Ordre des offres",
+  basis: "Distances approximatives entre centres de communes (tranches de 5 km) — ni GPS, ni durée de trajet. « Distance inconnue » : commune non identifiable, offre classée en dernier.",
+  refused: "Le tri « Plus proches d’abord » n’est plus possible : le rayon de recherche a changé ou est désactivé. Rien n’a été basculé automatiquement.",
+  back: "Revenir au chronologique",
+} as const;
 export function parsePoint(body: unknown, id: string): MissionOffer | null {
   const p = parseMissionsPage(body);
   if (!p || !p.eligible || p.items.length !== 1 || p.items[0].id.toLowerCase() !== id.toLowerCase()) return null;
@@ -93,6 +163,7 @@ export const MISSIONS_COPY = {
   gone: "Cette offre n’est plus disponible avec vos droits actuels.",
   moreFailed: "La suite des offres n’a pas pu être chargée. Réessayez.",
   anonymized: "Offres anonymisées : l’adresse, le contact et la description sont transmis après acceptation. Distance non calculée.",
+  anonymizedNearest: "Offres anonymisées : l’adresse, le contact et la description sont transmis après acceptation.",
   acceptFailed: "L’acceptation n’a pas été confirmée. Vérifiez la liste : l’offre a pu être prise par un autre artisan.",
 } as const;
 export const shownCount = (n: number, hasMore: boolean) => `${n} offre${n > 1 ? "s" : ""} affichée${n > 1 ? "s" : ""}${hasMore ? " · il y en a d’autres" : ""}`;
@@ -102,7 +173,11 @@ export type PointState = { id: string; phase: "loading" | "ready" | "gone" | "er
 export type MissionsState = {
   phase: "loading" | "ready" | "error";
   eligible: boolean;
-  items: MissionOffer[];
+  items: ListedOffer[];
+  /** Nearest only: the server refused the ranked feed (422 — radius changed or inactive). */
+  nearestRefused: boolean;
+  /** Nearest only: radius_version carried by the loaded pages' cursor (never mixed). */
+  radiusVersion: number | null;
   /** captured_at of every loaded page, in order (each page is its own snapshot). */
   captured: string[];
   page: MissionsPageDTO["page"] | null;
@@ -113,24 +188,31 @@ export type MissionsState = {
   accepting: string | null;
   acceptError: string;
 };
-export const MISSIONS_INITIAL: MissionsState = { phase: "loading", eligible: false, items: [], captured: [], page: null, error: "", loadingMore: false, moreError: "", point: null, accepting: null, acceptError: "" };
+export const MISSIONS_INITIAL: MissionsState = { phase: "loading", eligible: false, items: [], nearestRefused: false, radiusVersion: null, captured: [], page: null, error: "", loadingMore: false, moreError: "", point: null, accepting: null, acceptError: "" };
 
 const failure = (status: number) => (status === 401 ? MISSIONS_COPY.session : status === 403 ? MISSIONS_COPY.forbidden : MISSIONS_COPY.loadFailed);
-export function applyFirst(s: MissionsState, r: MissionsResult): MissionsState {
-  const p = r.status === 200 ? parseMissionsPage(r.body) : null;
-  if (!p) return { ...s, phase: "error", items: [], captured: [], page: null, error: failure(r.status) };
-  return { ...s, phase: "ready", eligible: p.eligible, items: p.items, captured: [p.captured_at], page: p.page, error: "", moreError: "" };
+export function applyFirst(s: MissionsState, r: MissionsResult, order: MissionsOrder = "oldest_first"): MissionsState {
+  if (order === "nearest_first" && r.status === 422) return { ...s, phase: "error", items: [], captured: [], page: null, nearestRefused: true, radiusVersion: null, error: NEAREST_COPY.refused };
+  const p = r.status === 200 ? parseMissionsPage(r.body, order) : null;
+  if (!p) return { ...s, phase: "error", items: [], captured: [], page: null, nearestRefused: false, radiusVersion: null, error: failure(r.status) };
+  return { ...s, phase: "ready", eligible: p.eligible, items: p.items, captured: [p.captured_at], page: p.page, nearestRefused: false, radiusVersion: p.radius_version ?? null, error: "", moreError: "" };
 }
 /** Next page: appended with dedup by id; a 422 (cursor refused) is handled by the controller. */
-export function applyMore(s: MissionsState, r: MissionsResult): MissionsState {
-  const p = r.status === 200 ? parseMissionsPage(r.body) : null;
+export function applyMore(s: MissionsState, r: MissionsResult, order: MissionsOrder = "oldest_first"): MissionsState {
+  const p = r.status === 200 ? parseMissionsPage(r.body, order) : null;
   if (!p || !p.eligible) return { ...s, loadingMore: false, moreError: r.status === 401 ? MISSIONS_COPY.session : MISSIONS_COPY.moreFailed };
   const seen = new Set(s.items.map((i) => i.id));
   const fresh = p.items.filter((i) => !seen.has(i.id) && (seen.add(i.id), true));
   return { ...s, items: [...s.items, ...fresh], captured: [...s.captured, p.captured_at], page: p.page, loadingMore: false, moreError: "" };
 }
 
-export function createMissionsController({ api, context = DEFAULT_MISSIONS_CONTEXT, get, set }: { api: () => MissionsApi; context?: MissionsContext; get: () => MissionsState; set: (s: MissionsState) => void }) {
+/** Was a ranked page appended across a radius version change? (never mix ⇒ restart) */
+export const mixesRadius = (s: MissionsState, r: MissionsResult): boolean => {
+  const p = r.status === 200 ? parseMissionsPage(r.body, "nearest_first") : null;
+  return Boolean(p && p.radius_version !== null && s.radiusVersion !== null && p.radius_version !== s.radiusVersion);
+};
+
+export function createMissionsController({ api, context = DEFAULT_MISSIONS_CONTEXT, get, set, order = "oldest_first", radiusVersion = null }: { api: () => MissionsApi; context?: MissionsContext; get: () => MissionsState; set: (s: MissionsState) => void; order?: MissionsOrder; /** Nearest: the radius version the host CONFIRMED (GET). */ radiusVersion?: number | null }) {
   let seq = 0;
   let pointSeq = 0;
   let accepting = false;
@@ -149,11 +231,15 @@ export function createMissionsController({ api, context = DEFAULT_MISSIONS_CONTE
   const first = async (): Promise<boolean> => {
     const my = ++seq;
     const gen = context.generation(), uid = context.userId();
-    set({ ...get(), phase: "loading", items: [], captured: [], page: null, error: "", loadingMore: false, moreError: "" });
-    const r = await call(() => api().list(null));
+    set({ ...get(), phase: "loading", items: [], captured: [], page: null, error: "", loadingMore: false, moreError: "", point: null, nearestRefused: false, radiusVersion: null });
+    const r = await call(() => api().list(null, order));
     if (!same(gen, uid) || my !== seq) return false;
     loadedFor = `${uid ?? ""}|${gen}`;
-    set(applyFirst(get(), r));
+    const next = applyFirst(get(), r, order);
+    // Ranked pages of a radius version other than the confirmed one are never shown.
+    if (order === "nearest_first" && radiusVersion !== null && next.radiusVersion !== null && next.radiusVersion !== radiusVersion)
+      return set({ ...next, phase: "error", items: [], captured: [], page: null, nearestRefused: true, error: NEAREST_COPY.refused }), true;
+    set(next);
     return true;
   };
   return {
@@ -168,10 +254,12 @@ export function createMissionsController({ api, context = DEFAULT_MISSIONS_CONTE
       const cursor = s.page.next_cursor;
       const gen = context.generation(), uid = context.userId();
       set({ ...s, loadingMore: true, moreError: "" });
-      const r = await call(() => api().list(cursor));
+      const r = await call(() => api().list(cursor, order));
       if (!same(gen, uid) || my !== seq) return false;
       if (r.status === 422) return first(); // cursor refused: restart from page 1
-      set(applyMore(get(), r));
+      // A ranked page from another radius version is never appended: restart from page 1.
+      if (order === "nearest_first" && mixesRadius(get(), r)) return first();
+      set(applyMore(get(), r, order));
       return true;
     },
     /** Anonymized summary of one offer (?id=), never the private dossier. 404 ⇒ removed locally. */

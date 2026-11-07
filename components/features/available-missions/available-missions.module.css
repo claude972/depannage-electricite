@@ -144,3 +144,8 @@
     flex: 1 1 100%;
   }
 }
+
+/* Sort control (nearest): two 44 px buttons, pressed state from the mount order. */
+.sort { display: flex; flex-wrap: wrap; gap: 8px; }
+.sort > button[aria-pressed="true"] { border-color: var(--ui-primary); color: var(--ui-text); opacity: 1; cursor: default; }
+@media (max-width: 640px) { .sort > button { flex: 1 1 100%; } }

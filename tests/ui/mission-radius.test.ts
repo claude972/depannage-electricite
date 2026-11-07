@@ -2,7 +2,8 @@
 // bounds refused locally (0, 201, decimals) and both-null clear; command fenced under
 // courant-private-mission-radius:<uid>:<gen> (read-back or 0 POST, strict restore, identity change ⇒
 // dropped, 401/403 clear, 409 honest + reload, 503 same command, 422 bounds message); a confirmed save
-// calls onSaved once (offers restart); no geolocation, no client-side filtering; demo zero calls.
+// reports every CONFIRMED preference through onConfirmed (host restarts offers on a version change);
+// « Relire le réglage » after an uncertain reply never claims a cancellation; no geolocation, no client-side filtering; demo zero calls.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -58,7 +59,7 @@ function ctrl(load: () => Reply, save: (body: Model.RadiusCommand, n: number) =>
   const mem = memStore();
   const store = o.store === undefined ? mem.store : o.store;
   let view: Model.View = m.VIEW_INITIAL;
-  let saved = 0;
+  const confirmed: Model.ConfirmedRadius[] = [];
   const c = m.createRadiusController({
     api: () => ({
       load: async () => { calls.push({ kind: "GET" }); return load(); },
@@ -68,15 +69,15 @@ function ctrl(load: () => Reply, save: (body: Model.RadiusCommand, n: number) =>
     context: { generation: () => ctx.gen, userId: () => ctx.uid },
     get: () => view,
     set: (v) => (view = v),
-    onSaved: () => saved++,
+    onConfirmed: (p) => confirmed.push(p),
   });
-  return { c, calls, mem, ctx, view: () => view, saved: () => saved };
+  return { c, calls, mem, ctx, view: () => view, versions: () => confirmed.map((x) => `${x.version}${x.active ? "+" : "-"}`) };
 }
 const ok = (body: unknown): Model.Result => ({ status: 200, body, retryAfterS: null });
 const status = (s: number, retryAfterS: number | null = null): Model.Result => ({ status: s, body: { error: "x" }, retryAfterS });
 const echo = (b: Model.RadiusCommand) => ok(VIEW({ version: b.expected_version + 1, reference_code: b.reference_code, radius_km: b.radius_km }));
 
-test("enregistrer : commande stockée et relue avant le POST, réponse = même vue, onSaved une fois ; refus local ⇒ 0 POST", async () => {
+test("enregistrer : commande stockée et relue avant le POST, réponse = même vue, préférences confirmées remontées ; refus local ⇒ 0 POST", async () => {
   assert.equal(m.PENDING_PREFIX, "courant-private-mission-radius:");
   assert.equal(m.pendingKey(UID, 1), `courant-private-mission-radius:${UID}:1`);
   let stored: string | undefined;
@@ -91,17 +92,17 @@ test("enregistrer : commande stockée et relue avant le POST, réponse = même v
   assert.equal(JSON.stringify(h.calls[1].body), JSON.stringify({ expected_version: 3, reference_code: "97209", radius_km: 25 }));
   assert.equal(JSON.parse(stored!).command.radius_km, 25);
   assert.equal(h.mem.map.size, 0);
-  assert.equal(h.saved(), 1, "offers restarted once");
+  assert.deepEqual(h.versions(), ["3-", "4+"], "GET then the confirmed save");
   assert.equal(h.view().data!.preference.radius_km, 25);
   assert.equal(await h.c.clear(), true);
   assert.equal(JSON.stringify(h.calls[2].body), JSON.stringify({ expected_version: 4, reference_code: null, radius_km: null }));
   assert.equal(h.view().notice, m.COPY.cleared);
-  assert.equal(h.saved(), 2);
+  assert.deepEqual(h.versions(), ["3-", "4+", "5-"]);
   // A reply that does not carry what was sent is not a confirmation.
   const bad = ctrl(() => ok(VIEW()), () => ok(VIEW({ version: 4, reference_code: "97213", radius_km: 25 })));
   await bad.c.load();
   await bad.c.save("97209", "25");
-  assert.equal(bad.saved(), 0);
+  assert.deepEqual(bad.versions(), ["3-"], "an unconfirmed reply is never reported");
   assert.equal(bad.view().error, m.COPY.retry);
 });
 
@@ -126,7 +127,7 @@ test("503 / perdu ⇒ même commande ; 401/403 ⇒ effacé ; 409 ⇒ honnête + 
   const posts = h.calls.filter((x) => x.kind === "POST").map((x) => JSON.stringify(x.body));
   assert.equal(posts.length, 3);
   assert.equal(new Set(posts).size, 1);
-  assert.equal(h.saved(), 1);
+  assert.deepEqual(h.versions(), ["3-", "4+"]);
   for (const s of [401, 403]) {
     const f = ctrl(() => ok(VIEW()), () => status(s));
     await f.c.load();
@@ -141,7 +142,7 @@ test("503 / perdu ⇒ même commande ; 401/403 ⇒ effacé ; 409 ⇒ honnête + 
   assert.equal(k.view().error, m.COPY.conflict);
   assert.deepEqual(k.calls.map((x) => x.kind), ["GET", "POST", "GET"]);
   assert.equal(await k.c.retry(), false);
-  assert.equal(k.saved(), 0);
+  assert.deepEqual(k.versions(), ["3-", "3-"], "409 ⇒ re-read reported (same version: nothing to restart)");
   const u = ctrl(() => ok(VIEW()), () => status(422));
   await u.c.load();
   await u.c.save("97209", "25");
@@ -163,7 +164,7 @@ test("changement d’identité pendant le POST ⇒ ignoré ; restauration strict
   g1.c.restorePending();
   assert.equal(g1.view().pending!.radius_km, 25);
   await g1.c.retry();
-  assert.equal(g1.saved(), 1);
+  assert.deepEqual(g1.versions(), ["4+"]);
   const t = memStore();
   t.store.set(m.pendingKey(UID, 1), JSON.stringify({ uid: "other", gen: 1, command: { expected_version: 1, reference_code: null, radius_km: null } }));
   const tampered = ctrl(() => ok(VIEW()), (b) => echo(b), { store: t.store });
@@ -176,14 +177,47 @@ test("aucune géolocalisation, aucun filtrage côté client ; libellés d’appr
   const leaf = ["model.ts", "mission-radius-panel.tsx", "contract.ts"].map((f) => readFileSync(`components/features/mission-radius/${f}`, "utf8")).join("\n");
   assert.doesNotMatch(leaf, /navigator\.geolocation|getCurrentPosition|watchPosition/);
   assert.doesNotMatch(leaf, /available-missions|\.filter\(\s*\(?\w+\)?\s*=>\s*\w+\.(distance|postal)/, "no client-side filtering of offers");
-  assert.match(m.COPY.basis, /approximation entre centres de communes[\s\S]*Votre position n’est jamais utilisée/);
-  assert.match(m.COPY.unknownPostal, /uniquement par code postal/);
-  const demo = renderToString(createElement(p.MissionRadiusPanel as never, { demo: true, context: { generation: () => 1, userId: () => null }, onSaved: () => {} } as never));
+  assert.match(m.COPY.basis, /^Rayon indicatif entre centres de communes[\s\S]*approximation entre centres de communes[\s\S]*Votre position n’est jamais utilisée/);
+  assert.match(m.COPY.unknownPostal, /^Les offres dont le code postal ne permet pas d’identifier une commune unique restent soumises à vos zones postales/);
+  const demo = renderToString(createElement(p.MissionRadiusPanel as never, { demo: true, context: { generation: () => 1, userId: () => null }, onConfirmed: () => {} } as never));
   assert.match(demo, /aucun appel n’est fait/);
   assert.doesNotMatch(demo, /<button|<select|<input/);
   const artisan = readFileSync("components/role/artisan-space.tsx", "utf8");
-  assert.match(artisan, /<MissionRadiusPanel demo=\{demo\} context=\{session\.mutationContext\} onSaved=\{\(\) => setRadiusRev\(\(n\) => n \+ 1\)\} \/>/);
-  assert.match(artisan, /\|\$\{radiusRev\}`\}/);
+  assert.match(artisan, /<MissionRadiusPanel\s+demo=\{demo\}\s+context=\{session\.mutationContext\}\s+onConfirmed=/);
+  assert.match(artisan, /\|\$\{confirmed\?\.rev \?\? 0\}\|\$\{shownOrder\}`\}/);
   const missions = readFileSync("components/features/available-missions/available-missions-panel.tsx", "utf8");
-  assert.doesNotMatch(missions, /radius/i, "the offers leaf is untouched: the server applies the radius");
+  const missionsModel = readFileSync("components/features/available-missions/available-missions-model.ts", "utf8");
+  for (const src of [missions, missionsModel]) assert.doesNotMatch(src, /\.filter\([^)]*(distance_band_km|radius_km)|radius_km/, "the server applies the radius: no client-side filtering");
+});
+
+test("409 ⇒ relecture : nouvelle version confirmée remontée (offres relancées) ; réponse incertaine ⇒ « Relire le réglage », sans annonce d’annulation", async () => {
+  let server = VIEW();
+  const k = ctrl(() => ok(server), () => { server = VIEW({ version: 7, reference_code: "97213", radius_km: 40 }); return status(409); });
+  await k.c.load();
+  await k.c.save("97209", "25");
+  assert.deepEqual(k.versions(), ["3-", "7+"], "the re-read after 409 reports the new version");
+  assert.equal(k.view().data!.preference.version, 7);
+  let srv = VIEW();
+  const u = ctrl(() => ok(srv), () => { srv = VIEW({ version: 4, reference_code: "97209", radius_km: 25 }); return status(503); });
+  await u.c.load();
+  await u.c.save("97209", "25");
+  assert.ok(u.view().pending);
+  assert.ok(u.mem.map.has(m.pendingKey(UID, 1)));
+  assert.equal(await u.c.reread(), true);
+  assert.deepEqual(u.versions(), ["3-", "4+"], "the confirmed read is reported (version changed ⇒ offers refresh)");
+  assert.equal(u.view().pending, null);
+  assert.equal(u.mem.map.size, 0);
+  assert.equal(u.view().notice, m.COPY.reread);
+  assert.doesNotMatch(m.COPY.reread, /annul/i, "never claims a cancellation");
+  assert.match(m.COPY.reread, /a pu être pris en compte ou non/);
+  // A failed re-read keeps the pending command (nothing proven).
+  const f = ctrl(() => ok(VIEW()), () => status(503));
+  await f.c.load();
+  await f.c.save("97209", "25");
+  const g = ctrl(() => status(503), () => status(503), { store: f.mem.store });
+  g.c.restorePending();
+  assert.equal(await g.c.reread(), false);
+  assert.ok(g.view().pending);
+  assert.ok(f.mem.map.has(m.pendingKey(UID, 1)));
+  assert.doesNotMatch(readFileSync("components/features/mission-radius/mission-radius-panel.tsx", "utf8"), /Abandonner/);
 });

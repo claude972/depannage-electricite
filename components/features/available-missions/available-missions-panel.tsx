@@ -10,12 +10,15 @@ import {
   DEFAULT_MISSIONS_CONTEXT,
   MISSIONS_COPY,
   MISSIONS_INITIAL,
+  NEAREST_COPY,
+  bandLabel,
   createMissionsApi,
   createMissionsController,
   shownCount,
   type MissionOffer,
   type MissionsApi,
   type MissionsContext,
+  type MissionsOrder,
   type MissionsState,
 } from "./available-missions-model";
 import styles from "./available-missions.module.css";
@@ -30,6 +33,13 @@ export type AvailableMissionsProps = {
   onAccept(id: string): Promise<boolean>;
   /** Opens the PRIVATE dossier, only after a successful accept (and refresh). */
   onOpenAccepted(id: string): void;
+  /** Order of this mount (the host keys the panel by it: a change restarts at page 1). */
+  order?: MissionsOrder;
+  /** Only true after a CONFIRMED radius GET shows an active preference (never local edits). */
+  nearestAvailable?: boolean;
+  /** Confirmed radius version (nearest: pages of another version are never shown). */
+  radiusVersion?: number | null;
+  onOrderChange?(order: MissionsOrder): void;
   /** Tests only. */
   initial?: MissionsState;
 };
@@ -66,6 +76,8 @@ export function AvailableMissionsPanel(props: AvailableMissionsProps) {
       },
       get: () => ref.current,
       set,
+      order: props.demo ? "oldest_first" : props.order ?? "oldest_first",
+      radiusVersion: props.radiusVersion ?? null,
     });
   }
   const ctrl = controller.current;
@@ -77,6 +89,9 @@ export function AvailableMissionsPanel(props: AvailableMissionsProps) {
   }, [ctrl]);
 
   const point = state.point;
+  const order: MissionsOrder = props.demo ? "oldest_first" : props.order ?? "oldest_first";
+  const nearest = order === "nearest_first";
+  const bandOf = (id: string) => state.items.find((i) => i.id === id)?.distance_band_km;
   const accept = (id: string) => void ctrl.accept(id, (x) => latest.current.onAccept(x), (x) => latest.current.onOpenAccepted(x));
 
   return (
@@ -87,13 +102,27 @@ export function AvailableMissionsPanel(props: AvailableMissionsProps) {
           <span className={styles.meta} data-available-count="">{shownCount(state.items.length, Boolean(state.page?.has_more))}</span>
         )}
       </div>
-      <p className={styles.hint}>{MISSIONS_COPY.anonymized}</p>
+      {!props.demo && props.nearestAvailable && props.onOrderChange && (
+        <div className={styles.sort} role="group" aria-label={NEAREST_COPY.label} data-available-sort={order}>
+          {(["oldest_first", "nearest_first"] as const).map((o) => (
+            <button key={o} type="button" className={styles.secondary} aria-pressed={order === o} disabled={order === o} onClick={() => props.onOrderChange?.(o)}>
+              {o === "oldest_first" ? NEAREST_COPY.oldest : NEAREST_COPY.nearest}
+            </button>
+          ))}
+        </div>
+      )}
+      <p className={styles.hint}>{nearest ? MISSIONS_COPY.anonymizedNearest : MISSIONS_COPY.anonymized}</p>
+      {nearest && <p className={styles.hint} data-available-basis="">{NEAREST_COPY.basis}</p>}
 
       {state.phase === "loading" && <p className={styles.hint} role="status">{MISSIONS_COPY.loading}</p>}
       {state.phase === "error" && (
         <div className={styles.note} role="alert" data-available-error="">
           <p className={styles.error}>{state.error}</p>
-          <button type="button" className={styles.secondary} onClick={() => void ctrl.load()}>Réessayer</button>
+          {state.nearestRefused && props.onOrderChange ? (
+            <button type="button" className={styles.secondary} onClick={() => props.onOrderChange?.("oldest_first")} data-available-back="">{NEAREST_COPY.back}</button>
+          ) : (
+            <button type="button" className={styles.secondary} onClick={() => void ctrl.load()}>Réessayer</button>
+          )}
         </div>
       )}
       {state.phase === "ready" && !state.eligible && <p className={styles.note} data-available-ineligible="">{MISSIONS_COPY.ineligible}</p>}
@@ -118,7 +147,7 @@ export function AvailableMissionsPanel(props: AvailableMissionsProps) {
                 <div><dt>Besoin</dt><dd>{point.offer.urgency === "urgent" ? "Urgent" : "À planifier"}</dd></div>
                 <div><dt>Estimation indicative</dt><dd>{money(point.offer.estimate_min_cents)} – {money(point.offer.estimate_max_cents)}</dd></div>
                 <div><dt>Demande créée</dt><dd>{dateTime(point.offer.created_at)}</dd></div>
-                <div><dt>Distance</dt><dd>non calculée</dd></div>
+                <div><dt>Distance</dt><dd>{nearest ? `${bandLabel(bandOf(point.id))} (approximation entre centres de communes)` : "non calculée"}</dd></div>
               </dl>
               <p className={styles.hint}>L’adresse exacte, le contact et la description sont transmis après acceptation.</p>
               {state.acceptError && <p className={styles.error} role="alert" data-available-accept-error="">{state.acceptError}</p>}
@@ -147,6 +176,7 @@ export function AvailableMissionsPanel(props: AvailableMissionsProps) {
                 <span className={styles.meta}>
                   {o.city} ({o.postal_code}) · {money(o.estimate_min_cents)} – {money(o.estimate_max_cents)} · demandée le {date(o.created_at)}
                 </span>
+                {nearest && <span className={styles.meta} data-available-band={o.distance_band_km ?? "unknown"}>{bandLabel(o.distance_band_km)} · approximation entre centres de communes</span>}
               </button>
             </li>
           ))}
