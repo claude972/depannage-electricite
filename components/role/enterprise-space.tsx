@@ -107,6 +107,7 @@ import { OrganizationSitesList, SiteSettingsPanel } from "../features/site-lifec
 import { SiteDirectLoader } from "../features/site-lifecycle/site-direct";
 import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-panel";
 import { DelegatedPayerCheckout, DelegatedPayerManager } from "../features/delegated-payer/delegated-payer";
+import { ContractSourceLine, QuoteGridAccessPanel } from "../features/quote-grid/quote-grid";
 import { SiteAssetLinksPanel } from "../features/site-asset-links/site-asset-links-panel";
 import type { AssetSource } from "../features/site-asset-links/asset-links-model";
 import { createAreasApi, parseAreasPage } from "../features/site-areas/areas-model";
@@ -1721,6 +1722,9 @@ function DossierView({ c, id }: { c: Ctx; id: string }) {
                 </Tag>
               )}
             </div>
+            {/* ENT-13: contract source of the displayed quote (server-stated) and the owner's grid access. */}
+            {displayed && <ContractSourceLine key={displayed.id} quoteId={displayed.id} demo={demo} />}
+            <QuoteGridAccessPanel interventionId={intervention.id} context={session.mutationContext} demo={demo} />
             {versions.length > 1 && (
               <div className={styles.versions} role="group" aria-label="Versions du devis">
                 {versions.map((q, index) => (

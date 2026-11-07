@@ -117,6 +117,7 @@ import {
 import { CredentialReviewPanel } from "../features/credential-reviews/credential-review-panel";
 import { AppointmentReminderPanel } from "../features/appointment-reminders/appointment-reminder-panel";
 import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-panel";
+import { ContractSourceLine } from "../features/quote-grid/quote-grid";
 
 // ---- Static definitions ---------------------------------------------------------------
 type Tone = "neutral" | "blue" | "green" | "amber" | "red" | "violet";
@@ -1849,6 +1850,8 @@ function QuotePanel({
                   : ""}
               </Tag>
             </div>
+            {/* ENT-13: contract source only when the server states it. */}
+            <ContractSourceLine key={current.id} quoteId={current.id} demo={session.mode === "demo"} />
             {versions.length > 1 && (
               <div className={styles.versionList} role="group" aria-label="Versions du devis">
                 {versions.map((q, index) => (
