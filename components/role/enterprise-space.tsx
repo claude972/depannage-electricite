@@ -3513,8 +3513,22 @@ function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
 /** Exported for tests only (live report wiring). */
 export function ReportsView({ c }: { c: Ctx }) {
   const { session, scope, demo } = c;
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  // Export guard: a scope generation bumped AT RENDER on every scope change (identity uid+gen,
+  // organization, site) and on unmount. An export applies (download, error, busy) only for the
+  // generation captured at its click — A→B→A or a logout invalidates it even if the key looks equal.
+  const exportScope = `${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${c.organization?.id ?? "-"}|${c.activeSite?.id ?? "-"}`;
+  const scopeGen = useRef({ key: exportScope, gen: 0, mounted: true });
+  if (scopeGen.current.key !== exportScope) scopeGen.current = { ...scopeGen.current, key: exportScope, gen: scopeGen.current.gen + 1 };
+  useEffect(() => {
+    scopeGen.current.mounted = true;
+    return () => {
+      scopeGen.current = { ...scopeGen.current, gen: scopeGen.current.gen + 1, mounted: false };
+    };
+  }, []);
+  const [exportState, setExportState] = useState<{ gen: number; busy: boolean; error: string }>({ gen: -1, busy: false, error: "" });
+  const ownExport = exportState.gen === scopeGen.current.gen;
+  const busy = ownExport && exportState.busy;
+  const error = ownExport ? exportState.error : "";
   // Live (ENT-15) : tableau et totaux UNIQUEMENT depuis le JSON serveur de /api/reports, même périmètre
   // que l’export CSV (organisation choisie + site éventuel). Aucune organisation choisie ⇒ rien n’est lu
   // et l’export est désactivé. Démo : calcul local inchangé, aucun appel.
@@ -3532,7 +3546,9 @@ export function ReportsView({ c }: { c: Ctx }) {
   };
   const server = live && report.state.phase === "ready" ? report.state.data : null;
   async function downloadCsv() {
-    setError("");
+    const gen = scopeGen.current.gen;
+    const current = () => scopeGen.current.mounted && scopeGen.current.gen === gen;
+    setExportState({ gen, busy: false, error: "" });
     if (demo) {
       download(
         "rapport-demo.csv",
@@ -3552,19 +3568,23 @@ export function ReportsView({ c }: { c: Ctx }) {
       return;
     }
     if (!orgId) return;
-    setBusy(true);
+    setExportState({ gen, busy: true, error: "" });
     try {
       const url = reportQuery(orgId, siteId, "csv");
       const response = await fetch(url, { cache: "no-store" });
+      if (!current()) return; // scope changed during the request: dropped silently (state bound to the old generation)
       if (!response.ok) {
         const result = await response.json().catch(() => ({}));
         throw new Error((result as { error?: string }).error || "Le rapport n’est pas disponible.");
       }
-      download("rapport.csv", await response.text(), "text/csv;charset=utf-8");
+      const body = await response.text();
+      if (!current()) return; // scope changed while reading the body: no download
+      download("rapport.csv", body, "text/csv;charset=utf-8");
+      setExportState({ gen, busy: false, error: "" });
     } catch (e) {
-      setError((e as Error).message);
+      if (current()) setExportState({ gen, busy: false, error: (e as Error).message });
     } finally {
-      setBusy(false);
+      if (current()) setExportState((s) => (s.gen === gen ? { ...s, busy: false } : s));
     }
   }
   return (
@@ -3575,7 +3595,7 @@ export function ReportsView({ c }: { c: Ctx }) {
         action={
           <button type="button" className="button primary" disabled={busy || (live && !orgId)} onClick={() => void downloadCsv()} data-report-csv="">
             <Icon name="download" size={17} />
-            {busy ? "Préparation…" : "Télécharger le rapport CSV"}
+            {busy ? "Préparation…" : demo ? "Télécharger l’export de démonstration (CSV généré localement)" : "Télécharger le rapport CSV"}
           </button>
         }
       />
