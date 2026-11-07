@@ -81,6 +81,7 @@ import { PlatformPage } from "./platform-anchor";
 import { platformEntries } from "./anchors";
 import { UploadQueuePanel } from "../app/upload-queue";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
+import { AccountDataPanel } from "../features/account-data/account-data-panel";
 import { ClientAddressesPanel, usePreferredAddress } from "../features/client-addresses/client-addresses-panel";
 import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
 import { AppointmentReminderPanel } from "../features/appointment-reminders/appointment-reminder-panel";
@@ -2085,6 +2086,12 @@ function ProfileView({ session }: { session: Session }) {
           <ProfileNotificationPreferences session={session} />
           <InstallPanel />
           <ClientAddressesPanel key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} demo={demo} context={session.mutationContext} />
+          <AccountDataPanel
+            key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}
+            demo={demo}
+            context={session.mutationContext}
+            onOpenTicket={(id) => session.go("support", id)}
+          />
           <Unavailable
             title="Moyens de paiement enregistrés"
             reason="Pas encore activé sur ce service : aucun moyen de paiement n’est mémorisé. Chaque règlement se fait sur la plateforme, au moment voulu."
