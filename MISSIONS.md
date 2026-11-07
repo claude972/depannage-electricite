@@ -74,3 +74,5 @@ Assembler les feuilles énergie, rappels et accessibilité déjà poussées sur 
 ### SYS-09 / PUB-10 — données du compte
 
 ROOT réalise la lecture paginée des données du compte sous la session courante et la demande explicite d'effacement via le circuit d'assistance existant. Les dossiers d'organisation et les messages de tiers sont exclus du téléchargement personnel. Le dépôt ouvre un ticket consultable et garde son identifiant au rejeu. L'effacement effectif et la durée de conservation restent des opérations distinctes à définir. Claude raccorde les actions et leurs états à l'espace connecté. Tests de portée, réponse invalide, pagination et rejeu avant assemblage.
+
+- ENT-16 — Astra : propriétaire unique backend payeur B2B délégué, branche codex/delegated-payer base e541656 ; périmètre docs/missions/ENT16_DELEGATED_PAYER.md. Aucun cloud/UI.
