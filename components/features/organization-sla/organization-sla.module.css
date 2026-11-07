@@ -1,0 +1,72 @@
+/* ENT-11 consolidated SLA. Tokens only (DESIGN.md): 1px borders, 8px grid, one accent. */
+.summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  margin: 8px 0 16px;
+}
+.figure {
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.figure strong {
+  display: block;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.figure span {
+  font-size: 13px;
+  color: var(--ui-text-muted);
+}
+.scope {
+  font-weight: 600;
+  margin: 0;
+}
+.muted {
+  color: var(--ui-text-muted);
+  font-size: 13px;
+  margin: 4px 0;
+}
+.reasons {
+  margin: 8px 0;
+  padding-left: 20px;
+  font-size: 13px;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.table th,
+.table td {
+  text-align: left;
+  padding: 8px;
+  border-bottom: 1px solid var(--ui-border);
+  font-variant-numeric: tabular-nums;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+@media (max-width: 640px) {
+  .table thead {
+    display: none;
+  }
+  .table tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-bottom: 1px solid var(--ui-border);
+    padding: 8px 0;
+  }
+  .table td {
+    border: 0;
+    padding: 4px 8px;
+  }
+  .table td::before {
+    content: attr(data-label) " : ";
+    color: var(--ui-text-muted);
+  }
+}

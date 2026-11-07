@@ -100,6 +100,7 @@ import { useDetailPresence } from "./use-detail-presence";
 import { PointReadState } from "./detail-read-view";
 import { SiteOperationsView } from "../features/site-operations/site-operations-view";
 import { SiteEnergyPanel } from "../features/energy/site-energy-panel";
+import { OrganizationSlaPanel } from "../features/organization-sla/organization-sla-panel";
 import { CONTRACT_MESSAGES } from "../app/api";
 import { demoReport } from "../../lib/features/site-operations/demo";
 import { leafScope, platformEntries } from "./anchors";
@@ -3244,12 +3245,20 @@ function ReportsView({ c }: { c: Ctx }) {
           blocker="ENT-09"
         />
         <Unavailable title="Assemblées générales & appels de fonds" reason="Non modélisés pour les copropriétés." blocker="ENT-05" />
+      </div>
+      {demo || !c.organization ? (
         <Unavailable
           title="Respect des SLA (consolidé)"
-          reason="Les délais et calendriers se suivent site par site dans la fiche de site (« Opérations du site »). Le consolidé multi-sites n’est pas livré ; aucune conformité contractuelle ou réglementaire n’est attestée ici."
+          reason={
+            demo
+              ? "En démonstration, aucun rapport SLA consolidé n’est calculé : les délais se suivent site par site dans « Opérations du site »."
+              : "Choisissez une organisation pour obtenir le rapport SLA consolidé de ses sites."
+          }
           blocker="ENT-11"
         />
-      </div>
+      ) : (
+        <OrganizationSlaPanel key={`${c.organization.id}:${session.refreshContext}`} organizationId={c.organization.id} context={session.mutationContext} />
+      )}
     </>
   );
 }
