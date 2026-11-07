@@ -26,5 +26,5 @@ export function useOverviewCounts({ enabled, context, organizationId, siteId, ap
   useEffect(() => {
     if (enabled) ctrl.current?.query(organizationId, siteId);
   }, [enabled, identity, organizationId, siteId]);
-  return { state: enabled ? countsView(state, key) : COUNTS_INITIAL, retry: () => ctrl.current?.retry(key) };
+  return { state: enabled ? countsView(state, key) : COUNTS_INITIAL, retry: () => ctrl.current?.retry(key), refresh: () => ctrl.current?.refresh(key) ?? false };
 }

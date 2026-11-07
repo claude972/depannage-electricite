@@ -336,6 +336,30 @@ test("synthèse professionnelle (7c6eff1) : lecture stricte, fenêtre Martinique
   assert.match(src, /siteBudgetBars\(scope\.sites, scope\.interventions, scope\.quotes\)/, "charts still from the loaded data, untouched");
 });
 
+test("« Actualiser » : relit la même clé (liste, compteurs, synthèse) ; une autre clé ⇒ rien ; démo sans bouton ; une seule alerte de synthèse", async () => {
+  const h = harness({ lists: [res(200, pageOf([row(1)], 1, 1)), res(200, pageOf([row(2)], 1, 1))] });
+  h.c.query(F(), 1); await h.tick();
+  same(h.c.refresh("other"), false);
+  same(h.c.refresh(h.get().key), true);
+  await h.tick();
+  same([h.calls.length, h.calls[1], h.get().items.map((x) => x.id)], [2, m.listBody(F(), 1), [ID(2)]], "same key re-read through the same guards");
+  const ctx = { generation: () => 0, userId: () => USER };
+  for (const [mod, create, ok] of [[oc, "createCountsController", { organization_id: ORG, site_id: null, counts: { open: 1, urgent: 0 }, captured_at: "2026-11-07T00:00:00Z" }], [po, "createProController", { organization_id: ORG, site_id: null, counts: { approvals_pending: 1, deadlines30: 0 }, amounts: { accepted_commitment_cents: 0, reference_budget_cents: 0, currency: "eur" }, window: { from: "2026-11-06", to: "2026-12-06", time_zone: "America/Martinique" }, captured_at: "2026-11-07T03:00:00Z" }]] as [any, string, unknown][]) {
+    const calls: unknown[] = [];
+    let st: { key: string } = { key: "" };
+    const c = mod[create]({ api: () => ({ read: async (b: unknown) => (calls.push(b), res(200, ok)) }), context: ctx, set: (n: { key: string }) => (st = n) });
+    c.query(ORG, null); await h.tick();
+    same([c.refresh("other"), calls.length], [false, 1], create);
+    same(c.refresh(st.key), true); await h.tick();
+    same(calls, [{ organization_id: ORG, site_id: null }, { organization_id: ORG, site_id: null }], create);
+  }
+  const src = readFileSync("components/role/enterprise-space.tsx", "utf8");
+  same((src.match(/data-professional-overview-error=""/g) ?? []).length, 1, "one grouped alert");
+  same((src.match(/onClick=\{\(\) => pro\.retry\(\)\}/g) ?? []).length, 1, "one « Réessayer »");
+  assert.match(src, /\{!c\.demo && \(\n\s*<button type="button" className="button outline" onClick=\{refreshAll\} data-overview-refresh="">/, "no dashboard refresh in demo");
+  assert.match(src, /\{refreshable && list\.live && \(/, "no list refresh in demo");
+});
+
 test("câblage : useInterventionList en direct ⇒ recherche serveur ; démo ⇒ liste locale ; KPI non touchés", () => {
   const src = readFileSync("components/role/enterprise-space.tsx", "utf8");
   const hook = src.slice(src.indexOf("function useInterventionList"), src.indexOf("function ExportButton"));
@@ -354,7 +378,7 @@ const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..",
 const ENTRY = `
 import { createElement as h, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { RequestsView } from "./components/role/enterprise-space";
+import { RequestsView, OverviewView } from "./components/role/enterprise-space";
 import { useEnterpriseSearch, useOverviewCounts, useProfessionalOverview } from "./components/features/enterprise-search/use-enterprise-search";
 const w = window;
 const tick = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -426,6 +450,36 @@ w.scopeExit = async () => {
   URL.createObjectURL = origCreate;
   root.unmount();
   return { result, saved };
+};
+w.overview = async (proFails) => {
+  const calls = [];
+  w.fetch = async (url, init) => {
+    const u = String(url); const b = JSON.parse(init.body); calls.push(u.replace("/api/enterprise/", "") + (b.action ? ":" + b.action : ""));
+    if (u.endsWith("/overview")) return Response.json({ organization_id: b.organization_id, site_id: b.site_id, counts: { open: 4, urgent: 1 }, captured_at: "2026-11-07T00:00:00Z" });
+    if (u.endsWith("/professional")) return proFails ? Response.json({ error: "x" }, { status: 503 }) : Response.json({ organization_id: b.organization_id, site_id: b.site_id, counts: { approvals_pending: 2, deadlines30: 1 }, amounts: { accepted_commitment_cents: 100, reference_budget_cents: 0, currency: "eur" }, window: { from: "2026-11-06", to: "2026-12-06", time_zone: "America/Martinique" }, captured_at: "2026-11-07T03:00:00Z" });
+    return Response.json({ items: [row(1)], total: 1, page: { number: 1, limit: 10, pages: 1 } });
+  };
+  const c = { ...ctx(0, []), session: { mode: "live", mutationContext: { userId: () => "${USER}", generation: () => 0 }, openIntervention: () => {}, capabilities: { professional: "loaded" } } };
+  const div = document.createElement("div"); document.body.appendChild(div);
+  const root = createRoot(div);
+  root.render(h(StrictMode, null, h(OverviewView, { c })));
+  await tick(400);
+  const first = calls.slice();
+  const alerts = div.querySelectorAll("[data-professional-overview-error]").length;
+  const retryButtons = [...div.querySelectorAll("[data-professional-overview-error] button")].length;
+  const n = calls.length;
+  div.querySelector("[data-overview-refresh]").click(); await tick(400);
+  const refreshed = calls.slice(n);
+  root.unmount();
+  // demo: no button, zero fetch
+  const before = calls.length;
+  const d = document.createElement("div"); document.body.appendChild(d);
+  const r2 = createRoot(d);
+  r2.render(h(StrictMode, null, h(OverviewView, { c: { ...c, demo: true, session: { ...c.session, mode: "demo" } } })));
+  await tick(300);
+  const demo = { calls: calls.length - before, buttons: d.querySelectorAll("[data-overview-refresh], [data-enterprise-list-refresh]").length };
+  r2.unmount();
+  return { first, alerts, retryButtons, refreshed, demo };
 };
 w.run = async () => {
   const bodies = [], opened = [], saved = [], revoked = [];
@@ -508,6 +562,31 @@ w.run = async () => {
   return out;
 };
 `;
+test("tableau de bord réel (Chromium) : « Actualiser » relit exactement les 3 lectures du même périmètre ; une seule alerte de synthèse ; démo sans bouton ni appel", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
+  const out = await build({ absWorkingDir: ROOT, stdin: { contents: ENTRY, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, outdir: "out", platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "local-css", ".svg": "dataurl", ".png": "dataurl" }, define: { "process.env.NODE_ENV": '"development"' }, logLevel: "error" });
+  const js = out.outputFiles.find((f) => f.path.endsWith(".js"))!.text;
+  const server: Server = createServer((_rq, rs) => { rs.setHeader("content-type", "text/html"); rs.end(`<!doctype html><div></div><script>${js}</script>`); });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
+  const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true, args: ["--single-process"] });
+  try {
+    const page = await (await browser.newContext()).newPage();
+    const errors: string[] = [];
+    page.on("pageerror", (e: Error) => errors.push(String(e)));
+    await page.goto(`http://127.0.0.1:${(server.address() as { port: number }).port}/`);
+    const ok = (await page.evaluate(() => (window as unknown as { overview: (f: boolean) => Promise<unknown> }).overview(false))) as Record<string, any>;
+    same([...new Set(ok.first)].sort(), ["interventions/search:list", "overview", "overview/professional"]);
+    same([ok.refreshed.slice().sort(), ok.alerts], [["interventions/search:list", "overview", "overview/professional"], 0], "Actualiser ⇒ exactly the 3 reads, once each");
+    same(ok.demo, { calls: 0, buttons: 0 }, "demo: no button, zero fetch");
+    const ko = (await page.evaluate(() => (window as unknown as { overview: (f: boolean) => Promise<unknown> }).overview(true))) as Record<string, any>;
+    same([ko.alerts, ko.retryButtons], [1, 1], "one grouped professional alert with one « Réessayer »");
+    same(errors, []);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+});
+
 test("aucun ancien cadre (Chromium, StrictMode) : 1er rendu après changement de page / site / organisation sans anciennes lignes ni ancien compteur", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
   const out = await build({ absWorkingDir: ROOT, stdin: { contents: ENTRY, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, outdir: "out", platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "local-css", ".svg": "dataurl", ".png": "dataurl" }, define: { "process.env.NODE_ENV": '"development"' }, logLevel: "error" });
   const js = out.outputFiles.find((f) => f.path.endsWith(".js"))!.text;
