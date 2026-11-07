@@ -45,6 +45,7 @@ import { resolveDisplayName } from "./app/display-name";
 import { draftNotice, getDraftStorage, readBootDraft } from "./app/request-draft-boot";
 import { BOOKING_DRAFT_KEY, PAYMENT_LABEL, clearBooking, ensureRequestId, readBooking, saveBooking, type BookingDraft } from "./app/booking-draft";
 import { DEFINITIVE_REFUSAL, prepareRequestKey, settleRequestKey } from "./app/request-key";
+import { purgePrivateStorage } from "./app/private-storage";
 import { bookingForEditedRequest, bookingFromSignedRequest, readPhotoCount, writePhotoCount } from "./app/signed-booking";
 
 type BookingReceipt = {
@@ -249,10 +250,10 @@ export default function CourantApp() {
     writePhotoCount(getDraftStorage(), 0);
     try {
       sessionStorage.removeItem(DRAFT_KEY);
-      // Pending private content (unsent assistance request) of the outgoing user never survives
-      // a logout or an identity change; a same-user reload keeps it (no reset happens then).
-      for (const key of Object.keys(sessionStorage))
-        if (key.startsWith("courant-support-pending-")) sessionStorage.removeItem(key);
+      // Pending private content of the outgoing user (unsent assistance request, identity-fenced
+      // leaf commands with emails/notes/addresses, request payloads) never survives a logout or an
+      // identity change; a same-user reload keeps it (no reset happens then).
+      purgePrivateStorage(sessionStorage);
     } catch {}
     setSessionKey((k) => k + 1);
   }, []);
