@@ -3,6 +3,7 @@
 // Saving a draft is never sending it: publication is a distinct, explicit command. Every
 // call goes through `session`; a 409 keeps the typed lines and offers an explicit reload.
 // When the draft route is unavailable, the direct send editor (forms.QuoteEditor) remains.
+// EXPLICIT-TAX (claim, Claude UI): rates come only from lib/tax-rates (TAX_RATES); never a default.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session } from "../app/session-types";
 import type { Line, Quote, QuoteDraftCommand, QuoteDraftEnvelope } from "../app/types";
