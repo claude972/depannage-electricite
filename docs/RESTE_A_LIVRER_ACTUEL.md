@@ -2,6 +2,21 @@
 
 Objectif : application entière ; seules liaisons fournisseur Stripe/SMS différées. Inventaire source, pas preuve de panne hébergée et pas reprise des anciens pourcentages. Référence initiale fe4f24c ; interfaces zones et backend copropriété intégrés depuis en3402f64.
 
+
+## Actualisation — 6 novembre23h19 Martinique
+
+L'inventaire ci-dessous conserve les constats initiaux fe4 ; les statuts courants suivants priment :
+
+- TVA : corrigée, taux0/2,1/5,5/8,5/10/20 explicites sans fallback automatique ; API/SQL/UI et transaction réelle vérifiés.
+- REPORT_TOTALS : corrigé, devis+avenants acceptés, paiements enregistrés et remboursements distincts ; migration réelle24046, preuves SQL réelles rollback. Extension refund31755 installée avec refus sans exécution qualifiée ; aucun test bancaire réel.
+- COVERAGE_MATCHING : pagination offres50+1 et lecture ponctuelle anonymisée livrées,135offres vérifiées par transaction réelle rollback ; distance/rayon/classement géographique et zone publique configurables restent ouverts.
+- QR : génération locale réellement décodée/testée, visible dans la recette467 ; ni paiement ni OTP fabriqués.
+- CARD_HOLD_EXTRA_TOTAL : remplacement autorisation en développement, pas livré.
+- Parcours client connecté : demande→artisan→devis8,5%→acceptation→début/compte rendu/fin vérifiés sur467, mises à jour devis et acceptation sans reload. Choix du paiement et identifiant durable avant émission manquent encore au formulaire générique connecté : correction en cours. Cela ne remet pas en cause la preuve du parcours réellement contrôlé, mais empêche une clôture globale.
+- LOCALISATION : carte de détail client affiche fournisseur non choisi ; géocodage et itinéraire existants ne constituent pas un rendu cartographique.
+
+Toutes les autres limites ci-dessous restent ouvertes sauf preuve datée ultérieure. Sources/historiques ne valent pas livraisons à eux seuls.
+
 ## TVA — CLI-07 FIN-05 FIN-06
 
 Les taux acceptés sont0/5.5/10/20 ;2.1/8.5 non représentables. Pas de conclusion sur obligation fiscale individuelle. Fallback20 encore côté actions et ancien formulaire ; draft UI récent commenceNULL.
