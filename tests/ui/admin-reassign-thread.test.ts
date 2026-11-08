@@ -33,7 +33,7 @@ test("wiring: live picker + live thread; reassign command and composer unchanged
   const src = readFileSync(path.join(ROOT, "components/role/admin-space.tsx"), "utf8");
   assert.match(src, /session\.operate\(intervention\.id, \{ action: "reassign", artisan_id: target \|\| null, reason: reason\.trim\(\) \}\)/);
   assert.match(src, /\{live \? \(\s*<ArtisanPicker[\s\S]*load=\{session\.loadAdminDirectory\}/);
-  assert.match(src, /const thread = useAdminThread\(session\.mutationContext, id, sentReplies, !demo\);/);
+  assert.match(src, /const thread = useAdminThread\(session\.mutationContext, id, sentReplies, !demo, session\.data\.messages\);/);
   assert.match(src, /const messages = demo\s*\? mergeThread\(session\.data\.messages, sentReplies, id\)/);
   assert.match(src, /<AdminReplyComposer\s+key=\{`\$\{id\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\}\s+intervention=\{intervention\}\s+demo=\{demo\}\s+context=\{session\.mutationContext\}/);
   const leaf = ["admin-reassign/artisan-picker.tsx", "admin-reassign/artisan-picker-model.ts", "admin-thread/use-admin-thread.ts"].map((f) => readFileSync(path.join(ROOT, "components/features", f), "utf8")).join("\n");

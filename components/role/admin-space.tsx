@@ -3355,7 +3355,8 @@ function DossierView({
   // ADM-07: replies confirmed by the server, shown at once while the workspace re-reads.
   const [sentReplies, setSentReplies] = useState<Message[]>([]);
   // ADM-07 live: the thread comes from the paginated GET /api/messages (identity + dossier fence).
-  const thread = useAdminThread(session.mutationContext, id, sentReplies, !demo);
+  // The refreshed workspace is only a signal: a new message of this dossier re-reads page 1.
+  const thread = useAdminThread(session.mutationContext, id, sentReplies, !demo, session.data.messages);
   const lastDetail = useRef<AdminInterventionDetail | null>(null);
   useEffect(() => {
     let active = true;
@@ -3664,6 +3665,16 @@ function DossierView({
                     « Réessayer » reprend à la même page.
                   </p>
                 )}
+              </div>
+            )}
+            {!demo && tv.phase === "ready" && tv.headError && (
+              <div className={styles.panelBody} role="alert" data-admin-thread-head-error="">
+                <p className={styles.muted}>
+                  Un nouveau message n’a pas pu être vérifié. Les messages affichés restent valables.
+                </p>
+                <button type="button" className="button outline" onClick={thread.retryHead}>
+                  Réessayer
+                </button>
               </div>
             )}
             {!demo && tv.phase === "loading" ? (

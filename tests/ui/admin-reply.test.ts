@@ -116,7 +116,7 @@ test("admin dossier thread mounts the composer (ADM-07 block removed) and merges
   // ADM-07 thread source (claude/admin-reassign-thread-ui): demo keeps the workspace merge, live reads
   // the paginated /api/messages (useAdminThread) and merges the confirmed replies there.
   assert.match(src, /const messages = demo\s*\? mergeThread\(session\.data\.messages, sentReplies, id\)/);
-  assert.match(src, /useAdminThread\(session\.mutationContext, id, sentReplies, !demo\)/);
+  assert.match(src, /useAdminThread\(session\.mutationContext, id, sentReplies, !demo, session\.data\.messages\)/);
   assert.match(src, /setSentReplies\(\(list\) => \[\.\.\.list, message\]\);\s+void sessionRef\.current\.ensureFresh\(\);/);
 });
 

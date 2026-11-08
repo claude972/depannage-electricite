@@ -35,7 +35,11 @@ const overview = { counts: { interventions: 1, active_interventions: 1, artisans
 const msg = (d, n) => ({ id: U("f", d * 1000 + n), intervention_id: D(d), author_id: n % 2 ? U("c", 1) : A(1), body: "Message " + n + " du dossier " + d, created_at: new Date(Date.UTC(2024, 1, 1) + n * 60000).toISOString() });
 window.thread = { 1: Array.from({ length: 60 }, (_, k) => msg(1, k + 1)), 3: [msg(3, 1)] };
 for (const d of [5, 6, 7, 8]) window.thread[d] = Array.from({ length: 40 }, (_, k) => msg(d, k + 1));
-window.failOlder = 0;
+window.failOlder = 0; window.failHead = 0;
+for (const d of [9, 10, 11, 12]) window.thread[d] = Array.from({ length: 60 }, (_, k) => msg(d, k + 1));
+// A new message written by another role, proven by a workspace refresh (realtime / ensureFresh).
+window.newMsg = (d, n) => { const m = { ...msg(d, 1000 + n), author_id: U("c", 1), body: "Nouveau message client " + n, created_at: new Date(Date.UTC(2026, 10, 7, 12, n)).toISOString() }; window.thread[d].push(m); return m; };
+window.workspace = (rows) => { window.seed.data.messages = rows; window.rerender(); };
 window.msgCalls = []; window.msgHold = null; window.msgGates = []; window.fail3 = 1;
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status });
 window.respond = async (url, init) => {
@@ -48,10 +52,12 @@ window.respond = async (url, init) => {
     if (d === 4) return json({ error: "Session" }, 401);
     if (d === 3 && window.fail3) return json({ error: "x" }, 503);
     if (c && window.failOlder) return json({ error: "x" }, window.failOlder);
+    if (!c && window.failHead) return json({ error: "x" }, window.failHead);
     const rows = [...(window.thread[d] || [])].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
-    const start = c ? Number(c.slice(1)) : 0;
+    // Cursor = offset + size of the thread when it was issued (the size is only a witness for tests).
+    const start = c ? Number(c.slice(1).split(".")[0]) : 0;
     const page = rows.slice(start, start + limit), more = start + limit < rows.length;
-    return json({ messages: page, page: { limit, has_more: more, next_cursor: more ? "c" + (start + limit) : null } });
+    return json({ messages: page, page: { limit, has_more: more, next_cursor: more ? "c" + (start + limit) + "." + rows.length : null } });
   }
   if (url === "/api/admin/messages" && init && init.method === "POST") {
     const cmd = JSON.parse(init.body);
@@ -156,7 +162,7 @@ test("ADM-07 : ancien fil paginé depuis /api/messages ; envoi fusionné sans do
     assert.equal(await page.locator("[data-admin-thread-older]").count(), 0, "end of thread");
     assert.match(await page.locator("[data-message-id]").first().innerText(), /Message 1 du dossier 1/, "oldest first");
     const calls = (await page.evaluate("window.msgCalls")) as string[];
-    assert.ok(calls.some((c) => c.includes("intervention_id=d0000000-0000-4000-8000-000000000001") && c.includes("cursor=c25")));
+    assert.ok(calls.some((c) => c.includes("intervention_id=d0000000-0000-4000-8000-000000000001") && c.includes("cursor=c25.")));
     // Send: merged once, then a fresh page 1 (identity generation bump) still shows it once.
     await page.getByLabel("Répondre dans le fil (signé « Exploitant »)").fill("Nous recontactons l’artisan.");
     await page.getByRole("button", { name: "Envoyer", exact: true }).click();
@@ -211,7 +217,7 @@ test("ADM-07 : ancien fil paginé depuis /api/messages ; envoi fusionné sans do
     await page.evaluate("window.failOlder = 0");
     await page.locator("[data-admin-thread-older]").click();
     await page.waitForFunction("document.querySelectorAll('[data-message-id]').length === 40");
-    assert.ok(((await page.evaluate("window.msgCalls")) as string[]).filter((c) => c.includes("000000000008") && c.includes("cursor=c25")).length >= 2, "same cursor resumed");
+    assert.ok(((await page.evaluate("window.msgCalls")) as string[]).filter((c) => c.includes("000000000008") && c.includes("cursor=c25.")).length >= 2, "same cursor resumed");
     // Reset for the next viewport.
     await page.evaluate(`window.param = window.U("d", 1); window.gen = 1; window.fail3 = 1; window.thread[1] = window.thread[1].filter((m) => m.id !== window.sentId); window.sentId = null; window.rerender()`);
   });
@@ -226,5 +232,84 @@ test("app réelle (démo, 390 px) : dossier admin — sélecteur et fil locaux i
     assert.equal(await page.locator("[data-admin-thread]").count(), 0, "demo keeps the local thread");
     assert.deepEqual(api, []);
     assert.deepEqual(errors, []);
+  });
+});
+
+test("ADM-07 P2 : un rafraîchissement du workspace portant un nouveau message relit la page 1 ; pages anciennes gardées, sans doublon ; 503 ⇒ pages gardées + Réessayer ; 404 ⇒ tout effacé", { skip }, async () => {
+  await run(async (page) => {
+    await page.evaluate(`window.param = window.U("d", 9); window.rerender()`);
+    await page.waitForFunction("document.querySelectorAll('[data-message-id]').length === 25");
+    await page.locator("[data-admin-thread-older]").click();
+    await page.waitForFunction("document.querySelectorAll('[data-message-id]').length === 50");
+    await page.locator("[data-admin-thread-older]").click();
+    await page.waitForFunction("document.querySelectorAll('[data-message-id]').length === 60");
+    const calls0 = ((await page.evaluate("window.msgCalls")) as string[]).length;
+    // An OLD unknown workspace row (before the newest verified one) is not a signal and never shown.
+    await page.evaluate(`window.workspace([{ id: window.U("9", 1), intervention_id: window.U("d", 9), author_id: window.U("c", 1), body: "Ancien hors pagination", created_at: "2023-01-01T00:00:00.000Z" }])`);
+    await page.waitForTimeout(250);
+    assert.equal(((await page.evaluate("window.msgCalls")) as string[]).length, calls0, "no re-read for an old row");
+    assert.ok(!/Ancien hors pagination/.test(await page.locator("body").innerText()));
+    // New client message ⇒ page 1 re-read, merged at the head; 60 older rows kept, no duplicate.
+    await page.evaluate(`window.workspace([window.newMsg(9, 1), { ...window.thread[9][58] }])`);
+    await page.waitForFunction("document.querySelectorAll('[data-message-id]').length === 61");
+    assert.match(await page.locator("[data-message-id]").last().innerText(), /Nouveau message client 1/);
+    assert.match(await page.locator("[data-message-id]").first().innerText(), /Message 1 du dossier 9/, "older pages kept");
+    const ids = (await page.evaluate("[...document.querySelectorAll('[data-message-id]')].map((e) => e.dataset.messageId)")) as string[];
+    assert.equal(new Set(ids).size, 61, "no duplicate");
+    const head = ((await page.evaluate("window.msgCalls")) as string[]).slice(calls0);
+    assert.ok(head.length >= 1 && head.every((c) => c.includes("000000000009") && !c.includes("cursor=")), "page 1 only");
+    assert.equal(await page.locator("[data-admin-thread-older]").count(), 0, "older cursor state unchanged (end reached)");
+    // Same refresh while page 1 answers 503 ⇒ existing pages preserved, « Réessayer ».
+    await page.evaluate("window.failHead = 503");
+    await page.evaluate(`window.workspace([window.newMsg(9, 2)])`);
+    await page.locator("[data-admin-thread-head-error]").waitFor();
+    assert.equal(await page.locator("[data-message-id]").count(), 61, "503 ⇒ pages kept");
+    assert.equal(await page.locator('[data-admin-reply="open"]').count(), 1);
+    await page.evaluate("window.failHead = 0");
+    await page.locator("[data-admin-thread-head-error] button").click();
+    await page.waitForFunction("document.querySelectorAll('[data-message-id]').length === 62");
+    assert.equal(await page.locator("[data-admin-thread-head-error]").count(), 0);
+    // 404 on the page-1 re-read ⇒ every row cleared and the composer hidden.
+    await page.evaluate(`window.param = window.U("d", 10); window.workspace([]);`);
+    await page.waitForFunction("document.querySelectorAll('[data-message-id]').length === 25");
+    await page.evaluate("window.failHead = 404");
+    await page.evaluate(`window.workspace([window.newMsg(10, 1)])`);
+    await page.locator('[data-admin-thread="refused"]').waitFor();
+    assert.equal(await page.locator("[data-message-id]").count(), 0);
+    assert.equal(await page.locator("[data-admin-reply]").count(), 0);
+  });
+});
+
+test("ADM-07 P2 : rafale > 25 sans recouvrement ⇒ le fil repart de la nouvelle page et « plus anciens » suit le NOUVEAU curseur ; recouvrement ⇒ pages gardées sans doublon", { skip }, async () => {
+  await run(async (page) => {
+    // Burst of 30 new messages on a thread whose page 1 (25 rows) is loaded: no shared id + hasMore.
+    await page.evaluate(`window.param = window.U("d", 11); window.rerender()`);
+    await page.waitForFunction("document.querySelectorAll('[data-message-id]').length === 25");
+    await page.evaluate(`window.workspace(Array.from({ length: 30 }, (_, k) => window.newMsg(11, k + 1)))`);
+    await page.waitForFunction("[...document.querySelectorAll('[data-message-id]')].every((e) => /Nouveau message client/.test(e.textContent)) && document.querySelectorAll('[data-message-id]').length === 25");
+    assert.ok(!/Message 60 du dossier 11/.test(await page.locator("body").innerText()), "old pages dropped (no gap shown)");
+    await page.locator("[data-admin-thread-older]").click();
+    await page.waitForFunction("document.querySelectorAll('[data-message-id]').length === 50");
+    const older = ((await page.evaluate("window.msgCalls")) as string[]).filter((c) => c.includes("000000000011") && c.includes("cursor="));
+    assert.ok(older.length >= 1 && older.every((c) => c.includes("cursor=c25.90")), "the NEW cursor (issued on 90 rows) is followed, never the old one");
+    for (const n of [75, 90]) {
+      await page.locator("[data-admin-thread-older]").click();
+      await page.waitForFunction(`document.querySelectorAll('[data-message-id]').length === ${n}`);
+    }
+    assert.equal(await page.locator("[data-admin-thread-older]").count(), 0, "the rest is reachable to the end");
+    const ids = (await page.evaluate("[...document.querySelectorAll('[data-message-id]')].map((e) => e.dataset.messageId)")) as string[];
+    assert.equal(new Set(ids).size, 90, "nothing lost, nothing duplicated");
+    // Overlap: 3 new messages on a thread with 3 pages loaded ⇒ pages and cursor kept, merged once.
+    await page.evaluate(`window.param = window.U("d", 12); window.workspace([])`);
+    await page.waitForFunction("document.querySelectorAll('[data-message-id]').length === 25");
+    await page.locator("[data-admin-thread-older]").click();
+    await page.waitForFunction("document.querySelectorAll('[data-message-id]').length === 50");
+    await page.evaluate(`window.workspace([1, 2, 3].map((k) => window.newMsg(12, k)))`);
+    await page.waitForFunction("document.querySelectorAll('[data-message-id]').length === 53");
+    assert.match(await page.locator("[data-message-id]").first().innerText(), /Message 11 du dossier 12/, "older pages kept");
+    await page.locator("[data-admin-thread-older]").click();
+    await page.waitForFunction("document.querySelectorAll('[data-message-id]').length === 63");
+    const ids12 = (await page.evaluate("[...document.querySelectorAll('[data-message-id]')].map((e) => e.dataset.messageId)")) as string[];
+    assert.equal(new Set(ids12).size, 63, "no duplicate");
   });
 });
