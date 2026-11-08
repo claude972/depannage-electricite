@@ -1,5 +1,6 @@
 // CLI-08 / ENT-12 recipient quotes — pure model + controllers (no React). Contract (read-only):
-// docs/RECIPIENT_QUOTES_BACKEND.md (codex/recipient-quotes d8cde0a; strict browser mirror):
+// docs/RECIPIENT_QUOTES_BACKEND.md + lib/features/recipient-quotes/handler.ts (codex/recipient-quotes
+// 2e7f79c; server-only, so a strict browser mirror of its schemas and checks):
 //   GET /api/quotes?status=all|sent|accepted|rejected&cursor=  (current client only)
 //     → { items, page: { limit: 50, has_more, next_cursor } }   created_at DESC, UUID DESC (µs)
 //     item { id, intervention_id, total_cents, status, created_at, intervention: { id, category, status, site_id } }
@@ -10,6 +11,7 @@
 // late replies dropped; 401/403/404 ⇒ cleared + inaccessible; 422 on a next page ⇒ page 1.
 import { z } from "zod";
 import { isTaxRate } from "../../../lib/tax-rates";
+import { calculateQuote } from "../../../lib/domain";
 
 export const QUOTES_LIMIT = 50;
 export type QuoteFilter = "all" | "sent" | "accepted" | "rejected";
@@ -23,13 +25,14 @@ const intervention = z
   .strict();
 const item = z.object({ id, intervention_id: id, total_cents: cents, status: quoteStatus, created_at: stamp, intervention }).strict();
 export type QuoteItem = z.infer<typeof item>;
-const line = z.object({ label: z.string().min(1).max(200), quantity: z.number().positive().max(10000), unit_price_cents: cents }).strict();
+// Same line bounds as the server's ART-07 projection (lib/features/workspace/detail-read.ts).
+const line = z.object({ label: z.string(), quantity: z.number().int().min(1).max(1000), unit_price_cents: z.number().int().min(0).max(10000000) }).strict();
 const quote = z
-  .object({ id, intervention_id: id, artisan_id: id.nullable(), lines: z.array(line).min(1).max(100), subtotal_cents: cents, tax_rate: z.number().refine(isTaxRate), tax_cents: cents, total_cents: cents, status: quoteStatus, created_at: stamp, accepted_at: stamp.nullable() })
+  .object({ id, intervention_id: id, artisan_id: id, lines: z.array(line).min(1).max(30), subtotal_cents: cents, tax_rate: z.number().refine(isTaxRate), tax_cents: cents, total_cents: cents, status: quoteStatus, created_at: stamp, accepted_at: stamp.nullable() })
   .strict();
 export type ExactQuote = z.infer<typeof quote>;
 const listSchema = z
-  .object({ items: z.array(item).max(QUOTES_LIMIT), page: z.object({ limit: z.literal(QUOTES_LIMIT), has_more: z.boolean(), next_cursor: z.string().regex(/^[A-Za-z0-9_-]{1,700}$/).nullable() }).strict() })
+  .object({ items: z.array(item).max(QUOTES_LIMIT), page: z.object({ limit: z.literal(QUOTES_LIMIT), has_more: z.boolean(), next_cursor: z.string().regex(/^[A-Za-z0-9_-]{1,600}$/).nullable() }).strict() })
   .strict();
 const detailSchema = z.object({ quote, intervention, version: z.object({ current_quote_id: id.nullable(), is_current: z.boolean() }).strict() }).strict();
 export type QuoteDetail = z.infer<typeof detailSchema>;
@@ -66,6 +69,15 @@ export function parseDetail(body: unknown, quoteId: string): QuoteDetail | null 
   const d = r.data;
   if (lower(d.quote.id) !== lower(quoteId) || lower(d.intervention.id) !== lower(d.quote.intervention_id)) return null;
   if (d.version.is_current !== (d.version.current_quote_id !== null && lower(d.version.current_quote_id) === lower(d.quote.id))) return null;
+  // Handler rule: a sent / accepted quote IS the active one; a rejected quote never is.
+  if (d.quote.status === "rejected" ? d.version.is_current : !d.version.is_current) return null;
+  // Same amounts as the server's calculateQuote check.
+  try {
+    const t = calculateQuote(d.quote.lines, d.quote.tax_rate);
+    if (t.subtotal_cents !== d.quote.subtotal_cents || t.tax_cents !== d.quote.tax_cents || t.total_cents !== d.quote.total_cents) return null;
+  } catch {
+    return null;
+  }
   return d;
 }
 export const listUrl = (status: QuoteFilter, cursor: string | null) => {

@@ -38,11 +38,12 @@ test("lecture stricte (docs/RECIPIENT_QUOTES_BACKEND.md) : liste + détail exact
     [page([item(1, { intervention: { id: I(9), category: "panel", status: "completed", site_id: null } })]), "all"],
     [page([item(1, { address: "x" })]), "all"],
     [page([item(1)], "c=1"), "all"],
+    [page([item(1)], "c".repeat(601)), "all"],
   ] as [unknown, Model.QuoteFilter][])
     assert.equal(m.parseList(bad, st), null, JSON.stringify(bad).slice(0, 90));
   assert.ok(m.parseDetail(detail(300), Q(300)));
   assert.ok(m.parseDetail(detail(1, { status: "sent" }), Q(1)), "current version");
-  for (const bad of [detail(301), { ...detail(300), extra: 1 }, { ...detail(300), version: { current_quote_id: Q(1), is_current: true } }, detail(300, { tax_rate: 7 }), detail(300, { lines: [] }), detail(300, { total_cents: -1 }), { quote: quote(300), intervention: { id: I(9), category: "panel", status: "quoted", site_id: null }, version: { current_quote_id: null, is_current: false } }])
+  for (const bad of [detail(301), { ...detail(300), extra: 1 }, { ...detail(300), version: { current_quote_id: Q(1), is_current: true } }, detail(300, { tax_rate: 7 }), detail(300, { lines: [] }), detail(300, { total_cents: -1 }), detail(300, { status: "sent" }), detail(300, { total_cents: 9766 }), detail(300, { artisan_id: null }), detail(300, { lines: [{ label: "x", quantity: 1.5, unit_price_cents: 9000 }] }), detail(300, { lines: Array.from({ length: 31 }, () => ({ label: "x", quantity: 1, unit_price_cents: 0 })), subtotal_cents: 0, tax_cents: 0, total_cents: 0 }), { quote: quote(300), intervention: { id: I(9), category: "panel", status: "quoted", site_id: null }, version: { current_quote_id: null, is_current: false } }])
     assert.equal(m.parseDetail(bad, Q(300)), null, JSON.stringify(bad).slice(0, 90));
   same([m.listUrl("all", null), m.listUrl("sent", "c1"), m.detailUrl(Q(3), null), m.detailUrl(Q(3), { org: ORG, site: SITE }), m.detailUrl(Q(3), { org: ORG, site: null })], ["/api/quotes", "/api/quotes?status=sent&cursor=c1", `/api/quotes/${Q(3)}`, `/api/quotes/${Q(3)}?organization_id=${ORG}&site_id=${SITE}`, `/api/quotes/${Q(3)}?organization_id=${ORG}`]);
 });
@@ -105,11 +106,12 @@ test("contrôleurs : filtre ⇒ page 1 ; plus dédupliqué ; 401/403/404 ⇒ eff
 test("câblage : is_current jamais une permission ; gardes existantes inchangées ; dispatch entreprise", () => {
   const src = readFileSync("components/role/client-space.tsx", "utf8");
   const view = src.slice(src.indexOf("export function QuoteView"), src.indexOf("// ---- Documents"));
-  assert.match(view, /const guarded = cachedQuote && cachedI \? quoteDecisionState\(cachedQuote, pickQuote\(session\.data\.quotes, cachedI\.id\), cachedI\.status\) : null;/, "existing guard (cache quote + dossier)");
-  assert.match(view, /\? guarded === "active" && quote\.status === "sent"\n\s*\? "active"/, "live active only if the existing guard says so");
+  assert.match(view, /session\.role === "client" && point\.state\.phase === "ready" && server\.quote\.id === quoteId && server\.quote\.status === "sent" && !!exactCurrent && server\.intervention\.status === "quoted"/, "every condition required");
+  assert.match(view, /\? quoteDecisionState\(server!\.quote, exactCurrent, server!\.intervention\.status\)/, "the existing rule on the exact read");
   assert.doesNotMatch(view, /is_current \?|is_current &&\s*\(?\s*isActive|isActive = .*is_current/, "is_current never enables an action");
   const ent = readFileSync("components/role/enterprise-space.tsx", "utf8");
-  assert.match(ent, /if \(!quote && session\.mode === "live" && !session\.data\.interventions\.some\(\(i\) => i\.id === ref\)\)\n\s*return <EnterpriseQuoteView key=\{ref\} c=\{c\} quoteId=\{ref\} \/>;/);
+  assert.match(ent, /if \(quote\) return <DossierView key=\{`\$\{quote\.intervention_id\}-\$\{quote\.id\}`\} c=\{c\} id=\{quote\.intervention_id\} initialQuoteId=\{quote\.id\} \/>;/, "cached quote ⇒ that exact version first");
+  assert.match(ent, /case "quote":\n\s*return <EnterpriseQuoteRoute /);
 });
 
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
@@ -120,7 +122,8 @@ const ENTRY = `
 import { createElement as h, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QuoteView, DocumentsView } from "./components/role/client-space";
-import { EnterpriseQuoteView } from "./components/role/enterprise-space";
+import { EnterpriseQuoteView, EnterpriseQuoteRoute } from "./components/role/enterprise-space";
+import { quoteRef } from "./components/app/format";
 import { useRecipientQuote } from "./components/features/recipient-quotes/use-recipient-quotes";
 const tick = (ms) => new Promise((r) => setTimeout(r, ms));
 const USER = "${USER}", ORG = "${ORG}", ORG_B = "${ORG_B}", SITE = "${SITE}";
@@ -135,11 +138,13 @@ const anchor = [];
 const sessionOf = (opts, log) => ({
   mode: opts.demo ? "demo" : "live", role: opts.role ?? "client", profileId: USER, busy: false, displayName: "Moi",
   mutationContext: { userId: () => opts.uid ?? USER, generation: () => 0 },
-  data: { quotes: opts.cacheQuotes ?? [], interventions: opts.cacheRows ?? [], documents: [], messages: [], payments: [], organization_members: [] },
+  data: { quotes: opts.cacheQuotes ?? [], interventions: opts.cacheRows ?? [], documents: [], messages: [], payments: [], reviews: [], organization_members: [], sites: [], organizations: [] },
+  ensureFresh: async () => ({ kind: "loaded" }), refreshedAt: 0, uploads: [], retryUpload: () => {}, dismissUpload: () => {},
   capabilities: { quoteDocuments: "available", operations: "available" }, reprobeFeature: async () => {},
   features: { quoteDocuments: new Proxy({}, { get: (_t, name) => (...args) => { anchor.push(String(name) + ":" + JSON.stringify(args)); return new Promise(() => {}); } }) },
   loadOperations: async () => null, go: (v, p) => log.push(["go", v, p]), openIntervention: (id, q) => log.push(["open", id, q]),
-  action: async (id, a, b) => { log.push(["action", a, b.quote_id]); return true; }, operate: async () => true, refresh: async () => {},
+  action: async (id, a, b) => { log.push(["action", a, b.quote_id, id]); return true; }, operate: async (id, b) => { log.push(["operate", b.action, b.quote_id, id]); return true; }, refresh: async () => {},
+  professional: { approvals: [], approval_rules: [], audit: [] }, submitReview: async () => true, checkout: async () => {}, loadOrganization: async () => null,
 });
 const mount = (el) => { const d = document.createElement("div"); d.className = "ui-v2"; document.body.appendChild(d); const r = createRoot(d); r.render(h(StrictMode, null, el)); return { d, r }; };
 const buttons = (d, text) => [...d.querySelectorAll("button")].filter((b) => b.textContent.includes(text)).length;
@@ -176,7 +181,27 @@ window.run = async () => {
   replies[Q(1)] = detail(1, { status: "sent" });
   v = mount(h(QuoteView, { session: sessionOf({}, log), rows: [], quoteId: Q(1) }));
   await tick(400);
-  out.currentOutside = { accept: buttons(v.d, "Accepter le devis"), text: v.d.textContent };
+  out.currentOutside = { accept: buttons(v.d, "Accepter le devis"), refuse: buttons(v.d, "Refuser"), text: v.d.textContent };
+  const exact1 = () => calls.filter((u) => u === "/api/quotes/" + Q(1)).length;
+  let n1 = exact1();
+  [...v.d.querySelectorAll("button")].find((b) => b.textContent.includes("Accepter le devis")).click(); await tick(300);
+  out.currentOutside.accepted = log.find((x) => x[0] === "action");
+  out.currentOutside.rereadAccept = exact1() - n1;
+  [...v.d.querySelectorAll("button")].find((b) => b.textContent.includes("Refuser")).click(); await tick(50);
+  const ta = v.d.querySelector("#reject-quote textarea");
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(ta, "Trop cher pour cette prestation");
+  ta.dispatchEvent(new Event("input", { bubbles: true })); await tick(30);
+  n1 = exact1();
+  v.d.querySelector("#reject-quote").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); await tick(300);
+  out.currentOutside.refused = log.find((x) => x[0] === "operate");
+  out.currentOutside.rereadRefuse = exact1() - n1;
+  v.r.unmount();
+  // Error states and a non-client role ⇒ never mutable.
+  calls = [];
+  replies[Q(1)] = detail(1, { status: "sent" });
+  v = mount(h(QuoteView, { session: sessionOf({ role: "manager" }, []), rows: [], quoteId: Q(1) }));
+  await tick(300);
+  out.nonClient = buttons(v.d, "Accepter le devis");
   v.r.unmount();
   // 3. Loaded active quote: the existing guard still offers « Accepter » ; accepting re-reads the server.
   calls = []; log = [];
@@ -199,7 +224,7 @@ window.run = async () => {
     replies[Q(9)] = code;
     v = mount(h(QuoteView, { session: sessionOf({}, []), rows: [], quoteId: Q(9) }));
     await tick(300);
-    out[name] = { retry: buttons(v.d, "Réessayer"), text: v.d.textContent };
+    out[name] = { retry: buttons(v.d, "Réessayer"), text: v.d.textContent, accept: buttons(v.d, "Accepter le devis") + buttons(v.d, "Refuser") };
     v.r.unmount();
   }
   // 5. Client quotes list: 120 quotes over 3 pages (> the loaded window), filter ⇒ page 1.
@@ -223,6 +248,29 @@ window.run = async () => {
   await tick(400);
   out.ent = { url: calls.find((u) => u.startsWith("/api/quotes/")), superseded: !!v.d.querySelector("[data-enterprise-quote-superseded]"), total: v.d.querySelector("[data-enterprise-quote-total]")?.textContent, accept: buttons(v.d, "Accepter") + buttons(v.d, "Approuver"), anchorExact: anchor.some((a) => a.includes(Q(300))) };
   v.r.unmount();
+  // 6b. Enterprise #quote/<id>: a cached OLD version is shown exactly on the first render (no
+  // selectedQuoteId), read-only; a dossier id answers 404 on the quote read ⇒ the dossier, as before;
+  // a 403 ⇒ inaccessible, never another quote.
+  const OLDID = "e1a00000-0000-4000-8000-000000000010", CURID = "f2b00000-0000-4000-8000-000000000011";
+  const oldQ = { id: OLDID, intervention_id: I(10), artisan_id: USER, lines: quote(10).lines, subtotal_cents: 9000, tax_rate: 8.5, tax_cents: 765, total_cents: 9765, status: "rejected", created_at: at(20) };
+  const curQ = { ...oldQ, id: CURID, status: "sent", created_at: at(5) };
+  const dossier = { id: I(10), site_id: SITE, category: "panel", status: "quoted", description: "Tableau", address: "x", postal_code: "97200", city: "FDF", urgency: "scheduled", created_at: at(30), estimate_min_cents: 1, estimate_max_cents: 2, artisan_id: USER };
+  const entCtx = (extra = {}) => ({ ...c, session: { ...sessionOf({ role: "manager", cacheQuotes: [oldQ, curQ], cacheRows: [dossier] }, []), selectedQuoteId: "", ...extra }, orgInterventions: [dossier], orgSites: [{ id: SITE, name: "Siège", organization_id: ORG }], scope: { sites: [{ id: SITE, name: "Siège", organization_id: ORG }], interventions: [dossier], quotes: [oldQ, curQ], payments: [], approvals: [], compliance: [], documents: [], rules: [] }, authority: { role: "owner", canWrite: true, readOnlyReason: null, canWriteSite: () => true } });
+  calls = [];
+  const errs = [];
+  window.addEventListener("error", (e) => errs.push(String(e.message) + " @ " + String(e.error && e.error.stack).slice(0, 400)));
+  v = mount(h(EnterpriseQuoteRoute, { c: entCtx(), ref_: OLDID }));
+  await tick(400);
+  out.entOld = { errs, text: v.d.textContent, ref: quoteRef(OLDID), curRef: quoteRef(CURID), decide: buttons(v.d, "Accepter") + buttons(v.d, "Refuser ce devis"), quoteCalls: calls.filter((u) => u.startsWith("/api/quotes/") && !u.slice(12).split("?")[0].includes("/")).length };
+  v.r.unmount();
+  for (const [name, code] of [["ent404", 404], ["ent403", 403]]) {
+    calls = [];
+    replies[I(99)] = code;
+    v = mount(h(EnterpriseQuoteRoute, { c: entCtx(), ref_: I(99) }));
+    await tick(400);
+    out[name] = { inaccessible: !!v.d.querySelector("[data-enterprise-quote-inaccessible]"), quoteView: !!v.d.querySelector("[data-enterprise-quote='ready']"), text: v.d.textContent, called: [...new Set(calls.filter((u) => u.startsWith("/api/quotes/")))] };
+    v.r.unmount();
+  }
   // 7. Identity / organization / site switch: the first render after the change never shows the old quote.
   window.fetch = async (url) => { await tick(30); return Response.json(detail(300)); };
   const frames = [];
@@ -275,16 +323,23 @@ for (const width of [390, 1280])
         assert.match(r.old.text, /Remplacement disjoncteur 300/);
         same([r.old.accept, r.old.refuse, r.old.current, r.old.anchorExact], [0, 0, Q(1), true], "old version read-only, link to the current one, documents of the exact quote");
         assert.match(r.old.text, /Version en lecture seule/);
-        same(r.currentOutside.accept, 0, "is_current never enables an action outside the loaded dossier");
-        assert.match(r.currentOutside.text, /ouvrez le dossier pour accepter ou refuser/);
-        same([r.active.accept, r.active.action, r.active.reread], [1, ["action", "accept_quote", Q(2)], 1], "existing guard kept; accept ⇒ server re-read");
-        same(r.e503.retry, 1);
+        same([r.currentOutside.accept, r.currentOutside.refuse], [1, 1], "a CURRENT sent quote outside the cache (all conditions) is decidable");
+        same([r.currentOutside.accepted, r.currentOutside.rereadAccept], [["action", "accept_quote", Q(1), I(1)], 1], "accept with the exact quote + dossier ids, then re-read");
+        same([r.currentOutside.refused, r.currentOutside.rereadRefuse], [["operate", "reject_quote", Q(1), I(1)], 1], "refuse with the exact ids, then re-read");
+        same(r.nonClient, 0, "another role ⇒ never decidable");
+        same([r.active.accept, r.active.action, r.active.reread], [1, ["action", "accept_quote", Q(2), I(2)], 1], "existing guard kept; accept ⇒ server re-read");
+        same([r.e503.retry, r.e503.accept, r.e404.accept], [1, 0, 0], "error states ⇒ inactive");
         assert.match(r.e404.text, /introuvable ou inaccessible/);
         same([r.list.first, r.list.all, r.list.oldest], [50, 120, true], "120 quotes over 3 pages, the oldest reachable");
         same(r.list.filterCall, "/api/quotes?status=rejected");
         same(r.list.go[0], "go");
         same([r.ent.url, r.ent.superseded, r.ent.accept, r.ent.anchorExact], [`/api/quotes/${Q(300)}?organization_id=${ORG}&site_id=${SITE}`, true, 0, true], "enterprise: organization + site, read-only, exact documents");
         assert.match(r.ent.total, /97,65/);
+        assert.ok(r.entOld.text.includes(r.entOld.ref + " · reçu le"), "first render of #quote/<old cached id>: the OLD version is displayed " + r.entOld.ref + " | " + JSON.stringify(r.entOld.errs) + r.entOld.text.slice(0, 600));
+        assert.ok(!r.entOld.text.includes(r.entOld.curRef + " · reçu le"), "not the current one");
+        same([r.entOld.decide, r.entOld.quoteCalls], [0, 0], "cached old version: read-only, no exact quote read needed");
+        same([r.ent404.inaccessible, r.ent404.quoteView, r.ent404.called], [false, false, [`/api/quotes/${I(99)}?organization_id=${ORG}&site_id=${SITE}`]], "404 on the quote read ⇒ the dossier path, as before");
+        same([r.ent403.inaccessible, r.ent403.quoteView], [true, false], "403 ⇒ inaccessible, no other quote");
         for (const k of ["org", "site", "identity"]) same([r.switches[k].phase, r.switches[k].id], ["loading", null], `${k} switch: first render shows no old quote`);
         same([r.demo.quoteCalls, r.demo.shown], [0, true], "demo unchanged, zero quote call");
         assert.ok(r.overflow <= 0, `${r.overflow}px`);

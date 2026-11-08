@@ -487,17 +487,8 @@ export function EnterpriseSpace({ session }: { session: Session }) {
               id={param || session.selectedId}
             />
           );
-        case "quote": {
-          // #quote/<quote id> (deep links, notifications) opens the dossier of THAT quote; an id that
-          // is not a loaded quote is treated as a dossier id, as before (unknown ⇒ honest not-found).
-          // Live, outside the caches: the EXACT quote is read by id (organization + site) first.
-          const ref = param || session.selectedId;
-          const quote = session.data.quotes.find((q) => q.id === ref);
-          if (!quote && session.mode === "live" && !session.data.interventions.some((i) => i.id === ref))
-            return <EnterpriseQuoteView key={ref} c={c} quoteId={ref} />;
-          const dossierId = quote ? quote.intervention_id : ref;
-          return <DossierView key={`${dossierId}-${quote?.id ?? session.selectedQuoteId}`} c={c} id={dossierId} />;
-        }
+        case "quote":
+          return <EnterpriseQuoteRoute key={param || session.selectedId} c={c} ref_={param || session.selectedId} />;
         case "sites":
           return <SitesView c={c} />;
         case "site":
@@ -1652,10 +1643,12 @@ function NewRequestView({ c, siteId, initialCategory = "panel" }: { c: Ctx; site
 }
 
 // ---- Dossier (vue gestionnaire) ----------------------------------------------------------
-function DossierView({ c, id }: { c: Ctx; id: string }) {
+/** Exported for tests only. `initialQuoteId`: the EXACT version asked by a #quote/<id> link (first
+ *  render, no session.selectedQuoteId needed). */
+export function DossierView({ c, id, initialQuoteId }: { c: Ctx; id: string; initialQuoteId?: string }) {
   const { session, demo } = c;
   const intervention = c.orgInterventions.find((i) => i.id === id);
-  const [versionId, setVersionId] = useState(session.selectedQuoteId);
+  const [versionId, setVersionId] = useState(initialQuoteId ?? session.selectedQuoteId);
   const [ops, setOps] = useState<Operations | null>(null);
   const [opsLoading, setOpsLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
@@ -3914,6 +3907,19 @@ function ApprovalDetailInner({ c, id }: { c: Ctx; id: string }) {
       </section>
     </>
   );
+}
+
+/** #quote/<id> (deep links, notifications). Every quote id is honoured EXACTLY:
+ *  - a loaded quote ⇒ its dossier with THAT version as the initial one (never the current by default);
+ *  - an explicitly loaded dossier id ⇒ that dossier, as before;
+ *  - live, otherwise ⇒ the exact point read (EnterpriseQuoteView); its 404 keeps the dossier-id meaning,
+ *    a 401/403 stays « inaccessible » (never another quote). Exported for tests only. */
+export function EnterpriseQuoteRoute({ c, ref_ }: { c: Ctx; ref_: string }) {
+  const { session } = c;
+  const quote = session.data.quotes.find((q) => q.id === ref_);
+  if (quote) return <DossierView key={`${quote.intervention_id}-${quote.id}`} c={c} id={quote.intervention_id} initialQuoteId={quote.id} />;
+  if (session.mode === "live" && !session.data.interventions.some((i) => i.id === ref_)) return <EnterpriseQuoteView c={c} quoteId={ref_} />;
+  return <DossierView key={`${ref_}-${session.selectedQuoteId}`} c={c} id={ref_} />;
 }
 
 /** Exact enterprise quote by id (live, outside the caches): GET /api/quotes/<id>?organization_id=&site_id=.
