@@ -4,6 +4,16 @@ Objectif : application entière, seuls raccordements Stripe et SMS différés. P
 
 ## Référence en ligne
 
+La preview `e4ab640` contient les cinq lots ci-dessous. Le code est poussé sur `integration/web-pwa`. Les preuves fonctionnelles correspondent aux commits indiqués. [Preview actuelle](https://depannage-electricite-csz4c0bv8-brafas-projects.vercel.app)
+
+- Le compte rendu artisan verrouille l’éditeur pendant le POST. Le rapport confirmé s’affiche et un 503 simulé conserve le brouillon. Le nettoyage est vérifié. [Recette e4ab640](reviews/DELIVERY_E4A_ARTISAN_REPORT_LOCK.md)
+- Le filtre « Non lues » garde son curseur lorsqu’une page « Toutes » arrive en retard. La 26e notification est chargée sans réafficher de notification lue. [Recette c028d74](reviews/DELIVERY_C028_NOTIFICATION_FILTER.md)
+- L’assistance rejoue exactement une demande après une réponse perdue et retrouve un seul ticket. Le brouillon distinct est conservé. [Recette 5a98914](reviews/DELIVERY_5A9_SUPPORT_REPLAY.md)
+- L’équipe prestataire peut affecter la 51e intervention. Le technicien la prend en compte et perd son accès après retrait. Le panneau de garantie propose également la version de conditions enregistrée avec une demande. [Recette 58b6b92](reviews/DELIVERY_58B_PROVIDER_TEAMS.md)
+- Les anciens dossiers et demandes de garantie sont accessibles au-delà de la première page, avec reprise après erreur et refus pour le tiers. [Recette e100a63](reviews/DELIVERY_E100_WARRANTY_HISTORY.md)
+
+### Version précédente `eff0061`
+
 La preview `eff0061` permet au gestionnaire d’approuver puis d’accepter le devis exact d’un dossier ancien. Le lecteur est en lecture seule et la décision en attente bloque l’acceptation. Sur la même version, les douze étapes du parcours client–artisan passent jusqu’à l’intervention terminée, PDF privé vérifié et règlement encore attendu. Le brouillon PWA passe dans Chromium et WebKit. Les seize cas publics WebKit et l’affichage Safari sur simulateur iPhone sont vérifiés selon les conditions du rapport. Les nettoyages passent. [Preview](https://depannage-electricite-k098dsnpw-brafas-projects.vercel.app) · [Preuves](reviews/DELIVERY_EFF_ENTERPRISE_DECISION.md)
 
 ### Version précédente `9e6d24f`

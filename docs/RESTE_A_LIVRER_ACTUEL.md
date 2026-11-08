@@ -2,6 +2,12 @@
 
 Objectif : application entière ; seules liaisons fournisseur Stripe/SMS différées. Inventaire source, pas preuve de panne hébergée et pas reprise des anciens pourcentages. Référence initiale fe4f24c ; interfaces zones et backend copropriété intégrés depuis en3402f64.
 
+## Actualisation du 7 novembre, version `e4ab640`
+
+Cinq lots ont une preuve hébergée et un nettoyage indépendant. Ils couvrent les anciens dossiers de garantie, l’affectation paginée dans l’équipe prestataire, le rejeu exact d’une demande d’assistance, la pagination du filtre de notifications et la sauvegarde du compte rendu artisan. Les résultats sont rattachés à leurs commits. [État courant et preuves](ETAT_LIVRAISON_COURANT.md)
+
+Restent ouvertes les recettes fournisseur Stripe et Vonage, la recette positive du compte propriétaire, l’activation opérateur des conditions de garantie, les décisions d’effacement et les vérifications PWA sur appareils et natives. Les preuves ciblées de la plateforme ne ferment pas à elles seules les 76 capacités du plan. Les constats historiques ci-dessous restent rattachés à leurs versions.
+
 ## État vérifié le 7 novembre, version `eff0061`
 
 Les constats plus anciens restent ci-dessous pour l’historique. La preview et les rapports datés fixent la portée vérifiée.
