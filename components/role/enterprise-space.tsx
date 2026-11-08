@@ -2639,6 +2639,74 @@ function ContractsView({ c }: { c: Ctx }) {
 }
 
 // ---- Fiche de site (V5-C01 / M50, données réelles uniquement) -------------------------------
+/** Live paginated intervention history of ONE site (« En cours » ⇐ open, « Passées » ⇐ past), shared by
+ *  SiteSheet and DirectSiteSheet. Rows only (opening a dossier); no write action. */
+function SiteInterventionsPanel({ session, siteId, headingId, title = "Interventions", onForbidden }: { session: Session; siteId: string; headingId: string; title?: string; /** Lifts a 401/403/404 (site contract) to the sheet. */ onForbidden?: () => void }) {
+  const [tab, setTab] = useState<"open" | "past">("open");
+  const jobs = useSiteRecords({ enabled: session.mode !== "demo", context: session.mutationContext, siteId, kind: tab });
+  const forbidden = jobs.state.phase === "forbidden";
+  useEffect(() => {
+    if (forbidden) onForbidden?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forbidden]);
+  return (
+    <section className="panel" aria-labelledby={headingId} data-site-interventions={siteId}>
+      <div className={styles.panelTitle}>
+        <h2 id={headingId}>{title}</h2>
+        <div className={styles.segmentsWrap}>
+          <Segments
+            label="Filtre des interventions du site"
+            value={tab}
+            options={[
+              ["open", "En cours"],
+              ["past", "Passées"],
+            ]}
+            onChange={setTab}
+          />
+        </div>
+      </div>
+      <div data-site-records={`jobs:${tab}:${jobs.state.phase}`}>
+        {(jobs.state.phase === "loading" || jobs.state.phase === "idle") && <p className={styles.muted} role="status">{RECORDS_COPY.loading}</p>}
+        {(jobs.state.phase === "error" || jobs.state.phase === "forbidden") && (
+          <div role="alert">
+            <p className={styles.muted}>{jobs.state.error}</p>
+            {jobs.state.phase === "error" && <button type="button" className="button outline" onClick={() => jobs.retry()}>Réessayer</button>}
+          </div>
+        )}
+        {jobs.state.phase === "ready" &&
+          (jobs.state.items.length ? (
+            (jobs.state.items as JobRow[]).map((i) => (
+              <button key={i.id} type="button" className={cx(styles.listRow, styles.listRowButton, styles.datedRow)} onClick={() => session.openIntervention(i.id)} data-site-job={i.id}>
+                <time dateTime={i.created_at}>{date(i.created_at)}</time>
+                <section>
+                  <strong>{category(i.category).label}</strong>
+                  <small>
+                    {shortId(i.id)} · {dateTime(i.created_at)}
+                  </small>
+                </section>
+                <Badge status={i.status} />
+                <Icon name="arrow" size={16} />
+              </button>
+            ))
+          ) : (
+            <p className={styles.muted}>{tab === "open" ? "Aucune intervention en cours sur ce site." : "Aucune intervention passée sur ce site."}</p>
+          ))}
+        {jobs.state.failed === "more" && (
+          <div role="alert">
+            <p className={styles.muted}>{jobs.state.error}</p>
+            <button type="button" className="button outline" onClick={() => jobs.retry()}>Réessayer</button>
+          </div>
+        )}
+        {jobs.state.phase === "ready" && jobs.state.next && jobs.state.failed !== "more" && (
+          <button type="button" className="button outline" disabled={jobs.state.loadingMore} onClick={() => jobs.more()} data-site-records-more="jobs">
+            {jobs.state.loadingMore ? "Chargement…" : RECORDS_COPY.more}
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
 /** Exported for tests only (real-mount layout checks). */
 export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
   const { session } = c;
@@ -2653,7 +2721,6 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
   const live = session.mode !== "demo";
   const recordsSite = site && !site.archived_at ? site.id : null;
   const [dueTab, setDueTab] = useState<"upcoming" | "completed">("upcoming");
-  const jobs = useSiteRecords({ enabled: live, context: session.mutationContext, siteId: recordsSite, kind: tab });
   const upcoming = useSiteRecords({ enabled: live, context: session.mutationContext, siteId: recordsSite, kind: "upcoming" });
   const completedDue = useSiteRecords({ enabled: live && dueTab === "completed", context: session.mutationContext, siteId: recordsSite, kind: "completed" });
   const auditRecords = useSiteRecords({ enabled: live && (site?.type || site?.vertical || "") === "erp", context: session.mutationContext, siteId: recordsSite, kind: "audits" });
@@ -2662,8 +2729,26 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
   const reminderScope = `${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${recordsSite ?? "-"}|${dueTab}|${dueList.state.key}|${dueList.state.items.length}`;
   const [reminder, setReminder] = useState<{ scope: string; id: string } | null>(null);
   const openReminder = reminder && reminder.scope === reminderScope ? reminder.id : null;
+  // Site-level « inaccessible »: ANY active records read of THIS site answering 401/403/404 hides the
+  // whole sheet. Keyed by identity + site (resets elsewhere). A 503 stays panel-level.
+  const siteScope = `${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${recordsSite ?? "-"}`;
+  const [forbiddenScope, setForbiddenScope] = useState<string | null>(null);
+  const siteForbidden = live && (forbiddenScope === siteScope || [upcoming, completedDue, auditRecords].some((x) => x.state.phase === "forbidden"));
   // Absent from the workspace cache (portfolio page > 1, archived site): exact server read.
   if (!site || site.archived_at) return <DirectSiteSheet c={c} id={id} />;
+  if (siteForbidden)
+    return (
+      <div data-site-sheet="inaccessible">
+        <button type="button" className="back-link" onClick={() => c.go("sites")}>
+          <Icon name="back" size={17} />
+          Retour aux sites
+        </button>
+        <section className="panel" role="alert">
+          <h2>Site inaccessible</h2>
+          <p className={styles.muted}>{RECORDS_COPY.notFound}</p>
+        </section>
+      </div>
+    );
   const f = siteFigures(site, session.data);
   const interventions = byDateDesc(session.data.interventions.filter((i) => i.site_id === site.id));
   const open = interventions.filter((i) => OPEN_STATUSES.includes(i.status));
@@ -2779,6 +2864,9 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
       </div>
 
       <div className={styles.twoCol}>
+        {live ? (
+          <SiteInterventionsPanel session={session} siteId={site.id} headingId="site-interventions" onForbidden={() => setForbiddenScope(siteScope)} />
+        ) : (
         <section className="panel" aria-labelledby="site-interventions">
           <div className={styles.panelTitle}>
             <h2 id="site-interventions">Interventions</h2>
@@ -2786,61 +2874,15 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
               <Segments
                 label="Filtre des interventions du site"
                 value={tab}
-                options={
-                  live
-                    ? [
-                        ["open", "En cours"],
-                        ["past", "Passées"],
-                      ]
-                    : [
-                        ["open", `En cours (${open.length})`],
-                        ["past", `Passées (${past.length})`],
-                      ]
-                }
+                options={[
+                  ["open", `En cours (${open.length})`],
+                  ["past", `Passées (${past.length})`],
+                ]}
                 onChange={setTab}
               />
             </div>
           </div>
-          {live ? (
-            <div data-site-records={`jobs:${tab}:${jobs.state.phase}`}>
-              {(jobs.state.phase === "loading" || jobs.state.phase === "idle") && <p className={styles.muted} role="status">{RECORDS_COPY.loading}</p>}
-              {(jobs.state.phase === "error" || jobs.state.phase === "forbidden") && (
-                <div role="alert">
-                  <p className={styles.muted}>{jobs.state.error}</p>
-                  {jobs.state.phase === "error" && <button type="button" className="button outline" onClick={() => jobs.retry()}>Réessayer</button>}
-                </div>
-              )}
-              {jobs.state.phase === "ready" &&
-                (jobs.state.items.length ? (
-                  (jobs.state.items as JobRow[]).map((i) => (
-                    <button key={i.id} type="button" className={cx(styles.listRow, styles.listRowButton, styles.datedRow)} onClick={() => session.openIntervention(i.id)} data-site-job={i.id}>
-                      <time dateTime={i.created_at}>{date(i.created_at)}</time>
-                      <section>
-                        <strong>{category(i.category).label}</strong>
-                        <small>
-                          {shortId(i.id)} · {dateTime(i.created_at)}
-                        </small>
-                      </section>
-                      <Badge status={i.status} />
-                      <Icon name="arrow" size={16} />
-                    </button>
-                  ))
-                ) : (
-                  <p className={styles.muted}>{tab === "open" ? "Aucune intervention en cours sur ce site." : "Aucune intervention passée sur ce site."}</p>
-                ))}
-              {jobs.state.failed === "more" && (
-                <div role="alert">
-                  <p className={styles.muted}>{jobs.state.error}</p>
-                  <button type="button" className="button outline" onClick={() => jobs.retry()}>Réessayer</button>
-                </div>
-              )}
-              {jobs.state.phase === "ready" && jobs.state.next && jobs.state.failed !== "more" && (
-                <button type="button" className="button outline" disabled={jobs.state.loadingMore} onClick={() => jobs.more()} data-site-records-more="jobs">
-                  {jobs.state.loadingMore ? "Chargement…" : RECORDS_COPY.more}
-                </button>
-              )}
-            </div>
-          ) : shown.length ? (
+          {shown.length ? (
             shown.map((i) => (
               <button
                 key={i.id}
@@ -2865,6 +2907,7 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
             </p>
           )}
         </section>
+        )}
 
         <section className="panel" aria-labelledby="site-budget">
           <h2 id="site-budget">Budget</h2>
@@ -3285,6 +3328,9 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
  *  dossiers listed are only those already loaded (never claimed exhaustive). */
 function DirectSiteSheet({ c, id }: { c: Ctx; id: string }) {
   const { session } = c;
+  // Same site-level « inaccessible » as the full sheet, keyed by identity + site.
+  const directScope = `${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${id}`;
+  const [forbiddenScope, setForbiddenScope] = useState<string | null>(null);
   const back = (
     <button type="button" className="button outline" onClick={() => c.go("sites")}>
       Retour aux sites
@@ -3299,7 +3345,19 @@ function DirectSiteSheet({ c, id }: { c: Ctx; id: string }) {
       back={back}
       render={(site, state, reload) => {
         const archived = site.archived_at !== null;
-        const loaded = byDateDesc(session.data.interventions.filter((i) => i.site_id === site.id));
+        if (forbiddenScope === directScope)
+          return (
+            <div data-site-sheet="inaccessible">
+              <button type="button" className="back-link" onClick={() => c.go("sites")}>
+                <Icon name="back" size={17} />
+                Retour aux sites
+              </button>
+              <section className="panel" role="alert">
+                <h2>Site inaccessible</h2>
+                <p className={styles.muted}>{RECORDS_COPY.notFound}</p>
+              </section>
+            </div>
+          );
         return (
           <div data-site-sheet="direct" data-site-archived={archived ? "" : undefined}>
             <button type="button" className="back-link" onClick={() => c.go("sites")}>
@@ -3323,32 +3381,37 @@ function DirectSiteSheet({ c, id }: { c: Ctx; id: string }) {
                 <ReadOnlyNote
                   reason={
                     archived
-                      ? "Site archivé : ses paramètres et les dossiers chargés restent consultables. Ce site ne reçoit plus de nouvelle demande."
+                      ? "Site archivé : ses paramètres et son historique restent consultables. Ce site ne reçoit plus de nouvelle demande."
                       : "Site absent des données chargées : seules ses informations serveur sont affichées ici."
                   }
                 />
               </div>
             </div>
             <div className={styles.twoCol}>
-              <section className="panel" aria-labelledby="site-direct-interventions">
-                <h2 id="site-direct-interventions">Interventions chargées</h2>
-                {loaded.length ? (
-                  loaded.map((i) => (
-                    <button key={i.id} type="button" className={cx(styles.listRow, styles.listRowButton, styles.datedRow)} onClick={() => session.openIntervention(i.id)}>
-                      <time dateTime={i.created_at}>{date(i.created_at)}</time>
-                      <section>
-                        <strong>{category(i.category).label}</strong>
-                        <small>{shortId(i.id)} · {dateTime(i.created_at)}</small>
-                      </section>
-                      <Badge status={i.status} />
-                      <Icon name="arrow" size={16} />
-                    </button>
-                  ))
-                ) : (
-                  <p className={styles.muted}>Aucun dossier de ce site parmi les interventions chargées.</p>
-                )}
-                <p className={styles.note}>Seuls les dossiers déjà chargés sont listés : la liste peut être incomplète.</p>
-              </section>
+              {/* Live: mounted only here, i.e. after SiteDirectLoader proved the organization and the site. */}
+              {session.mode === "demo" ? (
+                <section className="panel" aria-labelledby="site-direct-interventions">
+                  <h2 id="site-direct-interventions">Interventions chargées</h2>
+                  {session.data.interventions.some((i) => i.site_id === site.id) ? (
+                    byDateDesc(session.data.interventions.filter((i) => i.site_id === site.id)).map((i) => (
+                      <button key={i.id} type="button" className={cx(styles.listRow, styles.listRowButton, styles.datedRow)} onClick={() => session.openIntervention(i.id)}>
+                        <time dateTime={i.created_at}>{date(i.created_at)}</time>
+                        <section>
+                          <strong>{category(i.category).label}</strong>
+                          <small>{shortId(i.id)} · {dateTime(i.created_at)}</small>
+                        </section>
+                        <Badge status={i.status} />
+                        <Icon name="arrow" size={16} />
+                      </button>
+                    ))
+                  ) : (
+                    <p className={styles.muted}>Aucun dossier de ce site parmi les interventions chargées.</p>
+                  )}
+                  <p className={styles.note}>Seuls les dossiers déjà chargés sont listés : la liste peut être incomplète.</p>
+                </section>
+              ) : (
+                <SiteInterventionsPanel session={session} siteId={site.id} headingId="site-direct-interventions" onForbidden={() => setForbiddenScope(directScope)} />
+              )}
               <SiteSettingsPanel
                 siteId={site.id}
                 context={session.mutationContext}

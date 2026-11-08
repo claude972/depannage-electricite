@@ -141,7 +141,9 @@ test("câblage : lectures seulement dans la fiche live ; droits = canWriteSite ;
   const src = readFileSync("components/role/enterprise-space.tsx", "utf8");
   const sheet = src.slice(src.indexOf("export function SiteSheet"), src.indexOf("function DirectSiteSheet"));
   assert.match(sheet, /const live = session\.mode !== "demo";/);
-  assert.match(sheet, /useSiteRecords\(\{ enabled: live, context: session\.mutationContext, siteId: recordsSite, kind: tab \}\)/);
+  assert.match(src, /function SiteInterventionsPanel\(/, "one shared paginated history panel");
+  assert.match(sheet, /<SiteInterventionsPanel session=\{session\} siteId=\{site\.id\} headingId="site-interventions" onForbidden=/);
+  assert.match(src, /<SiteInterventionsPanel session=\{session\} siteId=\{site\.id\} headingId="site-direct-interventions" onForbidden=/, "reused in DirectSiteSheet (inside the loader's render)");
   assert.match(sheet, /const canWrite = c\.authority\.canWriteSite\(site\.id\);/, "rights stay with canWriteSite");
   assert.match(sheet, /aria-expanded=\{openReminder === r\.id\}/);
   assert.match(sheet, /\{openReminder === r\.id && \(/, "reminder panel mounted only when opened");
@@ -189,7 +191,7 @@ const mount = (opts) => {
         return Response.json(page(Array.from({ length: 50 }, (_, i) => due(301 + n * 50 + i - saved, "pending")), n < 6 ? "u" + (n + 1) : null));
       }
       if (kind === "completed") return Response.json(page([due(900, "completed")]));
-      if (kind === "audits") return Response.json(page([due(700, "completed", "audit")]));
+      if (kind === "audits") return opts.auditsStatus ? Response.json({ error: "x" }, { status: opts.auditsStatus }) : Response.json(page([due(700, "completed", "audit")]));
     }
     if (u.includes("/reminder")) return Response.json({ error: "x" }, { status: 503 });
     return Response.json({ error: "x" }, { status: 503 });
@@ -214,6 +216,34 @@ const mount = (opts) => {
   const render = () => root.render(h(StrictMode, null, h("main", { className: "content" }, h(SiteSheet, { c, id: SITE }))));
   render();
   return { div, root, calls, release: () => releaseOpen?.(), releaseMore: () => releaseMore?.(), setGen: (g) => { gen = g; render(); }, saved: () => saved };
+};
+window.direct = async () => {
+  const out = {};
+  const OTHER = "11111111-1111-4111-8111-111111111112";
+  for (const [name, org, archived] of [["proven", ORG, null], ["foreign", OTHER, null], ["archived", ORG, "2026-10-02T10:00:00.000Z"]]) {
+    const calls = [];
+    window.fetch = async (url) => {
+      const u = String(url); calls.push(u);
+      if (u.endsWith("/settings")) return Response.json({ site: { id: SITE, organization_id: org, name: "Entrepôt Nord", address: "4 zone de la Jambette", access_notes: "", opening_hours: [], type: "office", budget_cents: 0, settings_version: 2, archived_at: archived, created_at: "2026-10-01T10:00:00.000Z" }, can_write: !archived });
+      if (u.includes("/records")) return Response.json(page([job(7, "requested")]));
+      return Response.json({ error: "x" }, { status: 503 });
+    };
+    const session = {
+      mode: "live", role: "manager", profileId: USER, busy: false, capabilities: { siteOperations: "available", professional: "loaded" },
+      data: { interventions: [], documents: [], quotes: [], payments: [], sites: [], organizations: [] },
+      professional: { compliance_records: [], approval_rules: [], approval: null, compliance: null },
+      features: { siteOperations: demoClient(demoReport()) }, loadOrganization: async () => ({ members: [] }),
+      mutationContext: { userId: () => USER, generation: () => 0 }, openIntervention: () => {}, refresh: async () => {}, reprobeFeature: async () => {}, professionalCommand: async () => true,
+    };
+    const c = { session, demo: false, organization: { id: ORG, name: "Org" }, activeSite: null, orgSites: [], orgInterventions: [], scope: { sites: [], interventions: [], quotes: [], payments: [], approvals: [], compliance: [], documents: [], rules: [] }, siteAccess: null, authority: { canWrite: true, readOnlyReason: null, canWriteSite: () => !archived }, canCreateRequest: true, reloadSiteAccess: () => {}, go: () => {} };
+    const div = document.createElement("div"); document.body.appendChild(div);
+    const root = createRoot(div);
+    root.render(h(StrictMode, null, h(SiteSheet, { c, id: SITE })));
+    await tick(700);
+    out[name] = { records: [...new Set(calls.filter((u) => u.includes("/records")))], rows: div.querySelectorAll("[data-site-job]").length, direct: !!div.querySelector("[data-site-sheet='direct']"), writeActions: div.querySelectorAll("[data-site-due-complete], [data-site-reminder-toggle]").length, areas: div.textContent.includes("Étages, zones et parties communes") };
+    root.unmount();
+  }
+  return out;
 };
 const segment = (div, label, text) => [...div.querySelectorAll("[aria-label='" + label + "'] button")].find((b) => b.textContent === text);
 window.run = async () => {
@@ -268,7 +298,7 @@ window.run = async () => {
   await tick(600);
   const rowsBefore404 = v.div.querySelectorAll("[data-site-job]").length;
   v.div.querySelector("[data-site-records-more='jobs']").click(); await tick(300);
-  out.revoked = { before: rowsBefore404, after: v.div.querySelectorAll("[data-site-job]").length, state: v.div.querySelector("[data-site-records^='jobs:']")?.getAttribute("data-site-records"), text: v.div.querySelector("[data-site-records^='jobs:']")?.textContent ?? "", more: !!v.div.querySelector("[data-site-records-more='jobs']") };
+  out.revoked = { before: rowsBefore404, after: v.div.querySelectorAll("[data-site-job]").length, state: v.div.querySelector("[data-site-sheet='inaccessible']") ? "sheet:inaccessible" : null, text: v.div.textContent, more: !!v.div.querySelector("[data-site-records-more='jobs']") };
   v.root.unmount();
   // Post-write refresh: an older upcoming read (next page, still loading) never wins.
   const w = mount({ holdUpcomingMore: true });
@@ -279,6 +309,21 @@ window.run = async () => {
   const dues = [...w.div.querySelectorAll("[data-site-due]")].map((x) => x.getAttribute("data-site-due"));
   out.postWrite = { count: dues.length, first: dues[0], hasOld: dues.includes(D(5000)), next: w.div.querySelector("[data-site-next-due]").textContent };
   w.root.unmount();
+  // Whole-sheet « inaccessible » when ANY records read of this site answers 404; 503 stays panel-level.
+  for (const [name, st] of [["kind404", 404], ["kind503", 503]]) {
+    const z = mount({ auditsStatus: st });
+    await tick(700);
+    out[name] = {
+      inaccessible: !!z.div.querySelector("[data-site-sheet='inaccessible']"),
+      back: [...z.div.querySelectorAll("button")].some((b) => b.textContent.includes("Retour aux sites")),
+      jobs: z.div.querySelectorAll("[data-site-job]").length,
+      dues: z.div.querySelectorAll("[data-site-due]").length,
+      actions: z.div.querySelectorAll("[data-site-due-complete], [data-site-reminder-toggle], [data-site-records-more]").length,
+      auditsState: z.div.querySelector("[data-site-records^='audits:']")?.getAttribute("data-site-records") ?? null,
+      retry: [...(z.div.querySelector("[data-site-records^='audits:']")?.querySelectorAll("button") ?? [])].some((b) => b.textContent === "Réessayer"),
+    };
+    z.root.unmount();
+  }
   // Next due date on a failed upcoming read: never « Aucune ».
   const e = mount({ upcomingFails: true });
   await tick(500);
@@ -293,6 +338,35 @@ window.run = async () => {
   return out;
 };
 `;
+test("fiche de site directe (Chromium, SiteSheet réelle hors cache) : historique paginé du bon site après preuve ; autre organisation ⇒ 0 lecture ; archivé ⇒ aucune action d’écriture", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
+  const out = await build({ absWorkingDir: ROOT, stdin: { contents: ENTRY, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, outdir: "out", platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "local-css", ".svg": "dataurl", ".png": "dataurl" }, define: { "process.env.NODE_ENV": '"development"', "process.env.NEXT_PUBLIC_SUPABASE_URL": "undefined", "process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "undefined" }, logLevel: "error" });
+  const js = out.outputFiles.find((f) => f.path.endsWith(".js"))!.text;
+  const server: Server = createServer((_rq, rs) => { rs.setHeader("content-type", "text/html"); rs.end(`<!doctype html><script>${js}</script>`); });
+  let browser: { close(): Promise<void>; newContext(o?: unknown): Promise<any> } | null = null;
+  try {
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
+    browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true });
+    const context = await browser!.newContext();
+    try {
+      const page = await context.newPage();
+      const errors: string[] = [];
+      page.on("pageerror", (e: Error) => errors.push(String(e)));
+      await page.goto(`http://127.0.0.1:${(server.address() as { port: number }).port}/`);
+      const r = (await page.evaluate(() => (window as unknown as { direct: () => Promise<unknown> }).direct())) as Record<string, any>;
+      same([r.proven.direct, r.proven.records, r.proven.rows], [true, [`/api/sites/${SITE}/records?kind=open`], 1], "direct sheet: paginated history of THIS site, after proof");
+      same([r.foreign.records, r.foreign.rows], [[], 0], "another organization ⇒ 0 records call");
+      same([r.archived.records, r.archived.rows, r.archived.writeActions, r.archived.areas], [[`/api/sites/${SITE}/records?kind=open`], 1, 0, false], "archived ⇒ history readable, no write action");
+      same(errors, []);
+    } finally {
+      await context.close();
+    }
+  } finally {
+    await browser?.close();
+    server.close();
+  }
+});
+
 for (const width of [360, 390, 1280])
   test(`fiche de site réelle à ${width} px : lignes serveur (> caches), onglets et kinds, plus, rappel à la demande, relecture après action, tardive ignorée, échéance « Non vérifiée », démo 0 appel`, { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
     const out = await build({ absWorkingDir: ROOT, stdin: { contents: ENTRY, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, outdir: "out", platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "local-css", ".svg": "dataurl", ".png": "dataurl" }, define: { "process.env.NODE_ENV": '"development"', "process.env.NEXT_PUBLIC_SUPABASE_URL": "undefined", "process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "undefined" }, logLevel: "error" });
@@ -323,10 +397,12 @@ for (const width of [360, 390, 1280])
         assert.ok(r.pastCalls.every((u: string) => !u.includes("cursor")), "kind switch resets the cursor");
         same(r.auditRows, 1);
         same(r.lateRows, ["a0000000-0000-4000-8000-000000000500"], "the late « open » reply after switching to « Passées » is dropped");
-        same([r.revoked.before, r.revoked.after, r.revoked.state, r.revoked.more], [50, 0, "jobs:open:forbidden", false], "404 on « Afficher plus » ⇒ no row left, inaccessible");
+        same([r.revoked.before, r.revoked.after, r.revoked.state, r.revoked.more], [50, 0, "sheet:inaccessible", false], "404 on « Afficher plus » ⇒ no row left, whole sheet inaccessible");
         assert.match(r.revoked.text, /n’est pas \(ou plus\) accessible/);
         same([r.postWrite.count, r.postWrite.first, r.postWrite.hasOld], [50, "d0000000-0000-4000-8000-000000000300", false], "the older read is ignored; the fresh page 1 wins");
         assert.match(r.postWrite.next, /Échéance 300/, "next due date from the fresh read");
+        same(r.kind404, { inaccessible: true, back: true, jobs: 0, dues: 0, actions: 0, auditsState: null, retry: false }, "one kind 404 ⇒ whole sheet inaccessible, back link kept");
+        same([r.kind503.inaccessible, r.kind503.jobs > 0, r.kind503.dues > 0, r.kind503.auditsState, r.kind503.retry], [false, true, true, "audits:error", true], "503 on one kind ⇒ only that panel errors");
         assert.match(r.nextDueError, /Non vérifiée/);
         assert.doesNotMatch(r.nextDueError, /Aucune/, "never « Aucune » from an error");
         same([r.demoRecords, r.demoCache], [0, true], "demo unchanged, zero records call");
