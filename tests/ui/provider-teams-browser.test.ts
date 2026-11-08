@@ -121,10 +121,10 @@ function pageOf(list, after) {
   const records = list.slice(start, start + 50);
   return { records, next_after: start + 50 < list.length ? records[records.length - 1].id : null };
 }
-function setupBig() {
+function setupBig(role = "owner") {
   const A = N("7", 1), B = N("7", 2);
   const ctx = { gen: 0 };
-  const teamOf = (id) => ({ id, name: id === A ? "Équipe Nord" : "Équipe Sud", owner_id: OWNER, version: 4, role: "owner", active: true });
+  const teamOf = (id) => ({ id, name: id === A ? "Équipe Nord" : "Équipe Sud", owner_id: OWNER, version: 4, role, active: true });
   const data = {
     [A + ":members"]: Array.from({ length: 60 }, (_, i) => ({ id: N("1", i + 1), full_name: i === 0 ? "Alex Martin" : "Tech " + (i + 1), role: i === 0 ? "owner" : "technician", active: true, version: 1 })),
     [A + ":missions"]: Array.from({ length: 55 }, (_, i) => ({ id: N("2", i + 1), category: "panel", status: "accepted", city: "Ville " + (i + 1), assignment: null })),
@@ -272,7 +272,7 @@ Object.assign(w.scenarios, {
   },
   async writeRefused(mode) {
     // GET 200 with sections visible, then « Affecter » answers 404 (write_provider_team P0002).
-    const t = setupBig();
+    const t = setupBig(mode === "gone-coordinator" ? "coordinator" : "owner");
     await tick(300);
     await click(t.div, '[data-pt-open="' + t.A + '"]');
     await tick(300);
@@ -291,13 +291,13 @@ Object.assign(w.scenarios, {
     };
     const closed = snap();
     const verifyReads = t.count("A:members|") - reads;
-    if (mode !== "gone") return { before, closed, verifyReads };
+    if (mode === "removed") return { before, closed, verifyReads };
     t.post.status = 200;
     await t.release("A:members|");
     await tick(300);
     const proven = { ...snap(), missions: has(t.div, "[data-pt-mission]"), assign: has(t.div, "[data-pt-assign]") };
     await tick(300);
-    return { before, closed, verifyReads, proven, postsLater: t.calls.post.length };
+    return { before, closed, verifyReads, proven, postsLater: t.calls.post.length, sentReads: t.calls.get.filter((k) => k.startsWith("A:invitations")).length };
   },
   async midSwitch() {
     const t = setupBig();
@@ -433,6 +433,9 @@ test("équipes prestataires paginées (Chromium) : une reprise par section, déd
     const gone = (await run("writeRefused", "gone")) as W;
     same([gone.closed.residue, gone.closed.checking, gone.closed.private, gone.closed.notice, gone.closed.gone, gone.closed.posts], [0, "checking", false, null, 0, 1], "before the re-read proves access: nothing private, no action");
     same([gone.proven!.checking, gone.proven!.gone, gone.proven!.missions, gone.proven!.assign, gone.proven!.notice, gone.postsLater, gone.proven!.stored], [null, 1, 50, 50, null, 1, 0], "re-read 200 (target gone) ⇒ local error + refresh, no replay");
+    const gc = (await run("writeRefused", "gone-coordinator")) as W & { sentReads: number };
+    same([gc.before.missions, gc.before.assign, gc.closed.residue, gc.closed.checking, gc.closed.private], [50, 50, 0, "checking", false], "coordinator: closed until the re-read proves access");
+    same([gc.proven!.lost, gc.proven!.checking, gc.proven!.gone, gc.proven!.missions, gc.proven!.assign, gc.proven!.notice, gc.postsLater, gc.proven!.stored, gc.sentReads], [0, null, 1, 50, 50, null, 1, 0, 0], "gone, coordinator: list back, team NOT closed, no replay, no success, sent invitations never read");
     const m = (await run("midMutation")) as { posts: string[]; reread: number; released: boolean; rows: number; late: boolean; more: number };
     same([m.posts, m.reread >= 1, m.released, m.rows, m.late, m.more], [["assign"], true, true, 50, false, 1], "a write re-reads page 1; the late page 2 is dropped");
 
