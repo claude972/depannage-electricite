@@ -67,7 +67,7 @@ test("centre renders unavailable, read-only and demo states without touching the
   assert.match(readOnly, /Rendez-vous enregistré/); assert.match(readOnly, /Non lue/);
   const live = render("components/features/notifications/notification-center.tsx", "NotificationCenter", { state: "available", unavailableMessage: "", scope: scope(), client, demo });
   assert.match(live, /Démonstration/); assert.doesNotMatch(live, /Marquer comme lue/, "demo data is never marked");
-  assert.match(live, /3 notifications/); assert.match(live, /Aucun e-mail, SMS ni notification push n’est envoyé/);
+  assert.match(live, /3 notifications/); assert.doesNotMatch(live, /n’est envoyé/, "no global claim about external sends");
   assert.deepEqual(client.calls, []);
   assert.equal(scopeKey(scope()), "client-a||");
 });

@@ -72,5 +72,5 @@ test("étiquette du canal push : « Disponible » seulement si le serveur le dit
   assert.equal(m.TAG_LABEL.available, "Disponible");
   const center = readFileSync("components/features/notifications/notification-center.tsx", "utf8");
   assert.match(center, /channel === "push" && pushTagState \? \(\s*<Tag tone="green">\{TAG_LABEL\[pushTagState\]\}<\/Tag>/);
-  assert.match(center, /<Tag tone=\{view\.channels\[channel\] === "available" \? "green" : "amber"\}>\{view\.channels\[channel\] === "available" \? "Actif" : NOTIFICATION_COPY\.channelsUnavailable\}<\/Tag>/, "e-mail / SMS tags unchanged");
+  assert.match(center, /<ChannelTag available=\{view\.channels\[channel\] === "available"\} optIn=\{view\.preferences\[`\$\{channel\}_enabled`\]\} \/>/, "e-mail / SMS tags: server availability + saved opt-in");
 });

@@ -182,7 +182,7 @@ function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate
           {!demo && <button type="button" className="button outline" aria-label="Recharger les notifications" onClick={reload}><Icon name="refresh" size={18} /></button>}
         </div>
       </div>
-      <p className={styles.summary}>Aucun e-mail, SMS ni notification push n’est envoyé : les notifications se consultent dans cet espace.</p>
+      <p className={styles.summary}>Les notifications de vos dossiers se consultent dans cet espace. Les canaux externes et leur état figurent dans les préférences.</p>
       {showPreferences && <PreferencesPanel client={client} demo={demo?.preferences} writable={writable} context={context} onClose={() => setShowPreferences(false)} />}
       {list.status === "loading" && list.items.length === 0 && <Loader label="Chargement des notifications…" />}
       {list.status === "error" && (
@@ -191,7 +191,7 @@ function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate
           <button type="button" className="button outline" onClick={reload}>Réessayer</button>
         </div>
       )}
-      {list.status === "ready" && list.items.length === 0 && <Empty level={2} icon="bell" title={unreadOnly ? NOTIFICATION_COPY.emptyUnread : NOTIFICATION_COPY.empty}>Les événements de vos dossiers apparaîtront ici. Aucun e-mail ni SMS n’est envoyé.</Empty>}
+      {list.status === "ready" && list.items.length === 0 && <Empty level={2} icon="bell" title={unreadOnly ? NOTIFICATION_COPY.emptyUnread : NOTIFICATION_COPY.empty}>Les événements de vos dossiers apparaîtront ici.</Empty>}
       {list.items.length > 0 && (
         <>
           {page && <p className={styles.summary}>{page.total} notification{page.total > 1 ? "s" : ""}{unreadOnly ? " non lue" + (page.total > 1 ? "s" : "") : ""} · {list.items.length} affichée{list.items.length > 1 ? "s" : ""}</p>}
@@ -232,6 +232,16 @@ function NotificationItem({ notification: n, pending, locked, writable, error, o
       {error && <p className={styles.itemError} role="alert">{error}</p>}
     </article>
   );
+}
+/** Channel state from data already loaded: the server availability and the SAVED opt-in (never
+ *  the unsaved checkbox). « Activé » only when both hold; the push browser status is separate. */
+export function channelState(available: boolean, optIn: boolean): { tone: "green" | "blue" | "amber"; label: string } {
+  if (!available) return { tone: "amber", label: NOTIFICATION_COPY.channelsUnavailable };
+  return optIn ? { tone: "green", label: "Activé" } : { tone: "blue", label: "Disponible" };
+}
+function ChannelTag({ available, optIn }: { available: boolean; optIn: boolean }) {
+  const s = channelState(available, optIn);
+  return <Tag tone={s.tone}>{s.label}</Tag>;
 }
 /** Also mounted on its own (client profile, CLI-09): same load/save contract, no copy of the form. */
 export function PreferencesPanel({ client, demo, writable, onClose, context }: { client: NotificationsClient; demo?: PreferencesView; writable: boolean; onClose?: () => void; context?: { generation(): number; userId(): string | null } }) {
@@ -288,9 +298,9 @@ export function PreferencesPanel({ client, demo, writable, onClose, context }: {
             {channel === "push" && pushTagState ? (
               <Tag tone="green">{TAG_LABEL[pushTagState]}</Tag>
             ) : channel === "push" ? (
-              <Tag tone="amber">{view.channels.push === "available" ? "Non activé sur ce navigateur" : NOTIFICATION_COPY.channelsUnavailable}</Tag>
+              <ChannelTag available={view.channels.push === "available"} optIn={view.preferences.push_enabled} />
             ) : (
-              <Tag tone={view.channels[channel] === "available" ? "green" : "amber"}>{view.channels[channel] === "available" ? "Actif" : NOTIFICATION_COPY.channelsUnavailable}</Tag>
+              <ChannelTag available={view.channels[channel] === "available"} optIn={view.preferences[`${channel}_enabled`]} />
             )}
           </label>
         ))}
