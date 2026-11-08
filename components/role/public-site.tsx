@@ -232,7 +232,7 @@ function AuthView({ session }: { session: PublicSession }) {
           <span>Votre brouillon de demande sera repris après connexion.</span>
         </div>
       )}
-      <AuthForm mode={session.authMode} onMode={(mode) => session.setAuthMode(mode)} busy={session.busy} onSubmit={async (values) => { if (session.authMode === "signup") await session.signUp(values); else if (session.authMode === "reset") await session.resetPassword(values.email); else await session.signIn(values.email, values.password); }} onDemo={() => session.startDemo("client")} initial={session.booking?.contact ? { email: session.booking.contact.email, full_name: `${session.booking.contact.first_name} ${session.booking.contact.last_name}`.trim() } : undefined} />
+      <AuthForm mode={session.authMode} onMode={(mode) => session.setAuthMode(mode)} busy={session.busy} onSubmit={async (values) => { if (session.authMode === "signup") await session.signUp(values); else if (session.authMode === "reset") await session.resetPassword(values.email); else await session.signIn(values.email, values.password); }} onDemo={() => session.startDemo("client")} initial={session.booking?.contact ? { email: session.booking.contact.email, first_name: session.booking.contact.first_name, last_name: session.booking.contact.last_name } : undefined} />
     </div>
   );
 }
