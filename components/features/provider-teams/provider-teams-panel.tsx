@@ -26,7 +26,6 @@ import {
   teamActions,
   type AnyCommand,
   type Context,
-  type Member,
   type Mission,
   type MyInvitation,
   type PtApi,
@@ -34,10 +33,9 @@ import {
   type Section,
   type Store,
   type Team,
-  type TeamInvitation,
-  type TeamMission,
 } from "./model";
 import styles from "./provider-teams.module.css";
+import { usePages, type PagesState } from "./use-pages";
 
 export type ProviderTeamsPanelProps = {
   context: Context;
@@ -109,6 +107,38 @@ function RunnerFeedback({ state, onRetry }: { state: RunnerState; onRetry: () =>
   );
 }
 
+/** Status of one paginated list before its first page is shown (loading / refused / page-1 error). */
+function PagesStatus({ state, onRetry, name }: { state: PagesState<unknown>; onRetry: () => void; name: string }) {
+  if (state.phase === "loading") return <p className={styles.muted} role="status" data-pt-section-loading={name}>{COPY.loading}</p>;
+  if (state.phase === "forbidden") return <p className={styles.muted} data-pt-section-forbidden={name}>{COPY.forbidden}</p>;
+  if (state.phase === "error")
+    return (
+      <div role="alert" data-pt-section-error={name}>
+        <p className={styles.error}>{COPY.loadFailed}</p>
+        <button type="button" className={styles.button} disabled={state.reading !== null} onClick={onRetry} data-pt-section-retry={name}>Réessayer</button>
+      </div>
+    );
+  return null;
+}
+
+/** « Afficher plus » of one list, or its local next-page error (Réessayer re-reads that cursor). */
+function PagesFooter({ state, onMore, onRetry, name, label = COPY.more }: { state: PagesState<unknown>; onMore: () => void; onRetry: () => void; name: string; label?: string }) {
+  if (state.phase !== "ready") return null;
+  if (state.failed !== null)
+    return (
+      <div role="alert" data-pt-page-error={name}>
+        <p className={styles.error}>{COPY.moreFailed}</p>
+        <button type="button" className={styles.button} disabled={state.reading !== null} onClick={onRetry} data-pt-page-retry={name}>Réessayer</button>
+      </div>
+    );
+  if (!state.next) return null;
+  return (
+    <button type="button" className={styles.button} disabled={state.reading !== null} aria-busy={state.reading === "next" || undefined} onClick={onMore} data-pt-more={name}>
+      {state.reading === "next" ? "Chargement…" : label}
+    </button>
+  );
+}
+
 function Live({ context, audience = "artisan", api, store = tabStore, newId = ptUuid, now = Date.now }: ProviderTeamsPanelProps) {
   const member = audience === "member";
   const [invitationCount, setInvitationCount] = useState<number | null>(null);
@@ -122,29 +152,13 @@ function Live({ context, audience = "artisan", api, store = tabStore, newId = pt
     newId: () => latest.current.newId(),
     now: () => latest.current.now(),
   };
-  const [teams, setTeams] = useState<{ phase: "loading" | "ready" | "error" | "forbidden"; records: Team[]; next: string | null }>({ phase: "loading", records: [], next: null });
-  const [selected, setSelected] = useState<string | null>(null);
-  const loadTeams = async (after: string | null = null) => {
-    const gen = context.generation(), uid = context.userId();
-    const r = await deps.api().teams(after);
-    if (context.generation() !== gen || context.userId() !== uid) return;
-    if (r.status === 401 || r.status === 403) return setTeams({ phase: "forbidden", records: [], next: null });
-    const p = r.status === 200 ? parseTeams(r.body, after) : null;
-    if (!p) return setTeams((s) => ({ ...s, phase: "error" }));
-    setTeams((s) => ({ phase: "ready", records: after ? [...s.records, ...p.records] : p.records, next: p.next_after }));
-  };
-  useEffect(() => {
-    let active = true;
-    void (async () => active && (await loadTeams()))();
-    return () => {
-      active = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const teams = usePages({ context, fetchPage: (after) => deps.api().teams(after), parse: parseTeams });
+  // The opened team stays open when a page-1 re-read no longer lists it (it sat on a later page).
+  const [selected, setSelected] = useState<Team | null>(null);
   const uid = useId();
-  const create = useRunner(deps, "create", () => loadTeams(), () => setTeams({ phase: "forbidden", records: [], next: null }));
+  const create = useRunner(deps, "create", () => teams.reset(), () => teams.forbid());
   const [name, setName] = useState("");
-  const team = teams.records.find((t) => t.id === selected) ?? null;
+  const team = selected ? (teams.state.records.find((t) => t.id.toLowerCase() === selected.id.toLowerCase()) ?? selected) : null;
   const submitCreate = async (e: FormEvent) => {
     e.preventDefault();
     const n = name.trim();
@@ -153,38 +167,35 @@ function Live({ context, audience = "artisan", api, store = tabStore, newId = pt
     if (!teamId || !commandId) return;
     if ((await create.run({ kind: "create", body: { action: "create", team_id: teamId.toLowerCase(), command_id: commandId.toLowerCase(), name: n } })) === "ok") setName("");
   };
+  const t = teams.state;
   // Member accounts: the block exists only when the server returns something for this account.
-  const hidden = member && (invitationCount === null || teams.phase === "loading" || (invitationCount === 0 && teams.records.length === 0 && teams.phase !== "error"));
+  const hidden = member && (invitationCount === null || t.phase === "loading" || (invitationCount === 0 && t.records.length === 0 && t.phase !== "error"));
   return (
     <section className={styles.panel} aria-labelledby={`${uid}-title`} data-provider-teams="live" data-pt-audience={audience} hidden={hidden || undefined}>
       <h2 id={`${uid}-title`} className={styles.title}>{COPY.title}</h2>
       <p className={styles.muted}>{COPY.roleNote}</p>
-      <MyInvitations deps={deps} onAccepted={() => void loadTeams()} onCount={setInvitationCount} />
-      {teams.phase === "loading" && <p className={styles.muted} role="status">{COPY.loading}</p>}
-      {teams.phase === "forbidden" && <p className={styles.muted}>{COPY.forbidden}</p>}
-      {teams.phase === "error" && (
-        <div role="alert">
-          <p className={styles.error}>{COPY.loadFailed}</p>
-          <button type="button" className={styles.button} onClick={() => void loadTeams()}>Réessayer</button>
-        </div>
-      )}
-      {teams.phase === "ready" && (
+      <MyInvitations deps={deps} onAccepted={() => void teams.reset()} onCount={setInvitationCount} />
+      <PagesStatus state={t} onRetry={() => void teams.retry()} name="teams" />
+      {t.phase === "ready" && (
         <>
           <h3 className={styles.subtitle}>Mes équipes</h3>
-          {teams.records.length === 0 && <p className={styles.muted} data-pt-noteam="">{COPY.noTeam}</p>}
+          {t.records.length === 0 && <p className={styles.muted} data-pt-noteam="">{COPY.noTeam}</p>}
           <ul className={styles.list}>
-            {teams.records.map((t) => (
-              <li key={t.id} className={styles.item} data-pt-team={t.id}>
-                <span>
-                  <strong>{t.name}</strong> · {ROLE_LABEL[t.role]}{t.active ? "" : " · inactive"}
-                </span>
-                <button type="button" className={styles.button} aria-pressed={selected === t.id} onClick={() => setSelected(selected === t.id ? null : t.id)} data-pt-open={t.id}>
-                  {selected === t.id ? "Fermer" : "Ouvrir"}
-                </button>
-              </li>
-            ))}
+            {t.records.map((row) => {
+              const open = selected?.id.toLowerCase() === row.id.toLowerCase();
+              return (
+                <li key={row.id} className={styles.item} data-pt-team={row.id}>
+                  <span>
+                    <strong>{row.name}</strong> · {ROLE_LABEL[row.role]}{row.active ? "" : " · inactive"}
+                  </span>
+                  <button type="button" className={styles.button} aria-pressed={open} onClick={() => setSelected(open ? null : row)} data-pt-open={row.id}>
+                    {open ? "Fermer" : "Ouvrir"}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
-          {teams.next && <button type="button" className={styles.button} onClick={() => void loadTeams(teams.next)}>{COPY.more}</button>}
+          <PagesFooter state={t} onMore={() => void teams.more()} onRetry={() => void teams.retry()} name="teams" />
           {!member && (
           <form className={styles.form} onSubmit={(e) => void submitCreate(e)} noValidate data-pt-create="">
             <label className={styles.label} htmlFor={`${uid}-name`}>Créer une équipe (titulaire artisan approuvé)</label>
@@ -197,30 +208,24 @@ function Live({ context, audience = "artisan", api, store = tabStore, newId = pt
           <RunnerFeedback state={create.state} onRetry={create.retry} />
         </>
       )}
-      {team && <TeamDetail key={team.id} deps={deps} initialTeam={team} onTeamChanged={() => void loadTeams()} />}
+      {team && t.phase !== "forbidden" && <TeamDetail key={team.id.toLowerCase()} deps={deps} initialTeam={team} onTeamChanged={() => void teams.reset()} />}
     </section>
   );
 }
 
 function MyInvitations({ deps, onAccepted, onCount }: { deps: Deps; onAccepted: () => void; onCount?: (n: number) => void }) {
-  const [state, setState] = useState<{ phase: "loading" | "ready" | "error" | "forbidden"; records: MyInvitation[] }>({ phase: "loading", records: [] });
-  const load = async () => {
-    const gen = deps.context.generation(), uid = deps.context.userId();
-    const r = await deps.api().invitations(null);
-    if (deps.context.generation() !== gen || deps.context.userId() !== uid) return;
-    if (r.status === 401 || r.status === 403) return setState({ phase: "forbidden", records: [] });
-    const p = r.status === 200 ? parseMyInvitations(r.body, null) : null;
-    setState(p ? { phase: "ready", records: p.records } : { phase: "error", records: [] });
-    onCount?.(p ? p.records.length : -1); // -1: read failed ⇒ the block shows the honest error
-  };
+  const list = usePages({ context: deps.context, fetchPage: (after) => deps.api().invitations(after), parse: parseMyInvitations });
+  const state = list.state;
+  const count = useRef(onCount);
+  count.current = onCount;
   useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (state.phase === "ready") count.current?.(state.records.length);
+    else if (state.phase === "error") count.current?.(-1); // read failed ⇒ the block shows the honest error
+  }, [state.phase, state.records.length]);
   const runner = useRunner(deps, "invitation", async () => {
-    await load();
+    await list.reset();
     onAccepted();
-  }, () => setState({ phase: "forbidden", records: [] }));
+  }, () => list.forbid());
   const answer = (inv: MyInvitation, action: "accept_invitation" | "decline_invitation") => {
     const cid = deps.newId();
     if (!cid) return;
@@ -230,9 +235,7 @@ function MyInvitations({ deps, onAccepted, onCount }: { deps: Deps; onAccepted: 
   return (
     <div className={styles.block} data-pt-invitations="">
       <h3 className={styles.subtitle}>{COPY.invitationsTitle}</h3>
-      {state.phase === "loading" && <p className={styles.muted} role="status">{COPY.loading}</p>}
-      {state.phase === "error" && <p className={styles.error} role="alert">{COPY.loadFailed}</p>}
-      {state.phase === "forbidden" && <p className={styles.muted}>{COPY.forbidden}</p>}
+      <PagesStatus state={state} onRetry={() => void list.retry()} name="received" />
       {state.phase === "ready" && state.records.length === 0 && <p className={styles.muted}>{COPY.noInvitations}</p>}
       <ul className={styles.list}>
         {state.records.map((inv) => (
@@ -248,47 +251,35 @@ function MyInvitations({ deps, onAccepted, onCount }: { deps: Deps; onAccepted: 
           </li>
         ))}
       </ul>
+      <PagesFooter state={state} onMore={() => void list.more()} onRetry={() => void list.retry()} name="received" />
       <p className={styles.muted}>{COPY.invitationNote}</p>
       <RunnerFeedback state={runner.state} onRetry={runner.retry} />
     </div>
   );
 }
 
-type Pages = { members: Member[]; invitations: TeamInvitation[]; missions: TeamMission[] };
 function TeamDetail({ deps, initialTeam, onTeamChanged }: { deps: Deps; initialTeam: Team; onTeamChanged: () => void }) {
   const uid = useId();
+  const teamId = initialTeam.id;
   const [team, setTeam] = useState<Team>(initialTeam);
-  const [pages, setPages] = useState<Pages>({ members: [], invitations: [], missions: [] });
-  const [phase, setPhase] = useState<"loading" | "ready" | "error" | "forbidden">("loading");
+  const latestTeam = useRef(team);
+  latestTeam.current = team;
+  const [lost, setLost] = useState(false);
   const [tab, setTab] = useState<Section>("missions");
   const [openMission, setOpenMission] = useState<string | null>(null);
   const actions = teamActions(team);
-  const loadSection = async (section: Section) => {
-    const gen = deps.context.generation(), who = deps.context.userId();
-    const r = await deps.api().team(team.id, section, null);
-    if (deps.context.generation() !== gen || deps.context.userId() !== who) return null;
-    if (r.status === 401 || r.status === 403) return "forbidden" as const;
-    const p = r.status === 200 ? parseTeamPage(r.body, team.id, section, null) : null;
-    if (!p) return "error" as const;
-    setTeam(p.team);
-    setPages((s) => ({ ...s, [section]: p.records }));
-    return "ok" as const;
-  };
+  // Each section keeps its own cursor, read, error and generation (a section never wipes another).
+  const members = usePages({ context: deps.context, fetchPage: (after) => deps.api().team(teamId, "members", after), parse: (b, after) => parseTeamPage(b, teamId, "members", after), onPage: (p) => setTeam(p.team) });
+  const missions = usePages({ context: deps.context, fetchPage: (after) => deps.api().team(teamId, "missions", after), parse: (b, after) => parseTeamPage(b, teamId, "missions", after), onPage: (p) => setTeam(p.team) });
+  const invitations = usePages({ context: deps.context, fetchPage: (after) => deps.api().team(teamId, "invitations", after), parse: (b, after) => parseTeamPage(b, teamId, "invitations", after), onPage: (p) => setTeam(p.team), auto: teamActions(initialTeam).invitationsVisible });
+  // After a successful write: every section restarts at page 1 (late pages of the old generation are dropped).
   const reload = async () => {
-    const wanted: Section[] = ["members", "missions", ...(teamActions(team).invitationsVisible ? (["invitations"] as Section[]) : [])];
-    const out = await Promise.all(wanted.map(loadSection));
-    if (out.some((o) => o === "forbidden")) setPhase("forbidden");
-    else if (out.some((o) => o === "error")) setPhase("error");
-    else if (out.every((o) => o === "ok")) setPhase("ready");
+    await Promise.all([members.reset(), missions.reset(), ...(teamActions(latestTeam.current).invitationsVisible ? [invitations.reset()] : [])]);
   };
-  useEffect(() => {
-    void reload();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const runner = useRunner(deps, `team:${team.id.toLowerCase()}`, async () => {
+  const runner = useRunner(deps, `team:${teamId.toLowerCase()}`, async () => {
     await reload();
     onTeamChanged();
-  }, () => setPhase("forbidden"));
+  }, () => setLost(true));
   const run = (build: (cid: string) => AnyCommand | null) => {
     const cid = deps.newId();
     if (!cid) return Promise.resolve("ignored" as const);
@@ -301,8 +292,34 @@ function TeamDetail({ deps, initialTeam, onTeamChanged }: { deps: Deps; initialT
   const [rename, setRename] = useState("");
   const [assignTo, setAssignTo] = useState<Record<string, string>>({});
   const [removing, setRemoving] = useState<string | null>(null);
-  if (phase === "forbidden") return <p className={styles.muted} data-pt-team-forbidden="">{COPY.forbidden}</p>;
-  const technicians = activeTechnicians(pages.members);
+  // Any refused team read (401/403/404, page 1 or a continuation, any section) or refused write:
+  // every section and every action of this team disappears at once.
+  const refused = lost || members.state.phase === "forbidden" || missions.state.phase === "forbidden" || invitations.state.phase === "forbidden";
+  useEffect(() => {
+    if (!refused) return;
+    // Clear (not only hide) every section and fence their in-flight pages; sticky until remount.
+    setLost(true);
+    members.forbid();
+    missions.forbid();
+    invitations.forbid();
+    setAssignTo({});
+    setRemoving(null);
+    setOpenMission(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refused]);
+  if (refused)
+    return (
+      <div className={styles.team} role="status" data-pt-team-forbidden="">
+        <h3 className={styles.subtitle}>{COPY.teamLost}</h3>
+      </div>
+    );
+  const m = members.state, j = missions.state, s = invitations.state;
+  const technicians = activeTechnicians(m.records);
+  // A selection stays only while its technician is still listed (still valid after a re-read).
+  const chosen = (jobId: string) => {
+    const v = assignTo[jobId];
+    return v && technicians.some((t) => t.id === v) ? v : "";
+  };
   const tabs: [Section, string][] = [["missions", "Interventions"], ["members", "Membres"], ...(actions.invitationsVisible ? ([["invitations", "Invitations envoyées"]] as [Section, string][]) : [])];
   return (
     <div className={styles.team} data-pt-detail={team.id} data-pt-role={team.role}>
@@ -313,68 +330,73 @@ function TeamDetail({ deps, initialTeam, onTeamChanged }: { deps: Deps; initialT
           <button key={k} type="button" role="tab" aria-selected={tab === k} className={`${styles.button} ${tab === k ? styles.tabActive : ""}`} onClick={() => setTab(k)} data-pt-tab={k}>{label}</button>
         ))}
       </div>
-      {phase === "loading" && <p className={styles.muted} role="status">{COPY.loading}</p>}
-      {phase === "error" && (
-        <div role="alert">
-          <p className={styles.error}>{COPY.loadFailed}</p>
-          <button type="button" className={styles.button} onClick={() => void reload()}>Réessayer</button>
-        </div>
-      )}
       <RunnerFeedback state={runner.state} onRetry={runner.retry} />
-      {phase === "ready" && tab === "members" && (
-        <div className={styles.block}>
-          <ul className={styles.list}>
-            {pages.members.map((m) => (
-              <li key={m.id} className={styles.item} data-pt-member={m.id}>
-                <span>{m.full_name || "Membre"} · {ROLE_LABEL[m.role]}{m.active ? "" : " · retiré"}</span>
-                {actions.admin && m.role !== "owner" && m.active && (
+      {tab === "members" && (
+        <div className={styles.block} data-pt-section="members">
+          <PagesStatus state={m} onRetry={() => void members.retry()} name="members" />
+          {m.phase === "ready" && (
+            <>
+              <ul className={styles.list}>
+                {m.records.map((row) => (
+                  <li key={row.id} className={styles.item} data-pt-member={row.id}>
+                    <span>{row.full_name || "Membre"} · {ROLE_LABEL[row.role]}{row.active ? "" : " · retiré"}</span>
+                    {actions.admin && row.role !== "owner" && row.active && (
+                      <span className={styles.row}>
+                        <button type="button" className={styles.button} disabled={locked} onClick={() => void run((cid) => ({ kind: "team", teamId: team.id, body: { action: "set_role", command_id: cid, expected_version: team.version, user_id: row.id, role: row.role === "technician" ? "coordinator" : "technician" } }))} data-pt-setrole={row.id}>
+                          Passer {row.role === "technician" ? "coordinateur" : "technicien"}
+                        </button>
+                        <button type="button" className={styles.button} disabled={locked || removing === row.id} onClick={() => setRemoving(row.id)} data-pt-remove={row.id}>
+                          Retirer…
+                        </button>
+                      </span>
+                    )}
+                    {removing === row.id && (
+                      <div className={styles.confirm} role="alertdialog" aria-labelledby={`${uid}-rm-${row.id}`} data-pt-remove-confirm={row.id}>
+                        <p id={`${uid}-rm-${row.id}`}>Retirer {row.full_name || "ce membre"} de l’équipe ? Son affectation courante sera retirée ; l’historique est conservé.</p>
+                        <span className={styles.row}>
+                          <button type="button" className={`${styles.button} ${styles.primary}`} disabled={locked} onClick={() => void run((cid) => ({ kind: "team", teamId: team.id, body: { action: "remove_member", command_id: cid, expected_version: team.version, user_id: row.id } })).then(() => setRemoving(null))} data-pt-remove-execute={row.id}>
+                            Confirmer le retrait
+                          </button>
+                          <button type="button" className={styles.button} disabled={runner.state.busy} onClick={() => setRemoving(null)}>Annuler</button>
+                        </span>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <PagesFooter state={m} onMore={() => void members.more()} onRetry={() => void members.retry()} name="members" />
+              {actions.admin && (
+                <form className={styles.form} noValidate onSubmit={(e) => { e.preventDefault(); const n = rename.trim(); if (n) void run((cid) => ({ kind: "team", teamId: team.id, body: { action: "rename", command_id: cid, expected_version: team.version, name: n } })).then((o) => o === "ok" && setRename("")); }} data-pt-rename="">
+                  <label className={styles.label} htmlFor={`${uid}-rename`}>Renommer l’équipe</label>
                   <span className={styles.row}>
-                    <button type="button" className={styles.button} disabled={locked} onClick={() => void run((cid) => ({ kind: "team", teamId: team.id, body: { action: "set_role", command_id: cid, expected_version: team.version, user_id: m.id, role: m.role === "technician" ? "coordinator" : "technician" } }))} data-pt-setrole={m.id}>
-                      Passer {m.role === "technician" ? "coordinateur" : "technicien"}
-                    </button>
-                    <button type="button" className={styles.button} disabled={locked || removing === m.id} onClick={() => setRemoving(m.id)} data-pt-remove={m.id}>
-                      Retirer…
-                    </button>
+                    <input id={`${uid}-rename`} className={styles.input} value={rename} maxLength={160} onChange={(e) => setRename(e.target.value)} disabled={locked} />
+                    <button type="submit" className={styles.button} disabled={locked || !rename.trim()}>Renommer</button>
                   </span>
-                )}
-                {removing === m.id && (
-                  <div className={styles.confirm} role="alertdialog" aria-labelledby={`${uid}-rm-${m.id}`} data-pt-remove-confirm={m.id}>
-                    <p id={`${uid}-rm-${m.id}`}>Retirer {m.full_name || "ce membre"} de l’équipe ? Son affectation courante sera retirée ; l’historique est conservé.</p>
-                    <span className={styles.row}>
-                      <button type="button" className={`${styles.button} ${styles.primary}`} disabled={locked} onClick={() => void run((cid) => ({ kind: "team", teamId: team.id, body: { action: "remove_member", command_id: cid, expected_version: team.version, user_id: m.id } })).then(() => setRemoving(null))} data-pt-remove-execute={m.id}>
-                        Confirmer le retrait
-                      </button>
-                      <button type="button" className={styles.button} disabled={runner.state.busy} onClick={() => setRemoving(null)}>Annuler</button>
-                    </span>
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-          {actions.admin && (
-            <form className={styles.form} noValidate onSubmit={(e) => { e.preventDefault(); const n = rename.trim(); if (n) void run((cid) => ({ kind: "team", teamId: team.id, body: { action: "rename", command_id: cid, expected_version: team.version, name: n } })).then((o) => o === "ok" && setRename("")); }} data-pt-rename="">
-              <label className={styles.label} htmlFor={`${uid}-rename`}>Renommer l’équipe</label>
-              <span className={styles.row}>
-                <input id={`${uid}-rename`} className={styles.input} value={rename} maxLength={160} onChange={(e) => setRename(e.target.value)} disabled={locked} />
-                <button type="submit" className={styles.button} disabled={locked || !rename.trim()}>Renommer</button>
-              </span>
-            </form>
+                </form>
+              )}
+            </>
           )}
         </div>
       )}
-      {phase === "ready" && tab === "invitations" && actions.invitationsVisible && (
-        <div className={styles.block}>
-          <ul className={styles.list}>
-            {pages.invitations.map((inv) => (
-              <li key={inv.id} className={styles.item} data-pt-sent={inv.id}>
-                <span>{inv.email} · {ROLE_LABEL[inv.role]} · {INVITATION_LABEL[inv.status]}{inv.expired ? " · expirée" : ` · expire le ${when(inv.expires_at)}`}</span>
-                {actions.admin && inv.status === "pending" && !inv.expired && (
-                  <button type="button" className={styles.button} disabled={locked} onClick={() => void run((cid) => ({ kind: "team", teamId: team.id, body: { action: "revoke_invitation", command_id: cid, expected_version: team.version, invitation_id: inv.id } }))} data-pt-revoke={inv.id}>Révoquer</button>
-                )}
-              </li>
-            ))}
-          </ul>
-          {pages.invitations.length === 0 && <p className={styles.muted}>Aucune invitation envoyée.</p>}
+      {tab === "invitations" && actions.invitationsVisible && (
+        <div className={styles.block} data-pt-section="invitations">
+          <PagesStatus state={s} onRetry={() => void invitations.retry()} name="invitations" />
+          {s.phase === "ready" && (
+            <>
+              <ul className={styles.list}>
+                {s.records.map((inv) => (
+                  <li key={inv.id} className={styles.item} data-pt-sent={inv.id}>
+                    <span>{inv.email} · {ROLE_LABEL[inv.role]} · {INVITATION_LABEL[inv.status]}{inv.expired ? " · expirée" : ` · expire le ${when(inv.expires_at)}`}</span>
+                    {actions.admin && inv.status === "pending" && !inv.expired && (
+                      <button type="button" className={styles.button} disabled={locked} onClick={() => void run((cid) => ({ kind: "team", teamId: team.id, body: { action: "revoke_invitation", command_id: cid, expected_version: team.version, invitation_id: inv.id } }))} data-pt-revoke={inv.id}>Révoquer</button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {s.records.length === 0 && <p className={styles.muted}>Aucune invitation envoyée.</p>}
+              <PagesFooter state={s} onMore={() => void invitations.more()} onRetry={() => void invitations.retry()} name="invitations" />
+            </>
+          )}
           {actions.admin && (
             <form
               className={styles.form}
@@ -409,41 +431,55 @@ function TeamDetail({ deps, initialTeam, onTeamChanged }: { deps: Deps; initialT
           )}
         </div>
       )}
-      {phase === "ready" && tab === "missions" && (
-        <div className={styles.block}>
-          {actions.assign && <p className={styles.muted}>{COPY.assignNote}</p>}
-          {pages.missions.length === 0 && <p className={styles.muted}>Aucune intervention visible pour votre rôle dans cette équipe.</p>}
-          <ul className={styles.list}>
-            {pages.missions.map((job) => {
-              const a = job.assignment;
-              const current = a?.technician_id ? pages.members.find((m) => m.id === a.technician_id) : undefined;
-              return (
-                <li key={job.id} className={styles.item} data-pt-mission={job.id}>
-                  <span>
-                    {jobLabel(job.category, job.status, job.city)} · {a ? `${ASSIGNMENT_LABEL[a.state]}${current ? ` (${current.full_name})` : ""}` : "Non affecté"}
-                  </span>
-                  <span className={styles.row}>
-                    <button type="button" className={styles.button} onClick={() => setOpenMission(openMission === job.id ? null : job.id)} data-pt-mission-open={job.id}>{openMission === job.id ? "Fermer le suivi" : "Suivi"}</button>
-                    {actions.assign && (!a || a.state === "unassigned") && technicians.length > 0 && (
-                      <>
-                        <select className={styles.input} aria-label="Technicien à affecter" value={assignTo[job.id] ?? ""} onChange={(e) => setAssignTo({ ...assignTo, [job.id]: e.target.value })} disabled={locked}>
-                          <option value="">Choisir un technicien…</option>
-                          {technicians.map((t) => (
-                            <option key={t.id} value={t.id}>{t.full_name || t.id.slice(0, 8)}</option>
-                          ))}
-                        </select>
-                        <button type="button" className={styles.button} disabled={locked || !assignTo[job.id]} onClick={() => void run((cid) => ({ kind: "team", teamId: team.id, body: { action: "assign", command_id: cid, expected_version: a ? a.version : null, intervention_id: job.id, technician_id: assignTo[job.id] } }))} data-pt-assign={job.id}>Affecter</button>
-                      </>
-                    )}
-                    {actions.assign && a && a.state !== "unassigned" && (
-                      <button type="button" className={styles.button} disabled={locked} onClick={() => void run((cid) => ({ kind: "team", teamId: team.id, body: { action: "unassign", command_id: cid, expected_version: a.version, intervention_id: job.id } }))} data-pt-unassign={job.id}>Retirer l’affectation</button>
-                    )}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-          {openMission && <MissionFollowUp key={openMission} deps={deps} teamId={team.id} jobId={openMission} run={run} locked={locked} />}
+      {tab === "missions" && (
+        <div className={styles.block} data-pt-section="missions">
+          <PagesStatus state={j} onRetry={() => void missions.retry()} name="missions" />
+          {j.phase === "ready" && (
+            <>
+              {actions.assign && <p className={styles.muted}>{COPY.assignNote}</p>}
+              {actions.assign && m.phase !== "ready" && <PagesStatus state={m} onRetry={() => void members.retry()} name="assign-members" />}
+              {actions.assign && m.phase === "ready" && (m.next || m.failed !== null) && (
+                <div className={styles.row} data-pt-assign-members="">
+                  <small className={styles.muted}>{COPY.moreMembersNote}</small>
+                  <PagesFooter state={m} onMore={() => void members.more()} onRetry={() => void members.retry()} name="assign-members" label={COPY.moreMembers} />
+                </div>
+              )}
+              {j.records.length === 0 && <p className={styles.muted}>Aucune intervention visible pour votre rôle dans cette équipe.</p>}
+              <ul className={styles.list}>
+                {j.records.map((job) => {
+                  const a = job.assignment;
+                  const current = a?.technician_id ? m.records.find((x) => x.id === a.technician_id) : undefined;
+                  const value = chosen(job.id);
+                  return (
+                    <li key={job.id} className={styles.item} data-pt-mission={job.id}>
+                      <span>
+                        {jobLabel(job.category, job.status, job.city)} · {a ? `${ASSIGNMENT_LABEL[a.state]}${current ? ` (${current.full_name})` : ""}` : "Non affecté"}
+                      </span>
+                      <span className={styles.row}>
+                        <button type="button" className={styles.button} onClick={() => setOpenMission(openMission === job.id ? null : job.id)} data-pt-mission-open={job.id}>{openMission === job.id ? "Fermer le suivi" : "Suivi"}</button>
+                        {actions.assign && (!a || a.state === "unassigned") && technicians.length > 0 && (
+                          <>
+                            <select className={styles.input} aria-label="Technicien à affecter" value={value} onChange={(e) => setAssignTo((prev) => ({ ...prev, [job.id]: e.target.value }))} disabled={locked} data-pt-assign-select={job.id}>
+                              <option value="">Choisir un technicien…</option>
+                              {technicians.map((t) => (
+                                <option key={t.id} value={t.id}>{t.full_name || t.id.slice(0, 8)}</option>
+                              ))}
+                            </select>
+                            <button type="button" className={styles.button} disabled={locked || !value} onClick={() => void run((cid) => ({ kind: "team", teamId: team.id, body: { action: "assign", command_id: cid, expected_version: a ? a.version : null, intervention_id: job.id, technician_id: value } }))} data-pt-assign={job.id}>Affecter</button>
+                          </>
+                        )}
+                        {actions.assign && a && a.state !== "unassigned" && (
+                          <button type="button" className={styles.button} disabled={locked} onClick={() => void run((cid) => ({ kind: "team", teamId: team.id, body: { action: "unassign", command_id: cid, expected_version: a.version, intervention_id: job.id } }))} data-pt-unassign={job.id}>Retirer l’affectation</button>
+                        )}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+              <PagesFooter state={j} onMore={() => void missions.more()} onRetry={() => void missions.retry()} name="missions" />
+              {openMission && <MissionFollowUp key={openMission} deps={deps} teamId={team.id} jobId={openMission} run={run} locked={locked} onRefused={() => setLost(true)} />}
+            </>
+          )}
         </div>
       )}
     </div>
@@ -452,14 +488,17 @@ function TeamDetail({ deps, initialTeam, onTeamChanged }: { deps: Deps; initialT
 
 /** Technician follow-up of ONE mission: intervention facts, appointment, assignment; no price,
  *  payment or document exists in this contract. Acknowledge / done only with server permissions. */
-export function MissionFollowUp({ deps, teamId, jobId, run, locked, initial }: { deps: Deps; teamId: string; jobId: string; run: (build: (cid: string) => AnyCommand | null) => Promise<unknown>; locked: boolean; initial?: Mission }) {
+export function MissionFollowUp({ deps, teamId, jobId, run, locked, initial, onRefused }: { deps: Deps; teamId: string; jobId: string; run: (build: (cid: string) => AnyCommand | null) => Promise<unknown>; locked: boolean; initial?: Mission; onRefused?: () => void }) {
   const [state, setState] = useState<{ phase: "loading" | "ready" | "error" | "forbidden"; data: Mission | null }>(initial ? { phase: "ready", data: initial } : { phase: "loading", data: null });
   const [note, setNote] = useState("");
   const load = async () => {
     const gen = deps.context.generation(), who = deps.context.userId();
     const r = await deps.api().mission(teamId, jobId);
     if (deps.context.generation() !== gen || deps.context.userId() !== who) return;
-    if (r.status === 401 || r.status === 403) return setState({ phase: "forbidden", data: null });
+    if (r.status === 401 || r.status === 403 || r.status === 404) {
+      setState({ phase: "forbidden", data: null });
+      return onRefused?.();
+    }
     const p = r.status === 200 ? parseMission(r.body, teamId, jobId) : null;
     setState(p ? { phase: "ready", data: p } : { phase: "error", data: null });
   };

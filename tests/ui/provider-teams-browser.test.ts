@@ -114,9 +114,193 @@ w.scenarios = {
     return { before, posts: calls.post, storedAtPost: calls.stored[0], teams: has(div, "[data-pt-team]"), notice: div.querySelector("[data-pt-notice]")?.textContent ?? null };
   },
 };
+// ---- Pagination (members, missions, sent and received invitations), one cursor per section ----
+const N = (p, n) => U(p, n);
+function pageOf(list, after) {
+  const start = after ? list.findIndex((x) => x.id === after) + 1 : 0;
+  const records = list.slice(start, start + 50);
+  return { records, next_after: start + 50 < list.length ? records[records.length - 1].id : null };
+}
+function setupBig() {
+  const A = N("7", 1), B = N("7", 2);
+  const ctx = { gen: 0 };
+  const teamOf = (id) => ({ id, name: id === A ? "Équipe Nord" : "Équipe Sud", owner_id: OWNER, version: 4, role: "owner", active: true });
+  const data = {
+    [A + ":members"]: Array.from({ length: 60 }, (_, i) => ({ id: N("1", i + 1), full_name: i === 0 ? "Alex Martin" : "Tech " + (i + 1), role: i === 0 ? "owner" : "technician", active: true, version: 1 })),
+    [A + ":missions"]: Array.from({ length: 55 }, (_, i) => ({ id: N("2", i + 1), category: "panel", status: "accepted", city: "Ville " + (i + 1), assignment: null })),
+    [A + ":invitations"]: Array.from({ length: 55 }, (_, i) => ({ id: N("9", i + 1), email: "p" + (i + 1) + "@example.test", role: "technician", status: "pending", expires_at: AT, expired: false })),
+    [B + ":members"]: Array.from({ length: 3 }, (_, i) => ({ id: N("3", i + 1), full_name: i === 0 ? "Alex Martin" : "Sud " + (i + 1), role: i === 0 ? "owner" : "technician", active: true, version: 1 })),
+    [B + ":missions"]: [],
+    [B + ":invitations"]: [],
+    received: Array.from({ length: 55 }, (_, i) => ({ id: N("8", i + 1), team_id: A, team_name: "Équipe Nord", role: "technician", expires_at: AT, team_active: true })),
+  };
+  const calls = { get: [], post: [] };
+  const hold = {}, fail = {}, waiting = {}, refuse = {};
+  const reply = (key, body) => {
+    calls.get.push(key);
+    if (refuse[key]) return Promise.resolve({ status: refuse[key], body: null });
+    if (fail[key] > 0) { fail[key]--; return Promise.resolve({ status: 503, body: null }); }
+    if (hold[key]) return new Promise((r) => { waiting[key] = () => r({ status: 200, body }); });
+    return ok(body);
+  };
+  const release = async (key) => { delete hold[key]; const go = waiting[key]; delete waiting[key]; if (go) go(); await tick(200); return !!go; };
+  const map = new Map();
+  const store = () => ({ get: (k) => map.get(k) ?? null, set: (k, v) => map.set(k, v), remove: (k) => map.delete(k) });
+  const api = {
+    teams: (after) => reply("teams|" + (after ?? ""), pageOf([teamOf(A), teamOf(B)], after)),
+    invitations: (after) => reply("received|" + (after ?? ""), pageOf(data.received, after)),
+    team: (id, section, after) => reply((id === A ? "A" : "B") + ":" + section + "|" + (after ?? ""), { team: teamOf(id), section, ...pageOf(data[id + ":" + section], after) }),
+    mission: () => ok(mission),
+    send: (cmd) => { calls.post.push(cmd); const c = cmd.body; return ok({ team_id: cmd.teamId ?? c.team_id, action: c.action, team_version: 4, entity_id: c.intervention_id ?? c.user_id ?? c.invitation_id ?? cmd.teamId, entity_version: c.action === "assign" ? 1 : null, state: c.action === "assign" ? "assigned" : "x", replayed: false }); },
+  };
+  const div = document.createElement("div"); document.body.appendChild(div);
+  const root = createRoot(div);
+  const context = { generation: () => ctx.gen, userId: () => OWNER };
+  const render = () => root.render(h(StrictMode, null, h(ProviderTeamsPanel, { context, api, store, newId: () => crypto.randomUUID(), now: () => Date.parse(AT) })));
+  render();
+  const ids = (sel, attr) => [...div.querySelectorAll(sel)].map((e) => e.getAttribute(attr));
+  const count = (key) => calls.get.filter((k) => k === key).length;
+  const choose = async (job, tech) => { const s = div.querySelector('[data-pt-assign-select="' + job + '"]'); s.value = tech; s.dispatchEvent(new Event("change", { bubbles: true })); await tick(100); };
+  const options = (job) => [...div.querySelectorAll('[data-pt-assign-select="' + job + '"] option')].map((o) => o.value).filter(Boolean);
+  const value = (job) => div.querySelector('[data-pt-assign-select="' + job + '"]')?.value ?? null;
+  return { A, B, div, calls, hold, fail, refuse, release, ids, count, choose, options, value, ctx, render };
+}
+const M = (n) => U("1", n), J = (n) => U("2", n), S = (n) => U("9", n), R = (n) => U("8", n);
+const uniq = (a) => new Set(a).size === a.length;
+Object.assign(w.scenarios, {
+  async pages() {
+    const t = setupBig();
+    await tick(300);
+    const received = [t.ids("[data-pt-invitation]", "data-pt-invitation").length];
+    await click(t.div, '[data-pt-more="received"]');
+    received.push(t.ids("[data-pt-invitation]", "data-pt-invitation").length, has(t.div, '[data-pt-more="received"]'));
+    await click(t.div, '[data-pt-open="' + t.A + '"]');
+    await tick(300);
+    const missions = [t.ids("[data-pt-mission]", "data-pt-mission").length];
+    await click(t.div, '[data-pt-more="missions"]');
+    const mids = t.ids("[data-pt-mission]", "data-pt-mission");
+    missions.push(mids.length, uniq(mids), has(t.div, '[data-pt-more="missions"]'));
+    await tab(t.div, "members");
+    const members = [t.ids("[data-pt-member]", "data-pt-member").length];
+    // Double click: one read for the page, no duplicated row.
+    t.div.querySelector('[data-pt-more="members"]').click();
+    t.div.querySelector('[data-pt-more="members"]').click();
+    await tick(250);
+    const memids = t.ids("[data-pt-member]", "data-pt-member");
+    members.push(memids.length, uniq(memids), t.count("A:members|" + M(50)), has(t.div, '[data-pt-more="members"]'));
+    await tab(t.div, "invitations");
+    const sent = [t.ids("[data-pt-sent]", "data-pt-sent").length];
+    await click(t.div, '[data-pt-more="invitations"]');
+    const sids = t.ids("[data-pt-sent]", "data-pt-sent");
+    sent.push(sids.length, uniq(sids), has(t.div, '[data-pt-more="invitations"]'));
+    const cursors = t.calls.get.filter((k) => !k.endsWith("|"));
+    return { received, missions, members, sent, cursors, posts: t.calls.post.length, ...metrics(t.div) };
+  },
+  async assignBeyond() {
+    const t = setupBig();
+    await tick(300);
+    await click(t.div, '[data-pt-open="' + t.A + '"]');
+    await tick(300);
+    await t.choose(J(1), M(2));
+    const before = { has51: t.options(J(1)).includes(M(51)), cta: t.div.querySelector('[data-pt-more="assign-members"]')?.textContent ?? null };
+    await click(t.div, '[data-pt-more="missions"]');
+    const keptAfterMissions = t.value(J(1));
+    await click(t.div, '[data-pt-more="assign-members"]');
+    const after = { has51: t.options(J(1)).includes(M(51)), has60: t.options(J(55)).includes(M(60)), kept: t.value(J(1)), cta: has(t.div, '[data-pt-more="assign-members"]'), reads: t.count("A:members|" + M(50)) };
+    await t.choose(J(2), M(51));
+    await click(t.div, '[data-pt-assign="' + J(2) + '"]');
+    await tick(300);
+    const post = t.calls.post.map((p) => ({ action: p.body.action, job: p.body.intervention_id, tech: p.body.technician_id }));
+    return { before, keptAfterMissions, after, post };
+  },
+  async localError() {
+    const t = setupBig();
+    t.fail["received|"] = 99;
+    await tick(300);
+    const receivedError = has(t.div, '[data-pt-section-error="received"]'), teamsShown = has(t.div, "[data-pt-team]");
+    await click(t.div, '[data-pt-open="' + t.A + '"]');
+    await tick(300);
+    await tab(t.div, "members");
+    t.fail["A:members|" + M(50)] = 1;
+    await click(t.div, '[data-pt-more="members"]');
+    const during = { error: has(t.div, '[data-pt-page-error="members"]'), rows: has(t.div, "[data-pt-member]"), more: has(t.div, '[data-pt-more="members"]') };
+    await tab(t.div, "missions");
+    const missionsIntact = has(t.div, "[data-pt-mission]");
+    await tab(t.div, "members");
+    await click(t.div, '[data-pt-page-retry="members"]');
+    const after = { error: has(t.div, '[data-pt-page-error="members"]'), rows: has(t.div, "[data-pt-member]"), reads: t.count("A:members|" + M(50)) };
+    t.fail["received|"] = 0;
+    await click(t.div, '[data-pt-section-retry="received"]');
+    await tick(150);
+    return { receivedError, teamsShown, during, missionsIntact, after, received: has(t.div, "[data-pt-invitation]"), members: has(t.div, "[data-pt-member]") };
+  },
+  async midMutation() {
+    const t = setupBig();
+    await tick(300);
+    await click(t.div, '[data-pt-open="' + t.A + '"]');
+    await tick(300);
+    t.hold["A:missions|" + J(50)] = true;
+    await click(t.div, '[data-pt-more="missions"]');
+    const page1Before = t.count("A:missions|");
+    await t.choose(J(1), M(2));
+    await click(t.div, '[data-pt-assign="' + J(1) + '"]');
+    await tick(300);
+    const reread = t.count("A:missions|") - page1Before;
+    const released = await t.release("A:missions|" + J(50));
+    const rows = t.ids("[data-pt-mission]", "data-pt-mission");
+    return { posts: t.calls.post.map((p) => p.body.action), reread, released, rows: rows.length, late: rows.includes(J(51)), more: has(t.div, '[data-pt-more="missions"]') };
+  },
+  async revoked(section) {
+    // Page 1 visible, then the member is removed elsewhere: the continuation answers 404 (no_data_found).
+    const t = setupBig();
+    await tick(300);
+    await click(t.div, '[data-pt-open="' + t.A + '"]');
+    await tick(300);
+    const before = { missions: has(t.div, "[data-pt-mission]"), assign: has(t.div, "[data-pt-assign]"), cta: has(t.div, '[data-pt-more="assign-members"]') };
+    if (section === "received") {
+      t.refuse["received|" + R(50)] = 404;
+      await click(t.div, '[data-pt-more="received"]');
+    } else {
+      if (section !== "missions") await tab(t.div, section);
+      t.refuse["A:" + section + "|" + (section === "members" ? M(50) : section === "missions" ? J(50) : S(50))] = 404;
+      await click(t.div, '[data-pt-more="' + section + '"]');
+    }
+    await tick(200);
+    const detail = t.div.querySelector("[data-pt-detail], [data-pt-team-forbidden]");
+    const residue = ["[data-pt-member]", "[data-pt-mission]", "[data-pt-sent]", "[data-pt-assign]", "[data-pt-assign-select]", "[data-pt-unassign]", "[data-pt-setrole]", "[data-pt-remove]", "[data-pt-rename]", "[data-pt-invite]", "[data-pt-revoke]", "[data-pt-tab]", "[data-pt-more]:not([data-pt-more=teams]):not([data-pt-more=received])", "[data-pt-followup]"].reduce((n, sel) => n + has(t.div, sel), 0);
+    return { before, lost: has(t.div, "[data-pt-team-forbidden]"), text: detail?.textContent ?? "", residue, received: has(t.div, "[data-pt-invitation]"), accept: has(t.div, "[data-pt-accept]"), receivedRefused: has(t.div, '[data-pt-section-forbidden="received"]') };
+  },
+  async midSwitch() {
+    const t = setupBig();
+    await tick(300);
+    await click(t.div, '[data-pt-open="' + t.A + '"]');
+    await tick(300);
+    await tab(t.div, "members");
+    t.hold["A:members|" + M(50)] = true;
+    await click(t.div, '[data-pt-more="members"]');
+    await click(t.div, '[data-pt-open="' + t.B + '"]');
+    await tick(300);
+    await tab(t.div, "members");
+    const releasedTeam = await t.release("A:members|" + M(50));
+    const team = { detail: t.div.querySelector("[data-pt-detail]")?.getAttribute("data-pt-detail"), members: t.ids("[data-pt-member]", "data-pt-member") };
+    // Identity switch (generation bump) while the received page 2 is in flight.
+    t.hold["received|" + R(50)] = true;
+    await click(t.div, '[data-pt-more="received"]');
+    const page1Before = t.count("received|");
+    t.ctx.gen = 1;
+    t.render();
+    await tick(400);
+    const reread = t.count("received|") - page1Before;
+    const releasedIdentity = await t.release("received|" + R(50));
+    const rows = t.ids("[data-pt-invitation]", "data-pt-invitation");
+    return { releasedTeam, team, reread, releasedIdentity, received: rows.length, late: rows.includes(R(51)) };
+  },
+});
 `;
 
-test("équipes prestataires montées (Chromium, StrictMode, faux api par rôle serveur)", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
+type Run = (name: string, arg?: string) => Promise<unknown>;
+/** Bundles ENTRY, serves it, opens Chromium at 360 px; `fn` drives window.scenarios. Always closes. */
+async function mounted(fn: (run: Run, errors: string[], requests: string[]) => Promise<void>) {
   const out = await build({ absWorkingDir: ROOT, stdin: { contents: ENTRY, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, outdir: "out", platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "local-css" }, define: { "process.env.NODE_ENV": '"development"' }, logLevel: "error" });
   const js = out.outputFiles.find((f) => f.path.endsWith(".js"))!.text;
   const css = readFileSync(path.join(ROOT, "app/globals.css"), "utf8") + "\n" + out.outputFiles.filter((f) => f.path.endsWith(".css")).map((f) => f.text).join("\n");
@@ -134,7 +318,16 @@ test("équipes prestataires montées (Chromium, StrictMode, faux api par rôle s
     const errors: string[] = [];
     page.on("pageerror", (e: Error) => errors.push(String(e)));
     await page.goto(`http://127.0.0.1:${(server.address() as { port: number }).port}/`);
-    const run = (name: string, arg?: string) => page.evaluate(([n, a]: [string, string | undefined]) => (window as unknown as { scenarios: Record<string, (x?: string) => Promise<unknown>> }).scenarios[n](a), [name, arg]);
+    const run: Run = (name, arg) => page.evaluate(([n, a]: [string, string | undefined]) => (window as unknown as { scenarios: Record<string, (x?: string) => Promise<unknown>> }).scenarios[n](a), [name, arg]);
+    await fn(run, errors, requests);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+}
+
+test("équipes prestataires montées (Chromium, StrictMode, faux api par rôle serveur)", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
+  await mounted(async (run, errors, requests) => {
     type R = { missionsTab: { assign: number; unassign: number; techNote: number }; membersTab: { setrole: number; remove: number; rename: number }; invitationsTab: number; inviteForm: number; revoke: number; follow: { ack: number; done: number; text: string } | null; posts: number; gets: string[]; small: number; overflow: number; text: string };
     const owner = (await run("role", "owner")) as R;
     same([owner.missionsTab.assign, owner.missionsTab.unassign, owner.membersTab.setrole, owner.membersTab.remove, owner.membersTab.rename, owner.invitationsTab, owner.inviteForm, owner.revoke], [1, 1, 2, 2, 1, 1, 1, 1], "owner");
@@ -167,10 +360,50 @@ test("équipes prestataires montées (Chromium, StrictMode, faux api par rôle s
     same([rm.afterOpen, rm.posts, rm.dialog], [{ posts: 0, dialog: 1 }, ["remove_member"], 0], "inline confirmation, then exactly one POST");
     same(errors, []);
     same(requests.filter((u) => u.startsWith("/api/")), []);
-  } finally {
-    await browser.close();
-    server.close();
-  }
+  });
+});
+
+test("équipes prestataires paginées (Chromium) : une reprise par section, dédoublonnage, erreur locale, génération après écriture / changement, membre 51 affectable", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
+  await mounted(async (run, errors, requests) => {
+    const p = (await run("pages")) as { received: number[]; missions: (number | boolean)[]; members: (number | boolean)[]; sent: (number | boolean)[]; cursors: string[]; posts: number; small: number; overflow: number };
+    same(p.received, [50, 55, 0], "received invitations continue past page 1");
+    same(p.missions, [50, 55, true, 0], "missions continue past page 1, unique ids");
+    same(p.members, [50, 60, true, 1, 0], "members: a double click reads page 2 once, no duplicated row");
+    same(p.sent, [50, 55, true, 0], "sent invitations continue past page 1");
+    same([...new Set(p.cursors)].sort(), ["A:invitations|90000000-0000-4000-8000-000000000050", "A:members|10000000-0000-4000-8000-000000000050", "A:missions|20000000-0000-4000-8000-000000000050", "received|80000000-0000-4000-8000-000000000050"], "each section resumes at its own next_after");
+    same([p.posts, p.small, p.overflow <= 0], [0, 0, true], "reading never posts; 44 px targets, no overflow at 360 px");
+
+    const a = (await run("assignBeyond")) as { before: { has51: boolean; cta: string | null }; keptAfterMissions: string; after: { has51: boolean; has60: boolean; kept: string; cta: number; reads: number }; post: { action: string; job: string; tech: string }[] };
+    same(a.before, { has51: false, cta: "Charger les autres membres" }, "member 51 not choosable before the CTA");
+    same(a.keptAfterMissions, "10000000-0000-4000-8000-000000000002", "selection kept across « Afficher plus »");
+    same(a.after, { has51: true, has60: true, kept: "10000000-0000-4000-8000-000000000002", cta: 0, reads: 1 }, "CTA loads the next members once, selection kept");
+    same(a.post, [{ action: "assign", job: "20000000-0000-4000-8000-000000000002", tech: "10000000-0000-4000-8000-000000000051" }], "member 51 assigned with one command");
+
+    const e = (await run("localError")) as { receivedError: number; teamsShown: number; during: { error: number; rows: number; more: number }; missionsIntact: number; after: { error: number; rows: number; reads: number }; received: number; members: number };
+    same([e.receivedError, e.teamsShown], [1, 2], "received invitations fail locally, teams still listed");
+    same([e.during, e.missionsIntact], [{ error: 1, rows: 50, more: 0 }, 50], "members page 2 fails locally, page 1 and missions kept");
+    same(e.after, { error: 0, rows: 60, reads: 2 }, "Réessayer re-reads the failed cursor");
+    same([e.received, e.members], [50, 60], "received retry does not wipe the members");
+
+    type V = { before: { missions: number; assign: number; cta: number }; lost: number; text: string; residue: number; received: number; accept: number; receivedRefused: number };
+    for (const section of ["members", "missions", "invitations"]) {
+      const v = (await run("revoked", section)) as V;
+      same(v.before, { missions: 50, assign: 50, cta: 1 }, "page 1 visible with its actions");
+      same([v.lost, v.residue], [1, 0], section + " continuation 404 ⇒ every team section and action cleared");
+      assert.match(v.text, /Accès à l’équipe retiré ou inaccessible/);
+      same([v.received, v.accept], [50, 50], "the received invitations are another scope, untouched");
+    }
+    const rv = (await run("revoked", "received")) as V;
+    same([rv.received, rv.accept, rv.receivedRefused, rv.lost], [0, 0, 1, 0], "received continuation 404 ⇒ list and actions cleared, refusal shown");
+    const m = (await run("midMutation")) as { posts: string[]; reread: number; released: boolean; rows: number; late: boolean; more: number };
+    same([m.posts, m.reread >= 1, m.released, m.rows, m.late, m.more], [["assign"], true, true, 50, false, 1], "a write re-reads page 1; the late page 2 is dropped");
+
+    const sw = (await run("midSwitch")) as { releasedTeam: boolean; team: { detail: string; members: string[] }; reread: number; releasedIdentity: boolean; received: number; late: boolean };
+    same([sw.releasedTeam, sw.team.detail, sw.team.members.length, sw.team.members.some((id) => id.startsWith("1"))], [true, "70000000-0000-4000-8000-000000000002", 3, false], "team switch: the late page of the old team never lands");
+    same([sw.reread >= 1, sw.releasedIdentity, sw.received, sw.late], [true, true, 50, false], "identity switch: fresh page 1, the late page is dropped");
+    same(errors, []);
+    same(requests.filter((u) => u.startsWith("/api/")), []);
+  });
 });
 
 test("câblage réel (démo client / gestionnaire « Vue d’ensemble ») : aucun bloc sans données serveur, aucun appel /api, pas de débordement à 390", { skip }, async () => {
