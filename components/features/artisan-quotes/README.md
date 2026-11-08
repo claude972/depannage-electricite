@@ -20,3 +20,15 @@ In live mode, the « Devis » screen is fed only by GET `/api/artisan/quotes` (c
   - At render time, the panel only shows state that belongs to the current identity and filter.
   - Each row has « Voir le dossier », which opens the current dossier through `session.openIntervention(intervention_id)`. That dossier view does not claim to show this exact quote.
   - Each row can also receive an extra action through `rowAction`, used for the exact point read of the quote.
+- **`detail.ts` and `artisan-quote-detail.tsx`**: « Ouvrir le devis » makes an exact point read of GET `/api/artisan/quotes/[id]` (contract 42708ad).
+  - `parseQuoteDetail` is strict. It accepts the reply only when:
+    - it carries exactly the requested id;
+    - `artisan_id` is the current user;
+    - the dossier id is coherent;
+    - the VAT rate is representable;
+    - the totals match `calculateQuote`.
+  - The screen shows the lines, VAT, status and TTC as the server sends them. These are the quote's own totals: no amendments, no payment.
+  - 404, 403 and 422 show « devis inaccessible », and no other quote is substituted. 401 shows a session-expired message. 503 and other failures show « Réessayer », disabled until `Retry-After` has elapsed.
+  - The state is bound at render time to identity + quote id, and late replies are dropped.
+  - The screen never falls back to the cache or to the 20-quote dossier detail.
+- **`artisan-quotes.tsx`**: the list stays mounted, hidden, while a quote is open. « Retour à la liste » keeps its pages and filter, and returns focus to the row.

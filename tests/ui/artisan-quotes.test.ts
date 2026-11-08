@@ -4,6 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { parseQuoteDetail, quoteDetailUrl } from "../../components/features/artisan-quotes/detail";
 import { createQuotes, parseQuotes, quotesInitial, quotesUrl, retryAfterSeconds, type QuotesState } from "../../components/features/artisan-quotes/model";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
@@ -105,9 +106,35 @@ test("wiring : Quotes mounts the live panel only outside demo; demo branch uncha
   const q = src.slice(src.indexOf("function Quotes("), src.indexOf("\nfunction QuoteRow("));
   assert.match(q, /const live = session\.mode !== "demo";/);
   assert.match(q, /if \(!live && !myQuotes\.length && !toWrite\.length\)/);
-  assert.match(q, /\{live && \(\s*<>[\s\S]*<ArtisanQuotesPanel/);
+  assert.match(q, /\{live && \(\s*<>[\s\S]*<ArtisanQuotes/);
   assert.match(q, /onOpenDossier=\{\(id\) => session\.openIntervention\(id\)\}/);
   assert.match(q, /\{!live && groups\.map/);
-  const leaf = readFileSync(path.join(ROOT, "components/features/artisan-quotes/artisan-quotes-panel.tsx"), "utf8") + readFileSync(path.join(ROOT, "components/features/artisan-quotes/model.ts"), "utf8");
+  const leaf = ["artisan-quotes-panel.tsx", "model.ts", "detail.ts", "artisan-quote-detail.tsx", "artisan-quotes.tsx"].map((f) => readFileSync(path.join(ROOT, "components/features/artisan-quotes", f), "utf8")).join("\n");
+  assert.ok(!/\/api\/interventions/.test(leaf), "never the 20-capped dossier detail");
   assert.ok(!/dossiers chargés|session\.data|sessionStorage|localStorage/.test(leaf), "no cache, no storage");
+});
+
+const U = "c0000000-0000-4000-8000-000000000001";
+const detail = () => ({
+  quote: { id: Q(7), intervention_id: I(7), artisan_id: U, lines: [{ label: "Disjoncteur", quantity: 2, unit_price_cents: 4500 }, { label: "Main-d’œuvre", quantity: 1, unit_price_cents: 6000 }], subtotal_cents: 15000, tax_rate: 8.5, tax_cents: 1275, total_cents: 16275, status: "rejected", created_at: "2026-01-02T10:00:00.123+00:00", accepted_at: null },
+  intervention: { id: I(7), category: "panel", status: "quoted" },
+});
+test("point read : exact quote of the current artisan with coherent totals; anything else refused", () => {
+  assert.equal(quoteDetailUrl(Q(7)), `/api/artisan/quotes/${Q(7)}`);
+  const ok = parseQuoteDetail(detail(), Q(7).toUpperCase(), U);
+  assert.ok(ok);
+  assert.equal(ok.quote.total_cents, 16275);
+  const bad: Array<[string, (d: ReturnType<typeof detail>) => unknown, string?]> = [
+    ["another quote", (d) => d, Q(8)],
+    ["another author", (d) => ({ ...d, quote: { ...d.quote, artisan_id: I(1) } })],
+    ["dossier mismatch", (d) => ({ ...d, intervention: { ...d.intervention, id: I(9) } })],
+    ["totals do not add up", (d) => ({ ...d, quote: { ...d.quote, total_cents: 16000 } })],
+    ["tax not representable", (d) => ({ ...d, quote: { ...d.quote, tax_rate: 7 } })],
+    ["no lines", (d) => ({ ...d, quote: { ...d.quote, lines: [] } })],
+    ["decimal quantity", (d) => ({ ...d, quote: { ...d.quote, lines: [{ label: "x", quantity: 1.5, unit_price_cents: 100 }] } })],
+    ["amendment total leaked", (d) => ({ ...d, quote: { ...d.quote, accepted_total_cents: 20000 } })],
+    ["payment leaked", (d) => ({ ...d, payment: {} })],
+    ["draft status", (d) => ({ ...d, quote: { ...d.quote, status: "draft" } })],
+  ];
+  for (const [name, mutate, id] of bad) assert.equal(parseQuoteDetail(mutate(detail()), id ?? Q(7), U), null, name);
 });

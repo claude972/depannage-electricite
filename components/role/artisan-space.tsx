@@ -119,7 +119,7 @@ import {
   type MissionSegment,
 } from "./artisan-lists";
 import { CredentialReviewPanel } from "../features/credential-reviews/credential-review-panel";
-import { ArtisanQuotesPanel } from "../features/artisan-quotes/artisan-quotes-panel";
+import { ArtisanQuotes } from "../features/artisan-quotes/artisan-quotes";
 import { useArtisanPerformance, LivePerformanceSummary, LivePerformanceGrid, LiveRatingLine, livePerformanceSubtitle } from "../features/artisan-performance";
 import { CredentialReminderPanel } from "../features/operational-reminders/operational-reminder-panel";
 import { AppointmentReminderPanel } from "../features/appointment-reminders/appointment-reminder-panel";
@@ -2376,7 +2376,7 @@ function Quotes({ session }: { session: Session }) {
           <div className={styles.groupHead}>
             <h2>Mes devis</h2>
           </div>
-          <ArtisanQuotesPanel
+          <ArtisanQuotes
             key={`quotes|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`}
             context={session.mutationContext}
             onOpenDossier={(id) => session.openIntervention(id)}
