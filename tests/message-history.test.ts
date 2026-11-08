@@ -80,7 +80,9 @@ test("malformed database responses and transport failures return503 with retry a
 });
 
 test("existing POST keeps exact identity-free send_message command and refuses invalid inputs", async () => {
-  const h = routes({ rpcData: messages[0] }); const r = await h.post({ intervention_id: job, body: "Bonjour" });
-  assert.equal(r.status, 201); assert.deepEqual(h.requests[0].args, { p_intervention_id: job, p_body: "Bonjour" });
-  assert.equal((await routes().post({ intervention_id: job, body: "Bonjour", author_id: uuid(2) })).status, 422);
+  const command = { intervention_id: job, body: "Bonjour", command_id: uuid(1) };
+  const h = routes({ rpcData: messages[0] }); const r = await h.post(command);
+  assert.equal(r.status, 201); assert.deepEqual(h.requests[0].args, { p_intervention_id: job, p_body: "Bonjour", p_command_id: uuid(1) });
+  assert.equal((await routes().post({ ...command, author_id: uuid(2) })).status, 422);
+  assert.equal((await routes().post({ intervention_id: job, body: "Bonjour" })).status, 422);
 });
