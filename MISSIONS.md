@@ -261,3 +261,7 @@ Claude possède le câblage de la fiche et du formulaire dans `components/role/e
 ### SYS-04 — déclencher la livraison externe planifiée
 
 Codex assemble le déclencheur de la file privée. Réutiliser les routes e-mail et Web Push existantes et les baux de la file. Définir un job Supabase inactif à l’installation, avec les paramètres dans Vault et les appels bornés aux routes internes. La recette et l’activation suivent la phase 1.
+
+### ENT-04 — historique des documents d’un site
+
+Codex ajoute `site_id` à `GET /api/documents/history`. Réutiliser la projection documentaire et la pagination existantes sous RLS, sans exposer les chemins ni les liens signés. Le filtre est exclusif du filtre dossier. Le curseur d’un site est lié au compte et au site. Claude prend ensuite le panneau et son câblage dans les fiches normale et directe. La recette est réservée à la phase 2.
