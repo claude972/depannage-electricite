@@ -18,8 +18,11 @@ const SITE = "22222222-2222-4222-8222-222222222222";
 const SITE_B = "22222222-2222-4222-8222-222222222223";
 const J = (n: number) => `a0000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const D = (n: number) => `d0000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
-const job = (n: number, over: Record<string, unknown> = {}) => ({ id: J(n), site_id: SITE, category: "outage", status: "requested", created_at: "2026-01-02T10:00:00Z", ...over });
-const due = (n: number, over: Record<string, unknown> = {}) => ({ id: D(n), site_id: SITE, title: `Échéance ${n}`, kind: "maintenance", due_on: "2026-12-01", status: "pending", notes: "", ...over });
+// Server order: jobs created_at DESC (higher n = older), due dates due_on ASC (higher n = later).
+const at = (n: number) => new Date(Date.UTC(2026, 5, 1) - n * 60_000).toISOString().replace(".000", "");
+const day = (n: number) => new Date(Date.UTC(2026, 0, 1) + n * 86_400_000).toISOString().slice(0, 10);
+const job = (n: number, over: Record<string, unknown> = {}) => ({ id: J(n), site_id: SITE, category: "outage", status: "requested", created_at: at(n), ...over });
+const due = (n: number, over: Record<string, unknown> = {}) => ({ id: D(n), site_id: SITE, title: `Échéance ${n}`, kind: "maintenance", due_on: day(n), status: "pending", notes: "", ...over });
 const page = (items: unknown[], next: string | null = null) => ({ items, page: { limit: 50, has_more: next !== null, next_cursor: next } });
 const res = (status: number, body: unknown = null) => ({ status, body });
 
@@ -44,49 +47,94 @@ test("lecture stricte du contrat (docs/SITE_RECORDS_BACKEND.md) : formes, limite
     [page([due(1, { kind: "maintenance" })]), "audits"],
     [page([due(1, { due_on: "demain" })]), "upcoming"],
     [page(Array.from({ length: 51 }, (_, i) => job(i + 1))), "open"],
+    [page([due(1, { title: "x".repeat(161) })]), "upcoming"],
+    [page([due(1, { kind: "inspection" })]), "upcoming"],
+    [page([due(1, { status: "done" })]), "upcoming"],
+    [page([job(1)], "c1=="), "open"],
+    [page([job(1)], "c".repeat(601)), "open"],
+    [page([job(1), { ...job(2), id: J(1).toUpperCase() }]), "open"],
+    [page([job(2), job(1)]), "open"],
+    [page([due(2), due(1)]), "upcoming"],
+    [page([job(1, { created_at: "2026-01-02T10:00:00.1234567Z" })]), "open"],
   ] as [unknown, Model.Kind][])
     assert.equal(m.parseRecords(bad, SITE, kind), null, JSON.stringify(bad).slice(0, 90));
+  assert.ok(m.parseRecords(page([job(2)]), SITE, "open", job(1) as Model.JobRow), "next page continues after the last shown row");
+  assert.equal(m.parseRecords(page([job(1)]), SITE, "open", job(2) as Model.JobRow), null, "a next page must not go back");
   same([m.recordsUrl(SITE, "upcoming", null), m.recordsUrl(SITE, "open", "c 1")], [`/api/sites/${SITE}/records?kind=upcoming`, `/api/sites/${SITE}/records?kind=open&cursor=c%201`]);
 });
 
-test("contrôleur : kind ⇒ page 1 sans mélange ; « Afficher plus » dédupliqué ; réponse tardive ignorée ; 404 / 503 + réessai ; 401/403 ; relecture après action", async () => {
+function ctl() {
   const ctx = { uid: USER as string | null, gen: 0 };
   const context = { generation: () => ctx.gen, userId: () => ctx.uid };
   const calls: [string, string, string | null][] = [];
   const replies: (Model.RecordsResult | Promise<Model.RecordsResult>)[] = [];
   let s: Model.RecordsState = m.RECORDS_INITIAL;
   const c = m.createRecordsController({ api: () => ({ read: async (site, kind, cursor) => (calls.push([site, kind, cursor]), replies.shift() ?? res(503)) }), context, set: (n) => (s = n) });
-  const tick = () => new Promise((r) => setTimeout(r, 0));
-  replies.push(res(200, page([job(1), job(2)], "c1")), res(200, page([job(2), job(3)])));
-  c.query(SITE, "open"); await tick();
-  await c.more(s.key);
-  same([s.items.map((x) => x.id), s.next, calls[1]], [[J(1), J(2), J(3)], null, [SITE, "open", "c1"]], "appended with dedupe");
+  return { c, calls, replies, context, get: () => s };
+}
+const tick = () => new Promise((r) => setTimeout(r, 0));
+
+test("contrôleur : kind ⇒ page 1 sans mélange ; « Afficher plus » dédupliqué ; réponse tardive ignorée ; 503 + réessai ; relecture ; clé au rendu", async () => {
+  const h = ctl();
+  h.replies.push(res(200, page([job(1), job(2)], "c1")), res(200, page([job(2), job(3)])));
+  h.c.query(SITE, "open"); await tick();
+  await h.c.more(h.get().key);
+  same([h.get().items.map((x) => x.id), h.get().next, h.calls[1]], [[J(1), J(2), J(3)], null, [SITE, "open", "c1"]], "appended with dedupe");
   let late!: (r: Model.RecordsResult) => void;
-  replies.push(new Promise((r) => (late = r)), res(200, page([job(9, { status: "paid" })])));
-  c.query(SITE, "open"); // same key: nothing
-  same(calls.length, 2);
-  c.query(SITE_B, "open");
-  c.query(SITE, "past"); await tick();
-  same([s.items.map((x) => x.id), calls[calls.length - 1]], [[J(9)], [SITE, "past", null]], "kind switch ⇒ page 1, cursor reset");
-  late(res(200, page([job(5, { site_id: SITE_B })], null))); await tick();
-  same(s.items.map((x) => x.id), [J(9)], "late reply of the previous site dropped");
-  replies.push(res(404), res(503), res(200, page([due(1)])));
-  c.query(SITE, "upcoming"); await tick();
-  same([s.phase, s.error], ["error", m.RECORDS_COPY.notFound]);
-  c.retry(s.key); await tick();
-  same(s.error, m.RECORDS_COPY.failed);
-  c.retry(s.key); await tick();
-  same([s.phase, s.items.length], ["ready", 1]);
-  replies.push(res(200, page([])));
-  c.refresh(s.key); await tick();
-  same([s.items.length, calls[calls.length - 1]], [0, [SITE, "upcoming", null]], "refresh re-reads page 1 of the same key");
-  replies.push(res(403));
-  c.query(SITE, "completed"); await tick();
-  same([s.phase, s.items], ["forbidden", []]);
-  const k = m.recordsKey(context, SITE, "open");
+  h.replies.push(new Promise((r) => (late = r)), res(200, page([job(9, { status: "paid" })])));
+  h.c.query(SITE, "open");
+  same(h.calls.length, 2, "same key ⇒ nothing");
+  h.c.query(SITE_B, "open");
+  h.c.query(SITE, "past"); await tick();
+  same([h.get().items.map((x) => x.id), h.calls[h.calls.length - 1]], [[J(9)], [SITE, "past", null]], "kind switch ⇒ page 1, cursor reset");
+  late(res(200, page([job(5, { site_id: SITE_B })]))); await tick();
+  same(h.get().items.map((x) => x.id), [J(9)], "late reply of the previous site dropped");
+  h.replies.push(res(503), res(200, page([due(1)])));
+  h.c.query(SITE, "upcoming"); await tick();
+  same([h.get().phase, h.get().error], ["error", m.RECORDS_COPY.failed]);
+  h.c.retry(h.get().key); await tick();
+  same([h.get().phase, h.get().items.length], ["ready", 1]);
+  const k = m.recordsKey(h.context, SITE, "open");
   const st = { ...m.RECORDS_INITIAL, key: k, phase: "ready" as const, items: [job(1) as Model.JobRow] };
-  for (const other of [m.recordsKey(context, SITE, "past"), m.recordsKey(context, SITE_B, "open"), m.recordsKey({ generation: () => 1, userId: () => USER }, SITE, "open")])
+  for (const other of [m.recordsKey(h.context, SITE, "past"), m.recordsKey(h.context, SITE_B, "open"), m.recordsKey({ generation: () => 1, userId: () => USER }, SITE, "open")])
     same([m.recordsView(st, other).phase, m.recordsView(st, other).items], ["loading", []], "another identity / site / kind ⇒ never the old rows");
+});
+
+test("confidentialité : 401/403/404 en page 1 OU sur « Afficher plus » ⇒ lignes ET curseur effacés, « inaccessible » ; 422 ⇒ page 1 ; relecture après écriture ⇒ lecture antérieure ignorée", async () => {
+  for (const st of [401, 403, 404]) {
+    const a = ctl();
+    a.replies.push(res(st));
+    a.c.query(SITE, "upcoming"); await tick();
+    same([a.get().phase, a.get().items, a.get().next], ["forbidden", [], null], `page 1 ${st}`);
+    const b = ctl();
+    b.replies.push(res(200, page([due(1)], "n1")), res(st));
+    b.c.query(SITE, "upcoming"); await tick();
+    await b.c.more(b.get().key);
+    same([b.get().phase, b.get().items, b.get().next], ["forbidden", [], null], `next page ${st} ⇒ nothing private kept`);
+    if (st === 404) same(b.get().error, m.RECORDS_COPY.notFound);
+  }
+  const r = ctl();
+  r.replies.push(res(200, page([due(1)], "n2")), res(422), res(200, page([due(5)])));
+  r.c.query(SITE, "upcoming"); await tick();
+  await r.c.more(r.get().key); await tick();
+  same([r.calls.map((x) => x[2]), r.get().items.map((x) => x.id)], [[null, "n2", null], [D(5)]], "invalid cursor (422) ⇒ restart at page 1");
+  let old!: (x: Model.RecordsResult) => void;
+  const w = ctl();
+  w.replies.push(res(200, page([due(1)], "n3")), new Promise((x) => (old = x)), res(200, page([due(8)])));
+  w.c.query(SITE, "upcoming"); await tick();
+  const pending = w.c.more(w.get().key); // an earlier read, still loading
+  w.c.refresh(w.get().key); await tick(); // post-write refresh
+  old(res(200, page([due(2)]))); await pending; await tick();
+  same(w.get().items.map((x) => x.id), [D(8)], "the reply that started before the success is ignored; the fresh read wins");
+  // Same while PAGE 1 is still loading (e.g. the « Terminées » list): the refresh is not skipped.
+  let held!: (x: Model.RecordsResult) => void;
+  const l = ctl();
+  l.replies.push(new Promise((x) => (held = x)), res(200, page([due(9, { status: "completed" })])));
+  l.c.query(SITE, "completed");
+  same(l.get().phase, "loading");
+  l.c.refresh(l.get().key); await tick();
+  held(res(200, page([due(3, { status: "completed" })]))); await tick();
+  same([l.calls.length, l.get().items.map((x) => x.id)], [2, [D(9)]], "a page-1 read still loading is superseded by the post-write refresh");
 });
 
 test("câblage : lectures seulement dans la fiche live ; droits = canWriteSite ; un seul panneau de rappel monté à la demande ; relecture après « Marquer terminé »", () => {
@@ -114,25 +162,29 @@ const tick = (ms) => new Promise((r) => setTimeout(r, ms));
 const SITE = "${SITE}", ORG = "11111111-1111-4111-8111-111111111111", USER = "${USER}";
 const J = (n) => "a0000000-0000-4000-8000-" + String(n).padStart(12, "0");
 const D = (n) => "d0000000-0000-4000-8000-" + String(n).padStart(12, "0");
-const job = (n, status) => ({ id: J(n), site_id: SITE, category: "outage", status, created_at: "2026-01-02T10:00:00Z" });
-const due = (n, status, kind = "maintenance") => ({ id: D(n), site_id: SITE, title: "Échéance " + n, kind, due_on: "2026-12-01", status, notes: "" });
+const at = (n) => new Date(Date.UTC(2026, 5, 1) - n * 60000).toISOString().replace(".000", "");
+const day = (n) => new Date(Date.UTC(2026, 0, 1) + n * 86400000).toISOString().slice(0, 10);
+const job = (n, status) => ({ id: J(n), site_id: SITE, category: "outage", status, created_at: at(n) });
+const due = (n, status, kind = "maintenance") => ({ id: D(n), site_id: SITE, title: "Échéance " + n, kind, due_on: day(n), status, notes: "" });
 const page = (items, next = null) => ({ items, page: { limit: 50, has_more: next !== null, next_cursor: next } });
 const mount = (opts) => {
   const calls = [];
   let saved = 0, upcomingFails = opts.upcomingFails, holdOpen = opts.holdOpen;
-  let releaseOpen = null;
+  let releaseOpen = null, releaseMore = null;
   window.fetch = async (url) => {
     const u = String(url); calls.push(u);
     const q = new URL(u, "http://x").searchParams;
     if (u.includes("/records")) {
       const kind = q.get("kind"), cursor = q.get("cursor");
       if (kind === "open") {
+        if (cursor && opts.jobsMore404) return Response.json({ error: "Site introuvable." }, { status: 404 });
         if (holdOpen) { holdOpen = false; await new Promise((r) => (releaseOpen = r)); return Response.json(page([job(999, "requested")])); }
         return Response.json(cursor ? page([job(50, "requested"), ...Array.from({ length: 70 }, (_, i) => job(101 + i, "requested")).slice(0, 49)]) : page(Array.from({ length: 50 }, (_, i) => job(i + 1, "requested")), "c1"));
       }
       if (kind === "past") return Response.json(page([job(500, "paid")]));
       if (kind === "upcoming") {
         if (upcomingFails) return Response.json({ error: "x" }, { status: 503 });
+        if (cursor && opts.holdUpcomingMore) { await new Promise((r) => (releaseMore = r)); return Response.json(page([due(5000, "pending")])); }
         const n = cursor ? Number(cursor.slice(1)) : 0; // 7 pages × 50 = 350 due dates (> the 300 cache)
         return Response.json(page(Array.from({ length: 50 }, (_, i) => due(301 + n * 50 + i - saved, "pending")), n < 6 ? "u" + (n + 1) : null));
       }
@@ -161,7 +213,7 @@ const mount = (opts) => {
   const root = createRoot(div);
   const render = () => root.render(h(StrictMode, null, h("main", { className: "content" }, h(SiteSheet, { c, id: SITE }))));
   render();
-  return { div, root, calls, release: () => releaseOpen?.(), setGen: (g) => { gen = g; render(); }, saved: () => saved };
+  return { div, root, calls, release: () => releaseOpen?.(), releaseMore: () => releaseMore?.(), setGen: (g) => { gen = g; render(); }, saved: () => saved };
 };
 const segment = (div, label, text) => [...div.querySelectorAll("[aria-label='" + label + "'] button")].find((b) => b.textContent === text);
 window.run = async () => {
@@ -211,6 +263,22 @@ window.run = async () => {
   b.release(); await tick(300);
   out.lateRows = [...b.div.querySelectorAll("[data-site-job]")].map((x) => x.getAttribute("data-site-job"));
   b.root.unmount();
+  // Revocation on « Afficher plus »: page 1 ok, next page 404 ⇒ no private row left, inaccessible.
+  const v = mount({ jobsMore404: true });
+  await tick(600);
+  const rowsBefore404 = v.div.querySelectorAll("[data-site-job]").length;
+  v.div.querySelector("[data-site-records-more='jobs']").click(); await tick(300);
+  out.revoked = { before: rowsBefore404, after: v.div.querySelectorAll("[data-site-job]").length, state: v.div.querySelector("[data-site-records^='jobs:']")?.getAttribute("data-site-records"), text: v.div.querySelector("[data-site-records^='jobs:']")?.textContent ?? "", more: !!v.div.querySelector("[data-site-records-more='jobs']") };
+  v.root.unmount();
+  // Post-write refresh: an older upcoming read (next page, still loading) never wins.
+  const w = mount({ holdUpcomingMore: true });
+  await tick(600);
+  w.div.querySelector("[data-site-records-more='due']").click(); await tick(100);
+  w.div.querySelector("[data-site-due-complete]").click(); await tick(400);
+  w.releaseMore(); await tick(300);
+  const dues = [...w.div.querySelectorAll("[data-site-due]")].map((x) => x.getAttribute("data-site-due"));
+  out.postWrite = { count: dues.length, first: dues[0], hasOld: dues.includes(D(5000)), next: w.div.querySelector("[data-site-next-due]").textContent };
+  w.root.unmount();
   // Next due date on a failed upcoming read: never « Aucune ».
   const e = mount({ upcomingFails: true });
   await tick(500);
@@ -255,6 +323,10 @@ for (const width of [360, 390, 1280])
         assert.ok(r.pastCalls.every((u: string) => !u.includes("cursor")), "kind switch resets the cursor");
         same(r.auditRows, 1);
         same(r.lateRows, ["a0000000-0000-4000-8000-000000000500"], "the late « open » reply after switching to « Passées » is dropped");
+        same([r.revoked.before, r.revoked.after, r.revoked.state, r.revoked.more], [50, 0, "jobs:open:forbidden", false], "404 on « Afficher plus » ⇒ no row left, inaccessible");
+        assert.match(r.revoked.text, /n’est pas \(ou plus\) accessible/);
+        same([r.postWrite.count, r.postWrite.first, r.postWrite.hasOld], [50, "d0000000-0000-4000-8000-000000000300", false], "the older read is ignored; the fresh page 1 wins");
+        assert.match(r.postWrite.next, /Échéance 300/, "next due date from the fresh read");
         assert.match(r.nextDueError, /Non vérifiée/);
         assert.doesNotMatch(r.nextDueError, /Aucune/, "never « Aucune » from an error");
         same([r.demoRecords, r.demoCache], [0, true], "demo unchanged, zero records call");

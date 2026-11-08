@@ -1,6 +1,6 @@
 // Site sheet paginated records — pure model + controller (no React). Contract (read-only):
-// docs/SITE_RECORDS_BACKEND.md (codex/site-records d38e6e3; handler not published yet — strict
-// browser mirror of the doc):
+// docs/SITE_RECORDS_BACKEND.md + lib/features/site-records/handler.ts (codex/site-records 1c0acea;
+// server-only, so a strict browser mirror of its schemas and checks):
 //   GET /api/sites/<id>/records?kind=open|past|upcoming|completed|audits[&cursor=opaque]
 //   → { items, page: { limit: 50, has_more, next_cursor } } — no other key.
 //   open: requested/assigned/quoted/accepted/in_progress · past: completed/paid/cancelled
@@ -20,30 +20,41 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const id = z.string().regex(UUID);
 const OPEN = ["requested", "assigned", "quoted", "accepted", "in_progress"] as const;
 const PAST = ["completed", "paid", "cancelled"] as const;
+const timestamp = z.iso.datetime({ offset: true }).regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/);
 const job = z
-  .object({ id, site_id: id, category: z.enum(["outage", "panel", "socket", "lighting", "diagnostic"]), status: z.enum([...OPEN, ...PAST]), created_at: z.iso.datetime({ offset: true }) })
+  .object({ id, site_id: id, category: z.enum(["outage", "panel", "socket", "lighting", "diagnostic"]), status: z.enum([...OPEN, ...PAST]), created_at: timestamp })
   .strict();
 const due = z
-  .object({ id, site_id: id, title: z.string().min(1).max(300), kind: z.string().min(1).max(40), due_on: z.iso.date(), status: z.string().min(1).max(40), notes: z.string().max(4000) })
+  .object({ id, site_id: id, title: z.string().min(1).max(160), kind: z.enum(["audit", "maintenance", "safety", "equipment", "contract"]), due_on: z.iso.date(), status: z.enum(["pending", "scheduled", "completed"]), notes: z.string().max(4000) })
   .strict();
 export type JobRow = z.infer<typeof job>;
 export type DueRow = z.infer<typeof due>;
-const page = z.object({ limit: z.literal(SITE_RECORDS_LIMIT), has_more: z.boolean(), next_cursor: z.string().min(1).max(1000).nullable() }).strict();
+const page = z.object({ limit: z.literal(SITE_RECORDS_LIMIT), has_more: z.boolean(), next_cursor: z.string().regex(/^[A-Za-z0-9_-]{1,600}$/).nullable() }).strict();
 const jobPage = z.object({ items: z.array(job).max(SITE_RECORDS_LIMIT), page }).strict();
 const duePage = z.object({ items: z.array(due).max(SITE_RECORDS_LIMIT), page }).strict();
 export type RecordsPage = { items: (JobRow | DueRow)[]; next: string | null };
 export const isJobKind = (k: Kind): k is JobKind => k === "open" || k === "past";
 
-/** Strict: the doc's shape, has_more ⇔ next_cursor, this site only, the kind's own filter, unique ids. */
-export function parseRecords(body: unknown, siteId: string, kind: Kind): RecordsPage | null {
+/** Strict: the handler's shape, has_more ⇔ next_cursor, this site only, the kind's own filter, unique
+ *  (lower-cased) ids, and the handler's order (jobs created_at DESC, id DESC; due dates due_on ASC,
+ *  id ASC), continuing after `after` (the last row already shown) for a next page. */
+export function parseRecords(body: unknown, siteId: string, kind: Kind, after: JobRow | DueRow | null = null, seen: ReadonlySet<string> = new Set()): RecordsPage | null {
   const r = (isJobKind(kind) ? jobPage : duePage).safeParse(body);
   if (!r.success) return null;
   const p = r.data as { items: (JobRow | DueRow)[]; page: z.infer<typeof page> };
   if (p.page.has_more !== (p.page.next_cursor !== null)) return null;
-  const ids = p.items.map((x) => x.id);
+  const ids = p.items.map((x) => x.id.toLowerCase());
   if (new Set(ids).size !== ids.length) return null;
   const site = siteId.toLowerCase();
+  const at = (x: JobRow | DueRow) => ("created_at" in x ? Date.parse(x.created_at) : 0);
+  let prev = after;
   for (const x of p.items) {
+    if (prev && !seen.has(x.id.toLowerCase())) {
+      const dir = isJobKind(kind) ? at(x) - at(prev) : (x as DueRow).due_on.localeCompare((prev as DueRow).due_on);
+      const order = dir || (x.id.toLowerCase() < prev.id.toLowerCase() ? -1 : x.id.toLowerCase() > prev.id.toLowerCase() ? 1 : 0);
+      if (isJobKind(kind) ? order >= 0 : order <= 0) return null;
+    }
+    if (!seen.has(x.id.toLowerCase())) prev = x;
     if (x.site_id.toLowerCase() !== site) return null;
     if (kind === "open" && !(OPEN as readonly string[]).includes(x.status)) return null;
     if (kind === "past" && !(PAST as readonly string[]).includes(x.status)) return null;
@@ -74,7 +85,7 @@ export const RECORDS_COPY = {
   loading: "Lecture des enregistrements du site…",
   failed: "Les enregistrements du site n’ont pas pu être lus. Réessayez.",
   moreFailed: "La suite n’a pas pu être lue. Réessayez.",
-  notFound: "Ce site n’est pas accessible avec votre compte.",
+  notFound: "Ce site n’est pas (ou plus) accessible avec votre compte.",
   forbidden: "Votre accès à ce site n’est plus valide. Reconnectez-vous ou changez d’organisation.",
   more: "Afficher plus",
 } as const;
@@ -97,12 +108,14 @@ export function createRecordsController({ api, context, set }: { api: () => Reco
     if (alive) set(s);
   };
   const same = (my: number) => alive && my === seq && identityOf(context) === bound;
+  // 401/403/404 (same 404 for an absent or a foreign site) on page 1 OR a next page: every private
+  // row and the cursor are cleared, then « inaccessible » — never rows kept after a revocation.
   const fail = (key: string, status: number, more: boolean) =>
-    status === 401 || status === 403
-      ? put({ ...RECORDS_INITIAL, key, phase: "forbidden", error: RECORDS_COPY.forbidden })
+    status === 401 || status === 403 || status === 404
+      ? put({ ...RECORDS_INITIAL, key, phase: "forbidden", error: status === 404 ? RECORDS_COPY.notFound : RECORDS_COPY.forbidden })
       : more
         ? put({ ...state, loadingMore: false, failed: "more", error: RECORDS_COPY.moreFailed })
-        : put({ ...RECORDS_INITIAL, key, phase: "error", failed: "first", error: status === 404 ? RECORDS_COPY.notFound : RECORDS_COPY.failed });
+        : put({ ...RECORDS_INITIAL, key, phase: "error", failed: "first", error: RECORDS_COPY.failed });
   const first = async (q: { siteId: string; kind: Kind }) => {
     current = q;
     const my = ++seq;
@@ -120,10 +133,11 @@ export function createRecordsController({ api, context, set }: { api: () => Reco
     put({ ...state, loadingMore: true, failed: null, error: "" });
     const r = await api().read(q.siteId, q.kind, cursor);
     if (!same(my)) return;
-    const p = r.status === 200 ? parseRecords(r.body, q.siteId, q.kind) : null;
+    if (r.status === 422) return void first(q); // invalid / expired cursor: restart at page 1
+    const seen = new Set(state.items.map((x) => x.id.toLowerCase()));
+    const p = r.status === 200 ? parseRecords(r.body, q.siteId, q.kind, state.items[state.items.length - 1] ?? null, seen) : null;
     if (!p) return fail(key, r.status, true);
-    const seen = new Set(state.items.map((x) => x.id));
-    put({ ...state, loadingMore: false, items: [...state.items, ...p.items.filter((x) => !seen.has(x.id))], next: p.next });
+    put({ ...state, loadingMore: false, items: [...state.items, ...p.items.filter((x) => !seen.has(x.id.toLowerCase()))], next: p.next });
   };
   return {
     /** Site or kind change ⇒ page 1 of the new key (cursor reset, never mixed). */
@@ -138,9 +152,10 @@ export function createRecordsController({ api, context, set }: { api: () => Reco
       if (state.failed === "more") return void more();
       if (state.phase === "error") void first(current);
     },
-    /** Re-read page 1 of the SAME key (after a server-confirmed action). */
+    /** Re-read page 1 of the SAME key after a server-confirmed action. Always a FRESH read: the
+     *  sequence is bumped, so any earlier read (page 1 or next page, even still loading) is ignored. */
     refresh(key: string) {
-      if (!current || state.key !== key || state.phase === "loading") return;
+      if (!current || state.key !== key) return;
       void first(current);
     },
     get: () => state,
