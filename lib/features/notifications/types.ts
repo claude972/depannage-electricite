@@ -10,6 +10,7 @@ export const NOTIFICATION_KINDS = [
   "work_started",
   "work_completed",
   "payment_confirmed",
+  "payment_reminder",
   "mission_cancelled",
   "appointment_saved",
   "appointment_reminder",
