@@ -22,7 +22,7 @@ Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvel
 | --- | ---: |
 | CORRIGÉ (avec suite verte) | 0 |
 | VÉRIFIÉ CIBLÉ (suite initiale rouge) | 4 |
-| CORRIGÉ PARTIEL | 7 |
+| CORRIGÉ PARTIEL | 9 |
 | NON REPRODUIT | 0 |
 | DÉCISION REQUISE | 4 |
 | REVERTÉ | 0 |
@@ -41,9 +41,9 @@ Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvel
 | E15 | Majeur | CORRIGÉ PARTIEL | P2 | `258f44e` | `sql-phase2-lot-a-p2-review.mjs` | Route operations, migration additive | Deux identités via vrai HTTP : ancien formulaire 200 et v3 avant, 409 et v2 conservée après. RPC historique refusé, pas d’audit supplémentaire. Attend le câblage du lot B. |
 | E18 | Mineur | CORRIGÉ PARTIEL | P3 | `7de6d11` | `sql-phase2-lot-a-p3-review.mjs` | Route operations, migration additive | Deux audits et instantanés avant. Après, un de chaque, réponse identique, autre contenu sous même clé refusé. Attend la conservation de la clé dans B. |
 | E19 | Mineur | À REPRODUIRE | Isolé | — | — | — | Rapport : nom déclaré vide rejeté côté serveur. |
-| E21 | Majeur | À REPRODUIRE | P4 | — | — | — | Validation des dates constatées SLA. |
+| E21 | Majeur | CORRIGÉ PARTIEL | P4 | `cbc4fcc` | `sql-phase2-lot-a-temporal-review.mjs` | Migrations additives et contrats `site-operations` | Trois écritures HTTP futures 200 avant puis 422. Refus 22023 SQL direct. Faits anciens futurs non mesurables. Attend le message immédiat B. |
 | E23 | Mineur | À REPRODUIRE | Isolé | — | — | — | Règle unique du statut SLA. |
-| E24 | Majeur | À REPRODUIRE | P4 | — | — | — | Validation chronologique de levée ERP. |
+| E24 | Majeur | CORRIGÉ PARTIEL | P4 | `cbc4fcc` | `sql-phase2-lot-a-temporal-review.mjs` | Migrations additives et contrats `site-operations` | Levées antérieure et future 200 avant puis 422, dossier conservé en v1. Refus SQL direct, levée valide 200. Attend le message immédiat B. |
 | E25 | Majeur | À REPRODUIRE | P4 | — | — | — | Grille publiée applicable à sa date d’effet. |
 | E29 | Majeur | CORRIGÉ PARTIEL | P2 | `2b3b44e` | `sql-phase2-lot-a-p2-review.mjs` | Route warranty, migration additive | Ancienne résolution écrasée avec HTTP 200 avant, 409 et résolution conservée après. RPC historique interdit, audit unique. Attend le lot B. |
 | E33 | Mineur | À REPRODUIRE | Isolé | — | — | — | Normalisation des noms dans la recherche. |
