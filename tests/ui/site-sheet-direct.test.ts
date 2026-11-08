@@ -100,7 +100,11 @@ test("site archivé ouvert directement : lecture seule, aucune action d’éditi
   assert.match(body, /initial=\{state\}/, "the settings panel is seeded: no second GET");
   assert.match(body, /\{!archived && <SiteAreasPanel /);
   assert.match(body, /\{!archived && <SiteContactsPanel /);
-  assert.doesNotMatch(body, /Nouvelle demande|c\.go\("new"|professionalCommand|BudgetEditor|SiteEnergyPanel|CoOwnershipPanel/);
+  assert.doesNotMatch(body, /Nouvelle demande|c\.go\("new"|professionalCommand|BudgetEditor/);
+  // ENT-05 / ENT-09 (claude/direct-site-verticals): energy and co-ownership are now mounted on the direct
+  // sheet, but ONLY for an active, live, proven site (co-ownership: syndic only) — never for an archived one.
+  assert.match(body, /\{!archived && session\.mode !== "demo" && \(\s*<SiteEnergyPanel/);
+  assert.match(body, /\{!archived && session\.mode !== "demo" && site\.type === "syndic" && \(\s*<CoOwnershipPanel/);
   assert.match(body, /la liste peut être incomplète/);
   assert.doesNotMatch(src, /title="Site introuvable dans l’organisation active"/);
 });
