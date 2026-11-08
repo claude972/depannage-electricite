@@ -9,6 +9,7 @@ import { PAYMENT_LABEL, SLOT_LABEL, contactErrors, type BookingDraft, type Payme
 import { category, money } from "../app/format";
 import type { RequestValues } from "../app/types";
 import { serviceBySlug } from "./public-service-catalog";
+import { Field } from "../app/ui";
 import { ReservedEstimate, ReviewEstimate } from "../features/indicative-prices/indicative-range";
 import { REVIEW_COPY, REVIEW_SCOPES } from "../features/indicative-prices/model";
 
@@ -214,20 +215,22 @@ export function BookingConfirm({
           <dt>Vos coordonnées (privées)</dt>
           <dd>
             {editingContact ? (
-              <span className="booking-contact-edit" data-booking-contact-edit="">
+              <div className="booking-contact-edit" data-booking-contact-edit="">
+                {/* CLI-05: Field keeps the label stable; the error is linked by aria-describedby. */}
                 {(["first_name", "last_name", "phone"] as const).map((key) => (
-                  <label key={key} className="field">
-                    <span>{key === "first_name" ? "Prénom" : key === "last_name" ? "Nom" : "Téléphone"}</span>
+                  <Field
+                    key={key}
+                    label={key === "first_name" ? "Prénom" : key === "last_name" ? "Nom" : "Téléphone"}
+                    error={contactProblems[key] || undefined}
+                  >
                     <input
                       value={contactDraft[key]}
                       maxLength={key === "phone" ? 30 : 60}
                       autoComplete={key === "first_name" ? "given-name" : key === "last_name" ? "family-name" : "tel"}
                       inputMode={key === "phone" ? "tel" : undefined}
-                      aria-invalid={contactProblems[key] ? true : undefined}
                       onChange={(e) => setContactDraft({ ...contactDraft, [key]: e.target.value })}
                     />
-                    {contactProblems[key] && <small className="field-error">{contactProblems[key]}</small>}
-                  </label>
+                  </Field>
                 ))}
                 <button
                   type="button"
@@ -241,7 +244,7 @@ export function BookingConfirm({
                 >
                   Enregistrer mes coordonnées
                 </button>
-              </span>
+              </div>
             ) : (
               <>
                 {[contact.first_name, contact.last_name].filter(Boolean).join(" ")}
