@@ -1647,7 +1647,7 @@ function NewRequestView({ c, siteId, initialCategory = "panel" }: { c: Ctx; site
  *  render, no session.selectedQuoteId needed). */
 export function DossierView({ c, id, initialQuoteId }: { c: Ctx; id: string; initialQuoteId?: string }) {
   const { session, demo } = c;
-  const intervention = c.orgInterventions.find((i) => i.id === id);
+  const intervention = (demo ? c.orgInterventions : c.scope.interventions).find((i) => i.id === id);
   const [versionId, setVersionId] = useState(initialQuoteId ?? session.selectedQuoteId);
   const [ops, setOps] = useState<Operations | null>(null);
   const [opsLoading, setOpsLoading] = useState(true);
@@ -1661,7 +1661,7 @@ export function DossierView({ c, id, initialQuoteId }: { c: Ctx; id: string; ini
   const [advancedRead, setAdvancedRead] = useState<{ quoteId: string; status: WorkflowStatus | null } | null>(null);
   const statusKey = intervention?.status || "";
   // Deep link to a dossier absent from the cached perimeter: one causal refresh before « introuvable ».
-  // Presence is the active organisation/site perimeter (orgInterventions), never wider.
+  // Presence uses the active organisation and site scope, including the direct dossier read.
   const presence = useDetailPresence(session, "enterprise-dossier", id, Boolean(intervention));
   useEffect(() => {
     if (!intervention) return;
@@ -3924,9 +3924,9 @@ function ApprovalDetailInner({ c, id }: { c: Ctx; id: string }) {
  *    a 401/403 stays « inaccessible » (never another quote). Exported for tests only. */
 export function EnterpriseQuoteRoute({ c, ref_ }: { c: Ctx; ref_: string }) {
   const { session } = c;
-  const quote = session.data.quotes.find((q) => q.id === ref_ && (c.demo || c.orgInterventions.some((i) => i.id === q.intervention_id)));
+  const quote = (c.demo ? session.data.quotes : c.scope.quotes).find((q) => q.id === ref_);
   if (quote) return <DossierView key={`${quote.intervention_id}-${quote.id}`} c={c} id={quote.intervention_id} initialQuoteId={quote.id} />;
-  if (session.mode === "live" && !c.orgInterventions.some((i) => i.id === ref_)) return <EnterpriseQuoteView c={c} quoteId={ref_} />;
+  if (session.mode === "live" && !c.scope.interventions.some((i) => i.id === ref_)) return <EnterpriseQuoteView c={c} quoteId={ref_} />;
   return <DossierView key={`${ref_}-${session.selectedQuoteId}`} c={c} id={ref_} />;
 }
 

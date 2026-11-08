@@ -263,6 +263,14 @@ window.run = async () => {
   await tick(400);
   out.entOld = { errs, text: v.d.textContent, ref: quoteRef(OLDID), curRef: quoteRef(CURID), decide: buttons(v.d, "Accepter") + buttons(v.d, "Refuser ce devis"), quoteCalls: calls.filter((u) => u.startsWith("/api/quotes/") && !u.slice(12).split("?")[0].includes("/")).length };
   v.r.unmount();
+  calls = [];
+  replies[OLDID] = 403;
+  const otherSite = "30000000-0000-4000-8000-000000000002";
+  const outside = entCtx();
+  v = mount(h(EnterpriseQuoteRoute, { c: { ...outside, activeSite: { id: otherSite }, scope: { ...outside.scope, interventions: [], quotes: [] } }, ref_: OLDID }));
+  await tick(400);
+  out.outsideSite = { requested: calls.includes("/api/quotes/" + OLDID + "?organization_id=" + ORG + "&site_id=" + otherSite), cachedTitle: v.d.textContent.includes(quoteRef(OLDID)), inaccessible: !!v.d.querySelector("[data-enterprise-quote-inaccessible]") };
+  v.r.unmount();
   for (const [name, code] of [["ent404", 404], ["ent403", 403]]) {
     calls = [];
     replies[I(99)] = code;
@@ -338,6 +346,7 @@ for (const width of [390, 1280])
         assert.ok(r.entOld.text.includes(r.entOld.ref + " · reçu le"), "first render of #quote/<old cached id>: the OLD version is displayed " + r.entOld.ref + " | " + JSON.stringify(r.entOld.errs) + r.entOld.text.slice(0, 600));
         assert.ok(!r.entOld.text.includes(r.entOld.curRef + " · reçu le"), "not the current one");
         same([r.entOld.decide, r.entOld.quoteCalls], [0, 0], "cached old version: read-only, no exact quote read needed");
+        same(r.outsideSite, { requested: true, cachedTitle: false, inaccessible: true }, "an old cached quote from another site cannot bypass the current site");
         same([r.ent404.inaccessible, r.ent404.quoteView, r.ent404.called], [false, false, [`/api/quotes/${I(99)}?organization_id=${ORG}&site_id=${SITE}`]], "404 on the quote read ⇒ the dossier path, as before");
         same([r.ent403.inaccessible, r.ent403.quoteView], [true, false], "403 ⇒ inaccessible, no other quote");
         for (const k of ["org", "site", "identity"]) same([r.switches[k].phase, r.switches[k].id], ["loading", null], `${k} switch: first render shows no old quote`);
