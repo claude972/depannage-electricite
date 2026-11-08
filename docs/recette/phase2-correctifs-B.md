@@ -23,7 +23,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E07 | Majeur | A | CONTRAT A | verrou site archivé SQL | | | supabase, app/api | UI déjà lecture seule |
 | E08 | Majeur | B | À REPRODUIRE | 409 → recharger le formulaire (P1/P2) | | | site-operations/budget-panel.tsx | |
 | E11 | Majeur | B | À REPRODUIRE | option active périmée après saisie | | | components/app/address-field.tsx | |
-| E15 | Majeur | B + A | À REPRODUIRE | expected_version du créneau (P2) | | | role/client-space.tsx | route sans version : contrat A |
+| E15 | Majeur | B + A | À REPRODUIRE | expected_version du créneau (P2) | | | role/client-space.tsx, role/artisan-space.tsx | contrat A vérifié : save_appointment exige expected_version = appointment.reminder_version (0 sans créneau) |
 | E16 | Majeur | B | À REPRODUIRE | Actualiser recharge opérations + rappel (P1/P6) | | | role/client-space.tsx, appointment-reminders | |
 | E17 | Majeur | B | À REPRODUIRE | réponse GET ancienne après arrêt | | | features/tracking/tracking-card.tsx | |
 | E20 | Majeur | B | À REPRODUIRE | 404 → relire/purger (P1) | | | advanced-approvals | |
@@ -31,28 +31,28 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E24 | Majeur | B + A | À REPRODUIRE | levée antérieure/future (P4) | | | site-operations/erp-panel.tsx | contrat A |
 | E25 | Majeur | A | CONTRAT A | date d’effet des grilles (P4) | | | supabase | côté B : affichage si contrat change |
 | E26 | Majeur | B | À REPRODUIRE | 403 → relire/purger (P1) | | | site-operations-view.tsx, grids-panel.tsx | |
-| E29 | Majeur | B + A | À REPRODUIRE | version attendue garantie (P2) | | | components/app/forms.tsx | route sans version : contrat A |
+| E29 | Majeur | B + A | À REPRODUIRE | version attendue garantie (P2) | | | components/app/forms.tsx | contrat A vérifié : resolve exige expected_version = case.updated_at ISO exacte ; 409 ⇒ relire, brouillon conservé |
 | E30 | Majeur | B | À REPRODUIRE | 403 → relire /me + purger (P1) | | | platform-operators-view.tsx | |
 | E32 | Majeur | B | À REPRODUIRE | vue journal audit_read | | | anchors.ts, features.ts, platform-anchor.tsx | |
 | E34 | Majeur | B + A | À REPRODUIRE | approbation ≠ réactivation (P2) | | | components/app/forms.tsx | contrat A |
 | E35 | Majeur | B | À REPRODUIRE | action « demander des corrections » | | | components/app/forms.tsx | POST approved:false existant |
 | E37 | Majeur | A | CONTRAT A | prédicat d’offre et congés | | | supabase | |
-| E38 | Majeur | B | À REPRODUIRE | 403/404 → purger (P1) | | | credential-reviews | |
+| E38 | Majeur | B | CORRIGÉ | 403/404 → relire/purger (P1) | bd77186 | phase2-lot-b-e38-credential-review-revoked | credential-reviews-model.ts | rouge : 0 GET après 403 ; vert : 1 POST, relecture, purge motifs et formulaire |
 | E39 | Majeur | B | À REPRODUIRE | 401 → purge fil (P1) | | | message-history.ts, forms.tsx | |
 | E40 | Majeur | B | À REPRODUIRE | relire contact à la réouverture (P1) | | | forms.tsx ConversationContact | |
 | E42 | Majeur | B | À REPRODUIRE | workspace sans dossier → purge fil (P1) | | | artisan-space.tsx, forms.tsx | |
-| E44 | Majeur | B | À REPRODUIRE | 404 pagination → purge (P1) | | | customer-invoices | |
-| E48 | Majeur | B | À REPRODUIRE | 403 pagination → purge (P1) | | | saved-payment-methods | |
-| E50 | Majeur | B | À REPRODUIRE | 403 → relire droit (P1) | | | refund-execution | |
+| E44 | Majeur | B | CORRIGÉ | 404 pagination → purge (P1) | ca0f8a3 | phase2-lot-b-e44-e45-invoices-pagination | invoices-model.ts, customer-invoices-panel.tsx | rouge : 25 lignes et PDF après 404 ; vert : purge + refus |
+| E48 | Majeur | B | CORRIGÉ | 403 pagination → purge (P1) | d5b1a3b | phase2-lot-b-e48-e49-saved-methods-pagination | saved-payment-methods/model.ts | rouge : 20 cartes après 403 ; vert : purge immédiate, 0 POST |
+| E50 | Majeur | B | CORRIGÉ | 403 → relire droit (P1) | aa2f826 | phase2-lot-b-e50-refund-revoked | refund-execution-model.ts | rouge : 0 GET après 403, « Émettre » actif ; vert : 1 POST, relecture, action retirée |
 | E51 | Majeur | B | À REPRODUIRE | GET de rattrapage à reconnexion (P6) | | | courant-app.tsx | |
-| E52 | Majeur | B | À REPRODUIRE | 404 → purge liste (P1) | | | site-attachments | |
+| E52 | Majeur | B | CORRIGÉ | 404 → relire/purger liste (P1) | f273048 | phase2-lot-b-e52-site-attachments-revoked | site-attachments-panel.tsx | rouge : 0 GET liste après 404 ; vert : relecture, purge, 1 signature |
 | E54 | Majeur | B | À REPRODUIRE | 503 sauvegarde ne masque pas le centre | | | features.ts, notifications | |
 | E56 | Majeur | B | À REPRODUIRE | 401 pagination → purge (P1) | | | notification-center.tsx | |
 | E59 | Majeur | Décision | DÉCISION | photos avant/après | — | — | — | fiche ci-dessous |
 | E60 | Majeur | Décision | DÉCISION | accusé de remise client | — | — | — | fiche ci-dessous |
 | E61 | Majeur | A | CONTRAT A | rapport > 1 000 sites | | | app/api/reports | |
-| E63 | Majeur | B | À REPRODUIRE | 404 → purge (P1) | | | energy | |
-| E64 | Majeur | B | À REPRODUIRE | 403 → relire/purger (P1) | | | co-ownership | |
+| E63 | Majeur | B | CORRIGÉ | 404 → relire/purger (P1) | fcf1abd | phase2-lot-b-e62-e63-energy | energy-model.ts | rouge : 0 GET après 404 ; vert : 1 POST, relecture, purge |
+| E64 | Majeur | B | CORRIGÉ | 403 → relire/purger (P1) | 3698ea6 | phase2-lot-b-e64-coownership-revoked | coownership-model.ts | rouge : 0 GET après 403 ; vert : relecture, purge |
 | E67 | Majeur | Décision | DÉCISION | justificatif de levée | — | — | — | fiche ci-dessous |
 | E70 | Majeur | A | HORS LOT B | erreur Connect | | | app/api/payments | externe Stripe |
 | E72 | Majeur | A | HORS LOT B | ApplicationFee py_ | | | lib | externe Stripe |
@@ -78,15 +78,15 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E36 | Mineur | A + B | CONTRAT A | suspension sans command_id (P3) | | | app/api/admin/artisans | |
 | E41 | Mineur | A + B | CONTRAT A | message texte sans id stable (P3) | | | app/api/messages | |
 | E43 | Mineur | B | À REPRODUIRE | publication propre prise pour « autre canal » (P3) | | | artisan-quote-draft.tsx | |
-| E45 | Mineur | B | À REPRODUIRE | erreur de page suivante silencieuse | | | customer-invoices | |
+| E45 | Mineur | B | CORRIGÉ | erreur de page suivante expliquée | ca0f8a3 | phase2-lot-b-e44-e45-invoices-pagination | invoices-model.ts, customer-invoices-panel.tsx | rouge : 503 silencieux ; vert : alerte, reprise 26 pièces, alerte retirée |
 | E46 | Mineur | B | À REPRODUIRE | avis effacé par la navigation | | | courant-app.tsx | |
 | E47 | Mineur | B | À REPRODUIRE | vérification de retour après SIGNED_IN | | | courant-app.tsx | |
-| E49 | Mineur | B | À REPRODUIRE | alerte de pagination conservée | | | saved-payment-methods | |
+| E49 | Mineur | B | CORRIGÉ | alerte de pagination retirée | d5b1a3b | phase2-lot-b-e48-e49-saved-methods-pagination | saved-payment-methods/model.ts | rouge : alerte conservée ; vert : retirée après la 21e carte |
 | E53 | Mineur | A + B | CONTRAT A | dépôt de site sans clé (P3) | | | app/api/sites/[id]/documents | |
 | E55 | Mineur | B | À REPRODUIRE | cloche non relue après lecture (P1/P6) | | | notification-center, courant-app | |
 | E57 | Mineur | B | À REPRODUIRE | confirmation perdue au remount (P3) | | | site-lifecycle | |
 | E58 | Mineur | B | À REPRODUIRE | profil public relu en navigation (P6) | | | public-operator-profile, public-site | |
-| E62 | Mineur | B | À REPRODUIRE | rejeu réussi → édition (P3) | | | energy | |
+| E62 | Mineur | B | CORRIGÉ | rejeu réussi → édition (P3) | fcf1abd | phase2-lot-b-e62-e63-energy | site-energy-panel.tsx | rouge : formulaire en création, expected_version null ; vert : édition v1 |
 | E65 | Mineur | B | À REPRODUIRE | présélection Artisan | | | public-site.tsx, forms.tsx | |
 | E66 | Mineur | B | À REPRODUIRE | détail hors cache sans GET | | | use-detail-presence.ts, enterprise-space | |
 | E68 | Mineur | A | HORS LOT B | public/offline-request.js | | | public/ | interdit en B |
@@ -103,7 +103,7 @@ Sous-cas externes avec condition ouverte (PUB-10.1, CLI-05.2, CLI-08.1, ADM-01.1
 
 Mise à jour à chaque commit d’item.
 
-- CORRIGÉ : aucun.
+- CORRIGÉ (rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E38, E44, E45, E48, E49, E50, E52, E62, E63, E64.
 - ROUGE : aucun.
 - À REPRODUIRE : voir tableau.
 - NON REPRODUIT : aucun.
@@ -113,8 +113,8 @@ Mise à jour à chaque commit d’item.
 
 Contrats requis côté serveur, sans duplication en B.
 
-- E15 · `app/api/interventions/[id]/operations/route.ts:7,47` et `supabase/migrations/202610310003_web_operations.sql:189–198` : la commande de rendez-vous doit accepter `expected_version` (version du rendez-vous lue) et répondre 409 en cas d’écart. B enverra la version lue dès que le schéma l’accepte ; aujourd’hui un champ inconnu serait refusé.
-- E29 · `app/api/warranty/route.ts:20–25,48–52` : décision de garantie avec `expected_version` (ou état attendu) et 409 en conflit.
+- E15 · LIVRÉ PAR A (signal) : `save_appointment` exige `expected_version` entier = `appointment.reminder_version` lu (0 sans créneau) ; ancien RPC sans version refusé. B : envoyer dans les éditeurs client et artisan, recharger et conserver la saisie sur 409. Origine : `app/api/interventions/[id]/operations/route.ts:7,47` et `supabase/migrations/202610310003_web_operations.sql:189–198` : la commande de rendez-vous doit accepter `expected_version` (version du rendez-vous lue) et répondre 409 en cas d’écart. B enverra la version lue dès que le schéma l’accepte ; aujourd’hui un champ inconnu serait refusé.
+- E29 · LIVRÉ PAR A (signal) : `POST /api/warranty` action `resolve` exige `expected_version` = `case.updated_at` ISO exacte telle que lue (chaîne conservée, microsecondes comprises) ; 409 ⇒ relire, brouillon conservé en conflit.
 - E34 · `app/api/admin/artisans/route.ts:4,36–42`, `202610310008_suspension_governance.sql:38–66` : distinguer `approve` (depuis `submitted`/`changes_requested`) et `reactivate` (depuis `suspended`), avec état attendu ; une approbation depuis `suspended` doit répondre 409.
 - E36 · même route : `command_id` d’intention stable et rejeu sans second audit.
 - E18 · `app/api/interventions/[id]/operations/route.ts:10,49` : `command_id` pour l’enregistrement du rapport et rejeu idempotent sans second instantané.
@@ -166,3 +166,9 @@ Ces échecs ne sont ni affaiblis ni supprimés par B.
 ## Journal
 
 - Prise en charge : ledger créé avant tout code, sur la branche B.
+- Harnais `tests/ui/phase2-lot-b-harness.ts` : esbuild + vrais composants + vrai CSS, Chromium headless (chemins QA_*), API simulée en page, aucune requête `/api/`.
+- Reproductions rouges : E38, E44, E45, E48, E49, E50, E52, E62, E63, E64 (assertion rouge citée dans chaque commit).
+- Signal `phase3-bloquants-livres.md` reçu (A sur 6f2d89c), corrections B ensuite, une par ID ou mécanisme.
+- Checkpoint A : les 12 mêmes échecs préexistants sur HEAD, deux builds OK. La suite globale n’est pas qualifiée verte.
+- Contrats A E15 et E29 publiés dans le signal (voir Attendu de l’autre lot).
+- Demande utilisateur : règles P1 communes (classification des refus + purge) avec adaptateurs de relecture par panneau, sans duplication dans les vues. Refactor à suivre.
