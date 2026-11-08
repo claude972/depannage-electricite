@@ -157,6 +157,7 @@ Claude vérifie la confirmation de réservation. Dans l’éditeur de coordonné
 ### ADM-03 / ADM-07 — sélection et messages du dossier administrateur
 
 Claude possède `admin-space.tsx` et les composants de ce parcours. Le sélecteur de réaffectation utilise l’annuaire serveur des artisans approuvés et sa pagination. Le fil d’un dossier réutilise la lecture paginée des messages, autorisée par la politique existante qui appelle `can_access_intervention`. Conserver le composeur, la réaffectation et les refus serveur. Effacer la sélection et les données au changement de dossier ou de session. Tester un artisan hors des 100 derniers et un ancien fil avec réponse, état vide, erreur et refus. La vérification locale utilise des données de test. L’activation du compte propriétaire reste différée.
+- Claude (add7245, claude/admin-reassign-thread-ui) : ADM-03 sélecteur de réaffectation sur /api/admin/directory (artisans approuvés, recherche, curseur) + ADM-07 fil du dossier sur /api/messages paginé ; seul auteur d’admin-space.tsx pour ce lot.
 
 ### ENT-12 — retrouver et décider une approbation ancienne
 
