@@ -2,7 +2,7 @@
 // Leaf component: persistent notification centre of the connected account (contract
 // ADV-PLANNING-NOTIFICATIONS-001, amendment A1). Lists, marks read/unread and edits preferences
 // through the injected client only. External channels are shown unavailable, never simulated.
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Empty, Loader, Tag, Unavailable } from "../../app/ui";
 import { Icon } from "../../app/icons";
 import { NOTIFICATION_COPY, applyMark, reducePage, scopeKey, type ContractState, type LeafScope, type ListState, type NotificationsClient } from "../../../lib/features/notifications/leaf";
@@ -40,40 +40,97 @@ function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate
   const [showPreferences, setShowPreferences] = useState(false);
   const available = state === "available";
   const writable = scope.authority.canWrite && !demo;
+  // Fence of every list read: a filter switch, a reload or an unmount bumps `gen`; a reply (and its
+  // catch / finally) from an older generation, filter or identity never touches rows, cursor,
+  // loading or error. The cursor and the filter live in refs, reset synchronously on a switch.
+  const gen = useRef(0);
+  const filter = useRef(unreadOnly);
+  const cursor = useRef<string | null>(demo ? demo.page.page.next_cursor : null);
+  const moreBusy = useRef(false);
+  const alive = useRef(true);
+  const identity = () => (context ? `${context.userId() ?? "-"}|${context.generation()}` : "");
+  const fence = () => {
+    const g = gen.current, f = filter.current, who = identity();
+    return () => alive.current && gen.current === g && filter.current === f && identity() === who;
+  };
+  const restart = () => {
+    gen.current++;
+    if (!demo) cursor.current = null; // the demo list is never re-read: its cursor stays
+    moreBusy.current = false;
+    setLoadingMore(false);
+    setItemError((e) => (e?.id === "more" ? null : e));
+  };
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      gen.current++;
+    };
+  }, []);
 
   useEffect(() => {
     if (demo || !available) return;
-    let active = true;
-    setList((previous) => ({ status: "loading", items: previous.items }));
-    client.list({ limit: PAGE_SIZE, unread: unreadOnly, cursor: null })
-      .then((answer) => { if (active) setList((previous) => reducePage(previous, answer, false)); })
-      .catch((error: unknown) => { if (active) setList((previous) => ({ status: "error", message: error instanceof Error && error.message ? error.message : NOTIFICATION_COPY.loadError, items: previous.items })); });
-    return () => { active = false; };
+    restart();
+    const fresh = fence();
+    setList({ status: "loading", items: [] });
+    client.list({ limit: PAGE_SIZE, unread: filter.current, cursor: null })
+      .then((answer) => {
+        if (!fresh()) return;
+        if (answer) cursor.current = answer.page.next_cursor;
+        setList((previous) => reducePage(previous, answer, false));
+      })
+      .catch((error: unknown) => { if (fresh()) setList({ status: "error", message: error instanceof Error && error.message ? error.message : NOTIFICATION_COPY.loadError, items: [] }); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, demo, available, unreadOnly, reloadKey]);
 
   if (!available) return <Unavailable title="Notifications" reason={unavailableMessage} state={state} blocker="capability:notifications" />;
   const page = list.status === "ready" ? list.page : null;
   const unread = list.status === "ready" ? list.unread : null;
+  const switchFilter = (next: boolean) => {
+    if (filter.current === next) return;
+    filter.current = next; // synchronous: no old cursor or filter can be used in this tick
+    restart();
+    setUnreadOnly(next);
+  };
   const loadMore = async () => {
-    if (!page?.next_cursor) return;
+    const from = cursor.current;
+    if (!from || moreBusy.current) return; // one continuation in flight
+    moreBusy.current = true;
+    const fresh = fence();
     setLoadingMore(true);
+    setItemError((e) => (e?.id === "more" ? null : e));
     try {
-      const answer = await client.list({ limit: PAGE_SIZE, unread: unreadOnly, cursor: page.next_cursor });
+      const answer = await client.list({ limit: PAGE_SIZE, unread: filter.current, cursor: from });
+      if (!fresh()) return;
+      if (answer) cursor.current = answer.page.next_cursor;
       setList((previous) => reducePage(previous, answer, true));
-    } catch (error) { setItemError({ id: "more", message: error instanceof Error && error.message ? error.message : NOTIFICATION_COPY.loadError }); }
-    finally { setLoadingMore(false); }
+    } catch (error) {
+      if (fresh()) setItemError({ id: "more", message: error instanceof Error && error.message ? error.message : NOTIFICATION_COPY.loadError });
+    } finally {
+      if (fresh()) {
+        moreBusy.current = false;
+        setLoadingMore(false);
+      }
+    }
   };
   const mark = async (command: NotificationMarkCommand, key: string) => {
+    const who = identity();
+    const same = () => alive.current && identity() === who;
     setPending(key); setItemError(null);
     try {
       const answer = await client.mark(command);
-      const applied = applyMark(list.items, command, answer, new Date().toISOString());
-      if (applied.message) { setItemError({ id: key, message: applied.message }); return; }
-      if (answer === null) return;
-      setList((previous) => (previous.status === "ready" ? { ...previous, items: unreadOnly ? applied.items.filter((n) => !n.read_at) : applied.items, unread: applied.unread ?? previous.unread } : previous));
-      if (command.action === "mark_all_read") setNotice(applied.unread === 0 ? "Toutes les notifications sont marquées comme lues." : "Notifications marquées comme lues.");
-    } catch (error) { setItemError({ id: key, message: error instanceof Error && error.message ? error.message : "Le marquage n’a pas pu être effectué." }); }
-    finally { setPending(null); }
+      if (!same() || answer === null) return;
+      if (!answer.ok) { setItemError({ id: key, message: answer.message }); return; }
+      const now = new Date().toISOString();
+      // Confirmed: applied to the CURRENT rows (never to the list captured before the network).
+      setList((previous) => {
+        if (previous.status !== "ready") return previous;
+        const applied = applyMark(previous.items, command, answer, now);
+        return { ...previous, items: filter.current ? applied.items.filter((n) => !n.read_at) : applied.items, unread: applied.unread ?? previous.unread };
+      });
+      if (command.action === "mark_all_read") setNotice(answer.result.unread_count === 0 ? "Toutes les notifications sont marquées comme lues." : "Notifications marquées comme lues.");
+    } catch (error) { if (same()) setItemError({ id: key, message: error instanceof Error && error.message ? error.message : "Le marquage n’a pas pu être effectué." }); }
+    finally { if (same()) setPending(null); }
   };
   return (
     <div className={styles.root} data-scope={scope.userId}>
@@ -82,8 +139,8 @@ function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate
       {notice && <p className={styles.notice} role="status">{notice}</p>}
       <div className={styles.toolbar}>
         <div className={styles.filters} role="group" aria-label="Filtre">
-          <button type="button" className={`button ${unreadOnly ? "outline" : "primary"}`} aria-pressed={!unreadOnly} onClick={() => setUnreadOnly(false)}>Toutes</button>
-          <button type="button" className={`button ${unreadOnly ? "primary" : "outline"}`} aria-pressed={unreadOnly} onClick={() => setUnreadOnly(true)}>Non lues{unread !== null ? ` (${unread})` : ""}</button>
+          <button type="button" className={`button ${unreadOnly ? "outline" : "primary"}`} aria-pressed={!unreadOnly} onClick={() => switchFilter(false)}>Toutes</button>
+          <button type="button" className={`button ${unreadOnly ? "primary" : "outline"}`} aria-pressed={unreadOnly} onClick={() => switchFilter(true)}>Non lues{unread !== null ? ` (${unread})` : ""}</button>
         </div>
         <div className={styles.filters}>
           {writable && unread !== null && unread > 0 && <button type="button" className="button outline" disabled={pending === "all"} onClick={() => mark({ action: "mark_all_read", before: list.items[0]?.created_at }, "all")}>{pending === "all" ? "Marquage…" : "Tout marquer lu"}</button>}
@@ -116,7 +173,7 @@ function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate
           {itemError?.id === "all" && <p className={styles.error} role="alert">{itemError.message}</p>}
           {page?.has_more && (
             <div className={styles.more}>
-              <button type="button" className="button outline" disabled={loadingMore} onClick={loadMore}>{loadingMore ? "Chargement…" : "Afficher les suivantes"}</button>
+              <button type="button" className="button outline" disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? "Chargement…" : "Afficher les suivantes"}</button>
             </div>
           )}
           {itemError?.id === "more" && <p className={styles.error} role="alert">{itemError.message}</p>}
