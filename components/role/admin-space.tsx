@@ -49,6 +49,7 @@ import type {
 } from "../app/types";
 import { Icon } from "../app/icons";
 import { InstallPanel } from "../app/install-panel";
+import { AccountDataPanel } from "../features/account-data/account-data-panel";
 import { AccountSessionsPanel } from "../features/account-sessions/account-sessions-panel";
 import { AdminReplyComposer } from "../features/admin-messages/admin-reply";
 import { WarrantyPolicyEditor } from "../features/warranty-policy/warranty-policy-editor";
@@ -1092,6 +1093,15 @@ export function AdminSpace({ session }: { session: Session }) {
         />
         <InstallPanel />
         <AccountSessionsPanel key={`sessions:${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} demo={demo} context={session.mutationContext} />
+        {/* SYS-09 / PUB-10: the Super Admin's OWN personal data only (same panel and endpoint as every
+            account); administered dossiers are never part of it. */}
+        <AccountDataPanel
+          key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}
+          demo={demo}
+          context={session.mutationContext}
+          onOpenTicket={(id) => go("support-queue", id)}
+          erasureRequests
+        />
       </div>
       <aside>
         <Panel title="Rôle Super Admin">
