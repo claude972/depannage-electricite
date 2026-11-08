@@ -66,18 +66,18 @@ export function ProviderTeamsPanel(props: ProviderTeamsPanelProps) {
 }
 
 /** Runner per scope, created per effect run (StrictMode-safe). */
-function useRunner(deps: Deps, scope: string, after: () => Promise<void>, onForbidden: () => void) {
+function useRunner(deps: Deps, scope: string, after: () => Promise<void>, onForbidden: () => void, onNotFound?: () => void) {
   const [state, setRaw] = useState<RunnerState>(RUNNER_INITIAL);
   const ref = useRef(state);
   const set = (s: RunnerState) => {
     ref.current = s;
     setRaw(s);
   };
-  const cb = useRef({ after, onForbidden });
-  cb.current = { after, onForbidden };
+  const cb = useRef({ after, onForbidden, onNotFound });
+  cb.current = { after, onForbidden, onNotFound };
   const runner = useRef<ReturnType<typeof createRunner> | null>(null);
   useEffect(() => {
-    const r = createRunner({ api: deps.api, store: deps.store, context: deps.context, scope, get: () => ref.current, set, after: () => cb.current.after(), onForbidden: () => cb.current.onForbidden() });
+    const r = createRunner({ api: deps.api, store: deps.store, context: deps.context, scope, get: () => ref.current, set, after: () => cb.current.after(), onForbidden: () => cb.current.onForbidden(), ...(onNotFound ? { onNotFound: () => cb.current.onNotFound?.() } : {}) });
     runner.current = r;
     r.restore();
     return () => {
@@ -276,10 +276,45 @@ function TeamDetail({ deps, initialTeam, onTeamChanged }: { deps: Deps; initialT
   const reload = async () => {
     await Promise.all([members.reset(), missions.reset(), ...(teamActions(latestTeam.current).invitationsVisible ? [invitations.reset()] : [])]);
   };
+  // A 404 on a team write closes the team at once (fail-closed). One bounded re-read of page 1 then
+  // tells « membership removed » (refusal ⇒ stays closed) from « target gone » (access proven).
+  const [checking, setChecking] = useState<"no" | "checking" | "unproven">("no");
+  const [gone, setGone] = useState("");
+  const checkSeq = useRef(0);
+  const verify = async () => {
+    const seq = ++checkSeq.current;
+    const cg = deps.context.generation(), who = deps.context.userId();
+    let r: { status: number; body: unknown };
+    try {
+      r = await deps.api().team(teamId, "members", null);
+    } catch {
+      r = { status: 0, body: null };
+    }
+    if (seq !== checkSeq.current || deps.context.generation() !== cg || deps.context.userId() !== who) return;
+    if (r.status === 401 || r.status === 403 || r.status === 404) return setLost(true);
+    const p = r.status === 200 ? parseTeamPage(r.body, teamId, "members", null) : null;
+    if (!p) return setChecking("unproven"); // not proven: stays closed, the user may verify again
+    setTeam(p.team);
+    setGone(COPY.targetGone);
+    await Promise.all([members.reset(), missions.reset(), ...(teamActions(p.team).invitationsVisible ? [invitations.reset()] : [])]);
+    setChecking("no");
+  };
+  const closeScope = () => {
+    setChecking("checking");
+    setGone("");
+    members.forbid();
+    missions.forbid();
+    invitations.forbid();
+    setAssignTo({});
+    setRemoving(null);
+    setOpenMission(null);
+    void verify();
+  };
   const runner = useRunner(deps, `team:${teamId.toLowerCase()}`, async () => {
+    setGone("");
     await reload();
     onTeamChanged();
-  }, () => setLost(true));
+  }, () => setLost(true), closeScope);
   const run = (build: (cid: string) => AnyCommand | null) => {
     const cid = deps.newId();
     if (!cid) return Promise.resolve("ignored" as const);
@@ -294,7 +329,7 @@ function TeamDetail({ deps, initialTeam, onTeamChanged }: { deps: Deps; initialT
   const [removing, setRemoving] = useState<string | null>(null);
   // Any refused team read (401/403/404, page 1 or a continuation, any section) or refused write:
   // every section and every action of this team disappears at once.
-  const refused = lost || members.state.phase === "forbidden" || missions.state.phase === "forbidden" || invitations.state.phase === "forbidden";
+  const refused = lost || (checking === "no" && (members.state.phase === "forbidden" || missions.state.phase === "forbidden" || invitations.state.phase === "forbidden"));
   useEffect(() => {
     if (!refused) return;
     // Clear (not only hide) every section and fence their in-flight pages; sticky until remount.
@@ -311,6 +346,15 @@ function TeamDetail({ deps, initialTeam, onTeamChanged }: { deps: Deps; initialT
     return (
       <div className={styles.team} role="status" data-pt-team-forbidden="">
         <h3 className={styles.subtitle}>{COPY.teamLost}</h3>
+      </div>
+    );
+  if (checking !== "no")
+    return (
+      <div className={styles.team} role="status" data-pt-team-checking={checking}>
+        <h3 className={styles.subtitle}>{COPY.teamChecking}</h3>
+        {checking === "unproven" && (
+          <button type="button" className={styles.button} onClick={() => { setChecking("checking"); void verify(); }} data-pt-team-verify="">Vérifier à nouveau</button>
+        )}
       </div>
     );
   const m = members.state, j = missions.state, s = invitations.state;
@@ -331,6 +375,7 @@ function TeamDetail({ deps, initialTeam, onTeamChanged }: { deps: Deps; initialT
         ))}
       </div>
       <RunnerFeedback state={runner.state} onRetry={runner.retry} />
+      {gone && <p className={styles.error} role="alert" data-pt-target-gone="">{gone}</p>}
       {tab === "members" && (
         <div className={styles.block} data-pt-section="members">
           <PagesStatus state={m} onRetry={() => void members.retry()} name="members" />
