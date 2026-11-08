@@ -49,15 +49,15 @@ assert.equal(job.client_id,ids.client1);
 assert.equal((await as('client2','select * from public.interventions where id=$1',[job.id])).rows.length,0);
 assert.equal((await as('artisan1','select * from public.interventions where id=$1',[job.id])).rows.length,0);
 await assert.rejects(as('client1',"update public.profiles set role='admin' where id=$1",[ids.client1]));
-await assert.rejects(as('artisan1','select public.approve_artisan($1,true)',[ids.artisan1]));
+await assert.rejects(as('artisan1','select public.decide_artisan_application($1,\'approve\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0))',[ids.artisan1]));
 console.log('PASS: unrelated client/artisan cannot read job; role escalation and self-approval rejected');
 for (const name of ['artisan1','artisan2']) {
  await as(name,"select public.save_artisan_profile('Entreprise test','12345678901234','EI',0,'12 rue de test',array['97200'],array['outage','panel','socket','lighting','diagnostic'])");
  await as(name,'select public.submit_artisan_application()');
  await as(name,'select public.set_artisan_availability(true)');
 }
-await as('admin','select public.approve_artisan($1,true)',[ids.artisan1]);
-await as('admin','select public.approve_artisan($1,true)',[ids.artisan2]);
+await as('admin','select public.decide_artisan_application($1,\'approve\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0))',[ids.artisan1]);
+await as('admin','select public.decide_artisan_application($1,\'approve\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0))',[ids.artisan2]);
 const offer=(await as('artisan1','select * from public.available_missions()')).rows.find(r=>r.id===job.id);
 assert.ok(offer);assert.equal('address' in offer,false);assert.equal('description' in offer,false);assert.equal(offer.postal_code,'972**');
 await as('artisan1',"select public.intervention_action($1,'accept_mission')",[job.id]);
@@ -196,7 +196,7 @@ await as('artisan1',"select public.intervention_action($1,'start')",[operationJo
 await assert.rejects(as('artisan1',"select public.save_intervention_report($1,'Rapport de contrôle suffisant','[{\"label\":\"Contrôle\",\"result\":\"certified\"}]','Artisan')",[operationJob.id]));
 await as('artisan1',"select public.save_intervention_report($1,'Contrôle électrique effectué, défaut identifié.','[{\"label\":\"Test électrique\",\"result\":\"pass\"}]','Artisan test')",[operationJob.id]);
 assert.equal((await as('client2','select * from public.intervention_reports where intervention_id=$1',[operationJob.id])).rows.length,1);
-await as('admin','select public.approve_artisan($1,false)',[ids.artisan1]);
+await as('admin','select public.decide_artisan_application($1,\'suspend\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0))',[ids.artisan1]);
 // CL-001: suspension is operator-controlled, including every self-service entry point.
 await assert.rejects(as('artisan1',"select public.save_artisan_profile('Reset interdit','12345678901234','EI',0,'12 rue de test',array['97200'],array['panel'])"));
 await assert.rejects(as('artisan1','select public.submit_artisan_application()'));
@@ -207,13 +207,13 @@ await assert.rejects(as('artisan1','select public.submit_artisan_application_bef
 await assert.rejects(as('artisan1','select public.set_artisan_availability_before_suspension_guard(true)'));
 await assert.rejects(as('artisan1','select public.guard_artisan_self_edit()'));
 assert.equal((await db.query('select application_status from public.artisan_profiles where user_id=$1',[ids.artisan1])).rows[0].application_status,'suspended');
-await as('admin','select public.approve_artisan($1,false)',[ids.artisan1]);
+await as('admin','select public.decide_artisan_application($1,\'suspend\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0))',[ids.artisan1]);
 assert.equal((await db.query('select application_status from public.artisan_profiles where user_id=$1',[ids.artisan1])).rows[0].application_status,'suspended');
 assert.equal((await db.query('select artisan_approved from public.profiles where id=$1',[ids.artisan1])).rows[0].artisan_approved,false);
 assert.equal((await db.query('select available from public.artisan_profiles where user_id=$1',[ids.artisan1])).rows[0].available,false);
 await assert.rejects(as('artisan1',"select public.intervention_action($1,'complete')",[operationJob.id]));
 assert.equal((await as('artisan1','select * from public.intervention_reports where intervention_id=$1',[operationJob.id])).rows.length,1);
-await as('admin','select public.approve_artisan($1,true)',[ids.artisan1]);
+await as('admin','select public.decide_artisan_application($1,\'reinstate\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0))',[ids.artisan1]);
 assert.equal((await db.query('select application_status from public.artisan_profiles where user_id=$1',[ids.artisan1])).rows[0].application_status,'approved');
 assert.equal((await db.query('select available from public.artisan_profiles where user_id=$1',[ids.artisan1])).rows[0].available,false);
 await as('artisan1','select public.set_artisan_availability(true)');
@@ -387,11 +387,11 @@ console.log('PASS: ownership transfer is atomic/canonical, preserves one owner, 
 ids.legacyArtisan='00000000-0000-4000-8000-000000000099';
 await db.query('insert into auth.users(id,raw_user_meta_data) values($1,$2)',[ids.legacyArtisan,JSON.stringify({role:'artisan',full_name:'Legacy artisan'})]);
 await db.query('update public.profiles set artisan_approved=true where id=$1',[ids.legacyArtisan]);
-await as('admin','select public.approve_artisan($1,false)',[ids.legacyArtisan]);
+await as('admin','select public.decide_artisan_application($1,\'suspend\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0))',[ids.legacyArtisan]);
 assert.equal((await db.query('select application_status from public.artisan_profiles where user_id=$1',[ids.legacyArtisan])).rows[0].application_status,'suspended');
-await as('admin','select public.approve_artisan($1,false)',[ids.legacyArtisan]);
+await as('admin','select public.decide_artisan_application($1,\'suspend\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0))',[ids.legacyArtisan]);
 await assert.rejects(as('legacyArtisan',"select public.save_artisan_profile('Reset interdit','12345678901234','EI',0,'12 rue de test',array['97200'],array['panel'])"));
-await assert.rejects(as('admin','select public.approve_artisan($1,true)',[ids.legacyArtisan]));
+await assert.rejects(as('admin','select public.decide_artisan_application($1,\'reinstate\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0))',[ids.legacyArtisan]));
 assert.equal((await db.query('select artisan_approved from public.profiles where id=$1',[ids.legacyArtisan])).rows[0].artisan_approved,false);
 console.log('PASS: legacy approved account without dossier remains explicitly suspended until operator repairs and reviews its missing application');
 // CL-002 source invariant plus behavioral evidence: public feed scans only open/unassigned candidates.

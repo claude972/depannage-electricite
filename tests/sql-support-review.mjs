@@ -107,7 +107,7 @@ assert.equal(await scalar('delegate','select count(*)::int v from public.support
 console.log('PASS: organization peers never inherit tickets; selected-site revocation/removal closes linked content and replay without deleting unrelated private support');
 for(const actor of['artisan','otherArtisan']){
  await as(actor,"select public.save_artisan_profile('Entreprise QA','12345678901234','EI',0,'12 rue du Test',array['97200'],array['panel'])");
- await as(actor,'select public.submit_artisan_application()');await as('admin','select public.approve_artisan($1,true)',[ids[actor]]);await as(actor,'select public.set_artisan_availability(true)');
+ await as(actor,'select public.submit_artisan_application()');await as('admin','select public.decide_artisan_application($1,\'approve\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0))',[ids[actor]]);await as(actor,'select public.set_artisan_availability(true)');
 }
 await as('artisan',"select public.intervention_action($1,'accept_mission')",[job]);
 assert.equal(await scalar('artisan','select count(*)::int v from public.interventions where id=$1',[job]),1);

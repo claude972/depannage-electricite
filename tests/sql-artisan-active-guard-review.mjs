@@ -17,7 +17,7 @@ await db.query("update public.profiles set role='admin' where id=$1",[ids.admin]
 async function as(actor,sql,params=[]){await db.exec('set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[ids[actor]??'']);try{return await db.query(sql,params)}finally{await db.exec('reset role')}}
 async function denied(promise,code){await assert.rejects(promise,error=>error.code===code)}
 const save="select * from public.save_artisan_profile('Entreprise QA','12345678901234','EI',0,'12 rue du Test',array['97200'],array['panel'])";
-async function approve(actor){await as(actor,'select public.submit_artisan_application()');await as('admin','select public.approve_artisan($1,true)',[ids[actor]]);await as(actor,'select public.set_artisan_availability(true)');}
+async function approve(actor){await as(actor,'select public.submit_artisan_application()');await as('admin','select public.decide_artisan_application($1,\'approve\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0))',[ids[actor]]);await as(actor,'select public.set_artisan_availability(true)');}
 for(const actor of['artisan','otherArtisan']){await as(actor,save);await approve(actor);}
 async function job(){return(await as('client',"select * from public.create_intervention('panel','Déclenchements électriques du tableau.','12 rue du Test','97200','Fort-de-France','urgent',null)")).rows[0].id;}
 async function dossier(actor){return(await db.query('select to_jsonb(p) as profile,to_jsonb(a) as dossier from public.profiles p join public.artisan_profiles a on a.user_id=p.id where p.id=$1',[ids[actor]])).rows[0];}
@@ -40,9 +40,9 @@ assert.equal((await db.query('select status from public.interventions where id=$
 console.log('PASS: availability/contact remain separate and paid work releases dossier editing without weakening payment approval rules');
 await approve('artisan');const cancelled=await job();await as('artisan',"select public.intervention_action($1,'accept_mission')",[cancelled]);
 await denied(as('artisan',save),'P0001');await as('client',"select public.intervention_action($1,'cancel')",[cancelled]);await as('artisan',save);assert.equal((await dossier('artisan')).profile.artisan_approved,false);
-await approve('artisan');const suspended=await job();await as('artisan',"select public.intervention_action($1,'accept_mission')",[suspended]);await as('admin','select public.approve_artisan($1,false)',[ids.artisan]);
+await approve('artisan');const suspended=await job();await as('artisan',"select public.intervention_action($1,'accept_mission')",[suspended]);await as('admin','select public.decide_artisan_application($1,\'suspend\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0))',[ids.artisan]);
 const suspension=await dossier('artisan');await denied(as('artisan',save),'42501');assert.deepEqual(await dossier('artisan'),suspension);await denied(as('artisan','select public.set_artisan_availability(true)'),'42501');
-await as('admin','select public.approve_artisan($1,true)',[ids.artisan]);await as('artisan','select public.set_artisan_availability(true)');
+await as('admin','select public.decide_artisan_application($1,\'reinstate\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0))',[ids.artisan]);await as('artisan','select public.set_artisan_availability(true)');
 await as('admin',"select public.reassign_intervention($1,$2,'Réaffectation QA protection dossier')",[suspended,ids.otherArtisan]);
 const targetBefore=await dossier('otherArtisan');await denied(as('otherArtisan',save),'P0001');assert.deepEqual(await dossier('otherArtisan'),targetBefore);
 await as('artisan',save);assert.equal((await dossier('artisan')).profile.artisan_approved,false);

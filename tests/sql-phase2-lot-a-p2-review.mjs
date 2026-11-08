@@ -105,3 +105,49 @@ test("E29 — a stale warranty decision cannot replace the resolution of another
     await db.close();
   }
 });
+
+test("E34 — an old approval cannot undo a later suspension; reactivation is explicit", async () => {
+  const db = await freshDatabase();
+  try {
+    const otherAdmin = { ...actor, id: randomUUID(), email: "other-operator@example.test" };
+    for (const user of [actor, otherAdmin])
+      await db.query("insert into auth.users(id,email) values($1,$2)", [user.id, user.email]);
+    await db.query("update public.profiles set role='admin' where id in ($1,$2)", [actor.id, otherAdmin.id]);
+    await db.query("insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3)", [
+      requester.id, requester.email, { role: "artisan", full_name: "Artisan de recette" },
+    ]);
+    await asUser(db, requester, "select public.save_artisan_profile('Electricité QA','12345678901234','EI',0,'12 rue de test QA',array['97200'],array['panel']) v");
+    await asUser(db, requester, "select public.submit_artisan_application() v");
+    const dossier = async () => (await db.query(`select a.application_status as status,
+      (to_jsonb(a)->>'application_version')::integer version,p.artisan_approved,p.id
+      from public.artisan_profiles a join public.profiles p on p.id=a.user_id where a.user_id=$1`, [requester.id])).rows[0];
+    const old = await dossier();
+    const route = "/api/admin/artisans";
+    await withNext(db, async http => {
+      const post = async (user, body) => {
+        const response = await http(route, { method: "POST", body: JSON.stringify({ user_id: requester.id, ...body }) }, user);
+        return { status: response.status, body: await response.json() };
+      };
+      const first = await post(actor, { action: "approve", expected_version: old.version ?? 1 });
+      const versioned = first.status === 200;
+      const approved = versioned ? first : await post(actor, { approved: true });
+      assert.equal(approved.status, 200, JSON.stringify(approved.body));
+      const current = await dossier();
+      assert.equal(current.status, "approved");
+      const suspended = await post(actor, versioned ? { action: "suspend", expected_version: current.version } : { approved: false });
+      assert.equal(suspended.status, 200, JSON.stringify(suspended.body));
+      const suspension = await dossier();
+      assert.equal(suspension.status, "suspended");
+      const stale = await post(otherAdmin, versioned ? { action: "approve", expected_version: old.version } : { approved: true });
+      const after = await dossier();
+      assert.deepEqual([first.status, stale.status, after.status, after.artisan_approved], [200, 409, "suspended", false]);
+      assert.equal((await post(otherAdmin, { action: "approve", expected_version: suspension.version })).status, 409);
+      assert.equal((await post(otherAdmin, { approved: true })).status, 422);
+      await assert.rejects(asUser(db, otherAdmin, "select public.approve_artisan($1,true) v", [requester.id]), error => error.code === "42501");
+      assert.equal((await post(actor, { action: "reinstate", expected_version: suspension.version })).status, 200);
+      assert.equal((await dossier()).status, "approved");
+    }, {}, { users: [actor, otherAdmin], rpcAllowlist: new Set(["approve_artisan", "decide_artisan_application"]) });
+  } finally {
+    await db.close();
+  }
+});
