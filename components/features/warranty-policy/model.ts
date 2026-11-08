@@ -74,13 +74,13 @@ export async function loadRecordedTerms(version: number, fetcher: typeof fetch =
   return p.version === version ? { phase: "ready", published: p } : { phase: "error" };
 }
 export const RECORDED_COPY = {
-  label: (v: number) => `Version des conditions en vigueur lors de la demande : ${v}.`,
+  label: (v: number) => `Version des conditions enregistrée au dépôt : ${v}.`,
   open: (v: number) => `Voir les conditions (version ${v})`,
   hide: "Masquer les conditions",
   none: "Version des conditions non enregistrée pour cette demande.",
   loading: "Lecture des conditions de cette version…",
   error: "Les conditions de cette version n’ont pas pu être lues. Aucune autre version n’est affichée à la place.",
-  missing: "Version introuvable : ces conditions ne sont plus publiées sous ce numéro. Aucune autre version n’est affichée à la place.",
+  missing: "Cette version n’est pas disponible. Aucune autre version n’est affichée à la place.",
   meaning: "Cette version désigne la publication en vigueur au dépôt de la demande ; elle ne vaut ni acceptation ni droit à la date des travaux.",
 } as const;
 
