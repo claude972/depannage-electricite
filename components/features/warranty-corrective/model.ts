@@ -47,6 +47,11 @@ export function parseCases(body: unknown): WarrantyCaseRow[] | null {
   const r = z.object({ cases: z.array(caseRow).max(100) }).passthrough().safeParse(body);
   return r.success ? r.data.cases.map((c) => ({ id: c.id, intervention_id: c.intervention_id, status: c.status, created_at: c.created_at })) : null;
 }
+/** Next page cursor of the global history read (null = last page / absent); undefined if malformed. */
+export function parseNextCursor(body: unknown): string | null | undefined {
+  const r = z.object({ next_cursor: z.string().min(1).max(2048).nullable().optional() }).passthrough().safeParse(body);
+  return r.success ? (r.data.next_cursor ?? null) : undefined;
+}
 export function parseCorrective(body: unknown): Corrective | null {
   const r = corrective.safeParse(body);
   if (!r.success) return null;
@@ -78,11 +83,12 @@ async function timed(fetcher: typeof fetch, url: string, init: RequestInit, time
     clearTimeout(timer);
   }
 }
-export type CorrectiveApi = { cases(): Promise<Result>; read(caseId: string): Promise<Result>; link(caseId: string, interventionId: string): Promise<Result> };
+export type CorrectiveApi = { cases(cursor?: string | null): Promise<Result>; read(caseId: string): Promise<Result>; link(caseId: string, interventionId: string): Promise<Result> };
 export const correctivePath = (caseId: string) => `/api/warranty/${encodeURIComponent(caseId)}/corrective`;
 export function createCorrectiveApi(fetcher: typeof fetch = (...a) => fetch(...a)): CorrectiveApi {
   return {
-    cases: () => timed(fetcher, "/api/warranty", { method: "GET" }, WC_TIMEOUT_MS),
+    // ADM-10 history contract (b8301be): global read, opaque next_cursor followed as is.
+    cases: (cursor) => timed(fetcher, cursor ? `/api/warranty?cursor=${encodeURIComponent(cursor)}` : "/api/warranty", { method: "GET" }, WC_TIMEOUT_MS),
     read: (caseId) => timed(fetcher, correctivePath(caseId), { method: "GET" }, WC_TIMEOUT_MS),
     link: (caseId, interventionId) => timed(fetcher, correctivePath(caseId), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ intervention_id: interventionId }) }, WC_TIMEOUT_MS),
   };

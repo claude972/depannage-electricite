@@ -33,6 +33,8 @@ import { Icon } from "./icons";
 import { TAX_RATE_HINT, TAX_RATE_OPTIONS, TAX_RATE_PLACEHOLDER, TAX_RATE_REQUIRED, parseTaxRateInput, type TaxRate } from "./tax-rate";
 import { Empty, Field, ConfirmAction, Unavailable } from "./ui";
 import { ReviewEstimate } from "../features/indicative-prices/indicative-range";
+import { useWarrantyHistory } from "../features/warranty-corrective/use-warranty-history";
+import { HISTORY_COPY as WARRANTY_COPY, claimAllowed } from "../features/warranty-corrective/warranty-history";
 import { EnterpriseContractsPanel, type EnterpriseContractsContext, NO_CONTRACTS_CONTEXT } from "../features/enterprise-contracts/enterprise-contracts-panel";
 import {
   CATEGORIES,
@@ -2494,15 +2496,32 @@ export function ProfessionalOperations({
   );
 }
 
-export function WarrantyPanel({
-  interventionId,
-  demo,
-  role,
-}: {
+// Callers without an identity fence (none in the app today) keep a stable placeholder identity.
+const WARRANTY_ANON = { generation: () => 0, userId: () => "anonymous" };
+
+type WarrantyPanelProps = {
   interventionId?: string;
   demo: boolean;
   role: Role;
-}) {
+  /** ADM-10/PUB-06: identity fence of the live history (uid + generation). */
+  context?: { generation(): number; userId(): string | null };
+  /** Requester (client_id) of the dossier: only that account is offered the real claim form. */
+  ownerId?: string | null;
+  /** Tests only. */
+  fetcher?: typeof fetch;
+};
+/**
+ * Every draft, notice, error and in-flight mutation belongs to ONE identity + generation + dossier:
+ * a scope change remounts the panel, so nothing typed or replied for dossier A ever shows on B.
+ */
+export function WarrantyPanel(props: WarrantyPanelProps) {
+  const ctx = props.context ?? WARRANTY_ANON;
+  return <WarrantyPanelBody key={`${ctx.userId() ?? "-"}|${ctx.generation()}|${props.interventionId ?? "*"}`} {...props} />;
+}
+function WarrantyPanelBody({ interventionId, demo, role, context, ownerId, fetcher }: WarrantyPanelProps) {
+  // Live: paged GET /api/warranty (intervention_id filter, next_cursor, has_active proof).
+  const history = useWarrantyHistory(context ?? WARRANTY_ANON, interventionId ?? null, !demo, fetcher);
+  const hs = history.state;
   const [cases, setCases] = useState<WarrantyCase[]>([]);
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
@@ -2510,16 +2529,12 @@ export function WarrantyPanel({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   async function load() {
+    if (!demo) return; // live reads go through useWarrantyHistory only
     setLoading(true);
     try {
-      if (demo) {
-        setCases(
-          JSON.parse(localStorage.getItem("courant-warranty-demo-v1") || "[]"),
-        );
-        return;
-      }
-      const result = await api<{ cases: WarrantyCase[] }>("/api/warranty");
-      setCases(result.cases);
+      setCases(
+        JSON.parse(localStorage.getItem("courant-warranty-demo-v1") || "[]"),
+      );
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -2529,9 +2544,18 @@ export function WarrantyPanel({
   useEffect(() => {
     void load();
   }, [demo, interventionId]);
-  const visible = cases.filter(
-    (c) => !interventionId || c.intervention_id === interventionId,
-  );
+  const visible: WarrantyCase[] = demo
+    ? cases.filter((c) => !interventionId || c.intervention_id === interventionId)
+    : hs.cases;
+  const listLoading = demo ? loading : hs.phase === "loading";
+  const claimRole = ["client", "manager"].includes(role);
+  // The request RPC requires client_id = auth.uid: never offer the real form to another member.
+  const me = (context ?? WARRANTY_ANON).userId();
+  const isOwner = Boolean(ownerId && me && ownerId.toLowerCase() === me.toLowerCase());
+  // Real form ONLY on server proof (enabled + has_active === false for THIS dossier); demo unchanged.
+  const showClaim = demo
+    ? Boolean(interventionId) && claimRole && !visible.some((c) => ["submitted", "reviewing"].includes(c.status))
+    : claimRole && isOwner && claimAllowed(hs, interventionId);
   async function save(values: Record<string, unknown>) {
     setBusy(true);
     setError("");
@@ -2566,7 +2590,7 @@ export function WarrantyPanel({
         );
       } else {
         await api("/api/warranty", values);
-        await load();
+        history.reload(); // causal re-read: page 1 + fresh has_active proof
         setNotice("Votre dossier a été enregistré.");
       }
       setDescription("");
@@ -2597,12 +2621,32 @@ export function WarrantyPanel({
           {notice}
         </div>
       )}
-      {loading ? (
-        <p className="document-empty">Chargement du suivi…</p>
+      {!demo && hs.notice && (
+        <div className="alert" role="status" data-warranty-notice="">
+          {hs.notice}
+        </div>
+      )}
+      {!demo && history.signedOut ? (
+        <p className="document-empty" role="alert" data-warranty-history="refused">
+          {WARRANTY_COPY.session}
+        </p>
+      ) : !demo && hs.phase === "refused" ? (
+        <p className="document-empty" role="alert" data-warranty-history="refused">
+          {hs.error}
+        </p>
+      ) : !demo && hs.phase === "error" ? (
+        <div className="alert error" role="alert" data-warranty-history="error">
+          {hs.error}{" "}
+          <button type="button" className="button outline" onClick={history.reload}>
+            Réessayer
+          </button>
+        </div>
+      ) : listLoading ? (
+        <p className="document-empty" data-warranty-history="loading">Chargement du suivi…</p>
       ) : visible.length ? (
-        <div className="warranty-list">
+        <div className="warranty-list" data-warranty-history="ready">
           {visible.map((c) => (
-            <div key={c.id}>
+            <div key={c.id} data-warranty-case={c.id}>
               <div>
                 <span
                   className={`badge ${c.status === "resolved" ? "status-paid" : c.status === "declined" ? "status-cancelled" : "status-quoted"}`}
@@ -2644,11 +2688,26 @@ export function WarrantyPanel({
           ))}
         </div>
       ) : (
-        <p className="document-empty">Aucune demande de suivi enregistrée.</p>
+        <p className="document-empty" data-warranty-history={demo ? undefined : "empty"}>Aucune demande de suivi enregistrée.</p>
       )}
-      {interventionId &&
-        ["client", "manager"].includes(role) &&
-        !visible.some((c) => ["submitted", "reviewing"].includes(c.status)) && (
+      {!demo && hs.phase === "ready" && hs.moreError && (
+        <p className="field-error" role="alert">{hs.moreError}</p>
+      )}
+      {!demo && hs.phase === "ready" && hs.next && (
+        <button type="button" className="button outline" disabled={hs.loadingMore} onClick={history.more} data-warranty-more="">
+          {hs.loadingMore ? "Chargement…" : WARRANTY_COPY.more}
+        </button>
+      )}
+      {!demo && interventionId && claimRole && hs.phase === "ready" && !showClaim && (
+        <p className="document-empty" data-warranty-claim-blocked={!isOwner ? "not-owner" : hs.hasActive ? "active" : "disabled"}>
+          {!isOwner
+            ? "Seul le demandeur du dossier peut ouvrir une demande de suivi. L’historique reste consultable."
+            : hs.hasActive
+              ? WARRANTY_COPY.active
+              : WARRANTY_COPY.disabled}
+        </p>
+      )}
+      {showClaim && interventionId && (
           <form
             onSubmit={(e) => {
               e.preventDefault();

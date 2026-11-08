@@ -190,7 +190,7 @@ test("rendu éditeur, démo sans appel, câblage public, aucune formulation de g
 test("wiring: admin-warranty mounts the editor (identity-keyed) next to the panel; client FAQ promises no invented warranty", async () => {
   const { readFileSync } = await import("node:fs");
   const admin = readFileSync("components/role/admin-space.tsx", "utf8");
-  assert.match(admin, /case "admin-warranty":\s+content = \(\s+<>\s+<WarrantyPolicyEditor key=\{`\$\{session\.mutationContext\.userId\(\) \?\? "-"\}\|\$\{session\.mutationContext\.generation\(\)\}`\} context=\{session\.mutationContext\} demo=\{demo\} \/>\s+<WarrantyPanel demo=\{demo\} role="admin" \/>/);
+  assert.match(admin, /case "admin-warranty":\s+content = \(\s+<>\s+<WarrantyPolicyEditor key=\{`\$\{session\.mutationContext\.userId\(\) \?\? "-"\}\|\$\{session\.mutationContext\.generation\(\)\}`\} context=\{session\.mutationContext\} demo=\{demo\} \/>\s+<WarrantyPanel demo=\{demo\} role="admin" context=\{session\.mutationContext\} \/>/); // ADM-10: identity fence of the paged history
   const client = readFileSync("components/role/client-space.tsx", "utf8");
   assert.doesNotMatch(client, /garantie d’un an/);
   assert.match(client, /conditions de garantie de la plateforme figurent dans l’aide publique/);

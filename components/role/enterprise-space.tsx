@@ -1682,18 +1682,27 @@ export function DossierView({ c, id, initialQuoteId }: { c: Ctx; id: string; ini
 
   if (!intervention) {
     if (presence.decision === "loading") return <Loader label="Recherche du dossier…" />;
-    if (presence.decision === "detail" || presence.decision === "detail_loading" || presence.decision === "detail_error")
+    if (presence.decision === "detail" || presence.decision === "detail_loading" || presence.decision === "detail_error") {
+      const outside = (d: NonNullable<typeof presence.detail>) =>
+        !c.organization || d.site.status !== "ok" || d.site.value.organization_id !== c.organization.id ||
+        Boolean(c.activeSite && d.intervention.site_id !== c.activeSite.id);
       return (
-        <PointReadState
-          presence={presence}
-          backLabel="Interventions"
-          onBack={() => c.go("requests")}
-          outsideActivePerimeter={(d) =>
-            !c.organization || d.site.status !== "ok" || d.site.value.organization_id !== c.organization.id ||
-            Boolean(c.activeSite && d.intervention.site_id !== c.activeSite.id)
-          }
-        />
+        <>
+          <PointReadState presence={presence} backLabel="Interventions" onBack={() => c.go("requests")} outsideActivePerimeter={outside} />
+          {/* PUB-06: warranty follow-up of an authorized out-of-cache paid dossier in the active perimeter. */}
+          {presence.decision === "detail" && presence.detail && presence.detail.intervention.status === "paid" && !outside(presence.detail) && (
+            <WarrantyPanel
+              key={presence.detail.intervention.id}
+              interventionId={presence.detail.intervention.id}
+              demo={demo}
+              role={session.role}
+              context={session.mutationContext}
+              ownerId={presence.detail.intervention.client_id}
+            />
+          )}
+        </>
       );
+    }
     if (presence.decision === "error")
       return (
         <Unavailable
@@ -2068,7 +2077,7 @@ export function DossierView({ c, id, initialQuoteId }: { c: Ctx; id: string; ini
                   await session.submitReview(id, values);
                 }}
               />
-              <WarrantyPanel interventionId={id} demo={demo} role={session.role} />
+              <WarrantyPanel interventionId={id} demo={demo} role={session.role} context={session.mutationContext} ownerId={intervention.client_id} />
             </>
           )}
           <UploadQueuePanel session={session} interventionId={id} />
