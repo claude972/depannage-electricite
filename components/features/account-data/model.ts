@@ -38,6 +38,7 @@ const FIELDS: Record<PagedSection, { owner: string; fields: string }> = {
   support: { owner: "creator_id", fields: "id,creator_id,intervention_id,subject,status,created_at,updated_at" },
 };
 const ACCOUNT_FIELDS = "id,full_name,phone,role,created_at".split(",");
+const ACCOUNT_WITH_NAME_PARTS = [...ACCOUNT_FIELDS, "first_name", "last_name"];
 const PREFERENCES_FIELDS = "user_id,muted_kinds,email_enabled,sms_enabled,push_enabled,updated_at".split(",");
 
 type Row = Record<string, unknown>;
@@ -51,9 +52,16 @@ export function parseAccount(body: unknown): AccountData | null {
   const d = body.data;
   if (!exactKeys(d, ["email", "verified_phone", "profile", "notification_preferences"])) return null;
   if ((d.email !== null && typeof d.email !== "string") || (d.verified_phone !== null && typeof d.verified_phone !== "string")) return null;
-  if (!exactKeys(d.profile, ACCOUNT_FIELDS) || !uuid.safeParse(d.profile.id).success) return null;
+  const profile = d.profile;
+  if (!exactKeys(profile, ACCOUNT_FIELDS) && !exactKeys(profile, ACCOUNT_WITH_NAME_PARTS)) return null;
+  if (!uuid.safeParse(profile.id).success) return null;
+  if ("first_name" in profile && (
+    typeof profile.first_name !== "string" || !profile.first_name || profile.first_name.length > 60
+    || typeof profile.last_name !== "string" || !profile.last_name || profile.last_name.length > 60
+    || profile.full_name !== `${profile.first_name} ${profile.last_name}`
+  )) return null;
   const prefs = d.notification_preferences;
-  if (prefs !== null && (!exactKeys(prefs, PREFERENCES_FIELDS) || prefs.user_id !== d.profile.id)) return null;
+  if (prefs !== null && (!exactKeys(prefs, PREFERENCES_FIELDS) || prefs.user_id !== profile.id)) return null;
   return d as AccountData;
 }
 /** A page answers exactly the request: same section, owner = the account, ids strictly after the cursor. */

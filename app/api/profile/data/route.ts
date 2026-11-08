@@ -88,18 +88,24 @@ export async function GET(request: Request) {
 
     if (section.data === "account") {
       const [profile, preferences] = await Promise.all([
-        db.from("profiles").select(accountFields).eq("id", user.id).single(),
+        db.from("profiles").select(`${accountFields},first_name,last_name`).eq("id", user.id).single(),
         db.from("notification_preferences").select(preferencesFields)
           .eq("user_id", user.id).maybeSingle(),
       ]);
       dbError(profile.error);
       dbError(preferences.error);
+      const account = projection(profile.data, accountFields, "id", user.id);
+      const given = profile.data?.first_name, family = profile.data?.last_name;
+      if (typeof given === "string" && typeof family === "string") {
+        account.first_name = given;
+        account.last_name = family;
+      }
       return Response.json({
         section: section.data,
         data: {
           email: user.email ?? null,
           verified_phone: user.phone_confirmed_at ? user.phone ?? null : null,
-          profile: projection(profile.data, accountFields, "id", user.id),
+          profile: account,
           notification_preferences: preferences.data === null ? null :
             projection(preferences.data, preferencesFields, "user_id", user.id),
         },

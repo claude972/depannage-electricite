@@ -13,8 +13,9 @@ export function splitFullName(full: string): { first_name: string; last_name: st
   return { first_name: parts[0], last_name: parts.slice(1).join(" ") };
 }
 
-export function bookingFromSignedRequest(values: RequestValues, profile: Pick<Profile, "full_name" | "phone"> | null): BookingDraft {
-  const name = splitFullName(profile?.full_name ?? "");
+export function bookingFromSignedRequest(values: RequestValues, profile: Pick<Profile, "full_name" | "phone" | "first_name" | "last_name"> | null): BookingDraft {
+  const first = profile?.first_name?.trim(), last = profile?.last_name?.trim();
+  const name = first && last ? { first_name: first, last_name: last } : splitFullName(profile?.full_name ?? "");
   return {
     slug: signedSlug(values.category),
     urgent: values.urgency === "urgent",

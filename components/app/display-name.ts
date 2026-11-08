@@ -1,6 +1,5 @@
-// Display name from the REAL profile (FASTSPLIT-CLIENT-ADDRESS-NAME-001). Live: only
-// `profile.full_name`, never a demo name; the database default « Mon compte » (sign-up without a
-// name) is a placeholder, not a first name. Demo: the demo profile, else the demo cast name.
+// Display name from the current profile. Prefer the exact given name when available, including
+// compound given names. Legacy records retain their existing display without a data migration.
 import type { Session } from "./session-types";
 
 type Role = Session["role"];
@@ -17,10 +16,11 @@ export function realName(fullName: string | null | undefined): string | null {
 export function resolveDisplayName(
   mode: "live" | "demo",
   role: Role,
-  profile: { role?: Role | null; full_name?: string | null } | null,
+  profile: { role?: Role | null; full_name?: string | null; first_name?: string | null } | null,
   demoNames: Record<Role, string>,
 ): { displayName: string; firstName: string | null } {
   const name =
     mode === "demo" ? (profile?.role === role ? realName(profile?.full_name) : null) ?? demoNames[role] : realName(profile?.full_name);
-  return { displayName: name ?? ACCOUNT_LABEL, firstName: name ? name.split(" ")[0] : null };
+  const givenName = mode === "demo" && profile?.role !== role ? null : realName(profile?.first_name);
+  return { displayName: name ?? ACCOUNT_LABEL, firstName: name ? givenName ?? name.split(" ")[0] : null };
 }
