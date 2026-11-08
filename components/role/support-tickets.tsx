@@ -23,6 +23,7 @@ import { authorLabel, QUEUE_READ_ONLY, runStatusCommand, statusTargets, supportL
 import styles from "./support-tickets.module.css";
 import { RECOVERY_COPY, clearSnapshot, freeze, readDraft, readSnapshot, sameSnapshot, readLegacy, dropLegacy, dropLegacyIfSame, tabStore, validate, writeDraft, writeSnapshot, type Draft, type Snapshot, type Store } from "./support-snapshot";
 import { UNVERIFIED_RECEIPT, validSupportReceipt } from "../app/support-receipt";
+import { SupportTriagePanel, SupportTriageQueues } from "../features/support-triage/triage-panel";
 
 type Tone = "neutral" | "blue" | "green" | "amber" | "red" | "violet";
 const STATUS_META: Record<SupportStatus, { label: string; tone: Tone }> = {
@@ -218,6 +219,15 @@ function TicketList({ session, queue }: { session: Session; queue: SupportQueue 
         }
       />
       <p className={styles.note}>{HONEST_NOTE}</p>
+      {/* ADM-07: operator queue only — never in a requester view. */}
+      {queue === "all" && (
+        <SupportTriageQueues
+          key={`triage-queues|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`}
+          demo={session.mode === "demo"}
+          context={session.mutationContext}
+          onOpen={(ticketId) => session.go(listView, ticketId)}
+        />
+      )}
 
       {page !== null && (
         <div className={styles.toolbar}>
@@ -966,6 +976,17 @@ function TicketDetail({
             }}
           />
         </section>
+      )}
+
+      {/* ADM-07: internal triage, operator queue only (server can_manage decides the writes). */}
+      {queue === "all" && (
+        <SupportTriagePanel
+          key={`triage|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${ticket.id}`}
+          ticketId={ticket.id}
+          resolved={ticket.status === "resolved"}
+          demo={session.mode === "demo"}
+          context={session.mutationContext}
+        />
       )}
 
       <section className={`panel ${styles.reply}`} aria-labelledby="support-reply-title">
