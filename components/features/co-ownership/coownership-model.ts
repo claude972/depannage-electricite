@@ -334,7 +334,10 @@ export function createCoController({ api, siteId, kind, context = DEFAULT_CO_CON
     loadSeq++;
     if (!same(gen, uid)) return false;
     set(applyCoCommand(get(), r, command, siteId));
-    if (hadLoad) void fetchList(false);
+    // Refused right or resource: re-read before any new POST; a refused read purges the records,
+    // the typed values and the write action (E64).
+    const refused = r.status === 401 || r.status === 403 || r.status === 404;
+    if (hadLoad || refused) void fetchList(false);
     return true;
   };
   return {
