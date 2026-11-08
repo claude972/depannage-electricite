@@ -1,5 +1,6 @@
 // ENT-12 enterprise approvals — pure model + controllers (no React). Contract (read-only):
-// docs/ENTERPRISE_APPROVALS_BACKEND.md (codex/enterprise-approvals d5fc0c5; strict browser mirror):
+// docs/ENTERPRISE_APPROVALS_BACKEND.md + lib/features/enterprise-approvals/handler.ts
+// (codex/enterprise-approvals 17a32f9; server-only, so a strict browser mirror of its schemas/checks):
 //   GET /api/enterprise/approvals?organization_id=&site_id=&status=all|pending|approved|rejected&cursor=
 //     → { items, page: { limit: 50, has_more, next_cursor } }   (created_at DESC, then UUID DESC)
 //   GET /api/enterprise/approvals/<id>?organization_id=&site_id=
@@ -16,28 +17,35 @@ export const APPROVALS_LIMIT = 50;
 export type StatusFilter = "all" | "pending" | "approved" | "rejected";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const id = z.string().regex(UUID);
-const stamp = z.iso.datetime({ offset: true });
+// Same timestamp format as the handler (≤ 6 fractional digits, Z or ±hh:mm).
+const stamp = z.iso.datetime({ offset: true }).regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/);
+/** Microsecond-exact instant (the handler keeps microseconds; Date.parse would collapse them). */
+export function micros(ts: string): number {
+  const m = /^(.*T\d{2}:\d{2}:\d{2})(?:\.(\d{1,6}))?(Z|[+-]\d{2}:\d{2})$/.exec(ts);
+  if (!m) return NaN;
+  return Date.parse(`${m[1]}${m[3]}`) * 1000 + Number((m[2] ?? "").padEnd(6, "0"));
+}
 const row = z
   .object({
     id,
     quote_id: id,
     site_id: id,
     status: z.enum(["pending", "approved", "rejected"]),
-    note: z.string().max(4000),
+    note: z.string().max(2000),
     decided_by: id.nullable(),
     created_at: stamp,
     decided_at: stamp.nullable(),
     site: z.object({ id, name: z.string().min(1).max(160), organization_id: id }).strict(),
-    quote: z.object({ id, intervention_id: id, total_cents: z.number().int().min(0).max(2147483647), status: z.string().min(1).max(40) }).strict(),
+    quote: z.object({ id, intervention_id: id, total_cents: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), status: z.enum(["sent", "accepted", "rejected"]) }).strict(),
     intervention: z.object({ id, category: z.enum(["outage", "panel", "socket", "lighting", "diagnostic"]), status: z.enum(["requested", "assigned", "quoted", "accepted", "in_progress", "completed", "paid", "cancelled"]) }).strict(),
   })
   .strict();
 export type ApprovalRow = z.infer<typeof row>;
 const listSchema = z
-  .object({ items: z.array(row).max(APPROVALS_LIMIT), page: z.object({ limit: z.literal(APPROVALS_LIMIT), has_more: z.boolean(), next_cursor: z.string().regex(/^[A-Za-z0-9_-]{1,800}$/).nullable() }).strict() })
+  .object({ items: z.array(row).max(APPROVALS_LIMIT), page: z.object({ limit: z.literal(APPROVALS_LIMIT), has_more: z.boolean(), next_cursor: z.string().regex(/^[A-Za-z0-9_-]{1,700}$/).nullable() }).strict() })
   .strict();
 const pointSchema = z
-  .object({ approval: row, rule: z.object({ enabled: z.boolean(), required_role: z.enum(["owner", "manager"]), threshold_cents: z.number().int().min(0).max(2147483647) }).strict().nullable() })
+  .object({ approval: row, rule: z.object({ enabled: z.boolean(), required_role: z.enum(["owner", "manager"]), threshold_cents: z.number().int().min(0).max(100000000) }).strict().nullable() })
   .strict();
 export type ApprovalPoint = z.infer<typeof pointSchema>;
 const lower = (x: string) => x.toLowerCase();
@@ -57,7 +65,7 @@ export function parseList(body: unknown, q: { org: string; site: string | null; 
     if (!inScope(x, q.org, q.site) || (q.status !== "all" && x.status !== q.status)) return null;
     if (seen.has(lower(x.id))) continue;
     if (prev) {
-      const d = Date.parse(x.created_at) - Date.parse(prev.created_at);
+      const d = micros(x.created_at) - micros(prev.created_at);
       const order = d || (lower(x.id) < lower(prev.id) ? -1 : lower(x.id) > lower(prev.id) ? 1 : 0);
       if (order >= 0) return null; // created_at DESC, then UUID DESC
     }

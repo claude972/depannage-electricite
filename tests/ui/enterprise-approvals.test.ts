@@ -43,10 +43,20 @@ test("lecture stricte (docs/ENTERPRISE_APPROVALS_BACKEND.md) : liste + point ; o
     [page([row(1, { status: "escalated" })]), Qy],
     [page([row(1, { secret: 1 })]), Qy],
     [page([row(1)], "c=1"), Qy],
+    [page([row(1, { note: "x".repeat(2001) })]), Qy],
+    [page([row(1, { quote: { id: Q(1), intervention_id: I(1), total_cents: 1, status: "draft" } })]), Qy],
+    [page([row(1)], "c".repeat(701)), Qy],
+    [page([row(1, { created_at: "2026-10-01T10:00:00.1234567Z" })]), Qy],
   ] as [unknown, typeof Qy][])
     assert.equal(m.parseList(bad, q), null, JSON.stringify(bad).slice(0, 90));
   assert.ok(m.parseList(page([row(3)]), Qy, row(2) as Model.ApprovalRow), "next page continues after the last row");
   assert.equal(m.parseList(page([row(1)]), Qy, row(2) as Model.ApprovalRow), null, "a next page never goes back in time");
+  // Microsecond order (the handler keeps microseconds): same millisecond, later microsecond first.
+  const t1 = "2026-10-01T10:00:00.000002Z", t2 = "2026-10-01T10:00:00.000001Z";
+  assert.ok(m.parseList(page([row(1, { created_at: t1 }), row(2, { created_at: t2 })]), Qy), "µs DESC accepted even when the ids ascend");
+  assert.equal(m.parseList(page([row(2, { created_at: t2 }), row(1, { created_at: t1 })]), Qy), null, "µs ASC refused");
+  assert.equal(m.micros("2026-10-01T10:00:00.5+02:00"), Date.parse("2026-10-01T08:00:00Z") * 1000 + 500000);
+  assert.equal(m.parsePoint({ approval: row(7), rule: { enabled: true, required_role: "owner", threshold_cents: 100000001 } }, { id: A(7), org: ORG, site: null }), null, "threshold bound of the handler");
   const pq = { id: A(7), org: ORG, site: null };
   same(m.parsePoint({ approval: row(7), rule: null }, pq)?.rule, null, "rule null parsed: no rule, proven");
   assert.ok(m.parsePoint({ approval: row(7), rule: { enabled: true, required_role: "owner", threshold_cents: 50000 } }, pq));
