@@ -1817,13 +1817,18 @@ export function QuoteView({
         Ce devis n’existe pas dans votre espace ou son lien n’est plus valide.
       </Empty>
     );
-  // Actions: the EXISTING guard only (cached quote + dossier, unchanged rule). Live additionally
-  // requires the server to read this exact quote as « sent » — is_current never enables anything.
-  const guarded = cachedQuote && cachedI ? quoteDecisionState(cachedQuote, pickQuote(session.data.quotes, cachedI.id), cachedI.status) : null;
+  // Live: the EXISTING rule (quoteDecisionState) applied to the exact point read. Decidable only when
+  // ALL hold: client role, exact quote « sent », is_current AND current_quote_id === quote.id, exact
+  // dossier « quoted », and the read belongs to this render's key (identity + quote). is_current alone
+  // is never enough; the server stays the guard for validity and races.
   const current = live ? undefined : pickQuote(session.data.quotes, i.id);
+  const exactCurrent =
+    server && server.version.is_current && server.version.current_quote_id === server.quote.id ? { id: server.version.current_quote_id, status: server.quote.status } : undefined;
+  const liveDecidable =
+    !!server && session.role === "client" && point.state.phase === "ready" && server.quote.id === quoteId && server.quote.status === "sent" && !!exactCurrent && server.intervention.status === "quoted";
   const decision = live
-    ? guarded === "active" && quote.status === "sent"
-      ? "active"
+    ? liveDecidable
+      ? quoteDecisionState(server!.quote, exactCurrent, server!.intervention.status)
       : quote.status === "accepted"
         ? "accepted"
         : quote.status === "rejected" || !server!.version.is_current
@@ -1996,9 +2001,7 @@ export function QuoteView({
               ? live
                 ? QUOTES_COPY.readOnly
                 : "Ce devis ne peut plus être accepté ni refusé."
-              : live && quote.status === "sent"
-                ? QUOTES_COPY.openDossierToAct
-                : "Ce devis n’attend plus de décision de votre part."}
+              : "Ce devis n’attend plus de décision de votre part."}
         </p>
       )}
       {rejecting && isActive && (
