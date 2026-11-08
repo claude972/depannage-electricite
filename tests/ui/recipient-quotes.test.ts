@@ -230,10 +230,21 @@ window.run = async () => {
   // 5. Client quotes list: 120 quotes over 3 pages (> the loaded window), filter ⇒ page 1.
   calls = []; log = [];
   v = mount(h(DocumentsView, { session: sessionOf({}, log), rows: [] }));
-  await tick(400);
-  out.list = { first: v.d.querySelectorAll("[data-client-quote]").length };
-  for (let i = 0; i < 2; i++) { v.d.querySelector("[data-client-quotes-more]").click(); await tick(200); }
-  out.list.all = v.d.querySelectorAll("[data-client-quote]").length;
+  const visibleQuotes = () => v.d.querySelectorAll("[data-client-quote]").length;
+  async function waitForQuotePage(expected) {
+    const deadline = performance.now() + 5000;
+    while (visibleQuotes() !== expected) {
+      if (performance.now() >= deadline) throw new Error("Expected " + expected + " quotes, found " + visibleQuotes());
+      await tick(20);
+    }
+  }
+  await waitForQuotePage(50);
+  out.list = { first: visibleQuotes() };
+  for (const expected of [100, 120]) {
+    v.d.querySelector("[data-client-quotes-more]").click();
+    await waitForQuotePage(expected);
+  }
+  out.list.all = visibleQuotes();
   out.list.oldest = !!v.d.querySelector("[data-client-quote='" + Q(120) + "']");
   [...v.d.querySelectorAll("[aria-label='Filtrer les devis'] button")].find((b) => b.textContent === "Refusés").click(); await tick(300);
   out.list.filterCall = calls.filter((u) => u.startsWith("/api/quotes?") || u === "/api/quotes").slice(-1)[0];
