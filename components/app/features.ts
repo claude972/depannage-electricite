@@ -156,7 +156,7 @@ function observe(deps: FeatureDeps, key: FeatureKey, error: unknown): void {
  * meanwhile (success or failure alike: nothing of another identity reaches the screen); otherwise
  * returns the value or rethrows the server's error for the leaf to render.
  */
-export async function bound<T>(deps: FeatureDeps, key: FeatureKey, task: () => Promise<T>): Promise<T | null> {
+export async function bound<T>(deps: FeatureDeps, key: FeatureKey, task: () => Promise<T>, kind: "read" | "command" = "read"): Promise<T | null> {
   const generation = deps.owner ?? deps.generation();
   if (generation !== deps.generation()) return null; // stale bundle: nothing is sent
   try {
@@ -166,7 +166,11 @@ export async function bound<T>(deps: FeatureDeps, key: FeatureKey, task: () => P
     return value;
   } catch (error) {
     if (generation !== deps.generation()) return null;
-    observe(deps, key, error);
+    // A COMMAND answering a transient 503 or a network failure (status 0) proves nothing about the
+    // contract already loaded: the module state is left as it is (never « available » because of
+    // an error), so the leaf stays mounted with its form and the error is shown inline. Reads and
+    // every other status keep the classification below.
+    if (!(kind === "command" && error instanceof ApiRequestError && (error.status === 503 || error.status === 0))) observe(deps, key, error);
     throw error;
   }
 }
@@ -238,7 +242,7 @@ export function createSiteOperationsClient(input: FeatureDeps): SiteOperationsCl
   const request = requestOf(deps);
   return {
     load: (siteId: string) => bound(deps, "siteOperations", () => request<SiteOperationsReport>(`/api/site-operations${query({ site_id: siteId })}`)),
-    command: (command: SiteOperationsCommand) => bound(deps, "siteOperations", () => request<SiteOperationsCommandResult>("/api/site-operations", command)),
+    command: (command: SiteOperationsCommand) => bound(deps, "siteOperations", () => request<SiteOperationsCommandResult>("/api/site-operations", command), "command"),
   };
 }
 

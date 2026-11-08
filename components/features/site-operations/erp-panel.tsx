@@ -48,7 +48,7 @@ export function ErpPanel({ context }: { context: PanelContext }) {
    *  lift date is sent as entered (the validator accepts a date for any finding). */
   const save = async (event: FormEvent) => {
     event.preventDefault();
-    if (!editing || inFlight.current || form.submitting || context.busy) return;
+    if (!editing || !canWrite || inFlight.current || form.submitting || context.busy) return;
     inFlight.current = true;
     const token = editor.current, site = report.site_id;
     const payload = toPayload(draft);
@@ -83,7 +83,8 @@ export function ErpPanel({ context }: { context: PanelContext }) {
       </div>
       {!canWrite && <ReadOnly reason={context.readOnlyReason} />}
       {form.message && !editing && <Notice tone={form.message.tone} onClose={() => form.setMessage(null)}>{form.message.text}</Notice>}
-      {editing && (
+      {/* Right lost after re-evaluation (canWrite false): no write is offered; the draft is not sent. */}
+      {editing && canWrite && (
         <form className={styles.form} noValidate onSubmit={(event) => void save(event)}>
           <h4>{editing.id ? "Modifier le contrôle" : "Nouveau contrôle déclaratif"}</h4>
           {/* Every input, select and button below is locked while the save is in flight. */}
