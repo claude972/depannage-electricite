@@ -225,3 +225,7 @@ Claude possède l'éditeur de compte rendu artisan et son test navigateur. Verro
 ### SYS-04 / PUB-04 — distinguer canal disponible et réception activée
 
 Claude possède les libellés et leurs tests dans le centre de notifications. Le serveur peut exposer l'e-mail et le push comme disponibles après configuration et autorisation. Le centre doit alors rester exact. Retirer l'affirmation générale qu'aucun canal n'envoie de notifications et afficher « disponible » pour un canal proposé dont la préférence enregistrée est désactivée. Conserver le statut distinct du navigateur pour le push. Vérifier les cas disponible sans opt-in, opt-in confirmé et indisponible. Aucun appel supplémentaire, activation fournisseur ou modification des préférences par le test.
+
+### ENT-10 — conserver la saisie d’un contrôle ERP pendant son enregistrement
+
+Claude possède le formulaire ERP et ses tests ciblés. Pendant l’écriture, empêcher les modifications de la saisie et les soumissions répétées. Après un échec, rendre la main en conservant les champs, le point exact et la version attendue. Vérifier le cas d’une réserve déjà levée dont le constat change, en suivant le contrat de validation existant. Garder distincts le constat, la date de levée déclarée et une éventuelle preuve documentaire. Réutiliser le thème, les permissions, l’API et le journal existants. ROOT vérifie l’ouverture et la levée sur la preview avec un gestionnaire, un lecteur et un tiers. Ce lot ne fixe aucune modalité d’attestation ni de certification.
