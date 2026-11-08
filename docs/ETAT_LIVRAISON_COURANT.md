@@ -4,6 +4,10 @@ Objectif : application entière, seuls raccordements Stripe et SMS différés. P
 
 ## Référence en ligne
 
+La preview `eff0061` permet au gestionnaire d’approuver puis d’accepter le devis exact d’un dossier ancien. Le lecteur est en lecture seule et la décision en attente bloque l’acceptation. Sur la même version, les douze étapes du parcours client–artisan passent jusqu’à l’intervention terminée, PDF privé vérifié et règlement encore attendu. Le brouillon PWA et les nettoyages passent. [Preview](https://depannage-electricite-k098dsnpw-brafas-projects.vercel.app) · [Preuves](reviews/DELIVERY_EFF_ENTERPRISE_DECISION.md)
+
+### Version précédente `9e6d24f`
+
 La preview `9e6d24f` retrouve les anciens devis et contrats depuis les écrans. Le client accepte le devis courant hors des listes initiales. L’entreprise ouvre l’ancienne version exacte, archive un contrat de la troisième page et voit le statut relu. Le changement d’organisation purge le brouillon. Le brouillon PWA reste récupérable hors connexion et les nettoyages passent. [Preview](https://depannage-electricite-huai4bhrp-brafas-projects.vercel.app) · [Preuves](reviews/DELIVERY_9E6_QUOTES_CONTRACTS.md)
 
 ### Version précédente `635e41d`

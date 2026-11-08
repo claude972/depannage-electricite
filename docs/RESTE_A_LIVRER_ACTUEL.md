@@ -2,6 +2,16 @@
 
 Objectif : application entière ; seules liaisons fournisseur Stripe/SMS différées. Inventaire source, pas preuve de panne hébergée et pas reprise des anciens pourcentages. Référence initiale fe4f24c ; interfaces zones et backend copropriété intégrés depuis en3402f64.
 
+## État vérifié le 7 novembre, version `eff0061`
+
+Les constats plus anciens restent ci-dessous pour l’historique. La preview et les rapports datés fixent la portée vérifiée.
+
+- Les approbations, les devis et les contrats cadres dépassent les fenêtres de chargement initiales. La décision d’approbation, l’acceptation client d’un devis courant, l’ouverture d’une ancienne version entreprise et l’archivage d’un contrat ancien ont des preuves hébergées. [Approbations](reviews/DELIVERY_635_APPROVALS.md) · [Devis et contrats](reviews/DELIVERY_9E6_QUOTES_CONTRACTS.md)
+- La preview `eff0061` passe l’approbation puis l’acceptation du devis exact d’un dossier entreprise ancien. Elle passe aussi les douze étapes du parcours client–artisan, de la demande à la clôture avec PDF privé. Le règlement reste attendu. [Recettes sur la version courante](reviews/DELIVERY_EFF_ENTERPRISE_DECISION.md)
+- Stripe et Vonage attendent leurs accès et la recette fournisseur. Les canaux e-mail et push et la revue photo avec validation humaine disposent de code et de contrôles locaux. Leur configuration et leurs essais réels restent à effectuer. [Notifications](EXTERNAL_NOTIFICATION_OUTBOX_BACKEND.md) · [Revue photo](PHOTO_TRIAGE_BACKEND.md)
+- L’activation du compte propriétaire Super Admin et sa recette positive restent différées. Les règles de conservation et d’effacement doivent être validées avant de coder l’exécution de la suppression. Le ticket d’effacement est déjà utilisable. [Demandes d’effacement](DATA_ERASURE_REQUESTS_BACKEND.md)
+- La vérification PWA sur iOS et Android et la distribution native restent à faire. La reprise de brouillon a une preuve dans Chromium. Le natif suit la validation Web/PWA selon l’ordre du plan. [Ordre de livraison](PLAN_LIVRAISON_INTEGRALE.md)
+
 ## Assemblage de code du 7 novembre avant la recette
 
 La branche `codex/full-delivery-assembly` regroupe les ajouts destinés à la recette par parcours. La dernière version vérifiée en ligne reste `610b13f`.
