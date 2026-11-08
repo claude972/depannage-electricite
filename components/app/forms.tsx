@@ -3,6 +3,7 @@
 // role spaces. Styling classes live in app/globals.css.
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { api, ApiRequestError, PHOTO_TYPES, validateUpload } from "./api";
+import { classifyRefusal } from "./refusal";
 import { AddressField, createAddressApi } from "./address-field";
 import {
   applyOutcome,
@@ -2037,17 +2038,22 @@ export function DocumentManager({
 // GET /api/admin/artisans → { artisans: [{ id, full_name, artisan_approved, created_at,
 // application_status }], limit, truncated } (older servers / demo: no status, no limit). The status
 // shown is the server's application_status only; when absent it says so, never inferred. Actions
-// follow the status: approved ⇒ Suspendre, suspended ⇒ Réactiver, submitted ⇒ Approuver; no
-// approval for a draft, changes requested, unknown or missing status (the server would refuse an
-// incomplete dossier anyway). All decisions POST { user_id, approved } after an explicit confirm.
+// follow the status: approved ⇒ Suspendre, suspended ⇒ Réactiver, submitted ⇒ Approuver or
+// Demander des corrections (E35); no approval for a draft, changes requested, unknown or missing
+// status. Contract A (E34/E36): every decision POSTs { user_id, command_id, action, expected_version }
+// after an explicit confirm — action approve | request_changes | suspend | reinstate (approval and
+// reactivation are distinct), expected_version = application_version read, command_id stable for the
+// same intention until it is confirmed.
 export type ArtisanApplicationRow = {
   id: string;
   full_name: string;
   artisan_approved: boolean;
   created_at: string;
   application_status?: string | null;
+  /** Dossier revision read (0 without dossier); the expected version of the next decision. */
+  application_version?: number;
 };
-export type ArtisanDecision = "suspend" | "reactivate" | "approve";
+export type ArtisanDecision = "suspend" | "reactivate" | "approve" | "request_changes";
 export const ARTISAN_STATUS_LABELS: Record<string, string> = {
   submitted: "Dossier soumis",
   approved: "Approuvé",
@@ -2055,24 +2061,34 @@ export const ARTISAN_STATUS_LABELS: Record<string, string> = {
   changes_requested: "Modifications demandées",
   draft: "Brouillon",
 };
-const DECISIONS: Record<ArtisanDecision, { label: string; message: string; confirmLabel: string; approved: boolean }> = {
+const DECISIONS: Record<ArtisanDecision, { label: string; message: string; confirmLabel: string; action: "approve" | "request_changes" | "suspend" | "reinstate"; approved: boolean }> = {
   suspend: {
     label: "Suspendre",
     message: "Suspendre l’accès aux nouvelles missions de cet artisan ?",
     confirmLabel: "Confirmer la suspension",
+    action: "suspend",
     approved: false,
   },
   reactivate: {
     label: "Réactiver",
     message: "Réactiver cet artisan suspendu ? Il retrouvera l’accès aux nouvelles missions.",
     confirmLabel: "Confirmer la réactivation",
+    action: "reinstate",
     approved: true,
   },
   approve: {
     label: "Approuver",
     message: "Confirmez-vous avoir vérifié la candidature et ses justificatifs ?",
     confirmLabel: "Confirmer l’approbation",
+    action: "approve",
     approved: true,
+  },
+  request_changes: {
+    label: "Demander des corrections",
+    message: "Renvoyer la candidature à l’artisan pour corrections ? Il pourra la modifier puis la soumettre à nouveau.",
+    confirmLabel: "Confirmer la demande de corrections",
+    action: "request_changes",
+    approved: false,
   },
 };
 /** Label, single allowed decision and honest note for one row (pure, exported for tests). */
@@ -2080,6 +2096,8 @@ export function artisanApplicationView(row: Pick<ArtisanApplicationRow, "artisan
   label: string;
   decision: ArtisanDecision | null;
   note: string | null;
+  /** Second decision offered with the main one (submitted ⇒ request changes, E35). */
+  secondary?: ArtisanDecision;
 } {
   const status = row.application_status;
   if (status === undefined || status === null) {
@@ -2093,7 +2111,7 @@ export function artisanApplicationView(row: Pick<ArtisanApplicationRow, "artisan
   const label = ARTISAN_STATUS_LABELS[status] ?? "Statut inconnu";
   if (status === "approved") return { label, decision: "suspend", note: null };
   if (status === "suspended") return { label, decision: "reactivate", note: null };
-  if (status === "submitted") return { label, decision: "approve", note: null };
+  if (status === "submitted") return { label, decision: "approve", note: null, secondary: "request_changes" };
   const note =
     status === "draft"
       ? "Dossier incomplet : en attente de l’artisan."
@@ -2117,7 +2135,9 @@ export function parseArtisanApplications(raw: unknown): { rows: ArtisanApplicati
     if (typeof r.id !== "string" || typeof r.full_name !== "string" || typeof r.artisan_approved !== "boolean" || typeof r.created_at !== "string")
       throw new Error(ARTISAN_LIST_INVALID);
     if (!(status === undefined || status === null || typeof status === "string")) throw new Error(ARTISAN_LIST_INVALID);
-    return { id: r.id, full_name: r.full_name, artisan_approved: r.artisan_approved, created_at: r.created_at, application_status: typeof status === "string" ? status : null };
+    const version = r.application_version;
+    if (!(version === undefined || (typeof version === "number" && Number.isSafeInteger(version) && version >= 0))) throw new Error(ARTISAN_LIST_INVALID);
+    return { id: r.id, full_name: r.full_name, artisan_approved: r.artisan_approved, created_at: r.created_at, application_status: typeof status === "string" ? status : null, ...(version === undefined ? {} : { application_version: version }) };
   });
   return { rows, truncated: v.truncated === true, limit: typeof v.limit === "number" && Number.isSafeInteger(v.limit) && v.limit > 0 ? v.limit : null };
 }
@@ -2180,6 +2200,15 @@ export function ArtisanApplicationsList({
                   onConfirm={() => onDecide(p, view.decision as ArtisanDecision)}
                 />
               )}
+              {view.secondary && (
+                <ConfirmAction
+                  label={DECISIONS[view.secondary].label}
+                  message={DECISIONS[view.secondary].message}
+                  confirmLabel={DECISIONS[view.secondary].confirmLabel}
+                  busy={busy}
+                  onConfirm={() => onDecide(p, view.secondary as ArtisanDecision)}
+                />
+              )}
             </div>
           );
         })}
@@ -2229,23 +2258,46 @@ export function ArtisanAdministration({ demo }: { demo: boolean }) {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  /** E36: one command id per intention (dossier + action + version read), kept until confirmed. */
+  const intents = useRef(new Map<string, string>());
   async function decide(p: ArtisanApplicationRow, decision: ArtisanDecision) {
-    const approved = DECISIONS[decision].approved;
+    const { approved, action } = DECISIONS[decision];
     setBusy(p.id);
     setError("");
+    const expected_version = p.application_version ?? 0;
+    const intent = `${p.id}|${action}|${expected_version}`;
     try {
       if (demo) {
-        const next = rows.map((row) =>
-          row.id === p.id ? { ...row, artisan_approved: approved, application_status: approved ? "approved" : "suspended" } : row,
-        );
+        const status = action === "request_changes" ? "changes_requested" : approved ? "approved" : "suspended";
+        const next = rows.map((row) => (row.id === p.id ? { ...row, artisan_approved: approved, application_status: status } : row));
         localStorage.setItem(DEMO_KEY, JSON.stringify(next));
         setRows(next);
       } else {
-        await api("/api/admin/artisans", { user_id: p.id, approved });
+        let command_id = intents.current.get(intent);
+        if (!command_id) {
+          command_id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : "";
+          if (!command_id) throw new Error("Ce navigateur ne permet pas de créer un identifiant sécurisé : décision impossible ici.");
+          intents.current.set(intent, command_id);
+        }
+        await api("/api/admin/artisans", { user_id: p.id, command_id, action, expected_version });
+        intents.current.delete(intent);
         await load();
       }
     } catch (e) {
-      setError((e as Error).message);
+      const status = e instanceof ApiRequestError ? e.status : 0;
+      const kind = classifyRefusal(status);
+      // Definitive refusals end the intention; a lost reply keeps it for an exact replay (E36).
+      if (kind !== "transient") intents.current.delete(intent);
+      if (kind === "session") {
+        setRows([]); // P1: 401 purges the protected list at once
+        setError((e as Error).message);
+        return;
+      }
+      const message = kind === "conflict" ? "Ce dossier a changé depuis son affichage : il a été relu, vérifiez son état avant de décider." : (e as Error).message;
+      // 409 / 403 / 404 / uncertain reply: re-read the dossier before any new decision (E34, P1);
+      // the refusal message stays visible over the re-read (load() clears its own error first).
+      if (kind !== "invalid") await load();
+      setError((prev) => prev || message);
     } finally {
       setBusy("");
     }

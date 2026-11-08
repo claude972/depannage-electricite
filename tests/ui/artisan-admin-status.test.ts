@@ -21,9 +21,9 @@ const list = (rows: unknown[], truncated = false, limit: number | null = 100) =>
   renderToString(createElement(f.ArtisanApplicationsList as never, { rows, truncated, limit, busy: false, onDecide: async () => {} } as never)).replace(/<!-- -->/g, "");
 const buttons = (html: string) => [...html.matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((m) => m[1].trim());
 
-test("statut : libellé distinct et UNE seule décision autorisée par statut", () => {
+test("statut : libellé distinct et décisions autorisées par statut (soumis ⇒ approuver ou demander des corrections, E35)", () => {
   const cases: [string | null, boolean, string, string | null][] = [
-    ["submitted", false, "Dossier soumis", "Approuver"],
+    ["submitted", false, "Dossier soumis", "Approuver|Demander des corrections"],
     ["approved", true, "Approuvé", "Suspendre"],
     ["suspended", false, "Suspendu", "Réactiver"],
     ["changes_requested", false, "Modifications demandées", null],
@@ -34,19 +34,20 @@ test("statut : libellé distinct et UNE seule décision autorisée par statut", 
   for (const [status, approved, label, action] of cases) {
     const html = list([row(status, approved)]);
     assert.match(html, new RegExp(`${label} — `), String(status));
-    assert.deepEqual(buttons(html), action ? [action] : [], String(status));
+    assert.deepEqual(buttons(html), action ? action.split("|") : [], String(status));
   }
 });
 
-test("suspendu ⇒ « Réactiver » avec confirmation explicite, même commande approved:true", () => {
+test("suspendu ⇒ « Réactiver » avec confirmation explicite, action reinstate distincte de l’approbation (E34)", () => {
   const v = f.artisanApplicationView({ artisan_approved: false, application_status: "suspended" });
   assert.equal(v.decision, "reactivate");
   const html = list([row("suspended")]);
   assert.deepEqual(buttons(html), ["Réactiver"]);
   assert.doesNotMatch(html, /Approuver/);
   const src = readFileSync("components/app/forms.tsx", "utf8");
-  assert.match(src, /reactivate: \{\s*label: "Réactiver",[\s\S]*?confirmLabel: "Confirmer la réactivation",\s*approved: true,/);
-  assert.match(src, /await api\("\/api\/admin\/artisans", \{ user_id: p\.id, approved \}\);/);
+  assert.match(src, /reactivate: \{\s*label: "Réactiver",[\s\S]*?confirmLabel: "Confirmer la réactivation",\s*action: "reinstate",/);
+  assert.match(src, /approve: \{\s*label: "Approuver",[\s\S]*?action: "approve",/);
+  assert.match(src, /await api\("\/api\/admin\/artisans", \{ user_id: p\.id, command_id, action, expected_version \}\);/);
 });
 
 test("brouillon / modifications demandées / statut absent ou inconnu ⇒ jamais d’approbation, texte honnête", () => {
