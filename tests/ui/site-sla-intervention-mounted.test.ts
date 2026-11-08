@@ -41,7 +41,13 @@ const api = {
   },
   async exportCsv() { return { status: 503, blob: null, filename: null, csv: false }; },
 };
-const client = { load: async () => JSON.parse(JSON.stringify(report)), command: async (c) => { window.cmds.push(JSON.parse(JSON.stringify(c))); return { action: c.action, result: {} }; } };
+window.cmdGates = []; window.holdCmd = false; window.cmdFail = false;
+const client = { load: async () => JSON.parse(JSON.stringify(report)), command: async (c) => {
+  window.cmds.push(JSON.parse(JSON.stringify(c)));
+  if (window.holdCmd) await new Promise((r) => window.cmdGates.push(r));
+  if (window.cmdFail) throw new Error("Refus simulé du serveur.");
+  return { action: c.action, result: {} };
+} };
 const scope = { userId: "u1", role: "manager", organizationId: report.snapshot.site.organization_id, siteId: SITE, authority: reader ? { canWrite: false, reason: "Lecture seule sur ce site." } : { canWrite: true } };
 window.opened = [];
 const div = document.createElement("div"); document.body.appendChild(div);
@@ -86,7 +92,7 @@ test("Chromium 390/1280 : notes ⇒ lien conservé ; choix paginé ⇒ envoyé ;
       const last = async () => ((await page.evaluate("window.cmds")) as Cmd[]).at(-1)!;
       // 1) Edit notes only ⇒ link preserved; the old ticket's reference is shown though not in any page.
       await editFirst();
-      assert.match(await page.locator("[data-sla-current-link]").innerText(), /INT-BB000000/);
+      assert.match(await page.locator("[data-sla-current-link]").innerText(), /INT-BB0000(?![0-9A-F])/);
       await page.getByLabel("Notes (facultatif)").fill("Relance du prestataire.");
       await save(1);
       assert.equal((await last()).action, "save_sla_case");
@@ -100,7 +106,7 @@ test("Chromium 390/1280 : notes ⇒ lien conservé ; choix paginé ⇒ envoyé ;
       await page.waitForFunction("document.querySelector('[data-sla-picker]')?.textContent.includes('Page 2 sur 3')");
       await page.locator("[data-sla-next]").click();
       await page.locator(`[data-sla-option="${T25}"]`).waitFor();
-      assert.match(await page.locator("[data-sla-current-link]").innerText(), /INT-BB000000/, "current link kept across pages");
+      assert.match(await page.locator("[data-sla-current-link]").innerText(), /INT-BB0000(?![0-9A-F])/, "current link kept across pages");
       await page.locator(`[data-sla-option="${T25}"] input`).check();
       const bodies = (await page.evaluate("window.lists")) as Array<{ organization_id: string; site_id: string; page: number }>;
       assert.ok(bodies.every((b) => b.site_id === "22222222-2222-4222-8222-222222222222" && b.organization_id), "bounded to org + site");
@@ -112,7 +118,7 @@ test("Chromium 390/1280 : notes ⇒ lien conservé ; choix paginé ⇒ envoyé ;
       await page.evaluate("window.mode = 'fail'");
       await page.getByRole("button", { name: "Choisir un autre ticket" }).click();
       await page.locator("[data-sla-picker-error]").waitFor();
-      assert.match(await page.locator("[data-sla-current-link]").innerText(), /INT-BB000000/);
+      assert.match(await page.locator("[data-sla-current-link]").innerText(), /INT-BB0000(?![0-9A-F])/);
       await page.evaluate("window.mode = 'foreign'");
       await page.locator("[data-sla-picker-error]").getByRole("button", { name: "Réessayer" }).click();
       await page.waitForTimeout(300);
@@ -157,6 +163,68 @@ test("Chromium 390 : lecteur ⇒ aucune modification, ticket lié consultable", 
     await page.locator(`[data-sla-case-link="${OLD}"] button`).click();
     assert.deepEqual(await page.evaluate("window.opened"), [["intervention", OLD]]);
     assert.equal(await page.evaluate("window.cmds.length"), 0);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+});
+
+test("Chromium 390/1280 : POST retenu ⇒ tout verrouillé (champs + lien), 2e envoi ⇒ aucun POST ; échec ⇒ brouillon + lien gardés, reprise identique ; succès ⇒ fermeture unique ; INT-6 ; échéance calculée après réponse", { skip }, async () => {
+  const { server, url } = await serve();
+  const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
+  const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true });
+  try {
+    for (const width of [390, 1280]) {
+      const page = await (await browser.newContext({ viewport: { width, height: 1000 } })).newPage();
+      const errors: string[] = [];
+      page.on("pageerror", (e: Error) => errors.push(String(e)));
+      await page.goto(url);
+      await page.getByRole("tab", { name: "Délais" }).or(page.getByRole("button", { name: "Délais" })).first().click();
+      const card = page.locator("li").filter({ hasText: "DEMO-001" });
+      await card.locator(`[data-sla-case-link="${OLD}"]`).waitFor();
+      // INT- + 6 characters, as the enterprise CSV.
+      assert.equal((await card.locator(`[data-sla-case-link="${OLD}"]`).innerText()).trim(), "INT-BB0000");
+      // A responded case still shows its computed due date.
+      assert.ok((await card.locator("[data-sla-deadline]").count()) >= 1, "computed due date shown after a response");
+      assert.match(await card.innerText(), /échéance calculée/);
+      // Open the editor, choose a ticket on page 2, edit notes.
+      await card.getByRole("button", { name: "Modifier" }).click();
+      await page.getByRole("button", { name: "Choisir un autre ticket" }).click();
+      await page.locator('[data-sla-picker="ready"]').waitFor();
+      await page.locator("[data-sla-next]").click();
+      const T15 = "aa000000-0000-4000-8000-000000000015";
+      await page.locator(`[data-sla-option="${T15}"] input`).check();
+      await page.getByLabel("Notes (facultatif)").fill("Note A avant envoi.");
+      // Held POST ⇒ every field and link control disabled; a second submit sends nothing.
+      await page.evaluate("window.holdCmd = true; window.cmdFail = true");
+      await page.getByRole("button", { name: "Enregistrer", exact: true }).click();
+      await page.waitForFunction("window.cmds.length === 1");
+      await page.locator('[data-sla-case-form="saving"]').waitFor();
+      const enabled = await page.evaluate("[...document.querySelectorAll('[data-sla-case-form] input, [data-sla-case-form] textarea, [data-sla-case-form] select, [data-sla-case-form] button')].filter((e) => !e.matches(':disabled')).length");
+      assert.equal(enabled, 0, "all fields and link controls locked");
+      await page.evaluate("document.querySelector('[data-sla-case-form]').requestSubmit()");
+      await page.waitForTimeout(150);
+      assert.equal(await page.evaluate("window.cmds.length"), 1, "second submit ⇒ no POST");
+      // Error ⇒ draft + chosen link kept, unlocked; identical manual retry.
+      await page.evaluate("window.cmdGates.shift()()");
+      await page.locator('[data-sla-case-form="idle"]').waitFor();
+      assert.equal(await page.getByLabel("Notes (facultatif)").inputValue(), "Note A avant envoi.");
+      assert.match(await page.locator("[data-sla-current-link]").innerText(), /INT-AA0000/);
+      assert.equal(await page.getByLabel("Notes (facultatif)").isDisabled(), false);
+      await page.evaluate("window.cmdFail = false");
+      await page.getByRole("button", { name: "Enregistrer", exact: true }).click();
+      await page.waitForFunction("window.cmds.length === 2");
+      const cmds = (await page.evaluate("window.cmds")) as Cmd[];
+      assert.deepEqual(cmds[1], cmds[0], "identical retry");
+      assert.equal(cmds[1].payload.intervention_id, T15);
+      // Success ⇒ closes once.
+      await page.evaluate("window.cmdGates.shift()()");
+      await page.locator("[data-sla-case-form]").waitFor({ state: "detached" });
+      await page.waitForTimeout(150);
+      assert.equal(await page.evaluate("window.cmds.length"), 2);
+      assert.equal(await page.locator("[data-sla-case-form]").count(), 0);
+      assert.deepEqual(errors, []);
+    }
   } finally {
     await browser.close();
     server.close();
