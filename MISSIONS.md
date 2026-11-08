@@ -217,3 +217,6 @@ Claude possède le formulaire de création et ses tests. Séparer le brouillon d
 ### PUB / ART / ENT — maintenir la pagination du bon filtre de notifications
 
 Claude possède le centre de notifications et le test navigateur ciblé. Une continuation « Toutes » retenue par le réseau doit être ignorée dès le changement vers « Non lues », y compris son erreur, son curseur et la fin de chargement. Reprendre le bon curseur, borner à une continuation en vol et écarter les réponses après rechargement ou changement de compte. Dans le même panneau, une confirmation de marquage ne doit pas remplacer une liste plus récente par les anciennes lignes capturées avant le réseau. Conserver les commandes, les refus, la démo, le thème et l'API. Vérifier en Chromium les réponses dans l'ordre inverse, un vrai changement de filtre et la reprise correcte.
+
+## Claim Claude — pagination du bon filtre de notifications
+Base f72f500 ; claude/notification-filter-pages. Ownership components/features/notifications/notification-center.tsx et un test navigateur ciblé (tests/ui/notification-center-pages.test.ts). Aucun backend, API, thème ou cloud.
