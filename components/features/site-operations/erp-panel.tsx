@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { erpChecklistPayload } from "../../../lib/features/site-operations/schemas";
 import { CHECKLIST_STATUS, DECLARATIVE_NOTICE, ITEM_STATE, date } from "../../../lib/features/site-operations/labels";
 import type { ChecklistStatus, ErpChecklist, ErpChecklistPayload, ItemState } from "../../../lib/features/site-operations/types";
@@ -29,11 +29,43 @@ export function ErpPanel({ context }: { context: PanelContext }) {
   const [editing, setEditing] = useState<{ id: string | null; version: number | null } | null>(null);
   const [draft, setDraft] = useState<Draft>(empty);
   const form = useSubmit(context);
+  // One save at a time (synchronous guard, before any re-render), and a token per editor so that
+  // only the editor that sent the save is closed by its success.
+  const inFlight = useRef(false);
+  const editor = useRef(0);
+  const close = () => {
+    editor.current++;
+    setEditing(null);
+  };
   const open = (row: ErpChecklist | null) => {
+    editor.current++;
     setEditing(row ? { id: row.id, version: row.version } : { id: null, version: null });
     setDraft(row ? fromRow(row) : empty());
     form.setMessage(null);
   };
+  /** The body is built once from the locked draft, the exact checklist and its expected version:
+   *  after a failure the fields stay as sent, so a retry sends the identical body. The reserve
+   *  lift date is sent as entered (the validator accepts a date for any finding). */
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!editing || inFlight.current || form.submitting || context.busy) return;
+    inFlight.current = true;
+    const token = editor.current, site = report.site_id;
+    const payload = toPayload(draft);
+    const command = editing.id
+      ? { action: "save_erp_checklist" as const, site_id: site, payload, id: editing.id, expected_version: editing.version ?? 0 }
+      : { action: "save_erp_checklist" as const, site_id: site, payload };
+    try {
+      await form.submit(event, erpChecklistPayload, payload, command, () => {
+        if (editor.current === token && site === siteRef.current) close(); // late reply for another editor or site: ignored
+      }, editing.id ? "Contrôle mis à jour." : "Contrôle enregistré.");
+    } finally {
+      inFlight.current = false;
+    }
+  };
+  const siteRef = useRef(report.site_id);
+  siteRef.current = report.site_id;
+  const locked = form.submitting;
   const setItem = (index: number, patch: Partial<ItemDraft>) => setDraft((d) => ({ ...d, items: d.items.map((i, j) => (j === index ? { ...i, ...patch } : i)) }));
   const openReserves = report.completeness.erp.open_reserves;
   return (
@@ -52,8 +84,10 @@ export function ErpPanel({ context }: { context: PanelContext }) {
       {!canWrite && <ReadOnly reason={context.readOnlyReason} />}
       {form.message && !editing && <Notice tone={form.message.tone} onClose={() => form.setMessage(null)}>{form.message.text}</Notice>}
       {editing && (
-        <form className={styles.form} noValidate onSubmit={(event) => form.submit(event, erpChecklistPayload, toPayload(draft), editing.id ? { action: "save_erp_checklist", site_id: report.site_id, payload: toPayload(draft), id: editing.id, expected_version: editing.version ?? 0 } : { action: "save_erp_checklist", site_id: report.site_id, payload: toPayload(draft) }, () => setEditing(null), editing.id ? "Contrôle mis à jour." : "Contrôle enregistré.")}>
+        <form className={styles.form} noValidate onSubmit={(event) => void save(event)}>
           <h4>{editing.id ? "Modifier le contrôle" : "Nouveau contrôle déclaratif"}</h4>
+          {/* Every input, select and button below is locked while the save is in flight. */}
+          <fieldset disabled={locked} aria-busy={locked || undefined} style={{ display: "contents" }} data-erp-lock="">
           <p className={styles.hint}>Les intitulés sont libres et relèvent de votre organisation ; ils ne constituent pas une liste réglementaire fournie par le service.</p>
           {form.message && <Notice tone={form.message.tone}>{form.message.text}</Notice>}
           <div className={styles.grid2}>
@@ -78,8 +112,9 @@ export function ErpPanel({ context }: { context: PanelContext }) {
           </fieldset>
           <div className={styles.actions}>
             <button type="submit" className="button primary" disabled={form.submitting || context.busy}>{form.submitting ? "Enregistrement…" : "Enregistrer"}</button>
-            <button type="button" className="button outline" onClick={() => setEditing(null)} disabled={form.submitting}>Annuler</button>
+            <button type="button" className="button outline" onClick={close} disabled={form.submitting}>Annuler</button>
           </div>
+          </fieldset>
         </form>
       )}
       {checklists.length === 0 && !editing ? (
