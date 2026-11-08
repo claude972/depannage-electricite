@@ -79,8 +79,20 @@ try {
  const exactManager=(qid,organization)=>q('select q.id from public.quotes q join public.interventions i on i.id=q.intervention_id join public.sites s on s.id=i.site_id join public.organization_members m on m.organization_id=s.organization_id and m.user_id=auth.uid()where q.id=$1 and s.organization_id=$2',[qid,organization]);
  await as('viewer');eq((await exactManager(old,org)).map(r=>r.id),[old]);eq((await exactManager(old,other)).length,0);eq((await exactClient(old)).length,0);
  await as('foreign');eq((await exactClient(old)).length,0);eq((await exactManager(old,org)).length,0);
+ // Decision context uses the same existing RLS tables, including terms and read-only site grants.
+ await as('', 'postgres');
+ await q("insert into public.approval_rules(site_id,enabled,threshold_cents,required_role)values($1,true,10000,'owner')",[sites[0]]);
+ await q("insert into public.approvals(quote_id,site_id,status)values($1,$2,'approved')",[active,sites[0]]);
+ await q("insert into public.quote_terms(quote_id,valid_until,set_by)values($1,'2000-01-01',$2)",[active,ids.owner]);
+ const decisionRead=()=>q(`select q.id,r.threshold_cents,(q.total_cents>r.threshold_cents) required,a.status,t.valid_until::text,
+ public.can_manage_site(i.site_id) can_write from public.quotes q join public.interventions i on i.id=q.intervention_id
+ left join public.approval_rules r on r.site_id=i.site_id left join public.approvals a on a.quote_id=q.id
+ left join public.quote_terms t on t.quote_id=q.id where q.id=$1`,[active]);
+ await as('viewer');eq((await decisionRead())[0],{id:active,threshold_cents:10000,required:false,status:'approved',valid_until:'2000-01-01',can_write:false});
+ await as('owner');eq((await decisionRead())[0].can_write,true);
+ await as('foreign');eq((await decisionRead()).length,0);
  await as('', 'postgres');await q('delete from public.organization_member_site_grants where user_id=$1',[ids.viewer]);
- await as('viewer');eq((await exactManager(old,org)).length,0);
+ await as('viewer');eq((await exactManager(old,org)).length,0);eq((await decisionRead()).length,0);
  await as('', 'postgres');await q('update public.interventions set client_id=$2 where id=$1',[job,ids.foreign]);
  await as('client');eq((await exactClient(old)).length,0);
  console.log(`recipient quotes: ${checks} real RLS assertions PASS (246 owned quotes; 25 old revisions; no migration)`);
