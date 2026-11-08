@@ -121,6 +121,7 @@ import { SiteAssetLinksPanel } from "../features/site-asset-links/site-asset-lin
 import type { AssetSource } from "../features/site-asset-links/asset-links-model";
 import { createAreasApi, parseAreasPage } from "../features/site-areas/areas-model";
 import { CoOwnershipPanel } from "../features/co-ownership/co-ownership-panel";
+import { SiteDocumentsPanel } from "../features/site-documents/site-documents-panel";
 import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
 import { PlatformPayAction } from "../app/platform-pay";
 import { OrganizationSlaPanel } from "../features/organization-sla/organization-sla-panel";
@@ -3383,6 +3384,16 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
           />
         )}
 
+        {/* ENT-04: live ⇒ paged server documents of THIS site (beyond the workspace cache); demo unchanged. */}
+        {live ? (
+          <SiteDocumentsPanel
+            key={`docs|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${c.organization?.id ?? "-"}|${site.id}`}
+            siteId={site.id}
+            organizationId={c.organization?.id}
+            context={session.mutationContext}
+            onOpenDossier={(id) => session.openIntervention(id)}
+          />
+        ) : (
         <section className="panel" aria-labelledby="site-docs">
           <h2 id="site-docs">Documents</h2>
           {documents.length ? (
@@ -3404,6 +3415,7 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
             <Icon name="arrow" size={15} />
           </button>
         </section>
+        )}
       </div>
     </>
   );
@@ -3589,6 +3601,17 @@ function DirectSiteSheet({ c, id }: { c: Ctx; id: string }) {
                 key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${site.organization_id}|${site.id}`}
                 siteId={site.id}
                 context={session.mutationContext}
+              />
+            )}
+            {/* ENT-04: read-only documents of THIS site (also archived: the server proves the exact right). */}
+            {session.mode !== "demo" && (
+              <SiteDocumentsPanel
+                key={`docs|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${site.organization_id}|${site.id}`}
+                siteId={site.id}
+                organizationId={site.organization_id}
+                context={session.mutationContext}
+                onOpenDossier={(iid) => session.openIntervention(iid)}
+                headingId="site-direct-docs"
               />
             )}
             {!archived && session.mode !== "demo" && site.type === "syndic" && (
