@@ -6,7 +6,8 @@
 // says the periods are comparable. Identity-guarded after the await; demo: no call. Logic: ./model.
 // « Exporter en CSV » (ROOT b404b4f): private download of exactly the displayed consolidation —
 // same-origin GET with credentials, no-store, blob + object URL (revoked), server filename; one export
-// at a time; a reply after an identity / consolidation change is dropped and nothing is saved.
+// at a time; a reply after an identity / consolidation / organisation change or an unmount is dropped
+// and nothing is saved.
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { COMPARISON_REASON, COPY, EMPTY_FORM, EXPORT_COPY, centsToEuros, exportError, fetchCsv, fetchReport, formToSelection, incompleteReasons, parseReport, totalConsumption, totalCost, whToKwh, type EnergyReport, type Form, type Result, type Selection } from "./model";
 import styles from "./energy-consolidation.module.css";
@@ -53,7 +54,26 @@ export function EnergyConsolidationPanel({ organizationId, sites, demo, context,
   const [retryWait, setRetryWait] = useState(false);
   const exporting = useRef(false);
   const waitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => clearTimeout(waitTimer.current), []);
+  // Instance fence: every effect run (StrictMode included) opens its own epoch and its cleanup closes
+  // it, so any continuation of an unmounted instance (organisation switch remounts the panel, leaving
+  // « Rapports ») — or of another organisation — is inert: no setState, no saveBlob.
+  const alive = useRef(false);
+  const epoch = useRef(0);
+  const org = useRef(organizationId);
+  org.current = organizationId;
+  useEffect(() => {
+    epoch.current++;
+    alive.current = true;
+    return () => {
+      epoch.current++;
+      alive.current = false;
+      clearTimeout(waitTimer.current);
+    };
+  }, []);
+  const fence = () => {
+    const ep = epoch.current, o = org.current;
+    return () => alive.current && epoch.current === ep && org.current === o;
+  };
   const name = (id: string) => sites.find((s) => s.id === id)?.name ?? "Site";
 
   if (demo)
@@ -68,6 +88,7 @@ export function EnergyConsolidationPanel({ organizationId, sites, demo, context,
   const run = async (sel: Selection) => {
     const my = ++seq.current;
     const gen = context.generation(), uid = context.userId();
+    const live = fence();
     setPhase("loading");
     setError("");
     // A new consolidation replaces the displayed one: any export in flight belongs to the old one.
@@ -76,6 +97,7 @@ export function EnergyConsolidationPanel({ organizationId, sites, demo, context,
     setRetryWait(false);
     setExp({ phase: "idle" });
     const r: Result = await fetchReport(fetcher ?? ((...a) => fetch(...a)), sel);
+    if (!live()) return; // old instance / organisation: inert
     // StrictMode / identity guard: only the latest request, under the same identity, applies.
     if (my !== seq.current) return;
     if (context.generation() !== gen || context.userId() !== uid) {
@@ -111,10 +133,12 @@ export function EnergyConsolidationPanel({ organizationId, sites, demo, context,
     exporting.current = true;
     const sel = shown, my = seq.current;
     const gen = context.generation(), uid = context.userId();
+    const live = fence();
     clearTimeout(waitTimer.current);
     setRetryWait(false);
     setExp({ phase: "busy" });
     const out = await fetchCsv(fetcher ?? ((...a) => fetch(...a)), sel);
+    if (!live()) return; // unmounted or another organisation meanwhile: nothing is shown or saved
     if (my !== seq.current) return; // another consolidation was displayed meanwhile: drop, save nothing
     exporting.current = false;
     if (context.generation() !== gen || context.userId() !== uid) {
