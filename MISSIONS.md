@@ -257,3 +257,7 @@ La consolidation ne propose aujourd’hui que les sites présents dans les donn�
 ### ENT-03 — créer une demande depuis une fiche de site chargée directement
 
 Claude possède le câblage de la fiche et du formulaire dans `components/role/enterprise-space.tsx` ainsi que ses tests ciblés. Depuis un site actif du portefeuille, y compris hors des 100 initiaux, ouvrir la demande avec le site et son adresse préremplis. Pour un identifiant absent du chargement initial, réutiliser la lecture exacte et son droit serveur, dans l’organisation active. Préserver le formulaire existant et ses erreurs. Tester le site actif autorisé, le lecteur, le site archivé et le changement de périmètre. Aucun changement d’API, de RLS ou de base. Intégrer le code avant la recette hébergée groupée.
+
+### SYS-04 — déclencher la livraison externe planifiée
+
+Codex assemble le déclencheur de la file privée. Réutiliser les routes e-mail et Web Push existantes et les baux de la file. Définir un job Supabase inactif à l’installation, avec les paramètres dans Vault et les appels bornés aux routes internes. La recette et l’activation suivent la phase 1.
