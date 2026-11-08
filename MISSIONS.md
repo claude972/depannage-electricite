@@ -221,3 +221,7 @@ Claude possède le centre de notifications et le test navigateur ciblé. Une con
 ### ART — conserver le compte rendu pendant l'enregistrement
 
 Claude possède l'éditeur de compte rendu artisan et son test navigateur. Verrouiller les champs, l'ajout ou retrait de contrôles et les doubles soumissions pendant le POST. En cas de refus ou d'échec, garder le résumé, les contrôles et le nom déclaré et permettre la reprise. Fermer uniquement après succès confirmé pour l'éditeur courant. Tester un reçu retenu pendant la saisie et un échec suivi d'une reprise avec la même saisie. Périmètre limité au formulaire, sans changement SQL, statut métier ou paiement.
+
+### SYS-04 / PUB-04 — distinguer canal disponible et réception activée
+
+Claude possède les libellés et leurs tests dans le centre de notifications. Le serveur peut exposer l'e-mail et le push comme disponibles après configuration et autorisation. Le centre doit alors rester exact. Retirer l'affirmation générale qu'aucun canal n'envoie de notifications et afficher « disponible » pour un canal proposé dont la préférence enregistrée est désactivée. Conserver le statut distinct du navigateur pour le push. Vérifier les cas disponible sans opt-in, opt-in confirmé et indisponible. Aucun appel supplémentaire, activation fournisseur ou modification des préférences par le test.
