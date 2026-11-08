@@ -25,35 +25,7 @@ const schema = z.discriminatedUnion("action", [
     })
     .strict(),
 ]);
-export async function GET() {
-  try {
-    const { db } = await authenticatedClient();
-    const [{ data, error }, gate] = await Promise.all([
-      db
-        .from("warranty_cases")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(100),
-      db.rpc("warranty_requests_enabled"),
-    ]);
-    dbError(error);
-    dbError(gate.error);
-    if (typeof gate.data !== "boolean")
-      throw new ApiError(
-        503,
-        "La disponibilité des demandes doit être vérifiée.",
-      );
-    return Response.json(
-      {
-        cases: data,
-        enabled: process.env.WARRANTY_REQUESTS_ENABLED === "true" && gate.data,
-      },
-      { headers: { "Cache-Control": "private, no-store" } },
-    );
-  } catch (error) {
-    return apiError(error);
-  }
-}
+export { GET } from '@/lib/features/warranty-history/handler';
 export async function POST(request: Request) {
   try {
     assertOrigin(request);

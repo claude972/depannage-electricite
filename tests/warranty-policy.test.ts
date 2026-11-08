@@ -253,13 +253,13 @@ test("existing intake keeps environment guard and historical resolution works wi
 });
 test("existing intake GET accepts only real boolean gate and combines both switches", async () => {
   await withEnv("true", async () => {
-    assert.equal((await harness(warranty, "true").GET()).status, 503);
+    assert.equal((await harness(warranty, "true").GET(req("/api/warranty"))).status, 503);
     assert.equal(
-      (await (await harness(warranty, false).GET()).json()).enabled,
+      (await (await harness(warranty, false).GET(req("/api/warranty"))).json()).enabled,
       false,
     );
     assert.equal(
-      (await (await harness(warranty, true).GET()).json()).enabled,
+      (await (await harness(warranty, true).GET(req("/api/warranty"))).json()).enabled,
       true,
     );
   });
