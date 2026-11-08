@@ -8,4 +8,4 @@ Sur une nouvelle modification, le navigateur a reçu un 503 injecté avant toute
 
 Les 23 étapes de nettoyage et 24 lectures indépendantes ont réussi. Le premier parcours `ed1fd5130d7d` s'était arrêté pendant le chargement du rapport après sauvegarde. L'attente de la seconde recette porte sur le rapport effectivement rendu. Le premier résultat et ses 24 lectures de nettoyage sont conservés.
 
-Les 17 tests ciblés et TypeScript strict passent. Le test Chromium avec réponses injectées vérifie aussi la reprise à saisie identique et le changement de dossier pendant la sauvegarde. [CI du commit e4ab640](https://github.com/claude972/depannage-electricite/actions/runs/42440888872)
+Les 17 tests ciblés, TypeScript strict et les deux jobs GitHub passent. Le test Chromium avec réponses injectées vérifie aussi la reprise à saisie identique et le changement de dossier pendant la sauvegarde. [CI du commit e4ab640](https://github.com/claude972/depannage-electricite/actions/runs/42440888872)
