@@ -119,6 +119,7 @@ import {
   type MissionSegment,
 } from "./artisan-lists";
 import { CredentialReviewPanel } from "../features/credential-reviews/credential-review-panel";
+import { ArtisanQuotesPanel } from "../features/artisan-quotes/artisan-quotes-panel";
 import { useArtisanPerformance, LivePerformanceSummary, LivePerformanceGrid, LiveRatingLine, livePerformanceSubtitle } from "../features/artisan-performance";
 import { CredentialReminderPanel } from "../features/operational-reminders/operational-reminder-panel";
 import { AppointmentReminderPanel } from "../features/appointment-reminders/appointment-reminder-panel";
@@ -2314,7 +2315,9 @@ function Quotes({ session }: { session: Session }) {
   ];
   const others = myQuotes.filter((q) => !groups.some((g) => g.key === q.status));
   const byIntervention = new Map(data.interventions.map((i) => [i.id, i]));
-  if (!myQuotes.length && !toWrite.length)
+  // ART-07: in live the list comes only from GET /api/artisan/quotes (paged, beyond the cache).
+  const live = session.mode !== "demo";
+  if (!live && !myQuotes.length && !toWrite.length)
     return (
       <>
         <PageTitle title="Devis" subtitle="Vos devis, groupés par état, avec leur total TTC." />
@@ -2335,7 +2338,14 @@ function Quotes({ session }: { session: Session }) {
     );
   return (
     <>
-      <PageTitle title="Devis" subtitle="Vos devis, groupés par état, avec leur total TTC — sur les dossiers chargés." />
+      <PageTitle
+        title="Devis"
+        subtitle={
+          live
+            ? "Vos devis, du plus récent au plus ancien, avec leur total TTC."
+            : "Vos devis, groupés par état, avec leur total TTC — sur les dossiers chargés."
+        }
+      />
       {toWrite.length > 0 && (
         <>
           <div className={styles.groupHead}>
@@ -2361,7 +2371,19 @@ function Quotes({ session }: { session: Session }) {
           </div>
         </>
       )}
-      {groups.map((g) => {
+      {live && (
+        <>
+          <div className={styles.groupHead}>
+            <h2>Mes devis</h2>
+          </div>
+          <ArtisanQuotesPanel
+            key={`quotes|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`}
+            context={session.mutationContext}
+            onOpenDossier={(id) => session.openIntervention(id)}
+          />
+        </>
+      )}
+      {!live && groups.map((g) => {
         const rows = myQuotes.filter((q) => q.status === g.key);
         const total = rows.reduce((n, q) => n + q.total_cents, 0);
         return (
@@ -2389,7 +2411,7 @@ function Quotes({ session }: { session: Session }) {
           </div>
         );
       })}
-      {others.length > 0 && (
+      {!live && others.length > 0 && (
         <>
           <div className={styles.groupHead}>
             <h2>Autres états</h2>
