@@ -269,3 +269,7 @@ Codex ajoute `site_id` à `GET /api/documents/history`. Réutiliser la projectio
 ### ART-05 — refuser une offre dans le flux paginé
 
 Codex raccorde le refus motivé au résumé anonymisé des offres disponibles. Réutiliser la commande `decline_offer` et la confirmation serveur. Le refus conserve le motif en cas d’échec et retire l’offre après confirmation. Acceptation et refus partagent la protection contre les doubles envois. La recette suit la phase 1.
+
+### PUB-10 — publier la politique de confidentialité validée par l’exploitant
+
+Codex ajoute les champs facultatifs `privacy_controller`, `privacy_retention` et `privacy_notice` à l’instantané public versionné et au validateur SQL. Claude possède l’éditeur et la page Confidentialité. Utiliser le brouillon et la publication existants, afficher uniquement les valeurs publiées comme texte et conserver les anciennes versions lisibles. L’exploitant fournit les informations et le texte approuvé. La recette suit la phase 1.
