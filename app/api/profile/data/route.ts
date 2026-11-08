@@ -13,7 +13,7 @@ import {requestSchema,checked,publicRequest,checkedPage} from "@/lib/features/da
 export const dynamic = "force-dynamic";
 
 const headers = { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" };
-const sections = z.enum(["account", "addresses", "requests", "messages", "documents", "support", "erasure_requests"]);
+const sections = z.enum(["account", "addresses", "requests", "messages", "documents", "support", "erasure_requests", "payment_reminders"]);
 const pageSize = 100;
 const records = {
   addresses: {
@@ -44,6 +44,18 @@ const records = {
 } as const;
 const accountFields = "id,full_name,phone,role,created_at";
 const preferencesFields = "user_id,muted_kinds,email_enabled,sms_enabled,push_enabled,updated_at";
+const instant = z.iso.datetime({ offset: true });
+const paymentReminderPage = z.object({
+  rows: z.array(z.object({
+    id: uuid,
+    recipient_id: uuid,
+    version: z.number().int().positive(),
+    remind_at: instant,
+    status: z.enum(["scheduled", "cancelled", "sent", "invalidated", "muted"]),
+    processed_at: instant.nullable(),
+  }).strict().refine(row => (row.status === "scheduled") === (row.processed_at === null))).max(pageSize),
+  next_cursor: uuid.nullable(),
+}).strict();
 const erasure = z.object({
   action: z.literal("request_erasure"),
   request_id: uuid,
@@ -84,6 +96,24 @@ export async function GET(request: Request) {
     if(section.data==='erasure_requests'){
       const result=await db.rpc('list_data_erasure_requests',{p_all:false,p_after:after.data,p_limit:100});dbError(result.error);
       return Response.json({section:section.data,...checkedPage(result.data,after.data,user.id)},{headers});
+    }
+
+    if (section.data === "payment_reminders") {
+      const result = await db.rpc("export_personal_payment_reminders", { p_after: after.data });
+      dbError(result.error);
+      const page = checked(paymentReminderPage, result.data);
+      let previous = after.data?.toLowerCase() ?? "";
+      const rows = page.rows.map(({ recipient_id, ...row }) => {
+        if (recipient_id !== user.id || row.id <= previous) {
+          throw new ApiError(503, "La portée du téléchargement doit être vérifiée.");
+        }
+        previous = row.id;
+        return row;
+      });
+      if (page.next_cursor !== null && (rows.length !== pageSize || page.next_cursor !== previous)) {
+        throw new ApiError(503, "Les données reçues doivent être vérifiées.");
+      }
+      return Response.json({ section: section.data, rows, next_cursor: page.next_cursor }, { headers });
     }
 
     if (section.data === "account") {
