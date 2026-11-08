@@ -293,3 +293,9 @@ Codex possède la migration et `/api/sites/[id]/documents`. Réutiliser le bucke
 ### ENT-04 / ENT-10 — échéances et audits sur les fiches exactes
 
 Codex raccorde les listes paginées d’échéances et d’audits à la fiche directe, après autorisation du site. Réutiliser les lectures et actions serveur de la fiche normale, et la même séparation entre échéances actives, terminées et audits. Un site archivé ou un lecteur peut consulter l’historique selon ses droits. Le code ne modifie aucune règle de conformité.
+
+### ENT-04 / SYS-06 — versionner et archiver les pièces de site
+
+Codex possède la migration et `/api/sites/[id]/documents`. Claude possède `components/features/site-attachments/**`. Une nouvelle version conserve le fichier précédent dans l’historique privé. L’archivage masque une pièce de la liste courante et permet de la rétablir. Vérifier les droits et le caractère actif du site lors de chaque écriture. Les documents d’intervention gardent leur historique actuel.
+
+Contrat de phase 1. Chaque pièce ajoute `version`, `revision`, `replaces_id`, `replaced_at` et `archived_at`. `GET ?state=current|history` utilise `current` par défaut et un curseur propre à la vue. `history` liste les versions remplacées et les pièces archivées. Le lien signé reste accessible par identifiant exact selon les droits. Le dépôt accepte `replaces_id` en multipart et conserve la catégorie du document d’origine. `PATCH` accepte `{id,action:"archive"|"restore",expected_revision}` et renvoie `{document}`. Un remplacement requiert une pièce courante et active. La recette suit la fin du codage.
