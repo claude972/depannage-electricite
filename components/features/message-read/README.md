@@ -1,6 +1,6 @@
 # Message read confirmations (SYS-04 / M62)
 
-This module follows the contract of `POST /api/messages/read-state` (cbd0d2b). It is isolated, and nothing is mounted yet: the MessageCenter in `forms.tsx` will be wired after the photos lot.
+This module follows the contract of `POST /api/messages/read-state` (cbd0d2b). It is mounted in `MessageCenter` (`components/app/forms.tsx`). There, the hook is always called, and it stays inactive in demo, without a mutation context, without a selected and authorised thread, or when that thread is « indisponible ». A 404 from the route is silent: no label and no control.
 
 ```tsx
 const read = useMessageReadState({ context: session.mutationContext, interventionId, messages, demo });

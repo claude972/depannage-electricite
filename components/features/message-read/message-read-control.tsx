@@ -5,7 +5,7 @@ import type { MessageReadState } from "./use-message-read-state";
 
 /** « Marquer comme lus » for the received unread messages of the thread + « Actualiser » + errors. */
 export function MessageReadControl({ state, demo = false }: { state: MessageReadState; demo?: boolean }) {
-  if (demo) return null;
+  if (demo || state.unavailable) return null;
   return (
     <div className="message-read-control" data-message-read={state.loading ? "loading" : state.error ? "error" : "idle"} aria-busy={state.loading || state.marking || undefined} style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
       {state.canMarkRead && (

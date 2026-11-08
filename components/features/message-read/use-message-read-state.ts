@@ -13,6 +13,8 @@ export type MessageReadState = {
   error: string | null;
   loading: boolean;
   marking: boolean;
+  /** 404 from the route: silent, no label, no control. */
+  unavailable: boolean;
 };
 
 export function useMessageReadState({ context, interventionId, messages, demo, fetcher }: { context: Context; interventionId: string | null | undefined; messages: readonly ReadMessage[]; demo: boolean; fetcher?: typeof fetch }): MessageReadState {
@@ -21,7 +23,7 @@ export function useMessageReadState({ context, interventionId, messages, demo, f
   const ids = scope && interventionId ? threadIds(messages, interventionId) : [];
   const idsKey = ids.join(",");
   const [state, setState] = useState<{ scope: string | null; map: Map<string, boolean> }>({ scope: null, map: new Map() });
-  const [status, setStatus] = useState<{ scope: string | null; loading: boolean; marking: boolean; error: string | null }>({ scope: null, loading: false, marking: false, error: null });
+  const [status, setStatus] = useState<{ scope: string | null; loading: boolean; marking: boolean; error: string | null; unavailable?: boolean }>({ scope: null, loading: false, marking: false, error: null });
   const latest = useRef({ context, fetcher, scope, ids, messages, interventionId });
   latest.current = { context, fetcher, scope, ids, messages, interventionId };
   const seq = useRef(0);
@@ -46,6 +48,10 @@ export function useMessageReadState({ context, interventionId, messages, demo, f
       for (const batch of chunks(list)) {
         const rows = await postReadState(f(), "state", thread, batch, ctl?.signal);
         if (my !== seq.current || currentScope() !== at) return; // late / other scope: dropped
+        if (rows === "unavailable") {
+          setStatus({ scope: at, loading: false, marking: false, error: null, unavailable: true });
+          return;
+        }
         if (!rows) {
           setStatus((s) => ({ ...s, scope: at, loading: false, error: "failed" }));
           return; // an error confirms nothing new; earlier proofs stay
@@ -76,9 +82,9 @@ export function useMessageReadState({ context, interventionId, messages, demo, f
   }, [scope, idsKey, refresh]);
 
   const map = state.scope === scope ? state.map : new Map<string, boolean>();
-  const st = status.scope === scope ? status : { scope, loading: false, marking: false, error: null };
+  const st = status.scope === scope ? status : { scope, loading: false, marking: false, error: null, unavailable: false };
   const byId = new Map(messages.map((m) => [m.id.toLowerCase(), m]));
-  const statusOf = (messageId: string) => statusFor(byId.get(messageId.toLowerCase()), uid, map);
+  const statusOf = (messageId: string) => (st.unavailable ? null : statusFor(byId.get(messageId.toLowerCase()), uid, map));
   const unread = ids.filter((id) => {
     const m = byId.get(id);
     return m && uid && m.author_id.toLowerCase() !== uid.toLowerCase() && map.get(id) === false;
@@ -93,6 +99,10 @@ export function useMessageReadState({ context, interventionId, messages, demo, f
       for (const batch of chunks(unread)) {
         const rows = await postReadState(f(), "mark_read", thread, batch);
         if (currentScope() !== at) return;
+        if (rows === "unavailable") {
+          setStatus((s) => ({ ...s, scope: at, unavailable: true, error: null }));
+          return;
+        }
         if (!rows) {
           setStatus((s) => ({ ...s, scope: at, error: "mark" }));
           return; // only server rows mark a message read
@@ -111,11 +121,12 @@ export function useMessageReadState({ context, interventionId, messages, demo, f
 
   return {
     statusOf,
-    canMarkRead: Boolean(scope) && unread.length > 0 && !st.marking,
+    canMarkRead: Boolean(scope) && !st.unavailable && unread.length > 0 && !st.marking,
     markRead,
     refresh,
     error: st.error,
     loading: st.loading,
     marking: st.marking,
+    unavailable: Boolean(st.unavailable),
   };
 }

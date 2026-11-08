@@ -47,7 +47,8 @@ export function parseRows(body: unknown, ids: string[], mark: boolean): { messag
   }
   return out;
 }
-export async function postReadState(fetcher: typeof fetch, action: "state" | "mark_read", interventionId: string, ids: string[], signal?: AbortSignal): Promise<{ message_id: string; read: boolean }[] | null> {
+/** Rows, null (error: confirms nothing) or "unavailable" (404: the route / thread is not offered — silent). */
+export async function postReadState(fetcher: typeof fetch, action: "state" | "mark_read", interventionId: string, ids: string[], signal?: AbortSignal): Promise<{ message_id: string; read: boolean }[] | null | "unavailable"> {
   try {
     const r = await fetcher(READ_STATE_PATH, {
       method: "POST",
@@ -57,6 +58,7 @@ export async function postReadState(fetcher: typeof fetch, action: "state" | "ma
       body: JSON.stringify({ action, intervention_id: interventionId.toLowerCase(), message_ids: ids }),
       ...(signal ? { signal } : {}),
     });
+    if (r.status === 404) return "unavailable";
     if (!r.ok) return null;
     return parseRows(await r.json().catch(() => null), ids, action === "mark_read");
   } catch {

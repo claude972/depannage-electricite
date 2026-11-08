@@ -35,6 +35,8 @@ import { PHOTO_CAPTION_MAX, PHOTO_COPY, newSendId, openPhoto, sendPhotoMessage, 
 import { TAX_RATE_HINT, TAX_RATE_OPTIONS, TAX_RATE_PLACEHOLDER, TAX_RATE_REQUIRED, parseTaxRateInput, type TaxRate } from "./tax-rate";
 import { Empty, Field, ConfirmAction, Unavailable } from "./ui";
 import { ReviewEstimate } from "../features/indicative-prices/indicative-range";
+import { useMessageReadState } from "../features/message-read/use-message-read-state";
+import { MessageReadBadge, MessageReadControl } from "../features/message-read/message-read-control";
 import { useWarrantyHistory } from "../features/warranty-corrective/use-warranty-history";
 import { RecordedTerms } from "../features/warranty-policy/recorded-terms";
 import { HISTORY_COPY as WARRANTY_COPY, claimAllowed } from "../features/warranty-corrective/warranty-history";
@@ -819,6 +821,11 @@ export function MessageCenter({
     ? []
     : mergeMessages(id, history.enabled ? visibleHistoryMessages(id, messages, h.pages) : messages.filter((m) => m.intervention_id === id), sentPhotos.filter((x) => x.key === threadKey).map((x) => x.message));
   const firstLoad = history.enabled && !h.loaded && (h.status === "idle" || h.status === "loading");
+  // SYS-04 / M62: read confirmations of the open thread. The hook is always called; its ACTIVITY is
+  // gated (live, mutation context, selected authorised thread, not « indisponible »); otherwise it is
+  // disabled and makes no call. Labels come from the server state only.
+  const readActive = live && Boolean(context) && Boolean(id) && Boolean(target) && !unavailable;
+  const readState = useMessageReadState({ context: context ?? NO_READ_CONTEXT, interventionId: readActive ? id : null, messages: rows, demo: !readActive });
   return (
     <section className="panel messages-layout">
       <div className="message-threads">
@@ -850,6 +857,7 @@ export function MessageCenter({
               <h2>{target ? category(target.category).label : "Conversation"}</h2>
               <span>{target ? "Conversation liée à l’intervention" : `Dossier ${shortId(id)}`}</span>
             </div>
+            {readActive && <MessageReadControl state={readState} />}
             <div className="message-history" aria-live="polite" aria-busy={h.status === "loading"}>
               {history.enabled && offersOlder(h) && (
                 <button
@@ -903,6 +911,7 @@ export function MessageCenter({
                     {m.body && <p>{m.body}</p>}
                     {m.attachment_id && (photos && context ? <PhotoView key={`${threadKey}|${m.id}`} messageId={m.id} context={context} fetchImpl={photoFetch} /> : <p className="form-note">Photo jointe</p>)}
                     <small>{date(m.created_at)}</small>
+                    <MessageReadBadge status={readState.statusOf(m.id)} own={m.author_id === profileId} />
                   </div>
                 ))
               ) : firstLoad ? null : (
@@ -973,6 +982,8 @@ export function MessageCenter({
 }
 // ---- Photo in a conversation (SYS-04 / M62) -------------------------------------------------
 type PhotoContext = { generation(): number; userId(): string | null };
+/** No identity: the read-state hook stays inactive. */
+const NO_READ_CONTEXT: PhotoContext = { generation: () => 0, userId: () => null };
 type PhotoPhase = "ready" | "uploading" | "upload_unknown" | "sending" | "send_retry" | "collision" | "refused" | "signed_out" | "unavailable" | "done";
 /** One photo send of ONE identity + generation + dossier: the confirmed document and the frozen
  *  command are kept for an identical replay (same send id), in memory only. */
