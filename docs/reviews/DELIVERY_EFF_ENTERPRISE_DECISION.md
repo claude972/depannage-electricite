@@ -21,3 +21,10 @@ L’essai `6308109a5406` passe ses 12 étapes. Depuis les écrans, le client cor
 L’état final est « terminée », avec un devis accepté à 100 € et le règlement attendu sur la plateforme. Aucun paiement ou règlement n’est enregistré. Les 24 étapes de nettoyage et 29 lectures indépendantes passent. Aucune cohorte de recette connue active après les contrôles.
 
 Les deux jobs CI du commit déployé passent. [CI](https://github.com/claude972/depannage-electricite/actions/runs/42435058811)
+
+## WebKit et Safari iOS
+
+- Les huit fiches passent en clair et en sombre sous WebKit avec un viewport iPhone émulé. Les prix indicatifs et les photos sont présents. Les deux boutons d’entrée ouvrent le formulaire. Le chemin urgent avance, et le chemin planifié refuse l’absence de créneau puis avance après sélection. Le prénom est visible à l’étape suivante. Aucun envoi API.
+- Le premier essai omettait le créneau du chemin planifié. Un essai instrumenté a ensuite confirmé les 16 passages et attribué les cinq erreurs de page au script de feedback Vercel injecté dans la preview. La répétition qui bloque uniquement ce script dans le navigateur de test passe ses 16 cas sans erreur. Aucun paramètre Vercel modifié pour ce contrôle.
+- L’émulation hors ligne intégrée de Playwright WebKit a échoué avec une erreur interne de navigation. Une coupure du transport via un proxy local limité au seul hôte de preview a reproduit la perte de connexion. Le brouillon est sauvé, relu au rechargement puis repris dans le formulaire après rétablissement. Les trois fichiers publics sont les seuls en cache et aucune écriture API n’est observée.
+- La fiche « Coupure de courant partielle » avec la photo, l’estimation et le bouton « Confirmer » est visible dans Safari sur un simulateur iPhone 17 iOS 26.3. L’ouverture CLI a d’abord renvoyé un délai dépassé, puis le chargement a été constaté visuellement. Le Mac verrouillé a empêché l’essai d’ajout à l’écran d’accueil. Le simulateur temporaire a été supprimé. Les essais d’installation iOS et Android et les essais sur appareils physiques restent à réaliser.

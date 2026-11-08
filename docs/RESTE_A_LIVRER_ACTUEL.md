@@ -10,7 +10,7 @@ Les constats plus anciens restent ci-dessous pour l’historique. La preview et 
 - La preview `eff0061` passe l’approbation puis l’acceptation du devis exact d’un dossier entreprise ancien. Elle passe aussi les douze étapes du parcours client–artisan, de la demande à la clôture avec PDF privé. Le règlement reste attendu. [Recettes sur la version courante](reviews/DELIVERY_EFF_ENTERPRISE_DECISION.md)
 - Stripe et Vonage attendent leurs accès et la recette fournisseur. Les canaux e-mail et push et la revue photo avec validation humaine disposent de code et de contrôles locaux. Leur configuration et leurs essais réels restent à effectuer. [Notifications](EXTERNAL_NOTIFICATION_OUTBOX_BACKEND.md) · [Revue photo](PHOTO_TRIAGE_BACKEND.md)
 - L’activation du compte propriétaire Super Admin et sa recette positive restent différées. Les règles de conservation et d’effacement doivent être validées avant de coder l’exécution de la suppression. Le ticket d’effacement est déjà utilisable. [Demandes d’effacement](DATA_ERASURE_REQUESTS_BACKEND.md)
-- La vérification PWA sur iOS et Android et la distribution native restent à faire. La reprise de brouillon a une preuve dans Chromium. Le natif suit la validation Web/PWA selon l’ordre du plan. [Ordre de livraison](PLAN_LIVRAISON_INTEGRALE.md)
+- La vérification PWA sur iOS et Android et la distribution native restent à faire. La reprise de brouillon est vérifiée dans Chromium et WebKit, et une fiche a été affichée dans Safari sur simulateur iPhone. Le natif suit la validation Web/PWA selon l’ordre du plan. [Ordre de livraison](PLAN_LIVRAISON_INTEGRALE.md)
 
 ## Assemblage de code du 7 novembre avant la recette
 

@@ -4,7 +4,7 @@ Objectif : application entière, seuls raccordements Stripe et SMS différés. P
 
 ## Référence en ligne
 
-La preview `eff0061` permet au gestionnaire d’approuver puis d’accepter le devis exact d’un dossier ancien. Le lecteur est en lecture seule et la décision en attente bloque l’acceptation. Sur la même version, les douze étapes du parcours client–artisan passent jusqu’à l’intervention terminée, PDF privé vérifié et règlement encore attendu. Le brouillon PWA et les nettoyages passent. [Preview](https://depannage-electricite-k098dsnpw-brafas-projects.vercel.app) · [Preuves](reviews/DELIVERY_EFF_ENTERPRISE_DECISION.md)
+La preview `eff0061` permet au gestionnaire d’approuver puis d’accepter le devis exact d’un dossier ancien. Le lecteur est en lecture seule et la décision en attente bloque l’acceptation. Sur la même version, les douze étapes du parcours client–artisan passent jusqu’à l’intervention terminée, PDF privé vérifié et règlement encore attendu. Le brouillon PWA passe dans Chromium et WebKit. Les seize cas publics WebKit et l’affichage Safari sur simulateur iPhone sont vérifiés selon les conditions du rapport. Les nettoyages passent. [Preview](https://depannage-electricite-k098dsnpw-brafas-projects.vercel.app) · [Preuves](reviews/DELIVERY_EFF_ENTERPRISE_DECISION.md)
 
 ### Version précédente `9e6d24f`
 
