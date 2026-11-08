@@ -163,3 +163,6 @@ Claude possède `admin-space.tsx` et les composants de ce parcours. Le sélecteu
 Astra possède les lectures paginée et ponctuelle des approbations d’entreprise, sous RLS, dans `app/api/enterprise/approvals` et `lib/features/enterprise-approvals`. Périmètre organisation et site éventuel, filtre de statut, curseur et projection minimale. La lecture exacte inclut le devis et le site concernés et la règle utile à l’action. Aucune modification des politiques ou de la commande de décision. Vérifier une approbation en attente au-delà de 200, un dossier au-delà de 100, les statuts, le retrait de droit et le cloisonnement des organisations.
 
 Claude possède le raccordement des deux vues entreprise après publication du contrat. Présenter la liste et le détail serveur dans l’organisation active. Conserver l’action existante et relire après décision, avec les états de chargement, vide, refus et reprise. Les droits du serveur gouvernent les actions et les données de démonstration restent isolées.
+
+## ENT-12 — lectures paginées approbations (Astra, ROOT4c14a6d)
+Claim exclusif app/api/enterprise/approvals/**, lib/features/enterprise-approvals/**, tests et docs/ENTERPRISE_APPROVALS_BACKEND.md. Contrat publié avant code ; RLS manager/membre/site, pagination50 et point-read exact avec règle. Aucun changement des commandes/approbations avancées/SQL/UI/cloud.
