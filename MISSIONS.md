@@ -166,3 +166,9 @@ Claude possède le raccordement des deux vues entreprise après publication du c
 
 ## ENT-12 — lectures paginées approbations (Astra, ROOT4c14a6d)
 Claim exclusif app/api/enterprise/approvals/**, lib/features/enterprise-approvals/**, tests et docs/ENTERPRISE_APPROVALS_BACKEND.md. Contrat publié avant code ; RLS manager/membre/site, pagination50 et point-read exact avec règle. Aucun changement des commandes/approbations avancées/SQL/UI/cloud.
+
+### CLI-08 / ENT-12 / SYS-07 — historique et lien direct des devis
+
+Astra possède la lecture paginée du client et la lecture ponctuelle client/entreprise dans `app/api/quotes` et `lib/features/recipient-quotes`. Publier le contrat court avant le code. Reprendre la pagination et la projection utiles du parcours artisan. Filtrer sous la RLS de l’utilisateur, avec le propriétaire exact du dossier côté client et l’organisation et le site autorisés côté entreprise. La lecture d’une ancienne version indique si elle est encore courante. Conserver les règles d’acceptation, de refus et de paiement. Vérifier plus de 200 devis, plus de 20 révisions, les liens directs, les refus entre comptes et organisations et la reprise après erreur.
+
+Claude possède la liste des devis du client et les vues de détail client et entreprise. Préserver la consultation de l’ancienne version et de son PDF privé, ainsi que le retour vers le dossier et le devis courant. L’écran entreprise résout un identifiant de devis par la lecture dédiée. Effacer le devis affiché au changement d’identité ou de périmètre. La démonstration conserve ses données locales. Intégration et preview par ROOT.
