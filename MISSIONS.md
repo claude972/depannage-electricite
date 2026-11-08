@@ -149,3 +149,7 @@ Claude raccorde la fiche site après publication du contrat. Les onglets d'inter
 
 ## SYS-07 / ENT-04 / ENT-10 — site-records (Astra, mission ROOT44bb56f)
 Propriété exclusive route sites/[id]/records, lib/features/site-records, tests et docs/SITE_RECORDS_BACKEND.md. Contrat commit avant code ; lecture manager sous RLS, pages50 date+UUID, aucun droit/migration nouveaux ; preuve dossiers101/échéances301 et scopes. Aucun UI/shared/cloud.
+
+### CLI-05 / SYS-08 — libellés des coordonnées à la confirmation
+
+Claude vérifie la confirmation de réservation. Dans l’éditeur de coordonnées, le message d’erreur placé dans le libellé modifie le nom accessible du champ Téléphone. Réutiliser `Field` pour associer le libellé et le message séparément. Conserver validation, valeurs, apparence et soumission. Vérifier les noms accessibles avant et après correction du téléphone, le focus clavier et l’absence de requête tant que le contact est invalide.
