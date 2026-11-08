@@ -289,3 +289,7 @@ Codex ajoute `team_text` et `network_terms` à la publication versionnée de l�
 ### ENT-04 / SYS-06 — déposer une pièce privée directement sur un site
 
 Codex possède la migration et `/api/sites/[id]/documents`. Réutiliser le bucket privé et la validation PDF/JPEG/PNG/WebP, avec un chemin distinct et une métadonnée rattachée au site. Dépôt limité au gestionnaire d’un site actif, lecture sous RLS, permissions relues lors de la finalisation, aucun changement aux documents d’intervention. Claude raccordera le dépôt et la liste paginée à la fiche. Aucun nouveau format ni règle de conservation implicite.
+
+### ENT-04 / ENT-10 — échéances et audits sur les fiches exactes
+
+Codex raccorde les listes paginées d’échéances et d’audits à la fiche directe, après autorisation du site. Réutiliser les lectures et actions serveur de la fiche normale, et la même séparation entre échéances actives, terminées et audits. Un site archivé ou un lecteur peut consulter l’historique selon ses droits. Le code ne modifie aucune règle de conformité.
