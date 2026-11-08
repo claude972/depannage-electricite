@@ -27,7 +27,7 @@ Plan court : reproductions isolées E01, E28, E73 et E74 dans cet ordre, suite e
 
 | ID | Gravité | État | Mécanisme | Commit | Test ajouté | Fichiers modifiés | Note |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| E01 | Bloquant | En cours | Isolé | — | — | — | Attribution et escalade, révision 0. |
+| E01 | Bloquant | Vérifié ciblé | Isolé | `2feb706` | `sql-phase2-lot-a-blockers-review.mjs` | Migration additive `support_ticket_audit_target` | HTTP 422 ×2, SQL 23514 avant. HTTP 200 ×2 et audits exacts après. Suite globale à comparer. |
 | E28 | Bloquant | À traiter | Isolé | — | — | — | Première version de garantie. |
 | E73 | Bloquant | À traiter | Isolé | — | — | — | Motif PostgreSQL du secret de dispatch. |
 | E74 | Bloquant | À traiter | Isolé | — | — | — | Corps des déclencheurs HTTP internes. |
@@ -49,4 +49,4 @@ Plan court : reproductions isolées E01, E28, E73 et E74 dans cet ordre, suite e
 
 ## Échecs préexistants constatés sur HEAD
 
-`npm run check` lancé sur le checkout exact avec Node 24.15.0. Le typecheck est passé. La suite a déjà relevé des échecs en signature de document, export des données client et rendu responsive de la fiche site. Le recensement complet est en cours dans le journal privé de baseline. Les échecs restent visibles.
+`npm run check` lancé sur le checkout exact avec Node 24.15.0. Le typecheck est passé. La suite a donné 2 127 succès, 12 échecs et 2 skips (2 141 tests). Échecs en signature de document, export des données client, fiche site responsive/archivée et montage abonnements. La chaîne ne lance donc pas les builds automatiquement. La recette SQL de référence signale aussi un échec préexistant dans `sql-operational-reminders-review.mjs`.
