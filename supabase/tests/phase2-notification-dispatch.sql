@@ -12,8 +12,8 @@ declare
   paths text[];
   fixture_secret text := repeat('Z', 256);
 begin
-  if current_user <> 'postgres' or inet_server_addr() <> '127.0.0.1'::inet
-    or current_setting('pg_net.database_name', true) <> 'phase3_never_run_worker'
+  if current_user <> 'postgres' or inet_server_addr() is distinct from '127.0.0.1'::inet
+    or current_setting('pg_net.database_name', true) is distinct from 'phase3_never_run_worker'
     or exists (select 1 from net.http_request_queue)
     or exists (select 1 from vault.decrypted_secrets where name like 'depannage_notification_dispatch_%')
     or exists (select 1 from notification_delivery_private.outbox) then

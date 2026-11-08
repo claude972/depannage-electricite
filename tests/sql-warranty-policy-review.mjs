@@ -225,7 +225,7 @@ try {
   );
   const resolved = await as(
     "owner",
-    "select to_jsonb(public.resolve_warranty($1,'declined','Décision synthétique QA documentée'))v",
+    "select to_jsonb(public.resolve_warranty($1,'declined','Décision synthétique QA documentée',(select updated_at from public.warranty_cases where id=$1)))v",
     [first.id],
   );
   ok(
@@ -307,7 +307,7 @@ try {
   await denied(() => readLink("correctiveClient", crypto.randomUUID()), "P0002");
   await denied(() => linkJob("correctiveClient"), "42501");
   await denied(() => linkJob("owner"), "P0001");
-  await as("owner", "select public.resolve_warranty($1,'reviewing','Examen de recette')v", [correctiveCase]);
+  await as("owner", "select public.resolve_warranty($1,'reviewing','Examen de recette',(select updated_at from public.warranty_cases where id=$1))v", [correctiveCase]);
   await denied(() => linkJob("owner", baseJob), "22023");
   await denied(() => linkJob("owner", otherJob), "22023");
   await denied(() => linkJob("owner", cancelled), "22023");
@@ -319,7 +319,7 @@ try {
   const firstLink = await linkJob("owner");
   ok(firstLink.link.id === targetJob && !firstLink.replayed, "corrective link saved");
   ok((await readLink("correctiveClient")).link.id === targetJob, "client can read the authorized corrective job");
-  await as("owner", "select public.resolve_warranty($1,'resolved','Résolution de recette')v", [correctiveCase]);
+  await as("owner", "select public.resolve_warranty($1,'resolved','Résolution de recette',(select updated_at from public.warranty_cases where id=$1))v", [correctiveCase]);
   ok((await linkJob("owner")).replayed, "lost response can replay after case resolution");
   await denied(() => linkJob("owner", nextJob), "23505");
   ok((await db.query("select count(*)::int n from public.audit_log where action='warranty_corrective_linked'")).rows[0].n === 1,

@@ -154,8 +154,8 @@ await assert.rejects(as('client1',"select public.request_warranty($1,'Cette inte
 await db.query("update public.interventions set completed_at=now()-interval '1 day' where id=$1",[job.id]);
 const warranty=(await as('client1',"select * from public.request_warranty($1,'Le problème électrique est revenu après intervention.')",[job.id])).rows[0];
 await assert.rejects(as('client1',"select public.request_warranty($1,'Une seconde réclamation concurrente doit être refusée.')",[job.id]));
-await assert.rejects(as('artisan1',"select public.resolve_warranty($1,'resolved','Résolution non autorisée par artisan')",[warranty.id]));
-await as('admin',"select public.resolve_warranty($1,'reviewing','Réclamation reçue et en cours de contrôle.')",[warranty.id]);
+await assert.rejects(as('artisan1',"select public.resolve_warranty($1,'resolved','Résolution non autorisée par artisan',now())",[warranty.id]));
+await as('admin',"select public.resolve_warranty($1,'reviewing','Réclamation reçue et en cours de contrôle.',(select updated_at from public.warranty_cases where id=$1))",[warranty.id]);
 console.log('PASS: warranty gate cannot be bypassed, only owner within year may request, one open case, admin-only resolution');
 // New Web/PWA operations remain independent from offline shell behavior.
 const operationJob=(await as('client2',"select * from public.create_intervention('outage','La lumière du logement ne fonctionne plus.','34 rue de test','97200','Fort-de-France','scheduled',null)")).rows[0];

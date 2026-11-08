@@ -20,6 +20,7 @@ const schema = z.discriminatedUnion("action", [
     .object({
       action: z.literal("resolve"),
       case_id: uuid,
+      expected_version: z.iso.datetime({ offset: true }),
       status: z.enum(["reviewing", "resolved", "declined"]),
       resolution: z.string().trim().min(10).max(4000),
     })
@@ -49,6 +50,7 @@ export async function POST(request: Request) {
             p_case_id: input.case_id,
             p_status: input.status,
             p_resolution: input.resolution,
+            p_expected_version: input.expected_version,
           });
     dbError(result.error);
     return Response.json({ case: result.data });

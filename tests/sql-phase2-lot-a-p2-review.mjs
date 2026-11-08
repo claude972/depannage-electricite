@@ -58,3 +58,50 @@ test("E15 — a stale appointment form cannot overwrite another participant's ch
     await db.close();
   }
 });
+
+test("E29 — a stale warranty decision cannot replace the resolution of another operator", async () => {
+  const db = await freshDatabase();
+  try {
+    const otherAdmin = { ...actor, id: randomUUID(), email: "other-operator@example.test" };
+    for (const user of [actor, otherAdmin, requester])
+      await db.query("insert into auth.users(id,email) values($1,$2)", [user.id, user.email]);
+    await db.query("update public.profiles set role='admin' where id in ($1,$2)", [actor.id, otherAdmin.id]);
+    const job = randomUUID(), id = randomUUID();
+    await db.query(`insert into public.interventions(id, client_id, category, description, address,
+      postal_code, city, urgency, status, estimate_min_cents, estimate_max_cents)
+      values($1,$2,'panel','Défaut électrique de recette','Adresse de test','97200','Fort-de-France','scheduled','paid',10000,20000)`, [
+      job, requester.id,
+    ]);
+    const version = (await db.query(`insert into public.warranty_cases(id, intervention_id, client_id, description)
+      values($1,$2,$3,'Demande de garantie de recette') returning to_jsonb(updated_at) as version`, [id, job, requester.id])).rows[0].version;
+    const route = "/api/warranty";
+    const resolve = (status, resolution, expected) => ({
+      action: "resolve", case_id: id, status, resolution,
+      ...(expected === undefined ? {} : { expected_version: expected }),
+    });
+    await withNext(db, async http => {
+      const post = async (user, command) => {
+        const response = await http(route, { method: "POST", body: JSON.stringify(command) }, user);
+        return { status: response.status, body: await response.json() };
+      };
+      const first = await post(actor, resolve("resolved", "Résolution documentée par le premier opérateur.", version));
+      const versioned = first.status === 200;
+      const resolved = versioned ? first : await post(actor, resolve("resolved", "Résolution documentée par le premier opérateur."));
+      assert.equal(resolved.status, 200, JSON.stringify(resolved.body));
+      const stale = await post(otherAdmin, resolve("reviewing", "Saisie ancienne du second opérateur.", versioned ? version : undefined));
+      const current = (await db.query("select status,resolution,to_jsonb(updated_at) version from public.warranty_cases where id=$1", [id])).rows[0];
+      assert.deepEqual([first.status, stale.status, current.status, current.resolution],
+        [200, 409, "resolved", "Résolution documentée par le premier opérateur."]);
+      assert.notEqual(current.version, version);
+      assert.equal((await post(otherAdmin, resolve("reviewing", "Version absente à rejeter."))).status, 422);
+      await assert.rejects(asUser(db, otherAdmin, "select public.resolve_warranty($1,'reviewing',$2) v", [
+        id, "Appel SQL sans version",
+      ]), error => error.code === "42501");
+      assert.equal((await db.query(
+        "select count(*)::int count from public.audit_log where intervention_id=$1 and action like 'warranty_%'", [job],
+      )).rows[0].count, 1);
+    }, {}, { users: [actor, otherAdmin], rpcAllowlist: new Set(["resolve_warranty"]) });
+  } finally {
+    await db.close();
+  }
+});
