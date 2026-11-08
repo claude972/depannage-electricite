@@ -47,6 +47,7 @@ import {
   category,
   csv,
   date,
+  dateTime,
   download,
   money,
   shortId,
@@ -61,6 +62,7 @@ import type {
   Intervention,
   Line,
   Message,
+  Operations,
   Profile,
   ProfessionalData,
   Quote,
@@ -765,6 +767,7 @@ export function MessageCenter({
   readOnlyReason,
   context,
   photoFetch = browserFetch,
+  loadOperations,
 }: {
   interventions: Intervention[];
   messages: Message[];
@@ -786,6 +789,8 @@ export function MessageCenter({
   context?: PhotoContext;
   /** Test seam for the photo requests (upload, send, open). */
   photoFetch?: PhotoFetch;
+  /** CLI-06 / ART-06: the session's already-authorised operations read (contact + appointment). */
+  loadOperations?: (id: string) => Promise<Operations | null>;
 }) {
   const [picked, setId] = useState(selectedId || interventions[0]?.id || "");
   // The open dossier follows the selectedId prop (hash #messages/A → #messages/B in the same
@@ -858,6 +863,16 @@ export function MessageCenter({
               <span>{target ? "Conversation liée à l’intervention" : `Dossier ${shortId(id)}`}</span>
             </div>
             {readActive && <MessageReadControl state={readState} />}
+            {/* CLI-06 / ART-06: expected participant + recorded slot, on explicit open, live only. */}
+            {live && context && loadOperations && target && !unavailable && (
+              <ConversationContact
+                key={`${context.userId() ?? "-"}|${context.generation()}|${target.id}|${target.artisan_id ?? "-"}|${target.client_id ?? "-"}|${target.status}`}
+                intervention={target}
+                role={role}
+                context={context}
+                load={loadOperations}
+              />
+            )}
             <div className="message-history" aria-live="polite" aria-busy={h.status === "loading"}>
               {history.enabled && offersOlder(h) && (
                 <button
@@ -980,6 +995,91 @@ export function MessageCenter({
     </section>
   );
 }
+// ---- Contact and appointment of the conversation (CLI-06 / ART-06 / M62) -----------------------
+/** A phone number usable in a tel: link: E.164, or a 10-digit French national number. */
+export function telHref(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const compact = raw.trim().replace(/[\s.()-]/g, "");
+  if (/^\+[1-9]\d{6,14}$/.test(compact)) return `tel:${compact}`;
+  if (/^0[1-9]\d{8}$/.test(compact)) return `tel:${compact}`;
+  return null;
+}
+/**
+ * The expected participant of THIS dossier (client / enterprise side: the participant whose id is the
+ * dossier's exact artisan_id; artisan side: the one whose id is its exact client_id — never another)
+ * and the recorded appointment, both from the already-authorised session.loadOperations(id), read
+ * only when the block is opened. Keyed by the host on account + thread + assignment + status; late
+ * replies are dropped (sequence + key). Nothing before assignment or for a cancelled dossier.
+ */
+function ConversationContact({ intervention, role, context, load }: { intervention: Intervention; role: Role; context: PhotoContext; load: (id: string) => Promise<Operations | null> }) {
+  const [open, setOpen] = useState(false);
+  const [state, setState] = useState<{ phase: "idle" | "loading" | "ready" | "error"; ops: Operations | null }>({ phase: "idle", ops: null });
+  const seq = useRef(0);
+  const mounted = useRef(true);
+  const [me] = useState(() => ({ uid: context.userId(), gen: context.generation() }));
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      seq.current++;
+    };
+  }, []);
+  const eligible = Boolean(intervention.artisan_id) && intervention.status !== "cancelled" && intervention.status !== "requested";
+  if (!eligible) return null;
+  const read = () => {
+    const my = ++seq.current;
+    setState({ phase: "loading", ops: null });
+    void load(intervention.id)
+      .catch(() => null)
+      .then((ops) => {
+        if (!mounted.current || my !== seq.current || context.userId() !== me.uid || context.generation() !== me.gen) return; // late: dropped
+        setState(ops ? { phase: "ready", ops } : { phase: "error", ops: null });
+      });
+  };
+  const expectedId = role === "artisan" ? intervention.client_id : intervention.artisan_id;
+  const ops = state.ops;
+  const person = ops && expectedId ? ops.participants.find((p) => p.id === expectedId) ?? null : null;
+  const appointment = ops?.appointment && ops.appointment.intervention_id === intervention.id ? ops.appointment : null;
+  const tel = person ? telHref(person.phone) : null;
+  return (
+    <div className="conversation-contact" data-conversation-contact={open ? state.phase : "closed"}>
+      <button type="button" className="button outline" aria-expanded={open} onClick={() => { const next = !open; setOpen(next); if (next && state.phase !== "ready" && state.phase !== "loading") read(); }} data-conversation-contact-toggle="">
+        <Icon name="phone" size={16} />
+        Contact et rendez-vous
+      </button>
+      {open && (
+        <div aria-busy={state.phase === "loading" || undefined} style={{ marginTop: 8 }}>
+          {state.phase === "loading" && <p className="form-note" role="status">Lecture du contact et du rendez-vous…</p>}
+          {state.phase === "error" && (
+            <div role="alert">
+              <p className="form-note">Le contact et le rendez-vous n’ont pas pu être lus.</p>
+              <button type="button" className="button outline" onClick={read} data-conversation-contact-retry="">Réessayer</button>
+            </div>
+          )}
+          {state.phase === "ready" && (
+            <dl className="conversation-contact-details">
+              <dt>{role === "artisan" ? "Client du dossier" : "Artisan du dossier"}</dt>
+              <dd data-conversation-contact-person={person ? person.id : ""}>
+                {person ? person.full_name : "Coordonnées non transmises pour ce dossier."}
+                {tel && (
+                  <>
+                    {" "}
+                    <a className="button outline" href={tel} data-conversation-contact-call="">Appeler</a>
+                  </>
+                )}
+              </dd>
+              <dt>Rendez-vous enregistré</dt>
+              <dd data-conversation-contact-appointment={appointment ? "" : "none"}>
+                {appointment ? `${dateTime(appointment.starts_at)} – ${dateTime(appointment.ends_at)}${appointment.note ? ` · ${appointment.note}` : ""}` : "Aucun rendez-vous enregistré."}
+              </dd>
+            </dl>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---- Photo in a conversation (SYS-04 / M62) -------------------------------------------------
 type PhotoContext = { generation(): number; userId(): string | null };
 /** No identity: the read-state hook stays inactive. */

@@ -2528,6 +2528,7 @@ function Messages({ session }: { session: Session }) {
           busy={session.busy}
           onSubmit={(id, body) => session.sendMessage(id, body)}
           context={session.mutationContext}
+          loadOperations={session.loadOperations}
         />
       ) : (
         <section className="panel">
