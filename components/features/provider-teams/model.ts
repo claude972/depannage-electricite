@@ -170,7 +170,11 @@ export const COPY = {
   resumeNote: "Une commande de cet onglet attend sa confirmation : reprenez-la (même commande) avant toute autre action.",
   storage: "Le stockage de cet onglet est indisponible : rien n’a été envoyé. Sans lui, une réponse perdue ne pourrait pas être rejouée à l’identique.",
   noUuid: "Ce navigateur ne permet pas de créer un identifiant sécurisé : aucune commande n’est possible ici.",
-  more: "Afficher la suite",
+  teamLost: "Accès à l’équipe retiré ou inaccessible : aucune donnée ni action de cette équipe n’est affichée.",
+  more: "Afficher plus",
+  moreFailed: "La page suivante n’a pas pu être lue. Ce qui est déjà affiché reste valable.",
+  moreMembers: "Charger les autres membres",
+  moreMembersNote: "Le choix ne liste que les membres déjà chargés.",
 } as const;
 export const ROLE_LABEL = { owner: "Propriétaire", coordinator: "Coordinateur", technician: "Technicien" } as const;
 export const ASSIGNMENT_LABEL = { assigned: "Affecté", acknowledged: "Pris en compte", done: "Suivi terminé", unassigned: "Non affecté" } as const;
