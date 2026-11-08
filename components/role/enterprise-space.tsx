@@ -2211,6 +2211,7 @@ export function DossierView({ c, id, initialQuoteId }: { c: Ctx; id: string; ini
                     busyLabel="Redirection…"
                     className="button primary full"
                     onPay={() => void session.checkout(acceptedQuote.id)}
+                    reminder={{ quoteId: acceptedQuote.id, context: session.mutationContext }}
                   />
                 ) : (
                   // ENT-16: a delegated member sees the SAME Checkout CTA only while the server says so.
@@ -2224,6 +2225,7 @@ export function DossierView({ c, id, initialQuoteId }: { c: Ctx; id: string; ini
                         busyLabel="Redirection…"
                         className="button primary full"
                         onPay={() => void session.checkout(acceptedQuote.id)}
+                        reminder={{ quoteId: acceptedQuote.id, context: session.mutationContext }}
                       />
                     )}
                   />

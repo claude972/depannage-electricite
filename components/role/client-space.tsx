@@ -1181,6 +1181,7 @@ function DetailView({
           busy={session.busy}
           busyLabel="Veuillez patienter…"
           onPay={() => (demo ? void session.action(i.id, "simulate_payment") : void session.checkout(accepted.id))}
+          reminder={demo ? undefined : { quoteId: accepted.id, context: session.mutationContext }}
         />
       );
     }
