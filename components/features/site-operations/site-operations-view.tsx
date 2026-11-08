@@ -12,7 +12,7 @@ import { ErpPanel } from "./erp-panel";
 import { GridsPanel } from "./grids-panel";
 import { HistoryPanel } from "./history-panel";
 import { MaintenancePanel } from "./maintenance-panel";
-import { Loading, Notice, type PanelContext } from "./shared";
+import { Loading, Notice, type InterventionSearchBinding, type PanelContext } from "./shared";
 import { BUSY_MESSAGE, INITIAL_LOAD, applyLoadResult, messageOf, outcomeOf, resolveAuthority, scopeKey, type LoadState, type RunOutcome } from "../../../lib/features/site-operations/view-model";
 import { SlaPanel } from "./sla-panel";
 import styles from "./site-operations.module.css";
@@ -29,7 +29,11 @@ const TABS: { id: SiteOperationsTab; label: string }[] = [
 ];
 const LOAD_FAILURE = "Les données du site n’ont pas pu être chargées.";
 
-export function SiteOperationsView(props: SiteOperationsViewProps) {
+type ViewProps = SiteOperationsViewProps & {
+  /** ENT-07: paginated intervention choice for SLA cases (live only). */
+  interventionSearch?: InterventionSearchBinding;
+};
+export function SiteOperationsView(props: ViewProps) {
   const { state, scope, unavailableMessage } = props;
   if (state !== "available")
     return (
@@ -51,7 +55,7 @@ export function SiteOperationsView(props: SiteOperationsViewProps) {
   return <Content key={scopeKey(scope)} {...props} siteId={scope.siteId} />;
 }
 
-function Content({ scope, client, demo, onNavigate, siteId }: SiteOperationsViewProps & { siteId: string }) {
+function Content({ scope, client, demo, onNavigate, siteId, interventionSearch }: ViewProps & { siteId: string }) {
   const [tab, setTab] = useState<SiteOperationsTab>("equipment");
   const [data, setData] = useState<LoadState>(demo ? { report: demo, error: "", stale: false } : INITIAL_LOAD);
   const { report, error, stale } = data;
@@ -100,7 +104,7 @@ function Content({ scope, client, demo, onNavigate, siteId }: SiteOperationsView
     [busy, client, load],
   );
   const authority = resolveAuthority(scope, report, stale);
-  const context: PanelContext | null = report ? { report, ...authority, busy, run, onNavigate } : null;
+  const context: PanelContext | null = report ? { report, ...authority, busy, run, onNavigate, interventionSearch: demo ? undefined : interventionSearch } : null;
   return (
     <div className={styles.root} data-demo={demo ? "true" : undefined}>
       {demo && (

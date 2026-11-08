@@ -3205,6 +3205,7 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
             )}
             client={session.features.siteOperations}
             demo={session.mode === "demo" ? demoReport() : undefined}
+            interventionSearch={session.mode === "demo" ? undefined : { context: session.mutationContext }}
             onNavigate={(view, param) => {
               if (view === "intervention" && param) session.openIntervention(param);
             }}
