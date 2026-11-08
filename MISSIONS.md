@@ -190,3 +190,9 @@ Claude raccorde la décision au détail exact d’un devis entreprise hors de la
 
 ## Claim Astra — contexte décision entreprise
 Branche codex/enterprise-quote-decision depuis d91089a. Ownership route decision-context, lib/features/recipient-quotes, tests et contrat dédié. Lecture seulement ; contrôles RLS existants, aucune migration. Plan et DTO : docs/ENTERPRISE_QUOTE_DECISION_BACKEND.md.
+
+### ADM-10 / PUB-06 — retrouver une demande de garantie au-delà de la première page
+
+Astra possède la lecture de `GET /api/warranty` et ses tests. Conserver `cases` et `enabled`, ajouter `next_cursor`, un filtre `intervention_id` et une pagination stable par `created_at` et `id`. Filtrer avant la limite, utiliser la RLS existante et refuser un dossier ciblé inaccessible. Une demande active doit rester repérable même si l’historique du dossier dépasse une page. Contrat JSON court avant code. Les écritures, l’activation et le rattachement correctif gardent leurs règles.
+
+Claude possède le raccordement des panneaux de suivi et de rattachement correctif. Séparer états vide, erreur et chargement, isoler les réponses par dossier et identité, et proposer la suite de la liste sans perdre l’élément sélectionné. Le formulaire réel n’est proposé que si le serveur confirme que le dépôt est activé et qu’aucune demande active n’existe. Couvrir l’ancien dossier au-delà de 100 entrées, la récupération après erreur et le cloisonnement. ROOT assemble puis vérifie la preview avec des données de test temporaires.
