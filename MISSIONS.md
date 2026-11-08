@@ -253,3 +253,6 @@ La fiche directe omet les relevés du site et, pour un syndic, les assemblées g
 ### ENT-09 / ENT-15 — sélectionner un site du portefeuille complet dans Rapports
 
 La consolidation ne propose aujourd’hui que les sites présents dans les données initiales. Claude possède le sélecteur du panneau de consolidation, ses styles locaux et ses tests. Réutiliser la lecture paginée du portefeuille de l’organisation et permettre la sélection explicite d’un site absent des 100 initiaux, actif ou archivé. Conserver les choix lors d’une pagination ou d’un changement de filtre et les réinitialiser au changement de périmètre. Respecter la limite de 50 sites, le chargement et la reprise, la lecture seule et la séparation des organisations. Le rapport et le CSV utilisent exactement les sites sélectionnés. ROOT vérifiera cette sélection dans le navigateur. Aucun changement des calculs ni de l’API.
+
+## Claim Claude — ENT-09/15 sélection complète du portefeuille énergie
+Base de13a93 ; claude/energy-portfolio-picker. Ownership components/features/energy-consolidation/** et un test navigateur dédié (tests/ui/energy-portfolio-picker.test.ts). enterprise-space.tsx, API, SQL et cloud inchangés.
