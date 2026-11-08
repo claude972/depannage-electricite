@@ -29,26 +29,32 @@ const ROWS = Array.from({ length: 60 }, (_, i) => ({ id: "n" + String(i + 1).pad
 function setup() {
   const calls = { list: [], mark: [], refused: [] };
   const hold = {}, waiting = {}, lie = {};
-  const read = new Set();
+  const read = new Set(), unreadAgain = new Set();
+  const isUnread = (n) => (read.has(n.id) ? false : unreadAgain.has(n.id) ? true : !n.read_at);
   const answer = (unread, cursor) => {
     const name = unread ? "unread" : "all";
     if (cursor && cursor.split(":")[0] !== name) { calls.refused.push(cursor); throw new Error("422 : curseur d’un autre filtre."); }
-    const rows = ROWS.map((n) => (read.has(n.id) ? { ...n, read_at: AT } : n)).filter((n) => !unread || !n.read_at);
+    const rows = ROWS.map((n) => ({ ...n, read_at: isUnread(n) ? null : n.read_at ?? AT })).filter((n) => !unread || !n.read_at);
     const start = cursor ? Number(cursor.split(":")[1]) : 0;
     const page = rows.slice(start, start + 25);
     const more = start + 25 < rows.length;
-    return { notifications: page, page: { limit: 25, total: rows.length, has_more: more, next_cursor: more ? name + ":" + (start + 25) : null }, unread_count: ROWS.filter((n) => !n.read_at && !read.has(n.id)).length, filters: { unread } };
+    return { notifications: page, page: { limit: 25, total: rows.length, has_more: more, next_cursor: more ? name + ":" + (start + 25) : null }, unread_count: ROWS.filter(isUnread).length, filters: { unread } };
   };
   const served = (unread, cursor) => { const a = answer(unread, cursor); const key = (unread ? "unread" : "all") + "|" + (cursor ?? ""); return lie[key] ? { ...a, filters: { unread: !unread } } : a; };
-  const gate = (key, make) => {
+  // A hold applies to the NEXT call of that key only. A list reply is computed when the server
+  // receives the GET (its data predates later marks); a mark receipt when it is released.
+  const gate = (key, make, atCall) => {
     if (!hold[key]) return Promise.resolve().then(make);
-    return new Promise((resolve, reject) => { waiting[key] = { resolve: () => { try { resolve(make()); } catch (e) { reject(e); } }, reject }; });
+    delete hold[key];
+    let snap = null;
+    if (atCall) { try { snap = { v: make() }; } catch (e) { snap = { e }; } }
+    return new Promise((resolve, reject) => { waiting[key] = { resolve: () => { try { if (snap) { if (snap.e) throw snap.e; resolve(snap.v); } else resolve(make()); } catch (e) { reject(e); } }, reject }; });
   };
   const release = async (key, failure) => { delete hold[key]; const p = waiting[key]; delete waiting[key]; if (p) { if (failure) p.reject(new Error(failure)); else p.resolve(); } await tick(200); return !!p; };
   const client = {
-    list: (q) => { const key = (q.unread ? "unread" : "all") + "|" + (q.cursor ?? ""); calls.list.push(key); return gate(key, () => served(q.unread, q.cursor)); },
+    list: (q) => { const key = (q.unread ? "unread" : "all") + "|" + (q.cursor ?? ""); calls.list.push(key); return gate(key, () => served(q.unread, q.cursor), true); },
     summary: async () => null,
-    mark: (cmd) => { calls.mark.push(cmd); return gate("mark", () => { for (const id of cmd.ids ?? ROWS.map((n) => n.id)) read.add(id); return { ok: true, result: { updated: (cmd.ids ?? []).length, unread_count: ROWS.filter((n) => !n.read_at && !read.has(n.id)).length } }; }); },
+    mark: (cmd) => { calls.mark.push(cmd); return gate("mark", () => { if (cmd.action === "mark_unread") { for (const id of cmd.ids) read.delete(id); ROWS.forEach((n) => { if (cmd.ids.includes(n.id)) unreadAgain.add(n.id); }); } else for (const id of cmd.ids ?? ROWS.map((n) => n.id)) { read.add(id); unreadAgain.delete(id); } return { ok: true, result: { updated: (cmd.ids ?? []).length, unread_count: ROWS.filter(isUnread).length } }; }); },
     loadPreferences: async () => null,
     savePreferences: async () => null,
   };
@@ -188,6 +194,25 @@ w.scenarios = {
     await t.press("Marquer comme non lue", 250);
     return { locked, postsWhileHeld, afterReceipt, posts: t.calls.mark.map((m) => m.action), view: t.view() };
   },
+  async causalHead() {
+    const t = setup();
+    await tick(250);
+    const counter = () => { const x = t.button("Non lues")?.textContent ?? ""; return x.includes("(") ? x.split("(")[1].split(")")[0] : null; };
+    // Single mark with no read in flight: applied locally, no page-1 re-read.
+    const heads0 = t.count("all|");
+    await t.press("Marquer comme lue", 250);
+    const single = { reread: t.count("all|") - heads0, counter: counter(), rows: t.view().rows };
+    // Bulk mark: its causal head GET is held; a single mark is then confirmed first.
+    t.hold["all|"] = true;
+    await t.press("Tout marquer lu", 250);
+    const heads1 = t.count("all|");
+    await t.press("Marquer comme non lue", 250);
+    const fresh = t.count("all|") - heads1;
+    const beforeLate = { counter: counter(), first: t.rows()[0] };
+    const released = await t.release("all|");
+    await tick(150);
+    return { single, fresh, beforeLate, released, counter: counter(), first: t.rows()[0], unreadRows: t.rows().filter((r) => r.unread).length, rows: t.view().rows, marks: t.calls.mark.map((m) => m.action) };
+  },
   async reloadFence() {
     const t = setup();
     await tick(250);
@@ -268,6 +293,11 @@ test("centre de notifications monté (Chromium, StrictMode) : la suite du bon fi
     same(lk.locked, { disabled: true, bulk: true, waiting: 1 }, "every mark button disabled, waiting label only on the running bulk");
     same(lk.postsWhileHeld, 1, "a second mark while the first receipt is held sends no POST");
     same([lk.afterReceipt, lk.posts], [{ posts: 1, enabled: true }, ["mark_all_read", "mark_unread"]], "after the receipt, the next action is possible again");
+    type CH = { single: { reread: number; counter: string | null; rows: number }; fresh: number; beforeLate: { counter: string | null; first: { unread: boolean } }; released: boolean; counter: string | null; first: { label: string; unread: boolean }; unreadRows: number; rows: number; marks: string[] };
+    const ch = (await run("causalHead")) as CH;
+    same(ch.single, { reread: 0, counter: "29", rows: 25 }, "single mark, no read in flight ⇒ applied locally, no page-1 re-read");
+    same([ch.marks, ch.fresh], [["mark_read", "mark_all_read", "mark_unread"], 1], "a single mark confirmed while the post-bulk head GET is held ⇒ one fresh causal head GET");
+    same([ch.released, ch.counter, ch.first.unread, ch.unreadRows, ch.rows], [true, "1", true, 1, 25], "the old GET is ignored: counter 1, the re-marked row stays unread");
     same(errors, []);
     same(requests.filter((u) => u.startsWith("/api/")), []);
   } finally {
