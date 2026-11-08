@@ -52,6 +52,8 @@ import { InstallPanel } from "../app/install-panel";
 import { AdminReplyComposer } from "../features/admin-messages/admin-reply";
 import { WarrantyPolicyEditor } from "../features/warranty-policy/warranty-policy-editor";
 import { mergeThread } from "../features/admin-messages/admin-reply-model";
+import { ArtisanPicker } from "../features/admin-reassign/artisan-picker";
+import { useAdminThread } from "../features/admin-thread/use-admin-thread";
 import {
   Alerts,
   Badge,
@@ -3352,6 +3354,8 @@ function DossierView({
   const [detailAttempt, setDetailAttempt] = useState(0);
   // ADM-07: replies confirmed by the server, shown at once while the workspace re-reads.
   const [sentReplies, setSentReplies] = useState<Message[]>([]);
+  // ADM-07 live: the thread comes from the paginated GET /api/messages (identity + dossier fence).
+  const thread = useAdminThread(session.mutationContext, id, sentReplies, !demo);
   const lastDetail = useRef<AdminInterventionDetail | null>(null);
   useEffect(() => {
     let active = true;
@@ -3430,7 +3434,12 @@ function DossierView({
   const c = category(intervention.category);
   // Server quotes when the detail is available (bounded to quotes_limit), workspace otherwise.
   const quotes = [...(detail ? detail.quotes : quoteVersions(session.data.quotes, id))].sort(byNewest);
-  const messages = mergeThread(session.data.messages, sentReplies, id);
+  const messages = demo
+    ? mergeThread(session.data.messages, sentReplies, id)
+    : thread.view.phase === "ready"
+      ? thread.view.messages
+      : [];
+  const tv = thread.view;
   const reached = STEP_ORDER.indexOf(intervention.status);
   const caps = overview?.capabilities;
   const approvedArtisans = (overview?.artisans || []).filter(isApprovedArtisan);
@@ -3644,10 +3653,44 @@ function DossierView({
           </Panel>
 
           <Panel title="Messages du dossier" count={messages.length} intro="Échanges entre le client, l’artisan et l’exploitant.">
-            {messages.length ? (
+            {!demo && tv.phase === "ready" && tv.older && (
+              <div className={styles.panelBody}>
+                <button type="button" className="button outline" data-admin-thread-older="" disabled={tv.loadingOlder} onClick={thread.loadOlder}>
+                  {tv.loadingOlder ? "Chargement…" : tv.olderError ? "Réessayer" : "Charger les messages plus anciens"}
+                </button>
+                {tv.olderError && (
+                  <p className={styles.muted} role="alert" data-admin-thread-older-error="">
+                    Les messages plus anciens n’ont pas pu être chargés. Les messages affichés restent valables ;
+                    « Réessayer » reprend à la même page.
+                  </p>
+                )}
+              </div>
+            )}
+            {!demo && tv.phase === "loading" ? (
+              <div className={styles.panelBody} data-admin-thread="loading">
+                <Loader label="Chargement des messages…" />
+              </div>
+            ) : !demo && tv.phase === "error" ? (
+              <div className={styles.panelBody} data-admin-thread="error">
+                <Unavailable title="Messages indisponibles" reason="Le fil de ce dossier n’a pas pu être lu. Aucun message n’est affiché à la place." onRetry={thread.retry} />
+              </div>
+            ) : !demo && tv.phase === "refused" ? (
+              <div className={styles.panelBody} data-admin-thread="refused">
+                <Unavailable
+                  title="Messages inaccessibles"
+                  reason={
+                    tv.reason === "signed_out"
+                      ? "Votre session a expiré. Reconnectez-vous pour lire ce fil."
+                      : tv.reason === "forbidden"
+                        ? "Vos droits ne permettent plus de lire ce fil."
+                        : "Ce fil n’est pas accessible : le dossier est introuvable ou hors de vos droits."
+                  }
+                />
+              </div>
+            ) : messages.length ? (
               <div className={styles.messages}>
                 {messages.map((m) => (
-                  <article className={styles.message} key={m.id}>
+                  <article className={styles.message} key={m.id} data-message-id={m.id}>
                     <header>
                       <strong>{authorLabel(m, intervention, session.profileId, operations?.participants ?? [])}</strong>
                       <span>{dateTime(m.created_at)}</span>
@@ -3658,9 +3701,14 @@ function DossierView({
               </div>
             ) : (
               <div className={styles.panelBody}>
-                <p className={styles.muted}>Aucun message chargé pour ce dossier.</p>
+                <p className={styles.muted} data-admin-thread-empty="">
+                  {demo ? "Aucun message chargé pour ce dossier." : "Aucun message dans ce dossier."}
+                </p>
               </div>
             )}
+            {/* Admin only: a refusal (401/403/404, any page) clears the rows and hides the composer
+                until an authorized read succeeds under a new key (dossier or identity). */}
+            {(demo || tv.phase !== "refused") && (
             <div className={styles.panelBody}>
               <AdminReplyComposer
                 key={`${id}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}
@@ -3673,16 +3721,19 @@ function DossierView({
                 }}
                 onRefresh={() => {
                   setDetailAttempt((n) => n + 1);
+                  if (!demo) thread.retry();
                   void sessionRef.current.ensureFresh();
                 }}
               />
             </div>
+            )}
           </Panel>
 
           <WarrantyPanel interventionId={id} demo={demo} role="admin" />
         </div>
         <aside>
           <ReassignPanel
+            key={`reassign|${id}|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`}
             session={session}
             intervention={intervention}
             artisans={approvedArtisans}
@@ -3790,6 +3841,9 @@ function ReassignPanel({
   artisanName: (id: string | null | undefined) => string | undefined;
 }) {
   const [target, setTarget] = useState("");
+  // ADM-03 live: label of the artisan chosen in the server directory (beyond the 100 overview rows).
+  const [pickedName, setPickedName] = useState<string | null>(null);
+  const live = session.mode !== "demo";
   const [reason, setReason] = useState("");
   const [touched, setTouched] = useState(false);
   const eligible = REASSIGNABLE.includes(intervention.status);
@@ -3797,7 +3851,7 @@ function ReassignPanel({
   const sameArtisan = target && target === intervention.artisan_id ? "Cet artisan est déjà attribué au dossier." : "";
   const noChange = !target && !intervention.artisan_id ? "Le dossier est déjà en attente d’attribution." : "";
   const error = reasonError || sameArtisan || noChange;
-  const targetName = target ? artisans.find((a) => a.id === target)?.full_name || "l’artisan choisi" : null;
+  const targetName = target ? (live ? pickedName : artisans.find((a) => a.id === target)?.full_name) || "l’artisan choisi" : null;
 
   let body: ReactNode;
   if (capability === null) {
@@ -3821,6 +3875,19 @@ function ReassignPanel({
         <p>
           Artisan actuel : <strong>{intervention.artisan_id ? artisanName(intervention.artisan_id) || "attribué" : "aucun"}</strong>
         </p>
+        {live ? (
+          <ArtisanPicker
+            context={session.mutationContext}
+            dossierId={intervention.id}
+            load={session.loadAdminDirectory}
+            value={target}
+            currentId={intervention.artisan_id ?? null}
+            onChange={(id, artisan) => {
+              setTarget(id);
+              setPickedName(artisan?.full_name ?? null);
+            }}
+          />
+        ) : (
         <Field label="Nouvel artisan" hint="Seuls les artisans approuvés avec un dossier approuvé sont proposés.">
           <select value={target} onChange={(e) => setTarget(e.target.value)}>
             <option value="">Remettre en attente d’attribution</option>
@@ -3832,7 +3899,8 @@ function ReassignPanel({
             ))}
           </select>
         </Field>
-        {!artisans.length && <p className={styles.formNote}>Aucun artisan approuvé parmi les artisans chargés : seule la remise en attente est possible.</p>}
+        )}
+        {!live && !artisans.length && <p className={styles.formNote}>Aucun artisan approuvé parmi les artisans chargés : seule la remise en attente est possible.</p>}
         <Field label="Motif (obligatoire)" error={touched ? error : undefined}>
           <textarea rows={3} maxLength={1000} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Raison de la réaffectation, partagée avec le client et les artisans concernés" />
         </Field>
