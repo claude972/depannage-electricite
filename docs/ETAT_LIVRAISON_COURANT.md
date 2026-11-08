@@ -4,6 +4,10 @@ Objectif : application entière, seuls raccordements Stripe et SMS différés. P
 
 ## Référence en ligne
 
+La preview `9526e05` corrige les libellés accessibles des coordonnées et passe le parcours client–artisan depuis les écrans jusqu’à la clôture. Le règlement reste attendu sur la plateforme. Les seize contrôles publics, le brouillon PWA et le nettoyage du parcours passent sur cette version. [Preview](https://depannage-electricite-25cxpsuy9-brafas-projects.vercel.app) · [Preuves](reviews/DELIVERY_952_CONTACT_CORE.md)
+
+### Version précédente `71f1eb0`
+
 La preview `71f1eb0` a passé quatre scénarios hébergés sur les rapports, la fiche site, les statistiques et le devis exact. Le parcours central crée, attribue et termine un dossier, avec un devis accepté et un règlement attendu sur la plateforme. Les fiches publiques et le brouillon PWA hors ligne ont été rejoués. La CI du commit passe. [Preview](https://depannage-electricite-nrvv4d24m-brafas-projects.vercel.app) · [Recette et nettoyage](reviews/DELIVERY_71F_SCOPED_RECORDS.md)
 
 ### Version précédente `256ec5c`
