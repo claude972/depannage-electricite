@@ -1639,6 +1639,7 @@ function WorkDossier({ session, intervention: i }: { session: Session; intervent
               pending={pending}
               state={state}
               busy={session.busy}
+              scope={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${i.id}`}
               onSave={(values) => operate({ action: "save_report", ...values })}
             />
           )}
@@ -2011,6 +2012,7 @@ function ReportPanel({
   pending,
   state,
   busy,
+  scope,
   onSave,
 }: {
   report: InterventionReport | null;
@@ -2018,6 +2020,8 @@ function ReportPanel({
   pending: boolean;
   state: Session["capabilities"]["operations"];
   busy: boolean;
+  /** identity (uid|generation) + dossier: the editor never outlives it. */
+  scope: string;
   onSave: (values: {
     summary: string;
     checks: ReportCheck[];
@@ -2034,7 +2038,8 @@ function ReportPanel({
         <Unavailable title="Compte rendu" state={state} />
       ) : editing ? (
         <ReportForm
-          key={report?.updated_at || "new"}
+          key={`${scope}|${report?.updated_at || "new"}`}
+          scope={scope}
           initial={report}
           busy={busy}
           onSave={onSave}
@@ -2084,11 +2089,13 @@ function ReportPanel({
 function ReportForm({
   initial,
   busy,
+  scope,
   onSave,
   onDone,
 }: {
   initial: InterventionReport | null;
   busy: boolean;
+  scope: string;
   onSave: (values: {
     summary: string;
     checks: ReportCheck[];
@@ -2107,24 +2114,53 @@ function ReportForm({
   const [errors, setErrors] = useState<{ summary?: string; checks?: string; signature?: string }>(
     {},
   );
+  // Save in flight: every field and control is locked; a synchronous guard blocks a second POST.
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const doneRef = useRef(false);
+  const mounted = useRef(true);
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (savingRef.current || doneRef.current) return;
     const next: typeof errors = {};
     if (summary.trim().length < 10) next.summary = "Décrivez l’intervention en au moins 10 caractères.";
     if (checks.some((c) => !c.label.trim())) next.checks = "Chaque point de contrôle doit avoir un intitulé.";
     if (signature.trim().length < 2) next.signature = "Indiquez le nom de la personne qui déclare ce compte rendu.";
     setErrors(next);
     if (Object.keys(next).length) return;
+    savingRef.current = true;
+    setSaving(true);
+    const sentScope = scope;
     void onSave({
       summary: summary.trim(),
       checks: checks.map((c) => ({ label: c.label.trim(), result: c.result })),
       signature_name: signature.trim(),
-    }).then((ok) => {
-      if (ok) onDone();
-    });
+    })
+      .catch(() => false)
+      .then((ok) => {
+        // A late reply for another identity / dossier, or after a remount, is ignored entirely.
+        if (!mounted.current || scopeRef.current !== sentScope) return;
+        savingRef.current = false;
+        if (ok && !doneRef.current) {
+          doneRef.current = true; // close once, this editor only
+          onDone();
+          return;
+        }
+        setSaving(false); // failure: the text stays exactly as typed, unlocked for a retry
+      });
   }
   return (
-    <form onSubmit={submit}>
+    <form onSubmit={submit} aria-busy={saving || undefined} data-report-form={saving ? "saving" : "idle"}>
+      {/* Locks every field and control (add/remove, submit, cancel) while the POST is in flight. */}
+      <fieldset disabled={saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <Field label="Résumé des travaux réalisés" hint="Au moins 10 caractères." error={errors.summary}>
         <textarea
           required
@@ -2211,13 +2247,14 @@ function ReportForm({
         />
       </Field>
       <div className={styles.formActions}>
-        <button type="submit" className="button primary" disabled={busy}>
-          {busy ? "Enregistrement…" : "Enregistrer le compte rendu"}
+        <button type="submit" className="button primary" disabled={busy || saving}>
+          {busy || saving ? "Enregistrement…" : "Enregistrer le compte rendu"}
         </button>
         <button type="button" className="text-button" onClick={onDone}>
           Annuler
         </button>
       </div>
+      </fieldset>
     </form>
   );
 }
