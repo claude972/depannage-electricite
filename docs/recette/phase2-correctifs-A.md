@@ -22,7 +22,7 @@ Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvel
 | --- | ---: |
 | CORRIGÉ (avec suite verte) | 0 |
 | VÉRIFIÉ CIBLÉ (suite initiale rouge) | 4 |
-| CORRIGÉ PARTIEL | 2 |
+| CORRIGÉ PARTIEL | 3 |
 | NON REPRODUIT | 0 |
 | DÉCISION REQUISE | 4 |
 | REVERTÉ | 0 |
@@ -47,7 +47,7 @@ Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvel
 | E25 | Majeur | À REPRODUIRE | P4 | — | — | — | Grille publiée applicable à sa date d’effet. |
 | E29 | Majeur | CORRIGÉ PARTIEL | P2 | `2b3b44e` | `sql-phase2-lot-a-p2-review.mjs` | Route warranty, migration additive | Ancienne résolution écrasée avec HTTP 200 avant, 409 et résolution conservée après. RPC historique interdit, audit unique. Attend le lot B. |
 | E33 | Mineur | À REPRODUIRE | Isolé | — | — | — | Normalisation des noms dans la recherche. |
-| E34 | Majeur | À REPRODUIRE | P2 | — | — | — | Version et intentions distinctes d’approbation et de réactivation. |
+| E34 | Majeur | CORRIGÉ PARTIEL | P2 | `e17c0e5` | `sql-phase2-lot-a-p2-review.mjs` | Route admin artisans, migration additive | Une approbation ancienne réactivait le dossier via HTTP 200. Elle reçoit maintenant 409 et la suspension demeure. Une réactivation explicite avec version courante passe. Attend le lot B. |
 | E36 | Mineur | À REPRODUIRE | P3 | — | — | — | Rejeu de suspension sans deuxième audit. |
 | E37 | Majeur | À REPRODUIRE | Isolé | — | — | — | Indisponibilité planifiée et éligibilité des offres. |
 | E41 | Mineur | À REPRODUIRE | P3 | — | — | — | Rejeu de message texte avec un ID par intention. |
@@ -79,7 +79,7 @@ Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvel
 | --- | --- | --- |
 | E15 | `components/role/client-space.tsx:1714`, écriture artisan correspondante | Envoyer la version lue du créneau, 0 pour la création. Contrat vérifié : `expected_version` reçoit `reminder_version` (entier). Sur 409, relire le créneau avant nouvel envoi. |
 | E29 | `components/app/forms.tsx:3338` | Envoyer la version de la demande de garantie avec la décision et conserver le brouillon en cas de conflit. Contrat vérifié : `expected_version` = chaîne `case.updated_at` exacte issue du GET, sans conversion en Date qui perd les microsecondes. |
-| E34/E36 | `components/app/forms.tsx:2232` | Distinguer approbation, demande de correction, suspension et réactivation. Envoyer la version lue et garder la même clé d’intention sur les réessais. Valeurs finales à publier avec la preuve backend. |
+| E34/E36 | `components/app/forms.tsx:2232` | Distinguer approbation, demande de correction, suspension et réactivation. Envoyer la version lue et garder la même clé d’intention sur les réessais. E34 vérifié : POST action `approve, request_changes, suspend, reinstate`, `expected_version` entier égal à `application_version` du GET. E36 ajoutera une clé d’intention de rejeu. |
 | E18/E41/E53 | Rapport, conversation texte, dépôt de site | Une clé stable par intention, y compris après la perte de la réponse. Définir le format exact avec chaque test de contrat backend. |
 | E08/E10/E12/E62 | Éditeurs budget, zones, adresses et énergie | Les routes concernées ont déjà un contrat de version. Vérifier côté B le rechargement du formulaire et la transition après rejeu avant de modifier le serveur. |
 | E21/E24 | `components/features/site-operations/sla-panel.tsx`, `erp-panel.tsx` | Afficher les bornes et les refus immédiatement avec le même ordre de dates que l’API. |
