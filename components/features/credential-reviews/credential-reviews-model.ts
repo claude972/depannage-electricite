@@ -199,7 +199,10 @@ function readError(status: number): Pick<CrState, "phase" | "error"> {
   return { phase: "error", error: CR_COPY.loadFailed };
 }
 export function applyFirstPage(s: CrState, r: CrResult, credentialId: string): CrState {
-  if (r.status !== 200) return { ...s, ...readError(r.status), page: r.status === 503 || r.status <= 0 ? s.page : null };
+  if (r.status !== 200) {
+    const transient = r.status === 503 || r.status <= 0;
+    return { ...s, ...readError(r.status), page: transient ? s.page : null, reviews: transient ? s.reviews : [], nextBefore: transient ? s.nextBefore : null };
+  }
   const p = parseReviewsPage(r.body, credentialId, null);
   if (!p) return { ...s, phase: "error", error: CR_COPY.loadFailed };
   const { reviews, next_before, ...page } = p;
@@ -308,6 +311,9 @@ export function createCrController({
     if (key) store().remove(key);
     const message = r.status === 422 ? (cmd.decision === "accepted" ? CR_COPY.expired : CR_COPY.invalid) : r.status === 403 ? CR_COPY.forbidden : r.status === 404 ? CR_COPY.notFound : r.status === 401 ? CR_COPY.session : CR_COPY.invalid;
     set({ ...base, pending: null, writeError: message });
+    // Refused right or piece: re-read before any new decision; a refused read purges the piece,
+    // its reasons and the form (E38).
+    if (r.status === 401 || r.status === 403 || r.status === 404) await load();
     return true;
   }
   return {
