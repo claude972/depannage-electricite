@@ -20,7 +20,7 @@ import {
 
 export type ThreadView =
   | { phase: "loading"; messages: Message[] }
-  | { phase: "ready"; messages: Message[]; older: boolean; loadingOlder: boolean; olderError: boolean }
+  | { phase: "ready"; messages: Message[]; older: boolean; loadingOlder: boolean; olderError: boolean; headError: boolean }
   | { phase: "refused"; reason: "signed_out" | "forbidden" | "not_found" }
   | { phase: "error" };
 
@@ -32,6 +32,9 @@ export function useAdminThread(
   sent: readonly Message[],
   /** false in demo: no read at all (the caller keeps its local thread). */
   enabled: boolean,
+  /** Refreshed workspace messages: only a SIGNAL. An unknown id of this dossier triggers a re-read
+   *  of the newest page (page 1); workspace rows themselves are never shown. */
+  workspace: readonly Message[] = [],
   fetchImpl: HistoryFetch = browserFetch,
 ) {
   const uid = context.userId();
@@ -75,6 +78,78 @@ export function useAdminThread(
   }, [key, reload, load, update]);
 
   const h = state.key === key ? state : initialHistory(key);
+
+  // Newest-page re-read (« head »), kept apart from the older pages and their cursor.
+  type Head = { key: string; messages: Message[]; tried: string; status: "idle" | "loading" | "error" };
+  const [headRaw, setHead] = useState<Head>({ key, messages: [], tried: "", status: "idle" });
+  const head = headRaw.key === key ? headRaw : { key, messages: [], tried: "", status: "idle" as const };
+  const headFlight = useRef<AbortController | null>(null);
+  const headRef = useRef(head.messages);
+  useEffect(() => {
+    headRef.current = head.messages;
+  });
+  const [headNonce, setHeadNonce] = useState(0);
+  const verified = [...h.pages, ...head.messages, ...sent];
+  const known = new Set(verified.map((m) => m.id));
+  const newest = verified.reduce((t, m) => Math.max(t, Date.parse(m.created_at) || 0), 0);
+  // Only rows newer than the newest verified one are a signal: older workspace rows outside the
+  // verified pagination never trigger anything and are never shown.
+  const unknown = workspace
+    .filter((m) => m.intervention_id === interventionId && !known.has(m.id) && (Date.parse(m.created_at) || 0) >= newest)
+    .map((m) => m.id)
+    .sort()
+    .join(",");
+  const refused = h.status === "signed_out" || h.status === "not_found" || (h.status === "error" && h.errorStatus === 403);
+  const signal = key && h.loaded && !refused && unknown ? `${unknown}#${headNonce}` : "";
+  useEffect(() => {
+    if (!signal || head.tried === signal) return;
+    headFlight.current?.abort();
+    const ctl = new AbortController();
+    headFlight.current = ctl;
+    setHead((x) => ({ ...(x.key === key ? x : { key, messages: [] }), tried: signal, status: "loading" }));
+    void fetchHistoryPage(fetchRef.current, interventionId, null, ctl.signal).then((outcome: HistoryOutcome) => {
+      if (headFlight.current !== ctl) return; // superseded (dossier, identity or a newer signal)
+      headFlight.current = null;
+      if (outcome.kind === "aborted") return;
+      if (outcome.kind === "loaded") {
+        const cur = stateRef.current;
+        if (cur.key !== key) return;
+        // Already verified and contiguous: the loaded pages plus earlier head re-reads.
+        const loadedIds = new Set([...cur.pages, ...headRef.current].map((m) => m.id));
+        const overlap = outcome.messages.some((m) => loadedIds.has(m.id));
+        if (outcome.hasMore && !overlap) {
+          // A burst larger than one page: a gap would remain between this head and the old cursor.
+          // Restart from this page as page 1 with ITS cursor; the older pages and cursor are dropped.
+          flight.current?.abort();
+          flight.current = null;
+          update(() => ({ key, pages: outcome.messages, cursor: outcome.nextCursor, hasMore: true, loaded: true, status: "idle" }));
+          setHead((x) => (x.key === key ? { ...x, messages: [], status: "idle" } : x));
+          return;
+        }
+        setHead((x) => (x.key === key ? { ...x, messages: mergeMessages(interventionId, x.messages, outcome.messages), status: "idle" } : x));
+        return;
+      }
+      if (outcome.kind === "failed" && outcome.status !== 403) {
+        // 503 / invalid: the verified pages stay; « Réessayer » re-reads page 1.
+        setHead((x) => (x.key === key ? { ...x, status: "error" } : x));
+        return;
+      }
+      // 401 / 403 / 404: terminal for this key, every row is cleared (applyOutcome keeps the reason).
+      setHead((x) => (x.key === key ? { ...x, messages: [], status: "idle" } : x));
+      flight.current?.abort();
+      flight.current = null;
+      update((st) => applyOutcome({ ...st, status: st.status === "loading" ? "idle" : st.status }, key, outcome));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signal, key]);
+  useEffect(
+    () => () => {
+      headFlight.current?.abort();
+      headFlight.current = null;
+    },
+    [key],
+  );
+
   let view: ThreadView;
   if (!enabled) view = { phase: "loading", messages: [] };
   else if (!key || h.status === "signed_out") view = { phase: "refused", reason: "signed_out" };
@@ -85,11 +160,12 @@ export function useAdminThread(
     // Server pages + replies confirmed by the server for this dossier, deduplicated by id.
     view = {
       phase: "ready",
-      messages: mergeMessages(interventionId, h.pages, sent),
+      messages: mergeMessages(interventionId, h.pages, head.messages, sent),
       older: offersOlder(h),
       loadingOlder: h.status === "loading",
       olderError: h.status === "error",
+      headError: head.status === "error",
     };
   }
-  return { view, loadOlder: load, retry: () => setReload((n) => n + 1) };
+  return { view, loadOlder: load, retry: () => setReload((n) => n + 1), retryHead: () => setHeadNonce((n) => n + 1) };
 }
