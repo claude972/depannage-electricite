@@ -14,7 +14,7 @@ Plan court : reproductions isolées E01, E28, E73 et E74 dans cet ordre, suite e
 
 ## Bloquants livrés
 
-Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvelles migrations passent chacune deux fois sur PostgreSQL 17.11 natif vierge après les 101 existantes, avec stubs Auth/Storage, Vault et pg_net natifs et envoi sortant neutralisé. E01, E28 et E74 passent sur de vraies routes Next.js avec PostgreSQL PGlite isolé et des réponses de fournisseurs synthétiques. La suite de comparaison a été relancée et le typecheck a passé. Le verdict global reste distinct des quatre reproductions ciblées et dépend des échecs de référence.
+Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvelles migrations passent chacune deux fois sur PostgreSQL 17.11 natif vierge après les 101 existantes, avec stubs Auth/Storage, Vault et pg_net natifs et envoi sortant neutralisé. E01, E28 et E74 passent sur de vraies routes Next.js avec PostgreSQL PGlite isolé et des réponses de fournisseurs synthétiques. La suite de comparaison a été relancée et le typecheck a passé. Les deux builds passent (Webpack dans le checkout, Turbopack dans une copie du checkpoint avec dépendances physiques). La suite applicative conserve ses résultats de référence : 2 127 succès, 12 échecs, 2 skips. Le script SQL préexistant en échec demeure le même ; les autres scripts du passage de comparaison réussissent.
 
 ## Synthèse
 
@@ -22,7 +22,7 @@ Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvel
 | --- | ---: |
 | CORRIGÉ (avec suite verte) | 0 |
 | VÉRIFIÉ CIBLÉ (suite initiale rouge) | 4 |
-| CORRIGÉ PARTIEL | 1 |
+| CORRIGÉ PARTIEL | 2 |
 | NON REPRODUIT | 0 |
 | DÉCISION REQUISE | 4 |
 | REVERTÉ | 0 |
@@ -45,7 +45,7 @@ Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvel
 | E23 | Mineur | À REPRODUIRE | Isolé | — | — | — | Règle unique du statut SLA. |
 | E24 | Majeur | À REPRODUIRE | P4 | — | — | — | Validation chronologique de levée ERP. |
 | E25 | Majeur | À REPRODUIRE | P4 | — | — | — | Grille publiée applicable à sa date d’effet. |
-| E29 | Majeur | À REPRODUIRE | P2 | — | — | — | Décision de garantie : version attendue. |
+| E29 | Majeur | CORRIGÉ PARTIEL | P2 | `2b3b44e` | `sql-phase2-lot-a-p2-review.mjs` | Route warranty, migration additive | Ancienne résolution écrasée avec HTTP 200 avant, 409 et résolution conservée après. RPC historique interdit, audit unique. Attend le lot B. |
 | E33 | Mineur | À REPRODUIRE | Isolé | — | — | — | Normalisation des noms dans la recherche. |
 | E34 | Majeur | À REPRODUIRE | P2 | — | — | — | Version et intentions distinctes d’approbation et de réactivation. |
 | E36 | Mineur | À REPRODUIRE | P3 | — | — | — | Rejeu de suspension sans deuxième audit. |
@@ -78,7 +78,7 @@ Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvel
 | ID | Fichier et ligne | Contrat attendu |
 | --- | --- | --- |
 | E15 | `components/role/client-space.tsx:1714`, écriture artisan correspondante | Envoyer la version lue du créneau, 0 pour la création. Contrat vérifié : `expected_version` reçoit `reminder_version` (entier). Sur 409, relire le créneau avant nouvel envoi. |
-| E29 | `components/app/forms.tsx:3338` | Envoyer la version de la demande de garantie avec la décision et conserver le brouillon en cas de conflit. Nom de champ attendu : `expected_version`. |
+| E29 | `components/app/forms.tsx:3338` | Envoyer la version de la demande de garantie avec la décision et conserver le brouillon en cas de conflit. Contrat vérifié : `expected_version` = chaîne `case.updated_at` exacte issue du GET, sans conversion en Date qui perd les microsecondes. |
 | E34/E36 | `components/app/forms.tsx:2232` | Distinguer approbation, demande de correction, suspension et réactivation. Envoyer la version lue et garder la même clé d’intention sur les réessais. Valeurs finales à publier avec la preuve backend. |
 | E18/E41/E53 | Rapport, conversation texte, dépôt de site | Une clé stable par intention, y compris après la perte de la réponse. Définir le format exact avec chaque test de contrat backend. |
 | E08/E10/E12/E62 | Éditeurs budget, zones, adresses et énergie | Les routes concernées ont déjà un contrat de version. Vérifier côté B le rechargement du formulaire et la transition après rejeu avant de modifier le serveur. |
