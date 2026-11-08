@@ -191,10 +191,10 @@ console.log('PASS: acceptance requires displayed active exact quote ID; missing,
 await assert.rejects(as('admin',"select public.reassign_intervention($1,$2,'Trop tard')",[operationJob.id,ids.artisan2]));
 await as('artisan1',"select public.set_travel_stage($1,'en_route')",[operationJob.id]);
 await assert.rejects(as('client2',"select public.set_travel_stage($1,'on_site')",[operationJob.id]));
-await assert.rejects(as('artisan1',"select public.save_intervention_report($1,'Rapport avant travaux suffisant','[]','Artisan')",[operationJob.id]));
+await assert.rejects(as('artisan1',"select public.save_intervention_report($1,'Rapport avant travaux suffisant','[]','Artisan',gen_random_uuid())",[operationJob.id]));
 await as('artisan1',"select public.intervention_action($1,'start')",[operationJob.id]);
-await assert.rejects(as('artisan1',"select public.save_intervention_report($1,'Rapport de contrôle suffisant','[{\"label\":\"Contrôle\",\"result\":\"certified\"}]','Artisan')",[operationJob.id]));
-await as('artisan1',"select public.save_intervention_report($1,'Contrôle électrique effectué, défaut identifié.','[{\"label\":\"Test électrique\",\"result\":\"pass\"}]','Artisan test')",[operationJob.id]);
+await assert.rejects(as('artisan1',"select public.save_intervention_report($1,'Rapport de contrôle suffisant','[{\"label\":\"Contrôle\",\"result\":\"certified\"}]','Artisan',gen_random_uuid())",[operationJob.id]));
+await as('artisan1',"select public.save_intervention_report($1,'Contrôle électrique effectué, défaut identifié.','[{\"label\":\"Test électrique\",\"result\":\"pass\"}]','Artisan test',gen_random_uuid())",[operationJob.id]);
 assert.equal((await as('client2','select * from public.intervention_reports where intervention_id=$1',[operationJob.id])).rows.length,1);
 await as('admin','select public.decide_artisan_application($1,\'suspend\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0))',[ids.artisan1]);
 // CL-001: suspension is operator-controlled, including every self-service entry point.
@@ -219,7 +219,7 @@ assert.equal((await db.query('select available from public.artisan_profiles wher
 await as('artisan1','select public.set_artisan_availability(true)');
 await as('artisan1',"select public.intervention_action($1,'complete')",[operationJob.id]);
 console.log('PASS: CL-001 suspension survives self-edit, submit, availability, repeated operator false and private-helper bypass; explicit checked operator release restores eligibility');
-await as('artisan1',"select public.save_intervention_report($1,'Rapport complété après contrôle, photo conservée.','[]','Artisan test')",[operationJob.id]);
+await as('artisan1',"select public.save_intervention_report($1,'Rapport complété après contrôle, photo conservée.','[]','Artisan test',gen_random_uuid())",[operationJob.id]);
 const history=(await as('client2',"select * from public.intervention_operation_events where intervention_id=$1 and kind='report' order by id",[operationJob.id])).rows;
 assert.equal(history.length,2);assert.notEqual(history[0].payload.summary,history[1].payload.summary);
 await assert.rejects(as('artisan1','delete from public.intervention_operation_events where intervention_id=$1',[operationJob.id]));
