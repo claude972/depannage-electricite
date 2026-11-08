@@ -8,7 +8,7 @@
 // same-origin GET with credentials, no-store, blob + object URL (revoked), server filename; one export
 // at a time; a reply after an identity / consolidation / organisation change or an unmount is dropped
 // and nothing is saved.
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { COMPARISON_REASON, COPY, EMPTY_FORM, EXPORT_COPY, centsToEuros, exportError, fetchCsv, fetchReport, formToSelection, incompleteReasons, parseReport, totalConsumption, totalCost, whToKwh, type EnergyReport, type Form, type Result, type Selection } from "./model";
 import styles from "./energy-consolidation.module.css";
 
@@ -56,12 +56,14 @@ export function EnergyConsolidationPanel({ organizationId, sites, demo, context,
   const waitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // Instance fence: every effect run (StrictMode included) opens its own epoch and its cleanup closes
   // it, so any continuation of an unmounted instance (organisation switch remounts the panel, leaving
-  // « Rapports ») — or of another organisation — is inert: no setState, no saveBlob.
+  // « Rapports ») — or of another organisation — is inert: no setState, no saveBlob. A LAYOUT effect:
+  // its cleanup runs synchronously in the commit that removes the panel (a passive cleanup may be
+  // deferred), so the barrier is closed before any later reply can reach saveBlob. Refs only.
   const alive = useRef(false);
   const epoch = useRef(0);
   const org = useRef(organizationId);
   org.current = organizationId;
-  useEffect(() => {
+  useLayoutEffect(() => {
     epoch.current++;
     alive.current = true;
     return () => {
