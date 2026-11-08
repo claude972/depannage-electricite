@@ -4,6 +4,7 @@
 //   GET /api/invoices/:id            PDF: /api/invoices/:id/pdf?inline=1 (view) | /pdf (download)
 // Amounts are shown exactly as stored (integer cents), nothing is recomputed, and an invoice's
 // document state never says anything about a payment.
+import { readRefused } from "../../app/refusal";
 import { z } from "zod";
 import { taxRateSchema } from "../../../lib/tax-rates";
 
@@ -190,7 +191,7 @@ export function applyInvoiceList(s: InvoicesState, r: InvoicesResult, filters: I
     const invoices = [...(append ? s.invoices : []), ...l.invoices.filter((x) => !seen.has(x.id) && (seen.add(x.id), true))];
     return { ...s, phase: "ready", invoices, page: l.page, total: append ? s.total : l.page.total, loadingMore: false, error: "" };
   }
-  const denied = r.status === 401 || r.status === 403 || r.status === 404;
+  const denied = readRefused(r.status);
   // A refusal on ANY page (first or « Afficher plus ») purges every protected row already shown (E44);
   // a transient failure on a later page keeps the authorized rows and explains itself (E45).
   if (denied) return { ...INVOICES_INITIAL, phase: "denied", error: errorFor(r.status) };

@@ -1,6 +1,7 @@
 // ENT-09 site energy — pure model (no React): API client, strict parse, exact unit conversions,
 // totals wording, form validation and the list/command state machine. The backend contract is
 // lib/features/energy/schemas.ts (read-only): its record schema and kWh→Wh helper are reused.
+import { afterWriteRefusal, readRefused } from "../../app/refusal";
 import { z } from "zod";
 import { energyRecord, energyValues, kwhToWh, type EnergyRecord, type EnergyValues } from "../../../lib/features/energy/schemas";
 
@@ -229,8 +230,9 @@ export function applyList(s: EnergyState, r: EnergyResult, append: boolean, site
     // loading later pages never turns them into an exhaustive client-side sum.
     return { ...s, phase: "ready", records, page: p.page, cursorFilters: { ...s.filters }, totals: append ? s.totals : p.totals, canWrite: p.permissions.can_write, loadingMore: false, error: "" };
   }
-  if (r.status === 404) return { ...ENERGY_INITIAL, filters: s.filters, phase: "unavailable", error: ENERGY_COPY.unavailable };
-  const error = r.status === 401 || r.status === 403 ? ENERGY_COPY.session : ENERGY_COPY.loadFailed;
+  // P1: a refused read of ANY page purges the rows, totals and write rights.
+  if (readRefused(r.status)) return { ...ENERGY_INITIAL, filters: s.filters, phase: "unavailable", error: r.status === 404 ? ENERGY_COPY.unavailable : ENERGY_COPY.session };
+  const error = ENERGY_COPY.loadFailed;
   return { ...s, loadingMore: false, phase: append ? s.phase : "error", error };
 }
 export function applyCommand(s: EnergyState, r: EnergyResult, command: EnergyCommand, siteId: string): EnergyState {
@@ -300,11 +302,14 @@ export function createEnergyController({ api, siteId, context = DEFAULT_ENERGY_C
     }
     loadSeq++; // and again after the reply: nothing started meanwhile may apply
     if (!same(gen, uid)) return false;
+    // P1 shared rules (E63): 401 purges now; 403/404 re-read (a refused read purges rows + form).
+    const refusal = afterWriteRefusal(r.status);
+    if (refusal.purge) {
+      set({ ...ENERGY_INITIAL, filters: get().filters, phase: "unavailable", error: ENERGY_COPY.session });
+      return true;
+    }
     set(applyCommand(get(), r, command, siteId));
-    // A refused right or resource (401/403/404) re-reads the list before anything else: a 404
-    // purges the rows and the write rights, so the open form and its action disappear (E63).
-    const refused = r.status === 401 || r.status === 403 || r.status === 404;
-    if (hadLoad || refused) void fetchList(false); // causal reload
+    if (hadLoad || refusal.reread) void fetchList(false); // causal reload / rights re-read
     return true;
   };
   return {

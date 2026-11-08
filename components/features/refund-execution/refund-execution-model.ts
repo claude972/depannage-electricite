@@ -7,6 +7,7 @@
 // by the webhook-qualified bank confirmation, in one SQL transaction).
 // command_id: the existing execution_id, else a UUID persisted in tab storage (keyed by operator,
 // request and approved version) BEFORE the POST; a lost reply resumes with the same key.
+import { afterWriteRefusal } from "../../app/refusal";
 import { z } from "zod";
 
 export const REFUND_EXEC_TIMEOUT_MS = 15_000;
@@ -213,9 +214,10 @@ export function applyExecute(s: RxState, r: RxResult, cmd: RxCommand): { state: 
   if (r.status === 409) return { state: { ...base, pending: null, conflict: RX_COPY.conflict, notice: "" }, reload: false };
   if (r.status === 503 || r.status === REFUND_EXEC_TIMEOUT || r.status === 0 || r.status >= 500)
     return { state: { ...base, pending: cmd, writeError: RX_COPY.retry, notice: "" }, reload: false };
-  // A refused right or resource is never retried blindly: re-read rights + resource first (E50).
-  if (r.status === 401 || r.status === 403) return { state: { ...base, pending: null, writeError: RX_COPY.session }, reload: true };
-  if (r.status === 404) return { state: { ...base, pending: null, writeError: RX_COPY.notFound }, reload: true };
+  // P1 shared rules (E50): 401 purges now; 403/404 re-read rights + resource before any new POST.
+  const refusal = afterWriteRefusal(r.status);
+  if (refusal.purge) return { state: { ...RX_INITIAL, phase: "unavailable", error: RX_COPY.session, writeError: RX_COPY.session }, reload: false };
+  if (refusal.reread) return { state: { ...base, pending: null, writeError: r.status === 404 ? RX_COPY.notFound : RX_COPY.session }, reload: true };
   return { state: { ...base, pending: null, writeError: RX_COPY.invalid }, reload: false };
 }
 

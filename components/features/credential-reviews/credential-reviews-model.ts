@@ -7,6 +7,7 @@
 // The command is PERSISTED in tab storage (keyed uid|credential|expected_version) BEFORE the POST;
 // a lost reply / 503 / reload resends the identical command. A 409 is never replayed: a new
 // command for this version exists only after an explicit « Actualiser ».
+import { afterWriteRefusal, readRefused } from "../../app/refusal";
 import { z } from "zod";
 
 export const CR_PAGE = 50;
@@ -200,7 +201,7 @@ function readError(status: number): Pick<CrState, "phase" | "error"> {
 }
 export function applyFirstPage(s: CrState, r: CrResult, credentialId: string): CrState {
   if (r.status !== 200) {
-    const transient = r.status === 503 || r.status <= 0;
+    const transient = !readRefused(r.status) && (r.status === 503 || r.status <= 0);
     return { ...s, ...readError(r.status), page: transient ? s.page : null, reviews: transient ? s.reviews : [], nextBefore: transient ? s.nextBefore : null };
   }
   const p = parseReviewsPage(r.body, credentialId, null);
@@ -311,9 +312,10 @@ export function createCrController({
     if (key) store().remove(key);
     const message = r.status === 422 ? (cmd.decision === "accepted" ? CR_COPY.expired : CR_COPY.invalid) : r.status === 403 ? CR_COPY.forbidden : r.status === 404 ? CR_COPY.notFound : r.status === 401 ? CR_COPY.session : CR_COPY.invalid;
     set({ ...base, pending: null, writeError: message });
-    // Refused right or piece: re-read before any new decision; a refused read purges the piece,
-    // its reasons and the form (E38).
-    if (r.status === 401 || r.status === 403 || r.status === 404) await load();
+    // P1 shared rules (E38): 401 purges now; 403/404 re-read (a refused read purges piece + form).
+    const refusal = afterWriteRefusal(r.status);
+    if (refusal.purge) set({ ...CR_INITIAL, phase: "unavailable", error: CR_COPY.session });
+    else if (refusal.reread) await load();
     return true;
   }
   return {

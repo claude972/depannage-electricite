@@ -8,6 +8,7 @@
 // waits for an explicit action; a PATCH 409 (revision) re-reads, never replays.
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { validateUpload } from "../../app/api";
+import { afterWriteRefusal, readRefused } from "../../app/refusal";
 import {
   ATTACH_COPY as COPY,
   KIND_LABEL,
@@ -49,7 +50,7 @@ function useAttachmentList(view: AttachmentView, siteId: string, fence: Fence, e
     set({ ...initial(k), notice });
     void request(fenceRef.current.fetch(), listUrl(siteId, null, view)).then((r) => {
       if (my !== seq.current || !at || fenceRef.current.current() !== at) return; // late: dropped
-      if (r.status === 401 || r.status === 403 || r.status === 404) return set({ ...initial(k), phase: "refused", error: r.status === 401 ? COPY.refused401 : COPY.refused });
+      if (readRefused(r.status)) return set({ ...initial(k), phase: "refused", error: r.status === 401 ? COPY.refused401 : COPY.refused });
       const p = r.status === 200 ? parseAttachmentPage(r.body, siteId, view) : null;
       if (!p) return set({ ...initial(k), phase: "error", error: COPY.failed, notice });
       set({ ...initial(k), phase: "ready", docs: p.documents, next: p.page.next_cursor, notice });
@@ -71,7 +72,7 @@ function useAttachmentList(view: AttachmentView, siteId: string, fence: Fence, e
     void request(fenceRef.current.fetch(), listUrl(siteId, cursor, view)).then((r) => {
       if (my !== seq.current || !at || fenceRef.current.current() !== at || ref.current.key !== key) return;
       if (r.status === 422) return first(key, COPY.cursor);
-      if (r.status === 401 || r.status === 403 || r.status === 404) return set({ ...initial(key), phase: "refused", error: r.status === 401 ? COPY.refused401 : COPY.refused });
+      if (readRefused(r.status)) return set({ ...initial(key), phase: "refused", error: r.status === 401 ? COPY.refused401 : COPY.refused });
       const p = r.status === 200 ? parseAttachmentPage(r.body, siteId, view) : null;
       if (!p) return set({ ...ref.current, loadingMore: false, moreError: true });
       const seen = new Set(ref.current.docs.map((d) => d.id));
@@ -126,7 +127,9 @@ export function SiteAttachmentsPanel({ siteId, organizationId, context, canUploa
     setOpening(null);
     // Refused right or piece: re-read both lists before anything else; a refused list purges the
     // names and every « Ouvrir » (E52). Nothing is retried automatically.
-    if (r.status === 401 || r.status === 403 || r.status === 404) {
+    // P1: the list is this panel's re-read adapter; its refused read purges (401 included).
+    const refusal = afterWriteRefusal(r.status);
+    if (refusal.purge || refusal.reread) {
       setOpenError(COPY.openFailed);
       reread();
       return;
@@ -175,7 +178,7 @@ export function SiteAttachmentsPanel({ siteId, organizationId, context, canUploa
     }
     if (o.kind === "refused") {
       setMessage({ tone: "error", text: o.message });
-      if (r.status === 401 || r.status === 403 || r.status === 404) reread(); // rights re-read (E52)
+      if (afterWriteRefusal(r.status).purge || afterWriteRefusal(r.status).reread) reread(); // rights re-read (E52)
       return;
     }
     setMessage({ tone: "uncertain", text: COPY.uncertain }); // file, kind and target kept
@@ -204,7 +207,7 @@ export function SiteAttachmentsPanel({ siteId, organizationId, context, canUploa
     }
     if (o.kind === "refused") {
       setMessage({ tone: "error", text: o.message });
-      if (r.status === 401 || r.status === 403 || r.status === 404) reread(); // rights re-read (E52)
+      if (afterWriteRefusal(r.status).purge || afterWriteRefusal(r.status).reread) reread(); // rights re-read (E52)
       return;
     }
     setMessage({ tone: "uncertain", text: o.kind === "conflict" ? COPY.conflict : COPY.patchUncertain });

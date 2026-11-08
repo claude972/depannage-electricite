@@ -8,6 +8,7 @@
 // the POST (else 0 POST), keyed by uid + generation, restored only by strict parse for the same
 // identity (never sent by itself), never replayed after an identity change; 401/403 clear.
 // The setup URL is never persisted and opened only after the user's explicit click.
+import { readRefused } from "../../app/refusal";
 import { z } from "zod";
 
 export const PM_PATH = "/api/payments/methods";
@@ -281,7 +282,7 @@ export function createPmController({ api, store, newId, context, get, set }: { a
       const r = await api().list(after);
       if (my !== seq || !same(who)) return;
       // A refused page purges every card already shown at once (E48), like the first page does.
-      if (r.status === 401 || r.status === 403 || r.status === 404) return forbid();
+      if (readRefused(r.status)) return forbid();
       const p = r.status === 200 ? parseMethods(r.body, after) : null;
       if (!p) return set({ ...get(), loadingMore: false, error: COPY.loadFailed });
       const seen = new Set(get().methods.map((x) => x.id));
