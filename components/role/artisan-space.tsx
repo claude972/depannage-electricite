@@ -54,6 +54,7 @@ import {
 } from "../app/ui";
 import { DocumentManager, MessageCenter, ProfileForm } from "../app/forms";
 import { AccountDataPanel } from "../features/account-data/account-data-panel";
+import { AccountSessionsPanel } from "../features/account-sessions/account-sessions-panel";
 import { SubscriptionsPanel } from "../features/subscriptions/subscriptions-panel";
 import {
   ARTISAN_STATUS,
@@ -3498,6 +3499,7 @@ function Profile({
         ))}
       </section>
       <InstallPanel />
+      <AccountSessionsPanel key={`sessions:${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} demo={session.mode === "demo"} context={session.mutationContext} />
       <AccountDataPanel
         key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}
         demo={session.mode === "demo"}
