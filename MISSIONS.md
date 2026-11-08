@@ -225,3 +225,6 @@ Claude possède l'éditeur de compte rendu artisan et son test navigateur. Verro
 ### SYS-04 / PUB-04 — distinguer canal disponible et réception activée
 
 Claude possède les libellés et leurs tests dans le centre de notifications. Le serveur peut exposer l'e-mail et le push comme disponibles après configuration et autorisation. Le centre doit alors rester exact. Retirer l'affirmation générale qu'aucun canal n'envoie de notifications et afficher « disponible » pour un canal proposé dont la préférence enregistrée est désactivée. Conserver le statut distinct du navigateur pour le push. Vérifier les cas disponible sans opt-in, opt-in confirmé et indisponible. Aucun appel supplémentaire, activation fournisseur ou modification des préférences par le test.
+
+## Claim Claude — libellés exacts des canaux de notification
+Base 493fb3a ; claude/notification-channel-labels. Ownership components/features/notifications/notification-center.tsx et un test de rendu ciblé (tests/ui/notification-channel-labels.test.ts) ; ajustement des assertions qui citaient l’ancien texte. Aucun appel, API, activation ou changement des préférences.
