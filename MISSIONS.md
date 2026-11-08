@@ -273,3 +273,7 @@ Codex raccorde le refus motivé au résumé anonymisé des offres disponibles. R
 ### PUB-10 — publier la politique de confidentialité validée par l’exploitant
 
 Codex ajoute les champs facultatifs `privacy_controller`, `privacy_retention` et `privacy_notice` à l’instantané public versionné et au validateur SQL. Claude possède l’éditeur et la page Confidentialité. Utiliser le brouillon et la publication existants, afficher uniquement les valeurs publiées comme texte et conserver les anciennes versions lisibles. L’exploitant fournit les informations et le texte approuvé. La recette suit la phase 1.
+
+### ENT-14 — signaler les budgets dépassés dans le rapport consolidé
+
+Codex ajoute les alertes de lecture dans Rapports. Comparer le montant des devis acceptés au budget de référence positif de la même ligne du serveur. Afficher l’excédent et un lien vers le site. Le rapport peut couvrir un périmètre partiel, et la comparaison reprend exactement sa période et ses montants. Aucun seuil commercial supplémentaire.

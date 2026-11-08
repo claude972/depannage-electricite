@@ -4461,6 +4461,7 @@ export function ReportsView({ c }: { c: Ctx }) {
         ) : server ? (
           server.sites.length ? (
             <>
+              <ReportBudgetAlerts sites={server.sites} onOpen={(id) => c.go("site", id)} />
               {!server.totals.financial_complete && <p className={styles.muted} data-report-unverified="">{REPORT_COPY.unverified(money(server.totals.unverified_paid_cents))}</p>}
               <table className={styles.table}>
                 <caption className="sr-only">Budget et engagements par site</caption>
@@ -4585,6 +4586,31 @@ export function ReportsView({ c }: { c: Ctx }) {
         <OrganizationSlaPanel key={`${c.organization.id}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} organizationId={c.organization.id} context={session.mutationContext} />
       )}
     </>
+  );
+}
+
+function ReportBudgetAlerts({ sites, onOpen }: {
+  sites: readonly { site_id: string; name: string; budget_cents: number; accepted_cents: number }[];
+  onOpen(id: string): void;
+}) {
+  const exceeded = sites.filter((site) => site.budget_cents > 0 && site.accepted_cents > site.budget_cents);
+  if (exceeded.length === 0) return null;
+  return (
+    <section className="alert warning" aria-labelledby="report-budget-alerts" data-report-budget-alerts="">
+      <Icon name="warning" />
+      <div>
+        <h3 id="report-budget-alerts">Budgets de référence dépassés</h3>
+        <p>Devis acceptés des sites affichés dans ce rapport.</p>
+        <ul>
+          {exceeded.map((site) => (
+            <li key={site.site_id}>
+              <button type="button" className="text-button" onClick={() => onOpen(site.site_id)}>{site.name}</button>
+              {" · "}{money(site.accepted_cents - site.budget_cents)} au-dessus du budget de référence
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
   );
 }
 
