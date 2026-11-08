@@ -2289,6 +2289,7 @@ function ProfileView({ session }: { session: Session }) {
             role={session.role}
             demo={demo}
             busy={session.busy}
+            structuredName={demo ? undefined : { first_name: (session.profile as { first_name?: string | null } | null | undefined)?.first_name ?? null, last_name: (session.profile as { last_name?: string | null } | null | undefined)?.last_name ?? null }}
             onSubmit={async (values) => {
               await session.updateProfile(values);
             }}

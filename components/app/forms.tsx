@@ -1031,6 +1031,25 @@ export function SiteForm({
     </section>
   );
 }
+/** Structured account name (CLI-09 / PUB-07): 1–60 characters each, « Prénom Nom » ≤ 120. */
+const NAME_PART_MAX = 60;
+const FULL_NAME_MAX = 120;
+function structuredNameError(first: string, last: string): string {
+  const f = first.trim(), l = last.trim();
+  if (!f || !l) return "Renseignez le prénom et le nom.";
+  if (f.length > NAME_PART_MAX || l.length > NAME_PART_MAX) return `Prénom et nom : ${NAME_PART_MAX} caractères au plus chacun.`;
+  if (`${f} ${l}`.length > FULL_NAME_MAX) return `Prénom et nom réunis : ${FULL_NAME_MAX} caractères au plus.`;
+  return "";
+}
+const joinName = (first: string, last: string) => `${first.trim()} ${last.trim()}`.trim();
+const initials = (value: string) =>
+  value
+    .split(" ")
+    .filter(Boolean)
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join("");
+
 export function ProfileForm({
   name,
   phone,
@@ -1038,32 +1057,48 @@ export function ProfileForm({
   demo,
   busy,
   onSubmit,
+  structuredName,
 }: {
   name: string;
   phone: string;
   role: Role;
   demo: boolean;
   busy: boolean;
-  onSubmit: (values: { full_name: string; phone: string }) => Promise<void>;
+  onSubmit: (values: { full_name: string; phone: string; first_name?: string; last_name?: string }) => Promise<void>;
+  /** Opt-in (client profile): the stored first / last name. Both present ⇒ structured fields;
+   *  otherwise the existing full name stays as is (never split) with an explicit action. */
+  structuredName?: { first_name?: string | null; last_name?: string | null };
 }) {
+  const known = Boolean(structuredName?.first_name?.trim() && structuredName?.last_name?.trim());
   const [fullName, setFullName] = useState(name);
   const [number, setNumber] = useState(phone);
+  // Structured fields: shown when both are known, or when the holder explicitly chooses to fill them.
+  const [structured, setStructured] = useState(known);
+  const [first, setFirst] = useState(known ? structuredName!.first_name!.trim() : "");
+  const [last, setLast] = useState(known ? structuredName!.last_name!.trim() : "");
+  const [edited, setEdited] = useState(false);
+  const [nameError, setNameError] = useState("");
+  const shownName = structured && (edited || known) ? joinName(first, last) || name : fullName;
   return (
     <form
       className="panel profile-form"
       onSubmit={(e) => {
         e.preventDefault();
-        void onSubmit({ full_name: fullName, phone: number });
+        // Structured fields are sent only when filled or edited; a phone-only save sends neither.
+        const filled = structured && (edited || (!known && (first.trim() || last.trim())));
+        if (filled) {
+          const error = structuredNameError(first, last);
+          setNameError(error);
+          if (error) return;
+          void onSubmit({ full_name: joinName(first, last), phone: number, first_name: first.trim(), last_name: last.trim() });
+          return;
+        }
+        setNameError("");
+        void onSubmit({ full_name: structured && known ? name : fullName, phone: number });
       }}
     >
       <div className="profile-intro">
-        <span className="avatar large-avatar">
-          {fullName
-            .split(" ")
-            .map((n) => n[0])
-            .slice(0, 2)
-            .join("")}
-        </span>
+        <span className="avatar large-avatar">{initials(shownName)}</span>
         <div>
           <h2>{name}</h2>
           <p>
@@ -1072,16 +1107,67 @@ export function ProfileForm({
           </p>
         </div>
       </div>
-      <Field label="Nom complet">
-        <input
-          required
-          minLength={2}
-          maxLength={100}
-          autoComplete="name"
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
-        />
-      </Field>
+      {structured ? (
+        <>
+          <Field label="Prénom" error={nameError || undefined}>
+            <input
+              required
+              maxLength={NAME_PART_MAX}
+              autoComplete="given-name"
+              value={first}
+              onChange={(e) => {
+                setFirst(e.target.value);
+                setEdited(true);
+              }}
+            />
+          </Field>
+          <Field label="Nom">
+            <input
+              required
+              maxLength={NAME_PART_MAX}
+              autoComplete="family-name"
+              value={last}
+              onChange={(e) => {
+                setLast(e.target.value);
+                setEdited(true);
+              }}
+            />
+          </Field>
+          {!known && (
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => {
+                setStructured(false);
+                setFirst("");
+                setLast("");
+                setEdited(false);
+                setNameError("");
+              }}
+            >
+              Garder le nom complet actuel
+            </button>
+          )}
+        </>
+      ) : (
+        <>
+          <Field label="Nom complet">
+            <input
+              required
+              minLength={2}
+              maxLength={100}
+              autoComplete="name"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+            />
+          </Field>
+          {structuredName !== undefined && (
+            <button type="button" className="text-button" onClick={() => setStructured(true)}>
+              Renseigner prénom et nom
+            </button>
+          )}
+        </>
+      )}
       <Field label="Téléphone (facultatif)">
         <input
           type="tel"
@@ -1118,14 +1204,20 @@ export function AuthForm({
     password: string;
     full_name: string;
     role: Role;
+    /** Signup only: both always sent there, with full_name = « Prénom Nom ». */
+    first_name?: string;
+    last_name?: string;
   }) => Promise<void>;
   onDemo: () => void;
-  /** Prefill from the service booking flow (email + full name typed there); never a password. */
-  initial?: { email?: string; full_name?: string };
+  /** Prefill from the service booking flow (email, first and last name typed there); never a
+   *  password, and a full name is never split into first / last name. */
+  initial?: { email?: string; first_name?: string; last_name?: string };
 }) {
   const [email, setEmail] = useState(initial?.email ?? "");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState(initial?.full_name ?? "");
+  const [first, setFirst] = useState(initial?.first_name?.trim().slice(0, NAME_PART_MAX) ?? "");
+  const [last, setLast] = useState(initial?.last_name?.trim().slice(0, NAME_PART_MAX) ?? "");
+  const [nameError, setNameError] = useState("");
   const [role, setRole] = useState<Role>("client");
   return (
     <div className="auth-layout">
@@ -1150,7 +1242,15 @@ export function AuthForm({
         className="panel auth-form"
         onSubmit={(e) => {
           e.preventDefault();
-          void onSubmit({ email, password, full_name: name, role });
+          if (mode === "signup") {
+            const error = structuredNameError(first, last);
+            setNameError(error);
+            if (error) return;
+            void onSubmit({ email, password, role, full_name: joinName(first, last), first_name: first.trim(), last_name: last.trim() });
+            return;
+          }
+          // Login and reset keep their existing fields.
+          void onSubmit({ email, password, full_name: "", role });
         }}
       >
         <h2>
@@ -1179,14 +1279,22 @@ export function AuthForm({
                 <option value="manager">Professionnel / syndic</option>
               </select>
             </Field>
-            <Field label="Nom complet">
+            <Field label="Prénom" error={nameError || undefined}>
               <input
                 required
-                autoComplete="name"
-                minLength={2}
-                maxLength={100}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                autoComplete="given-name"
+                maxLength={NAME_PART_MAX}
+                value={first}
+                onChange={(e) => setFirst(e.target.value)}
+              />
+            </Field>
+            <Field label="Nom">
+              <input
+                required
+                autoComplete="family-name"
+                maxLength={NAME_PART_MAX}
+                value={last}
+                onChange={(e) => setLast(e.target.value)}
               />
             </Field>
             {role === "artisan" && (
