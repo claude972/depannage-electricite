@@ -21,7 +21,7 @@ export async function GET() {
     ] = await Promise.all([
       db
         .from("profiles")
-        .select("id,role,full_name,phone,artisan_approved,created_at")
+        .select("id,role,full_name,first_name,last_name,phone,artisan_approved,created_at")
         .eq("id", user.id)
         .single(),
       db

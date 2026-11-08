@@ -1613,7 +1613,7 @@ export default function CourantApp() {
       ctx.notice("Site enregistré.");
     });
   }
-  async function updateProfile(values: { full_name: string; phone: string }) {
+  async function updateProfile(values: Parameters<Session["updateProfile"]>[0]) {
     return run(async (ctx) => {
       if (modeRef.current === "demo") {
         ctx.when(setData)({
@@ -1622,6 +1622,8 @@ export default function CourantApp() {
             id: `demo-${roleRef.current}`,
             role: roleRef.current,
             full_name: values.full_name,
+            first_name: values.first_name,
+            last_name: values.last_name,
             phone: values.phone,
           },
         });
@@ -2706,7 +2708,10 @@ export default function CourantApp() {
           email: values.email,
           password: values.password,
           // Confirmation link lands on the server callback (token_hash verify), never a fake session.
-          options: { data: { full_name: values.full_name, role: values.role }, emailRedirectTo: `${window.location.origin}/auth/confirm` },
+          options: {
+            data: { full_name: values.full_name, first_name: values.first_name, last_name: values.last_name, role: values.role },
+            emailRedirectTo: `${window.location.origin}/auth/confirm`,
+          },
         });
         if (result.error) throw result.error;
         if (result.data.session) {

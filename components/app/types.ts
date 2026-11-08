@@ -100,6 +100,8 @@ export type Message = {
 export type Profile = {
   id: string;
   full_name: string;
+  first_name?: string | null;
+  last_name?: string | null;
   role: Role;
   artisan_approved?: boolean;
   approved?: boolean;

@@ -76,7 +76,7 @@ export interface PublicSession {
   /** Stores a manually shared organisation invitation code, then routes to login. */
   keepInvitation(token: string): void;
   signIn(email: string, password: string): Promise<boolean>;
-  signUp(values: { email: string; password: string; full_name: string; role: Role }): Promise<boolean>;
+  signUp(values: { email: string; password: string; full_name: string; first_name?: string; last_name?: string; role: Role }): Promise<boolean>;
   resetPassword(email: string): Promise<boolean>;
 }
 
@@ -230,7 +230,7 @@ export interface Session {
   sendMessage(interventionId: string, body: string): Promise<boolean>;
   submitReview(interventionId: string, values: { rating: number; body: string }): Promise<boolean>;
   createSite(values: { name: string; type: string; address: string; budget_cents: number; organization_id?: string }): Promise<boolean>;
-  updateProfile(values: { full_name: string; phone: string }): Promise<boolean>;
+  updateProfile(values: { full_name: string; phone: string; first_name?: string; last_name?: string }): Promise<boolean>;
   /** Existing POST /api/professional actions (set_approval_rule, decide_approval, save_contract, save_compliance, set_site_budget). */
   professionalCommand(values: Record<string, unknown>): Promise<boolean>;
   checkout(quoteId: string): Promise<void>;
