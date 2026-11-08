@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useEnterpriseSearch, ENTERPRISE_SEARCH_COPY } from "../enterprise-search/use-enterprise-search";
 import { z } from "zod";
 import { slaCalendarPayload, slaCasePayload, slaPolicyPayload } from "../../../lib/features/site-operations/schemas";
@@ -31,7 +31,8 @@ const casePayload = (d: CaseDraft): SlaCasePayload => ({ policy_id: d.policy_id,
 const pauseSchema = z.object({ started_at: z.string().min(1, "Indiquez le début de la pause."), reason: z.string().trim().max(400) }).strict();
 const resumeSchema = z.object({ ended_at: z.string().min(1, "Indiquez la fin de la pause.") }).strict();
 
-const ticketRef = (id: string) => `INT-${id.slice(0, 8).toUpperCase()}`;
+// Same derivation as the enterprise CSV export (app/api/enterprise/interventions/search/route.ts).
+const ticketRef = (id: string) => `INT-${id.slice(0, 6).toUpperCase()}`;
 const CATEGORY_LABEL: Record<string, string> = { outage: "Panne générale", panel: "Tableau électrique", socket: "Prise ou interrupteur", lighting: "Éclairage", diagnostic: "Recherche de panne" };
 const day = (iso: string) => new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 
@@ -116,7 +117,9 @@ function TrackCell({ label, track }: { label: string; track: SlaTrack }) {
       ) : (
         <small>
           cible {minutes(track.target_minutes)} · écoulé {minutes(track.elapsed_minutes)}
-          {track.status === "pending" && ` · reste ${minutes(track.remaining_minutes)} · échéance ${dateTime(track.deadline_at)}`}
+          {track.status === "pending" && ` · reste ${minutes(track.remaining_minutes)}`}
+          {/* ENT-06: the computed due date stays readable after a response or a resolution. */}
+          {track.deadline_at && <span data-sla-deadline=""> · échéance calculée {dateTime(track.deadline_at)}</span>}
         </small>
       )}
     </div>
@@ -135,8 +138,34 @@ export function SlaPanel({ context }: { context: PanelContext }) {
   const [pauseDraft, setPauseDraft] = useState({ started_at: "", reason: "" });
   const [resumeDraft, setResumeDraft] = useState({ ended_at: "" });
   const form = useSubmit(context);
-  const close = () => setMode({ kind: "none" });
-  const start = (next: Mode) => { setMode(next); form.setMessage(null); };
+  // SLA case editor: one save at a time (synchronous guard) and a token per opened editor, so only
+  // the editor that sent the save is closed by its success; a late reply for another one is ignored.
+  const caseInFlight = useRef(false);
+  const caseEditor = useRef(0);
+  const siteRef = useRef(report.site_id);
+  siteRef.current = report.site_id;
+  const close = () => {
+    caseEditor.current++;
+    setMode({ kind: "none" });
+  };
+  const start = (next: Mode) => { caseEditor.current++; setMode(next); form.setMessage(null); };
+  const saveCase = async (event: FormEvent) => {
+    event.preventDefault();
+    if (mode.kind !== "case" || !canWrite || caseInFlight.current || form.submitting || context.busy) return;
+    caseInFlight.current = true;
+    const token = caseEditor.current, site = report.site_id;
+    const payload = casePayload(caseDraft); // built once: after a failure the draft (and link) stay as sent
+    const command = mode.id
+      ? { action: "save_sla_case" as const, site_id: site, payload, id: mode.id, expected_version: mode.version ?? 0 }
+      : { action: "save_sla_case" as const, site_id: site, payload };
+    try {
+      await form.submit(event, slaCasePayload, payload, command, () => {
+        if (caseEditor.current === token && site === siteRef.current) close();
+      }, "Dossier enregistré.");
+    } finally {
+      caseInFlight.current = false;
+    }
+  };
   const activePolicies = policies.filter((p) => p.status === "active");
   const org = report.snapshot.site.organization_id;
   return (
@@ -240,9 +269,12 @@ export function SlaPanel({ context }: { context: PanelContext }) {
       <h4 className={styles.subhead}>Dossiers suivis</h4>
       {canWrite && mode.kind === "none" && activePolicies.length > 0 && <button type="button" className="button primary" onClick={() => { setCaseDraft(emptyCase(activePolicies[0].id)); start({ kind: "case", id: null, version: null }); }}>Ouvrir un dossier de délai</button>}
       {canWrite && activePolicies.length === 0 && <p className={styles.hint}>Créez d’abord une règle active pour suivre un dossier.</p>}
-      {mode.kind === "case" && (
-        <form className={styles.form} noValidate onSubmit={(event) => form.submit(event, slaCasePayload, casePayload(caseDraft), mode.id ? { action: "save_sla_case", site_id: report.site_id, payload: casePayload(caseDraft), id: mode.id, expected_version: mode.version ?? 0 } : { action: "save_sla_case", site_id: report.site_id, payload: casePayload(caseDraft) }, close, "Dossier enregistré.")}>
+      {/* Right lost after re-evaluation (canWrite false): the editor is withdrawn, nothing is sent. */}
+      {mode.kind === "case" && canWrite && (
+        <form className={styles.form} noValidate onSubmit={(event) => void saveCase(event)} data-sla-case-form={form.submitting ? "saving" : "idle"}>
           <h4>{mode.id ? "Modifier le dossier" : "Nouveau dossier de délai"}</h4>
+          {/* Every field and every link control (choose, remove, search, pages) is locked while the save is in flight. */}
+          <fieldset disabled={form.submitting} aria-busy={form.submitting || undefined} style={{ display: "contents" }} data-sla-lock="">
           {form.message && <Notice tone={form.message.tone}>{form.message.text}</Notice>}
           <div className={styles.grid2}>
             <Field label="Règle appliquée" error={form.errors.policy_id}>{(a) => <select {...a} value={caseDraft.policy_id} onChange={(e) => setCaseDraft((d) => ({ ...d, policy_id: e.target.value }))}>{policies.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}</select>}</Field>
@@ -257,6 +289,7 @@ export function SlaPanel({ context }: { context: PanelContext }) {
             <button type="submit" className="button primary" disabled={form.submitting || context.busy}>{form.submitting ? "Enregistrement…" : "Enregistrer"}</button>
             <button type="button" className="button outline" onClick={close} disabled={form.submitting}>Annuler</button>
           </div>
+          </fieldset>
         </form>
       )}
       {cases.length === 0 ? (
