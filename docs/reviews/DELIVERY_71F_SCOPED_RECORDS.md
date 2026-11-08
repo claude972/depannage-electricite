@@ -11,4 +11,12 @@ Les quatre scénarios authentifiés ont été joués avec Chromium à 390 px en 
 
 Les essais `132b5b58f72d` et `2b2a4f7106a2` restent en échec. Le premier a rejeté une insertion synthétique dont les clés variaient entre les lignes. Le second a lu les 106 dossiers attendus, puis a échoué sur une assertion CSV qui ne tenait pas compte des guillemets. Les deux nettoyages sont prouvés séparément par 104 et 107 lectures. Les corrections portaient sur le harnais.
 
-Cette recette couvre ces lectures et actions sur ce déploiement. Les preuves antérieures de réservation, de suivi GPS, de documents et de PWA gardent leurs propres versions. Les raccordements réels Stripe et Vonage, la recette complète par rôle et la distribution native restent ouverts.
+## Parcours central, fiches publiques et reprise hors ligne
+
+Sur la même version, les seize contrôles des huit fiches publiques passent à 360 px en clair et 1 440 px en sombre. Les photos et estimations s’affichent, les deux boutons de poursuite fonctionnent et le prénom est présent à l’étape des coordonnées. Le navigateur n’émet aucune écriture. La PWA à 390 px conserve le brouillon hors ligne et le reprend après retour du réseau. Seuls les trois fichiers publics de reprise figurent dans son cache et aucune demande n’est envoyée pendant la vérification.
+
+Le parcours `4749ddc7eddf` part de deux comptes temporaires et crée le dossier depuis la confirmation client. Le même corps de requête rejoué par HTTP renvoie le même dossier et la même estimation. Dans Chromium, l’artisan accepte l’offre, enregistre le brouillon et publie le devis. Le client accepte ce devis depuis sa fiche. Les contrôles HTTP vérifient la validité, le téléchargement privé du PDF, le déplacement, le démarrage, le compte rendu et la fin. Le navigateur client affiche ensuite le règlement de 100 € attendu sur la plateforme. La base confirme le devis accepté à 100 € et zéro paiement ou règlement fournisseur. La recette est sortie à 0 et les 29 lectures indépendantes après nettoyage passent.
+
+Les trois essais précédents du parcours central ont été conservés. Deux se sont arrêtés sur les sélecteurs d’adresse et de téléphone avant la soumission. Le troisième a créé et attribué le dossier puis enregistré le brouillon, mais son assertion omettait la seconde prestation proposée par défaut. Le rejeu réussi supprime cette ligne dans l’éditeur. Les nettoyages indépendants de ces trois essais donnent respectivement 12, 12 et 27 lectures réussies.
+
+Les preuves GPS et les autres essais par rôle gardent leurs versions. Les raccordements réels Stripe et Vonage, la recette complète par rôle et la distribution native restent ouverts.
