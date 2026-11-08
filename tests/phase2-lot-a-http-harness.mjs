@@ -81,7 +81,7 @@ function fakeSession(user) {
   return { token, cookie, user };
 }
 
-export async function withNext(db, check, extraEnv = {}, { users = [actor], rpcAllowlist = rpcNames } = {}) {
+export async function withNext(db, check, extraEnv = {}, { users = [actor], rpcAllowlist = rpcNames, handle } = {}) {
   const sessions = new Map(users.map(user => [user.id, fakeSession(user)]));
   const byAuthorization = new Map([...sessions.values()].map(session => ["Bearer " + session.token, session.user]));
   const rejectedSql = [];
@@ -94,6 +94,7 @@ export async function withNext(db, check, extraEnv = {}, { users = [actor], rpcA
       if (!signedIn && !isService) return send(401, { error: "Invalid fixture identity" });
       if (signedIn && request.method === "GET" && request.url === "/auth/v1/user")
         return send(200, signedIn);
+      if (handle && await handle(request, response, { user: signedIn, isService, send })) return;
       const rpc = request.url?.match(/^\/rest\/v1\/rpc\/([a-z_]+)$/)?.[1];
       if (request.method !== "POST" || !rpc || !(isService ? deliveryRpcs : rpcAllowlist).has(rpc))
         return send(404, { error: "Unexpected fixture RPC" });
@@ -101,7 +102,7 @@ export async function withNext(db, check, extraEnv = {}, { users = [actor], rpcA
       for await (const chunk of request) body += chunk;
       const args = JSON.parse(body);
       const fields = Object.keys(args);
-      assert.ok(fields.every(field => /^p_[a-z_]+$/.test(field)));
+      assert.ok(fields.every(field => /^p_[a-z][a-z0-9_]*$/.test(field)));
       const call = fields.map((field, i) => `${field} => $${i + 1}`).join(", ");
       const sql = `select to_jsonb(public.${rpc}(${call})) v`;
       const data = isService
@@ -145,7 +146,7 @@ export async function withNext(db, check, extraEnv = {}, { users = [actor], rpcA
     assert.match(logs, /Ready in/, "Next.js did not start on the local loopback");
     const http = (route, options = {}, user = users[0]) => fetch(origin + route, {
       ...options,
-      headers: { cookie: sessions.get(user.id).cookie, "Content-Type": "application/json", ...options.headers },
+      headers: { cookie: sessions.get(user.id).cookie, ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }), ...options.headers },
       signal: AbortSignal.timeout(20_000),
     });
     await check(http, rejectedSql);

@@ -50,23 +50,29 @@ type PersistOptions<T> = {
   finalize(): PromiseLike<{ data: unknown; error: { code?: string } | null }>;
   readback(): PromiseLike<{ data: unknown; error: unknown }>;
   project(value: unknown): T | null;
+  // Stable site upload paths may already have bytes from an interrupted or concurrent attempt.
+  resumeUploadedObject?(): Promise<boolean>;
 };
 
 /** Only Storage uses the server credential. The supplied metadata writer runs under the caller.
  * An absent row after a transport failure does not prove rollback. */
 export async function persistPrivateWebDocument<T>(
   admin: SupabaseClient,
-  { path, mime, bytes, scope, finalize, readback, project }: PersistOptions<T>,
+  { path, mime, bytes, scope, finalize, readback, project, resumeUploadedObject }: PersistOptions<T>,
 ): Promise<T> {
   let uploaded;
   try {
     uploaded = await admin.storage.from(DOCUMENT_BUCKET).upload(path, bytes, { contentType: mime, upsert: false });
   } catch { uploaded = { error: { message: "Upload transport unavailable" } }; }
   if (uploaded.error) {
-    if (isExistingObjectError(uploaded.error))
-      throw new ApiError(409, "L’état du fichier a changé. Rechargez les documents avant de réessayer.");
-    if (!await compensate(admin, path)) throw cleanupIncomplete();
-    throw new ApiError(503, "Le fichier n’a pas pu être envoyé. Réessayez dans quelques instants.");
+    if (isExistingObjectError(uploaded.error)) {
+      if (!resumeUploadedObject || !await resumeUploadedObject())
+        throw new ApiError(409, "L’état du fichier a changé. Rechargez les documents avant de réessayer.");
+    } else {
+      if (resumeUploadedObject) throw uncertain(scope);
+      if (!await compensate(admin, path)) throw cleanupIncomplete();
+      throw new ApiError(503, "Le fichier n’a pas pu être envoyé. Réessayez dans quelques instants.");
+    }
   }
 
   let finalized: Awaited<ReturnType<PersistOptions<T>["finalize"]>>;
@@ -89,7 +95,8 @@ export async function persistPrivateWebDocument<T>(
     throw uncertain(scope);
   }
   if (isDefiniteRollback(finalized.error?.code)) {
-    if (!await compensate(admin, path)) throw cleanupIncomplete();
+    // A parallel retry may be finalizing the exact same stable object; never remove it here.
+    if (!resumeUploadedObject && !await compensate(admin, path)) throw cleanupIncomplete();
     dbError(finalized.error);
   }
   throw uncertain(scope);

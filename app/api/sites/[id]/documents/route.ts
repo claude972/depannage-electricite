@@ -1,8 +1,8 @@
-import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { adminClient, ApiError, apiError, assertOrigin, authenticatedClient, dbError } from "@/lib/supabase/server";
-import { documentNameFor, MAX_DOCUMENT_BYTES, MAX_REQUEST_BYTES, validateDocumentUpload } from "@/lib/shared/document-policy";
+import { DOCUMENT_BUCKET, documentNameFor, MAX_DOCUMENT_BYTES, MAX_REQUEST_BYTES, validateDocumentUpload } from "@/lib/shared/document-policy";
 import { validated } from "@/lib/supabase/validation";
 import { signPrivateDocument } from "@/lib/features/documents/signed-url";
 import { persistPrivateWebDocument, WebUploadError } from "@/lib/features/documents/web-upload";
@@ -29,7 +29,6 @@ const archiveCommand = z.object({
   id: uuid, action: z.enum(["archive", "restore"]), expected_revision: revision.max(2147483646),
 }).strict();
 const fields = "id,site_id,name,mime_type,kind,created_at,version,revision,replaces_id,replaced_at,archived_at";
-const finalizedFields = `${fields},owner_id,path`;
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -146,13 +145,41 @@ export async function POST(request: Request, context: Context) {
     let form: FormData;
     try { form = await request.formData(); }
     catch { throw new ApiError(422, "Le formulaire de dépôt est invalide."); }
-    if ([...form.keys()].some(key => !["file", "kind", "replaces_id"].includes(key) || form.getAll(key).length !== 1))
+    if ([...form.keys()].some(key => !["file", "kind", "replaces_id", "command_id"].includes(key) || form.getAll(key).length !== 1))
       throw new ApiError(422, "Le formulaire de dépôt est invalide.");
     const file = form.get("file");
     const kind = kindSchema.safeParse(form.get("kind"));
     const replaces = uuid.nullable().safeParse(form.get("replaces_id"));
+    const command = uuid.safeParse(form.get("command_id"));
+    if (!command.success) throw new ApiError(422, "Référence de dépôt invalide.");
     if (!(file instanceof File) || file.size < 1 || file.size > MAX_DOCUMENT_BYTES || !kind.success || !replaces.success)
       throw new ApiError(422, "Choisissez un type et un fichier PDF, JPEG, PNG ou WebP de moins de 4 Mo.");
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const verdict = validateDocumentUpload({ size: file.size, declaredType: file.type, bytes });
+    if (!verdict.ok) throw new ApiError(422, "Le contenu du fichier ne correspond pas à un format autorisé.");
+    const id = command.data, owner = user.id.toLowerCase();
+    const path = `sites/${siteId}/${owner}/${id}`, name = documentNameFor(file.name);
+    const args = {
+      p_site: siteId, p_command_id: id, p_name: name, p_mime: verdict.mime, p_kind: kind.data,
+      p_replaces: replaces.data, p_content_sha256: createHash("sha256").update(bytes).digest("hex"),
+    };
+    const readback = () => db.rpc("site_document_upload_command", { ...args, p_finalize: false });
+    const project = (value: unknown) => {
+      const projected = publicDocument(value);
+      if (!projected) return null;
+      const { document: item, path: storedPath, ownerId } = projected;
+      return item.id === id && item.site_id === siteId && ownerId === owner && storedPath === path
+        && item.name === name && item.mime_type === verdict.mime && item.kind === kind.data
+        && item.replaces_id === replaces.data && (replaces.data ? item.version > 1 : item.version === 1) ? item : null;
+    };
+    const prior = await readback();
+    dbError(prior.error);
+    if (prior.data !== null) {
+      const document = project(prior.data);
+      if (!document) throw new ApiError(503, "Le dépôt précédent doit être vérifié.");
+      return Response.json({ document }, { status: 201, headers });
+    }
 
     let expectedVersion = 1;
     if (replaces.data) {
@@ -166,30 +193,21 @@ export async function POST(request: Request, context: Context) {
       expectedVersion = old.version + 1;
     }
 
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const verdict = validateDocumentUpload({ size: file.size, declaredType: file.type, bytes });
-    if (!verdict.ok) throw new ApiError(422, "Le contenu du fichier ne correspond pas à un format autorisé.");
     const throttle = await db.rpc("check_upload_limit");
     dbError(throttle.error);
-    const id = randomUUID(), owner = user.id.toLowerCase();
-    const path = `sites/${siteId}/${owner}/${id}`, name = documentNameFor(file.name);
     const admin = adminClient();
     const document = await persistPrivateWebDocument(admin, {
-      path, bytes, mime: verdict.mime, scope: "du site",
-      finalize: () => {
-        const args = { p_site: siteId, p_id: id, p_path: path, p_name: name, p_mime: verdict.mime, p_kind: kind.data };
-        return replaces.data
-          ? db.rpc("replace_site_document_upload", { ...args, p_replaces: replaces.data })
-          : db.rpc("finalize_site_document_upload", args);
-      },
-      readback: () => admin.from("site_documents").select(finalizedFields).eq("id", id).maybeSingle(),
+      path, bytes, mime: verdict.mime, scope: "du site", readback,
+      finalize: () => db.rpc("site_document_upload_command", { ...args, p_finalize: true }),
       project(value) {
-        const projected = publicDocument(value);
-        if (!projected) return null;
-        const { document: item, path: storedPath, ownerId } = projected;
-        return item.id === id && item.site_id === siteId && ownerId === owner && storedPath === path
-          && item.name === name && item.mime_type === verdict.mime && item.kind === kind.data
-          && item.version === expectedVersion && item.replaces_id === replaces.data ? item : null;
+        const item = project(value);
+        return item?.version === expectedVersion ? item : null;
+      },
+      async resumeUploadedObject() {
+        const stored = await admin.storage.from(DOCUMENT_BUCKET).download(path);
+        dbError(stored.error);
+        return stored.data !== null && stored.data.size === bytes.byteLength
+          && Buffer.from(await stored.data.arrayBuffer()).equals(bytes);
       },
     });
     return Response.json({ document }, { status: 201, headers });
