@@ -11,3 +11,5 @@ Le front combine le point devis exact (version courante, statut sent, dossier qu
 401 session,403 rôle,404 absence/périmètre,422 paramètres,503 incohérence/indisponibilité avec Retry-After:2. Refus et erreurs jamais assimilés à absence.
 
 Plan : réutiliser le reader destinataire et ses contrôles avant/après ; lectures bornées règle/décision/termes/droits ; tests HTTP de projection, absence, statuts, droits et échecs, régressions reader et TypeScript. Aucun SQL, UI, cloud ou nouvelle politique.
+
+Vérification locale : 8 tests HTTP (contexte + régressions destinataire), 17 assertions SQL/RLS isolées (246 devis, 25 anciennes révisions, règle/approbation/termes, lecteur restreint, tiers, révocation), TypeScript et diff-check passent. Le contexte est relu et comparé autour des contrôles de périmètre ; changement détecté = 503. Ce GET ne verrouille pas une future décision : les commandes et gardes SQL existantes restent autoritaires. Aucune recette hébergée exécutée pour ce lot.

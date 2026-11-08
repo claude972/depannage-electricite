@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { authenticatedClient, ApiError, dbError } from '@/lib/supabase/server';
 import { comparePostgresTime } from '@/lib/shared/postgres-time-order';
 import { detailReadSchema, DETAIL_PROJECTIONS } from '@/lib/features/workspace/detail-read';
+import { readDecisionContext } from './decision-context';
 import { calculateQuote } from '@/lib/domain';
 
 const uuid = z.uuid().transform(v => v.toLowerCase());
@@ -27,7 +28,7 @@ const embed = `intervention:interventions!quotes_intervention_id_fkey!inner(${jo
 const headers = { 'Cache-Control': 'private, no-store', 'Referrer-Policy': 'no-referrer' };
 type Context = { params: Promise<{ id: string }> };
 
-async function read(request: Request, context?: Context) {
+async function read(request: Request, context?: Context, decision = false) {
   try {
     const { db, user } = await authenticatedClient();
     const actor = uuid.parse(user.id), params = new URL(request.url).searchParams;
@@ -42,7 +43,7 @@ async function read(request: Request, context?: Context) {
     const profile = await db.from('profiles').select('role').eq('id', actor).maybeSingle();
     dbError(profile.error);
     const role = profile.data?.role;
-    if (role !== 'client' && !(context && role === 'manager')) throw new ApiError(403, 'Accès destinataire requis.');
+    if ((decision && role !== 'manager') || (role !== 'client' && !(context && role === 'manager'))) throw new ApiError(403, 'Accès destinataire requis.');
     if (role === 'client' && (org || site)) throw new ApiError(422, 'Périmètre client invalide.');
     if (role === 'manager' && !org) throw new ApiError(422, 'Choisissez une organisation.');
     async function access(jobs: z.infer<typeof jobSchema>[] = []) {
@@ -115,6 +116,15 @@ async function read(request: Request, context?: Context) {
       dbError(activeResult.error);
       const active = z.array(z.object({ id: uuid, intervention_id: uuid, status: z.enum(['sent', 'accepted']) })).max(1).parse(activeResult.data);
       if (active.some(q => q.intervention_id !== intervention.id) || (quote.status !== 'rejected' && (active[0]?.id !== quote.id || active[0]?.status !== quote.status)) || (quote.status === 'rejected' && active[0]?.id === quote.id)) throw Error('Quote version changed');
+      if (decision) {
+        if (!intervention.site_id) throw new ApiError(404, 'Devis introuvable.');
+        const before = await readDecisionContext(db, quote.id, intervention.id, intervention.site_id);
+        await access([intervention]);
+        const after = await readDecisionContext(db, quote.id, intervention.id, intervention.site_id);
+        if (JSON.stringify(before) !== JSON.stringify(after)) throw Error('Decision context changed');
+        await access([intervention]);
+        return Response.json(after, { headers });
+      }
       await access([intervention]);
       return Response.json({ quote, intervention: projectJob(intervention), version: { current_quote_id: active[0]?.id ?? null, is_current: active[0]?.id === quote.id } }, { headers });
     }
@@ -129,3 +139,5 @@ async function read(request: Request, context?: Context) {
 }
 export const GET = (request: Request) => read(request);
 export const GET_DETAIL = (request: Request, context: Context) => read(request, context);
+
+export const GET_DECISION_CONTEXT = (request: Request, context: Context) => read(request, context, true);
