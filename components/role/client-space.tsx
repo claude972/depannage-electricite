@@ -81,6 +81,7 @@ import { platformEntries } from "./anchors";
 import { UploadQueuePanel } from "../app/upload-queue";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
 import { AccountDataPanel } from "../features/account-data/account-data-panel";
+import { AccountSessionsPanel } from "../features/account-sessions/account-sessions-panel";
 import { SEARCH_COPY, rowsSignal, toListRows, useRequestsSearch } from "../features/requests-search/use-requests-search";
 import { QUOTES_COPY, useRecipientQuote, useRecipientQuotes, type QuoteFilter } from "../features/recipient-quotes/use-recipient-quotes";
 import { ClientAddressesPanel, usePreferredAddress } from "../features/client-addresses/client-addresses-panel";
@@ -2298,6 +2299,7 @@ function ProfileView({ session }: { session: Session }) {
           <ProfileNotificationPreferences session={session} />
           <InstallPanel />
           <ClientAddressesPanel key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} demo={demo} context={session.mutationContext} />
+          <AccountSessionsPanel key={`sessions:${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} demo={demo} context={session.mutationContext} />
           <AccountDataPanel
             key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}
             demo={demo}

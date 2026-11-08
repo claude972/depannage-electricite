@@ -49,6 +49,7 @@ import type {
 } from "../app/types";
 import { Icon } from "../app/icons";
 import { InstallPanel } from "../app/install-panel";
+import { AccountSessionsPanel } from "../features/account-sessions/account-sessions-panel";
 import { AdminReplyComposer } from "../features/admin-messages/admin-reply";
 import { WarrantyPolicyEditor } from "../features/warranty-policy/warranty-policy-editor";
 import { mergeThread } from "../features/admin-messages/admin-reply-model";
@@ -1090,6 +1091,7 @@ export function AdminSpace({ session }: { session: Session }) {
           }}
         />
         <InstallPanel />
+        <AccountSessionsPanel key={`sessions:${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} demo={demo} context={session.mutationContext} />
       </div>
       <aside>
         <Panel title="Rôle Super Admin">

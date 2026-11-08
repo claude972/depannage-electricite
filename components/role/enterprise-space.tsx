@@ -135,6 +135,7 @@ import { FeatureUnavailable, useProbeWhenUnknown } from "./feature-unavailable";
 import { EnterpriseTimeline } from "../features/enterprise-timeline/enterprise-timeline";
 import { buildTimeline } from "../features/enterprise-timeline/timeline-model";
 import { AccountDataPanel } from "../features/account-data/account-data-panel";
+import { AccountSessionsPanel } from "../features/account-sessions/account-sessions-panel";
 import type {
   Category,
   Approval,
@@ -5518,6 +5519,7 @@ function ProfileView({ c }: { c: Ctx }) {
         }}
       />
       <InstallPanel />
+      <AccountSessionsPanel key={`sessions:${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} demo={demo} context={session.mutationContext} />
       <AccountDataPanel
         key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}
         demo={demo}
