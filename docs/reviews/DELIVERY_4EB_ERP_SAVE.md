@@ -5,3 +5,5 @@ La preview sert `4eb815ceda8d7e9e36e15306c56667efa57869f2` de `integration/web-p
 Chromium a ouvert puis levé une réserve ERP lors de la recette `d66f54701277` à 390 px. Le premier envoi de la modification a reçu un 503 injecté avant transmission. Tous les champs sont restés identiques et l’état en base est resté à la version 1. La reprise manuelle a envoyé la même commande versionnée. Son reçu a été retenu après confirmation de la version 2 et de l’événement d’audit en base. Pendant l’attente, les contrôles étaient verrouillés et une seconde soumission n’a émis aucune requête supplémentaire. Le formulaire s’est fermé après le reçu.
 
 Les refus ont été vérifiés avec une version périmée (409), un lecteur (écriture 403) et un tiers (lecture et écriture 403). Les deux versions journalisées sont restées intactes. Les 36 étapes de nettoyage et 38 lectures indépendantes ont réussi. Cette recette porte sur la levée déclarative et sur une erreur interceptée avant transmission. [Recette déclarative précédente](DELIVERY_817_ERP_DECLARATION.md)
+
+Les deux jobs GitHub du commit servi passent. [CI](https://github.com/claude972/depannage-electricite/actions/runs/42442493537)
