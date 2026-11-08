@@ -2527,6 +2527,7 @@ function Messages({ session }: { session: Session }) {
           selectedId={selected}
           busy={session.busy}
           onSubmit={(id, body) => session.sendMessage(id, body)}
+          context={session.mutationContext}
         />
       ) : (
         <section className="panel">

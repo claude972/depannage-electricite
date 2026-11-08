@@ -39,6 +39,7 @@ export type HistoryPage = { messages: Message[]; hasMore: boolean; nextCursor: s
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const str = (v: unknown) => typeof v === "string" && v.length > 0;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Validates a 200 body for the requested dossier; null when unusable (nothing is applied then). */
 export function parseHistoryPage(raw: unknown, interventionId: string): HistoryPage | null {
@@ -51,7 +52,10 @@ export function parseHistoryPage(raw: unknown, interventionId: string): HistoryP
     if (!isObject(m) || !str(m.id) || !str(m.author_id) || typeof m.body !== "string" || !str(m.created_at)) return null;
     // A row of another dossier means the reply is not for this request: refuse the whole page.
     if (m.intervention_id !== interventionId) return null;
-    messages.push({ id: m.id as string, intervention_id: interventionId, author_id: m.author_id as string, body: m.body, created_at: m.created_at as string });
+    // attachment_id (SYS-04 / M62): UUID | null; older rows omit it (⇒ null). Anything else refuses the page.
+    const attachment = m.attachment_id === undefined || m.attachment_id === null ? null : typeof m.attachment_id === "string" && UUID.test(m.attachment_id) ? m.attachment_id.toLowerCase() : undefined;
+    if (attachment === undefined) return null;
+    messages.push({ id: m.id as string, intervention_id: interventionId, author_id: m.author_id as string, body: m.body, created_at: m.created_at as string, ...(attachment ? { attachment_id: attachment } : {}) });
   }
   return { messages, hasMore: has_more, nextCursor: has_more ? (next_cursor as string) : null };
 }

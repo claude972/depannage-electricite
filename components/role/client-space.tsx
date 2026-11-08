@@ -331,6 +331,7 @@ export function ClientSpace({ session }: { session: Session }) {
               selectedId={session.param || session.selectedId}
               busy={session.busy}
               onSubmit={(id, body) => session.sendMessage(id, body)}
+              context={session.mutationContext}
             />
           </>
         );
