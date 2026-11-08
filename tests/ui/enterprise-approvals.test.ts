@@ -142,12 +142,15 @@ const page = (items, next = null) => ({ items, page: { limit: 50, has_more: next
 // 250 approvals (> the 200-row cache); the oldest one (#249, pending) is only on page 5.
 const all = Array.from({ length: 250 }, (_, i) => row(i + 1));
 const ctxOf = (opts, gone) => ({
-  session: { mode: opts.demo ? "demo" : "live", mutationContext: { userId: () => USER, generation: () => 0 }, data: { quotes: [], documents: [], organization_members: [], interventions: [] }, professional: { approvals: [], approval_rules: [], audit: [] }, profileId: USER, displayName: "Moi", busy: false, openIntervention: (id, q) => gone.push(["open", id, q]), professionalCommand: async (b) => { gone.push(["decide", b.approval_id, b.decision]); decided = true; return true; }, capabilities: {}, features: {} },
+  session: { mode: opts.demo ? "demo" : "live", mutationContext: { userId: () => USER, generation: () => 0 }, data: { quotes: [], documents: [], organization_members: [], interventions: [] }, professional: { approvals: [], approval_rules: [], audit: [] }, profileId: USER, displayName: "Moi", busy: false, openIntervention: (id, q) => gone.push(["open", id, q]), professionalCommand: async (b) => { gone.push(["decide", b.approval_id, b.decision]); decided = true; return true; }, capabilities: { quoteDocuments: "available" }, reprobeFeature: async () => {}, go: () => {}, role: "manager",
+    // Records what the real QuoteDocumentsAnchor asks its client for (target incl. the exact quoteId).
+    features: { quoteDocuments: new Proxy({}, { get: (_t, name) => (...args) => { anchorLog.push(String(name) + ":" + JSON.stringify(args)); return new Promise(() => {}); } }) } },
   demo: !!opts.demo, organization: opts.noOrg ? null : { id: opts.org ?? ORG, name: "Org" }, activeSite: null, orgSites: [], orgInterventions: [],
   scope: { sites: [], interventions: [], quotes: [], payments: [], approvals: opts.demo ? [{ id: "d1", quote_id: "q1", status: "pending", created_at: "2026-01-01T00:00:00Z" }] : [], compliance: [], documents: [], rules: [] },
   authority: { role: "owner", canWrite: true, readOnlyReason: null, canWriteSite: () => true }, go: (v, p) => gone.push([v, p]),
 });
 let decided = false;
+const anchorLog = [];
 const fetchMock = (calls, opts = {}) => async (url) => {
   const u = String(url); calls.push(u);
   const q = new URL(u, "http://x").searchParams;
@@ -195,6 +198,11 @@ window.run = async () => {
   root.render(h(StrictMode, null, h(ApprovalDetail, { c: ctxOf({}, gone), id: A(249) })));
   await tick(400);
   out.dossierButton = div.querySelector("[data-approval-open-dossier]")?.getAttribute("data-approval-open-dossier");
+  out.openLabel = div.querySelector("[data-approval-open-dossier]")?.textContent.trim();
+  out.anchorCalls = anchorLog.slice();
+  out.artisan = div.querySelector("[data-approval-artisan]")?.textContent;
+  out.docsLabel = div.querySelector("[data-approval-documents-label]")?.textContent;
+  out.journalNote = !!div.querySelector("[data-approval-journal-note]");
   out.rule = div.querySelector("[data-approval-rule]")?.textContent;
   div.querySelector("[data-approval-open-dossier]").click();
   out.openDossier = gone.find((g) => g[0] === "open");
@@ -204,6 +212,35 @@ window.run = async () => {
   out.decided = gone.find((g) => g[0] === "decide");
   out.pointsAfter = calls.filter((u) => u.includes("/approvals/")).length - pointsBefore;
   out.afterText = div.textContent.includes("Décision enregistrée");
+  root.unmount();
+  // Decision form bound to identity + organization + site + approval id.
+  decided = false; calls = []; gone = [];
+  window.fetch = fetchMock(calls);
+  const formState = (d) => ({ note: d.querySelector("textarea")?.value ?? "", error: d.textContent.includes("Un commentaire est obligatoire") });
+  const typeNote = async (d) => {
+    [...d.querySelectorAll("button")].find((b) => b.textContent.includes("Refuser")).click(); await tick(30);
+    d.querySelector("form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); await tick(30);
+    const ta = d.querySelector("textarea");
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(ta, "Motif saisi");
+    ta.dispatchEvent(new Event("input", { bubbles: true })); await tick(30);
+  };
+  let who = { uid: USER, gen: 0 };
+  const ctxWho = (org) => { const x = ctxOf({ org }, gone); x.session.mutationContext = { userId: () => who.uid, generation: () => who.gen }; return x; };
+  div = document.createElement("div"); document.body.appendChild(div);
+  root = createRoot(div);
+  root.render(h(StrictMode, null, h(ApprovalDetail, { c: ctxWho(ORG), id: A(3) }))); await tick(300);
+  await typeNote(div);
+  out.typedBefore = formState(div);
+  root.render(h(StrictMode, null, h(ApprovalDetail, { c: ctxWho(ORG), id: A(6) }))); await tick(300);
+  out.switchApproval = formState(div);
+  await typeNote(div);
+  root.render(h(StrictMode, null, h(ApprovalDetail, { c: ctxWho(ORG_B), id: A(6) }))); await tick(300);
+  out.switchOrg = { note: div.querySelector("textarea")?.value ?? "", error: div.textContent.includes("Un commentaire est obligatoire") };
+  root.render(h(StrictMode, null, h(ApprovalDetail, { c: ctxWho(ORG), id: A(6) }))); await tick(300);
+  await typeNote(div);
+  who = { uid: "10000000-0000-4000-8000-000000000002", gen: 1 };
+  root.render(h(StrictMode, null, h(ApprovalDetail, { c: ctxWho(ORG), id: A(6) }))); await tick(300);
+  out.switchAccount = formState(div);
   root.unmount();
   // Errors.
   for (const [name, opts, el] of [["list503", { list503: true }, "list"], ["point404", { point404: true }, "point"]]) {
@@ -264,7 +301,12 @@ for (const width of [390, 1280])
         assert.ok(r.pendingCall.endsWith("&status=pending") && !r.pendingCall.includes("cursor"), r.pendingCall);
         same(r.pendingRows, 50);
         same(r.dossierButton, I(249), "exact dossier of the approval");
-        same(r.openDossier, ["open", I(249), Q(249)]);
+        same(r.openDossier, ["open", I(249), null], "live: « Ouvrir le dossier » (the exact quote stays in the documents section)");
+        same(r.openLabel, "Ouvrir le dossier");
+        assert.ok(r.anchorCalls.some((u: string) => u.includes(Q(249))), `QuoteDocumentsAnchor targets the exact quote: ${JSON.stringify(r.anchorCalls)}`);
+        same([r.artisan, r.docsLabel, r.journalNote], ["Attribution à consulter dans le dossier", "Pièces jointes (documents chargés)", true], "honest labels outside the cache");
+        for (const k of ["switchApproval", "switchOrg", "switchAccount"]) same(r[k], { note: "", error: false }, `${k}: typed note and error cleared`);
+        same(r.typedBefore, { note: "Motif saisi", error: true }, "the note and error were really there before the switch");
         assert.match(r.rule, /Aucune règle d’approbation pour ce site \(vérifié par le serveur\)/);
         same(r.decided, ["decide", A(249), "approved"]);
         same([r.pointsAfter, r.afterText], [1, true], "decision ⇒ one server re-read, decided state shown");

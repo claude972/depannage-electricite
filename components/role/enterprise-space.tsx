@@ -3572,8 +3572,13 @@ export function ApprovalsView({ c }: { c: Ctx }) {
   );
 }
 
-/** Exported for tests only (live approval point read). */
+/** Exported for tests only (live approval point read). The decision form state (choice, note, error)
+ *  is bound to identity + organization + site + approval id: any change remounts it from scratch. */
 export function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
+  const k = `${c.session.mutationContext.userId() ?? "-"}|${c.session.mutationContext.generation()}|${c.organization?.id ?? "-"}|${c.activeSite?.id ?? "-"}|${id}`;
+  return <ApprovalDetailInner key={k} c={c} id={id} />;
+}
+function ApprovalDetailInner({ c, id }: { c: Ctx; id: string }) {
   const { session } = c;
   // Live (ENT-12): exact point read of THIS approval (row + site rule), never the 200-row cache.
   const live = !c.demo;
@@ -3673,7 +3678,7 @@ export function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
       .filter((e) => e.subject_id === approval.id)
       .map((e) => ({
         date: e.created_at,
-        status: "Événement du journal",
+        status: live ? "Journal (événement chargé)" : "Événement du journal",
         tone: "neutral" as const,
         actor: actorName(e.actor_id),
         comment: e.action.replace(/_/g, " "),
@@ -3735,7 +3740,7 @@ export function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
             </div>
             <div>
               <small>Artisan</small>
-              <strong>{intervention?.artisan_id ? "Artisan attribué" : "Non attribué"}</strong>
+              <strong data-approval-artisan="">{live && !intervention ? "Attribution à consulter dans le dossier" : intervention?.artisan_id ? "Artisan attribué" : "Non attribué"}</strong>
               <p>Identité consultable dans le dossier d’intervention.</p>
             </div>
             <div>
@@ -3757,14 +3762,15 @@ export function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
                 <p>Dossier non chargé sur ce périmètre.</p>
               )}
               {exactDossierId && (
-                <button type="button" className={styles.textLink} onClick={() => session.openIntervention(exactDossierId, approval.quote_id)} data-approval-open-dossier={exactDossierId}>
-                  Ouvrir le dossier et le devis
+                <button type="button" className={styles.textLink} onClick={() => (live ? session.openIntervention(exactDossierId) : session.openIntervention(exactDossierId, approval.quote_id))} data-approval-open-dossier={exactDossierId}>
+                  {/* Live: the dossier point read may omit this quote (capped); the exact quote stays below (QuoteDocumentsAnchor). */}
+                  {live ? "Ouvrir le dossier" : "Ouvrir le dossier et le devis"}
                   <Icon name="arrow" size={15} />
                 </button>
               )}
             </div>
             <div className={styles.quoteFactsWide}>
-              <small>Pièces jointes</small>
+              <small data-approval-documents-label="">{live ? "Pièces jointes (documents chargés)" : "Pièces jointes"}</small>
               {documents.length ? (
                 documents.map((d) => (
                   <p key={d.id}>
@@ -3899,6 +3905,7 @@ export function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
         <p className={styles.footNote}>
           <Icon name="lock" size={15} />
           Les décisions sont enregistrées et tracées côté serveur.
+          {live && <span data-approval-journal-note=""> Journal (événements chargés) : les événements affichés sont ceux déjà chargés.</span>}
         </p>
       </section>
     </>
