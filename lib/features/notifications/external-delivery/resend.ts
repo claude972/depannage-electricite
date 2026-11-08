@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
+import { hasEmptyDispatchBody } from "./dispatch-request";
 import { processExternalNotifications, type IdempotentAdapter, type Outcome, type RpcClient } from "./worker";
 
 const headers = { "Cache-Control": "private, no-store" };
@@ -67,7 +68,7 @@ export async function handleEmailDispatch(request: Request, env: Environment, cr
     return Response.json({ error: "Accès refusé." }, { status: 403, headers });
   const config = resendConfiguration(env);
   if (!config) return Response.json({ error: "Envoi e-mail indisponible." }, { status: 503, headers });
-  if (new URL(request.url).searchParams.size || request.body !== null)
+  if (new URL(request.url).searchParams.size || !(await hasEmptyDispatchBody(request)))
     return Response.json({ error: "Aucun paramètre attendu." }, { status: 422, headers });
 
   try {

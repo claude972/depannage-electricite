@@ -1,6 +1,7 @@
 import { createECDH, createHash, ECDH, timingSafeEqual } from "node:crypto";
 import { generateRequestDetails } from "web-push";
 import { z } from "zod";
+import { hasEmptyDispatchBody } from "./dispatch-request";
 import type { RpcClient } from "./worker";
 
 const version = z.number().int().min(0).max(2147483647);
@@ -152,7 +153,7 @@ export async function handleWebPushDispatch(request: Request, env: Env, admin: (
   if (!secretPattern.test(secret) || supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return failure(403, "Accès refusé.");
   const config = webPushConfiguration(env);
   if (!config) return failure(503, "L’envoi des notifications du navigateur est indisponible.");
-  if (new URL(request.url).searchParams.size || request.body !== null) return failure(422, "Aucun paramètre attendu.");
+  if (new URL(request.url).searchParams.size || !(await hasEmptyDispatchBody(request))) return failure(422, "Aucun paramètre attendu.");
   try {
     const db = admin();
     const report = { processed: 0, accepted: 0, failed: 0, uncertain: 0, skipped: 0 };

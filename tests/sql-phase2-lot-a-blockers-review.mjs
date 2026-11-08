@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createECDH, createHash, randomBytes, randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { readdir, readFile } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -65,6 +65,12 @@ async function listen(server) {
 }
 
 const rpcNames = new Set(["mutate_support_triage", "read_warranty_policy_editor", "write_warranty_policy"]);
+const deliveryRpcs = new Set([
+  "claim_external_notification", "begin_external_notification", "finish_external_notification",
+  "authorize_external_email", "claim_web_push", "finish_web_push",
+]);
+const serviceKey = "synthetic-service-role";
+const dispatchSecret = randomBytes(32).toString("base64url");
 const encode = value => Buffer.from(JSON.stringify(value)).toString("base64url");
 const accessToken = `${encode({ alg: "HS256" })}.${encode({ sub: actor.id, exp: Math.floor(Date.now() / 1000) + 3600 })}.synthetic`;
 const cookie = "sb-127-auth-token=base64-" + encode({
@@ -72,18 +78,19 @@ const cookie = "sb-127-auth-token=base64-" + encode({
   expires_in: 3600, token_type: "bearer", user: actor,
 });
 
-async function withNext(db, check) {
+async function withNext(db, check, extraEnv = {}) {
   const rejectedSql = [];
   const gateway = createServer(async (request, response) => {
     response.setHeader("Content-Type", "application/json");
     const send = (status, body) => { response.writeHead(status); response.end(JSON.stringify(body)); };
     try {
-      if (request.headers.authorization !== "Bearer " + accessToken)
-        return send(401, { error: "Invalid fixture identity" });
-      if (request.method === "GET" && request.url === "/auth/v1/user")
+      const isActor = request.headers.authorization === "Bearer " + accessToken;
+      const isService = request.headers.authorization === "Bearer " + serviceKey;
+      if (!isActor && !isService) return send(401, { error: "Invalid fixture identity" });
+      if (isActor && request.method === "GET" && request.url === "/auth/v1/user")
         return send(200, actor);
       const rpc = request.url?.match(/^\/rest\/v1\/rpc\/([a-z_]+)$/)?.[1];
-      if (request.method !== "POST" || !rpc || !rpcNames.has(rpc))
+      if (request.method !== "POST" || !rpc || !(isService ? deliveryRpcs : rpcNames).has(rpc))
         return send(404, { error: "Unexpected fixture RPC" });
       let body = "";
       for await (const chunk of request) body += chunk;
@@ -91,7 +98,14 @@ async function withNext(db, check) {
       const fields = Object.keys(args);
       assert.ok(fields.every(field => /^p_[a-z_]+$/.test(field)));
       const call = fields.map((field, i) => `${field} => $${i + 1}`).join(", ");
-      return send(200, await asUser(db, actor, `select public.${rpc}(${call}) v`, Object.values(args)));
+      const sql = `select public.${rpc}(${call}) v`;
+      const data = isService
+        ? await db.transaction(async tx => {
+          await tx.exec("set local role service_role");
+          return (await tx.query(sql, Object.values(args))).rows[0].v;
+        })
+        : await asUser(db, actor, sql, Object.values(args));
+      return send(200, data);
     } catch (error) {
       rejectedSql.push({ code: error.code, constraint: error.constraint });
       return send(400, { code: error.code ?? "XX000", message: "Fixture SQL rejected" });
@@ -110,6 +124,8 @@ async function withNext(db, check) {
       NEXT_TELEMETRY_DISABLED: "1",
       NEXT_PUBLIC_SUPABASE_URL: `http://127.0.0.1:${gatewayPort}`,
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "synthetic-publishable",
+      NODE_OPTIONS: '--require="' + fileURLToPath(new URL("./phase2-lot-a-http-fetch.cjs", import.meta.url)) + '"',
+      ...extraEnv,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -202,6 +218,70 @@ test("E28 — the first warranty policy is readable and can be saved through HTT
       const persisted = await asUser(db, actor, "select public.read_warranty_policy_editor() v");
       assert.equal(persisted.version, 1);
       assert.equal(persisted.draft.title, "Conditions test");
+    });
+  } finally {
+    await db.close();
+  }
+});
+
+test("E74 — actual email and push POST routes accept both scheduler JSON and a bodyless request", async () => {
+  const db = await freshDatabase();
+  try {
+    const vapid = createECDH("prime256v1");
+    const vapidPublic = vapid.generateKeys().toString("base64url");
+    const vapidPrivate = Buffer.from(vapid.getPrivateKey("hex").padStart(64, "0"), "hex").toString("base64url");
+    const browser = createECDH("prime256v1").generateKeys().toString("base64url");
+    const site = "https://dispatch.example.test";
+    const scope = createHash("sha256").update(JSON.stringify([site, vapidPublic])).digest("hex");
+    const session = randomUUID();
+    await db.query("insert into auth.users(id, email, email_confirmed_at) values($1, $2, now())", [requester.id, requester.email]);
+    await db.query("insert into auth.sessions(id, user_id) values($1, $2)", [session, requester.id]);
+    await db.query("insert into public.notification_preferences(user_id, email_enabled, push_enabled) values($1, true, true)", [requester.id]);
+    await db.exec("update notification_delivery_private.control set enabled = true");
+    await db.query("select public.web_push_enrollment($1,$2,$3,'register',0,$4,$5,$6)", [
+      requester.id, session, scope, "https://fcm.googleapis.com/fcm/send/fixture-endpoint", browser, randomBytes(16).toString("base64url"),
+    ]);
+
+    await withNext(db, async http => {
+      const routes = ["/api/internal/notifications/email", "/api/internal/notifications/push"];
+      const authorized = { authorization: "Bearer " + dispatchSecret };
+      for (const route of routes) {
+        assert.equal((await http(route, { method: "POST" })).status, 403);
+        assert.equal((await http(route + "?extra=1", { method: "POST", headers: authorized })).status, 422);
+        assert.equal((await http(route, { method: "POST", headers: authorized, body: '{"extra":1}' })).status, 422);
+      }
+      const attempts = [];
+      for (const body of ["{}", undefined]) {
+        const notice = (await db.query(
+          "insert into public.notifications(recipient_id, kind, title, body, dedupe_key) values($1, 'message_received', 'Test', 'Fixture.', $2) returning id",
+          [requester.id, randomUUID()],
+        )).rows[0].id;
+        const observed = [];
+        for (const route of routes) {
+          const response = await http(route, { method: "POST", headers: authorized, ...(body === undefined ? {} : { body }) });
+          observed.push({ status: response.status, result: await response.json() });
+        }
+        const outbox = (await db.query(
+          "select channel, status, attempts from notification_delivery_private.outbox where notification_id=$1 order by channel", [notice],
+        )).rows;
+        attempts.push({ observed, outbox });
+      }
+      assert.deepEqual(attempts.map(({ observed }) => observed.map(entry => entry.status)), [[200, 200], [200, 200]], JSON.stringify(attempts));
+      for (const { observed, outbox } of attempts) {
+        assert.deepEqual(observed.map(entry => entry.result.accepted), [1, 1]);
+        assert.deepEqual(outbox, [{ channel: "email", status: "accepted", attempts: 1 }, { channel: "push", status: "accepted", attempts: 1 }]);
+      }
+    }, {
+      SUPABASE_SERVICE_ROLE_KEY: serviceKey,
+      NOTIFICATION_DELIVERY_SECRET: dispatchSecret,
+      NOTIFICATIONS_EMAIL_PROVIDER: "resend",
+      NOTIFICATION_RESEND_API_KEY: "re_synthetic_00000000",
+      NOTIFICATION_EMAIL_FROM: "fixture@example.test",
+      NOTIFICATIONS_PUSH_PROVIDER: "webpush",
+      NOTIFICATION_VAPID_PUBLIC_KEY: vapidPublic,
+      NOTIFICATION_VAPID_PRIVATE_KEY: vapidPrivate,
+      NOTIFICATION_VAPID_SUBJECT: "mailto:fixture@example.test",
+      NEXT_PUBLIC_APP_URL: site,
     });
   } finally {
     await db.close();
