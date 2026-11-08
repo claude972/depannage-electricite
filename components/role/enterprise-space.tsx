@@ -109,6 +109,7 @@ import { SiteDirectLoader } from "../features/site-lifecycle/site-direct";
 import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-panel";
 import { DelegatedPayerCheckout, DelegatedPayerManager } from "../features/delegated-payer/delegated-payer";
 import { REPORT_COPY, reportQuery, useEnterpriseReport } from "../features/enterprise-reports/use-enterprise-report";
+import { RECORDS_COPY, useSiteRecords, type DueRow, type JobRow } from "../features/site-records/use-site-records";
 import { COUNTS_COPY, ENTERPRISE_SEARCH_COPY, ExportFeedback, PRO_COPY, useEnterpriseSearch, useOverviewCounts, useProfessionalOverview, type EnterpriseSearchFilters } from "../features/enterprise-search/use-enterprise-search";
 import { ContractSourceLine, QuoteGridAccessPanel } from "../features/quote-grid/quote-grid";
 import { QuoteApprovalPanel, SitePolicyPanel } from "../features/advanced-approvals/approvals";
@@ -2646,6 +2647,21 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
   // « Tous les sites » too, where no global active site triggers the controller probe).
   useProbeWhenUnknown(c.session, "siteOperations", { siteId: id }, Boolean(site && !site.archived_at));
   const [tab, setTab] = useState<"open" | "past">("open");
+  // Live (SYS-07 / ENT-04 / ENT-10): interventions, due dates and audits come from the paginated
+  // server reads of THIS site (GET /api/sites/<id>/records), never from the 100 / 300 caches. Demo:
+  // unchanged, zero call. Rows are bound at render to identity + site + kind.
+  const live = session.mode !== "demo";
+  const recordsSite = site && !site.archived_at ? site.id : null;
+  const [dueTab, setDueTab] = useState<"upcoming" | "completed">("upcoming");
+  const jobs = useSiteRecords({ enabled: live, context: session.mutationContext, siteId: recordsSite, kind: tab });
+  const upcoming = useSiteRecords({ enabled: live, context: session.mutationContext, siteId: recordsSite, kind: "upcoming" });
+  const completedDue = useSiteRecords({ enabled: live && dueTab === "completed", context: session.mutationContext, siteId: recordsSite, kind: "completed" });
+  const auditRecords = useSiteRecords({ enabled: live && (site?.type || site?.vertical || "") === "erp", context: session.mutationContext, siteId: recordsSite, kind: "audits" });
+  // One reminder panel at a time, mounted only on demand (no GET per row); any scope change closes it.
+  const dueList = dueTab === "upcoming" ? upcoming : completedDue;
+  const reminderScope = `${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${recordsSite ?? "-"}|${dueTab}|${dueList.state.key}|${dueList.state.items.length}`;
+  const [reminder, setReminder] = useState<{ scope: string; id: string } | null>(null);
+  const openReminder = reminder && reminder.scope === reminderScope ? reminder.id : null;
   // Absent from the workspace cache (portfolio page > 1, archived site): exact server read.
   if (!site || site.archived_at) return <DirectSiteSheet c={c} id={id} />;
   const f = siteFigures(site, session.data);
@@ -2739,10 +2755,26 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
           <strong>{f.open}</strong>
           <small>{f.count} dossier{f.count > 1 ? "s" : ""} chargé{f.count > 1 ? "s" : ""}</small>
         </div>
-        <div className={styles.tile}>
+        <div className={styles.tile} data-site-next-due={live ? upcoming.state.phase : "demo"}>
           <span>Prochaine échéance</span>
-          <strong>{next ? date(next.due_on) : "Aucune"}</strong>
-          {next && <small>{next.title}</small>}
+          {!live ? (
+            <>
+              <strong>{next ? date(next.due_on) : "Aucune"}</strong>
+              {next && <small>{next.title}</small>}
+            </>
+          ) : upcoming.state.phase === "ready" ? (
+            <>
+              <strong>{upcoming.state.items[0] ? date((upcoming.state.items[0] as DueRow).due_on) : "Aucune"}</strong>
+              {upcoming.state.items[0] && <small>{(upcoming.state.items[0] as DueRow).title}</small>}
+            </>
+          ) : upcoming.state.phase === "loading" || upcoming.state.phase === "idle" ? (
+            <strong>…</strong>
+          ) : (
+            <>
+              <strong>Non vérifiée</strong>
+              <small>Lecture des échéances indisponible</small>
+            </>
+          )}
         </div>
       </div>
 
@@ -2754,15 +2786,61 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
               <Segments
                 label="Filtre des interventions du site"
                 value={tab}
-                options={[
-                  ["open", `En cours (${open.length})`],
-                  ["past", `Passées (${past.length})`],
-                ]}
+                options={
+                  live
+                    ? [
+                        ["open", "En cours"],
+                        ["past", "Passées"],
+                      ]
+                    : [
+                        ["open", `En cours (${open.length})`],
+                        ["past", `Passées (${past.length})`],
+                      ]
+                }
                 onChange={setTab}
               />
             </div>
           </div>
-          {shown.length ? (
+          {live ? (
+            <div data-site-records={`jobs:${tab}:${jobs.state.phase}`}>
+              {(jobs.state.phase === "loading" || jobs.state.phase === "idle") && <p className={styles.muted} role="status">{RECORDS_COPY.loading}</p>}
+              {(jobs.state.phase === "error" || jobs.state.phase === "forbidden") && (
+                <div role="alert">
+                  <p className={styles.muted}>{jobs.state.error}</p>
+                  {jobs.state.phase === "error" && <button type="button" className="button outline" onClick={() => jobs.retry()}>Réessayer</button>}
+                </div>
+              )}
+              {jobs.state.phase === "ready" &&
+                (jobs.state.items.length ? (
+                  (jobs.state.items as JobRow[]).map((i) => (
+                    <button key={i.id} type="button" className={cx(styles.listRow, styles.listRowButton, styles.datedRow)} onClick={() => session.openIntervention(i.id)} data-site-job={i.id}>
+                      <time dateTime={i.created_at}>{date(i.created_at)}</time>
+                      <section>
+                        <strong>{category(i.category).label}</strong>
+                        <small>
+                          {shortId(i.id)} · {dateTime(i.created_at)}
+                        </small>
+                      </section>
+                      <Badge status={i.status} />
+                      <Icon name="arrow" size={16} />
+                    </button>
+                  ))
+                ) : (
+                  <p className={styles.muted}>{tab === "open" ? "Aucune intervention en cours sur ce site." : "Aucune intervention passée sur ce site."}</p>
+                ))}
+              {jobs.state.failed === "more" && (
+                <div role="alert">
+                  <p className={styles.muted}>{jobs.state.error}</p>
+                  <button type="button" className="button outline" onClick={() => jobs.retry()}>Réessayer</button>
+                </div>
+              )}
+              {jobs.state.phase === "ready" && jobs.state.next && jobs.state.failed !== "more" && (
+                <button type="button" className="button outline" disabled={jobs.state.loadingMore} onClick={() => jobs.more()} data-site-records-more="jobs">
+                  {jobs.state.loadingMore ? "Chargement…" : RECORDS_COPY.more}
+                </button>
+              )}
+            </div>
+          ) : shown.length ? (
             shown.map((i) => (
               <button
                 key={i.id}
@@ -2854,7 +2932,97 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
               <ReadOnlyNote compact reason="Lecture seule" />
             )}
           </div>
-          {compliance.length ? (
+          {live ? (
+            <div data-site-records={`due:${dueTab}:${dueList.state.phase}`}>
+              <div className={styles.segmentsWrap}>
+                <Segments
+                  label="Filtre des échéances du site"
+                  value={dueTab}
+                  options={[
+                    ["upcoming", "En attente"],
+                    ["completed", "Terminées"],
+                  ]}
+                  onChange={(v) => {
+                    setReminder(null);
+                    setDueTab(v);
+                  }}
+                />
+              </div>
+              {(dueList.state.phase === "loading" || dueList.state.phase === "idle") && <p className={styles.muted} role="status">{RECORDS_COPY.loading}</p>}
+              {(dueList.state.phase === "error" || dueList.state.phase === "forbidden") && (
+                <div role="alert">
+                  <p className={styles.muted}>{dueList.state.error}</p>
+                  {dueList.state.phase === "error" && <button type="button" className="button outline" onClick={() => dueList.retry()}>Réessayer</button>}
+                </div>
+              )}
+              {dueList.state.phase === "ready" &&
+                (dueList.state.items.length ? (
+                  (dueList.state.items as DueRow[]).map((r) => (
+                    <Fragment key={r.id}>
+                      <div className={styles.listRow} data-site-due={r.id}>
+                        <section>
+                          <strong>{r.title}</strong>
+                          <small>
+                            {COMPLIANCE_KIND[r.kind] || r.kind} · échéance {date(r.due_on)}
+                            {r.notes ? ` · ${r.notes}` : ""}
+                          </small>
+                        </section>
+                        <Tag tone={r.status === "completed" ? "green" : "amber"}>{COMPLIANCE_STATUS[r.status] || r.status}</Tag>
+                        {r.status !== "completed" && canWrite && (
+                          <button
+                            type="button"
+                            className={cx("button outline", styles.rowAction)}
+                            disabled={session.busy}
+                            onClick={async () => {
+                              const ok = await session.professionalCommand({ action: "save_compliance", id: r.id, site_id: r.site_id, title: r.title, kind: r.kind, due_on: r.due_on, status: "completed", notes: r.notes });
+                              // Server-confirmed only: re-read both lists, never patch rows locally.
+                              if (ok) {
+                                setReminder(null);
+                                upcoming.refresh();
+                                completedDue.refresh();
+                              }
+                            }}
+                            data-site-due-complete={r.id}
+                          >
+                            Marquer terminé
+                          </button>
+                        )}
+                        {r.status !== "completed" && (
+                          <button
+                            type="button"
+                            className={cx("button outline", styles.rowAction)}
+                            aria-expanded={openReminder === r.id}
+                            aria-controls={`site-reminder-${r.id}`}
+                            onClick={() => setReminder(openReminder === r.id ? null : { scope: reminderScope, id: r.id })}
+                            data-site-reminder-toggle={r.id}
+                          >
+                            Gérer le rappel
+                          </button>
+                        )}
+                      </div>
+                      {openReminder === r.id && (
+                        <div id={`site-reminder-${r.id}`}>
+                          <ComplianceReminderPanel key={reminderScope} complianceId={r.id} context={session.mutationContext} demo={false} />
+                        </div>
+                      )}
+                    </Fragment>
+                  ))
+                ) : (
+                  <p className={styles.muted}>{dueTab === "upcoming" ? "Aucune échéance en attente pour ce site." : "Aucune échéance terminée pour ce site."}</p>
+                ))}
+              {dueList.state.failed === "more" && (
+                <div role="alert">
+                  <p className={styles.muted}>{dueList.state.error}</p>
+                  <button type="button" className="button outline" onClick={() => dueList.retry()}>Réessayer</button>
+                </div>
+              )}
+              {dueList.state.phase === "ready" && dueList.state.next && dueList.state.failed !== "more" && (
+                <button type="button" className="button outline" disabled={dueList.state.loadingMore} onClick={() => dueList.more()} data-site-records-more="due">
+                  {dueList.state.loadingMore ? "Chargement…" : RECORDS_COPY.more}
+                </button>
+              )}
+            </div>
+          ) : compliance.length ? (
             compliance.map((r) => (
               <Fragment key={r.id}>
               <div className={styles.listRow}>
@@ -2897,7 +3065,7 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
           ) : (
             <p className={styles.muted}>Aucune échéance enregistrée pour ce site.</p>
           )}
-          {!canWrite && compliance.some((r) => r.status !== "completed") && (
+          {!canWrite && (live ? upcoming.state.items.length > 0 : compliance.some((r) => r.status !== "completed")) && (
             <ReadOnlyNote reason={c.authority.readOnlyReason} />
           )}
           <p className={styles.note}>Ces enregistrements organisent le suivi ; ils ne certifient pas la conformité d’une installation.</p>
@@ -3007,7 +3175,44 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
         {vertical === "erp" && (
           <section className="panel" aria-labelledby="site-audits">
             <h2 id="site-audits">Audits & réserves</h2>
-            {audits.length ? (
+            {live ? (
+              <div data-site-records={`audits:${auditRecords.state.phase}`}>
+                {(auditRecords.state.phase === "loading" || auditRecords.state.phase === "idle") && <p className={styles.muted} role="status">{RECORDS_COPY.loading}</p>}
+                {(auditRecords.state.phase === "error" || auditRecords.state.phase === "forbidden") && (
+                  <div role="alert">
+                    <p className={styles.muted}>{auditRecords.state.error}</p>
+                    {auditRecords.state.phase === "error" && <button type="button" className="button outline" onClick={() => auditRecords.retry()}>Réessayer</button>}
+                  </div>
+                )}
+                {auditRecords.state.phase === "ready" &&
+                  (auditRecords.state.items.length ? (
+                    (auditRecords.state.items as DueRow[]).map((r) => (
+                      <div key={r.id} className={styles.listRow} data-site-audit={r.id}>
+                        <section>
+                          <strong>{r.title}</strong>
+                          <small>
+                            {COMPLIANCE_KIND[r.kind] || r.kind} · {date(r.due_on)}
+                          </small>
+                        </section>
+                        <Tag tone={r.status === "completed" ? "green" : "amber"}>{COMPLIANCE_STATUS[r.status] || r.status}</Tag>
+                      </div>
+                    ))
+                  ) : (
+                    <p className={styles.muted}>Aucun audit ni signalement de sécurité enregistré pour cet ERP.</p>
+                  ))}
+                {auditRecords.state.failed === "more" && (
+                  <div role="alert">
+                    <p className={styles.muted}>{auditRecords.state.error}</p>
+                    <button type="button" className="button outline" onClick={() => auditRecords.retry()}>Réessayer</button>
+                  </div>
+                )}
+                {auditRecords.state.phase === "ready" && auditRecords.state.next && auditRecords.state.failed !== "more" && (
+                  <button type="button" className="button outline" disabled={auditRecords.state.loadingMore} onClick={() => auditRecords.more()} data-site-records-more="audits">
+                    {auditRecords.state.loadingMore ? "Chargement…" : RECORDS_COPY.more}
+                  </button>
+                )}
+              </div>
+            ) : audits.length ? (
               audits.map((r) => (
                 <div key={r.id} className={styles.listRow}>
                   <section>
