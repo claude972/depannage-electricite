@@ -113,6 +113,7 @@ import { QUOTES_COPY, useRecipientQuote } from "../features/recipient-quotes/use
 import { DECISION_COPY, simplePending as decisionSimplePending, useDecisionContext } from "../features/enterprise-quote-decision/use-decision-context";
 import { APPROVALS_COPY, useApprovalPoint, useApprovalsList, type ApprovalRow as ServerApproval, type StatusFilter as ApprovalFilter } from "../features/enterprise-approvals/use-enterprise-approvals";
 import { RECORDS_COPY, useSiteRecords, type DueRow, type JobRow } from "../features/site-records/use-site-records";
+import { SiteComplianceRecords } from "../features/site-records/site-compliance-records";
 import { COUNTS_COPY, ENTERPRISE_SEARCH_COPY, ExportFeedback, PRO_COPY, useEnterpriseSearch, useOverviewCounts, useProfessionalOverview, type EnterpriseSearchFilters } from "../features/enterprise-search/use-enterprise-search";
 import { ContractSourceLine, QuoteGridAccessPanel } from "../features/quote-grid/quote-grid";
 import { QuoteApprovalPanel, SitePolicyPanel } from "../features/advanced-approvals/approvals";
@@ -3595,6 +3596,27 @@ function DirectSiteSheet({ c, id }: { c: Ctx; id: string }) {
               {!archived && <SiteAreasPanel siteId={site.id} context={session.mutationContext} demo={false} />}
               {!archived && <SiteContactsPanel siteId={site.id} context={session.mutationContext} />}
             </div>
+            {session.mode !== "demo" && (
+              <SiteComplianceRecords
+                key={`compliance|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${site.organization_id}|${site.id}`}
+                siteId={site.id}
+                context={session.mutationContext}
+                canWrite={!archived && state.canWrite}
+                busy={session.busy}
+                complete={(row) => session.professionalCommand({
+                  action: "save_compliance",
+                  id: row.id,
+                  site_id: site.id,
+                  title: row.title,
+                  kind: row.kind,
+                  due_on: row.due_on,
+                  status: "completed",
+                  notes: row.notes,
+                })}
+                kindLabels={COMPLIANCE_KIND}
+                statusLabels={COMPLIANCE_STATUS}
+              />
+            )}
             {/* ENT-08: same operations module (maintenance, plans, visits…) for an active site read exactly;
                 archived ⇒ not mounted (no probe, no new write). Keyed on identity + organisation + site. */}
             {!archived && session.mode !== "demo" && (
