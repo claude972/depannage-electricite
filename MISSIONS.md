@@ -229,3 +229,6 @@ Claude possède les libellés et leurs tests dans le centre de notifications. Le
 ### ENT-10 — conserver la saisie d’un contrôle ERP pendant son enregistrement
 
 Claude possède le formulaire ERP et ses tests ciblés. Pendant l’écriture, empêcher les modifications de la saisie et les soumissions répétées. Après un échec, rendre la main en conservant les champs, le point exact et la version attendue. Vérifier le cas d’une réserve déjà levée dont le constat change, en suivant le contrat de validation existant. Garder distincts le constat, la date de levée déclarée et une éventuelle preuve documentaire. Réutiliser le thème, les permissions, l’API et le journal existants. ROOT vérifie l’ouverture et la levée sur la preview avec un gestionnaire, un lecteur et un tiers. Ce lot ne fixe aucune modalité d’attestation ni de certification.
+
+## Claim Claude — ENT-10 contrôle ERP pendant l’enregistrement
+Base a4826d1 ; claude/erp-reserve-save. Auteur unique. Ownership components/features/site-operations/erp-panel.tsx et un test navigateur ciblé (tests/ui/erp-panel-save.test.ts). Validateur, API, SQL, journal, thème et permissions inchangés ; aucune attestation ni certification.
