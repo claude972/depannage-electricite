@@ -485,6 +485,8 @@ export type WarrantyCase = {
   status: "submitted" | "reviewing" | "resolved" | "declined";
   resolution?: string;
   created_at: string;
+  /** PUB-06: terms publication in force when the case was filed (null on historical cases). */
+  terms_version?: number | null;
 };
 export type RequestValues = {
   category: Category;

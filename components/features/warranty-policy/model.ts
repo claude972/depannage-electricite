@@ -56,6 +56,34 @@ export async function loadPublicTerms(fetcher: typeof fetch = (...a) => fetch(..
   const p = r.status === 200 ? parsePublicTerms(r.body) : undefined;
   return p === undefined ? { phase: "error", published: null } : { phase: "ready", published: p };
 }
+// ---- Recorded version of a warranty case (PUB-06) ------------------------------------------------
+// GET /api/public/warranty-terms?version=N → { published: null | { version, … } }. null = this version
+// does not exist (never replaced by the current publication); another version returned = refused.
+export type RecordedTermsState =
+  | { phase: "ready"; published: Published }
+  | { phase: "missing" }
+  | { phase: "error" };
+export const recordedTermsUrl = (version: number) => `${PUBLIC_TERMS_PATH}?version=${encodeURIComponent(String(version))}`;
+export const validRecordedVersion = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 2147483647;
+export async function loadRecordedTerms(version: number, fetcher: typeof fetch = (...a) => fetch(...a)): Promise<RecordedTermsState> {
+  if (!validRecordedVersion(version)) return { phase: "error" };
+  const r = await timed(fetcher, recordedTermsUrl(version), { method: "GET" }, WP_TIMEOUT_MS);
+  const p = r.status === 200 ? parsePublicTerms(r.body) : undefined;
+  if (p === undefined) return { phase: "error" };
+  if (p === null) return { phase: "missing" };
+  return p.version === version ? { phase: "ready", published: p } : { phase: "error" };
+}
+export const RECORDED_COPY = {
+  label: (v: number) => `Version des conditions en vigueur lors de la demande : ${v}.`,
+  open: (v: number) => `Voir les conditions (version ${v})`,
+  hide: "Masquer les conditions",
+  none: "Version des conditions non enregistrée pour cette demande.",
+  loading: "Lecture des conditions de cette version…",
+  error: "Les conditions de cette version n’ont pas pu être lues. Aucune autre version n’est affichée à la place.",
+  missing: "Version introuvable : ces conditions ne sont plus publiées sous ce numéro. Aucune autre version n’est affichée à la place.",
+  meaning: "Cette version désigne la publication en vigueur au dépôt de la demande ; elle ne vaut ni acceptation ni droit à la date des travaux.",
+} as const;
+
 export const PUBLIC_COPY = {
   title: "Conditions de garantie",
   loading: "Lecture des conditions publiées…",
