@@ -22,7 +22,7 @@ Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvel
 | --- | ---: |
 | CORRIGÉ (avec suite verte) | 0 |
 | VÉRIFIÉ CIBLÉ (suite initiale rouge) | 4 |
-| CORRIGÉ PARTIEL | 6 |
+| CORRIGÉ PARTIEL | 7 |
 | NON REPRODUIT | 0 |
 | DÉCISION REQUISE | 4 |
 | REVERTÉ | 0 |
@@ -51,7 +51,7 @@ Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvel
 | E36 | Mineur | CORRIGÉ PARTIEL | P3 | `523878c` | `sql-phase2-lot-a-p3-review.mjs` | Route admin artisans, migration additive | Après le verrou P2, le rejeu était refusé 409. Avec la clé, 200 identique et un seul audit. Modification de la même intention refusée. Attend le lot B. |
 | E37 | Majeur | À REPRODUIRE | Isolé | — | — | — | Indisponibilité planifiée et éligibilité des offres. |
 | E41 | Mineur | CORRIGÉ PARTIEL | P3 | `0127c6d` | `sql-phase2-lot-a-p3-review.mjs` | Route messages, migration additive | Vrai HTTP : deux messages et notifications avant. Après, les deux réponses 201 sont identiques et il n’y a qu’un message et une notification. Attend le lot B. |
-| E53 | Mineur | À REPRODUIRE | P3 | — | — | — | Dépôt de site dédupliqué, y compris l’objet Storage. |
+| E53 | Mineur | CORRIGÉ PARTIEL | P3 | `b414386` | `sql-phase2-lot-a-documents-review.mjs` | Route documents site, helper Storage, migration additive | Deux objets/documents avant, 1/1 et reçu exact après. Remplacement et reprise de l’objet exact après interruption Storage vérifiés. Un objet privé sans métadonnée reste récupérable avec la clé initiale. Attend le lot B. |
 | E59 | Majeur | DÉCISION REQUISE | Décision | — | — | — | Photos avant/après. |
 | E60 | Majeur | DÉCISION REQUISE | Décision | — | — | — | Accusé de remise par le client. |
 | E61 | Majeur | À REPRODUIRE | Isolé | — | — | — | Pagination et CSV du rapport consolidé. |
