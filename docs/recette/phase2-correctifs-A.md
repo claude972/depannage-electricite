@@ -22,7 +22,7 @@ Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvel
 | --- | ---: |
 | CORRIGÉ (avec suite verte) | 0 |
 | VÉRIFIÉ CIBLÉ (suite initiale rouge) | 4 |
-| CORRIGÉ PARTIEL | 5 |
+| CORRIGÉ PARTIEL | 6 |
 | NON REPRODUIT | 0 |
 | DÉCISION REQUISE | 4 |
 | REVERTÉ | 0 |
@@ -50,7 +50,7 @@ Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvel
 | E34 | Majeur | CORRIGÉ PARTIEL | P2 | `e17c0e5` | `sql-phase2-lot-a-p2-review.mjs` | Route admin artisans, migration additive | Une approbation ancienne réactivait le dossier via HTTP 200. Elle reçoit maintenant 409 et la suspension demeure. Une réactivation explicite avec version courante passe. Attend le lot B. |
 | E36 | Mineur | CORRIGÉ PARTIEL | P3 | `523878c` | `sql-phase2-lot-a-p3-review.mjs` | Route admin artisans, migration additive | Après le verrou P2, le rejeu était refusé 409. Avec la clé, 200 identique et un seul audit. Modification de la même intention refusée. Attend le lot B. |
 | E37 | Majeur | À REPRODUIRE | Isolé | — | — | — | Indisponibilité planifiée et éligibilité des offres. |
-| E41 | Mineur | À REPRODUIRE | P3 | — | — | — | Rejeu de message texte avec un ID par intention. |
+| E41 | Mineur | CORRIGÉ PARTIEL | P3 | `0127c6d` | `sql-phase2-lot-a-p3-review.mjs` | Route messages, migration additive | Vrai HTTP : deux messages et notifications avant. Après, les deux réponses 201 sont identiques et il n’y a qu’un message et une notification. Attend le lot B. |
 | E53 | Mineur | À REPRODUIRE | P3 | — | — | — | Dépôt de site dédupliqué, y compris l’objet Storage. |
 | E59 | Majeur | DÉCISION REQUISE | Décision | — | — | — | Photos avant/après. |
 | E60 | Majeur | DÉCISION REQUISE | Décision | — | — | — | Accusé de remise par le client. |
