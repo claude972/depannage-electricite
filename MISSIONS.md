@@ -140,3 +140,9 @@ ROOT possède le serveur, la migration et les tests. Une demande publique collec
 Claude raccorde le rapport entreprise au JSON de `/api/reports`, sur le même périmètre que le CSV. Vérifier les totaux au-delà de 100 dossiers, les états vides et l’effacement au changement d’habilitation. Un second worker Claude raccorde le profil et l’écran performance artisan à la lecture serveur existante. Vérifier les périodes en Martinique, l’erreur de lecture et le changement d’identité.
 
 Astra possède la lecture serveur paginée des devis de l’artisan. Vérifier les anciens dossiers, les révisions et les refus d’accès avant de raccorder l’écran. Garder les lectures sous l’identité réelle et les écritures de devis sur les routes existantes. ROOT intègre et lance la recette sur la version exacte.
+
+### SYS-07 / ENT-04 / ENT-10 — historique et échéances de la fiche site
+
+Astra possède la lecture paginée du site en cours via `GET /api/sites/[id]/records` et les tests de permissions. Le filtre `kind` distingue `open`, `past`, `upcoming`, `completed` et `audits`. Le serveur vérifie le site sous l'identité du membre et conserve la RLS actuelle. Il renvoie les seules colonnes nécessaires et un curseur lié à l'identité, au site et au filtre. Aucun changement des règles métier, des écritures, des migrations ou des accès de l'opérateur.
+
+Claude raccorde la fiche site après publication du contrat. Les onglets d'intervention et les échéances utilisent les lectures paginées et distinguent chargement, vide et échec. Conserver le chemin de démonstration et les actions existantes. Vérifier une intervention au-delà des 100 dossiers, une échéance après 300 enregistrements, un rappel et une fin d'échéance, le changement de site et le refus entre organisations. Les indicateurs et documents encore tirés des dossiers chargés portent leur limite.
