@@ -22,7 +22,7 @@ Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvel
 | --- | ---: |
 | CORRIGÉ (avec suite verte) | 0 |
 | VÉRIFIÉ CIBLÉ (suite initiale rouge) | 4 |
-| CORRIGÉ PARTIEL | 3 |
+| CORRIGÉ PARTIEL | 4 |
 | NON REPRODUIT | 0 |
 | DÉCISION REQUISE | 4 |
 | REVERTÉ | 0 |
@@ -39,7 +39,7 @@ Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvel
 
 | E07 | Majeur | À REPRODUIRE | Isolé | — | — | — | Verrou d’archivage site pour équipement et visite. |
 | E15 | Majeur | CORRIGÉ PARTIEL | P2 | `258f44e` | `sql-phase2-lot-a-p2-review.mjs` | Route operations, migration additive | Deux identités via vrai HTTP : ancien formulaire 200 et v3 avant, 409 et v2 conservée après. RPC historique refusé, pas d’audit supplémentaire. Attend le câblage du lot B. |
-| E18 | Mineur | À REPRODUIRE | P3 | — | — | — | Rapport : rejeu avec une seule écriture et un seul instantané. |
+| E18 | Mineur | CORRIGÉ PARTIEL | P3 | `7de6d11` | `sql-phase2-lot-a-p3-review.mjs` | Route operations, migration additive | Deux audits et instantanés avant. Après, un de chaque, réponse identique, autre contenu sous même clé refusé. Attend la conservation de la clé dans B. |
 | E19 | Mineur | À REPRODUIRE | Isolé | — | — | — | Rapport : nom déclaré vide rejeté côté serveur. |
 | E21 | Majeur | À REPRODUIRE | P4 | — | — | — | Validation des dates constatées SLA. |
 | E23 | Mineur | À REPRODUIRE | Isolé | — | — | — | Règle unique du statut SLA. |
