@@ -3932,14 +3932,32 @@ export function EnterpriseQuoteRoute({ c, ref_ }: { c: Ctx; ref_: string }) {
 }
 
 /** Exact enterprise quote by id (live, outside the caches): GET /api/quotes/<id>?organization_id=&site_id=.
- *  Read-only: no decision here (the dossier and approvals keep their existing guarded actions);
- *  `is_current` is information only. A 404 keeps the former meaning of the link (a dossier id). */
+ *  A 404 keeps the former meaning of the link (a dossier id); 401/403 ⇒ inaccessible.
+ *  ENT-12 guarded decision, offered ONLY when every proof holds (re-checked at click, before any POST):
+ *   1. the exact scoped point read: same id, « sent », is_current AND current_quote_id === id, dossier « quoted »;
+ *   2. GET /api/quotes/<id>/decision-context: same quote / dossier / site, can_write, validity not expired;
+ *   3. the existing authority c.authority.canWriteSite(site);
+ *   4. the simple rule (applies only if enabled AND TTC > threshold) ⇒ the exact approval « approved »,
+ *      and the advanced workflow (QuoteApprovalPanel read) — both through the existing acceptanceDecision.
+ *  Commands: the EXISTING POSTs only — session.action(dossier, "accept_quote", { quote_id }) via
+ *  ConfirmAction, and session.operate(dossier, { action: "reject_quote", quote_id, reason }) with the
+ *  existing reason flow. After any outcome: re-read the quote, its decision context and its approval.
+ *  Old / not-current versions stay read-only; `is_current` alone never enables anything. */
 export function EnterpriseQuoteView({ c, quoteId }: { c: Ctx; quoteId: string }) {
+  // FULL scope key (identity + organization + site + quote): any change remounts the whole subtree —
+  // proofs, advanced read, decision form, refusal note and the QuoteApprovalPanel are cleared at the
+  // first render of the new scope; a late reply of the old scope lands on an unmounted instance.
+  const k = `${c.session.mutationContext.userId() ?? "-"}|${c.session.mutationContext.generation()}|${c.organization?.id ?? "-"}|${c.activeSite?.id ?? "-"}|${quoteId}`;
+  return <EnterpriseQuoteInner key={k} c={c} quoteId={quoteId} />;
+}
+function EnterpriseQuoteInner({ c, quoteId }: { c: Ctx; quoteId: string }) {
   const { session } = c;
   const point = useRecipientQuote({ enabled: !c.demo, context: session.mutationContext, quoteId, scope: { org: c.organization?.id ?? null, site: c.activeSite?.id ?? null } });
   // ENT-12 decision on this EXACT quote: decision context (scope rights, simple rule / approval,
   // validity) + the existing advanced approval read, combined by the existing acceptanceDecision.
-  const decisionCtx = useDecisionContext({ enabled: !c.demo, context: session.mutationContext, quoteId, organizationId: c.organization?.id ?? null, siteId: c.activeSite?.id ?? null });
+  // Read only for a version that could be decided (exact current « sent »): never for old / 404 ones.
+  const candidate = point.state.phase === "ready" && point.state.data!.quote.status === "sent" && point.state.data!.version.is_current;
+  const decisionCtx = useDecisionContext({ enabled: !c.demo && candidate, context: session.mutationContext, quoteId, organizationId: c.organization?.id ?? null, siteId: c.activeSite?.id ?? null });
   const [advancedRead, setAdvancedRead] = useState<{ quoteId: string; status: WorkflowStatus | null } | null>(null);
   const [approvalRound, setApprovalRound] = useState(0);
   const [rejectOpen, setRejectOpen] = useState(false);
@@ -4109,9 +4127,23 @@ export function EnterpriseQuoteView({ c, quoteId }: { c: Ctx; quoteId: string })
             )}
           </div>
         ) : (
-          <p className={styles.muted} data-enterprise-quote-readonly="" data-enterprise-quote-blocked={blockedReason ? "" : undefined}>
-            {exactCurrent ? blockedReason : QUOTES_COPY.readOnly}
-          </p>
+          <div data-enterprise-quote-blocked-box="">
+            <p className={styles.muted} data-enterprise-quote-readonly="" data-enterprise-quote-blocked={blockedReason ? "" : undefined}>
+              {exactCurrent ? blockedReason : QUOTES_COPY.readOnly}
+            </p>
+            {exactCurrent && decisionCtx.state.phase === "error" && (
+              // Re-read only (never a POST): a 503 is recoverable without reloading the page.
+              <button type="button" className="button outline" onClick={() => decisionCtx.retry()} data-enterprise-quote-ctx-retry="">
+                Réessayer
+              </button>
+            )}
+            {exactCurrent && ctxMatches && acceptance.blocked && acceptance.reason === "simple" && ctx!.simple_approval && (
+              <button type="button" className={styles.textLink} onClick={() => c.go("approval", ctx!.simple_approval!.id)} data-enterprise-quote-approval={ctx!.simple_approval.id}>
+                Ouvrir l’approbation
+                <Icon name="arrow" size={15} />
+              </button>
+            )}
+          </div>
         )}
         <button type="button" className="button outline" onClick={() => session.openIntervention(intervention.id)} data-enterprise-quote-dossier={intervention.id}>
           Ouvrir le dossier

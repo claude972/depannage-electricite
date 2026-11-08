@@ -69,6 +69,7 @@ const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..",
 const ENTRY = `
 import { createElement as h, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { flushSync } from "react-dom";
 import { EnterpriseQuoteView } from "./components/role/enterprise-space";
 const tick = (ms) => new Promise((r) => setTimeout(r, ms));
 const USER = "${USER}", ORG = "${ORG}", ORG_B = "${ORG_B}", SITE = "${SITE}", QID = "${QID}", IID = "${IID}", APP = "${APP}";
@@ -81,7 +82,11 @@ const run = async (opts) => {
   window.fetch = async (url) => {
     const u = String(url); calls.push(u);
     if (u.includes(ORG_B)) await tick(300); // the new scope's reads are still in flight
-    if (u.includes("/decision-context")) { if (opts.ctxHold) await opts.ctxHold; return typeof opts.ctx === "number" ? Response.json({ error: "x" }, { status: opts.ctx }) : Response.json(opts.ctx ?? ctxOk()); }
+    if (u.includes("/decision-context")) {
+      if (opts.ctxHold) await opts.ctxHold;
+      const v = opts.ctxFailing ? 503 : opts.ctx;
+      return typeof v === "number" ? Response.json({ error: "x" }, { status: v }) : Response.json(v ?? ctxOk());
+    }
     if (u.includes("/approval")) return typeof opts.wf === "number" ? Response.json({ error: "x" }, { status: opts.wf }) : Response.json(opts.wf ?? wf());
     if (u.startsWith("/api/quotes/")) return typeof opts.point === "number" ? Response.json({ error: "x" }, { status: opts.point }) : Response.json(opts.point ?? point());
     return Response.json({ error: "x" }, { status: 503 });
@@ -96,7 +101,7 @@ const run = async (opts) => {
     action: async (id, a, b) => { log.push(["action", a, b.quote_id, id]); return true; },
     operate: async (id, b) => { log.push(["operate", b.action, b.quote_id, id]); return true; },
   };
-  const c = { session, demo: false, organization: { id: opts.org ?? ORG, name: "Org" }, activeSite: { id: SITE, name: "Siège" }, orgSites: [], orgInterventions: [], scope: { sites: [], rules: [] }, authority: { role: "owner", canWrite: true, readOnlyReason: null, canWriteSite: () => opts.authority !== false }, go: () => {} };
+  const c = { session, demo: false, organization: { id: opts.org ?? ORG, name: "Org" }, activeSite: { id: SITE, name: "Siège" }, orgSites: [], orgInterventions: [], scope: { sites: [], rules: [] }, authority: { role: "owner", canWrite: true, readOnlyReason: null, canWriteSite: () => opts.authority !== false }, go: (v, p) => log.push(["go", v, p]) };
   const div = document.createElement("div"); div.className = "ui-v2"; document.body.appendChild(div);
   const root = createRoot(div);
   root.render(h(StrictMode, null, h(EnterpriseQuoteView, { c, quoteId: QID })));
@@ -120,6 +125,18 @@ const run = async (opts) => {
     div.querySelector("[data-enterprise-quote-reject]").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); await tick(400);
     out.after = calls.slice(before).map((u) => (u.includes("/decision-context") ? "context" : u.includes("/approval") ? "approval" : u.startsWith("/api/quotes/") ? "quote" : "other"));
   }
+  if (opts.act === "retry") {
+    out.retryButton = !!div.querySelector("[data-enterprise-quote-ctx-retry]");
+    const n = calls.filter((u) => u.includes("/decision-context")).length;
+    opts.ctxFailing = false; // the service is back
+    div.querySelector("[data-enterprise-quote-ctx-retry]")?.click(); await tick(400);
+    out.contextReread = calls.filter((u) => u.includes("/decision-context")).length - n;
+    out.decisionAfterRetry = !!div.querySelector("[data-enterprise-quote-decision]");
+  }
+  if (opts.act === "openApproval") {
+    out.approvalLink = div.querySelector("[data-enterprise-quote-approval]")?.getAttribute("data-enterprise-quote-approval") ?? null;
+    div.querySelector("[data-enterprise-quote-approval]")?.click(); await tick(20);
+  }
   if (opts.switchOrg) {
     root.render(h(StrictMode, null, h(EnterpriseQuoteView, { c: { ...c, organization: { id: ORG_B, name: "B" } }, quoteId: QID })));
     await tick(30);
@@ -127,6 +144,60 @@ const run = async (opts) => {
   }
   out.overflow = document.documentElement.scrollWidth - document.documentElement.clientWidth;
   root.unmount();
+  return out;
+};
+// Same quote under another scope: note / form / proofs cleared at first render; a late approval reply
+// of the old scope never enables anything in the new one.
+window.scopes = async () => {
+  const out = {};
+  let phase = "A";
+  const held = [];
+  window.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes("/approval")) {
+      if (phase === "A-hold" || phase === "B") return new Promise((r) => held.push({ phase, release: () => r(Response.json(wf())) }));
+      return Response.json(wf());
+    }
+    if (u.includes("/decision-context")) return Response.json(ctxOk());
+    if (u.startsWith("/api/quotes/")) return Response.json(point());
+    return Response.json({ error: "x" }, { status: 503 });
+  };
+  let who = USER;
+  const session = { mode: "live", role: "manager", profileId: USER, busy: false, mutationContext: { userId: () => who, generation: () => 0 }, data: { quotes: [], interventions: [], documents: [], messages: [], payments: [], reviews: [], organization_members: [] }, capabilities: { quoteDocuments: "available" }, reprobeFeature: async () => {}, features: { quoteDocuments: new Proxy({}, { get: () => () => new Promise(() => {}) }) }, go: () => {}, openIntervention: () => {}, loadOrganization: async () => null, action: async () => true, operate: async () => true };
+  const ctxFor = (org, site) => ({ session, demo: false, organization: { id: org, name: "Org" }, activeSite: site ? { id: site, name: "Site" } : null, orgSites: [], orgInterventions: [], scope: { sites: [], rules: [] }, authority: { role: "owner", canWrite: true, readOnlyReason: null, canWriteSite: () => true }, go: () => {} });
+  const div = document.createElement("div"); document.body.appendChild(div);
+  const root = createRoot(div);
+  const show = (org, site) => root.render(h(StrictMode, null, h(EnterpriseQuoteView, { c: ctxFor(org, site), quoteId: QID })));
+  const typeNote = async () => {
+    [...div.querySelectorAll("button")].find((b) => b.textContent.includes("Refuser ce devis")).click(); await tick(40);
+    const ta = div.querySelector("[data-enterprise-quote-reject] textarea");
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(ta, "Note de refus saisie");
+    ta.dispatchEvent(new Event("input", { bubbles: true })); await tick(30);
+    return div.querySelector("[data-enterprise-quote-reject] textarea")?.value;
+  };
+  const state = () => ({ form: !!div.querySelector("[data-enterprise-quote-reject]"), note: div.querySelector("[data-enterprise-quote-reject] textarea")?.value ?? null, decision: !!div.querySelector("[data-enterprise-quote-decision]") });
+  show(ORG, SITE); await tick(500);
+  out.typed = await typeNote();
+  for (const [name, change] of [["org", () => show(ORG_B, SITE)], ["site", () => show(ORG_B, null)], ["identity", () => { who = "10000000-0000-4000-8000-000000000002"; show(ORG_B, null); }]]) {
+    flushSync(() => change()); // the very first commit of the new scope
+    out[name + "First"] = state();
+    await tick(500);
+    out[name + "Loaded"] = state();
+    if (name !== "identity") out[name + "Retyped"] = await typeNote();
+  }
+  root.unmount();
+  // Late approval reply of the old scope.
+  who = USER; phase = "A-hold";
+  const d2 = document.createElement("div"); document.body.appendChild(d2);
+  const r2 = createRoot(d2);
+  r2.render(h(StrictMode, null, h(EnterpriseQuoteView, { c: ctxFor(ORG, SITE), quoteId: QID }))); await tick(400);
+  out.beforeSwitch = !!d2.querySelector("[data-enterprise-quote-decision]");
+  phase = "B";
+  r2.render(h(StrictMode, null, h(EnterpriseQuoteView, { c: ctxFor(ORG_B, SITE), quoteId: QID }))); await tick(400);
+  for (const x of held.filter((x) => x.phase === "A-hold")) x.release();
+  await tick(300);
+  out.afterLateOld = { decision: !!d2.querySelector("[data-enterprise-quote-decision]"), blocked: d2.querySelector("[data-enterprise-quote-readonly]")?.textContent ?? null };
+  r2.unmount();
   return out;
 };
 window.all = async () => {
@@ -139,7 +210,8 @@ window.all = async () => {
   r.noWrite = await run({ ctx: ctxOk({ can_write: false }) });
   r.authority = await run({ authority: false });
   r.ctxOtherSite = await run({ ctx: ctxOk({ site_id: "30000000-0000-4000-8000-000000000009" }) });
-  r.simplePending = await run({ ctx: ctxOk({ simple_rule: { enabled: true, threshold_cents: 5000, required_role: "manager" }, simple_approval: { id: APP, status: "pending" } }) });
+  r.simplePending = await run({ act: "openApproval", ctx: ctxOk({ simple_rule: { enabled: true, threshold_cents: 5000, required_role: "manager" }, simple_approval: { id: APP, status: "pending" } }) });
+  r.retry = await run({ act: "retry", ctxFailing: true }); // 503 until « Réessayer » is clicked
   r.simpleApproved = await run({ ctx: ctxOk({ simple_rule: { enabled: true, threshold_cents: 5000, required_role: "manager" }, simple_approval: { id: APP, status: "approved" } }) });
   r.simpleBelow = await run({ ctx: ctxOk({ simple_rule: { enabled: true, threshold_cents: 9765, required_role: "manager" }, simple_approval: null }) });
   r.expired = await run({ ctx: ctxOk({ validity: { valid_until: "2026-01-02", state: "expired" } }) });
@@ -174,9 +246,12 @@ for (const width of [390, 1280])
         for (const k of ["quote", "context", "approval"]) assert.ok(r.allProven.after.includes(k), `accept ⇒ re-read ${k}: ${JSON.stringify(r.allProven.after)}`);
         same(r.reject.log, [["operate", "reject_quote", QID, IID]], "refuse with the exact ids");
         for (const k of ["quote", "context", "approval"]) assert.ok(r.reject.after.includes(k), `refuse ⇒ re-read ${k}`);
-        for (const k of ["notSent", "notCurrent", "dossierNotQuoted", "noWrite", "authority", "ctxOtherSite", "simplePending", "expired", "advancedPending", "advancedUnread", "ctx401", "ctx403", "ctx404", "ctx422", "ctx503"])
+        for (const k of ["notSent", "notCurrent", "dossierNotQuoted", "noWrite", "authority", "ctxOtherSite", "expired", "advancedPending", "advancedUnread", "ctx401", "ctx403", "ctx404", "ctx422", "ctx503"])
           same([r[k].decision, r[k].log], [false, []], `${k}: missing proof ⇒ no action`);
+        same(r.simplePending.decision, false, "simplePending: missing proof ⇒ no action");
         same([r.simpleApproved.decision, r.simpleBelow.decision], [true, true], "simple rule approved / total not above the threshold ⇒ decidable");
+        same([r.simplePending.approvalLink, r.simplePending.log], [APP, [["go", "approval", APP]]], "simple rule blocking + exact approval ⇒ « Ouvrir l’approbation » (navigation only)");
+        same([r.retry.decision, r.retry.retryButton, r.retry.contextReread, r.retry.decisionAfterRetry, r.retry.log], [false, true, 1, true, []], "context 503 ⇒ Réessayer ⇒ re-read ⇒ decidable, no POST");
         assert.match(r.expired.blocked, /expiré/);
         assert.match(r.advancedPending.blocked, /circuit d’approbation interne/);
         assert.match(r.simplePending.blocked, /approuvé dans « Devis & approbations »/);
@@ -194,6 +269,40 @@ for (const width of [390, 1280])
       server.close();
     }
   });
+
+test("périmètre complet (Chromium) : même devis sous une autre organisation / site / identité ⇒ note, formulaire et preuves effacés au premier rendu ; réponse d’approbation tardive de l’ancien périmètre ignorée", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
+  const out = await build({ absWorkingDir: ROOT, stdin: { contents: ENTRY, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, outdir: "out", platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "local-css", ".svg": "dataurl", ".png": "dataurl" }, define: { "process.env.NODE_ENV": '"development"', "process.env.NEXT_PUBLIC_SUPABASE_URL": "undefined", "process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "undefined" }, logLevel: "error" });
+  const js = out.outputFiles.find((f) => f.path.endsWith(".js"))!.text;
+  const server: Server = createServer((_rq, rs) => { rs.setHeader("content-type", "text/html"); rs.end(`<!doctype html><script>${js}</script>`); });
+  let browser: { close(): Promise<void>; newContext(o?: unknown): Promise<any> } | null = null;
+  try {
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
+    browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true });
+    const context = await browser!.newContext();
+    try {
+      const page = await context.newPage();
+      const errors: string[] = [];
+      page.on("pageerror", (e: Error) => errors.push(String(e)));
+      await page.goto(`http://127.0.0.1:${(server.address() as { port: number }).port}/`);
+      const r = (await page.evaluate(() => (window as unknown as { scopes: () => Promise<unknown> }).scopes())) as Record<string, any>;
+      same(r.typed, "Note de refus saisie", "the note was really typed");
+      for (const k of ["org", "site", "identity"]) {
+        same(r[k + "First"], { form: false, note: null, decision: false }, `${k}: first render of the new scope ⇒ no form, no note, no proof`);
+        same([r[k + "Loaded"].form, r[k + "Loaded"].note], [false, null], `${k}: once proven again, the old note never comes back`);
+      }
+      same(r.beforeSwitch, false, "old scope: approval state held ⇒ no action");
+      same(r.afterLateOld.decision, false, "the old scope's late approval reply never enables the new scope");
+      assert.match(r.afterLateOld.blocked ?? "", /n’a pas encore pu être lu/);
+      same(errors, []);
+    } finally {
+      await context.close();
+    }
+  } finally {
+    await browser?.close();
+    server.close();
+  }
+});
 
 test("câblage : gardes existantes réutilisées (acceptanceDecision, QuoteApprovalPanel, ConfirmAction), recontrôle au clic, chemin DossierView en cache inchangé", () => {
   const src = readFileSync("components/role/enterprise-space.tsx", "utf8");
