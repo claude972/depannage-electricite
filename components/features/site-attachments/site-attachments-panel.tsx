@@ -124,6 +124,13 @@ export function SiteAttachmentsPanel({ siteId, organizationId, context, canUploa
     const r = await request(f(), signUrl(siteId, id));
     if (currentBase() !== at) return;
     setOpening(null);
+    // Refused right or piece: re-read both lists before anything else; a refused list purges the
+    // names and every « Ouvrir » (E52). Nothing is retried automatically.
+    if (r.status === 401 || r.status === 403 || r.status === 404) {
+      setOpenError(COPY.openFailed);
+      reread();
+      return;
+    }
     const url = r.status === 200 && r.body && typeof r.body === "object" ? (r.body as { url?: unknown }).url : null;
     if (typeof url !== "string" || !url.startsWith("https://")) return setOpenError(COPY.openFailed);
     window.open(url, "_blank", "noopener,noreferrer");
@@ -166,7 +173,11 @@ export function SiteAttachmentsPanel({ siteId, organizationId, context, canUploa
       reread();
       return;
     }
-    if (o.kind === "refused") return setMessage({ tone: "error", text: o.message });
+    if (o.kind === "refused") {
+      setMessage({ tone: "error", text: o.message });
+      if (r.status === 401 || r.status === 403 || r.status === 404) reread(); // rights re-read (E52)
+      return;
+    }
     setMessage({ tone: "uncertain", text: COPY.uncertain }); // file, kind and target kept
     reread();
   };
@@ -191,7 +202,11 @@ export function SiteAttachmentsPanel({ siteId, organizationId, context, canUploa
       reread();
       return;
     }
-    if (o.kind === "refused") return setMessage({ tone: "error", text: o.message });
+    if (o.kind === "refused") {
+      setMessage({ tone: "error", text: o.message });
+      if (r.status === 401 || r.status === 403 || r.status === 404) reread(); // rights re-read (E52)
+      return;
+    }
     setMessage({ tone: "uncertain", text: o.kind === "conflict" ? COPY.conflict : COPY.patchUncertain });
     reread(); // never replayed
   };
