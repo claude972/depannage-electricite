@@ -281,3 +281,7 @@ Codex ajoute les alertes de lecture dans Rapports. Comparer le montant des devis
 ### SYS-09 — suivre ses demandes de données dans les profils professionnels
 
 Codex ajoute le panneau personnel de suivi de l’effacement aux profils artisan et entreprise. Réutiliser la lecture sous l’identité du titulaire et les liens de ses tickets. Le profil entreprise ne transmet aucun compte ni périmètre d’organisation à cette lecture personnelle.
+
+### PUB-07 / PUB-09 — éditer l’équipe et les conditions du réseau
+
+Codex ajoute `team_text` et `network_terms` à la publication versionnée de l’exploitant. Claude les raccorde à l’éditeur, à la présentation de l’équipe et à la page de candidature artisan. Afficher les textes approuvés de l’exploitant comme texte brut. Conserver les versions antérieures et les conditions commerciales hors des valeurs par défaut.
