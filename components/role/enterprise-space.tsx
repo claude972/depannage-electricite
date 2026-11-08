@@ -5433,6 +5433,7 @@ function MessagesView({ c }: { c: Ctx }) {
           }}
           readOnlyReason={c.authority.readOnlyReason || undefined}
           context={session.mutationContext}
+          loadOperations={session.loadOperations}
         />
       ) : (
         <Empty icon="message" title="Aucune conversation" action={
