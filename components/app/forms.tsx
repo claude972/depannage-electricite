@@ -34,6 +34,7 @@ import { TAX_RATE_HINT, TAX_RATE_OPTIONS, TAX_RATE_PLACEHOLDER, TAX_RATE_REQUIRE
 import { Empty, Field, ConfirmAction, Unavailable } from "./ui";
 import { ReviewEstimate } from "../features/indicative-prices/indicative-range";
 import { useWarrantyHistory } from "../features/warranty-corrective/use-warranty-history";
+import { RecordedTerms } from "../features/warranty-policy/recorded-terms";
 import { HISTORY_COPY as WARRANTY_COPY, claimAllowed } from "../features/warranty-corrective/warranty-history";
 import { EnterpriseContractsPanel, type EnterpriseContractsContext, NO_CONTRACTS_CONTEXT } from "../features/enterprise-contracts/enterprise-contracts-panel";
 import {
@@ -2663,6 +2664,14 @@ function WarrantyPanelBody({ interventionId, demo, role, context, ownerId, fetch
                 <small>{date(c.created_at)}</small>
               </div>
               <p>{c.description}</p>
+              {/* PUB-06: recorded terms version, read on demand; keyed on identity + dossier + case + version. */}
+              {!demo && (
+                <RecordedTerms
+                  key={`${(context ?? WARRANTY_ANON).userId() ?? "-"}|${(context ?? WARRANTY_ANON).generation()}|${interventionId ?? "*"}|${c.id}|${c.terms_version ?? "none"}`}
+                  version={c.terms_version}
+                  fetcher={fetcher}
+                />
+              )}
               {c.resolution && (
                 <p>
                   <strong>Réponse : </strong>
