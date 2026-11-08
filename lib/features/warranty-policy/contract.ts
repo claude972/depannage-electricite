@@ -1,5 +1,6 @@
 import { z } from "zod";
 const version = z.number().int().min(1).max(2147483647);
+const editorVersion = z.number().int().min(0).max(2147483647);
 export const published = z
   .object({
     version,
@@ -10,7 +11,7 @@ export const published = z
   .strict();
 export const editor = z
   .object({
-    version: version.min(0),
+    version: editorVersion,
     draft: z
       .object({ title: z.string().max(160), body: z.string().max(20000) })
       .strict(),
@@ -25,7 +26,7 @@ export const editor = z
   );
 const base = {
   command_id: z.uuid(),
-  expected_version: version.min(0).max(2147483646),
+  expected_version: editorVersion.max(2147483646),
 };
 export const command = z.discriminatedUnion("action", [
   z

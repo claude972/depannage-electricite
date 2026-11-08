@@ -64,7 +64,7 @@ async function listen(server) {
   return server.address().port;
 }
 
-const rpcNames = new Set(["mutate_support_triage"]);
+const rpcNames = new Set(["mutate_support_triage", "read_warranty_policy_editor", "write_warranty_policy"]);
 const encode = value => Buffer.from(JSON.stringify(value)).toString("base64url");
 const accessToken = `${encode({ alg: "HS256" })}.${encode({ sub: actor.id, exp: Math.floor(Date.now() / 1000) + 3600 })}.synthetic`;
 const cookie = "sb-127-auth-token=base64-" + encode({
@@ -176,6 +176,32 @@ test("E01 — independent revision-zero assign and escalate return 200 and recor
         assert.deepEqual(audits, [{ actor_id: actor.id, action: "support_triage_changed", target_kind: "support_ticket",
           details: { command_id: command.command_id, action: command.action, version: 1 } }]);
       }
+    });
+  } finally {
+    await db.close();
+  }
+});
+
+test("E28 — the first warranty policy is readable and can be saved through HTTP", async () => {
+  const db = await freshDatabase();
+  try {
+    await db.query("insert into auth.users(id) values($1)", [actor.id]);
+    await db.query("update public.profiles set role = 'admin' where id = $1", [actor.id]);
+    const route = "/api/admin/warranty-policy";
+    await withNext(db, async http => {
+      const initial = await http(route);
+      const saved = await http(route, { method: "POST", body: JSON.stringify({
+        action: "save", command_id: randomUUID(), expected_version: 0, title: "Conditions test", body: "Texte de recette.",
+      }) });
+      assert.deepEqual([initial.status, saved.status], [200, 200]);
+      const { version, draft, published, operator_enabled } = await initial.json();
+      assert.deepEqual({ version, draft, published, operator_enabled }, {
+        version: 0, draft: { title: "", body: "" }, published: null, operator_enabled: false,
+      });
+      assert.deepEqual(await saved.json(), { version: 1, action: "save", replayed: false });
+      const persisted = await asUser(db, actor, "select public.read_warranty_policy_editor() v");
+      assert.equal(persisted.version, 1);
+      assert.equal(persisted.draft.title, "Conditions test");
     });
   } finally {
     await db.close();
