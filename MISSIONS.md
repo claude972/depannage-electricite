@@ -153,3 +153,4 @@ Propriété exclusive route sites/[id]/records, lib/features/site-records, tests
 ### CLI-05 / SYS-08 — libellés des coordonnées à la confirmation
 
 Claude vérifie la confirmation de réservation. Dans l’éditeur de coordonnées, le message d’erreur placé dans le libellé modifie le nom accessible du champ Téléphone. Réutiliser `Field` pour associer le libellé et le message séparément. Conserver validation, valeurs, apparence et soumission. Vérifier les noms accessibles avant et après correction du téléphone, le focus clavier et l’absence de requête tant que le contact est invalide.
+- Claude (add7245, claude/booking-contact-a11y) : CLI-05 — éditeur de coordonnées de booking-confirm.tsx sur `Field` (libellé stable, erreur via aria-describedby) ; un test ciblé.
