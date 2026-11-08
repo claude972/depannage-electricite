@@ -4,6 +4,10 @@ Objectif : application entière, seuls raccordements Stripe et SMS différés. P
 
 ## Référence en ligne
 
+La preview `71f1eb0` a passé quatre scénarios hébergés. Le rapport et son CSV suivent l’organisation active, la fiche site retrouve les interventions et échéances anciennes, les statistiques artisan comptent au-delà du démarrage et le devis exact reste accessible hors de la fenêtre du dossier. La CI du commit passe. [Preview](https://depannage-electricite-nrvv4d24m-brafas-projects.vercel.app) · [Recette et nettoyage](reviews/DELIVERY_71F_SCOPED_RECORDS.md)
+
+### Version précédente `256ec5c`
+
 La version de recette `256ec5c` corrige le débordement de la fiche entreprise à 360 px. Les sept scénarios entreprise et les seize contrôles des fiches publiques passent sur ce déploiement. La réservation connectée avec rejeu, le brouillon PWA et les devis privés ont été vérifiés sur `a18f507`. [Preview corrigée](https://depannage-electricite-g75a26xmo-brafas-projects.vercel.app) · [Recette et limites](reviews/DELIVERY_A18_HOSTED.md)
 
 ### Version précédente `610b13f`
