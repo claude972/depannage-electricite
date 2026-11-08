@@ -200,7 +200,8 @@ export type NotMeasurableReason =
   | "calendar_without_windows"
   | "calendar_unreachable"
   | "invalid_timezone"
-  | "pauses_incomplete";
+  | "pauses_incomplete"
+  | "future_fact";
 export type SlaTrack = {
   target_minutes: number | null;
   deadline_at: string | null;

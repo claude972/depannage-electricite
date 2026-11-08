@@ -200,10 +200,17 @@ export function evaluateSlaCase(
 ): SlaEvaluation {
   const nowMs = Date.parse(now);
   const openedMs = Date.parse(facts.opened_at);
-  if (facts.pauses_total !== undefined && facts.pauses_total !== facts.pauses.length) {
-    // Incomplete pause list (a missing pause, possibly the open one, would produce a wrong state).
-    const incomplete = { response: unmeasurable(policy.response_target_minutes, "pauses_incomplete"), resolution: unmeasurable(policy.resolution_target_minutes, "pauses_incomplete") };
-    return { case_id: ids.case_id, policy_id: ids.policy_id, measurable: false, reasons: ["pauses_incomplete"], paused_now: false, ...incomplete };
+  const hasFutureFact = [facts.opened_at, facts.responded_at, facts.resolved_at].some(value =>
+    value !== null && Date.parse(value) > nowMs,
+  );
+  const incompletePauses = facts.pauses_total !== undefined && facts.pauses_total !== facts.pauses.length;
+  if (hasFutureFact || incompletePauses) {
+    const reason = hasFutureFact ? "future_fact" : "pauses_incomplete";
+    return {
+      case_id: ids.case_id, policy_id: ids.policy_id, measurable: false, reasons: [reason], paused_now: false,
+      response: unmeasurable(policy.response_target_minutes, reason),
+      resolution: unmeasurable(policy.resolution_target_minutes, reason),
+    };
   }
   const holes = pauseIntervals(facts.pauses, nowMs);
   const pausedNow = facts.resolved_at === null && facts.pauses.some((p) => p.ended_at === null && Date.parse(p.started_at) <= nowMs);

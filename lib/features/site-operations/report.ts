@@ -1,6 +1,7 @@
 // Builds the GET report from the raw snapshot: SLA evaluation per case (server computed) and
 // completeness flags so the UI never claims "no alert" on partial or truncated data.
 import { evaluateSlaCase } from "./sla";
+import { martiniqueDate } from "./fact-dates";
 import type { Completeness, SiteOperationsReport, SiteOperationsSnapshot, SlaEvaluation, SlaSummary } from "./types";
 
 const isoDate = (ms: number) => new Date(ms).toISOString().slice(0, 10);
@@ -39,9 +40,13 @@ export function completeness(snapshot: SiteOperationsSnapshot, cases: SlaEvaluat
   const today = isoDate(Date.parse(now));
   const current = snapshot.fiscal_years.find((f) => f.starts_on <= today && f.ends_on >= today) ?? null;
   const scheduled = snapshot.maintenance_plans.filter((p) => p.status !== "archived" && p.next_due_on !== null);
+  const observedToday = martiniqueDate(Date.parse(now));
   const openReserves = snapshot.erp_checklists
     .filter((c) => c.status !== "archived")
-    .reduce((n, c) => n + c.items.filter((i) => i.state === "reserve" && i.reserve_resolved_on === null).length, 0);
+    .reduce((n, c) => n + c.items.filter((i) => i.state === "reserve" && (
+      i.reserve_resolved_on === null || c.performed_on === null ||
+      i.reserve_resolved_on < c.performed_on || i.reserve_resolved_on > observedToday
+    )).length, 0);
   const l = snapshot.limits;
   const truncated = (
     [

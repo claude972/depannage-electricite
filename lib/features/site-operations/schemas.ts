@@ -1,6 +1,7 @@
 // Strict command schemas shared by the API route (authoritative) and the leaf forms (early
 // feedback). The SQL layer re-validates every payload; these schemas never relax a SQL rule.
 import { z } from "zod";
+import { martiniqueDate } from "./fact-dates";
 
 export const uuid = z.string().uuid();
 export const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date attendue au format AAAA-MM-JJ.");
@@ -89,14 +90,20 @@ export const slaPolicyPayload = z
     status: z.enum(["active", "archived"]),
   })
   .strict();
+const observedInstant = isoInstant.refine(
+  value => Date.parse(value) <= Date.now(), "La date d’un fait constaté ne peut pas être dans le futur.",
+);
+const observedDate = isoDate.refine(
+  value => value <= martiniqueDate(), "La date d’un fait constaté ne peut pas être dans le futur.",
+);
 export const slaCasePayload = z
   .object({
     policy_id: uuid,
     intervention_id: uuid.nullable(),
     reference: text(160),
-    opened_at: isoInstant,
-    responded_at: isoInstant.nullable(),
-    resolved_at: isoInstant.nullable(),
+    opened_at: observedInstant,
+    responded_at: observedInstant.nullable(),
+    resolved_at: observedInstant.nullable(),
     notes: text(4000),
   })
   .strict()
@@ -117,14 +124,14 @@ export const checklistItem = z
     label: text(240, 1),
     state: z.enum(["not_checked", "ok", "reserve", "not_applicable"]),
     note: text(1000),
-    reserve_resolved_on: isoDate.nullable(),
+    reserve_resolved_on: observedDate.nullable(),
   })
   .strict();
 export const erpChecklistPayload = z
   .object({
     title: text(160, 1),
     description: text(4000),
-    performed_on: isoDate.nullable(),
+    performed_on: observedDate.nullable(),
     performed_by_label: text(160),
     status: z.enum(["draft", "completed", "archived"]),
     items: z
@@ -132,7 +139,12 @@ export const erpChecklistPayload = z
       .max(200)
       .refine((items) => new Set(items.map((i) => i.key)).size === items.length, "Chaque élément doit avoir une clé unique."),
   })
-  .strict();
+  .strict()
+  .refine(
+    payload => payload.items.every(item => item.reserve_resolved_on === null ||
+      (payload.performed_on !== null && item.reserve_resolved_on >= payload.performed_on)),
+    { message: "Une levée de réserve exige une date de contrôle et ne peut pas la précéder.", path: ["items"] },
+  );
 
 const versioned = { id: uuid.optional(), expected_version: version.optional() };
 const versionRule = {
