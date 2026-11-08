@@ -1,0 +1,9 @@
+# Comparaison et export énergie sur 72ebee3
+
+La preview sert `72ebee3b7ecdc0ec6e359ee919889c4f46639ba2` de `integration/web-pwa`. Vercel confirme `dpl_4xTUL9DMVXjEH1PSx16vDNYHmX8F` et le HTML public confirme le build `6nEkcfdIYynvs7dohPVgX`. Les 63 tests ciblés, TypeScript strict et les deux jobs GitHub passent. Les tests montés couvrent aussi le retour A → B → A, la sortie de Rapports et la réponse libérée au démontage. [Preview](https://depannage-electricite-rkufseg9a-brafas-projects.vercel.app) · [CI](https://github.com/claude972/depannage-electricite/actions/runs/42443603121)
+
+Dans la recette Chromium `2bb84931f200` à 390 px, un gestionnaire a comparé deux périodes de sept jours. L’écran et le CSV de la première organisation donnent 2 kWh et 2 € sur la période courante, avec un écart de 1 kWh et 1 €. Les montants proviennent de quatre relevés synthétiques enregistrés via l’API utilisateur. L’absence de relevé rend le total non calculable. Un relevé effectivement saisi à zéro reste affiché comme zéro. Ces preuves portent sur les relevés déclarés.
+
+Le navigateur a retenu une réponse CSV de la première organisation, puis sélectionné la seconde avec le même compte. La première réponse, relâchée après le changement, n’a déclenché aucun téléchargement. L’export de la seconde organisation a téléchargé le fichier attendu avec le bon périmètre et les valeurs exactes. Le lecteur a obtenu le rapport et le CSV de son site, avec HTTP 403 à l’écriture et HTTP 404 sur une sélection hors de ses droits. Le tiers a reçu HTTP 404 sur le rapport et le CSV.
+
+Les 36 étapes de nettoyage, les 38 lectures indépendantes et les 2 lectures supplémentaires des tables de périodes et événements ont réussi. Les essais `8fc7177a1e88` et `3d02c97a136a` se sont arrêtés avant l’export car la recette omettait le choix initial de l’organisation. Les résultats et les nettoyages indépendants sont conservés.

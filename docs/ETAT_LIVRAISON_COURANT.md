@@ -4,7 +4,9 @@ Objectif : application entière, seuls raccordements Stripe et SMS différés. P
 
 ## Référence en ligne
 
-La preview `955d36b` permet de choisir le ticket d’un dossier de délai depuis les interventions autorisées du site. La recette restauration conserve le ticket pendant l’édition, vérifie l’échéance calculée et les refus d’accès. [Preview actuelle](https://depannage-electricite-41xmipfvx-brafas-projects.vercel.app) · [Recette](reviews/DELIVERY_955_RESTAURANT_SLA.md)
+La preview `72ebee3` invalide les réponses tardives d’un panneau énergie démonté. La recette compare deux périodes et vérifie les CSV, les accès par organisation et l’absence de téléchargement après changement d’organisation. [Preview actuelle](https://depannage-electricite-rkufseg9a-brafas-projects.vercel.app) · [Recette](reviews/DELIVERY_72E_ENERGY_EXPORT_SCOPE.md)
+
+La preview précédente `955d36b` permet de choisir le ticket d’un dossier de délai depuis les interventions autorisées du site. La recette restauration conserve le ticket pendant l’édition, vérifie l’échéance calculée et les refus d’accès. [Preview 955d36b](https://depannage-electricite-41xmipfvx-brafas-projects.vercel.app) · [Recette](reviews/DELIVERY_955_RESTAURANT_SLA.md)
 
 La preview précédente `4eb815c` conserve le formulaire ERP lors d’un 503 de la commande. Le brouillon et la version attendue survivent à l’erreur. Une reprise manuelle est confirmée avec un seul enregistrement et le second envoi est bloqué pendant l’attente du reçu. [Preview 4eb815c](https://depannage-electricite-pk13qh7bx-brafas-projects.vercel.app) · [Recette](reviews/DELIVERY_4EB_ERP_SAVE.md)
 
