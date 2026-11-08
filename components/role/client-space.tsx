@@ -1070,7 +1070,22 @@ function DetailView({
   if (!i) {
     if (presence.decision === "loading") return <Loader label="Recherche du dossier…" />;
     if (presence.decision === "detail" || presence.decision === "detail_loading" || presence.decision === "detail_error")
-      return <PointReadState presence={presence} backLabel="Mes demandes" onBack={() => session.go("requests")} />;
+      return (
+        <>
+          <PointReadState presence={presence} backLabel="Mes demandes" onBack={() => session.go("requests")} />
+          {/* PUB-06: warranty follow-up of an authorized out-of-cache paid dossier (exact id). */}
+          {presence.decision === "detail" && presence.detail?.intervention.status === "paid" && (
+            <WarrantyPanel
+              key={presence.detail.intervention.id}
+              interventionId={presence.detail.intervention.id}
+              demo={demo}
+              role={session.role}
+              context={session.mutationContext}
+              ownerId={presence.detail.intervention.client_id}
+            />
+          )}
+        </>
+      );
     if (presence.decision === "error")
       return (
         <Unavailable
@@ -1662,7 +1677,7 @@ function DetailView({
               await session.submitReview(i.id, values);
             }}
           />
-          <WarrantyPanel interventionId={i.id} demo={demo} role={session.role} />
+          <WarrantyPanel interventionId={i.id} demo={demo} role={session.role} context={session.mutationContext} ownerId={i.client_id} />
         </>
       )}
       <UploadQueuePanel session={session} interventionId={i.id} />

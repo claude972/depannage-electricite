@@ -1173,7 +1173,7 @@ export function AdminSpace({ session }: { session: Session }) {
         content = (
           <>
             <WarrantyPolicyEditor key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`} context={session.mutationContext} demo={demo} />
-            <WarrantyPanel demo={demo} role="admin" />
+            <WarrantyPanel demo={demo} role="admin" context={session.mutationContext} />
             {/* ADM-10: corrective dossier of each case (existing dossier only; opens #detail/<id>). */}
             <WarrantyCorrectivePanel
               key={`corrective|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`}
@@ -3740,7 +3740,7 @@ function DossierView({
             )}
           </Panel>
 
-          <WarrantyPanel interventionId={id} demo={demo} role="admin" />
+          <WarrantyPanel interventionId={id} demo={demo} role="admin" context={session.mutationContext} />
         </div>
         <aside>
           <ReassignPanel

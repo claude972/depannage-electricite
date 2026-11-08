@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { category, STATUS } from "../../app/format";
 import type { Status } from "../../app/types";
-import { CASE_INITIAL, CASE_STATUS_LABEL, COPY, canLink, createCaseController, createCorrectiveApi, parseCases, tabStore, type CaseView, type Context, type CorrectiveApi, type Dossier, type Store, type WarrantyCaseRow } from "./model";
+import { CASE_INITIAL, CASE_STATUS_LABEL, COPY, canLink, createCaseController, createCorrectiveApi, parseCases, parseNextCursor, tabStore, type CaseView, type Context, type CorrectiveApi, type Dossier, type Store, type WarrantyCaseRow } from "./model";
 import styles from "./warranty-corrective.module.css";
 
 const short = (v: string) => v.slice(0, 8).toUpperCase();
@@ -44,14 +44,24 @@ function Live({ context, superAdmin, onOpenDossier, api, store = tabStore, initi
   const client = useRef<CorrectiveApi | null>(null);
   const getApi = () => (client.current ??= latest.current.api ?? createCorrectiveApi());
   const [reload, setReload] = useState(0);
+  // Next page of the history (opaque cursor); appended pages keep every case (and its open
+  // selection / confirmation) mounted: CaseCorrective is keyed by case id.
+  const [next, setNext] = useState<string | null>(null);
+  const [more, setMore] = useState<"idle" | "loading" | "error">("idle");
+  const moreSeq = useRef(0);
   useEffect(() => {
     if (initialCases !== undefined && reload === 0) return;
     let active = true;
     const gen = context.generation(), uid = context.userId();
     setCases(undefined);
+    setNext(null);
+    setMore("idle");
+    moreSeq.current++;
     void getApi().cases().then((r) => {
       if (!active || context.generation() !== gen || context.userId() !== uid) return;
-      setCases(r.status === 200 ? parseCases(r.body) ?? "error" : "error");
+      const parsed = r.status === 200 ? parseCases(r.body) : null;
+      setCases(parsed ?? "error");
+      setNext(parsed ? parseNextCursor(r.body) ?? null : null);
     });
     return () => {
       active = false;
@@ -79,6 +89,42 @@ function Live({ context, superAdmin, onOpenDossier, api, store = tabStore, initi
             </li>
           ))}
         </ul>
+      )}
+      {more === "error" && <p className={styles.error} role="alert">{COPY.casesFailed}</p>}
+      {Array.isArray(cases) && next && (
+        <button
+          type="button"
+          className={styles.button}
+          disabled={more === "loading"}
+          data-corrective-more=""
+          onClick={() => {
+            const my = ++moreSeq.current;
+            const gen = context.generation(), uid = context.userId();
+            setMore("loading");
+            void getApi().cases(next).then((r) => {
+              if (my !== moreSeq.current || context.generation() !== gen || context.userId() !== uid) return; // late: dropped
+              const parsed = r.status === 200 ? parseCases(r.body) : null;
+              const cursor = r.status === 200 ? parseNextCursor(r.body) : undefined;
+              if (r.status === 422) return setReload((k) => k + 1); // cursor refused: page 1 again
+              if (r.status === 401 || r.status === 403 || r.status === 404) {
+                setCases("error");
+                setNext(null);
+                setMore("idle");
+                return;
+              }
+              if (!parsed || cursor === undefined) return setMore("error");
+              setCases((prev) => {
+                const list = Array.isArray(prev) ? prev : [];
+                const seen = new Set(list.map((c) => c.id.toLowerCase()));
+                return [...list, ...parsed.filter((c) => !seen.has(c.id.toLowerCase()) && (seen.add(c.id.toLowerCase()), true))];
+              });
+              setNext(cursor);
+              setMore("idle");
+            });
+          }}
+        >
+          {more === "loading" ? "Chargement…" : "Afficher plus"}
+        </button>
       )}
     </section>
   );
