@@ -110,6 +110,7 @@ import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-pa
 import { DelegatedPayerCheckout, DelegatedPayerManager } from "../features/delegated-payer/delegated-payer";
 import { REPORT_COPY, reportQuery, useEnterpriseReport } from "../features/enterprise-reports/use-enterprise-report";
 import { QUOTES_COPY, useRecipientQuote } from "../features/recipient-quotes/use-recipient-quotes";
+import { DECISION_COPY, simplePending as decisionSimplePending, useDecisionContext } from "../features/enterprise-quote-decision/use-decision-context";
 import { APPROVALS_COPY, useApprovalPoint, useApprovalsList, type ApprovalRow as ServerApproval, type StatusFilter as ApprovalFilter } from "../features/enterprise-approvals/use-enterprise-approvals";
 import { RECORDS_COPY, useSiteRecords, type DueRow, type JobRow } from "../features/site-records/use-site-records";
 import { COUNTS_COPY, ENTERPRISE_SEARCH_COPY, ExportFeedback, PRO_COPY, useEnterpriseSearch, useOverviewCounts, useProfessionalOverview, type EnterpriseSearchFilters } from "../features/enterprise-search/use-enterprise-search";
@@ -3936,6 +3937,16 @@ export function EnterpriseQuoteRoute({ c, ref_ }: { c: Ctx; ref_: string }) {
 export function EnterpriseQuoteView({ c, quoteId }: { c: Ctx; quoteId: string }) {
   const { session } = c;
   const point = useRecipientQuote({ enabled: !c.demo, context: session.mutationContext, quoteId, scope: { org: c.organization?.id ?? null, site: c.activeSite?.id ?? null } });
+  // ENT-12 decision on this EXACT quote: decision context (scope rights, simple rule / approval,
+  // validity) + the existing advanced approval read, combined by the existing acceptanceDecision.
+  const decisionCtx = useDecisionContext({ enabled: !c.demo, context: session.mutationContext, quoteId, organizationId: c.organization?.id ?? null, siteId: c.activeSite?.id ?? null });
+  const [advancedRead, setAdvancedRead] = useState<{ quoteId: string; status: WorkflowStatus | null } | null>(null);
+  const [approvalRound, setApprovalRound] = useState(0);
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [reasonError, setReasonError] = useState("");
+  // Latest proofs, re-checked at click time (before any POST).
+  const proofRef = useRef<() => boolean>(() => false);
   if (!c.organization) return <Empty icon="document" title={QUOTES_COPY.chooseOrg} />;
   // 404: not a quote of this scope — the link keeps its former meaning (a dossier id), read exactly by DossierView.
   if (point.state.phase === "forbidden" && point.state.notFound)
@@ -3957,6 +3968,56 @@ export function EnterpriseQuoteView({ c, quoteId }: { c: Ctx; quoteId: string })
     );
   const { quote, intervention, version } = point.state.data!;
   const statusLabel = quote.status === "accepted" ? "Accepté" : quote.status === "rejected" ? "Refusé" : "Envoyé";
+  // Every proof, all required (never inferred from an error, a stale read or another scope).
+  const exactCurrent = quote.id.toLowerCase() === quoteId.toLowerCase() && quote.status === "sent" && version.is_current && version.current_quote_id === quote.id && intervention.status === "quoted";
+  const ctx = decisionCtx.state.phase === "ready" ? decisionCtx.state.data : null;
+  const ctxMatches = !!ctx && ctx.quote_id.toLowerCase() === quote.id.toLowerCase() && ctx.intervention_id.toLowerCase() === intervention.id.toLowerCase() && !!intervention.site_id && ctx.site_id.toLowerCase() === intervention.site_id.toLowerCase();
+  const advanced: WorkflowStatus | null | undefined = advancedRead?.quoteId === quote.id ? advancedRead.status : undefined;
+  const acceptance = ctxMatches ? acceptanceDecision(decisionSimplePending(ctx!, quote.total_cents), advanced, true, true) : { blocked: true, reason: "unknown" as const };
+  const expired = ctx?.validity.state === "expired";
+  const decidable = exactCurrent && ctxMatches && ctx!.can_write && !acceptance.blocked && !expired && c.authority.canWriteSite(intervention.site_id);
+  proofRef.current = () => decidable;
+  const blockedReason = !exactCurrent
+    ? null
+    : decisionCtx.state.phase === "loading" || decisionCtx.state.phase === "idle"
+      ? DECISION_COPY.loading
+      : decisionCtx.state.phase !== "ready" || !ctxMatches
+        ? decisionCtx.state.phase === "forbidden" ? DECISION_COPY.inaccessible : DECISION_COPY.failed
+        : expired
+          ? DECISION_COPY.expired
+          : !ctx!.can_write || !c.authority.canWriteSite(intervention.site_id)
+            ? DECISION_COPY.noWrite
+            : acceptance.blocked
+              ? acceptance.reason === "advanced" ? DECISION_COPY.advanced : acceptance.reason === "simple" ? DECISION_COPY.simple : DECISION_COPY.unknown
+              : null;
+  const rereadAll = () => {
+    // After ANY outcome: re-read the exact quote, its decision context and its approval state.
+    point.refresh();
+    decisionCtx.refresh();
+    setAdvancedRead(null);
+    setApprovalRound((n) => n + 1);
+  };
+  async function accept() {
+    if (!proofRef.current()) return false; // re-checked at click time: no proof ⇒ no POST
+    const ok = await session.action(intervention.id, "accept_quote", { quote_id: quote.id });
+    rereadAll();
+    return ok;
+  }
+  async function reject(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (reason.trim().length < 5) {
+      setReasonError("Indiquez le motif du refus (5 caractères minimum).");
+      return;
+    }
+    if (!proofRef.current()) return;
+    setReasonError("");
+    const ok = await session.operate(intervention.id, { action: "reject_quote", quote_id: quote.id, reason: reason.trim() });
+    if (ok) {
+      setRejectOpen(false);
+      setReason("");
+    }
+    rereadAll();
+  }
   return (
     <div data-enterprise-quote="ready">
       <PageTitle title={`Devis ${quoteRef(quote.id)}`} subtitle={`Reçu le ${dateTime(quote.created_at)} — ${category(intervention.category).label}, ${shortId(intervention.id)}`} />
@@ -4008,9 +4069,50 @@ export function EnterpriseQuoteView({ c, quoteId }: { c: Ctx; quoteId: string })
           <span>Total TTC (devis seul)</span>
           <strong data-enterprise-quote-total="">{money(quote.total_cents)}</strong>
         </div>
-        <p className={styles.muted} data-enterprise-quote-readonly="">
-          {version.is_current && quote.status === "sent" ? "Lecture seule ici : la décision se prend depuis le dossier ou l’approbation, selon vos droits." : QUOTES_COPY.readOnly}
-        </p>
+        {exactCurrent && intervention.site_id && (
+          <QuoteApprovalPanel
+            key={`${quote.id}|${approvalRound}`}
+            quoteId={quote.id}
+            context={session.mutationContext}
+            demo={c.demo}
+            onStatus={(st) => setAdvancedRead({ quoteId: quote.id, status: st })}
+          />
+        )}
+        {decidable ? (
+          <div className={styles.quoteActions} data-enterprise-quote-decision="">
+            <ConfirmAction
+              label="Accepter le devis"
+              message={`Accepter la version ${quoteRef(quote.id)} pour ${money(quote.total_cents)} TTC ? L’artisan pourra planifier l’intervention.`}
+              confirmLabel="Confirmer l’acceptation"
+              className="button primary"
+              busy={session.busy}
+              onConfirm={accept}
+            />
+            {!rejectOpen ? (
+              <button type="button" className="button outline" disabled={session.busy} onClick={() => setRejectOpen(true)}>
+                Refuser ce devis
+              </button>
+            ) : (
+              <form className={styles.rejectForm} onSubmit={reject} data-enterprise-quote-reject="">
+                <Field label="Motif du refus (obligatoire)" error={reasonError}>
+                  <textarea required minLength={5} maxLength={2000} rows={3} value={reason} onChange={(e) => setReason(e.target.value)} />
+                </Field>
+                <div className={styles.actions}>
+                  <button type="submit" className="button destructive-button" disabled={session.busy}>
+                    {session.busy ? "Enregistrement…" : "Confirmer le refus"}
+                  </button>
+                  <button type="button" className="button outline" disabled={session.busy} onClick={() => setRejectOpen(false)}>
+                    Annuler
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        ) : (
+          <p className={styles.muted} data-enterprise-quote-readonly="" data-enterprise-quote-blocked={blockedReason ? "" : undefined}>
+            {exactCurrent ? blockedReason : QUOTES_COPY.readOnly}
+          </p>
+        )}
         <button type="button" className="button outline" onClick={() => session.openIntervention(intervention.id)} data-enterprise-quote-dossier={intervention.id}>
           Ouvrir le dossier
         </button>
