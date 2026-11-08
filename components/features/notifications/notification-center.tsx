@@ -48,6 +48,7 @@ function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate
   const cursor = useRef<string | null>(demo ? demo.page.page.next_cursor : null);
   const moreBusy = useRef(false);
   const alive = useRef(true);
+  const markLock = useRef(false);
   const identity = () => (context ? `${context.userId() ?? "-"}|${context.generation()}` : "");
   const fence = () => {
     const g = gen.current, f = filter.current, who = identity();
@@ -68,18 +69,29 @@ function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate
     };
   }, []);
 
-  useEffect(() => {
-    if (demo || !available) return;
+  /** Reads the canonical head (page 1) of the current filter under a new generation. `blank`
+   *  clears the rows first (filter switch, reload); after a confirmed « Tout marquer lu » the rows
+   *  stay until the head replaces them. A reply for another filter is invalid: no rows, no cursor. */
+  const readHead = (blank: boolean) => {
     restart();
     const fresh = fence();
-    setList({ status: "loading", items: [] });
-    client.list({ limit: PAGE_SIZE, unread: filter.current, cursor: null })
+    const wanted = filter.current;
+    if (blank) setList({ status: "loading", items: [] });
+    client.list({ limit: PAGE_SIZE, unread: wanted, cursor: null })
       .then((answer) => {
         if (!fresh()) return;
+        if (answer && answer.filters?.unread !== wanted) {
+          cursor.current = null;
+          return setList({ status: "error", message: NOTIFICATION_COPY.loadError, items: [] });
+        }
         if (answer) cursor.current = answer.page.next_cursor;
         setList((previous) => reducePage(previous, answer, false));
       })
       .catch((error: unknown) => { if (fresh()) setList({ status: "error", message: error instanceof Error && error.message ? error.message : NOTIFICATION_COPY.loadError, items: [] }); });
+  };
+  useEffect(() => {
+    if (demo || !available) return;
+    readHead(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, demo, available, unreadOnly, reloadKey]);
 
@@ -90,7 +102,13 @@ function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate
     if (filter.current === next) return;
     filter.current = next; // synchronous: no old cursor or filter can be used in this tick
     restart();
+    if (!demo) setList({ status: "loading", items: [] }); // never an old row under the new filter
     setUnreadOnly(next);
+  };
+  const reload = () => {
+    restart(); // the cursor and the rows are invalid from the click on
+    setList({ status: "loading", items: [] });
+    setReloadKey((k) => k + 1);
   };
   const loadMore = async () => {
     const from = cursor.current;
@@ -100,8 +118,10 @@ function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate
     setLoadingMore(true);
     setItemError((e) => (e?.id === "more" ? null : e));
     try {
-      const answer = await client.list({ limit: PAGE_SIZE, unread: filter.current, cursor: from });
+      const wanted = filter.current;
+      const answer = await client.list({ limit: PAGE_SIZE, unread: wanted, cursor: from });
       if (!fresh()) return;
+      if (answer && answer.filters?.unread !== wanted) { setItemError({ id: "more", message: NOTIFICATION_COPY.loadError }); return; }
       if (answer) cursor.current = answer.page.next_cursor;
       setList((previous) => reducePage(previous, answer, true));
     } catch (error) {
@@ -114,6 +134,9 @@ function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate
     }
   };
   const mark = async (command: NotificationMarkCommand, key: string) => {
+    // One mark command at a time (single or bulk): an older receipt can never undo a newer mark.
+    if (markLock.current) return;
+    markLock.current = true;
     const who = identity();
     const same = () => alive.current && identity() === who;
     setPending(key); setItemError(null);
@@ -128,9 +151,15 @@ function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate
         const applied = applyMark(previous.items, command, answer, now);
         return { ...previous, items: filter.current ? applied.items.filter((n) => !n.read_at) : applied.items, unread: applied.unread ?? previous.unread };
       });
+      // A page read before « Tout marquer lu » would bring back rows still shown unread: drop it
+      // and re-read the canonical head.
+      if (command.action === "mark_all_read" && !demo) readHead(false);
       if (command.action === "mark_all_read") setNotice(answer.result.unread_count === 0 ? "Toutes les notifications sont marquées comme lues." : "Notifications marquées comme lues.");
     } catch (error) { if (same()) setItemError({ id: key, message: error instanceof Error && error.message ? error.message : "Le marquage n’a pas pu être effectué." }); }
-    finally { if (same()) setPending(null); }
+    finally {
+      markLock.current = false; // released by this command's own receipt or error only
+      if (same()) setPending(null);
+    }
   };
   return (
     <div className={styles.root} data-scope={scope.userId}>
@@ -143,9 +172,9 @@ function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate
           <button type="button" className={`button ${unreadOnly ? "primary" : "outline"}`} aria-pressed={unreadOnly} onClick={() => switchFilter(true)}>Non lues{unread !== null ? ` (${unread})` : ""}</button>
         </div>
         <div className={styles.filters}>
-          {writable && unread !== null && unread > 0 && <button type="button" className="button outline" disabled={pending === "all"} onClick={() => mark({ action: "mark_all_read", before: list.items[0]?.created_at }, "all")}>{pending === "all" ? "Marquage…" : "Tout marquer lu"}</button>}
+          {writable && unread !== null && unread > 0 && <button type="button" className="button outline" disabled={pending !== null} onClick={() => mark({ action: "mark_all_read", before: list.items[0]?.created_at }, "all")}>{pending === "all" ? "Marquage…" : "Tout marquer lu"}</button>}
           <button type="button" className="button outline" aria-expanded={showPreferences} onClick={() => setShowPreferences((v) => !v)}><Icon name="settings" size={16} />Préférences</button>
-          {!demo && <button type="button" className="button outline" aria-label="Recharger les notifications" onClick={() => setReloadKey((k) => k + 1)}><Icon name="refresh" size={18} /></button>}
+          {!demo && <button type="button" className="button outline" aria-label="Recharger les notifications" onClick={reload}><Icon name="refresh" size={18} /></button>}
         </div>
       </div>
       <p className={styles.summary}>Aucun e-mail, SMS ni notification push n’est envoyé : les notifications se consultent dans cet espace.</p>
@@ -154,7 +183,7 @@ function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate
       {list.status === "error" && (
         <div className="alert" role="alert">
           <p className={styles.error}>{list.message}</p>
-          <button type="button" className="button outline" onClick={() => setReloadKey((k) => k + 1)}>Réessayer</button>
+          <button type="button" className="button outline" onClick={reload}>Réessayer</button>
         </div>
       )}
       {list.status === "ready" && list.items.length === 0 && <Empty level={2} icon="bell" title={unreadOnly ? NOTIFICATION_COPY.emptyUnread : NOTIFICATION_COPY.empty}>Les événements de vos dossiers apparaîtront ici. Aucun e-mail ni SMS n’est envoyé.</Empty>}
@@ -166,7 +195,7 @@ function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate
           <ul className={styles.list}>
             {list.items.map((n) => (
               <li key={n.id}>
-                <NotificationItem notification={n} pending={pending === n.id} writable={writable} error={itemError?.id === n.id ? itemError.message : null} onMark={(action) => mark({ action, ids: [n.id] }, n.id)} onOpen={onNavigate && n.intervention_id ? () => onNavigate("intervention", n.intervention_id!) : undefined} />
+                <NotificationItem notification={n} pending={pending === n.id} locked={pending !== null} writable={writable} error={itemError?.id === n.id ? itemError.message : null} onMark={(action) => mark({ action, ids: [n.id] }, n.id)} onOpen={onNavigate && n.intervention_id ? () => onNavigate("intervention", n.intervention_id!) : undefined} />
               </li>
             ))}
           </ul>
@@ -182,7 +211,7 @@ function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate
     </div>
   );
 }
-function NotificationItem({ notification: n, pending, writable, error, onMark, onOpen }: { notification: Notification; pending: boolean; writable: boolean; error: string | null; onMark: (action: "mark_read" | "mark_unread") => void; onOpen?: () => void }) {
+function NotificationItem({ notification: n, pending, locked, writable, error, onMark, onOpen }: { notification: Notification; pending: boolean; locked: boolean; writable: boolean; error: string | null; onMark: (action: "mark_read" | "mark_unread") => void; onOpen?: () => void }) {
   const unread = !n.read_at;
   return (
     <article className={`${styles.item} ${unread ? styles.itemUnread : ""}`} aria-label={`${n.title}${unread ? ", non lue" : ""}`}>
@@ -193,7 +222,7 @@ function NotificationItem({ notification: n, pending, writable, error, onMark, o
         <time dateTime={n.created_at}>{when(n.created_at)}</time>
         <span>{KIND_LABELS[n.kind] ?? "Notification"}</span>
         {onOpen && <button type="button" className="text-button" onClick={onOpen}>Ouvrir le dossier</button>}
-        {writable && <button type="button" className="text-button" disabled={pending} onClick={() => onMark(unread ? "mark_read" : "mark_unread")}>{pending ? "Marquage…" : unread ? "Marquer comme lue" : "Marquer comme non lue"}</button>}
+        {writable && <button type="button" className="text-button" disabled={pending || locked} onClick={() => onMark(unread ? "mark_read" : "mark_unread")}>{pending ? "Marquage…" : unread ? "Marquer comme lue" : "Marquer comme non lue"}</button>}
       </div>
       {error && <p className={styles.itemError} role="alert">{error}</p>}
     </article>

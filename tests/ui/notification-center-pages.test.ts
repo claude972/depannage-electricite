@@ -28,7 +28,7 @@ const AT = "2026-11-07T10:00:00.000Z";
 const ROWS = Array.from({ length: 60 }, (_, i) => ({ id: "n" + String(i + 1).padStart(2, "0"), kind: "quote_received", title: "Notif " + (i + 1), body: "Corps " + (i + 1), intervention_id: null, organization_id: null, site_id: null, payload: {}, read_at: i % 2 === 0 ? null : AT, created_at: new Date(Date.parse(AT) - i * 60000).toISOString() }));
 function setup() {
   const calls = { list: [], mark: [], refused: [] };
-  const hold = {}, waiting = {};
+  const hold = {}, waiting = {}, lie = {};
   const read = new Set();
   const answer = (unread, cursor) => {
     const name = unread ? "unread" : "all";
@@ -39,15 +39,16 @@ function setup() {
     const more = start + 25 < rows.length;
     return { notifications: page, page: { limit: 25, total: rows.length, has_more: more, next_cursor: more ? name + ":" + (start + 25) : null }, unread_count: ROWS.filter((n) => !n.read_at && !read.has(n.id)).length, filters: { unread } };
   };
+  const served = (unread, cursor) => { const a = answer(unread, cursor); const key = (unread ? "unread" : "all") + "|" + (cursor ?? ""); return lie[key] ? { ...a, filters: { unread: !unread } } : a; };
   const gate = (key, make) => {
     if (!hold[key]) return Promise.resolve().then(make);
     return new Promise((resolve, reject) => { waiting[key] = { resolve: () => { try { resolve(make()); } catch (e) { reject(e); } }, reject }; });
   };
   const release = async (key, failure) => { delete hold[key]; const p = waiting[key]; delete waiting[key]; if (p) { if (failure) p.reject(new Error(failure)); else p.resolve(); } await tick(200); return !!p; };
   const client = {
-    list: (q) => { const key = (q.unread ? "unread" : "all") + "|" + (q.cursor ?? ""); calls.list.push(key); return gate(key, () => answer(q.unread, q.cursor)); },
+    list: (q) => { const key = (q.unread ? "unread" : "all") + "|" + (q.cursor ?? ""); calls.list.push(key); return gate(key, () => served(q.unread, q.cursor)); },
     summary: async () => null,
-    mark: (cmd) => { calls.mark.push(cmd); return gate("mark", () => { for (const id of cmd.ids ?? []) read.add(id); return { ok: true, result: { updated: (cmd.ids ?? []).length, unread_count: ROWS.filter((n) => !n.read_at && !read.has(n.id)).length } }; }); },
+    mark: (cmd) => { calls.mark.push(cmd); return gate("mark", () => { for (const id of cmd.ids ?? ROWS.map((n) => n.id)) read.add(id); return { ok: true, result: { updated: (cmd.ids ?? []).length, unread_count: ROWS.filter((n) => !n.read_at && !read.has(n.id)).length } }; }); },
     loadPreferences: async () => null,
     savePreferences: async () => null,
   };
@@ -59,7 +60,7 @@ function setup() {
   const more = () => { const b = div.querySelector("[class*=more] button"); return b ? { text: b.textContent, disabled: b.disabled } : null; };
   const view = () => ({ rows: rows().length, readRows: rows().filter((r) => !r.unread).length, loader: /Chargement des notifications/.test(div.textContent), alerts: [...div.querySelectorAll("[role=alert]")].map((e) => e.textContent), more: more() });
   const count = (key) => calls.list.filter((k) => k === key).length;
-  return { div, calls, hold, release, press, button, view, count, rows };
+  return { div, calls, hold, lie, release, press, button, view, count, rows };
 }
 w.scenarios = {
   async repro() {
@@ -118,6 +119,74 @@ w.scenarios = {
     const after = t.view();
     const first = t.rows()[0];
     return { before, after, first, marks: t.calls.mark.length };
+  },
+  async firstRender() {
+    // Every commit from the click on is recorded (MutationObserver), the new page 1 being held:
+    // the old rows must never be rendered under the new filter / after the reload.
+    const t = setup();
+    await tick(250);
+    const watch = () => {
+      const seen = [];
+      const o = new MutationObserver(() => seen.push({ rows: t.div.querySelectorAll("article").length, more: !!t.div.querySelector("[class*=more] button") }));
+      o.observe(t.div, { childList: true, subtree: true, attributes: true, characterData: true });
+      return () => { o.disconnect(); return seen; };
+    };
+    t.hold["unread|"] = true;
+    let stop = watch();
+    t.button("Non lues").click();
+    await tick(100);
+    const filter = { commits: stop(), view: t.view() };
+    await t.release("unread|");
+    t.hold["unread|"] = true;
+    stop = watch();
+    t.div.querySelector('[aria-label="Recharger les notifications"]').click();
+    await tick(100);
+    const reload = { commits: stop(), view: t.view() };
+    await t.release("unread|");
+    return { filter, reload, after: t.view() };
+  },
+  async mismatch() {
+    const t = setup();
+    t.lie["all|"] = true;
+    await tick(250);
+    const head = t.view();
+    delete t.lie["all|"];
+    await t.press("Réessayer", 250);
+    const retried = t.view();
+    t.lie["all|all:25"] = true;
+    await t.press("Afficher les suivantes", 250);
+    const more = t.view();
+    delete t.lie["all|all:25"];
+    await t.press("Afficher les suivantes", 250);
+    return { head, retried, more, next: t.view(), cursors: t.calls.list.filter((k) => k.includes(":")) };
+  },
+  async markAll() {
+    const t = setup();
+    await tick(250);
+    t.hold["all|all:25"] = true;
+    await t.press("Afficher les suivantes", 50);
+    const heads = t.count("all|");
+    await t.press("Tout marquer lu", 300);
+    const reread = t.count("all|") - heads;
+    const released = await t.release("all|all:25");
+    return { reread, released, view: t.view(), marks: t.calls.mark.map((m) => m.action) };
+  },
+  async markLock() {
+    // Bulk receipt held; a single mark (or a second bulk) must send no POST until it lands.
+    const t = setup();
+    await tick(250);
+    t.hold.mark = true;
+    await t.press("Tout marquer lu", 100);
+    const singles = [...t.div.querySelectorAll("article button")].filter((b) => /Marquer comme/.test(b.textContent));
+    const locked = { disabled: singles.every((b) => b.disabled), bulk: t.button("Marquage…")?.disabled ?? null, waiting: [...t.div.querySelectorAll("button")].filter((b) => b.textContent.includes("Marquage")).length };
+    singles[1].disabled = false; singles[1].click(); // even a forced click is refused by the lock
+    await tick(100);
+    const postsWhileHeld = t.calls.mark.length;
+    await t.release("mark");
+    await tick(200);
+    const afterReceipt = { posts: t.calls.mark.length, enabled: [...t.div.querySelectorAll("article button")].filter((b) => /Marquer comme/.test(b.textContent)).some((b) => !b.disabled) };
+    await t.press("Marquer comme non lue", 250);
+    return { locked, postsWhileHeld, afterReceipt, posts: t.calls.mark.map((m) => m.action), view: t.view() };
   },
   async reloadFence() {
     const t = setup();
@@ -178,6 +247,27 @@ test("centre de notifications monté (Chromium, StrictMode) : la suite du bon fi
 
     const l = (await run("reloadFence")) as { reloaded: View; afterLate: View; next: View; reads: number; refused: string[] };
     same([l.reloaded.rows, l.afterLate.rows, l.afterLate.more, l.next.rows, l.reads, l.refused], [25, 25, { text: "Afficher les suivantes", disabled: false }, 50, 2, []], "reload fences the pending page; the next continuation is read again once");
+    type C = { commits: { rows: number; more: boolean }[]; view: View };
+    const fr = (await run("firstRender")) as { filter: C; reload: C; after: View };
+    for (const [name, c] of [["filter", fr.filter], ["reload", fr.reload]] as const) {
+      assert.ok(c.commits.length > 0, name + ": commits observed");
+      same(c.commits.filter((x) => x.rows > 0 || x.more), [], name + " click ⇒ no old row nor cursor in any commit");
+      same([c.view.rows, c.view.more, c.view.loader], [0, null, true], name + ": loading, page 1 held");
+    }
+    same([fr.after.rows, fr.after.readRows], [25, 0], "then the fresh page 1");
+
+    const mm = (await run("mismatch")) as { head: View; retried: View; more: View; next: View; cursors: string[] };
+    same([mm.head.rows, mm.head.alerts.length, mm.head.more], [0, 1, null], "page 1 for another filter ⇒ rejected, no rows, no cursor");
+    same(mm.retried.rows, 25, "Réessayer reads a valid page 1");
+    same([mm.more.rows, mm.more.alerts.length], [25, 1], "continuation for another filter ⇒ rejected, nothing appended");
+    same([mm.next.rows, mm.cursors], [50, ["all|all:25", "all|all:25"]], "the valid cursor was kept, not the rejected reply's");
+
+    const ma = (await run("markAll")) as { reread: number; released: boolean; view: View; marks: string[] };
+    same([ma.marks, ma.reread, ma.released, ma.view.rows, ma.view.readRows], [["mark_all_read"], 1, true, 25, 25], "mark-all during a held page ⇒ head re-read, the late page is dropped");
+    const lk = (await run("markLock")) as { locked: { disabled: boolean; bulk: boolean | null; waiting: number }; postsWhileHeld: number; afterReceipt: { posts: number; enabled: boolean }; posts: string[]; view: View };
+    same(lk.locked, { disabled: true, bulk: true, waiting: 1 }, "every mark button disabled, waiting label only on the running bulk");
+    same(lk.postsWhileHeld, 1, "a second mark while the first receipt is held sends no POST");
+    same([lk.afterReceipt, lk.posts], [{ posts: 1, enabled: true }, ["mark_all_read", "mark_unread"]], "after the receipt, the next action is possible again");
     same(errors, []);
     same(requests.filter((u) => u.startsWith("/api/")), []);
   } finally {
