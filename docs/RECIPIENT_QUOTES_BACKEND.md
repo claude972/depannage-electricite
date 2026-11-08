@@ -9,3 +9,5 @@ Détail `{quote,intervention,version:{current_quote_id,is_current}}` : quote = D
 401 session,403 rôle,404 absent/étranger/périmètre,422 paramètres/curseur,503 lecture incohérente ou indisponible + Retry-After2. private no-store partout. Revalidation du périmètre courant avant réponse ; aucun write ni migration.
 
 Plan/propriété Astra : nouvelles routes app/api/quotes/route.ts et [id]/route.ts seulement, lib/features/recipient-quotes, tests backend/SQL et ce contrat. Prouver >200 et >20 révisions, exact ancien ID, scope manager limité/retrait, refus tiers et montants. Pas UI/cloud/credentials.
+
+Preuves locales : 4 tests des vrais handlers + TypeScript strict ; 13 assertions SQL sous RLS après migrations isolées (246 devis client sur plusieurs pages, 25 révisions et ancien ID hors20, propriétaire/tiers, manager lecteur limité et retrait). Les fixtures distinguent dossiers personnels et site : être client_id d'un dossier de site ne contourne pas sa RLS. Aucune migration ajoutée ; pg_cron stubé dans le harnais, aucune preuve fournisseur/cloud. Recette PostgREST sur preview assemblée encore nécessaire.
