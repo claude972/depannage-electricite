@@ -2046,6 +2046,7 @@ function ReportPanel({
     summary: string;
     checks: ReportCheck[];
     signature_name: string;
+    command_id: string;
   }) => Promise<boolean>;
 }) {
   const [editing, setEditing] = useState(false);
@@ -2120,6 +2121,7 @@ function ReportForm({
     summary: string;
     checks: ReportCheck[];
     signature_name: string;
+    command_id: string;
   }) => Promise<boolean>;
   onDone: () => void;
 }) {
@@ -2138,6 +2140,8 @@ function ReportForm({
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const doneRef = useRef(false);
+  /** E18: one command id per intention (exact input), reused until the save is confirmed. */
+  const intentRef = useRef<{ input: string; id: string } | null>(null);
   const mounted = useRef(true);
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
@@ -2156,20 +2160,31 @@ function ReportForm({
     if (signature.trim().length < 2) next.signature = "Indiquez le nom de la personne qui déclare ce compte rendu.";
     setErrors(next);
     if (Object.keys(next).length) return;
-    savingRef.current = true;
-    setSaving(true);
-    const sentScope = scope;
-    void onSave({
+    const values = {
       summary: summary.trim(),
       checks: checks.map((c) => ({ label: c.label.trim(), result: c.result })),
       signature_name: signature.trim(),
-    })
+    };
+    const input = JSON.stringify(values);
+    if (!intentRef.current || intentRef.current.input !== input) {
+      const id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : "";
+      if (!id) {
+        setErrors({ summary: "Ce navigateur ne permet pas de créer un identifiant sécurisé : enregistrement impossible ici." });
+        return;
+      }
+      intentRef.current = { input, id };
+    }
+    savingRef.current = true;
+    setSaving(true);
+    const sentScope = scope;
+    void onSave({ ...values, command_id: intentRef.current.id })
       .catch(() => false)
       .then((ok) => {
         // A late reply for another identity / dossier, or after a remount, is ignored entirely.
         if (!mounted.current || scopeRef.current !== sentScope) return;
         savingRef.current = false;
         if (ok && !doneRef.current) {
+          intentRef.current = null; // confirmed: a later report is a new intention
           doneRef.current = true; // close once, this editor only
           onDone();
           return;

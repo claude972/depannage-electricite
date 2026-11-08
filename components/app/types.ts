@@ -261,6 +261,8 @@ export type OperationBody =
   | { action: "set_travel_stage"; stage: TravelStage }
   | {
       action: "save_report";
+      /** Intention key (E18): same UUID and same input until the save is confirmed. */
+      command_id: string;
       summary: string;
       checks: ReportCheck[];
       signature_name: string;
