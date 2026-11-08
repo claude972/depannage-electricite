@@ -23,7 +23,7 @@ export async function GET(request: Request) {
   }
 }
 const schema = z
-  .object({ intervention_id: uuid, body: z.string().trim().min(1).max(4000) })
+  .object({ intervention_id: uuid, command_id: uuid, body: z.string().trim().min(1).max(4000) })
   .strict();
 export async function POST(request: Request) {
   try {
@@ -33,6 +33,7 @@ export async function POST(request: Request) {
     const { data: result, error } = await db.rpc("send_message", {
       p_intervention_id: data.intervention_id,
       p_body: data.body,
+      p_command_id: data.command_id,
     });
     dbError(error);
     return Response.json({ message: result }, { status: 201 });

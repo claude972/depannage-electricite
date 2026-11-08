@@ -83,3 +83,40 @@ test("E36 — an exact suspension retry succeeds after response loss with just o
     await db.close();
   }
 });
+
+test("E41 — an exact message retry delivers one message and one notification", async () => {
+  const db = await freshDatabase();
+  try {
+    await db.query("insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3),($4,$5,$6)", [
+      actor.id, actor.email, { role: "artisan", full_name: "Artisan de recette" },
+      requester.id, requester.email, { role: "client", full_name: "Client de recette" },
+    ]);
+    const id = randomUUID();
+    await db.query(`insert into public.interventions(id, client_id, artisan_id, category, description,
+      address, postal_code, city, urgency, status, estimate_min_cents, estimate_max_cents)
+      values($1,$2,$3,'panel','Panne électrique de recette','Adresse de test','97200','Fort-de-France','scheduled','assigned',10000,20000)`, [
+      id, requester.id, actor.id,
+    ]);
+    await withNext(db, async http => {
+      const post = body => http("/api/messages", { method: "POST", body: JSON.stringify(body) });
+      const fields = { intervention_id: id, body: "Message de recette à envoyer une fois" };
+      const command = { ...fields, command_id: randomUUID() };
+      const keyed = await post(command);
+      const first = keyed.ok ? keyed : await post(fields);
+      assert.equal(first.status, 201);
+      const initial = await first.json(); // proxy drops the first response from the sender
+      const retry = await post(keyed.ok ? command : fields);
+      assert.equal(retry.status, 201);
+      const counts = (await db.query(`select
+        (select count(*)::int from public.messages where intervention_id=$1) messages,
+        (select count(*)::int from public.notifications where intervention_id=$1 and recipient_id=$2 and kind='message_received') notices`, [id, requester.id])).rows[0];
+      assert.deepEqual([keyed.status, counts], [201, { messages: 1, notices: 1 }]);
+      assert.deepEqual(await retry.json(), initial);
+      assert.equal(initial.message.id, command.command_id);
+      assert.equal((await post({ ...command, body: "Autre texte sous la même clé" })).status, 409);
+      assert.equal((await post(fields)).status, 422);
+    }, {}, { rpcAllowlist: new Set(["send_message"]) });
+  } finally {
+    await db.close();
+  }
+});

@@ -143,8 +143,8 @@ await assert.rejects(()=>as('writer','select public.set_site_budget($1,1)',[b]))
 await as('writer',"select public.save_compliance($1,'New fixture','audit',current_date,'pending','')",[a]);
 await as('writer',"select public.decide_approval($1,'approved','')",[ja.approval]);
 await as('writer',"select public.intervention_action($1,'accept_quote',null,20,$2)",[ja.job,ja.quote]);
-await assert.rejects(()=>as('writer','select public.send_message($1,\'Excluded\')',[jb.job]));
-await assert.rejects(()=>as('reader','select public.send_message($1,\'Read only\')',[ja.job]));
+await assert.rejects(()=>as('writer','select public.send_message($1,\'Excluded\',gen_random_uuid())',[jb.job]));
+await assert.rejects(()=>as('reader','select public.send_message($1,\'Read only\',gen_random_uuid())',[ja.job]));
 console.log('PASS: operational read-only grants cannot create requests/sites, edit budgets/compliance, approve/accept/refuse quotes or appointments; writer retains allowed-site workflow');
 const token='a'.repeat(64),hash=createHash('sha256').update(token).digest('hex');
 await as('owner','select public.create_organization_invitation($1,$2,\'manager\',$3,7,\'selected\',$4)',[org,'invitee@example.invalid',hash,JSON.stringify([grant(a,false)])]);

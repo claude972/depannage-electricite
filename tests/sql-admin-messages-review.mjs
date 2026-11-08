@@ -49,7 +49,8 @@ await denied(()=>send('admin','20000000-0000-4000-8000-000000000002','test','200
 ok((await as('client','select count(*)::int n from public.messages')).rows[0].n===1,'requester reads reply');
 ok((await as('other','select count(*)::int n from public.messages')).rows[0].n===0,'unrelated reader denied');
 await denied(()=>as('admin',"insert into public.messages(intervention_id,author_id,body)values($1,$2,'direct')",[job,ids.admin]),'42501');
-await as('admin','select public.send_message($1,$2)',[job,'Legacy caller audited']);ok((await db.query("select count(*)::int n from public.audit_log where action like 'admin_message:%'")).rows[0].n===2,'old command also audited');
+await denied(()=>as('admin','select public.send_message($1,$2)',[job,'Missing command identifier']),'42501');
+await as('admin','select public.send_message($1,$2,$3)',[job,'General command audited',crypto.randomUUID()]);ok((await db.query("select count(*)::int n from public.audit_log where action like 'admin_message:%'")).rows[0].n===2,'general command also audited');
 await db.query("update public.interventions set status='cancelled' where id=$1",[job]);await denied(()=>send('admin','20000000-0000-4000-8000-000000000002'),'P0001');
 await db.query("update public.interventions set status='requested',artisan_id=null where id=$1",[job]);await denied(()=>send('admin','20000000-0000-4000-8000-000000000002'),'P0001');
 await db.query("update public.profiles set role='admin' where id=$1",[ids.other]);await db.query("update public.profiles set role='client' where id=$1",[ids.admin]);await denied(()=>send('admin',id),'42501');

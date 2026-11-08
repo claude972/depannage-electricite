@@ -173,7 +173,7 @@ assert.equal((await kinds('artisan',flow)).filter(k=>k==='appointment_saved').le
 await as('artisan',appointment,[flow,at(31),at(32),'Décalé',1]);
 assert.equal((await kinds('client',flow)).filter(k=>k==='appointment_saved').length,1);
 const appointmentNote=(await mine('client','where kind=$1 and intervention_id=$2',['appointment_saved',flow]))[0];assert.ok(appointmentNote.body.includes('heure de Martinique'));assert.equal(appointmentNote.body.includes('Décalé'),false);
-await as('client',"select public.send_message($1,'Bonjour, merci de confirmer.')",[flow]);
+await as('client',"select public.send_message($1,'Bonjour, merci de confirmer.',gen_random_uuid())",[flow]);
 assert.equal((await kinds('artisan',flow)).filter(k=>k==='message_received').length,2);assert.equal((await kinds('client',flow)).filter(k=>k==='message_received').length,0);
 await as('artisan',"select public.intervention_action($1,'start')",[flow]);await as('artisan',"select public.intervention_action($1,'complete')",[flow]);
 assert.ok((await kinds('client',flow)).includes('work_started'));assert.ok((await kinds('client',flow)).includes('work_completed'));
@@ -191,7 +191,7 @@ assert.deepEqual(await kinds('artisan',cancel),['mission_cancelled']);
 const re=(await as('client',"select * from public.create_intervention('panel','Tableau à remplacer.','12 rue du Test','97200','Fort-de-France','scheduled',null)")).rows[0].id;
 await as('artisan',"select public.intervention_action($1,'accept_mission')",[re]);
 await as('artisan',"select public.intervention_action($1,'send_quote',$2,20)",[re,lines]);
-await as('client',"select public.send_message($1,'Bonjour, pouvez-vous confirmer la date ?')",[re]);
+await as('client',"select public.send_message($1,'Bonjour, pouvez-vous confirmer la date ?',gen_random_uuid())",[re]);
 assert.deepEqual(await kinds('artisan',re),['message_received']);
 await as('admin',"select public.reassign_intervention($1,$2,'Réaffectation QA')",[re,ids.otherArtisan]);
 assert.deepEqual([...await kinds('otherArtisan',re)].sort(),['message_received','mission_received']);
@@ -251,7 +251,7 @@ let p=await scalar('client',prefs,[['message_received'],false,false,false,0]);as
 await denied(as('client',prefs,[['message_received'],true,false,false,0]),'P0001');
 await denied(as('client',prefs,[['unknown_kind'],false,false,false,1]),'22023');
 const before=await scalar('client','select count(*)::int v from public.notifications');
-await as('otherArtisan',"select public.send_message($1,'Message muet')",[re]);
+await as('otherArtisan',"select public.send_message($1,'Message muet',gen_random_uuid())",[re]);
 assert.equal(await scalar('client','select count(*)::int v from public.notifications'),before);
 p=await scalar('client',prefs,[[],true,true,true,1]);assert.equal(p.preferences.version,2);assert.equal(p.preferences.email_enabled,true);
 assert.equal(await scalar('artisan','select count(*)::int v from public.notification_preferences'),0);

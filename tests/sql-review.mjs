@@ -100,8 +100,8 @@ await db.query("insert into public.organization_members(organization_id,user_id,
 const siteJob=(await as('manager',"select * from public.create_intervention('panel','Le tableau du bureau est en panne.','12 rue des bureaux','97200','Fort-de-France','urgent',$1)",[site.id])).rows[0];
 await as('artisan1',"select public.intervention_action($1,'accept_mission')",[siteJob.id]);
 assert.equal((await as('client2','select * from public.interventions where id=$1',[siteJob.id])).rows.length,1);
-await assert.rejects(as('client2',"select public.send_message($1,'Un viewer ne doit pas écrire.')",[siteJob.id]));
-await as('manager',"select public.send_message($1,'Message du gestionnaire autorisé.')",[siteJob.id]);
+await assert.rejects(as('client2',"select public.send_message($1,'Un viewer ne doit pas écrire.',gen_random_uuid())",[siteJob.id]));
+await as('manager',"select public.send_message($1,'Message du gestionnaire autorisé.',gen_random_uuid())",[siteJob.id]);
 console.log('PASS: organization viewer can read but cannot send messages; manager can write');
 const manager2='00000000-0000-4000-8000-000000000007';
 ids.manager2=manager2;
