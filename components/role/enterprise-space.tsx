@@ -1585,8 +1585,20 @@ export function RequestsView({ c }: { c: Ctx }) {
 
 const isRequestCategory = (value: string): value is Category => CATEGORIES.some((cat) => cat.id === value);
 
+const SITE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function NewRequestView({ c, siteId, initialCategory = "panel" }: { c: Ctx; siteId: string; initialCategory?: Category }) {
   const site = c.orgSites.find((s) => s.id === siteId) || null;
+  // ENT-03: a site id absent from the bootstrap cache ⇒ exact read in the ACTIVE organisation, then the
+  // existing form for that site only (live). The normal path below is unchanged.
+  if (!site && siteId && SITE_UUID.test(siteId) && c.session.mode !== "demo")
+    return (
+      <DirectNewRequest
+        key={`${c.session.mutationContext.userId() ?? "-"}|${c.session.mutationContext.generation()}|${c.organization?.id ?? "-"}|${siteId}`}
+        c={c}
+        siteId={siteId}
+        initialCategory={initialCategory}
+      />
+    );
   const writableSites = c.orgSites.filter((s) => !s.archived_at && c.authority.canWriteSite(s.id));
   const allowed = siteId ? writableSites.some((s) => s.id === siteId) : c.canCreateRequest;
   if (!allowed)
@@ -1640,6 +1652,69 @@ function NewRequestView({ c, siteId, initialCategory = "panel" }: { c: Ctx; site
         onDemo={() => undefined}
       />
     </>
+  );
+}
+
+/**
+ * ENT-03 — request creation for a site loaded by its exact read (absent from the cache). The form is
+ * rendered only after SiteDirectLoader proved the site in the active organisation, for an active site
+ * whose settings GET says can_write; reader, archived site or another organisation ⇒ refusal, no form,
+ * no POST. The only offered site is that exact site, prefilled with its address. Server unchanged.
+ */
+function DirectNewRequest({ c, siteId, initialCategory }: { c: Ctx; siteId: string; initialCategory: Category }) {
+  const { session } = c;
+  const back = (
+    <button type="button" className="button outline" onClick={() => c.go("requests")}>
+      Retour aux interventions
+    </button>
+  );
+  return (
+    <SiteDirectLoader
+      siteId={siteId}
+      organizationId={c.organization?.id ?? null}
+      context={session.mutationContext}
+      demo={false}
+      back={back}
+      render={(site, state) => {
+        if (site.archived_at !== null || !state.canWrite)
+          return (
+            <div data-direct-request="refused">
+              <PageTitle
+                title="Nouvelle demande"
+                subtitle={`Site ${site.name}`}
+                back={{ label: "Retour aux interventions", onClick: () => c.go("requests") }}
+              />
+              <Unavailable
+                title="Création de demande non autorisée sur ce périmètre"
+                reason={site.archived_at !== null ? "Le site est archivé et ne peut plus recevoir de demande." : c.authority.readOnlyReason || "Vos droits ne permettent pas de créer une demande sur ce site."}
+              />
+            </div>
+          );
+        const only: Site = { id: site.id, organization_id: site.organization_id, name: site.name, type: site.type, address: site.address, budget_cents: site.budget_cents, created_at: site.created_at, archived_at: null };
+        return (
+          <div data-direct-request="form">
+            <p className={styles.note}>
+              Demande rattachée au site <strong>{site.name}</strong>. L’adresse est préremplie ; complétez le
+              code postal et la ville.
+            </p>
+            <RequestForm
+              initialCategory={initialCategory}
+              initialValues={{ category: initialCategory, description: "", address: site.address, postal_code: "", city: "", urgency: "scheduled", site_id: site.id }}
+              sites={[only]}
+              mode={session.mode}
+              busy={session.busy}
+              onBack={() => c.go("requests")}
+              onSubmit={async (values, photos) => {
+                // Only this exact site can be sent (the form offers no other).
+                if (values.site_id !== site.id) return;
+                await session.createIntervention(values, photos);
+              }}
+              onDemo={() => undefined}
+            />
+          </div>
+        );
+      }}
+    />
   );
 }
 
@@ -3441,13 +3516,21 @@ function DirectSiteSheet({ c, id }: { c: Ctx; id: string }) {
                 </p>
               </div>
               <div className={styles.sheetActions}>
-                <ReadOnlyNote
-                  reason={
-                    archived
-                      ? "Site archivé : ses paramètres et son historique restent consultables. Ce site ne reçoit plus de nouvelle demande."
-                      : "Site absent des données chargées : seules ses informations serveur sont affichées ici."
-                  }
-                />
+                {/* ENT-03: active site + server can_write (settings GET) ⇒ request creation for THIS site. */}
+                {!archived && state.canWrite && session.mode !== "demo" ? (
+                  <button type="button" className="button primary" onClick={() => c.go("new", site.id)} data-direct-new-request="">
+                    <Icon name="plus" size={16} />
+                    Nouvelle demande
+                  </button>
+                ) : (
+                  <ReadOnlyNote
+                    reason={
+                      archived
+                        ? "Site archivé : ses paramètres et son historique restent consultables. Ce site ne reçoit plus de nouvelle demande."
+                        : "Site absent des données chargées : seules ses informations serveur sont affichées ici."
+                    }
+                  />
+                )}
               </div>
             </div>
             <div className={styles.twoCol}>
