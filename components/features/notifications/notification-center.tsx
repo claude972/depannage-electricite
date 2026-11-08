@@ -47,6 +47,7 @@ function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate
   const filter = useRef(unreadOnly);
   const cursor = useRef<string | null>(demo ? demo.page.page.next_cursor : null);
   const moreBusy = useRef(false);
+  const headBusy = useRef(false);
   const alive = useRef(true);
   const markLock = useRef(false);
   const identity = () => (context ? `${context.userId() ?? "-"}|${context.generation()}` : "");
@@ -56,6 +57,7 @@ function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate
   };
   const restart = () => {
     gen.current++;
+    headBusy.current = false;
     if (!demo) cursor.current = null; // the demo list is never re-read: its cursor stays
     moreBusy.current = false;
     setLoadingMore(false);
@@ -77,6 +79,7 @@ function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate
     const fresh = fence();
     const wanted = filter.current;
     if (blank) setList({ status: "loading", items: [] });
+    headBusy.current = true;
     client.list({ limit: PAGE_SIZE, unread: wanted, cursor: null })
       .then((answer) => {
         if (!fresh()) return;
@@ -87,7 +90,8 @@ function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate
         if (answer) cursor.current = answer.page.next_cursor;
         setList((previous) => reducePage(previous, answer, false));
       })
-      .catch((error: unknown) => { if (fresh()) setList({ status: "error", message: error instanceof Error && error.message ? error.message : NOTIFICATION_COPY.loadError, items: [] }); });
+      .catch((error: unknown) => { if (fresh()) setList({ status: "error", message: error instanceof Error && error.message ? error.message : NOTIFICATION_COPY.loadError, items: [] }); })
+      .finally(() => { if (fresh()) headBusy.current = false; });
   };
   useEffect(() => {
     if (demo || !available) return;
@@ -151,9 +155,10 @@ function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate
         const applied = applyMark(previous.items, command, answer, now);
         return { ...previous, items: filter.current ? applied.items.filter((n) => !n.read_at) : applied.items, unread: applied.unread ?? previous.unread };
       });
-      // A page read before « Tout marquer lu » would bring back rows still shown unread: drop it
-      // and re-read the canonical head.
-      if (command.action === "mark_all_read" && !demo) readHead(false);
+      // A list read issued before this receipt would bring back pre-mark rows and counter: after a
+      // bulk mark, or when any read (head or continuation) is in flight, drop it and re-read the
+      // head causally (issued after the receipt). A single mark with no read in flight: no re-read.
+      if (!demo && (command.action === "mark_all_read" || headBusy.current || moreBusy.current)) readHead(false);
       if (command.action === "mark_all_read") setNotice(answer.result.unread_count === 0 ? "Toutes les notifications sont marquées comme lues." : "Notifications marquées comme lues.");
     } catch (error) { if (same()) setItemError({ id: key, message: error instanceof Error && error.message ? error.message : "Le marquage n’a pas pu être effectué." }); }
     finally {
