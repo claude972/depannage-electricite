@@ -153,3 +153,13 @@ Propriété exclusive route sites/[id]/records, lib/features/site-records, tests
 ### CLI-05 / SYS-08 — libellés des coordonnées à la confirmation
 
 Claude vérifie la confirmation de réservation. Dans l’éditeur de coordonnées, le message d’erreur placé dans le libellé modifie le nom accessible du champ Téléphone. Réutiliser `Field` pour associer le libellé et le message séparément. Conserver validation, valeurs, apparence et soumission. Vérifier les noms accessibles avant et après correction du téléphone, le focus clavier et l’absence de requête tant que le contact est invalide.
+
+### ADM-03 / ADM-07 — sélection et messages du dossier administrateur
+
+Claude possède `admin-space.tsx` et les composants de ce parcours. Le sélecteur de réaffectation utilise l’annuaire serveur des artisans approuvés et sa pagination. Le fil d’un dossier réutilise la lecture paginée des messages, autorisée par la politique existante qui appelle `can_access_intervention`. Conserver le composeur, la réaffectation et les refus serveur. Effacer la sélection et les données au changement de dossier ou de session. Tester un artisan hors des 100 derniers et un ancien fil avec réponse, état vide, erreur et refus. La vérification locale utilise des données de test. L’activation du compte propriétaire reste différée.
+
+### ENT-12 — retrouver et décider une approbation ancienne
+
+Astra possède les lectures paginée et ponctuelle des approbations d’entreprise, sous RLS, dans `app/api/enterprise/approvals` et `lib/features/enterprise-approvals`. Périmètre organisation et site éventuel, filtre de statut, curseur et projection minimale. La lecture exacte inclut le devis et le site concernés et la règle utile à l’action. Aucune modification des politiques ou de la commande de décision. Vérifier une approbation en attente au-delà de 200, un dossier au-delà de 100, les statuts, le retrait de droit et le cloisonnement des organisations.
+
+Claude possède le raccordement des deux vues entreprise après publication du contrat. Présenter la liste et le détail serveur dans l’organisation active. Conserver l’action existante et relire après décision, avec les états de chargement, vide, refus et reprise. Les droits du serveur gouvernent les actions et les données de démonstration restent isolées.
