@@ -5432,6 +5432,7 @@ function MessagesView({ c }: { c: Ctx }) {
             return Boolean(row && c.authority.canWriteSite(row.site_id));
           }}
           readOnlyReason={c.authority.readOnlyReason || undefined}
+          context={session.mutationContext}
         />
       ) : (
         <Empty icon="message" title="Aucune conversation" action={

@@ -9,6 +9,7 @@ import {
   fetchHistoryPage,
   historyKey,
   initialHistory,
+  mergeMessages,
   clearSentDraft,
   draftText,
   offersOlder,
@@ -30,6 +31,7 @@ import {
   type DocumentHistoryState,
 } from "./document-history";
 import { Icon } from "./icons";
+import { PHOTO_CAPTION_MAX, PHOTO_COPY, newSendId, openPhoto, sendPhotoMessage, uploadPhoto, type PhotoCommand, type PhotoFetch } from "./message-photo";
 import { TAX_RATE_HINT, TAX_RATE_OPTIONS, TAX_RATE_PLACEHOLDER, TAX_RATE_REQUIRED, parseTaxRateInput, type TaxRate } from "./tax-rate";
 import { Empty, Field, ConfirmAction, Unavailable } from "./ui";
 import { ReviewEstimate } from "../features/indicative-prices/indicative-range";
@@ -759,6 +761,8 @@ export function MessageCenter({
   fetchHistory = browserFetch,
   canSend,
   readOnlyReason,
+  context,
+  photoFetch = browserFetch,
 }: {
   interventions: Intervention[];
   messages: Message[];
@@ -775,6 +779,11 @@ export function MessageCenter({
   canSend?: (id: string) => boolean;
   /** Short reason shown instead of the compose box when canSend is false. */
   readOnlyReason?: string;
+  /** Session mutation context (uid + generation): identity fence of the photo upload / send /
+   *  opening. Without it (or outside live mode) no photo is uploaded, sent or opened. */
+  context?: PhotoContext;
+  /** Test seam for the photo requests (upload, send, open). */
+  photoFetch?: PhotoFetch;
 }) {
   const [picked, setId] = useState(selectedId || interventions[0]?.id || "");
   // The open dossier follows the selectedId prop (hash #messages/A → #messages/B in the same
@@ -802,7 +811,13 @@ export function MessageCenter({
   const unavailable = history.enabled && h.status === "not_found";
   // Live: the preview never pre-fills older history (see visibleHistoryMessages). Demo: unchanged,
   // every workspace message of the dossier (no history exists there).
-  const rows = unavailable ? [] : history.enabled ? visibleHistoryMessages(id, messages, h.pages) : messages.filter((m) => m.intervention_id === id);
+  // Photo messages confirmed by their 201 are merged at once (dedup by id), no manual reload.
+  const [sentPhotos, setSentPhotos] = useState<{ key: string; message: Message }[]>([]);
+  const photoCommands = useRef(new Map<string, PhotoDraft>());
+  const photos = live && Boolean(context);
+  const rows = unavailable
+    ? []
+    : mergeMessages(id, history.enabled ? visibleHistoryMessages(id, messages, h.pages) : messages.filter((m) => m.intervention_id === id), sentPhotos.filter((x) => x.key === threadKey).map((x) => x.message));
   const firstLoad = history.enabled && !h.loaded && (h.status === "idle" || h.status === "loading");
   return (
     <section className="panel messages-layout">
@@ -885,7 +900,8 @@ export function MessageCenter({
                     <span>
                       {messageAuthorLabel(m.author_id, target, role, profileId)}
                     </span>
-                    <p>{m.body}</p>
+                    {m.body && <p>{m.body}</p>}
+                    {m.attachment_id && (photos && context ? <PhotoView key={`${threadKey}|${m.id}`} messageId={m.id} context={context} fetchImpl={photoFetch} /> : <p className="form-note">Photo jointe</p>)}
                     <small>{date(m.created_at)}</small>
                   </div>
                 ))
@@ -938,10 +954,200 @@ export function MessageCenter({
               </button>
             </form>
             )}
+            {!unavailable && writable && photos && context && (
+              <PhotoCompose
+                key={`${threadKey}|${context.generation()}`}
+                interventionId={id}
+                context={context}
+                fetchImpl={photoFetch}
+                store={photoCommands.current}
+                storeKey={`${threadKey}|${context.generation()}`}
+                onSent={(message) => setSentPhotos((list) => (list.some((x) => x.message.id === message.id) ? list : [...list, { key: threadKey, message }]))}
+              />
+            )}
           </>
         )}
       </div>
     </section>
+  );
+}
+// ---- Photo in a conversation (SYS-04 / M62) -------------------------------------------------
+type PhotoContext = { generation(): number; userId(): string | null };
+type PhotoPhase = "ready" | "uploading" | "upload_unknown" | "sending" | "send_retry" | "collision" | "refused" | "signed_out" | "unavailable" | "done";
+/** One photo send of ONE identity + generation + dossier: the confirmed document and the frozen
+ *  command are kept for an identical replay (same send id), in memory only. */
+type PhotoDraft = { file: File | null; caption: string; sendId: string; documentId: string | null; command: PhotoCommand | null; phase: PhotoPhase; error: string };
+
+function PhotoCompose({ interventionId, context, fetchImpl, store, storeKey, onSent }: { interventionId: string; context: PhotoContext; fetchImpl: PhotoFetch; store: Map<string, PhotoDraft>; storeKey: string; onSent: (message: Message) => void }) {
+  const [draft, setDraftState] = useState<PhotoDraft | null>(() => store.get(storeKey) ?? null);
+  const [pickError, setPickError] = useState("");
+  const draftRef = useRef(draft);
+  const put = (next: PhotoDraft | null) => {
+    draftRef.current = next;
+    if (next && next.phase !== "done") store.set(storeKey, next);
+    else store.delete(storeKey);
+    setDraftState(next);
+  };
+  const inFlight = useRef(false);
+  const alive = useRef(false);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  const fileInput = useRef<HTMLInputElement | null>(null);
+  const pick = (file: File | undefined) => {
+    if (!file) return;
+    const invalid = validateUpload(file, PHOTO_TYPES);
+    if (invalid) return setPickError(invalid);
+    const sendId = newSendId();
+    if (!sendId) return setPickError(PHOTO_COPY.noUuid);
+    setPickError("");
+    put({ file, caption: "", sendId, documentId: null, command: null, phase: "ready", error: "" });
+  };
+  const run = async () => {
+    const d = draftRef.current;
+    if (!d || inFlight.current) return;
+    inFlight.current = true;
+    // Identity + generation + dossier captured now, re-checked after every await.
+    const uid = context.userId(), gen = context.generation();
+    const same = () => alive.current && context.userId() === uid && context.generation() === gen;
+    try {
+      let documentId = d.documentId;
+      if (!documentId) {
+        if (!d.file) return;
+        put({ ...d, phase: "uploading", error: "" });
+        const up = await uploadPhoto(d.file, interventionId, fetchImpl);
+        if (!same()) return; // stale: nothing applied
+        if (up.kind === "unknown") return put({ ...d, phase: "upload_unknown", error: up.message });
+        if (up.kind === "failed") return put({ ...d, phase: "ready", error: up.message });
+        documentId = up.documentId;
+      }
+      // The command is frozen once (stable id, confirmed document, caption): a replay is identical.
+      const current = draftRef.current ?? d;
+      const command: PhotoCommand = current.command ?? { id: current.sendId, intervention_id: interventionId, document_id: documentId, body: current.caption.trim().slice(0, PHOTO_CAPTION_MAX) };
+      put({ ...current, documentId, command, phase: "sending", error: "" });
+      const out = await sendPhotoMessage(fetchImpl, command);
+      if (!same()) return;
+      const after = draftRef.current ?? { ...current, documentId, command };
+      if (out.kind === "ok") {
+        onSent(out.message);
+        return put({ ...after, phase: "done", error: "" });
+      }
+      if (out.kind === "retry") return put({ ...after, phase: "send_retry", error: PHOTO_COPY.sendRetry });
+      if (out.kind === "collision") return put({ ...after, phase: "collision", error: PHOTO_COPY.collision });
+      if (out.kind === "signed_out") return put({ ...after, phase: "signed_out", error: PHOTO_COPY.signedOut });
+      if (out.kind === "unavailable") return put({ ...after, phase: "unavailable", error: PHOTO_COPY.unavailable });
+      return put({ ...after, phase: "refused", error: out.message });
+    } finally {
+      inFlight.current = false;
+    }
+  };
+  const busy = draft?.phase === "uploading" || draft?.phase === "sending";
+  const frozen = Boolean(draft?.command);
+  return (
+    <div className="message-photo" data-message-photo={draft?.phase ?? "idle"}>
+      {(!draft || draft.phase === "done") && (
+        <>
+          <label className="button outline">
+            <Icon name="camera" />
+            {PHOTO_COPY.attach}
+            <input
+              ref={fileInput}
+              className="sr-only"
+              type="file"
+              accept={PHOTO_TYPES.join(",")}
+              onChange={(e) => {
+                pick(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          {draft?.phase === "done" && <p role="status" data-message-photo-done="">{PHOTO_COPY.done}</p>}
+          {pickError && <p className="field-error" role="alert">{pickError}</p>}
+        </>
+      )}
+      {draft && draft.phase !== "done" && (
+        <div className="inline-note" role="group" aria-label="Photo à envoyer">
+          <p>
+            <strong>{draft.file?.name ?? "Photo"}</strong>
+            {draft.documentId ? " · enregistrée" : ""}
+          </p>
+          <Field label={PHOTO_COPY.caption}>
+            <textarea
+              rows={2}
+              maxLength={PHOTO_CAPTION_MAX}
+              value={draft.command ? draft.command.body : draft.caption}
+              disabled={frozen || busy}
+              onChange={(e) => put({ ...draft, caption: e.target.value })}
+            />
+          </Field>
+          {busy && <p role="status">{draft.phase === "uploading" ? PHOTO_COPY.uploading : PHOTO_COPY.sending}</p>}
+          {draft.error && <p className="field-error" role="alert" data-message-photo-error={draft.phase}>{draft.error}</p>}
+          <div className="form-actions">
+            {draft.phase === "ready" && (
+              <button type="button" className="button primary" onClick={() => void run()} disabled={busy}>
+                {PHOTO_COPY.send}
+              </button>
+            )}
+            {draft.phase === "upload_unknown" && (
+              // Explicit action only: a new upload (the first one may exist).
+              <button type="button" className="button primary" onClick={() => void run()}>
+                {PHOTO_COPY.reupload}
+              </button>
+            )}
+            {draft.phase === "send_retry" && (
+              <button type="button" className="button primary" onClick={() => void run()}>
+                {PHOTO_COPY.retrySend}
+              </button>
+            )}
+            <button type="button" className="button outline" disabled={busy} onClick={() => put(null)}>
+              {PHOTO_COPY.cancel}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Opens one photo on demand: a short-lived signed URL kept in memory while shown, never stored. */
+function PhotoView({ messageId, context, fetchImpl }: { messageId: string; context: PhotoContext; fetchImpl: PhotoFetch }) {
+  const [state, setState] = useState<{ phase: "idle" | "opening" | "open" | "error"; url: string; error: string }>({ phase: "idle", url: "", error: "" });
+  const alive = useRef(false);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  const open = async () => {
+    if (state.phase === "opening") return;
+    const uid = context.userId(), gen = context.generation();
+    setState({ phase: "opening", url: "", error: "" });
+    const out = await openPhoto(fetchImpl, messageId);
+    if (!alive.current || context.userId() !== uid || context.generation() !== gen) return;
+    if (out.kind === "ok") return setState({ phase: "open", url: out.url, error: "" });
+    setState({ phase: "error", url: "", error: out.kind === "gone" ? PHOTO_COPY.openGone : out.kind === "signed_out" ? PHOTO_COPY.signedOut : PHOTO_COPY.openFailed });
+  };
+  return (
+    <div className="message-photo-view" data-message-photo-view={state.phase}>
+      {state.phase === "open" ? (
+        <>
+          <img src={state.url} alt="Photo jointe au message" style={{ display: "block", maxWidth: "100%", height: "auto", borderRadius: 8 }} />
+          <button type="button" className="text-button" onClick={() => setState({ phase: "idle", url: "", error: "" })}>
+            {PHOTO_COPY.close}
+          </button>
+        </>
+      ) : (
+        <button type="button" className="text-button" onClick={() => void open()} disabled={state.phase === "opening"}>
+          <Icon name="camera" size={16} />
+          {state.phase === "opening" ? PHOTO_COPY.opening : PHOTO_COPY.open}
+        </button>
+      )}
+      {state.phase === "error" && <p className="field-error" role="alert">{state.error}</p>}
+    </div>
   );
 }
 export function SiteForm({

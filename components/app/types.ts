@@ -96,6 +96,8 @@ export type Message = {
   author_id: string;
   body: string;
   created_at: string;
+  /** SYS-04 / M62: private photo (document id) of a photo message; null or absent for text. */
+  attachment_id?: string | null;
 };
 export type Profile = {
   id: string;
