@@ -11,3 +11,14 @@ content_path = "./supabase/templates/confirmation.html"
 [auth.email.template.recovery]
 subject = "Réinitialisez votre mot de passe"
 content_path = "./supabase/templates/recovery.html"
+
+# Phone verification is activated for the provider recipe in the dedicated environment.
+[auth.sms]
+enable_signup = false
+enable_confirmations = false
+
+[auth.sms.vonage]
+enabled = false
+api_key = "env(SUPABASE_AUTH_SMS_VONAGE_API_KEY)"
+api_secret = "env(SUPABASE_AUTH_SMS_VONAGE_API_SECRET)"
+from = "env(SUPABASE_AUTH_SMS_VONAGE_FROM)"
