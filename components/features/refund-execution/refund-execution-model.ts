@@ -213,8 +213,9 @@ export function applyExecute(s: RxState, r: RxResult, cmd: RxCommand): { state: 
   if (r.status === 409) return { state: { ...base, pending: null, conflict: RX_COPY.conflict, notice: "" }, reload: false };
   if (r.status === 503 || r.status === REFUND_EXEC_TIMEOUT || r.status === 0 || r.status >= 500)
     return { state: { ...base, pending: cmd, writeError: RX_COPY.retry, notice: "" }, reload: false };
-  if (r.status === 401 || r.status === 403) return { state: { ...base, pending: null, writeError: RX_COPY.session }, reload: false };
-  if (r.status === 404) return { state: { ...base, pending: null, writeError: RX_COPY.notFound }, reload: false };
+  // A refused right or resource is never retried blindly: re-read rights + resource first (E50).
+  if (r.status === 401 || r.status === 403) return { state: { ...base, pending: null, writeError: RX_COPY.session }, reload: true };
+  if (r.status === 404) return { state: { ...base, pending: null, writeError: RX_COPY.notFound }, reload: true };
   return { state: { ...base, pending: null, writeError: RX_COPY.invalid }, reload: false };
 }
 
