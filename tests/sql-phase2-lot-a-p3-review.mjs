@@ -43,3 +43,43 @@ test("E18 — retrying the same work report after response loss returns the orig
     await db.close();
   }
 });
+
+test("E36 — an exact suspension retry succeeds after response loss with just one audit", async () => {
+  const db = await freshDatabase();
+  try {
+    await db.query("insert into auth.users(id,email) values($1,$2)", [actor.id, actor.email]);
+    await db.query("update public.profiles set role='admin' where id=$1", [actor.id]);
+    await db.query("insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3)", [
+      requester.id, requester.email, { role: "artisan", full_name: "Artisan de recette" },
+    ]);
+    await asUser(db, requester, "select public.save_artisan_profile('Electricité QA','12345678901234','EI',0,'12 rue de test QA',array['97200'],array['panel']) v");
+    await asUser(db, requester, "select public.submit_artisan_application() v");
+    const revision = async () => (await db.query(
+      "select application_version from public.artisan_profiles where user_id=$1", [requester.id],
+    )).rows[0].application_version;
+    await withNext(db, async http => {
+      const post = command => http("/api/admin/artisans", {
+        method: "POST", body: JSON.stringify({ user_id: requester.id, ...command }),
+      });
+      const approval = { action: "approve", expected_version: await revision() };
+      const keyed = await post({ ...approval, command_id: randomUUID() });
+      assert.equal((keyed.ok ? keyed : await post(approval)).status, 200);
+      const suspension = { action: "suspend", expected_version: await revision() };
+      const body = keyed.ok ? { ...suspension, command_id: randomUUID() } : suspension;
+      const first = await post(body);
+      const firstResult = await first.json();
+      assert.equal(first.status, 200);
+      const afterFirst = await revision();
+      const retry = await post(body); // first response deliberately not used to change the command
+      const count = (await db.query("select count(*)::int n from public.audit_log where action=$1", [
+        `artisan_approval:${requester.id}:false`,
+      ])).rows[0].n;
+      assert.deepEqual([keyed.status, retry.status, await revision(), count], [200, 200, afterFirst, 1]);
+      assert.deepEqual(await retry.json(), firstResult);
+      assert.equal((await post({ ...body, expected_version: afterFirst })).status, 409);
+      assert.equal((await post(suspension)).status, 422);
+    }, {}, { rpcAllowlist: new Set(["decide_artisan_application"]) });
+  } finally {
+    await db.close();
+  }
+});

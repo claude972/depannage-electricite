@@ -3,6 +3,7 @@ import { authenticatedClient, apiError, assertOrigin, ApiError, dbError } from "
 import { uuid, validated } from "@/lib/supabase/validation";
 const schema = z.object({
   user_id: uuid,
+  command_id: uuid,
   action: z.enum(["approve", "request_changes", "suspend", "reinstate"]),
   expected_version: z.number().int().min(0).max(2147483646),
 }).strict();
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
     assertOrigin(request);
     const { db } = await authenticatedClient();
     const data = await validated(request, schema);
-    const { error } = await db.rpc("decide_artisan_application", { p_user_id: data.user_id, p_action: data.action, p_expected_version: data.expected_version });
+    const { error } = await db.rpc("decide_artisan_application", { p_user_id: data.user_id, p_action: data.action, p_expected_version: data.expected_version, p_command_id: data.command_id });
     if (error?.code === "P0001" && error.message === "A complete submitted application is required for approval or reinstatement")
       throw new ApiError(422, "Un dossier complet et soumis est requis pour approuver ou réactiver cet artisan.");
     dbError(error);

@@ -32,7 +32,7 @@ const saveEntry='select public.save_planning_entry($1,$2,$3,$4,$5,$6,$7,$8) as v
 const planning='select public.artisan_planning($1,$2) as v';
 for(const actor of['artisan','otherArtisan','freshArtisan']){
  await as(actor,"select public.save_artisan_profile('Entreprise QA','12345678901234','EI',0,'12 rue du Test',array['97200'],array['panel'])");
- await as(actor,'select public.submit_artisan_application()');await as('admin','select public.decide_artisan_application($1,\'approve\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0))',[ids[actor]]);await as(actor,'select public.set_artisan_availability(true)');
+ await as(actor,'select public.submit_artisan_application()');await as('admin','select public.decide_artisan_application($1,\'approve\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0),gen_random_uuid())',[ids[actor]]);await as(actor,'select public.set_artisan_availability(true)');
 }
 // ---- recurring rules: idempotent creation, optimistic update, validation, privacy -----------
 let r=await scalar('otherArtisan',saveRule,[req(1),null,1,480,720,'America/Martinique','2026-01-05',null,null]);
@@ -140,12 +140,12 @@ await as('freshArtisan',"select public.intervention_action($1,'accept_mission')"
 const nothing=await scalar('otherClient',slots,[job4,at(0),at(24)]);assert.equal(nothing.availability_declared,false);assert.deepEqual(nothing.slots,[]);
 console.log('PASS: free slots are served only to dossier parties as bare intervals, never titles/notes/other dossiers; unassigned or oversized requests refused; undeclared availability stated honestly');
 // ---- suspension keeps reading, blocks writing; approval guard reused ----------------------------
-await as('admin','select public.decide_artisan_application($1,\'suspend\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0))',[ids.otherArtisan]);
+await as('admin','select public.decide_artisan_application($1,\'suspend\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0),gen_random_uuid())',[ids.otherArtisan]);
 await denied(as('otherArtisan',saveRule,[req(30),null,2,480,720,'America/Martinique',null,null,null]),'42501');
 await denied(as('otherArtisan',saveEntry,[req(31),null,'busy','2026-11-10T12:00:00Z','2026-11-10T13:00:00Z','','',null]),'42501');
 await denied(as('otherArtisan','select public.delete_availability_rule($1,2)',[ruleId]),'42501');
 view=await week('2026-11-02T04:00:00Z','2026-11-09T04:00:00Z');assert.equal(view.permissions.can_edit,false);assert.ok(view.permissions.reason.length>10);assert.equal(view.rules.length,1);
-await as('admin','select public.decide_artisan_application($1,\'reinstate\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0))',[ids.otherArtisan]);
+await as('admin','select public.decide_artisan_application($1,\'reinstate\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0),gen_random_uuid())',[ids.otherArtisan]);
 assert.equal((await week('2026-11-02T04:00:00Z','2026-11-09T04:00:00Z')).permissions.can_edit,true);
 await as('otherArtisan','select public.set_artisan_availability(true)');
 console.log('PASS: a suspended artisan keeps reading the planning but every write is refused by the reused suspension guard until explicit reinstatement');
@@ -221,9 +221,9 @@ console.log('PASS: approval requests reach the organisation owner, decisions rea
 // ---- account approval, support replies, preferences, read/unread -----------------------------
 await as('otherClient',"select public.intervention_action($1,'cancel')",[job4]);
 assert.deepEqual((await mine('freshArtisan')).map(x=>x.kind),['mission_cancelled']);
-await as('admin','select public.decide_artisan_application($1,\'suspend\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0))',[ids.freshArtisan]);
+await as('admin','select public.decide_artisan_application($1,\'suspend\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0),gen_random_uuid())',[ids.freshArtisan]);
 assert.deepEqual((await mine('freshArtisan')).map(x=>x.kind),['mission_cancelled','account_suspended']);
-await as('admin','select public.decide_artisan_application($1,\'reinstate\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0))',[ids.freshArtisan]);
+await as('admin','select public.decide_artisan_application($1,\'reinstate\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0),gen_random_uuid())',[ids.freshArtisan]);
 assert.deepEqual((await mine('freshArtisan')).map(x=>x.kind),['mission_cancelled','account_suspended','account_approved']);
 await as('freshArtisan',"select public.save_artisan_profile('Entreprise QA 2','12345678901234','EI',0,'12 rue du Test',array['97200'],array['panel'])");
 assert.equal((await mine('freshArtisan')).length,3);

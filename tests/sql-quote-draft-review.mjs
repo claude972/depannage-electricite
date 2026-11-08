@@ -36,7 +36,7 @@ async function rejectsCode(promise,code) { await assert.rejects(promise,error=>e
 for(const actor of ['artisan','otherArtisan']) {
  await as(actor,"select public.save_artisan_profile('Entreprise QA','12345678901234','EI',0,'12 rue du Test',array['97200'],array['panel'])");
  await as(actor,'select public.submit_artisan_application()');
- await as('admin','select public.decide_artisan_application($1,\'approve\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0))',[ids[actor]]);
+ await as('admin','select public.decide_artisan_application($1,\'approve\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0),gen_random_uuid())',[ids[actor]]);
  await as(actor,'select public.set_artisan_availability(true)');
 }
 async function newJob(actor='client',site=null) {
@@ -104,10 +104,10 @@ assert.equal((await as('artisan','select * from public.quote_drafts where interv
 console.log('PASS: external sent-version changes conflict, and accepted quotes cannot be changed or drafted over');
 const suspendedJob=await newJob();let suspended=await draft('artisan',suspendedJob,'load');
 suspended=await draft('artisan',suspendedJob,'save',{version:0,token:suspended.assignment_token,lines,tax:20});
-await as('admin','select public.decide_artisan_application($1,\'suspend\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0))',[ids.artisan]);
+await as('admin','select public.decide_artisan_application($1,\'suspend\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0),gen_random_uuid())',[ids.artisan]);
 for(const action of ['load','save','discard','send']) await rejectsCode(draft('artisan',suspendedJob,action,{version:1,token:suspended.assignment_token,lines,tax:20}),'42501');
 assert.equal((await as('artisan','select * from public.quote_drafts where intervention_id=$1',[suspendedJob])).rows.length,0);
-await as('admin','select public.decide_artisan_application($1,\'reinstate\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0))',[ids.artisan]);
+await as('admin','select public.decide_artisan_application($1,\'reinstate\',coalesce((select application_version from public.artisan_profiles where user_id=$1),0),gen_random_uuid())',[ids.artisan]);
 assert.equal((await draft('artisan',suspendedJob,'load')).version,1);
 assert.equal((await db.query('select available from public.artisan_profiles where user_id=$1',[ids.artisan])).rows[0].available,false);
 await as('artisan','select public.set_artisan_availability(true)');

@@ -125,7 +125,7 @@ test("E34 — an old approval cannot undo a later suspension; reactivation is ex
     const route = "/api/admin/artisans";
     await withNext(db, async http => {
       const post = async (user, body) => {
-        const response = await http(route, { method: "POST", body: JSON.stringify({ user_id: requester.id, ...body }) }, user);
+        const response = await http(route, { method: "POST", body: JSON.stringify({ user_id: requester.id, ...("action" in body ? { command_id: randomUUID() } : {}), ...body }) }, user);
         return { status: response.status, body: await response.json() };
       };
       const first = await post(actor, { action: "approve", expected_version: old.version ?? 1 });

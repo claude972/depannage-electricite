@@ -34,7 +34,7 @@ begin
  foreach artisan in array array[${q(ids.artisan)}::uuid,former] loop
   perform pg_temp.t_as(artisan,'select public.save_artisan_profile(''QA tracking'',''12345678901234'',''EI'',0,''12 rue du Test'',array[''97200''],array[''panel''])');
   perform pg_temp.t_as(artisan,'select public.submit_artisan_application()');
-  perform pg_temp.t_as(admin,format('select public.decide_artisan_application(%L::uuid,''approve'',(select application_version from public.artisan_profiles where user_id=%L::uuid))',artisan,artisan));
+  perform pg_temp.t_as(admin,format('select public.decide_artisan_application(%L::uuid,''approve'',(select application_version from public.artisan_profiles where user_id=%L::uuid),gen_random_uuid())',artisan,artisan));
  end loop; artisan=${q(ids.artisan)};
  a=pg_temp.t_as(client,'select to_jsonb(i) from public.create_intervention(''panel'',''Panne électrique QA GPS'',''12 rue du Test'',''97200'',''Fort-de-France'',''scheduled'',null) i');job=(a->>'id')::uuid;
  update public.interventions set artisan_id=artisan,status='accepted' where id=job;
@@ -84,7 +84,7 @@ begin
  perform pg_temp.t_deny(artisan,format('select public.tracking_command(%L::uuid,''point'',%s,%L::jsonb)',job,v,point),'42501','former assignee cannot send');
  s=pg_temp.t_as(former,format('select public.tracking_snapshot(%L::uuid)',job));v=(s->'tracking'->>'control_version')::integer;
  s=pg_temp.t_as(former,format('select public.tracking_command(%L::uuid,''start'',%s,%L::jsonb)',job,v,jsonb_build_object('session_id',sid,'consent',true,'consent_policy','tracking-v1')));
- perform pg_temp.t_as(admin,format('select public.decide_artisan_application(%L::uuid,''suspend'',(select application_version from public.artisan_profiles where user_id=%L::uuid))',former,former));
+ perform pg_temp.t_as(admin,format('select public.decide_artisan_application(%L::uuid,''suspend'',(select application_version from public.artisan_profiles where user_id=%L::uuid),gen_random_uuid())',former,former));
  perform pg_temp.t_check((select not shared and latitude is null and session_id is null from public.intervention_tracking where intervention_id=job),'suspension trigger physically invalidates');
  v=(s->'tracking'->>'control_version')::integer;
  perform pg_temp.t_deny(former,format('select public.tracking_command(%L::uuid,''point'',%s,%L::jsonb)',job,v,point),'42501','suspended point denied');
