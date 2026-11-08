@@ -82,6 +82,7 @@ import { UploadQueuePanel } from "../app/upload-queue";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
 import { AccountDataPanel } from "../features/account-data/account-data-panel";
 import { SEARCH_COPY, rowsSignal, toListRows, useRequestsSearch } from "../features/requests-search/use-requests-search";
+import { QUOTES_COPY, useRecipientQuote, useRecipientQuotes, type QuoteFilter } from "../features/recipient-quotes/use-recipient-quotes";
 import { ClientAddressesPanel, usePreferredAddress } from "../features/client-addresses/client-addresses-panel";
 import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
 import { AppointmentReminderPanel } from "../features/appointment-reminders/appointment-reminder-panel";
@@ -194,7 +195,7 @@ function quoteStatusLabel(q: Quote) {
         ? "Envoyé, à valider"
         : q.status;
 }
-function recapText(q: Quote, i: Intervention | undefined, demo: boolean) {
+function recapText(q: Quote, i: Pick<Intervention, "id" | "category"> | undefined, demo: boolean) {
   return [
     demo ? "DÉMONSTRATION — AUCUNE VALEUR CONTRACTUELLE" : "",
     `RÉCAPITULATIF DU DEVIS ${quoteRef(q.id)} (texte, pas une facture)`,
@@ -1749,7 +1750,8 @@ function AppointmentForm({
 }
 
 // ---- Devis (V8-C06) -----------------------------------------------------------------
-function QuoteView({
+/** Exported for tests only (live exact quote read). */
+export function QuoteView({
   session,
   rows,
   quoteId,
@@ -1758,13 +1760,49 @@ function QuoteView({
   rows: Intervention[];
   quoteId: string;
 }) {
-  const quote = session.data.quotes.find((q) => q.id === quoteId);
-  const i = quote ? rows.find((x) => x.id === quote.intervention_id) : undefined;
+  // Live (CLI-08): the EXACT quote by id from GET /api/quotes/<id> (deep link, old versions outside
+  // the caches); no substitute, no cache fallback. Demo: cache path unchanged, zero call.
+  const live = session.mode === "live";
+  const point = useRecipientQuote({ enabled: live, context: session.mutationContext, quoteId, scope: null });
+  const server = live && point.state.phase === "ready" ? point.state.data : null;
+  const cachedQuote = session.data.quotes.find((q) => q.id === quoteId);
+  const cachedI = cachedQuote ? rows.find((x) => x.id === cachedQuote.intervention_id) : undefined;
+  const quote: Quote | undefined = live ? (server ? (server.quote as unknown as Quote) : undefined) : cachedQuote;
+  const i: Pick<Intervention, "id" | "category" | "status" | "artisan_id"> | undefined = live
+    ? server
+      ? { id: server.intervention.id, category: server.intervention.category, status: server.intervention.status, artisan_id: server.quote.artisan_id }
+      : undefined
+    : cachedI;
   const demo = session.mode === "demo";
   const { ops } = useOperations(session, i?.id || "", `${i?.status || ""}|${session.mode}`);
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState("");
+  if (live && point.state.phase !== "ready")
+    return (
+      <section className="panel" data-quote-point={point.state.phase}>
+        {point.state.phase === "loading" || point.state.phase === "idle" ? (
+          <p className="muted" role="status">{QUOTES_COPY.loadingOne}</p>
+        ) : point.state.phase === "forbidden" ? (
+          <Empty
+            icon="document"
+            title="Devis introuvable"
+            action={
+              <button type="button" className="button primary" onClick={() => session.go("documents")}>
+                Voir mes documents
+              </button>
+            }
+          >
+            {point.state.error}
+          </Empty>
+        ) : (
+          <div role="alert">
+            <p>{point.state.error}</p>
+            <button type="button" className="button outline" onClick={() => point.retry()}>Réessayer</button>
+          </div>
+        )}
+      </section>
+    );
   if (!quote || !i)
     return (
       <Empty
@@ -1779,10 +1817,26 @@ function QuoteView({
         Ce devis n’existe pas dans votre espace ou son lien n’est plus valide.
       </Empty>
     );
-  const current = pickQuote(session.data.quotes, i.id);
-  const decision = quoteDecisionState(quote, current, i.status);
+  // Actions: the EXISTING guard only (cached quote + dossier, unchanged rule). Live additionally
+  // requires the server to read this exact quote as « sent » — is_current never enables anything.
+  const guarded = cachedQuote && cachedI ? quoteDecisionState(cachedQuote, pickQuote(session.data.quotes, cachedI.id), cachedI.status) : null;
+  const current = live ? undefined : pickQuote(session.data.quotes, i.id);
+  const decision = live
+    ? guarded === "active" && quote.status === "sent"
+      ? "active"
+      : quote.status === "accepted"
+        ? "accepted"
+        : quote.status === "rejected" || !server!.version.is_current
+          ? "superseded"
+          : "closed"
+    : quoteDecisionState(quote, current, i.status);
   const isActive = decision === "active";
   const superseded = decision === "superseded";
+  const currentId = live ? server!.version.current_quote_id : current?.id ?? null;
+  const refreshAfter = () => {
+    // Server-confirmed action: re-read the exact quote (no local patch).
+    if (live) point.refresh();
+  };
   const artisan = ops?.participants.find((p) => p.role === "artisan");
 
   return (
@@ -1810,11 +1864,12 @@ function QuoteView({
           <Icon name="info" />
           <span>
             Cette version n’est plus active.{" "}
-            {current && current.id !== quote.id ? (
+            {currentId && currentId !== quote.id ? (
               <button
                 type="button"
                 className="text-button"
-                onClick={() => session.go("quote", current.id)}
+                onClick={() => session.go("quote", currentId)}
+                data-quote-current={currentId}
               >
                 Voir la version actuelle
               </button>
@@ -1916,9 +1971,7 @@ function QuoteView({
             type="button"
             className="button primary large"
             disabled={session.busy}
-            onClick={() =>
-              void session.action(i.id, "accept_quote", { quote_id: quote.id })
-            }
+            onClick={() => void session.action(i.id, "accept_quote", { quote_id: quote.id }).then(refreshAfter)}
           >
             <Icon name="check" />
             {session.busy ? "Enregistrement…" : "Accepter le devis"}
@@ -1940,8 +1993,12 @@ function QuoteView({
           {quote.status === "accepted"
             ? `Devis accepté${quote.accepted_at ? ` le ${dateTime(quote.accepted_at)}` : ""}. Il sert de base au règlement après intervention.`
             : superseded
-              ? "Ce devis ne peut plus être accepté ni refusé."
-              : "Ce devis n’attend plus de décision de votre part."}
+              ? live
+                ? QUOTES_COPY.readOnly
+                : "Ce devis ne peut plus être accepté ni refusé."
+              : live && quote.status === "sent"
+                ? QUOTES_COPY.openDossierToAct
+                : "Ce devis n’attend plus de décision de votre part."}
         </p>
       )}
       {rejecting && isActive && (
@@ -1958,6 +2015,7 @@ function QuoteView({
             setReasonError("");
             void session
               .operate(i.id, { action: "reject_quote", quote_id: quote.id, reason: reason.trim() })
+              .finally(refreshAfter)
               .then((saved) => {
                 if (saved) {
                   setRejecting(false);
@@ -2026,7 +2084,13 @@ function QuoteView({
 }
 
 // ---- Documents ------------------------------------------------------------------------
-function DocumentsView({ session, rows }: { session: Session; rows: Intervention[] }) {
+/** Exported for tests only (live quotes list). */
+export function DocumentsView({ session, rows }: { session: Session; rows: Intervention[] }) {
+  // Live (CLI-08): the quotes list comes from GET /api/quotes (every quote of this client, paginated,
+  // status filter), not from the loaded window. Demo: cache list unchanged, zero call.
+  const live = session.mode === "live";
+  const [quoteFilter, setQuoteFilter] = useState<QuoteFilter>("all");
+  const server = useRecipientQuotes({ enabled: live, context: session.mutationContext, status: quoteFilter });
   const ids = new Set(rows.map((i) => i.id));
   const quotes = session.data.quotes
     .filter((q) => ids.has(q.intervention_id))
@@ -2041,7 +2105,74 @@ function DocumentsView({ session, rows }: { session: Session; rows: Intervention
         <div className="section-heading" style={{ padding: "18px 16px 8px" }}>
           <h2>Devis</h2>
         </div>
-        {quotes.length ? (
+        {live ? (
+          <div data-client-quotes={server.state.phase}>
+            <div style={{ padding: "0 16px 8px" }}>
+              <Segments
+                label="Filtrer les devis"
+                value={quoteFilter}
+                options={[
+                  ["all", "Tous"],
+                  ["sent", "En attente"],
+                  ["accepted", "Acceptés"],
+                  ["rejected", "Refusés"],
+                ]}
+                onChange={setQuoteFilter}
+              />
+            </div>
+            {server.state.phase === "loading" || server.state.phase === "idle" ? (
+              <p className="muted" role="status" style={{ padding: "0 16px 16px" }}>{QUOTES_COPY.loading}</p>
+            ) : server.state.phase === "forbidden" ? (
+              <p className="muted" role="alert" style={{ padding: "0 16px 16px" }}>{server.state.error}</p>
+            ) : server.state.phase === "error" ? (
+              <div role="alert" style={{ padding: "0 16px 16px" }}>
+                <p>{server.state.error}</p>
+                <button type="button" className="button outline" onClick={() => server.retry()}>Réessayer</button>
+              </div>
+            ) : server.state.items.length ? (
+              server.state.items.map((q) => (
+                <div className={styles.docRow} key={q.id} data-client-quote={q.id}>
+                  <span className="service-icon">
+                    <Icon name="document" size={24} />
+                  </span>
+                  <section>
+                    <h3>
+                      {quoteRef(q.id)} — {category(q.intervention.category).label}
+                    </h3>
+                    <p>
+                      {dateTime(q.created_at)} · {money(q.total_cents)} TTC · {q.status === "accepted" ? "Accepté" : q.status === "rejected" ? "Refusé" : "En attente de décision"} · {shortId(q.intervention_id)}
+                    </p>
+                  </section>
+                  <div>
+                    <button type="button" className="button outline" onClick={() => session.go("quote", q.id)}>
+                      Voir le devis
+                    </button>
+                    <button type="button" className="button outline" onClick={() => session.openIntervention(q.intervention_id)}>
+                      Consulter le dossier
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <Empty icon="document" title={quoteFilter === "all" ? "Aucun devis pour le moment" : "Aucun devis pour ce filtre"}>
+                Les devis apparaîtront ici après leur envoi par votre artisan.
+              </Empty>
+            )}
+            {server.state.failed === "more" && (
+              <div role="alert" style={{ padding: "0 16px 16px" }}>
+                <p>{server.state.error}</p>
+                <button type="button" className="button outline" onClick={() => server.retry()}>Réessayer</button>
+              </div>
+            )}
+            {server.state.phase === "ready" && server.state.next && server.state.failed !== "more" && (
+              <div style={{ padding: "0 16px 16px" }}>
+                <button type="button" className="button outline" disabled={server.state.loadingMore} onClick={() => server.more()} data-client-quotes-more="">
+                  {server.state.loadingMore ? "Chargement…" : QUOTES_COPY.more}
+                </button>
+              </div>
+            )}
+          </div>
+        ) : quotes.length ? (
           quotes.map((q) => {
             const i = rows.find((x) => x.id === q.intervention_id);
             return (

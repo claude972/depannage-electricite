@@ -109,6 +109,7 @@ import { SiteDirectLoader } from "../features/site-lifecycle/site-direct";
 import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-panel";
 import { DelegatedPayerCheckout, DelegatedPayerManager } from "../features/delegated-payer/delegated-payer";
 import { REPORT_COPY, reportQuery, useEnterpriseReport } from "../features/enterprise-reports/use-enterprise-report";
+import { QUOTES_COPY, useRecipientQuote } from "../features/recipient-quotes/use-recipient-quotes";
 import { APPROVALS_COPY, useApprovalPoint, useApprovalsList, type ApprovalRow as ServerApproval, type StatusFilter as ApprovalFilter } from "../features/enterprise-approvals/use-enterprise-approvals";
 import { RECORDS_COPY, useSiteRecords, type DueRow, type JobRow } from "../features/site-records/use-site-records";
 import { COUNTS_COPY, ENTERPRISE_SEARCH_COPY, ExportFeedback, PRO_COPY, useEnterpriseSearch, useOverviewCounts, useProfessionalOverview, type EnterpriseSearchFilters } from "../features/enterprise-search/use-enterprise-search";
@@ -489,8 +490,11 @@ export function EnterpriseSpace({ session }: { session: Session }) {
         case "quote": {
           // #quote/<quote id> (deep links, notifications) opens the dossier of THAT quote; an id that
           // is not a loaded quote is treated as a dossier id, as before (unknown ⇒ honest not-found).
+          // Live, outside the caches: the EXACT quote is read by id (organization + site) first.
           const ref = param || session.selectedId;
           const quote = session.data.quotes.find((q) => q.id === ref);
+          if (!quote && session.mode === "live" && !session.data.interventions.some((i) => i.id === ref))
+            return <EnterpriseQuoteView key={ref} c={c} quoteId={ref} />;
           const dossierId = quote ? quote.intervention_id : ref;
           return <DossierView key={`${dossierId}-${quote?.id ?? session.selectedQuoteId}`} c={c} id={dossierId} />;
         }
@@ -3909,6 +3913,105 @@ function ApprovalDetailInner({ c, id }: { c: Ctx; id: string }) {
         </p>
       </section>
     </>
+  );
+}
+
+/** Exact enterprise quote by id (live, outside the caches): GET /api/quotes/<id>?organization_id=&site_id=.
+ *  Read-only: no decision here (the dossier and approvals keep their existing guarded actions);
+ *  `is_current` is information only. A 404 keeps the former meaning of the link (a dossier id). */
+export function EnterpriseQuoteView({ c, quoteId }: { c: Ctx; quoteId: string }) {
+  const { session } = c;
+  const point = useRecipientQuote({ enabled: !c.demo, context: session.mutationContext, quoteId, scope: { org: c.organization?.id ?? null, site: c.activeSite?.id ?? null } });
+  if (!c.organization) return <Empty icon="document" title={QUOTES_COPY.chooseOrg} />;
+  // 404: not a quote of this scope — the link keeps its former meaning (a dossier id), read exactly by DossierView.
+  if (point.state.phase === "forbidden" && point.state.notFound)
+    return <DossierView key={quoteId} c={c} id={quoteId} />;
+  if (point.state.phase !== "ready")
+    return (
+      <section className="panel" data-enterprise-quote={point.state.phase}>
+        {point.state.phase === "loading" || point.state.phase === "idle" ? (
+          <p className={styles.muted} role="status">{QUOTES_COPY.loadingOne}</p>
+        ) : point.state.phase === "forbidden" ? (
+          <p className={styles.muted} role="alert" data-enterprise-quote-inaccessible="">{point.state.error}</p>
+        ) : (
+          <div role="alert">
+            <p className={styles.muted}>{point.state.error}</p>
+            <button type="button" className="button outline" onClick={() => point.retry()}>Réessayer</button>
+          </div>
+        )}
+      </section>
+    );
+  const { quote, intervention, version } = point.state.data!;
+  const statusLabel = quote.status === "accepted" ? "Accepté" : quote.status === "rejected" ? "Refusé" : "Envoyé";
+  return (
+    <div data-enterprise-quote="ready">
+      <PageTitle title={`Devis ${quoteRef(quote.id)}`} subtitle={`Reçu le ${dateTime(quote.created_at)} — ${category(intervention.category).label}, ${shortId(intervention.id)}`} />
+      {!version.is_current && (
+        <div className="alert warning" role="status" data-enterprise-quote-superseded="">
+          <Icon name="info" />
+          <span>
+            {QUOTES_COPY.readOnly}{" "}
+            {version.current_quote_id && (
+              <button type="button" className="text-button" onClick={() => c.go("quote", version.current_quote_id!)}>
+                Voir la version actuelle
+              </button>
+            )}
+          </span>
+        </div>
+      )}
+      <section className="panel" aria-labelledby="enterprise-quote-lines">
+        <h2 id="enterprise-quote-lines">Détail du devis · {statusLabel}</h2>
+        <table className={styles.table}>
+          <caption className="sr-only">Détail du devis {quoteRef(quote.id)}</caption>
+          <thead>
+            <tr>
+              <th scope="col">Prestation</th>
+              <th scope="col">Quantité</th>
+              <th scope="col">Prix unitaire HT</th>
+              <th scope="col">Total HT</th>
+            </tr>
+          </thead>
+          <tbody>
+            {quote.lines.map((l, k) => (
+              <tr key={k}>
+                <td data-label="Prestation">{l.label}</td>
+                <td data-label="Quantité">{l.quantity}</td>
+                <td data-label="Prix unitaire HT">{money(l.unit_price_cents)}</td>
+                <td data-label="Total HT">{money(Math.round(l.quantity * l.unit_price_cents))}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className={styles.keyValue}>
+          <span>Sous-total HT</span>
+          <strong>{money(quote.subtotal_cents)}</strong>
+        </div>
+        <div className={styles.keyValue}>
+          <span>TVA ({String(quote.tax_rate).replace(".", ",")} %)</span>
+          <strong>{money(quote.tax_cents)}</strong>
+        </div>
+        <div className={styles.keyValue}>
+          <span>Total TTC (devis seul)</span>
+          <strong data-enterprise-quote-total="">{money(quote.total_cents)}</strong>
+        </div>
+        <p className={styles.muted} data-enterprise-quote-readonly="">
+          {version.is_current && quote.status === "sent" ? "Lecture seule ici : la décision se prend depuis le dossier ou l’approbation, selon vos droits." : QUOTES_COPY.readOnly}
+        </p>
+        <button type="button" className="button outline" onClick={() => session.openIntervention(intervention.id)} data-enterprise-quote-dossier={intervention.id}>
+          Ouvrir le dossier
+        </button>
+      </section>
+      <section className={styles.approvalDocuments} aria-label="Documents du devis">
+        <QuoteDocumentsAnchor
+          session={session}
+          variant="enterprise"
+          target={{ quoteId: quote.id }}
+          authority={{ canWrite: false, reason: "Consultation du devis exact (lecture seule)." }}
+          organizationId={c.organization?.id}
+          siteId={intervention.site_id || undefined}
+        />
+      </section>
+    </div>
   );
 }
 
