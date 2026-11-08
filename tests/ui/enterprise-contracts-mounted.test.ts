@@ -51,7 +51,8 @@ const data = { approval_rules: [], approvals: [], compliance_records: [], audit:
 function Host() {
   const [org, setOrg] = useState(O(1));
   const [ident, setIdent] = useState({ uid: "u1", gen: 1 });
-  window.setOrg = setOrg; window.setIdent = setIdent;
+  const [withCtx, setCtx] = useState(true);
+  window.setOrg = setOrg; window.setIdent = setIdent; window.setCtx = setCtx;
   const onSave = async (values) => {
     window.saves.push(values);
     const list = window.store[values.organization_id] || (window.store[values.organization_id] = []);
@@ -60,7 +61,7 @@ function Host() {
     return true;
   };
   return h(ProfessionalOperations, { data, sites: [], organizations: [{ id: O(1), name: "Org 1" }], quotes: [], demo, busy: false, onRefresh: async () => {}, onSave,
-    contracts: { organizationId: org, context: { userId: () => ident.uid, generation: () => ident.gen } } });
+    contracts: withCtx ? { organizationId: org, context: { userId: () => ident.uid, generation: () => ident.gen } } : undefined });
 }
 const div = document.createElement("div"); document.body.appendChild(div);
 createRoot(div).render(h(StrictMode, null, h(Host)));
@@ -95,30 +96,29 @@ test("Chromium 390/1280 : 120 contrats paginés, détail à l’ouverture, 422, 
       await page.locator("[data-contracts-more]").click();
       await page.waitForFunction(`${rows} === 120`);
       assert.equal(await page.locator("[data-contracts-more]").count(), 0);
-      // Detail (terms) read on open only.
-      const old = "c0000000-0000-4000-8000-000000000003";
+      // Detail (terms) read on open only — the OLDEST contract, beyond 100 (page 3).
+      const old = "c0000000-0000-4000-8000-000000000001";
       assert.equal(((await page.evaluate("window.calls")) as string[]).filter((c) => c.includes("/contracts/")).length, 0, "no detail before opening");
       await page.locator(`[data-contract-open="${old}"]`).click();
       await page.locator('[data-contract-detail="ready"]').waitFor();
-      assert.match(await page.locator("[data-contract-terms]").innerText(), /Conditions du contrat 3$/);
-      assert.ok(((await page.evaluate("window.calls")) as string[]).some((c) => c.startsWith(`/api/enterprise/contracts/${old}?organization_id=`)));
-      // Write ⇒ causal re-read: page 1 + the open detail, fresh status.
+      assert.match(await page.locator("[data-contract-terms]").innerText(), /Conditions du contrat 1$/);
+      // Write ⇒ causal re-read: page 1 + exactly one point GET of the open contract, which stays open.
       const before = ((await page.evaluate("window.calls")) as string[]).length;
+      await page.evaluate("window.hold = (u) => u.includes('/contracts/c0000000-0000-4000-8000-000000000001')");
       await page.locator("[data-contract-toggle-status]").click();
       await page.waitForFunction("window.saves.length === 1");
       const save = ((await page.evaluate("window.saves")) as Array<Record<string, unknown>>)[0];
-      assert.deepEqual(JSON.parse(JSON.stringify(save)), { action: "save_contract", id: old, organization_id: "0a000000-0000-4000-8000-000000000001", title: "Contrat 3", reference: "REF-3", starts_on: "2026-01-01", terms: "Conditions du contrat 3", status: "archived" }, "existing command, same payload");
+      assert.deepEqual(JSON.parse(JSON.stringify(save)), { action: "save_contract", id: old, organization_id: "0a000000-0000-4000-8000-000000000001", title: "Contrat 1", reference: "REF-1", starts_on: "2026-01-01", terms: "Conditions du contrat 1", status: "archived" }, "existing command, same payload");
+      await page.locator('[data-contract-detail="loading"]').waitFor();
+      assert.equal(await page.locator("[data-contract-terms]").count(), 0, "old detail never shown after the write");
+      await page.evaluate("window.hold = null; while (window.gates.length) window.gates.shift()()");
       await page.waitForFunction(`${rows} === 50`);
-      const after = ((await page.evaluate("window.calls")) as string[]).slice(before);
-      assert.ok(after.some((c) => c === "/api/enterprise/contracts?organization_id=0a000000-0000-4000-8000-000000000001"), "page 1 re-read");
-      // The re-read page 1 does not hold contract 3 (older): open it again after paging → status fresh.
-      await page.locator("[data-contracts-more]").click();
-      await page.waitForFunction(`${rows} === 100`);
-      await page.locator("[data-contracts-more]").click();
-      await page.waitForFunction(`${rows} === 120`);
       await page.locator('[data-contract-detail="ready"]').waitFor();
-      assert.match(await page.locator('[data-contract-detail="ready"]').innerText(), /Archivé/, "open detail re-read after the write");
-      assert.ok(((await page.evaluate("window.calls")) as string[]).slice(before).some((c) => c.startsWith(`/api/enterprise/contracts/${old}?`)), "detail re-read after the write");
+      assert.match(await page.locator(`[data-contract-panel="${old}"]`).innerText(), /Archivé/, "fresh detail in the open panel");
+      assert.equal(await page.locator(`[data-contract-row="${old}"]`).count(), 0, "list back on page 1 (the contract is not on it)");
+      const after = ((await page.evaluate("window.calls")) as string[]).slice(before);
+      assert.ok(after.includes("/api/enterprise/contracts?organization_id=0a000000-0000-4000-8000-000000000001"), "page 1 re-read");
+      assert.equal(after.filter((c) => c.startsWith(`/api/enterprise/contracts/${old}?`)).length, 1, "exactly one point GET after the write");
       // Create ⇒ the new contract is on the fresh page 1.
       await page.getByLabel("Intitulé").fill("Maintenance annuelle");
       await page.getByLabel("Référence").fill("MA-2026");
@@ -140,6 +140,7 @@ test("Chromium 390/1280 : 120 contrats paginés, détail à l’ouverture, 422, 
       await page.waitForFunction("window.gates.length >= 1");
       await page.evaluate("window.hold = null; window.setOrg(window.O(2))");
       await page.locator("[data-contracts-refused]").waitFor();
+      assert.equal(await page.locator("[data-contract-panel]").count(), 0, "open detail cleared on org switch / refusal");
       await page.evaluate("while (window.gates.length) window.gates.shift()()");
       await page.waitForTimeout(200);
       assert.equal(await page.evaluate(rows), 0, "no old frame, late reply dropped");
@@ -157,11 +158,24 @@ test("Chromium 390/1280 : 120 contrats paginés, détail à l’ouverture, 422, 
       await page.waitForFunction("!document.querySelector('[data-contracts-retry]')?.disabled", null, { timeout: 5000 });
       await page.locator("[data-contracts-retry]").click();
       await page.waitForFunction(`${rows} === 1`);
+      await page.locator("[data-contract-open]").first().click();
+      await page.locator('[data-contract-detail="ready"]').waitFor();
       // Identity switch ⇒ fresh read, no old frame.
       await page.evaluate("window.hold = () => true; window.setIdent({ uid: 'u2', gen: 3 })");
       await page.locator('[data-contracts="loading"]').waitFor();
       assert.equal(await page.evaluate(rows), 0);
+      assert.equal(await page.locator("[data-contract-panel]").count(), 0, "open detail cleared on identity switch");
       await page.evaluate("window.hold = null; while (window.gates.length) window.gates.shift()()");
+      await page.waitForFunction(`${rows} === 1`);
+      // No contracts context ⇒ no read, « choisissez une organisation », creation disabled.
+      const n0 = (await page.evaluate("window.fetches")) as number;
+      await page.evaluate("window.setCtx(false)");
+      await page.locator('[data-contracts="choose"]').waitFor();
+      assert.equal(await page.locator("[data-contract-create-choose]").count(), 1);
+      assert.equal(await page.getByRole("button", { name: "Enregistrer le contrat" }).isDisabled(), true, "no fallback to organizations[0]");
+      await page.waitForTimeout(150);
+      assert.equal(await page.evaluate("window.fetches"), n0, "no live read without context");
+      await page.evaluate("window.setCtx(true)");
       await page.waitForFunction(`${rows} === 1`);
       const small = await page.evaluate("[...document.querySelectorAll('[data-contracts] button')].filter((b) => b.getBoundingClientRect().height > 0 && b.getBoundingClientRect().height < 43.5).length");
       assert.equal(small, 0);

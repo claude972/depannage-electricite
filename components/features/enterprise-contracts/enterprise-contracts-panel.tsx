@@ -92,9 +92,34 @@ export function EnterpriseContractsPanel({ context, organizationId, epoch, canWr
   const waiting = useWaiting(s.retryAt);
   const c = ctrl.current && ctrl.current.key === key ? ctrl.current.c : null;
 
+  // The opened contract is an autonomous panel (exact point read), not a list row: it survives the
+  // post-write return to page 1 and is cleared on a list refusal or an identity/org change.
+  const shownId = s.phase === "refused" ? null : openId;
+  useEffect(() => {
+    if (shownId) document.querySelector<HTMLElement>(`[data-contract-panel="${shownId}"]`)?.focus();
+  }, [shownId]);
   if (!base || !organizationId) return <p className={styles.hint} data-contracts="choose">{COPY.choose}</p>;
   return (
     <div data-contracts={s.phase} aria-busy={s.phase === "loading" || s.loadingMore || undefined}>
+      {shownId && (
+        <section className={styles.note} aria-label="Contrat ouvert" tabIndex={-1} data-contract-panel={shownId}>
+          <button type="button" className={styles.button} onClick={() => setOpen({ base, id: null })} data-contract-close="">
+            Fermer le contrat
+          </button>
+          <ContractDetailView
+            key={`${base}|${shownId}`}
+            id={`contract-${shownId}`}
+            context={context}
+            organizationId={organizationId}
+            contractId={shownId}
+            epoch={epoch}
+            canWrite={canWrite}
+            busy={busy}
+            onSave={onSave}
+            fetcher={fetcher}
+          />
+        </section>
+      )}
       {s.notice && <p className={styles.note} role="status" data-contracts-notice="">{s.notice}</p>}
       {s.phase === "loading" && <p className={styles.hint} role="status">{COPY.loading}</p>}
       {s.phase === "refused" && <p className={styles.note} role="alert" data-contracts-refused="">{s.error}</p>}
@@ -119,7 +144,9 @@ export function EnterpriseContractsPanel({ context, organizationId, epoch, canWr
                     aria-expanded={expanded}
                     aria-controls={`contract-${ct.id}`}
                     data-contract-open={ct.id}
-                    onClick={() => setOpen({ base, id: expanded ? null : ct.id })}
+                    onClick={() => {
+                      setOpen({ base, id: expanded ? null : ct.id });
+                    }}
                   >
                     <span>
                       <strong>{ct.title}</strong>
@@ -130,20 +157,6 @@ export function EnterpriseContractsPanel({ context, organizationId, epoch, canWr
                     </span>
                     <Icon name="arrow" size={17} />
                   </button>
-                  {expanded && (
-                    <ContractDetailView
-                      key={`${base}|${epoch}|${ct.id}`}
-                      id={`contract-${ct.id}`}
-                      context={context}
-                      organizationId={organizationId}
-                      contractId={ct.id}
-                      epoch={epoch}
-                      canWrite={canWrite}
-                      busy={busy}
-                      onSave={onSave}
-                      fetcher={fetcher}
-                    />
-                  )}
                 </li>
               );
             })}

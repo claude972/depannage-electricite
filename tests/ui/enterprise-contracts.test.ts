@@ -100,6 +100,7 @@ test("wiring : only the contracts section of ProfessionalOperations; typed conte
   assert.match(src, /contracts\?: EnterpriseContractsContext;/);
   assert.match(src, /\{liveContracts \? \(\s*<EnterpriseContractsPanel/);
   assert.match(src, /\) : data\.contracts\.length \? \(/, "demo listing kept");
+  assert.match(src, /const contractOrganizationId = liveContracts \? contracts\?\.organizationId \|\| undefined : organizations\[0\]\?\.id;/, "live: no fallback to organizations[0]");
   const panel = readFileSync(path.join(ROOT, "components/features/enterprise-contracts/enterprise-contracts-panel.tsx"), "utf8");
   assert.match(panel, /action: "save_contract",\s+id: ct\.id,\s+organization_id: ct\.organization_id,\s+title: ct\.title,\s+reference: ct\.reference,\s+starts_on: ct\.starts_on,\s+ends_on: ct\.ends_on \|\| undefined,\s+terms: ct\.terms,\s+status: ct\.status === "archived" \? "active" : "archived",/);
   assert.ok(!/discount|remise|sessionStorage|localStorage/i.test(panel));

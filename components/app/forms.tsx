@@ -1894,7 +1894,8 @@ export function ProfessionalOperations({
     if (ok && liveContracts) setContractsEpoch((n) => n + 1);
     return ok;
   };
-  const contractOrganizationId = liveContracts && contracts?.organizationId ? contracts.organizationId : organizations[0]?.id;
+  // Live: the active organisation of the contracts context ONLY (no fallback); demo unchanged.
+  const contractOrganizationId = liveContracts ? contracts?.organizationId || undefined : organizations[0]?.id;
   const [site, setSite] = useState("");
   const [threshold, setThreshold] = useState("200");
   const [requiredRole, setRequiredRole] = useState("manager");
@@ -2317,15 +2318,19 @@ export function ProfessionalOperations({
                 <option value="archived">Archivé</option>
               </select>
             </Field>
-            {!organizations.length && (
+            {liveContracts ? (
+              !contractOrganizationId && <p className="form-note" data-contract-create-choose="">Choisissez une organisation pour enregistrer un contrat cadre.</p>
+            ) : (
+              !organizations.length && (
               <p className="form-note">
                 Ajoutez un premier site pour créer votre organisation.
               </p>
+              )
             )}
             <button
               className="button primary full"
               type="submit"
-              disabled={busy || !organizations.length}
+              disabled={busy || (liveContracts ? !contractOrganizationId : !organizations.length)}
             >
               Enregistrer le contrat
             </button>
