@@ -135,7 +135,7 @@ function setupBig() {
     received: Array.from({ length: 55 }, (_, i) => ({ id: N("8", i + 1), team_id: A, team_name: "Équipe Nord", role: "technician", expires_at: AT, team_active: true })),
   };
   const calls = { get: [], post: [] };
-  const hold = {}, fail = {}, waiting = {}, refuse = {};
+  const hold = {}, fail = {}, waiting = {}, refuse = {}, post = { status: 200 };
   const reply = (key, body) => {
     calls.get.push(key);
     if (refuse[key]) return Promise.resolve({ status: refuse[key], body: null });
@@ -151,7 +151,7 @@ function setupBig() {
     invitations: (after) => reply("received|" + (after ?? ""), pageOf(data.received, after)),
     team: (id, section, after) => reply((id === A ? "A" : "B") + ":" + section + "|" + (after ?? ""), { team: teamOf(id), section, ...pageOf(data[id + ":" + section], after) }),
     mission: () => ok(mission),
-    send: (cmd) => { calls.post.push(cmd); const c = cmd.body; return ok({ team_id: cmd.teamId ?? c.team_id, action: c.action, team_version: 4, entity_id: c.intervention_id ?? c.user_id ?? c.invitation_id ?? cmd.teamId, entity_version: c.action === "assign" ? 1 : null, state: c.action === "assign" ? "assigned" : "x", replayed: false }); },
+    send: (cmd) => { calls.post.push(cmd); if (post.status !== 200) return Promise.resolve({ status: post.status, body: null }); const c = cmd.body; return ok({ team_id: cmd.teamId ?? c.team_id, action: c.action, team_version: 4, entity_id: c.intervention_id ?? c.user_id ?? c.invitation_id ?? cmd.teamId, entity_version: c.action === "assign" ? 1 : null, state: c.action === "assign" ? "assigned" : "x", replayed: false }); },
   };
   const div = document.createElement("div"); document.body.appendChild(div);
   const root = createRoot(div);
@@ -163,7 +163,7 @@ function setupBig() {
   const choose = async (job, tech) => { const s = div.querySelector('[data-pt-assign-select="' + job + '"]'); s.value = tech; s.dispatchEvent(new Event("change", { bubbles: true })); await tick(100); };
   const options = (job) => [...div.querySelectorAll('[data-pt-assign-select="' + job + '"] option')].map((o) => o.value).filter(Boolean);
   const value = (job) => div.querySelector('[data-pt-assign-select="' + job + '"]')?.value ?? null;
-  return { A, B, div, calls, hold, fail, refuse, release, ids, count, choose, options, value, ctx, render };
+  return { A, B, div, calls, hold, fail, refuse, post, stored: () => map.size, release, ids, count, choose, options, value, ctx, render };
 }
 const M = (n) => U("1", n), J = (n) => U("2", n), S = (n) => U("9", n), R = (n) => U("8", n);
 const uniq = (a) => new Set(a).size === a.length;
@@ -269,6 +269,35 @@ Object.assign(w.scenarios, {
     const detail = t.div.querySelector("[data-pt-detail], [data-pt-team-forbidden]");
     const residue = ["[data-pt-member]", "[data-pt-mission]", "[data-pt-sent]", "[data-pt-assign]", "[data-pt-assign-select]", "[data-pt-unassign]", "[data-pt-setrole]", "[data-pt-remove]", "[data-pt-rename]", "[data-pt-invite]", "[data-pt-revoke]", "[data-pt-tab]", "[data-pt-more]:not([data-pt-more=teams]):not([data-pt-more=received])", "[data-pt-followup]"].reduce((n, sel) => n + has(t.div, sel), 0);
     return { before, lost: has(t.div, "[data-pt-team-forbidden]"), text: detail?.textContent ?? "", residue, received: has(t.div, "[data-pt-invitation]"), accept: has(t.div, "[data-pt-accept]"), receivedRefused: has(t.div, '[data-pt-section-forbidden="received"]') };
+  },
+  async writeRefused(mode) {
+    // GET 200 with sections visible, then « Affecter » answers 404 (write_provider_team P0002).
+    const t = setupBig();
+    await tick(300);
+    await click(t.div, '[data-pt-open="' + t.A + '"]');
+    await tick(300);
+    const before = { missions: has(t.div, "[data-pt-mission]"), assign: has(t.div, "[data-pt-assign]") };
+    t.post.status = 404;
+    if (mode === "removed") t.refuse["A:members|"] = 404;
+    else t.hold["A:members|"] = true;
+    const reads = t.count("A:members|");
+    await t.choose(J(1), M(2));
+    await click(t.div, '[data-pt-assign="' + J(1) + '"]');
+    await tick(250);
+    const snap = () => {
+      const detail = t.div.querySelector("[data-pt-detail], [data-pt-team-forbidden], [data-pt-team-checking]");
+      const residue = ["[data-pt-member]", "[data-pt-mission]", "[data-pt-sent]", "[data-pt-assign]", "[data-pt-assign-select]", "[data-pt-unassign]", "[data-pt-setrole]", "[data-pt-remove]", "[data-pt-rename]", "[data-pt-invite]", "[data-pt-revoke]", "[data-pt-tab]", "[data-pt-more]:not([data-pt-more=teams]):not([data-pt-more=received])", "[data-pt-followup]", "[data-pt-retry]"].reduce((n, sel) => n + has(t.div, sel), 0);
+      return { residue, lost: has(t.div, "[data-pt-team-forbidden]"), checking: t.div.querySelector("[data-pt-team-checking]")?.getAttribute("data-pt-team-checking") ?? null, text: detail?.textContent ?? "", notice: t.div.querySelector("[data-pt-notice]")?.textContent ?? null, gone: has(t.div, "[data-pt-target-gone]"), private: /Tech [0-9]|Ville [0-9]|example\.test/.test(detail?.textContent ?? ""), posts: t.calls.post.length, stored: t.stored(), received: has(t.div, "[data-pt-invitation]"), create: has(t.div, "[data-pt-create]") };
+    };
+    const closed = snap();
+    const verifyReads = t.count("A:members|") - reads;
+    if (mode !== "gone") return { before, closed, verifyReads };
+    t.post.status = 200;
+    await t.release("A:members|");
+    await tick(300);
+    const proven = { ...snap(), missions: has(t.div, "[data-pt-mission]"), assign: has(t.div, "[data-pt-assign]") };
+    await tick(300);
+    return { before, closed, verifyReads, proven, postsLater: t.calls.post.length };
   },
   async midSwitch() {
     const t = setupBig();
@@ -395,6 +424,15 @@ test("équipes prestataires paginées (Chromium) : une reprise par section, déd
     }
     const rv = (await run("revoked", "received")) as V;
     same([rv.received, rv.accept, rv.receivedRefused, rv.lost], [0, 0, 1, 0], "received continuation 404 ⇒ list and actions cleared, refusal shown");
+    type W = { before: { missions: number; assign: number }; closed: { residue: number; lost: number; checking: string | null; text: string; notice: string | null; gone: number; private: boolean; posts: number; stored: number; received: number; create: number }; verifyReads: number; proven?: W["closed"] & { missions: number; assign: number }; postsLater?: number };
+    const removed = (await run("writeRefused", "removed")) as W;
+    same(removed.before, { missions: 50, assign: 50 }, "sections and actions visible before the write");
+    same([removed.closed.residue, removed.closed.lost, removed.closed.private, removed.closed.notice, removed.closed.posts, removed.closed.stored, removed.verifyReads], [0, 1, false, null, 1, 0, 1], "write 404 + re-read 404 ⇒ closed, zero success, zero replay, one bounded re-read");
+    assert.match(removed.closed.text, /Accès à l’équipe retiré ou inaccessible/);
+    same([removed.closed.received, removed.closed.create], [50, 1], "received invitations and team creation stay outside the closed scope");
+    const gone = (await run("writeRefused", "gone")) as W;
+    same([gone.closed.residue, gone.closed.checking, gone.closed.private, gone.closed.notice, gone.closed.gone, gone.closed.posts], [0, "checking", false, null, 0, 1], "before the re-read proves access: nothing private, no action");
+    same([gone.proven!.checking, gone.proven!.gone, gone.proven!.missions, gone.proven!.assign, gone.proven!.notice, gone.postsLater, gone.proven!.stored], [null, 1, 50, 50, null, 1, 0], "re-read 200 (target gone) ⇒ local error + refresh, no replay");
     const m = (await run("midMutation")) as { posts: string[]; reread: number; released: boolean; rows: number; late: boolean; more: number };
     same([m.posts, m.reread >= 1, m.released, m.rows, m.late, m.more], [["assign"], true, true, 50, false, 1], "a write re-reads page 1; the late page 2 is dropped");
 

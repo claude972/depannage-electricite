@@ -170,6 +170,8 @@ export const COPY = {
   resumeNote: "Une commande de cet onglet attend sa confirmation : reprenez-la (même commande) avant toute autre action.",
   storage: "Le stockage de cet onglet est indisponible : rien n’a été envoyé. Sans lui, une réponse perdue ne pourrait pas être rejouée à l’identique.",
   noUuid: "Ce navigateur ne permet pas de créer un identifiant sécurisé : aucune commande n’est possible ici.",
+  teamChecking: "Commande refusée : vérification de votre accès à l’équipe. Rien n’est affiché d’ici là.",
+  targetGone: "Cet élément n’est plus accessible ; la commande n’a pas été appliquée. Les données de l’équipe ont été relues.",
   teamLost: "Accès à l’équipe retiré ou inaccessible : aucune donnée ni action de cette équipe n’est affichée.",
   more: "Afficher plus",
   moreFailed: "La page suivante n’a pas pu être lue. Ce qui est déjà affiché reste valable.",
@@ -189,7 +191,9 @@ export type RunnerState = { busy: boolean; pending: AnyCommand | null; error: st
 export const RUNNER_INITIAL: RunnerState = { busy: false, pending: null, error: "", notice: "" };
 
 /** One runner per scope (a team, team creation, invitations). `after` re-reads on ok / conflict. */
-export function createRunner({ api, store, context, scope, get, set, after, onForbidden }: { api: () => PtApi; store: () => Store | null; context: Context; scope: string; get: () => RunnerState; set: (s: RunnerState) => void; after: () => Promise<void>; onForbidden: () => void }) {
+/** `onNotFound` (team scope): a 404 on a write (write_provider_team raises P0002 for a removed
+ *  member, or the target intervention is gone) closes the scope fail-closed — no notice, no replay. */
+export function createRunner({ api, store, context, scope, get, set, after, onForbidden, onNotFound }: { api: () => PtApi; store: () => Store | null; context: Context; scope: string; get: () => RunnerState; set: (s: RunnerState) => void; after: () => Promise<void>; onForbidden: () => void; onNotFound?: () => void }) {
   let alive = true;
   let inFlight = false;
   let pendingFor: string | null = null;
@@ -246,6 +250,13 @@ export function createRunner({ api, store, context, scope, get, set, after, onFo
         await after();
         return "ok";
       }
+    }
+    if (r.status === 404 && onNotFound) {
+      clearStored(who);
+      pendingFor = null;
+      set({ ...RUNNER_INITIAL });
+      onNotFound();
+      return "forbidden";
     }
     if (r.status === 409) {
       clearStored(who);
