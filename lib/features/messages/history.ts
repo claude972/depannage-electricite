@@ -1,11 +1,11 @@
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export const MESSAGE_FIELDS = "id,intervention_id,author_id,body,created_at";
+export const MESSAGE_FIELDS = "id,intervention_id,author_id,body,created_at,attachment_id";
 const uuid = z.uuid();
 const timestamp = z.iso.datetime({ offset: true }).max(40);
 const cursorSchema = z.object({ v: z.literal(1), intervention_id: uuid, created_at: timestamp, id: uuid }).strict();
-const messageSchema = z.object({ id: uuid, intervention_id: uuid, author_id: uuid, body: z.string(), created_at: timestamp }).strict();
+const messageSchema = z.object({ id: uuid, intervention_id: uuid, author_id: uuid, body: z.string(), created_at: timestamp, attachment_id: uuid.nullable().optional() }).strict();
 export class MessageHistoryError extends Error {
   constructor(public status: 404 | 422 | 503) {
     super(status === 404 ? "Ce dossier est introuvable." : status === 422 ? "Vérifiez les filtres ou rechargez la conversation sans son ancien curseur." : "Les messages sont momentanément indisponibles. Réessayez.");

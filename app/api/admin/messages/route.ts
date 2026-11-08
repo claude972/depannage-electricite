@@ -14,7 +14,13 @@ export async function POST(request: Request) {
     const command = await validated(request, input);
     const result = await db.rpc("admin_send_message", { p_id: command.id, p_intervention_id: command.intervention_id, p_body: command.body });
     dbError(result.error);
-    const message = output.safeParse(result.data);
+    // The table now carries a nullable photo reference. The audited admin
+    // command still sends a text-only message and preserves its public DTO.
+    const row = output.extend({ attachment_id: z.null().optional() }).safeParse(result.data);
+    if (!row.success) throw new ApiError(503, "L’envoi n’a pas pu être vérifié. Réessayez sans modifier votre message.");
+    const { attachment_id, ...textMessage } = row.data;
+    void attachment_id;
+    const message = output.safeParse(textMessage);
     if (!message.success || message.data.id !== command.id || message.data.intervention_id !== command.intervention_id || message.data.author_id !== user.id || message.data.body !== command.body)
       throw new ApiError(503, "L’envoi n’a pas pu être vérifié. Réessayez sans modifier votre message.");
     return Response.json({ message: message.data }, { headers });
