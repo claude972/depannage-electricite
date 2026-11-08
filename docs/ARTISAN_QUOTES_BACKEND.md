@@ -5,7 +5,7 @@ GET `/api/artisan/quotes?status=all&limit=50&cursor=…` sous session courante, 
 
 Réponse : `{items:[{id,intervention_id,status,total_cents,created_at,accepted_at,intervention:{id,category,status}}],page:{limit,has_more,next_cursor},order:'newest_first'}`. Vide = 200 et items vide. Le total est celui du devis, pas un montant payé ni le total des avenants.
 
-L'UUID désigne le devis exact, y compris les anciens devis rejetés encore accessibles du dossier. Aucun numéro de révision PDF ou version d'avenant n'est inventé. Le détail reste `GET /api/interventions/[id]`, puis sélection du devis par son UUID ; les documents et avenants gardent leurs routes existantes. La liste n'est pas un registre de brouillons.
+L'UUID désigne le devis exact, y compris les anciens devis rejetés encore accessibles du dossier. Ouvrir la révision avec `GET /api/artisan/quotes/[id]`. Le dossier, ses documents et ses avenants gardent leurs routes. Les brouillons suivent leur parcours distinct.
 
 Portée : rôle profil courant artisan, auteur exact du devis et attribution actuelle du dossier au même compte. RLS `quotes_read` et `interventions_read` restent appliquées. Une relation de membre/site ne remplace jamais l'attribution. Réaffectation : l'ancien artisan perd la ligne ; le nouvel artisan ne voit pas le devis d'un autre auteur dans cette liste. Aucune exigence d'agrément supplémentaire inventée pour la lecture historique (même règle de rôle que mission-history). Aucun changement de permissions/table/migration.
 
