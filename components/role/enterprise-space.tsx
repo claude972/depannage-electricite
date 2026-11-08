@@ -2799,8 +2799,6 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
   // Écriture opérationnelle sur CE site : rôle de membre et portée (jamais le rôle seul).
   const canWrite = c.authority.canWriteSite(site.id);
   // Opérations du site (lot B2B) : état réel du contrat, libellé commun quand il n’est pas disponible.
-  const opsState = session.capabilities.siteOperations;
-  const opsMessage = opsState === "available" ? "" : CONTRACT_MESSAGES[opsState];
 
   return (
     <>
@@ -3184,34 +3182,13 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
           />
         </section>
 
-        <section className={cx("panel", styles.operationsPanel)} aria-labelledby="site-operations">
-          <h2 id="site-operations">Opérations du site</h2>
-          <p className={styles.muted}>
-            Équipements, maintenance, budget, grilles, délais et contrôles enregistrés pour ce site.
-          </p>
-          {opsState === "unavailable" ? (
-            <FeatureUnavailable session={session} featureKey="siteOperations" title="Opérations du site momentanément indisponibles" hint={{ siteId: site.id }} />
-          ) : (
-          <SiteOperationsView
-            state={opsState}
-            unavailableMessage={opsMessage}
-            scope={leafScope(
-              session.profileId,
-              session.role,
-              canWrite
-                ? { canWrite: true }
-                : { canWrite: false, reason: c.authority.readOnlyReason || "Lecture seule sur ce site." },
-              { organizationId: c.organization?.id, siteId: site.id },
-            )}
-            client={session.features.siteOperations}
-            demo={session.mode === "demo" ? demoReport() : undefined}
-            interventionSearch={session.mode === "demo" ? undefined : { context: session.mutationContext }}
-            onNavigate={(view, param) => {
-              if (view === "intervention" && param) session.openIntervention(param);
-            }}
-          />
-          )}
-        </section>
+        <SiteOperationsSection
+          c={c}
+          siteId={site.id}
+          organizationId={c.organization?.id}
+          canWrite={canWrite}
+          readOnlyReason={c.authority.readOnlyReason || "Lecture seule sur ce site."}
+        />
 
         {vertical === "restaurant" && (
           <Unavailable
@@ -3360,6 +3337,58 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
 /** Site opened by id but absent from the workspace: read by GET /api/sites/:id/settings under the
  *  current identity, refused for another organisation. An archived site is strictly read-only;
  *  dossiers listed are only those already loaded (never claimed exhaustive). */
+/**
+ * « Opérations du site » — ONE module for the normal sheet and the direct (out-of-cache) sheet:
+ * the same SiteOperationsView, client, interventionSearch and SLA ticket navigation. The caller
+ * gives the exact site + organisation and the write cap; the report limits stay the second cap.
+ */
+function SiteOperationsSection({ c, siteId, organizationId, canWrite, readOnlyReason }: { c: Ctx; siteId: string; organizationId: string | undefined; canWrite: boolean; readOnlyReason: string }) {
+  const { session } = c;
+  const opsState = session.capabilities.siteOperations;
+  const opsMessage = opsState === "available" ? "" : CONTRACT_MESSAGES[opsState];
+  return (
+    <section className={cx("panel", styles.operationsPanel)} aria-labelledby="site-operations">
+      <h2 id="site-operations">Opérations du site</h2>
+      <p className={styles.muted}>
+        Équipements, maintenance, budget, grilles, délais et contrôles enregistrés pour ce site.
+      </p>
+      {opsState === "unavailable" ? (
+        <FeatureUnavailable session={session} featureKey="siteOperations" title="Opérations du site momentanément indisponibles" hint={{ siteId }} />
+      ) : (
+        <SiteOperationsView
+          state={opsState}
+          unavailableMessage={opsMessage}
+          scope={leafScope(session.profileId, session.role, canWrite ? { canWrite: true } : { canWrite: false, reason: readOnlyReason }, { organizationId, siteId })}
+          client={session.features.siteOperations}
+          demo={session.mode === "demo" ? demoReport() : undefined}
+          interventionSearch={session.mode === "demo" ? undefined : { context: session.mutationContext }}
+          onNavigate={(view, param) => {
+            if (view === "intervention" && param) session.openIntervention(param);
+          }}
+        />
+      )}
+    </section>
+  );
+}
+
+/**
+ * ENT-08 — operations of a site loaded by its exact read (absent from the bootstrap cache). Mounted
+ * ONLY after SiteDirectLoader is ready for THIS organisation and only for a non-archived site, so the
+ * probe and the reads happen exactly then. Write cap = the settings GET's can_write (never the cache).
+ */
+function DirectSiteOperations({ c, site, canWrite }: { c: Ctx; site: { id: string; organization_id: string }; canWrite: boolean }) {
+  useProbeWhenUnknown(c.session, "siteOperations", { siteId: site.id });
+  return (
+    <SiteOperationsSection
+      c={c}
+      siteId={site.id}
+      organizationId={site.organization_id}
+      canWrite={canWrite}
+      readOnlyReason={c.authority.readOnlyReason || "Lecture seule sur ce site."}
+    />
+  );
+}
+
 function DirectSiteSheet({ c, id }: { c: Ctx; id: string }) {
   const { session } = c;
   // Same site-level « inaccessible » as the full sheet, keyed by identity + site.
@@ -3459,6 +3488,16 @@ function DirectSiteSheet({ c, id }: { c: Ctx; id: string }) {
               {!archived && <SiteAreasPanel siteId={site.id} context={session.mutationContext} demo={false} />}
               {!archived && <SiteContactsPanel siteId={site.id} context={session.mutationContext} />}
             </div>
+            {/* ENT-08: same operations module (maintenance, plans, visits…) for an active site read exactly;
+                archived ⇒ not mounted (no probe, no new write). Keyed on identity + organisation + site. */}
+            {!archived && session.mode !== "demo" && (
+              <DirectSiteOperations
+                key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${site.organization_id}|${site.id}`}
+                c={c}
+                site={site}
+                canWrite={state.canWrite && site.archived_at === null}
+              />
+            )}
           </div>
         );
       }}
