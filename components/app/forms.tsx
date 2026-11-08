@@ -2,7 +2,7 @@
 // Operational forms extracted from the original monolith; behaviour preserved, shared by the
 // role spaces. Styling classes live in app/globals.css.
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { api, PHOTO_TYPES, validateUpload } from "./api";
+import { api, ApiRequestError, PHOTO_TYPES, validateUpload } from "./api";
 import { AddressField, createAddressApi } from "./address-field";
 import {
   applyOutcome,
@@ -2954,6 +2954,8 @@ function WarrantyPanelBody({ interventionId, demo, role, context, ownerId, fetch
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  /** E29: a decision refused on a stale version keeps its draft here, across the re-read. */
+  const [conflicts, setConflicts] = useState<Record<string, { status: string; note: string }>>({});
   async function load() {
     if (!demo) return; // live reads go through useWarrantyHistory only
     setLoading(true);
@@ -3018,10 +3020,19 @@ function WarrantyPanelBody({ interventionId, demo, role, context, ownerId, fetch
         await api("/api/warranty", values);
         history.reload(); // causal re-read: page 1 + fresh has_active proof
         setNotice("Votre dossier a été enregistré.");
+        if (values.action === "resolve") {
+          const id = String(values.case_id);
+          setConflicts(({ [id]: _done, ...rest }) => rest);
+        }
       }
       setDescription("");
     } catch (e) {
-      setError((e as Error).message);
+      if (!demo && values.action === "resolve" && e instanceof ApiRequestError && e.status === 409) {
+        // Stale decision: re-read the case, keep the draft, flag the conflict; never resent alone.
+        setConflicts((m) => ({ ...m, [String(values.case_id)]: { status: String(values.status), note: String(values.resolution) } }));
+        setError(WARRANTY_CONFLICT);
+        history.reload();
+      } else setError((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -3104,14 +3115,17 @@ function WarrantyPanelBody({ interventionId, demo, role, context, ownerId, fetch
                 </p>
               )}
               {role === "admin" &&
-                ["submitted", "reviewing"].includes(c.status) && (
+                (["submitted", "reviewing"].includes(c.status) || Boolean(conflicts[c.id])) && (
                   <WarrantyResolution
                     busy={busy}
-                    initialNote={c.resolution || ""}
+                    initialNote={conflicts[c.id]?.note ?? (c.resolution || "")}
+                    initialStatus={conflicts[c.id]?.status}
+                    conflict={conflicts[c.id] ? WARRANTY_CONFLICT : undefined}
                     onSave={(status, resolution) =>
                       save({
                         action: "resolve",
                         case_id: c.id,
+                        ...(demo ? {} : { expected_version: c.updated_at }),
                         status,
                         resolution,
                       })
@@ -3323,17 +3337,24 @@ export function ApprovalDecision({
     </div>
   );
 }
+export const WARRANTY_CONFLICT =
+  "Cette demande a été modifiée entre-temps : son état actuel est affiché. Votre brouillon est conservé ; vérifiez-le avant d’enregistrer à nouveau.";
 export function WarrantyResolution({
   busy,
   initialNote,
+  initialStatus,
+  conflict,
   onSave,
 }: {
   busy: boolean;
   initialNote: string;
+  initialStatus?: string;
+  /** E29: the last decision was refused on a stale version; the draft is the one kept. */
+  conflict?: string;
   onSave: (status: string, note: string) => Promise<void>;
 }) {
   const [note, setNote] = useState(initialNote);
-  const [status, setStatus] = useState("reviewing");
+  const [status, setStatus] = useState(initialStatus ?? "reviewing");
   return (
     <form
       className="warranty-resolution inline-editor"
@@ -3342,6 +3363,11 @@ export function WarrantyResolution({
         void onSave(status, note.trim());
       }}
     >
+      {conflict && (
+        <p className="field-error" role="alert" data-warranty-conflict="">
+          {conflict}
+        </p>
+      )}
       <Field label="État du traitement">
         <select value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="reviewing">En cours d’examen</option>
