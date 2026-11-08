@@ -131,6 +131,7 @@ import { createElement as h, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { ApprovalsView, ApprovalDetail } from "./components/role/enterprise-space";
 import { useApprovalsList } from "./components/features/enterprise-approvals/use-enterprise-approvals";
+import styles from "./components/role/enterprise.module.css";
 const tick = (ms) => new Promise((r) => setTimeout(r, ms));
 const ORG = "${ORG}", ORG_B = "${ORG_B}", SITE = "${SITE}", USER = "${USER}";
 const A = (n) => "a0000000-0000-4000-8000-" + String(n).padStart(12, "0");
@@ -212,6 +213,7 @@ window.run = async () => {
   out.decided = gone.find((g) => g[0] === "decide");
   out.pointsAfter = calls.filter((u) => u.includes("/approvals/")).length - pointsBefore;
   out.afterText = div.textContent.includes("Décision enregistrée");
+  out.approvalOverflow = document.documentElement.scrollWidth - document.documentElement.clientWidth;
   root.unmount();
   // Decision form bound to identity + organization + site + approval id.
   decided = false; calls = []; gone = [];
@@ -274,7 +276,23 @@ window.run = async () => {
   await tick(300);
   out.demo = { calls: calls.length, text: div.textContent.includes("1 au total") };
   root.unmount();
-  out.overflow = document.documentElement.scrollWidth - document.documentElement.clientWidth;
+  // Same scope controls as the enterprise shell, including its mobile side gutters.
+  div = document.createElement("div"); div.style.paddingInline = "16px"; document.body.appendChild(div);
+  root = createRoot(div);
+  const name = "OrganisationSynthétiqueTrèsLonguePourLeContrôleDeLargeur".repeat(2);
+  root.render(h("div", { className: styles.contextBar },
+    h("div", { className: styles.contextNames }, h("span", null, "Organisation active ", h("strong", null, name))),
+    h("div", { className: styles.contextControls },
+      h("label", null, "Organisation", h("select", null, h("option", null, name), h("option", null, "Autre organisation"))),
+      h("label", null, "Site", h("select", null, h("option", null, "Tous les sites"))))));
+  await tick(100);
+  const right = div.querySelector("[class*='contextControls']").getBoundingClientRect().right;
+  out.scopeSelectsFit = [...div.querySelectorAll("select")].every((select) => {
+    const bounds = select.getBoundingClientRect();
+    return bounds.right <= right + 0.5 && bounds.height >= 44;
+  });
+  out.scopeOverflow = document.documentElement.scrollWidth - document.documentElement.clientWidth;
+  root.unmount();
   return out;
 };
 `;
@@ -315,7 +333,8 @@ for (const width of [390, 1280])
         same([r.afterOrg[0].phase, r.afterOrg[0].ids], ["loading", []], "first render after an org switch shows no old row");
         same(r.afterOrg[r.afterOrg.length - 1].ids, [A(1)]);
         same(r.demo, { calls: 0, text: true }, "demo unchanged, zero fetch");
-        assert.ok(r.overflow <= 0, `${r.overflow}px`);
+        assert.ok(r.approvalOverflow <= 0, `${r.approvalOverflow}px`);
+        assert.ok(r.scopeOverflow <= 0 && r.scopeSelectsFit, `Périmètre : ${r.scopeOverflow}px`);
         same(errors, []);
       } finally {
         await context.close();

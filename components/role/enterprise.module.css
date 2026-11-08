@@ -403,6 +403,9 @@
 .contextNames svg {
   color: #1457d9;
 }
+.contextNames span {
+  overflow-wrap: anywhere;
+}
 .contextNames strong {
   color: #102a43;
   font-weight: 650;
@@ -1816,12 +1819,13 @@
     width: 100%;
   }
   .contextControls select {
+    min-width: 0;
     max-width: none;
     flex: 1;
   }
   .contextControls label {
     flex: 1;
-    min-width: 200px;
+    min-width: min(100%, 200px);
   }
 }
 @media (prefers-reduced-motion: reduce) {
