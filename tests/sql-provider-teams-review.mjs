@@ -584,6 +584,88 @@ try {
       second.records.every((x) => x.id > first.next_after),
     "stable continuation without duplicates",
   );
+  // Privileged fixture setup only: populate a legitimate >50-member roster without
+  // manufacturing command receipts or bypassing the production command quota.
+  // Every dispatch/progress/removal below uses the authenticated public functions.
+  const pagedActors = new Map();
+  for (let n = 0; n < 52; n++) {
+    const actor = crypto.randomUUID(), label = `pagedTech${n}`;
+    ids[label] = actor;
+    pagedActors.set(actor, label);
+    await db.query(
+      "insert into auth.users(id,raw_user_meta_data,email,email_confirmed_at)values($1,$2,$3,now())",
+      [actor, JSON.stringify({role: "client", full_name: "Pagination QA " + n}), `paged-${n}@example.invalid`],
+    );
+    await db.query(
+      "insert into public.provider_team_members(team_id,user_id,role)values($1,$2,'technician')",
+      [team, actor],
+    );
+  }
+  const membersFirst = await list("owner", team, "members");
+  ok(membersFirst.records.length === 50 && membersFirst.next_after === membersFirst.records[49].id,
+    "real members first page exposes its exact exclusive cursor");
+  const membersSecond = await list("owner", team, "members", membersFirst.next_after);
+  const memberRows = [...membersFirst.records, ...membersSecond.records];
+  ok(membersSecond.records.length > 0 && membersSecond.next_after === null &&
+    membersSecond.records.every(row => row.id > membersFirst.next_after) &&
+    new Set(memberRows.map(row => row.id)).size === memberRows.length,
+    "real members continuation has no overlap or omission");
+  const expectedMembers = (await db.query(
+    "select user_id id from public.provider_team_members where team_id=$1 order by user_id", [team],
+  )).rows.map(row => row.id);
+  assert.deepEqual(memberRows.map(row => row.id), expectedMembers); checks++;
+  const target = membersSecond.records.find(row => pagedActors.has(row.id) && row.active && row.role === "technician");
+  ok(Boolean(target), "dispatch target belongs to the second member page");
+  const technician = pagedActors.get(target.id), mission51 = second.records[0].id;
+  const expectedMissions = (await db.query(
+    "select id from public.interventions where artisan_id=$1 and status not in('requested','cancelled')order by id", [ids.owner],
+  )).rows.map(row => row.id);
+  assert.deepEqual([...first.records, ...second.records].map(row => row.id), expectedMissions); checks++;
+  ok(expectedMissions[50] === mission51, "exact 51st mission identified by real SQL continuation");
+  await denied(() => detail(technician, mission51), "P0002");
+  const pageAssignKey = crypto.randomUUID();
+  const assigned = await write("owner", team, "assign", {
+    intervention_id: mission51, technician_id: target.id, expected_version: null,
+  }, pageAssignKey);
+  ok(assigned.entity_id === mission51 && assigned.entity_version === 1, "51st mission assigned to second-page technician");
+  ok((await write("owner", team, "assign", {
+    intervention_id: mission51, technician_id: target.id, expected_version: null,
+  }, pageAssignKey)).replayed, "same dispatch command replays exactly");
+  const own = await detail(technician, mission51);
+  assert.deepEqual(Object.keys(own).sort(), ["team_id", "intervention", "appointment", "assignment", "permissions"].sort()); checks++;
+  assert.deepEqual(Object.keys(own.intervention).sort(), ["id", "category", "status", "description", "address", "postal_code", "city"].sort()); checks++;
+  ok(own.assignment.technician_id === target.id && own.permissions.can_acknowledge === true,
+    "assigned technician gets operational facts but no price, document or participant identity");
+  ok((await list(technician, team, "missions")).records.map(row => row.id).join() === mission51,
+    "technician page exposes only the exact assigned mission");
+  await denied(() => detail("foreign", mission51), "P0002");
+  await write(technician, team, "progress", {
+    intervention_id: mission51, expected_version: 1, state: "acknowledged", note: "Prise en charge QA pagination",
+  });
+  ok((await detail(technician, mission51)).assignment.state === "acknowledged", "real technician acknowledgement readback");
+  await db.query("update public.interventions set status='in_progress'where id=$1", [mission51]);
+  await write(technician, team, "progress", {
+    intervention_id: mission51, expected_version: 2, state: "done", note: "Suivi interne QA pagination",
+  });
+  ok((await detail(technician, mission51)).assignment.state === "done", "real technician completion readback");
+  ok((await db.query("select status from public.interventions where id=$1", [mission51])).rows[0].status === "in_progress",
+    "internal completion does not complete or pay the commercial dossier");
+  await write("owner", team, "remove_member", {
+    user_id: target.id, expected_version: (await list("owner", team, "members")).team.version,
+  });
+  await denied(() => detail(technician, mission51), "P0002");
+  await denied(() => list(technician, team, "missions"), "P0002");
+  await denied(() => write(technician, team, "progress", {
+    intervention_id: mission51, expected_version: 3, state: "done", note: "Unauthorized retry",
+  }), "P0002");
+  const revokedAssignment = (await detail("owner", mission51)).assignment;
+  ok(revokedAssignment.state === "unassigned" && revokedAssignment.technician_id === null && revokedAssignment.note === "",
+    "member removal clears current operational access and private note");
+  ok((await db.query("select role from public.profiles where id=$1", [target.id])).rows[0].role === "client",
+    "second-page technician never acquires global artisan rights");
+  ok((await db.query("select count(*)::int n from public.provider_team_assignment_events where intervention_id=$1", [mission51])).rows[0].n === 4,
+    "dispatch replay does not duplicate the four real assignment audit transitions");
+
   // Reassignment away and back never resurrects old technician access.
   await db.query("update public.interventions set artisan_id=$1 where id=$2", [ids.owner, j]);
   await denied(() => detail("otherTech", j, teamB), "P0002");
