@@ -217,3 +217,7 @@ Claude possède le formulaire de création et ses tests. Séparer le brouillon d
 ### PUB / ART / ENT — maintenir la pagination du bon filtre de notifications
 
 Claude possède le centre de notifications et le test navigateur ciblé. Une continuation « Toutes » retenue par le réseau doit être ignorée dès le changement vers « Non lues », y compris son erreur, son curseur et la fin de chargement. Reprendre le bon curseur, borner à une continuation en vol et écarter les réponses après rechargement ou changement de compte. Dans le même panneau, une confirmation de marquage ne doit pas remplacer une liste plus récente par les anciennes lignes capturées avant le réseau. Conserver les commandes, les refus, la démo, le thème et l'API. Vérifier en Chromium les réponses dans l'ordre inverse, un vrai changement de filtre et la reprise correcte.
+
+### ART — conserver le compte rendu pendant l'enregistrement
+
+Claude possède l'éditeur de compte rendu artisan et son test navigateur. Verrouiller les champs, l'ajout ou retrait de contrôles et les doubles soumissions pendant le POST. En cas de refus ou d'échec, garder le résumé, les contrôles et le nom déclaré et permettre la reprise. Fermer uniquement après succès confirmé pour l'éditeur courant. Tester un reçu retenu pendant la saisie et un échec suivi d'une reprise avec la même saisie. Périmètre limité au formulaire, sans changement SQL, statut métier ou paiement.
