@@ -23,7 +23,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E07 | Majeur | A | CONTRAT A | verrou site archivé SQL | | | supabase, app/api | UI déjà lecture seule |
 | E08 | Majeur | B | À REPRODUIRE | 409 → recharger le formulaire (P1/P2) | | | site-operations/budget-panel.tsx | |
 | E11 | Majeur | B | À REPRODUIRE | option active périmée après saisie | | | components/app/address-field.tsx | |
-| E15 | Majeur | B + A | À REPRODUIRE | expected_version du créneau (P2) | | | role/client-space.tsx, role/artisan-space.tsx | contrat A vérifié : save_appointment exige expected_version = appointment.reminder_version (0 sans créneau) |
+| E15 | Majeur | B + A | CORRIGÉ (dépend de A 258f44e) | expected_version du créneau (P2) | c1b5ddf | phase2-lot-b-e15-appointment-version | types.ts, client-space.tsx, artisan-space.tsx, enterprise-space.tsx | rouge : expected_version absent (client et artisan) ; vert : version lue (0 en création), refus ⇒ relecture 13 h, saisie conservée, conflit signalé, renvoi v2 |
 | E16 | Majeur | B | À REPRODUIRE | Actualiser recharge opérations + rappel (P1/P6) | | | role/client-space.tsx, appointment-reminders | |
 | E17 | Majeur | B | À REPRODUIRE | réponse GET ancienne après arrêt | | | features/tracking/tracking-card.tsx | |
 | E20 | Majeur | B | À REPRODUIRE | 404 → relire/purger (P1) | | | advanced-approvals | |
@@ -31,11 +31,11 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E24 | Majeur | B + A | À REPRODUIRE | levée antérieure/future (P4) | | | site-operations/erp-panel.tsx | contrat A |
 | E25 | Majeur | A | CONTRAT A | date d’effet des grilles (P4) | | | supabase | côté B : affichage si contrat change |
 | E26 | Majeur | B | À REPRODUIRE | 403 → relire/purger (P1) | | | site-operations-view.tsx, grids-panel.tsx | |
-| E29 | Majeur | B + A | À REPRODUIRE | version attendue garantie (P2) | | | components/app/forms.tsx | contrat A vérifié : resolve exige expected_version = case.updated_at ISO exacte ; 409 ⇒ relire, brouillon conservé |
+| E29 | Majeur | B + A | CORRIGÉ (dépend de A 2b3b44e) | updated_at exact en version (P2) | 47f3fdc | phase2-lot-b-e29-warranty-version | types.ts, forms.tsx | rouge : expected_version absent ; vert : chaîne exacte envoyée, 409 ⇒ relecture, décision de A affichée, brouillon de B conservé |
 | E30 | Majeur | B | À REPRODUIRE | 403 → relire /me + purger (P1) | | | platform-operators-view.tsx | |
 | E32 | Majeur | B | À REPRODUIRE | vue journal audit_read | | | anchors.ts, features.ts, platform-anchor.tsx | |
-| E34 | Majeur | B + A | À REPRODUIRE | approbation ≠ réactivation (P2) | | | components/app/forms.tsx | contrat A |
-| E35 | Majeur | B | À REPRODUIRE | action « demander des corrections » | | | components/app/forms.tsx | POST approved:false existant |
+| E34 | Majeur | B + A | CORRIGÉ (dépend de A e17c0e5) | approbation ≠ réactivation + version (P2) | 43ee0b9 | phase2-lot-b-e34-e35-e36-artisan-decisions | forms.tsx | rouge : corps {approved:true} ; vert : action approve + version 1 ⇒ 409, Suspendu relu |
+| E35 | Majeur | B | CORRIGÉ | action « Demander des corrections » | 43ee0b9 | phase2-lot-b-e34-e35-e36-artisan-decisions | forms.tsx | rouge : seule action « Approuver » ; vert : request_changes envoyé, statut changes_requested |
 | E37 | Majeur | A | CONTRAT A | prédicat d’offre et congés | | | supabase | |
 | E38 | Majeur | B | CORRIGÉ | 403/404 → relire/purger (P1) | bd77186 | phase2-lot-b-e38-credential-review-revoked | credential-reviews-model.ts | rouge : 0 GET après 403 ; vert : 1 POST, relecture, purge motifs et formulaire |
 | E39 | Majeur | B | À REPRODUIRE | 401 → purge fil (P1) | | | message-history.ts, forms.tsx | |
@@ -75,7 +75,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E27 | Mineur | B | À REPRODUIRE | 409 → relire la grille (P1) | | | grids-panel.tsx | |
 | E31 | Mineur | B | À REPRODUIRE | `account_role` lu comme `role` | | | features.ts, platform-operators-view.tsx | |
 | E33 | Mineur | A | CONTRAT A | normalisation NFC annuaire | | | app/api, supabase | |
-| E36 | Mineur | A + B | CONTRAT A | suspension sans command_id (P3) | | | app/api/admin/artisans | |
+| E36 | Mineur | A + B | CORRIGÉ (dépend de A 523878c) | command_id stable par intention (P3) | 43ee0b9 | phase2-lot-b-e34-e35-e36-artisan-decisions | forms.tsx | rouge : aucune clé ; vert : même command_id jusqu’à confirmation, écran relu |
 | E41 | Mineur | A + B | CONTRAT A | message texte sans id stable (P3) | | | app/api/messages | |
 | E43 | Mineur | B | À REPRODUIRE | publication propre prise pour « autre canal » (P3) | | | artisan-quote-draft.tsx | |
 | E45 | Mineur | B | CORRIGÉ | erreur de page suivante expliquée | ca0f8a3 | phase2-lot-b-e44-e45-invoices-pagination | invoices-model.ts, customer-invoices-panel.tsx | rouge : 503 silencieux ; vert : alerte, reprise 26 pièces, alerte retirée |
@@ -103,7 +103,7 @@ Sous-cas externes avec condition ouverte (PUB-10.1, CLI-05.2, CLI-08.1, ADM-01.1
 
 Mise à jour à chaque commit d’item.
 
-- CORRIGÉ (rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E38, E44, E45, E48, E49, E50, E52, E62, E63, E64.
+- CORRIGÉ (rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E15, E29, E34, E35, E36, E38, E44, E45, E48, E49, E50, E52, E62, E63, E64. E15/E29/E34/E36 exigent les routes A à l’intégration.
 - ROUGE : aucun.
 - À REPRODUIRE : voir tableau.
 - NON REPRODUIT : aucun.
@@ -115,7 +115,7 @@ Contrats requis côté serveur, sans duplication en B.
 
 - E15 · LIVRÉ PAR A (signal) : `save_appointment` exige `expected_version` entier = `appointment.reminder_version` lu (0 sans créneau) ; ancien RPC sans version refusé. B : envoyer dans les éditeurs client et artisan, recharger et conserver la saisie sur 409. Origine : `app/api/interventions/[id]/operations/route.ts:7,47` et `supabase/migrations/202610310003_web_operations.sql:189–198` : la commande de rendez-vous doit accepter `expected_version` (version du rendez-vous lue) et répondre 409 en cas d’écart. B enverra la version lue dès que le schéma l’accepte ; aujourd’hui un champ inconnu serait refusé.
 - E29 · LIVRÉ PAR A (signal) : `POST /api/warranty` action `resolve` exige `expected_version` = `case.updated_at` ISO exacte telle que lue (chaîne conservée, microsecondes comprises) ; 409 ⇒ relire, brouillon conservé en conflit.
-- E34 · `app/api/admin/artisans/route.ts:4,36–42`, `202610310008_suspension_governance.sql:38–66` : distinguer `approve` (depuis `submitted`/`changes_requested`) et `reactivate` (depuis `suspended`), avec état attendu ; une approbation depuis `suspended` doit répondre 409.
+- E34 · LIVRÉ PAR A (e17c0e5) puis E36 (523878c) : `{ user_id, command_id, action approve|request_changes|suspend|reinstate, expected_version = application_version }` ; câblé en B (43ee0b9). Origine : `app/api/admin/artisans/route.ts:4,36–42`, `202610310008_suspension_governance.sql:38–66` : distinguer `approve` (depuis `submitted`/`changes_requested`) et `reactivate` (depuis `suspended`), avec état attendu ; une approbation depuis `suspended` doit répondre 409.
 - E36 · même route : `command_id` d’intention stable et rejeu sans second audit.
 - E18 · `app/api/interventions/[id]/operations/route.ts:10,49` : `command_id` pour l’enregistrement du rapport et rejeu idempotent sans second instantané.
 - E41 · `app/api/messages/route.ts:24–38` : `id` client stable pour l’envoi texte (même contrat que `/api/messages/photo`).
@@ -171,4 +171,5 @@ Ces échecs ne sont ni affaiblis ni supprimés par B.
 - Signal `phase3-bloquants-livres.md` reçu (A sur 6f2d89c), corrections B ensuite, une par ID ou mécanisme.
 - Checkpoint A : les 12 mêmes échecs préexistants sur HEAD, deux builds OK. La suite globale n’est pas qualifiée verte.
 - Contrats A E15 et E29 publiés dans le signal (voir Attendu de l’autre lot).
-- Demande utilisateur : règles P1 communes (classification des refus + purge) avec adaptateurs de relecture par panneau, sans duplication dans les vues. Refactor à suivre.
+- Règles P1 communes livrées (961e24d) : `components/app/refusal.ts` (401 purge immédiate, 403/404 relecture avant tout POST, refus de lecture = purge, 409 conflit, invalide, transitoire) ; chaque panneau fournit seulement son adaptateur de relecture. Test `phase2-lot-b-refusal-rules`.
+- Test existant modifié (contrat changé par A, pas d’affaiblissement) : `tests/ui/artisan-admin-status.test.ts`, deux assertions figeaient `{ user_id, approved }` et une seule action pour « soumis ». Remplacées par le nouveau corps exact et les deux actions (E35), même rigueur.
