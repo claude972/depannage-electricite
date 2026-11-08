@@ -4,7 +4,9 @@ Objectif : application entière, seuls raccordements Stripe et SMS différés. P
 
 ## Référence en ligne
 
-La preview `bee50a0` rend la maintenance accessible depuis la fiche exacte d’un site actif au-delà des 100 sites initiaux. La recette a ouvert le 101e site via le portefeuille, relu sa zone et son plan puis enregistré une visite. [Preview actuelle](https://depannage-electricite-if3ebe74c-brafas-projects.vercel.app) · [Recette](reviews/DELIVERY_BEE_OFFICE_DIRECT_MAINTENANCE.md)
+La preview `df31cdd` donne accès aux relevés d’énergie et aux opérations documentaires de copropriété sur les fiches directes. La recette confirme deux écritures depuis les écrans au-delà des 100 sites initiaux et les refus pour le lecteur et le tiers. [Preview actuelle](https://depannage-electricite-khje8rgra-brafas-projects.vercel.app) · [Recette](reviews/DELIVERY_DF3_DIRECT_SITE_VERTICALS.md)
+
+La preview précédente `bee50a0` rend la maintenance accessible depuis la fiche exacte d’un site actif au-delà des 100 sites initiaux. La recette a ouvert le 101e site via le portefeuille, relu sa zone et son plan puis enregistré une visite. [Preview bee50a0](https://depannage-electricite-if3ebe74c-brafas-projects.vercel.app) · [Recette](reviews/DELIVERY_BEE_OFFICE_DIRECT_MAINTENANCE.md)
 
 La preview précédente `72ebee3` invalide les réponses tardives d’un panneau énergie démonté. La recette compare deux périodes et vérifie les CSV, les accès par organisation et l’absence de téléchargement après changement d’organisation. [Preview 72ebee3](https://depannage-electricite-rkufseg9a-brafas-projects.vercel.app) · [Recette](reviews/DELIVERY_72E_ENERGY_EXPORT_SCOPE.md)
 
