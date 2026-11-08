@@ -3,7 +3,7 @@
 // particulier, artisan et entreprise. Tout passe par session.loadSupportTickets /
 // loadSupportTicket / createSupportTicket / supportCommand ; aucun état n'est imposé par
 // l'utilisateur, aucune promesse de délai ni de canal (appel, email, SMS) n'est affichée.
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Session } from "../app/session-types";
 import type {
   ContractState,
@@ -21,6 +21,8 @@ import { ConfirmAction, Empty, Field, Loader, PageTitle, Tag, Unavailable } from
 import { category, date, dateTime, shortId, uid } from "../app/format";
 import { authorLabel, QUEUE_READ_ONLY, runStatusCommand, statusTargets, supportListView, ticketAuthorityKey, type SupportQueue } from "./support-lists";
 import styles from "./support-tickets.module.css";
+import { RECOVERY_COPY, clearSnapshot, freeze, readDraft, readSnapshot, sameSnapshot, readLegacy, dropLegacy, dropLegacyIfSame, tabStore, validate, writeDraft, writeSnapshot, type Draft, type Snapshot, type Store } from "./support-snapshot";
+import { UNVERIFIED_RECEIPT, validSupportReceipt } from "../app/support-receipt";
 
 type Tone = "neutral" | "blue" | "green" | "amber" | "red" | "violet";
 const STATUS_META: Record<SupportStatus, { label: string; tone: Tone }> = {
@@ -372,92 +374,143 @@ function TicketRow({ ticket: t, queue, onOpen }: { ticket: SupportTicket; queue:
 }
 
 // ---- Nouvelle demande -----------------------------------------------------------------
-function NewTicket({
+// The panel is remounted per identity (uid + generation): nothing of another account survives.
+function NewTicket(props: { session: Session; interventions: Intervention[]; presetId: string; store?: () => Store | null }) {
+  const ctx = props.session.mutationContext;
+  return <NewTicketForm key={`${ctx.userId() ?? "-"}|${ctx.generation()}`} {...props} />;
+}
+function NewTicketForm({
   session,
   interventions,
   presetId,
+  store = tabStore,
 }: {
   session: Session;
   interventions: Intervention[];
   presetId: string;
+  store?: () => Store | null;
 }) {
-  // Clé d'idempotence générée une fois à l'ouverture du formulaire et conservée tant que la
-  // création n'a pas abouti : une nouvelle tentative ne crée jamais de doublon.
-  // The idempotency key and the content it covers survive a remount (navigation, identity
-  // refresh): a retry after an uncertain outcome re-sends the SAME key with the SAME content,
-  // which the platform replays instead of duplicating. Cleared only after success.
-  const PENDING_KEY = `courant-support-pending-${session.profileId}`;
-  const [requestId, setRequestId] = useState<string>(() => {
-    try {
-      const saved = JSON.parse(sessionStorage.getItem(PENDING_KEY) || "null") as { request_id?: string } | null;
-      if (saved?.request_id && /^[0-9a-f-]{36}$/i.test(saved.request_id)) return saved.request_id;
-    } catch {}
-    return uid();
-  });
+  // Account at mount: storage keys are bound to mode + uid (found again after a reload); the
+  // generation is kept for the reply fence only.
+  const [me] = useState(() => ({ mode: session.mode, uid: session.mutationContext.userId() ?? "", gen: session.mutationContext.generation() }));
   const presetKnown = Boolean(presetId) && interventions.some((i) => i.id === presetId);
-  const pendingSaved = (() => {
-    try {
-      return JSON.parse(sessionStorage.getItem(PENDING_KEY) || "null") as
-        | { request_id?: string; subject?: string; body?: string; intervention_id?: string }
-        | null;
-    } catch {
-      return null;
-    }
-  })();
-  const [subject, setSubject] = useState(pendingSaved?.subject ?? "");
-  const [body, setBody] = useState(pendingSaved?.body ?? "");
-  const [interventionId, setInterventionId] = useState(
-    pendingSaved?.intervention_id ?? (presetKnown ? presetId : ""),
-  );
-  // Keep key + content together: a replay must carry exactly the same content.
+  // IMMUTABLE submitted snapshot, or a provable legacy tuple promoted to it (never sent by itself).
+  // Boot is READ-ONLY (StrictMode may run it twice); the legacy promotion happens in an effect.
+  const [boot] = useState(() => {
+    if (!me.uid) return { snapshot: null as Snapshot | null, unproven: false, promote: false };
+    const st = store();
+    const stored = readSnapshot(st, me.mode, me.uid);
+    if (stored) return { snapshot: stored, unproven: false, promote: false };
+    const legacy = readLegacy(st, session.profileId, me.mode, me.uid);
+    if (legacy?.kind === "tuple") return { snapshot: legacy.snapshot, unproven: false, promote: true };
+    return { snapshot: null, unproven: legacy?.kind === "unproven", promote: false };
+  });
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(boot.snapshot);
+  const [unproven, setUnproven] = useState(boot.unproven);
   useEffect(() => {
-    try {
-      if (subject || body)
-        sessionStorage.setItem(
-          PENDING_KEY,
-          JSON.stringify({ request_id: requestId, subject, body, intervention_id: interventionId }),
-        );
-    } catch {}
-  }, [PENDING_KEY, requestId, subject, body, interventionId]);
+    // Idempotent promotion of the exact legacy tuple (same request_id + content): checks the CURRENT
+    // storage, writes + reads back the private snapshot, then drops the old record only if it is
+    // still exactly that tuple. Safe to run twice; never touches a different record or draft.
+    if (!boot.promote || !boot.snapshot) return;
+    const st = store();
+    const current = readSnapshot(st, me.mode, me.uid);
+    if (current && !sameSnapshot(current, boot.snapshot)) return; // another command is pending
+    if (!current && !writeSnapshot(st, boot.snapshot)) {
+      setSnapshot(null);
+      setUnproven(true);
+      return;
+    }
+    dropLegacyIfSame(st, session.profileId, boot.snapshot);
+  }, [boot, me, store, session.profileId]);
+  // EDITABLE draft (never the snapshot).
+  const [draft, setDraft] = useState<Draft>(
+    () => (me.uid ? readDraft(store(), me.mode, me.uid) : null) ?? { subject: "", body: "", intervention_id: presetKnown ? presetId : "" },
+  );
+  useEffect(() => {
+    if (me.uid) writeDraft(store(), me.mode, me.uid, draft);
+  }, [draft, me, store]);
   const [errors, setErrors] = useState<{ subject?: string; body?: string }>({});
+  const [problem, setProblem] = useState("");
+  const [confirmAbandon, setConfirmAbandon] = useState(false);
   const [sending, setSending] = useState(false);
+  const inFlight = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const busy = session.busy || sending;
   const dossiers = [...interventions].sort(
     (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
   );
+  const sameIdentity = () => session.mutationContext.userId() === me.uid && session.mutationContext.generation() === me.gen;
 
-  async function submit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const s = subject.trim();
-    const b = body.trim();
-    const next: { subject?: string; body?: string } = {};
-    if (s.length < 4 || s.length > 160) next.subject = "Le sujet doit faire entre 4 et 160 caractères.";
-    if (b.length < 10 || b.length > 4000) next.body = "Le message doit faire entre 10 et 4000 caractères.";
-    if (next.subject || next.body) {
-      setErrors(next);
+  /** Sends EXACTLY `snap` (already frozen); the stored copy is re-read first, else 0 POST. */
+  async function send(snap: Snapshot) {
+    if (inFlight.current || !me.uid || !sameIdentity()) return; // one POST at a time, same identity
+    const stored = readSnapshot(store(), me.mode, me.uid);
+    if (!stored || !sameSnapshot(stored, snap)) {
+      setProblem(RECOVERY_COPY.storage);
       return;
     }
-    setErrors({});
+    inFlight.current = true;
     setSending(true);
-    const result = await session.createSupportTicket({
-      request_id: requestId,
-      subject: s,
-      body: b,
-      intervention_id: interventionId || null,
-    });
+    setProblem("");
+    const command = { request_id: snap.request_id, subject: snap.subject, body: snap.body, intervention_id: snap.intervention_id };
+    const result = await session.createSupportTicket(command);
+    inFlight.current = false;
+    // A late reply after an identity change or an unmount is ignored (nothing cleared, no navigation).
+    if (!mounted.current || !sameIdentity()) return;
     setSending(false);
-    // Échec : session.error l'affiche en haut ; le texte et la clé sont conservés pour réessayer.
-    if (!result) return;
-    try {
-      sessionStorage.removeItem(PENDING_KEY);
-    } catch {}
-    setRequestId(uid());
+    // null or a receipt that is not exactly this command = uncertain: the snapshot is kept as is.
+    if (!result || !validSupportReceipt(result, command, me.uid)) {
+      setProblem(result ? UNVERIFIED_RECEIPT : RECOVERY_COPY.uncertain);
+      return;
+    }
+    // Confirmed. The editable draft is cleared only if it IS the confirmed command (persisted first).
+    const matches =
+      draft.subject.trim() === snap.subject && draft.body.trim() === snap.body && (draft.intervention_id || null) === snap.intervention_id;
+    const nextDraft = matches ? { subject: "", body: "", intervention_id: "" } : draft;
+    writeDraft(store(), me.mode, me.uid, nextDraft);
+    clearSnapshot(store(), me.mode, me.uid);
+    dropLegacyIfSame(store(), session.profileId, snap); // a matching old copy never comes back
+    setDraft(nextDraft);
+    setSnapshot(null);
     session.go("support", result.ticket.id);
     session.setNotice(
       result.replayed
         ? "Cette demande avait déjà été enregistrée ; aucun doublon créé."
         : "Demande d’assistance enregistrée. Les réponses s’afficheront ici à l’actualisation.",
     );
+  }
+
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (inFlight.current || !me.uid) return;
+    // A pending snapshot is never replaced: resend it (or abandon it) first.
+    const pending = readSnapshot(store(), me.mode, me.uid);
+    if (snapshot || pending || unproven) {
+      if (pending && !snapshot) setSnapshot(pending);
+      setProblem(RECOVERY_COPY.blocked);
+      return;
+    }
+    const next = validate(draft);
+    if (next.subject || next.body) {
+      setErrors(next);
+      return;
+    }
+    setErrors({});
+    // First real send of this content: freeze it with a fresh id, store, read back, then POST.
+    const snap = freeze(draft, me.mode, me.uid, uid());
+    if (!writeSnapshot(store(), snap)) {
+      clearSnapshot(store(), me.mode, me.uid);
+      setProblem(RECOVERY_COPY.storage);
+      return;
+    }
+    setSnapshot(snap);
+    await send(snap);
   }
 
   return (
@@ -467,34 +520,107 @@ function NewTicket({
         title="Nouvelle demande d’assistance"
         subtitle="Décrivez votre question à l’équipe de la plateforme."
       />
+      {snapshot && (
+        <section className="panel" aria-labelledby="support-pending-title" data-support-pending={snapshot.request_id}>
+          <h2 id="support-pending-title" style={{ fontSize: 17, marginBottom: 8 }}>
+            {RECOVERY_COPY.pendingTitle}
+          </h2>
+          <p className={styles.note}>{snapshot.origin === "legacy" ? RECOVERY_COPY.legacyPending : RECOVERY_COPY.pending}</p>
+          <p>
+            <strong>{snapshot.subject}</strong>
+          </p>
+          <p style={{ whiteSpace: "pre-wrap" }}>{snapshot.body}</p>
+          {snapshot.intervention_id && <p className={styles.note}>Dossier {shortId(snapshot.intervention_id)}</p>}
+          <div className={styles.actions}>
+            <button type="button" className="button primary" disabled={busy} onClick={() => void send(snapshot)} data-support-resend="">
+              <Icon name="send" size={17} />
+              {busy ? "Envoi…" : RECOVERY_COPY.resend}
+            </button>
+            {!confirmAbandon ? (
+              <button type="button" className="button outline" disabled={busy} onClick={() => setConfirmAbandon(true)}>
+                {RECOVERY_COPY.abandon}
+              </button>
+            ) : (
+              <>
+                <p role="alert" className={styles.note}>{RECOVERY_COPY.abandonConfirm}</p>
+                <button
+                  type="button"
+                  className="button outline"
+                  disabled={busy}
+                  data-support-abandon=""
+                  onClick={() => {
+                    clearSnapshot(store(), me.mode, me.uid);
+                    setSnapshot(null);
+                    setConfirmAbandon(false);
+                    setProblem("");
+                  }}
+                >
+                  Confirmer l’abandon
+                </button>
+                <button type="button" className="button outline" onClick={() => setConfirmAbandon(false)}>
+                  Garder l’envoi précédent
+                </button>
+                <button type="button" className="button outline" onClick={() => session.go("support")}>
+                  Consulter mes demandes
+                </button>
+              </>
+            )}
+          </div>
+        </section>
+      )}
       <section className="panel" aria-labelledby="support-new-title">
         <h2 id="support-new-title" style={{ fontSize: 17, marginBottom: 12 }}>
           Votre demande
         </h2>
+        {unproven && !snapshot && (
+          <div className={styles.note} role="alert" data-support-unproven="">
+            <strong>{RECOVERY_COPY.unprovenTitle}</strong>
+            <p>{RECOVERY_COPY.unproven}</p>
+            <div className={styles.actions}>
+              <button type="button" className="button outline" onClick={() => session.go("support")}>
+                {RECOVERY_COPY.review}
+              </button>
+              <button
+                type="button"
+                className="button outline"
+                data-support-abandon-unproven=""
+                onClick={() => {
+                  dropLegacy(store(), session.profileId);
+                  setUnproven(false);
+                  setProblem("");
+                }}
+              >
+                {RECOVERY_COPY.abandonUnproven}
+              </button>
+            </div>
+          </div>
+        )}
+        {problem && <p className="field-error" role="alert" data-support-problem="">{problem}</p>}
+        {snapshot && <p className={styles.note}>{RECOVERY_COPY.editNote}</p>}
         <form className={styles.form} onSubmit={submit} noValidate>
           <Field label="Sujet" hint="4 à 160 caractères" error={errors.subject}>
             <input
               type="text"
-              value={subject}
+              value={draft.subject}
               maxLength={160}
               autoComplete="off"
               required
-              onChange={(e) => setSubject(e.target.value)}
+              onChange={(e) => setDraft({ ...draft, subject: e.target.value })}
             />
           </Field>
-          <span className={`${styles.counter} ${subject.length > 160 ? styles.counterOver : ""}`} aria-hidden="true">
-            {subject.length}/160
+          <span className={`${styles.counter} ${draft.subject.length > 160 ? styles.counterOver : ""}`} aria-hidden="true">
+            {draft.subject.length}/160
           </span>
           <Field label="Message" hint="10 à 4000 caractères" error={errors.body}>
             <textarea
-              value={body}
+              value={draft.body}
               maxLength={4000}
               required
-              onChange={(e) => setBody(e.target.value)}
+              onChange={(e) => setDraft({ ...draft, body: e.target.value })}
             />
           </Field>
-          <span className={`${styles.counter} ${body.length > 4000 ? styles.counterOver : ""}`} aria-hidden="true">
-            {body.length}/4000
+          <span className={`${styles.counter} ${draft.body.length > 4000 ? styles.counterOver : ""}`} aria-hidden="true">
+            {draft.body.length}/4000
           </span>
           <Field
             label="Dossier concerné (facultatif)"
@@ -504,7 +630,7 @@ function NewTicket({
                 : "Seuls les dossiers accessibles depuis votre espace peuvent être liés."
             }
           >
-            <select value={interventionId} onChange={(e) => setInterventionId(e.target.value)}>
+            <select value={draft.intervention_id} onChange={(e) => setDraft({ ...draft, intervention_id: e.target.value })}>
               <option value="">Aucun dossier</option>
               {dossiers.map((i) => (
                 <option key={i.id} value={i.id}>
@@ -518,9 +644,9 @@ function NewTicket({
             dossier.
           </p>
           <div className={styles.actions}>
-            <button type="submit" className="button primary" disabled={busy}>
+            <button type="submit" className="button primary" disabled={busy || Boolean(snapshot) || unproven} data-support-send="">
               <Icon name="send" size={17} />
-              {busy ? "Envoi…" : "Envoyer la demande"}
+              {busy && !snapshot ? "Envoi…" : "Envoyer la demande"}
             </button>
             <button
               type="button"
@@ -531,6 +657,7 @@ function NewTicket({
               Annuler
             </button>
           </div>
+          {snapshot && <p className={styles.note}>{RECOVERY_COPY.blocked}</p>}
         </form>
       </section>
     </>

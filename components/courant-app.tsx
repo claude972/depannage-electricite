@@ -4,6 +4,7 @@
 // counterpart). Role spaces under components/role render the screens.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "../lib/supabase/client";
+import { UNVERIFIED_RECEIPT, validSupportReceipt } from "./app/support-receipt";
 import { api, ApiRequestError, contractStateFromError, uploadDocument } from "./app/api";
 import { createGuard, createRunner, runForResult, type RunContext, type Runner } from "./app/guard";
 import { adoptIdentity } from "./app/identity";
@@ -2181,6 +2182,8 @@ export default function CourantApp() {
       try {
         const result = await api<SupportCreateResult>("/api/support", values);
         if (!ctx.alive()) return undefined; // stale chain: runForResult yields null to the caller
+        // A 200 is a success only if the receipt is exactly this command (else: uncertain, no notice).
+        if (!validSupportReceipt(result, values, userId.current)) throw new Error(UNVERIFIED_RECEIPT);
         ctx.when(setCapabilities)((c) => ({ ...c, support: "available" }));
         ctx.notice(
           result.replayed
