@@ -1,0 +1,16 @@
+/* ADM-03 reassign picker. --ui-* tokens only, light/dark, 1px borders, 44 px targets, visible focus. */
+.picker { display: grid; gap: 8px; margin: 0 0 16px; min-width: 0; }
+.label { font-size: 14px; font-weight: 600; color: var(--ui-text); padding: 0; }
+.searchRow { display: flex; gap: 8px; min-width: 0; }
+.input { flex: 1; min-width: 0; min-height: 44px; padding: 0 12px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-card); color: var(--ui-text); font: inherit; }
+.options { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; min-width: 0; max-height: 360px; overflow-y: auto; }
+.option { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 10px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-card); color: var(--ui-text); cursor: pointer; overflow-wrap: anywhere; }
+.option:has(input:checked) { border-color: var(--ui-accent); }
+.option input { width: 20px; height: 20px; flex: none; margin: 0; accent-color: var(--ui-accent); }
+.hint { margin: 0; font-size: 13px; color: var(--ui-text-muted); }
+.error { margin: 0; font-size: 13px; color: var(--ui-danger); }
+.note { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-surface); font-size: 14px; }
+.note p { margin: 0; }
+.button { min-height: 44px; padding: 0 16px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-card); color: var(--ui-text); font: inherit; font-weight: 600; cursor: pointer; justify-self: start; }
+.button:disabled { opacity: 0.6; cursor: not-allowed; }
+.input:focus-visible, .button:focus-visible, .option:has(input:focus-visible) { outline: 3px solid var(--ui-focus); outline-offset: 2px; }

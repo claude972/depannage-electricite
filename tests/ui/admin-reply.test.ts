@@ -113,7 +113,10 @@ test("admin dossier thread mounts the composer (ADM-07 block removed) and merges
   const src = readFileSync("components/role/admin-space.tsx", "utf8");
   assert.doesNotMatch(src, /blocker="ADM-07"/);
   assert.match(src, /<AdminReplyComposer\s+key=\{`\$\{id\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\}\s+intervention=\{intervention\}\s+demo=\{demo\}\s+context=\{session\.mutationContext\}/);
-  assert.match(src, /const messages = mergeThread\(session\.data\.messages, sentReplies, id\);/);
+  // ADM-07 thread source (claude/admin-reassign-thread-ui): demo keeps the workspace merge, live reads
+  // the paginated /api/messages (useAdminThread) and merges the confirmed replies there.
+  assert.match(src, /const messages = demo\s*\? mergeThread\(session\.data\.messages, sentReplies, id\)/);
+  assert.match(src, /useAdminThread\(session\.mutationContext, id, sentReplies, !demo\)/);
   assert.match(src, /setSentReplies\(\(list\) => \[\.\.\.list, message\]\);\s+void sessionRef\.current\.ensureFresh\(\);/);
 });
 
