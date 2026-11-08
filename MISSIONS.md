@@ -285,3 +285,7 @@ Codex ajoute le panneau personnel de suivi de l’effacement aux profils artisan
 ### PUB-07 / PUB-09 — éditer l’équipe et les conditions du réseau
 
 Codex ajoute `team_text` et `network_terms` à la publication versionnée de l’exploitant. Claude les raccorde à l’éditeur, à la présentation de l’équipe et à la page de candidature artisan. Afficher les textes approuvés de l’exploitant comme texte brut. Conserver les versions antérieures et les conditions commerciales hors des valeurs par défaut.
+
+### ENT-04 / SYS-06 — déposer une pièce privée directement sur un site
+
+Codex possède la migration et `/api/sites/[id]/documents`. Réutiliser le bucket privé et la validation PDF/JPEG/PNG/WebP, avec un chemin distinct et une métadonnée rattachée au site. Dépôt limité au gestionnaire d’un site actif, lecture sous RLS, permissions relues lors de la finalisation, aucun changement aux documents d’intervention. Claude raccordera le dépôt et la liste paginée à la fiche. Aucun nouveau format ni règle de conservation implicite.
