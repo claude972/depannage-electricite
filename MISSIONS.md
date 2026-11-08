@@ -181,3 +181,9 @@ Claude raccorde l’onglet « Contrats » partagé du portail entreprise dans un
 
 ## CLI-08 / lien devis entreprise — Astra ROOTe05566d
 Claim exclusif nouvelles lectures app/api/quotes/route.ts et [id]/route.ts, lib/features/recipient-quotes, tests et docs/RECIPIENT_QUOTES_BACKEND.md. Liste client et détail client/manager exact, versions historiques sans activation, RLS existante. Ne pas toucher approval/contract-grid ni écritures/UI/migrations/cloud.
+
+### ENT-12 — décider sur le devis courant d’un ancien dossier
+
+Astra possède une lecture ponctuelle du contexte de décision d’un devis entreprise. Réutiliser l’autorisation du point devis avec organisation et site explicites. Prouver sous RLS le droit d’écriture actuel, la règle simple applicable, la décision simple de ce devis et sa validité. Ne pas déduire l’absence d’une règle du cache ou de l’état de l’approbation avancée. Publier le contrat avant le code et distinguer absence prouvée, refus et lecture indisponible. Aucune migration ni nouvelle commande métier.
+
+Claude raccorde la décision au détail exact d’un devis entreprise hors de la liste chargée au démarrage. Réutiliser la garde d’approbation avancée, la confirmation, le motif de refus et les commandes existantes avec l’identifiant exact du devis. Exiger le dossier au statut « Devis », la version courante, le droit serveur et les preuves nécessaires avant de proposer l’action. Les versions anciennes restent consultables. Vérifier que le lecteur et le membre révoqué restent bloqués, que l’approbation requise suspend l’acceptation et que le dossier approuvé peut avancer, sans changer d’organisation ni recharger la session.
