@@ -7,6 +7,11 @@
 //   POST /api/profile/data { action: "request_erasure", request_id: UUID, confirmed: true }
 //        → { ticket_id, status, replayed } through the existing support tickets. NOTHING is erased.
 // Organisation dossiers and third-party messages are not part of the personal download (MISSIONS SYS-09).
+// SYS-09 / PUB-10 completion (MISSIONS 1e17ca7): two more paged sections, same paging rule:
+//   erasure_requests  → { id, ticket_id, state, execution_state, version, created_at, updated_at }
+//   payment_reminders → { id, version, remind_at, status, processed_at }
+//   The server checks the identity of every row WITHOUT projecting it: no owner key is expected (and
+//   any extra key — quote / notification ids, fingerprint, organisation data — refuses the page).
 import { z } from "zod";
 
 export const DATA_PATH = "/api/profile/data";
@@ -16,7 +21,7 @@ export const PAGE_SIZE = 100;
 export type Result = { status: number; body: unknown; retryAfterS: number | null };
 export type Context = { generation(): number; userId(): string | null };
 
-export const SECTIONS = ["account", "addresses", "requests", "messages", "documents", "support"] as const;
+export const SECTIONS = ["account", "addresses", "requests", "messages", "documents", "support", "erasure_requests", "payment_reminders"] as const;
 export type Section = (typeof SECTIONS)[number];
 export type PagedSection = Exclude<Section, "account">;
 export const SECTION_LABEL: Record<Section, string> = {
@@ -26,17 +31,35 @@ export const SECTION_LABEL: Record<Section, string> = {
   messages: "Messages que vous avez écrits",
   documents: "Documents dont vous êtes propriétaire",
   support: "Demandes d’assistance",
+  erasure_requests: "Demandes d’effacement",
+  payment_reminders: "Rappels de règlement",
 };
 
 const uuid = z.string().uuid();
 // Field lists copied verbatim from the route (the server projects exactly these keys).
-const FIELDS: Record<PagedSection, { owner: string; fields: string }> = {
+const FIELDS: Record<PagedSection, { owner: string | null; fields: string }> = {
   addresses: { owner: "user_id", fields: "id,user_id,label,first_name,last_name,address,postal_code,city,country_code,latitude,longitude,geo_source,is_preferred,created_at,updated_at,archived_at" },
   requests: { owner: "client_id", fields: "id,client_id,site_id,category,description,address,postal_code,city,urgency,status,created_at,updated_at" },
   messages: { owner: "author_id", fields: "id,author_id,intervention_id,body,created_at" },
   documents: { owner: "owner_id", fields: "id,owner_id,intervention_id,name,mime_type,created_at" },
   support: { owner: "creator_id", fields: "id,creator_id,intervention_id,subject,status,created_at,updated_at" },
+  // Identity verified per row by the server, never projected (no owner key).
+  erasure_requests: { owner: null, fields: "id,ticket_id,state,execution_state,version,created_at,updated_at" },
+  payment_reminders: { owner: null, fields: "id,version,remind_at,status,processed_at" },
 };
+const isIso = (v: unknown) => typeof v === "string" && /T.*(Z|[+-]\d{2}:\d{2})$/.test(v) && Number.isFinite(Date.parse(v));
+const ERASURE_STATES = ["requested", "in_review", "needs_information", "approved", "rejected"];
+const REMINDER_STATUSES = ["scheduled", "cancelled", "sent", "invalidated", "muted"];
+/** Value checks of the two identity-less sections (exact keys are checked by the caller). */
+function validRow(section: PagedSection, r: Row): boolean {
+  if (section === "erasure_requests")
+    return uuid.safeParse(r.ticket_id).success && ERASURE_STATES.includes(String(r.state)) && r.execution_state === "not_started"
+      && Number.isInteger(r.version) && (r.version as number) >= 1 && (r.version as number) <= 100 && isIso(r.created_at) && isIso(r.updated_at);
+  if (section === "payment_reminders")
+    return Number.isInteger(r.version) && (r.version as number) >= 1 && isIso(r.remind_at) && REMINDER_STATUSES.includes(String(r.status))
+      && (r.status === "scheduled" ? r.processed_at === null : isIso(r.processed_at));
+  return true;
+}
 const ACCOUNT_FIELDS = "id,full_name,phone,role,created_at".split(",");
 const ACCOUNT_WITH_NAME_PARTS = [...ACCOUNT_FIELDS, "first_name", "last_name"];
 const PREFERENCES_FIELDS = "user_id,muted_kinds,email_enabled,sms_enabled,push_enabled,updated_at".split(",");
@@ -73,7 +96,7 @@ export function parsePage(body: unknown, section: PagedSection, after: string | 
   const keys = fields.split(",");
   let previous = after?.toLowerCase() ?? "";
   for (const r of rows) {
-    if (!exactKeys(r, keys) || r[owner] !== ownerId || !uuid.safeParse(r.id).success) return null;
+    if (!exactKeys(r, keys) || (owner !== null && r[owner] !== ownerId) || !uuid.safeParse(r.id).success || !validRow(section, r)) return null;
     const id = String(r.id).toLowerCase();
     if (id <= previous) return null;
     if (section === "requests" && r.site_id !== null) return null;
@@ -180,6 +203,8 @@ export function exportDocument(c: Collected, now: Date) {
     messages: c.rows.messages,
     documents: c.rows.documents,
     support: c.rows.support,
+    erasure_requests: c.rows.erasure_requests,
+    payment_reminders: c.rows.payment_reminders,
   };
 }
 
@@ -219,7 +244,7 @@ export function createCollector({ fetcher, context, save, now = () => new Date()
       if (!owner || owner.uid !== me.uid || owner.gen !== me.gen) {
         reset();
         owner = me;
-        collected = { account: null, rows: { addresses: [], requests: [], messages: [], documents: [], support: [] } };
+        collected = { account: null, rows: { addresses: [], requests: [], messages: [], documents: [], support: [], erasure_requests: [], payment_reminders: [] } };
         state = { ...state, progress: initialProgress() };
       }
       running = true;
