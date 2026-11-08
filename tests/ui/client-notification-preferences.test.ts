@@ -81,10 +81,13 @@ test("demo: read-only form, no save button, SMS never shown as active", async ()
   assert.doesNotMatch(html, />Actif</, "no external channel is presented as active");
 });
 
-test("panel: an external channel is « Actif » only when the server reports it available", async () => {
+test("panel: an available channel is « Disponible », « Activé » only with the saved server opt-in", async () => {
   const { renderPanel, demoPreferences } = await load();
   const view = demoPreferences();
   const html = renderPanel({ client, demo: { ...view, channels: { ...view.channels, email: "available" } }, writable: true });
-  assert.equal((html.match(/>Actif</g) ?? []).length, 1);
+  assert.equal((html.match(/>Disponible</g) ?? []).length, 1);
+  assert.doesNotMatch(html, />Actif<|>Activé</);
   assert.match(html, /Enregistrer<\/button>/);
+  const on = renderPanel({ client, demo: { ...view, channels: { ...view.channels, email: "available" }, preferences: { ...view.preferences, email_enabled: true } }, writable: true });
+  assert.equal((on.match(/>Activé</g) ?? []).length, 1);
 });
