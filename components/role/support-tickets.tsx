@@ -426,6 +426,9 @@ function NewTicketForm({
   const [draft, setDraft] = useState<Draft>(
     () => (me.uid ? readDraft(store(), me.mode, me.uid) : null) ?? { subject: "", body: "", intervention_id: presetKnown ? presetId : "" },
   );
+  // Latest draft, never a stale closure: the post-send decision reads it after the await.
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
   useEffect(() => {
     if (me.uid) writeDraft(store(), me.mode, me.uid, draft);
   }, [draft, me, store]);
@@ -470,9 +473,10 @@ function NewTicketForm({
       return;
     }
     // Confirmed. The editable draft is cleared only if it IS the confirmed command (persisted first).
+    const latest = draftRef.current; // what the user typed up to the receipt, not the draft at send time
     const matches =
-      draft.subject.trim() === snap.subject && draft.body.trim() === snap.body && (draft.intervention_id || null) === snap.intervention_id;
-    const nextDraft = matches ? { subject: "", body: "", intervention_id: "" } : draft;
+      latest.subject.trim() === snap.subject && latest.body.trim() === snap.body && (latest.intervention_id || null) === snap.intervention_id;
+    const nextDraft = matches ? { subject: "", body: "", intervention_id: "" } : latest;
     writeDraft(store(), me.mode, me.uid, nextDraft);
     clearSnapshot(store(), me.mode, me.uid);
     dropLegacyIfSame(store(), session.profileId, snap); // a matching old copy never comes back
