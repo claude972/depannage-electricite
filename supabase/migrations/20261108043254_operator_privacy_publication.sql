@@ -18,6 +18,8 @@ begin
       when 'privacy_controller' then 200
       when 'privacy_retention' then 2000
       when 'privacy_notice' then 8000
+      when 'team_text' then 4000
+      when 'network_terms' then 8000
       when 'host_contact' then 254
       when 'public_phone' then 16
       when 'siren' then 9

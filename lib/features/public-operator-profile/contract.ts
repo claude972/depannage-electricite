@@ -10,6 +10,8 @@ export const operatorProfile = z.object({
   privacy_controller: text(200),
   privacy_retention: text(2000),
   privacy_notice: text(8000),
+  team_text: text(4000),
+  network_terms: text(8000),
   host_name: text(160), host_address: text(500), host_contact: text(254), rights_holder: text(160),
   display_name: text(120), about_text: text(2000), service_area: text(500),
   public_phone: z.string().regex(/^\+[1-9][0-9]{6,14}$/),
