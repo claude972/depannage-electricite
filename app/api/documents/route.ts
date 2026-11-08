@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { env } from "node:process";
 import {
   authenticatedClient,
   adminClient,
@@ -10,17 +9,14 @@ import {
 } from "@/lib/supabase/server";
 import { uuid } from "@/lib/supabase/validation";
 import {
-  DOCUMENT_BUCKET as bucket,
   MAX_DOCUMENT_BYTES,
   MAX_REQUEST_BYTES,
   documentNameFor,
   validateDocumentUpload,
 } from "@/lib/shared/document-policy";
 import { storeWebDocument, WebUploadError } from "@/lib/features/documents/web-upload";
+import { signPrivateDocument, unavailableDownload } from "@/lib/features/documents/signed-url";
 export const runtime = "nodejs";
-function unavailableDownload(): never {
-  throw new ApiError(503, "Le lien du document est momentanément indisponible. Réessayez.");
-}
 async function readDocuments(request: Request) {
   let signedRequest = false;
   try {
@@ -45,32 +41,7 @@ async function readDocuments(request: Request) {
       .maybeSingle();
     if (error) unavailableDownload();
     if (data === null) throw new ApiError(404, "Ce document est introuvable.");
-    if (!data || Array.isArray(data) || typeof data.path !== "string" ||
-      !data.path.length || data.path.length > 1024 || data.path.trim() !== data.path ||
-      /[\u0000-\u001f\u007f\\]/.test(data.path) ||
-      data.path.split("/").some((part: string) => !part || part === "." || part === ".."))
-      unavailableDownload();
-    let base: URL;
-    try { base = new URL(env.NEXT_PUBLIC_SUPABASE_URL ?? ""); }
-    catch { unavailableDownload(); }
-    if (base.protocol !== "https:" || base.username || base.password) unavailableDownload();
-    const signed = await db.storage.from(bucket).createSignedUrl(data.path, 60);
-    if (signed.error || typeof signed.data?.signedUrl !== "string") unavailableDownload();
-    const value = signed.data.signedUrl;
-    if (!value || value.length > 8192 || value.trim() !== value) unavailableDownload();
-    try {
-      const url = new URL(value);
-      // Validate only origin/path, never decode or log the opaque signed query token.
-      const expectedPath = `${base.pathname.replace(/\/$/, "")}/storage/v1/object/sign/${bucket}/${data.path}`;
-      if (url.protocol !== "https:" || url.origin !== base.origin || url.username || url.password ||
-        url.hash || decodeURIComponent(url.pathname) !== expectedPath) unavailableDownload();
-      // Inspect parameter names and raw presence only. The signature value stays opaque:
-      // never decode it, parse claims or expose it in diagnostics. Duplicate keys are ambiguous.
-      const tokenEntries = url.search.slice(1).split("&").filter(part =>
-        decodeURIComponent(part.split("=", 1)[0].replace(/\+/g, " ")) === "token");
-      if (tokenEntries.length !== 1 || !/^token=.+$/s.test(tokenEntries[0])) unavailableDownload();
-    } catch { unavailableDownload(); }
-    return Response.json({ url: value });
+    return Response.json({ url: await signPrivateDocument(db, data?.path) });
   } catch (error) {
     if (!signedRequest) return apiError(error);
     if (error instanceof ApiError && [401, 422, 404].includes(error.status)) return apiError(error);

@@ -14,9 +14,9 @@ export class WebUploadError extends ApiError {
     super(status, message);
   }
 }
-const uncertain = () => new WebUploadError(
+const uncertain = (scope: "du dossier" | "du site") => new WebUploadError(
   502,
-  "L’enregistrement du fichier est incertain. Vérifiez la liste des documents du dossier avant de réessayer.",
+  `L’enregistrement du fichier est incertain. Vérifiez la liste des documents ${scope} avant de réessayer.`,
   { uncertain: true },
 );
 const cleanupIncomplete = () => new WebUploadError(
@@ -42,56 +42,78 @@ async function compensate(admin: SupabaseClient, path: string) {
   } catch { return false; }
 }
 
-/** Storage alone uses the server credential. Metadata is committed by the caller's JWT RPC,
- * which rechecks current rights while holding the existing organisation/dossier locks (013).
- * Readback may confirm a commit; a momentarily absent row never proves a transport rollback. */
-export async function storeWebDocument(
-  db: SupabaseClient,
+type PersistOptions<T> = {
+  path: string;
+  mime: string;
+  bytes: Uint8Array;
+  scope: "du dossier" | "du site";
+  finalize(): PromiseLike<{ data: unknown; error: { code?: string } | null }>;
+  readback(): PromiseLike<{ data: unknown; error: unknown }>;
+  project(value: unknown): T | null;
+};
+
+/** Only Storage uses the server credential. The supplied metadata writer runs under the caller.
+ * An absent row after a transport failure does not prove rollback. */
+export async function persistPrivateWebDocument<T>(
   admin: SupabaseClient,
-  expected: ExpectedRow,
-  bytes: Uint8Array,
-) {
+  { path, mime, bytes, scope, finalize, readback, project }: PersistOptions<T>,
+): Promise<T> {
   let uploaded;
   try {
-    uploaded = await admin.storage.from(DOCUMENT_BUCKET).upload(expected.path, bytes, { contentType: expected.mime, upsert: false });
+    uploaded = await admin.storage.from(DOCUMENT_BUCKET).upload(path, bytes, { contentType: mime, upsert: false });
   } catch { uploaded = { error: { message: "Upload transport unavailable" } }; }
   if (uploaded.error) {
-    // A duplicate-path refusal did not create this attempt's object: do not delete an older one.
     if (isExistingObjectError(uploaded.error))
       throw new ApiError(409, "L’état du fichier a changé. Rechargez les documents avant de réessayer.");
-    if (!await compensate(admin, expected.path)) throw cleanupIncomplete();
+    if (!await compensate(admin, path)) throw cleanupIncomplete();
     throw new ApiError(503, "Le fichier n’a pas pu être envoyé. Réessayez dans quelques instants.");
   }
-  let finalized: { data: unknown; error: { code?: string } | null };
+
+  let finalized: Awaited<ReturnType<PersistOptions<T>["finalize"]>>;
   try {
-    finalized = await db.rpc("finalize_document_upload", {
+    finalized = await finalize();
+  } catch { finalized = { data: null, error: { code: "network" } }; }
+  if (!finalized.error) {
+    const row = project(finalized.data);
+    if (row) return row;
+  }
+
+  let lookup: Awaited<ReturnType<PersistOptions<T>["readback"]>>;
+  try {
+    lookup = await readback();
+  } catch { throw uncertain(scope); }
+  if (lookup.error) throw uncertain(scope);
+  if (lookup.data !== null) {
+    const row = project(lookup.data);
+    if (row) return row;
+    throw uncertain(scope);
+  }
+  if (isDefiniteRollback(finalized.error?.code)) {
+    if (!await compensate(admin, path)) throw cleanupIncomplete();
+    dbError(finalized.error);
+  }
+  throw uncertain(scope);
+}
+
+export function storeWebDocument(db: SupabaseClient, admin: SupabaseClient, expected: ExpectedRow, bytes: Uint8Array) {
+  return persistPrivateWebDocument(admin, {
+    path: expected.path,
+    mime: expected.mime,
+    bytes,
+    scope: "du dossier",
+    finalize: () => db.rpc("finalize_document_upload", {
       p_id: expected.id,
       p_path: expected.path,
       p_name: expected.name,
       p_mime: expected.mime,
       p_intervention_id: expected.interventionId,
-    });
-  } catch { finalized = { data: null, error: { code: "network" } }; }
-  if (!finalized.error) {
-    const row = validateFinalizedRow(finalized.data, expected);
-    if (row) return publicDocument(row);
-  }
-  let lookup: { data: unknown; error: unknown };
-  try {
-    lookup = await admin.from("documents")
+    }),
+    readback: () => admin.from("documents")
       .select("id,intervention_id,owner_id,name,path,mime_type,created_at")
-      .eq("id", expected.id).maybeSingle();
-  } catch { throw uncertain(); }
-  if (lookup.error) throw uncertain();
-  if (lookup.data !== null) {
-    const row = validateFinalizedRow(lookup.data, expected);
-    if (row) return publicDocument(row);
-    throw uncertain();
-  }
-  if (isDefiniteRollback(finalized.error?.code)) {
-    if (!await compensate(admin, expected.path)) throw cleanupIncomplete();
-    dbError(finalized.error);
-  }
-  // Unknown commit state: keeping this exact object avoids deleting a committed document.
-  throw uncertain();
+      .eq("id", expected.id).maybeSingle(),
+    project(value) {
+      const row = validateFinalizedRow(value, expected);
+      return row ? publicDocument(row) : null;
+    },
+  });
 }
