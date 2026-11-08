@@ -32,7 +32,8 @@ const PUBLIC_VIEWS: View[] = ["home", "new", "auth", "help", "pricing", "join", 
 // The PUBLISHED operator profile (never the draft) feeds the informational pages; while it loads,
 // fails or is not published, every field keeps « À renseigner par l’exploitant ».
 const OperatorContext = createContext<PublicProfileState | null>(null);
-const OPERATOR_VIEWS: View[] = ["help", "pricing", "about", "privacy", "legal"];
+// "join" reads the published network terms (PUB-07); nothing else is derived from it there.
+const OPERATOR_VIEWS: View[] = ["help", "pricing", "about", "privacy", "legal", "join"];
 type Source = { fields: OperatorField[]; optional?: OperatorField[]; join?: string };
 /** Published value for a field label, or null ⇒ pending. Required parts must all be published. */
 function sourced(state: PublicProfileState | null, source: Source | undefined): string | null {
@@ -278,6 +279,24 @@ function PrivacyText({ field, title }: { field: "privacy_retention" | "privacy_n
     </div>
   );
 }
+/** PUB-07 / PUB-09: a published long text as plain-text paragraphs; nothing at all when absent. */
+function PublishedBlock({ field, title, headingId }: { field: "team_text" | "network_terms"; title: string; headingId: string }) {
+  const value = publishedValue(useContext(OperatorContext), field);
+  if (!value) return null;
+  return (
+    <section className={styles.docSection} aria-labelledby={headingId} data-published-text={field}>
+      <h2 id={headingId}>{title}</h2>
+      {paragraphs(value).map((p, i) => <p key={i} style={{ whiteSpace: "pre-line" }}>{p}</p>)}
+    </section>
+  );
+}
+/** Network terms on the artisan application page: the published text, else the existing notice. */
+function NetworkTerms() {
+  const value = publishedValue(useContext(OperatorContext), "network_terms");
+  if (!value)
+    return <Unavailable title="Commission, délais de règlement et conditions du réseau" reason="Non définis à ce stade. Aucun pourcentage, aucun délai de versement ni condition contractuelle n’est publié avant décision de l’exploitant." blocker="Q-PDF-15 / Q-PDF-05" />;
+  return <PublishedBlock field="network_terms" title="Conditions du réseau publiées par l’exploitant" headingId="join-network-terms" />;
+}
 /** Full published privacy notice, or the existing honest placeholder while it is not published. */
 function PrivacyNotice() {
   const value = publishedValue(useContext(OperatorContext), "privacy_notice");
@@ -486,7 +505,7 @@ function JoinView({ onSignup, onDemo }: { onSignup: () => void; onDemo: () => vo
               ))}
             </ol>
           </section>
-          <Unavailable title="Commission, délais de règlement et conditions du réseau" reason="Non définis à ce stade. Aucun pourcentage, aucun délai de versement ni condition contractuelle n’est publié avant décision de l’exploitant." blocker="Q-PDF-15 / Q-PDF-05" />
+          <NetworkTerms />
           <section className={styles.cta}>
             <div>
               <h2>Créer mon compte artisan</h2>
@@ -548,6 +567,7 @@ function AboutView({ onNew, onJoin, onLogin }: { onNew: () => void; onJoin: () =
       <section className={`panel ${styles.block} ${styles.narrowBlock}`} aria-labelledby="about-operator">
         <h2 id="about-operator">Exploitant, équipe et histoire</h2>
         <OperatorAbout />
+        <PublishedBlock field="team_text" title="L’équipe" headingId="about-team" />
         <PendingFields
           fields={OPERATOR_FIELDS}
           label="Présentation de l’exploitant"
