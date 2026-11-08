@@ -22,7 +22,7 @@ Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvel
 | --- | ---: |
 | CORRIGÉ (avec suite verte) | 0 |
 | VÉRIFIÉ CIBLÉ (suite initiale rouge) | 4 |
-| CORRIGÉ PARTIEL | 0 |
+| CORRIGÉ PARTIEL | 1 |
 | NON REPRODUIT | 0 |
 | DÉCISION REQUISE | 4 |
 | REVERTÉ | 0 |
@@ -38,7 +38,7 @@ Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvel
 | E74 | Bloquant | Vérifié ciblé | Isolé | `14ea285` | `sql-phase2-lot-a-blockers-review.mjs` | `lib/features/notifications/external-delivery/` | Les deux formes donnent HTTP 422 sans tentative avant, HTTP 200 et une tentative acceptée par canal après. Fournisseurs interceptés, 403 et corps avec données toujours refusés. |
 
 | E07 | Majeur | À REPRODUIRE | Isolé | — | — | — | Verrou d’archivage site pour équipement et visite. |
-| E15 | Majeur | À REPRODUIRE | P2 | — | — | — | Créneau : version atomique et conflit HTTP. |
+| E15 | Majeur | CORRIGÉ PARTIEL | P2 | `258f44e` | `sql-phase2-lot-a-p2-review.mjs` | Route operations, migration additive | Deux identités via vrai HTTP : ancien formulaire 200 et v3 avant, 409 et v2 conservée après. RPC historique refusé, pas d’audit supplémentaire. Attend le câblage du lot B. |
 | E18 | Mineur | À REPRODUIRE | P3 | — | — | — | Rapport : rejeu avec une seule écriture et un seul instantané. |
 | E19 | Mineur | À REPRODUIRE | Isolé | — | — | — | Rapport : nom déclaré vide rejeté côté serveur. |
 | E21 | Majeur | À REPRODUIRE | P4 | — | — | — | Validation des dates constatées SLA. |
@@ -77,7 +77,7 @@ Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvel
 
 | ID | Fichier et ligne | Contrat attendu |
 | --- | --- | --- |
-| E15 | `components/role/client-space.tsx:1714`, écriture artisan correspondante | Envoyer la version lue du créneau, 0 pour la création. Contrat proposé : `expected_version` reçoit `reminder_version`. Sur 409, relire le créneau avant nouvel envoi. |
+| E15 | `components/role/client-space.tsx:1714`, écriture artisan correspondante | Envoyer la version lue du créneau, 0 pour la création. Contrat vérifié : `expected_version` reçoit `reminder_version` (entier). Sur 409, relire le créneau avant nouvel envoi. |
 | E29 | `components/app/forms.tsx:3338` | Envoyer la version de la demande de garantie avec la décision et conserver le brouillon en cas de conflit. Nom de champ attendu : `expected_version`. |
 | E34/E36 | `components/app/forms.tsx:2232` | Distinguer approbation, demande de correction, suspension et réactivation. Envoyer la version lue et garder la même clé d’intention sur les réessais. Valeurs finales à publier avec la preuve backend. |
 | E18/E41/E53 | Rapport, conversation texte, dépôt de site | Une clé stable par intention, y compris après la perte de la réponse. Définir le format exact avec chaque test de contrat backend. |
