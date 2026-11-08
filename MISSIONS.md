@@ -241,3 +241,6 @@ Contre-revue de `022f2ac`. Le sélecteur reste modifiable pendant un enregistrem
 ### ENT-09 / ENT-15 — annuler l’export énergie lors d’un changement de contexte
 
 Le panneau énergie est démonté au changement d’organisation ou en quittant Rapports. Sa réponse d’export tardive peut encore déclencher un téléchargement sous la même identité. Claude possède le panneau de consolidation et ses tests. Invalider les réponses de l’instance démontée avant toute sauvegarde de fichier, mise à jour ou programmation de reprise. Préserver le téléchargement du rapport courant et le fonctionnement sous StrictMode. Vérifier un export retenu de A, le passage à B avec le même compte, l’arrivée tardive de A et un export légitime de B. ROOT vérifiera deux périodes comparables, le CSV et les accès sur la preview. Aucun changement d’API ou des règles de mesure.
+
+## Claim Claude — ENT-09/ENT-15 export énergie inerte au changement d’organisation
+Base bb04ede ; claude/energy-export-unmount. Ownership components/features/energy-consolidation/energy-consolidation-panel.tsx et un test navigateur ciblé (tests/ui/energy-export-unmount.test.ts). Aucune API, SQL ou cloud.
