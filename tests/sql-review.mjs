@@ -170,9 +170,9 @@ assert.equal((await as('client2','select * from public.intervention_participants
 await assert.rejects(as('artisan2','select * from public.intervention_participants($1)',[operationJob.id]));
 console.log('PASS: refusal hides only that artisan offer; authorized participant projection excludes other artisans');
 const startAt=new Date(Date.now()+86400000).toISOString(),endAt=new Date(Date.now()+90000000).toISOString();
-await assert.rejects(as('client1',"select public.save_intervention_appointment($1,$2,$3,'Intrus')",[operationJob.id,startAt,endAt]));
-await assert.rejects(as('client2',"select public.save_intervention_appointment($1,$2,$3,'Fin avant début')",[operationJob.id,endAt,startAt]));
-await as('client2',"select public.save_intervention_appointment($1,$2,$3,'Client disponible')",[operationJob.id,startAt,endAt]);
+await assert.rejects(as('client1',"select public.save_intervention_appointment($1,$2,$3,'Intrus',0)",[operationJob.id,startAt,endAt]));
+await assert.rejects(as('client2',"select public.save_intervention_appointment($1,$2,$3,'Fin avant début',0)",[operationJob.id,endAt,startAt]));
+await as('client2',"select public.save_intervention_appointment($1,$2,$3,'Client disponible',0)",[operationJob.id,startAt,endAt]);
 await as('artisan1',"select public.intervention_action($1,'send_quote',$2,20)",[operationJob.id,lines]);
 const rejectedQuote=(await as('client2',"select * from public.quotes where intervention_id=$1 and status='sent'",[operationJob.id])).rows[0];
 await assert.rejects(as('client1',"select public.reject_intervention_quote($1,$2,'Refus intrus')",[operationJob.id,rejectedQuote.id]));

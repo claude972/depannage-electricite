@@ -132,7 +132,7 @@ for(const actor of ['reader','viewer','outside']){
  await assert.rejects(()=>as(actor,"select public.decide_approval($1,'approved','')",[ja.approval]));
  await assert.rejects(()=>as(actor,"select public.intervention_action($1,'accept_quote',null,20,$2)",[ja.job,ja.quote]));
  await assert.rejects(()=>as(actor,"select public.reject_intervention_quote($1,$2,'Reason')",[ja.job,ja.quote]));
- await assert.rejects(()=>as(actor,"select public.save_intervention_appointment($1,now()+interval '3 days',now()+interval '4 days','')",[ja.job]));
+ await assert.rejects(()=>as(actor,"select public.save_intervention_appointment($1,now()+interval '3 days',now()+interval '4 days','',0)",[ja.job]));
 }
 for(const actor of ['writer','reader','viewer']){
  await assert.rejects(()=>as(actor,"select public.create_site('Fixture','office','Address',1,$1)",[org]));
