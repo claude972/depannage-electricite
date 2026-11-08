@@ -169,6 +169,7 @@ export const MISSIONS_COPY = {
   anonymized: "Offres anonymisées : l’adresse, le contact et la description sont transmis après acceptation. Distance non calculée.",
   anonymizedNearest: "Offres anonymisées : l’adresse, le contact et la description sont transmis après acceptation.",
   acceptFailed: "L’acceptation n’a pas été confirmée. Vérifiez la liste : l’offre a pu être prise par un autre artisan.",
+  declineFailed: "Le refus n’a pas été confirmé. Votre motif est conservé : réessayez ou vérifiez les offres disponibles.",
 } as const;
 export const shownCount = (n: number, hasMore: boolean) => `${n} offre${n > 1 ? "s" : ""} affichée${n > 1 ? "s" : ""}${hasMore ? " · il y en a d’autres" : ""}`;
 
@@ -250,12 +251,37 @@ export function createMissionsController({ api, context = DEFAULT_MISSIONS_CONTE
     set(next);
     return true;
   };
+  async function respond(id: string, send: (id: string) => Promise<boolean>, confirmed: (id: string) => void, failureMessage: string) {
+    if (!attached || accepting) return false;
+    accepting = true;
+    seq++; // An older page must not put a resolved offer back in the list.
+    pointSeq++;
+    const gen = context.generation(), uid = context.userId();
+    set({ ...get(), accepting: id, loadingMore: false, acceptError: "" });
+    let ok = false;
+    try {
+      ok = await send(id);
+    } catch {
+      ok = false;
+    } finally {
+      accepting = false;
+    }
+    if (!same(gen, uid)) return false;
+    const current = get();
+    if (!ok) {
+      set({ ...current, accepting: null, acceptError: failureMessage });
+      return false;
+    }
+    set({ ...current, accepting: null, point: null, items: current.items.filter(offer => offer.id !== id) });
+    confirmed(id);
+    return true;
+  }
   return {
     /** Page 1 (or reload): pages, cursor and selection are dropped. */
     load: first,
     async more(): Promise<boolean> {
       const s = get();
-      if (s.phase !== "ready" || s.loadingMore || !s.page?.has_more || !s.page.next_cursor) return false;
+      if (accepting || s.phase !== "ready" || s.loadingMore || !s.page?.has_more || !s.page.next_cursor) return false;
       // The cursor belongs to the identity that loaded page 1: another identity restarts at page 1.
       if (loadedFor !== identity()) return first();
       const my = seq; // a reload (++seq) voids this page
@@ -272,7 +298,7 @@ export function createMissionsController({ api, context = DEFAULT_MISSIONS_CONTE
     },
     /** Anonymized summary of one offer (?id=), never the private dossier. 404 ⇒ removed locally. */
     async open(id: string): Promise<boolean> {
-      if (!UUID.test(id)) return false;
+      if (accepting || !UUID.test(id)) return false;
       const my = ++pointSeq;
       const gen = context.generation(), uid = context.userId();
       set({ ...get(), point: { id, phase: "loading", offer: null }, acceptError: "" });
@@ -290,39 +316,26 @@ export function createMissionsController({ api, context = DEFAULT_MISSIONS_CONTE
     /** DEMO ONLY: summary from the local demo offers (ids « demo-* »), never a GET and never the
      *  live parser; the live open() keeps its strict UUID + parsePoint path unchanged. */
     openDemo(id: string, items: MissionOffer[]): boolean {
+      if (accepting) return false;
       pointSeq++;
       const offer = items.find((o) => o.id === id) ?? null;
       set({ ...get(), point: { id, phase: offer ? "ready" : "gone", offer }, acceptError: "" });
       return offer !== null;
     },
     close() {
+      if (accepting) return;
       pointSeq++;
       set({ ...get(), point: null, acceptError: "" });
     },
-    /** Existing locked accept action (single flight); success ⇒ onOpenAccepted (private dossier). */
-    async accept(id: string, onAccept: (id: string) => Promise<boolean>, onOpenAccepted: (id: string) => void): Promise<boolean> {
-      if (accepting) return false;
-      accepting = true;
-      const gen = context.generation(), uid = context.userId();
-      set({ ...get(), accepting: id, acceptError: "" });
-      let ok = false;
-      try {
-        ok = await onAccept(id);
-      } catch {
-        ok = false;
-      } finally {
-        accepting = false;
-      }
-      if (!same(gen, uid)) return false;
-      if (ok) {
-        const s = get();
-        set({ ...s, accepting: null, point: null, items: s.items.filter((i) => i.id !== id) });
-        onOpenAccepted(id);
-        return true;
-      }
-      // No optimistic removal: the list says what the server still offers.
-      set({ ...get(), accepting: null, acceptError: MISSIONS_COPY.acceptFailed });
-      return false;
+    accept(id: string, onAccept: (id: string) => Promise<boolean>, onOpenAccepted: (id: string) => void) {
+      return respond(id, onAccept, onOpenAccepted, MISSIONS_COPY.acceptFailed);
+    },
+    decline(id: string, reason: string, onDecline: (id: string, reason: string) => Promise<boolean>, onDeclined: (id: string) => void) {
+      const point = get().point;
+      const motive = reason.trim();
+      if (point?.id !== id || point.phase !== "ready" || !point.offer || motive.length < 5 || motive.length > 1000)
+        return Promise.resolve(false);
+      return respond(id, offerId => onDecline(offerId, motive), onDeclined, MISSIONS_COPY.declineFailed);
     },
     get accepting() {
       return accepting;

@@ -33,6 +33,8 @@ export type AvailableMissionsProps = {
   onAccept(id: string): Promise<boolean>;
   /** Opens the PRIVATE dossier, only after a successful accept (and refresh). */
   onOpenAccepted(id: string): void;
+  onDecline?(id: string, reason: string): Promise<boolean>;
+  onDeclined?(id: string): void;
   /** Order of this mount (the host keys the panel by it: a change restarts at page 1). */
   order?: MissionsOrder;
   /** Only true after a CONFIRMED radius GET shows an active preference (never local edits). */
@@ -91,7 +93,17 @@ export function AvailableMissionsPanel(props: AvailableMissionsProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctrl]);
 
+  const [decliningId, setDecliningId] = useState<string | null>(null);
   const point = state.point;
+  const declining = point !== null && decliningId === point.id;
+  const locked = state.accepting !== null;
+  const decline = (id: string, reason: string) => {
+    const send = latest.current.onDecline;
+    if (send) void ctrl.decline(id, reason, send, (confirmedId) => {
+      setDecliningId(null);
+      latest.current.onDeclined?.(confirmedId);
+    });
+  };
   const order: MissionsOrder = props.demo ? "oldest_first" : props.order ?? "oldest_first";
   const nearest = order === "nearest_first";
   const bandOf = (id: string) => state.items.find((i) => i.id === id)?.distance_band_km;
@@ -108,7 +120,7 @@ export function AvailableMissionsPanel(props: AvailableMissionsProps) {
       {!props.demo && props.nearestAvailable && props.onOrderChange && (
         <div className={styles.sort} role="group" aria-label={NEAREST_COPY.label} data-available-sort={order}>
           {(["oldest_first", "nearest_first"] as const).map((o) => (
-            <button key={o} type="button" className={styles.secondary} aria-pressed={order === o} disabled={order === o} onClick={() => props.onOrderChange?.(o)}>
+            <button key={o} type="button" className={styles.secondary} aria-pressed={order === o} disabled={locked || order === o} onClick={() => props.onOrderChange?.(o)}>
               {o === "oldest_first" ? NEAREST_COPY.oldest : NEAREST_COPY.nearest}
             </button>
           ))}
@@ -156,13 +168,19 @@ export function AvailableMissionsPanel(props: AvailableMissionsProps) {
               {state.acceptError && <p className={styles.error} role="alert" data-available-accept-error="">{state.acceptError}</p>}
             </>
           )}
+          {point.phase === "ready" && point.offer && declining && props.onDecline && (
+            <DeclineOfferForm key={point.id} busy={locked} onSubmit={(reason) => decline(point.id, reason)} onBack={() => setDecliningId(null)} />
+          )}
           <div className={styles.actions}>
-            {point.phase === "ready" && point.offer && (
+            {point.phase === "ready" && point.offer && !declining && (
               <button type="button" className={styles.primary} disabled={state.accepting !== null} onClick={() => accept(point.id)} data-available-accept="">
                 {state.accepting === point.id ? "Acceptation…" : "Accepter la mission"}
               </button>
             )}
-            <button type="button" className={styles.secondary} disabled={state.accepting !== null} onClick={() => ctrl.close()}>Fermer</button>
+            {point.phase === "ready" && point.offer && !declining && props.onDecline && (
+              <button type="button" className={styles.secondary} disabled={locked} onClick={() => setDecliningId(point.id)}>Refuser la mission</button>
+            )}
+            <button type="button" className={styles.secondary} disabled={locked} onClick={() => { setDecliningId(null); ctrl.close(); }}>Fermer</button>
           </div>
         </div>
       )}
@@ -171,7 +189,11 @@ export function AvailableMissionsPanel(props: AvailableMissionsProps) {
         <ul className={styles.list}>
           {state.items.map((o) => (
             <li key={o.id}>
-              <button type="button" className={styles.row} aria-current={point?.id === o.id ? "true" : undefined} onClick={() => (props.demo ? ctrl.openDemo(o.id, props.demoItems ?? []) : void ctrl.open(o.id))} data-available-offer={o.id}>
+              <button type="button" className={styles.row} aria-current={point?.id === o.id ? "true" : undefined} disabled={locked} onClick={() => {
+                setDecliningId(null);
+                if (props.demo) ctrl.openDemo(o.id, props.demoItems ?? []);
+                else void ctrl.open(o.id);
+              }} data-available-offer={o.id}>
                 <span className={styles.rowHead}>
                   <strong>{category(o.category).label}</strong>
                   <span className={o.urgency === "urgent" ? styles.urgent : styles.meta}>{o.urgency === "urgent" ? "Urgent" : "À planifier"}</span>
@@ -194,10 +216,37 @@ export function AvailableMissionsPanel(props: AvailableMissionsProps) {
         <p className={styles.error} role="alert" data-available-more-error="">{state.moreError}</p>
       )}
       {state.phase === "ready" && state.eligible && state.page?.has_more && (
-        <button type="button" className={styles.secondary} disabled={state.loadingMore} onClick={() => void ctrl.more()} data-available-more="">
+        <button type="button" className={styles.secondary} disabled={locked || state.loadingMore} onClick={() => void ctrl.more()} data-available-more="">
           {state.loadingMore ? "Chargement…" : "Afficher plus"}
         </button>
       )}
     </section>
+  );
+}
+
+function DeclineOfferForm({ busy, onSubmit, onBack }: { busy: boolean; onSubmit(reason: string): void; onBack(): void }) {
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
+  return (
+    <form className={styles.declineForm} onSubmit={(event) => {
+      event.preventDefault();
+      const motive = reason.trim();
+      if (motive.length < 5) {
+        setError("Indiquez un motif d’au moins 5 caractères.");
+        return;
+      }
+      setError("");
+      onSubmit(motive);
+    }}>
+      <label>
+        Motif du refus
+        <textarea rows={3} maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} disabled={busy} aria-invalid={Boolean(error)} />
+      </label>
+      {error && <p className={styles.error} role="alert">{error}</p>}
+      <div className={styles.actions}>
+        <button type="submit" className={styles.primary} disabled={busy}>{busy ? "Enregistrement…" : "Confirmer le refus"}</button>
+        <button type="button" className={styles.secondary} disabled={busy} onClick={onBack}>Annuler</button>
+      </div>
+    </form>
   );
 }

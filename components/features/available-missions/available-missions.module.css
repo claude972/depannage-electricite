@@ -149,3 +149,24 @@
 .sort { display: flex; flex-wrap: wrap; gap: 8px; }
 .sort > button[aria-pressed="true"] { border-color: var(--ui-primary); color: var(--ui-text); opacity: 1; cursor: default; }
 @media (max-width: 640px) { .sort > button { flex: 1 1 100%; } }
+
+.declineForm,
+.declineForm label {
+  display: grid;
+  gap: 8px;
+}
+.declineForm textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 8px 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-card);
+  color: var(--ui-text);
+  font: inherit;
+  resize: vertical;
+}
+.declineForm textarea:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}

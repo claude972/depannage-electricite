@@ -265,3 +265,7 @@ Codex assemble le déclencheur de la file privée. Réutiliser les routes e-mail
 ### ENT-04 — historique des documents d’un site
 
 Codex ajoute `site_id` à `GET /api/documents/history`. Réutiliser la projection documentaire et la pagination existantes sous RLS, sans exposer les chemins ni les liens signés. Le filtre est exclusif du filtre dossier. Le curseur d’un site est lié au compte et au site. Claude prend ensuite le panneau et son câblage dans les fiches normale et directe. La recette est réservée à la phase 2.
+
+### ART-05 — refuser une offre dans le flux paginé
+
+Codex raccorde le refus motivé au résumé anonymisé des offres disponibles. Réutiliser la commande `decline_offer` et la confirmation serveur. Le refus conserve le motif en cas d’échec et retire l’offre après confirmation. Acceptation et refus partagent la protection contre les doubles envois. La recette suit la phase 1.

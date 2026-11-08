@@ -460,7 +460,7 @@ export function ArtisanSpace({ session }: { session: Session }) {
       case "missions":
         content = (
           <>
-            <Missions session={session} declinedIds={declinedIds} />
+            <Missions session={session} declinedIds={declinedIds} onDeclined={onDeclined} />
             {/* ART-12: provider team (invitations, members, internal assignment, technician follow-up). */}
             <ProviderTeamsPanel
               key={`teams|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`}
@@ -1112,7 +1112,7 @@ function toDemoOffer(i: Intervention): MissionOffer {
     created_at: i.created_at,
   };
 }
-function Missions({ session, declinedIds }: { session: Session; declinedIds: string[] }) {
+function Missions({ session, declinedIds, onDeclined }: { session: Session; declinedIds: string[]; onDeclined(id: string): void }) {
   const [segment, setSegment] = useState<MissionSegment>("available");
   const demo = session.mode === "demo";
   // Radius as CONFIRMED by the server for this identity; rev bumps when its version changes.
@@ -1219,6 +1219,8 @@ function Missions({ session, declinedIds }: { session: Session; declinedIds: str
           demoItems={demo ? offers.map(toDemoOffer) : undefined}
           onAccept={(id) => session.action(id, "accept_mission")}
           onOpenAccepted={(id) => session.openIntervention(id)}
+          onDecline={(id, reason) => session.operate(id, { action: "decline_offer", reason })}
+          onDeclined={onDeclined}
         />
       )}
       {segment === "available" && demo && hidden > 0 && (
