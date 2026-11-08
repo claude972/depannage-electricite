@@ -114,6 +114,9 @@ function Panel({ filters, api, context = DEFAULT_INVOICES_CONTEXT, demo = false,
           <p className={styles.hint} data-invoices-count="">
             {state.page?.has_more && state.total !== null ? INVOICES_COPY.partial(state.invoices.length, state.total) : INVOICES_COPY.end}
           </p>
+          {state.error && (
+            <p className={styles.error} role="alert" data-invoices-more-error="">{state.error}</p>
+          )}
           {state.page?.has_more && (
             <button type="button" className={styles.secondary} disabled={state.loadingMore} onClick={() => void ctrl.more()} data-invoices-more="">
               {state.loadingMore ? "Chargement…" : "Afficher plus"}

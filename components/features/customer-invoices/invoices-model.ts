@@ -191,7 +191,10 @@ export function applyInvoiceList(s: InvoicesState, r: InvoicesResult, filters: I
     return { ...s, phase: "ready", invoices, page: l.page, total: append ? s.total : l.page.total, loadingMore: false, error: "" };
   }
   const denied = r.status === 401 || r.status === 403 || r.status === 404;
-  return { ...s, loadingMore: false, phase: append ? s.phase : denied ? "denied" : "error", error: errorFor(r.status) };
+  // A refusal on ANY page (first or « Afficher plus ») purges every protected row already shown (E44);
+  // a transient failure on a later page keeps the authorized rows and explains itself (E45).
+  if (denied) return { ...INVOICES_INITIAL, phase: "denied", error: errorFor(r.status) };
+  return { ...s, loadingMore: false, phase: append ? s.phase : "error", error: errorFor(r.status) };
 }
 export function applyInvoiceDetail(s: InvoicesState, id: string, r: InvoicesResult): InvoicesState {
   if (r.status === 200) {
