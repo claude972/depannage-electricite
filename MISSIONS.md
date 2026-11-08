@@ -199,3 +199,9 @@ Claude possède le raccordement des panneaux de suivi et de rattachement correct
 
 ## Claim Astra — garantie historique
 Base c14578d ; codex/warranty-history. Ownership GET app/api/warranty/route.ts, lib/features/warranty-history, tests et docs/WARRANTY_HISTORY_BACKEND.md. POST inchangé, aucune migration/activation.
+
+### ART — affecter les interventions au-delà de la première page d’équipe
+
+Claude possède la pagination des interventions, membres, invitations envoyées et invitations reçues dans le panneau Équipe prestataire. Réutiliser les curseurs `next_after` existants. Garder une reprise par section, borner à une lecture par page, maintenir les sélections encore valides et réinitialiser les lectures au changement d’équipe, d’identité ou après une mutation réussie. Le sélecteur d’affectation permet aussi de charger la suite des membres actifs. Conserver les commandes, leurs protections de concurrence et le thème actuel.
+
+Astra vérifie le contrat existant par une recette PostgreSQL isolée dans le test Équipe prestataire. Lire une intervention et un technicien au-delà de 50 entrées, les affecter avec le RPC existant, puis vérifier la révocation. Aucun changement SQL applicatif, appel de fournisseur ou accès cloud par les agents. ROOT assemble, contrôle la preview et distingue les preuves navigateur et PostgreSQL isolé.
