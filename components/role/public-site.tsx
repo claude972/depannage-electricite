@@ -17,7 +17,7 @@ import { PublicChrome, type HomeHandlers } from "./public-chrome";
 import formStyles from "./public-forms.module.css";
 import { ABOUT_VALUES, CONTACT_CHANNELS, FAQ, HELP_PROCESS, JOIN_FACTS, JOIN_REVIEW, JOIN_STEPS, JOIN_TILES, LEGAL_SECTIONS, OPERATOR_FIELDS, PENDING, PRICING_PENDING, PRIVACY_CONTROLS, PRIVACY_DATA, PRIVACY_THIRD_PARTIES, numbered, pricingRows } from "./public-lists";
 import styles from "./public.module.css";
-import { publishedStamp, publishedValue, type PublicProfileState } from "../features/public-operator-profile/model";
+import { paragraphs, publishedStamp, publishedValue, type PublicProfileState } from "../features/public-operator-profile/model";
 import { usePublishedOperatorProfile } from "../features/public-operator-profile/use-published-profile";
 import { PublicCallbackForm } from "../features/public-callback/public-callback-form";
 import { IndicativeRange } from "../features/indicative-prices/indicative-range";
@@ -268,6 +268,29 @@ function ContactBlock({ onLogin, headingId }: { onLogin: () => void; headingId: 
     </section>
   );
 }
+/** PUB-10: a published long text as plain-text paragraphs (never HTML); pending wording otherwise. */
+function PrivacyText({ field, title }: { field: "privacy_retention" | "privacy_notice"; title: string }) {
+  const value = publishedValue(useContext(OperatorContext), field);
+  return (
+    <div className={styles.legalFields} data-privacy-text={field} data-published={value ? "" : undefined}>
+      <h3>{title}</h3>
+      {value ? paragraphs(value).map((p, i) => <p key={i} style={{ whiteSpace: "pre-line" }}>{p}</p>) : <p>{PENDING}</p>}
+    </div>
+  );
+}
+/** Full published privacy notice, or the existing honest placeholder while it is not published. */
+function PrivacyNotice() {
+  const value = publishedValue(useContext(OperatorContext), "privacy_notice");
+  if (!value)
+    return <Unavailable title="Politique complète, contact DPO et préférences : à publier avant ouverture" reason="Les modalités d’accès, de rectification et de suppression, la durée de conservation, le contact du délégué à la protection des données et les préférences de confidentialité seront publiés avant l’ouverture commerciale." blocker="PUB-10" />;
+  return (
+    <div className={styles.legalFields} data-privacy-text="privacy_notice" data-published="">
+      <h3>Politique de confidentialité de l’exploitant</h3>
+      {paragraphs(value).map((p, i) => <p key={i} style={{ whiteSpace: "pre-line" }}>{p}</p>)}
+    </div>
+  );
+}
+
 function PendingFields({ fields, label, sources = {} }: { fields: string[]; label: string; sources?: Record<string, Source> }) {
   const operator = useContext(OperatorContext);
   return (
@@ -599,12 +622,16 @@ function PrivacyView({ onHome, onLogin }: { onHome: () => void; onLogin: () => v
       <section className={styles.docSection} aria-labelledby="privacy-rights">
         <h2 id="privacy-rights">{numbered(5, sections[5])}</h2>
         <PendingFields
-          fields={["Responsable du traitement", "Contact pour l’exercice des droits (accès, rectification, suppression)", "Durées de conservation hors position partagée"]}
-          label="Informations de confidentialité en attente"
-          sources={{ "Contact pour l’exercice des droits (accès, rectification, suppression)": { fields: ["privacy_email"] } }}
+          fields={["Responsable du traitement", "Contact pour l’exercice des droits (accès, rectification, suppression)"]}
+          label="Informations de confidentialité"
+          sources={{
+            "Responsable du traitement": { fields: ["privacy_controller"] },
+            "Contact pour l’exercice des droits (accès, rectification, suppression)": { fields: ["privacy_email"] },
+          }}
         />
+        <PrivacyText field="privacy_retention" title="Durées de conservation hors position partagée" />
         <PublishedStamp />
-        <Unavailable title="Politique complète, contact DPO et préférences : à publier avant ouverture" reason="Les modalités d’accès, de rectification et de suppression, la durée de conservation, le contact du délégué à la protection des données et les préférences de confidentialité seront publiés avant l’ouverture commerciale." blocker="PUB-10" />
+        <PrivacyNotice />
       </section>
       <p className={styles.docFoot}>
         <Icon name="shield" size={20} />

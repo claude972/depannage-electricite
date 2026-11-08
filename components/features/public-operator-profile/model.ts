@@ -23,6 +23,9 @@ export const FIELD_LABELS: Record<OperatorField, string> = {
   publication_director: "Directeur ou directrice de la publication",
   public_email: "Adresse e-mail de contact",
   privacy_email: "Adresse e-mail pour les données personnelles",
+  privacy_controller: "Responsable du traitement (facultatif)",
+  privacy_retention: "Durées de conservation (facultatif)",
+  privacy_notice: "Politique de confidentialité complète (facultatif)",
   public_phone: "Téléphone (format international, ex. +596…)",
   host_name: "Nom de l’hébergeur",
   host_address: "Adresse de l’hébergeur",
@@ -32,7 +35,20 @@ export const FIELD_LABELS: Record<OperatorField, string> = {
   about_text: "Présentation de l’exploitant",
   service_area: "Zone d’intervention couverte",
 };
-export const FIELD_ORDER: OperatorField[] = ["legal_name", "legal_form", "siren", "vat_number", "hq_address", "publication_director", "public_email", "privacy_email", "public_phone", "host_name", "host_address", "host_contact", "rights_holder", "display_name", "about_text", "service_area"];
+export const FIELD_ORDER: OperatorField[] = ["legal_name", "legal_form", "siren", "vat_number", "hq_address", "publication_director", "public_email", "privacy_email", "privacy_controller", "privacy_retention", "privacy_notice", "public_phone", "host_name", "host_address", "host_contact", "rights_holder", "display_name", "about_text", "service_area"];
+/** Same maximum lengths as the contract (lib/features/public-operator-profile/contract.ts). */
+export const FIELD_MAX: Record<OperatorField, number> = {
+  // siren / VAT / phone: room for the spaces the form strips before validation.
+  legal_name: 160, legal_form: 80, siren: 11, vat_number: 20, hq_address: 500, publication_director: 160,
+  public_email: 254, privacy_email: 254, privacy_controller: 200, privacy_retention: 2000, privacy_notice: 8000,
+  public_phone: 20, host_name: 160, host_address: 500, host_contact: 254, rights_holder: 160,
+  display_name: 120, about_text: 2000, service_area: 500,
+};
+/** Long free texts edited in a textarea. */
+export const LONG_FIELDS: readonly OperatorField[] = ["about_text", "privacy_retention", "privacy_notice"];
+/** Published plain text → paragraphs (split on blank lines). Rendered as text, never as HTML. */
+export const paragraphs = (text: string): string[] =>
+  text.split(/\r?\n\s*\r?\n/).map((p) => p.trim()).filter(Boolean);
 export const missingMinimum = (p: OperatorProfile): OperatorField[] => MINIMUM_FIELDS.filter((f) => !p[f]);
 
 async function timed(fetcher: typeof fetch, url: string, init: RequestInit, timeoutMs: number): Promise<Result> {
