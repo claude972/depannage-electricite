@@ -223,6 +223,8 @@ export type Appointment = {
   note: string;
   updated_by?: string;
   updated_at?: string;
+  /** Slot revision (server `reminder_version`); the expected version of the next save (E15). */
+  reminder_version?: number;
 };
 export type ReportCheck = {
   label: string;
@@ -255,7 +257,7 @@ export type Operations = {
 export type OperationBody =
   | { action: "decline_offer"; reason: string }
   | { action: "reject_quote"; quote_id: string; reason: string }
-  | { action: "save_appointment"; starts_at: string; ends_at: string; note: string }
+  | { action: "save_appointment"; expected_version: number; starts_at: string; ends_at: string; note: string }
   | { action: "set_travel_stage"; stage: TravelStage }
   | {
       action: "save_report";

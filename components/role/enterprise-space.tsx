@@ -2323,6 +2323,9 @@ function AppointmentPanel({
   const [error, setError] = useState("");
   const stageOpen = APPOINTMENT_STATUSES.includes(intervention.status);
   const editable = stageOpen && canWrite;
+  const slotRevision = ops?.appointment ? ops.appointment.reminder_version ?? 0 : 0;
+  const [refusedAt, setRefusedAt] = useState<number | null>(null);
+  const conflict = open && refusedAt !== null && refusedAt !== slotRevision;
   async function save(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const start = Date.parse(starts);
@@ -2336,23 +2339,25 @@ function AppointmentPanel({
       return;
     }
     setError("");
+    const sentVersion = slotRevision;
     const ok = await session.operate(intervention.id, {
       action: "save_appointment",
+      expected_version: sentVersion,
       starts_at: new Date(start).toISOString(),
       ends_at: new Date(end).toISOString(),
       note: note.trim(),
     });
-    if (ok) {
-      setOpen(false);
-      onSaved();
-    }
+    setRefusedAt(ok ? null : sentVersion);
+    if (ok) setOpen(false);
+    // Saved ⇒ fresh read; refused (409 version, rights…) ⇒ re-read too, the typed form is kept (E15).
+    onSaved();
   }
   return (
     <section className="panel" aria-labelledby="dossier-appointment">
       <div className={styles.panelTitle}>
         <h2 id="dossier-appointment">Rendez-vous</h2>
         {editable && !open && !loading && ops && (
-          <button type="button" className="button outline" disabled={session.busy} onClick={() => setOpen(true)}>
+          <button type="button" className="button outline" disabled={session.busy} onClick={() => { setRefusedAt(null); setOpen(true); }}>
             {ops.appointment ? "Proposer un autre créneau" : "Proposer un créneau"}
           </button>
         )}
@@ -2405,6 +2410,11 @@ function AppointmentPanel({
               <Field label="Consignes d’accès (facultatif)" error={error}>
                 <textarea rows={2} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} />
               </Field>
+              {conflict && (
+                <p className={styles.note} role="alert" data-slot-conflict="">
+                  Le créneau a été modifié entre-temps : la version actuelle est affichée ci-dessus. Votre saisie est conservée ; enregistrez à nouveau pour la confirmer.
+                </p>
+              )}
               <div className={styles.actions}>
                 <button type="submit" className="button primary" disabled={session.busy}>
                   {session.busy ? "Enregistrement…" : "Enregistrer le créneau"}

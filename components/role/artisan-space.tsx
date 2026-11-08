@@ -1606,9 +1606,13 @@ function WorkDossier({ session, intervention: i }: { session: Session; intervent
             state={state}
             editable={canAppoint}
             busy={session.busy}
-            onSave={(starts_at, ends_at, note) =>
-              operate({ action: "save_appointment", starts_at, ends_at, note })
-            }
+            version={ops?.appointment ? ops.appointment.reminder_version ?? 0 : 0}
+            onSave={async (starts_at, ends_at, note) => {
+              const ok = await operate({ action: "save_appointment", expected_version: ops?.appointment ? ops.appointment.reminder_version ?? 0 : 0, starts_at, ends_at, note });
+              // Refused (409 version, rights…): re-read the slot; the open form keeps its values (E15).
+              if (!ok) setOpsVersion((v) => v + 1);
+              return ok;
+            }}
             reminder={
               <AppointmentReminderPanel
                 key={`${i.id}|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`}
@@ -1736,9 +1740,12 @@ function AppointmentPanel({
   state,
   editable,
   busy,
+  version,
   onSave,
   reminder,
 }: {
+  /** Revision of the slot shown (0 without slot): a change after a refused save is a conflict. */
+  version: number;
   appointment: Appointment | null;
   loaded: boolean;
   pending: boolean;
@@ -1754,7 +1761,10 @@ function AppointmentPanel({
   const [duration, setDuration] = useState("2");
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
+  const [refusedAt, setRefusedAt] = useState<number | null>(null);
+  const conflict = open && refusedAt !== null && refusedAt !== version;
   function edit() {
+    setRefusedAt(null);
     if (appointment) {
       setStart(toLocalInput(appointment.starts_at));
       const hours = Math.round(
@@ -1775,7 +1785,9 @@ function AppointmentPanel({
     }
     setError("");
     const end = new Date(s.getTime() + Number(duration) * 3600000);
+    const sentVersion = version;
     void onSave(s.toISOString(), end.toISOString(), note.trim()).then((ok) => {
+      setRefusedAt(ok ? null : sentVersion);
       if (ok) setOpen(false);
     });
   }
@@ -1840,6 +1852,11 @@ function AppointmentPanel({
               placeholder="Accès, interphone, matériel à prévoir…"
             />
           </Field>
+          {conflict && (
+            <p className={styles.sectionNote} role="alert" data-slot-conflict="">
+              Le créneau a été modifié entre-temps : la version actuelle est affichée ci-dessus. Votre saisie est conservée ; enregistrez à nouveau pour la confirmer.
+            </p>
+          )}
           <div className={styles.formActions}>
             <button type="submit" className="button primary" disabled={busy}>
               {busy ? "Enregistrement…" : "Enregistrer le créneau"}

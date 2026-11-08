@@ -1020,9 +1020,14 @@ function useOperations(session: Session, id: string, dependency: string) {
   ref.current = session;
   const [ops, setOps] = useState<Operations | null | undefined>(undefined);
   const [version, setVersion] = useState(0);
+  // An explicit re-read of the SAME dossier keeps the shown values (and any open form) until the
+  // reply arrives; another dossier / dependency starts from the loader.
+  const shown = useRef("");
   useEffect(() => {
     let active = true;
-    setOps(undefined);
+    const key = `${id}|${dependency}`;
+    if (shown.current !== key) setOps(undefined);
+    shown.current = key;
     if (!id) return;
     void ref.current.loadOperations(id).then((result) => {
       if (active) setOps(result);
@@ -1045,6 +1050,7 @@ function DetailView({
 }) {
   const i = rows.find((x) => x.id === id);
   const demo = session.mode === "demo";
+  const [keptDraft, setKeptDraft] = useState<string | null>(null);
   const { ops, reload } = useOperations(
     session,
     i?.id || "",
@@ -1478,17 +1484,22 @@ function DetailView({
             />
             {canSchedule ? (
               <AppointmentForm
-                key={ops.appointment?.updated_at || "new"}
+                key={keptDraft ?? (ops.appointment?.updated_at || "new")}
                 initial={ops.appointment}
+                version={slotVersion(ops.appointment)}
                 busy={session.busy}
                 onSubmit={async (starts_at, ends_at, note) => {
+                  const formKey = ops.appointment?.updated_at || "new";
                   const saved = await session.operate(i.id, {
                     action: "save_appointment",
+                    expected_version: slotVersion(ops.appointment),
                     starts_at,
                     ends_at,
                     note,
                   });
-                  if (saved) reload();
+                  // Refused (409 version, rights…): re-read the slot, keep the typed form (E15).
+                  setKeptDraft(saved ? null : formKey);
+                  reload();
                   return saved;
                 }}
               />
@@ -1689,15 +1700,23 @@ function DetailView({
   );
 }
 
+/** Expected version of the next slot save: the server revision read, 0 when no slot exists. */
+const slotVersion = (a: Operations["appointment"]) => (a ? a.reminder_version ?? 0 : 0);
+export const SLOT_CONFLICT =
+  "Le créneau a été modifié entre-temps : la version actuelle est affichée ci-dessus. Votre saisie est conservée ; enregistrez à nouveau pour la confirmer.";
+
 function AppointmentForm({
   initial,
+  version,
   busy,
   onSubmit,
 }: {
   initial: Operations["appointment"];
+  version: number;
   busy: boolean;
   onSubmit: (starts_at: string, ends_at: string, note: string) => Promise<boolean>;
 }) {
+  const [refusedAt, setRefusedAt] = useState<number | null>(null);
   const initialDuration = initial
     ? Math.min(
         4,
@@ -1724,8 +1743,10 @@ function AppointmentForm({
     }
     setError("");
     const ends = new Date(begins.getTime() + duration * 3600000);
-    void onSubmit(begins.toISOString(), ends.toISOString(), note.trim());
+    const sentVersion = version;
+    void onSubmit(begins.toISOString(), ends.toISOString(), note.trim()).then((ok) => setRefusedAt(ok ? null : sentVersion));
   }
+  const conflict = refusedAt !== null && refusedAt !== version;
   return (
     <form className={styles.appointmentForm} onSubmit={submit} noValidate>
       <h3>{initial ? "Modifier le créneau" : "Proposer un créneau"}</h3>
@@ -1756,6 +1777,11 @@ function AppointmentForm({
           placeholder="Par exemple : interphone au nom de Dupont, 3e étage"
         />
       </Field>
+      {conflict && (
+        <p className="form-note" role="alert" data-slot-conflict="">
+          {SLOT_CONFLICT}
+        </p>
+      )}
       <button type="submit" className="button outline" disabled={busy}>
         <Icon name="calendar" size={17} />
         {busy ? "Enregistrement…" : initial ? "Enregistrer le nouveau créneau" : "Proposer ce créneau"}
