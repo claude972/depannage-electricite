@@ -92,6 +92,17 @@ function SitePanel({ siteId, api, context = DEFAULT_ENERGY_CONTEXT, initial, new
     if (!s.writeError && !s.pending && s.saved) setForm(null); // success only; 409/422/503 keep the values
   };
 
+  /** Explicit replay of the pending command. A confirmed replay turns the still-open form into the
+   *  edition of the saved record (its id + version), never a second creation (E62). */
+  const retry = async () => {
+    const sent = ref.current.pending;
+    await ctrl.retry();
+    const s = ref.current;
+    if (!sent || s.pending || s.writeError || !s.saved) return;
+    const saved = sent.action === "archive" ? undefined : s.records.find((x) => x.id === sent.id);
+    setForm((f) => (f && saved ? editForm(saved) : null));
+    setErrors({});
+  };
   const t = state.totals ? totalsView(state.totals) : null;
   return (
     <section className={styles.panel} aria-labelledby={`energy-${siteId}`} data-energy-panel={state.phase} aria-busy={state.busy || state.phase === "loading" || undefined}>
@@ -119,7 +130,7 @@ function SitePanel({ siteId, api, context = DEFAULT_ENERGY_CONTEXT, initial, new
       {state.writeError && !form && (
         <div className={styles.error} role="alert">
           {state.writeError}{" "}
-          {state.pending && <button type="button" className={styles.secondary} disabled={state.busy} onClick={() => void ctrl.retry()} data-energy-retry="">Réessayer</button>}
+          {state.pending && <button type="button" className={styles.secondary} disabled={state.busy} onClick={() => void retry()} data-energy-retry="">Réessayer</button>}
           <button type="button" className={styles.secondary} onClick={() => void ctrl.load()}>Actualiser</button>
         </div>
       )}
@@ -145,7 +156,7 @@ function SitePanel({ siteId, api, context = DEFAULT_ENERGY_CONTEXT, initial, new
           {state.writeError && (
             <p className={styles.error} role="alert">
               {state.writeError}{" "}
-              {state.pending && <button type="button" className={styles.secondary} disabled={state.busy} onClick={() => void ctrl.retry()} data-energy-retry="">Réessayer</button>}
+              {state.pending && <button type="button" className={styles.secondary} disabled={state.busy} onClick={() => void retry()} data-energy-retry="">Réessayer</button>}
               {!state.pending && <button type="button" className={styles.secondary} disabled={state.busy} onClick={() => void ctrl.load()} data-energy-reload="">Actualiser la liste</button>}
             </p>
           )}

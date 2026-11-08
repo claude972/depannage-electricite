@@ -301,7 +301,10 @@ export function createEnergyController({ api, siteId, context = DEFAULT_ENERGY_C
     loadSeq++; // and again after the reply: nothing started meanwhile may apply
     if (!same(gen, uid)) return false;
     set(applyCommand(get(), r, command, siteId));
-    if (hadLoad) void fetchList(false); // causal reload
+    // A refused right or resource (401/403/404) re-reads the list before anything else: a 404
+    // purges the rows and the write rights, so the open form and its action disappear (E63).
+    const refused = r.status === 401 || r.status === 403 || r.status === 404;
+    if (hadLoad || refused) void fetchList(false); // causal reload
     return true;
   };
   return {
