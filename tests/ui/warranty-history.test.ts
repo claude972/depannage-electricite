@@ -27,6 +27,9 @@ test("parser : filtered page needs a boolean proof consistent with the page; glo
     ["duplicate case", page([kase(1), kase(1)], null), D],
     ["more than 100", page(Array.from({ length: 101 }, (_, k) => kase(k)), null), D],
     ["bad terms_version", page([{ ...kase(1), terms_version: "2" }], null), D],
+    ["timestamp beyond microseconds (handler shape)", page([{ ...kase(1), created_at: "2026-11-07T10:00:00.1234567+00:00" }], null), D],
+    ["cursor not base64url (handler shape)", page([kase(1)], "a b"), D],
+    ["cursor longer than 600", page([kase(1)], "a".repeat(601)), D],
   ];
   for (const [name, body, id] of bad) assert.equal(parseHistory(body, id), null, name);
   assert.equal(historyUrl(D, null), `/api/warranty?intervention_id=${D}`);
@@ -119,9 +122,10 @@ test("corrective panel : global history cursor read and followed as is", async (
   assert.equal(m.parseNextCursor({ cases: [], enabled: true, next_cursor: "p100", has_active: null }), "p100");
   assert.equal(m.parseNextCursor({ cases: [], enabled: true, next_cursor: null, has_active: null }), null);
   assert.equal(m.parseNextCursor({ cases: [], next_cursor: 3 }), undefined, "malformed");
+  assert.equal(m.parseNextCursor({ cases: [], next_cursor: "a b" }), undefined, "not base64url");
   const urls: string[] = [];
   const api = m.createCorrectiveApi((async (u: string) => (urls.push(u), new Response("{}", { status: 200 }))) as unknown as typeof fetch);
   await api.cases();
-  await api.cases("p 100");
-  assert.deepEqual(urls, ["/api/warranty", "/api/warranty?cursor=p%20100"]);
+  await api.cases("p_100");
+  assert.deepEqual(urls, ["/api/warranty", "/api/warranty?cursor=p_100"]);
 });
