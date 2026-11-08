@@ -297,3 +297,36 @@ test("Chromium 390 : génération nouvelle, même compte ⇒ instantané retrouv
     server.close();
   }
 });
+
+test("Chromium 390 : saisie pendant le POST ⇒ conservée (UI + stockage) après un reçu valide", { skip }, async () => {
+  const { server, url } = await serve();
+  const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
+  const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true });
+  try {
+    const page = await (await browser.newContext({ viewport: { width: 390, height: 1000 } })).newPage();
+    const errors: string[] = [];
+    page.on("pageerror", (e: Error) => errors.push(String(e)));
+    await page.goto(url);
+    await fill(page, "Panne de tableau", "Le disjoncteur saute toutes les heures.");
+    await page.evaluate("window.mode = 'ok'; window.hold = true");
+    await page.locator("[data-support-send]").click();
+    await page.waitForFunction("window.posts.length === 1");
+    // B typed while the receipt is held.
+    await fill(page, "Deuxième question", "Une autre question saisie pendant l’envoi.");
+    await page.evaluate("window.hold = false; while (window.gates.length) window.gates.shift()()");
+    await page.waitForFunction("window.gone.length === 1");
+    assert.equal(await page.getByLabel("Sujet").inputValue(), "Deuxième question", "B kept in the UI");
+    await page.evaluate("window.setMounted(false)");
+    await page.getByText("démonté").waitFor();
+    await page.evaluate("window.setMounted(true)");
+    await page.getByLabel("Sujet").waitFor();
+    assert.equal(await page.getByLabel("Sujet").inputValue(), "Deuxième question", "B kept in storage");
+    assert.equal(await page.getByLabel("Message").inputValue(), "Une autre question saisie pendant l’envoi.");
+    assert.equal(await page.locator("[data-support-pending]").count(), 0);
+    assert.equal(((await page.evaluate("window.posts")) as Post[]).length, 1, "B never sent");
+    assert.deepEqual(errors, []);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+});
