@@ -33,6 +33,7 @@ import { Icon } from "./icons";
 import { TAX_RATE_HINT, TAX_RATE_OPTIONS, TAX_RATE_PLACEHOLDER, TAX_RATE_REQUIRED, parseTaxRateInput, type TaxRate } from "./tax-rate";
 import { Empty, Field, ConfirmAction, Unavailable } from "./ui";
 import { ReviewEstimate } from "../features/indicative-prices/indicative-range";
+import { EnterpriseContractsPanel, type EnterpriseContractsContext, NO_CONTRACTS_CONTEXT } from "../features/enterprise-contracts/enterprise-contracts-panel";
 import {
   CATEGORIES,
   ROLE_NAMES,
@@ -1864,6 +1865,7 @@ export function ProfessionalOperations({
   canWriteOrganization = true,
   canWriteSite = () => true,
   readOnlyReason = null,
+  contracts,
 }: {
   data: ProfessionalData;
   sites: Site[];
@@ -1879,8 +1881,20 @@ export function ProfessionalOperations({
   canWriteSite?: (siteId: string) => boolean;
   /** Shown instead of a form when the member cannot write. */
   readOnlyReason?: string | null;
+  /** ENT-13 live contracts: active organisation + identity fence. Absent (or no organisation) ⇒
+   *  no live read and an honest « choisissez une organisation ». Ignored in demo. */
+  contracts?: EnterpriseContractsContext;
 }) {
   const [tab, setTab] = useState("approvals");
+  // ENT-13: bumped after each successful contract write ⇒ causal re-read (page 1 + open detail).
+  const [contractsEpoch, setContractsEpoch] = useState(0);
+  const liveContracts = !demo;
+  const saveContract = async (values: Record<string, unknown>) => {
+    const ok = await onSave(values);
+    if (ok && liveContracts) setContractsEpoch((n) => n + 1);
+    return ok;
+  };
+  const contractOrganizationId = liveContracts && contracts?.organizationId ? contracts.organizationId : organizations[0]?.id;
   const [site, setSite] = useState("");
   const [threshold, setThreshold] = useState("200");
   const [requiredRole, setRequiredRole] = useState("manager");
@@ -2157,7 +2171,17 @@ export function ProfessionalOperations({
         <div className="operations-grid">
           <div>
             <h3>Contrats de l’organisation</h3>
-            {data.contracts.length ? (
+            {liveContracts ? (
+              <EnterpriseContractsPanel
+                context={contracts?.context ?? NO_CONTRACTS_CONTEXT}
+                organizationId={contracts?.organizationId ?? null}
+                epoch={contractsEpoch}
+                canWrite={canWriteOrganization}
+                busy={busy}
+                onSave={saveContract}
+                fetcher={contracts?.fetcher}
+              />
+            ) : data.contracts.length ? (
               <div className="contract-list">
                 {data.contracts.map((c) => (
                   <details key={c.id}>
@@ -2219,10 +2243,10 @@ export function ProfessionalOperations({
             className="operations-form"
             onSubmit={(e) => {
               e.preventDefault();
-              if (!organizations[0]?.id) return;
-              void onSave({
+              if (!contractOrganizationId) return;
+              void saveContract({
                 action: "save_contract",
-                organization_id: organizations[0].id,
+                organization_id: contractOrganizationId,
                 title,
                 reference,
                 starts_on: starts,
