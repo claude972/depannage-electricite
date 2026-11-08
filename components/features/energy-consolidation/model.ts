@@ -255,6 +255,19 @@ export async function fetchCsv(fetcher: typeof fetch, sel: Selection, timeoutMs 
     clearTimeout(timer);
   }
 }
+/** Full portfolio read (GET /api/organizations/:id/sites, 50 per page, active | archived). */
+export const PORTFOLIO_COPY = {
+  legend: "Portefeuille complet de l’organisation",
+  open: "Parcourir tout le portefeuille",
+  filter: "Sites affichés",
+  loading: "Lecture du portefeuille…",
+  empty: (archived: boolean) => (archived ? "Aucun site archivé." : "Aucun site actif."),
+  failed: "Le portefeuille n’a pas pu être lu. Ce qui est déjà affiché et vos choix restent valables.",
+  more: "Afficher plus",
+  refused: { 401: "Session expirée : reconnectez-vous pour lire le portefeuille.", 403: "Le serveur refuse l’accès au portefeuille de cette organisation : la sélection et le rapport ont été effacés.", 404: "Cette organisation est introuvable ou n’est plus accessible : la sélection et le rapport ont été effacés." } as Record<401 | 403 | 404, string>,
+  chosen: (n: number) => `Sites choisis : ${n} / 50`,
+  limit: "50 sites au plus : retirez un site pour en choisir un autre.",
+} as const;
 export const EXPORT_COPY = {
   button: "Exporter en CSV",
   busy: "Export en cours…",

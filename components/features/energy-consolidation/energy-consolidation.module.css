@@ -33,3 +33,7 @@
 .primary:disabled, .secondary:disabled { opacity: 0.6; cursor: not-allowed; }
 .check input:focus-visible, .dates input:focus-visible, .primary:focus-visible, .secondary:focus-visible { outline: 3px solid var(--ui-focus); outline-offset: 2px; }
 @media (max-width: 640px) { .kv > div { grid-template-columns: 1fr; gap: 2px; } .primary, .secondary { justify-self: stretch; } }
+.portfolio, .portfolioList { display: grid; gap: 4px 16px; width: 100%; }
+.portfolioList { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.dates select { min-height: 44px; padding: 0 10px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-card); color: var(--ui-text); font: inherit; }
+.dates select:focus-visible { outline: 3px solid var(--ui-focus); outline-offset: 2px; }

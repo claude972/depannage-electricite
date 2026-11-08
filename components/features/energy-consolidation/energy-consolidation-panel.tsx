@@ -9,7 +9,8 @@
 // at a time; a reply after an identity / consolidation / organisation change or an unmount is dropped
 // and nothing is saved.
 import { useLayoutEffect, useRef, useState, type FormEvent } from "react";
-import { COMPARISON_REASON, COPY, EMPTY_FORM, EXPORT_COPY, centsToEuros, exportError, fetchCsv, fetchReport, formToSelection, incompleteReasons, parseReport, totalConsumption, totalCost, whToKwh, type EnergyReport, type Form, type Result, type Selection } from "./model";
+import { createListController, createSlApi, LIST_INITIAL, type ListState, type SiteState, type SlApi } from "../site-lifecycle/site-lifecycle-model";
+import { COMPARISON_REASON, COPY, EMPTY_FORM, EXPORT_COPY, PORTFOLIO_COPY, centsToEuros, exportError, fetchCsv, fetchReport, formToSelection, incompleteReasons, parseReport, totalConsumption, totalCost, whToKwh, type EnergyReport, type Form, type Result, type Selection } from "./model";
 import styles from "./energy-consolidation.module.css";
 
 export type EnergyConsolidationProps = {
@@ -76,7 +77,16 @@ export function EnergyConsolidationPanel({ organizationId, sites, demo, context,
     const ep = epoch.current, o = org.current;
     return () => alive.current && epoch.current === ep && org.current === o;
   };
-  const name = (id: string) => sites.find((s) => s.id === id)?.name ?? "Site";
+  // Full portfolio (beyond the bootstrap sites): read on demand, paginated, active | archived. Labels
+  // of every chosen site are kept across pages and filters; the selection stays explicit (≤ 50).
+  const [list, setList] = useState<ListState | null>(null);
+  const listRef = useRef<ListState | null>(null);
+  const [picked, setPicked] = useState<Record<string, { name: string; archived: boolean }>>({});
+  const [refusal, setRefusal] = useState("");
+  const refused = useRef(false);
+  const ctl = useRef<ReturnType<typeof createListController> | null>(null);
+  const lower = (id: string) => id.toLowerCase();
+  const name = (id: string) => sites.find((s) => lower(s.id) === lower(id))?.name ?? picked[lower(id)]?.name ?? list?.sites.find((s) => lower(s.id) === lower(id))?.name ?? "Site";
 
   if (demo)
     return (
@@ -159,25 +169,123 @@ export function EnergyConsolidationPanel({ organizationId, sites, demo, context,
       waitTimer.current = setTimeout(() => setRetryWait(false), out.retryAfterS * 1000);
     }
   };
-  const toggle = (id: string) => setForm((f) => ({ ...f, site_ids: f.site_ids.includes(id) ? f.site_ids.filter((x) => x !== id) : [...f.site_ids, id] }));
+  const toggle = (id: string, label?: { name: string; archived: boolean }) => {
+    if (label) setPicked((p) => ({ ...p, [lower(id)]: label }));
+    setForm((f) => (f.site_ids.includes(id) ? { ...f, site_ids: f.site_ids.filter((x) => x !== id) } : f.site_ids.length >= 50 ? f : { ...f, site_ids: [...f.site_ids, id] }));
+  };
+  /** 401/403/404 on the portfolio: fail closed — selection, report and export are cleared. */
+  const refuse = (status: 401 | 403 | 404) => {
+    refused.current = true;
+    seq.current++; // an in-flight report or export belongs to the cleared selection
+    exporting.current = false;
+    clearTimeout(waitTimer.current);
+    setRetryWait(false);
+    setExp({ phase: "idle" });
+    setForm((f) => ({ ...f, site_ids: [] }));
+    setPicked({});
+    setReport(null);
+    setShown(null);
+    setPhase("idle");
+    setRefusal(PORTFOLIO_COPY.refused[status]);
+  };
+  const openPortfolio = (state: SiteState) => {
+    if (!organizationId) return;
+    refused.current = false;
+    setRefusal("");
+    if (!ctl.current) {
+      const live = fence();
+      const base = createSlApi(fetcher ?? ((...a) => fetch(...a)));
+      const api: SlApi = {
+        ...base,
+        sites: async (org, st, after) => {
+          const r = await base.sites(org, st, after);
+          if (live() && (r.status === 401 || r.status === 403 || r.status === 404)) refuse(r.status);
+          return r;
+        },
+      };
+      const put = (next: ListState) => {
+        if (!live()) return; // unmounted / another organisation: inert
+        const s = refused.current ? { ...LIST_INITIAL, state: next.state, phase: "unavailable" as const, error: next.error } : next;
+        listRef.current = s;
+        setList(s);
+      };
+      ctl.current = createListController({ api: () => api, organizationId, context, get: () => listRef.current ?? LIST_INITIAL, set: put });
+    }
+    void ctl.current.load(state);
+  };
+  const retryPortfolio = () => {
+    const s = listRef.current;
+    if (!s || !ctl.current) return openPortfolio("active");
+    if (s.phase === "ready" && s.error) return void ctl.current.more();
+    openPortfolio(s.state);
+  };
+  const extra = (list?.sites ?? []).filter((x) => !sites.some((s) => lower(s.id) === lower(x.id)));
+  const full = form.site_ids.length >= 50;
 
   return (
     <section className={styles.panel} aria-labelledby="energy-consolidation-title" data-energy-consolidation={phase} aria-busy={phase === "loading" || undefined}>
       <h2 id="energy-consolidation-title">Consommation d’énergie (consolidé)</h2>
       <p className={styles.hint}>{COPY.declaredOnly}</p>
-      {!sites.length ? (
-        <p className={styles.note} data-energy-no-sites="">{COPY.noSites}</p>
-      ) : (
+      {!sites.length && <p className={styles.note} data-energy-no-sites="">{COPY.noSites}</p>}
+      {refusal && <p className={styles.error} role="alert" data-energy-portfolio-refused="">{refusal}</p>}
+      {(sites.length > 0 || list !== null || organizationId) && (
         <form className={styles.form} onSubmit={submit} noValidate>
+          {sites.length > 0 && (
           <fieldset className={styles.sites}>
             <legend>Sites (choix explicite, 50 au plus)</legend>
             {sites.map((s) => (
               <label key={s.id} className={styles.check}>
-                <input type="checkbox" checked={form.site_ids.includes(s.id)} onChange={() => toggle(s.id)} data-energy-site={s.id} />
+                <input type="checkbox" checked={form.site_ids.includes(s.id)} disabled={full && !form.site_ids.includes(s.id)} onChange={() => toggle(s.id)} data-energy-site={s.id} />
                 {s.name}{s.archived ? " (archivé)" : ""}
               </label>
             ))}
           </fieldset>
+          )}
+          <fieldset className={styles.sites} data-energy-portfolio={list?.phase ?? "closed"}>
+            <legend>{PORTFOLIO_COPY.legend}</legend>
+            {list === null ? (
+              <button type="button" className={styles.secondary} onClick={() => openPortfolio("active")} disabled={!organizationId} data-energy-portfolio-open="">{PORTFOLIO_COPY.open}</button>
+            ) : (
+              <div className={styles.portfolio}>
+                <div className={styles.dates}>
+                  <label>{PORTFOLIO_COPY.filter}
+                    <select value={list.state} onChange={(e) => openPortfolio(e.target.value as SiteState)} data-energy-portfolio-filter="">
+                      <option value="active">Actifs</option>
+                      <option value="archived">Archivés</option>
+                    </select>
+                  </label>
+                </div>
+                {list.phase === "loading" && <p className={styles.hint} role="status">{PORTFOLIO_COPY.loading}</p>}
+                {(list.phase === "error" || list.phase === "unavailable" || (list.phase === "ready" && list.error)) && !refusal && (
+                  <div className={styles.note} role="alert" data-energy-portfolio-error="">
+                    <p className={styles.error}>{list.phase === "ready" ? PORTFOLIO_COPY.failed : list.error || PORTFOLIO_COPY.failed}</p>
+                    <button type="button" className={styles.secondary} onClick={retryPortfolio}>Réessayer</button>
+                  </div>
+                )}
+                {list.phase === "ready" && list.sites.length === 0 && <p className={styles.hint} data-energy-portfolio-empty="">{PORTFOLIO_COPY.empty(list.state === "archived")}</p>}
+                {extra.length > 0 && (
+                  <div className={styles.portfolioList}>
+                    {extra.map((x) => {
+                      const archived = x.archived_at !== null;
+                      return (
+                        <label key={x.id} className={styles.check}>
+                          <input type="checkbox" checked={form.site_ids.includes(x.id)} disabled={full && !form.site_ids.includes(x.id)} onChange={() => toggle(x.id, { name: x.name, archived })} data-energy-site={x.id} />
+                          {x.name}{archived ? " (archivé)" : ""}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+                {list.phase === "ready" && list.nextAfter && !list.error && (
+                  <button type="button" className={styles.secondary} onClick={() => void ctl.current?.more()} disabled={list.loadingMore} data-energy-portfolio-more="">{list.loadingMore ? "Chargement…" : PORTFOLIO_COPY.more}</button>
+                )}
+              </div>
+            )}
+          </fieldset>
+          <p className={styles.hint} data-energy-chosen={form.site_ids.length}>
+            {PORTFOLIO_COPY.chosen(form.site_ids.length)}{form.site_ids.length ? ` — ${form.site_ids.map(name).join(", ")}` : ""}
+          </p>
+          {full && <p className={styles.hint} data-energy-limit="">{PORTFOLIO_COPY.limit}</p>}
           <div className={styles.dates}>
             <label>Du<input type="date" value={form.from} onChange={(e) => setForm({ ...form, from: e.target.value })} required /></label>
             <label>Au<input type="date" value={form.to} onChange={(e) => setForm({ ...form, to: e.target.value })} required /></label>
