@@ -176,6 +176,13 @@ import { createElement as h, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { PhotoReviewPanel } from "./components/features/photo-review/photo-review-panel";
 const tick = (ms) => new Promise((r) => setTimeout(r, ms));
+async function waitForPhotoReview(condition, label) {
+  const deadline = performance.now() + 5000;
+  while (!condition()) {
+    if (performance.now() >= deadline) throw new Error("Photo review did not reach " + label);
+    await tick(20);
+  }
+}
 const DOC = "d0000000-0000-4000-8000-000000000001";
 window.run = async () => {
   const calls = [];
@@ -184,13 +191,15 @@ window.run = async () => {
   const map = new Map();
   const div = document.createElement("div"); document.body.appendChild(div);
   createRoot(div).render(h(StrictMode, null, h(PhotoReviewPanel, { interventionId: "20000000-0000-4000-8000-000000000001", role: "client", photos: [{ id: DOC, name: "tableau.jpg" }], context: { generation: () => 0, userId: () => "10000000-0000-4000-8000-000000000001" }, api, store: () => ({ get: (k) => map.get(k) ?? null, set: (k, v) => map.set(k, v), remove: (k) => map.delete(k) }), newId: () => crypto.randomUUID() })));
-  await tick(300);
   const btn = () => div.querySelector("[data-photo-review-request]");
+  await waitForPhotoReview(() => btn(), "request available");
   const disabledBefore = btn().disabled;
   btn().click(); await tick(100);
   const postsBeforeConsent = calls.filter((c) => c.startsWith("POST")).length;
-  div.querySelector("[data-photo-review-consent]").click(); await tick(50);
-  btn().click(); await tick(300);
+  div.querySelector("[data-photo-review-consent]").click();
+  await waitForPhotoReview(() => btn() && !btn().disabled, "consent acknowledged");
+  btn().click();
+  await waitForPhotoReview(() => div.querySelector('[data-photo-review-status="requested"]'), "request confirmed");
   const heights = [...div.querySelectorAll("button, label")].map((b) => Math.round(b.getBoundingClientRect().height)).filter((x) => x > 0);
   return { disabledBefore, postsBeforeConsent, calls, status: div.querySelector("[data-photo-review-status]")?.getAttribute("data-photo-review-status"), withdraw: !!div.querySelector("[data-photo-review-withdraw]"), providerOff: !!div.querySelector("[data-photo-review-provider-off]"), heights, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
 };
