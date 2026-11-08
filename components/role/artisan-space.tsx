@@ -3503,6 +3503,7 @@ function Profile({
         demo={session.mode === "demo"}
         context={session.mutationContext}
         onOpenTicket={(id) => session.go("support", id)}
+        erasureRequests
       />
       <SubscriptionsPanel
         key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}

@@ -5474,6 +5474,7 @@ function ProfileView({ c }: { c: Ctx }) {
         demo={demo}
         context={session.mutationContext}
         onOpenTicket={(id) => c.go("support", id)}
+        erasureRequests
       />
       <section className="panel" aria-labelledby="profile-role">
         <h2 id="profile-role">Votre rôle</h2>

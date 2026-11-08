@@ -277,3 +277,7 @@ Codex ajoute les champs facultatifs `privacy_controller`, `privacy_retention` et
 ### ENT-14 — signaler les budgets dépassés dans le rapport consolidé
 
 Codex ajoute les alertes de lecture dans Rapports. Comparer le montant des devis acceptés au budget de référence positif de la même ligne du serveur. Afficher l’excédent et un lien vers le site. Le rapport peut couvrir un périmètre partiel, et la comparaison reprend exactement sa période et ses montants. Aucun seuil commercial supplémentaire.
+
+### SYS-09 — suivre ses demandes de données dans les profils professionnels
+
+Codex ajoute le panneau personnel de suivi de l’effacement aux profils artisan et entreprise. Réutiliser la lecture sous l’identité du titulaire et les liens de ses tickets. Le profil entreprise ne transmet aucun compte ni périmètre d’organisation à cette lecture personnelle.
