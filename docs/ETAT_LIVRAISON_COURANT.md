@@ -4,6 +4,10 @@ Objectif : application entière, seuls raccordements Stripe et SMS différés. P
 
 ## Référence en ligne
 
+La preview `9e6d24f` retrouve les anciens devis et contrats depuis les écrans. Le client accepte le devis courant hors des listes initiales. L’entreprise ouvre l’ancienne version exacte, archive un contrat de la troisième page et voit le statut relu. Le changement d’organisation purge le brouillon. Le brouillon PWA reste récupérable hors connexion et les nettoyages passent. [Preview](https://depannage-electricite-huai4bhrp-brafas-projects.vercel.app) · [Preuves](reviews/DELIVERY_9E6_QUOTES_CONTRACTS.md)
+
+### Version précédente `635e41d`
+
 La preview `635e41d` retrouve et décide une approbation ancienne avec l’identité du gestionnaire. La recette passe à 360, 390 et 1 280 px, avec refus de décision pour le lecteur et refus hors organisation. Le nettoyage est vérifié. La réaffectation et le fil administrateur ont des tests ciblés et attendent la recette positive avec le compte propriétaire. [Preview](https://depannage-electricite-l5vibd0zx-brafas-projects.vercel.app) · [Preuves](reviews/DELIVERY_635_APPROVALS.md)
 
 ### Version précédente `9526e05`
