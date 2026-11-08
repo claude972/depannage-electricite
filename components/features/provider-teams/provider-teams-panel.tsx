@@ -304,7 +304,8 @@ function TeamDetail({ deps, initialTeam, onTeamChanged }: { deps: Deps; initialT
     setGone("");
     members.forbid();
     missions.forbid();
-    invitations.forbid();
+    // Sent invitations exist only for the roles allowed to see them; otherwise they stay neutral (never read).
+    if (teamActions(latestTeam.current).invitationsVisible) invitations.forbid();
     setAssignTo({});
     setRemoving(null);
     setOpenMission(null);
@@ -329,7 +330,7 @@ function TeamDetail({ deps, initialTeam, onTeamChanged }: { deps: Deps; initialT
   const [removing, setRemoving] = useState<string | null>(null);
   // Any refused team read (401/403/404, page 1 or a continuation, any section) or refused write:
   // every section and every action of this team disappears at once.
-  const refused = lost || (checking === "no" && (members.state.phase === "forbidden" || missions.state.phase === "forbidden" || invitations.state.phase === "forbidden"));
+  const refused = lost || (checking === "no" && (members.state.phase === "forbidden" || missions.state.phase === "forbidden" || (actions.invitationsVisible && invitations.state.phase === "forbidden")));
   useEffect(() => {
     if (!refused) return;
     // Clear (not only hide) every section and fence their in-flight pages; sticky until remount.
