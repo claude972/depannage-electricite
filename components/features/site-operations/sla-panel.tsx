@@ -1,17 +1,19 @@
 "use client";
 import { useState } from "react";
+import { useEnterpriseSearch, ENTERPRISE_SEARCH_COPY } from "../enterprise-search/use-enterprise-search";
 import { z } from "zod";
 import { slaCalendarPayload, slaCasePayload, slaPolicyPayload } from "../../../lib/features/site-operations/schemas";
 import { NOT_MEASURABLE, NO_GLOBAL_ALERT_NOTICE, TRACK_STATUS, WEEKDAY, dateTime, minutes } from "../../../lib/features/site-operations/labels";
 import type { CalendarWindow, PolicyStatus, SlaCalendar, SlaCalendarPayload, SlaCase, SlaCasePayload, SlaEvaluation, SlaPolicy, SlaPolicyPayload, SlaTrack, Urgency } from "../../../lib/features/site-operations/types";
-import { EmptyState, Field, Notice, ReadOnly, Tag, Truncated, fromInstant, orNull, toInstant, toInt, useSubmit, type PanelContext, type Tone } from "./shared";
+import { EmptyState, Field, Notice, ReadOnly, Tag, Truncated, fromInstant, orNull, toInstant, toInt, useSubmit, type InterventionSearchBinding, type PanelContext, type Tone } from "./shared";
 import styles from "./site-operations.module.css";
 
 const TRACK_TONE: Record<SlaTrack["status"], Tone> = { met: "green", breached: "red", pending: "blue", not_measurable: "neutral" };
 type Mode = { kind: "none" } | { kind: "calendar"; id: string | null; version: number | null } | { kind: "policy"; id: string | null; version: number | null } | { kind: "case"; id: string | null; version: number | null } | { kind: "pause"; caseId: string; version: number } | { kind: "resume"; caseId: string; version: number };
 type CalendarDraft = { name: string; timezone: string; windows: { weekday: string; start: string; end: string }[]; closed_dates: string };
 type PolicyDraft = { name: string; calendar_id: string; urgency: "" | Urgency; response: string; resolution: string; status: PolicyStatus };
-type CaseDraft = { policy_id: string; reference: string; opened_at: string; responded_at: string; resolved_at: string; notes: string };
+// intervention_id is part of the editable state: editing another field never drops the link.
+type CaseDraft = { policy_id: string; intervention_id: string | null; reference: string; opened_at: string; responded_at: string; resolved_at: string; notes: string };
 const emptyCalendar = (): CalendarDraft => ({ name: "", timezone: "", windows: [{ weekday: "1", start: "", end: "" }], closed_dates: "" });
 const calendarFromRow = (c: SlaCalendar): CalendarDraft => ({ name: c.name, timezone: c.timezone, windows: c.windows.map((w) => ({ weekday: String(w.weekday), start: w.start, end: w.end })), closed_dates: c.closed_dates.join("\n") });
 const calendarPayload = (d: CalendarDraft): SlaCalendarPayload => ({
@@ -23,11 +25,86 @@ const calendarPayload = (d: CalendarDraft): SlaCalendarPayload => ({
 const emptyPolicy = (): PolicyDraft => ({ name: "", calendar_id: "", urgency: "", response: "", resolution: "", status: "active" });
 const policyFromRow = (p: SlaPolicy): PolicyDraft => ({ name: p.name, calendar_id: p.calendar_id ?? "", urgency: p.urgency ?? "", response: p.response_target_minutes === null ? "" : String(p.response_target_minutes), resolution: p.resolution_target_minutes === null ? "" : String(p.resolution_target_minutes), status: p.status });
 const policyPayload = (d: PolicyDraft): SlaPolicyPayload => ({ name: d.name.trim(), calendar_id: orNull(d.calendar_id), urgency: d.urgency || null, response_target_minutes: toInt(d.response), resolution_target_minutes: toInt(d.resolution), status: d.status });
-const emptyCase = (policyId: string): CaseDraft => ({ policy_id: policyId, reference: "", opened_at: "", responded_at: "", resolved_at: "", notes: "" });
-const caseFromRow = (c: SlaCase): CaseDraft => ({ policy_id: c.policy_id, reference: c.reference, opened_at: fromInstant(c.opened_at), responded_at: fromInstant(c.responded_at), resolved_at: fromInstant(c.resolved_at), notes: c.notes });
-const casePayload = (d: CaseDraft): SlaCasePayload => ({ policy_id: d.policy_id, intervention_id: null, reference: d.reference.trim(), opened_at: toInstant(d.opened_at) ?? "", responded_at: toInstant(d.responded_at), resolved_at: toInstant(d.resolved_at), notes: d.notes.trim() });
+const emptyCase = (policyId: string): CaseDraft => ({ policy_id: policyId, intervention_id: null, reference: "", opened_at: "", responded_at: "", resolved_at: "", notes: "" });
+const caseFromRow = (c: SlaCase): CaseDraft => ({ policy_id: c.policy_id, intervention_id: c.intervention_id, reference: c.reference, opened_at: fromInstant(c.opened_at), responded_at: fromInstant(c.responded_at), resolved_at: fromInstant(c.resolved_at), notes: c.notes });
+const casePayload = (d: CaseDraft): SlaCasePayload => ({ policy_id: d.policy_id, intervention_id: d.intervention_id, reference: d.reference.trim(), opened_at: toInstant(d.opened_at) ?? "", responded_at: toInstant(d.responded_at), resolved_at: toInstant(d.resolved_at), notes: d.notes.trim() });
 const pauseSchema = z.object({ started_at: z.string().min(1, "Indiquez le début de la pause."), reason: z.string().trim().max(400) }).strict();
 const resumeSchema = z.object({ ended_at: z.string().min(1, "Indiquez la fin de la pause.") }).strict();
+
+const ticketRef = (id: string) => `INT-${id.slice(0, 8).toUpperCase()}`;
+const CATEGORY_LABEL: Record<string, string> = { outage: "Panne générale", panel: "Tableau électrique", socket: "Prise ou interrupteur", lighting: "Éclairage", diagnostic: "Recherche de panne" };
+const day = (iso: string) => new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
+
+/**
+ * ENT-07 — optional link of an SLA case to an intervention of THIS site. The current link (even
+ * outside the loaded page or after a read error) is always shown and kept; it is removed only by
+ * « Retirer le lien ». The choice reads the paginated enterprise search bounded to organisation +
+ * site + identity; rows of any other site are never offered.
+ */
+function InterventionLink({ value, onChange, binding, organizationId, siteId }: { value: string | null; onChange: (id: string | null) => void; binding: InterventionSearchBinding | undefined; organizationId: string; siteId: string }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const filters = binding && open ? { organization_id: organizationId, site_id: siteId, category: null, status: null, search, sort: "recent" as const } : null;
+  const { state, retry } = useEnterpriseSearch({ enabled: Boolean(binding && open), context: binding?.context ?? { generation: () => 0, userId: () => null }, filters, page, api: binding?.api });
+  const rows = state.items.filter((r) => r.site_id === siteId.toLowerCase());
+  return (
+    <fieldset className={styles.fieldset} data-sla-intervention={value ?? ""}>
+      <legend>Ticket d’intervention lié (facultatif)</legend>
+      <p className={styles.hint} data-sla-current-link="">
+        {value ? <>Ticket lié : <strong>{ticketRef(value)}</strong></> : "Aucun ticket lié."}
+      </p>
+      <div className={styles.actions}>
+        {value && (
+          <button type="button" className="button outline" onClick={() => onChange(null)} data-sla-unlink="">
+            Retirer le lien
+          </button>
+        )}
+        {binding ? (
+          <button type="button" className="button outline" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+            {open ? "Masquer les interventions du site" : value ? "Choisir un autre ticket" : "Choisir un ticket du site"}
+          </button>
+        ) : (
+          <span className={styles.hint}>Le choix d’un ticket n’est pas disponible ici.</span>
+        )}
+      </div>
+      {binding && open && (
+        <div data-sla-picker={state.phase}>
+          <Field label="Rechercher une intervention du site">{(a) => <input {...a} type="search" value={search} maxLength={80} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />}</Field>
+          {state.phase === "loading" && <p className={styles.hint} role="status">{ENTERPRISE_SEARCH_COPY.loading}</p>}
+          {(state.phase === "error" || state.phase === "forbidden") && (
+            <div role="alert" data-sla-picker-error="">
+              <p className={styles.hint}>{state.error || ENTERPRISE_SEARCH_COPY.failed} Le ticket lié actuel est conservé.</p>
+              {state.phase === "error" && <button type="button" className="button outline" onClick={() => retry()}>Réessayer</button>}
+            </div>
+          )}
+          {state.phase === "ready" && rows.length === 0 && <p className={styles.hint} data-sla-picker-empty="">Aucune intervention de ce site ne correspond.</p>}
+          {state.phase === "ready" && rows.length > 0 && (
+            <ul className={styles.plain} aria-label="Interventions du site">
+              {rows.map((r) => (
+                <li key={r.id} data-sla-option={r.id}>
+                  <label style={{ display: "flex", gap: 10, alignItems: "center", minHeight: 44, cursor: "pointer" }}>
+                    <input type="radio" name="sla-intervention" checked={value === r.id} onChange={() => onChange(r.id)} style={{ width: 20, height: 20 }} />
+                    <span>
+                      <strong>{ticketRef(r.id)}</strong> · {CATEGORY_LABEL[r.category] ?? r.category} · {r.city} · {day(r.created_at)}
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          )}
+          {state.phase === "ready" && state.pages > 1 && (
+            <div className={styles.actions} aria-label="Pages des interventions">
+              <button type="button" className="button outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} data-sla-prev="">Précédent</button>
+              <span className={styles.hint}>Page {state.page} sur {state.pages}</span>
+              <button type="button" className="button outline" disabled={page >= state.pages} onClick={() => setPage((p) => p + 1)} data-sla-next="">Suivant</button>
+            </div>
+          )}
+        </div>
+      )}
+    </fieldset>
+  );
+}
 
 function TrackCell({ label, track }: { label: string; track: SlaTrack }) {
   return (
@@ -175,6 +252,7 @@ export function SlaPanel({ context }: { context: PanelContext }) {
             <Field label="Résolution constatée (facultatif)" error={form.errors.resolved_at}>{(a) => <input {...a} type="datetime-local" value={caseDraft.resolved_at} onChange={(e) => setCaseDraft((d) => ({ ...d, resolved_at: e.target.value }))} />}</Field>
           </div>
           <Field label="Notes (facultatif)" error={form.errors.notes}>{(a) => <textarea {...a} value={caseDraft.notes} maxLength={4000} onChange={(e) => setCaseDraft((d) => ({ ...d, notes: e.target.value }))} />}</Field>
+          <InterventionLink value={caseDraft.intervention_id} onChange={(id) => setCaseDraft((d) => ({ ...d, intervention_id: id }))} binding={context.interventionSearch} organizationId={org} siteId={report.site_id} />
           <div className={styles.actions}>
             <button type="submit" className="button primary" disabled={form.submitting || context.busy}>{form.submitting ? "Enregistrement…" : "Enregistrer"}</button>
             <button type="button" className="button outline" onClick={close} disabled={form.submitting}>Annuler</button>
@@ -204,6 +282,16 @@ export function SlaPanel({ context }: { context: PanelContext }) {
                   <div><dt>Réponse</dt><dd>{dateTime(c.responded_at)}</dd></div>
                   <div><dt>Résolution</dt><dd>{dateTime(c.resolved_at)}</dd></div>
                   <div><dt>Pauses</dt><dd>{c.pauses_total}{c.pauses_total !== c.pauses.length ? ` (${c.pauses.length} reçues)` : ""}</dd></div>
+                  <div>
+                    <dt>Ticket lié</dt>
+                    <dd data-sla-case-link={c.intervention_id ?? ""}>
+                      {c.intervention_id ? (
+                        context.onNavigate ? (
+                          <button type="button" className={styles.link} onClick={() => context.onNavigate?.("intervention", c.intervention_id!)}>{ticketRef(c.intervention_id)}</button>
+                        ) : ticketRef(c.intervention_id)
+                      ) : "—"}
+                    </dd>
+                  </div>
                 </dl>
                 {e && (
                   <div className={styles.tracks}>

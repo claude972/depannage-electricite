@@ -12,8 +12,15 @@ import styles from "./site-operations.module.css";
 export { fieldErrors, fromCents, fromInstant, orNull, toCents, toInstant, toInt };
 export type { RunOutcome };
 /** Everything a panel receives from the view; panels never call the client themselves. */
+/** ENT-07: identity-bound access to the paginated enterprise intervention search (site + organisation). */
+export type InterventionSearchBinding = {
+  context: { generation(): number; userId(): string | null };
+  api?: import("../enterprise-search/model").SearchApi;
+};
 export type PanelContext = {
   report: SiteOperationsReport;
+  /** Absent (demo, no identity) ⇒ no intervention list is read; the existing link stays as is. */
+  interventionSearch?: InterventionSearchBinding;
   canWrite: boolean;
   canWriteOrganization: boolean;
   readOnlyReason: string | null;
