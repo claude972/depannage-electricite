@@ -28,7 +28,7 @@ Plan court : reproductions isolées E01, E28, E73 et E74 dans cet ordre, suite e
 | ID | Gravité | État | Mécanisme | Commit | Test ajouté | Fichiers modifiés | Note |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | E01 | Bloquant | Vérifié ciblé | Isolé | `2feb706` | `sql-phase2-lot-a-blockers-review.mjs` | Migration additive `support_ticket_audit_target` | HTTP 422 ×2, SQL 23514 avant. HTTP 200 ×2 et audits exacts après. Suite globale à comparer. |
-| E28 | Bloquant | À traiter | Isolé | — | — | — | Première version de garantie. |
+| E28 | Bloquant | Vérifié ciblé | Isolé | `fb3e269` | `sql-phase2-lot-a-blockers-review.mjs` | `lib/features/warranty-policy/contract.ts` | HTTP 503 puis 422 avant, 200 puis 200 après, version 1 relue en SQL. |
 | E73 | Bloquant | À traiter | Isolé | — | — | — | Motif PostgreSQL du secret de dispatch. |
 | E74 | Bloquant | À traiter | Isolé | — | — | — | Corps des déclencheurs HTTP internes. |
 
