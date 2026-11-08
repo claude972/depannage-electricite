@@ -122,6 +122,7 @@ import type { AssetSource } from "../features/site-asset-links/asset-links-model
 import { createAreasApi, parseAreasPage } from "../features/site-areas/areas-model";
 import { CoOwnershipPanel } from "../features/co-ownership/co-ownership-panel";
 import { SiteDocumentsPanel } from "../features/site-documents/site-documents-panel";
+import { SiteAttachmentsPanel } from "../features/site-attachments/site-attachments-panel";
 import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
 import { PlatformPayAction } from "../app/platform-pay";
 import { OrganizationSlaPanel } from "../features/organization-sla/organization-sla-panel";
@@ -3416,6 +3417,17 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
           </button>
         </section>
         )}
+        {/* ENT-04 / SYS-06: the site's own pieces (plans, maintenance, compliance); upload capped by the
+            member's write right on this site, the server's can_manage_site stays the authority. */}
+        <SiteAttachmentsPanel
+          key={`attach|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${c.organization?.id ?? "-"}|${site.id}`}
+          siteId={site.id}
+          organizationId={c.organization?.id}
+          context={session.mutationContext}
+          canUpload={canWrite}
+          archived={Boolean(site.archived_at)}
+          demo={!live}
+        />
       </div>
     </>
   );
@@ -3612,6 +3624,19 @@ function DirectSiteSheet({ c, id }: { c: Ctx; id: string }) {
                 context={session.mutationContext}
                 onOpenDossier={(iid) => session.openIntervention(iid)}
                 headingId="site-direct-docs"
+              />
+            )}
+            {/* ENT-04 / SYS-06: site pieces on the direct sheet; upload only for an active site with the
+                settings GET can_write (archived ⇒ read only). */}
+            {session.mode !== "demo" && (
+              <SiteAttachmentsPanel
+                key={`attach|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${site.organization_id}|${site.id}`}
+                siteId={site.id}
+                organizationId={site.organization_id}
+                context={session.mutationContext}
+                canUpload={state.canWrite && !archived}
+                archived={archived}
+                headingId="site-direct-attachments"
               />
             )}
             {!archived && session.mode !== "demo" && site.type === "syndic" && (
