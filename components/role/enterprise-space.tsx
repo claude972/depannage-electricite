@@ -3498,6 +3498,24 @@ function DirectSiteSheet({ c, id }: { c: Ctx; id: string }) {
                 canWrite={state.canWrite && site.archived_at === null}
               />
             )}
+            {/* ENT-09 / ENT-05: the EXISTING energy and co-ownership panels, only for an active site proven in
+                the current organisation (rendered by the loader only then); rights stay each panel's server
+                permissions. Archived / demo / other organisation ⇒ nothing mounted, nothing read. */}
+            {!archived && session.mode !== "demo" && (
+              <SiteEnergyPanel
+                key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${site.organization_id}|${site.id}`}
+                siteId={site.id}
+                context={session.mutationContext}
+              />
+            )}
+            {!archived && session.mode !== "demo" && site.type === "syndic" && (
+              <CoOwnershipPanel
+                key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${site.organization_id}|${site.id}`}
+                siteId={site.id}
+                context={session.mutationContext}
+                demo={false}
+              />
+            )}
           </div>
         );
       }}
