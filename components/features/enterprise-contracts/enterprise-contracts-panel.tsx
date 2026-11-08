@@ -216,6 +216,7 @@ function ContractDetailView({ id, context, organizationId, contractId, epoch, ca
       )}
       {d.phase === "ready" && d.contract && (
         <>
+          <h4>{d.contract.title}</h4>
           <p>
             {STATUS_LABEL[d.contract.status]} — du {date(d.contract.starts_on)}
             {d.contract.ends_on ? ` au ${date(d.contract.ends_on)}` : ""}

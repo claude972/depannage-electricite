@@ -1687,7 +1687,10 @@ export function DossierView({ c, id, initialQuoteId }: { c: Ctx; id: string; ini
           presence={presence}
           backLabel="Interventions"
           onBack={() => c.go("requests")}
-          outsideActivePerimeter={(d) => Boolean(c.activeSite?.id) && d.intervention.site_id !== c.activeSite?.id}
+          outsideActivePerimeter={(d) =>
+            !c.organization || d.site.status !== "ok" || d.site.value.organization_id !== c.organization.id ||
+            Boolean(c.activeSite && d.intervention.site_id !== c.activeSite.id)
+          }
         />
       );
     if (presence.decision === "error")
@@ -2328,8 +2331,10 @@ function AppointmentPanel({
 }
 
 // ---- Sites & contrats --------------------------------------------------------------------
-function ProfessionalBlock({ c }: { c: Ctx }) {
+function ProfessionalBlock({ c, initialTab = "approvals" }: { c: Ctx; initialTab?: "approvals" | "contracts" }) {
   const { session, demo } = c;
+  const organizationId = c.organization?.id ?? null;
+  const context = session.mutationContext;
   const state = session.capabilities.professional;
   if (!demo && state === "unknown") return <Loader label="Vérification du pilotage professionnel…" />;
   if (!demo && state !== "available")
@@ -2342,6 +2347,9 @@ function ProfessionalBlock({ c }: { c: Ctx }) {
     );
   return (
     <ProfessionalOperations
+      key={demo ? undefined : `${context.userId()}|${context.generation()}|${organizationId}`}
+      initialTab={demo ? "approvals" : initialTab}
+      contracts={{ organizationId, context }}
       data={{
         ...session.professional,
         approvals: c.scope.approvals,
@@ -2648,7 +2656,7 @@ function ContractsView({ c }: { c: Ctx }) {
         subtitle="Approbations, contrats enregistrés et échéances de l’organisation active"
         back={{ label: "Retour aux sites", onClick: () => c.go("sites") }}
       />
-      <ProfessionalBlock c={c} />
+      <ProfessionalBlock c={c} initialTab="contracts" />
     </>
   );
 }
@@ -3916,9 +3924,9 @@ function ApprovalDetailInner({ c, id }: { c: Ctx; id: string }) {
  *    a 401/403 stays « inaccessible » (never another quote). Exported for tests only. */
 export function EnterpriseQuoteRoute({ c, ref_ }: { c: Ctx; ref_: string }) {
   const { session } = c;
-  const quote = session.data.quotes.find((q) => q.id === ref_);
+  const quote = session.data.quotes.find((q) => q.id === ref_ && (c.demo || c.orgInterventions.some((i) => i.id === q.intervention_id)));
   if (quote) return <DossierView key={`${quote.intervention_id}-${quote.id}`} c={c} id={quote.intervention_id} initialQuoteId={quote.id} />;
-  if (session.mode === "live" && !session.data.interventions.some((i) => i.id === ref_)) return <EnterpriseQuoteView c={c} quoteId={ref_} />;
+  if (session.mode === "live" && !c.orgInterventions.some((i) => i.id === ref_)) return <EnterpriseQuoteView c={c} quoteId={ref_} />;
   return <DossierView key={`${ref_}-${session.selectedQuoteId}`} c={c} id={ref_} />;
 }
 

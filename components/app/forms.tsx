@@ -1866,6 +1866,7 @@ export function ProfessionalOperations({
   canWriteSite = () => true,
   readOnlyReason = null,
   contracts,
+  initialTab = "approvals",
 }: {
   data: ProfessionalData;
   sites: Site[];
@@ -1884,8 +1885,9 @@ export function ProfessionalOperations({
   /** ENT-13 live contracts: active organisation + identity fence. Absent (or no organisation) ⇒
    *  no live read and an honest « choisissez une organisation ». Ignored in demo. */
   contracts?: EnterpriseContractsContext;
+  initialTab?: "approvals" | "contracts";
 }) {
-  const [tab, setTab] = useState("approvals");
+  const [tab, setTab] = useState<string>(initialTab);
   // ENT-13: bumped after each successful contract write ⇒ causal re-read (page 1 + open detail).
   const [contractsEpoch, setContractsEpoch] = useState(0);
   const liveContracts = !demo;
