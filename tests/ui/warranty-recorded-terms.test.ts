@@ -1,5 +1,5 @@
 // PUB-06 — terms version recorded with a warranty case: on-demand exact read (?version=N, version
-// checked), missing version honest, null ⇒ no request, wording never « acceptées »; Chromium 390:
+// checked), unavailable version honest, null ⇒ no request, wording never « acceptées »; Chromium 390:
 // real WarrantyPanel, on-demand read, error ⇒ Réessayer, missing, scope switch ⇒ cleared, demo ⇒ 0 fetch.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -34,7 +34,9 @@ test("model : exact ?version=N, version checked, null ⇒ missing, errors, inval
   assert.equal(urls.length, n, "invalid version ⇒ no request");
   const copy = Object.values(RECORDED_COPY).map((v) => (typeof v === "function" ? v(2) : v)).join(" ");
   assert.ok(!/acceptées|accepté par|vous avez accepté/i.test(copy), "never presented as an acceptance");
-  assert.match(RECORDED_COPY.label(2), /en vigueur lors de la demande/);
+  assert.match(RECORDED_COPY.label(2), /^Version des conditions enregistrée au dépôt : 2\.$/);
+  assert.ok(!/en vigueur/.test(RECORDED_COPY.label(2)), "no right implied");
+  assert.equal(RECORDED_COPY.missing.startsWith("Cette version n’est pas disponible."), true);
 });
 
 const ENTRY = `
@@ -83,7 +85,7 @@ async function serve() {
 const W = (n: number) => "e0000000-0000-4000-8000-" + String(n).padStart(12, "0");
 const row = (n: number) => `[data-warranty-case="${W(n)}"]`;
 
-test("Chromium 390 : lecture à la demande (version exacte), null sans requête, erreur ⇒ Réessayer, version introuvable, changement de dossier ⇒ effacé", { skip }, async () => {
+test("Chromium 390 : lecture à la demande (version exacte), null sans requête, erreur ⇒ Réessayer, version non disponible, changement de dossier ⇒ effacé", { skip }, async () => {
   const { server, url } = await serve();
   const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
   const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true });
@@ -94,7 +96,7 @@ test("Chromium 390 : lecture à la demande (version exacte), null sans requête,
     await page.goto(url);
     await page.locator('[data-warranty-history="ready"]').waitFor();
     assert.deepEqual(await page.evaluate("window.terms"), [], "nothing read before asking");
-    assert.match(await page.locator(row(1)).innerText(), /Version des conditions en vigueur lors de la demande : 2\./);
+    assert.match(await page.locator(row(1)).innerText(), /Version des conditions enregistrée au dépôt : 2\./);
     // null ⇒ honest note, no button, no request.
     assert.match(await page.locator(row(2)).innerText(), /Version des conditions non enregistrée/);
     assert.equal(await page.locator(`${row(2)} button`).count(), 0);
@@ -104,10 +106,10 @@ test("Chromium 390 : lecture à la demande (version exacte), null sans requête,
     assert.equal(await page.locator(`${row(1)} [data-recorded-body]`).innerText(), "Texte de la version 2");
     assert.deepEqual(await page.evaluate("window.terms"), ["?version=2"]);
     assert.match(await page.locator(row(1)).innerText(), /ne vaut ni acceptation/);
-    // Missing version ⇒ honest « introuvable », nothing substituted.
+    // Unavailable version ⇒ « Cette version n’est pas disponible », nothing substituted.
     await page.locator(row(3)).getByRole("button", { name: "Voir les conditions (version 7)" }).click();
     await page.locator(`${row(3)} [data-recorded-terms="missing"]`).waitFor();
-    assert.match(await page.locator(row(3)).innerText(), /Version introuvable/);
+    assert.match(await page.locator(row(3)).innerText(), /Cette version n’est pas disponible\./);
     assert.equal(await page.locator(`${row(3)} [data-recorded-body]`).count(), 0);
     // Error ⇒ Réessayer ⇒ exact version.
     await page.locator(row(4)).getByRole("button", { name: "Voir les conditions (version 9)" }).click();
