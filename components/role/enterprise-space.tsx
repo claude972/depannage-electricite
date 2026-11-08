@@ -109,6 +109,7 @@ import { SiteDirectLoader } from "../features/site-lifecycle/site-direct";
 import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-panel";
 import { DelegatedPayerCheckout, DelegatedPayerManager } from "../features/delegated-payer/delegated-payer";
 import { REPORT_COPY, reportQuery, useEnterpriseReport } from "../features/enterprise-reports/use-enterprise-report";
+import { APPROVALS_COPY, useApprovalPoint, useApprovalsList, type ApprovalRow as ServerApproval, type StatusFilter as ApprovalFilter } from "../features/enterprise-approvals/use-enterprise-approvals";
 import { RECORDS_COPY, useSiteRecords, type DueRow, type JobRow } from "../features/site-records/use-site-records";
 import { COUNTS_COPY, ENTERPRISE_SEARCH_COPY, ExportFeedback, PRO_COPY, useEnterpriseSearch, useOverviewCounts, useProfessionalOverview, type EnterpriseSearchFilters } from "../features/enterprise-search/use-enterprise-search";
 import { ContractSourceLine, QuoteGridAccessPanel } from "../features/quote-grid/quote-grid";
@@ -1503,6 +1504,23 @@ function ApprovalRow({ c, approval }: { c: Ctx; approval: Approval }) {
         <small>
           {site?.name || "Site de l’intervention"} · {quoteRef(approval.quote_id)}
           {approval.created_at ? ` · ${date(approval.created_at)}` : ""}
+        </small>
+      </section>
+      <Tag tone={meta.tone}>{meta.label}</Tag>
+      <Icon name="arrow" size={16} />
+    </button>
+  );
+}
+
+/** Server row (live): amount, site and dates come from the approval read itself, never from the cache. */
+function ServerApprovalRow({ c, approval }: { c: Ctx; approval: ServerApproval }) {
+  const meta = approvalMeta(approval.status);
+  return (
+    <button type="button" className={cx(styles.listRow, styles.listRowButton)} onClick={() => c.go("approval", approval.id)} data-approval={approval.id}>
+      <section>
+        <strong>{money(approval.quote.total_cents)}</strong>
+        <small>
+          {approval.site.name} · {quoteRef(approval.quote_id)} · {date(approval.created_at)}
         </small>
       </section>
       <Tag tone={meta.tone}>{meta.label}</Tag>
@@ -3453,7 +3471,72 @@ function siteAssetSource(session: Session, siteId: string): AssetSource {
 }
 
 // ---- Approbations ----------------------------------------------------------------------------
-function ApprovalsView({ c }: { c: Ctx }) {
+/** Exported for tests only (live approvals wiring). */
+export function ApprovalsView({ c }: { c: Ctx }) {
+  // Live (ENT-12): the list comes ONLY from the server (organization + global site + status filter,
+  // paginated). Demo: local list unchanged, zero call.
+  const live = !c.demo;
+  const [filter, setFilter] = useState<ApprovalFilter>("all");
+  const server = useApprovalsList({ enabled: live, context: c.session.mutationContext, organizationId: c.organization?.id ?? null, siteId: c.activeSite?.id ?? null, status: filter });
+  if (live)
+    return (
+      <>
+        <PageTitle
+          title="Devis & approbations"
+          subtitle={c.organization ? `Liste du serveur · ${c.activeSite ? c.activeSite.name : "tous les sites de l’organisation"}` : APPROVALS_COPY.chooseOrg}
+          action={
+            <button type="button" className="button outline" onClick={() => c.go("contracts")}>
+              <Icon name="shield" size={17} />
+              Règles d’approbation
+            </button>
+          }
+        />
+        <section className="panel" aria-label="Liste des approbations" data-approvals={server.state.phase}>
+          <div className={styles.segmentsWrap}>
+            <Segments
+              label="Filtrer les approbations"
+              value={filter}
+              options={[
+                ["all", "Toutes"],
+                ["pending", "En attente"],
+                ["approved", "Approuvées"],
+                ["rejected", "Refusées"],
+              ]}
+              onChange={setFilter}
+            />
+          </div>
+          {!c.organization ? (
+            <p className={styles.muted}>{APPROVALS_COPY.chooseOrg}</p>
+          ) : server.state.phase === "loading" || server.state.phase === "idle" ? (
+            <p className={styles.muted} role="status">{APPROVALS_COPY.loading}</p>
+          ) : server.state.phase === "forbidden" ? (
+            <p className={styles.muted} role="alert" data-approvals-inaccessible="">{server.state.error}</p>
+          ) : server.state.phase === "error" ? (
+            <div role="alert">
+              <p className={styles.muted}>{server.state.error}</p>
+              <button type="button" className="button outline" onClick={() => server.retry()}>Réessayer</button>
+            </div>
+          ) : server.state.items.length ? (
+            server.state.items.map((a) => <ServerApprovalRow key={a.id} c={c} approval={a} />)
+          ) : (
+            <Empty icon="receipt" title={filter === "all" ? "Aucune approbation sur ce périmètre" : "Aucune approbation pour ce filtre"}>
+              Les devis qui dépassent le seuil d’un site apparaîtront ici pour décision.
+            </Empty>
+          )}
+          {server.state.failed === "more" && (
+            <div role="alert">
+              <p className={styles.muted}>{server.state.error}</p>
+              <button type="button" className="button outline" onClick={() => server.retry()}>Réessayer</button>
+            </div>
+          )}
+          {server.state.phase === "ready" && server.state.next && server.state.failed !== "more" && (
+            <button type="button" className="button outline" disabled={server.state.loadingMore} onClick={() => server.more()} data-approvals-more="">
+              {server.state.loadingMore ? "Chargement…" : APPROVALS_COPY.more}
+            </button>
+          )}
+        </section>
+      </>
+    );
   const rows = [...c.scope.approvals].sort(
     (a, b) =>
       Number(b.status === "pending") - Number(a.status === "pending") ||
@@ -3489,13 +3572,40 @@ function ApprovalsView({ c }: { c: Ctx }) {
   );
 }
 
-function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
+/** Exported for tests only (live approval point read). */
+export function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
   const { session } = c;
-  const approval = c.scope.approvals.find((a) => a.id === id) ||
+  // Live (ENT-12): exact point read of THIS approval (row + site rule), never the 200-row cache.
+  const live = !c.demo;
+  const point = useApprovalPoint({ enabled: live, context: session.mutationContext, approvalId: id, organizationId: c.organization?.id ?? null, siteId: c.activeSite?.id ?? null });
+  const serverRow = live && point.state.phase === "ready" ? point.state.data!.approval : null;
+  const cached = c.scope.approvals.find((a) => a.id === id) ||
     session.professional.approvals.find((a) => a.id === id && c.orgSites.some((s) => s.id === a.site_id));
+  const approval = live ? (serverRow ? { id: serverRow.id, quote_id: serverRow.quote_id, site_id: serverRow.site_id, status: serverRow.status, note: serverRow.note, decided_by: serverRow.decided_by, created_at: serverRow.created_at, decided_at: serverRow.decided_at } : undefined) : cached;
   const [decision, setDecision] = useState<"approved" | "rejected" | "">("");
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
+  if (live && !c.organization)
+    return <Empty icon="receipt" title={APPROVALS_COPY.chooseOrg} action={<button type="button" className="button outline" onClick={() => c.go("approvals")}>Retour à la liste</button>} />;
+  if (live && point.state.phase !== "ready")
+    return (
+      <section className="panel" data-approval-point={point.state.phase}>
+        <button type="button" className="back-link" onClick={() => c.go("approvals")}>
+          <Icon name="back" size={17} />
+          Retour à la liste
+        </button>
+        {point.state.phase === "loading" || point.state.phase === "idle" ? (
+          <p className={styles.muted} role="status">{APPROVALS_COPY.loading}</p>
+        ) : point.state.phase === "forbidden" ? (
+          <p className={styles.muted} role="alert" data-approval-inaccessible="">{point.state.error}</p>
+        ) : (
+          <div role="alert">
+            <p className={styles.muted}>{point.state.error}</p>
+            <button type="button" className="button outline" onClick={() => point.retry()}>Réessayer</button>
+          </div>
+        )}
+      </section>
+    );
   if (!approval)
     return (
       <Empty
@@ -3511,6 +3621,10 @@ function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
   const quote = session.data.quotes.find((q) => q.id === approval.quote_id);
   const intervention = quote ? c.orgInterventions.find((i) => i.id === quote.intervention_id) : undefined;
   const site = c.orgSites.find((s) => s.id === (approval.site_id || intervention?.site_id));
+  // Live: the exact dossier / quote / site / rule of THIS approval come from the point read.
+  const exactDossierId = serverRow ? serverRow.intervention.id : intervention?.id ?? null;
+  const exactAmount = serverRow ? serverRow.quote.total_cents : quote ? quote.total_cents : null;
+  const exactSiteName = serverRow ? serverRow.site.name : site?.name ?? null;
   const documents = intervention ? session.data.documents.filter((d) => d.intervention_id === intervention.id) : [];
   const members = session.data.organization_members;
   const actorName = (actorId?: string | null) =>
@@ -3522,9 +3636,9 @@ function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
           ? "Membre de l’organisation"
           : "Acteur non résolu";
   const meta = approvalMeta(approval.status);
-  const rule = session.professional.approval_rules.find(
-    (r) => r.site_id === (approval.site_id || intervention?.site_id),
-  );
+  const rule = live
+    ? point.state.data!.rule // null = no rule for this exact site, proven by the server
+    : session.professional.approval_rules.find((r) => r.site_id === (approval.site_id || intervention?.site_id));
   // Décision : rôle de membre (règle du site) ET écriture sur le site du devis (portée).
   const role = c.authority.role;
   const decisionSiteId = approval.site_id || intervention?.site_id;
@@ -3577,12 +3691,14 @@ function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
       return;
     }
     setError("");
-    await session.professionalCommand({
+    const ok = await session.professionalCommand({
       action: "decide_approval",
       approval_id: approval!.id,
       decision,
       note: note.trim(),
     });
+    // Server-confirmed only: re-read the exact approval (no local patch).
+    if (ok && live) point.refresh();
   }
 
   return (
@@ -3614,7 +3730,7 @@ function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
             </div>
             <div>
               <small>Site</small>
-              <strong>{site?.name || "Site non chargé"}</strong>
+              <strong>{exactSiteName || "Site non chargé"}</strong>
               {site && <p>{site.address}</p>}
             </div>
             <div>
@@ -3628,15 +3744,20 @@ function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
             </div>
             <div className={styles.quoteFactsWide}>
               <small>Description de l’intervention</small>
-              {intervention ? (
+              {serverRow ? (
+                <p>
+                  {category(serverRow.intervention.category).label} · {shortId(serverRow.intervention.id)}
+                  {intervention ? ` — ${intervention.description}` : ""}
+                </p>
+              ) : intervention ? (
                 <p>
                   {category(intervention.category).label} · {shortId(intervention.id)} — {intervention.description}
                 </p>
               ) : (
                 <p>Dossier non chargé sur ce périmètre.</p>
               )}
-              {intervention && (
-                <button type="button" className={styles.textLink} onClick={() => session.openIntervention(intervention.id, approval.quote_id)}>
+              {exactDossierId && (
+                <button type="button" className={styles.textLink} onClick={() => session.openIntervention(exactDossierId, approval.quote_id)} data-approval-open-dossier={exactDossierId}>
                   Ouvrir le dossier et le devis
                   <Icon name="arrow" size={15} />
                 </button>
@@ -3656,11 +3777,11 @@ function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
             </div>
           </div>
           <div className={styles.amountBlock}>
-            <span>Montant TTC</span>
-            {quote ? (
+            <span>Montant TTC{serverRow ? " (devis de base)" : ""}</span>
+            {exactAmount !== null ? (
               <>
-                <strong>{money(quote.total_cents)}</strong>
-                <Tag tone="green">TVA {String(quote.tax_rate).replace(".", ",")} % incluse</Tag>
+                <strong>{money(exactAmount)}</strong>
+                {quote && <Tag tone="green">TVA {String(quote.tax_rate).replace(".", ",")} % incluse</Tag>}
               </>
             ) : (
               <strong>Devis non chargé</strong>
@@ -3671,6 +3792,13 @@ function ApprovalDetail({ c, id }: { c: Ctx; id: string }) {
 
         <section className="panel" aria-labelledby="approval-decision">
           <h2 id="approval-decision">Votre décision</h2>
+          {live && (
+            <p className={styles.muted} data-approval-rule={rule ? "rule" : "none"}>
+              {rule
+                ? `Règle du site : décision ${rule.required_role === "owner" ? "réservée au propriétaire" : "par un gestionnaire"} au-delà de ${money(rule.threshold_cents)}${rule.enabled ? "" : " (règle désactivée)"}.`
+                : APPROVALS_COPY.noRule}
+            </p>
+          )}
           {approval.status !== "pending" ? (
             <>
               <p className={styles.muted} style={{ marginTop: 10 }}>
