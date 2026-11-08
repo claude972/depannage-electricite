@@ -7,7 +7,7 @@
 // no call. Logic in ./model.
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { OperatorField } from "../../../lib/features/public-operator-profile/contract";
-import { EDITOR_INITIAL, FIELD_LABELS, FIELD_ORDER, PROFILE_COPY, createEditorApi, createEditorController, formToProfile, missingMinimum, tabStore, type EditorApi, type EditorContext, type EditorView, type Store } from "./model";
+import { EDITOR_INITIAL, FIELD_LABELS, FIELD_ORDER, PROFILE_COPY, createEditorApi, createEditorController, formToProfile, missingMinimum, tabStore, type EditorApi, type EditorContext, type EditorView, type Store, FIELD_MAX, LONG_FIELDS } from "./model";
 import styles from "./operator-profile.module.css";
 
 const uuid = (): string | null => (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : null);
@@ -122,10 +122,10 @@ function Editor({ api, store = tabStore, newId = uuid, context, initial }: Opera
             {FIELD_ORDER.map((f) => (
               <label key={f} className={styles.field}>
                 <span>{FIELD_LABELS[f]}{missing.includes(f) ? " — requis pour publier" : ""}</span>
-                {f === "about_text" ? (
-                  <textarea rows={4} maxLength={2000} value={form[f] ?? ""} onChange={(e) => setValues({ ...form, [f]: e.target.value })} />
+                {LONG_FIELDS.includes(f) ? (
+                  <textarea rows={f === "privacy_notice" ? 8 : 4} maxLength={FIELD_MAX[f]} value={form[f] ?? ""} onChange={(e) => setValues({ ...form, [f]: e.target.value })} />
                 ) : (
-                  <input value={form[f] ?? ""} onChange={(e) => setValues({ ...form, [f]: e.target.value })} />
+                  <input maxLength={FIELD_MAX[f]} value={form[f] ?? ""} onChange={(e) => setValues({ ...form, [f]: e.target.value })} />
                 )}
                 {errors[f] && <small className={styles.error} role="alert">{errors[f]}</small>}
               </label>
