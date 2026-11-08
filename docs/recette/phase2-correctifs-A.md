@@ -12,16 +12,21 @@ Plan court : reproductions isolées E01, E28, E73 et E74 dans cet ordre, suite e
 - SQL isolé CI : `node --test tests/sql-isolated-migrations.test.mjs`, puis `PGLITE_MODULE=<module PGlite 0.5.13> node tests/sql-*-review.mjs` fichier par fichier et `node tests/sql-review.mjs`. Les stubs Auth, Storage et pg_cron sont explicites.
 - PostgreSQL natif : `supabase migration up --local` pour une stack locale démarrée, ou `supabase migration up --remote=<URL locale>` avec le binaire natif déjà utilisé dans la recette et vérification de l’hôte de boucle locale. Aucune migration déployée par ce lot.
 
+## Bloquants livrés
+
+Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvelles migrations passent chacune deux fois sur PostgreSQL 17.11 natif vierge après les 101 existantes, avec stubs Auth/Storage, Vault et pg_net natifs et envoi sortant neutralisé. E01, E28 et E74 passent sur de vraies routes Next.js avec PostgreSQL PGlite isolé et des réponses de fournisseurs synthétiques. La suite de comparaison a été relancée et le typecheck a passé. Le verdict global reste distinct des quatre reproductions ciblées et dépend des échecs de référence.
+
 ## Synthèse
 
 | État | Nombre |
 | --- | ---: |
-| CORRIGÉ | 0 |
+| CORRIGÉ (avec suite verte) | 0 |
+| VÉRIFIÉ CIBLÉ (suite initiale rouge) | 4 |
 | CORRIGÉ PARTIEL | 0 |
 | NON REPRODUIT | 0 |
-| DÉCISION REQUISE | 0 |
+| DÉCISION REQUISE | 4 |
 | REVERTÉ | 0 |
-| HORS MISSION | 0 |
+| HORS MISSION | 7 |
 
 ## Items
 
@@ -32,14 +37,71 @@ Plan court : reproductions isolées E01, E28, E73 et E74 dans cet ordre, suite e
 | E73 | Bloquant | Vérifié ciblé | Isolé | `1cf47f4` | `supabase/tests/phase2-notification-dispatch.sql` | Migration additive `notification_dispatch_secret_length` | PostgreSQL 17.11 natif : 2201B avant, deux requêtes pg_net après pour quatre entrées (un appel par canal). Rollback, zéro ligne restante. |
 | E74 | Bloquant | Vérifié ciblé | Isolé | `14ea285` | `sql-phase2-lot-a-blockers-review.mjs` | `lib/features/notifications/external-delivery/` | Les deux formes donnent HTTP 422 sans tentative avant, HTTP 200 et une tentative acceptée par canal après. Fournisseurs interceptés, 403 et corps avec données toujours refusés. |
 
+| E07 | Majeur | À REPRODUIRE | Isolé | — | — | — | Verrou d’archivage site pour équipement et visite. |
+| E15 | Majeur | À REPRODUIRE | P2 | — | — | — | Créneau : version atomique et conflit HTTP. |
+| E18 | Mineur | À REPRODUIRE | P3 | — | — | — | Rapport : rejeu avec une seule écriture et un seul instantané. |
+| E19 | Mineur | À REPRODUIRE | Isolé | — | — | — | Rapport : nom déclaré vide rejeté côté serveur. |
+| E21 | Majeur | À REPRODUIRE | P4 | — | — | — | Validation des dates constatées SLA. |
+| E23 | Mineur | À REPRODUIRE | Isolé | — | — | — | Règle unique du statut SLA. |
+| E24 | Majeur | À REPRODUIRE | P4 | — | — | — | Validation chronologique de levée ERP. |
+| E25 | Majeur | À REPRODUIRE | P4 | — | — | — | Grille publiée applicable à sa date d’effet. |
+| E29 | Majeur | À REPRODUIRE | P2 | — | — | — | Décision de garantie : version attendue. |
+| E33 | Mineur | À REPRODUIRE | Isolé | — | — | — | Normalisation des noms dans la recherche. |
+| E34 | Majeur | À REPRODUIRE | P2 | — | — | — | Version et intentions distinctes d’approbation et de réactivation. |
+| E36 | Mineur | À REPRODUIRE | P3 | — | — | — | Rejeu de suspension sans deuxième audit. |
+| E37 | Majeur | À REPRODUIRE | Isolé | — | — | — | Indisponibilité planifiée et éligibilité des offres. |
+| E41 | Mineur | À REPRODUIRE | P3 | — | — | — | Rejeu de message texte avec un ID par intention. |
+| E53 | Mineur | À REPRODUIRE | P3 | — | — | — | Dépôt de site dédupliqué, y compris l’objet Storage. |
+| E59 | Majeur | DÉCISION REQUISE | Décision | — | — | — | Photos avant/après. |
+| E60 | Majeur | DÉCISION REQUISE | Décision | — | — | — | Accusé de remise par le client. |
+| E61 | Majeur | À REPRODUIRE | Isolé | — | — | — | Pagination et CSV du rapport consolidé. |
+| E67 | Majeur | DÉCISION REQUISE | Décision | — | — | — | Justificatif de levée ERP. |
+| E68 | Mineur | À REPRODUIRE | Isolé | — | — | — | Purge du brouillon expiré, y compris les champs restaurés par Firefox. |
+| E69 | Mineur | À REPRODUIRE | P7 | — | — | — | Session absente dans le SDK Auth → 401. |
+| E70 | Majeur | À REPRODUIRE | Isolé | — | — | — | Traduire l’erreur Stripe Connect localement. |
+| E72 | Majeur | À REPRODUIRE | P7 | — | — | — | Qualification du lien commission vers une écriture Stripe py_. |
+| E75 | Majeur | DÉCISION REQUISE | Décision | — | — | — | Réglage nullable à livrer ; valeur commerciale à décider. |
+| E76 | Majeur | À REPRODUIRE | Isolé | — | — | — | Quota public par origine/IP et numéro. |
+| E77 | Mineur | À REPRODUIRE | Isolé | — | — | — | Retry-After cohérent avec la fenêtre active. |
+| E78 | Majeur | À REPRODUIRE | Isolé | — | — | — | Sortie du remboursement préparé après révocation. |
+| E80 | Majeur | À REPRODUIRE | Isolé | — | — | — | Projection autorisée du litige dans l’espace artisan. |
+| H01 | Bloquant externe | HORS MISSION | Hébergement | — | — | — | Checklist ci-dessous. |
+| PUB-10.1 | Externe | HORS MISSION | Recette | — | — | — | Condition ouverte conservée au registre. |
+| CLI-05.2 | Externe | HORS MISSION | Recette | — | — | — | Condition ouverte conservée au registre. |
+| CLI-08.1 | Externe | HORS MISSION | Recette | — | — | — | Condition ouverte conservée au registre. |
+| ADM-01.1 | Externe | HORS MISSION | Recette | — | — | — | Condition ouverte conservée au registre. |
+| FIN-06.1 | Externe | HORS MISSION | Recette | — | — | — | Condition ouverte conservée au registre. |
+| SYS-08.2 | Externe | HORS MISSION | Recette | — | — | — | Condition ouverte conservée au registre. |
+
 ## Attendu de l’autre lot
 
 | ID | Fichier et ligne | Contrat attendu |
 | --- | --- | --- |
+| E15 | `components/role/client-space.tsx:1714`, écriture artisan correspondante | Envoyer la version lue du créneau, 0 pour la création. Contrat proposé : `expected_version` reçoit `reminder_version`. Sur 409, relire le créneau avant nouvel envoi. |
+| E29 | `components/app/forms.tsx:3338` | Envoyer la version de la demande de garantie avec la décision et conserver le brouillon en cas de conflit. Nom de champ attendu : `expected_version`. |
+| E34/E36 | `components/app/forms.tsx:2232` | Distinguer approbation, demande de correction, suspension et réactivation. Envoyer la version lue et garder la même clé d’intention sur les réessais. Valeurs finales à publier avec la preuve backend. |
+| E18/E41/E53 | Rapport, conversation texte, dépôt de site | Une clé stable par intention, y compris après la perte de la réponse. Définir le format exact avec chaque test de contrat backend. |
+| E08/E10/E12/E62 | Éditeurs budget, zones, adresses et énergie | Les routes concernées ont déjà un contrat de version. Vérifier côté B le rechargement du formulaire et la transition après rejeu avant de modifier le serveur. |
+| E21/E24 | `components/features/site-operations/sla-panel.tsx`, `erp-panel.tsx` | Afficher les bornes et les refus immédiatement avec le même ordre de dates que l’API. |
+| E80 | `components/role/artisan-space.tsx:2302` | Afficher l’état du litige du règlement attribué à l’artisan. Le journal finance reste privé. |
 
 ## Fiches de décision
 
-À renseigner avec les éléments applicables.
+### E59 — Photos de compte rendu
+
+Options : ajout facultatif par phase, ou photos requises selon des conditions définies par l’exploitant. Une obligation affecte la fin d’intervention, le stockage et les personnes photographiées. Préférence technique : pièces privées liées à la version du rapport, avec phase avant/après, facultatives avant décision. Aucun champ livré à ce checkpoint.
+
+### E60 — Accusé de remise client
+
+Options : accusé authentifié horodaté, ou dispositif de signature distinct. Un accusé rattache une action du destinataire à une version et ne qualifie pas à lui seul la valeur de signature. Préférence technique : preuve de remise séparée du nom déclaré par l’artisan. Niveau de preuve et caractère obligatoire à arbitrer. Aucun flux livré à ce checkpoint.
+
+### E67 — Justificatif ERP
+
+Options : lien facultatif à une pièce privée, ou preuve requise pour les types de réserve définis. Un lien facultatif permet une levée déclarative et une lecture différenciée. Préférence technique : rattacher la pièce à la version de la réserve dans le même site. Aucun champ livré à ce checkpoint.
+
+### E75 — Capacité artisan
+
+Options : capacité non renseignée ou plafond paramétrable. Déterminer l’unité (interventions simultanées, créneaux, autre) et les dossiers qui consomment la capacité avant d’imposer un plafond. Valeur technique prévue : null signifie illimité. Aucun seuil choisi et aucun réglage livré à ce checkpoint.
 
 ## Prérequis externes
 
