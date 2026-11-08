@@ -49,7 +49,7 @@ export function parseCases(body: unknown): WarrantyCaseRow[] | null {
 }
 /** Next page cursor of the global history read (null = last page / absent); undefined if malformed. */
 export function parseNextCursor(body: unknown): string | null | undefined {
-  const r = z.object({ next_cursor: z.string().min(1).max(2048).nullable().optional() }).passthrough().safeParse(body);
+  const r = z.object({ next_cursor: z.string().regex(/^[A-Za-z0-9_-]{1,600}$/).nullable().optional() }).passthrough().safeParse(body);
   return r.success ? (r.data.next_cursor ?? null) : undefined;
 }
 export function parseCorrective(body: unknown): Corrective | null {

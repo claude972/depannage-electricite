@@ -1,5 +1,5 @@
 // ADM-10 / PUB-06 — warranty history, pure model (no React). STRICT MIRROR of the Astra contract
-// b8301be (docs/WARRANTY_HISTORY_BACKEND.md):
+// b8301be (docs/WARRANTY_HISTORY_BACKEND.md) and handler cd68874 (lib/features/warranty-history):
 //   GET /api/warranty[?intervention_id=UUID][&cursor=opaque]
 //     → { cases, enabled, next_cursor: string|null, has_active: boolean|null }
 //   100 cases max per page, created_at DESC then UUID DESC. Without filter has_active = null (no
@@ -11,7 +11,10 @@ import { z } from "zod";
 
 export type Context = { generation(): number; userId(): string | null };
 export type Result = { status: number; body: unknown; retryAfter: number | null };
-const ts = z.iso.datetime({ offset: true });
+// Same timestamp shape as the handler (cd68874): offset required, at most microseconds.
+const ts = z.iso.datetime({ offset: true }).regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/);
+/** Opaque base64url cursor as issued by the handler (≤ 600 chars). */
+export const CURSOR = /^[A-Za-z0-9_-]{1,600}$/;
 export const ACTIVE_STATUSES = ["submitted", "reviewing"] as const;
 const caseSchema = z
   .object({
@@ -31,7 +34,7 @@ const pageSchema = z
   .object({
     cases: z.array(caseSchema).max(100),
     enabled: z.boolean(),
-    next_cursor: z.string().min(1).max(2048).nullable(),
+    next_cursor: z.string().regex(CURSOR).nullable(),
     has_active: z.boolean().nullable(),
   })
   .strict();
