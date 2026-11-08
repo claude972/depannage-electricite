@@ -4,6 +4,10 @@ Objectif : application entière, seuls raccordements Stripe et SMS différés. P
 
 ## Référence en ligne
 
+La preview `635e41d` retrouve et décide une approbation ancienne avec l’identité du gestionnaire. La recette passe à 360, 390 et 1 280 px, avec refus de décision pour le lecteur et refus hors organisation. Le nettoyage est vérifié. La réaffectation et le fil administrateur ont des tests ciblés et attendent la recette positive avec le compte propriétaire. [Preview](https://depannage-electricite-l5vibd0zx-brafas-projects.vercel.app) · [Preuves](reviews/DELIVERY_635_APPROVALS.md)
+
+### Version précédente `9526e05`
+
 La preview `9526e05` corrige les libellés accessibles des coordonnées et passe le parcours client–artisan depuis les écrans jusqu’à la clôture. Le règlement reste attendu sur la plateforme. Les seize contrôles publics, le brouillon PWA et le nettoyage du parcours passent sur cette version. [Preview](https://depannage-electricite-25cxpsuy9-brafas-projects.vercel.app) · [Preuves](reviews/DELIVERY_952_CONTACT_CORE.md)
 
 ### Version précédente `71f1eb0`
