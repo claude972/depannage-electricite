@@ -6,6 +6,8 @@ Objectif : application entière, seuls raccordements Stripe et SMS différés. P
 
 La preview `81742d3` distingue les canaux de notification indisponibles des préférences et de l’inscription de ce navigateur. La recette a vérifié les trois canaux indisponibles, l’absence d’inscription du navigateur et zéro écriture après une modification sans enregistrement. [Preview actuelle](https://depannage-electricite-ngl9mjr03-brafas-projects.vercel.app) · [Recette](reviews/DELIVERY_817_CHANNEL_LABELS.md)
 
+Sur la même preview, l’ouverture et la levée déclarative d’une réserve ERP ont été vérifiées. Le contrôle conserve deux versions journalisées. L’ancienne version, l’écriture du lecteur et l’accès du tiers sont refusés. [Recette ERP](reviews/DELIVERY_817_ERP_DECLARATION.md)
+
 La preview précédente `e4ab640` contient les cinq lots ci-dessous. Le code est poussé sur `integration/web-pwa`. Les preuves fonctionnelles correspondent aux commits indiqués. [Preview e4ab640](https://depannage-electricite-csz4c0bv8-brafas-projects.vercel.app)
 
 - Le compte rendu artisan verrouille l’éditeur pendant le POST. Le rapport confirmé s’affiche et un 503 simulé conserve le brouillon. Le nettoyage est vérifié. [Recette e4ab640](reviews/DELIVERY_E4A_ARTISAN_REPORT_LOCK.md)
