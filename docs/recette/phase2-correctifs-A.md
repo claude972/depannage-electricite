@@ -25,7 +25,7 @@ A `33d378f` et B `26464ef` ont été réunis dans un checkout temporaire. Typech
 | État | Nombre |
 | --- | ---: |
 | CORRIGÉ (avec suite verte) | 0 |
-| VÉRIFIÉ CIBLÉ (suite initiale rouge) | 8 |
+| VÉRIFIÉ CIBLÉ (suite initiale rouge) | 9 |
 | CORRIGÉ PARTIEL | 9 |
 | NON REPRODUIT | 0 |
 | DÉCISION REQUISE | 4 |
@@ -44,7 +44,7 @@ A `33d378f` et B `26464ef` ont été réunis dans un checkout temporaire. Typech
 | E07 | Majeur | VÉRIFIÉ CIBLÉ | Isolé | `f9d9918` | `sql-phase2-lot-a-archived-site-review.mjs` | Migration additive | Manager avec droit conservé : HTTP 200 et deux audits avant, HTTP 409 sur les deux commandes après, aucune écriture ni audit. RPC direct refusé aussi. |
 | E15 | Majeur | CORRIGÉ PARTIEL | P2 | `258f44e` | `sql-phase2-lot-a-p2-review.mjs` | Route operations, migration additive | Deux identités via vrai HTTP : ancien formulaire 200 et v3 avant, 409 et v2 conservée après. RPC historique refusé, pas d’audit supplémentaire. Attend le câblage du lot B. |
 | E18 | Mineur | CORRIGÉ PARTIEL | P3 | `7de6d11` | `sql-phase2-lot-a-p3-review.mjs` | Route operations, migration additive | Deux audits et instantanés avant. Après, un de chaque, réponse identique, autre contenu sous même clé refusé. Attend la conservation de la clé dans B. |
-| E19 | Mineur | À REPRODUIRE | Isolé | — | — | — | Rapport : nom déclaré vide rejeté côté serveur. |
+| E19 | Mineur | VÉRIFIÉ CIBLÉ | Isolé | `f6e280a` | `sql-phase2-lot-a-p3-review.mjs` | Route operations, migration additive | HTTP 200 et chaîne vide avant, 422 explicite et aucune écriture après. RPC direct refuse les espaces/tabulations, saisie nominale conservée. |
 | E21 | Majeur | CORRIGÉ PARTIEL | P4 | `cbc4fcc` | `sql-phase2-lot-a-temporal-review.mjs` | Migrations additives et contrats `site-operations` | Trois écritures HTTP futures 200 avant puis 422. Refus 22023 SQL direct. Faits anciens futurs non mesurables. Attend le message immédiat B. |
 | E23 | Mineur | À REPRODUIRE | Isolé | — | — | — | Règle unique du statut SLA. |
 | E24 | Majeur | CORRIGÉ PARTIEL | P4 | `cbc4fcc` | `sql-phase2-lot-a-temporal-review.mjs` | Migrations additives et contrats `site-operations` | Levées antérieure et future 200 avant puis 422, dossier conservé en v1. Refus SQL direct, levée valide 200. Attend le message immédiat B. |
