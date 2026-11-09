@@ -6,7 +6,7 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("save_profile"), company_name: z.string().trim().max(160), siret: z.string().regex(/^(?:\d{14})?$/), legal_status: z.string().trim().max(80), employee_count: z.number().int().min(0).max(100000), address: z.string().trim().max(500), postal_codes: z.array(z.string().regex(/^\d{5}$/)).max(100), categories: z.array(z.enum(["outage", "panel", "socket", "lighting", "diagnostic"])).max(5) }).strict(),
   z.object({ action: z.literal("submit_application") }).strict(),
   z.object({ action: z.literal("set_availability"), available: z.boolean() }).strict(),
-  z.object({ action: z.literal("set_capacity_limit"), capacity_limit: z.number().int().min(1).max(2147483647).nullable(),
+  z.object({ action: z.literal("set_capacity_limit"), capacity_limit: z.union([z.literal(3), z.literal(4)]).nullable(),
     expected_version: z.number().int().min(0).max(2147483647) }).strict(),
   z.object({ action: z.literal("link_credential"), document_id: uuid, kind: z.enum(["registration", "liability", "qualification", "other"]), expires_on: z.iso.date().nullable() }).strict(),
 ]);

@@ -75,6 +75,8 @@ export async function POST(request: Request, context: Context) {
       throw new ApiError(422, "Ajoutez deux photos distinctes de ce dossier, une avant et une après l’intervention.");
     if (result.error?.code === "P0001" && result.error.message === "report_revision_changed")
       throw new ApiError(409, "Le compte rendu à signer n’est plus disponible dans cette version. Actualisez-le.");
+    if (result.error?.code === "P0001" && result.error.message === "artisan_mission_capacity_reached")
+      throw new ApiError(409, "Cet artisan a atteint son maximum de missions actives.");
     dbError(result.error);
     return Response.json({ result: result.data, success: true }, { headers: privateHeaders });
   } catch (error) { return apiError(error); }
