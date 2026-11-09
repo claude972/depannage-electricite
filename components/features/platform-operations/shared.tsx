@@ -112,6 +112,11 @@ export function useCommand<A extends unknown[], R>(command: (...args: A) => Prom
   return { run, busy, error, success, reset: () => { setError(""); setSuccess(""); } };
 }
 export function preventDefault(event: FormEvent) { event.preventDefault(); }
+/** P1 shared rule for a refused command: 409 ⇒ the current version must be re-read in place. */
+export function commandConflict(e: unknown): boolean {
+  return e instanceof ApiRequestError && classifyRefusal(e.status) === "conflict";
+}
+export const CONFLICT_REREAD = "Cet élément a été modifié entre-temps : sa version actuelle est relue. Votre saisie est conservée ; vérifiez-la avant de confirmer à nouveau.";
 /** P1 shared rule for a refused command: true when rights + resource must be re-read first. */
 export function commandRefused(e: unknown): boolean {
   if (!(e instanceof ApiRequestError)) return false;
