@@ -25,7 +25,7 @@ A `33d378f` et B `26464ef` ont été réunis dans un checkout temporaire. Typech
 | État | Nombre |
 | --- | ---: |
 | CORRIGÉ (avec suite verte) | 0 |
-| VÉRIFIÉ CIBLÉ (suite initiale rouge) | 11 |
+| VÉRIFIÉ CIBLÉ (suite initiale rouge) | 13 |
 | CORRIGÉ PARTIEL | 11 |
 | NON REPRODUIT | 0 |
 | DÉCISION REQUISE | 4 |
@@ -65,8 +65,8 @@ A `33d378f` et B `26464ef` ont été réunis dans un checkout temporaire. Typech
 | E70 | Majeur | CORRIGÉ PARTIEL | Isolé | `3e86b60` | `sql-phase2-lot-a-connect-review.mjs` | `app/api/payments/connect/route.ts` | Next.js et SDK Stripe réels, fournisseur synthétique sur boucle locale. Les deux codes passent de 500 à 503 avec un message d’action. Refus 403 sans appel, autre erreur 500, aucune mutation de profil. La configuration du compte Connect reste externe. |
 | E72 | Majeur | VÉRIFIÉ CIBLÉ | P7 | `2bdc979` | Webhook signé local, qualification SQL et test provider injecté | Contrat Stripe, migration additive | HTTP 400 et SQL 22023 avant ; 200 et commission rapprochée sur fixture après. Le préfixe py_ est limité aux commissions, la transaction ch_ plateforme et l’identité Connect restent vérifiées. |
 | E75 | Majeur | DÉCISION REQUISE | Décision | — | — | — | Réglage nullable à livrer ; valeur commerciale à décider. |
-| E76 | Majeur | À REPRODUIRE | Isolé | — | — | — | Quota public par origine/IP et numéro. |
-| E77 | Mineur | À REPRODUIRE | Isolé | — | — | — | Retry-After cohérent avec la fenêtre active. |
+| E76 | Majeur | VÉRIFIÉ CIBLÉ | Quota rappel | `b102a21` | `sql-phase2-lot-a-callback-quota-review.mjs` | Handler rappel, migration additive | Vrai HTTP anonyme : 429/429 avant, 429/200 après pour la source saturée et l’autre appelant. Rejeu accepté à quota et aucun IP brut stocké. L’en-tête Vercel est simulé en recette. Sans adresse fiable, repli conservateur par origine. |
+| E77 | Mineur | VÉRIFIÉ CIBLÉ | Quota rappel | `b102a21` | `sql-phase2-lot-a-callback-quota-review.mjs` | Handler rappel, migration additive | La réponse renvoie le temps restant pour les deux plafonds, y compris après changement de source. Un numéro neuf reste accepté. PostgreSQL natif : migration appliquée deux fois ; contrat SQL historique, permissions et Chromium rappel passent. |
 | E78 | Majeur | À REPRODUIRE | Isolé | — | — | — | Sortie du remboursement préparé après révocation. |
 | E80 | Majeur | À REPRODUIRE | Isolé | — | — | — | Projection autorisée du litige dans l’espace artisan. |
 | H01 | Bloquant externe | HORS MISSION | Hébergement | — | — | — | Checklist ci-dessous. |
@@ -119,6 +119,10 @@ Options : capacité non renseignée ou plafond paramétrable. Déterminer l’un
 - E70 : changement de configuration Connect hors périmètre. La réponse d’erreur applicative est à traiter sur fixture synthétique.
 - H01 : checklist avant recette hébergée. Identifier la preview par SHA et son ref, renseigner les variables Supabase pour ce ref sur un projet de recette isolé, vérifier l’historique des migrations et la disponibilité du barème public puis d’une lecture et d’une écriture authentifiées. Relever le résultat sans reprendre les preuves d’une autre preview.
 - Les six sous-cas ouverts du registre restent hors mission.
+
+## Comparaison du lot A au checkpoint E70
+
+Le typecheck et la suite applicative ont été relancés sur `0031617`. La suite compte 2 128 succès, deux skips optionnels et les mêmes 12 échecs par nom que la base. La qualification combinée et les tests des changements ultérieurs restent séparés.
 
 ## Échecs préexistants constatés sur HEAD
 
