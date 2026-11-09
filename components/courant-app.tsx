@@ -461,9 +461,9 @@ export default function CourantApp() {
     if (returnContext.kind === "booking") {
       // Wait for an identified session: the hint is kept until then (never a status from the URL).
       if (mode !== "live" || !userId.current) {
-        setNotice("Connectez-vous avec le même compte pour vérifier votre réservation. Aucun statut n’est déduit du lien.");
         setAuthMode("login");
-        navigate("auth");
+        navigate("auth"); // clears notices: the explanation is set AFTER it (E46)
+        setNotice("Connectez-vous avec le même compte pour vérifier votre réservation. Aucun statut n’est déduit du lien.");
         return;
       }
       const back = returnContext;
