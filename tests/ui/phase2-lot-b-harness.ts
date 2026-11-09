@@ -19,11 +19,18 @@ export const skip = available ? false : "local Playwright/Chromium not found (SK
 export type Run = (name: string, arg?: unknown) => Promise<any>;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function withScenarios(entry: string, body: (run: Run, ctx: { errors: string[]; requests: string[]; page: any }) => Promise<void>, width = 390) {
+export async function withScenarios(entry: string, body: (run: Run, ctx: { errors: string[]; requests: string[]; page: any }) => Promise<void>, width = 390, stubs: { filter: RegExp; contents: string }[] = []) {
   const out = await build({
     absWorkingDir: ROOT, stdin: { contents: entry, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, outdir: "out",
-    platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "local-css" },
+    platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "local-css", ".svg": "dataurl", ".png": "dataurl", ".jpg": "dataurl", ".woff2": "dataurl" },
     define: { "process.env.NODE_ENV": '"development"' }, logLevel: "error",
+    // Optional module stubs (e.g. the browser Supabase client) — test seams only.
+    plugins: stubs.length ? [{ name: "lot-b-stubs", setup(b) {
+      stubs.forEach((s, i) => {
+        b.onResolve({ filter: s.filter }, (args) => ({ path: `stub-${i}:${args.path}`, namespace: "lot-b-stub" }));
+      });
+      b.onLoad({ filter: /.*/, namespace: "lot-b-stub" }, (args) => ({ contents: stubs[Number(args.path.split(":")[0].slice(5))].contents, loader: "js" }));
+    } }] : [],
   });
   const js = out.outputFiles.find((f) => f.path.endsWith(".js"))!.text;
   const css = readFileSync(path.join(ROOT, "app/globals.css"), "utf8") + "\n" + out.outputFiles.filter((f) => f.path.endsWith(".css")).map((f) => f.text).join("\n");

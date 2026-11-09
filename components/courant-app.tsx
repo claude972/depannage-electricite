@@ -153,6 +153,12 @@ export default function CourantApp() {
   const [capabilities, setCapabilities] =
     useState<Capabilities>(UNKNOWN_CAPABILITIES);
   const [returnContext, setReturnContext] = useState<ReturnContext | null>(null);
+  const returnRef = useRef<ReturnContext | null>(null);
+  returnRef.current = returnContext;
+  /** E47: a successful card return seen while signed out, kept across the FIRST sign-in only. It is
+   *  verified automatically once, and only if the signed-in account's pending attempt is that same
+   *  reference (another account never posts for an inherited reference). */
+  const inheritedReturn = useRef<string | null>(null);
   const [view, setView] = useState<View>("home");
   const [param, setParam] = useState("");
   const [selectedId, setSelectedId] = useState("");
@@ -417,12 +423,16 @@ export default function CourantApp() {
           const nextId = session?.user?.id ?? null;
           if (event === "SIGNED_OUT" || (!nextId && modeRef.current === "live")) {
             pendingLink.current = null;
+            inheritedReturn.current = null;
             clearSessionState();
             setMode("public");
             setView("home");
             return;
           }
           if (nextId && nextId !== userId.current) {
+            // E47: a booking return hint read while signed out survives this first sign-in only.
+            const hint = returnRef.current;
+            inheritedReturn.current = userId.current === null && hint?.kind === "booking" && hint.state === "success" ? hint.requestId : null;
             // Another account (same browser, other tab or renewed session): start clean.
             clearSessionState();
             userId.current = nextId;
@@ -1343,6 +1353,14 @@ export default function CourantApp() {
     if (userId.current !== me) return; // late reply for another identity
     if (!r.ok) {
       setPendingLookup("error");
+      return;
+    }
+    const inherited = inheritedReturn.current;
+    inheritedReturn.current = null; // one decision per sign-in
+    if (r.pending && inherited && r.pending.request_id === inherited && !cardReturnRef.current) {
+      // E47: the same account came back from a successful card return: one automatic verification.
+      setCardReturn({ requestId: inherited, userId: me, phase: "checking", message: CARD_RETURN_COPY.checking });
+      void verifyCardHoldReturn(inherited);
       return;
     }
     if (r.pending && !cardReturnRef.current)
