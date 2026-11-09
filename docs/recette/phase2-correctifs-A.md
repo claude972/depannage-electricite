@@ -25,7 +25,7 @@ A `33d378f` et B `26464ef` ont été réunis dans un checkout temporaire. Typech
 | État | Nombre |
 | --- | ---: |
 | CORRIGÉ (avec suite verte) | 0 |
-| VÉRIFIÉ CIBLÉ (suite initiale rouge) | 13 |
+| VÉRIFIÉ CIBLÉ (suite initiale rouge) | 14 |
 | CORRIGÉ PARTIEL | 11 |
 | NON REPRODUIT | 0 |
 | DÉCISION REQUISE | 4 |
@@ -50,7 +50,7 @@ A `33d378f` et B `26464ef` ont été réunis dans un checkout temporaire. Typech
 | E24 | Majeur | CORRIGÉ PARTIEL | P4 | `cbc4fcc` | `sql-phase2-lot-a-temporal-review.mjs` | Migrations additives et contrats `site-operations` | Levées antérieure et future 200 avant puis 422, dossier conservé en v1. Refus SQL direct, levée valide 200. Attend le message immédiat B. |
 | E25 | Majeur | VÉRIFIÉ CIBLÉ | P4 | `418035d` | `sql-phase2-lot-a-contract-dates-review.mjs` | Migration additive | La publication future vidait les deux lectures. Après, v2 reste disponible avant la date ; v3 devient seule applicable à la date. L’autorisation de l’artisan reste liée à sa révision. |
 | E29 | Majeur | CORRIGÉ PARTIEL | P2 | `2b3b44e` | `sql-phase2-lot-a-p2-review.mjs` | Route warranty, migration additive | Ancienne résolution écrasée avec HTTP 200 avant, 409 et résolution conservée après. RPC historique interdit, audit unique. Attend le lot B. |
-| E33 | Mineur | À REPRODUIRE | Isolé | — | — | — | Normalisation des noms dans la recherche. |
+| E33 | Mineur | VÉRIFIÉ CIBLÉ | Isolé | `cdd74bc` | `phase2-lot-a-directory-browser.mjs` | Route annuaire et migration additive | Chromium monté, vrais PATCH et GET Next.js et RLS isolée : 1 résultat avant et 2 après, pour les deux formes, noms bruts conservés, non-admin refusé. 8 tests annuaire passent. Migration native appliquée deux fois et filtre testé avec PostgREST 16.5 sur une table de recette RLS. |
 | E34 | Majeur | CORRIGÉ PARTIEL | P2 | `e17c0e5` | `sql-phase2-lot-a-p2-review.mjs` | Route admin artisans, migration additive | Une approbation ancienne réactivait le dossier via HTTP 200. Elle reçoit maintenant 409 et la suspension demeure. Une réactivation explicite avec version courante passe. Attend le lot B. |
 | E36 | Mineur | CORRIGÉ PARTIEL | P3 | `523878c` | `sql-phase2-lot-a-p3-review.mjs` | Route admin artisans, migration additive | Après le verrou P2, le rejeu était refusé 409. Avec la clé, 200 identique et un seul audit. Modification de la même intention refusée. Attend le lot B. |
 | E37 | Majeur | VÉRIFIÉ CIBLÉ | Isolé | `6104037` | `sql-phase2-lot-a-planning-eligibility-review.mjs` | Migration additive | Routes Next planning, liste et acceptation. Congé courant : offre urgente visible et attribuée avant, 404/403 et aucune attribution après. Congé futur et demande à planifier préservés, retrait du congé rend l’urgence de nouveau attribuable. Migration appliquée deux fois sur PostgreSQL natif. |
