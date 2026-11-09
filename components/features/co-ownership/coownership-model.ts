@@ -3,6 +3,7 @@
 // lib/features/co-ownership/schemas.ts + app/api/sites/[id]/co-ownership.
 // NEVER: quorum computation, collection / payment, « sent » claims — the server states
 // sends_notices / collects_funds / legal_validation = false and a reply saying otherwise is refused.
+import { afterWriteRefusal, readRefused } from "../../app/refusal";
 import { z } from "zod";
 import { coOwnershipRecord, fundCallValues, meetingValues, type CoOwnershipRecord } from "../../../lib/features/co-ownership/schemas";
 
@@ -268,9 +269,10 @@ export function applyCoList(s: CoState, r: CoResult, append: boolean, siteId: st
     const records = [...(append ? s.records : []), ...p.records.filter((x) => !seen.has(x.id) && (seen.add(x.id), true))];
     return { ...s, phase: "ready", records, page: p.page, total: append ? s.total : p.page.total, canWrite: p.permissions.can_write, loadingMore: false, error: "" };
   }
-  if (r.status === 404) return { ...CO_INITIAL, phase: "unavailable", error: CO_COPY.unavailable };
+  // P1: a refused read of ANY page purges the records and the write rights.
+  if (readRefused(r.status)) return { ...CO_INITIAL, phase: "unavailable", error: r.status === 404 ? CO_COPY.unavailable : CO_COPY.session };
   if (r.status === 422) return { ...CO_INITIAL, phase: "unavailable", error: CO_COPY.notSyndic };
-  const error = r.status === 401 || r.status === 403 ? CO_COPY.session : CO_COPY.loadFailed;
+  const error = CO_COPY.loadFailed;
   return { ...s, loadingMore: false, phase: append ? s.phase : "error", error };
 }
 export function applyCoCommand(s: CoState, r: CoResult, command: CoCommand, siteId: string): CoState {
@@ -333,8 +335,14 @@ export function createCoController({ api, siteId, kind, context = DEFAULT_CO_CON
     }
     loadSeq++;
     if (!same(gen, uid)) return false;
+    // P1 shared rules (E64): 401 purges now; 403/404 re-read (a refused read purges records + form).
+    const refusal = afterWriteRefusal(r.status);
+    if (refusal.purge) {
+      set({ ...CO_INITIAL, phase: "unavailable", error: CO_COPY.session });
+      return true;
+    }
     set(applyCoCommand(get(), r, command, siteId));
-    if (hadLoad) void fetchList(false);
+    if (hadLoad || refusal.reread) void fetchList(false);
     return true;
   };
   return {

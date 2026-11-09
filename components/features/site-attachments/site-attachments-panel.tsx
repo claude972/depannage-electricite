@@ -8,6 +8,7 @@
 // waits for an explicit action; a PATCH 409 (revision) re-reads, never replays.
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { validateUpload } from "../../app/api";
+import { afterWriteRefusal, readRefused } from "../../app/refusal";
 import {
   ATTACH_COPY as COPY,
   KIND_LABEL,
@@ -49,7 +50,7 @@ function useAttachmentList(view: AttachmentView, siteId: string, fence: Fence, e
     set({ ...initial(k), notice });
     void request(fenceRef.current.fetch(), listUrl(siteId, null, view)).then((r) => {
       if (my !== seq.current || !at || fenceRef.current.current() !== at) return; // late: dropped
-      if (r.status === 401 || r.status === 403 || r.status === 404) return set({ ...initial(k), phase: "refused", error: r.status === 401 ? COPY.refused401 : COPY.refused });
+      if (readRefused(r.status)) return set({ ...initial(k), phase: "refused", error: r.status === 401 ? COPY.refused401 : COPY.refused });
       const p = r.status === 200 ? parseAttachmentPage(r.body, siteId, view) : null;
       if (!p) return set({ ...initial(k), phase: "error", error: COPY.failed, notice });
       set({ ...initial(k), phase: "ready", docs: p.documents, next: p.page.next_cursor, notice });
@@ -71,7 +72,7 @@ function useAttachmentList(view: AttachmentView, siteId: string, fence: Fence, e
     void request(fenceRef.current.fetch(), listUrl(siteId, cursor, view)).then((r) => {
       if (my !== seq.current || !at || fenceRef.current.current() !== at || ref.current.key !== key) return;
       if (r.status === 422) return first(key, COPY.cursor);
-      if (r.status === 401 || r.status === 403 || r.status === 404) return set({ ...initial(key), phase: "refused", error: r.status === 401 ? COPY.refused401 : COPY.refused });
+      if (readRefused(r.status)) return set({ ...initial(key), phase: "refused", error: r.status === 401 ? COPY.refused401 : COPY.refused });
       const p = r.status === 200 ? parseAttachmentPage(r.body, siteId, view) : null;
       if (!p) return set({ ...ref.current, loadingMore: false, moreError: true });
       const seen = new Set(ref.current.docs.map((d) => d.id));
@@ -124,6 +125,15 @@ export function SiteAttachmentsPanel({ siteId, organizationId, context, canUploa
     const r = await request(f(), signUrl(siteId, id));
     if (currentBase() !== at) return;
     setOpening(null);
+    // Refused right or piece: re-read both lists before anything else; a refused list purges the
+    // names and every « Ouvrir » (E52). Nothing is retried automatically.
+    // P1: the list is this panel's re-read adapter; its refused read purges (401 included).
+    const refusal = afterWriteRefusal(r.status);
+    if (refusal.purge || refusal.reread) {
+      setOpenError(COPY.openFailed);
+      reread();
+      return;
+    }
     const url = r.status === 200 && r.body && typeof r.body === "object" ? (r.body as { url?: unknown }).url : null;
     if (typeof url !== "string" || !url.startsWith("https://")) return setOpenError(COPY.openFailed);
     window.open(url, "_blank", "noopener,noreferrer");
@@ -135,6 +145,8 @@ export function SiteAttachmentsPanel({ siteId, organizationId, context, canUploa
   const [replacing, setReplacing] = useState<SiteAttachment | null>(null);
   const [sending, setSending] = useState(false);
   const busyRef = useRef(false);
+  /** E53: one command id per upload intention (same file, kind and target) until the 201. */
+  const uploadIntent = useRef<{ file: File; kind: AttachmentKind; target: string | null; id: string } | null>(null);
   const [message, setMessage] = useState<{ tone: "error" | "ok" | "uncertain"; text: string } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const resetForm = () => {
@@ -148,12 +160,17 @@ export function SiteAttachmentsPanel({ siteId, organizationId, context, canUploa
     const invalid = validateUpload(file);
     if (invalid) return setMessage({ tone: "error", text: invalid });
     const at = base, target = replacing, sentKind = target ? target.kind : kind; // replacement keeps the original kind
+    const known = uploadIntent.current;
+    const commandId = known && known.file === file && known.kind === sentKind && known.target === (target?.id ?? null) ? known.id : typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : "";
+    if (!commandId) return setMessage({ tone: "error", text: "Ce navigateur ne permet pas de créer un identifiant sécurisé : dépôt impossible ici." });
+    uploadIntent.current = { file, kind: sentKind, target: target?.id ?? null, id: commandId };
     busyRef.current = true;
     setSending(true);
     setMessage(null);
     const body = new FormData();
     body.append("file", file);
     body.append("kind", sentKind);
+    body.append("command_id", commandId);
     if (target) body.append("replaces_id", target.id);
     const r = await request(f(), uploadUrl(siteId), { method: "POST", body }, 60_000);
     busyRef.current = false;
@@ -161,12 +178,17 @@ export function SiteAttachmentsPanel({ siteId, organizationId, context, canUploa
     setSending(false);
     const o = uploadOutcome(r, siteId, sentKind, target);
     if (o.kind === "done") {
+      uploadIntent.current = null; // confirmed: the next upload is a new intention
       resetForm();
       setMessage({ tone: "ok", text: target ? COPY.replaced : COPY.sent });
       reread();
       return;
     }
-    if (o.kind === "refused") return setMessage({ tone: "error", text: o.message });
+    if (o.kind === "refused") {
+      setMessage({ tone: "error", text: o.message });
+      if (afterWriteRefusal(r.status).purge || afterWriteRefusal(r.status).reread) reread(); // rights re-read (E52)
+      return;
+    }
     setMessage({ tone: "uncertain", text: COPY.uncertain }); // file, kind and target kept
     reread();
   };
@@ -191,7 +213,11 @@ export function SiteAttachmentsPanel({ siteId, organizationId, context, canUploa
       reread();
       return;
     }
-    if (o.kind === "refused") return setMessage({ tone: "error", text: o.message });
+    if (o.kind === "refused") {
+      setMessage({ tone: "error", text: o.message });
+      if (afterWriteRefusal(r.status).purge || afterWriteRefusal(r.status).reread) reread(); // rights re-read (E52)
+      return;
+    }
     setMessage({ tone: "uncertain", text: o.kind === "conflict" ? COPY.conflict : COPY.patchUncertain });
     reread(); // never replayed
   };

@@ -59,8 +59,13 @@ export function parseChargePage(body: unknown, paymentId: string, after: string 
 }
 
 // ---- fee (copy of fee-handlers.ts sourceSchema / qualificationSchema + read invariants) ----
+/** E72: the connected-account charge of a destination commission is `ch_` OR `py_` (Stripe writes a
+ *  `py_` on the connected side). Exact mirror of contract A `feeConnectedReference`
+ *  (lib/features/stripe-reconciliation/contract.ts on the A branch); replace by the import after
+ *  integration. Only this reference: the platform `charge_id` stays `ch_`. */
+const feeConnectedReference = z.string().regex(/^(?:ch|py)_[A-Za-z0-9_]{1,240}$/);
 const feeSource = z
-  .object({ payment_id: uuid, event_id: sid("evt"), live: z.boolean(), fee_id: sid("fee"), charge_id: sid("ch"), connected_charge_id: sid("ch"), destination_account: sid("acct"), amount_cents: money0, currency: z.literal("eur"), observation_fingerprint: z.string().regex(/^[a-f0-9]{64}$/), observation_created: stamp })
+  .object({ payment_id: uuid, event_id: sid("evt"), live: z.boolean(), fee_id: sid("fee"), charge_id: sid("ch"), connected_charge_id: feeConnectedReference, destination_account: sid("acct"), amount_cents: money0, currency: z.literal("eur"), observation_fingerprint: z.string().regex(/^[a-f0-9]{64}$/), observation_created: stamp })
   .strict();
 const feeQualification = z
   .object({ event_id: sid("evt"), payment_id: uuid, source: feeSource, provider_amount_refunded_cents: money0.nullable(), provider_refunded: z.boolean(), fee_created: epoch, provider_observed_at: stamp, qualified_at: stamp })

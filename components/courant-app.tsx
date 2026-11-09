@@ -57,7 +57,7 @@ type BookingReceipt = {
   payment?: { method: "on_site" | "card_hold"; status: string };
 };
 import { savePublicDraft } from "../lib/shared/request-draft";
-import { REALTIME_CHANNEL_CONFIG, REALTIME_TABLES, nextConnection } from "./app/realtime";
+import { REALTIME_CHANNEL_CONFIG, REALTIME_TABLES, createRealtimeCatchUp, nextConnection } from "./app/realtime";
 import { category, uid } from "./app/format";
 import {
   CONNECT_RETURN_MESSAGE,
@@ -153,6 +153,12 @@ export default function CourantApp() {
   const [capabilities, setCapabilities] =
     useState<Capabilities>(UNKNOWN_CAPABILITIES);
   const [returnContext, setReturnContext] = useState<ReturnContext | null>(null);
+  const returnRef = useRef<ReturnContext | null>(null);
+  returnRef.current = returnContext;
+  /** E47: a successful card return seen while signed out, kept across the FIRST sign-in only. It is
+   *  verified automatically once, and only if the signed-in account's pending attempt is that same
+   *  reference (another account never posts for an inherited reference). */
+  const inheritedReturn = useRef<string | null>(null);
   const [view, setView] = useState<View>("home");
   const [param, setParam] = useState("");
   const [selectedId, setSelectedId] = useState("");
@@ -228,6 +234,7 @@ export default function CourantApp() {
     setIdentityEpoch((e) => e + 1); // any in-flight mutation chain is now foreign
     runner.reset();
     userId.current = null;
+    inheritedReturn.current = null; // E47: never survives an identity change (401 included)
     setData(EMPTY_WORKSPACE);
     setProfessional(EMPTY_PROFESSIONAL);
     setCapabilities(UNKNOWN_CAPABILITIES);
@@ -417,14 +424,20 @@ export default function CourantApp() {
           const nextId = session?.user?.id ?? null;
           if (event === "SIGNED_OUT" || (!nextId && modeRef.current === "live")) {
             pendingLink.current = null;
+            inheritedReturn.current = null;
             clearSessionState();
             setMode("public");
             setView("home");
             return;
           }
           if (nextId && nextId !== userId.current) {
+            // E47: a booking return hint read while signed out survives this first sign-in only:
+            // computed BEFORE the clean-up, assigned AFTER it (clearSessionState empties it).
+            const hint = returnRef.current;
+            const inherited = userId.current === null && hint?.kind === "booking" && hint.state === "success" ? hint.requestId : null;
             // Another account (same browser, other tab or renewed session): start clean.
             clearSessionState();
+            inheritedReturn.current = inherited;
             userId.current = nextId;
             void refresh();
           }
@@ -461,9 +474,9 @@ export default function CourantApp() {
     if (returnContext.kind === "booking") {
       // Wait for an identified session: the hint is kept until then (never a status from the URL).
       if (mode !== "live" || !userId.current) {
-        setNotice("Connectez-vous avec le même compte pour vérifier votre réservation. Aucun statut n’est déduit du lien.");
         setAuthMode("login");
-        navigate("auth");
+        navigate("auth"); // clears notices: the explanation is set AFTER it (E46)
+        setNotice("Connectez-vous avec le même compte pour vérifier votre réservation. Aucun statut n’est déduit du lien.");
         return;
       }
       const back = returnContext;
@@ -618,8 +631,14 @@ export default function CourantApp() {
       return;
     }
     let channel = client.channel(`workspace-${profileIdForRealtime}`, REALTIME_CHANNEL_CONFIG);
+    // E51: after a lost connection the rejoined channel triggers one catch-up GET of the workspace.
+    const catchUp = createRealtimeCatchUp(() => {
+      if (active) void refresh();
+    });
     channel = channel.on("system", {}, (payload: { status?: string }) => {
-      if (active) setConnection((c) => nextConnection(c, { kind: "system", status: payload?.status }));
+      if (!active) return;
+      setConnection((c) => nextConnection(c, { kind: "system", status: payload?.status }));
+      if (payload?.status === "error") catchUp("CHANNEL_ERROR");
     });
     for (const table of REALTIME_TABLES)
       channel = channel.on(
@@ -633,7 +652,9 @@ export default function CourantApp() {
         },
       );
     channel.subscribe((status) => {
-      if (active) setConnection((c) => nextConnection(c, { kind: "status", status }));
+      if (!active) return;
+      setConnection((c) => nextConnection(c, { kind: "status", status }));
+      catchUp(status);
     });
     return () => {
       active = false;
@@ -1329,12 +1350,24 @@ export default function CourantApp() {
   async function checkPendingCardHold() {
     const me = userId.current;
     if (!me || modeRef.current !== "live") return;
+    const generation = guard.generation();
     pendingCheckedFor.current = me;
     setPendingLookup("idle");
     const r = await lookupPending((p) => api(p));
     if (userId.current !== me) return; // late reply for another identity
+    // E47 counter-review: another generation (sign-out/sign-in of the same UID) or outside live
+    // mode ⇒ nothing applied, nothing posted.
+    if (guard.generation() !== generation || modeRef.current !== "live") return;
     if (!r.ok) {
       setPendingLookup("error");
+      return;
+    }
+    const inherited = inheritedReturn.current;
+    inheritedReturn.current = null; // one decision per sign-in
+    if (r.pending && inherited && r.pending.request_id === inherited && !cardReturnRef.current) {
+      // E47: the same account came back from a successful card return: one automatic verification.
+      setCardReturn({ requestId: inherited, userId: me, phase: "checking", message: CARD_RETURN_COPY.checking });
+      void verifyCardHoldReturn(inherited);
       return;
     }
     if (r.pending && !cardReturnRef.current)
@@ -1541,7 +1574,7 @@ export default function CourantApp() {
       else ctx.error(uploadSummary(finished));
     });
   }
-  async function sendMessage(interventionId: string, body: string) {
+  async function sendMessage(interventionId: string, body: string, commandId?: string) {
     return run(async (ctx) => {
       if (modeRef.current === "demo") {
         ctx.when(setData)({
@@ -1560,7 +1593,10 @@ export default function CourantApp() {
         ctx.notice("Message enregistré dans la démonstration.");
         return;
       }
-      await api("/api/messages", { intervention_id: interventionId, body });
+      // Contract A (E41): command_id is mandatory and stable per intention; the caller owns it.
+      const command_id = commandId ?? (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : "");
+      if (!command_id) throw new Error("Ce navigateur ne permet pas de créer un identifiant sécurisé : envoi impossible ici.");
+      await api("/api/messages", { intervention_id: interventionId, body, command_id });
       if (ctx.alive()) await refresh();
       ctx.notice("Message envoyé.");
     });

@@ -523,6 +523,7 @@ export function EnterpriseSpace({ session }: { session: Session }) {
         case "platform-operators":
         case "platform-finance":
         case "platform-moderation":
+        case "platform-audit":
         case "support-queue":
       case "support-queue":
           return <PlatformPage session={session} view={view} />;
@@ -1742,7 +1743,14 @@ export function DossierView({ c, id, initialQuoteId }: { c: Ctx; id: string; ini
   const statusKey = intervention?.status || "";
   // Deep link to a dossier absent from the cached perimeter: one causal refresh before « introuvable ».
   // Presence uses the active organisation and site scope, including the direct dossier read.
-  const presence = useDetailPresence(session, "enterprise-dossier", id, Boolean(intervention));
+  // E66 (counter-review): only this enterprise case — the workspace holds the dossier, its site is
+  // absent from the truncated site window, and the active scope allows that site ⇒ automatic read.
+  const held = demo ? undefined : session.data.interventions.find((i) => i.id === id);
+  const siteWindowMayHide =
+    !demo && !intervention && !!held?.site_id && session.data.limits?.sites?.limited === true &&
+    // Absent from the CACHE (a site known for another organisation is not this case: no GET).
+    !!c.organization && !session.data.sites.some((s) => s.id === held.site_id) && (!c.activeSite || c.activeSite.id === held.site_id);
+  const presence = useDetailPresence(session, "enterprise-dossier", id, Boolean(intervention), undefined, { siteWindowMayHide });
   useEffect(() => {
     if (!intervention) return;
     let active = true;
@@ -2323,6 +2331,9 @@ function AppointmentPanel({
   const [error, setError] = useState("");
   const stageOpen = APPOINTMENT_STATUSES.includes(intervention.status);
   const editable = stageOpen && canWrite;
+  const slotRevision = ops?.appointment ? ops.appointment.reminder_version ?? 0 : 0;
+  const [refusedAt, setRefusedAt] = useState<number | null>(null);
+  const conflict = open && refusedAt !== null && refusedAt !== slotRevision;
   async function save(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const start = Date.parse(starts);
@@ -2336,23 +2347,25 @@ function AppointmentPanel({
       return;
     }
     setError("");
+    const sentVersion = slotRevision;
     const ok = await session.operate(intervention.id, {
       action: "save_appointment",
+      expected_version: sentVersion,
       starts_at: new Date(start).toISOString(),
       ends_at: new Date(end).toISOString(),
       note: note.trim(),
     });
-    if (ok) {
-      setOpen(false);
-      onSaved();
-    }
+    setRefusedAt(ok ? null : sentVersion);
+    if (ok) setOpen(false);
+    // Saved ⇒ fresh read; refused (409 version, rights…) ⇒ re-read too, the typed form is kept (E15).
+    onSaved();
   }
   return (
     <section className="panel" aria-labelledby="dossier-appointment">
       <div className={styles.panelTitle}>
         <h2 id="dossier-appointment">Rendez-vous</h2>
         {editable && !open && !loading && ops && (
-          <button type="button" className="button outline" disabled={session.busy} onClick={() => setOpen(true)}>
+          <button type="button" className="button outline" disabled={session.busy} onClick={() => { setRefusedAt(null); setOpen(true); }}>
             {ops.appointment ? "Proposer un autre créneau" : "Proposer un créneau"}
           </button>
         )}
@@ -2405,6 +2418,11 @@ function AppointmentPanel({
               <Field label="Consignes d’accès (facultatif)" error={error}>
                 <textarea rows={2} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} />
               </Field>
+              {conflict && (
+                <p className={styles.note} role="alert" data-slot-conflict="">
+                  Le créneau a été modifié entre-temps : la version actuelle est affichée ci-dessus. Votre saisie est conservée ; enregistrez à nouveau pour la confirmer.
+                </p>
+              )}
               <div className={styles.actions}>
                 <button type="submit" className="button primary" disabled={session.busy}>
                   {session.busy ? "Enregistrement…" : "Enregistrer le créneau"}
@@ -4492,7 +4510,7 @@ export function ReportsView({ c }: { c: Ctx }) {
         <div className={styles.tableHead}>
           <div>
             <h2 id="report-table-title">Budget et engagements par site</h2>
-            <p className={styles.muted}>{live ? (server && !server.scope.complete ? REPORT_COPY.partialNote : REPORT_COPY.totalsNote) : `Totaux ${BASIS} (démonstration) ; l’export CSV de démonstration est généré localement à partir de ces données.`}</p>
+            <p className={styles.muted}>{live ? (server?.page ? REPORT_COPY.pageNote : server && !server.scope.complete ? REPORT_COPY.partialNote : REPORT_COPY.totalsNote) : `Totaux ${BASIS} (démonstration) ; l’export CSV de démonstration est généré localement à partir de ces données.`}</p>
           </div>
         </div>
         {live && !orgId ? (
@@ -4505,6 +4523,12 @@ export function ReportsView({ c }: { c: Ctx }) {
             {report.state.phase === "error" && (
               <button type="button" className="button outline" onClick={() => report.retry()}>
                 Réessayer
+              </button>
+            )}
+            {report.pageNumber > 1 && (
+              // E61: a failed page > 1 can always go back (re-read of the previous page).
+              <button type="button" className="button outline" onClick={() => report.previous()}>
+                Page précédente
               </button>
             )}
           </div>
@@ -4542,7 +4566,7 @@ export function ReportsView({ c }: { c: Ctx }) {
                   ))}
                   <tr data-report-total={server.scope.complete ? "complete" : "partial"}>
                     <td data-label="Total">
-                      <strong>{server.scope.complete ? "Total" : "Somme des lignes reçues (non garantie complète)"}</strong>
+                      <strong>{server.page ? `Somme de la page ${report.pageNumber} (pas un total de l’organisation)` : server.scope.complete ? "Total" : "Somme des lignes reçues (non garantie complète)"}</strong>
                     </td>
                     <td data-label="Budget">{server.totals.budget_cents > 0 ? money(server.totals.budget_cents) : "—"}</td>
                     <td data-label="Devis acceptés">{money(server.totals.accepted_cents)}</td>
@@ -4555,6 +4579,9 @@ export function ReportsView({ c }: { c: Ctx }) {
                 </tbody>
               </table>
             </>
+          ) : server.page ? (
+            // E61: a split scope whose page came back empty (sites removed meanwhile) is not « no site ».
+            <p className={styles.muted} data-report-empty-page="">Aucun site sur cette page : le périmètre a pu changer depuis la page précédente.</p>
           ) : (
             <Empty icon="chart" title="Aucun site à consolider">
               Ajoutez un site pour obtenir un rapport.
@@ -4606,6 +4633,17 @@ export function ReportsView({ c }: { c: Ctx }) {
           <Empty icon="chart" title="Aucun site à consolider">
             Ajoutez un site pour obtenir un rapport.
           </Empty>
+        )}
+        {live && server?.page && (
+          <div className={styles.actions} data-report-pager="">
+            <span className={styles.muted}>Page {report.pageNumber}</span>
+            {report.pageNumber > 1 && (
+              <button type="button" className="button outline" onClick={() => report.previous()}>Page précédente</button>
+            )}
+            {server.page.has_more && (
+              <button type="button" className="button outline" onClick={() => report.next()}>Page suivante</button>
+            )}
+          </div>
         )}
       </section>
       <EnergyConsolidationPanel

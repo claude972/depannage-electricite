@@ -2,7 +2,7 @@
 // Local primitives of the site operations lot. Only global CSS classes from app/globals.css
 // (.button, .alert, .field, .tag, .empty-state, .unavailable) and the local CSS module are used;
 // nothing is imported from components/app/**.
-import { useId, useState, type FormEvent, type ReactNode } from "react";
+import { useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { ZodType } from "zod";
 import { fieldErrors, fromCents, fromInstant, orNull, toCents, toInstant, toInt } from "../../../lib/features/site-operations/forms";
 import { type RunOutcome } from "../../../lib/features/site-operations/view-model";
@@ -98,9 +98,16 @@ export function useSubmit(context: PanelContext) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<{ tone: "error" | "success"; text: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  /** E22: synchronous lock — two submissions in the same loop (before any render) send one POST. */
+  const lock = useRef(false);
   async function submit(event: FormEvent, schema: ZodType, value: unknown, command: SiteOperationsCommand, onDone: (result: SiteOperationsCommandResult) => void, successText: string) {
     event.preventDefault();
-    if (submitting || context.busy) return;
+    if (lock.current || submitting || context.busy) return;
+    // E06: a form left open after the rights were re-read as read-only never posts.
+    if (!context.canWrite) {
+      setMessage({ tone: "error", text: context.readOnlyReason ?? "Lecture seule : vos droits actuels ne permettent pas cette modification." });
+      return;
+    }
     const found = fieldErrors(schema, value);
     setErrors(found);
     setMessage(null);
@@ -108,6 +115,7 @@ export function useSubmit(context: PanelContext) {
       setMessage({ tone: "error", text: found._ ?? "Vérifiez les champs signalés." });
       return;
     }
+    lock.current = true;
     setSubmitting(true);
     try {
       const outcome = await context.run(command);
@@ -118,6 +126,7 @@ export function useSubmit(context: PanelContext) {
       }
       // "stale": the identity chain changed; neither success nor update.
     } finally {
+      lock.current = false;
       setSubmitting(false);
     }
   }

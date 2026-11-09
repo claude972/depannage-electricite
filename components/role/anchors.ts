@@ -58,6 +58,8 @@ export const PLATFORM_ENTRIES: readonly PlatformEntry[] = [
   { view: "platform-operators", label: "Opérateurs", icon: "users" },
   { view: "platform-finance", label: "Finance", icon: "euro" },
   { view: "platform-moderation", label: "Modération", icon: "flag" },
+  // E32: audit journal for operators holding the `audit` capability.
+  { view: "platform-audit", label: "Journal d’audit", icon: "document" },
   // A5: assistance queue for support operators (capability `support` = support_read or super admin).
   { view: "support-queue", label: "File d’assistance", icon: "help" },
 ];

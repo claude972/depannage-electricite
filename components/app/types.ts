@@ -196,6 +196,9 @@ export type ArtisanProfile = {
   application_status: ArtisanApplicationStatus;
   submitted_at?: string | null;
   updated_at?: string;
+  /** E75 (contract A, optional): personal capacity preference; null = unlimited. */
+  capacity_limit?: number | null;
+  capacity_version?: number;
 };
 export type CredentialKind = "registration" | "liability" | "qualification" | "other";
 export type ArtisanCredential = {
@@ -223,6 +226,8 @@ export type Appointment = {
   note: string;
   updated_by?: string;
   updated_at?: string;
+  /** Slot revision (server `reminder_version`); the expected version of the next save (E15). */
+  reminder_version?: number;
 };
 export type ReportCheck = {
   label: string;
@@ -255,10 +260,12 @@ export type Operations = {
 export type OperationBody =
   | { action: "decline_offer"; reason: string }
   | { action: "reject_quote"; quote_id: string; reason: string }
-  | { action: "save_appointment"; starts_at: string; ends_at: string; note: string }
+  | { action: "save_appointment"; expected_version: number; starts_at: string; ends_at: string; note: string }
   | { action: "set_travel_stage"; stage: TravelStage }
   | {
       action: "save_report";
+      /** Intention key (E18): same UUID and same input until the save is confirmed. */
+      command_id: string;
       summary: string;
       checks: ReportCheck[];
       signature_name: string;
@@ -277,6 +284,7 @@ export type ArtisanCommand =
     }
   | { action: "submit_application" }
   | { action: "set_availability"; available: boolean }
+  | { action: "set_capacity_limit"; capacity_limit: number | null; expected_version: number }
   | {
       action: "link_credential";
       document_id: string;
@@ -424,7 +432,11 @@ export type PaymentStatusReport = {
   attempts: PaymentAttempt[];
   attempts_limit: number;
   history_limited: boolean;
+  /** E80 (contract A, optional): dispute state for the assigned artisan who authored the accepted
+   *  quote; independent of payment.status, no finance detail. Absent on older servers. */
+  artisan_dispute?: ArtisanDisputeState;
 };
+export type ArtisanDisputeState = "none" | "open" | "under_review" | "resolved" | "closed";
 export type ArtisanPerformanceReport = {
   period: {
     current_start: string;
@@ -489,6 +501,8 @@ export type WarrantyCase = {
   status: "submitted" | "reviewing" | "resolved" | "declined";
   resolution?: string;
   created_at: string;
+  /** Revision read from the server, sent back EXACTLY as `expected_version` of a decision (E29). */
+  updated_at?: string;
   /** PUB-06: terms publication in force when the case was filed (null on historical cases). */
   terms_version?: number | null;
 };
@@ -605,6 +619,7 @@ export type View =
   | "platform-operators"
   | "platform-finance"
   | "platform-moderation"
+  | "platform-audit"
   // A5: global assistance queue for scoped support operators (server capability `support`).
   | "support-queue";
 

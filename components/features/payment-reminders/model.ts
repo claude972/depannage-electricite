@@ -115,13 +115,19 @@ export function readPending(store: Store | null, uid: string, gen: number, quote
     return null;
   }
 }
+/** E04: deep equality of two commands, independent of key order (the parser rebuilds the object). */
+export function sameCommand(a: ReminderCommand, b: ReminderCommand): boolean {
+  const keys = (x: ReminderCommand) => Object.keys(x).filter((k) => (x as Record<string, unknown>)[k] !== undefined).sort();
+  const ka = keys(a), kb = keys(b);
+  return ka.length === kb.length && ka.every((k, i) => k === kb[i] && (a as Record<string, unknown>)[k] === (b as Record<string, unknown>)[k]);
+}
 /** Write then read back; true only when the stored command is exactly this one. */
 export function writePending(store: Store | null, uid: string, gen: number, cmd: ReminderCommand): boolean {
   try {
     if (!store) return false;
     store.set(pendingKey(uid, gen, cmd.quote_id), JSON.stringify({ uid, gen, command: cmd }));
     const back = readPending(store, uid, gen, cmd.quote_id);
-    return back !== null && JSON.stringify(back) === JSON.stringify(cmd);
+    return back !== null && sameCommand(back, cmd);
   } catch {
     return false;
   }

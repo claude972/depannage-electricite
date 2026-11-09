@@ -3,7 +3,7 @@
 // `session.*`. Références : M61 (accueil mobile), V8-C07 (détail d’intervention), V8-C06
 // (devis), M7 (suivi). Mobile < 1024 px : navigation basse ; desktop : barre latérale.
 import { realName } from "../app/display-name";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useRef, useState, type FormEvent } from "react";
 import type { Session } from "../app/session-types";
 import {
   CATEGORIES,
@@ -106,6 +106,7 @@ const CLIENT_VIEWS: readonly View[] = [
   "platform-operators",
   "platform-finance",
   "platform-moderation",
+  "platform-audit",
   "support-queue",
   "documents",
   "profile",
@@ -123,6 +124,7 @@ const VIEW_NAMES: Partial<Record<View, string>> = {
   "platform-operators": "Opérateurs de plateforme",
   "platform-finance": "Finance plateforme",
   "platform-moderation": "Modération des avis",
+  "platform-audit": "Journal d’audit",
   "support-queue": "File d’assistance",
   documents: "Documents",
   profile: "Mon profil",
@@ -330,7 +332,7 @@ export function ClientSpace({ session }: { session: Session }) {
               profileId={session.profileId}
               selectedId={session.param || session.selectedId}
               busy={session.busy}
-              onSubmit={(id, body) => session.sendMessage(id, body)}
+              onSubmit={(id, body, commandId) => session.sendMessage(id, body, commandId)}
               context={session.mutationContext}
           loadOperations={session.loadOperations}
             />
@@ -341,6 +343,7 @@ export function ClientSpace({ session }: { session: Session }) {
       case "platform-operators":
       case "platform-finance":
       case "platform-moderation":
+      case "platform-audit":
       case "support-queue":
         return <PlatformPage session={session} view={view} />;
       case "documents":
@@ -1018,11 +1021,19 @@ export function RequestsView({ session, rows }: { session: Session; rows: Interv
 function useOperations(session: Session, id: string, dependency: string) {
   const ref = useRef(session);
   ref.current = session;
+  // E16 (P1/P6): every explicit refresh of the workspace re-reads the operations of this dossier too
+  // (slot, participants), keeping the shown values until the reply.
+  const refreshed = session.refreshedAt;
   const [ops, setOps] = useState<Operations | null | undefined>(undefined);
   const [version, setVersion] = useState(0);
+  // An explicit re-read of the SAME dossier keeps the shown values (and any open form) until the
+  // reply arrives; another dossier / dependency starts from the loader.
+  const shown = useRef("");
   useEffect(() => {
     let active = true;
-    setOps(undefined);
+    const key = `${id}|${dependency}`;
+    if (shown.current !== key) setOps(undefined);
+    shown.current = key;
     if (!id) return;
     void ref.current.loadOperations(id).then((result) => {
       if (active) setOps(result);
@@ -1030,7 +1041,7 @@ function useOperations(session: Session, id: string, dependency: string) {
     return () => {
       active = false;
     };
-  }, [id, dependency, version]);
+  }, [id, dependency, version, refreshed]);
   return { ops, reload: () => setVersion((v) => v + 1) };
 }
 
@@ -1045,6 +1056,7 @@ function DetailView({
 }) {
   const i = rows.find((x) => x.id === id);
   const demo = session.mode === "demo";
+  const [keptDraft, setKeptDraft] = useState<string | null>(null);
   const { ops, reload } = useOperations(
     session,
     i?.id || "",
@@ -1469,6 +1481,8 @@ function DetailView({
             ) : (
               <p className={styles.description}>Aucun créneau proposé pour le moment.</p>
             )}
+            {/* E16: a refresh or a new slot revision remounts the reminder ⇒ it is re-read. */}
+            <Fragment key={`${session.refreshedAt}|${ops.appointment?.reminder_version ?? 0}`}>
             <AppointmentReminderPanel
               key={`${i.id}|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`}
               interventionId={i.id}
@@ -1476,19 +1490,25 @@ function DetailView({
               context={session.mutationContext}
               demo={session.mode === "demo"}
             />
+            </Fragment>
             {canSchedule ? (
               <AppointmentForm
-                key={ops.appointment?.updated_at || "new"}
+                key={keptDraft ?? (ops.appointment?.updated_at || "new")}
                 initial={ops.appointment}
+                version={slotVersion(ops.appointment)}
                 busy={session.busy}
                 onSubmit={async (starts_at, ends_at, note) => {
+                  const formKey = ops.appointment?.updated_at || "new";
                   const saved = await session.operate(i.id, {
                     action: "save_appointment",
+                    expected_version: slotVersion(ops.appointment),
                     starts_at,
                     ends_at,
                     note,
                   });
-                  if (saved) reload();
+                  // Refused (409 version, rights…): re-read the slot, keep the typed form (E15).
+                  setKeptDraft(saved ? null : formKey);
+                  reload();
                   return saved;
                 }}
               />
@@ -1689,15 +1709,23 @@ function DetailView({
   );
 }
 
+/** Expected version of the next slot save: the server revision read, 0 when no slot exists. */
+const slotVersion = (a: Operations["appointment"]) => (a ? a.reminder_version ?? 0 : 0);
+export const SLOT_CONFLICT =
+  "Le créneau a été modifié entre-temps : la version actuelle est affichée ci-dessus. Votre saisie est conservée ; enregistrez à nouveau pour la confirmer.";
+
 function AppointmentForm({
   initial,
+  version,
   busy,
   onSubmit,
 }: {
   initial: Operations["appointment"];
+  version: number;
   busy: boolean;
   onSubmit: (starts_at: string, ends_at: string, note: string) => Promise<boolean>;
 }) {
+  const [refusedAt, setRefusedAt] = useState<number | null>(null);
   const initialDuration = initial
     ? Math.min(
         4,
@@ -1724,8 +1752,10 @@ function AppointmentForm({
     }
     setError("");
     const ends = new Date(begins.getTime() + duration * 3600000);
-    void onSubmit(begins.toISOString(), ends.toISOString(), note.trim());
+    const sentVersion = version;
+    void onSubmit(begins.toISOString(), ends.toISOString(), note.trim()).then((ok) => setRefusedAt(ok ? null : sentVersion));
   }
+  const conflict = refusedAt !== null && refusedAt !== version;
   return (
     <form className={styles.appointmentForm} onSubmit={submit} noValidate>
       <h3>{initial ? "Modifier le créneau" : "Proposer un créneau"}</h3>
@@ -1756,6 +1786,11 @@ function AppointmentForm({
           placeholder="Par exemple : interphone au nom de Dupont, 3e étage"
         />
       </Field>
+      {conflict && (
+        <p className="form-note" role="alert" data-slot-conflict="">
+          {SLOT_CONFLICT}
+        </p>
+      )}
       <button type="submit" className="button outline" disabled={busy}>
         <Icon name="calendar" size={17} />
         {busy ? "Enregistrement…" : initial ? "Enregistrer le nouveau créneau" : "Proposer ce créneau"}
@@ -1770,6 +1805,38 @@ function AppointmentForm({
 
 // ---- Devis (V8-C06) -----------------------------------------------------------------
 /** Exported for tests only (live exact quote read). */
+/** E13: validity of this exact quote from the quote documents read. Live acceptance needs a
+ *  CONFIRMED state: « valid » (valid or not specified, from a successful read of this quote). While
+ *  the read runs it is « checking »; a refusal, failure or a reply without this quote is « unknown »;
+ *  a passed validity is « expired ». Demo (quoteId "") is not gated: « valid ». */
+type QuoteValidity = "checking" | "valid" | "expired" | "unknown";
+function useQuoteValidity(session: Session, quoteId: string): { validity: QuoteValidity; retry: () => void } {
+  const [state, setState] = useState<{ key: string; validity: QuoteValidity } | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const key = quoteId ? `${session.profileId}|${session.mutationContext.generation()}|${quoteId}` : "";
+  const client = useRef(session.features.quoteDocuments);
+  client.current = session.features.quoteDocuments;
+  useEffect(() => {
+    if (!key) return;
+    let active = true;
+    setState({ key, validity: "checking" });
+    void Promise.resolve()
+      .then(() => client.current.load({ quoteId }))
+      .then((overview) => {
+        const q = overview?.quotes.find((x) => x.id === quoteId);
+        const validity: QuoteValidity = !q ? "unknown" : q.terms?.validity === "expired" ? "expired" : "valid";
+        if (active) setState({ key, validity });
+      })
+      .catch(() => {
+        if (active) setState({ key, validity: "unknown" });
+      });
+    return () => {
+      active = false;
+    };
+  }, [key, quoteId, attempt]);
+  const validity: QuoteValidity = !key ? "valid" : state && state.key === key ? state.validity : "checking";
+  return { validity, retry: () => setAttempt((n) => n + 1) };
+}
 export function QuoteView({
   session,
   rows,
@@ -1797,6 +1864,8 @@ export function QuoteView({
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState("");
+  const quoteValidity = useQuoteValidity(session, live ? quoteId : "");
+  const expired = quoteValidity.validity === "expired";
   if (live && point.state.phase !== "ready")
     return (
       <section className="panel" data-quote-point={point.state.phase}>
@@ -1854,7 +1923,9 @@ export function QuoteView({
           ? "superseded"
           : "closed"
     : quoteDecisionState(quote, current, i.status);
-  const isActive = decision === "active";
+  // E13: a quote whose recorded validity has passed is never offered for acceptance (the server
+  // refuses it with 409 anyway); the documents read is the source of the validity.
+  const isActive = decision === "active" && quoteValidity.validity === "valid";
   const superseded = decision === "superseded";
   const currentId = live ? server!.version.current_quote_id : current?.id ?? null;
   const refreshAfter = () => {
@@ -2020,7 +2091,21 @@ export function QuoteView({
               ? live
                 ? QUOTES_COPY.readOnly
                 : "Ce devis ne peut plus être accepté ni refusé."
-              : "Ce devis n’attend plus de décision de votre part."}
+              : expired && decision === "active"
+                ? "Ce devis ne peut plus être accepté : sa validité est dépassée. L’artisan peut en envoyer une nouvelle version."
+                : quoteValidity.validity === "checking" && decision === "active"
+                  ? "Vérification de la validité du devis…"
+                  : quoteValidity.validity === "unknown" && decision === "active"
+                    ? "La validité de ce devis n’a pas pu être vérifiée : aucune décision n’est possible pour le moment."
+                    : "Ce devis n’attend plus de décision de votre part."}
+          {quoteValidity.validity === "unknown" && decision === "active" && (
+            <>
+              {" "}
+              <button type="button" className="text-button" onClick={quoteValidity.retry} data-quote-validity-retry="">
+                Réessayer
+              </button>
+            </>
+          )}
         </p>
       )}
       {rejecting && isActive && (

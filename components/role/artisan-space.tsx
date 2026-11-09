@@ -14,6 +14,7 @@ import {
 import type { Session } from "../app/session-types";
 import type {
   Appointment,
+  ArtisanDisputeState,
   ArtisanApplicationStatus,
   ArtisanCommand,
   ArtisanCredential,
@@ -311,6 +312,14 @@ function appValuesFrom(profile: ArtisanProfile | null): AppValues {
     categories: profile?.categories ?? [],
   };
 }
+/** E05: same upper bound as the server (app/api/artisan save_profile.employee_count ≤ 100 000). */
+const EMPLOYEE_MAX = 100000;
+const employeeError = (raw: string): string | undefined => {
+  const n = Number(raw);
+  if (!raw.trim() || !Number.isInteger(n) || n < 1) return "Indiquez un effectif entier d’au moins 1 (vous compris).";
+  if (n > EMPLOYEE_MAX) return "L’effectif ne peut pas dépasser 100 000.";
+  return undefined;
+};
 function missingItems(v: AppValues): string[] {
   const out: string[] = [];
   if (v.company_name.trim().length < 2) out.push("Nom de la société");
@@ -318,6 +327,7 @@ function missingItems(v: AppValues): string[] {
   if (!v.legal_status) out.push("Statut juridique");
   if (!Number.isInteger(Number(v.employee_count)) || Number(v.employee_count) < 1)
     out.push("Effectif (au moins 1, vous compris)");
+  else if (Number(v.employee_count) > EMPLOYEE_MAX) out.push("Effectif (100 000 au plus)");
   if (v.address.trim().length < 5) out.push("Adresse du siège");
   if (!v.postal_codes.length) out.push("Au moins un code postal d’intervention");
   if (!v.categories.length) out.push("Au moins une compétence");
@@ -497,6 +507,7 @@ export function ArtisanSpace({ session }: { session: Session }) {
       case "platform-operators":
       case "platform-finance":
       case "platform-moderation":
+      case "platform-audit":
       case "support-queue":
         content = <PlatformPage session={session} view={session.view} />;
         break;
@@ -527,6 +538,7 @@ export function ArtisanSpace({ session }: { session: Session }) {
             dossier={dossier}
             pending={dossierPending}
             onCommand={command}
+            onReload={() => setDossierVersion((v) => v + 1)}
           />
         );
         break;
@@ -1606,9 +1618,13 @@ function WorkDossier({ session, intervention: i }: { session: Session; intervent
             state={state}
             editable={canAppoint}
             busy={session.busy}
-            onSave={(starts_at, ends_at, note) =>
-              operate({ action: "save_appointment", starts_at, ends_at, note })
-            }
+            version={ops?.appointment ? ops.appointment.reminder_version ?? 0 : 0}
+            onSave={async (starts_at, ends_at, note) => {
+              const ok = await operate({ action: "save_appointment", expected_version: ops?.appointment ? ops.appointment.reminder_version ?? 0 : 0, starts_at, ends_at, note });
+              // Refused (409 version, rights…): re-read the slot; the open form keeps its values (E15).
+              if (!ok) setOpsVersion((v) => v + 1);
+              return ok;
+            }}
             reminder={
               <AppointmentReminderPanel
                 key={`${i.id}|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`}
@@ -1736,9 +1752,12 @@ function AppointmentPanel({
   state,
   editable,
   busy,
+  version,
   onSave,
   reminder,
 }: {
+  /** Revision of the slot shown (0 without slot): a change after a refused save is a conflict. */
+  version: number;
   appointment: Appointment | null;
   loaded: boolean;
   pending: boolean;
@@ -1754,7 +1773,10 @@ function AppointmentPanel({
   const [duration, setDuration] = useState("2");
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
+  const [refusedAt, setRefusedAt] = useState<number | null>(null);
+  const conflict = open && refusedAt !== null && refusedAt !== version;
   function edit() {
+    setRefusedAt(null);
     if (appointment) {
       setStart(toLocalInput(appointment.starts_at));
       const hours = Math.round(
@@ -1775,7 +1797,9 @@ function AppointmentPanel({
     }
     setError("");
     const end = new Date(s.getTime() + Number(duration) * 3600000);
+    const sentVersion = version;
     void onSave(s.toISOString(), end.toISOString(), note.trim()).then((ok) => {
+      setRefusedAt(ok ? null : sentVersion);
       if (ok) setOpen(false);
     });
   }
@@ -1840,6 +1864,11 @@ function AppointmentPanel({
               placeholder="Accès, interphone, matériel à prévoir…"
             />
           </Field>
+          {conflict && (
+            <p className={styles.sectionNote} role="alert" data-slot-conflict="">
+              Le créneau a été modifié entre-temps : la version actuelle est affichée ci-dessus. Votre saisie est conservée ; enregistrez à nouveau pour la confirmer.
+            </p>
+          )}
           <div className={styles.formActions}>
             <button type="submit" className="button primary" disabled={busy}>
               {busy ? "Enregistrement…" : "Enregistrer le créneau"}
@@ -2029,6 +2058,7 @@ function ReportPanel({
     summary: string;
     checks: ReportCheck[];
     signature_name: string;
+    command_id: string;
   }) => Promise<boolean>;
 }) {
   const [editing, setEditing] = useState(false);
@@ -2103,6 +2133,7 @@ function ReportForm({
     summary: string;
     checks: ReportCheck[];
     signature_name: string;
+    command_id: string;
   }) => Promise<boolean>;
   onDone: () => void;
 }) {
@@ -2121,6 +2152,8 @@ function ReportForm({
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const doneRef = useRef(false);
+  /** E18: one command id per intention (exact input), reused until the save is confirmed. */
+  const intentRef = useRef<{ input: string; id: string } | null>(null);
   const mounted = useRef(true);
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
@@ -2139,20 +2172,31 @@ function ReportForm({
     if (signature.trim().length < 2) next.signature = "Indiquez le nom de la personne qui déclare ce compte rendu.";
     setErrors(next);
     if (Object.keys(next).length) return;
-    savingRef.current = true;
-    setSaving(true);
-    const sentScope = scope;
-    void onSave({
+    const values = {
       summary: summary.trim(),
       checks: checks.map((c) => ({ label: c.label.trim(), result: c.result })),
       signature_name: signature.trim(),
-    })
+    };
+    const input = JSON.stringify(values);
+    if (!intentRef.current || intentRef.current.input !== input) {
+      const id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : "";
+      if (!id) {
+        setErrors({ summary: "Ce navigateur ne permet pas de créer un identifiant sécurisé : enregistrement impossible ici." });
+        return;
+      }
+      intentRef.current = { input, id };
+    }
+    savingRef.current = true;
+    setSaving(true);
+    const sentScope = scope;
+    void onSave({ ...values, command_id: intentRef.current.id })
       .catch(() => false)
       .then((ok) => {
         // A late reply for another identity / dossier, or after a remount, is ignored entirely.
         if (!mounted.current || scopeRef.current !== sentScope) return;
         savingRef.current = false;
         if (ok && !doneRef.current) {
+          intentRef.current = null; // confirmed: a later report is a new intention
           doneRef.current = true; // close once, this editor only
           onDone();
           return;
@@ -2299,8 +2343,41 @@ function ParticipantsPanel({
     </section>
   );
 }
+const DISPUTE_LINE: Partial<Record<ArtisanDisputeState, { tone: Tone; label: string; text: string }>> = {
+  // Neutral wording (review of A f58df31): the origin may be the client, the artisan or the
+  // platform; nothing here asserts a bank chargeback or a future notification.
+  open: { tone: "amber", label: "Litige enregistré", text: "Un litige est enregistré sur ce règlement." },
+  under_review: { tone: "amber", label: "Litige examiné par la plateforme", text: "Un litige sur ce règlement est en cours d’examen par la plateforme." },
+  resolved: { tone: "neutral", label: "Litige résolu", text: "Le litige enregistré sur ce règlement est résolu." },
+  closed: { tone: "neutral", label: "Litige clos", text: "Le litige enregistré sur ce règlement est clos." },
+};
+/** E80: dispute state of the accepted quote, from GET /api/payments/status (optional field). */
+function useArtisanDispute(session: Session, quoteId: string | null): ArtisanDisputeState | null {
+  const [state, setState] = useState<{ key: string; value: ArtisanDisputeState | null } | null>(null);
+  // Keyed by identity + session generation + quote: never survives a session change; every rights /
+  // workspace refresh (refreshedAt) re-reads it for the same quote (no loop: the read changes neither).
+  const key = quoteId && session.mode === "live" ? `${session.profileId}|${session.mutationContext.generation()}|${quoteId}` : "";
+  const refreshed = session.refreshedAt;
+  const load = useRef(session.loadPaymentStatus);
+  load.current = session.loadPaymentStatus;
+  useEffect(() => {
+    setState(null); // a re-read never shows the previous answer meanwhile
+    if (!key || !quoteId) return;
+    let active = true;
+    void load.current(quoteId).then((report) => {
+      const value = report?.artisan_dispute;
+      if (active) setState({ key, value: value && value in DISPUTE_LINE ? value : null });
+    }).catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [key, quoteId, refreshed]);
+  return state && state.key === key ? state.value : null;
+}
 function PaymentPanel({ session, intervention: i }: { session: Session; intervention: Intervention }) {
   const { accepted, payment } = paymentFor(session.data.quotes, session.data.payments, i.id);
+  const dispute = useArtisanDispute(session, accepted?.id ?? null);
+  const disputeLine = dispute ? DISPUTE_LINE[dispute] : undefined;
   let tag: ReactNode;
   let text: string;
   let awaiting = false;
@@ -2327,7 +2404,19 @@ function PaymentPanel({ session, intervention: i }: { session: Session; interven
         <strong>{accepted ? `Devis initial accepté : ${money(accepted.total_cents)}` : "Montant du devis accepté introuvable"}</strong>
         {tag}
       </div>
+      {/* E81: the amount actually agreed (accepted amendments included) and, once confirmed, settled. */}
+      {accepted && typeof accepted.accepted_total_cents === "number" && accepted.accepted_total_cents !== accepted.total_cents && (
+        <p data-artisan-accepted-total="">Total accepté, avenants compris : {money(accepted.accepted_total_cents)}</p>
+      )}
+      {payment?.status === "paid" && !isDeclaredOnSite(payment) && (
+        <p data-artisan-paid-amount="">Montant réglé confirmé par la plateforme : {money(payment.total_cents)}</p>
+      )}
       <p>{text}</p>
+      {disputeLine && (
+        <p data-artisan-dispute={dispute ?? undefined}>
+          <Tag tone={disputeLine.tone}>{disputeLine.label}</Tag> {disputeLine.text}
+        </p>
+      )}
       {/* Follow-up link only (GET /api/payments/link): never a Checkout for the artisan, never a collect action. */}
       {awaiting && session.mode === "live" && (
         <PaymentLinkPanel key={`${session.profileId}|${i.id}`} interventionId={i.id} viewer="artisan" amountCents={null} />
@@ -2526,7 +2615,7 @@ function Messages({ session }: { session: Session }) {
           profileId={session.profileId}
           selectedId={selected}
           busy={session.busy}
-          onSubmit={(id, body) => session.sendMessage(id, body)}
+          onSubmit={(id, body, commandId) => session.sendMessage(id, body, commandId)}
           context={session.mutationContext}
           loadOperations={session.loadOperations}
         />
@@ -2932,6 +3021,7 @@ function ApplicationForm({
   }
   async function saveDraft() {
     setTouched(true);
+    if (employeeError(values.employee_count)) return false; // E05: refused here, in French, no POST
     return onCommand(saveBody());
   }
   async function submitApplication() {
@@ -3062,12 +3152,12 @@ function ApplicationForm({
               ))}
             </select>
           </Field>
-          <Field label="Effectif (vous compris)">
+          <Field label="Effectif (vous compris)" error={touched ? employeeError(values.employee_count) : undefined}>
             <input
               required
               type="number"
               min="1"
-              max="999"
+              max={EMPLOYEE_MAX}
               step="1"
               value={values.employee_count}
               onChange={(e) => set("employee_count", e.target.value)}
@@ -3347,16 +3437,69 @@ function PerfGrid({ perf, since }: { perf: Performance; since: string | null }) 
     </>
   );
 }
+/** E75 (decision pending, no ceiling chosen): neutral personal preference, shown only when the
+ *  server exposes the contract (capacity_version). Empty = unlimited (null). A refusal (version
+ *  changed, 409) re-reads the profile and keeps the typed value. It does not filter offers. */
+/** Same technical bound as the API (int4); the unit itself is still to be decided (E75). */
+const CAPACITY_MAX = 2147483647;
+function CapacityPreference({ artisan, onCommand, onReload, reloading }: { artisan: ArtisanProfile; onCommand: (body: ArtisanCommand) => Promise<boolean>; onReload: () => void; reloading: boolean }) {
+  const [value, setValue] = useState(artisan.capacity_limit == null ? "" : String(artisan.capacity_limit));
+  const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const lock = useRef(false); // synchronous: two submissions in one loop send one command
+  const save = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (lock.current || reloading) return;
+    const raw = value.trim();
+    const limit = raw === "" ? null : Number(raw);
+    if (limit !== null && (!Number.isInteger(limit) || limit < 1 || limit > CAPACITY_MAX)) {
+      setMessage({ tone: "error", text: "Indiquez un nombre entier d’au moins 1 (2 147 483 647 au plus), ou laissez vide pour ne fixer aucune valeur." });
+      return;
+    }
+    lock.current = true;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const ok = await onCommand({ action: "set_capacity_limit", capacity_limit: limit, expected_version: artisan.capacity_version ?? 0 });
+      if (ok) setMessage({ tone: "ok", text: "Préférence enregistrée." });
+      else {
+        onReload(); // re-read requested; the typed value stays for an explicit resend
+        setMessage({ tone: "error", text: "La préférence n’a pas été enregistrée : relecture demandée, votre saisie est conservée." });
+      }
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="panel" aria-labelledby="capacity-preference">
+      <h2 id="capacity-preference">Capacité de travail (préférence)</h2>
+      <p className="form-note">
+        Préférence personnelle enregistrée sur votre profil. Elle ne filtre pas les offres à ce stade et la plateforme n’impose aucune limite.
+        Valeur actuelle : {artisan.capacity_limit == null ? "aucune (illimité)" : artisan.capacity_limit}. L’unité de cette valeur reste à décider par l’exploitant.
+      </p>
+      <form onSubmit={(e) => void save(e)} noValidate>
+        <Field label="Valeur de capacité souhaitée (vide = aucune limite)">
+          <input type="number" min="1" max={CAPACITY_MAX} step="1" inputMode="numeric" value={value} disabled={busy || reloading} onChange={(e) => setValue(e.target.value)} />
+        </Field>
+        {message && <p className={message.tone === "ok" ? "form-note" : "field-error"} role={message.tone === "ok" ? "status" : "alert"}>{message.text}</p>}
+        <button type="submit" className="button outline" disabled={busy || reloading}>{busy ? "Enregistrement…" : reloading ? "Relecture…" : "Enregistrer la préférence"}</button>
+      </form>
+    </section>
+  );
+}
 function Profile({
   session,
   dossier,
   pending,
   onCommand,
+  onReload,
 }: {
   session: Session;
   dossier: ArtisanDossier | null;
   pending: boolean;
   onCommand: (body: ArtisanCommand) => Promise<boolean>;
+  onReload?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const { data, profileId } = session;
@@ -3373,6 +3516,9 @@ function Profile({
   return (
     <>
       <PageTitle title="Profil artisan" />
+      {artisan && typeof artisan.capacity_version === "number" && session.mode === "live" && onReload && (
+        <CapacityPreference artisan={artisan} onCommand={onCommand} onReload={onReload} reloading={pending} />
+      )}
       <div className={styles.profileHead}>
         <span className={styles.avatar} aria-hidden="true">
           {initials(session.displayName)}
@@ -3510,7 +3656,7 @@ function Profile({
         erasureRequests
       />
       <SubscriptionsPanel
-        key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}
+        key={`subscriptions:${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}
         role="artisan"
         demo={session.mode === "demo"}
         context={session.mutationContext}

@@ -49,6 +49,9 @@ export function useDetailPresence(
   id: string,
   present: boolean,
   fetchJson: DetailFetch = (path) => api<unknown>(path),
+  /** E66: set ONLY by the enterprise dossier when the workspace holds this dossier on a site absent
+   *  from the truncated site window of the active scope ⇒ the absence is unproven. */
+  options: { siteWindowMayHide?: boolean } = {},
 ): {
   decision: PresenceDecision;
   retry: () => void;
@@ -116,7 +119,7 @@ export function useDetailPresence(
   }, [id, context, rerender]);
 
   const base = decideDetail({ present, live, attempt: live && id ? memory.get(key) : undefined });
-  const limited = session.data?.limits?.interventions.limited === true;
+  const limited = session.data?.limits?.interventions.limited === true || options.siteWindowMayHide === true;
   const cached = live && id && !present ? cache.get(id) : undefined;
   const point = live && id ? points.get(id) : undefined;
 

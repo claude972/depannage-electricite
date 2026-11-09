@@ -2,7 +2,8 @@
 // Operational forms extracted from the original monolith; behaviour preserved, shared by the
 // role spaces. Styling classes live in app/globals.css.
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { api, PHOTO_TYPES, validateUpload } from "./api";
+import { api, ApiRequestError, PHOTO_TYPES, validateUpload } from "./api";
+import { classifyRefusal } from "./refusal";
 import { AddressField, createAddressApi } from "./address-field";
 import {
   applyOutcome,
@@ -734,7 +735,15 @@ function useMessageHistory(live: boolean, profileId: string, interventionId: str
       flight.current = null;
     };
   }, [key, enabled, load, update]);
-  return { state: state.key === key ? state : initialHistory(key), load, enabled };
+  /** P1 (E42): rights may have changed — restart from the newest page (a 404/401 then purges). */
+  const reread = useCallback(() => {
+    if (!enabled) return;
+    flight.current?.abort();
+    flight.current = null;
+    update(() => initialHistory(key));
+    load();
+  }, [enabled, key, load, update]);
+  return { state: state.key === key ? state : initialHistory(key), load, reread, enabled };
 }
 /** Who wrote a thread message, from the dossier's own participants. An author who is neither the
  *  dossier's client nor its artisan is never presented as the other party: on a private dossier it
@@ -775,7 +784,8 @@ export function MessageCenter({
   profileId: string;
   selectedId: string;
   busy: boolean;
-  onSubmit: (id: string, body: string) => Promise<boolean | undefined>;
+  /** `commandId` (E41): one UUID per message intention, resent unchanged until confirmed. */
+  onSubmit: (id: string, body: string, commandId: string) => Promise<boolean | undefined>;
   /** Live session: the paginated history is read from /api/messages. Demo/default: preview only, no call. */
   live?: boolean;
   /** Test seam for the history client. */
@@ -811,11 +821,24 @@ export function MessageCenter({
   // The compose draft belongs to ONE identity + dossier: switching never carries A's text to B.
   const threadKey = historyKey(profileId, id);
   const [draft, setDraft] = useState<ComposeDraft>({ key: threadKey, text: "" });
+  const sendIntent = useRef<{ thread: string; text: string; id: string } | null>(null);
   const body = draftText(draft, threadKey);
   const setBody = (text: string) => setDraft({ key: threadKey, text });
   const history = useMessageHistory(live, profileId, id, fetchHistory);
   const h = history.state;
-  const unavailable = history.enabled && h.status === "not_found";
+  // E42: the open thread left the re-read list (reassignment, rights): re-read its history before
+  // anything else is shown or sent; the server's refusal purges it.
+  const listed = interventions.some((i) => i.id === id);
+  const wasListed = useRef(listed);
+  useEffect(() => {
+    if (wasListed.current && !listed) history.reread();
+    wasListed.current = listed;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listed, id]);
+  const notFound = history.enabled && h.status === "not_found";
+  // P1 (E39): a 401 reported by the API purges the protected thread in this document (messages,
+  // contact, compose) like a 404; only the reconnect message stays.
+  const unavailable = notFound || (history.enabled && h.status === "signed_out");
   // Live: the preview never pre-fills older history (see visibleHistoryMessages). Demo: unchanged,
   // every workspace message of the dossier (no history exists there).
   // Photo messages confirmed by their 201 are merged at once (dedup by id), no manual reload.
@@ -908,7 +931,7 @@ export function MessageCenter({
                 </p>
               )}
               {unavailable ? (
-                <div data-message-history="not_found">
+                notFound && <div data-message-history="not_found">
                   <Empty icon="message" title="Conversation indisponible">
                     Cette conversation n’est pas accessible depuis votre compte.
                   </Empty>
@@ -940,7 +963,7 @@ export function MessageCenter({
                 {readOnlyReason || "Lecture seule : vos droits sur ce dossier ne permettent pas d’envoyer de message."}
               </p>
             )}
-            {!unavailable && writable && (
+            {!unavailable && writable && !(history.enabled && !listed && !h.loaded) && (
             <form
               className="message-compose"
               onSubmit={(e) => {
@@ -948,10 +971,19 @@ export function MessageCenter({
                 if (body.trim()) {
                   const sentKey = threadKey;
                   const sentText = body; // snapshot of the draft as sent
-                  void onSubmit(id, body.trim()).then((saved) => {
+                  const text = body.trim();
+                  // E41: same thread + same text ⇒ same intention key until a confirmed send.
+                  const known = sendIntent.current;
+                  const commandId = known && known.thread === sentKey && known.text === text ? known.id : typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : "";
+                  if (!commandId) return;
+                  sendIntent.current = { thread: sentKey, text, id: commandId };
+                  void onSubmit(id, text, commandId).then((saved) => {
                     // Clear only the draft that was sent (same thread, unchanged since); text typed
                     // during the request is kept; on failure the draft stays as is.
-                    if (saved) setDraft((d) => clearSentDraft(d, sentKey, sentText));
+                    if (saved) {
+                      if (sendIntent.current?.id === commandId) sendIntent.current = null;
+                      setDraft((d) => clearSentDraft(d, sentKey, sentText));
+                    }
                   });
                 }
               }}
@@ -1043,7 +1075,13 @@ function ConversationContact({ intervention, role, context, load }: { interventi
   const tel = person ? telHref(person.phone) : null;
   return (
     <div className="conversation-contact" data-conversation-contact={open ? state.phase : "closed"}>
-      <button type="button" className="button outline" aria-expanded={open} onClick={() => { const next = !open; setOpen(next); if (next && state.phase !== "ready" && state.phase !== "loading") read(); }} data-conversation-contact-toggle="">
+      <button type="button" className="button outline" aria-expanded={open} onClick={() => {
+          const next = !open;
+          setOpen(next);
+          // P1 (E40): folding purges the contact; every opening re-reads it (rights may have changed).
+          if (next) read();
+          else { seq.current++; setState({ phase: "idle", ops: null }); }
+        }} data-conversation-contact-toggle="">
         <Icon name="phone" size={16} />
         Contact et rendez-vous
       </button>
@@ -1089,23 +1127,48 @@ type PhotoPhase = "ready" | "uploading" | "upload_unknown" | "sending" | "send_r
  *  command are kept for an identical replay (same send id), in memory only. */
 type PhotoDraft = { file: File | null; caption: string; sendId: string; documentId: string | null; command: PhotoCommand | null; phase: PhotoPhase; error: string };
 
+/** E02: uploads in flight per draft store + key. A conversation switch unmounts the composer; the
+ *  upload's outcome is still written to the (identity + dossier keyed) draft store, and a composer
+ *  mounted again for the same key waits for it instead of staying stuck in « uploading ». */
+const photoFlights = new WeakMap<Map<string, PhotoDraft>, Map<string, Promise<void>>>();
+const flightsOf = (store: Map<string, PhotoDraft>) => {
+  let m = photoFlights.get(store);
+  if (!m) photoFlights.set(store, (m = new Map()));
+  return m;
+};
+
 function PhotoCompose({ interventionId, context, fetchImpl, store, storeKey, onSent }: { interventionId: string; context: PhotoContext; fetchImpl: PhotoFetch; store: Map<string, PhotoDraft>; storeKey: string; onSent: (message: Message) => void }) {
   const [draft, setDraftState] = useState<PhotoDraft | null>(() => store.get(storeKey) ?? null);
   const [pickError, setPickError] = useState("");
   const draftRef = useRef(draft);
+  const alive = useRef(false);
   const put = (next: PhotoDraft | null) => {
     draftRef.current = next;
     if (next && next.phase !== "done") store.set(storeKey, next);
     else store.delete(storeKey);
-    setDraftState(next);
+    if (alive.current) setDraftState(next);
   };
   const inFlight = useRef(false);
-  const alive = useRef(false);
   useEffect(() => {
     alive.current = true;
+    // E02: a draft left « uploading » by an unmounted composer: follow its flight, or — if none is
+    // in flight any more — reread the store (its outcome was written there).
+    const stored = store.get(storeKey) ?? null;
+    if (stored?.phase === "uploading") {
+      const flight = flightsOf(store).get(storeKey);
+      const reread = () => {
+        if (!alive.current) return;
+        const now = store.get(storeKey) ?? null;
+        draftRef.current = now;
+        setDraftState(now?.phase === "uploading" ? { ...now, phase: "upload_unknown", error: PHOTO_COPY.uploadUnknown } : now);
+      };
+      if (flight) void flight.then(reread);
+      else reread();
+    }
     return () => {
       alive.current = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const pick = (file: File | undefined) => {
@@ -1124,16 +1187,31 @@ function PhotoCompose({ interventionId, context, fetchImpl, store, storeKey, onS
     // Identity + generation + dossier captured now, re-checked after every await.
     const uid = context.userId(), gen = context.generation();
     const same = () => alive.current && context.userId() === uid && context.generation() === gen;
+    // E02: the store (keyed by identity + dossier) is updated as long as the IDENTITY is unchanged,
+    // even if this composer was unmounted by a conversation switch.
+    const sameIdentity = () => context.userId() === uid && context.generation() === gen;
     try {
       let documentId = d.documentId;
       if (!documentId) {
         if (!d.file) return;
         put({ ...d, phase: "uploading", error: "" });
-        const up = await uploadPhoto(d.file, interventionId, fetchImpl);
-        if (!same()) return; // stale: nothing applied
-        if (up.kind === "unknown") return put({ ...d, phase: "upload_unknown", error: up.message });
-        if (up.kind === "failed") return put({ ...d, phase: "ready", error: up.message });
-        documentId = up.documentId;
+        const flights = flightsOf(store);
+        let settle!: () => void;
+        flights.set(storeKey, new Promise<void>((r) => (settle = r)));
+        let up: Awaited<ReturnType<typeof uploadPhoto>>;
+        try {
+          up = await uploadPhoto(d.file, interventionId, fetchImpl);
+          if (!sameIdentity()) return; // another identity: nothing applied
+          if (up.kind === "unknown") return put({ ...d, phase: "upload_unknown", error: up.message });
+          if (up.kind === "failed") return put({ ...d, phase: "ready", error: up.message });
+          documentId = up.documentId;
+          // Receipt kept; when the composer is gone, stop here: the send is resumed explicitly on
+          // the same dossier (no second upload, never on another thread).
+          if (!same()) return put({ ...d, documentId, phase: "ready", error: "" });
+        } finally {
+          flights.delete(storeKey);
+          settle();
+        }
       }
       // The command is frozen once (stable id, confirmed document, caption): a replay is identical.
       const current = draftRef.current ?? d;
@@ -1512,6 +1590,7 @@ export function AuthForm({
   onSubmit,
   onDemo,
   initial,
+  initialRole,
 }: {
   mode: "login" | "signup" | "reset";
   onMode: (mode: "login" | "signup" | "reset") => void;
@@ -1529,13 +1608,15 @@ export function AuthForm({
   /** Prefill from the service booking flow (email, first and last name typed there); never a
    *  password, and a full name is never split into first / last name. */
   initial?: { email?: string; first_name?: string; last_name?: string };
+  /** E65: profile preselected by the entry point (« Créer mon compte artisan »); default client. */
+  initialRole?: Role;
 }) {
   const [email, setEmail] = useState(initial?.email ?? "");
   const [password, setPassword] = useState("");
   const [first, setFirst] = useState(initial?.first_name?.trim().slice(0, NAME_PART_MAX) ?? "");
   const [last, setLast] = useState(initial?.last_name?.trim().slice(0, NAME_PART_MAX) ?? "");
   const [nameError, setNameError] = useState("");
-  const [role, setRole] = useState<Role>("client");
+  const [role, setRole] = useState<Role>(initialRole ?? "client");
   return (
     <div className="auth-layout">
       <section className="auth-copy">
@@ -2037,17 +2118,22 @@ export function DocumentManager({
 // GET /api/admin/artisans → { artisans: [{ id, full_name, artisan_approved, created_at,
 // application_status }], limit, truncated } (older servers / demo: no status, no limit). The status
 // shown is the server's application_status only; when absent it says so, never inferred. Actions
-// follow the status: approved ⇒ Suspendre, suspended ⇒ Réactiver, submitted ⇒ Approuver; no
-// approval for a draft, changes requested, unknown or missing status (the server would refuse an
-// incomplete dossier anyway). All decisions POST { user_id, approved } after an explicit confirm.
+// follow the status: approved ⇒ Suspendre, suspended ⇒ Réactiver, submitted ⇒ Approuver or
+// Demander des corrections (E35); no approval for a draft, changes requested, unknown or missing
+// status. Contract A (E34/E36): every decision POSTs { user_id, command_id, action, expected_version }
+// after an explicit confirm — action approve | request_changes | suspend | reinstate (approval and
+// reactivation are distinct), expected_version = application_version read, command_id stable for the
+// same intention until it is confirmed.
 export type ArtisanApplicationRow = {
   id: string;
   full_name: string;
   artisan_approved: boolean;
   created_at: string;
   application_status?: string | null;
+  /** Dossier revision read (0 without dossier); the expected version of the next decision. */
+  application_version?: number;
 };
-export type ArtisanDecision = "suspend" | "reactivate" | "approve";
+export type ArtisanDecision = "suspend" | "reactivate" | "approve" | "request_changes";
 export const ARTISAN_STATUS_LABELS: Record<string, string> = {
   submitted: "Dossier soumis",
   approved: "Approuvé",
@@ -2055,24 +2141,34 @@ export const ARTISAN_STATUS_LABELS: Record<string, string> = {
   changes_requested: "Modifications demandées",
   draft: "Brouillon",
 };
-const DECISIONS: Record<ArtisanDecision, { label: string; message: string; confirmLabel: string; approved: boolean }> = {
+const DECISIONS: Record<ArtisanDecision, { label: string; message: string; confirmLabel: string; action: "approve" | "request_changes" | "suspend" | "reinstate"; approved: boolean }> = {
   suspend: {
     label: "Suspendre",
     message: "Suspendre l’accès aux nouvelles missions de cet artisan ?",
     confirmLabel: "Confirmer la suspension",
+    action: "suspend",
     approved: false,
   },
   reactivate: {
     label: "Réactiver",
     message: "Réactiver cet artisan suspendu ? Il retrouvera l’accès aux nouvelles missions.",
     confirmLabel: "Confirmer la réactivation",
+    action: "reinstate",
     approved: true,
   },
   approve: {
     label: "Approuver",
     message: "Confirmez-vous avoir vérifié la candidature et ses justificatifs ?",
     confirmLabel: "Confirmer l’approbation",
+    action: "approve",
     approved: true,
+  },
+  request_changes: {
+    label: "Demander des corrections",
+    message: "Renvoyer la candidature à l’artisan pour corrections ? Il pourra la modifier puis la soumettre à nouveau.",
+    confirmLabel: "Confirmer la demande de corrections",
+    action: "request_changes",
+    approved: false,
   },
 };
 /** Label, single allowed decision and honest note for one row (pure, exported for tests). */
@@ -2080,6 +2176,8 @@ export function artisanApplicationView(row: Pick<ArtisanApplicationRow, "artisan
   label: string;
   decision: ArtisanDecision | null;
   note: string | null;
+  /** Second decision offered with the main one (submitted ⇒ request changes, E35). */
+  secondary?: ArtisanDecision;
 } {
   const status = row.application_status;
   if (status === undefined || status === null) {
@@ -2093,7 +2191,7 @@ export function artisanApplicationView(row: Pick<ArtisanApplicationRow, "artisan
   const label = ARTISAN_STATUS_LABELS[status] ?? "Statut inconnu";
   if (status === "approved") return { label, decision: "suspend", note: null };
   if (status === "suspended") return { label, decision: "reactivate", note: null };
-  if (status === "submitted") return { label, decision: "approve", note: null };
+  if (status === "submitted") return { label, decision: "approve", note: null, secondary: "request_changes" };
   const note =
     status === "draft"
       ? "Dossier incomplet : en attente de l’artisan."
@@ -2117,7 +2215,9 @@ export function parseArtisanApplications(raw: unknown): { rows: ArtisanApplicati
     if (typeof r.id !== "string" || typeof r.full_name !== "string" || typeof r.artisan_approved !== "boolean" || typeof r.created_at !== "string")
       throw new Error(ARTISAN_LIST_INVALID);
     if (!(status === undefined || status === null || typeof status === "string")) throw new Error(ARTISAN_LIST_INVALID);
-    return { id: r.id, full_name: r.full_name, artisan_approved: r.artisan_approved, created_at: r.created_at, application_status: typeof status === "string" ? status : null };
+    const version = r.application_version;
+    if (!(version === undefined || (typeof version === "number" && Number.isSafeInteger(version) && version >= 0))) throw new Error(ARTISAN_LIST_INVALID);
+    return { id: r.id, full_name: r.full_name, artisan_approved: r.artisan_approved, created_at: r.created_at, application_status: typeof status === "string" ? status : null, ...(version === undefined ? {} : { application_version: version }) };
   });
   return { rows, truncated: v.truncated === true, limit: typeof v.limit === "number" && Number.isSafeInteger(v.limit) && v.limit > 0 ? v.limit : null };
 }
@@ -2180,6 +2280,15 @@ export function ArtisanApplicationsList({
                   onConfirm={() => onDecide(p, view.decision as ArtisanDecision)}
                 />
               )}
+              {view.secondary && (
+                <ConfirmAction
+                  label={DECISIONS[view.secondary].label}
+                  message={DECISIONS[view.secondary].message}
+                  confirmLabel={DECISIONS[view.secondary].confirmLabel}
+                  busy={busy}
+                  onConfirm={() => onDecide(p, view.secondary as ArtisanDecision)}
+                />
+              )}
             </div>
           );
         })}
@@ -2229,23 +2338,46 @@ export function ArtisanAdministration({ demo }: { demo: boolean }) {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  /** E36: one command id per intention (dossier + action + version read), kept until confirmed. */
+  const intents = useRef(new Map<string, string>());
   async function decide(p: ArtisanApplicationRow, decision: ArtisanDecision) {
-    const approved = DECISIONS[decision].approved;
+    const { approved, action } = DECISIONS[decision];
     setBusy(p.id);
     setError("");
+    const expected_version = p.application_version ?? 0;
+    const intent = `${p.id}|${action}|${expected_version}`;
     try {
       if (demo) {
-        const next = rows.map((row) =>
-          row.id === p.id ? { ...row, artisan_approved: approved, application_status: approved ? "approved" : "suspended" } : row,
-        );
+        const status = action === "request_changes" ? "changes_requested" : approved ? "approved" : "suspended";
+        const next = rows.map((row) => (row.id === p.id ? { ...row, artisan_approved: approved, application_status: status } : row));
         localStorage.setItem(DEMO_KEY, JSON.stringify(next));
         setRows(next);
       } else {
-        await api("/api/admin/artisans", { user_id: p.id, approved });
+        let command_id = intents.current.get(intent);
+        if (!command_id) {
+          command_id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : "";
+          if (!command_id) throw new Error("Ce navigateur ne permet pas de créer un identifiant sécurisé : décision impossible ici.");
+          intents.current.set(intent, command_id);
+        }
+        await api("/api/admin/artisans", { user_id: p.id, command_id, action, expected_version });
+        intents.current.delete(intent);
         await load();
       }
     } catch (e) {
-      setError((e as Error).message);
+      const status = e instanceof ApiRequestError ? e.status : 0;
+      const kind = classifyRefusal(status);
+      // Definitive refusals end the intention; a lost reply keeps it for an exact replay (E36).
+      if (kind !== "transient") intents.current.delete(intent);
+      if (kind === "session") {
+        setRows([]); // P1: 401 purges the protected list at once
+        setError((e as Error).message);
+        return;
+      }
+      const message = kind === "conflict" ? "Ce dossier a changé depuis son affichage : il a été relu, vérifiez son état avant de décider." : (e as Error).message;
+      // 409 / 403 / 404 / uncertain reply: re-read the dossier before any new decision (E34, P1);
+      // the refusal message stays visible over the re-read (load() clears its own error first).
+      if (kind !== "invalid") await load();
+      setError((prev) => prev || message);
     } finally {
       setBusy("");
     }
@@ -2954,6 +3086,8 @@ function WarrantyPanelBody({ interventionId, demo, role, context, ownerId, fetch
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  /** E29: a decision refused on a stale version keeps its draft here, across the re-read. */
+  const [conflicts, setConflicts] = useState<Record<string, { status: string; note: string }>>({});
   async function load() {
     if (!demo) return; // live reads go through useWarrantyHistory only
     setLoading(true);
@@ -3018,10 +3152,19 @@ function WarrantyPanelBody({ interventionId, demo, role, context, ownerId, fetch
         await api("/api/warranty", values);
         history.reload(); // causal re-read: page 1 + fresh has_active proof
         setNotice("Votre dossier a été enregistré.");
+        if (values.action === "resolve") {
+          const id = String(values.case_id);
+          setConflicts(({ [id]: _done, ...rest }) => rest);
+        }
       }
       setDescription("");
     } catch (e) {
-      setError((e as Error).message);
+      if (!demo && values.action === "resolve" && e instanceof ApiRequestError && e.status === 409) {
+        // Stale decision: re-read the case, keep the draft, flag the conflict; never resent alone.
+        setConflicts((m) => ({ ...m, [String(values.case_id)]: { status: String(values.status), note: String(values.resolution) } }));
+        setError(WARRANTY_CONFLICT);
+        history.reload();
+      } else setError((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -3104,14 +3247,17 @@ function WarrantyPanelBody({ interventionId, demo, role, context, ownerId, fetch
                 </p>
               )}
               {role === "admin" &&
-                ["submitted", "reviewing"].includes(c.status) && (
+                (["submitted", "reviewing"].includes(c.status) || Boolean(conflicts[c.id])) && (
                   <WarrantyResolution
                     busy={busy}
-                    initialNote={c.resolution || ""}
+                    initialNote={conflicts[c.id]?.note ?? (c.resolution || "")}
+                    initialStatus={conflicts[c.id]?.status}
+                    conflict={conflicts[c.id] ? WARRANTY_CONFLICT : undefined}
                     onSave={(status, resolution) =>
                       save({
                         action: "resolve",
                         case_id: c.id,
+                        ...(demo ? {} : { expected_version: c.updated_at }),
                         status,
                         resolution,
                       })
@@ -3323,17 +3469,24 @@ export function ApprovalDecision({
     </div>
   );
 }
+export const WARRANTY_CONFLICT =
+  "Cette demande a été modifiée entre-temps : son état actuel est affiché. Votre brouillon est conservé ; vérifiez-le avant d’enregistrer à nouveau.";
 export function WarrantyResolution({
   busy,
   initialNote,
+  initialStatus,
+  conflict,
   onSave,
 }: {
   busy: boolean;
   initialNote: string;
+  initialStatus?: string;
+  /** E29: the last decision was refused on a stale version; the draft is the one kept. */
+  conflict?: string;
   onSave: (status: string, note: string) => Promise<void>;
 }) {
   const [note, setNote] = useState(initialNote);
-  const [status, setStatus] = useState("reviewing");
+  const [status, setStatus] = useState(initialStatus ?? "reviewing");
   return (
     <form
       className="warranty-resolution inline-editor"
@@ -3342,6 +3495,11 @@ export function WarrantyResolution({
         void onSave(status, note.trim());
       }}
     >
+      {conflict && (
+        <p className="field-error" role="alert" data-warranty-conflict="">
+          {conflict}
+        </p>
+      )}
       <Field label="État du traitement">
         <select value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="reviewing">En cours d’examen</option>

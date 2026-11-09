@@ -143,7 +143,9 @@ test("ENT-10 P2 : client réel + vue montée — 503/0 sur une commande gardent 
 
     for (const status of ["401", "403"]) {
       const r = (await run("refusal", status)) as V & { states: string[]; posts: number };
-      same([r.states, r.form, r.unavailable, r.posts], [["siteOperations:available"], true, false, 1], `command ${status}: classification unchanged`);
+      // P1 (phase 2 lot B, E26/E27): a refused command re-reads the report exactly once before any
+      // new command; the classification stays « available », the form stays while the re-read grants.
+      same([r.states, r.form, r.unavailable, r.posts], [["siteOperations:available", "siteOperations:available"], true, false, 1], `command ${status}: classification unchanged, one rights re-read`);
       assert.match(r.alert ?? "", /Accès refusé/);
     }
 

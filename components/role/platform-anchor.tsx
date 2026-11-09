@@ -2,6 +2,7 @@
 // Point d’ancrage du back-office plateforme (ADV-PLATFORM-FINANCE-001) : les trois vues du lot,
 // ouvertes uniquement par la réponse serveur `platformAccess` (fail-closed). Sans réponse ou sans
 // droit, l’écran dit honnêtement que l’accès n’est pas vérifié ; rien n’est chargé ni simulé.
+import { PlatformAuditView } from "../features/platform-operations/platform-audit-view";
 import { PlatformFinanceView, PlatformModerationView, PlatformOperatorsView } from "../features/platform-operations";
 import { CONTRACT_MESSAGES } from "../app/api";
 import { operatorViewAllowed, platformViewAllowed, type OperatorView } from "../app/features";
@@ -18,6 +19,7 @@ export const PLATFORM_TITLES: Record<OperatorView, { title: string; subtitle: st
   "platform-operators": { title: "Opérateurs de plateforme", subtitle: "Habilitations, super-administrateurs et journal" },
   "platform-finance": { title: "Finance plateforme", subtitle: "Rapprochement, ledger, factures, remboursements et litiges" },
   "platform-moderation": { title: "Modération des avis", subtitle: "Avis masqués, contestations et décisions" },
+  "platform-audit": { title: "Journal d’audit", subtitle: "Actions sensibles enregistrées, lecture seule" },
   "support-queue": { title: "File d’assistance", subtitle: "Demandes de tous les comptes ; réponse et statut selon vos habilitations" },
 };
 
@@ -111,6 +113,8 @@ export function PlatformPage({
         <PlatformOperatorsView {...common} />
       ) : view === "platform-finance" ? (
         <PlatformFinanceView {...common} context={session.mutationContext} />
+      ) : view === "platform-audit" ? (
+        <PlatformAuditView {...common} />
       ) : (
         <PlatformModerationView {...common} />
       )}

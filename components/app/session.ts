@@ -79,6 +79,8 @@ const ACCESS: Record<View, readonly Role[] | "public"> = {
   "platform-operators": ["client", "artisan", "manager", "admin"],
   "platform-finance": ["client", "artisan", "manager", "admin"],
   "platform-moderation": ["client", "artisan", "manager", "admin"],
+  // E32: read-only audit journal, opened only by the /me capability `audit`.
+  "platform-audit": ["client", "artisan", "manager", "admin"],
   "support-queue": ["client", "artisan", "manager", "admin"],
 };
 export const ALL_VIEWS = Object.keys(ACCESS) as View[];

@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import type { ContractState, ModeratedReview, PlatformAccess, PlatformClient, PlatformViewScope } from "../../../lib/features/platform-operations/types";
 import { moderationAction, validateModeration, validateText } from "../../../lib/features/platform-operations/state-machines";
 import type { PlatformDemo } from "../../../lib/features/platform-operations/demo";
-import { EmptyState, ErrorBox, Field, Gate, Loading, Pager, Panel, ReadOnly, dateTime, errorText, scopeKey, shortId, useLoad } from "./shared";
+import { CONFLICT_REREAD, EmptyState, ErrorBox, Field, Gate, Loading, Pager, Panel, ReadOnly, commandConflict, commandRefused, dateTime, errorText, scopeKey, shortId, useLoad } from "./shared";
 import styles from "./platform-operations.module.css";
 
 export type PlatformModerationViewProps = { state: ContractState; unavailableMessage: string; scope: PlatformViewScope; client: PlatformClient; demo?: PlatformDemo; onNavigate?: (view: string, param?: string) => void };
@@ -27,8 +27,12 @@ function Inner({ scope, client, demo, onNavigate }: PlatformModerationViewProps)
     if (demo) { setMessage({ kind: "error", text: DEMO_NOTE }); return; }
     setBusy(true); setMessage(null);
     try { const result = await work(); if (result !== null) { setMessage({ kind: "ok", text: done }); setDraft(null); list.reload(); } }
-    catch (e) { setMessage({ kind: "error", text: errorText(e) }); } finally { setBusy(false); }
-  }, [busy, demo, list]);
+    catch (e) {
+      // E03 / P1: 409 re-reads the current version in place (draft kept); 401/403/404 re-read rights.
+      if (commandConflict(e)) { setMessage({ kind: "error", text: CONFLICT_REREAD }); list.reload(); }
+      else { setMessage({ kind: "error", text: errorText(e) }); if (commandRefused(e)) { me.reload(); list.reload(); } }
+    } finally { setBusy(false); }
+  }, [busy, demo, list, me]);
   if (me.loading && !me.data) return <Loading label="Chargement des droits…" />;
   if (me.error && !me.data) return <ErrorBox message={me.error} onRetry={me.reload} />;
   if (!me.data?.capabilities.reviews_moderation) return <div className="forbidden"><strong>Cet espace nécessite le scope de modération des avis.</strong><p>Demandez l’habilitation à un super administrateur.</p></div>;

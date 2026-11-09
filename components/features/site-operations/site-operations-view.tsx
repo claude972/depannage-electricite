@@ -5,6 +5,8 @@
 // a stale identity chain: nothing is shown or updated. Any change of userId, organizationId or
 // siteId remounts the content, clearing forms, drafts and loaded data.
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ApiRequestError } from "../../app/api";
+import { classifyRefusal } from "../../app/refusal";
 import type { SiteOperationsCommand, SiteOperationsViewProps } from "../../../lib/features/site-operations/types";
 import { BudgetPanel } from "./budget-panel";
 import { EquipmentPanel } from "./equipment-panel";
@@ -86,9 +88,11 @@ function Content({ scope, client, demo, onNavigate, siteId, interventionSearch }
   useEffect(() => {
     void load();
   }, [load]);
+  const running = useRef(false);
   const run = useCallback(
     async (command: SiteOperationsCommand): Promise<RunOutcome> => {
-      if (busy) return { status: "failed", message: BUSY_MESSAGE };
+      if (busy || running.current) return { status: "failed", message: BUSY_MESSAGE };
+      running.current = true;
       setBusy(true);
       try {
         const outcome = outcomeOf(await client.command(command), alive.current);
@@ -96,8 +100,13 @@ function Content({ scope, client, demo, onNavigate, siteId, interventionSearch }
         else if (outcome.status === "stale" && alive.current) setData((previous) => applyLoadResult(previous, { kind: "stale" }));
         return outcome;
       } catch (e) {
+        // P1 (E26/E27): a refused right / resource or a version conflict re-reads the report before
+        // any new command; a refused read purges the report and its write authority.
+        const kind = e instanceof ApiRequestError ? classifyRefusal(e.status) : null;
+        if (alive.current && (kind === "session" || kind === "access" || kind === "conflict")) await load();
         return { status: "failed", message: messageOf(e) };
       } finally {
+        running.current = false;
         if (alive.current) setBusy(false);
       }
     },

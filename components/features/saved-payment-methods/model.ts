@@ -8,6 +8,7 @@
 // the POST (else 0 POST), keyed by uid + generation, restored only by strict parse for the same
 // identity (never sent by itself), never replayed after an identity change; 401/403 clear.
 // The setup URL is never persisted and opened only after the user's explicit click.
+import { readRefused } from "../../app/refusal";
 import { z } from "zod";
 
 export const PM_PATH = "/api/payments/methods";
@@ -280,10 +281,14 @@ export function createPmController({ api, store, newId, context, get, set }: { a
       set({ ...s, loadingMore: true });
       const r = await api().list(after);
       if (my !== seq || !same(who)) return;
+      // A refused page purges every card already shown at once (E48), like the first page does.
+      if (readRefused(r.status)) return forbid();
       const p = r.status === 200 ? parseMethods(r.body, after) : null;
       if (!p) return set({ ...get(), loadingMore: false, error: COPY.loadFailed });
       const seen = new Set(get().methods.map((x) => x.id));
-      set({ ...get(), loadingMore: false, methods: [...get().methods, ...p.methods.filter((x) => !seen.has(x.id))], hasMore: p.has_more });
+      // A successful page clears the earlier page failure (E49); other messages are kept.
+      const error = get().error === COPY.loadFailed ? "" : get().error;
+      set({ ...get(), loadingMore: false, error, methods: [...get().methods, ...p.methods.filter((x) => !seen.has(x.id))], hasMore: p.has_more });
     },
     /** Explicit consent required; returns the validated URL into memory (opened only by a click). */
     setup: (consent: boolean) => (consent ? fresh((cid) => ({ action: "setup", consent: true, command_id: cid })) : Promise.resolve(false)),

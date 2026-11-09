@@ -141,7 +141,9 @@ const sessionOf = (opts, log) => ({
   data: { quotes: opts.cacheQuotes ?? [], interventions: opts.cacheRows ?? [], documents: [], messages: [], payments: [], reviews: [], organization_members: [], sites: [], organizations: [] },
   ensureFresh: async () => ({ kind: "loaded" }), refreshedAt: 0, uploads: [], retryUpload: () => {}, dismissUpload: () => {},
   capabilities: { quoteDocuments: "available", operations: "available" }, reprobeFeature: async () => {},
-  features: { quoteDocuments: new Proxy({}, { get: (_t, name) => (...args) => { anchor.push(String(name) + ":" + JSON.stringify(args)); return new Promise(() => {}); } }) },
+  // load answers a minimal overview of the requested quote with an unspecified validity (phase 2
+  // lot B, E13: live acceptance needs a confirmed validity); every other call stays pending.
+  features: { quoteDocuments: new Proxy({}, { get: (_t, name) => (...args) => { anchor.push(String(name) + ":" + JSON.stringify(args)); const t = args[0]; return name === "load" && t && t.quoteId ? Promise.resolve({ intervention: { id: I(0), status: "quoted", artisan_id: USER, site_id: null }, viewer: { role: "client", is_artisan: false, can_manage: false, is_admin: false }, issuer: { ready: true, missing: [] }, quotes: [{ id: t.quoteId, reference: "R", status: "sent", created_at: at(0), accepted_at: null, lines: [], subtotal_cents: 0, tax_rate: 20, tax_cents: 0, total_cents: 0, terms: null, permissions: { can_set_terms: false, can_generate: false, can_propose: false }, documents: [], amendments: [] }], history: [], settlement: "not_connected" }) : new Promise(() => {}); } }) },
   loadOperations: async () => null, go: (v, p) => log.push(["go", v, p]), openIntervention: (id, q) => log.push(["open", id, q]),
   action: async (id, a, b) => { log.push(["action", a, b.quote_id, id]); return true; }, operate: async (id, b) => { log.push(["operate", b.action, b.quote_id, id]); return true; }, refresh: async () => {},
   professional: { approvals: [], approval_rules: [], audit: [] }, submitReview: async () => true, checkout: async () => {}, loadOrganization: async () => null,

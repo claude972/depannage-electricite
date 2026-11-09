@@ -175,6 +175,23 @@ export async function bound<T>(deps: FeatureDeps, key: FeatureKey, task: () => P
   }
 }
 
+/**
+ * Leaf read (E32): same identity-generation binding as `bound` (stale bundle ⇒ nothing sent, late
+ * reply ⇒ null), but its errors never change the module's global state — a page error of one leaf
+ * (e.g. the audit journal) stays local and never unmounts the other views; /me keeps that role.
+ */
+export async function boundLeaf<T>(deps: FeatureDeps, task: () => Promise<T>): Promise<T | null> {
+  const generation = deps.owner ?? deps.generation();
+  if (generation !== deps.generation()) return null;
+  try {
+    const value = await task();
+    return generation !== deps.generation() ? null : value;
+  } catch (error) {
+    if (generation !== deps.generation()) return null;
+    throw error;
+  }
+}
+
 /** Same binding, but refusals become a `{ ok:false }` result instead of a thrown error. */
 async function boundResult<T, R>(
   deps: FeatureDeps,
@@ -182,9 +199,10 @@ async function boundResult<T, R>(
   task: () => Promise<T>,
   success: (value: T) => R,
   refusal: (error: ApiRequestError) => R,
+  kind: "read" | "command" = "read",
 ): Promise<R | null> {
   try {
-    const value = await bound(deps, key, task);
+    const value = await bound(deps, key, task, kind);
     return value === null ? null : success(value);
   } catch (error) {
     if (error instanceof ApiRequestError) return refusal(error);
@@ -230,10 +248,11 @@ export function createNotificationsClient(input: FeatureDeps): NotificationsClie
       bound(deps, "notifications", () => request<NotificationPage>(`/api/notifications${query({ limit: params.limit, cursor: params.cursor, unread: params.unread })}`)),
     summary: () => bound(deps, "notifications", () => request<NotificationSummary>("/api/notifications/summary")),
     mark: (body: NotificationMarkCommand) =>
-      boundResult<NotificationMarkResult, MarkResult>(deps, "notifications", () => request<NotificationMarkResult>("/api/notifications", body), (result) => ({ ok: true as const, result }), refusal),
+      boundResult<NotificationMarkResult, MarkResult>(deps, "notifications", () => request<NotificationMarkResult>("/api/notifications", body), (result) => ({ ok: true as const, result }), refusal, "command"),
     loadPreferences: () => bound(deps, "notifications", () => request<PreferencesView>("/api/notifications/preferences")),
     savePreferences: (body: PreferencesCommand) =>
-      boundResult<PreferencesView, PreferencesSaveResult>(deps, "notifications", () => request<PreferencesView>("/api/notifications/preferences", body), (view) => ({ ok: true as const, view }), refusal),
+      // E54: a transient 503 on a COMMAND never hides the whole centre (reads keep their classification).
+      boundResult<PreferencesView, PreferencesSaveResult>(deps, "notifications", () => request<PreferencesView>("/api/notifications/preferences", body), (view) => ({ ok: true as const, view }), refusal, "command"),
   };
 }
 
@@ -302,7 +321,7 @@ export function createPlatformClient(input: FeatureDeps): PlatformClient {
     load: {
       me: () => get<PlatformAccess>(`${PLATFORM}/me`),
       operators: (q) => get(listPath("operators", q)),
-      audit: (q) => get(listPath("audit", q)),
+      audit: (q) => boundLeaf(deps, () => request(listPath("audit", q))), // E32: page errors stay local
       settings: () => get(`${PLATFORM}/settings`),
       billingContact: (subject_kind, subject_id) => get(`${PLATFORM}/billing-contacts${query({ subject_kind, subject_id })}`),
       finance: () => get(`${PLATFORM}/finance`),
@@ -334,12 +353,14 @@ export function createPlatformClient(input: FeatureDeps): PlatformClient {
   };
 }
 
-export type PlatformView = "platform-operators" | "platform-finance" | "platform-moderation";
+export type PlatformView = "platform-operators" | "platform-finance" | "platform-moderation" | "platform-audit";
 /** Views opened only by the /me reply: the three back-office views and the A5 assistance queue. */
 export type OperatorView = PlatformView | "support-queue";
 /** Fail-closed gate for every operator view; the assistance queue needs the server capability `support`. */
 export function operatorViewAllowed(access: PlatformAccess | null | undefined, view: OperatorView): boolean {
   if (view === "support-queue") return !!access && access.capabilities?.support === true;
+  // E32: like the assistance queue, the audit journal entry follows the server capability `audit`.
+  if (view === "platform-audit") return !!access && access.capabilities?.audit === true;
   return platformViewAllowed(access, view);
 }
 /**
@@ -359,6 +380,8 @@ export function platformViewAllowed(access: PlatformAccess | null | undefined, v
       return caps.finance === true;
     case "platform-moderation":
       return caps.reviews_moderation === true;
+    case "platform-audit":
+      return caps.audit === true; // E32
     default:
       return false;
   }

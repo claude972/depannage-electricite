@@ -159,6 +159,8 @@ export function QuoteDraftEditor({
   const [conflict, setConflict] = useState<Conflict | null>(null);
   const [failure, setFailure] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  /** E43: this editor sent the draft and got no usable answer: a newly published quote may be its own. */
+  const [uncertainSend, setUncertainSend] = useState(false);
   /** ENT-13: grid the draft version `version` comes from (server-stated); dropped by any manual edit. */
   const [gridLink, setGridLink] = useState<{ source: GridSource; version: number } | null>(null);
   // Callbacks read the latest session without re-running the load effect on every render.
@@ -264,6 +266,7 @@ export function QuoteDraftEditor({
       "send",
     );
     if (result.ok) {
+      setUncertainSend(false);
       setEnvelope(result.envelope);
       setGridLink(null);
       setLines(DEFAULT_LINES);
@@ -278,7 +281,10 @@ export function QuoteDraftEditor({
       return;
     }
     if (result.conflict) setConflict({ message: result.message });
-    else setFailure(result.message);
+    else {
+      setUncertainSend(true); // the server may have published it anyway
+      setFailure(result.message);
+    }
   };
   const discard = async () => {
     if (!envelope?.draft) return;
@@ -300,6 +306,7 @@ export function QuoteDraftEditor({
     const my = ++seq.current;
     setPending("reload");
     setFailure("");
+    setUncertainSend(false);
     const env = await sessionRef.current.loadQuoteDraft(interventionId);
     if (my !== seq.current) return;
     setPending(null);
@@ -521,10 +528,17 @@ export function QuoteDraftEditor({
         <div className={`alert warning ${styles.conflict}`} role="alert">
           <Icon name="warning" size={17} />
           <div className={styles.conflictBody}>
-            <p>
-              <strong>Un devis a été publié par un autre canal.</strong> Rechargez le brouillon
-              avant d’enregistrer ; votre saisie est conservée.
-            </p>
+            {uncertainSend ? (
+              <p>
+                <strong>Votre envoi a pu aboutir malgré l’absence de réponse :</strong> un nouveau devis
+                est publié pour ce dossier. Rechargez le brouillon pour le vérifier ; votre saisie est conservée.
+              </p>
+            ) : (
+              <p>
+                <strong>Un devis a été publié par un autre canal.</strong> Rechargez le brouillon
+                avant d’enregistrer ; votre saisie est conservée.
+              </p>
+            )}
             <div className={styles.actions}>{reloadButton}</div>
           </div>
         </div>
