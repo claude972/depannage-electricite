@@ -82,6 +82,10 @@ function LivePanel({ api, context = DEFAULT_ADDRESS_CONTEXT, initial, newId = ad
   }, [ctrl]);
 
   const [form, setForm] = useState<AddressForm | null>(null);
+  /** E12: the record the open edit form is based on; a re-read with another version reloads the
+   *  untouched fields, keeps the typed ones, moves expected_version and flags the conflict. */
+  const [formBase, setFormBase] = useState<AddressForm | null>(null);
+  const [formConflict, setFormConflict] = useState(false);
   /** command_id of the form's save: one per operation, kept across retries of the SAME values. */
   const [formCommandId, setFormCommandId] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
@@ -159,9 +163,33 @@ function LivePanel({ api, context = DEFAULT_ADDRESS_CONTEXT, initial, newId = ad
     const s = ref.current;
     if (!s.writeError && !s.pending && s.saved) {
       setForm(null);
+      setFormBase(null);
+      setFormConflict(false);
       setFormCommandId(null);
+      return;
     }
+    // P1 (E12): a refusal without a pending replay (409 version, rights) re-reads the list at once;
+    // the open form is then rebased on the current version below.
+    if (!s.pending && s.writeError && form.expected_version !== null) void ctrl.load();
   };
+  const fresh = form && form.expected_version !== null ? state.records.find((r) => r.id === form.id) ?? null : null;
+  useEffect(() => {
+    if (!form || !formBase || !fresh || fresh.version === formBase.expected_version) return;
+    const next = editForm(fresh);
+    setForm((f) => {
+      if (!f || f.id !== next.id) return f;
+      const merged = { ...next } as AddressForm;
+      for (const k of Object.keys(next) as (keyof AddressForm)[]) {
+        if (k === "id" || k === "expected_version") continue;
+        if (f[k] !== formBase[k]) (merged as Record<string, unknown>)[k] = f[k]; // typed by the user: kept
+      }
+      return merged;
+    });
+    setFormBase(next);
+    setFormConflict(true);
+    setFormCommandId(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fresh?.version]);
   const quick = (run: (commandId: string) => Promise<boolean>) => {
     const got = ids(1);
     if (got) void run(got[0]);
@@ -233,6 +261,7 @@ function LivePanel({ api, context = DEFAULT_ADDRESS_CONTEXT, initial, newId = ad
             Adresse préférée
           </label>
           {preferred && preferred.id !== form.id && <p className={styles.hint}>{ADDRESS_COPY.otherPreferred(preferred.label)}</p>}
+          {formConflict && <p className={styles.error} role="alert" data-address-conflict="">Cette adresse a été modifiée entre-temps : sa version actuelle est rechargée ; vos modifications sont conservées. Vérifiez avant d’enregistrer.</p>}
           {state.writeError && (
             <p className={styles.error} role="alert" data-address-write-error="">
               {state.writeError}{" "}
@@ -281,7 +310,7 @@ function LivePanel({ api, context = DEFAULT_ADDRESS_CONTEXT, initial, newId = ad
                   </div>
                 ) : (
                   <div className={styles.actions}>
-                    <button type="button" className={styles.secondary} disabled={state.busy || Boolean(form)} onClick={() => { setErrors({}); setGeoNote(""); setFormCommandId(null); setForm(editForm(r)); }}>Modifier</button>
+                    <button type="button" className={styles.secondary} disabled={state.busy || Boolean(form)} onClick={() => { setErrors({}); setGeoNote(""); setFormCommandId(null); setForm(editForm(r)); setFormBase(editForm(r)); setFormConflict(false); }}>Modifier</button>
                     {r.is_preferred ? (
                       <button type="button" className={styles.secondary} disabled={state.busy || Boolean(form)} onClick={() => quick((c) => ctrl.setPreferred(r, false, c))} data-address-unprefer="">Retirer la préférence</button>
                     ) : (
