@@ -26,6 +26,8 @@ Sur A `974211b`, le test d’adaptation des migrations et 83 des 85 scripts SQL 
 
 La contre-recette E51 a monté le shell complet dans Chromium avec le SDK Supabase installé, une authentification de recette et un vrai WebSocket de boucle locale. Sur `93e5a5d`, la reconnexion ne produit aucun GET de rattrapage et la description précédente reste affichée. Sur A `c92b47f` avec B `99516ac`, deux abonnements sont observés autour de la coupure. La reconnexion produit exactement un GET, affiche la nouvelle description dans le même document et ne déclenche aucune mutation. Le typecheck et 56 tests ciblés d’interface passent également sur A `c92b47f` avec B `00e6e02`.
 
+Sur A `37126f9` et B `2e2d676`, le typecheck passe. La suite applicative donne 2 193 succès, 13 échecs et deux skips optionnels. Douze échecs portent les mêmes noms que ceux de la base. Le treizième survient dans la mini-application du harnais D4, au comptage de la requête lors du clic « Actualiser ». Le même scénario passe seul sur les mêmes commits. La suite complète reste rouge et les builds de ce checkpoint ne sont pas attestés.
+
 ## Rejeu natif de la chaîne complète
 
 Sur le SHA A `974211b`, les 101 migrations initiales et les 20 additives se sont appliquées dans l’ordre sur PostgreSQL 17.11 vierge. Vault, pg_cron et pg_net sont chargés, les départs de tâches et l’émission réseau sont neutralisés. La base de recette est arrêtée après vérification. Aucun changement hébergé.
@@ -128,7 +130,7 @@ Options : capacité non renseignée ou plafond paramétrable. Déterminer l’un
 
 ## Prérequis externes
 
-- E70 : changement de configuration Connect hors périmètre. La réponse d’erreur applicative est à traiter sur fixture synthétique.
+- E70 : le 503 explicite de l’application est vérifié avec le SDK Stripe et une réponse synthétique. La capacité de création de compte Connect reste à confirmer dans l’environnement de recette.
 - H01 : checklist avant recette hébergée. Identifier la preview par SHA et son ref, renseigner les variables Supabase pour ce ref sur un projet de recette isolé, vérifier l’historique des migrations et la disponibilité du barème public puis d’une lecture et d’une écriture authentifiées. Relever le résultat sans reprendre les preuves d’une autre preview.
 - Les six sous-cas ouverts du registre restent hors mission.
 
