@@ -312,6 +312,14 @@ function appValuesFrom(profile: ArtisanProfile | null): AppValues {
     categories: profile?.categories ?? [],
   };
 }
+/** E05: same upper bound as the server (app/api/artisan save_profile.employee_count ≤ 100 000). */
+const EMPLOYEE_MAX = 100000;
+const employeeError = (raw: string): string | undefined => {
+  const n = Number(raw);
+  if (!raw.trim() || !Number.isInteger(n) || n < 1) return "Indiquez un effectif entier d’au moins 1 (vous compris).";
+  if (n > EMPLOYEE_MAX) return "L’effectif ne peut pas dépasser 100 000.";
+  return undefined;
+};
 function missingItems(v: AppValues): string[] {
   const out: string[] = [];
   if (v.company_name.trim().length < 2) out.push("Nom de la société");
@@ -319,6 +327,7 @@ function missingItems(v: AppValues): string[] {
   if (!v.legal_status) out.push("Statut juridique");
   if (!Number.isInteger(Number(v.employee_count)) || Number(v.employee_count) < 1)
     out.push("Effectif (au moins 1, vous compris)");
+  else if (Number(v.employee_count) > EMPLOYEE_MAX) out.push("Effectif (100 000 au plus)");
   if (v.address.trim().length < 5) out.push("Adresse du siège");
   if (!v.postal_codes.length) out.push("Au moins un code postal d’intervention");
   if (!v.categories.length) out.push("Au moins une compétence");
@@ -3010,6 +3019,7 @@ function ApplicationForm({
   }
   async function saveDraft() {
     setTouched(true);
+    if (employeeError(values.employee_count)) return false; // E05: refused here, in French, no POST
     return onCommand(saveBody());
   }
   async function submitApplication() {
@@ -3140,12 +3150,12 @@ function ApplicationForm({
               ))}
             </select>
           </Field>
-          <Field label="Effectif (vous compris)">
+          <Field label="Effectif (vous compris)" error={touched ? employeeError(values.employee_count) : undefined}>
             <input
               required
               type="number"
               min="1"
-              max="999"
+              max={EMPLOYEE_MAX}
               step="1"
               value={values.employee_count}
               onChange={(e) => set("employee_count", e.target.value)}
