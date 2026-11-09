@@ -26,7 +26,7 @@ A `33d378f` et B `26464ef` ont été réunis dans un checkout temporaire. Typech
 | --- | ---: |
 | CORRIGÉ (avec suite verte) | 0 |
 | VÉRIFIÉ CIBLÉ (suite initiale rouge) | 14 |
-| CORRIGÉ PARTIEL | 12 |
+| CORRIGÉ PARTIEL | 13 |
 | NON REPRODUIT | 0 |
 | DÉCISION REQUISE | 4 |
 | REVERTÉ | 0 |
@@ -58,7 +58,7 @@ A `33d378f` et B `26464ef` ont été réunis dans un checkout temporaire. Typech
 | E53 | Mineur | CORRIGÉ PARTIEL | P3 | `b414386` | `sql-phase2-lot-a-documents-review.mjs` | Route documents site, helper Storage, migration additive | Deux objets/documents avant, 1/1 et reçu exact après. Remplacement et reprise de l’objet exact après interruption Storage vérifiés. Un objet privé sans métadonnée reste récupérable avec la clé initiale. Attend le lot B. |
 | E59 | Majeur | DÉCISION REQUISE | Décision | — | — | — | Photos avant/après. |
 | E60 | Majeur | DÉCISION REQUISE | Décision | — | — | — | Accusé de remise par le client. |
-| E61 | Majeur | À REPRODUIRE | Isolé | — | — | — | Pagination et CSV du rapport consolidé. |
+| E61 | Majeur | CORRIGÉ PARTIEL | Isolé | `fa9d690` | `sql-phase2-lot-a-reports-pagination-review.mjs` | Route rapports | HTTP sur PostgreSQL isolé : 503/422/503 avant, 200/200/200 après. 1 000 + 1 sites, totaux par page, CSV entier en flux, pas de résultat pour le tiers et interruption si la page finale est tronquée. Attend les contrôles de pagination B. |
 | E67 | Majeur | DÉCISION REQUISE | Décision | — | — | — | Justificatif de levée ERP. |
 | E68 | Mineur | CORRIGÉ PARTIEL | Isolé | `f183d49` | `phase2-lot-a-offline-draft-browser.mjs` | `public/offline-request.js` | Firefox conservait les champs et les deux moteurs gardaient la clé expirée. Après, formulaire vide et clé absente dans Firefox et WebKit, brouillon valide relu, transport coupé et zéro POST. Les installations existantes attendent une nouvelle génération du cache. |
 | E69 | Mineur | VÉRIFIÉ CIBLÉ | P7 | `7ccaeda` | `sql-phase2-lot-a-auth-session-review.mjs` | Route profile sessions | Vrai SDK et Next : `session_not_found` 503 avant, 401 après. `bad_jwt` reste 401, panne reste 503, nominal ferme seulement les autres sessions. |
@@ -88,6 +88,7 @@ A `33d378f` et B `26464ef` ont été réunis dans un checkout temporaire. Typech
 | E08/E10/E12/E62 | Éditeurs budget, zones, adresses et énergie | Les routes concernées ont déjà un contrat de version. Vérifier côté B le rechargement du formulaire et la transition après rejeu avant de modifier le serveur. |
 | E21/E24 | `components/features/site-operations/sla-panel.tsx`, `erp-panel.tsx` | Afficher les bornes et les refus immédiatement avec le même ordre de dates que l’API. |
 | E72 | `components/features/finance-proofs/model.ts:63` | Le champ `connected_charge_id` accepte ch_ ou py_ ; `charge_id` plateforme reste ch_. |
+| E61 | `components/features/enterprise-reports/model.ts` | Accepter `after=<UUID>` et `page` optionnel (`limit`, `has_more`, `next_after`) ; ajouter les contrôles de page et préserver le CSV sans `after`. Les montants des pages partielles ne sont pas des totaux globaux. |
 | E80 | `components/role/artisan-space.tsx:2302` | Lire le GET statut paiement du devis accepté. Champ optionnel `artisan_dispute` parmi `none`, `open`, `under_review`, `resolved`, `closed`, indépendant de l’état du règlement. Le journal finance reste privé. |
 
 ## Attendu de l’intégration
