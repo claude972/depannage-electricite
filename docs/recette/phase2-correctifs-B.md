@@ -58,7 +58,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E72 | Majeur | A + B | CORRIGÉ côté B (A : feeConnectedReference) | ch_ ou py_ pour la charge connectée | 976e6e3 | phase2-lot-b-e72-fee-connected-reference | finance-proofs/model.ts | rouge : preuve py_ illisible ; vert : py_/ch_ acceptés, charge plateforme ch_ seule, autres préfixes et liaisons refusés. Copie locale de la regex A à remplacer par l’import après intégration |
 | E75 | Majeur | A + Décision | DÉCISION | capacité artisan, null = illimité | — | — | — | aucun plafond choisi |
 | E76 | Majeur | A | CONTRAT A | plafond global rappel | | | lib, supabase | |
-| E78 | Majeur | A | CONTRAT A | reprise remboursement | | | supabase, lib | |
+| E78 | Majeur | A | HORS LOT B (corrigé par A) | reprise remboursement | Codex | — | supabase, lib | A confirmé et poussé ; aucun fichier B requis : le formulaire reprend déjà execution_id |
 | E80 | Majeur | A + B | CORRIGÉ (A f58df31) | état du litige artisan, libellé neutre | ec7d6f1, 8fa9749 | phase2-lot-b-e80-artisan-dispute | types.ts, artisan-space.tsx | rouge : aucune lecture ni mention ; vert : litige neutre (enregistré / examiné par la plateforme) à côté de « Réglé » inchangé, clé identité+génération+devis, relu à chaque actualisation ; none/absent/inconnu ⇒ rien |
 | E03 | Mineur | B | CORRIGÉ | 409 ⇒ relecture en place, motif conservé (P1) | 4800320 | phase2-lot-b-e03-moderation-conflict | platform-operations/shared.tsx, platform-moderation-view.tsx | rouge : renvoi version 1 ; vert : relecture, renvoi version 2 |
 | E05 | Mineur | B | À REPRODUIRE | validation locale effectif ≤ 100000 | | | role/artisan-space.tsx | |
@@ -66,7 +66,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E09 | Mineur | B | À REPRODUIRE | nom de secours « document » | | | components/app/uploads.ts | |
 | E10 | Mineur | B | À REPRODUIRE | rejeu réussi → édition (P3) | | | site-areas-panel.tsx | |
 | E12 | Mineur | B | CORRIGÉ | 409 ⇒ relecture dans le formulaire (P1/P2) | b238a1c | phase2-lot-b-e12-address-conflict | client-addresses-panel.tsx | rouge : ville v1 et version 1 renvoyées ; vert : ville v2 rechargée, libellé conservé, renvoi v2 |
-| E13 | Mineur | B | CORRIGÉ | devis expiré : acceptation retirée | 369d259 | phase2-lot-b-e13-expired-quote | client-space.tsx | rouge : bouton actif malgré validité dépassée ; vert : bouton retiré, explication, 0 POST ; devis valide inchangé |
+| E13 | Mineur | B | CORRIGÉ | devis expiré : action seulement sur validité confirmée | 369d259, 7f9fad9 | phase2-lot-b-e13-expired-quote | client-space.tsx | rouge : bouton actif (expiré, lecture retenue, lecture refusée) ; vert : action seulement après lecture réussie valide/non renseignée, états vérification/refus distincts + Réessayer, démo inchangée. Faux client de recipient-quotes.test.ts complété (assertions inchangées) |
 | E14 | Mineur | B | CORRIGÉ | refus d’acceptation ⇒ relecture ponctuelle (P1) | e8bfd00 | phase2-lot-b-e14-lost-offer | available-missions-model.ts | rouge : 0 relecture, bouton actif ; vert : 1 POST, relecture 404, offre retirée |
 | E18 | Mineur | A + B | CORRIGÉ (dépend de A 7de6d11) | command_id du rapport (P3) | 4049d5d | phase2-lot-b-e18-report-command-id | types.ts, artisan-space.tsx | rouge : aucune clé ; vert : même clé et saisie après réponse perdue, nouvelle clé après succès |
 | E19 | Mineur | A | CONTRAT A | nom vide accepté par la route | | | app/api | formulaire déjà conforme |
