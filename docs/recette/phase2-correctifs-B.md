@@ -55,7 +55,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E64 | Majeur | B | CORRIGÉ | 403 → relire/purger (P1) | 3698ea6 | phase2-lot-b-e64-coownership-revoked | coownership-model.ts | rouge : 0 GET après 403 ; vert : relecture, purge |
 | E67 | Majeur | Décision | DÉCISION | justificatif de levée | — | — | — | fiche ci-dessous |
 | E70 | Majeur | A | HORS LOT B (partiel A) | erreur Connect | Codex | — | app/api/payments | partiel côté A, configuration externe |
-| E72 | Majeur | A | HORS LOT B | ApplicationFee py_ | | | lib | externe Stripe |
+| E72 | Majeur | A + B | CORRIGÉ côté B (A : feeConnectedReference) | ch_ ou py_ pour la charge connectée | 976e6e3 | phase2-lot-b-e72-fee-connected-reference | finance-proofs/model.ts | rouge : preuve py_ illisible ; vert : py_/ch_ acceptés, charge plateforme ch_ seule, autres préfixes et liaisons refusés. Copie locale de la regex A à remplacer par l’import après intégration |
 | E75 | Majeur | A + Décision | DÉCISION | capacité artisan, null = illimité | — | — | — | aucun plafond choisi |
 | E76 | Majeur | A | CONTRAT A | plafond global rappel | | | lib, supabase | |
 | E78 | Majeur | A | CONTRAT A | reprise remboursement | | | supabase, lib | |
@@ -103,7 +103,7 @@ Sous-cas externes avec condition ouverte (PUB-10.1, CLI-05.2, CLI-08.1, ADM-01.1
 
 Mise à jour à chaque commit d’item.
 
-- CORRIGÉ (29 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E06, E14, E15, E18, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E41, E44, E45, E48, E49, E50, E52, E53, E54, E55, E56, E62, E63, E64. E15/E18/E29/E34/E36/E41/E53 exigent les routes A à l’intégration.
+- CORRIGÉ (30 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E06, E14, E15, E18, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E41, E44, E45, E48, E49, E50, E52, E53, E54, E55, E56, E62, E63, E64, E72. E15/E18/E29/E34/E36/E41/E53/E72 exigent les contrats A à l’intégration.
 - ROUGE : aucun.
 - À REPRODUIRE : voir tableau.
 - NON REPRODUIT : aucun.
