@@ -17,10 +17,10 @@ async function checkedId(context: Context) {
   if (!uuid.safeParse(id).success) throw new ApiError(422, "Identifiant de dossier invalide.");
   return id;
 }
-export async function GET(_request: Request, context: Context) {
+export async function GET(request: Request, context: Context) {
   try {
     const id = await checkedId(context);
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     // RLS determines dossier access before any dependent record is returned.
     const job = await db.from("interventions").select("id,travel_stage,report_evidence_required").eq("id", id).maybeSingle();
     dbError(job.error);
@@ -51,7 +51,7 @@ export async function POST(request: Request, context: Context) {
   try {
     assertOrigin(request);
     const id = await checkedId(context);
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     const data = await validated(request, schema);
     let result;
     switch (data.action) {

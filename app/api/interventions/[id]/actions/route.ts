@@ -31,7 +31,7 @@ export async function POST(
 ) {
   try {
     assertOrigin(request);
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     const { id } = await context.params;
     if (!uuid.safeParse(id).success)
       throw new ApiError(422, "Identifiant de dossier invalide.");

@@ -29,7 +29,29 @@ export async function serverClient() {
     },
   });
 }
-export async function authenticatedClient() {
+export async function authenticatedClient(request?: Request) {
+  const authorization = request?.headers.get("authorization");
+  if (authorization != null) {
+    const match = /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/i.exec(authorization);
+    if (!match || authorization.length > 8192)
+      throw new ApiError(401, "Connectez-vous pour accéder à cet espace.");
+    const token = match[1];
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+    if (!url || !key)
+      throw new ApiError(503, "Les comptes sont en cours de configuration.");
+    const db = createClient(url, key, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+    const { data: { user }, error } = await db.auth.getUser(token);
+    if (error && ![400, 401, 403].includes(error.status ?? 0))
+      throw new ApiError(503, "La vérification de la session est momentanément indisponible.");
+    if (error || !user)
+      throw new ApiError(401, "Connectez-vous pour accéder à cet espace.");
+    return { db, user };
+  }
+
   const db = await serverClient();
   const {
     data: { user },

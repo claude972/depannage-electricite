@@ -20,7 +20,7 @@ export const runtime = "nodejs";
 async function readDocuments(request: Request) {
   let signedRequest = false;
   try {
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     const id = new URL(request.url).searchParams.get("id");
     if (!id) {
       const { data, error } = await db
@@ -57,7 +57,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     assertOrigin(request);
-    const { db, user } = await authenticatedClient();
+    const { db, user } = await authenticatedClient(request);
     if (Number(request.headers.get("content-length") || 0) > MAX_REQUEST_BYTES)
       throw new ApiError(413, "Le fichier doit faire moins de 4 Mo.");
     const form = await request.formData();

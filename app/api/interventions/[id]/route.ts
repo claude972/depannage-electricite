@@ -3,9 +3,9 @@ import { detailIdSchema, readInterventionDetail } from "@/lib/features/workspace
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store" };
 const missing = () => Response.json({ error: "Ce dossier est introuvable." }, { status: 404, headers });
-export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     const { id } = await context.params;
     if (!detailIdSchema.safeParse(id).success) return missing();
     const detail = await readInterventionDetail(db, id.toLowerCase());

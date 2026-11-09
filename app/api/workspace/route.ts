@@ -3,9 +3,9 @@ import { authenticatedClient, apiError, dbError } from "@/lib/supabase/server";
 import { DetailReadUnavailable, workspaceWindow } from "@/lib/features/workspace/detail-read";
 import { clientWorkspaceCounters } from "@/lib/features/client-interventions/contract";
 export const dynamic = "force-dynamic";
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const { db, user } = await authenticatedClient();
+    const { db, user } = await authenticatedClient(request);
     const [
       profile,
       jobs,

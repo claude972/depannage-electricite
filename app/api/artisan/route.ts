@@ -13,7 +13,7 @@ const schema = z.discriminatedUnion("action", [
 const privateHeaders = { "Cache-Control": "private, no-store" };
 export async function GET(request: Request) {
   try {
-    const { db, user } = await authenticatedClient();
+    const { db, user } = await authenticatedClient(request);
     const target = new URL(request.url).searchParams.get("user_id") ?? user.id;
     if (!uuid.safeParse(target).success) throw new ApiError(422, "Identifiant artisan invalide.");
     const profile = await db.from("profiles").select("role").eq("id", user.id).single();
@@ -30,7 +30,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     assertOrigin(request);
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     const data = await validated(request, schema);
     let result;
     switch (data.action) {

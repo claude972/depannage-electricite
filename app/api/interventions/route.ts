@@ -24,7 +24,7 @@ const schema = z
 export async function POST(request: Request) {
   try {
     assertOrigin(request);
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     const data = await validated(request, schema);
     const { data: result, error } = await db.rpc(data.request_id ? "create_intervention_once_reviewed" : "create_intervention_reviewed", {
       ...(data.request_id ? { p_request_id: data.request_id } : {}),

@@ -21,7 +21,7 @@ const schema = z
 export async function PATCH(request: Request) {
   try {
     assertOrigin(request);
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     const data = await validated(request, schema);
     const { data: profile, error } = await (data.first_name !== undefined && data.last_name !== undefined
       ? db.rpc("update_profile_name", {

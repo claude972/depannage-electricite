@@ -10,7 +10,7 @@ const attemptSchema=z.object({id:uuid,...fields}).strict();
 const disputeState = z.enum(["none", "open", "under_review", "resolved", "closed"]);
 export async function GET(request: Request) {
  try {
-  const {db,user}=await authenticatedClient();const query=new URL(request.url).searchParams;
+  const {db,user}=await authenticatedClient(request);const query=new URL(request.url).searchParams;
   if([...query].length!==1||!query.has("quote_id")||!uuid.safeParse(query.get("quote_id")).success)throw new ApiError(422,"Référence de devis invalide.");
   const quoteId=query.get("quote_id")!.toLowerCase();const quote=await db.from("quotes").select("id,artisan_id,status").eq("id",quoteId).maybeSingle();dbError(quote.error);
   if(!quote.data)throw new ApiError(404,"Ce devis est introuvable.");

@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 const privateHeaders = { "Cache-Control": "private, no-store" };
 export async function GET(request: Request) {
   try {
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     return Response.json(await readMessageHistory(db, messageHistoryQuery(request.url)), { headers: privateHeaders });
   } catch (error) {
     if (error instanceof MessageHistoryError)
@@ -28,7 +28,7 @@ const schema = z
 export async function POST(request: Request) {
   try {
     assertOrigin(request);
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     const data = await validated(request, schema);
     const { data: result, error } = await db.rpc("send_message", {
       p_intervention_id: data.intervention_id,
