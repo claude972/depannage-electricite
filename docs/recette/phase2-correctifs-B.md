@@ -18,7 +18,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E28 | Bloquant | A | HORS LOT B | Zod version ≥0 | Codex | — | lib, app/api | en cours chez Codex |
 | E73 | Bloquant | A | HORS LOT B | regex PostgreSQL | Codex | — | supabase | en cours chez Codex |
 | E74 | Bloquant | A | HORS LOT B | corps pg_net vide | Codex | — | supabase, lib | en cours chez Codex |
-| E02 | Majeur | B | À REPRODUIRE | état photo par fil | | | components/app/forms.tsx | isolé |
+| E02 | Majeur | B | CORRIGÉ | issue du dépôt conservée hors montage, reprise sans second dépôt | 687270d | phase2-lot-b-e02-photo-thread-switch | components/app/forms.tsx | rouge : brouillon bloqué « uploading » (retour après et avant le reçu) ; vert : reçu repris, 1 dépôt, 1 envoi sur A, jamais sur B ; identité changée ⇒ rien (vert avant/après) |
 | E04 | Majeur | B | CORRIGÉ | égalité profonde de la commande stockée (P7) | 03239bd | phase2-lot-b-e04-reminder-storage | payment-reminders/model.ts, payment-reminder-control.tsx | rouge : « stockage indisponible », 0 POST ; vert : programmer puis annuler, 1 POST chacun |
 | E07 | Majeur | A | CONTRAT A | verrou site archivé SQL | | | supabase, app/api | UI déjà lecture seule |
 | E08 | Majeur | B | CORRIGÉ | 409 ⇒ relecture dans le formulaire (P1/P2) | e739cb1 | phase2-lot-b-e08-budget-conflict | budget-panel.tsx (+ relecture c91f30d) | rouge : note v1 renvoyée, note concurrente écrasée ; vert : note v2 rechargée, montant conservé, conflit, renvoi v2 |
@@ -88,7 +88,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E58 | Mineur | B | CORRIGÉ | profil relu à chaque navigation interne (P6) | f1271fc | phase2-lot-b-e58-e79-public-profile | use-published-profile.ts, public-site.tsx | rouge : 0 GET, ancien exploitant affiché ; vert : relecture, ancien exploitant absent |
 | E62 | Mineur | B | CORRIGÉ | rejeu réussi → édition (P3) | fcf1abd | phase2-lot-b-e62-e63-energy | site-energy-panel.tsx | rouge : formulaire en création, expected_version null ; vert : édition v1 |
 | E65 | Mineur | B | CORRIGÉ | présélection Artisan à l’inscription | 7e2d98f | phase2-lot-b-e65-artisan-signup | forms.tsx, public-site.tsx | rouge : « Particulier » présélectionné ; vert : Artisan électricien + explication d’approbation, aucun envoi |
-| E66 | Mineur | B | CORRIGÉ | lecture automatique du dossier entreprise masqué par la fenêtre de sites | 2abbdb8, 8fda19e | phase2-lot-b-e66-detail-out-of-cache-site | use-detail-presence.ts, enterprise-space.tsx | rouge : 0 GET avant « Ouvrir quand même » ; vert : GET auto + détail exact, tiers 404. Contre-revue : déclencheur restreint à l’option siteWindowMayHide (aucun GET superflu ailleurs). Vérifié par Codex sur le vrai 101e site (version large) |
+| E66 | Mineur | B | CORRIGÉ | lecture automatique du dossier entreprise masqué par la fenêtre de sites | 2abbdb8, 8fda19e | phase2-lot-b-e66-detail-out-of-cache-site | use-detail-presence.ts, enterprise-space.tsx (suivi 15bbfb5 : site absent du cache) | rouge : 0 GET avant « Ouvrir quand même » ; vert : GET auto + détail exact, tiers 404. Contre-revue : déclencheur restreint à l’option siteWindowMayHide (aucun GET superflu ailleurs). Vérifié par Codex sur le vrai 101e site (version large) |
 | E68 | Mineur | A | HORS LOT B (partiel A) | public/offline-request.js | Codex | — | public/ | partiel côté A jusqu’au changement de cache hors périmètre |
 | E69 | Mineur | A | CONTRAT A | session_not_found → 401 | | | app/api/profile/sessions | |
 | E71 | Mineur | B | CORRIGÉ | opted_in=true + browser=none = retrait (P7) | ab303ea | phase2-lot-b-e71-push-remove | web-push-panel.tsx | rouge : échec affiché, pas d’unsubscribe ; vert : retrait, unsubscribe, aucune alerte |
@@ -103,7 +103,7 @@ Sous-cas externes avec condition ouverte (PUB-10.1, CLI-05.2, CLI-08.1, ADM-01.1
 
 Mise à jour à chaque commit d’item.
 
-- CORRIGÉ (57 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E04, E05, E06, E08, E09, E10, E11, E12, E13, E14, E15, E16, E17, E18, E20, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E39, E40, E41, E42, E43, E44, E45, E46, E47, E48, E49, E50, E51, E52, E53, E54, E55, E56, E57, E58, E61, E62, E63, E64, E65, E66, E71, E72, E79, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : A f58df31).
+- CORRIGÉ (58 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E02, E03, E04, E05, E06, E08, E09, E10, E11, E12, E13, E14, E15, E16, E17, E18, E20, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E39, E40, E41, E42, E43, E44, E45, E46, E47, E48, E49, E50, E51, E52, E53, E54, E55, E56, E57, E58, E61, E62, E63, E64, E65, E66, E71, E72, E79, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : A f58df31).
 - VÉRIFIÉ À L’INTÉGRATION sans code B : E21, E24.
 - ROUGE : aucun.
 - À REPRODUIRE : voir tableau.
