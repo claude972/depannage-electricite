@@ -26,7 +26,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E15 | Majeur | B + A | CORRIGÉ (dépend de A 258f44e) | expected_version du créneau (P2) | c1b5ddf | phase2-lot-b-e15-appointment-version | types.ts, client-space.tsx, artisan-space.tsx, enterprise-space.tsx | rouge : expected_version absent (client et artisan) ; vert : version lue (0 en création), refus ⇒ relecture 13 h, saisie conservée, conflit signalé, renvoi v2 |
 | E16 | Majeur | B | À REPRODUIRE | Actualiser recharge opérations + rappel (P1/P6) | | | role/client-space.tsx, appointment-reminders | |
 | E17 | Majeur | B | À REPRODUIRE | réponse GET ancienne après arrêt | | | features/tracking/tracking-card.tsx | |
-| E20 | Majeur | B | À REPRODUIRE | 404 → relire/purger (P1) | | | advanced-approvals | |
+| E20 | Majeur | B | CORRIGÉ | 404 ⇒ relecture, lecture refusée purge (P1) | 1508558 | phase2-lot-b-e20-approval-revoked | advanced-approvals/model.ts, approvals.tsx | rouge : 0 relecture, historique et actions conservés ; vert : relecture, purge, 1 POST |
 | E21 | Majeur | A (schéma partagé) | VÉRIFIÉ À L’INTÉGRATION, aucun code B | faits constatés non futurs (P4) | — | contrôle privé `phase3-lot-b-private/e21-e24-with-a-schema.mts` | — | les formulaires B importent `slaCasePayload` : B seul 1 commande envoyée (rouge), avec le schéma A 0 commande et message immédiat. Non compté comme correctif B |
 | E24 | Majeur | A (schéma partagé) | VÉRIFIÉ À L’INTÉGRATION, aucun code B | levée ≥ contrôle, non future (P4) | — | même contrôle privé | — | `erpChecklistPayload` partagé : B seul 1 commande (rouge), avec A 0 commande et message immédiat. Non compté comme correctif B |
 | E25 | Majeur | A | CONTRAT A | date d’effet des grilles (P4) | | | supabase | côté B : affichage si contrat change |
@@ -38,8 +38,8 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E35 | Majeur | B | CORRIGÉ | action « Demander des corrections » | 43ee0b9 | phase2-lot-b-e34-e35-e36-artisan-decisions | forms.tsx | rouge : seule action « Approuver » ; vert : request_changes envoyé, statut changes_requested |
 | E37 | Majeur | A | HORS LOT B (validé par A) | prédicat d’offre et congés | Codex | — | supabase | validé côté A selon Codex |
 | E38 | Majeur | B | CORRIGÉ | 403/404 → relire/purger (P1) | bd77186 | phase2-lot-b-e38-credential-review-revoked | credential-reviews-model.ts | rouge : 0 GET après 403 ; vert : 1 POST, relecture, purge motifs et formulaire |
-| E39 | Majeur | B | À REPRODUIRE | 401 → purge fil (P1) | | | message-history.ts, forms.tsx | |
-| E40 | Majeur | B | À REPRODUIRE | relire contact à la réouverture (P1) | | | forms.tsx ConversationContact | |
+| E39 | Majeur | B | CORRIGÉ | 401 ⇒ purge du fil (P1) | 241cbc2 | phase2-lot-b-e39-message-session-expired | forms.tsx | rouge : 5 messages et saisie conservés ; vert : purge, reconnexion. Test existant message-history 4b (qui figeait ce défaut) mis à jour vers la purge |
+| E40 | Majeur | B | CORRIGÉ | réouverture du contact ⇒ relecture (P1) | 38541ef | phase2-lot-b-e40-contact-reread | forms.tsx | rouge : contact réaffiché sans lecture (contre-épreuve sans correctif refaite) ; vert : relecture, rien sans droit |
 | E42 | Majeur | B | À REPRODUIRE | workspace sans dossier → purge fil (P1) | | | artisan-space.tsx, forms.tsx | |
 | E44 | Majeur | B | CORRIGÉ | 404 pagination → purge (P1) | ca0f8a3 | phase2-lot-b-e44-e45-invoices-pagination | invoices-model.ts, customer-invoices-panel.tsx | rouge : 25 lignes et PDF après 404 ; vert : purge + refus |
 | E48 | Majeur | B | CORRIGÉ | 403 pagination → purge (P1) | d5b1a3b | phase2-lot-b-e48-e49-saved-methods-pagination | saved-payment-methods/model.ts | rouge : 20 cartes après 403 ; vert : purge immédiate, 0 POST |
@@ -103,7 +103,7 @@ Sous-cas externes avec condition ouverte (PUB-10.1, CLI-05.2, CLI-08.1, ADM-01.1
 
 Mise à jour à chaque commit d’item.
 
-- CORRIGÉ (34 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E06, E08, E12, E14, E15, E18, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E41, E44, E45, E48, E49, E50, E52, E53, E54, E55, E56, E62, E63, E64, E72, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : SHA backend à venir).
+- CORRIGÉ (37 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E06, E08, E12, E14, E15, E18, E20, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E39, E40, E41, E44, E45, E48, E49, E50, E52, E53, E54, E55, E56, E62, E63, E64, E72, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : SHA backend à venir).
 - VÉRIFIÉ À L’INTÉGRATION sans code B : E21, E24.
 - ROUGE : aucun.
 - À REPRODUIRE : voir tableau.
@@ -174,5 +174,6 @@ Ces échecs ne sont ni affaiblis ni supprimés par B.
 - Checkpoint A : les 12 mêmes échecs préexistants sur HEAD, deux builds OK. La suite globale n’est pas qualifiée verte.
 - Contrats A E15 et E29 publiés dans le signal (voir Attendu de l’autre lot).
 - Règles P1 communes livrées (961e24d) : `components/app/refusal.ts` (401 purge immédiate, 403/404 relecture avant tout POST, refus de lecture = purge, 409 conflit, invalide, transitoire) ; chaque panneau fournit seulement son adaptateur de relecture. Test `phase2-lot-b-refusal-rules`.
+- Test existant modifié (P1 exigé, E39) : `tests/ui/message-history.test.ts` cas 4b, « messages conservés après 401 » (le défaut lui-même) remplacé par purge + saisie absente.
 - Test existant modifié (P1 exigé) : `tests/ui/erp-command-transient.test.ts`, l’assertion 401/403 interdisait toute relecture ; remplacée par « exactement une relecture des droits », classification et formulaire inchangés.
 - Test existant modifié (contrat changé par A, pas d’affaiblissement) : `tests/ui/artisan-admin-status.test.ts`, deux assertions figeaient `{ user_id, approved }` et une seule action pour « soumis ». Remplacées par le nouveau corps exact et les deux actions (E35), même rigueur.
