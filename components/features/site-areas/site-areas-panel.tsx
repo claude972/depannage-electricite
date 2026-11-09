@@ -92,6 +92,17 @@ function SitePanel({ siteId, api, context = DEFAULT_AREAS_CONTEXT, demo = false,
     const s = ref.current;
     if (!s.writeError && !s.pending && s.saved) setForm(null); // 409 / 404 / 422 / 503 keep the values
   };
+  /** Explicit replay of the pending command. A confirmed replay of a save turns the still-open form
+   *  into the edition of the saved area (id + version), never a second creation (E10, P3). */
+  const retry = async () => {
+    const sent = ref.current.pending;
+    await ctrl.retry();
+    const s = ref.current;
+    if (!sent || s.pending || s.writeError || !s.saved) return;
+    const saved = sent.action === "save" ? s.records.find((x) => x.id === sent.id) : undefined;
+    setForm((f) => (f && saved ? editAreaForm(saved) : null));
+    setErrors({});
+  };
   const confirmArchive = async (r: SiteArea) => {
     const commandId = newId();
     if (!commandId) return setNoId(true);
@@ -103,7 +114,7 @@ function SitePanel({ siteId, api, context = DEFAULT_AREAS_CONTEXT, demo = false,
     <div className={styles.error} role="alert">
       {state.writeError}{" "}
       {state.pending ? (
-        <button type="button" className={styles.secondary} disabled={state.busy} onClick={() => void ctrl.retry()} data-areas-retry="">Réessayer</button>
+        <button type="button" className={styles.secondary} disabled={state.busy} onClick={() => void retry()} data-areas-retry="">Réessayer</button>
       ) : (
         <button type="button" className={styles.secondary} disabled={state.busy} onClick={() => void ctrl.load()} data-areas-reload="">Actualiser</button>
       )}
