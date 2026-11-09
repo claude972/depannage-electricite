@@ -234,6 +234,7 @@ export default function CourantApp() {
     setIdentityEpoch((e) => e + 1); // any in-flight mutation chain is now foreign
     runner.reset();
     userId.current = null;
+    inheritedReturn.current = null; // E47: never survives an identity change (401 included)
     setData(EMPTY_WORKSPACE);
     setProfessional(EMPTY_PROFESSIONAL);
     setCapabilities(UNKNOWN_CAPABILITIES);
@@ -430,11 +431,13 @@ export default function CourantApp() {
             return;
           }
           if (nextId && nextId !== userId.current) {
-            // E47: a booking return hint read while signed out survives this first sign-in only.
+            // E47: a booking return hint read while signed out survives this first sign-in only:
+            // computed BEFORE the clean-up, assigned AFTER it (clearSessionState empties it).
             const hint = returnRef.current;
-            inheritedReturn.current = userId.current === null && hint?.kind === "booking" && hint.state === "success" ? hint.requestId : null;
+            const inherited = userId.current === null && hint?.kind === "booking" && hint.state === "success" ? hint.requestId : null;
             // Another account (same browser, other tab or renewed session): start clean.
             clearSessionState();
+            inheritedReturn.current = inherited;
             userId.current = nextId;
             void refresh();
           }
@@ -1347,10 +1350,13 @@ export default function CourantApp() {
   async function checkPendingCardHold() {
     const me = userId.current;
     if (!me || modeRef.current !== "live") return;
+    const generation = guard.generation();
     pendingCheckedFor.current = me;
     setPendingLookup("idle");
     const r = await lookupPending((p) => api(p));
-    if (userId.current !== me) return; // late reply for another identity
+    // Late reply for another identity, another generation (sign-out/sign-in of the same UID) or
+    // outside live mode: nothing applied, nothing posted (E47 counter-review).
+    if (userId.current !== me || guard.generation() !== generation || modeRef.current !== "live") return;
     if (!r.ok) {
       setPendingLookup("error");
       return;
