@@ -101,7 +101,7 @@ test("E53 — retrying a committed site upload returns the exact document withou
       assert.deepEqual(await retriedReplacement.json(), replacementReceipt);
       assert.deepEqual(await (await post(id)).json(), initial);
       assert.equal(objects.size, 3);
-    }, { SUPABASE_SERVICE_ROLE_KEY: serviceKey }, { handle, rpcAllowlist: new Set([
+    }, { SUPABASE_SERVICE_ROLE_KEY: serviceKey }, { handle, compositeRpcs: new Set(["site_document_upload_command"]), rpcAllowlist: new Set([
       "can_manage_site", "check_upload_limit", "finalize_site_document_upload", "site_document_upload_command",
     ]) });
   } finally {

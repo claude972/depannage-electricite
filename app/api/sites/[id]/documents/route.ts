@@ -24,6 +24,7 @@ const documentSchema = z.object({
   replaced_at: instant.nullable(), archived_at: instant.nullable(),
 }).strict();
 const finalizedSchema = documentSchema.extend({ owner_id: uuid, path: z.string() }).strict();
+const finalizedColumns = Object.keys(finalizedSchema.shape);
 const cursorSchema = z.object({ v: z.literal(2), actor: uuid, site: uuid, id: uuid, at: instant, state: stateSchema }).strict();
 const archiveCommand = z.object({
   id: uuid, action: z.enum(["archive", "restore"]), expected_revision: revision.max(2147483646),
@@ -54,6 +55,13 @@ function publicDocument(value: unknown) {
   if (!row.success) return null;
   const { owner_id: ownerId, path, ...document } = row.data;
   return { ownerId, path, document };
+}
+
+function isNullDocumentRow(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const row = value as Record<string, unknown>;
+  return Object.keys(row).length === finalizedColumns.length
+    && finalizedColumns.every(column => Object.hasOwn(row, column) && row[column] === null);
 }
 
 function failure(error: unknown) {
@@ -164,7 +172,11 @@ export async function POST(request: Request, context: Context) {
       p_site: siteId, p_command_id: id, p_name: name, p_mime: verdict.mime, p_kind: kind.data,
       p_replaces: replaces.data, p_content_sha256: createHash("sha256").update(bytes).digest("hex"),
     };
-    const readback = () => db.rpc("site_document_upload_command", { ...args, p_finalize: false });
+    const readback = async () => {
+      const result = await db.rpc("site_document_upload_command", { ...args, p_finalize: false });
+      // PostgREST serializes a SQL NULL composite as a row of null columns.
+      return !result.error && isNullDocumentRow(result.data) ? { ...result, data: null } : result;
+    };
     const project = (value: unknown) => {
       const projected = publicDocument(value);
       if (!projected) return null;

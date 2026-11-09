@@ -81,7 +81,7 @@ function fakeSession(user) {
   return { token, cookie, user };
 }
 
-export async function withNext(db, check, extraEnv = {}, { users = [actor], rpcAllowlist = rpcNames, serviceRpcAllowlist = deliveryRpcs, sqlMessageAllowlist = new Set(), handle } = {}) {
+export async function withNext(db, check, extraEnv = {}, { users = [actor], rpcAllowlist = rpcNames, serviceRpcAllowlist = deliveryRpcs, sqlMessageAllowlist = new Set(), compositeRpcs = new Set(), handle } = {}) {
   const sessions = new Map(users.map(user => [user.id, fakeSession(user)]));
   const byAuthorization = new Map([...sessions.values()].map(session => ["Bearer " + session.token, session.user]));
   const rejectedSql = [];
@@ -104,7 +104,10 @@ export async function withNext(db, check, extraEnv = {}, { users = [actor], rpcA
       const fields = Object.keys(args);
       assert.ok(fields.every(field => /^p_[a-z][a-z0-9_]*$/.test(field)));
       const call = fields.map((field, i) => `${field} => $${i + 1}`).join(", ");
-      const sql = `select to_jsonb(public.${rpc}(${call})) v`;
+      // PostgREST projects a nullable composite RPC as a row, with nulls in every column.
+      const sql = compositeRpcs.has(rpc)
+        ? `select to_jsonb(result) v from public.${rpc}(${call}) result`
+        : `select to_jsonb(public.${rpc}(${call})) v`;
       const data = isService
         ? await db.transaction(async tx => {
           await tx.exec("set local role service_role");
