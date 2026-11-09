@@ -56,14 +56,21 @@ function attachOfflineForm() {
   let storage;
   try {
     storage = window.sessionStorage;
-    const draft = readPublicDraft(storage.getItem(PUBLIC_DRAFT_KEY));
+    const raw = storage.getItem(PUBLIC_DRAFT_KEY);
+    const draft = readPublicDraft(raw);
     if (draft) {
       for (const [name, value] of Object.entries(draft.values)) {
         const control = form.elements.namedItem(name);
         if (control && "value" in control) control.value = value;
       }
       tell("Brouillon local retrouvé dans cet onglet. Il n’a pas été envoyé. Il expire 30 minutes après son dernier enregistrement.");
-    } else tell("Aucun brouillon local valide. Enregistrez explicitement vos notes ; rien n’est envoyé.");
+    } else {
+      if (raw !== null) clearPublicDraft(storage);
+      form.reset();
+      // Firefox may restore form controls on reload after the initial script has run.
+      window.addEventListener("pageshow", () => form.reset(), { once: true });
+      tell("Aucun brouillon local valide. Enregistrez explicitement vos notes ; rien n’est envoyé.");
+    }
   } catch { tell("Stockage local indisponible : rien n’a été enregistré. Gardez vos notes dans ce formulaire ou copiez-les avant de quitter cette page."); }
   form.addEventListener("submit", event => {
     event.preventDefault();
