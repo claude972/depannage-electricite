@@ -2333,18 +2333,24 @@ function ParticipantsPanel({
   );
 }
 const DISPUTE_LINE: Partial<Record<ArtisanDisputeState, { tone: Tone; label: string; text: string }>> = {
-  open: { tone: "amber", label: "Litige ouvert", text: "Le client a contesté ce règlement auprès de sa banque. Le traitement est suivi par la plateforme ; vous serez informé de son issue." },
-  under_review: { tone: "amber", label: "Litige en cours d’examen", text: "La contestation de ce règlement est en cours d’examen. Le traitement est suivi par la plateforme ; vous serez informé de son issue." },
-  resolved: { tone: "neutral", label: "Litige résolu", text: "La contestation de ce règlement a été traitée." },
-  closed: { tone: "neutral", label: "Litige clos", text: "La contestation de ce règlement est close." },
+  // Neutral wording (review of A f58df31): the origin may be the client, the artisan or the
+  // platform; nothing here asserts a bank chargeback or a future notification.
+  open: { tone: "amber", label: "Litige enregistré", text: "Un litige est enregistré sur ce règlement." },
+  under_review: { tone: "amber", label: "Litige examiné par la plateforme", text: "Un litige sur ce règlement est en cours d’examen par la plateforme." },
+  resolved: { tone: "neutral", label: "Litige résolu", text: "Le litige enregistré sur ce règlement est résolu." },
+  closed: { tone: "neutral", label: "Litige clos", text: "Le litige enregistré sur ce règlement est clos." },
 };
 /** E80: dispute state of the accepted quote, from GET /api/payments/status (optional field). */
 function useArtisanDispute(session: Session, quoteId: string | null): ArtisanDisputeState | null {
   const [state, setState] = useState<{ key: string; value: ArtisanDisputeState | null } | null>(null);
-  const key = quoteId && session.mode === "live" ? `${session.profileId}|${quoteId}` : "";
+  // Keyed by identity + session generation + quote: never survives a session change; every rights /
+  // workspace refresh (refreshedAt) re-reads it for the same quote (no loop: the read changes neither).
+  const key = quoteId && session.mode === "live" ? `${session.profileId}|${session.mutationContext.generation()}|${quoteId}` : "";
+  const refreshed = session.refreshedAt;
   const load = useRef(session.loadPaymentStatus);
   load.current = session.loadPaymentStatus;
   useEffect(() => {
+    setState(null); // a re-read never shows the previous answer meanwhile
     if (!key || !quoteId) return;
     let active = true;
     void load.current(quoteId).then((report) => {
@@ -2354,7 +2360,7 @@ function useArtisanDispute(session: Session, quoteId: string | null): ArtisanDis
     return () => {
       active = false;
     };
-  }, [key, quoteId]);
+  }, [key, quoteId, refreshed]);
   return state && state.key === key ? state.value : null;
 }
 function PaymentPanel({ session, intervention: i }: { session: Session; intervention: Intervention }) {

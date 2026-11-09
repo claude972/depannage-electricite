@@ -29,11 +29,12 @@ window.seed = { data: { interventions: [job], quotes: [quote], payments: [paymen
   uploads: [], refreshContext: "g1|artisan||", ensureFresh: async () => ({ kind: "loaded" }),
   features: new Proxy({}, { get: (_t, k) => (k === "demo" ? false : () => new Proxy({}, { get: (_x, m) => (m === "then" ? undefined : async () => ({ status: 503, body: null })) })) }),
   loadOperations: async () => ({ participants: [], appointment: null, report: null, history: [], history_limit: 50, travel_stage: "on_site" }),
-  loadPaymentStatus: async (id) => { window.statusCalls.push(id); return { payment, attempts: [payment], attempts_limit: 50, history_limited: false${dispute === null ? "" : `, artisan_dispute: ${JSON.stringify(dispute)}`} }; },
+  get refreshedAt() { return window.refreshedAt || 1; },
+  loadPaymentStatus: async (id) => { window.statusCalls.push(id); const d = window.dispute === undefined ? ${JSON.stringify(dispute)} : window.dispute; return { payment, attempts: [payment], attempts_limit: 50, history_limited: false, ...(d === null ? {} : { artisan_dispute: d }) }; },
 } };
 `;
 
-async function render(dispute: string | null) {
+async function render(dispute: string | null, after?: string) {
   const { server, url } = await serveLiveArtisan(SETUP(dispute));
   const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
   const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true });
@@ -44,8 +45,16 @@ async function render(dispute: string | null) {
     await page.goto(url);
     try { await page.locator("#dossier-payment").waitFor({ timeout: 8000 }); } catch (e) { console.log("BODY:", JSON.stringify(((await page.evaluate("document.body.innerText")) as string).slice(0, 800)), errors); throw e; }
     await page.waitForTimeout(300);
-    const text = (await page.locator("section[aria-labelledby='dossier-payment']").innerText()).replace(/\s+/g, " ");
-    return { text, calls: (await page.evaluate("window.statusCalls")) as string[], errors };
+    let text = (await page.locator("section[aria-labelledby='dossier-payment']").innerText()).replace(/\s+/g, " ");
+    const steps: { calls: number; text: string }[] = [];
+    if (after) {
+      for (const step of after.split("|")) {
+        await page.evaluate(step + "; window.rerender()");
+        await page.waitForTimeout(300);
+        steps.push({ calls: ((await page.evaluate("window.statusCalls.length")) as number), text: (await page.locator("section[aria-labelledby='dossier-payment']").innerText()).replace(/\s+/g, " ") });
+      }
+    }
+    return { steps, text, calls: (await page.evaluate("window.statusCalls")) as string[], errors };
   } finally {
     await browser.close();
     server.close();
@@ -55,9 +64,10 @@ async function render(dispute: string | null) {
 test("E80 · litige en revue ⇒ affiché dans le règlement artisan, sans changer « Réglé »", { skip }, async () => {
   const r = await render("under_review");
   assert.ok(r.calls.length >= 1 && r.calls.every((c) => c === "e1000000-0000-4000-8000-000000000001"), `lecture du statut du devis accepté uniquement (${JSON.stringify(r.calls)})`);
-  assert.match(r.text, /Litige en cours d’examen/, `état du litige affiché (texte : ${r.text})`);
+  assert.match(r.text, /Litige examiné par la plateforme/, `état du litige affiché (texte : ${r.text})`);
   assert.match(r.text, /Réglé/, "statut du paiement inchangé");
   assert.doesNotMatch(r.text, /dp_|du_|motif|frais/i, "aucun détail finance");
+  assert.doesNotMatch(r.text, /banque|vous serez informé/i, "aucune origine bancaire ni promesse de notification affirmée");
   assert.deepEqual(r.errors, []);
 });
 
@@ -67,4 +77,14 @@ test("E80 · sans litige ou champ absent (backend antérieur) ⇒ aucune mention
     assert.doesNotMatch(r.text, /Litige/, String(d));
     assert.deepEqual(r.errors, []);
   }
+});
+
+test("E80 · nouvelle génération de session ou actualisation des droits ⇒ état relu, jamais conservé", { skip }, async () => {
+  const r = await render("under_review", 'window.dispute = "none"; window.gen = 2|window.dispute = "open"; window.refreshedAt = 2');
+  assert.match(r.text, /Litige examiné par la plateforme/);
+  const [gen, refresh] = r.steps;
+  assert.doesNotMatch(gen.text, /Litige/, "génération changée : ancien état non conservé, relu « none »");
+  assert.ok(refresh.calls > gen.calls, "actualisation des droits : relecture du même devis");
+  assert.match(refresh.text, /Litige enregistré/, "état relu affiché");
+  assert.deepEqual(r.errors, []);
 });
