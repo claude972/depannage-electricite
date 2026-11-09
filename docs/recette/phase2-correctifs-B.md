@@ -21,14 +21,14 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E02 | Majeur | B | À REPRODUIRE | état photo par fil | | | components/app/forms.tsx | isolé |
 | E04 | Majeur | B | À REPRODUIRE | égalité profonde sessionStorage (P7) | | | components/features/payment-reminders | |
 | E07 | Majeur | A | CONTRAT A | verrou site archivé SQL | | | supabase, app/api | UI déjà lecture seule |
-| E08 | Majeur | B | À REPRODUIRE | 409 → recharger le formulaire (P1/P2) | | | site-operations/budget-panel.tsx | |
+| E08 | Majeur | B | CORRIGÉ | 409 ⇒ relecture dans le formulaire (P1/P2) | e739cb1 | phase2-lot-b-e08-budget-conflict | budget-panel.tsx (+ relecture c91f30d) | rouge : note v1 renvoyée, note concurrente écrasée ; vert : note v2 rechargée, montant conservé, conflit, renvoi v2 |
 | E11 | Majeur | B | À REPRODUIRE | option active périmée après saisie | | | components/app/address-field.tsx | |
 | E15 | Majeur | B + A | CORRIGÉ (dépend de A 258f44e) | expected_version du créneau (P2) | c1b5ddf | phase2-lot-b-e15-appointment-version | types.ts, client-space.tsx, artisan-space.tsx, enterprise-space.tsx | rouge : expected_version absent (client et artisan) ; vert : version lue (0 en création), refus ⇒ relecture 13 h, saisie conservée, conflit signalé, renvoi v2 |
 | E16 | Majeur | B | À REPRODUIRE | Actualiser recharge opérations + rappel (P1/P6) | | | role/client-space.tsx, appointment-reminders | |
 | E17 | Majeur | B | À REPRODUIRE | réponse GET ancienne après arrêt | | | features/tracking/tracking-card.tsx | |
 | E20 | Majeur | B | À REPRODUIRE | 404 → relire/purger (P1) | | | advanced-approvals | |
-| E21 | Majeur | B + A | À REPRODUIRE | faits constatés futurs/ordre (P4) | | | site-operations/sla-panel.tsx | validation serveur : contrat A |
-| E24 | Majeur | B + A | À REPRODUIRE | levée antérieure/future (P4) | | | site-operations/erp-panel.tsx | contrat A |
+| E21 | Majeur | A (schéma partagé) | VÉRIFIÉ À L’INTÉGRATION, aucun code B | faits constatés non futurs (P4) | — | contrôle privé `phase3-lot-b-private/e21-e24-with-a-schema.mts` | — | les formulaires B importent `slaCasePayload` : B seul 1 commande envoyée (rouge), avec le schéma A 0 commande et message immédiat. Non compté comme correctif B |
+| E24 | Majeur | A (schéma partagé) | VÉRIFIÉ À L’INTÉGRATION, aucun code B | levée ≥ contrôle, non future (P4) | — | même contrôle privé | — | `erpChecklistPayload` partagé : B seul 1 commande (rouge), avec A 0 commande et message immédiat. Non compté comme correctif B |
 | E25 | Majeur | A | CONTRAT A | date d’effet des grilles (P4) | | | supabase | côté B : affichage si contrat change |
 | E26 | Majeur | B | CORRIGÉ | 403 ⇒ relecture du rapport (P1) | c91f30d | phase2-lot-b-e06-e22-e26-e27-site-operations | site-operations-view.tsx | rouge : 0 GET, tarifs/note/Publier conservés ; vert : relecture, retirés, 1 POST |
 | E29 | Majeur | B + A | CORRIGÉ (dépend de A 2b3b44e) | updated_at exact en version (P2) | 47f3fdc | phase2-lot-b-e29-warranty-version | types.ts, forms.tsx | rouge : expected_version absent ; vert : chaîne exacte envoyée, 409 ⇒ relecture, décision de A affichée, brouillon de B conservé |
@@ -65,7 +65,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E06 | Mineur | B | CORRIGÉ | formulaire ouvert sans droit ⇒ aucun POST (P1) | c91f30d | phase2-lot-b-e06-e22-e26-e27-site-operations | site-operations/shared.tsx | rouge : 1 POST après passage en lecture seule ; vert : 0 POST, message lecture seule. Mécanisme partagé useSubmit (équipement/maintenance/délais) |
 | E09 | Mineur | B | À REPRODUIRE | nom de secours « document » | | | components/app/uploads.ts | |
 | E10 | Mineur | B | À REPRODUIRE | rejeu réussi → édition (P3) | | | site-areas-panel.tsx | |
-| E12 | Mineur | B | À REPRODUIRE | 409 → recharger le formulaire (P1/P2) | | | client-addresses-panel.tsx | |
+| E12 | Mineur | B | CORRIGÉ | 409 ⇒ relecture dans le formulaire (P1/P2) | b238a1c | phase2-lot-b-e12-address-conflict | client-addresses-panel.tsx | rouge : ville v1 et version 1 renvoyées ; vert : ville v2 rechargée, libellé conservé, renvoi v2 |
 | E13 | Mineur | B | À REPRODUIRE | devis expiré : bouton inactif | | | client-space.tsx, quote-documents-panel.tsx | |
 | E14 | Mineur | B | CORRIGÉ | refus d’acceptation ⇒ relecture ponctuelle (P1) | e8bfd00 | phase2-lot-b-e14-lost-offer | available-missions-model.ts | rouge : 0 relecture, bouton actif ; vert : 1 POST, relecture 404, offre retirée |
 | E18 | Mineur | A + B | CORRIGÉ (dépend de A 7de6d11) | command_id du rapport (P3) | 4049d5d | phase2-lot-b-e18-report-command-id | types.ts, artisan-space.tsx | rouge : aucune clé ; vert : même clé et saisie après réponse perdue, nouvelle clé après succès |
@@ -103,7 +103,8 @@ Sous-cas externes avec condition ouverte (PUB-10.1, CLI-05.2, CLI-08.1, ADM-01.1
 
 Mise à jour à chaque commit d’item.
 
-- CORRIGÉ (30 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E06, E14, E15, E18, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E41, E44, E45, E48, E49, E50, E52, E53, E54, E55, E56, E62, E63, E64, E72. E15/E18/E29/E34/E36/E41/E53/E72 exigent les contrats A à l’intégration.
+- CORRIGÉ (32 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E06, E08, E12, E14, E15, E18, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E41, E44, E45, E48, E49, E50, E52, E53, E54, E55, E56, E62, E63, E64, E72. E15/E18/E29/E34/E36/E41/E53/E72 exigent les contrats A à l’intégration.
+- VÉRIFIÉ À L’INTÉGRATION sans code B : E21, E24.
 - ROUGE : aucun.
 - À REPRODUIRE : voir tableau.
 - NON REPRODUIT : aucun.
