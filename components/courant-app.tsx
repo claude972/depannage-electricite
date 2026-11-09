@@ -57,7 +57,7 @@ type BookingReceipt = {
   payment?: { method: "on_site" | "card_hold"; status: string };
 };
 import { savePublicDraft } from "../lib/shared/request-draft";
-import { REALTIME_CHANNEL_CONFIG, REALTIME_TABLES, nextConnection } from "./app/realtime";
+import { REALTIME_CHANNEL_CONFIG, REALTIME_TABLES, createRealtimeCatchUp, nextConnection } from "./app/realtime";
 import { category, uid } from "./app/format";
 import {
   CONNECT_RETURN_MESSAGE,
@@ -618,8 +618,14 @@ export default function CourantApp() {
       return;
     }
     let channel = client.channel(`workspace-${profileIdForRealtime}`, REALTIME_CHANNEL_CONFIG);
+    // E51: after a lost connection the rejoined channel triggers one catch-up GET of the workspace.
+    const catchUp = createRealtimeCatchUp(() => {
+      if (active) void refresh();
+    });
     channel = channel.on("system", {}, (payload: { status?: string }) => {
-      if (active) setConnection((c) => nextConnection(c, { kind: "system", status: payload?.status }));
+      if (!active) return;
+      setConnection((c) => nextConnection(c, { kind: "system", status: payload?.status }));
+      if (payload?.status === "error") catchUp("CHANNEL_ERROR");
     });
     for (const table of REALTIME_TABLES)
       channel = channel.on(
@@ -633,7 +639,9 @@ export default function CourantApp() {
         },
       );
     channel.subscribe((status) => {
-      if (active) setConnection((c) => nextConnection(c, { kind: "status", status }));
+      if (!active) return;
+      setConnection((c) => nextConnection(c, { kind: "status", status }));
+      catchUp(status);
     });
     return () => {
       active = false;

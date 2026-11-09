@@ -11,3 +11,24 @@ export function nextConnection(current: string, event: { kind: "status"; status:
   if (event.kind === "status") return event.status;
   return event.status === "error" ? "CHANNEL_ERROR" : current;
 }
+
+/**
+ * E51 (P6): catch-up after a reconnection. The first SUBSCRIBED is the boot (the workspace was just
+ * read): nothing. Any later SUBSCRIBED that follows a loss (closed socket, timeout, channel error)
+ * may have missed events: `onCatchUp` is called once, the caller re-reads (GET).
+ */
+export function createRealtimeCatchUp(onCatchUp: () => void): (status: string) => void {
+  let joined = false;
+  let lost = false;
+  return (status: string) => {
+    if (status === "SUBSCRIBED") {
+      if (joined && lost) {
+        lost = false;
+        onCatchUp();
+      }
+      joined = true;
+      return;
+    }
+    if (joined) lost = true;
+  };
+}
