@@ -59,6 +59,8 @@ export async function POST(
       p_tax_rate: data.tax_rate ?? null,
       p_quote_id: data.quote_id ?? null,
     });
+    if (error?.code === "P0001" && error.message === "report_photos_required")
+      throw new ApiError(409, "Enregistrez le compte rendu avec les photos avant et après pour terminer l’intervention.");
     dbError(error);
     return Response.json({ intervention: result });
   } catch (error) {

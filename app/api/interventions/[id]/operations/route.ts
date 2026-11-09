@@ -6,7 +6,8 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("reject_quote"), quote_id: uuid, reason: z.string().trim().min(1).max(2000) }).strict(),
   z.object({ action: z.literal("save_appointment"), expected_version: z.number().int().min(0).max(2147483646), starts_at: z.iso.datetime({ offset: true }), ends_at: z.iso.datetime({ offset: true }), note: z.string().trim().max(2000) }).strict(),
   z.object({ action: z.literal("set_travel_stage"), stage: z.enum(["planned", "en_route", "on_site"]) }).strict(),
-  z.object({ action: z.literal("save_report"), command_id: uuid, summary: z.string().trim().min(10).max(8000), checks: z.array(z.object({ label: z.string().trim().min(1).max(160), result: z.enum(["pass", "issue", "not_applicable"]) }).strict()).max(50), signature_name: z.string().trim().min(1, "Indiquez le nom du déclarant.").max(120) }).strict(),
+  z.object({ action: z.literal("save_report"), command_id: uuid, summary: z.string().trim().min(10).max(8000), checks: z.array(z.object({ label: z.string().trim().min(1).max(160), result: z.enum(["pass", "issue", "not_applicable"]) }).strict()).max(50), signature_name: z.string().trim().min(1, "Indiquez le nom du déclarant.").max(120), before_photo_id: uuid.nullable().optional(), after_photo_id: uuid.nullable().optional() }).strict(),
+  z.object({ action: z.literal("sign_report"), report_revision: uuid, acknowledged: z.literal(true), signature_name: z.string().trim().min(2).max(120) }).strict(),
   z.object({ action: z.literal("reassign"), artisan_id: uuid.nullable(), reason: z.string().trim().min(1).max(2000) }).strict(),
 ]);
 const privateHeaders = { "Cache-Control": "private, no-store" };
@@ -21,7 +22,7 @@ export async function GET(_request: Request, context: Context) {
     const id = await checkedId(context);
     const { db } = await authenticatedClient();
     // RLS determines dossier access before any dependent record is returned.
-    const job = await db.from("interventions").select("id,travel_stage").eq("id", id).maybeSingle();
+    const job = await db.from("interventions").select("id,travel_stage,report_evidence_required").eq("id", id).maybeSingle();
     dbError(job.error);
     if (!job.data) throw new ApiError(404, "Ce dossier est introuvable.");
     const [participants, appointment, report, history] = await Promise.all([
@@ -31,7 +32,19 @@ export async function GET(_request: Request, context: Context) {
       db.from("intervention_operation_events").select("*").eq("intervention_id", id).order("id", { ascending: false }).limit(100),
     ]);
     dbError(participants.error); dbError(appointment.error); dbError(report.error); dbError(history.error);
-    return Response.json({ participants: participants.data, appointment: appointment.data, report: report.data, history: history.data, history_limit: 100, travel_stage: job.data.travel_stage }, { headers: privateHeaders });
+    let receipt = null;
+    if (report.data?.report_revision) {
+      const saved = await db.from("intervention_report_receipts")
+        .select("report_revision,acknowledged_at,signed_at,signature_name")
+        .eq("intervention_id", id).eq("report_revision", report.data.report_revision).maybeSingle();
+      dbError(saved.error);
+      receipt = saved.data;
+    }
+    return Response.json({
+      participants: participants.data, appointment: appointment.data, report: report.data,
+      report_evidence_required: job.data.report_evidence_required === true, report_receipt: receipt,
+      history: history.data, history_limit: 100, travel_stage: job.data.travel_stage,
+    }, { headers: privateHeaders });
   } catch (error) { return apiError(error); }
 }
 export async function POST(request: Request, context: Context) {
@@ -46,9 +59,22 @@ export async function POST(request: Request, context: Context) {
       case "reject_quote": result = await db.rpc("reject_intervention_quote", { p_id: id, p_quote_id: data.quote_id, p_reason: data.reason }); break;
       case "save_appointment": result = await db.rpc("save_intervention_appointment", { p_id: id, p_starts_at: data.starts_at, p_ends_at: data.ends_at, p_note: data.note, p_expected_version: data.expected_version }); break;
       case "set_travel_stage": result = await db.rpc("set_travel_stage", { p_id: id, p_stage: data.stage }); break;
-      case "save_report": result = await db.rpc("save_intervention_report", { p_id: id, p_summary: data.summary, p_checks: data.checks, p_signature_name: data.signature_name, p_command_id: data.command_id }); break;
+      case "save_report": result = await db.rpc("save_intervention_report", {
+        p_id: id, p_summary: data.summary, p_checks: data.checks,
+        p_signature_name: data.signature_name, p_command_id: data.command_id,
+        ...(data.before_photo_id !== undefined || data.after_photo_id !== undefined
+          ? { p_before_photo_id: data.before_photo_id ?? null, p_after_photo_id: data.after_photo_id ?? null }
+          : {}),
+      }); break;
+      case "sign_report": result = await db.rpc("sign_intervention_report", {
+        p_id: id, p_report_revision: data.report_revision, p_acknowledged: data.acknowledged, p_signature_name: data.signature_name,
+      }); break;
       case "reassign": result = await db.rpc("reassign_intervention", { p_id: id, p_artisan_id: data.artisan_id, p_reason: data.reason }); break;
     }
+    if (result.error?.code === "22023" && result.error.message === "report_photos_invalid")
+      throw new ApiError(422, "Ajoutez deux photos distinctes de ce dossier, une avant et une après l’intervention.");
+    if (result.error?.code === "P0001" && result.error.message === "report_revision_changed")
+      throw new ApiError(409, "Le compte rendu à signer n’est plus disponible dans cette version. Actualisez-le.");
     dbError(result.error);
     return Response.json({ result: result.data, success: true }, { headers: privateHeaders });
   } catch (error) { return apiError(error); }

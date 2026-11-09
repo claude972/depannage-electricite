@@ -21,7 +21,10 @@ async function approve(actor){await as(actor,'select public.submit_artisan_appli
 for(const actor of['artisan','otherArtisan']){await as(actor,save);await approve(actor);}
 async function job(){return(await as('client',"select * from public.create_intervention('panel','Déclenchements électriques du tableau.','12 rue du Test','97200','Fort-de-France','urgent',null)")).rows[0].id;}
 async function dossier(actor){return(await db.query('select to_jsonb(p) as profile,to_jsonb(a) as dossier from public.profiles p join public.artisan_profiles a on a.user_id=p.id where p.id=$1',[ids[actor]])).rows[0];}
-const first=await job();await as('artisan',"select public.intervention_action($1,'accept_mission')",[first]);
+const first=await job();
+// This fixture represents a dossier already open before the photo rule.
+await db.query("update public.interventions set report_evidence_required=false where id=$1", [first]);
+await as('artisan',"select public.intervention_action($1,'accept_mission')",[first]);
 const lines=JSON.stringify([{label:'Travail QA',quantity:1,unit_price_cents:10000}]);let quote;
 for(const stage of['assigned','quoted','accepted','in_progress','completed']){
  if(stage==='quoted')await as('artisan',"select public.intervention_action($1,'send_quote',$2,20)",[first,lines]);

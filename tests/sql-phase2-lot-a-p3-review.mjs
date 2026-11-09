@@ -13,8 +13,8 @@ test("E18 — retrying the same work report after response loss returns the orig
     await db.query("update public.profiles set artisan_approved=true where id=$1", [actor.id]);
     const id = randomUUID();
     await db.query(`insert into public.interventions(id, client_id, artisan_id, category, description,
-      address, postal_code, city, urgency, status, estimate_min_cents, estimate_max_cents)
-      values($1,$2,$3,'panel','Panne électrique de recette','Adresse de test','97200','Fort-de-France','scheduled','in_progress',10000,20000)`, [
+      address, postal_code, city, urgency, status, estimate_min_cents, estimate_max_cents, report_evidence_required)
+      values($1,$2,$3,'panel','Panne électrique de recette','Adresse de test','97200','Fort-de-France','scheduled','in_progress',10000,20000,false)`, [
       id, requester.id, actor.id,
     ]);
     const fields = { action: "save_report", summary: "Contrôle électrique synthétique", checks: [], signature_name: "Déclarant de recette" };
@@ -131,8 +131,8 @@ test("E19 — an assigned artisan cannot store a blank declarant name through th
     await db.query("update public.profiles set artisan_approved=true where id=$1", [actor.id]);
     const id = randomUUID();
     await db.query(`insert into public.interventions(id, client_id, artisan_id, category, description,
-      address, postal_code, city, urgency, status, estimate_min_cents, estimate_max_cents)
-      values($1,$2,$3,'panel','Panne électrique de recette','Adresse de test','97200','Fort-de-France','scheduled','in_progress',10000,20000)`, [
+      address, postal_code, city, urgency, status, estimate_min_cents, estimate_max_cents, report_evidence_required)
+      values($1,$2,$3,'panel','Panne électrique de recette','Adresse de test','97200','Fort-de-France','scheduled','in_progress',10000,20000,false)`, [
       id, requester.id, actor.id,
     ]);
     const report = { action: "save_report", summary: "Contrôle électrique synthétique", checks: [] };

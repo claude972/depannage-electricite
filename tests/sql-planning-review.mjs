@@ -175,6 +175,8 @@ assert.equal((await kinds('client',flow)).filter(k=>k==='appointment_saved').len
 const appointmentNote=(await mine('client','where kind=$1 and intervention_id=$2',['appointment_saved',flow]))[0];assert.ok(appointmentNote.body.includes('heure de Martinique'));assert.equal(appointmentNote.body.includes('Décalé'),false);
 await as('client',"select public.send_message($1,'Bonjour, merci de confirmer.',gen_random_uuid())",[flow]);
 assert.equal((await kinds('artisan',flow)).filter(k=>k==='message_received').length,2);assert.equal((await kinds('client',flow)).filter(k=>k==='message_received').length,0);
+// This fixture represents a dossier already open before the photo rule.
+await db.query("update public.interventions set report_evidence_required=false where id=$1", [flow]);
 await as('artisan',"select public.intervention_action($1,'start')",[flow]);await as('artisan',"select public.intervention_action($1,'complete')",[flow]);
 assert.ok((await kinds('client',flow)).includes('work_started'));assert.ok((await kinds('client',flow)).includes('work_completed'));
 await db.query("insert into public.payments(quote_id,session_id,total_cents,currency,status) values($1,'cs_qa_flow',12000,'eur','pending')",[quote]);

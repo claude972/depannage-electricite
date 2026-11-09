@@ -81,7 +81,7 @@ function fakeSession(user) {
   return { token, cookie, user };
 }
 
-export async function withNext(db, check, extraEnv = {}, { users = [actor], rpcAllowlist = rpcNames, serviceRpcAllowlist = deliveryRpcs, handle } = {}) {
+export async function withNext(db, check, extraEnv = {}, { users = [actor], rpcAllowlist = rpcNames, serviceRpcAllowlist = deliveryRpcs, sqlMessageAllowlist = new Set(), handle } = {}) {
   const sessions = new Map(users.map(user => [user.id, fakeSession(user)]));
   const byAuthorization = new Map([...sessions.values()].map(session => ["Bearer " + session.token, session.user]));
   const rejectedSql = [];
@@ -114,7 +114,7 @@ export async function withNext(db, check, extraEnv = {}, { users = [actor], rpcA
       return send(200, data);
     } catch (error) {
       rejectedSql.push({ code: error.code, constraint: error.constraint });
-      return send(400, { code: error.code ?? "XX000", message: "Fixture SQL rejected" });
+      return send(400, { code: error.code ?? "XX000", message: sqlMessageAllowlist.has(error.message) ? error.message : "Fixture SQL rejected" });
     }
   });
   const gatewayPort = await listen(gateway);

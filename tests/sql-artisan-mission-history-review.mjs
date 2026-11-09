@@ -67,7 +67,7 @@ try {
  for(const who of ['client','manager','admin']){await as(who);await deny(page())}
  await as('other');eq((await page()).counts,{active:1,done:0});eq((await page()).items.map(x=>x.id),[foreign]);await as('', 'anon');await deny(page());
  await as('', 'postgres');eq(await one("select prosecdef v from pg_proc where oid='public.artisan_mission_history_page(text,timestamptz,uuid)'::regprocedure"),false);
- const moving=await insert(ids.artisan,'in_progress');await q("update public.interventions set created_at='2026-11-08T00:00:00Z' where id=$1",[moving]);await as('artisan');eq((await page()).counts,{active:124,done:112});eq((await page()).items.some(x=>x.id===moving),true);
+ const moving=await insert(ids.artisan,'in_progress');await q("update public.interventions set created_at='2026-11-08T00:00:00Z',report_evidence_required=false where id=$1",[moving]);await as('artisan');eq((await page()).counts,{active:124,done:112});eq((await page()).items.some(x=>x.id===moving),true);
  await q("select public.intervention_action($1,'complete','{}',0,null)",[moving]);
  eq((await page()).counts,{active:123,done:113});eq((await page()).items.some(x=>x.id===moving),false);eq((await page('done')).items.some(x=>x.id===moving),true);
  await as('', 'postgres');await q('update public.interventions set artisan_id=$2 where id=$1',[moving,ids.other]);await as('artisan');eq((await page('done')).counts,{active:123,done:112});eq((await page('done')).items.some(x=>x.id===moving),false);

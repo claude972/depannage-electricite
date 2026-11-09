@@ -45,6 +45,8 @@ async function as(name, sql, params=[]) {
  try {return await db.query(sql,params);} finally {await db.exec('reset role');}
 }
 const job = (await as('client1',"select * from public.create_intervention('panel','Le disjoncteur se déclenche régulièrement.','12 rue de test','97200','Fort-de-France','urgent',null)")).rows[0];
+// This fixture represents a dossier already open before the photo rule.
+await db.query("update public.interventions set report_evidence_required=false where id=$1", [job.id]);
 assert.equal(job.client_id,ids.client1);
 assert.equal((await as('client2','select * from public.interventions where id=$1',[job.id])).rows.length,0);
 assert.equal((await as('artisan1','select * from public.interventions where id=$1',[job.id])).rows.length,0);
@@ -159,6 +161,8 @@ await as('admin',"select public.resolve_warranty($1,'reviewing','Réclamation re
 console.log('PASS: warranty gate cannot be bypassed, only owner within year may request, one open case, admin-only resolution');
 // New Web/PWA operations remain independent from offline shell behavior.
 const operationJob=(await as('client2',"select * from public.create_intervention('outage','La lumière du logement ne fonctionne plus.','34 rue de test','97200','Fort-de-France','scheduled',null)")).rows[0];
+// This fixture represents a dossier already open before the photo rule.
+await db.query("update public.interventions set report_evidence_required=false where id=$1", [operationJob.id]);
 await assert.rejects(as('client1','select * from public.intervention_participants($1)',[operationJob.id]));
 await as('artisan2',"select public.decline_mission($1,'Pas de créneau adapté')",[operationJob.id]);
 assert.equal((await db.query('select status from public.interventions where id=$1',[operationJob.id])).rows[0].status,'requested');

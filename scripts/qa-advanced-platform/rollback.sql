@@ -274,6 +274,12 @@ begin
                 else '[{"label":"Fourniture","quantity":1,"unit_price_cents":83}]' end;
   v := pg_temp.qa_call(pg_temp.qa_id('client'),'authenticated',$q$select to_jsonb(r) v from public.create_intervention('panel','QA rollback : panne du tableau principal.','12 rue du Test QA','97200','Fort-de-France','scheduled',null) r$q$);
   job := (v->>'id')::uuid; perform pg_temp.qa_set('job'||k, job::text);
+  -- Exercise the historical settlement path, before the separate photo requirement.
+  if exists (select 1 from pg_attribute where attrelid='public.interventions'::regclass
+    and attname='report_evidence_required' and not attisdropped)
+  then
+   execute 'update public.interventions set report_evidence_required=false where id=$1' using job;
+  end if;
   perform pg_temp.qa_exec(pg_temp.qa_id('artisan'),'authenticated',format($q$select public.intervention_action(%L,'accept_mission')$q$,job));
   perform pg_temp.qa_exec(pg_temp.qa_id('artisan'),'authenticated',format($q$select public.intervention_action(%L,'send_quote',%L::jsonb,20)$q$,job,lines));
   select id,total_cents into quote,total from public.quotes where intervention_id=job and status='sent';
