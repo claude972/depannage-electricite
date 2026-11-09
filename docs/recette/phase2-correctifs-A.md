@@ -4,6 +4,15 @@ Branche `fix/phase2-lot-A-codex` · Base `93e5a5dcf76caa528c121248a1c22f52433fb8
 Lot B séparé sur `fix/phase2-lot-B-claude-code`. Registre original de recette hors du checkout, copie de référence conservée sans ses pièces privées.
 Plan court : reproductions isolées E01, E28, E73 et E74 dans cet ordre, suite et point de synchronisation, puis mécanismes P1–P7 et défauts isolés, avec contrats de frontière et commits ciblés.
 
+## Bilan de la branche d’intégration
+
+Sur `fix/phase2-integration`, le commit applicatif vérifié est `a01487ef0af3c9cc3961fdfa57e4803fe9313743`. Les états ci-dessous décrivent l’ancienne branche A avant l’assemblage. Le bilan consolidé est de 76 défauts du registre corrigés avec preuves ciblées, un partiel (E70) et quatre décisions métier (E59, E60, E67, E75).
+
+- E68 est intégré par `d099866` avec le cache public v7. Firefox et WebKit ont mis à jour une installation v6 avec le vrai nouveau script, conservé l’ancien cache jusqu’à activation puis effacé le brouillon expiré hors connexion. Le build local sert le worker v7 et les ressources de secours publiques avec leurs en-têtes.
+- Les douze anciens échecs applicatifs concernaient des configurations ou fixtures de recette. Les corrections serveur `aefd54c` et interface `5cd0b17` rétablissent les scénarios avec leurs contrôles de droits, de pagination et de reprise. TypeScript et les 2 221 tests passent sans échec ni skip. Les deux compilations de production Next.js passent.
+- Les 86 contrôles SQL et d’adaptation passent, dont huit scénarios HTTP rejoués séquentiellement pour isoler leurs dossiers de build. Les scripts rappels et rollback ont été alignés dans `ba8f4b1`. La restauration synthétique locale passe séparément.
+- Le contrôle Vercel ne trouve aucune configuration de preview pour cette branche. H01 et l’activation Stripe Connect restent à qualifier dans leurs environnements dédiés.
+
 ## Commandes de vérification détectées
 
 - TypeScript : `npm run typecheck`.
