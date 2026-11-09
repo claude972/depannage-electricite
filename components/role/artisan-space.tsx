@@ -2387,6 +2387,13 @@ function PaymentPanel({ session, intervention: i }: { session: Session; interven
         <strong>{accepted ? `Devis initial accepté : ${money(accepted.total_cents)}` : "Montant du devis accepté introuvable"}</strong>
         {tag}
       </div>
+      {/* E81: the amount actually agreed (accepted amendments included) and, once confirmed, settled. */}
+      {accepted && typeof accepted.accepted_total_cents === "number" && accepted.accepted_total_cents !== accepted.total_cents && (
+        <p data-artisan-accepted-total="">Total accepté, avenants compris : {money(accepted.accepted_total_cents)}</p>
+      )}
+      {payment?.status === "paid" && !isDeclaredOnSite(payment) && (
+        <p data-artisan-paid-amount="">Montant réglé confirmé par la plateforme : {money(payment.total_cents)}</p>
+      )}
       <p>{text}</p>
       {disputeLine && (
         <p data-artisan-dispute={dispute ?? undefined}>
