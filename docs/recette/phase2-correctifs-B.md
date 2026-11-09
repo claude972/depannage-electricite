@@ -24,7 +24,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E08 | Majeur | B | CORRIGÉ | 409 ⇒ relecture dans le formulaire (P1/P2) | e739cb1 | phase2-lot-b-e08-budget-conflict | budget-panel.tsx (+ relecture c91f30d) | rouge : note v1 renvoyée, note concurrente écrasée ; vert : note v2 rechargée, montant conservé, conflit, renvoi v2 |
 | E11 | Majeur | B | À REPRODUIRE | option active périmée après saisie | | | components/app/address-field.tsx | |
 | E15 | Majeur | B + A | CORRIGÉ (dépend de A 258f44e) | expected_version du créneau (P2) | c1b5ddf | phase2-lot-b-e15-appointment-version | types.ts, client-space.tsx, artisan-space.tsx, enterprise-space.tsx | rouge : expected_version absent (client et artisan) ; vert : version lue (0 en création), refus ⇒ relecture 13 h, saisie conservée, conflit signalé, renvoi v2 |
-| E16 | Majeur | B | À REPRODUIRE | Actualiser recharge opérations + rappel (P1/P6) | | | role/client-space.tsx, appointment-reminders | |
+| E16 | Majeur | B | CORRIGÉ | Actualiser relit créneau + rappel (P1/P6) | 8fad5b5 | phase2-lot-b-e16-refresh-dependencies | client-space.tsx | rouge : 0 relecture opérations/rappel, ancien horaire ; vert : relecture des deux, nouvel horaire. Clé existante du rappel conservée (fragment clé) |
 | E17 | Majeur | B | À REPRODUIRE | réponse GET ancienne après arrêt | | | features/tracking/tracking-card.tsx | |
 | E20 | Majeur | B | CORRIGÉ | 404 ⇒ relecture, lecture refusée purge (P1) | 1508558 | phase2-lot-b-e20-approval-revoked | advanced-approvals/model.ts, approvals.tsx | rouge : 0 relecture, historique et actions conservés ; vert : relecture, purge, 1 POST |
 | E21 | Majeur | A (schéma partagé) | VÉRIFIÉ À L’INTÉGRATION, aucun code B | faits constatés non futurs (P4) | — | contrôle privé `phase3-lot-b-private/e21-e24-with-a-schema.mts` | — | les formulaires B importent `slaCasePayload` : B seul 1 commande envoyée (rouge), avec le schéma A 0 commande et message immédiat. Non compté comme correctif B |
@@ -44,7 +44,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E44 | Majeur | B | CORRIGÉ | 404 pagination → purge (P1) | ca0f8a3 | phase2-lot-b-e44-e45-invoices-pagination | invoices-model.ts, customer-invoices-panel.tsx | rouge : 25 lignes et PDF après 404 ; vert : purge + refus |
 | E48 | Majeur | B | CORRIGÉ | 403 pagination → purge (P1) | d5b1a3b | phase2-lot-b-e48-e49-saved-methods-pagination | saved-payment-methods/model.ts | rouge : 20 cartes après 403 ; vert : purge immédiate, 0 POST |
 | E50 | Majeur | B | CORRIGÉ | 403 → relire droit (P1) | aa2f826 | phase2-lot-b-e50-refund-revoked | refund-execution-model.ts | rouge : 0 GET après 403, « Émettre » actif ; vert : 1 POST, relecture, action retirée |
-| E51 | Majeur | B | À REPRODUIRE | GET de rattrapage à reconnexion (P6) | | | courant-app.tsx | |
+| E51 | Majeur | B | CORRIGÉ (preuve niveau SDK) | GET de rattrapage à la reconnexion (P6) | 533750e | phase2-lot-b-e51-realtime-catchup | realtime.ts, courant-app.tsx | rouge : aucune décision de rattrapage ; vert : vrai canal realtime-js coupé puis rejoint ⇒ 1 rattrapage, aucun au démarrage ; câblé dans le shell. Pas de nouvelle preuve DOM du shell complet |
 | E52 | Majeur | B | CORRIGÉ | 404 → relire/purger liste (P1) | f273048 | phase2-lot-b-e52-site-attachments-revoked | site-attachments-panel.tsx | rouge : 0 GET liste après 404 ; vert : relecture, purge, 1 signature |
 | E54 | Majeur | B | CORRIGÉ | 503 de commande ne masque pas le centre | 48a79ff | phase2-lot-b-e54-e55-e56-notifications | features.ts, notification-center.tsx | rouge : centre et saisie disparus ; vert : centre, formulaire et case décochée conservés, erreur en ligne |
 | E56 | Majeur | B | CORRIGÉ | 401 en pagination ⇒ purge (P1) | 48a79ff | phase2-lot-b-e54-e55-e56-notifications | notification-center.tsx | rouge : 25 lignes conservées ; vert : purge, plus de bouton |
@@ -103,7 +103,7 @@ Sous-cas externes avec condition ouverte (PUB-10.1, CLI-05.2, CLI-08.1, ADM-01.1
 
 Mise à jour à chaque commit d’item.
 
-- CORRIGÉ (41 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E04, E06, E08, E12, E13, E14, E15, E18, E20, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E39, E40, E41, E42, E44, E45, E48, E49, E50, E52, E53, E54, E55, E56, E62, E63, E64, E71, E72, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : A f58df31).
+- CORRIGÉ (43 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E04, E06, E08, E12, E13, E14, E15, E16, E18, E20, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E39, E40, E41, E42, E44, E45, E48, E49, E50, E51, E52, E53, E54, E55, E56, E62, E63, E64, E71, E72, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : A f58df31).
 - VÉRIFIÉ À L’INTÉGRATION sans code B : E21, E24.
 - ROUGE : aucun.
 - À REPRODUIRE : voir tableau.
