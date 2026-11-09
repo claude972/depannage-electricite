@@ -428,7 +428,11 @@ export type PaymentStatusReport = {
   attempts: PaymentAttempt[];
   attempts_limit: number;
   history_limited: boolean;
+  /** E80 (contract A, optional): dispute state for the assigned artisan who authored the accepted
+   *  quote; independent of payment.status, no finance detail. Absent on older servers. */
+  artisan_dispute?: ArtisanDisputeState;
 };
+export type ArtisanDisputeState = "none" | "open" | "under_review" | "resolved" | "closed";
 export type ArtisanPerformanceReport = {
   period: {
     current_start: string;

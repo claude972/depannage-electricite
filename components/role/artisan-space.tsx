@@ -14,6 +14,7 @@ import {
 import type { Session } from "../app/session-types";
 import type {
   Appointment,
+  ArtisanDisputeState,
   ArtisanApplicationStatus,
   ArtisanCommand,
   ArtisanCredential,
@@ -2331,8 +2332,35 @@ function ParticipantsPanel({
     </section>
   );
 }
+const DISPUTE_LINE: Partial<Record<ArtisanDisputeState, { tone: Tone; label: string; text: string }>> = {
+  open: { tone: "amber", label: "Litige ouvert", text: "Le client a contesté ce règlement auprès de sa banque. Le traitement est suivi par la plateforme ; vous serez informé de son issue." },
+  under_review: { tone: "amber", label: "Litige en cours d’examen", text: "La contestation de ce règlement est en cours d’examen. Le traitement est suivi par la plateforme ; vous serez informé de son issue." },
+  resolved: { tone: "neutral", label: "Litige résolu", text: "La contestation de ce règlement a été traitée." },
+  closed: { tone: "neutral", label: "Litige clos", text: "La contestation de ce règlement est close." },
+};
+/** E80: dispute state of the accepted quote, from GET /api/payments/status (optional field). */
+function useArtisanDispute(session: Session, quoteId: string | null): ArtisanDisputeState | null {
+  const [state, setState] = useState<{ key: string; value: ArtisanDisputeState | null } | null>(null);
+  const key = quoteId && session.mode === "live" ? `${session.profileId}|${quoteId}` : "";
+  const load = useRef(session.loadPaymentStatus);
+  load.current = session.loadPaymentStatus;
+  useEffect(() => {
+    if (!key || !quoteId) return;
+    let active = true;
+    void load.current(quoteId).then((report) => {
+      const value = report?.artisan_dispute;
+      if (active) setState({ key, value: value && value in DISPUTE_LINE ? value : null });
+    }).catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [key, quoteId]);
+  return state && state.key === key ? state.value : null;
+}
 function PaymentPanel({ session, intervention: i }: { session: Session; intervention: Intervention }) {
   const { accepted, payment } = paymentFor(session.data.quotes, session.data.payments, i.id);
+  const dispute = useArtisanDispute(session, accepted?.id ?? null);
+  const disputeLine = dispute ? DISPUTE_LINE[dispute] : undefined;
   let tag: ReactNode;
   let text: string;
   let awaiting = false;
@@ -2360,6 +2388,11 @@ function PaymentPanel({ session, intervention: i }: { session: Session; interven
         {tag}
       </div>
       <p>{text}</p>
+      {disputeLine && (
+        <p data-artisan-dispute={dispute ?? undefined}>
+          <Tag tone={disputeLine.tone}>{disputeLine.label}</Tag> {disputeLine.text}
+        </p>
+      )}
       {/* Follow-up link only (GET /api/payments/link): never a Checkout for the artisan, never a collect action. */}
       {awaiting && session.mode === "live" && (
         <PaymentLinkPanel key={`${session.profileId}|${i.id}`} interventionId={i.id} viewer="artisan" amountCents={null} />
