@@ -12,7 +12,8 @@
         "credentialsSource": "local"
       },
       "ios": {
-        "simulator": true
+        "simulator": true,
+        "scheme": "Depannageelectrique"
       }
     }
   }
