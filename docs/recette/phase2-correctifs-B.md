@@ -95,7 +95,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E77 | Mineur | A | CONTRAT A | délai annoncé par numéro | | | lib, supabase | UI affiche la valeur serveur |
 | E79 | Mineur | B | CORRIGÉ | panne distincte de « À renseigner » | f1271fc | phase2-lot-b-e58-e79-public-profile | use-published-profile.ts, public-site.tsx | rouge : même texte, aucune reprise ; vert : alerte + Réessayer, reprise affiche le publié |
 | E81 | Mineur | B | CORRIGÉ | total accepté avec avenants + montant réglé | 10c6008 | phase2-lot-b-e81-artisan-paid-amount | artisan-space.tsx | rouge : seul « 60,00 € » ; vert : 90,00 € accepté et réglé, déclarations historiques non présentées comme confirmées |
-| R01 | Régression | B | À REPRODUIRE | deux sections [data-account-data=demo] dans l’espace artisan démo 360 px | | tests/ui/account-data-roles.test.ts (existant, non modifié) | à déterminer | signalé par Codex après le lot : échoue sur 4f2cf9c + A 8f07c89, passait sur 2e2d676 ; aucune erreur JS |
+| R01 | Régression | B | CORRIGÉ | clés React identiques de deux panneaux frères du profil artisan | 12709b0 | tests/ui/account-data-roles.test.ts (existant, non modifié) | artisan-space.tsx | introduite par le montage E75 (924401f) : AccountDataPanel et SubscriptionsPanel partageaient la clé mode:uid:génération ⇒ « Mes données » dupliqué (artisan démo 360 px). Isolé par Codex (A 8f07c89 + B bb3fcb2 vert). Correctif : préfixe « subscriptions: » sur la seule clé SubscriptionsPanel ; test existant vert (12 écrans, Chromium réel), tests E75 verts. Note : subscriptions.test.ts reste dans les échecs préexistants (#12 baseline), son expression régulière figeait déjà un autre ordre de montage |
 | H01 | Env. | — | HORS LOT B | preview Vercel/Supabase | — | — | — | hors mission |
 
 Sous-cas externes avec condition ouverte (PUB-10.1, CLI-05.2, CLI-08.1, ADM-01.1, FIN-06.1, SYS-08.2) : hors mission B.
@@ -107,7 +107,7 @@ Mise à jour à chaque commit d’item.
 - CORRIGÉ (59 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E02, E03, E04, E05, E06, E08, E09, E10, E11, E12, E13, E14, E15, E16, E17, E18, E20, E22, E26, E27, E29, E30, E31, E32, E34, E35, E36, E38, E39, E40, E41, E42, E43, E44, E45, E46, E47, E48, E49, E50, E51, E52, E53, E54, E55, E56, E57, E58, E61, E62, E63, E64, E65, E66, E71, E72, E79, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : A f58df31).
 - VÉRIFIÉ À L’INTÉGRATION sans code B : E21, E24.
 - ROUGE : aucun.
-- RÉGRESSION en cours : R01 (voir tableau).
+- RÉGRESSION : R01 corrigée (voir tableau).
 - À REPRODUIRE : aucun.
 - NON REPRODUIT : aucun.
 - REVERTÉ : aucun.
