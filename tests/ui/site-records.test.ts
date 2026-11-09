@@ -354,9 +354,11 @@ test("fiche de site directe (Chromium, SiteSheet réelle hors cache) : historiqu
       page.on("pageerror", (e: Error) => errors.push(String(e)));
       await page.goto(`http://127.0.0.1:${(server.address() as { port: number }).port}/`);
       const r = (await page.evaluate(() => (window as unknown as { direct: () => Promise<unknown> }).direct())) as Record<string, any>;
-      same([r.proven.direct, r.proven.records, r.proven.rows], [true, [`/api/sites/${SITE}/records?kind=open`], 1], "direct sheet: paginated history of THIS site, after proof");
+      // Realigned (phase 2 lot B): the direct sheet also mounts the compliance panel (0beec1b), which
+      // reads the « upcoming » records of the SAME site after the same proof.
+      same([r.proven.direct, r.proven.records, r.proven.rows], [true, [`/api/sites/${SITE}/records?kind=open`, `/api/sites/${SITE}/records?kind=upcoming`], 1], "direct sheet: paginated history of THIS site, after proof");
       same([r.foreign.records, r.foreign.rows], [[], 0], "another organization ⇒ 0 records call");
-      same([r.archived.records, r.archived.rows, r.archived.writeActions, r.archived.areas], [[`/api/sites/${SITE}/records?kind=open`], 1, 0, false], "archived ⇒ history readable, no write action");
+      same([r.archived.records, r.archived.rows, r.archived.writeActions, r.archived.areas], [[`/api/sites/${SITE}/records?kind=open`, `/api/sites/${SITE}/records?kind=upcoming`], 1, 0, false], "archived ⇒ history readable, no write action");
       same(errors, []);
     } finally {
       await context.close();
