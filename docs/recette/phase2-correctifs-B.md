@@ -33,7 +33,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E26 | Majeur | B | CORRIGÉ | 403 ⇒ relecture du rapport (P1) | c91f30d | phase2-lot-b-e06-e22-e26-e27-site-operations | site-operations-view.tsx | rouge : 0 GET, tarifs/note/Publier conservés ; vert : relecture, retirés, 1 POST |
 | E29 | Majeur | B + A | CORRIGÉ (dépend de A 2b3b44e) | updated_at exact en version (P2) | 47f3fdc | phase2-lot-b-e29-warranty-version | types.ts, forms.tsx | rouge : expected_version absent ; vert : chaîne exacte envoyée, 409 ⇒ relecture, décision de A affichée, brouillon de B conservé |
 | E30 | Majeur | B | CORRIGÉ | 403 ⇒ relire /me + liste, lecture refusée purge (P1) | 747a94f | phase2-lot-b-e30-e31-operators | platform-operations/shared.tsx, platform-operators-view.tsx | rouge : 0 GET /me après 403 ; vert : relecture, nom/note/boutons purgés, 1 POST |
-| E32 | Majeur | B | À REPRODUIRE | vue journal audit_read | | | anchors.ts, features.ts, platform-anchor.tsx | |
+| E32 | Majeur | B | CORRIGÉ | vue journal pour la capacité audit | b552cac | phase2-lot-b-e32-audit-journal | platform-audit-view.tsx (nouveau), features.ts, anchors.ts, platform-anchor.tsx, session.ts, types.ts, espaces | rouge : aucune entrée ni lecture ; vert : entrée « Journal d’audit » sur capacité serveur, lecture paginée, rien sans capacité |
 | E34 | Majeur | B + A | CORRIGÉ (dépend de A e17c0e5) | approbation ≠ réactivation + version (P2) | 43ee0b9 | phase2-lot-b-e34-e35-e36-artisan-decisions | forms.tsx | rouge : corps {approved:true} ; vert : action approve + version 1 ⇒ 409, Suspendu relu |
 | E35 | Majeur | B | CORRIGÉ | action « Demander des corrections » | 43ee0b9 | phase2-lot-b-e34-e35-e36-artisan-decisions | forms.tsx | rouge : seule action « Approuver » ; vert : request_changes envoyé, statut changes_requested |
 | E37 | Majeur | A | HORS LOT B (validé par A) | prédicat d’offre et congés | Codex | — | supabase | validé côté A selon Codex |
@@ -103,7 +103,7 @@ Sous-cas externes avec condition ouverte (PUB-10.1, CLI-05.2, CLI-08.1, ADM-01.1
 
 Mise à jour à chaque commit d’item.
 
-- CORRIGÉ (58 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E02, E03, E04, E05, E06, E08, E09, E10, E11, E12, E13, E14, E15, E16, E17, E18, E20, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E39, E40, E41, E42, E43, E44, E45, E46, E47, E48, E49, E50, E51, E52, E53, E54, E55, E56, E57, E58, E61, E62, E63, E64, E65, E66, E71, E72, E79, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : A f58df31).
+- CORRIGÉ (59 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E02, E03, E04, E05, E06, E08, E09, E10, E11, E12, E13, E14, E15, E16, E17, E18, E20, E22, E26, E27, E29, E30, E31, E32, E34, E35, E36, E38, E39, E40, E41, E42, E43, E44, E45, E46, E47, E48, E49, E50, E51, E52, E53, E54, E55, E56, E57, E58, E61, E62, E63, E64, E65, E66, E71, E72, E79, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : A f58df31).
 - VÉRIFIÉ À L’INTÉGRATION sans code B : E21, E24.
 - ROUGE : aucun.
 - À REPRODUIRE : voir tableau.
