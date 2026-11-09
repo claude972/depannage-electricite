@@ -41,7 +41,7 @@ export function fakeServerHelpers(options: { authenticated?: boolean; db: unknow
 type Exports = Record<string, unknown>;
 /** Compiles `relativeFromRoot` and everything it imports relatively or through `@/`; `overrides`
  *  win for exact specifiers (e.g. "@/lib/supabase/server", "*.module.css"). */
-export function loadModule(relativeFromRoot: string, overrides: Record<string, unknown> = {}): Exports {
+export function loadModule(relativeFromRoot: string, overrides: Record<string, unknown> = {}, env?: Record<string, string | undefined>): Exports {
   const cache = new Map<string, Exports>();
   // An override given as "@/lib/x" also applies when a module reaches that file through a relative
   // import (e.g. validation.ts importing "./server"), so one fake ApiError class is shared.
@@ -80,7 +80,7 @@ export function loadModule(relativeFromRoot: string, overrides: Record<string, u
       if (resolved) return compile(resolved);
       return nodeRequire(name);
     };
-    vm.runInNewContext(code, { module, exports: module.exports, require: localRequire, URL, Request, Response, ReadableStream, TextEncoder, Buffer, SyntaxError, console, Date, Math, Number, JSON, Promise, Array, Object, String, Error, TypeError, Symbol, Map, Set, Proxy, Reflect, RegExp, ArrayBuffer, Uint8Array, Intl, setTimeout, clearTimeout, queueMicrotask }, { filename: file });
+    vm.runInNewContext(code, { ...(env && { process: { env } }), module, exports: module.exports, require: localRequire, URL, Request, Response, ReadableStream, TextEncoder, Buffer, SyntaxError, console, Date, Math, Number, JSON, Promise, Array, Object, String, Error, TypeError, Symbol, Map, Set, Proxy, Reflect, RegExp, ArrayBuffer, Uint8Array, Intl, setTimeout, clearTimeout, queueMicrotask }, { filename: file });
     cache.set(file, module.exports);
     return module.exports;
   };

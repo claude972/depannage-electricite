@@ -1,4 +1,4 @@
-import test, { after } from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
 import { loadModule, fakeServerHelpers } from "./documents/harness";
 
@@ -7,11 +7,8 @@ const base = "https://documents.example.test";
 const objectPath = "owner/document";
 // Deliberately fake public URL; no Auth or Storage credential is read or used.
 const signedUrl = `${base}/storage/v1/object/sign/intervention-documents/${objectPath}?token=opaque-test-value`;
-const previousUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-after(() => { if (previousUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL; else process.env.NEXT_PUBLIC_SUPABASE_URL = previousUrl; });
 type Result = { data: unknown; error: { code?: string } | null };
-function setup(options: { anonymous?: boolean; metadata?: Result | "throw"; signed?: unknown | "throw"; list?: Result } = {}) {
-  process.env.NEXT_PUBLIC_SUPABASE_URL = base;
+function setup(options: { anonymous?: boolean; metadata?: Result | "throw"; signed?: unknown | "throw"; list?: Result; providerConfigured?: boolean } = {}) {
   const calls: { name: string; args?: unknown }[] = [];
   const db = {
     from: (table: string) => {
@@ -37,7 +34,11 @@ function setup(options: { anonymous?: boolean; metadata?: Result | "throw"; sign
       return options.signed === undefined ? { data: { signedUrl }, error: null } : options.signed;
     } }) },
   };
-  const route = loadModule("app/api/documents/route.ts", { "@/lib/supabase/server": fakeServerHelpers({ db, authenticated: !options.anonymous }) });
+  const route = loadModule(
+    "app/api/documents/route.ts",
+    { "@/lib/supabase/server": fakeServerHelpers({ db, authenticated: !options.anonymous }) },
+    { NEXT_PUBLIC_SUPABASE_URL: options.providerConfigured === false ? undefined : base },
+  );
   const get = (query = `?id=${DOCUMENT}`) => (route.GET as (r: Request) => Promise<Response>)(new Request(`https://app.example.test/api/documents${query}`));
   return { calls, get };
 }
@@ -100,7 +101,7 @@ test("a signed link needs exactly one nonempty opaque token parameter", async ()
   }
 });
 test("missing public provider configuration never produces an invented signed link", async () => {
-  const h = setup(); delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const h = setup({ providerConfigured: false });
   await unavailable(await h.get()); assert.equal(h.calls.some(c => c.name === "sign"), false);
 });
 test("unauthenticated requests are401 and invalid document IDs422, with no data or signing requests", async () => {
