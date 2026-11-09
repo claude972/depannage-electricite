@@ -22,6 +22,8 @@ A `33d378f` et B `26464ef` ont été réunis dans un checkout temporaire. Typech
 
 Le checkout combiné A `974211b` et B `b3af4c8` a passé le typecheck. La suite applicative a donné 2 168 succès, 12 échecs strictement identiques par nom à la base et deux skips optionnels. Le checkout A `dbeae94` et B `aa3c7ee` a ensuite passé le typecheck, 44 tests ciblés B et quatre cas HTTP serveur ciblés. Les deux validations temporelles des formulaires ont envoyé zéro commande dans Chromium. Les vérifications sont locales et isolées.
 
+Sur A `974211b`, le test d’adaptation des migrations et 83 des 85 scripts SQL passent. `sql-operational-reminders-review.mjs` échouait déjà sur la base. `sql-adv-rollback-review.mjs` échoue parce que son script historique appelle la commande d’approbation révoquée. Une copie de ce script adaptée au contrat versionné passe ses 346 vérifications. Le script versionné relève d’un raccordement hors lots, détaillé ci-dessous.
+
 ## Rejeu natif de la chaîne complète
 
 Sur le SHA A `974211b`, les 101 migrations initiales et les 20 additives se sont appliquées dans l’ordre sur PostgreSQL 17.11 vierge. Vault, pg_cron et pg_net sont chargés, les départs de tâches et l’émission réseau sont neutralisés. La base de recette est arrêtée après vérification. Aucun changement hébergé.
