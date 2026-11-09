@@ -1354,9 +1354,10 @@ export default function CourantApp() {
     pendingCheckedFor.current = me;
     setPendingLookup("idle");
     const r = await lookupPending((p) => api(p));
-    // Late reply for another identity, another generation (sign-out/sign-in of the same UID) or
-    // outside live mode: nothing applied, nothing posted (E47 counter-review).
-    if (userId.current !== me || guard.generation() !== generation || modeRef.current !== "live") return;
+    if (userId.current !== me) return; // late reply for another identity
+    // E47 counter-review: another generation (sign-out/sign-in of the same UID) or outside live
+    // mode ⇒ nothing applied, nothing posted.
+    if (guard.generation() !== generation || modeRef.current !== "live") return;
     if (!r.ok) {
       setPendingLookup("error");
       return;
