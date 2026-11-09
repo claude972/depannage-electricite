@@ -25,7 +25,7 @@ A `33d378f` et B `26464ef` ont été réunis dans un checkout temporaire. Typech
 | État | Nombre |
 | --- | ---: |
 | CORRIGÉ (avec suite verte) | 0 |
-| VÉRIFIÉ CIBLÉ (suite initiale rouge) | 10 |
+| VÉRIFIÉ CIBLÉ (suite initiale rouge) | 11 |
 | CORRIGÉ PARTIEL | 11 |
 | NON REPRODUIT | 0 |
 | DÉCISION REQUISE | 4 |
@@ -53,7 +53,7 @@ A `33d378f` et B `26464ef` ont été réunis dans un checkout temporaire. Typech
 | E33 | Mineur | À REPRODUIRE | Isolé | — | — | — | Normalisation des noms dans la recherche. |
 | E34 | Majeur | CORRIGÉ PARTIEL | P2 | `e17c0e5` | `sql-phase2-lot-a-p2-review.mjs` | Route admin artisans, migration additive | Une approbation ancienne réactivait le dossier via HTTP 200. Elle reçoit maintenant 409 et la suspension demeure. Une réactivation explicite avec version courante passe. Attend le lot B. |
 | E36 | Mineur | CORRIGÉ PARTIEL | P3 | `523878c` | `sql-phase2-lot-a-p3-review.mjs` | Route admin artisans, migration additive | Après le verrou P2, le rejeu était refusé 409. Avec la clé, 200 identique et un seul audit. Modification de la même intention refusée. Attend le lot B. |
-| E37 | Majeur | À REPRODUIRE | Isolé | — | — | — | Indisponibilité planifiée et éligibilité des offres. |
+| E37 | Majeur | VÉRIFIÉ CIBLÉ | Isolé | `6104037` | `sql-phase2-lot-a-planning-eligibility-review.mjs` | Migration additive | Routes Next planning, liste et acceptation. Congé courant : offre urgente visible et attribuée avant, 404/403 et aucune attribution après. Congé futur et demande à planifier préservés, retrait du congé rend l’urgence de nouveau attribuable. Migration appliquée deux fois sur PostgreSQL natif. |
 | E41 | Mineur | CORRIGÉ PARTIEL | P3 | `0127c6d` | `sql-phase2-lot-a-p3-review.mjs` | Route messages, migration additive | Vrai HTTP : deux messages et notifications avant. Après, les deux réponses 201 sont identiques et il n’y a qu’un message et une notification. Attend le lot B. |
 | E53 | Mineur | CORRIGÉ PARTIEL | P3 | `b414386` | `sql-phase2-lot-a-documents-review.mjs` | Route documents site, helper Storage, migration additive | Deux objets/documents avant, 1/1 et reçu exact après. Remplacement et reprise de l’objet exact après interruption Storage vérifiés. Un objet privé sans métadonnée reste récupérable avec la clé initiale. Attend le lot B. |
 | E59 | Majeur | DÉCISION REQUISE | Décision | — | — | — | Photos avant/après. |
