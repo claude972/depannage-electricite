@@ -35,8 +35,8 @@ Sur le SHA A `974211b`, les 101 migrations initiales et les 20 additives se sont
 | État | Nombre |
 | --- | ---: |
 | CORRIGÉ (avec suite verte) | 0 |
-| VÉRIFIÉ CIBLÉ (suite initiale rouge) | 25 |
-| CORRIGÉ PARTIEL | 3 |
+| VÉRIFIÉ CIBLÉ (suite initiale rouge) | 26 |
+| CORRIGÉ PARTIEL | 2 |
 | NON REPRODUIT | 0 |
 | DÉCISION REQUISE | 4 |
 | REVERTÉ | 0 |
@@ -68,7 +68,7 @@ Sur le SHA A `974211b`, les 101 migrations initiales et les 20 additives se sont
 | E53 | Mineur | VÉRIFIÉ CIBLÉ | P3 | `b414386` | `sql-phase2-lot-a-documents-review.mjs` | Route documents site, helper Storage, migration additive | Deux objets/documents avant, 1/1 et reçu exact après. Remplacement et reprise de l’objet exact après interruption Storage vérifiés. Un objet privé sans métadonnée reste récupérable avec la clé initiale. La stabilité de la clé du dépôt est vérifiée dans B `fc06c26`. |
 | E59 | Majeur | DÉCISION REQUISE | Décision | — | — | — | Photos avant/après. |
 | E60 | Majeur | DÉCISION REQUISE | Décision | — | — | — | Accusé de remise par le client. |
-| E61 | Majeur | CORRIGÉ PARTIEL | Isolé | `fa9d690` | `sql-phase2-lot-a-reports-pagination-review.mjs` | Route rapports | HTTP sur PostgreSQL isolé : 503/422/503 avant, 200/200/200 après. 1 000 + 1 sites, totaux par page, CSV entier en flux, pas de résultat pour le tiers et interruption si la page finale est tronquée. Attend les contrôles de pagination B. |
+| E61 | Majeur | Vérifié ciblé | Isolé | A `fa9d690`, B `8eedc26` et `4895f8e` | `sql-phase2-lot-a-reports-pagination-review.mjs`, `phase2-lot-b-e61-*.test.ts` | HTTP sur PostgreSQL isolé : 503/422/503 avant, 200/200/200 après. 1 000 + 1 sites, totaux par page, CSV en flux, refus du tiers et interruption si export tronqué. Chromium avec la route Next.js et SQL isolé permet de revenir aux 1 000 premiers sites quand la seconde page s’est vidée entre deux lectures. Trois tests navigateur ciblés passent. |
 | E67 | Majeur | DÉCISION REQUISE | Décision | — | — | — | Justificatif de levée ERP. |
 | E68 | Mineur | CORRIGÉ PARTIEL | Isolé | `f183d49` | `phase2-lot-a-offline-draft-browser.mjs` | `public/offline-request.js` | Firefox conservait les champs et les deux moteurs gardaient la clé expirée. Après, formulaire vide et clé absente dans Firefox et WebKit, brouillon valide relu, transport coupé et zéro POST. Le passage d’une installation existante de v6 à v7 a été vérifié dans les deux moteurs avec un candidat local. La génération reste à intégrer. |
 | E69 | Mineur | VÉRIFIÉ CIBLÉ | P7 | `7ccaeda` | `sql-phase2-lot-a-auth-session-review.mjs` | Route profile sessions | Vrai SDK et Next : `session_not_found` 503 avant, 401 après. `bad_jwt` reste 401, panne reste 503, nominal ferme seulement les autres sessions. |
@@ -98,7 +98,7 @@ Sur le SHA A `974211b`, les 101 migrations initiales et les 20 additives se sont
 | E08/E10/E12/E62 | Éditeurs budget, zones, adresses et énergie | Les routes concernées ont déjà un contrat de version. Vérifier côté B le rechargement du formulaire et la transition après rejeu avant de modifier le serveur. |
 | E21/E24 | `components/features/site-operations/sla-panel.tsx`, `erp-panel.tsx` | Afficher les bornes et les refus immédiatement avec le même ordre de dates que l’API. |
 | E72 | `components/features/finance-proofs/model.ts:63` | Le champ `connected_charge_id` accepte ch_ ou py_ ; `charge_id` plateforme reste ch_. |
-| E61 | `components/features/enterprise-reports/model.ts` | Accepter `after=<UUID>` et `page` optionnel (`limit`, `has_more`, `next_after`) ; ajouter les contrôles de page et préserver le CSV sans `after`. Les montants des pages partielles ne sont pas des totaux globaux. |
+| E61 | `components/features/enterprise-reports/model.ts` | Contrat vérifié sur A `b64e18e` et B `41f6061`. La navigation peut revenir après une page vide ou en erreur. Le CSV reste entier et les totaux partiels sont identifiés. |
 | E80 | `components/role/artisan-space.tsx:2302` | Lire le GET statut paiement du devis accepté. Champ optionnel `artisan_dispute` parmi `none`, `open`, `under_review`, `resolved`, `closed`, indépendant de l’état du règlement. Le journal finance reste privé. |
 
 ## Attendu de l’intégration
