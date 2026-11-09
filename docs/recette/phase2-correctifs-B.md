@@ -172,6 +172,15 @@ H01 (preview hébergée), E70/E72 (Stripe Connect), sous-cas mobiles/SMS/verseme
 
 Ces échecs ne sont ni affaiblis ni supprimés par B.
 
+### Suite « Fini les corrections » (B depuis 49209a7, check phase3-full-492)
+
+Échecs UI préexistants attribués à B (11 sur 12 ; « document signing » reste à Codex). Diagnostic : attendus/fixtures périmés face à des contrats livrés après leur écriture, aucune anomalie produit nouvelle ; profil client vérifié sans collision de clés.
+- subscriptions.test.ts (1) — 86efdec : montage artisan réaligné (prop `erasureRequests` du contrat demandes, préfixe de clé R01) ; mêmes assertions d’ordre, rôle, démo, contexte. Garde ajoutée `phase2-lot-b-profile-sibling-keys` (chaque panneau du profil monté une fois, client et artisan).
+- account-data.test.ts (4) + account-data-mounted.test.ts (1) — 06b4ae6 : fixtures et attendus réalignés sur l’export à 8 sections (6625a97 : erasure_requests, payment_reminders ; route /api/profile/data inchangée).
+- enterprise-overflow.test.ts (3) — 661fc6c : compte des 7 onglets ciblé sur la liste des opérations du site (« Pièces du site », 04dce17, ajoute 2 onglets) ; nouvelle vérification d’accessibilité de tous les onglets.
+- site-records.test.ts (1) + site-sheet-direct.test.ts (1) — 1f7173e : fiche directe avec ENT-03 (af676ab) et conformité (0beec1b) ; garde exacte `!archived && state.canWrite` vérifiée au lieu de l’absence ; seconde lecture `kind=upcoming` du même site ; archivé ⇒ 0 écriture toujours prouvé en Chromium.
+Exécution ciblée : 44/44 sur ces fichiers. Aucune suite complète relancée par B (assemblage et suite : Codex).
+
 Exécution intermédiaire de la suite complète sur B (03239bd, `tsx --test` sans filtre, donc `.mjs` inclus) : 2302 réussis, 13 échecs = les 12 échecs ci-dessus à l’identique + `tests/restore-drill.test.mjs` (hors du glob `npm test` qui ne prend que `*.test.ts`, non attribué à B). Aucune autre régression observée. La suite n’est pas qualifiée verte.
 
 ## Journal
