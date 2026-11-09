@@ -56,7 +56,7 @@ function PublishedStamp() {
 export function PublicSite({ session, operatorProfile }: { session: PublicSession; /** Tests only. */ operatorProfile?: PublicProfileState }) {
   const known = PUBLIC_VIEWS.includes(session.view);
   const view: View = known ? session.view : "home";
-  const fetched = usePublishedOperatorProfile(operatorProfile === undefined && OPERATOR_VIEWS.includes(view));
+  const fetched = usePublishedOperatorProfile(operatorProfile === undefined && OPERATOR_VIEWS.includes(view), undefined, view);
   const operator = operatorProfile ?? fetched;
 
   const navigate = (target: View) => {
@@ -135,6 +135,13 @@ export function PublicSite({ session, operatorProfile }: { session: PublicSessio
       <div className={viewStyles.wrap}>
         {themedAlerts}
         <div className={viewStyles.skin} data-public-skin="info">
+          {operatorProfile === undefined && OPERATOR_VIEWS.includes(view) && fetched.phase === "error" && (
+            // E79: an outage is never presented as « À renseigner par l’exploitant ».
+            <div className="alert error" role="alert" data-operator-profile-error="">
+              <span>Les informations de l’exploitant n’ont pas pu être chargées pour le moment. Les mentions ci-dessous ne reflètent pas leur publication.</span>
+              <button type="button" className="button outline" onClick={fetched.retry}>Réessayer</button>
+            </div>
+          )}
           <OperatorContext.Provider value={operator}>
           {view === "help" ? (
             <HelpView onNew={() => newRequest()} onLogin={login} />
