@@ -59,7 +59,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E75 | Majeur | A + Décision | DÉCISION | capacité artisan, null = illimité | — | — | — | aucun plafond choisi |
 | E76 | Majeur | A | CONTRAT A | plafond global rappel | | | lib, supabase | |
 | E78 | Majeur | A | CONTRAT A | reprise remboursement | | | supabase, lib | |
-| E80 | Majeur | A + B | CONTRAT A | litige non projeté côté artisan | | | app/api/payments/status | B affichera le champ quand projeté |
+| E80 | Majeur | A + B | CORRIGÉ côté B (dépend du SHA backend A à venir) | état du litige artisan | ec7d6f1 | phase2-lot-b-e80-artisan-dispute | types.ts, artisan-space.tsx | contrat annoncé : `artisan_dispute` optionnel (none/open/under_review/resolved/closed) sur GET /api/payments/status ; rouge : aucune lecture ni mention ; vert : litige affiché à côté de « Réglé » inchangé ; absent/none/inconnu ⇒ rien. SHA A à consigner à l’intégration |
 | E03 | Mineur | B | CORRIGÉ | 409 ⇒ relecture en place, motif conservé (P1) | 4800320 | phase2-lot-b-e03-moderation-conflict | platform-operations/shared.tsx, platform-moderation-view.tsx | rouge : renvoi version 1 ; vert : relecture, renvoi version 2 |
 | E05 | Mineur | B | À REPRODUIRE | validation locale effectif ≤ 100000 | | | role/artisan-space.tsx | |
 | E06 | Mineur | B | CORRIGÉ | formulaire ouvert sans droit ⇒ aucun POST (P1) | c91f30d | phase2-lot-b-e06-e22-e26-e27-site-operations | site-operations/shared.tsx | rouge : 1 POST après passage en lecture seule ; vert : 0 POST, message lecture seule. Mécanisme partagé useSubmit (équipement/maintenance/délais) |
@@ -94,7 +94,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E71 | Mineur | B | À REPRODUIRE | opted_in=true + browser=none = retrait (P7) | | | web-push-panel.tsx | |
 | E77 | Mineur | A | CONTRAT A | délai annoncé par numéro | | | lib, supabase | UI affiche la valeur serveur |
 | E79 | Mineur | B | À REPRODUIRE | panne ≠ politique absente | | | public-operator-profile, public-site | |
-| E81 | Mineur | B | À REPRODUIRE | montant encaissé (avenant) | | | role/artisan-space.tsx | |
+| E81 | Mineur | B | CORRIGÉ | total accepté avec avenants + montant réglé | 10c6008 | phase2-lot-b-e81-artisan-paid-amount | artisan-space.tsx | rouge : seul « 60,00 € » ; vert : 90,00 € accepté et réglé, déclarations historiques non présentées comme confirmées |
 | H01 | Env. | — | HORS LOT B | preview Vercel/Supabase | — | — | — | hors mission |
 
 Sous-cas externes avec condition ouverte (PUB-10.1, CLI-05.2, CLI-08.1, ADM-01.1, FIN-06.1, SYS-08.2) : hors mission B.
@@ -103,7 +103,7 @@ Sous-cas externes avec condition ouverte (PUB-10.1, CLI-05.2, CLI-08.1, ADM-01.1
 
 Mise à jour à chaque commit d’item.
 
-- CORRIGÉ (32 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E06, E08, E12, E14, E15, E18, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E41, E44, E45, E48, E49, E50, E52, E53, E54, E55, E56, E62, E63, E64, E72. E15/E18/E29/E34/E36/E41/E53/E72 exigent les contrats A à l’intégration.
+- CORRIGÉ (34 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E06, E08, E12, E14, E15, E18, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E41, E44, E45, E48, E49, E50, E52, E53, E54, E55, E56, E62, E63, E64, E72, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : SHA backend à venir).
 - VÉRIFIÉ À L’INTÉGRATION sans code B : E21, E24.
 - ROUGE : aucun.
 - À REPRODUIRE : voir tableau.
@@ -122,7 +122,8 @@ Contrats requis côté serveur, sans duplication en B.
 - E41 · `app/api/messages/route.ts:24–38` : `id` client stable pour l’envoi texte (même contrat que `/api/messages/photo`).
 - E53 · `app/api/sites/[id]/documents/route.ts:163–186` : clé d’idempotence de dépôt.
 - E21/E24 · validation serveur des faits constatés (non futurs, ordre chronologique) et de la date de levée (≥ date du contrôle, non future). B ajoute la même validation à la saisie.
-- E80 · `app/api/payments/status/route.ts:6–24` : projeter l’état de litige pour l’artisan affecté.
+- E80 · CONTRAT ANNONCÉ PAR A (SHA à venir) : `artisan_dispute` optionnel = none|open|under_review|resolved|closed sur GET /api/payments/status, seulement pour l’artisan affecté auteur du devis accepté, indépendant de payment.status, aucun détail finance. Câblé en B (ec7d6f1).
+- E61 · CONTRAT ANNONCÉ PAR A : GET /api/reports `after=<UUID>`, pages de 1000 sites triées par site_id, `page {limit:1000,has_more,next_after}` optionnel, `scope.complete=false` sur page d’un périmètre découpé ; CSV complet sans after. Câblage B en cours.
 - E19, E23, E25, E33, E37, E61, E69, E76, E77, E78, E07 : cause entièrement serveur (voir registre).
 
 ## Fiches de décision
