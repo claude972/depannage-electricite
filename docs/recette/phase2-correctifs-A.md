@@ -28,6 +28,10 @@ La contre-recette E51 a monté le shell complet dans Chromium avec le SDK Supaba
 
 Sur A `37126f9` et B `2e2d676`, le typecheck passe. La suite applicative donne 2 193 succès, 13 échecs et deux skips optionnels. Douze échecs portent les mêmes noms que ceux de la base. Le treizième survient dans la mini-application du harnais D4, au comptage de la requête lors du clic « Actualiser ». Le même scénario passe seul sur les mêmes commits. La suite complète reste rouge et les builds de ce checkpoint ne sont pas attestés.
 
+Vérification finale sur A `8f07c89` et B `49209a7`, réunis localement. TypeScript passe. `npm test` donne 2 206 succès, les 12 mêmes échecs que sur la base et deux skips optionnels sur 2 220 tests. Aucun échec supplémentaire sur ce passage. R01, le doublon « Mes données » du profil artisan, échouait à la fois en suite et seul avant le correctif B `12709b0`. Le test existant inchangé repasse sur les 12 configurations. Les deux occurrences intermittentes du harnais D3/D4 observées aux checkpoints antérieurs repassent seules.
+
+Le vrai journal d’audit E32 a été ouvert par un opérateur limité dans Chromium avec le serveur et SQL isolés. Les réponses paginées donnent 200, 503, 200 sur le même curseur après reprise, puis 403 après révocation. Le navigateur relit les droits et retire les lignes. E75 enregistre une valeur puis la remet à null depuis le profil jusqu’à la base isolée, sans règle d’éligibilité. La comparaison des deux registres donne 75 défauts d’origine vérifiés par des tests ciblés, deux partiels et quatre décisions. H01 relève de l’environnement hébergé.
+
 ## Rejeu natif de la chaîne complète
 
 Sur le SHA A `974211b`, les 101 migrations initiales et les 20 additives se sont appliquées dans l’ordre sur PostgreSQL 17.11 vierge. Vault, pg_cron et pg_net sont chargés, les départs de tâches et l’émission réseau sont neutralisés. La base de recette est arrêtée après vérification. Aucun changement hébergé.
@@ -126,7 +130,7 @@ Options : lien facultatif à une pièce privée, ou preuve requise pour les type
 
 ### E75 — Capacité artisan
 
-Options : capacité non renseignée ou plafond paramétrable. Déterminer l’unité (interventions simultanées, créneaux, autre) et les dossiers qui consomment la capacité avant d’imposer un plafond. La préférence nullable est disponible via le profil et une action versionnée. Null signifie illimité. Aucune valeur commerciale, aucun comptage de capacité ni contrôle affiché à ce stade.
+Options : capacité non renseignée ou plafond paramétrable. Déterminer l’unité (interventions simultanées, créneaux, autre) et les dossiers qui consomment la capacité avant d’imposer un plafond. La préférence nullable est disponible dans le profil et via une action versionnée. Null signifie illimité. Le formulaire indique que cette valeur ne filtre aucune offre. Son unité et les règles de capacité restent à décider.
 
 ## Prérequis externes
 
