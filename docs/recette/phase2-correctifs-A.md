@@ -21,7 +21,7 @@ Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvel
 | État | Nombre |
 | --- | ---: |
 | CORRIGÉ (avec suite verte) | 0 |
-| VÉRIFIÉ CIBLÉ (suite initiale rouge) | 5 |
+| VÉRIFIÉ CIBLÉ (suite initiale rouge) | 6 |
 | CORRIGÉ PARTIEL | 9 |
 | NON REPRODUIT | 0 |
 | DÉCISION REQUISE | 4 |
@@ -57,7 +57,7 @@ Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvel
 | E61 | Majeur | À REPRODUIRE | Isolé | — | — | — | Pagination et CSV du rapport consolidé. |
 | E67 | Majeur | DÉCISION REQUISE | Décision | — | — | — | Justificatif de levée ERP. |
 | E68 | Mineur | À REPRODUIRE | Isolé | — | — | — | Purge du brouillon expiré, y compris les champs restaurés par Firefox. |
-| E69 | Mineur | À REPRODUIRE | P7 | — | — | — | Session absente dans le SDK Auth → 401. |
+| E69 | Mineur | VÉRIFIÉ CIBLÉ | P7 | `7ccaeda` | `sql-phase2-lot-a-auth-session-review.mjs` | Route profile sessions | Vrai SDK et Next : `session_not_found` 503 avant, 401 après. `bad_jwt` reste 401, panne reste 503, nominal ferme seulement les autres sessions. |
 | E70 | Majeur | À REPRODUIRE | Isolé | — | — | — | Traduire l’erreur Stripe Connect localement. |
 | E72 | Majeur | À REPRODUIRE | P7 | — | — | — | Qualification du lien commission vers une écriture Stripe py_. |
 | E75 | Majeur | DÉCISION REQUISE | Décision | — | — | — | Réglage nullable à livrer ; valeur commerciale à décider. |
