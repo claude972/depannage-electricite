@@ -36,7 +36,9 @@ export function createDirectController({ api, siteId, context = DEFAULT_SL_CONTE
         return false;
       }
       const mine = ++seq;
-      set({ ...SETTINGS_INITIAL });
+      // E57 (P3): a re-read of a site already shown keeps it mounted (its confirmation stays) until
+      // the reply; only a first read starts from the loading state.
+      if (!get().site) set({ ...SETTINGS_INITIAL });
       const r = await api().settings(siteId);
       if (!attached || mine !== seq || context.generation() !== gen || context.userId() !== uid) return false;
       set(applySettings(get(), r, siteId));
