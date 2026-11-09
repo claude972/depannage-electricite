@@ -4502,7 +4502,7 @@ export function ReportsView({ c }: { c: Ctx }) {
         <div className={styles.tableHead}>
           <div>
             <h2 id="report-table-title">Budget et engagements par site</h2>
-            <p className={styles.muted}>{live ? (server && !server.scope.complete ? REPORT_COPY.partialNote : REPORT_COPY.totalsNote) : `Totaux ${BASIS} (démonstration) ; l’export CSV de démonstration est généré localement à partir de ces données.`}</p>
+            <p className={styles.muted}>{live ? (server?.page ? REPORT_COPY.pageNote : server && !server.scope.complete ? REPORT_COPY.partialNote : REPORT_COPY.totalsNote) : `Totaux ${BASIS} (démonstration) ; l’export CSV de démonstration est généré localement à partir de ces données.`}</p>
           </div>
         </div>
         {live && !orgId ? (
@@ -4552,7 +4552,7 @@ export function ReportsView({ c }: { c: Ctx }) {
                   ))}
                   <tr data-report-total={server.scope.complete ? "complete" : "partial"}>
                     <td data-label="Total">
-                      <strong>{server.scope.complete ? "Total" : "Somme des lignes reçues (non garantie complète)"}</strong>
+                      <strong>{server.page ? `Somme de la page ${report.pageNumber} (pas un total de l’organisation)` : server.scope.complete ? "Total" : "Somme des lignes reçues (non garantie complète)"}</strong>
                     </td>
                     <td data-label="Budget">{server.totals.budget_cents > 0 ? money(server.totals.budget_cents) : "—"}</td>
                     <td data-label="Devis acceptés">{money(server.totals.accepted_cents)}</td>
@@ -4564,6 +4564,17 @@ export function ReportsView({ c }: { c: Ctx }) {
                   </tr>
                 </tbody>
               </table>
+              {server.page && (
+                <div className={styles.actions} data-report-pager="">
+                  <span className={styles.muted}>Page {report.pageNumber}</span>
+                  {report.pageNumber > 1 && (
+                    <button type="button" className="button outline" onClick={() => report.previous()}>Page précédente</button>
+                  )}
+                  {server.page.has_more && (
+                    <button type="button" className="button outline" onClick={() => report.next()}>Page suivante</button>
+                  )}
+                </div>
+              )}
             </>
           ) : (
             <Empty icon="chart" title="Aucun site à consolider">

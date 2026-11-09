@@ -29,5 +29,11 @@ export function useEnterpriseReport({ enabled, context, organizationId, siteId, 
   useEffect(() => {
     if (active) ctrl.current?.query(organizationId, siteId);
   }, [active, identity, organizationId, siteId]);
-  return { state: enabled ? reportView(state, key) : REPORT_INITIAL, retry: () => ctrl.current?.retry(key) };
+  return {
+    state: enabled ? reportView(state, key) : REPORT_INITIAL,
+    retry: () => ctrl.current?.retry(key),
+    next: () => ctrl.current?.next(key),
+    previous: () => ctrl.current?.previous(key),
+    pageNumber: ctrl.current?.pageNumber() ?? 1,
+  };
 }
