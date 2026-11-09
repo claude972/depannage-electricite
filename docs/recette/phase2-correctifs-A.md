@@ -16,12 +16,16 @@ Plan court : reproductions isolées E01, E28, E73 et E74 dans cet ordre, suite e
 
 Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvelles migrations passent chacune deux fois sur PostgreSQL 17.11 natif vierge après les 101 existantes, avec stubs Auth/Storage, Vault et pg_net natifs et envoi sortant neutralisé. E01, E28 et E74 passent sur de vraies routes Next.js avec PostgreSQL PGlite isolé et des réponses de fournisseurs synthétiques. La suite de comparaison a été relancée et le typecheck a passé. Les deux builds passent (Webpack dans le checkout, Turbopack dans une copie du checkpoint avec dépendances physiques). La suite applicative conserve ses résultats de référence : 2 127 succès, 12 échecs, 2 skips. Le script SQL préexistant en échec demeure le même ; les autres scripts du passage de comparaison réussissent.
 
+## Vérification combinée de travail
+
+A `33d378f` et B `26464ef` ont été réunis dans un checkout temporaire. Typecheck passé, 19 scénarios Chromium et 2 vérifications unitaires de la règle de refus réussis, ainsi que 15 tests serveur ciblés. Ce passage ne vaut pas validation complète de la suite ni déploiement. Les scénarios existants de messages et garantie qui utilisaient les anciens contrats ont été conservés et adaptés aux nouveaux champs, avec leurs assertions de refus.
+
 ## Synthèse
 
 | État | Nombre |
 | --- | ---: |
 | CORRIGÉ (avec suite verte) | 0 |
-| VÉRIFIÉ CIBLÉ (suite initiale rouge) | 7 |
+| VÉRIFIÉ CIBLÉ (suite initiale rouge) | 8 |
 | CORRIGÉ PARTIEL | 9 |
 | NON REPRODUIT | 0 |
 | DÉCISION REQUISE | 4 |
@@ -37,7 +41,7 @@ Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvel
 | E73 | Bloquant | Vérifié ciblé | Isolé | `1cf47f4` | `supabase/tests/phase2-notification-dispatch.sql` | Migration additive `notification_dispatch_secret_length` | PostgreSQL 17.11 natif : 2201B avant, deux requêtes pg_net après pour quatre entrées (un appel par canal). Rollback, zéro ligne restante. |
 | E74 | Bloquant | Vérifié ciblé | Isolé | `14ea285` | `sql-phase2-lot-a-blockers-review.mjs` | `lib/features/notifications/external-delivery/` | Les deux formes donnent HTTP 422 sans tentative avant, HTTP 200 et une tentative acceptée par canal après. Fournisseurs interceptés, 403 et corps avec données toujours refusés. |
 
-| E07 | Majeur | À REPRODUIRE | Isolé | — | — | — | Verrou d’archivage site pour équipement et visite. |
+| E07 | Majeur | VÉRIFIÉ CIBLÉ | Isolé | `f9d9918` | `sql-phase2-lot-a-archived-site-review.mjs` | Migration additive | Manager avec droit conservé : HTTP 200 et deux audits avant, HTTP 409 sur les deux commandes après, aucune écriture ni audit. RPC direct refusé aussi. |
 | E15 | Majeur | CORRIGÉ PARTIEL | P2 | `258f44e` | `sql-phase2-lot-a-p2-review.mjs` | Route operations, migration additive | Deux identités via vrai HTTP : ancien formulaire 200 et v3 avant, 409 et v2 conservée après. RPC historique refusé, pas d’audit supplémentaire. Attend le câblage du lot B. |
 | E18 | Mineur | CORRIGÉ PARTIEL | P3 | `7de6d11` | `sql-phase2-lot-a-p3-review.mjs` | Route operations, migration additive | Deux audits et instantanés avant. Après, un de chaque, réponse identique, autre contenu sous même clé refusé. Attend la conservation de la clé dans B. |
 | E19 | Mineur | À REPRODUIRE | Isolé | — | — | — | Rapport : nom déclaré vide rejeté côté serveur. |
@@ -83,6 +87,7 @@ Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvel
 | E18/E41/E53 | Rapport, conversation texte, dépôt de site | Une clé stable par intention, y compris après la perte de la réponse. Définir le format exact avec chaque test de contrat backend. |
 | E08/E10/E12/E62 | Éditeurs budget, zones, adresses et énergie | Les routes concernées ont déjà un contrat de version. Vérifier côté B le rechargement du formulaire et la transition après rejeu avant de modifier le serveur. |
 | E21/E24 | `components/features/site-operations/sla-panel.tsx`, `erp-panel.tsx` | Afficher les bornes et les refus immédiatement avec le même ordre de dates que l’API. |
+| E72 | `components/features/finance-proofs/model.ts:63` | Le champ `connected_charge_id` accepte ch_ ou py_ ; `charge_id` plateforme reste ch_. |
 | E80 | `components/role/artisan-space.tsx:2302` | Afficher l’état du litige du règlement attribué à l’artisan. Le journal finance reste privé. |
 
 ## Fiches de décision
