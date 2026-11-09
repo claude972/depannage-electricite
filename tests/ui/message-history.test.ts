@@ -278,14 +278,16 @@ test("MessageCenter history in real React/Chromium: 237 messages over 10 pages, 
       assert.deepEqual(errors, []);
       await page.close();
     }
-    // 4b. 401 AFTER a partial page: button gone (not a dead control), messages kept, 0 further GET.
+    // 4b. 401 AFTER a partial page: button gone (not a dead control), protected messages and compose
+    //     purged in the same document (phase 2 lot B, E39 / P1), 0 further GET.
     {
       const { page, errors } = await open("401late");
       await page.waitForSelector(OLDER);
       await page.click(OLDER);
       await page.waitForSelector("[data-message-history=signed_out]");
       assert.equal(await page.$(OLDER), null, "older-page button removed after the 401");
-      assert.equal((await ids(page)).length, 25, "already loaded messages stay shown");
+      assert.equal((await ids(page)).length, 0, "E39: loaded messages purged after the 401");
+      assert.equal(await page.$("#message-body"), null, "E39: no compose after the 401");
       await page.click(".message-threads button:nth-child(2)"); // re-render, same dossier and identity
       await page.waitForTimeout(400);
       assert.equal((await calls(page)).length, 2, "no request after the 401 for this identity");

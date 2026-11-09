@@ -818,7 +818,10 @@ export function MessageCenter({
   const setBody = (text: string) => setDraft({ key: threadKey, text });
   const history = useMessageHistory(live, profileId, id, fetchHistory);
   const h = history.state;
-  const unavailable = history.enabled && h.status === "not_found";
+  const notFound = history.enabled && h.status === "not_found";
+  // P1 (E39): a 401 reported by the API purges the protected thread in this document (messages,
+  // contact, compose) like a 404; only the reconnect message stays.
+  const unavailable = notFound || (history.enabled && h.status === "signed_out");
   // Live: the preview never pre-fills older history (see visibleHistoryMessages). Demo: unchanged,
   // every workspace message of the dossier (no history exists there).
   // Photo messages confirmed by their 201 are merged at once (dedup by id), no manual reload.
@@ -911,7 +914,7 @@ export function MessageCenter({
                 </p>
               )}
               {unavailable ? (
-                <div data-message-history="not_found">
+                notFound && <div data-message-history="not_found">
                   <Empty icon="message" title="Conversation indisponible">
                     Cette conversation n’est pas accessible depuis votre compte.
                   </Empty>
