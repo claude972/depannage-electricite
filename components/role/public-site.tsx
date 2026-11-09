@@ -4,9 +4,9 @@
 // Visual references (addendum « pages publiques »): M11/M51 (home), M46/M70/M42 (help), M38
 // (pricing), M60 (join), V8-C03 (about), V8-C05 (privacy), M63 (legal), M49 (auth). Every number,
 // promise, team or contact of those mockups is an example and is never reproduced here.
-import { createContext, useContext, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { PublicSession } from "../app/session-types";
-import type { Category, View } from "../app/types";
+import type { Category, Role, View } from "../app/types";
 import { Alerts, PageTitle, Unavailable } from "../app/ui";
 import { AuthForm, RequestForm } from "../app/forms";
 import { Icon } from "../app/icons";
@@ -56,6 +56,7 @@ function PublishedStamp() {
 export function PublicSite({ session, operatorProfile }: { session: PublicSession; /** Tests only. */ operatorProfile?: PublicProfileState }) {
   const known = PUBLIC_VIEWS.includes(session.view);
   const view: View = known ? session.view : "home";
+  const [signupAs, setSignupAs] = useState<Role | null>(null);
   const fetched = usePublishedOperatorProfile(operatorProfile === undefined && OPERATOR_VIEWS.includes(view), undefined, view);
   const operator = operatorProfile ?? fetched;
 
@@ -63,10 +64,12 @@ export function PublicSite({ session, operatorProfile }: { session: PublicSessio
     session.go(target);
   };
   const login = () => {
+    setSignupAs(null);
     session.setAuthMode("login");
     session.go("auth");
   };
   const signupArtisan = () => {
+    setSignupAs("artisan"); // E65: the artisan entry opens the signup as an artisan
     session.setAuthMode("signup");
     session.go("auth");
   };
@@ -122,7 +125,7 @@ export function PublicSite({ session, operatorProfile }: { session: PublicSessio
         <div className={formStyles.wrap}>
           {themedAlerts}
           <div className={formStyles.authSkin} data-public-skin="auth">
-            <AuthView session={session} />
+            <AuthView session={session} initialRole={signupAs ?? undefined} />
           </div>
         </div>
       </PublicChrome>
@@ -230,7 +233,7 @@ function Crumb({ onHome, current }: { onHome: () => void; current: string }) {
 }
 
 // ---- Account entry (M49: centred card; the shared form is untouched) -------------------------
-function AuthView({ session }: { session: PublicSession }) {
+function AuthView({ session, initialRole }: { session: PublicSession; initialRole?: Role }) {
   return (
     <div className={styles.authPage}>
       {session.pendingDraft && (
@@ -239,7 +242,7 @@ function AuthView({ session }: { session: PublicSession }) {
           <span>Votre brouillon de demande sera repris après connexion.</span>
         </div>
       )}
-      <AuthForm mode={session.authMode} onMode={(mode) => session.setAuthMode(mode)} busy={session.busy} onSubmit={async (values) => { if (session.authMode === "signup") await session.signUp(values); else if (session.authMode === "reset") await session.resetPassword(values.email); else await session.signIn(values.email, values.password); }} onDemo={() => session.startDemo("client")} initial={session.booking?.contact ? { email: session.booking.contact.email, first_name: session.booking.contact.first_name, last_name: session.booking.contact.last_name } : undefined} />
+      <AuthForm mode={session.authMode} onMode={(mode) => session.setAuthMode(mode)} busy={session.busy} onSubmit={async (values) => { if (session.authMode === "signup") await session.signUp(values); else if (session.authMode === "reset") await session.resetPassword(values.email); else await session.signIn(values.email, values.password); }} onDemo={() => session.startDemo("client")} initial={session.booking?.contact ? { email: session.booking.contact.email, first_name: session.booking.contact.first_name, last_name: session.booking.contact.last_name } : undefined} key={initialRole ?? "client"} initialRole={initialRole} />
     </div>
   );
 }

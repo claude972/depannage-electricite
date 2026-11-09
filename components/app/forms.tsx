@@ -1550,6 +1550,7 @@ export function AuthForm({
   onSubmit,
   onDemo,
   initial,
+  initialRole,
 }: {
   mode: "login" | "signup" | "reset";
   onMode: (mode: "login" | "signup" | "reset") => void;
@@ -1567,13 +1568,15 @@ export function AuthForm({
   /** Prefill from the service booking flow (email, first and last name typed there); never a
    *  password, and a full name is never split into first / last name. */
   initial?: { email?: string; first_name?: string; last_name?: string };
+  /** E65: profile preselected by the entry point (« Créer mon compte artisan »); default client. */
+  initialRole?: Role;
 }) {
   const [email, setEmail] = useState(initial?.email ?? "");
   const [password, setPassword] = useState("");
   const [first, setFirst] = useState(initial?.first_name?.trim().slice(0, NAME_PART_MAX) ?? "");
   const [last, setLast] = useState(initial?.last_name?.trim().slice(0, NAME_PART_MAX) ?? "");
   const [nameError, setNameError] = useState("");
-  const [role, setRole] = useState<Role>("client");
+  const [role, setRole] = useState<Role>(initialRole ?? "client");
   return (
     <div className="auth-layout">
       <section className="auth-copy">
