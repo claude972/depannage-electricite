@@ -17,7 +17,7 @@ function setup(data: unknown, options: { enabled?: boolean; authenticated?: bool
   } };
   const handlers = loadModule("lib/features/public-callback/handlers.ts", {
     "@/lib/supabase/server": { ...fakeServerHelpers({ db, authenticated: options.authenticated }), adminClient: () => db },
-    "node:process": { env: { PUBLIC_CALLBACK_INTAKE_ENABLED: options.enabled ? "true" : "false" } },
+    "node:process": { env: { SUPABASE_SERVICE_ROLE_KEY: "synthetic-service-role", PUBLIC_CALLBACK_INTAKE_ENABLED: options.enabled ? "true" : "false" } },
   });
   return {
     calls, availability: handlers.getPublicCallback as () => Response, submit: handlers.postPublicCallback as Handler,
@@ -31,7 +31,7 @@ test("public callback intake gates, requires consent, normalizes locally and ret
   assert.deepEqual(await closed.availability().json(), { available: false });
   assert.equal((await closed.submit(post(path, command))).status, 503);
   assert.equal(closed.calls.length, 0);
-  const service = setup(true, { enabled: true, authenticated: false });
+  const service = setup(0, { enabled: true, authenticated: false });
   assert.deepEqual(await service.availability().json(), { available: true });
   for (const body of [{ ...command, consent: false }, { ...command, phone: "invalid" }, { ...command, name: "Unexpected" }]) {
     assert.equal((await service.submit(post(path, body))).status, 422);
@@ -43,15 +43,20 @@ test("public callback intake gates, requires consent, normalizes locally and ret
   assert.deepEqual(await response.json(), { received: true });
   assert.deepEqual(service.calls, [{ name: "submit_public_callback", args: {
     p_request_id: id, p_phone: "+596696010203", p_reason: "existing_request", p_consent: true,
+    p_source_key: (service.calls[0].args as { p_source_key: string }).p_source_key,
   } }]);
+  assert.match((service.calls[0].args as { p_source_key: string }).p_source_key, /^[0-9a-f]{64}$/);
   for (const [phone, normalized] of [["05 96 01 02 03", "+596596010203"], ["05 97 01 02 03", "+596597010203"]]) {
-    const landline = setup(true, { enabled: true });
+    const landline = setup(0, { enabled: true });
     assert.equal((await landline.submit(post(path, { ...command, phone }))).status, 200);
     assert.equal((landline.calls[0].args as { p_phone: string }).p_phone, normalized);
   }
   const throttled = await setup(null, { enabled: true, code: "53300" }).submit(post(path, command));
   assert.equal(throttled.status, 429);
   assert.equal(throttled.headers.get("retry-after"), "60");
+  const rolling = await setup(3590, { enabled: true }).submit(post(path, command));
+  assert.equal(rolling.status, 429);
+  assert.equal(rolling.headers.get("retry-after"), "3590");
   assert.equal((await setup(null, { enabled: true, code: "P0001" }).submit(post(path, command))).status, 409);
   assert.equal((await setup({ received: true }, { enabled: true }).submit(post(path, command))).status, 503);
 });

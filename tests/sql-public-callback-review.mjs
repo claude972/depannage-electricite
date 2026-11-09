@@ -48,6 +48,7 @@ try {
   const first = [randomUUID(), "+12025550100", "new_request", true];
   for (const role of ["authenticated", "anon"]) {
     await assert.rejects(() => as(role, "closer", submit, first), { code: "42501" });
+    await assert.rejects(() => as(role, "closer", "select public.submit_public_callback($1,$2,$3,$4,$5) v", [...first, "1".repeat(64)]), { code: "42501" });
     await assert.rejects(() => as(role, "closer", "select phone v from public.public_callback_requests"), { code: "42501" });
   }
   await assert.rejects(() => as("service_role", null, submit, [...first.slice(0, 3), false]), { code: "22023" });
@@ -62,7 +63,7 @@ try {
   assert.equal(total, 3);
   assert.equal(can_close, false);
   assert.equal(items.at(-1).reason, "new_request");
-  assert.ok(items.every(row => !("request_id" in row) && !("consent_version" in row)));
+  assert.ok(items.every(row => !("request_id" in row) && !("consent_version" in row) && !("source_key" in row)));
   const target = items.at(-1).id;
   await assert.rejects(() => operator("reader", close, [target, 1]), { code: "42501" });
   assert.equal((await operator("closer", queue, [false, 1])).can_close, true);

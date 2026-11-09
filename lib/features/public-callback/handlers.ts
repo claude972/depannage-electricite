@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+import { isIP } from "node:net";
 import { env } from "node:process";
 import { z } from "zod";
 import { adminClient, ApiError, authenticatedClient, dbError } from "@/lib/supabase/server";
@@ -10,6 +12,7 @@ const headers = { "Cache-Control": "private, no-store", "Referrer-Policy": "no-r
 const intakeSchema = z.object({
   request_id: z.uuid(), phone: z.string().max(40), reason: callbackReason, consent: z.literal(true),
 }).strict();
+const retrySecondsSchema = z.number().int().min(0).max(3600);
 const closeSchema = z.object({ id: z.uuid(), expected_version: z.literal(1) }).strict();
 const available = () => env.PUBLIC_CALLBACK_INTAKE_ENABLED === "true";
 
@@ -18,6 +21,18 @@ function postRequest(request: Request) {
   if (request.headers.get("origin") !== url.origin) throw new ApiError(403, "Origine de la requête non autorisée.");
   if (url.search) throw new ApiError(422, "Vérifiez le contenu envoyé.");
   if (request.headers.get("content-type")?.split(";")[0].trim() !== "application/json") throw new ApiError(415, "Format de requête non pris en charge.");
+}
+
+function sourceKey(request: Request) {
+  const secret = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!secret) throw new ApiError(503, "Le service sécurisé est en cours de configuration.");
+  // Use the platform-provided address only when running behind Vercel's trusted edge.
+  const forwarded = env.VERCEL === "1" ? request.headers.get("x-vercel-forwarded-for") : null;
+  const version = forwarded && !forwarded.includes("%") ? isIP(forwarded) : 0;
+  const address = version === 4 ? forwarded : version === 6 ? new URL(`http://[${forwarded}]`).hostname : "unknown";
+  return createHmac("sha256", secret)
+    .update(JSON.stringify(["public-callback-source", new URL(request.url).origin, address]))
+    .digest("hex");
 }
 
 function failed(error: unknown) {
@@ -42,9 +57,13 @@ export async function postPublicCallback(request: Request) {
     if (!phone) throw new ApiError(422, "Saisissez un numéro de téléphone valide avec son indicatif si nécessaire.");
     const result = await adminClient().rpc("submit_public_callback", {
       p_request_id: input.request_id, p_phone: phone, p_reason: input.reason, p_consent: input.consent,
+      p_source_key: sourceKey(request),
     });
     dbError(result.error);
-    if (result.data !== true) throw Error("Unconfirmed callback");
+    const retrySeconds = retrySecondsSchema.parse(result.data);
+    if (retrySeconds > 0) return Response.json({ error: "Trop de demandes de rappel. Réessayez après le délai indiqué." }, {
+      status: 429, headers: { ...headers, "Retry-After": String(retrySeconds) },
+    });
     return Response.json({ received: true }, { headers });
   } catch (error) { return failed(error); }
 }
