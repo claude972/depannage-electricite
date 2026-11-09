@@ -570,8 +570,9 @@ try {
     (await detail("otherTech", j, teamB)).assignment.note === "",
     "old team notes not leaked",
   );
-  // Bounded keyset page over real SQL rows.
-  for (let i = 0; i < 53; i++) await job();
+  // Existing backlog can exceed the new capacity. Seed it for the bounded keyset review.
+  const backlog = [];
+  for (let i = 0; i < 53; i++) backlog.push(await job());
   const first = await list("owner", team, "missions");
   ok(
     first.records.length === 50 && first.next_after === first.records[49].id,
@@ -666,6 +667,8 @@ try {
   ok((await db.query("select count(*)::int n from public.provider_team_assignment_events where intervention_id=$1", [mission51])).rows[0].n === 4,
     "dispatch replay does not duplicate the four real assignment audit transitions");
 
+  // The backlog has served its pagination scenarios. Close it before testing a new assignment.
+  await db.query("update public.interventions set status='cancelled' where id=any($1::uuid[])", [backlog]);
   // Reassignment away and back never resurrects old technician access.
   await db.query("update public.interventions set artisan_id=$1 where id=$2", [ids.owner, j]);
   await denied(() => detail("otherTech", j, teamB), "P0002");

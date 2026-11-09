@@ -290,6 +290,8 @@ assert.equal((await supportRows('delegate')).length,2);
 await as('manager','select public.remove_organization_member($1,$2)',[site.organization_id,ids.delegate]);
 assert.equal((await supportRows('delegate')).length,0);
 assert.equal(await superScalar('select count(*)::int v from public.notifications where support_ticket_id=$1',[siteTicket.id]),2);
+// The appointment overlap fixture has finished; release its active mission before the support case.
+await as('client',"select public.intervention_action($1,'cancel')",[job]);
 const job5=(await as('otherClient',"select * from public.create_intervention('panel','Tableau de la cave.','12 rue du Test','97200','Fort-de-France','scheduled',null)")).rows[0].id;
 await as('artisan',"select public.intervention_action($1,'accept_mission')",[job5]);
 const artisanTicket=(await scalar('artisan','select public.create_support_ticket($1,$2,$3,$4) as v',['80000000-0000-4000-8000-000000000003','Sujet privé artisan','Question de l’artisan sur ce dossier précis.',job5])).ticket;

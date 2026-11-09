@@ -112,6 +112,7 @@ assert.equal((await draft('artisan',suspendedJob,'load')).version,1);
 assert.equal((await db.query('select available from public.artisan_profiles where user_id=$1',[ids.artisan])).rows[0].available,false);
 await as('artisan','select public.set_artisan_availability(true)');
 console.log('PASS: suspension closes all draft reads/mutations without consuming content; explicit reinstatement preserves the assigned-job draft');
+await as('client',"select public.intervention_action($1,'cancel')",[suspendedJob]);
 const reassignedJob=await newJob();let old=await draft('artisan',reassignedJob,'load');
 old=await draft('artisan',reassignedJob,'save',{version:0,token:old.assignment_token,lines,tax:20});
 await as('admin',"select public.reassign_intervention($1,$2,'Réaffectation QA')",[reassignedJob,ids.otherArtisan]);
@@ -143,6 +144,7 @@ assert.ok(definition.indexOf('public.lock_intervention_organization')<definition
 assert.ok(definition.indexOf('from public.interventions where id=p_id for update')<definition.indexOf('from public.profiles where id=auth.uid() for update'));
 assert.ok(definition.indexOf('from public.profiles where id=auth.uid() for update')<definition.indexOf('from public.artisan_profiles where user_id=auth.uid() for update'));
 console.log('PASS: enterprise owners/admins do not read private drafts, internal quote helpers remain denied and lock order follows organization/job/profile/dossier');
+await as('manager',"select public.intervention_action($1,'cancel')",[siteJob]);
 // Apply a versioned published grid using the same draft and approval transitions.
 await db.query("delete from public.action_limits where actor_id=$1 and action='quote_draft'",[ids.artisan]);
 const gridPayload = (amount, from = null) => ({
@@ -175,6 +177,7 @@ assert.deepEqual((await options('artisan')).grids.map(row=>row.id),[grid.id]);
 await rejectsCode(apply(gridJob,gridDraft,anotherGrid),'P0002');
 assert.deepEqual((await options('artisan')).grids[0].lines, [{index:0,label:'Forfait QA',unit:'visit',unit_price_cents:12500}]);
 assert.deepEqual((await options('artisan',reassignedJob)).grids, []);
+await as('client',"select public.intervention_action($1,'cancel')",[reassignedJob]);
 await rejectsCode(options('otherArtisan'),'42501');
 await rejectsCode(apply(gridJob,gridDraft,grid,[{index:0,quantity:2,unit_price_cents:1}]),'22023');
 await rejectsCode(apply(gridJob,gridDraft,grid,[{index:0,quantity:1},{index:0,quantity:2}]),'22023');
