@@ -21,7 +21,7 @@ Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvel
 | État | Nombre |
 | --- | ---: |
 | CORRIGÉ (avec suite verte) | 0 |
-| VÉRIFIÉ CIBLÉ (suite initiale rouge) | 6 |
+| VÉRIFIÉ CIBLÉ (suite initiale rouge) | 7 |
 | CORRIGÉ PARTIEL | 9 |
 | NON REPRODUIT | 0 |
 | DÉCISION REQUISE | 4 |
@@ -59,7 +59,7 @@ Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvel
 | E68 | Mineur | À REPRODUIRE | Isolé | — | — | — | Purge du brouillon expiré, y compris les champs restaurés par Firefox. |
 | E69 | Mineur | VÉRIFIÉ CIBLÉ | P7 | `7ccaeda` | `sql-phase2-lot-a-auth-session-review.mjs` | Route profile sessions | Vrai SDK et Next : `session_not_found` 503 avant, 401 après. `bad_jwt` reste 401, panne reste 503, nominal ferme seulement les autres sessions. |
 | E70 | Majeur | À REPRODUIRE | Isolé | — | — | — | Traduire l’erreur Stripe Connect localement. |
-| E72 | Majeur | À REPRODUIRE | P7 | — | — | — | Qualification du lien commission vers une écriture Stripe py_. |
+| E72 | Majeur | VÉRIFIÉ CIBLÉ | P7 | `2bdc979` | Webhook signé local, qualification SQL et test provider injecté | Contrat Stripe, migration additive | HTTP 400 et SQL 22023 avant ; 200 et commission rapprochée sur fixture après. Le préfixe py_ est limité aux commissions, la transaction ch_ plateforme et l’identité Connect restent vérifiées. |
 | E75 | Majeur | DÉCISION REQUISE | Décision | — | — | — | Réglage nullable à livrer ; valeur commerciale à décider. |
 | E76 | Majeur | À REPRODUIRE | Isolé | — | — | — | Quota public par origine/IP et numéro. |
 | E77 | Mineur | À REPRODUIRE | Isolé | — | — | — | Retry-After cohérent avec la fenêtre active. |
