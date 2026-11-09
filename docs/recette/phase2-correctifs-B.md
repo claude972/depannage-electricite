@@ -106,9 +106,14 @@ Mise à jour à chaque commit d’item.
 - CORRIGÉ (59 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E02, E03, E04, E05, E06, E08, E09, E10, E11, E12, E13, E14, E15, E16, E17, E18, E20, E22, E26, E27, E29, E30, E31, E32, E34, E35, E36, E38, E39, E40, E41, E42, E43, E44, E45, E46, E47, E48, E49, E50, E51, E52, E53, E54, E55, E56, E57, E58, E61, E62, E63, E64, E65, E66, E71, E72, E79, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : A f58df31).
 - VÉRIFIÉ À L’INTÉGRATION sans code B : E21, E24.
 - ROUGE : aucun.
-- À REPRODUIRE : voir tableau.
+- À REPRODUIRE : aucun.
 - NON REPRODUIT : aucun.
 - REVERTÉ : aucun.
+- CONTRAT A (cause serveur, aucun code B) : E07, E19, E25, E33, E69, E76, E77.
+- DÉCISION : E59, E60, E67, E75 (E75 : réglage neutre livré, aucun plafond ni unité choisis).
+- HORS LOT B : E01, E23, E28, E37, E68, E70, E73, E74, E78, H01.
+- Suite globale : non qualifiée verte par B. Relevé intermédiaire sur 03239bd (12 échecs préexistants identiques + restore-drill.mjs hors glob). Suite complète A + B (4f2cf9c) lancée par Codex ; aucun doublon lancé par B.
+- Tests existants modifiés (contrat changé, même rigueur, jamais affaiblis) : artisan-admin-status.test.ts (E34/E35), erp-command-transient.test.ts (P1, une relecture), message-history.test.ts cas 4b (E39, purge), recipient-quotes.test.ts (faux client documents complété, E13).
 
 ## Attendu de l’autre lot (A)
 
@@ -123,7 +128,7 @@ Contrats requis côté serveur, sans duplication en B.
 - E53 · `app/api/sites/[id]/documents/route.ts:163–186` : clé d’idempotence de dépôt.
 - E21/E24 · validation serveur des faits constatés (non futurs, ordre chronologique) et de la date de levée (≥ date du contrôle, non future). B ajoute la même validation à la saisie.
 - E80 · LIVRÉ PAR A f58df31 : `artisan_dispute` optionnel = none|open|under_review|resolved|closed sur GET /api/payments/status, seulement pour l’artisan affecté auteur du devis accepté, indépendant de payment.status, aucun détail finance. Câblé en B (ec7d6f1).
-- E61 · LIVRÉ PAR A fa9d690, câblé en B (8eedc26) : GET /api/reports `after=<UUID>`, pages de 1000 sites triées par site_id, `page {limit:1000,has_more,next_after}` optionnel, `scope.complete=false` sur page d’un périmètre découpé ; CSV complet sans after. 
+- E61 · LIVRÉ PAR A fa9d690, câblé en B (8eedc26) : GET /api/reports `after=<UUID>`, pages de 1000 sites triées par site_id, `page {limit:1000,has_more,next_after}` optionnel, `scope.complete=false` sur page d’un périmètre découpé ; CSV complet sans after.
 - E19, E23, E25, E33, E37, E61, E69, E76, E77, E78, E07 : cause entièrement serveur (voir registre).
 
 ## Fiches de décision
