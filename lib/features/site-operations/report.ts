@@ -22,7 +22,7 @@ export function evaluateCases(snapshot: SiteOperationsSnapshot, now: string): Sl
   });
 }
 export function summarize(cases: SlaEvaluation[]): SlaSummary {
-  const summary: SlaSummary = { cases: cases.length, measurable: 0, not_measurable: 0, breached: 0, pending: 0, met: 0 };
+  const summary: SlaSummary = { cases: cases.length, measurable: 0, not_measurable: 0, breached: 0, pending: 0, met: 0, indeterminate: 0 };
   for (const c of cases) {
     if (!c.measurable) {
       summary.not_measurable++;
@@ -32,6 +32,7 @@ export function summarize(cases: SlaEvaluation[]): SlaSummary {
     const statuses = [c.response.status, c.resolution.status];
     if (statuses.includes("breached")) summary.breached++;
     else if (statuses.includes("pending")) summary.pending++;
+    else if (statuses.includes("not_measurable")) summary.indeterminate++;
     else summary.met++;
   }
   return summary;

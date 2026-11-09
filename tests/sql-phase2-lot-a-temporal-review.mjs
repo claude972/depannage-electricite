@@ -67,3 +67,42 @@ test("E24 — closing a reserve before the checklist date or in the future is re
     await db.close();
   }
 });
+
+test("E23 — both real report routes classify a missing resolution target as indeterminate", async () => {
+  const db = await freshDatabase();
+  try {
+    const site = await siteFixture(db);
+    const opened = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    opened.setUTCHours(10, 0, 0, 0);
+    const responded = new Date(opened.getTime() + 30 * 60 * 1000);
+    const calendar = await asUser(db, actor, "select public.save_sla_calendar($1,$2) v", [
+      site.organization_id, {
+        name: "Calendrier QA", timezone: "UTC", closed_dates: [],
+        windows: [{ weekday: opened.getUTCDay() || 7, start: "08:00", end: "17:00" }],
+      },
+    ]);
+    const policy = await asUser(db, actor, "select public.save_sla_policy($1,$2) v", [
+      site.id, { name: "Politique QA", status: "active", calendar_id: calendar.id, urgency: null,
+        response_target_minutes: 60, resolution_target_minutes: null },
+    ]);
+    const item = await asUser(db, actor, "select public.save_sla_case($1,$2) v", [
+      site.id, { policy_id: policy.id, intervention_id: null, reference: "Reproduction E23", notes: "",
+        opened_at: opened.toISOString(), responded_at: responded.toISOString(), resolved_at: null },
+    ]);
+    await withNext(db, async http => {
+      const siteResponse = await http(`/api/site-operations?site_id=${site.id}`);
+      const organizationResponse = await http(`/api/organizations/${site.organization_id}/sla`);
+      assert.deepEqual([siteResponse.status, organizationResponse.status], [200, 200]);
+      const local = (await siteResponse.json()).sla;
+      const consolidated = await organizationResponse.json();
+      assert.equal(local.cases[0].case_id, item.id);
+      assert.equal(local.cases[0].response.status, "met");
+      assert.equal(local.cases[0].resolution.status, "not_measurable");
+      assert.equal(consolidated.sites[0].cases[0].case_id, item.id);
+      assert.equal(consolidated.summary.indeterminate, 1);
+      assert.deepEqual([local.summary.met, local.summary.indeterminate], [0, 1]);
+    }, {}, { rpcAllowlist: new Set(["site_operations_snapshot", "organization_sla_snapshot"]) });
+  } finally {
+    await db.close();
+  }
+});

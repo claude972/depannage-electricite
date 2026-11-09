@@ -23,7 +23,7 @@ test("an empty site reports nothing as configured and no overdue figure (null, n
   assert.equal(report.completeness.maintenance.overdue, null, "no scheduled plan: overdue is unknown, not zero");
   assert.equal(report.completeness.contract_grids.readable, false);
   assert.equal(report.completeness.contract_grids.published, null);
-  assert.deepEqual(report.sla.summary, { cases: 0, measurable: 0, not_measurable: 0, breached: 0, pending: 0, met: 0 });
+  assert.deepEqual(report.sla.summary, { cases: 0, measurable: 0, not_measurable: 0, breached: 0, pending: 0, met: 0, indeterminate: 0 });
   assert.deepEqual(report.completeness.truncated, []);
   assert.equal(report.computed_at, NOW);
 });
@@ -60,8 +60,9 @@ test("truncation flags surface in completeness and summary counts breached befor
     { case_id: "b", policy_id: "p", measurable: true, reasons: [], paused_now: false, response: { ...track("met") }, resolution: { ...track("pending") } },
     { case_id: "c", policy_id: "p", measurable: true, reasons: [], paused_now: false, response: { ...track("met") }, resolution: { ...track("not_measurable") } },
     { case_id: "d", policy_id: "p", measurable: false, reasons: ["no_calendar"], paused_now: false, response: { ...track("not_measurable") }, resolution: { ...track("not_measurable") } },
+    { case_id: "e", policy_id: "p", measurable: true, reasons: [], paused_now: false, response: track("met"), resolution: track("met") },
   ]);
-  assert.deepEqual(summary, { cases: 4, measurable: 3, not_measurable: 1, breached: 1, pending: 1, met: 1 });
+  assert.deepEqual(summary, { cases: 5, measurable: 4, not_measurable: 1, breached: 1, pending: 1, met: 1, indeterminate: 1 });
 });
 test("a case whose pauses do not match the server total is reported not measurable with its reason", () => {
   const seed = demoSnapshot();

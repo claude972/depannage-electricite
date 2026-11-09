@@ -226,6 +226,7 @@ export type SlaSummary = {
   breached: number;
   pending: number;
   met: number;
+  indeterminate: number;
 };
 export type Completeness = {
   budget: { fiscal_years: number; current_fiscal_year_id: string | null; lines: number; configured: boolean };

@@ -32,12 +32,9 @@ export function buildOrganizationSla(value:unknown,organizationId:string,after:s
   return{id:site.id,name:site.name,cases_total:site.cases_total,cases,complete:siteReasons.size===0,reasons:[...siteReasons]};
  });
  const raw=summarize(evaluated);
- // The legacy summary allows one measurable track. Never label such a mixed
- // met/unknown case "met" in this consolidated view.
- const indeterminate=evaluated.filter(c=>[c.response.status,c.resolution.status].includes('not_measurable')&&[c.response.status,c.resolution.status].includes('met')&&![c.response.status,c.resolution.status].some(s=>s==='breached'||s==='pending')).length;
  const hasMore=snapshot.remaining_sites_total>20,last=snapshot.sites.at(-1);const complete=reasons.size===0;
  return{organization_id:organizationId,captured_at:snapshot.captured_at,scope:{kind:snapshot.organization_wide?'organization':'visible_sites',visible_sites_total:snapshot.visible_sites_total,organization_wide:snapshot.organization_wide},
   state:complete?'complete':'partial',reasons:[...reasons],complete_for_visible_scope:complete,complete_for_organization:complete&&snapshot.organization_wide,
   page:{limit:20,has_more:hasMore,next_cursor:hasMore&&last?Buffer.from(JSON.stringify({organization_id:organizationId,after_site_id:last.id})).toString('base64url'):null,returned_sites:sites.length,remaining_sites_total:snapshot.remaining_sites_total},
-  summary:{...raw,met:raw.met-indeterminate,indeterminate,cases_evaluated:raw.cases,cases_returned:sites.reduce((n,s)=>n+s.cases.length,0),partially_measurable:evaluated.filter(c=>c.measurable&&[c.response.status,c.resolution.status].includes('not_measurable')).length,unavailable,complete,basis:'returned_visible_sites' as const},sites};
+  summary:{...raw,cases_evaluated:raw.cases,cases_returned:sites.reduce((n,s)=>n+s.cases.length,0),partially_measurable:evaluated.filter(c=>c.measurable&&[c.response.status,c.resolution.status].includes('not_measurable')).length,unavailable,complete,basis:'returned_visible_sites' as const},sites};
 }
