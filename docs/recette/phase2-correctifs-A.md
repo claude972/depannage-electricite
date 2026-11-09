@@ -4,6 +4,19 @@ Branche `fix/phase2-lot-A-codex` · Base `93e5a5dcf76caa528c121248a1c22f52433fb8
 Lot B séparé sur `fix/phase2-lot-B-claude-code`. Registre original de recette hors du checkout, copie de référence conservée sans ses pièces privées.
 Plan court : reproductions isolées E01, E28, E73 et E74 dans cet ordre, suite et point de synchronisation, puis mécanismes P1–P7 et défauts isolés, avec contrats de frontière et commits ciblés.
 
+## E59 et E60 après décision du propriétaire
+
+Le bilan consolidé passe à 78 défauts applicatifs corrigés sur 81. La branche `feat/intervention-report-evidence` réunit le serveur `b0f9a93`, l’interface `25048a7`, la révocation `8eba138` et le contrôle d’affichage `fc6a33e`. Le commit applicatif vérifié est `95986762d740ed5c5a5f88c713362bb8c48563d3`. Le tableau historique ci-dessous conserve l’état du lot A initial.
+
+| ID | État | Correctif et preuve |
+| --- | --- | --- |
+| E59 | CORRIGÉ | L’artisan ajoute deux photos privées distinctes, avant et après, depuis le compte rendu. La clôture des nouvelles interventions est refusée tant que les deux fichiers du dossier ne sont pas enregistrés et présents. Les dossiers déjà créés sont exemptés. Sur `a01487e`, la clôture sans photo rendait HTTP 200. Sur la nouvelle version, elle rend 409. Recette dans `tests/sql-intervention-report-evidence-review.mjs` et `tests/ui/phase2-lot-b-e59-report-photos-closure.test.ts`. |
+| E60 | CORRIGÉ | Le demandeur authentifié confirme la réception et signe en saisissant son nom après clôture. Les deux actes sont horodatés côté serveur et liés à la version exacte du compte rendu. Une révision ultérieure conserve la preuve précédente. L’absence de signature ne bloque ni la clôture ni le paiement. L’ancien serveur rendait 422 pour cette action. Le rejeu autorisé ne produit aucun doublon. Après révocation d’un accès entreprise, la signature et le rejeu rendent 403, avec aucune nouvelle preuve. Recette dans `tests/sql-intervention-report-evidence-review.mjs` et `tests/ui/phase2-lot-b-e59-e60-report-receipt.test.ts`. |
+
+TypeScript, 2 234 tests (aucun échec, aucun ignoré) et les builds Next.js Turbopack et Webpack passent sur le commit applicatif. Les 87 contrôles SQL et d’adaptation passent sur le lot serveur. La recette SQL et HTTP de signature a ensuite été rejouée avec la vérification de révocation et les deux migrations se sont appliquées deux fois chacune sur PostgreSQL 17.11 isolé. Les tests utilisent des données synthétiques et des services de boucle locale.
+
+E67 reste une décision sur la preuve à fournir pour constater la levée d’une réserve ERP. E75 reste une décision sur le nombre de missions simultanées, le réglage existant reste neutre. E70 attend sa validation Stripe Connect en environnement de test. H01 reste distinct. Aucune variable de preview n’a été trouvée pour cette branche lors du contrôle Vercel, et la vérification de ce lot a été faite en local.
+
 ## Bilan de la branche d’intégration
 
 Sur `fix/phase2-integration`, le commit applicatif vérifié est `a01487ef0af3c9cc3961fdfa57e4803fe9313743`. Les états ci-dessous décrivent l’ancienne branche A avant l’assemblage. Le bilan consolidé est de 76 défauts du registre corrigés avec preuves ciblées, un partiel (E70) et quatre décisions métier (E59, E60, E67, E75).
