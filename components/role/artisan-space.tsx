@@ -3656,7 +3656,7 @@ function Profile({
         erasureRequests
       />
       <SubscriptionsPanel
-        key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}
+        key={`subscriptions:${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}
         role="artisan"
         demo={session.mode === "demo"}
         context={session.mutationContext}
