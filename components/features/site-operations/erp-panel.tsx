@@ -1,7 +1,6 @@
 "use client";
 import { useRef, useState, type FormEvent } from "react";
-import { z } from "zod";
-import { erpChecklistPayload } from "../../../lib/features/site-operations/schemas";
+import { erpChecklistPayload, uuid } from "../../../lib/features/site-operations/schemas";
 import { CHECKLIST_STATUS, DECLARATIVE_NOTICE, ITEM_STATE, date } from "../../../lib/features/site-operations/labels";
 import type { ChecklistItem, ChecklistStatus, ErpChecklist, ErpChecklistPayload, ItemState } from "../../../lib/features/site-operations/types";
 import { OpenSiteDocument, ReserveDocumentPicker, useSiteDocumentOptions, type SiteDocumentOption } from "./erp-reserve-document";
@@ -13,13 +12,9 @@ const ITEM_TONE: Record<ItemState, Tone> = { not_checked: "neutral", ok: "green"
  *  requires it. `doc_origin` is the link read from the server (to send an explicit null on removal). */
 type ItemDraft = { key: string; label: string; state: ItemState; note: string; reserve_resolved_on: string; doc: { id: string; name: string | null; site: string } | null; doc_origin: string | null };
 type Draft = { title: string; description: string; performed_on: string; performed_by_label: string; status: ChecklistStatus; items: ItemDraft[] };
-type ItemPayload = ChecklistItem & { reserve_document_id?: string | null };
-type Payload = Omit<ErpChecklistPayload, "items"> & { items: ItemPayload[] };
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-/** Server rows may carry reserve_document_id (contract in progress); anything else reads as no link. */
 const linkedDocument = (i: ChecklistItem): string | null => {
-  const v = (i as ItemPayload).reserve_document_id;
-  return typeof v === "string" && UUID.test(v) ? v : null;
+  const result = uuid.safeParse(i.reserve_document_id);
+  return result.success ? result.data : null;
 };
 let counter = 0;
 const newKey = () => `item-${Date.now().toString(36)}-${(counter++).toString(36)}`;
@@ -35,7 +30,7 @@ const fromRow = (c: ErpChecklist, site: string): Draft => ({
 const canLink = (i: ItemDraft) => i.state === "reserve" && i.reserve_resolved_on !== "";
 /** reserve_document_id is sent only when a document is chosen (same site, lifted reserve) or to
  *  clear a link that exists on the server; otherwise the key is absent. */
-const toPayload = (d: Draft, site: string): Payload => ({
+const toPayload = (d: Draft, site: string): ErpChecklistPayload => ({
   title: d.title.trim(),
   description: d.description.trim(),
   performed_on: orNull(d.performed_on),
@@ -43,19 +38,10 @@ const toPayload = (d: Draft, site: string): Payload => ({
   status: d.status,
   items: d.items.map((i) => {
     const doc = canLink(i) && i.doc && i.doc.site === site ? i.doc.id : null;
-    const base: ItemPayload = { key: i.key, label: i.label.trim(), state: i.state, note: i.note.trim(), reserve_resolved_on: orNull(i.reserve_resolved_on) };
+    const base: ChecklistItem = { key: i.key, label: i.label.trim(), state: i.state, note: i.note.trim(), reserve_resolved_on: orNull(i.reserve_resolved_on) };
     return doc ? { ...base, reserve_document_id: doc } : i.doc_origin ? { ...base, reserve_document_id: null } : base;
   }),
 });
-/** Client check: the existing payload rules, plus a well-formed optional document id per item. */
-const payloadSchema = z.preprocess((value) => {
-  const p = value as Payload;
-  return { ...p, items: p.items.map((item) => {
-    const { reserve_document_id: id, ...rest } = item;
-    return id === undefined || id === null || UUID.test(id) ? rest : item; // a malformed id stays and is refused
-  }) };
-}, erpChecklistPayload);
-
 export function ErpPanel({ context }: { context: PanelContext }) {
   const { report, canWrite } = context;
   const checklists = report.snapshot.erp_checklists;
@@ -89,7 +75,7 @@ export function ErpPanel({ context }: { context: PanelContext }) {
       ? { action: "save_erp_checklist" as const, site_id: site, payload, id: editing.id, expected_version: editing.version ?? 0 }
       : { action: "save_erp_checklist" as const, site_id: site, payload };
     try {
-      await form.submit(event, payloadSchema, payload, command, () => {
+      await form.submit(event, erpChecklistPayload, payload, command, () => {
         if (editor.current === token && site === siteRef.current) close(); // late reply for another editor or site: ignored
       }, editing.id ? "Contrôle mis à jour." : "Contrôle enregistré.");
     } finally {
