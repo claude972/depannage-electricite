@@ -24,8 +24,7 @@ import {
   type Context,
   type ReminderCommand,
   type ReminderRead,
-  type Store,
-} from "./model";
+  type Store, sameCommand } from "./model";
 
 const when = (iso: string) => new Intl.DateTimeFormat("fr-FR", { dateStyle: "long", timeStyle: "short" }).format(new Date(iso));
 
@@ -81,7 +80,7 @@ function Control({ quoteId, context, fetcher, store = tabStore }: { quoteId: str
   const send = async (cmd: ReminderCommand) => {
     if (inFlight.current || !still()) return;
     const stored = readPending(store(), me.uid, me.gen, quoteId);
-    if (!stored || JSON.stringify(stored) !== JSON.stringify(cmd)) return setMessage({ tone: "error", text: COPY.storage });
+    if (!stored || !sameCommand(stored, cmd)) return setMessage({ tone: "error", text: COPY.storage });
     inFlight.current = true;
     setBusy(true);
     setMessage(null);
