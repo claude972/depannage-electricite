@@ -125,8 +125,11 @@ export const checklistItem = z
     state: z.enum(["not_checked", "ok", "reserve", "not_applicable"]),
     note: text(1000),
     reserve_resolved_on: observedDate.nullable(),
+    reserve_document_id: uuid.nullable().optional(),
   })
-  .strict();
+  .strict()
+  .refine(item => !item.reserve_document_id || (item.state === "reserve" && item.reserve_resolved_on !== null),
+    { message: "Le justificatif peut être joint à une réserve levée.", path: ["reserve_document_id"] });
 export const erpChecklistPayload = z
   .object({
     title: text(160, 1),

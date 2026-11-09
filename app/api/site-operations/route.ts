@@ -48,6 +48,8 @@ export async function POST(request: Request) {
     const command = await validated(request, commandSchema);
     const { fn, args } = toRpc(command);
     const result = await db.rpc(fn, args);
+    if (result.error?.code === "22023" && result.error.message === "erp_reserve_document_invalid")
+      throw new ApiError(422, "Choisissez un document disponible dans ce site pour cette réserve.");
     dbError(result.error);
     if (!result.data || typeof result.data !== "object" || Array.isArray(result.data))
       throw new ApiError(503, "L’enregistrement n’a pas été confirmé. Rechargez les données avant de réessayer.");

@@ -139,6 +139,7 @@ export type ChecklistItem = {
   state: ItemState;
   note: string;
   reserve_resolved_on: string | null;
+  reserve_document_id?: string | null;
 };
 export type ErpChecklist = Audited & {
   site_id: string;
