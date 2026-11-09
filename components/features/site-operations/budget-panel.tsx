@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { z } from "zod";
 import { fiscalYearPayload } from "../../../lib/features/site-operations/schemas";
 import { BUDGET_CATEGORY, date, money } from "../../../lib/features/site-operations/labels";
@@ -24,6 +24,10 @@ export function BudgetPanel({ context }: { context: PanelContext }) {
   const [yearDraft, setYearDraft] = useState<YearDraft>(emptyYear);
   const [lineEditing, setLineEditing] = useState<BudgetCategory | null>(null);
   const [lineDraft, setLineDraft] = useState({ amount: "", note: "" });
+  /** E08: server values (and version) the open line form is based on; a re-read with another
+   *  version reloads the untouched fields, keeps the typed ones and flags the conflict. */
+  const [lineBase, setLineBase] = useState<{ version: number | null; amount: string; note: string } | null>(null);
+  const [lineConflict, setLineConflict] = useState(false);
   const yearForm = useSubmit(context);
   const lineForm = useSubmit(context);
   const year = years.find((y) => y.id === selected) ?? null;
@@ -38,9 +42,23 @@ export function BudgetPanel({ context }: { context: PanelContext }) {
   const openLine = (category: BudgetCategory) => {
     const existing = yearLines.find((l) => l.category === category);
     setLineEditing(category);
-    setLineDraft({ amount: existing ? fromCents(existing.amount_cents) : "", note: existing?.note ?? "" });
+    const values = { amount: existing ? fromCents(existing.amount_cents) : "", note: existing?.note ?? "" };
+    setLineDraft(values);
+    setLineBase({ version: existing?.version ?? null, ...values });
+    setLineConflict(false);
     lineForm.setMessage(null);
   };
+  const editedLine = lineEditing ? yearLines.find((l) => l.category === lineEditing) ?? null : null;
+  useEffect(() => {
+    if (!lineEditing || !lineBase) return;
+    const version = editedLine?.version ?? null;
+    if (version === lineBase.version) return;
+    const server = { amount: editedLine ? fromCents(editedLine.amount_cents) : "", note: editedLine?.note ?? "" };
+    setLineDraft((d) => ({ amount: d.amount === lineBase.amount ? server.amount : d.amount, note: d.note === lineBase.note ? server.note : d.note }));
+    setLineBase({ version, ...server });
+    setLineConflict(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lineEditing, editedLine?.version]);
   return (
     <section aria-labelledby="so-budget-title">
       <header className={styles.sectionHead}>
@@ -167,6 +185,7 @@ export function BudgetPanel({ context }: { context: PanelContext }) {
             >
               <h4>{BUDGET_CATEGORY[lineEditing]} — {year.label}</h4>
               {lineForm.message && <Notice tone={lineForm.message.tone}>{lineForm.message.text}</Notice>}
+              {lineConflict && <Notice tone="error">Cette ligne a été modifiée entre-temps : sa version actuelle est rechargée ci-dessous ; vos modifications sont conservées. Vérifiez avant d’enregistrer.</Notice>}
               <div className={styles.grid2}>
                 <Field label="Montant (€)" hint="Montant décidé par votre organisation, sans TVA ajoutée automatiquement." error={lineForm.errors.amount_cents}>
                   {(a) => <input {...a} inputMode="decimal" value={lineDraft.amount} onChange={(e) => setLineDraft((d) => ({ ...d, amount: e.target.value }))} />}
