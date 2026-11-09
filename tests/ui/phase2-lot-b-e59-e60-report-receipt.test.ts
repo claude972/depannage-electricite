@@ -11,6 +11,10 @@ import { pathToFileURL } from "node:url";
 import { serveLiveClient } from "./client-live-space-harness";
 import { canSignReport, closureMissing, currentReceipt, dossierPhotos } from "../../components/app/report-evidence";
 import type { Operations } from "../../components/app/types";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { readFileSync } from "node:fs";
+import { ReportEvidenceSummary } from "../../components/app/report-evidence";
 
 const PW = process.env.QA_PLAYWRIGHT_PATH || path.join(homedir(), ".cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright");
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
@@ -183,4 +187,18 @@ test("E59/E60 · règles partagées : statut, demandeur, version courante, photo
   ];
   assert.deepEqual(dossierPhotos(docs, J, A).map((p) => p.id), ["1", "2", "3", "8"], "JPEG/PNG/WebP du dossier et de l’artisan affecté (owner_id projeté)");
   assert.deepEqual(dossierPhotos(docs, J, null).map((p) => p.id), ["8"], "sans artisan affecté : aucune photo d’un propriétaire connu");
+});
+
+test("E60 · lecteur hors accusé (super admin, membre non demandeur) : report_receipt null ⇒ aucun statut, jamais « en attente »", () => {
+  const report = { intervention_id: "j", summary: "Résumé assez long", checks: [], signature_name: "Jean", report_revision: R1, before_photo_id: P1, after_photo_id: P2 };
+  const ops = { participants: [], appointment: null, history: [], history_limit: 50, travel_stage: "on_site", report, report_evidence_required: true, report_receipt: null } as unknown as Operations;
+  const hidden = renderToStaticMarkup(createElement(ReportEvidenceSummary, { ops, report, receiptVisible: false }));
+  assert.doesNotMatch(hidden, /Accusé|en attente/, "statut masqué");
+  assert.match(hidden, /data-report-evidence="hidden"/);
+  assert.match(hidden, /Photo avant[\s\S]*Photo après/, "compte rendu et photos restent lisibles");
+  const requester = renderToStaticMarkup(createElement(ReportEvidenceSummary, { ops, report, receiptVisible: true }));
+  assert.match(requester, /Accusé de réception du demandeur en attente/);
+  const admin = readFileSync("components/role/admin-space.tsx", "utf8");
+  assert.match(admin, /<ReportEvidenceSummary[^>]*receiptVisible=\{false\}/, "administration : jamais de statut d’accusé");
+  assert.match(readFileSync("components/role/enterprise-space.tsx", "utf8"), /<ReportEvidenceSummary[^>]*receiptVisible=\{intervention\.client_id === session\.profileId\}/, "entreprise : demandeur seulement");
 });

@@ -2153,7 +2153,7 @@ export function DossierView({ c, id, initialQuoteId }: { c: Ctx; id: string; ini
               <p className={styles.note}>
                 {reportDeclarant(ops.report.signature_name, ops.report.updated_at ? dateTime(ops.report.updated_at) : undefined)}
               </p>
-              <ReportEvidenceSummary ops={ops} report={ops.report} photos={dossierPhotos(session.data.documents, intervention.id, intervention.artisan_id)} noteClass={styles.note} declarant={false} openContext={demo ? undefined : session.mutationContext} />
+              <ReportEvidenceSummary ops={ops} report={ops.report} photos={dossierPhotos(session.data.documents, intervention.id, intervention.artisan_id)} noteClass={styles.note} declarant={false} receiptVisible={intervention.client_id === session.profileId} openContext={demo ? undefined : session.mutationContext} />
               {/* E60: only the authenticated requester of the dossier, within its writable perimeter. */}
               {!demo && canOperate && canSignReport(ops, intervention.status, intervention.client_id === session.profileId) && (
                 <ReportReceiptForm

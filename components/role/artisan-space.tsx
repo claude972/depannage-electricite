@@ -1654,6 +1654,7 @@ function WorkDossier({ session, intervention: i }: { session: Session; intervent
           />
           {canReport && (
             <ReportPanel
+              assigned={i.artisan_id === session.profileId}
               report={ops?.report ?? null}
               loaded={ops !== null}
               pending={pending}
@@ -2064,6 +2065,7 @@ function QuotePanel({
   );
 }
 function ReportPanel({
+  assigned,
   report,
   loaded,
   pending,
@@ -2086,6 +2088,8 @@ function ReportPanel({
   ops: Operations | null;
   photos: EvidencePhoto[];
   openContext?: { generation(): number; userId(): string | null };
+  /** Assigned artisan of the dossier: the only artisan allowed to see the acknowledgement state. */
+  assigned: boolean;
   /** Live only: private photo upload into this dossier from the form. */
   upload?: Omit<ReportPhotoUploadProps, "onUploaded">;
   onSave: (values: ReportValues) => Promise<boolean>;
@@ -2141,7 +2145,7 @@ function ReportPanel({
             {report.updated_at ? ` — enregistré le ${dateTime(report.updated_at)}` : ""}. Il ne
             s’agit pas d’une signature électronique certifiée.
           </p>
-          {ops && <ReportEvidenceSummary ops={ops} report={report} photos={photos} noteClass={styles.sectionNote} declarant={false} openContext={openContext} />}
+          {ops && <ReportEvidenceSummary ops={ops} report={report} photos={photos} noteClass={styles.sectionNote} declarant={false} receiptVisible={assigned} openContext={openContext} />}
           <div className={styles.formActions}>
             <button type="button" className="button outline" disabled={busy} onClick={() => setEditing(true)}>
               <Icon name="edit" size={17} />
