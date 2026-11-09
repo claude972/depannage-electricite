@@ -94,7 +94,8 @@ test("new report photos and the recipient's receipt are verified and tied to the
 
       const edit = await report({ ...valid, command_id: randomUUID(), summary: "Compte rendu de recette révisé" });
       assert.equal(edit.status, 200);
-      assert.notEqual((await edit.json()).result.report_revision, saved.report_revision);
+      const latest = (await edit.json()).result;
+      assert.notEqual(latest.report_revision, saved.report_revision);
       assert.equal((await read(requester)).report_receipt, null);
       const stored = (await db.query("select report_snapshot from public.intervention_report_receipts where intervention_id=$1", [id])).rows;
       assert.equal(stored.length, 1);
@@ -102,6 +103,17 @@ test("new report photos and the recipient's receipt are verified and tied to the
       assert.equal((await db.query("select count(*)::int n from public.audit_log where intervention_id=$1 and action='report_receipt_signed'", [id])).rows[0].n, 1);
       await assert.rejects(asUser(db, requester, "select report_snapshot v from public.intervention_report_receipts"), e => e.code === "42501");
       assert.equal(await asUser(db, assignee, "select count(intervention_id)::int v from public.intervention_report_receipts"), 0);
+
+      const org = (await db.query("insert into public.organizations(name,owner_id) values('Entreprise de recette',$1) returning id", [assignee.id])).rows[0].id;
+      const site = (await db.query("insert into public.sites(organization_id,name,type,address,budget_cents) values($1,'Site de recette','office','Adresse de recette',10000) returning id", [org])).rows[0].id;
+      await db.query("insert into public.organization_members values($1,$2,'manager')", [org, requester.id]);
+      await db.query("update public.interventions set site_id=$1 where id=$2", [site, id]);
+      assert.equal((await http(reportRoute, {}, requester)).status, 200);
+      await db.query("delete from public.organization_members where organization_id=$1 and user_id=$2", [org, requester.id]);
+      assert.equal((await http(reportRoute, {}, requester)).status, 404);
+      assert.equal((await report({ ...sign, report_revision: latest.report_revision }, requester)).status, 403, "former member cannot sign a report directly");
+      assert.equal((await report(sign, requester)).status, 403, "former member cannot replay an old signature");
+      assert.equal((await db.query("select count(*)::int n from public.intervention_report_receipts where intervention_id=$1", [id])).rows[0].n, 1);
     }, {}, {
       users: [actor, requester, assignee],
       rpcAllowlist: new Set(["save_intervention_report", "sign_intervention_report", "intervention_action"]),
