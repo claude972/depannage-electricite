@@ -68,7 +68,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E12 | Mineur | B | À REPRODUIRE | 409 → recharger le formulaire (P1/P2) | | | client-addresses-panel.tsx | |
 | E13 | Mineur | B | À REPRODUIRE | devis expiré : bouton inactif | | | client-space.tsx, quote-documents-panel.tsx | |
 | E14 | Mineur | B | À REPRODUIRE | 403 offre perdue → retirer (P1) | | | available-missions | |
-| E18 | Mineur | A + B | CONTRAT A | command_id rapport (P3) | | | route operations sans command_id | |
+| E18 | Mineur | A + B | CORRIGÉ (dépend de A 7de6d11) | command_id du rapport (P3) | 4049d5d | phase2-lot-b-e18-report-command-id | types.ts, artisan-space.tsx | rouge : aucune clé ; vert : même clé et saisie après réponse perdue, nouvelle clé après succès |
 | E19 | Mineur | A | CONTRAT A | nom vide accepté par la route | | | app/api | formulaire déjà conforme |
 | E22 | Mineur | B | À REPRODUIRE | verrou synchrone useSubmit (P5) | | | site-operations/shared.tsx | |
 | E23 | Mineur | A | CONTRAT A | classement SLA divergent | | | lib | |
@@ -76,13 +76,13 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E31 | Mineur | B | À REPRODUIRE | `account_role` lu comme `role` | | | features.ts, platform-operators-view.tsx | |
 | E33 | Mineur | A | CONTRAT A | normalisation NFC annuaire | | | app/api, supabase | |
 | E36 | Mineur | A + B | CORRIGÉ (dépend de A 523878c) | command_id stable par intention (P3) | 43ee0b9 | phase2-lot-b-e34-e35-e36-artisan-decisions | forms.tsx | rouge : aucune clé ; vert : même command_id jusqu’à confirmation, écran relu |
-| E41 | Mineur | A + B | CONTRAT A | message texte sans id stable (P3) | | | app/api/messages | |
+| E41 | Mineur | A + B | CORRIGÉ (dépend de A 0127c6d) | command_id du message texte (P3) | 03936b5 | phase2-lot-b-e41-message-command-id | forms.tsx, session-types.ts, courant-app.tsx, client/artisan-space | rouge : aucune clé ; vert : même clé au renvoi, nouvelle clé au message suivant |
 | E43 | Mineur | B | À REPRODUIRE | publication propre prise pour « autre canal » (P3) | | | artisan-quote-draft.tsx | |
 | E45 | Mineur | B | CORRIGÉ | erreur de page suivante expliquée | ca0f8a3 | phase2-lot-b-e44-e45-invoices-pagination | invoices-model.ts, customer-invoices-panel.tsx | rouge : 503 silencieux ; vert : alerte, reprise 26 pièces, alerte retirée |
 | E46 | Mineur | B | À REPRODUIRE | avis effacé par la navigation | | | courant-app.tsx | |
 | E47 | Mineur | B | À REPRODUIRE | vérification de retour après SIGNED_IN | | | courant-app.tsx | |
 | E49 | Mineur | B | CORRIGÉ | alerte de pagination retirée | d5b1a3b | phase2-lot-b-e48-e49-saved-methods-pagination | saved-payment-methods/model.ts | rouge : alerte conservée ; vert : retirée après la 21e carte |
-| E53 | Mineur | A + B | CONTRAT A | dépôt de site sans clé (P3) | | | app/api/sites/[id]/documents | |
+| E53 | Mineur | A + B | CORRIGÉ (dépend de A b414386) | command_id du dépôt de site (P3) | fc06c26 | phase2-lot-b-e53-site-upload-command-id | site-attachments-panel.tsx | rouge : command_id absent ; vert : même clé au renvoi, un seul document |
 | E55 | Mineur | B | À REPRODUIRE | cloche non relue après lecture (P1/P6) | | | notification-center, courant-app | |
 | E57 | Mineur | B | À REPRODUIRE | confirmation perdue au remount (P3) | | | site-lifecycle | |
 | E58 | Mineur | B | À REPRODUIRE | profil public relu en navigation (P6) | | | public-operator-profile, public-site | |
@@ -103,7 +103,7 @@ Sous-cas externes avec condition ouverte (PUB-10.1, CLI-05.2, CLI-08.1, ADM-01.1
 
 Mise à jour à chaque commit d’item.
 
-- CORRIGÉ (rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E15, E29, E34, E35, E36, E38, E44, E45, E48, E49, E50, E52, E62, E63, E64. E15/E29/E34/E36 exigent les routes A à l’intégration.
+- CORRIGÉ (rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E15, E18, E29, E34, E35, E36, E38, E41, E44, E45, E48, E49, E50, E52, E53, E62, E63, E64. E15/E18/E29/E34/E36/E41/E53 exigent les routes A à l’intégration.
 - ROUGE : aucun.
 - À REPRODUIRE : voir tableau.
 - NON REPRODUIT : aucun.
