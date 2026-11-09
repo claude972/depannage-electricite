@@ -44,7 +44,7 @@ const usePointsContext = (context: string) => {
 export type PresenceDecision = DetailDecision | "detail" | "detail_error" | "detail_loading";
 
 export function useDetailPresence(
-  session: Pick<Session, "mode" | "ensureFresh" | "refreshContext"> & { data?: { limits?: { interventions: { limited: boolean } } } },
+  session: Pick<Session, "mode" | "ensureFresh" | "refreshContext"> & { data?: { limits?: { interventions: { limited: boolean }; sites?: { limited: boolean } }; interventions?: { id: string }[] } },
   view: string,
   id: string,
   present: boolean,
@@ -116,7 +116,12 @@ export function useDetailPresence(
   }, [id, context, rerender]);
 
   const base = decideDetail({ present, live, attempt: live && id ? memory.get(key) : undefined });
-  const limited = session.data?.limits?.interventions.limited === true;
+  // E66: the view may hide a dossier the workspace holds when its SITE list is truncated (a site
+  // beyond the first page): the absence is then unproven too ⇒ automatic point read.
+  const limited =
+    session.data?.limits?.interventions.limited === true ||
+    session.data?.limits?.sites?.limited === true ||
+    (Boolean(id) && session.data?.interventions?.some((i) => i.id === id) === true);
   const cached = live && id && !present ? cache.get(id) : undefined;
   const point = live && id ? points.get(id) : undefined;
 
