@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { ContractState, Page, PlatformViewScope } from "../../../lib/features/platform-operations/types";
 import styles from "./platform-operations.module.css";
+import { ApiRequestError } from "../../app/api";
+import { classifyRefusal, readRefused } from "../../app/refusal";
 
 export const money = (cents: number, currency = "eur") => new Intl.NumberFormat("fr-FR", { style: "currency", currency: currency.toUpperCase(), minimumFractionDigits: 2 }).format(cents / 100);
 export const dateTime = (value: string | null | undefined) => (value ? new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "—");
@@ -83,7 +85,12 @@ export function useLoad<T>(loader: () => Promise<T | null>, deps: unknown[]) {
     let active = true;
     setLoading(true); setError("");
     loader().then((result) => { if (!active) return; if (result !== null) setData(result); setLoading(false); })
-      .catch((e) => { if (!active) return; setError(errorText(e)); setLoading(false); });
+      .catch((e) => {
+        if (!active) return;
+        // P1 shared rule: a refused read (401/403/404) purges the data already shown.
+        if (e instanceof ApiRequestError && readRefused(e.status)) setData(undefined);
+        setError(errorText(e)); setLoading(false);
+      });
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, tick]);
@@ -105,4 +112,10 @@ export function useCommand<A extends unknown[], R>(command: (...args: A) => Prom
   return { run, busy, error, success, reset: () => { setError(""); setSuccess(""); } };
 }
 export function preventDefault(event: FormEvent) { event.preventDefault(); }
+/** P1 shared rule for a refused command: true when rights + resource must be re-read first. */
+export function commandRefused(e: unknown): boolean {
+  if (!(e instanceof ApiRequestError)) return false;
+  const k = classifyRefusal(e.status);
+  return k === "session" || k === "access";
+}
 export const UUID_HINT = "Identifiant au format UUID (36 caractères).";

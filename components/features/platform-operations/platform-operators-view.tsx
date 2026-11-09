@@ -6,7 +6,7 @@ import { PLATFORM_SCOPES } from "../../../lib/features/platform-operations/types
 import { UUID_RE } from "../../../lib/features/platform-operations/state-machines";
 import { SCOPE_DESCRIPTIONS, SCOPE_LABELS, WRITE_WITHOUT_READ_WARNING, writeScopeWithoutRead } from "../../../lib/features/platform-operations/scope-labels";
 import type { PlatformDemo } from "../../../lib/features/platform-operations/demo";
-import { EmptyState, ErrorBox, Field, Gate, Loading, Pager, Panel, ReadOnly, dateTime, errorText, scopeKey, shortId, useLoad } from "./shared";
+import { EmptyState, ErrorBox, Field, Gate, Loading, Pager, Panel, ReadOnly, commandRefused, dateTime, errorText, scopeKey, shortId, useLoad } from "./shared";
 import styles from "./platform-operations.module.css";
 
 export type PlatformOperatorsViewProps = { state: ContractState; unavailableMessage: string; scope: PlatformViewScope; client: PlatformClient; demo?: PlatformDemo; onNavigate?: (view: string, param?: string) => void };
@@ -29,7 +29,11 @@ function Inner({ scope, client, demo, onNavigate }: PlatformOperatorsViewProps) 
     if (demo) { setMessage({ kind: "error", text: DEMO_NOTE }); return; }
     setBusy(true); setMessage(null);
     try { const result = await work(); if (result !== null) { setMessage({ kind: "ok", text: done }); list.reload(); me.reload(); } }
-    catch (e) { setMessage({ kind: "error", text: errorText(e) }); } finally { setBusy(false); }
+    catch (e) {
+      setMessage({ kind: "error", text: errorText(e) });
+      // E30: a refused revocation / grant re-reads the rights (/me) and the list before anything else.
+      if (commandRefused(e)) { me.reload(); list.reload(); }
+    } finally { setBusy(false); }
   }, [busy, demo, list, me]);
   if (me.loading && !me.data) return <Loading label="Chargement des droits…" />;
   if (me.error && !me.data) return <ErrorBox message={me.error} onRetry={me.reload} />;
@@ -50,11 +54,11 @@ function Inner({ scope, client, demo, onNavigate }: PlatformOperatorsViewProps) 
     </div>
   );
 }
-/** The account's record, ONLY from the profile role the server may send with the grant (optional,
- *  strict values): client / manager ⇒ client record, artisan ⇒ artisan record. Admin, absent or
- *  unknown ⇒ no link (a scope can be granted to any non-admin profile; never guessed). */
+/** The account's record, ONLY from the profile role the server sends with the grant: `account_role`
+ *  (actual list contract, E31), older `role` accepted. Strict values: client / manager ⇒ client
+ *  record, artisan ⇒ artisan record. Admin, absent or unknown ⇒ no link (never guessed). */
 export function grantAccountTarget(grant: OperatorGrant): { target: "client" | "artisan"; id: string } | null {
-  const role = (grant as OperatorGrant & { role?: unknown }).role;
+  const role = grant.account_role !== undefined ? grant.account_role : (grant as OperatorGrant & { role?: unknown }).role;
   if (role === "client" || role === "manager") return { target: "client", id: grant.user_id };
   if (role === "artisan") return { target: "artisan", id: grant.user_id };
   return null;
