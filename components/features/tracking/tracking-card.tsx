@@ -35,18 +35,23 @@ function CardBody({ state, unavailableMessage, scope, client, demo, onNavigate, 
   const [, setTick] = useState(0);
   const available = state === "available";
 
-  /** E17: only the reply of the LATEST read applies; an older reply arriving late is dropped. */
+  /** E17: monotone guard at RESOLUTION — a reply applies only if it is newer than the last APPLIED
+   *  one (success or error); an older reply arriving late is dropped, and a slower poll never blocks
+   *  every reply nor a « stopped » answer received while a newer read is still pending. */
   const loadSeq = useRef(0);
+  const appliedSeq = useRef(0);
   const load = useCallback(async () => {
     if (demo) return;
     const my = ++loadSeq.current;
     try {
       const next = await client.load();
-      if (my !== loadSeq.current) return;
+      if (my <= appliedSeq.current) return;
+      appliedSeq.current = my;
       if (next) setSnapshot(next);
       setLoadError("");
     } catch (error) {
-      if (my !== loadSeq.current) return;
+      if (my <= appliedSeq.current) return;
+      appliedSeq.current = my;
       const f = failureOf(error);
       // Droit perdu ou dossier invisible : tout est effacé de l’affichage.
       if (f.status === 403 || f.status === 404) {
