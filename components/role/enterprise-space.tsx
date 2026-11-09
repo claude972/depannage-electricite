@@ -523,6 +523,7 @@ export function EnterpriseSpace({ session }: { session: Session }) {
         case "platform-operators":
         case "platform-finance":
         case "platform-moderation":
+        case "platform-audit":
         case "support-queue":
       case "support-queue":
           return <PlatformPage session={session} view={view} />;

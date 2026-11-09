@@ -521,6 +521,7 @@ export function AdminSpace({ session }: { session: Session }) {
       case "platform-operators":
       case "platform-finance":
       case "platform-moderation":
+      case "platform-audit":
       case "support-queue":
         return PLATFORM_TITLES[view];
       case "admin-settings":
@@ -1175,6 +1176,7 @@ export function AdminSpace({ session }: { session: Session }) {
       case "platform-operators":
       case "platform-finance":
       case "platform-moderation":
+      case "platform-audit":
       case "support-queue":
         content = <PlatformPage session={session} view={view} withTitle={false} />;
         break;

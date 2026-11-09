@@ -106,6 +106,7 @@ const CLIENT_VIEWS: readonly View[] = [
   "platform-operators",
   "platform-finance",
   "platform-moderation",
+  "platform-audit",
   "support-queue",
   "documents",
   "profile",
@@ -123,6 +124,7 @@ const VIEW_NAMES: Partial<Record<View, string>> = {
   "platform-operators": "Opérateurs de plateforme",
   "platform-finance": "Finance plateforme",
   "platform-moderation": "Modération des avis",
+  "platform-audit": "Journal d’audit",
   "support-queue": "File d’assistance",
   documents: "Documents",
   profile: "Mon profil",
@@ -341,6 +343,7 @@ export function ClientSpace({ session }: { session: Session }) {
       case "platform-operators":
       case "platform-finance":
       case "platform-moderation":
+      case "platform-audit":
       case "support-queue":
         return <PlatformPage session={session} view={view} />;
       case "documents":

@@ -507,6 +507,7 @@ export function ArtisanSpace({ session }: { session: Session }) {
       case "platform-operators":
       case "platform-finance":
       case "platform-moderation":
+      case "platform-audit":
       case "support-queue":
         content = <PlatformPage session={session} view={session.view} />;
         break;

@@ -336,12 +336,14 @@ export function createPlatformClient(input: FeatureDeps): PlatformClient {
   };
 }
 
-export type PlatformView = "platform-operators" | "platform-finance" | "platform-moderation";
+export type PlatformView = "platform-operators" | "platform-finance" | "platform-moderation" | "platform-audit";
 /** Views opened only by the /me reply: the three back-office views and the A5 assistance queue. */
 export type OperatorView = PlatformView | "support-queue";
 /** Fail-closed gate for every operator view; the assistance queue needs the server capability `support`. */
 export function operatorViewAllowed(access: PlatformAccess | null | undefined, view: OperatorView): boolean {
   if (view === "support-queue") return !!access && access.capabilities?.support === true;
+  // E32: like the assistance queue, the audit journal entry follows the server capability `audit`.
+  if (view === "platform-audit") return !!access && access.capabilities?.audit === true;
   return platformViewAllowed(access, view);
 }
 /**
@@ -361,6 +363,8 @@ export function platformViewAllowed(access: PlatformAccess | null | undefined, v
       return caps.finance === true;
     case "platform-moderation":
       return caps.reviews_moderation === true;
+    case "platform-audit":
+      return caps.audit === true; // E32
     default:
       return false;
   }

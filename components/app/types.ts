@@ -615,6 +615,7 @@ export type View =
   | "platform-operators"
   | "platform-finance"
   | "platform-moderation"
+  | "platform-audit"
   // A5: global assistance queue for scoped support operators (server capability `support`).
   | "support-queue";
 
