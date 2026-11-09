@@ -34,7 +34,10 @@ function atom(row: Row, expression: string): boolean {
   const parsed = /^([a-z_]+)\.(eq|lt|ilike|in)\.(.*)$/s.exec(expression); assert.ok(parsed, expression);
   const [, field, op, raw] = parsed, value = raw.startsWith('"') ? raw.slice(1, -1) : raw;
   if (op === "in") return raw.slice(1, -1).split(",").includes(String(row[field]));
-  if (op === "ilike") return String(row[field]).toLocaleLowerCase().includes(value.slice(1, -1).toLocaleLowerCase());
+  if (op === "ilike") {
+    const text = field === "directory_profile_name" ? String(row.full_name).normalize("NFKC") : String(row[field]);
+    return text.toLocaleLowerCase().includes(value.slice(1, -1).toLocaleLowerCase());
+  }
   const actual = field === "created_at" ? micros(String(row[field])) : String(row[field]);
   const expected = field === "created_at" ? micros(value) : value;
   return op === "eq" ? actual === expected : actual < expected;

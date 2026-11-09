@@ -59,7 +59,7 @@ function queryFor(db: Database, kind: Kind, filters: Filters, head = false, curs
   if (filters.owner_id) query = query.eq("owner_id", filters.owner_id);
   if (filters.q) {
     if (uuid.safeParse(filters.q).success) query = query.eq("id", filters.q);
-    else query = query.ilike(kind === "organizations" ? "name" : "full_name", `%${filters.q}%`);
+    else query = query.ilike(kind === "organizations" ? "name" : "directory_profile_name", `%${filters.q}%`);
   }
   // Only validated timestamp/UUID enter PostgREST's raw logical expression. Search is a
   // separate literal column filter, ANDed by PostgREST, never client-provided filter syntax.
