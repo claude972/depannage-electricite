@@ -735,7 +735,15 @@ function useMessageHistory(live: boolean, profileId: string, interventionId: str
       flight.current = null;
     };
   }, [key, enabled, load, update]);
-  return { state: state.key === key ? state : initialHistory(key), load, enabled };
+  /** P1 (E42): rights may have changed — restart from the newest page (a 404/401 then purges). */
+  const reread = useCallback(() => {
+    if (!enabled) return;
+    flight.current?.abort();
+    flight.current = null;
+    update(() => initialHistory(key));
+    load();
+  }, [enabled, key, load, update]);
+  return { state: state.key === key ? state : initialHistory(key), load, reread, enabled };
 }
 /** Who wrote a thread message, from the dossier's own participants. An author who is neither the
  *  dossier's client nor its artisan is never presented as the other party: on a private dossier it
@@ -818,6 +826,15 @@ export function MessageCenter({
   const setBody = (text: string) => setDraft({ key: threadKey, text });
   const history = useMessageHistory(live, profileId, id, fetchHistory);
   const h = history.state;
+  // E42: the open thread left the re-read list (reassignment, rights): re-read its history before
+  // anything else is shown or sent; the server's refusal purges it.
+  const listed = interventions.some((i) => i.id === id);
+  const wasListed = useRef(listed);
+  useEffect(() => {
+    if (wasListed.current && !listed) history.reread();
+    wasListed.current = listed;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listed, id]);
   const notFound = history.enabled && h.status === "not_found";
   // P1 (E39): a 401 reported by the API purges the protected thread in this document (messages,
   // contact, compose) like a 404; only the reconnect message stays.
@@ -946,7 +963,7 @@ export function MessageCenter({
                 {readOnlyReason || "Lecture seule : vos droits sur ce dossier ne permettent pas d’envoyer de message."}
               </p>
             )}
-            {!unavailable && writable && (
+            {!unavailable && writable && !(history.enabled && !listed && !h.loaded) && (
             <form
               className="message-compose"
               onSubmit={(e) => {
