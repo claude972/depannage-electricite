@@ -40,7 +40,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E38 | Majeur | B | CORRIGÉ | 403/404 → relire/purger (P1) | bd77186 | phase2-lot-b-e38-credential-review-revoked | credential-reviews-model.ts | rouge : 0 GET après 403 ; vert : 1 POST, relecture, purge motifs et formulaire |
 | E39 | Majeur | B | CORRIGÉ | 401 ⇒ purge du fil (P1) | 241cbc2 | phase2-lot-b-e39-message-session-expired | forms.tsx | rouge : 5 messages et saisie conservés ; vert : purge, reconnexion. Test existant message-history 4b (qui figeait ce défaut) mis à jour vers la purge |
 | E40 | Majeur | B | CORRIGÉ | réouverture du contact ⇒ relecture (P1) | 38541ef | phase2-lot-b-e40-contact-reread | forms.tsx | rouge : contact réaffiché sans lecture (contre-épreuve sans correctif refaite) ; vert : relecture, rien sans droit |
-| E42 | Majeur | B | À REPRODUIRE | workspace sans dossier → purge fil (P1) | | | artisan-space.tsx, forms.tsx | |
+| E42 | Majeur | B | CORRIGÉ | fil retiré du workspace relu ⇒ historique relu (P1) | 3c80bdf | phase2-lot-b-e42-thread-rights-reread | forms.tsx | rouge : 0 GET, anciennes pages et saisie ; vert : relecture, saisie retenue jusqu’à la lecture, 404 purge |
 | E44 | Majeur | B | CORRIGÉ | 404 pagination → purge (P1) | ca0f8a3 | phase2-lot-b-e44-e45-invoices-pagination | invoices-model.ts, customer-invoices-panel.tsx | rouge : 25 lignes et PDF après 404 ; vert : purge + refus |
 | E48 | Majeur | B | CORRIGÉ | 403 pagination → purge (P1) | d5b1a3b | phase2-lot-b-e48-e49-saved-methods-pagination | saved-payment-methods/model.ts | rouge : 20 cartes après 403 ; vert : purge immédiate, 0 POST |
 | E50 | Majeur | B | CORRIGÉ | 403 → relire droit (P1) | aa2f826 | phase2-lot-b-e50-refund-revoked | refund-execution-model.ts | rouge : 0 GET après 403, « Émettre » actif ; vert : 1 POST, relecture, action retirée |
@@ -59,14 +59,14 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E75 | Majeur | A + Décision | DÉCISION | capacité artisan, null = illimité | — | — | — | aucun plafond choisi |
 | E76 | Majeur | A | CONTRAT A | plafond global rappel | | | lib, supabase | |
 | E78 | Majeur | A | CONTRAT A | reprise remboursement | | | supabase, lib | |
-| E80 | Majeur | A + B | CORRIGÉ côté B (dépend du SHA backend A à venir) | état du litige artisan | ec7d6f1 | phase2-lot-b-e80-artisan-dispute | types.ts, artisan-space.tsx | contrat annoncé : `artisan_dispute` optionnel (none/open/under_review/resolved/closed) sur GET /api/payments/status ; rouge : aucune lecture ni mention ; vert : litige affiché à côté de « Réglé » inchangé ; absent/none/inconnu ⇒ rien. SHA A à consigner à l’intégration |
+| E80 | Majeur | A + B | CORRIGÉ (A f58df31) | état du litige artisan, libellé neutre | ec7d6f1, 8fa9749 | phase2-lot-b-e80-artisan-dispute | types.ts, artisan-space.tsx | rouge : aucune lecture ni mention ; vert : litige neutre (enregistré / examiné par la plateforme) à côté de « Réglé » inchangé, clé identité+génération+devis, relu à chaque actualisation ; none/absent/inconnu ⇒ rien |
 | E03 | Mineur | B | CORRIGÉ | 409 ⇒ relecture en place, motif conservé (P1) | 4800320 | phase2-lot-b-e03-moderation-conflict | platform-operations/shared.tsx, platform-moderation-view.tsx | rouge : renvoi version 1 ; vert : relecture, renvoi version 2 |
 | E05 | Mineur | B | À REPRODUIRE | validation locale effectif ≤ 100000 | | | role/artisan-space.tsx | |
 | E06 | Mineur | B | CORRIGÉ | formulaire ouvert sans droit ⇒ aucun POST (P1) | c91f30d | phase2-lot-b-e06-e22-e26-e27-site-operations | site-operations/shared.tsx | rouge : 1 POST après passage en lecture seule ; vert : 0 POST, message lecture seule. Mécanisme partagé useSubmit (équipement/maintenance/délais) |
 | E09 | Mineur | B | À REPRODUIRE | nom de secours « document » | | | components/app/uploads.ts | |
 | E10 | Mineur | B | À REPRODUIRE | rejeu réussi → édition (P3) | | | site-areas-panel.tsx | |
 | E12 | Mineur | B | CORRIGÉ | 409 ⇒ relecture dans le formulaire (P1/P2) | b238a1c | phase2-lot-b-e12-address-conflict | client-addresses-panel.tsx | rouge : ville v1 et version 1 renvoyées ; vert : ville v2 rechargée, libellé conservé, renvoi v2 |
-| E13 | Mineur | B | À REPRODUIRE | devis expiré : bouton inactif | | | client-space.tsx, quote-documents-panel.tsx | |
+| E13 | Mineur | B | CORRIGÉ | devis expiré : acceptation retirée | 369d259 | phase2-lot-b-e13-expired-quote | client-space.tsx | rouge : bouton actif malgré validité dépassée ; vert : bouton retiré, explication, 0 POST ; devis valide inchangé |
 | E14 | Mineur | B | CORRIGÉ | refus d’acceptation ⇒ relecture ponctuelle (P1) | e8bfd00 | phase2-lot-b-e14-lost-offer | available-missions-model.ts | rouge : 0 relecture, bouton actif ; vert : 1 POST, relecture 404, offre retirée |
 | E18 | Mineur | A + B | CORRIGÉ (dépend de A 7de6d11) | command_id du rapport (P3) | 4049d5d | phase2-lot-b-e18-report-command-id | types.ts, artisan-space.tsx | rouge : aucune clé ; vert : même clé et saisie après réponse perdue, nouvelle clé après succès |
 | E19 | Mineur | A | CONTRAT A | nom vide accepté par la route | | | app/api | formulaire déjà conforme |
@@ -103,7 +103,7 @@ Sous-cas externes avec condition ouverte (PUB-10.1, CLI-05.2, CLI-08.1, ADM-01.1
 
 Mise à jour à chaque commit d’item.
 
-- CORRIGÉ (37 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E06, E08, E12, E14, E15, E18, E20, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E39, E40, E41, E44, E45, E48, E49, E50, E52, E53, E54, E55, E56, E62, E63, E64, E72, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : SHA backend à venir).
+- CORRIGÉ (39 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E06, E08, E12, E13, E14, E15, E18, E20, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E39, E40, E41, E42, E44, E45, E48, E49, E50, E52, E53, E54, E55, E56, E62, E63, E64, E72, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : A f58df31).
 - VÉRIFIÉ À L’INTÉGRATION sans code B : E21, E24.
 - ROUGE : aucun.
 - À REPRODUIRE : voir tableau.
@@ -122,8 +122,8 @@ Contrats requis côté serveur, sans duplication en B.
 - E41 · `app/api/messages/route.ts:24–38` : `id` client stable pour l’envoi texte (même contrat que `/api/messages/photo`).
 - E53 · `app/api/sites/[id]/documents/route.ts:163–186` : clé d’idempotence de dépôt.
 - E21/E24 · validation serveur des faits constatés (non futurs, ordre chronologique) et de la date de levée (≥ date du contrôle, non future). B ajoute la même validation à la saisie.
-- E80 · CONTRAT ANNONCÉ PAR A (SHA à venir) : `artisan_dispute` optionnel = none|open|under_review|resolved|closed sur GET /api/payments/status, seulement pour l’artisan affecté auteur du devis accepté, indépendant de payment.status, aucun détail finance. Câblé en B (ec7d6f1).
-- E61 · CONTRAT ANNONCÉ PAR A : GET /api/reports `after=<UUID>`, pages de 1000 sites triées par site_id, `page {limit:1000,has_more,next_after}` optionnel, `scope.complete=false` sur page d’un périmètre découpé ; CSV complet sans after. Câblage B en cours.
+- E80 · LIVRÉ PAR A f58df31 : `artisan_dispute` optionnel = none|open|under_review|resolved|closed sur GET /api/payments/status, seulement pour l’artisan affecté auteur du devis accepté, indépendant de payment.status, aucun détail finance. Câblé en B (ec7d6f1).
+- E61 · CONTRAT ANNONCÉ PAR A : GET /api/reports `after=<UUID>`, pages de 1000 sites triées par site_id, `page {limit:1000,has_more,next_after}` optionnel, `scope.complete=false` sur page d’un périmètre découpé ; CSV complet sans after. Backend A fa9d690 poussé ; câblage B à faire après les priorités P1–P7.
 - E19, E23, E25, E33, E37, E61, E69, E76, E77, E78, E07 : cause entièrement serveur (voir registre).
 
 ## Fiches de décision
