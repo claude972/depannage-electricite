@@ -6,7 +6,7 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("reject_quote"), quote_id: uuid, reason: z.string().trim().min(1).max(2000) }).strict(),
   z.object({ action: z.literal("save_appointment"), expected_version: z.number().int().min(0).max(2147483646), starts_at: z.iso.datetime({ offset: true }), ends_at: z.iso.datetime({ offset: true }), note: z.string().trim().max(2000) }).strict(),
   z.object({ action: z.literal("set_travel_stage"), stage: z.enum(["planned", "en_route", "on_site"]) }).strict(),
-  z.object({ action: z.literal("save_report"), command_id: uuid, summary: z.string().trim().min(10).max(8000), checks: z.array(z.object({ label: z.string().trim().min(1).max(160), result: z.enum(["pass", "issue", "not_applicable"]) }).strict()).max(50), signature_name: z.string().trim().max(120) }).strict(),
+  z.object({ action: z.literal("save_report"), command_id: uuid, summary: z.string().trim().min(10).max(8000), checks: z.array(z.object({ label: z.string().trim().min(1).max(160), result: z.enum(["pass", "issue", "not_applicable"]) }).strict()).max(50), signature_name: z.string().trim().min(1, "Indiquez le nom du déclarant.").max(120) }).strict(),
   z.object({ action: z.literal("reassign"), artisan_id: uuid.nullable(), reason: z.string().trim().min(1).max(2000) }).strict(),
 ]);
 const privateHeaders = { "Cache-Control": "private, no-store" };

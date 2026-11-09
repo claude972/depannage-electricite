@@ -120,3 +120,37 @@ test("E41 — an exact message retry delivers one message and one notification",
     await db.close();
   }
 });
+
+test("E19 — an assigned artisan cannot store a blank declarant name through the route or RPC", async () => {
+  const db = await freshDatabase();
+  try {
+    await db.query("insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3),($4,$5,$6)", [
+      actor.id, actor.email, { role: "artisan", full_name: "Artisan de recette" },
+      requester.id, requester.email, { role: "client", full_name: "Client de recette" },
+    ]);
+    await db.query("update public.profiles set artisan_approved=true where id=$1", [actor.id]);
+    const id = randomUUID();
+    await db.query(`insert into public.interventions(id, client_id, artisan_id, category, description,
+      address, postal_code, city, urgency, status, estimate_min_cents, estimate_max_cents)
+      values($1,$2,$3,'panel','Panne électrique de recette','Adresse de test','97200','Fort-de-France','scheduled','in_progress',10000,20000)`, [
+      id, requester.id, actor.id,
+    ]);
+    const report = { action: "save_report", summary: "Contrôle électrique synthétique", checks: [] };
+    await withNext(db, async http => {
+      const save = signature_name => http(`/api/interventions/${id}/operations`, {
+        method: "POST", body: JSON.stringify({ ...report, signature_name, command_id: randomUUID() }),
+      });
+      const result = await save("   ");
+      const stored = (await db.query("select signature_name from public.intervention_reports where intervention_id=$1", [id])).rows;
+      assert.deepEqual([result.status, stored], [422, []]);
+      assert.match((await result.json()).error, /nom du déclarant/);
+      await assert.rejects(asUser(db, actor, "select public.save_intervention_report($1,$2,'[]'::jsonb,$3,$4) v", [
+        id, report.summary, "\t ", randomUUID(),
+      ]), error => error.code === "23514");
+      assert.equal((await save(" Déclarant de recette ")).status, 200);
+      assert.equal((await db.query("select signature_name from public.intervention_reports where intervention_id=$1", [id])).rows[0].signature_name, "Déclarant de recette");
+    }, {}, { rpcAllowlist: new Set(["save_intervention_report"]) });
+  } finally {
+    await db.close();
+  }
+});
