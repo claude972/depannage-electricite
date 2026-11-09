@@ -2,6 +2,7 @@
 // ENT-12 UI: SitePolicyPanel (explicit, versioned site approval policy; edit only with can_manage)
 // and QuoteApprovalPanel (ordered chain of the EXACT quote as the server returns it; actions only from
 // the server permissions; later steps locked; never an acceptance). StrictMode-safe, fenced writes.
+import { readRefused } from "../../app/refusal";
 import { useEffect, useId, useRef, useState } from "react";
 import { money } from "../../app/format";
 import {
@@ -255,8 +256,10 @@ function Quote({ quoteId, context, api, store = tabStore, newId = uuid, loadMemb
     const gen = context.generation(), who = context.userId();
     const r = await getApi().workflow(quoteId, null);
     if (!alive.current || my !== loadSeq.current || context.generation() !== gen || context.userId() !== who) return;
-    if (r.status === 401 || r.status === 403) {
+    if (readRefused(r.status)) {
+      // P1 (E20): 401/403/404 purge the history and the decision actions.
       setStatus("forbidden");
+      setEvents([]);
       report(null);
       return;
     }
@@ -267,6 +270,12 @@ function Quote({ quoteId, context, api, store = tabStore, newId = uuid, loadMemb
   };
   const more = async (after: number) => {
     const r = await getApi().workflow(quoteId, after);
+    if (readRefused(r.status)) {
+      setStatus("forbidden");
+      setEvents([]);
+      report(null);
+      return;
+    }
     const s = r.status === 200 ? parseWorkflowStatus(r.body, quoteId, after) : null;
     if (s) {
       setEvents((e) => [...e, ...s.events]);

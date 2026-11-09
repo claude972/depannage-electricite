@@ -293,7 +293,9 @@ export function createWriter<C extends { command_id: string; expected_version: n
       clearStored(who);
       pendingFor = null;
       set({ ...get(), busy: false, pending: null, error: r.status === 409 ? COPY.conflict : r.status === 404 ? COPY.notFound : r.status === 429 ? COPY.limited : COPY.invalid });
-      if (r.status === 409) await after(); // re-read only, never a replay
+      // 409 (version) and 404 (right / resource gone, E20): re-read only, never a replay; a refused
+      // re-read purges the history and the actions (P1).
+      if (r.status === 409 || r.status === 404) await after();
       return false;
     }
     pendingFor = `${who.uid}|${who.gen}`;
