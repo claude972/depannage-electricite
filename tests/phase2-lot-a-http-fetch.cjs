@@ -13,3 +13,19 @@ globalThis.fetch = async function fixtureFetch(input, options) {
   }
   throw new Error("Unexpected outbound network call in the isolated HTTP fixture");
 };
+
+// Preserve the Stripe SDK's Node transport and error parsing, but send only the
+// expected test request to a disposable loopback server.
+if (process.env.QA_STRIPE_LOOPBACK_PORT) {
+  const https = require("node:https");
+  const http = require("node:http");
+  https.request = (options, callback) => {
+    if (options.host !== "api.stripe.com" || options.path !== "/v2/core/accounts" || options.method !== "POST") {
+      throw new Error("Unexpected HTTPS request in the isolated Stripe fixture");
+    }
+    return http.request({
+      hostname: "127.0.0.1", port: Number(process.env.QA_STRIPE_LOOPBACK_PORT),
+      path: options.path, method: options.method, headers: options.headers,
+    }, callback);
+  };
+}

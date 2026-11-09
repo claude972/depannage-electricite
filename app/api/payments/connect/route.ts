@@ -1,3 +1,4 @@
+import Stripe from "stripe";
 import {
   authenticatedClient,
   adminClient,
@@ -76,6 +77,16 @@ export async function POST(request: Request) {
     });
     return Response.json({ url: link.url });
   } catch (error) {
+    if (error instanceof Stripe.errors.StripeError && (
+      error.code === "non_connect_platform_accounts_v2_access_blocked" ||
+      error.code === "account_creation_losses_collector_unavailable"
+    )) {
+      console.warn("Stripe Connect platform configuration prevents onboarding", { code: error.code });
+      return apiError(new ApiError(
+        503,
+        "Le règlement artisan est temporairement indisponible. Contactez l’administrateur de la plateforme pour terminer la configuration de Stripe Connect.",
+      ));
+    }
     return apiError(error);
   }
 }
