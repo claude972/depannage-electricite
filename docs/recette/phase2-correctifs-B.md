@@ -33,7 +33,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E26 | Majeur | B | CORRIGÉ | 403 ⇒ relecture du rapport (P1) | c91f30d | phase2-lot-b-e06-e22-e26-e27-site-operations | site-operations-view.tsx | rouge : 0 GET, tarifs/note/Publier conservés ; vert : relecture, retirés, 1 POST |
 | E29 | Majeur | B + A | CORRIGÉ (dépend de A 2b3b44e) | updated_at exact en version (P2) | 47f3fdc | phase2-lot-b-e29-warranty-version | types.ts, forms.tsx | rouge : expected_version absent ; vert : chaîne exacte envoyée, 409 ⇒ relecture, décision de A affichée, brouillon de B conservé |
 | E30 | Majeur | B | CORRIGÉ | 403 ⇒ relire /me + liste, lecture refusée purge (P1) | 747a94f | phase2-lot-b-e30-e31-operators | platform-operations/shared.tsx, platform-operators-view.tsx | rouge : 0 GET /me après 403 ; vert : relecture, nom/note/boutons purgés, 1 POST |
-| E32 | Majeur | B | CORRIGÉ | vue journal pour la capacité audit | b552cac | phase2-lot-b-e32-audit-journal | platform-audit-view.tsx (nouveau), features.ts, anchors.ts, platform-anchor.tsx, session.ts, types.ts, espaces | rouge : aucune entrée ni lecture ; vert : entrée « Journal d’audit » sur capacité serveur, lecture paginée, rien sans capacité |
+| E32 | Majeur | B | CORRIGÉ | vue journal pour la capacité audit | b552cac, f68a8e1 | phase2-lot-b-e32-audit-journal | platform-audit-view.tsx, features.ts (boundLeaf), shared.tsx, anchors.ts, platform-anchor.tsx, session.ts, types.ts, espaces | rouge : aucune entrée ni lecture ; vert : entrée sur capacité serveur, lecture paginée. Contre-revue : 503 de page local, visible, Réessayer, Précédent atteignable ; pagination neutralisée pendant chargement ; refus ⇒ /me relu ; aucune bascule globale du module |
 | E34 | Majeur | B + A | CORRIGÉ (dépend de A e17c0e5) | approbation ≠ réactivation + version (P2) | 43ee0b9 | phase2-lot-b-e34-e35-e36-artisan-decisions | forms.tsx | rouge : corps {approved:true} ; vert : action approve + version 1 ⇒ 409, Suspendu relu |
 | E35 | Majeur | B | CORRIGÉ | action « Demander des corrections » | 43ee0b9 | phase2-lot-b-e34-e35-e36-artisan-decisions | forms.tsx | rouge : seule action « Approuver » ; vert : request_changes envoyé, statut changes_requested |
 | E37 | Majeur | A | HORS LOT B (validé par A) | prédicat d’offre et congés | Codex | — | supabase | validé côté A selon Codex |
@@ -56,7 +56,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E67 | Majeur | Décision | DÉCISION | justificatif de levée | — | — | — | fiche ci-dessous |
 | E70 | Majeur | A | HORS LOT B (partiel A) | erreur Connect | Codex | — | app/api/payments | partiel côté A, configuration externe |
 | E72 | Majeur | A + B | CORRIGÉ côté B (A : feeConnectedReference) | ch_ ou py_ pour la charge connectée | 976e6e3 | phase2-lot-b-e72-fee-connected-reference | finance-proofs/model.ts | rouge : preuve py_ illisible ; vert : py_/ch_ acceptés, charge plateforme ch_ seule, autres préfixes et liaisons refusés. Copie locale de la regex A à remplacer par l’import après intégration |
-| E75 | Majeur | A + Décision | DÉCISION | capacité artisan, null = illimité | — | — | — | aucun plafond choisi |
+| E75 | Majeur | A + Décision | DÉCISION (réglage neutre livré) | préférence de capacité, null = illimité | 924401f, 5f7c99a | phase2-lot-b-e75-capacity-preference | types.ts, artisan-space.tsx | contrat A e492a1b ; « Valeur de capacité souhaitée », unité à décider, borne API, refus ⇒ relecture demandée + saisie conservée, verrou ; n’influe pas sur les offres ; masqué sans contrat. Aucun plafond choisi |
 | E76 | Majeur | A | CONTRAT A | plafond global rappel | | | lib, supabase | |
 | E78 | Majeur | A | HORS LOT B (corrigé par A) | reprise remboursement | Codex | — | supabase, lib | A confirmé et poussé ; aucun fichier B requis : le formulaire reprend déjà execution_id |
 | E80 | Majeur | A + B | CORRIGÉ (A f58df31) | état du litige artisan, libellé neutre | ec7d6f1, 8fa9749 | phase2-lot-b-e80-artisan-dispute | types.ts, artisan-space.tsx | rouge : aucune lecture ni mention ; vert : litige neutre (enregistré / examiné par la plateforme) à côté de « Réglé » inchangé, clé identité+génération+devis, relu à chaque actualisation ; none/absent/inconnu ⇒ rien |
@@ -143,7 +143,7 @@ Contrats requis côté serveur, sans duplication en B.
 - Recommandation : (a), format et obligation à préciser.
 
 ### E75 · capacité artisan
-- Aucun plafond choisi. `null` = illimité, coordonné avec A ; pas de réglage UI inventé.
+- Aucun plafond ni unité choisis. `null` = illimité (contrat A e492a1b). Réglage neutre livré côté profil, sans effet sur les offres ; l’unité (missions simultanées, créneaux, autre) et l’usage éventuel dans l’éligibilité restent à décider par l’exploitant.
 
 ## Prérequis externes
 
