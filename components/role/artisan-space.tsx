@@ -3440,26 +3440,35 @@ function PerfGrid({ perf, since }: { perf: Performance; since: string | null }) 
 /** E75 (decision pending, no ceiling chosen): neutral personal preference, shown only when the
  *  server exposes the contract (capacity_version). Empty = unlimited (null). A refusal (version
  *  changed, 409) re-reads the profile and keeps the typed value. It does not filter offers. */
-function CapacityPreference({ artisan, onCommand, onReload }: { artisan: ArtisanProfile; onCommand: (body: ArtisanCommand) => Promise<boolean>; onReload: () => void }) {
+/** Same technical bound as the API (int4); the unit itself is still to be decided (E75). */
+const CAPACITY_MAX = 2147483647;
+function CapacityPreference({ artisan, onCommand, onReload, reloading }: { artisan: ArtisanProfile; onCommand: (body: ArtisanCommand) => Promise<boolean>; onReload: () => void; reloading: boolean }) {
   const [value, setValue] = useState(artisan.capacity_limit == null ? "" : String(artisan.capacity_limit));
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const lock = useRef(false); // synchronous: two submissions in one loop send one command
   const save = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (lock.current || reloading) return;
     const raw = value.trim();
     const limit = raw === "" ? null : Number(raw);
-    if (limit !== null && (!Number.isInteger(limit) || limit < 1)) {
-      setMessage({ tone: "error", text: "Indiquez un nombre entier d’au moins 1, ou laissez vide pour ne fixer aucune limite." });
+    if (limit !== null && (!Number.isInteger(limit) || limit < 1 || limit > CAPACITY_MAX)) {
+      setMessage({ tone: "error", text: "Indiquez un nombre entier d’au moins 1 (2 147 483 647 au plus), ou laissez vide pour ne fixer aucune valeur." });
       return;
     }
+    lock.current = true;
     setBusy(true);
     setMessage(null);
-    const ok = await onCommand({ action: "set_capacity_limit", capacity_limit: limit, expected_version: artisan.capacity_version ?? 0 });
-    setBusy(false);
-    if (ok) setMessage({ tone: "ok", text: "Préférence enregistrée." });
-    else {
-      onReload(); // re-read the current version; the typed value stays for an explicit resend
-      setMessage({ tone: "error", text: "La préférence n’a pas été enregistrée (elle a pu changer entre-temps) : la valeur actuelle a été relue, votre saisie est conservée." });
+    try {
+      const ok = await onCommand({ action: "set_capacity_limit", capacity_limit: limit, expected_version: artisan.capacity_version ?? 0 });
+      if (ok) setMessage({ tone: "ok", text: "Préférence enregistrée." });
+      else {
+        onReload(); // re-read requested; the typed value stays for an explicit resend
+        setMessage({ tone: "error", text: "La préférence n’a pas été enregistrée : relecture demandée, votre saisie est conservée." });
+      }
+    } finally {
+      lock.current = false;
+      setBusy(false);
     }
   };
   return (
@@ -3467,14 +3476,14 @@ function CapacityPreference({ artisan, onCommand, onReload }: { artisan: Artisan
       <h2 id="capacity-preference">Capacité de travail (préférence)</h2>
       <p className="form-note">
         Préférence personnelle enregistrée sur votre profil. Elle ne filtre pas les offres à ce stade et la plateforme n’impose aucune limite.
-        Actuellement : {artisan.capacity_limit == null ? "aucune limite" : `${artisan.capacity_limit} mission(s) simultanée(s)`}.
+        Valeur actuelle : {artisan.capacity_limit == null ? "aucune (illimité)" : artisan.capacity_limit}. L’unité de cette valeur reste à décider par l’exploitant.
       </p>
       <form onSubmit={(e) => void save(e)} noValidate>
-        <Field label="Nombre maximal de missions simultanées (vide = aucune limite)">
-          <input type="number" min="1" step="1" inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} />
+        <Field label="Valeur de capacité souhaitée (vide = aucune limite)">
+          <input type="number" min="1" max={CAPACITY_MAX} step="1" inputMode="numeric" value={value} disabled={busy || reloading} onChange={(e) => setValue(e.target.value)} />
         </Field>
         {message && <p className={message.tone === "ok" ? "form-note" : "field-error"} role={message.tone === "ok" ? "status" : "alert"}>{message.text}</p>}
-        <button type="submit" className="button outline" disabled={busy}>{busy ? "Enregistrement…" : "Enregistrer la préférence"}</button>
+        <button type="submit" className="button outline" disabled={busy || reloading}>{busy ? "Enregistrement…" : reloading ? "Relecture…" : "Enregistrer la préférence"}</button>
       </form>
     </section>
   );
@@ -3508,7 +3517,7 @@ function Profile({
     <>
       <PageTitle title="Profil artisan" />
       {artisan && typeof artisan.capacity_version === "number" && session.mode === "live" && onReload && (
-        <CapacityPreference artisan={artisan} onCommand={onCommand} onReload={onReload} />
+        <CapacityPreference artisan={artisan} onCommand={onCommand} onReload={onReload} reloading={pending} />
       )}
       <div className={styles.profileHead}>
         <span className={styles.avatar} aria-hidden="true">

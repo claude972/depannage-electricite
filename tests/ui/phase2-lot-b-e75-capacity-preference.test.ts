@@ -55,7 +55,7 @@ async function open(withContract: boolean) {
 test("E75 · contrat présent ⇒ préférence neutre ; 409 ⇒ relecture et renvoi sur la version relue ; vide ⇒ illimité", { skip }, async () => {
   const { server, browser, page, errors } = await open(true);
   try {
-    const field = page.getByLabel(/Nombre maximal de missions simultanées/);
+    const field = page.getByLabel(/Valeur de capacité souhaitée/);
     await field.waitFor({ timeout: 5000 });
     assert.match((await page.evaluate("document.getElementById('app').innerText")) as string, /ne filtre pas les offres/i);
     await page.evaluate("window.server = { capacity_limit: 4, capacity_version: 1 }"); // changed elsewhere
@@ -65,8 +65,13 @@ test("E75 · contrat présent ⇒ préférence neutre ; 409 ⇒ relecture et ren
     await page.waitForTimeout(400);
     assert.ok(((await page.evaluate("window.dossierReads")) as number) > reads, "refus ⇒ relecture");
     assert.equal(await field.inputValue(), "2", "saisie conservée");
+    assert.match((await page.evaluate("document.getElementById('app').innerText")) as string, /relecture demandée, votre saisie est conservée/);
     await page.getByRole("button", { name: /Enregistrer la préférence/ }).click();
     await page.waitForTimeout(400);
+    // Technical bound of the API: refused locally, no command.
+    await field.fill("2147483648");
+    await page.getByRole("button", { name: /Enregistrer la préférence/ }).click();
+    await page.waitForTimeout(200);
     await field.fill("");
     await page.getByRole("button", { name: /Enregistrer la préférence/ }).click();
     await page.waitForTimeout(400);
@@ -82,7 +87,7 @@ test("E75 · contrat présent ⇒ préférence neutre ; 409 ⇒ relecture et ren
 test("E75 · contrat absent ⇒ aucun réglage affiché", { skip }, async () => {
   const { server, browser, page, errors } = await open(false);
   try {
-    assert.equal(await page.getByLabel(/Nombre maximal de missions simultanées/).count(), 0);
+    assert.equal(await page.getByLabel(/Valeur de capacité souhaitée/).count(), 0);
     assert.deepEqual(errors, []);
   } finally {
     await browser.close();
