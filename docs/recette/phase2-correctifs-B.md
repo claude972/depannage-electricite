@@ -44,13 +44,13 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E44 | Majeur | B | CORRIGÉ | 404 pagination → purge (P1) | ca0f8a3 | phase2-lot-b-e44-e45-invoices-pagination | invoices-model.ts, customer-invoices-panel.tsx | rouge : 25 lignes et PDF après 404 ; vert : purge + refus |
 | E48 | Majeur | B | CORRIGÉ | 403 pagination → purge (P1) | d5b1a3b | phase2-lot-b-e48-e49-saved-methods-pagination | saved-payment-methods/model.ts | rouge : 20 cartes après 403 ; vert : purge immédiate, 0 POST |
 | E50 | Majeur | B | CORRIGÉ | 403 → relire droit (P1) | aa2f826 | phase2-lot-b-e50-refund-revoked | refund-execution-model.ts | rouge : 0 GET après 403, « Émettre » actif ; vert : 1 POST, relecture, action retirée |
-| E51 | Majeur | B | CORRIGÉ (preuve niveau SDK) | GET de rattrapage à la reconnexion (P6) | 533750e | phase2-lot-b-e51-realtime-catchup | realtime.ts, courant-app.tsx | rouge : aucune décision de rattrapage ; vert : vrai canal realtime-js coupé puis rejoint ⇒ 1 rattrapage, aucun au démarrage ; câblé dans le shell. Pas de nouvelle preuve DOM du shell complet |
+| E51 | Majeur | B | CORRIGÉ | GET de rattrapage à la reconnexion (P6) | 533750e | phase2-lot-b-e51-realtime-catchup | realtime.ts, courant-app.tsx | rouge : aucune décision de rattrapage ; vert : vrai canal realtime-js coupé puis rejoint ⇒ 1 rattrapage. Contre-recette Codex sur CourantApp entier, Chromium, vrai SDK et WebSocket loopback : base 0 GET et ancienne description ; A c92b47f + B 99516ac ⇒ 1 GET auto, description à jour, 2 joins, 0 erreur (journal phase3-E51-shell-after.log, ledger A) |
 | E52 | Majeur | B | CORRIGÉ | 404 → relire/purger liste (P1) | f273048 | phase2-lot-b-e52-site-attachments-revoked | site-attachments-panel.tsx | rouge : 0 GET liste après 404 ; vert : relecture, purge, 1 signature |
 | E54 | Majeur | B | CORRIGÉ | 503 de commande ne masque pas le centre | 48a79ff | phase2-lot-b-e54-e55-e56-notifications | features.ts, notification-center.tsx | rouge : centre et saisie disparus ; vert : centre, formulaire et case décochée conservés, erreur en ligne |
 | E56 | Majeur | B | CORRIGÉ | 401 en pagination ⇒ purge (P1) | 48a79ff | phase2-lot-b-e54-e55-e56-notifications | notification-center.tsx | rouge : 25 lignes conservées ; vert : purge, plus de bouton |
 | E59 | Majeur | Décision | DÉCISION | photos avant/après | — | — | — | fiche ci-dessous |
 | E60 | Majeur | Décision | DÉCISION | accusé de remise client | — | — | — | fiche ci-dessous |
-| E61 | Majeur | A | CONTRAT A | rapport > 1 000 sites | | | app/api/reports | |
+| E61 | Majeur | A + B | CORRIGÉ (A fa9d690) | rapport paginé, Suivant/Précédent avec relecture | 8eedc26 | phase2-lot-b-e61-report-pages | enterprise-reports/model.ts, use-enterprise-report.ts, enterprise-space.tsx | rouge : réponse paginée refusée par le parseur ⇒ erreur ; vert : page acceptée (ordre, curseur, jamais complète), navigation relue, sommes de page libellées comme telles, CSV sans after |
 | E63 | Majeur | B | CORRIGÉ | 404 → relire/purger (P1) | fcf1abd | phase2-lot-b-e62-e63-energy | energy-model.ts | rouge : 0 GET après 404 ; vert : 1 POST, relecture, purge |
 | E64 | Majeur | B | CORRIGÉ | 403 → relire/purger (P1) | 3698ea6 | phase2-lot-b-e64-coownership-revoked | coownership-model.ts | rouge : 0 GET après 403 ; vert : relecture, purge |
 | E67 | Majeur | Décision | DÉCISION | justificatif de levée | — | — | — | fiche ci-dessous |
@@ -63,7 +63,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E03 | Mineur | B | CORRIGÉ | 409 ⇒ relecture en place, motif conservé (P1) | 4800320 | phase2-lot-b-e03-moderation-conflict | platform-operations/shared.tsx, platform-moderation-view.tsx | rouge : renvoi version 1 ; vert : relecture, renvoi version 2 |
 | E05 | Mineur | B | À REPRODUIRE | validation locale effectif ≤ 100000 | | | role/artisan-space.tsx | |
 | E06 | Mineur | B | CORRIGÉ | formulaire ouvert sans droit ⇒ aucun POST (P1) | c91f30d | phase2-lot-b-e06-e22-e26-e27-site-operations | site-operations/shared.tsx | rouge : 1 POST après passage en lecture seule ; vert : 0 POST, message lecture seule. Mécanisme partagé useSubmit (équipement/maintenance/délais) |
-| E09 | Mineur | B | À REPRODUIRE | nom de secours « document » | | | components/app/uploads.ts | |
+| E09 | Mineur | B | CORRIGÉ | même règle de nom que le serveur (P3) | c791b1c | phase2-lot-b-e09-upload-name | components/app/uploads.ts | rouge : 0 candidat pour un nom vide ; vert : « document » du même dossier proposé, via lib/shared/document-policy (pas de copie) |
 | E10 | Mineur | B | CORRIGÉ | rejeu réussi ⇒ édition (P3) | cb0d678 | phase2-lot-b-e10-area-replay | site-areas-panel.tsx | rouge : expected_version null renvoyé ⇒ 409 ; vert : édition v1 |
 | E12 | Mineur | B | CORRIGÉ | 409 ⇒ relecture dans le formulaire (P1/P2) | b238a1c | phase2-lot-b-e12-address-conflict | client-addresses-panel.tsx | rouge : ville v1 et version 1 renvoyées ; vert : ville v2 rechargée, libellé conservé, renvoi v2 |
 | E13 | Mineur | B | CORRIGÉ | devis expiré : action seulement sur validité confirmée | 369d259, 7f9fad9 | phase2-lot-b-e13-expired-quote | client-space.tsx | rouge : bouton actif (expiré, lecture retenue, lecture refusée) ; vert : action seulement après lecture réussie valide/non renseignée, états vérification/refus distincts + Réessayer, démo inchangée. Faux client de recipient-quotes.test.ts complété (assertions inchangées) |
@@ -103,7 +103,7 @@ Sous-cas externes avec condition ouverte (PUB-10.1, CLI-05.2, CLI-08.1, ADM-01.1
 
 Mise à jour à chaque commit d’item.
 
-- CORRIGÉ (48 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E04, E06, E08, E10, E12, E13, E14, E15, E16, E18, E20, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E39, E40, E41, E42, E43, E44, E45, E48, E49, E50, E51, E52, E53, E54, E55, E56, E57, E58, E62, E63, E64, E71, E72, E79, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : A f58df31).
+- CORRIGÉ (50 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E04, E06, E08, E09, E10, E12, E13, E14, E15, E16, E18, E20, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E39, E40, E41, E42, E43, E44, E45, E48, E49, E50, E51, E52, E53, E54, E55, E56, E57, E58, E61, E62, E63, E64, E71, E72, E79, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : A f58df31).
 - VÉRIFIÉ À L’INTÉGRATION sans code B : E21, E24.
 - ROUGE : aucun.
 - À REPRODUIRE : voir tableau.
@@ -123,7 +123,7 @@ Contrats requis côté serveur, sans duplication en B.
 - E53 · `app/api/sites/[id]/documents/route.ts:163–186` : clé d’idempotence de dépôt.
 - E21/E24 · validation serveur des faits constatés (non futurs, ordre chronologique) et de la date de levée (≥ date du contrôle, non future). B ajoute la même validation à la saisie.
 - E80 · LIVRÉ PAR A f58df31 : `artisan_dispute` optionnel = none|open|under_review|resolved|closed sur GET /api/payments/status, seulement pour l’artisan affecté auteur du devis accepté, indépendant de payment.status, aucun détail finance. Câblé en B (ec7d6f1).
-- E61 · CONTRAT ANNONCÉ PAR A : GET /api/reports `after=<UUID>`, pages de 1000 sites triées par site_id, `page {limit:1000,has_more,next_after}` optionnel, `scope.complete=false` sur page d’un périmètre découpé ; CSV complet sans after. Backend A fa9d690 poussé ; câblage B à faire après les priorités P1–P7.
+- E61 · LIVRÉ PAR A fa9d690, câblé en B (8eedc26) : GET /api/reports `after=<UUID>`, pages de 1000 sites triées par site_id, `page {limit:1000,has_more,next_after}` optionnel, `scope.complete=false` sur page d’un périmètre découpé ; CSV complet sans after. 
 - E19, E23, E25, E33, E37, E61, E69, E76, E77, E78, E07 : cause entièrement serveur (voir registre).
 
 ## Fiches de décision
