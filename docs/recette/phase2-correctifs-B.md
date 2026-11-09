@@ -80,7 +80,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E43 | Mineur | B | CORRIGÉ | envoi propre incertain ≠ autre canal (P3) | 6b4104c | phase2-lot-b-e43-own-publication | artisan-quote-draft.tsx | rouge : « publié par un autre canal » ; vert : message d’issue incertaine de son envoi, rechargement pour vérifier |
 | E45 | Mineur | B | CORRIGÉ | erreur de page suivante expliquée | ca0f8a3 | phase2-lot-b-e44-e45-invoices-pagination | invoices-model.ts, customer-invoices-panel.tsx | rouge : 503 silencieux ; vert : alerte, reprise 26 pièces, alerte retirée |
 | E46 | Mineur | B | CORRIGÉ | avis conservé après la navigation | 37fa4b3 | phase2-lot-b-e46-return-notice | courant-app.tsx | rouge : avis absent sur la connexion ; vert : avis affiché, 0 POST |
-| E47 | Mineur | B | CORRIGÉ | vérification unique après la première connexion | 5b1d5d7 | phase2-lot-b-e47-return-after-signin | courant-app.tsx | rouge : attente affichée, 0 POST ; vert : propriétaire ⇒ 1 POST finalize de la référence ; tiers avec sa propre tentative ⇒ 0 POST pour la référence héritée (client Supabase navigateur simulé) |
+| E47 | Mineur | B | CORRIGÉ | vérification unique après la première connexion | 5b1d5d7, 7d8c078, 765cdc2 | phase2-lot-b-e47-return-after-signin | courant-app.tsx | rouge : 0 POST ; vert : propriétaire 1 POST, tiers 0. Contre-revue : garde génération + mode live, effacement dans clearSessionState, assignation après nettoyage ; cas « même UID tardif » vert avant et après (non reproduit rouge). 7d8c078 avait rompu card-return.test.ts (ligne figée), rétabli par 765cdc2. Vérifié par Codex avec routes et SQL réels |
 | E49 | Mineur | B | CORRIGÉ | alerte de pagination retirée | d5b1a3b | phase2-lot-b-e48-e49-saved-methods-pagination | saved-payment-methods/model.ts | rouge : alerte conservée ; vert : retirée après la 21e carte |
 | E53 | Mineur | A + B | CORRIGÉ (dépend de A b414386) | command_id du dépôt de site (P3) | fc06c26 | phase2-lot-b-e53-site-upload-command-id | site-attachments-panel.tsx | rouge : command_id absent ; vert : même clé au renvoi, un seul document |
 | E55 | Mineur | B | CORRIGÉ | lecture confirmée ⇒ résumé de cloche relu (P1/P6) | 48a79ff | phase2-lot-b-e54-e55-e56-notifications | notification-center.tsx, notifications-anchor.tsx | rouge : 0 GET résumé ; vert : résumé relu |
@@ -88,7 +88,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E58 | Mineur | B | CORRIGÉ | profil relu à chaque navigation interne (P6) | f1271fc | phase2-lot-b-e58-e79-public-profile | use-published-profile.ts, public-site.tsx | rouge : 0 GET, ancien exploitant affiché ; vert : relecture, ancien exploitant absent |
 | E62 | Mineur | B | CORRIGÉ | rejeu réussi → édition (P3) | fcf1abd | phase2-lot-b-e62-e63-energy | site-energy-panel.tsx | rouge : formulaire en création, expected_version null ; vert : édition v1 |
 | E65 | Mineur | B | CORRIGÉ | présélection Artisan à l’inscription | 7e2d98f | phase2-lot-b-e65-artisan-signup | forms.tsx, public-site.tsx | rouge : « Particulier » présélectionné ; vert : Artisan électricien + explication d’approbation, aucun envoi |
-| E66 | Mineur | B | À REPRODUIRE | détail hors cache sans GET | | | use-detail-presence.ts, enterprise-space | |
+| E66 | Mineur | B | CORRIGÉ | lecture automatique du dossier entreprise masqué par la fenêtre de sites | 2abbdb8, 8fda19e | phase2-lot-b-e66-detail-out-of-cache-site | use-detail-presence.ts, enterprise-space.tsx | rouge : 0 GET avant « Ouvrir quand même » ; vert : GET auto + détail exact, tiers 404. Contre-revue : déclencheur restreint à l’option siteWindowMayHide (aucun GET superflu ailleurs). Vérifié par Codex sur le vrai 101e site (version large) |
 | E68 | Mineur | A | HORS LOT B (partiel A) | public/offline-request.js | Codex | — | public/ | partiel côté A jusqu’au changement de cache hors périmètre |
 | E69 | Mineur | A | CONTRAT A | session_not_found → 401 | | | app/api/profile/sessions | |
 | E71 | Mineur | B | CORRIGÉ | opted_in=true + browser=none = retrait (P7) | ab303ea | phase2-lot-b-e71-push-remove | web-push-panel.tsx | rouge : échec affiché, pas d’unsubscribe ; vert : retrait, unsubscribe, aucune alerte |
@@ -103,7 +103,7 @@ Sous-cas externes avec condition ouverte (PUB-10.1, CLI-05.2, CLI-08.1, ADM-01.1
 
 Mise à jour à chaque commit d’item.
 
-- CORRIGÉ (56 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E04, E05, E06, E08, E09, E10, E11, E12, E13, E14, E15, E16, E17, E18, E20, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E39, E40, E41, E42, E43, E44, E45, E46, E47, E48, E49, E50, E51, E52, E53, E54, E55, E56, E57, E58, E61, E62, E63, E64, E65, E71, E72, E79, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : A f58df31).
+- CORRIGÉ (57 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E04, E05, E06, E08, E09, E10, E11, E12, E13, E14, E15, E16, E17, E18, E20, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E39, E40, E41, E42, E43, E44, E45, E46, E47, E48, E49, E50, E51, E52, E53, E54, E55, E56, E57, E58, E61, E62, E63, E64, E65, E66, E71, E72, E79, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : A f58df31).
 - VÉRIFIÉ À L’INTÉGRATION sans code B : E21, E24.
 - ROUGE : aucun.
 - À REPRODUIRE : voir tableau.
