@@ -1541,7 +1541,7 @@ export default function CourantApp() {
       else ctx.error(uploadSummary(finished));
     });
   }
-  async function sendMessage(interventionId: string, body: string) {
+  async function sendMessage(interventionId: string, body: string, commandId?: string) {
     return run(async (ctx) => {
       if (modeRef.current === "demo") {
         ctx.when(setData)({
@@ -1560,7 +1560,10 @@ export default function CourantApp() {
         ctx.notice("Message enregistré dans la démonstration.");
         return;
       }
-      await api("/api/messages", { intervention_id: interventionId, body });
+      // Contract A (E41): command_id is mandatory and stable per intention; the caller owns it.
+      const command_id = commandId ?? (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : "");
+      if (!command_id) throw new Error("Ce navigateur ne permet pas de créer un identifiant sécurisé : envoi impossible ici.");
+      await api("/api/messages", { intervention_id: interventionId, body, command_id });
       if (ctx.alive()) await refresh();
       ctx.notice("Message envoyé.");
     });

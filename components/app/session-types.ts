@@ -227,7 +227,8 @@ export interface Session {
   acknowledgeUpload(interventionId: string, key: string, documentId: string): void;
   /** Drops a dossier's queue (files stay on the device; nothing is deleted on the server). */
   dismissUploads(interventionId: string): void;
-  sendMessage(interventionId: string, body: string): Promise<boolean>;
+  /** `commandId`: intention key of this message (E41), reused by the caller until confirmed. */
+  sendMessage(interventionId: string, body: string, commandId?: string): Promise<boolean>;
   submitReview(interventionId: string, values: { rating: number; body: string }): Promise<boolean>;
   createSite(values: { name: string; type: string; address: string; budget_cents: number; organization_id?: string }): Promise<boolean>;
   updateProfile(values: { full_name: string; phone: string; first_name?: string; last_name?: string }): Promise<boolean>;

@@ -2558,7 +2558,7 @@ function Messages({ session }: { session: Session }) {
           profileId={session.profileId}
           selectedId={selected}
           busy={session.busy}
-          onSubmit={(id, body) => session.sendMessage(id, body)}
+          onSubmit={(id, body, commandId) => session.sendMessage(id, body, commandId)}
           context={session.mutationContext}
           loadOperations={session.loadOperations}
         />

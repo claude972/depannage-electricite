@@ -330,7 +330,7 @@ export function ClientSpace({ session }: { session: Session }) {
               profileId={session.profileId}
               selectedId={session.param || session.selectedId}
               busy={session.busy}
-              onSubmit={(id, body) => session.sendMessage(id, body)}
+              onSubmit={(id, body, commandId) => session.sendMessage(id, body, commandId)}
               context={session.mutationContext}
           loadOperations={session.loadOperations}
             />

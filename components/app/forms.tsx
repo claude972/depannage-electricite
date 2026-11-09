@@ -776,7 +776,8 @@ export function MessageCenter({
   profileId: string;
   selectedId: string;
   busy: boolean;
-  onSubmit: (id: string, body: string) => Promise<boolean | undefined>;
+  /** `commandId` (E41): one UUID per message intention, resent unchanged until confirmed. */
+  onSubmit: (id: string, body: string, commandId: string) => Promise<boolean | undefined>;
   /** Live session: the paginated history is read from /api/messages. Demo/default: preview only, no call. */
   live?: boolean;
   /** Test seam for the history client. */
@@ -812,6 +813,7 @@ export function MessageCenter({
   // The compose draft belongs to ONE identity + dossier: switching never carries A's text to B.
   const threadKey = historyKey(profileId, id);
   const [draft, setDraft] = useState<ComposeDraft>({ key: threadKey, text: "" });
+  const sendIntent = useRef<{ thread: string; text: string; id: string } | null>(null);
   const body = draftText(draft, threadKey);
   const setBody = (text: string) => setDraft({ key: threadKey, text });
   const history = useMessageHistory(live, profileId, id, fetchHistory);
@@ -949,10 +951,19 @@ export function MessageCenter({
                 if (body.trim()) {
                   const sentKey = threadKey;
                   const sentText = body; // snapshot of the draft as sent
-                  void onSubmit(id, body.trim()).then((saved) => {
+                  const text = body.trim();
+                  // E41: same thread + same text ⇒ same intention key until a confirmed send.
+                  const known = sendIntent.current;
+                  const commandId = known && known.thread === sentKey && known.text === text ? known.id : typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : "";
+                  if (!commandId) return;
+                  sendIntent.current = { thread: sentKey, text, id: commandId };
+                  void onSubmit(id, text, commandId).then((saved) => {
                     // Clear only the draft that was sent (same thread, unchanged since); text typed
                     // during the request is kept; on failure the draft stays as is.
-                    if (saved) setDraft((d) => clearSentDraft(d, sentKey, sentText));
+                    if (saved) {
+                      if (sendIntent.current?.id === commandId) sendIntent.current = null;
+                      setDraft((d) => clearSentDraft(d, sentKey, sentText));
+                    }
                   });
                 }
               }}
