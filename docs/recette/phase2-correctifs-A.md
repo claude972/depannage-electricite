@@ -26,7 +26,7 @@ A `33d378f` et B `26464ef` ont été réunis dans un checkout temporaire. Typech
 | --- | ---: |
 | CORRIGÉ (avec suite verte) | 0 |
 | VÉRIFIÉ CIBLÉ (suite initiale rouge) | 14 |
-| CORRIGÉ PARTIEL | 11 |
+| CORRIGÉ PARTIEL | 12 |
 | NON REPRODUIT | 0 |
 | DÉCISION REQUISE | 4 |
 | REVERTÉ | 0 |
@@ -68,7 +68,7 @@ A `33d378f` et B `26464ef` ont été réunis dans un checkout temporaire. Typech
 | E76 | Majeur | VÉRIFIÉ CIBLÉ | Quota rappel | `b102a21` | `sql-phase2-lot-a-callback-quota-review.mjs` | Handler rappel, migration additive | Vrai HTTP anonyme : 429/429 avant, 429/200 après pour la source saturée et l’autre appelant. Rejeu accepté à quota et aucun IP brut stocké. L’en-tête Vercel est simulé en recette. Sans adresse fiable, repli conservateur par origine. |
 | E77 | Mineur | VÉRIFIÉ CIBLÉ | Quota rappel | `b102a21` | `sql-phase2-lot-a-callback-quota-review.mjs` | Handler rappel, migration additive | La réponse renvoie le temps restant pour les deux plafonds, y compris après changement de source. Un numéro neuf reste accepté. PostgreSQL natif : migration appliquée deux fois ; contrat SQL historique, permissions et Chromium rappel passent. |
 | E78 | Majeur | À REPRODUIRE | Isolé | — | — | — | Sortie du remboursement préparé après révocation. |
-| E80 | Majeur | À REPRODUIRE | Isolé | — | — | — | Projection autorisée du litige dans l’espace artisan. |
+| E80 | Majeur | CORRIGÉ PARTIEL | Isolé | `f58df31` | `sql-phase2-lot-a-artisan-dispute-review.mjs` | Route statut paiement, migration additive | GET 200 avec règlement confirmé avant et après. Nouveau champ seul `under_review` pour l’artisan affecté auteur du devis. Client, tiers, ancien et nouvel artisan après changement d’affectation ne reçoivent pas le litige historique. Registre finance inchangé. Attend le lot B. |
 | H01 | Bloquant externe | HORS MISSION | Hébergement | — | — | — | Checklist ci-dessous. |
 | PUB-10.1 | Externe | HORS MISSION | Recette | — | — | — | Condition ouverte conservée au registre. |
 | CLI-05.2 | Externe | HORS MISSION | Recette | — | — | — | Condition ouverte conservée au registre. |
@@ -88,7 +88,7 @@ A `33d378f` et B `26464ef` ont été réunis dans un checkout temporaire. Typech
 | E08/E10/E12/E62 | Éditeurs budget, zones, adresses et énergie | Les routes concernées ont déjà un contrat de version. Vérifier côté B le rechargement du formulaire et la transition après rejeu avant de modifier le serveur. |
 | E21/E24 | `components/features/site-operations/sla-panel.tsx`, `erp-panel.tsx` | Afficher les bornes et les refus immédiatement avec le même ordre de dates que l’API. |
 | E72 | `components/features/finance-proofs/model.ts:63` | Le champ `connected_charge_id` accepte ch_ ou py_ ; `charge_id` plateforme reste ch_. |
-| E80 | `components/role/artisan-space.tsx:2302` | Afficher l’état du litige du règlement attribué à l’artisan. Le journal finance reste privé. |
+| E80 | `components/role/artisan-space.tsx:2302` | Lire le GET statut paiement du devis accepté. Champ optionnel `artisan_dispute` parmi `none`, `open`, `under_review`, `resolved`, `closed`, indépendant de l’état du règlement. Le journal finance reste privé. |
 
 ## Attendu de l’intégration
 
