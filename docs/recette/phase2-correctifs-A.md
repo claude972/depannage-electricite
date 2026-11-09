@@ -4,6 +4,18 @@ Branche `fix/phase2-lot-A-codex` · Base `93e5a5dcf76caa528c121248a1c22f52433fb8
 Lot B séparé sur `fix/phase2-lot-B-claude-code`. Registre original de recette hors du checkout, copie de référence conservée sans ses pièces privées.
 Plan court : reproductions isolées E01, E28, E73 et E74 dans cet ordre, suite et point de synchronisation, puis mécanismes P1–P7 et défauts isolés, avec contrats de frontière et commits ciblés.
 
+## Dernier lot du registre
+
+Le bilan de recette est de 81 points traités sur 81. Le commit applicatif `abbe67a46f1a340778210fdfc97ea8df296d5890` intègre E67 et E75. Les états dans les sections historiques ci-dessous décrivent leurs checkpoints respectifs.
+
+| ID | État | Décision et preuve |
+| --- | --- | --- |
+| E67 | CORRIGÉ | Justificatif facultatif lors de la levée. L’utilisateur choisit un document privé du même site, ou enregistre sans pièce. La recette HTTP refuse un autre site, un fichier absent, une version périmée et un acteur tiers. Un ancien formulaire conserve une pièce déjà liée. Le test Chromium couvre la sélection, la pagination, l’erreur de lecture, la reprise et le retrait. Commits `b00f678`, `6862d5d`, `abbe67a`. |
+| E75 | CORRIGÉ | L’artisan choisit trois ou quatre missions simultanées. Trois s’applique par défaut, y compris aux anciennes préférences hors plage. Les dossiers attribués, avec devis envoyé, acceptés ou en cours occupent une place. Une intervention terminée libère sa place même si son paiement reste en attente. La liste, l’acceptation et la réaffectation respectent le plafond. Deux transactions PostgreSQL ont concouru pour la dernière place. Une a attendu le verrou puis reçu un refus, et le compteur est resté à trois. Aucun dossier ni compte de cette recette ne subsiste. Commits `9004769`, `54dd9b4`. |
+| E70 | VALIDÉ EN SANDBOX | Sur `9598676`, création d’un nouveau compte Connect par l’application, reprise sur le même compte, refus avant approbation et fermeture du compte de recette avec zéro utilisateur résiduel. Le compte déjà qualifié a rouvert son lien et le paiement de test existant a été relu. Stripe a confirmé 43,40 € payés, 7,38 € de commission de recette et un versement automatique rapproché de 36,02 €. L’événement réel a été signé pour le relais de boucle locale et rejoué. Une seule preuve a été enregistrée. Le client est refusé sur cette preuve finance, le statut de son paiement est `paid`, et aucune réception bancaire réelle n’est attestée. La configuration de qualification a été restaurée dans la base isolée. Les chemins applicatifs du paiement et du rapprochement sont identiques entre `9598676` et `abbe67a`. |
+
+TypeScript, les 2 237 tests applicatifs sans échec ni test ignoré, et les deux builds Next.js passent. Les 88 contrôles SQL et d’adaptation passent après le rejeu des trois recettes qui cumulaient des dossiers fictifs. Les scénarios de planning, d’équipe et de devis libèrent leurs places après les assertions concernées. Les deux migrations additives ont été rejouées deux fois sur PostgreSQL 17.11 isolé après la chaîne précédente. H01 reste distinct. Vercel ne liste aucune variable de preview pour la branche `feat/reserve-and-mission-capacity`.
+
 ## E59 et E60 après décision du propriétaire
 
 Le bilan consolidé passe à 78 défauts applicatifs corrigés sur 81. La branche `feat/intervention-report-evidence` réunit le serveur `b0f9a93`, l’interface `25048a7`, la révocation `8eba138` et le contrôle d’affichage `fc6a33e`. Le commit applicatif vérifié est `95986762d740ed5c5a5f88c713362bb8c48563d3`. Le tableau historique ci-dessous conserve l’état du lot A initial.
