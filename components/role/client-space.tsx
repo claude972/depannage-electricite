@@ -3,7 +3,7 @@
 // `session.*`. Références : M61 (accueil mobile), V8-C07 (détail d’intervention), V8-C06
 // (devis), M7 (suivi). Mobile < 1024 px : navigation basse ; desktop : barre latérale.
 import { realName } from "../app/display-name";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useRef, useState, type FormEvent } from "react";
 import type { Session } from "../app/session-types";
 import {
   CATEGORIES,
@@ -1018,6 +1018,9 @@ export function RequestsView({ session, rows }: { session: Session; rows: Interv
 function useOperations(session: Session, id: string, dependency: string) {
   const ref = useRef(session);
   ref.current = session;
+  // E16 (P1/P6): every explicit refresh of the workspace re-reads the operations of this dossier too
+  // (slot, participants), keeping the shown values until the reply.
+  const refreshed = session.refreshedAt;
   const [ops, setOps] = useState<Operations | null | undefined>(undefined);
   const [version, setVersion] = useState(0);
   // An explicit re-read of the SAME dossier keeps the shown values (and any open form) until the
@@ -1035,7 +1038,7 @@ function useOperations(session: Session, id: string, dependency: string) {
     return () => {
       active = false;
     };
-  }, [id, dependency, version]);
+  }, [id, dependency, version, refreshed]);
   return { ops, reload: () => setVersion((v) => v + 1) };
 }
 
@@ -1475,6 +1478,8 @@ function DetailView({
             ) : (
               <p className={styles.description}>Aucun créneau proposé pour le moment.</p>
             )}
+            {/* E16: a refresh or a new slot revision remounts the reminder ⇒ it is re-read. */}
+            <Fragment key={`${session.refreshedAt}|${ops.appointment?.reminder_version ?? 0}`}>
             <AppointmentReminderPanel
               key={`${i.id}|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`}
               interventionId={i.id}
@@ -1482,6 +1487,7 @@ function DetailView({
               context={session.mutationContext}
               demo={session.mode === "demo"}
             />
+            </Fragment>
             {canSchedule ? (
               <AppointmentForm
                 key={keptDraft ?? (ops.appointment?.updated_at || "new")}
