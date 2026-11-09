@@ -24,14 +24,18 @@ try {
     alter table storage.objects enable row level security;
   `);
   const dir = new URL("../supabase/migrations/", import.meta.url);
-  let previousJobs;
+  const installerSuffix = "_operational_reminders_schedule.sql";
+  const jobs = async (excludeOperational = false) => (
+    await db.query(`select to_jsonb(j)v from cron.job j
+      ${excludeOperational ? "where jobname<>'depannage_operational_reminders_v1'" : ""}
+      order by jobname`)
+  ).rows;
+  let initialInstallerVerified = false;
   for (const name of (await readdir(dir))
     .filter((n) => n.endsWith(".sql"))
     .sort()) {
-    if (name.endsWith("_operational_reminders_schedule.sql"))
-      previousJobs = (
-        await db.query("select to_jsonb(j)v from cron.job j order by jobname")
-      ).rows;
+    const isInstaller = name.endsWith(installerSuffix);
+    const previousJobs = isInstaller ? await jobs() : undefined;
     const migration = await isolatedMigrationSql(
       db,
       name,
@@ -43,7 +47,13 @@ try {
         "-- stub for isolated test",
       ),
     );
+    if (previousJobs) {
+      // Compare at the install boundary. Later migrations legitimately add independent jobs.
+      assert.deepEqual(await jobs(true), previousJobs);
+      initialInstallerVerified = true;
+    }
   }
+  assert.equal(initialInstallerVerified, true);
   let checks = 0;
   const eq = (a, b) => {
     assert.deepEqual(a, b);
@@ -367,19 +377,13 @@ try {
     true,
   );
 
-  eq(
-    (
-      await db.query(
-        "select to_jsonb(j)v from cron.job j where jobname<>'depannage_operational_reminders_v1'order by jobname",
-      )
-    ).rows,
-    previousJobs,
-  );
+  const previousJobs = await jobs(true);
   const scheduleFile = (await readdir(dir)).find((x) =>
-    x.endsWith("_operational_reminders_schedule.sql"),
+    x.endsWith(installerSuffix),
   );
   const scheduleSql = await readFile(new URL(scheduleFile, dir), "utf8");
   await db.exec(scheduleSql);
+  eq(await jobs(true), previousJobs);
   eq(
     (
       await db.query(
@@ -401,6 +405,7 @@ try {
   await db.exec(scheduleSql.replace("current_user<>'postgres'", "current_user<>'operational_installer'"));
   eq((await db.query("select active v from cron.job where jobname='depannage_operational_reminders_v1'")).rows[0].v, false);
   await db.exec("reset role");
+  eq(await jobs(true), previousJobs);
   // Seed an honestly overdue historical reminder without waiting a calendar day.
   const overdue = await compliance();
   await db.query(

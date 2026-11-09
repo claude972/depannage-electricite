@@ -145,7 +145,7 @@ begin
   perform pg_temp.qa_set(k||'_siret', siret);
   perform pg_temp.qa_call(pg_temp.qa_id(k),'authenticated',format($q$select public.save_artisan_profile('Entreprise QA %s',%L,'EI',0,'12 rue du Test QA',array['97200'],array['panel']) v$q$, i, siret));
   perform pg_temp.qa_call(pg_temp.qa_id(k),'authenticated','select public.submit_artisan_application() v');
-  perform pg_temp.qa_exec(pg_temp.qa_id('admin'),'authenticated',format('select public.approve_artisan(%L,true)', pg_temp.qa_id(k)));
+  perform pg_temp.qa_exec(pg_temp.qa_id('admin'),'authenticated',format('select public.decide_artisan_application(%1$L,''approve'',(select application_version from public.artisan_profiles where user_id=%1$L),gen_random_uuid())', pg_temp.qa_id(k)));
   perform pg_temp.qa_call(pg_temp.qa_id(k),'authenticated','select public.set_artisan_availability(true) v');
  end loop;
  perform pg_temp.qa_check((select count(*) from public.profiles where id in (pg_temp.qa_id('artisan'),pg_temp.qa_id('otherArtisan')) and artisan_approved)=2, 'artisans QA approuvés par le super admin temporaire');
