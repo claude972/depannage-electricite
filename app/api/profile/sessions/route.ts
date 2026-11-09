@@ -1,3 +1,4 @@
+import { isAuthSessionMissingError } from "@supabase/supabase-js";
 import { z } from "zod";
 import {
   ApiError,
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
 
     // Use the explicit bearer method so provider refusals reach the caller.
     const { error } = await db.auth.admin.signOut(session.access_token, "others");
-    if (error?.status === 401 || error?.status === 403 || error?.status === 404) {
+    if (isAuthSessionMissingError(error) || error?.status === 401 || error?.status === 403 || error?.status === 404) {
       throw new ApiError(401, "Reconnectez-vous pour gérer vos sessions.");
     }
     if (error?.status === 429) {
