@@ -227,6 +227,7 @@ test("existing intake keeps environment guard and historical resolution works wi
           post({
             action: "resolve",
             case_id: id,
+            expected_version: "2026-11-07T12:00:00.123456Z",
             status: "declined",
             resolution: "Synthetic documented QA resolution",
           }),
@@ -235,6 +236,7 @@ test("existing intake keeps environment guard and historical resolution works wi
       200,
     );
     assert.equal(resolve.calls[0][0], "resolve_warranty");
+    assert.equal(resolve.calls[0][1].p_expected_version, "2026-11-07T12:00:00.123456Z");
   });
   await withEnv("true", async () => {
     assert.equal(
