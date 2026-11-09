@@ -77,14 +77,14 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E33 | Mineur | A | CONTRAT A | normalisation NFC annuaire | | | app/api, supabase | |
 | E36 | Mineur | A + B | CORRIGÉ (dépend de A 523878c) | command_id stable par intention (P3) | 43ee0b9 | phase2-lot-b-e34-e35-e36-artisan-decisions | forms.tsx | rouge : aucune clé ; vert : même command_id jusqu’à confirmation, écran relu |
 | E41 | Mineur | A + B | CORRIGÉ (dépend de A 0127c6d) | command_id du message texte (P3) | 03936b5 | phase2-lot-b-e41-message-command-id | forms.tsx, session-types.ts, courant-app.tsx, client/artisan-space | rouge : aucune clé ; vert : même clé au renvoi, nouvelle clé au message suivant |
-| E43 | Mineur | B | À REPRODUIRE | publication propre prise pour « autre canal » (P3) | | | artisan-quote-draft.tsx | |
+| E43 | Mineur | B | CORRIGÉ | envoi propre incertain ≠ autre canal (P3) | 6b4104c | phase2-lot-b-e43-own-publication | artisan-quote-draft.tsx | rouge : « publié par un autre canal » ; vert : message d’issue incertaine de son envoi, rechargement pour vérifier |
 | E45 | Mineur | B | CORRIGÉ | erreur de page suivante expliquée | ca0f8a3 | phase2-lot-b-e44-e45-invoices-pagination | invoices-model.ts, customer-invoices-panel.tsx | rouge : 503 silencieux ; vert : alerte, reprise 26 pièces, alerte retirée |
 | E46 | Mineur | B | À REPRODUIRE | avis effacé par la navigation | | | courant-app.tsx | |
 | E47 | Mineur | B | À REPRODUIRE | vérification de retour après SIGNED_IN | | | courant-app.tsx | |
 | E49 | Mineur | B | CORRIGÉ | alerte de pagination retirée | d5b1a3b | phase2-lot-b-e48-e49-saved-methods-pagination | saved-payment-methods/model.ts | rouge : alerte conservée ; vert : retirée après la 21e carte |
 | E53 | Mineur | A + B | CORRIGÉ (dépend de A b414386) | command_id du dépôt de site (P3) | fc06c26 | phase2-lot-b-e53-site-upload-command-id | site-attachments-panel.tsx | rouge : command_id absent ; vert : même clé au renvoi, un seul document |
 | E55 | Mineur | B | CORRIGÉ | lecture confirmée ⇒ résumé de cloche relu (P1/P6) | 48a79ff | phase2-lot-b-e54-e55-e56-notifications | notification-center.tsx, notifications-anchor.tsx | rouge : 0 GET résumé ; vert : résumé relu |
-| E57 | Mineur | B | À REPRODUIRE | confirmation perdue au remount (P3) | | | site-lifecycle | |
+| E57 | Mineur | B | CORRIGÉ | confirmation persistante après rejeu (P3) | 3e4c3c1 | phase2-lot-b-e57-site-replay-confirmation | site-direct.tsx | rouge : panneau démonté, confirmation perdue ; vert : fiche conservée pendant la relecture, « Paramètres enregistrés. » visible |
 | E58 | Mineur | B | CORRIGÉ | profil relu à chaque navigation interne (P6) | f1271fc | phase2-lot-b-e58-e79-public-profile | use-published-profile.ts, public-site.tsx | rouge : 0 GET, ancien exploitant affiché ; vert : relecture, ancien exploitant absent |
 | E62 | Mineur | B | CORRIGÉ | rejeu réussi → édition (P3) | fcf1abd | phase2-lot-b-e62-e63-energy | site-energy-panel.tsx | rouge : formulaire en création, expected_version null ; vert : édition v1 |
 | E65 | Mineur | B | À REPRODUIRE | présélection Artisan | | | public-site.tsx, forms.tsx | |
@@ -103,7 +103,7 @@ Sous-cas externes avec condition ouverte (PUB-10.1, CLI-05.2, CLI-08.1, ADM-01.1
 
 Mise à jour à chaque commit d’item.
 
-- CORRIGÉ (46 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E04, E06, E08, E10, E12, E13, E14, E15, E16, E18, E20, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E39, E40, E41, E42, E44, E45, E48, E49, E50, E51, E52, E53, E54, E55, E56, E58, E62, E63, E64, E71, E72, E79, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : A f58df31).
+- CORRIGÉ (48 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E04, E06, E08, E10, E12, E13, E14, E15, E16, E18, E20, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E39, E40, E41, E42, E43, E44, E45, E48, E49, E50, E51, E52, E53, E54, E55, E56, E57, E58, E62, E63, E64, E71, E72, E79, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : A f58df31).
 - VÉRIFIÉ À L’INTÉGRATION sans code B : E21, E24.
 - ROUGE : aucun.
 - À REPRODUIRE : voir tableau.
