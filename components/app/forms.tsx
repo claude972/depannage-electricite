@@ -1058,7 +1058,13 @@ function ConversationContact({ intervention, role, context, load }: { interventi
   const tel = person ? telHref(person.phone) : null;
   return (
     <div className="conversation-contact" data-conversation-contact={open ? state.phase : "closed"}>
-      <button type="button" className="button outline" aria-expanded={open} onClick={() => { const next = !open; setOpen(next); if (next && state.phase !== "ready" && state.phase !== "loading") read(); }} data-conversation-contact-toggle="">
+      <button type="button" className="button outline" aria-expanded={open} onClick={() => {
+          const next = !open;
+          setOpen(next);
+          // P1 (E40): folding purges the contact; every opening re-reads it (rights may have changed).
+          if (next) read();
+          else { seq.current++; setState({ phase: "idle", ops: null }); }
+        }} data-conversation-contact-toggle="">
         <Icon name="phone" size={16} />
         Contact et rendez-vous
       </button>
