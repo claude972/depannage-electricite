@@ -12,6 +12,7 @@
 //   centres (SQL available_missions_by_distance) ⇒ d = 5 means ≤ 5 km, d > 5 means ]d−5, d] km. The
 //   ranked cursor carries radius_version; no active radius or another radius version ⇒ 422. The ?id
 //   point read stays chronological (no band): the summary keeps the list-row band.
+import { readRefused } from "../../app/refusal";
 import { z } from "zod";
 import { missionOfferSchema, rankedCursorSchema, rankedOfferSchema, type MissionOffer } from "../../../lib/features/artisan-missions/schema";
 
@@ -270,6 +271,15 @@ export function createMissionsController({ api, context = DEFAULT_MISSIONS_CONTE
     const current = get();
     if (!ok) {
       set({ ...current, accepting: null, acceptError: failureMessage });
+      // P1 (E14): a refused answer re-reads this offer before any new attempt; the point read is
+      // this panel's adapter — a refused read (404/403/401) removes the offer and its actions.
+      const my = ++pointSeq;
+      const r = await call(() => api().point(id));
+      if (!same(gen, uid) || my !== pointSeq) return false;
+      if (readRefused(r.status)) {
+        const s = get();
+        set({ ...s, items: s.items.filter((i) => i.id !== id), point: { id, phase: "gone", offer: null } });
+      }
       return false;
     }
     set({ ...current, accepting: null, point: null, items: current.items.filter(offer => offer.id !== id) });
