@@ -77,25 +77,27 @@ export function Gate({ state, unavailableMessage, title, children }: { state: Co
 export function useLoad<T>(loader: () => Promise<T | null>, deps: unknown[]) {
   const [data, setData] = useState<T | undefined>(undefined);
   const [error, setError] = useState<string>("");
+  /** True when the last read was refused (401/403/404): rights must be re-read first (P1). */
+  const [refused, setRefused] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useEffect(() => {
     let active = true;
-    setLoading(true); setError("");
+    setLoading(true); setError(""); setRefused(false);
     loader().then((result) => { if (!active) return; if (result !== null) setData(result); setLoading(false); })
       .catch((e) => {
         if (!active) return;
         // P1 shared rule: a refused read (401/403/404) purges the data already shown.
-        if (e instanceof ApiRequestError && readRefused(e.status)) setData(undefined);
+        if (e instanceof ApiRequestError && readRefused(e.status)) { setData(undefined); setRefused(true); }
         setError(errorText(e)); setLoading(false);
       });
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, tick]);
   const reload = useCallback(() => setTick((t) => t + 1), []);
-  return { data, error, loading, reload };
+  return { data, error, loading, reload, refused };
 }
 /** Runs a command with double-submit protection. null = stale: no success, no update. */
 export function useCommand<A extends unknown[], R>(command: (...args: A) => Promise<R | null>, onDone: (result: R) => void) {

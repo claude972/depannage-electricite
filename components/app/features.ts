@@ -175,6 +175,23 @@ export async function bound<T>(deps: FeatureDeps, key: FeatureKey, task: () => P
   }
 }
 
+/**
+ * Leaf read (E32): same identity-generation binding as `bound` (stale bundle ⇒ nothing sent, late
+ * reply ⇒ null), but its errors never change the module's global state — a page error of one leaf
+ * (e.g. the audit journal) stays local and never unmounts the other views; /me keeps that role.
+ */
+export async function boundLeaf<T>(deps: FeatureDeps, task: () => Promise<T>): Promise<T | null> {
+  const generation = deps.owner ?? deps.generation();
+  if (generation !== deps.generation()) return null;
+  try {
+    const value = await task();
+    return generation !== deps.generation() ? null : value;
+  } catch (error) {
+    if (generation !== deps.generation()) return null;
+    throw error;
+  }
+}
+
 /** Same binding, but refusals become a `{ ok:false }` result instead of a thrown error. */
 async function boundResult<T, R>(
   deps: FeatureDeps,
@@ -304,7 +321,7 @@ export function createPlatformClient(input: FeatureDeps): PlatformClient {
     load: {
       me: () => get<PlatformAccess>(`${PLATFORM}/me`),
       operators: (q) => get(listPath("operators", q)),
-      audit: (q) => get(listPath("audit", q)),
+      audit: (q) => boundLeaf(deps, () => request(listPath("audit", q))), // E32: page errors stay local
       settings: () => get(`${PLATFORM}/settings`),
       billingContact: (subject_kind, subject_id) => get(`${PLATFORM}/billing-contacts${query({ subject_kind, subject_id })}`),
       finance: () => get(`${PLATFORM}/finance`),
