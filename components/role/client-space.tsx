@@ -1796,6 +1796,27 @@ function AppointmentForm({
 
 // ---- Devis (V8-C06) -----------------------------------------------------------------
 /** Exported for tests only (live exact quote read). */
+/** E13: true only when the quote documents read states this exact quote's validity as expired. */
+function useQuoteExpired(session: Session, quoteId: string): boolean {
+  const [state, setState] = useState<{ key: string; expired: boolean } | null>(null);
+  const key = quoteId ? `${session.profileId}|${session.mutationContext.generation()}|${quoteId}` : "";
+  const client = useRef(session.features.quoteDocuments);
+  client.current = session.features.quoteDocuments;
+  useEffect(() => {
+    if (!key) return;
+    let active = true;
+    void Promise.resolve(client.current.load({ quoteId }))
+      .then((overview) => {
+        const q = overview?.quotes.find((x) => x.id === quoteId);
+        if (active) setState({ key, expired: q?.terms?.validity === "expired" });
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [key, quoteId]);
+  return !!state && state.key === key && state.expired;
+}
 export function QuoteView({
   session,
   rows,
@@ -1823,6 +1844,7 @@ export function QuoteView({
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState("");
+  const expired = useQuoteExpired(session, live ? quoteId : "");
   if (live && point.state.phase !== "ready")
     return (
       <section className="panel" data-quote-point={point.state.phase}>
@@ -1880,7 +1902,9 @@ export function QuoteView({
           ? "superseded"
           : "closed"
     : quoteDecisionState(quote, current, i.status);
-  const isActive = decision === "active";
+  // E13: a quote whose recorded validity has passed is never offered for acceptance (the server
+  // refuses it with 409 anyway); the documents read is the source of the validity.
+  const isActive = decision === "active" && !expired;
   const superseded = decision === "superseded";
   const currentId = live ? server!.version.current_quote_id : current?.id ?? null;
   const refreshAfter = () => {
@@ -2046,7 +2070,9 @@ export function QuoteView({
               ? live
                 ? QUOTES_COPY.readOnly
                 : "Ce devis ne peut plus être accepté ni refusé."
-              : "Ce devis n’attend plus de décision de votre part."}
+              : expired && decision === "active"
+                ? "Ce devis ne peut plus être accepté : sa validité est dépassée. L’artisan peut en envoyer une nouvelle version."
+                : "Ce devis n’attend plus de décision de votre part."}
         </p>
       )}
       {rejecting && isActive && (
