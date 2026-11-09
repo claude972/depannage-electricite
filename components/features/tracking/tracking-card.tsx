@@ -35,13 +35,18 @@ function CardBody({ state, unavailableMessage, scope, client, demo, onNavigate, 
   const [, setTick] = useState(0);
   const available = state === "available";
 
+  /** E17: only the reply of the LATEST read applies; an older reply arriving late is dropped. */
+  const loadSeq = useRef(0);
   const load = useCallback(async () => {
     if (demo) return;
+    const my = ++loadSeq.current;
     try {
       const next = await client.load();
+      if (my !== loadSeq.current) return;
       if (next) setSnapshot(next);
       setLoadError("");
     } catch (error) {
+      if (my !== loadSeq.current) return;
       const f = failureOf(error);
       // Droit perdu ou dossier invisible : tout est effacé de l’affichage.
       if (f.status === 403 || f.status === 404) {
