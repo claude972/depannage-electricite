@@ -24,6 +24,8 @@ Le checkout combiné A `974211b` et B `b3af4c8` a passé le typecheck. La suite 
 
 Sur A `974211b`, le test d’adaptation des migrations et 83 des 85 scripts SQL passent. `sql-operational-reminders-review.mjs` échouait déjà sur la base. `sql-adv-rollback-review.mjs` échoue parce que son script historique appelle la commande d’approbation révoquée. Une copie de ce script adaptée au contrat versionné passe ses 346 vérifications. Le script versionné relève d’un raccordement hors lots, détaillé ci-dessous.
 
+La contre-recette E51 a monté le shell complet dans Chromium avec le SDK Supabase installé, une authentification de recette et un vrai WebSocket de boucle locale. Sur `93e5a5d`, la reconnexion ne produit aucun GET de rattrapage et la description précédente reste affichée. Sur A `c92b47f` avec B `99516ac`, deux abonnements sont observés autour de la coupure. La reconnexion produit exactement un GET, affiche la nouvelle description dans le même document et ne déclenche aucune mutation. Le typecheck et 56 tests ciblés d’interface passent également sur A `c92b47f` avec B `00e6e02`.
+
 ## Rejeu natif de la chaîne complète
 
 Sur le SHA A `974211b`, les 101 migrations initiales et les 20 additives se sont appliquées dans l’ordre sur PostgreSQL 17.11 vierge. Vault, pg_cron et pg_net sont chargés, les départs de tâches et l’émission réseau sont neutralisés. La base de recette est arrêtée après vérification. Aucun changement hébergé.
@@ -68,7 +70,7 @@ Sur le SHA A `974211b`, les 101 migrations initiales et les 20 additives se sont
 | E60 | Majeur | DÉCISION REQUISE | Décision | — | — | — | Accusé de remise par le client. |
 | E61 | Majeur | CORRIGÉ PARTIEL | Isolé | `fa9d690` | `sql-phase2-lot-a-reports-pagination-review.mjs` | Route rapports | HTTP sur PostgreSQL isolé : 503/422/503 avant, 200/200/200 après. 1 000 + 1 sites, totaux par page, CSV entier en flux, pas de résultat pour le tiers et interruption si la page finale est tronquée. Attend les contrôles de pagination B. |
 | E67 | Majeur | DÉCISION REQUISE | Décision | — | — | — | Justificatif de levée ERP. |
-| E68 | Mineur | CORRIGÉ PARTIEL | Isolé | `f183d49` | `phase2-lot-a-offline-draft-browser.mjs` | `public/offline-request.js` | Firefox conservait les champs et les deux moteurs gardaient la clé expirée. Après, formulaire vide et clé absente dans Firefox et WebKit, brouillon valide relu, transport coupé et zéro POST. Les installations existantes attendent une nouvelle génération du cache. |
+| E68 | Mineur | CORRIGÉ PARTIEL | Isolé | `f183d49` | `phase2-lot-a-offline-draft-browser.mjs` | `public/offline-request.js` | Firefox conservait les champs et les deux moteurs gardaient la clé expirée. Après, formulaire vide et clé absente dans Firefox et WebKit, brouillon valide relu, transport coupé et zéro POST. Le passage d’une installation existante de v6 à v7 a été vérifié dans les deux moteurs avec un candidat local. La génération reste à intégrer. |
 | E69 | Mineur | VÉRIFIÉ CIBLÉ | P7 | `7ccaeda` | `sql-phase2-lot-a-auth-session-review.mjs` | Route profile sessions | Vrai SDK et Next : `session_not_found` 503 avant, 401 après. `bad_jwt` reste 401, panne reste 503, nominal ferme seulement les autres sessions. |
 | E70 | Majeur | CORRIGÉ PARTIEL | Isolé | `3e86b60` | `sql-phase2-lot-a-connect-review.mjs` | `app/api/payments/connect/route.ts` | Next.js et SDK Stripe réels, fournisseur synthétique sur boucle locale. Les deux codes passent de 500 à 503 avec un message d’action. Refus 403 sans appel, autre erreur 500, aucune mutation de profil. La configuration du compte Connect reste externe. |
 | E72 | Majeur | VÉRIFIÉ CIBLÉ | P7 | `2bdc979` | Webhook signé local, qualification SQL et test provider injecté | Contrat Stripe, migration additive | HTTP 400 et SQL 22023 avant ; 200 et commission rapprochée sur fixture après. Le préfixe py_ est limité aux commissions, la transaction ch_ plateforme et l’identité Connect restent vérifiées. Le parseur B `976e6e3` accepte les deux formes sans élargir la preuve plateforme. |
@@ -104,7 +106,7 @@ Sur le SHA A `974211b`, les 101 migrations initiales et les 20 additives se sont
 | ID | Fichier | Action requise |
 | --- | --- | --- |
 | E34/E36 | `scripts/qa-advanced-platform/rollback.sql:148` | La suite intégrale échoue sur `approve_artisan` (42501), volontairement révoqué. La copie de recette passe avec `decide_artisan_application` (`approve`, version du profil relue, `gen_random_uuid()`) : 346 PASS, 130 tables inchangées après rollback. Le script versionné est hors périmètre des deux lots. |
-| E68 | `public/sw.js` | Incrémenter la génération immuable avec le nouveau script dans le même déploiement. Vérifier la mise à jour d’une installation v6 et la purge hors connexion. Le fichier est hors périmètre A et B. |
+| E68 | `public/sw.js` | Incrémenter la génération immuable avec le nouveau script dans le même déploiement. Le candidat local a conservé v6 jusqu’à activation explicite, installé v7 puis supprimé v6. Firefox et WebKit ont rechargé hors connexion sans brouillon expiré ni POST. Les 35 tests PWA et brouillons passent avec le candidat. `public/sw.js` est hors périmètre des deux lots. |
 
 ## Fiches de décision
 
