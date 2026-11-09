@@ -20,7 +20,11 @@ if (process.env.QA_STRIPE_LOOPBACK_PORT) {
   const https = require("node:https");
   const http = require("node:http");
   https.request = (options, callback) => {
-    if (options.host !== "api.stripe.com" || options.path !== "/v2/core/accounts" || options.method !== "POST") {
+    const allowed = process.env.QA_STRIPE_FIXTURE === "refund"
+      ? (options.method === "GET" && /^\/v1\/(checkout\/sessions\/cs_test_QA[a-z0-9]+|payment_intents\/pi_QA|charges\/ch_QA)$/.test(options.path))
+        || (options.method === "POST" && options.path === "/v1/refunds")
+      : options.method === "POST" && options.path === "/v2/core/accounts";
+    if (options.host !== "api.stripe.com" || !allowed) {
       throw new Error("Unexpected HTTPS request in the isolated Stripe fixture");
     }
     return http.request({
