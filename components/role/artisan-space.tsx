@@ -129,6 +129,7 @@ import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-pa
 import { ContractSourceLine } from "../features/quote-grid/quote-grid";
 import { PhotoReviewPanel } from "../features/photo-review/photo-review-panel";
 import { reviewImage } from "../features/photo-review/model";
+import { ReportEvidenceSummary, ReportPhotoUpload, closureMissing, dossierPhotos, evidenceRequired, type EvidencePhoto, type ReportPhotoUploadProps } from "../app/report-evidence";
 
 // ---- Static definitions ---------------------------------------------------------------
 type Tone = "neutral" | "blue" | "green" | "amber" | "red" | "violet";
@@ -1590,7 +1591,7 @@ function WorkDossier({ session, intervention: i }: { session: Session; intervent
               </div>
             </dl>
           </section>
-          <NextAction session={session} intervention={i} />
+          <NextAction session={session} intervention={i} ops={ops} pending={pending} />
           <DocumentManager
             key={`${i.id}|${session.profileId}|${session.mutationContext.generation()}`}
             documents={[]}
@@ -1659,6 +1660,10 @@ function WorkDossier({ session, intervention: i }: { session: Session; intervent
               state={state}
               busy={session.busy}
               scope={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${i.id}`}
+              ops={ops}
+              photos={dossierPhotos(session.data.documents, i.id, i.artisan_id)}
+              openContext={session.mode === "demo" ? undefined : session.mutationContext}
+              upload={session.mode === "demo" ? undefined : { interventionId: i.id, context: session.mutationContext, refresh: session.refresh }}
               onSave={(values) => operate({ action: "save_report", ...values })}
             />
           )}
@@ -1691,8 +1696,12 @@ function WorkDossier({ session, intervention: i }: { session: Session; intervent
     </>
   );
 }
-function NextAction({ session, intervention: i }: { session: Session; intervention: Intervention }) {
+function NextAction({ session, intervention: i, ops, pending }: { session: Session; intervention: Intervention; ops: Operations | null; pending: boolean }) {
   const s: Status = i.status;
+  // E59: a new intervention (server flag) completes only once the report holds both photos; the
+  // button says what is missing. Legacy dossiers (no flag) keep the previous behaviour.
+  const missing = pending ? [] : closureMissing(ops);
+  const gated = evidenceRequired(ops);
   let body: ReactNode;
   if (s === "assigned")
     body = <p>Prochaine étape : établir le devis ci-dessous et l’envoyer au client.</p>;
@@ -1721,15 +1730,31 @@ function NextAction({ session, intervention: i }: { session: Session; interventi
           Intervention en cours. Rédigez le compte rendu, puis terminez l’intervention : le client
           sera invité à régler le devis accepté.
         </p>
-        <div className={styles.formActions}>
-          <ConfirmAction
-            label="Terminer l’intervention"
-            message="Confirmer la fin de l’intervention ? Le règlement du devis accepté sera demandé au client."
-            confirmLabel="Terminer"
-            className="button primary"
-            busy={session.busy}
-            onConfirm={() => session.action(i.id, "complete")}
-          />
+        {gated && missing.length > 0 && (
+          <div className={styles.sectionNote} role="status" data-closure-missing>
+            <strong>Pour terminer, il manque :</strong>
+            <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+              {missing.map((m) => (
+                <li key={m}>{m}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <div className={styles.formActions} data-closure={pending && !ops ? "checking" : gated ? (missing.length ? "blocked" : "ready") : "legacy"}>
+          {gated && missing.length > 0 ? (
+            <button type="button" className="button primary" disabled aria-describedby="dossier-next">
+              Terminer l’intervention
+            </button>
+          ) : (
+            <ConfirmAction
+              label="Terminer l’intervention"
+              message="Confirmer la fin de l’intervention ? Le règlement du devis accepté sera demandé au client."
+              confirmLabel="Terminer"
+              className="button primary"
+              busy={session.busy || (pending && !ops)}
+              onConfirm={() => session.action(i.id, "complete")}
+            />
+          )}
         </div>
       </>
     );
@@ -2045,6 +2070,10 @@ function ReportPanel({
   state,
   busy,
   scope,
+  ops,
+  photos,
+  openContext,
+  upload,
   onSave,
 }: {
   report: InterventionReport | null;
@@ -2054,14 +2083,16 @@ function ReportPanel({
   busy: boolean;
   /** identity (uid|generation) + dossier: the editor never outlives it. */
   scope: string;
-  onSave: (values: {
-    summary: string;
-    checks: ReportCheck[];
-    signature_name: string;
-    command_id: string;
-  }) => Promise<boolean>;
+  ops: Operations | null;
+  photos: EvidencePhoto[];
+  openContext?: { generation(): number; userId(): string | null };
+  /** Live only: private photo upload into this dossier from the form. */
+  upload?: Omit<ReportPhotoUploadProps, "onUploaded">;
+  onSave: (values: ReportValues) => Promise<boolean>;
 }) {
   const [editing, setEditing] = useState(false);
+  const panelScope = useRef(scope);
+  panelScope.current = scope;
   return (
     <section className="panel" aria-labelledby="dossier-report">
       <h2 id="dossier-report">Compte rendu d’intervention</h2>
@@ -2071,11 +2102,23 @@ function ReportPanel({
         <Unavailable title="Compte rendu" state={state} />
       ) : editing ? (
         <ReportForm
-          key={`${scope}|${report?.updated_at || "new"}`}
+          key={`${scope}|${report?.report_revision || report?.updated_at || "new"}`}
           scope={scope}
           initial={report}
+          evidence={evidenceRequired(ops)}
+          photos={photos}
+          upload={upload}
           busy={busy}
-          onSave={onSave}
+          onSave={async (values) => {
+            const sent = panelScope.current;
+            const ok = await onSave(values);
+            // A late reply for another identity / dossier never closes the current editor.
+            if (panelScope.current !== sent) return ok;
+            // The confirmed save re-reads the report (new revision ⇒ new form key): close the editor
+            // here, not only from the form, which may already be unmounted by that re-read.
+            if (ok) setEditing(false);
+            return ok;
+          }}
           onDone={() => setEditing(false)}
         />
       ) : report ? (
@@ -2098,6 +2141,7 @@ function ReportPanel({
             {report.updated_at ? ` — enregistré le ${dateTime(report.updated_at)}` : ""}. Il ne
             s’agit pas d’une signature électronique certifiée.
           </p>
+          {ops && <ReportEvidenceSummary ops={ops} report={report} photos={photos} noteClass={styles.sectionNote} declarant={false} openContext={openContext} />}
           <div className={styles.formActions}>
             <button type="button" className="button outline" disabled={busy} onClick={() => setEditing(true)}>
               <Icon name="edit" size={17} />
@@ -2119,24 +2163,41 @@ function ReportPanel({
     </section>
   );
 }
+type ReportValues = {
+  summary: string;
+  checks: ReportCheck[];
+  signature_name: string;
+  command_id: string;
+  before_photo_id?: string | null;
+  after_photo_id?: string | null;
+};
 function ReportForm({
   initial,
   busy,
   scope,
+  evidence,
+  photos,
+  upload,
   onSave,
   onDone,
 }: {
   initial: InterventionReport | null;
   busy: boolean;
   scope: string;
-  onSave: (values: {
-    summary: string;
-    checks: ReportCheck[];
-    signature_name: string;
-    command_id: string;
-  }) => Promise<boolean>;
+  /** E59: the dossier requires before/after photos (server flag). */
+  evidence: boolean;
+  photos: EvidencePhoto[];
+  upload?: Omit<ReportPhotoUploadProps, "onUploaded">;
+  onSave: (values: ReportValues) => Promise<boolean>;
   onDone: () => void;
 }) {
+  // Photos whose upload was confirmed (201 + id) in this form: selectable even if the refresh has
+  // not (yet) brought them into the workspace documents.
+  const [uploaded, setUploaded] = useState<EvidencePhoto[]>([]);
+  const choices = [...photos, ...uploaded.filter((u) => !photos.some((p) => p.id === u.id))];
+  const known = (id?: string | null) => (id && photos.some((p) => p.id === id) ? id : "");
+  const [before, setBefore] = useState(known(initial?.before_photo_id));
+  const [after, setAfter] = useState(known(initial?.after_photo_id));
   const [summary, setSummary] = useState(initial?.summary ?? "");
   const [checks, setChecks] = useState<ReportCheck[]>(
     initial?.checks ?? [
@@ -2145,7 +2206,7 @@ function ReportForm({
     ],
   );
   const [signature, setSignature] = useState(initial?.signature_name ?? "");
-  const [errors, setErrors] = useState<{ summary?: string; checks?: string; signature?: string }>(
+  const [errors, setErrors] = useState<{ summary?: string; checks?: string; signature?: string; photos?: string }>(
     {},
   );
   // Save in flight: every field and control is locked; a synchronous guard blocks a second POST.
@@ -2170,12 +2231,17 @@ function ReportForm({
     if (summary.trim().length < 10) next.summary = "Décrivez l’intervention en au moins 10 caractères.";
     if (checks.some((c) => !c.label.trim())) next.checks = "Chaque point de contrôle doit avoir un intitulé.";
     if (signature.trim().length < 2) next.signature = "Indiquez le nom de la personne qui déclare ce compte rendu.";
+    // E59: a new intervention's report is saved only with both photos (the server refuses otherwise).
+    if (evidence && (!before || !after)) next.photos = "Choisissez la photo avant et la photo après l’intervention.";
+    else if (evidence && before === after) next.photos = "Choisissez deux photos distinctes : une avant, une après.";
     setErrors(next);
     if (Object.keys(next).length) return;
     const values = {
       summary: summary.trim(),
       checks: checks.map((c) => ({ label: c.label.trim(), result: c.result })),
       signature_name: signature.trim(),
+      // Legacy dossier: the photo fields are not sent at all (previous request body unchanged).
+      ...(evidence ? { before_photo_id: before, after_photo_id: after } : {}),
     };
     const input = JSON.stringify(values);
     if (!intentRef.current || intentRef.current.input !== input) {
@@ -2279,6 +2345,50 @@ function ReportForm({
           Ajouter un point de contrôle
         </button>
       </fieldset>
+      {evidence && (
+        <fieldset style={{ border: 0, padding: 0, margin: "0 0 14px" }} data-report-photo-picker>
+          <legend className={styles.sectionNote} style={{ fontWeight: 600 }}>
+            Photos avant / après (obligatoires)
+          </legend>
+          {choices.length < 2 && (
+            <p className={styles.sectionNote} data-report-photo-hint>
+              {choices.length === 0 ? "Aucune photo JPEG, PNG ou WebP dans ce dossier." : "Une seule photo JPEG, PNG ou WebP dans ce dossier."}{" "}
+              {upload ? "Ajoutez-les ci-dessous : chaque photo envoyée est sélectionnée." : "Ajoutez les photos depuis les documents du dossier, puis choisissez-les ici."}
+            </p>
+          )}
+          {upload && (
+            <ReportPhotoUpload
+              {...upload}
+              // The uploaded photo fills the first empty slot (before, then after); still changeable.
+              onUploaded={(photo) => {
+                setUploaded((list) => (list.some((p) => p.id === photo.id) ? list : [...list, photo]));
+                if (!before) setBefore(photo.id);
+                else if (!after && photo.id !== before) setAfter(photo.id);
+              }}
+            />
+          )}
+          <Field label="Photo avant l’intervention">
+            <select value={before} onChange={(e) => setBefore(e.target.value)} data-report-photo-select="before">
+              <option value="">— Aucune —</option>
+              {choices.map((p) => (
+                <option key={p.id} value={p.id} disabled={p.id === after}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Photo après l’intervention" error={errors.photos}>
+            <select value={after} onChange={(e) => setAfter(e.target.value)} data-report-photo-select="after">
+              <option value="">— Aucune —</option>
+              {choices.map((p) => (
+                <option key={p.id} value={p.id} disabled={p.id === before}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </fieldset>
+      )}
       <Field
         label="Nom déclaré"
         hint="Nom de la personne qui déclare ce compte rendu. Il ne s’agit pas d’une signature électronique certifiée."

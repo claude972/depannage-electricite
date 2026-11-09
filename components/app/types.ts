@@ -240,6 +240,17 @@ export type InterventionReport = {
   checks: ReportCheck[];
   signature_name: string;
   updated_at?: string;
+  /** E59/E60: revision of the saved report (acknowledgements bind to one revision). */
+  report_revision?: string | null;
+  before_photo_id?: string | null;
+  after_photo_id?: string | null;
+};
+/** E60: requester acknowledgement + typed signature of one report revision. */
+export type ReportReceipt = {
+  report_revision: string;
+  acknowledged_at: string | null;
+  signed_at: string | null;
+  signature_name: string;
 };
 export type OperationEvent = {
   id: number | string;
@@ -256,6 +267,10 @@ export type Operations = {
   history: OperationEvent[];
   history_limit: number;
   travel_stage: TravelStage;
+  /** E59: true for new interventions (two photos required to complete); absent on legacy/demo. */
+  report_evidence_required?: boolean;
+  /** E60: acknowledgement of the current report revision, or null. */
+  report_receipt?: ReportReceipt | null;
 };
 export type OperationBody =
   | { action: "decline_offer"; reason: string }
@@ -269,7 +284,11 @@ export type OperationBody =
       summary: string;
       checks: ReportCheck[];
       signature_name: string;
+      /** E59: sent only for a dossier flagged `report_evidence_required`. */
+      before_photo_id?: string | null;
+      after_photo_id?: string | null;
     }
+  | { action: "sign_report"; report_revision: string; acknowledged: true; signature_name: string }
   | { action: "reassign"; artisan_id: string | null; reason: string };
 export type ArtisanCommand =
   | {

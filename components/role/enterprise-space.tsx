@@ -14,6 +14,8 @@ import {
   type ReactNode,
 } from "react";
 import { isDeclaredOnSite } from "../app/booking-status";
+import { reportDeclarant } from "../app/report-declarant";
+import { ReportEvidenceSummary, ReportReceiptForm, canSignReport, dossierPhotos } from "../app/report-evidence";
 import styles from "./enterprise.module.css";
 import theme from "./enterprise-theme.module.css";
 import { ThemeSurface } from "../app/theme-provider";
@@ -2149,8 +2151,23 @@ export function DossierView({ c, id, initialQuoteId }: { c: Ctx; id: string; ini
                 </ul>
               )}
               <p className={styles.note}>
-                Signé « {ops.report.signature_name} »{ops.report.updated_at ? ` · ${dateTime(ops.report.updated_at)}` : ""}.
+                {reportDeclarant(ops.report.signature_name, ops.report.updated_at ? dateTime(ops.report.updated_at) : undefined)}
               </p>
+              <ReportEvidenceSummary ops={ops} report={ops.report} photos={dossierPhotos(session.data.documents, intervention.id, intervention.artisan_id)} noteClass={styles.note} declarant={false} openContext={demo ? undefined : session.mutationContext} />
+              {/* E60: only the authenticated requester of the dossier, within its writable perimeter. */}
+              {!demo && canOperate && canSignReport(ops, intervention.status, intervention.client_id === session.profileId) && (
+                <ReportReceiptForm
+                  key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${intervention.id}|${ops.report.report_revision}`}
+                  scope={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${intervention.id}`}
+                  revision={ops.report.report_revision}
+                  busy={session.busy}
+                  onSign={async (values) => {
+                    const ok = await session.operate(intervention.id, { action: "sign_report", ...values });
+                    setReloadKey((k) => k + 1);
+                    return ok;
+                  }}
+                />
+              )}
             </section>
           )}
 

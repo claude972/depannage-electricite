@@ -3,6 +3,8 @@
 // `session.*`. Références : M61 (accueil mobile), V8-C07 (détail d’intervention), V8-C06
 // (devis), M7 (suivi). Mobile < 1024 px : navigation basse ; desktop : barre latérale.
 import { realName } from "../app/display-name";
+import { reportDeclarant } from "../app/report-declarant";
+import { ReportEvidenceSummary, ReportReceiptForm, canSignReport, dossierPhotos } from "../app/report-evidence";
 import { Fragment, useEffect, useRef, useState, type FormEvent } from "react";
 import type { Session } from "../app/session-types";
 import {
@@ -1579,9 +1581,24 @@ function DetailView({
               </ul>
             )}
             <p className="form-note">
-              Signé par {ops.report.signature_name}
-              {ops.report.updated_at ? ` le ${dateTime(ops.report.updated_at)}` : ""}.
+              {reportDeclarant(ops.report.signature_name, ops.report.updated_at ? dateTime(ops.report.updated_at) : undefined)}
             </p>
+            {/* E59/E60: before/after photos and the requester's acknowledgement of this revision. */}
+            <ReportEvidenceSummary ops={ops} report={ops.report} photos={dossierPhotos(session.data.documents, i.id, i.artisan_id)} declarant={false} openContext={demo ? undefined : session.mutationContext} />
+            {!demo && canSignReport(ops, i.status, i.client_id === session.profileId) && (
+              <ReportReceiptForm
+                key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${i.id}|${ops.report.report_revision}`}
+                scope={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${i.id}`}
+                revision={ops.report.report_revision}
+                busy={session.busy}
+                onSign={async (values) => {
+                  const ok = await session.operate(i.id, { action: "sign_report", ...values });
+                  // Success or refusal (409 revision changed, rights…): the dossier is re-read.
+                  reload();
+                  return ok;
+                }}
+              />
+            )}
           </section>
         </>
       )}
