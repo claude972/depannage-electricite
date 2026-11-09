@@ -22,10 +22,10 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E04 | Majeur | B | CORRIGÉ | égalité profonde de la commande stockée (P7) | 03239bd | phase2-lot-b-e04-reminder-storage | payment-reminders/model.ts, payment-reminder-control.tsx | rouge : « stockage indisponible », 0 POST ; vert : programmer puis annuler, 1 POST chacun |
 | E07 | Majeur | A | CONTRAT A | verrou site archivé SQL | | | supabase, app/api | UI déjà lecture seule |
 | E08 | Majeur | B | CORRIGÉ | 409 ⇒ relecture dans le formulaire (P1/P2) | e739cb1 | phase2-lot-b-e08-budget-conflict | budget-panel.tsx (+ relecture c91f30d) | rouge : note v1 renvoyée, note concurrente écrasée ; vert : note v2 rechargée, montant conservé, conflit, renvoi v2 |
-| E11 | Majeur | B | À REPRODUIRE | option active périmée après saisie | | | components/app/address-field.tsx | |
+| E11 | Majeur | B | CORRIGÉ | suggestions périmées annulées à la saisie | 9e97064 | phase2-lot-b-e11-address-stale-option | address-field.tsx | rouge : Entrée immédiate applique l’ancienne rue ; vert : saisie conservée, aucun champ remplacé |
 | E15 | Majeur | B + A | CORRIGÉ (dépend de A 258f44e) | expected_version du créneau (P2) | c1b5ddf | phase2-lot-b-e15-appointment-version | types.ts, client-space.tsx, artisan-space.tsx, enterprise-space.tsx | rouge : expected_version absent (client et artisan) ; vert : version lue (0 en création), refus ⇒ relecture 13 h, saisie conservée, conflit signalé, renvoi v2 |
 | E16 | Majeur | B | CORRIGÉ | Actualiser relit créneau + rappel (P1/P6) | 8fad5b5 | phase2-lot-b-e16-refresh-dependencies | client-space.tsx | rouge : 0 relecture opérations/rappel, ancien horaire ; vert : relecture des deux, nouvel horaire. Clé existante du rappel conservée (fragment clé) |
-| E17 | Majeur | B | À REPRODUIRE | réponse GET ancienne après arrêt | | | features/tracking/tracking-card.tsx | |
+| E17 | Majeur | B | CORRIGÉ | garde monotone sur la dernière lecture appliquée | 24f20de, eb9e2fa | phase2-lot-b-e17-tracking-late-reply | tracking-card.tsx | rouge : réponse ancienne réaffiche « Suivi actif » ; contre-revue Codex : garde sur le dernier GET lancé ⇒ rien affiché si latence > sondage, arrêt ignoré derrière un GET pendant (rouges reproduits) ; vert : 3 cas |
 | E20 | Majeur | B | CORRIGÉ | 404 ⇒ relecture, lecture refusée purge (P1) | 1508558 | phase2-lot-b-e20-approval-revoked | advanced-approvals/model.ts, approvals.tsx | rouge : 0 relecture, historique et actions conservés ; vert : relecture, purge, 1 POST |
 | E21 | Majeur | A (schéma partagé) | VÉRIFIÉ À L’INTÉGRATION, aucun code B | faits constatés non futurs (P4) | — | contrôle privé `phase3-lot-b-private/e21-e24-with-a-schema.mts` | — | les formulaires B importent `slaCasePayload` : B seul 1 commande envoyée (rouge), avec le schéma A 0 commande et message immédiat. Non compté comme correctif B |
 | E24 | Majeur | A (schéma partagé) | VÉRIFIÉ À L’INTÉGRATION, aucun code B | levée ≥ contrôle, non future (P4) | — | même contrôle privé | — | `erpChecklistPayload` partagé : B seul 1 commande (rouge), avec A 0 commande et message immédiat. Non compté comme correctif B |
@@ -103,7 +103,7 @@ Sous-cas externes avec condition ouverte (PUB-10.1, CLI-05.2, CLI-08.1, ADM-01.1
 
 Mise à jour à chaque commit d’item.
 
-- CORRIGÉ (52 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E04, E05, E06, E08, E09, E10, E12, E13, E14, E15, E16, E18, E20, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E39, E40, E41, E42, E43, E44, E45, E48, E49, E50, E51, E52, E53, E54, E55, E56, E57, E58, E61, E62, E63, E64, E65, E71, E72, E79, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : A f58df31).
+- CORRIGÉ (54 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E04, E05, E06, E08, E09, E10, E11, E12, E13, E14, E15, E16, E17, E18, E20, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E39, E40, E41, E42, E43, E44, E45, E48, E49, E50, E51, E52, E53, E54, E55, E56, E57, E58, E61, E62, E63, E64, E65, E71, E72, E79, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : A f58df31).
 - VÉRIFIÉ À L’INTÉGRATION sans code B : E21, E24.
 - ROUGE : aucun.
 - À REPRODUIRE : voir tableau.
