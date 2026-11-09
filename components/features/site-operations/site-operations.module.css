@@ -268,6 +268,29 @@
 .lineRow > button {
   margin-bottom: 8px;
 }
+/* E67: optional document of a lifted reserve, on its own full-width line under the item. */
+.reserveDoc {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  margin-bottom: 8px;
+}
+.reserveDocLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 0;
+}
+.reserveDocList {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  border: 1px solid #d9dfdc;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
 @media (min-width: 900px) {
   .lineRow {
     grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;

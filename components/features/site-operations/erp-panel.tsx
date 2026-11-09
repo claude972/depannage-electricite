@@ -1,27 +1,60 @@
 "use client";
 import { useRef, useState, type FormEvent } from "react";
+import { z } from "zod";
 import { erpChecklistPayload } from "../../../lib/features/site-operations/schemas";
 import { CHECKLIST_STATUS, DECLARATIVE_NOTICE, ITEM_STATE, date } from "../../../lib/features/site-operations/labels";
-import type { ChecklistStatus, ErpChecklist, ErpChecklistPayload, ItemState } from "../../../lib/features/site-operations/types";
+import type { ChecklistItem, ChecklistStatus, ErpChecklist, ErpChecklistPayload, ItemState } from "../../../lib/features/site-operations/types";
+import { OpenSiteDocument, ReserveDocumentPicker, useSiteDocumentOptions, type SiteDocumentOption } from "./erp-reserve-document";
 import { EmptyState, Field, Notice, ReadOnly, Tag, Truncated, orNull, useSubmit, type PanelContext, type Tone } from "./shared";
 import styles from "./site-operations.module.css";
 
 const ITEM_TONE: Record<ItemState, Tone> = { not_checked: "neutral", ok: "green", reserve: "amber", not_applicable: "neutral" };
-type ItemDraft = { key: string; label: string; state: ItemState; note: string; reserve_resolved_on: string };
+/** E67: optional private document of the same site linked to a lifted reserve. The lift itself never
+ *  requires it. `doc_origin` is the link read from the server (to send an explicit null on removal). */
+type ItemDraft = { key: string; label: string; state: ItemState; note: string; reserve_resolved_on: string; doc: { id: string; name: string | null; site: string } | null; doc_origin: string | null };
 type Draft = { title: string; description: string; performed_on: string; performed_by_label: string; status: ChecklistStatus; items: ItemDraft[] };
+type ItemPayload = ChecklistItem & { reserve_document_id?: string | null };
+type Payload = Omit<ErpChecklistPayload, "items"> & { items: ItemPayload[] };
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Server rows may carry reserve_document_id (contract in progress); anything else reads as no link. */
+const linkedDocument = (i: ChecklistItem): string | null => {
+  const v = (i as ItemPayload).reserve_document_id;
+  return typeof v === "string" && UUID.test(v) ? v : null;
+};
 let counter = 0;
 const newKey = () => `item-${Date.now().toString(36)}-${(counter++).toString(36)}`;
-const emptyItem = (): ItemDraft => ({ key: newKey(), label: "", state: "not_checked", note: "", reserve_resolved_on: "" });
+const emptyItem = (): ItemDraft => ({ key: newKey(), label: "", state: "not_checked", note: "", reserve_resolved_on: "", doc: null, doc_origin: null });
 const empty = (): Draft => ({ title: "", description: "", performed_on: "", performed_by_label: "", status: "draft", items: [emptyItem()] });
-const fromRow = (c: ErpChecklist): Draft => ({ title: c.title, description: c.description, performed_on: c.performed_on ?? "", performed_by_label: c.performed_by_label, status: c.status, items: c.items.map((i) => ({ key: i.key, label: i.label, state: i.state, note: i.note, reserve_resolved_on: i.reserve_resolved_on ?? "" })) });
-const toPayload = (d: Draft): ErpChecklistPayload => ({
+const fromRow = (c: ErpChecklist, site: string): Draft => ({
+  title: c.title, description: c.description, performed_on: c.performed_on ?? "", performed_by_label: c.performed_by_label, status: c.status,
+  items: c.items.map((i) => {
+    const linked = linkedDocument(i);
+    return { key: i.key, label: i.label, state: i.state, note: i.note, reserve_resolved_on: i.reserve_resolved_on ?? "", doc: linked ? { id: linked, name: null, site } : null, doc_origin: linked };
+  }),
+});
+const canLink = (i: ItemDraft) => i.state === "reserve" && i.reserve_resolved_on !== "";
+/** reserve_document_id is sent only when a document is chosen (same site, lifted reserve) or to
+ *  clear a link that exists on the server; otherwise the key is absent. */
+const toPayload = (d: Draft, site: string): Payload => ({
   title: d.title.trim(),
   description: d.description.trim(),
   performed_on: orNull(d.performed_on),
   performed_by_label: d.performed_by_label.trim(),
   status: d.status,
-  items: d.items.map((i) => ({ key: i.key, label: i.label.trim(), state: i.state, note: i.note.trim(), reserve_resolved_on: orNull(i.reserve_resolved_on) })),
+  items: d.items.map((i) => {
+    const doc = canLink(i) && i.doc && i.doc.site === site ? i.doc.id : null;
+    const base: ItemPayload = { key: i.key, label: i.label.trim(), state: i.state, note: i.note.trim(), reserve_resolved_on: orNull(i.reserve_resolved_on) };
+    return doc ? { ...base, reserve_document_id: doc } : i.doc_origin ? { ...base, reserve_document_id: null } : base;
+  }),
 });
+/** Client check: the existing payload rules, plus a well-formed optional document id per item. */
+const payloadSchema = z.preprocess((value) => {
+  const p = value as Payload;
+  return { ...p, items: p.items.map((item) => {
+    const { reserve_document_id: id, ...rest } = item;
+    return id === undefined || id === null || UUID.test(id) ? rest : item; // a malformed id stays and is refused
+  }) };
+}, erpChecklistPayload);
 
 export function ErpPanel({ context }: { context: PanelContext }) {
   const { report, canWrite } = context;
@@ -40,7 +73,7 @@ export function ErpPanel({ context }: { context: PanelContext }) {
   const open = (row: ErpChecklist | null) => {
     editor.current++;
     setEditing(row ? { id: row.id, version: row.version } : { id: null, version: null });
-    setDraft(row ? fromRow(row) : empty());
+    setDraft(row ? fromRow(row, report.site_id) : empty());
     form.setMessage(null);
   };
   /** The body is built once from the locked draft, the exact checklist and its expected version:
@@ -51,12 +84,12 @@ export function ErpPanel({ context }: { context: PanelContext }) {
     if (!editing || !canWrite || inFlight.current || form.submitting || context.busy) return;
     inFlight.current = true;
     const token = editor.current, site = report.site_id;
-    const payload = toPayload(draft);
+    const payload = toPayload(draft, site);
     const command = editing.id
       ? { action: "save_erp_checklist" as const, site_id: site, payload, id: editing.id, expected_version: editing.version ?? 0 }
       : { action: "save_erp_checklist" as const, site_id: site, payload };
     try {
-      await form.submit(event, erpChecklistPayload, payload, command, () => {
+      await form.submit(event, payloadSchema, payload, command, () => {
         if (editor.current === token && site === siteRef.current) close(); // late reply for another editor or site: ignored
       }, editing.id ? "Contrôle mis à jour." : "Contrôle enregistré.");
     } finally {
@@ -66,7 +99,15 @@ export function ErpPanel({ context }: { context: PanelContext }) {
   const siteRef = useRef(report.site_id);
   siteRef.current = report.site_id;
   const locked = form.submitting;
-  const setItem = (index: number, patch: Partial<ItemDraft>) => setDraft((d) => ({ ...d, items: d.items.map((i, j) => (j === index ? { ...i, ...patch } : i)) }));
+  // E67: a changed finding or lift date clears the chosen document (re-choose explicitly); an
+  // existing server link is then cleared by an explicit null at save.
+  const setItem = (index: number, patch: Partial<ItemDraft>) => setDraft((d) => ({ ...d, items: d.items.map((i, j) => {
+    if (j !== index) return i;
+    const changed = (patch.state !== undefined && patch.state !== i.state) || (patch.reserve_resolved_on !== undefined && patch.reserve_resolved_on !== i.reserve_resolved_on);
+    return { ...i, ...patch, ...(changed ? { doc: null } : {}) };
+  }) }));
+  const setDoc = (index: number, doc: SiteDocumentOption | null) => setDraft((d) => ({ ...d, items: d.items.map((i, j) => (j === index ? { ...i, doc: doc ? { id: doc.id, name: doc.name, site: report.site_id } : null } : i)) }));
+  const documents = useSiteDocumentOptions(report.site_id, context.interventionSearch?.context);
   const openReserves = report.completeness.erp.open_reserves;
   return (
     <section aria-labelledby="so-erp-title">
@@ -107,6 +148,9 @@ export function ErpPanel({ context }: { context: PanelContext }) {
                 <Field label="Note">{(a) => <input {...a} value={item.note} maxLength={1000} onChange={(e) => setItem(i, { note: e.target.value })} />}</Field>
                 <Field label="Réserve levée le">{(a) => <input {...a} type="date" value={item.reserve_resolved_on} disabled={item.state !== "reserve"} onChange={(e) => setItem(i, { reserve_resolved_on: e.target.value })} />}</Field>
                 <button type="button" className="button outline" onClick={() => setDraft((d) => ({ ...d, items: d.items.filter((_, j) => j !== i) }))} aria-label={`Retirer le point ${i + 1}`}>Retirer</button>
+                {(item.state === "reserve" || item.doc) && (
+                  <ReserveDocumentPicker index={i} siteId={report.site_id} enabled={canLink(item)} value={item.doc && item.doc.site === report.site_id ? item.doc : null} options={documents} onChange={(doc) => setDoc(i, doc)} />
+                )}
               </div>
             ))}
             <button type="button" className="button outline" onClick={() => setDraft((d) => ({ ...d, items: [...d.items, emptyItem()] }))} disabled={draft.items.length >= 200}>Ajouter un point</button>
@@ -142,13 +186,21 @@ export function ErpPanel({ context }: { context: PanelContext }) {
                 {c.description && <p className={styles.notes}>{c.description}</p>}
                 {c.items.length > 0 && (
                   <ul className={styles.plain} aria-label={`Points de ${c.title}`}>
-                    {c.items.map((i) => (
-                      <li key={i.key}>
-                        <span>{i.label}</span>
-                        <span className={styles.tags}><Tag tone={ITEM_TONE[i.state]}>{ITEM_STATE[i.state]}</Tag>{i.state === "reserve" && i.reserve_resolved_on && <Tag tone="green">Levée le {date(i.reserve_resolved_on)}</Tag>}</span>
-                        {i.note && <span className={styles.muted}>{i.note}</span>}
-                      </li>
-                    ))}
+                    {c.items.map((i) => {
+                      const linked = linkedDocument(i);
+                      return (
+                        <li key={i.key}>
+                          <span>{i.label}</span>
+                          <span className={styles.tags}><Tag tone={ITEM_TONE[i.state]}>{ITEM_STATE[i.state]}</Tag>{i.state === "reserve" && i.reserve_resolved_on && <Tag tone="green">Levée le {date(i.reserve_resolved_on)}</Tag>}</span>
+                          {i.note && <span className={styles.muted}>{i.note}</span>}
+                          {linked && (
+                            <span className={styles.muted}>
+                              Document de levée lié (réf. {linked.slice(0, 8)}) <OpenSiteDocument siteId={report.site_id} id={linked} options={documents} />
+                            </span>
+                          )}
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
                 {canWrite && <div className={styles.cardActions}><button type="button" className="button outline" onClick={() => open(c)} disabled={!!editing}>Modifier</button></div>}
