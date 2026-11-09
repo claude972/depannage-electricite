@@ -174,7 +174,9 @@ function Live({ pushSaved, context, api, env, readyTimeoutMs, onTag }: WebPushPa
       return setPhase("forbidden");
     }
     const v = r.status === 200 ? parsePushView(r.body) : null;
-    if (v && !v.enrollment?.opted_in) {
+    // E71: the server clears the browser and may keep the general consent (opted_in true +
+    // browser none): this browser is removed either way.
+    if (v && (!v.enrollment?.opted_in || v.enrollment.browser === "none")) {
       setData(v);
       setNotice(COPY.removed);
       // Best effort: this browser no longer needs its subscription.
