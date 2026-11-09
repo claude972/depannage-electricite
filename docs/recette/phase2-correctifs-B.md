@@ -32,7 +32,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E25 | Majeur | A | CONTRAT A | date d’effet des grilles (P4) | | | supabase | côté B : affichage si contrat change |
 | E26 | Majeur | B | À REPRODUIRE | 403 → relire/purger (P1) | | | site-operations-view.tsx, grids-panel.tsx | |
 | E29 | Majeur | B + A | CORRIGÉ (dépend de A 2b3b44e) | updated_at exact en version (P2) | 47f3fdc | phase2-lot-b-e29-warranty-version | types.ts, forms.tsx | rouge : expected_version absent ; vert : chaîne exacte envoyée, 409 ⇒ relecture, décision de A affichée, brouillon de B conservé |
-| E30 | Majeur | B | À REPRODUIRE | 403 → relire /me + purger (P1) | | | platform-operators-view.tsx | |
+| E30 | Majeur | B | CORRIGÉ | 403 ⇒ relire /me + liste, lecture refusée purge (P1) | 747a94f | phase2-lot-b-e30-e31-operators | platform-operations/shared.tsx, platform-operators-view.tsx | rouge : 0 GET /me après 403 ; vert : relecture, nom/note/boutons purgés, 1 POST |
 | E32 | Majeur | B | À REPRODUIRE | vue journal audit_read | | | anchors.ts, features.ts, platform-anchor.tsx | |
 | E34 | Majeur | B + A | CORRIGÉ (dépend de A e17c0e5) | approbation ≠ réactivation + version (P2) | 43ee0b9 | phase2-lot-b-e34-e35-e36-artisan-decisions | forms.tsx | rouge : corps {approved:true} ; vert : action approve + version 1 ⇒ 409, Suspendu relu |
 | E35 | Majeur | B | CORRIGÉ | action « Demander des corrections » | 43ee0b9 | phase2-lot-b-e34-e35-e36-artisan-decisions | forms.tsx | rouge : seule action « Approuver » ; vert : request_changes envoyé, statut changes_requested |
@@ -60,20 +60,20 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E76 | Majeur | A | CONTRAT A | plafond global rappel | | | lib, supabase | |
 | E78 | Majeur | A | CONTRAT A | reprise remboursement | | | supabase, lib | |
 | E80 | Majeur | A + B | CONTRAT A | litige non projeté côté artisan | | | app/api/payments/status | B affichera le champ quand projeté |
-| E03 | Mineur | B | À REPRODUIRE | 409 → relire + garder motif (P1) | | | platform-moderation-view.tsx | |
+| E03 | Mineur | B | CORRIGÉ | 409 ⇒ relecture en place, motif conservé (P1) | 4800320 | phase2-lot-b-e03-moderation-conflict | platform-operations/shared.tsx, platform-moderation-view.tsx | rouge : renvoi version 1 ; vert : relecture, renvoi version 2 |
 | E05 | Mineur | B | À REPRODUIRE | validation locale effectif ≤ 100000 | | | role/artisan-space.tsx | |
 | E06 | Mineur | B | À REPRODUIRE | formulaire ouvert après perte d’écriture (P1) | | | site-operations shared/equipment/maintenance | |
 | E09 | Mineur | B | À REPRODUIRE | nom de secours « document » | | | components/app/uploads.ts | |
 | E10 | Mineur | B | À REPRODUIRE | rejeu réussi → édition (P3) | | | site-areas-panel.tsx | |
 | E12 | Mineur | B | À REPRODUIRE | 409 → recharger le formulaire (P1/P2) | | | client-addresses-panel.tsx | |
 | E13 | Mineur | B | À REPRODUIRE | devis expiré : bouton inactif | | | client-space.tsx, quote-documents-panel.tsx | |
-| E14 | Mineur | B | À REPRODUIRE | 403 offre perdue → retirer (P1) | | | available-missions | |
+| E14 | Mineur | B | CORRIGÉ | refus d’acceptation ⇒ relecture ponctuelle (P1) | e8bfd00 | phase2-lot-b-e14-lost-offer | available-missions-model.ts | rouge : 0 relecture, bouton actif ; vert : 1 POST, relecture 404, offre retirée |
 | E18 | Mineur | A + B | CORRIGÉ (dépend de A 7de6d11) | command_id du rapport (P3) | 4049d5d | phase2-lot-b-e18-report-command-id | types.ts, artisan-space.tsx | rouge : aucune clé ; vert : même clé et saisie après réponse perdue, nouvelle clé après succès |
 | E19 | Mineur | A | CONTRAT A | nom vide accepté par la route | | | app/api | formulaire déjà conforme |
 | E22 | Mineur | B | À REPRODUIRE | verrou synchrone useSubmit (P5) | | | site-operations/shared.tsx | |
 | E23 | Mineur | A | CONTRAT A | classement SLA divergent | | | lib | |
 | E27 | Mineur | B | À REPRODUIRE | 409 → relire la grille (P1) | | | grids-panel.tsx | |
-| E31 | Mineur | B | À REPRODUIRE | `account_role` lu comme `role` | | | features.ts, platform-operators-view.tsx | |
+| E31 | Mineur | B | CORRIGÉ | `account_role` lu | 747a94f | phase2-lot-b-e30-e31-operators | platform-operators-view.tsx | rouge : aucun lien ; vert : lien fiche client |
 | E33 | Mineur | A | CONTRAT A | normalisation NFC annuaire | | | app/api, supabase | |
 | E36 | Mineur | A + B | CORRIGÉ (dépend de A 523878c) | command_id stable par intention (P3) | 43ee0b9 | phase2-lot-b-e34-e35-e36-artisan-decisions | forms.tsx | rouge : aucune clé ; vert : même command_id jusqu’à confirmation, écran relu |
 | E41 | Mineur | A + B | CORRIGÉ (dépend de A 0127c6d) | command_id du message texte (P3) | 03936b5 | phase2-lot-b-e41-message-command-id | forms.tsx, session-types.ts, courant-app.tsx, client/artisan-space | rouge : aucune clé ; vert : même clé au renvoi, nouvelle clé au message suivant |
@@ -103,7 +103,7 @@ Sous-cas externes avec condition ouverte (PUB-10.1, CLI-05.2, CLI-08.1, ADM-01.1
 
 Mise à jour à chaque commit d’item.
 
-- CORRIGÉ (rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E15, E18, E29, E34, E35, E36, E38, E41, E44, E45, E48, E49, E50, E52, E53, E62, E63, E64. E15/E18/E29/E34/E36/E41/E53 exigent les routes A à l’intégration.
+- CORRIGÉ (rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E14, E15, E30, E31, E18, E29, E34, E35, E36, E38, E41, E44, E45, E48, E49, E50, E52, E53, E62, E63, E64. E15/E18/E29/E34/E36/E41/E53 exigent les routes A à l’intégration.
 - ROUGE : aucun.
 - À REPRODUIRE : voir tableau.
 - NON REPRODUIT : aucun.
