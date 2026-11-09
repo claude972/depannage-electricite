@@ -64,7 +64,7 @@ A `33d378f` et B `26464ef` ont été réunis dans un checkout temporaire. Typech
 | E69 | Mineur | VÉRIFIÉ CIBLÉ | P7 | `7ccaeda` | `sql-phase2-lot-a-auth-session-review.mjs` | Route profile sessions | Vrai SDK et Next : `session_not_found` 503 avant, 401 après. `bad_jwt` reste 401, panne reste 503, nominal ferme seulement les autres sessions. |
 | E70 | Majeur | CORRIGÉ PARTIEL | Isolé | `3e86b60` | `sql-phase2-lot-a-connect-review.mjs` | `app/api/payments/connect/route.ts` | Next.js et SDK Stripe réels, fournisseur synthétique sur boucle locale. Les deux codes passent de 500 à 503 avec un message d’action. Refus 403 sans appel, autre erreur 500, aucune mutation de profil. La configuration du compte Connect reste externe. |
 | E72 | Majeur | VÉRIFIÉ CIBLÉ | P7 | `2bdc979` | Webhook signé local, qualification SQL et test provider injecté | Contrat Stripe, migration additive | HTTP 400 et SQL 22023 avant ; 200 et commission rapprochée sur fixture après. Le préfixe py_ est limité aux commissions, la transaction ch_ plateforme et l’identité Connect restent vérifiées. |
-| E75 | Majeur | DÉCISION REQUISE | Décision | — | — | — | Réglage nullable à livrer ; valeur commerciale à décider. |
+| E75 | Majeur | DÉCISION REQUISE | Décision | `e492a1b` | `sql-phase2-lot-a-artisan-capacity-review.mjs` | Route artisan et migration additive | Réglage neutre versionné : `null` initial et réinitialisable, aucune capacité appliquée aux offres. HTTP 422 avant, 200 après. Autre rôle, suspension et version périmée refusés. Migration appliquée deux fois en natif. |
 | E76 | Majeur | VÉRIFIÉ CIBLÉ | Quota rappel | `b102a21` | `sql-phase2-lot-a-callback-quota-review.mjs` | Handler rappel, migration additive | Vrai HTTP anonyme : 429/429 avant, 429/200 après pour la source saturée et l’autre appelant. Rejeu accepté à quota et aucun IP brut stocké. L’en-tête Vercel est simulé en recette. Sans adresse fiable, repli conservateur par origine. |
 | E77 | Mineur | VÉRIFIÉ CIBLÉ | Quota rappel | `b102a21` | `sql-phase2-lot-a-callback-quota-review.mjs` | Handler rappel, migration additive | La réponse renvoie le temps restant pour les deux plafonds, y compris après changement de source. Un numéro neuf reste accepté. PostgreSQL natif : migration appliquée deux fois ; contrat SQL historique, permissions et Chromium rappel passent. |
 | E78 | Majeur | À REPRODUIRE | Isolé | — | — | — | Sortie du remboursement préparé après révocation. |
@@ -113,7 +113,7 @@ Options : lien facultatif à une pièce privée, ou preuve requise pour les type
 
 ### E75 — Capacité artisan
 
-Options : capacité non renseignée ou plafond paramétrable. Déterminer l’unité (interventions simultanées, créneaux, autre) et les dossiers qui consomment la capacité avant d’imposer un plafond. Valeur technique prévue : null signifie illimité. Aucun seuil choisi et aucun réglage livré à ce checkpoint.
+Options : capacité non renseignée ou plafond paramétrable. Déterminer l’unité (interventions simultanées, créneaux, autre) et les dossiers qui consomment la capacité avant d’imposer un plafond. La préférence nullable est disponible via le profil et une action versionnée. Null signifie illimité. Aucune valeur commerciale, aucun comptage de capacité ni contrôle affiché à ce stade.
 
 ## Prérequis externes
 
