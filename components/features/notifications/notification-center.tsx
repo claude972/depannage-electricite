@@ -2,6 +2,8 @@
 // Leaf component: persistent notification centre of the connected account (contract
 // ADV-PLANNING-NOTIFICATIONS-001, amendment A1). Lists, marks read/unread and edits preferences
 // through the injected client only. External channels are shown unavailable, never simulated.
+import { ApiRequestError } from "../../app/api";
+import { readRefused } from "../../app/refusal";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Empty, Loader, Tag, Unavailable } from "../../app/ui";
 import { Icon } from "../../app/icons";
@@ -22,6 +24,8 @@ export type NotificationCenterProps = {
   onNavigate?: (view: string, param?: string) => void;
   /** Session mutation context (uid + generation): identity fence of the web push enrollment. */
   context?: { generation(): number; userId(): string | null };
+  /** E55: called after a CONFIRMED mark so the host re-reads its dependants (bell summary). */
+  onMarked?: () => void;
 };
 const PAGE_SIZE = 25;
 const when = (value: string) => new Intl.DateTimeFormat("fr-FR", { timeZone: "America/Martinique", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(value));
@@ -29,7 +33,7 @@ const when = (value: string) => new Intl.DateTimeFormat("fr-FR", { timeZone: "Am
 export function NotificationCenter(props: NotificationCenterProps) {
   return <CenterBody key={scopeKey(props.scope)} {...props} />;
 }
-function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate, context }: NotificationCenterProps) {
+function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate, context, onMarked }: NotificationCenterProps) {
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [list, setList] = useState<ListState>(demo ? reducePage({ status: "loading", items: [] }, demo.page, false) : { status: "loading", items: [] });
   const [reloadKey, setReloadKey] = useState(0);
@@ -129,7 +133,16 @@ function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate
       if (answer) cursor.current = answer.page.next_cursor;
       setList((previous) => reducePage(previous, answer, true));
     } catch (error) {
-      if (fresh()) setItemError({ id: "more", message: error instanceof Error && error.message ? error.message : NOTIFICATION_COPY.loadError });
+      if (!fresh()) return;
+      const message = error instanceof Error && error.message ? error.message : NOTIFICATION_COPY.loadError;
+      // E56 / P1: a refused continuation (401/403/404) purges every row already shown.
+      if (error instanceof ApiRequestError && readRefused(error.status)) {
+        restart();
+        cursor.current = null;
+        setList({ status: "error", message, items: [] });
+        return;
+      }
+      setItemError({ id: "more", message });
     } finally {
       if (fresh()) {
         moreBusy.current = false;
@@ -159,6 +172,7 @@ function CenterBody({ state, unavailableMessage, scope, client, demo, onNavigate
       // bulk mark, or when any read (head or continuation) is in flight, drop it and re-read the
       // head causally (issued after the receipt). A single mark with no read in flight: no re-read.
       if (!demo && (command.action === "mark_all_read" || headBusy.current || moreBusy.current)) readHead(false);
+      if (!demo) onMarked?.(); // E55: the bell is re-read from the server summary, never guessed
       if (command.action === "mark_all_read") setNotice(answer.result.unread_count === 0 ? "Toutes les notifications sont marquées comme lues." : "Notifications marquées comme lues.");
     } catch (error) { if (same()) setItemError({ id: key, message: error instanceof Error && error.message ? error.message : "Le marquage n’a pas pu être effectué." }); }
     finally {

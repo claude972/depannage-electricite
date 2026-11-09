@@ -58,6 +58,7 @@ export function NotificationsPage({
             : undefined
         }
         context={session.mutationContext}
+        onMarked={() => void session.reprobeFeature("notifications")}
         onNavigate={(view, param) => {
           if (view === "intervention" && param) session.openIntervention(param);
         }}

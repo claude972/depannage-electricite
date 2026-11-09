@@ -182,9 +182,10 @@ async function boundResult<T, R>(
   task: () => Promise<T>,
   success: (value: T) => R,
   refusal: (error: ApiRequestError) => R,
+  kind: "read" | "command" = "read",
 ): Promise<R | null> {
   try {
-    const value = await bound(deps, key, task);
+    const value = await bound(deps, key, task, kind);
     return value === null ? null : success(value);
   } catch (error) {
     if (error instanceof ApiRequestError) return refusal(error);
@@ -230,10 +231,11 @@ export function createNotificationsClient(input: FeatureDeps): NotificationsClie
       bound(deps, "notifications", () => request<NotificationPage>(`/api/notifications${query({ limit: params.limit, cursor: params.cursor, unread: params.unread })}`)),
     summary: () => bound(deps, "notifications", () => request<NotificationSummary>("/api/notifications/summary")),
     mark: (body: NotificationMarkCommand) =>
-      boundResult<NotificationMarkResult, MarkResult>(deps, "notifications", () => request<NotificationMarkResult>("/api/notifications", body), (result) => ({ ok: true as const, result }), refusal),
+      boundResult<NotificationMarkResult, MarkResult>(deps, "notifications", () => request<NotificationMarkResult>("/api/notifications", body), (result) => ({ ok: true as const, result }), refusal, "command"),
     loadPreferences: () => bound(deps, "notifications", () => request<PreferencesView>("/api/notifications/preferences")),
     savePreferences: (body: PreferencesCommand) =>
-      boundResult<PreferencesView, PreferencesSaveResult>(deps, "notifications", () => request<PreferencesView>("/api/notifications/preferences", body), (view) => ({ ok: true as const, view }), refusal),
+      // E54: a transient 503 on a COMMAND never hides the whole centre (reads keep their classification).
+      boundResult<PreferencesView, PreferencesSaveResult>(deps, "notifications", () => request<PreferencesView>("/api/notifications/preferences", body), (view) => ({ ok: true as const, view }), refusal, "command"),
   };
 }
 
