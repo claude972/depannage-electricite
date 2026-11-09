@@ -1,5 +1,6 @@
 // Sequential upload of the photos attached to a freshly created dossier. Pure: the uploader
 // and the progress sink are injected, so the retry behaviour is testable without a browser.
+import { documentNameFor } from "../../lib/shared/document-policy";
 import { ApiRequestError } from "./api";
 import type { StoredDocument, UploadQueue } from "./types";
 
@@ -61,7 +62,8 @@ export function reconcileUncertain(queue: UploadQueue, documents: StoredDocument
       if (item.status !== "uncertain") return item;
       const candidates = documents
         .filter(
-          (d) => d.intervention_id === queue.interventionId && d.name === item.file.name.slice(0, 160),
+          // E09: the same name rule as the server (clipped, blank ⇒ « document »), never the raw name.
+          (d) => d.intervention_id === queue.interventionId && d.name === documentNameFor(item.file.name),
         )
         .map((d) => ({ id: d.id, name: d.name, created_at: d.created_at }));
       return { ...item, candidates };
