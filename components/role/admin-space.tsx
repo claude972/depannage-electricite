@@ -16,6 +16,8 @@ import {
   type ReactNode,
 } from "react";
 import type { Session } from "../app/session-types";
+import { reportDeclarant } from "../app/report-declarant";
+import { ReportEvidenceSummary } from "../app/report-evidence";
 import type {
   AdminInterventionDetail,
   AdminInterventionRow,
@@ -3637,8 +3639,9 @@ function DossierView({
                           </ul>
                         )}
                         <small className={styles.muted}>
-                          Signé « {operations.report.signature_name} »{operations.report.updated_at ? ` le ${dateTime(operations.report.updated_at)}` : ""}
+                          {reportDeclarant(operations.report.signature_name, operations.report.updated_at ? dateTime(operations.report.updated_at) : undefined)}
                         </small>
+                        <ReportEvidenceSummary ops={operations} report={operations.report} noteClass={styles.muted} declarant={false} openContext={session.mode === "demo" ? undefined : session.mutationContext} />
                       </>
                     ) : (
                       "Aucun compte rendu enregistré."
