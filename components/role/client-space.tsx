@@ -1796,26 +1796,37 @@ function AppointmentForm({
 
 // ---- Devis (V8-C06) -----------------------------------------------------------------
 /** Exported for tests only (live exact quote read). */
-/** E13: true only when the quote documents read states this exact quote's validity as expired. */
-function useQuoteExpired(session: Session, quoteId: string): boolean {
-  const [state, setState] = useState<{ key: string; expired: boolean } | null>(null);
+/** E13: validity of this exact quote from the quote documents read. Live acceptance needs a
+ *  CONFIRMED state: « valid » (valid or not specified, from a successful read of this quote). While
+ *  the read runs it is « checking »; a refusal, failure or a reply without this quote is « unknown »;
+ *  a passed validity is « expired ». Demo (quoteId "") is not gated: « valid ». */
+type QuoteValidity = "checking" | "valid" | "expired" | "unknown";
+function useQuoteValidity(session: Session, quoteId: string): { validity: QuoteValidity; retry: () => void } {
+  const [state, setState] = useState<{ key: string; validity: QuoteValidity } | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const key = quoteId ? `${session.profileId}|${session.mutationContext.generation()}|${quoteId}` : "";
   const client = useRef(session.features.quoteDocuments);
   client.current = session.features.quoteDocuments;
   useEffect(() => {
     if (!key) return;
     let active = true;
-    void Promise.resolve(client.current.load({ quoteId }))
+    setState({ key, validity: "checking" });
+    void Promise.resolve()
+      .then(() => client.current.load({ quoteId }))
       .then((overview) => {
         const q = overview?.quotes.find((x) => x.id === quoteId);
-        if (active) setState({ key, expired: q?.terms?.validity === "expired" });
+        const validity: QuoteValidity = !q ? "unknown" : q.terms?.validity === "expired" ? "expired" : "valid";
+        if (active) setState({ key, validity });
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (active) setState({ key, validity: "unknown" });
+      });
     return () => {
       active = false;
     };
-  }, [key, quoteId]);
-  return !!state && state.key === key && state.expired;
+  }, [key, quoteId, attempt]);
+  const validity: QuoteValidity = !key ? "valid" : state && state.key === key ? state.validity : "checking";
+  return { validity, retry: () => setAttempt((n) => n + 1) };
 }
 export function QuoteView({
   session,
@@ -1844,7 +1855,8 @@ export function QuoteView({
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState("");
-  const expired = useQuoteExpired(session, live ? quoteId : "");
+  const quoteValidity = useQuoteValidity(session, live ? quoteId : "");
+  const expired = quoteValidity.validity === "expired";
   if (live && point.state.phase !== "ready")
     return (
       <section className="panel" data-quote-point={point.state.phase}>
@@ -1904,7 +1916,7 @@ export function QuoteView({
     : quoteDecisionState(quote, current, i.status);
   // E13: a quote whose recorded validity has passed is never offered for acceptance (the server
   // refuses it with 409 anyway); the documents read is the source of the validity.
-  const isActive = decision === "active" && !expired;
+  const isActive = decision === "active" && quoteValidity.validity === "valid";
   const superseded = decision === "superseded";
   const currentId = live ? server!.version.current_quote_id : current?.id ?? null;
   const refreshAfter = () => {
@@ -2072,7 +2084,19 @@ export function QuoteView({
                 : "Ce devis ne peut plus être accepté ni refusé."
               : expired && decision === "active"
                 ? "Ce devis ne peut plus être accepté : sa validité est dépassée. L’artisan peut en envoyer une nouvelle version."
-                : "Ce devis n’attend plus de décision de votre part."}
+                : quoteValidity.validity === "checking" && decision === "active"
+                  ? "Vérification de la validité du devis…"
+                  : quoteValidity.validity === "unknown" && decision === "active"
+                    ? "La validité de ce devis n’a pas pu être vérifiée : aucune décision n’est possible pour le moment."
+                    : "Ce devis n’attend plus de décision de votre part."}
+          {quoteValidity.validity === "unknown" && decision === "active" && (
+            <>
+              {" "}
+              <button type="button" className="text-button" onClick={quoteValidity.retry} data-quote-validity-retry="">
+                Réessayer
+              </button>
+            </>
+          )}
         </p>
       )}
       {rejecting && isActive && (

@@ -15,7 +15,7 @@ const PW = process.env.QA_PLAYWRIGHT_PATH || path.join(homedir(), ".cache/codex-
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const skip = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM) ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)";
 
-const SETUP = (validity: string) => `
+const SETUP = (validity: string, mode: "ok" | "hold" | "refuse" = "ok") => `
 const J = "d0000000-0000-4000-8000-000000000001", Q = "e1000000-0000-4000-8000-000000000001", ART = "a0000000-0000-4000-8000-000000000001";
 window.uid = "c0000000-0000-4000-8000-000000000001";
 window.view = "quote"; window.param = Q;
@@ -27,13 +27,13 @@ window.docLoads = 0;
 const overview = { intervention: { id: J, status: "quoted", artisan_id: ART, site_id: null }, viewer: { role: "client", is_artisan: false, can_manage: false, is_admin: false }, issuer: { ready: true, missing: [] }, quotes: [{ id: Q, reference: "D-1", status: "sent", created_at: quote.created_at, accepted_at: null, lines: quote.lines, subtotal_cents: 10000, tax_rate: 20, tax_cents: 2000, total_cents: 12000, terms: { valid_until: "2026-10-15", validity: ${JSON.stringify(validity)} }, permissions: { can_set_terms: false, can_generate: false, can_propose: false }, documents: [], amendments: [] }], history: [], settlement: "not_connected" };
 window.seed = { data: { interventions: [], quotes: [], payments: [] }, session: {
   uploads: [], loadOperations: async () => null,
-  features: new Proxy({ quoteDocuments: { load: async () => { window.docLoads++; return overview; }, command: async () => null, documentHref: () => "#" } }, { get: (t, k) => (k in t ? t[k] : k === "demo" ? false : new Proxy({}, { get: (_x, m) => (m === "then" ? undefined : async () => null) })) }),
+  features: new Proxy({ quoteDocuments: { load: async () => { window.docLoads++; if (${JSON.stringify(mode)} === "hold") await new Promise((r) => { window.releaseDocs = r; }); if (${JSON.stringify(mode)} === "refuse") throw Object.assign(new Error("Accès refusé."), { status: 403 }); return overview; }, command: async () => null, documentHref: () => "#" } }, { get: (t, k) => (k in t ? t[k] : k === "demo" ? false : new Proxy({}, { get: (_x, m) => (m === "then" ? undefined : async () => null) })) }),
   action: async (...a) => { window.actions.push(a); return false; },
 } };
 `;
 
-async function view(validity: string) {
-  const { server, url } = await serveLiveClient(SETUP(validity));
+async function view(validity: string, mode: "ok" | "hold" | "refuse" = "ok") {
+  const { server, url } = await serveLiveClient(SETUP(validity, mode));
   const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
   const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true });
   try {
@@ -66,5 +66,21 @@ test("E13 · devis expiré ⇒ pas d’acceptation proposée, explication, zéro
 test("E13 · devis valide ⇒ acceptation toujours proposée", { skip }, async () => {
   const r = await view("valid");
   assert.equal(r.visible, true);
+  assert.deepEqual(r.errors, []);
+});
+
+test("E13 · lecture de validité en cours ⇒ aucune acceptation, état « vérification » distinct", { skip }, async () => {
+  const r = await view("expired", "hold");
+  assert.equal(r.visible, false, "pas de bouton tant que la validité n’est pas confirmée");
+  assert.equal(r.actions, 0);
+  assert.match(r.text, /Vérification de la validité/);
+  assert.deepEqual(r.errors, []);
+});
+
+test("E13 · lecture de validité refusée ⇒ aucune acceptation, refus distinct", { skip }, async () => {
+  const r = await view("valid", "refuse");
+  assert.equal(r.visible, false, "pas de bouton sans validité confirmée");
+  assert.equal(r.actions, 0);
+  assert.match(r.text, /validité de ce devis n’a pas pu être vérifiée/);
   assert.deepEqual(r.errors, []);
 });
