@@ -20,6 +20,8 @@ Les quatre corrections ont un test reproductible rouge → vert. Les deux nouvel
 
 A `33d378f` et B `26464ef` ont été réunis dans un checkout temporaire. Typecheck passé, 19 scénarios Chromium et 2 vérifications unitaires de la règle de refus réussis, ainsi que 15 tests serveur ciblés. Ce passage ne vaut pas validation complète de la suite ni déploiement. Les scénarios existants de messages et garantie qui utilisaient les anciens contrats ont été conservés et adaptés aux nouveaux champs, avec leurs assertions de refus.
 
+Le checkout combiné A `974211b` et B `b3af4c8` a passé le typecheck. La suite applicative a donné 2 168 succès, 12 échecs strictement identiques par nom à la base et deux skips optionnels. Le checkout A `dbeae94` et B `aa3c7ee` a ensuite passé le typecheck, 44 tests ciblés B et quatre cas HTTP serveur ciblés. Les deux validations temporelles des formulaires ont envoyé zéro commande dans Chromium. Les vérifications sont locales et isolées.
+
 ## Rejeu natif de la chaîne complète
 
 Sur le SHA A `974211b`, les 101 migrations initiales et les 20 additives se sont appliquées dans l’ordre sur PostgreSQL 17.11 vierge. Vault, pg_cron et pg_net sont chargés, les départs de tâches et l’émission réseau sont neutralisés. La base de recette est arrêtée après vérification. Aucun changement hébergé.
@@ -29,8 +31,8 @@ Sur le SHA A `974211b`, les 101 migrations initiales et les 20 additives se sont
 | État | Nombre |
 | --- | ---: |
 | CORRIGÉ (avec suite verte) | 0 |
-| VÉRIFIÉ CIBLÉ (suite initiale rouge) | 24 |
-| CORRIGÉ PARTIEL | 4 |
+| VÉRIFIÉ CIBLÉ (suite initiale rouge) | 25 |
+| CORRIGÉ PARTIEL | 3 |
 | NON REPRODUIT | 0 |
 | DÉCISION REQUISE | 4 |
 | REVERTÉ | 0 |
@@ -72,7 +74,7 @@ Sur le SHA A `974211b`, les 101 migrations initiales et les 20 additives se sont
 | E76 | Majeur | VÉRIFIÉ CIBLÉ | Quota rappel | `b102a21` | `sql-phase2-lot-a-callback-quota-review.mjs` | Handler rappel, migration additive | Vrai HTTP anonyme : 429/429 avant, 429/200 après pour la source saturée et l’autre appelant. Rejeu accepté à quota et aucun IP brut stocké. L’en-tête Vercel est simulé en recette. Sans adresse fiable, repli conservateur par origine. |
 | E77 | Mineur | VÉRIFIÉ CIBLÉ | Quota rappel | `b102a21` | `sql-phase2-lot-a-callback-quota-review.mjs` | Handler rappel, migration additive | La réponse renvoie le temps restant pour les deux plafonds, y compris après changement de source. Un numéro neuf reste accepté. PostgreSQL natif : migration appliquée deux fois ; contrat SQL historique, permissions et Chromium rappel passent. |
 | E78 | Majeur | VÉRIFIÉ CIBLÉ | Isolé | `0c4e5c7` | `sql-phase2-lot-a-refund-handoff-review.mjs` | Migration additive | Vrais HTTP et SDK Stripe sur boucle locale. Révocation pendant la lecture : 403 et zéro émission initiale. Reprise exacte par un autre habilité : 202, une seule émission simulée et un audit, jamais de confirmation bancaire. Nouvel ID, acteur encore habilité et émission déjà soumise refusés. Préparation de plus de 23 h ou incertitude fournisseur hors reprise. 37 contrôles SQL historiques et 13 tests existants passent. |
-| E80 | Majeur | CORRIGÉ PARTIEL | Isolé | `f58df31` | `sql-phase2-lot-a-artisan-dispute-review.mjs` | Route statut paiement, migration additive | GET 200 avec règlement confirmé avant et après. Nouveau champ seul `under_review` pour l’artisan affecté auteur du devis. Client, tiers, ancien et nouvel artisan après changement d’affectation ne reçoivent pas le litige historique. Registre finance inchangé. Attend le lot B. |
+| E80 | Majeur | VÉRIFIÉ CIBLÉ | Isolé | `f58df31` | `sql-phase2-lot-a-artisan-dispute-review.mjs` | Route statut paiement, migration additive | GET 200 avec règlement confirmé avant et après. Nouveau champ seul `under_review` pour l’artisan affecté auteur du devis. Client, tiers, ancien et nouvel artisan après changement d’affectation ne reçoivent pas le litige historique. Registre finance inchangé. Affichage Chromium vérifié avec B `8fa9749`, état relu sur changement de session ou actualisation. |
 | H01 | Bloquant externe | HORS MISSION | Hébergement | — | — | — | Checklist ci-dessous. |
 | PUB-10.1 | Externe | HORS MISSION | Recette | — | — | — | Condition ouverte conservée au registre. |
 | CLI-05.2 | Externe | HORS MISSION | Recette | — | — | — | Condition ouverte conservée au registre. |
