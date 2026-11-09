@@ -64,7 +64,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E05 | Mineur | B | À REPRODUIRE | validation locale effectif ≤ 100000 | | | role/artisan-space.tsx | |
 | E06 | Mineur | B | CORRIGÉ | formulaire ouvert sans droit ⇒ aucun POST (P1) | c91f30d | phase2-lot-b-e06-e22-e26-e27-site-operations | site-operations/shared.tsx | rouge : 1 POST après passage en lecture seule ; vert : 0 POST, message lecture seule. Mécanisme partagé useSubmit (équipement/maintenance/délais) |
 | E09 | Mineur | B | À REPRODUIRE | nom de secours « document » | | | components/app/uploads.ts | |
-| E10 | Mineur | B | À REPRODUIRE | rejeu réussi → édition (P3) | | | site-areas-panel.tsx | |
+| E10 | Mineur | B | CORRIGÉ | rejeu réussi ⇒ édition (P3) | cb0d678 | phase2-lot-b-e10-area-replay | site-areas-panel.tsx | rouge : expected_version null renvoyé ⇒ 409 ; vert : édition v1 |
 | E12 | Mineur | B | CORRIGÉ | 409 ⇒ relecture dans le formulaire (P1/P2) | b238a1c | phase2-lot-b-e12-address-conflict | client-addresses-panel.tsx | rouge : ville v1 et version 1 renvoyées ; vert : ville v2 rechargée, libellé conservé, renvoi v2 |
 | E13 | Mineur | B | CORRIGÉ | devis expiré : action seulement sur validité confirmée | 369d259, 7f9fad9 | phase2-lot-b-e13-expired-quote | client-space.tsx | rouge : bouton actif (expiré, lecture retenue, lecture refusée) ; vert : action seulement après lecture réussie valide/non renseignée, états vérification/refus distincts + Réessayer, démo inchangée. Faux client de recipient-quotes.test.ts complété (assertions inchangées) |
 | E14 | Mineur | B | CORRIGÉ | refus d’acceptation ⇒ relecture ponctuelle (P1) | e8bfd00 | phase2-lot-b-e14-lost-offer | available-missions-model.ts | rouge : 0 relecture, bouton actif ; vert : 1 POST, relecture 404, offre retirée |
@@ -85,7 +85,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E53 | Mineur | A + B | CORRIGÉ (dépend de A b414386) | command_id du dépôt de site (P3) | fc06c26 | phase2-lot-b-e53-site-upload-command-id | site-attachments-panel.tsx | rouge : command_id absent ; vert : même clé au renvoi, un seul document |
 | E55 | Mineur | B | CORRIGÉ | lecture confirmée ⇒ résumé de cloche relu (P1/P6) | 48a79ff | phase2-lot-b-e54-e55-e56-notifications | notification-center.tsx, notifications-anchor.tsx | rouge : 0 GET résumé ; vert : résumé relu |
 | E57 | Mineur | B | À REPRODUIRE | confirmation perdue au remount (P3) | | | site-lifecycle | |
-| E58 | Mineur | B | À REPRODUIRE | profil public relu en navigation (P6) | | | public-operator-profile, public-site | |
+| E58 | Mineur | B | CORRIGÉ | profil relu à chaque navigation interne (P6) | f1271fc | phase2-lot-b-e58-e79-public-profile | use-published-profile.ts, public-site.tsx | rouge : 0 GET, ancien exploitant affiché ; vert : relecture, ancien exploitant absent |
 | E62 | Mineur | B | CORRIGÉ | rejeu réussi → édition (P3) | fcf1abd | phase2-lot-b-e62-e63-energy | site-energy-panel.tsx | rouge : formulaire en création, expected_version null ; vert : édition v1 |
 | E65 | Mineur | B | À REPRODUIRE | présélection Artisan | | | public-site.tsx, forms.tsx | |
 | E66 | Mineur | B | À REPRODUIRE | détail hors cache sans GET | | | use-detail-presence.ts, enterprise-space | |
@@ -93,7 +93,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E69 | Mineur | A | CONTRAT A | session_not_found → 401 | | | app/api/profile/sessions | |
 | E71 | Mineur | B | CORRIGÉ | opted_in=true + browser=none = retrait (P7) | ab303ea | phase2-lot-b-e71-push-remove | web-push-panel.tsx | rouge : échec affiché, pas d’unsubscribe ; vert : retrait, unsubscribe, aucune alerte |
 | E77 | Mineur | A | CONTRAT A | délai annoncé par numéro | | | lib, supabase | UI affiche la valeur serveur |
-| E79 | Mineur | B | À REPRODUIRE | panne ≠ politique absente | | | public-operator-profile, public-site | |
+| E79 | Mineur | B | CORRIGÉ | panne distincte de « À renseigner » | f1271fc | phase2-lot-b-e58-e79-public-profile | use-published-profile.ts, public-site.tsx | rouge : même texte, aucune reprise ; vert : alerte + Réessayer, reprise affiche le publié |
 | E81 | Mineur | B | CORRIGÉ | total accepté avec avenants + montant réglé | 10c6008 | phase2-lot-b-e81-artisan-paid-amount | artisan-space.tsx | rouge : seul « 60,00 € » ; vert : 90,00 € accepté et réglé, déclarations historiques non présentées comme confirmées |
 | H01 | Env. | — | HORS LOT B | preview Vercel/Supabase | — | — | — | hors mission |
 
@@ -103,7 +103,7 @@ Sous-cas externes avec condition ouverte (PUB-10.1, CLI-05.2, CLI-08.1, ADM-01.1
 
 Mise à jour à chaque commit d’item.
 
-- CORRIGÉ (43 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E04, E06, E08, E12, E13, E14, E15, E16, E18, E20, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E39, E40, E41, E42, E44, E45, E48, E49, E50, E51, E52, E53, E54, E55, E56, E62, E63, E64, E71, E72, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : A f58df31).
+- CORRIGÉ (46 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E04, E06, E08, E10, E12, E13, E14, E15, E16, E18, E20, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E39, E40, E41, E42, E44, E45, E48, E49, E50, E51, E52, E53, E54, E55, E56, E58, E62, E63, E64, E71, E72, E79, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : A f58df31).
 - VÉRIFIÉ À L’INTÉGRATION sans code B : E21, E24.
 - ROUGE : aucun.
 - À REPRODUIRE : voir tableau.
