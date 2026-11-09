@@ -1,0 +1,19 @@
+{
+  "cli": {
+    "version": ">= 27.2.0",
+    "requireCommit": true
+  },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "environment": "preview",
+      "android": {
+        "buildType": "apk",
+        "credentialsSource": "local"
+      },
+      "ios": {
+        "simulator": true
+      }
+    }
+  }
+}

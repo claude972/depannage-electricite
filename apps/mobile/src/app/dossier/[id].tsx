@@ -1,0 +1,129 @@
+import { useRef, useState } from 'react';
+import { Alert } from 'react-native';
+import { Host, Switch } from '@expo/ui';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { openBrowserAsync } from 'expo-web-browser';
+import { z } from 'zod';
+import { Action, Card, Copy, Field, ReadState, Screen } from '@/components/ui';
+import { QuoteEditor } from '@/components/quote-editor';
+import { ReportEditor } from '@/components/report-editor';
+import { api, useResource } from '@/lib/api';
+import { categories, creation, detail, euros, link, operations, signature, statuses, success, timestamp } from '@/lib/contracts';
+import { useSession } from '@/lib/session';
+import { supabaseOrigin } from '@/lib/config';
+
+const uuid=z.uuid();
+const bookingOptions=z.object({payment_methods:z.array(z.object({id:z.string(),available:z.boolean()}))});
+export default function Dossier() {
+  const params=useLocalSearchParams<{id:string}>(), router=useRouter();
+  const auth=useSession().session;
+  const id=uuid.safeParse(params.id).data;
+  const token=auth?.access_token, base=id?`/api/interventions/${id}`:null;
+  const data=useResource(token?base:null,detail,token);
+  const ops=useResource(base&&token?base+'/operations':null,operations,token);
+  const paymentOptions=useResource('/api/bookings/options',bookingOptions);
+  const [error,setError]=useState<string|null>(null), [busy,setBusy]=useState(false);
+  const [ack,setAck]=useState(false), [name,setName]=useState(''), [reason,setReason]=useState('');
+  const lock=useRef(false);
+  const job=data.data?.intervention;
+  const owner=Boolean(job?.client_id&&job.client_id===auth?.user.id), artisan=Boolean(job?.artisan_id&&job.artisan_id===auth?.user.id);
+  const reload=()=>{data.reload();ops.reload();};
+  async function run(work:()=>Promise<unknown>, refresh=true) {
+    if(lock.current)return;
+    lock.current=true;setBusy(true);setError(null);
+    try{await work();}
+    catch(issue){setError(issue instanceof Error?issue.message:'Action indisponible.');}
+    finally{lock.current=false;setBusy(false);if(refresh)reload();}
+  }
+  function action(body:object) {
+    if(!base||!token)return;
+    void run(()=>api(base+'/actions',creation,{token,method:'POST',body}));
+  }
+  function operation(body:object) {
+    if(!base||!token)return;
+    void run(()=>api(base+'/operations',success,{token,method:'POST',body}));
+  }
+  function confirm(title:string, message:string, work:()=>void) {
+    Alert.alert(title,message,[{text:'Revenir',style:'cancel'},{text:'Confirmer',onPress:work}]);
+  }
+  function pay(quoteId:string){
+    if(!token)return;
+    void run(async()=>{
+      const result=await api('/api/payments/checkout',link,{token,method:'POST',body:{quote_id:quoteId}});
+      const checkout=new URL(result.url);
+      if(checkout.origin!=='https://checkout.stripe.com'||!/(?:^|\/)cs_test_/.test(checkout.pathname)||checkout.username||checkout.password)
+        throw Error('L’application de recette accepte uniquement un paiement Stripe de test.');
+      await openBrowserAsync(checkout.toString());
+    });
+  }
+  function openDocument(documentId:string){
+    if(!token)return;
+    void run(async()=>{
+      const result=await api('/api/documents?id='+encodeURIComponent(documentId),link,{token});
+      const target=new URL(result.url);
+      if(target.origin!==supabaseOrigin||!target.pathname.startsWith('/storage/v1/object/sign/'))
+        throw Error('Le lien du document est invalide.');
+      await openBrowserAsync(target.toString());
+    },false);
+  }
+  const report=ops.data?.report;
+  const receipt=ops.data?.report_receipt;
+  if(!id)return <Screen><Copy kind="error">Dossier introuvable.</Copy></Screen>;
+  return <Screen>
+    <ReadState loading={data.loading} error={data.error} onRetry={reload}/>
+    {error&&<Copy kind="error">{error}</Copy>}
+    {job&&<>
+      <Copy kind="label">{statuses[job.status]}</Copy>
+      <Copy kind="title">{categories[job.category]}</Copy>
+      <Copy>{job.description}</Copy>
+      <Copy kind="muted">{[job.address,job.postal_code,job.city].filter(Boolean).join(', ')}</Copy>
+      <Card><Copy kind="subtitle">Estimation indicative</Copy><Copy>{euros(job.estimate_min_cents)} à {euros(job.estimate_max_cents)}</Copy></Card>
+      <Action secondary label="Ouvrir la conversation" onPress={()=>router.push({pathname:'/dossier/messages',params:{id}})}/>
+      <Action secondary label="Actualiser le dossier" disabled={busy} onPress={reload}/>
+      {owner&&['requested','assigned','quoted'].includes(job.status)&&
+        <Action secondary label="Annuler ma demande" disabled={busy} onPress={()=>confirm('Annuler la demande ?', 'Le serveur vérifiera que le dossier peut être annulé.',()=>action({action:'cancel'}))}/>}
+
+      <ReadState loading={ops.loading} error={ops.error} onRetry={ops.reload}/>
+      {ops.data?.appointment&&<Card><Copy kind="subtitle">Rendez-vous</Copy><Copy>{timestamp(ops.data.appointment.starts_at)} – {timestamp(ops.data.appointment.ends_at)}</Copy></Card>}
+      {artisan&&job.status==='assigned'&&<QuoteEditor busy={busy} onSend={(lines,tax_rate)=>confirm('Envoyer le devis ?', 'Le client pourra examiner le devis et décider avant les travaux.',()=>action({action:'send_quote',lines,tax_rate}))}/>}
+      {data.data?.quotes.status==='error'&&<Copy kind="error">Les devis n’ont pas pu être chargés.</Copy>}
+      {data.data?.quotes.status==='ok'&&data.data.quotes.items.map(quote=><Card key={quote.id}>
+        <Copy kind="subtitle">Devis {quote.status==='accepted'?'accepté':quote.status==='rejected'?'refusé':'proposé'}</Copy>
+        {quote.lines.map((line,index)=><Copy key={index}>{line.quantity} × {line.label} · {euros(line.unit_price_cents)} HT</Copy>)}
+        <Copy>Total TTC {euros(quote.accepted_total_cents??quote.total_cents)}</Copy>
+        {owner&&quote.status==='sent'&&job.status==='quoted'&&<>
+          <Action label="Accepter ce devis" disabled={busy} onPress={()=>confirm('Accepter ce devis ?', `Le montant total est de ${euros(quote.total_cents)} TTC.`,()=>action({action:'accept_quote',quote_id:quote.id}))}/>
+          <Field label="Motif si vous refusez" value={reason} onChangeText={setReason} maxLength={2000}/>
+          <Action secondary label="Refuser ce devis" disabled={busy||!reason.trim()} onPress={()=>confirm('Refuser ce devis ?', 'Le motif sera transmis à l’artisan.',()=>operation({action:'reject_quote',quote_id:quote.id,reason:reason.trim()}))}/>
+        </>}
+        {owner&&quote.status==='accepted'&&job.status==='completed'&&paymentOptions.data?.payment_methods.some(option=>option.id==='card_hold'&&option.available)&&
+          <Action label="Régler sur Stripe en mode test" disabled={busy} onPress={()=>pay(quote.id)}/>}
+      </Card>)}
+      {artisan&&job.status==='accepted'&&<Card>
+        <Copy kind="subtitle">Déplacement</Copy>
+        <Action secondary label="Signaler mon départ" disabled={busy||ops.data?.travel_stage==='en_route'} onPress={()=>operation({action:'set_travel_stage',stage:'en_route'})}/>
+        <Action secondary label="Signaler mon arrivée" disabled={busy||ops.data?.travel_stage==='on_site'} onPress={()=>operation({action:'set_travel_stage',stage:'on_site'})}/>
+        <Action label="Démarrer l’intervention" disabled={busy} onPress={()=>confirm('Démarrer ?', 'Le dossier passera au statut en cours.',()=>action({action:'start'}))}/>
+      </Card>}
+      {artisan&&job.status==='in_progress'&&token&&ops.data&&<>
+        <ReportEditor token={token} id={id} report={report??null} required={ops.data.report_evidence_required} onSaved={reload}/>
+        <Action label="Clôturer l’intervention" disabled={busy||!report} onPress={()=>confirm('Clôturer l’intervention ?', 'Vérifiez le compte rendu et ses pièces jointes.',()=>action({action:'complete'}))}/>
+      </>}
+      {report&&<Card>
+        <Copy kind="subtitle">Compte rendu enregistré</Copy><Copy>{report.summary}</Copy><Copy kind="muted">{report.signature_name}</Copy>
+        {receipt&&<Copy>Remis et signé par {receipt.signature_name} le {timestamp(receipt.signed_at)}.</Copy>}
+        {owner&&['completed','paid'].includes(job.status)&&report.report_revision&&!receipt&&<>
+          <Host matchContents><Switch label="J’accuse réception du compte rendu" value={ack} onValueChange={setAck}/></Host>
+          <Field label="Vos nom et prénom" value={name} onChangeText={setName} maxLength={120}/>
+          <Action label="Signer le compte rendu" disabled={busy||!ack||!signature.safeParse(name).success} onPress={()=>operation({action:'sign_report',acknowledged:true,signature_name:name.trim(),report_revision:report.report_revision})}/>
+        </>}
+      </Card>}
+      {data.data?.documents.status==='ok'&&data.data.documents.items.length>0&&<Card><Copy kind="subtitle">Pièces du dossier</Copy>
+        {data.data.documents.items.map(item=><Action key={item.id} label={item.name} disabled={busy} secondary onPress={()=>openDocument(item.id)}/>)}
+      </Card>}
+      {data.data?.payments.status==='ok'&&data.data.payments.items.map(item=><Copy key={item.id} kind="muted">
+        Règlement {item.status==='paid'?'confirmé':item.status==='failed'?'échoué':'en attente'} · {euros(item.total_cents)}
+      </Copy>)}
+    </>}
+  </Screen>;
+}
