@@ -345,7 +345,9 @@ test("montages : profil client après les moyens de paiement, profil artisan apr
   const client = readFileSync("components/role/client-space.tsx", "utf8");
   assert.match(client, /<SavedPaymentMethodsPanel [^\n]*\/>\n\s*<SubscriptionsPanel key=\{`\$\{session\.mode\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\} role="client" demo=\{demo\} context=\{session\.mutationContext\} \/>/);
   const artisan = readFileSync("components/role/artisan-space.tsx", "utf8");
-  assert.match(artisan, /onOpenTicket=\{\(id\) => session\.go\("support", id\)\}\n\s*\/>\n\s*<SubscriptionsPanel\n\s*key=\{`\$\{session\.mode\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\}\n\s*role="artisan"\n\s*demo=\{session\.mode === "demo"\}\n\s*context=\{session\.mutationContext\}\n\s*\/>\n\s*<div className=\{styles\.profileActions\}>/);
+  // Realigned (phase 2 lot B): AccountDataPanel now also carries `erasureRequests` (data-requests
+  // contract) and the subscriptions key is prefixed « subscriptions: » (R01: sibling key collision).
+  assert.match(artisan, /onOpenTicket=\{\(id\) => session\.go\("support", id\)\}\n\s*erasureRequests\n\s*\/>\n\s*<SubscriptionsPanel\n\s*key=\{`subscriptions:\$\{session\.mode\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\}\n\s*role="artisan"\n\s*demo=\{session\.mode === "demo"\}\n\s*context=\{session\.mutationContext\}\n\s*\/>\n\s*<div className=\{styles\.profileActions\}>/);
   const src = readFileSync("components/features/subscriptions/subscriptions-panel.tsx", "utf8") + readFileSync("components/features/subscriptions/model.ts", "utf8");
   assert.doesNotMatch(src, /cancel_subscription|action: "cancel"|Résilier|résiliation|annuler l’abonnement/i, "no own cancel action, no cancellation promise (the portal is Stripe's page)");
 });
