@@ -25,7 +25,7 @@ A `33d378f` et B `26464ef` ont été réunis dans un checkout temporaire. Typech
 | État | Nombre |
 | --- | ---: |
 | CORRIGÉ (avec suite verte) | 0 |
-| VÉRIFIÉ CIBLÉ (suite initiale rouge) | 14 |
+| VÉRIFIÉ CIBLÉ (suite initiale rouge) | 15 |
 | CORRIGÉ PARTIEL | 13 |
 | NON REPRODUIT | 0 |
 | DÉCISION REQUISE | 4 |
@@ -67,7 +67,7 @@ A `33d378f` et B `26464ef` ont été réunis dans un checkout temporaire. Typech
 | E75 | Majeur | DÉCISION REQUISE | Décision | `e492a1b` | `sql-phase2-lot-a-artisan-capacity-review.mjs` | Route artisan et migration additive | Réglage neutre versionné : `null` initial et réinitialisable, aucune capacité appliquée aux offres. HTTP 422 avant, 200 après. Autre rôle, suspension et version périmée refusés. Migration appliquée deux fois en natif. |
 | E76 | Majeur | VÉRIFIÉ CIBLÉ | Quota rappel | `b102a21` | `sql-phase2-lot-a-callback-quota-review.mjs` | Handler rappel, migration additive | Vrai HTTP anonyme : 429/429 avant, 429/200 après pour la source saturée et l’autre appelant. Rejeu accepté à quota et aucun IP brut stocké. L’en-tête Vercel est simulé en recette. Sans adresse fiable, repli conservateur par origine. |
 | E77 | Mineur | VÉRIFIÉ CIBLÉ | Quota rappel | `b102a21` | `sql-phase2-lot-a-callback-quota-review.mjs` | Handler rappel, migration additive | La réponse renvoie le temps restant pour les deux plafonds, y compris après changement de source. Un numéro neuf reste accepté. PostgreSQL natif : migration appliquée deux fois ; contrat SQL historique, permissions et Chromium rappel passent. |
-| E78 | Majeur | À REPRODUIRE | Isolé | — | — | — | Sortie du remboursement préparé après révocation. |
+| E78 | Majeur | VÉRIFIÉ CIBLÉ | Isolé | `0c4e5c7` | `sql-phase2-lot-a-refund-handoff-review.mjs` | Migration additive | Vrais HTTP et SDK Stripe sur boucle locale. Révocation pendant la lecture : 403 et zéro émission initiale. Reprise exacte par un autre habilité : 202, une seule émission simulée et un audit, jamais de confirmation bancaire. Nouvel ID, acteur encore habilité et émission déjà soumise refusés. Préparation de plus de 23 h ou incertitude fournisseur hors reprise. 37 contrôles SQL historiques et 13 tests existants passent. |
 | E80 | Majeur | CORRIGÉ PARTIEL | Isolé | `f58df31` | `sql-phase2-lot-a-artisan-dispute-review.mjs` | Route statut paiement, migration additive | GET 200 avec règlement confirmé avant et après. Nouveau champ seul `under_review` pour l’artisan affecté auteur du devis. Client, tiers, ancien et nouvel artisan après changement d’affectation ne reçoivent pas le litige historique. Registre finance inchangé. Attend le lot B. |
 | H01 | Bloquant externe | HORS MISSION | Hébergement | — | — | — | Checklist ci-dessous. |
 | PUB-10.1 | Externe | HORS MISSION | Recette | — | — | — | Condition ouverte conservée au registre. |
