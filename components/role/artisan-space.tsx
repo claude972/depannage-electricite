@@ -3551,33 +3551,35 @@ function PerfGrid({ perf, since }: { perf: Performance; since: string | null }) 
     </>
   );
 }
-/** E75 (decision pending, no ceiling chosen): neutral personal preference, shown only when the
- *  server exposes the contract (capacity_version). Empty = unlimited (null). A refusal (version
- *  changed, 409) re-reads the profile and keeps the typed value. It does not filter offers. */
-/** Same technical bound as the API (int4); the unit itself is still to be decided (E75). */
-const CAPACITY_MAX = 2147483647;
+/** E75: number of simultaneous missions, a choice between 3 and 4 only, shown when the server
+ *  exposes the contract (capacity_version). Backward-compatible display: null (former « unlimited »)
+ *  or any other stored value reads as 3 until the artisan saves a choice. The POST always sends 3
+ *  or 4 with expected_version; a refusal (409) re-reads the profile and keeps the choice. */
+const CAPACITY_CHOICES = [3, 4] as const;
+type CapacityChoice = (typeof CAPACITY_CHOICES)[number];
+const capacityChoice = (stored: number | null | undefined): CapacityChoice => (stored === 4 ? 4 : 3);
 function CapacityPreference({ artisan, onCommand, onReload, reloading }: { artisan: ArtisanProfile; onCommand: (body: ArtisanCommand) => Promise<boolean>; onReload: () => void; reloading: boolean }) {
-  const [value, setValue] = useState(artisan.capacity_limit == null ? "" : String(artisan.capacity_limit));
+  const [value, setValue] = useState<CapacityChoice>(() => capacityChoice(artisan.capacity_limit));
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const lock = useRef(false); // synchronous: two submissions in one loop send one command
+  const stored = artisan.capacity_limit;
+  const recorded = stored === 3 || stored === 4;
   const save = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (lock.current || reloading) return;
-    const raw = value.trim();
-    const limit = raw === "" ? null : Number(raw);
-    if (limit !== null && (!Number.isInteger(limit) || limit < 1 || limit > CAPACITY_MAX)) {
-      setMessage({ tone: "error", text: "Indiquez un nombre entier d’au moins 1 (2 147 483 647 au plus), ou laissez vide pour ne fixer aucune valeur." });
+    if (value !== 3 && value !== 4) {
+      setMessage({ tone: "error", text: "Choisissez 3 ou 4 missions simultanées." });
       return;
     }
     lock.current = true;
     setBusy(true);
     setMessage(null);
     try {
-      const ok = await onCommand({ action: "set_capacity_limit", capacity_limit: limit, expected_version: artisan.capacity_version ?? 0 });
+      const ok = await onCommand({ action: "set_capacity_limit", capacity_limit: value, expected_version: artisan.capacity_version ?? 0 });
       if (ok) setMessage({ tone: "ok", text: "Préférence enregistrée." });
       else {
-        onReload(); // re-read requested; the typed value stays for an explicit resend
+        onReload(); // re-read requested; the choice stays for an explicit resend
         setMessage({ tone: "error", text: "La préférence n’a pas été enregistrée : relecture demandée, votre saisie est conservée." });
       }
     } finally {
@@ -3587,15 +3589,21 @@ function CapacityPreference({ artisan, onCommand, onReload, reloading }: { artis
   };
   return (
     <section className="panel" aria-labelledby="capacity-preference">
-      <h2 id="capacity-preference">Capacité de travail (préférence)</h2>
+      <h2 id="capacity-preference">Missions simultanées (préférence)</h2>
       <p className="form-note">
-        Préférence personnelle enregistrée sur votre profil. Elle ne filtre pas les offres à ce stade et la plateforme n’impose aucune limite.
-        Valeur actuelle : {artisan.capacity_limit == null ? "aucune (illimité)" : artisan.capacity_limit}. L’unité de cette valeur reste à décider par l’exploitant.
+        Préférence personnelle enregistrée sur votre profil. Elle ne filtre pas les offres à ce stade.
+        Valeur actuelle : {capacityChoice(stored)} missions simultanées{recorded ? "" : " (valeur par défaut, aucun choix enregistré)"}.
       </p>
       <form onSubmit={(e) => void save(e)} noValidate>
-        <Field label="Valeur de capacité souhaitée (vide = aucune limite)">
-          <input type="number" min="1" max={CAPACITY_MAX} step="1" inputMode="numeric" value={value} disabled={busy || reloading} onChange={(e) => setValue(e.target.value)} />
-        </Field>
+        <fieldset disabled={busy || reloading} style={{ border: 0, padding: 0, margin: 0 }}>
+          <legend>Nombre de missions simultanées</legend>
+          {CAPACITY_CHOICES.map((n) => (
+            <label key={n} style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 44 }}>
+              <input type="radio" name="capacity-choice" value={n} checked={value === n} onChange={() => setValue(n)} />
+              {n} missions simultanées
+            </label>
+          ))}
+        </fieldset>
         {message && <p className={message.tone === "ok" ? "form-note" : "field-error"} role={message.tone === "ok" ? "status" : "alert"}>{message.text}</p>}
         <button type="submit" className="button outline" disabled={busy || reloading}>{busy ? "Enregistrement…" : reloading ? "Relecture…" : "Enregistrer la préférence"}</button>
       </form>

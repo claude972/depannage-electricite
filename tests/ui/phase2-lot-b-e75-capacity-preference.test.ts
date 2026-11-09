@@ -1,9 +1,9 @@
-// E75 (registre phase 2, reste DÉCISION) — ART-04.1 : préférence de capacité côté profil artisan,
-// sans plafond imposé. Contrat A (e492a1b) : workspace.artisan_profile expose capacity_limit (null =
-// illimité) et capacity_version ; POST /api/artisan { action:"set_capacity_limit", capacity_limit:
-// entier positif | null, expected_version: capacity_version }. Attendu : réglage visible si le contrat
-// est présent ; vide ⇒ null (illimité) ; refus (409) ⇒ relecture, saisie conservée, renvoi sur la
-// version relue ; mention « préférence enregistrée, ne filtre pas les offres ».
+// E75 — ART-04.1 : préférence « missions simultanées » côté profil artisan, choix 3 ou 4 uniquement.
+// Contrat A (e492a1b) : workspace.artisan_profile expose capacity_limit et capacity_version ;
+// POST /api/artisan { action:"set_capacity_limit", capacity_limit: 3 | 4, expected_version }.
+// Attendu : réglage visible si le contrat est présent ; null ou autre valeur stockée ⇒ affiché 3 ;
+// 4 stocké ⇒ affiché 4 ; refus (409) ⇒ relecture, choix conservé, renvoi sur la version relue ;
+// mention « ne filtre pas les offres ».
 // Vrai ArtisanSpace monté (live, Chromium 390), session simulée.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -17,11 +17,11 @@ const PW = process.env.QA_PLAYWRIGHT_PATH || path.join(homedir(), ".cache/codex-
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const skip = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM) ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)";
 
-const SETUP = (withContract: boolean) => `
+const SETUP = (withContract: boolean, stored: number | null = null) => `
 window.uid = "a0000000-0000-4000-8000-000000000001";
 window.view = "profile"; window.param = "";
 window.commands = []; window.dossierReads = 0;
-window.server = { capacity_limit: null, capacity_version: 0 };
+window.server = { capacity_limit: ${JSON.stringify(stored)}, capacity_version: 0 };
 const profile = () => ({ user_id: window.uid, company_name: "Atelier Recette", siret: "12345678901234", legal_status: "SAS ou SASU", employee_count: 3, address: "3 rue des Ateliers", postal_codes: ["97200"], categories: ["panel"], available: true, application_status: "approved"${withContract ? ", capacity_limit: window.server.capacity_limit, capacity_version: window.server.capacity_version" : ""} });
 const lim = { limited: false, limit: 100 };
 window.seed = { data: { interventions: [], quotes: [], payments: [], reviews: [], limits: { interventions: lim, quotes: { limited: false, limit: 200 }, sites: lim, organizations: { limited: false, limit: 50 } } }, session: {
@@ -39,8 +39,8 @@ window.seed = { data: { interventions: [], quotes: [], payments: [], reviews: []
 } };
 `;
 
-async function open(withContract: boolean) {
-  const { server, url } = await serveLiveArtisan(SETUP(withContract));
+async function open(withContract: boolean, stored: number | null = null) {
+  const { server, url } = await serveLiveArtisan(SETUP(withContract, stored));
   const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
   const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true });
   const page = await (await browser.newContext({ viewport: { width: 390, height: 1000 } })).newPage();
@@ -52,31 +52,33 @@ async function open(withContract: boolean) {
   return { server, browser, page, errors };
 }
 
-test("E75 · contrat présent ⇒ préférence neutre ; 409 ⇒ relecture et renvoi sur la version relue ; vide ⇒ illimité", { skip }, async () => {
+test("E75 · contrat présent ⇒ choix 3 ou 4 ; null affiché 3 ; 409 ⇒ relecture, choix conservé, renvoi sur la version relue", { skip }, async () => {
   const { server, browser, page, errors } = await open(true);
   try {
-    const field = page.getByLabel(/Valeur de capacité souhaitée/);
-    await field.waitFor({ timeout: 5000 });
-    assert.match((await page.evaluate("document.getElementById('app').innerText")) as string, /ne filtre pas les offres/i);
+    const three = page.getByLabel("3 missions simultanées");
+    const four = page.getByLabel("4 missions simultanées");
+    await three.waitFor({ timeout: 5000 });
+    const text = () => page.evaluate("document.getElementById('app').innerText") as Promise<string>;
+    assert.match(await text(), /ne filtre pas les offres/i);
+    assert.doesNotMatch(await text(), /illimité/i, "plus aucune option illimitée");
+    assert.equal(await page.locator("#app input[type=number]").count(), 0, "plus de saisie libre");
+    assert.equal(await three.isChecked(), true, "null (ancien illimité) ⇒ affiché 3");
+    assert.match(await text(), /Valeur actuelle : 3 missions simultanées \(valeur par défaut/);
     await page.evaluate("window.server = { capacity_limit: 4, capacity_version: 1 }"); // changed elsewhere
-    await field.fill("2");
+    await four.check();
     const reads = (await page.evaluate("window.dossierReads")) as number;
     await page.getByRole("button", { name: /Enregistrer la préférence/ }).click();
     await page.waitForTimeout(400);
     assert.ok(((await page.evaluate("window.dossierReads")) as number) > reads, "refus ⇒ relecture");
-    assert.equal(await field.inputValue(), "2", "saisie conservée");
-    assert.match((await page.evaluate("document.getElementById('app').innerText")) as string, /relecture demandée, votre saisie est conservée/);
+    assert.equal(await four.isChecked(), true, "choix conservé");
+    assert.match(await text(), /relecture demandée, votre saisie est conservée/);
     await page.getByRole("button", { name: /Enregistrer la préférence/ }).click();
     await page.waitForTimeout(400);
-    // Technical bound of the API: refused locally, no command.
-    await field.fill("2147483648");
-    await page.getByRole("button", { name: /Enregistrer la préférence/ }).click();
-    await page.waitForTimeout(200);
-    await field.fill("");
+    await three.check();
     await page.getByRole("button", { name: /Enregistrer la préférence/ }).click();
     await page.waitForTimeout(400);
     const cmds = ((await page.evaluate("window.commands")) as Array<Record<string, unknown>>).filter((c) => c.action === "set_capacity_limit");
-    assert.deepEqual(cmds.map((c) => [c.capacity_limit, c.expected_version]), [[2, 0], [2, 1], [null, 2]]);
+    assert.deepEqual(cmds.map((c) => [c.capacity_limit, c.expected_version]), [[4, 0], [4, 1], [3, 2]]);
     assert.deepEqual(errors, []);
   } finally {
     await browser.close();
@@ -84,10 +86,28 @@ test("E75 · contrat présent ⇒ préférence neutre ; 409 ⇒ relecture et ren
   }
 });
 
+for (const [stored, shown] of [[7, 3], [4, 4]] as const) {
+  test(`E75 · valeur stockée ${stored} ⇒ affichée ${shown} (rétrocompatible)`, { skip }, async () => {
+    const { server, browser, page, errors } = await open(true, stored);
+    try {
+      const radio = page.getByLabel(`${shown} missions simultanées`);
+      await radio.waitFor({ timeout: 5000 });
+      assert.equal(await radio.isChecked(), true);
+      const text = (await page.evaluate("document.getElementById('app').innerText")) as string;
+      assert.match(text, new RegExp(`Valeur actuelle : ${shown} missions simultanées`));
+      assert.equal(/valeur par défaut/.test(text), stored !== shown, "défaut signalé seulement hors 3/4");
+      assert.deepEqual(errors, []);
+    } finally {
+      await browser.close();
+      server.close();
+    }
+  });
+}
+
 test("E75 · contrat absent ⇒ aucun réglage affiché", { skip }, async () => {
   const { server, browser, page, errors } = await open(false);
   try {
-    assert.equal(await page.getByLabel(/Valeur de capacité souhaitée/).count(), 0);
+    assert.equal(await page.getByLabel(/missions simultanées/).count(), 0);
     assert.deepEqual(errors, []);
   } finally {
     await browser.close();
