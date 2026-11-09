@@ -30,13 +30,13 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E21 | Majeur | B + A | À REPRODUIRE | faits constatés futurs/ordre (P4) | | | site-operations/sla-panel.tsx | validation serveur : contrat A |
 | E24 | Majeur | B + A | À REPRODUIRE | levée antérieure/future (P4) | | | site-operations/erp-panel.tsx | contrat A |
 | E25 | Majeur | A | CONTRAT A | date d’effet des grilles (P4) | | | supabase | côté B : affichage si contrat change |
-| E26 | Majeur | B | À REPRODUIRE | 403 → relire/purger (P1) | | | site-operations-view.tsx, grids-panel.tsx | |
+| E26 | Majeur | B | CORRIGÉ | 403 ⇒ relecture du rapport (P1) | c91f30d | phase2-lot-b-e06-e22-e26-e27-site-operations | site-operations-view.tsx | rouge : 0 GET, tarifs/note/Publier conservés ; vert : relecture, retirés, 1 POST |
 | E29 | Majeur | B + A | CORRIGÉ (dépend de A 2b3b44e) | updated_at exact en version (P2) | 47f3fdc | phase2-lot-b-e29-warranty-version | types.ts, forms.tsx | rouge : expected_version absent ; vert : chaîne exacte envoyée, 409 ⇒ relecture, décision de A affichée, brouillon de B conservé |
 | E30 | Majeur | B | CORRIGÉ | 403 ⇒ relire /me + liste, lecture refusée purge (P1) | 747a94f | phase2-lot-b-e30-e31-operators | platform-operations/shared.tsx, platform-operators-view.tsx | rouge : 0 GET /me après 403 ; vert : relecture, nom/note/boutons purgés, 1 POST |
 | E32 | Majeur | B | À REPRODUIRE | vue journal audit_read | | | anchors.ts, features.ts, platform-anchor.tsx | |
 | E34 | Majeur | B + A | CORRIGÉ (dépend de A e17c0e5) | approbation ≠ réactivation + version (P2) | 43ee0b9 | phase2-lot-b-e34-e35-e36-artisan-decisions | forms.tsx | rouge : corps {approved:true} ; vert : action approve + version 1 ⇒ 409, Suspendu relu |
 | E35 | Majeur | B | CORRIGÉ | action « Demander des corrections » | 43ee0b9 | phase2-lot-b-e34-e35-e36-artisan-decisions | forms.tsx | rouge : seule action « Approuver » ; vert : request_changes envoyé, statut changes_requested |
-| E37 | Majeur | A | CONTRAT A | prédicat d’offre et congés | | | supabase | |
+| E37 | Majeur | A | HORS LOT B (validé par A) | prédicat d’offre et congés | Codex | — | supabase | validé côté A selon Codex |
 | E38 | Majeur | B | CORRIGÉ | 403/404 → relire/purger (P1) | bd77186 | phase2-lot-b-e38-credential-review-revoked | credential-reviews-model.ts | rouge : 0 GET après 403 ; vert : 1 POST, relecture, purge motifs et formulaire |
 | E39 | Majeur | B | À REPRODUIRE | 401 → purge fil (P1) | | | message-history.ts, forms.tsx | |
 | E40 | Majeur | B | À REPRODUIRE | relire contact à la réouverture (P1) | | | forms.tsx ConversationContact | |
@@ -46,15 +46,15 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E50 | Majeur | B | CORRIGÉ | 403 → relire droit (P1) | aa2f826 | phase2-lot-b-e50-refund-revoked | refund-execution-model.ts | rouge : 0 GET après 403, « Émettre » actif ; vert : 1 POST, relecture, action retirée |
 | E51 | Majeur | B | À REPRODUIRE | GET de rattrapage à reconnexion (P6) | | | courant-app.tsx | |
 | E52 | Majeur | B | CORRIGÉ | 404 → relire/purger liste (P1) | f273048 | phase2-lot-b-e52-site-attachments-revoked | site-attachments-panel.tsx | rouge : 0 GET liste après 404 ; vert : relecture, purge, 1 signature |
-| E54 | Majeur | B | À REPRODUIRE | 503 sauvegarde ne masque pas le centre | | | features.ts, notifications | |
-| E56 | Majeur | B | À REPRODUIRE | 401 pagination → purge (P1) | | | notification-center.tsx | |
+| E54 | Majeur | B | CORRIGÉ | 503 de commande ne masque pas le centre | 48a79ff | phase2-lot-b-e54-e55-e56-notifications | features.ts, notification-center.tsx | rouge : centre et saisie disparus ; vert : centre, formulaire et case décochée conservés, erreur en ligne |
+| E56 | Majeur | B | CORRIGÉ | 401 en pagination ⇒ purge (P1) | 48a79ff | phase2-lot-b-e54-e55-e56-notifications | notification-center.tsx | rouge : 25 lignes conservées ; vert : purge, plus de bouton |
 | E59 | Majeur | Décision | DÉCISION | photos avant/après | — | — | — | fiche ci-dessous |
 | E60 | Majeur | Décision | DÉCISION | accusé de remise client | — | — | — | fiche ci-dessous |
 | E61 | Majeur | A | CONTRAT A | rapport > 1 000 sites | | | app/api/reports | |
 | E63 | Majeur | B | CORRIGÉ | 404 → relire/purger (P1) | fcf1abd | phase2-lot-b-e62-e63-energy | energy-model.ts | rouge : 0 GET après 404 ; vert : 1 POST, relecture, purge |
 | E64 | Majeur | B | CORRIGÉ | 403 → relire/purger (P1) | 3698ea6 | phase2-lot-b-e64-coownership-revoked | coownership-model.ts | rouge : 0 GET après 403 ; vert : relecture, purge |
 | E67 | Majeur | Décision | DÉCISION | justificatif de levée | — | — | — | fiche ci-dessous |
-| E70 | Majeur | A | HORS LOT B | erreur Connect | | | app/api/payments | externe Stripe |
+| E70 | Majeur | A | HORS LOT B (partiel A) | erreur Connect | Codex | — | app/api/payments | partiel côté A, configuration externe |
 | E72 | Majeur | A | HORS LOT B | ApplicationFee py_ | | | lib | externe Stripe |
 | E75 | Majeur | A + Décision | DÉCISION | capacité artisan, null = illimité | — | — | — | aucun plafond choisi |
 | E76 | Majeur | A | CONTRAT A | plafond global rappel | | | lib, supabase | |
@@ -62,7 +62,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E80 | Majeur | A + B | CONTRAT A | litige non projeté côté artisan | | | app/api/payments/status | B affichera le champ quand projeté |
 | E03 | Mineur | B | CORRIGÉ | 409 ⇒ relecture en place, motif conservé (P1) | 4800320 | phase2-lot-b-e03-moderation-conflict | platform-operations/shared.tsx, platform-moderation-view.tsx | rouge : renvoi version 1 ; vert : relecture, renvoi version 2 |
 | E05 | Mineur | B | À REPRODUIRE | validation locale effectif ≤ 100000 | | | role/artisan-space.tsx | |
-| E06 | Mineur | B | À REPRODUIRE | formulaire ouvert après perte d’écriture (P1) | | | site-operations shared/equipment/maintenance | |
+| E06 | Mineur | B | CORRIGÉ | formulaire ouvert sans droit ⇒ aucun POST (P1) | c91f30d | phase2-lot-b-e06-e22-e26-e27-site-operations | site-operations/shared.tsx | rouge : 1 POST après passage en lecture seule ; vert : 0 POST, message lecture seule. Mécanisme partagé useSubmit (équipement/maintenance/délais) |
 | E09 | Mineur | B | À REPRODUIRE | nom de secours « document » | | | components/app/uploads.ts | |
 | E10 | Mineur | B | À REPRODUIRE | rejeu réussi → édition (P3) | | | site-areas-panel.tsx | |
 | E12 | Mineur | B | À REPRODUIRE | 409 → recharger le formulaire (P1/P2) | | | client-addresses-panel.tsx | |
@@ -70,9 +70,9 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E14 | Mineur | B | CORRIGÉ | refus d’acceptation ⇒ relecture ponctuelle (P1) | e8bfd00 | phase2-lot-b-e14-lost-offer | available-missions-model.ts | rouge : 0 relecture, bouton actif ; vert : 1 POST, relecture 404, offre retirée |
 | E18 | Mineur | A + B | CORRIGÉ (dépend de A 7de6d11) | command_id du rapport (P3) | 4049d5d | phase2-lot-b-e18-report-command-id | types.ts, artisan-space.tsx | rouge : aucune clé ; vert : même clé et saisie après réponse perdue, nouvelle clé après succès |
 | E19 | Mineur | A | CONTRAT A | nom vide accepté par la route | | | app/api | formulaire déjà conforme |
-| E22 | Mineur | B | À REPRODUIRE | verrou synchrone useSubmit (P5) | | | site-operations/shared.tsx | |
-| E23 | Mineur | A | CONTRAT A | classement SLA divergent | | | lib | |
-| E27 | Mineur | B | À REPRODUIRE | 409 → relire la grille (P1) | | | grids-panel.tsx | |
+| E22 | Mineur | B | CORRIGÉ | verrou synchrone useSubmit (P5) | c91f30d | phase2-lot-b-e06-e22-e26-e27-site-operations | site-operations/shared.tsx, site-operations-view.tsx | rouge : 2 POST dans la même boucle ; vert : 1 POST |
+| E23 | Mineur | A | HORS LOT B (validé par A) | classement SLA | Codex | — | lib | validé côté A selon Codex |
+| E27 | Mineur | B | CORRIGÉ | 409 ⇒ relecture de la grille (P1) | c91f30d | phase2-lot-b-e06-e22-e26-e27-site-operations | site-operations-view.tsx | rouge : 0 GET, « Brouillon » conservé ; vert : relecture, Publiée, bouton retiré |
 | E31 | Mineur | B | CORRIGÉ | `account_role` lu | 747a94f | phase2-lot-b-e30-e31-operators | platform-operators-view.tsx | rouge : aucun lien ; vert : lien fiche client |
 | E33 | Mineur | A | CONTRAT A | normalisation NFC annuaire | | | app/api, supabase | |
 | E36 | Mineur | A + B | CORRIGÉ (dépend de A 523878c) | command_id stable par intention (P3) | 43ee0b9 | phase2-lot-b-e34-e35-e36-artisan-decisions | forms.tsx | rouge : aucune clé ; vert : même command_id jusqu’à confirmation, écran relu |
@@ -83,13 +83,13 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E47 | Mineur | B | À REPRODUIRE | vérification de retour après SIGNED_IN | | | courant-app.tsx | |
 | E49 | Mineur | B | CORRIGÉ | alerte de pagination retirée | d5b1a3b | phase2-lot-b-e48-e49-saved-methods-pagination | saved-payment-methods/model.ts | rouge : alerte conservée ; vert : retirée après la 21e carte |
 | E53 | Mineur | A + B | CORRIGÉ (dépend de A b414386) | command_id du dépôt de site (P3) | fc06c26 | phase2-lot-b-e53-site-upload-command-id | site-attachments-panel.tsx | rouge : command_id absent ; vert : même clé au renvoi, un seul document |
-| E55 | Mineur | B | À REPRODUIRE | cloche non relue après lecture (P1/P6) | | | notification-center, courant-app | |
+| E55 | Mineur | B | CORRIGÉ | lecture confirmée ⇒ résumé de cloche relu (P1/P6) | 48a79ff | phase2-lot-b-e54-e55-e56-notifications | notification-center.tsx, notifications-anchor.tsx | rouge : 0 GET résumé ; vert : résumé relu |
 | E57 | Mineur | B | À REPRODUIRE | confirmation perdue au remount (P3) | | | site-lifecycle | |
 | E58 | Mineur | B | À REPRODUIRE | profil public relu en navigation (P6) | | | public-operator-profile, public-site | |
 | E62 | Mineur | B | CORRIGÉ | rejeu réussi → édition (P3) | fcf1abd | phase2-lot-b-e62-e63-energy | site-energy-panel.tsx | rouge : formulaire en création, expected_version null ; vert : édition v1 |
 | E65 | Mineur | B | À REPRODUIRE | présélection Artisan | | | public-site.tsx, forms.tsx | |
 | E66 | Mineur | B | À REPRODUIRE | détail hors cache sans GET | | | use-detail-presence.ts, enterprise-space | |
-| E68 | Mineur | A | HORS LOT B | public/offline-request.js | | | public/ | interdit en B |
+| E68 | Mineur | A | HORS LOT B (partiel A) | public/offline-request.js | Codex | — | public/ | partiel côté A jusqu’au changement de cache hors périmètre |
 | E69 | Mineur | A | CONTRAT A | session_not_found → 401 | | | app/api/profile/sessions | |
 | E71 | Mineur | B | À REPRODUIRE | opted_in=true + browser=none = retrait (P7) | | | web-push-panel.tsx | |
 | E77 | Mineur | A | CONTRAT A | délai annoncé par numéro | | | lib, supabase | UI affiche la valeur serveur |
@@ -103,7 +103,7 @@ Sous-cas externes avec condition ouverte (PUB-10.1, CLI-05.2, CLI-08.1, ADM-01.1
 
 Mise à jour à chaque commit d’item.
 
-- CORRIGÉ (rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E14, E15, E30, E31, E18, E29, E34, E35, E36, E38, E41, E44, E45, E48, E49, E50, E52, E53, E62, E63, E64. E15/E18/E29/E34/E36/E41/E53 exigent les routes A à l’intégration.
+- CORRIGÉ (29 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E06, E14, E15, E18, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E41, E44, E45, E48, E49, E50, E52, E53, E54, E55, E56, E62, E63, E64. E15/E18/E29/E34/E36/E41/E53 exigent les routes A à l’intégration.
 - ROUGE : aucun.
 - À REPRODUIRE : voir tableau.
 - NON REPRODUIT : aucun.
@@ -172,4 +172,5 @@ Ces échecs ne sont ni affaiblis ni supprimés par B.
 - Checkpoint A : les 12 mêmes échecs préexistants sur HEAD, deux builds OK. La suite globale n’est pas qualifiée verte.
 - Contrats A E15 et E29 publiés dans le signal (voir Attendu de l’autre lot).
 - Règles P1 communes livrées (961e24d) : `components/app/refusal.ts` (401 purge immédiate, 403/404 relecture avant tout POST, refus de lecture = purge, 409 conflit, invalide, transitoire) ; chaque panneau fournit seulement son adaptateur de relecture. Test `phase2-lot-b-refusal-rules`.
+- Test existant modifié (P1 exigé) : `tests/ui/erp-command-transient.test.ts`, l’assertion 401/403 interdisait toute relecture ; remplacée par « exactement une relecture des droits », classification et formulaire inchangés.
 - Test existant modifié (contrat changé par A, pas d’affaiblissement) : `tests/ui/artisan-admin-status.test.ts`, deux assertions figeaient `{ user_id, approved }` et une seule action pour « soumis ». Remplacées par le nouveau corps exact et les deux actions (E35), même rigueur.
