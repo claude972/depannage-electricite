@@ -1742,7 +1742,13 @@ export function DossierView({ c, id, initialQuoteId }: { c: Ctx; id: string; ini
   const statusKey = intervention?.status || "";
   // Deep link to a dossier absent from the cached perimeter: one causal refresh before « introuvable ».
   // Presence uses the active organisation and site scope, including the direct dossier read.
-  const presence = useDetailPresence(session, "enterprise-dossier", id, Boolean(intervention));
+  // E66 (counter-review): only this enterprise case — the workspace holds the dossier, its site is
+  // absent from the truncated site window, and the active scope allows that site ⇒ automatic read.
+  const held = demo ? undefined : session.data.interventions.find((i) => i.id === id);
+  const siteWindowMayHide =
+    !demo && !intervention && !!held?.site_id && session.data.limits?.sites?.limited === true &&
+    !!c.organization && !c.orgSites.some((s) => s.id === held.site_id) && (!c.activeSite || c.activeSite.id === held.site_id);
+  const presence = useDetailPresence(session, "enterprise-dossier", id, Boolean(intervention), undefined, { siteWindowMayHide });
   useEffect(() => {
     if (!intervention) return;
     let active = true;
