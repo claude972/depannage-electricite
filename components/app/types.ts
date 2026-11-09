@@ -196,6 +196,9 @@ export type ArtisanProfile = {
   application_status: ArtisanApplicationStatus;
   submitted_at?: string | null;
   updated_at?: string;
+  /** E75 (contract A, optional): personal capacity preference; null = unlimited. */
+  capacity_limit?: number | null;
+  capacity_version?: number;
 };
 export type CredentialKind = "registration" | "liability" | "qualification" | "other";
 export type ArtisanCredential = {
@@ -281,6 +284,7 @@ export type ArtisanCommand =
     }
   | { action: "submit_application" }
   | { action: "set_availability"; available: boolean }
+  | { action: "set_capacity_limit"; capacity_limit: number | null; expected_version: number }
   | {
       action: "link_credential";
       document_id: string;

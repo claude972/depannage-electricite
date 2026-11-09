@@ -538,6 +538,7 @@ export function ArtisanSpace({ session }: { session: Session }) {
             dossier={dossier}
             pending={dossierPending}
             onCommand={command}
+            onReload={() => setDossierVersion((v) => v + 1)}
           />
         );
         break;
@@ -3436,16 +3437,60 @@ function PerfGrid({ perf, since }: { perf: Performance; since: string | null }) 
     </>
   );
 }
+/** E75 (decision pending, no ceiling chosen): neutral personal preference, shown only when the
+ *  server exposes the contract (capacity_version). Empty = unlimited (null). A refusal (version
+ *  changed, 409) re-reads the profile and keeps the typed value. It does not filter offers. */
+function CapacityPreference({ artisan, onCommand, onReload }: { artisan: ArtisanProfile; onCommand: (body: ArtisanCommand) => Promise<boolean>; onReload: () => void }) {
+  const [value, setValue] = useState(artisan.capacity_limit == null ? "" : String(artisan.capacity_limit));
+  const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const save = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const raw = value.trim();
+    const limit = raw === "" ? null : Number(raw);
+    if (limit !== null && (!Number.isInteger(limit) || limit < 1)) {
+      setMessage({ tone: "error", text: "Indiquez un nombre entier d’au moins 1, ou laissez vide pour ne fixer aucune limite." });
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    const ok = await onCommand({ action: "set_capacity_limit", capacity_limit: limit, expected_version: artisan.capacity_version ?? 0 });
+    setBusy(false);
+    if (ok) setMessage({ tone: "ok", text: "Préférence enregistrée." });
+    else {
+      onReload(); // re-read the current version; the typed value stays for an explicit resend
+      setMessage({ tone: "error", text: "La préférence n’a pas été enregistrée (elle a pu changer entre-temps) : la valeur actuelle a été relue, votre saisie est conservée." });
+    }
+  };
+  return (
+    <section className="panel" aria-labelledby="capacity-preference">
+      <h2 id="capacity-preference">Capacité de travail (préférence)</h2>
+      <p className="form-note">
+        Préférence personnelle enregistrée sur votre profil. Elle ne filtre pas les offres à ce stade et la plateforme n’impose aucune limite.
+        Actuellement : {artisan.capacity_limit == null ? "aucune limite" : `${artisan.capacity_limit} mission(s) simultanée(s)`}.
+      </p>
+      <form onSubmit={(e) => void save(e)} noValidate>
+        <Field label="Nombre maximal de missions simultanées (vide = aucune limite)">
+          <input type="number" min="1" step="1" inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} />
+        </Field>
+        {message && <p className={message.tone === "ok" ? "form-note" : "field-error"} role={message.tone === "ok" ? "status" : "alert"}>{message.text}</p>}
+        <button type="submit" className="button outline" disabled={busy}>{busy ? "Enregistrement…" : "Enregistrer la préférence"}</button>
+      </form>
+    </section>
+  );
+}
 function Profile({
   session,
   dossier,
   pending,
   onCommand,
+  onReload,
 }: {
   session: Session;
   dossier: ArtisanDossier | null;
   pending: boolean;
   onCommand: (body: ArtisanCommand) => Promise<boolean>;
+  onReload?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const { data, profileId } = session;
@@ -3462,6 +3507,9 @@ function Profile({
   return (
     <>
       <PageTitle title="Profil artisan" />
+      {artisan && typeof artisan.capacity_version === "number" && session.mode === "live" && onReload && (
+        <CapacityPreference artisan={artisan} onCommand={onCommand} onReload={onReload} />
+      )}
       <div className={styles.profileHead}>
         <span className={styles.avatar} aria-hidden="true">
           {initials(session.displayName)}
