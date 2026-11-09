@@ -13,7 +13,7 @@ export default function Welcome() {
     <Copy kind="title">Une panne ? Demandez une intervention.</Copy>
     <Copy>Retrouvez vos demandes, vos devis et les étapes de votre intervention depuis votre téléphone.</Copy>
     <Action label="Accéder à mon espace" onPress={() => router.push('/connexion')}/>
-    {apiOrigin&&<Action secondary label="Demander sans compte sur le site" onPress={() => void openBrowserAsync(apiOrigin!)}/>}
+    {apiOrigin&&<Action secondary label="Demander sans compte sur le site" onPress={() => void openBrowserAsync(apiOrigin+'/#new')}/>}
     <Copy kind="subtitle">Fourchettes indicatives</Copy>
     <ReadState loading={catalogue.loading} error={catalogue.error} onRetry={catalogue.reload}/>
     {catalogue.data&&Object.entries(categories).map(([key,label])=>{

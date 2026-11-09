@@ -10,7 +10,7 @@ function Navigator() {
   if (!ready) return <Screen><ReadState loading error={null} onRetry={() => {}}/></Screen>;
   return <>
     <StatusBar style="auto"/>
-    <Stack screenOptions={{headerTintColor:palette.blue,headerStyle:{backgroundColor:palette.surface},contentStyle:{backgroundColor:palette.background}}}>
+    <Stack key={session?.user.id??'guest'} screenOptions={{headerTintColor:palette.blue,headerStyle:{backgroundColor:palette.surface},contentStyle:{backgroundColor:palette.background}}}>
       <Stack.Screen name="index" options={{headerShown:false}}/>
       <Stack.Protected guard={!session}>
         <Stack.Screen name="bienvenue" options={{title:'Dépannage électrique'}}/>

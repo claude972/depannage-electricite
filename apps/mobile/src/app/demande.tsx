@@ -19,7 +19,7 @@ export default function RequestForm() {
   const [uncertain,setUncertain]=useState(false);
   const [suggestion,setSuggestion]=useState<{address:string;postal:string;city:string}|null>(null);
   const lock=useRef(false);
-  const intent=useRef<{fingerprint:string;id:string}|null>(null);
+  const intent=useRef<{id:string;payload:object}|null>(null);
   async function locate() {
     setLocating(true);setError(null);setSuggestion(null);
     try {
@@ -35,17 +35,20 @@ export default function RequestForm() {
     finally{setLocating(false);}
   }
   async function submit() {
-    if(!token||!catalogue.data||lock.current||account.data?.profile.role!=='client')return;
+    if(!token||lock.current||account.data?.profile.role!=='client')return;
     setError(null);
-    if(!urgency){setError('Indiquez si l’intervention est urgente.');return;}
-    const input=requestFields.safeParse({category,description,address,postal_code:postal,city,urgency});
-    if(!input.success){setError(input.error.issues[0].message);return;}
-    const payload={...input.data,reviewed_estimate_version:catalogue.data.version};
-    const fingerprint=JSON.stringify(payload);
-    if(intent.current?.fingerprint!==fingerprint)intent.current={fingerprint,id:randomUUID()};
+    if(!uncertain){
+      if(!catalogue.data)return;
+      if(!urgency){setError('Indiquez si l’intervention est urgente.');return;}
+      const input=requestFields.safeParse({category,description,address,postal_code:postal,city,urgency});
+      if(!input.success){setError(input.error.issues[0].message);return;}
+      intent.current={id:randomUUID(),payload:{...input.data,reviewed_estimate_version:catalogue.data.version}};
+    }
+    const current=intent.current;
+    if(!current)return;
     lock.current=true;setBusy(true);
     try {
-      const result=await api('/api/interventions',creation,{token,method:'POST',body:{...payload,request_id:intent.current.id}});
+      const result=await api('/api/interventions',creation,{token,method:'POST',body:{...current.payload,request_id:current.id}});
       router.replace({pathname:'/dossier/[id]',params:{id:result.intervention.id}});
     }catch(issue){
       if(issue instanceof ApiFailure){
@@ -86,7 +89,7 @@ export default function RequestForm() {
       {error&&<Copy kind="error">{error}</Copy>}
       {uncertain&&<Copy kind="muted">L’envoi n’a pas pu être confirmé. Le prochain essai réutilise la même référence.</Copy>}
       <Action label={busy?'Envoi…':uncertain?'Vérifier ou réessayer la même demande':'Confirmer la demande'}
-        disabled={busy||!range||account.data?.profile.role!=='client'}
+        disabled={busy||(!range&&!uncertain)||account.data?.profile.role!=='client'}
         onPress={()=>{if(uncertain){void submit();return;}Alert.alert('Confirmer la demande ?', 'Le montant affiché est une estimation. Vous pourrez examiner le devis avant les travaux.', [{text:'Revenir',style:'cancel'},{text:'Confirmer',onPress:()=>void submit()}]);}}/>
     </Card>
   </Screen>;
