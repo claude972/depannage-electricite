@@ -65,8 +65,11 @@ window.run = async (failFirst) => {
     await tick(800);
     out.afterRetry = measure();
   } else out.loaded = measure();
-  const tabs = [...document.querySelectorAll("[role=tab]")];
-  out.tabs = tabs.map((t) => { const b = t.getBoundingClientRect(); return { h: Math.round(b.height), right: Math.round(b.right) }; });
+  // Realigned (phase 2 lot B): the site sheet now also mounts « Pièces du site » with its own
+  // two-tab list; the count targets the site-operations tablist, reachability covers every tab.
+  const rect = (t) => { const b = t.getBoundingClientRect(); return { h: Math.round(b.height), right: Math.round(b.right) }; };
+  out.tabs = [...document.querySelectorAll('[role=tablist][aria-label="Sections des opérations du site"] [role=tab]')].map(rect);
+  out.allTabs = [...document.querySelectorAll("[role=tab]")].map(rect);
   const controls = [...document.querySelectorAll("[class*='approvals_block'] button, [class*='approvals_block'] select, [class*='approvals_block'] input:not([type=checkbox]), [class*='approvals_block'] label:has(input[type=checkbox])")];
   out.controls = controls.map((el) => { const b = el.getBoundingClientRect(); return { h: Math.round(b.height), right: Math.round(b.right), w: Math.round(b.width) }; }).filter((x) => x.w > 0);
   return out;
@@ -98,6 +101,7 @@ for (const width of [360, 390, 1280])
           assert.ok(m.block !== null && m.form !== null && m.block <= m.W && m.form <= m.W, `approval block ${m.block} / form ${m.form}`);
           assert.equal(r.tabs.length, 7, "7 site operations tabs");
           assert.ok(r.tabs.every((t: { right: number }) => t.right <= m.W + 0.5) || width < 1280, "tabs inside the viewport at desktop");
+          assert.ok(r.allTabs.length >= r.tabs.length && (r.allTabs.every((t: { right: number }) => t.right <= m.W + 0.5) || width < 1280), "every tab of the sheet inside the viewport at desktop");
           assert.ok(r.controls.length > 0 && r.controls.every((x: { h: number; right: number }) => x.h >= 44 && x.right <= m.W + 0.5), `approval controls ${JSON.stringify(r.controls)}`);
           assert.deepEqual(errors, []);
         } finally {

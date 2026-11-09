@@ -100,7 +100,15 @@ test("site archivé ouvert directement : lecture seule, aucune action d’éditi
   assert.match(body, /initial=\{state\}/, "the settings panel is seeded: no second GET");
   assert.match(body, /\{!archived && <SiteAreasPanel /);
   assert.match(body, /\{!archived && <SiteContactsPanel /);
-  assert.doesNotMatch(body, /Nouvelle demande|c\.go\("new"|professionalCommand|BudgetEditor/);
+  // Realigned (phase 2 lot B): the direct sheet now offers ENT-03 request creation (af676ab) and the
+  // compliance « completed » command (0beec1b) — both strictly gated by an ACTIVE site and the server
+  // can_write; an archived site still offers no write action (also proven in Chromium by
+  // site-records.test.ts: archived ⇒ 0 write action). No budget editor on the direct sheet.
+  assert.doesNotMatch(body, /BudgetEditor/);
+  assert.match(body, /\{!archived && state\.canWrite && session\.mode !== "demo" \? \(\s*<button[^>]*onClick=\{\(\) => c\.go\("new", site\.id\)\}[^>]*data-direct-new-request=""/);
+  assert.equal((body.match(/c\.go\("new"/g) ?? []).length, 1, "a single request entry, the gated one");
+  assert.match(body, /canWrite=\{!archived && state\.canWrite\}[\s\S]{0,120}complete=\{\(row\) => session\.professionalCommand\(/);
+  assert.equal((body.match(/professionalCommand/g) ?? []).length, 1, "a single command, behind the compliance panel's gated canWrite");
   // ENT-05 / ENT-09 (claude/direct-site-verticals): energy and co-ownership are now mounted on the direct
   // sheet, but ONLY for an active, live, proven site (co-ownership: syndic only) — never for an archived one.
   assert.match(body, /\{!archived && session\.mode !== "demo" && \(\s*<SiteEnergyPanel/);
