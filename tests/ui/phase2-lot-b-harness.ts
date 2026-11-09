@@ -18,7 +18,8 @@ export const skip = available ? false : "local Playwright/Chromium not found (SK
 
 export type Run = (name: string, arg?: unknown) => Promise<any>;
 
-export async function withScenarios(entry: string, body: (run: Run, ctx: { errors: string[]; requests: string[] }) => Promise<void>, width = 390) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function withScenarios(entry: string, body: (run: Run, ctx: { errors: string[]; requests: string[]; page: any }) => Promise<void>, width = 390) {
   const out = await build({
     absWorkingDir: ROOT, stdin: { contents: entry, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, outdir: "out",
     platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "local-css" },
@@ -42,7 +43,7 @@ export async function withScenarios(entry: string, body: (run: Run, ctx: { error
     await page.goto(`http://127.0.0.1:${(server.address() as { port: number }).port}/`);
     const run: Run = (name, arg) =>
       page.evaluate(([n, a]: [string, unknown]) => (window as unknown as { scenarios: Record<string, (x: unknown) => Promise<unknown>> }).scenarios[n](a), [name, arg] as [string, unknown]);
-    await body(run, { errors, requests });
+    await body(run, { errors, requests, page });
   } finally {
     await browser.close();
     server.close();

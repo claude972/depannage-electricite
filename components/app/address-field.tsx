@@ -168,6 +168,8 @@ export function createAddressController(opts: AddressControllerOptions) {
         set({ status: "idle", candidates: [], open: false, active: -1 });
         return;
       }
+      // E11: suggestions of the previous text are void at once (Enter can no longer choose them).
+      set({ status: "idle", candidates: [], open: false, active: -1 });
       timer = timers.set(() => void run(q), DEBOUNCE_MS);
     },
     move(delta: 1 | -1) {
