@@ -4517,6 +4517,12 @@ export function ReportsView({ c }: { c: Ctx }) {
                 Réessayer
               </button>
             )}
+            {report.pageNumber > 1 && (
+              // E61: a failed page > 1 can always go back (re-read of the previous page).
+              <button type="button" className="button outline" onClick={() => report.previous()}>
+                Page précédente
+              </button>
+            )}
           </div>
         ) : server ? (
           server.sites.length ? (
@@ -4564,18 +4570,10 @@ export function ReportsView({ c }: { c: Ctx }) {
                   </tr>
                 </tbody>
               </table>
-              {server.page && (
-                <div className={styles.actions} data-report-pager="">
-                  <span className={styles.muted}>Page {report.pageNumber}</span>
-                  {report.pageNumber > 1 && (
-                    <button type="button" className="button outline" onClick={() => report.previous()}>Page précédente</button>
-                  )}
-                  {server.page.has_more && (
-                    <button type="button" className="button outline" onClick={() => report.next()}>Page suivante</button>
-                  )}
-                </div>
-              )}
             </>
+          ) : server.page ? (
+            // E61: a split scope whose page came back empty (sites removed meanwhile) is not « no site ».
+            <p className={styles.muted} data-report-empty-page="">Aucun site sur cette page : le périmètre a pu changer depuis la page précédente.</p>
           ) : (
             <Empty icon="chart" title="Aucun site à consolider">
               Ajoutez un site pour obtenir un rapport.
@@ -4627,6 +4625,17 @@ export function ReportsView({ c }: { c: Ctx }) {
           <Empty icon="chart" title="Aucun site à consolider">
             Ajoutez un site pour obtenir un rapport.
           </Empty>
+        )}
+        {live && server?.page && (
+          <div className={styles.actions} data-report-pager="">
+            <span className={styles.muted}>Page {report.pageNumber}</span>
+            {report.pageNumber > 1 && (
+              <button type="button" className="button outline" onClick={() => report.previous()}>Page précédente</button>
+            )}
+            {server.page.has_more && (
+              <button type="button" className="button outline" onClick={() => report.next()}>Page suivante</button>
+            )}
+          </div>
         )}
       </section>
       <EnergyConsolidationPanel
