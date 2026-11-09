@@ -3641,7 +3641,7 @@ function DossierView({
                         <small className={styles.muted}>
                           {reportDeclarant(operations.report.signature_name, operations.report.updated_at ? dateTime(operations.report.updated_at) : undefined)}
                         </small>
-                        <ReportEvidenceSummary ops={operations} report={operations.report} noteClass={styles.muted} declarant={false} openContext={session.mode === "demo" ? undefined : session.mutationContext} />
+                        <ReportEvidenceSummary ops={operations} report={operations.report} noteClass={styles.muted} declarant={false} receiptVisible={false} openContext={session.mode === "demo" ? undefined : session.mutationContext} />
                       </>
                     ) : (
                       "Aucun compte rendu enregistré."

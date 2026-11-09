@@ -109,12 +109,21 @@ const when = (iso?: string | null) => {
  * Read-only evidence block shared by every role: declared name (never a client signature), the
  * before/after photos when recorded, and the acknowledgement state of the current revision.
  */
-export function ReportEvidenceSummary({ ops, report, photos, noteClass, declarant = true, openContext }: { ops: Operations; report: InterventionReport; photos?: readonly EvidencePhoto[]; noteClass?: string; declarant?: boolean; /** Live session: photos open through the private document link. Absent (demo) ⇒ names only. */ openContext?: OpenContext }) {
+export function ReportEvidenceSummary({ ops, report, photos, noteClass, declarant = true, openContext, receiptVisible }: {
+  ops: Operations; report: InterventionReport; photos?: readonly EvidencePhoto[]; noteClass?: string; declarant?: boolean;
+  /** Live session: photos open through the private document link. Absent (demo) ⇒ names only. */ openContext?: OpenContext;
+  /**
+   * Whether this reader may see the acknowledgement state: only the requester and the assigned
+   * artisan (receipt RLS). Other readers (super admin, non-requesting members) get
+   * `report_receipt: null` even when signed ⇒ no status at all, never a false « en attente ».
+   */
+  receiptVisible: boolean;
+}) {
   const name = (id?: string | null) => (id ? photos?.find((p) => p.id === id)?.name ?? "photo jointe au dossier" : "");
-  const receipt = currentReceipt(ops);
-  const versioned = Boolean(report.report_revision);
+  const receipt = receiptVisible ? currentReceipt(ops) : null;
+  const versioned = receiptVisible && Boolean(report.report_revision);
   return (
-    <div data-report-evidence={receipt ? "signed" : versioned ? "pending" : "legacy"}>
+    <div data-report-evidence={receipt ? "signed" : versioned ? "pending" : receiptVisible ? "legacy" : "hidden"}>
       {declarant && <p className={noteClass ?? "form-note"}>{reportDeclarant(report.signature_name, report.updated_at ? when(report.updated_at) : undefined)}</p>}
       {(report.before_photo_id || report.after_photo_id || evidenceRequired(ops)) && (
         <ul className={noteClass ?? "form-note"} data-report-photos style={{ listStyle: "none", padding: 0, margin: "8px 0 0" }}>

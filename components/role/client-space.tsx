@@ -1584,7 +1584,7 @@ function DetailView({
               {reportDeclarant(ops.report.signature_name, ops.report.updated_at ? dateTime(ops.report.updated_at) : undefined)}
             </p>
             {/* E59/E60: before/after photos and the requester's acknowledgement of this revision. */}
-            <ReportEvidenceSummary ops={ops} report={ops.report} photos={dossierPhotos(session.data.documents, i.id, i.artisan_id)} declarant={false} openContext={demo ? undefined : session.mutationContext} />
+            <ReportEvidenceSummary ops={ops} report={ops.report} photos={dossierPhotos(session.data.documents, i.id, i.artisan_id)} declarant={false} receiptVisible={i.client_id === session.profileId} openContext={demo ? undefined : session.mutationContext} />
             {!demo && canSignReport(ops, i.status, i.client_id === session.profileId) && (
               <ReportReceiptForm
                 key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${i.id}|${ops.report.report_revision}`}
