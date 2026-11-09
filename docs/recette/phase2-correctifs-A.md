@@ -25,7 +25,7 @@ A `33d378f` et B `26464ef` ont été réunis dans un checkout temporaire. Typech
 | État | Nombre |
 | --- | ---: |
 | CORRIGÉ (avec suite verte) | 0 |
-| VÉRIFIÉ CIBLÉ (suite initiale rouge) | 9 |
+| VÉRIFIÉ CIBLÉ (suite initiale rouge) | 10 |
 | CORRIGÉ PARTIEL | 10 |
 | NON REPRODUIT | 0 |
 | DÉCISION REQUISE | 4 |
@@ -46,7 +46,7 @@ A `33d378f` et B `26464ef` ont été réunis dans un checkout temporaire. Typech
 | E18 | Mineur | CORRIGÉ PARTIEL | P3 | `7de6d11` | `sql-phase2-lot-a-p3-review.mjs` | Route operations, migration additive | Deux audits et instantanés avant. Après, un de chaque, réponse identique, autre contenu sous même clé refusé. Attend la conservation de la clé dans B. |
 | E19 | Mineur | VÉRIFIÉ CIBLÉ | Isolé | `f6e280a` | `sql-phase2-lot-a-p3-review.mjs` | Route operations, migration additive | HTTP 200 et chaîne vide avant, 422 explicite et aucune écriture après. RPC direct refuse les espaces/tabulations, saisie nominale conservée. |
 | E21 | Majeur | CORRIGÉ PARTIEL | P4 | `cbc4fcc` | `sql-phase2-lot-a-temporal-review.mjs` | Migrations additives et contrats `site-operations` | Trois écritures HTTP futures 200 avant puis 422. Refus 22023 SQL direct. Faits anciens futurs non mesurables. Attend le message immédiat B. |
-| E23 | Mineur | À REPRODUIRE | Isolé | — | — | — | Règle unique du statut SLA. |
+| E23 | Mineur | VÉRIFIÉ CIBLÉ | Isolé | `1a32034` | `sql-phase2-lot-a-temporal-review.mjs` | Rapports SLA site et organisation | Deux GET Next.js avec données SQL. Avant, le site comptait un dossier respecté et le consolidé un indéterminé. Après, les deux classent le dossier indéterminé. 74 tests unitaires ciblés et les trois cas HTTP temporels passent. |
 | E24 | Majeur | CORRIGÉ PARTIEL | P4 | `cbc4fcc` | `sql-phase2-lot-a-temporal-review.mjs` | Migrations additives et contrats `site-operations` | Levées antérieure et future 200 avant puis 422, dossier conservé en v1. Refus SQL direct, levée valide 200. Attend le message immédiat B. |
 | E25 | Majeur | VÉRIFIÉ CIBLÉ | P4 | `418035d` | `sql-phase2-lot-a-contract-dates-review.mjs` | Migration additive | La publication future vidait les deux lectures. Après, v2 reste disponible avant la date ; v3 devient seule applicable à la date. L’autorisation de l’artisan reste liée à sa révision. |
 | E29 | Majeur | CORRIGÉ PARTIEL | P2 | `2b3b44e` | `sql-phase2-lot-a-p2-review.mjs` | Route warranty, migration additive | Ancienne résolution écrasée avec HTTP 200 avant, 409 et résolution conservée après. RPC historique interdit, audit unique. Attend le lot B. |
