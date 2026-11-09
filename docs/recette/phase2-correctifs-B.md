@@ -61,7 +61,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E78 | Majeur | A | HORS LOT B (corrigé par A) | reprise remboursement | Codex | — | supabase, lib | A confirmé et poussé ; aucun fichier B requis : le formulaire reprend déjà execution_id |
 | E80 | Majeur | A + B | CORRIGÉ (A f58df31) | état du litige artisan, libellé neutre | ec7d6f1, 8fa9749 | phase2-lot-b-e80-artisan-dispute | types.ts, artisan-space.tsx | rouge : aucune lecture ni mention ; vert : litige neutre (enregistré / examiné par la plateforme) à côté de « Réglé » inchangé, clé identité+génération+devis, relu à chaque actualisation ; none/absent/inconnu ⇒ rien |
 | E03 | Mineur | B | CORRIGÉ | 409 ⇒ relecture en place, motif conservé (P1) | 4800320 | phase2-lot-b-e03-moderation-conflict | platform-operations/shared.tsx, platform-moderation-view.tsx | rouge : renvoi version 1 ; vert : relecture, renvoi version 2 |
-| E05 | Mineur | B | À REPRODUIRE | validation locale effectif ≤ 100000 | | | role/artisan-space.tsx | |
+| E05 | Mineur | B | CORRIGÉ | borne d’effectif locale = serveur | 4ac4825 | phase2-lot-b-e05-employee-bound | artisan-space.tsx | rouge (contre-épreuve sans correctif) : save_profile envoyé ; vert : message français près du champ, 0 commande |
 | E06 | Mineur | B | CORRIGÉ | formulaire ouvert sans droit ⇒ aucun POST (P1) | c91f30d | phase2-lot-b-e06-e22-e26-e27-site-operations | site-operations/shared.tsx | rouge : 1 POST après passage en lecture seule ; vert : 0 POST, message lecture seule. Mécanisme partagé useSubmit (équipement/maintenance/délais) |
 | E09 | Mineur | B | CORRIGÉ | même règle de nom que le serveur (P3) | c791b1c | phase2-lot-b-e09-upload-name | components/app/uploads.ts | rouge : 0 candidat pour un nom vide ; vert : « document » du même dossier proposé, via lib/shared/document-policy (pas de copie) |
 | E10 | Mineur | B | CORRIGÉ | rejeu réussi ⇒ édition (P3) | cb0d678 | phase2-lot-b-e10-area-replay | site-areas-panel.tsx | rouge : expected_version null renvoyé ⇒ 409 ; vert : édition v1 |
@@ -87,7 +87,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E57 | Mineur | B | CORRIGÉ | confirmation persistante après rejeu (P3) | 3e4c3c1 | phase2-lot-b-e57-site-replay-confirmation | site-direct.tsx | rouge : panneau démonté, confirmation perdue ; vert : fiche conservée pendant la relecture, « Paramètres enregistrés. » visible |
 | E58 | Mineur | B | CORRIGÉ | profil relu à chaque navigation interne (P6) | f1271fc | phase2-lot-b-e58-e79-public-profile | use-published-profile.ts, public-site.tsx | rouge : 0 GET, ancien exploitant affiché ; vert : relecture, ancien exploitant absent |
 | E62 | Mineur | B | CORRIGÉ | rejeu réussi → édition (P3) | fcf1abd | phase2-lot-b-e62-e63-energy | site-energy-panel.tsx | rouge : formulaire en création, expected_version null ; vert : édition v1 |
-| E65 | Mineur | B | À REPRODUIRE | présélection Artisan | | | public-site.tsx, forms.tsx | |
+| E65 | Mineur | B | CORRIGÉ | présélection Artisan à l’inscription | 7e2d98f | phase2-lot-b-e65-artisan-signup | forms.tsx, public-site.tsx | rouge : « Particulier » présélectionné ; vert : Artisan électricien + explication d’approbation, aucun envoi |
 | E66 | Mineur | B | À REPRODUIRE | détail hors cache sans GET | | | use-detail-presence.ts, enterprise-space | |
 | E68 | Mineur | A | HORS LOT B (partiel A) | public/offline-request.js | Codex | — | public/ | partiel côté A jusqu’au changement de cache hors périmètre |
 | E69 | Mineur | A | CONTRAT A | session_not_found → 401 | | | app/api/profile/sessions | |
@@ -103,7 +103,7 @@ Sous-cas externes avec condition ouverte (PUB-10.1, CLI-05.2, CLI-08.1, ADM-01.1
 
 Mise à jour à chaque commit d’item.
 
-- CORRIGÉ (50 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E04, E06, E08, E09, E10, E12, E13, E14, E15, E16, E18, E20, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E39, E40, E41, E42, E43, E44, E45, E48, E49, E50, E51, E52, E53, E54, E55, E56, E57, E58, E61, E62, E63, E64, E71, E72, E79, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : A f58df31).
+- CORRIGÉ (52 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E04, E05, E06, E08, E09, E10, E12, E13, E14, E15, E16, E18, E20, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E39, E40, E41, E42, E43, E44, E45, E48, E49, E50, E51, E52, E53, E54, E55, E56, E57, E58, E61, E62, E63, E64, E65, E71, E72, E79, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : A f58df31).
 - VÉRIFIÉ À L’INTÉGRATION sans code B : E21, E24.
 - ROUGE : aucun.
 - À REPRODUIRE : voir tableau.
