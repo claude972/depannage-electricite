@@ -19,7 +19,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E73 | Bloquant | A | HORS LOT B | regex PostgreSQL | Codex | — | supabase | en cours chez Codex |
 | E74 | Bloquant | A | HORS LOT B | corps pg_net vide | Codex | — | supabase, lib | en cours chez Codex |
 | E02 | Majeur | B | À REPRODUIRE | état photo par fil | | | components/app/forms.tsx | isolé |
-| E04 | Majeur | B | À REPRODUIRE | égalité profonde sessionStorage (P7) | | | components/features/payment-reminders | |
+| E04 | Majeur | B | CORRIGÉ | égalité profonde de la commande stockée (P7) | 03239bd | phase2-lot-b-e04-reminder-storage | payment-reminders/model.ts, payment-reminder-control.tsx | rouge : « stockage indisponible », 0 POST ; vert : programmer puis annuler, 1 POST chacun |
 | E07 | Majeur | A | CONTRAT A | verrou site archivé SQL | | | supabase, app/api | UI déjà lecture seule |
 | E08 | Majeur | B | CORRIGÉ | 409 ⇒ relecture dans le formulaire (P1/P2) | e739cb1 | phase2-lot-b-e08-budget-conflict | budget-panel.tsx (+ relecture c91f30d) | rouge : note v1 renvoyée, note concurrente écrasée ; vert : note v2 rechargée, montant conservé, conflit, renvoi v2 |
 | E11 | Majeur | B | À REPRODUIRE | option active périmée après saisie | | | components/app/address-field.tsx | |
@@ -91,7 +91,7 @@ Colonnes : ID · gravité · lot · état · mécanisme · commit · test · fic
 | E66 | Mineur | B | À REPRODUIRE | détail hors cache sans GET | | | use-detail-presence.ts, enterprise-space | |
 | E68 | Mineur | A | HORS LOT B (partiel A) | public/offline-request.js | Codex | — | public/ | partiel côté A jusqu’au changement de cache hors périmètre |
 | E69 | Mineur | A | CONTRAT A | session_not_found → 401 | | | app/api/profile/sessions | |
-| E71 | Mineur | B | À REPRODUIRE | opted_in=true + browser=none = retrait (P7) | | | web-push-panel.tsx | |
+| E71 | Mineur | B | CORRIGÉ | opted_in=true + browser=none = retrait (P7) | ab303ea | phase2-lot-b-e71-push-remove | web-push-panel.tsx | rouge : échec affiché, pas d’unsubscribe ; vert : retrait, unsubscribe, aucune alerte |
 | E77 | Mineur | A | CONTRAT A | délai annoncé par numéro | | | lib, supabase | UI affiche la valeur serveur |
 | E79 | Mineur | B | À REPRODUIRE | panne ≠ politique absente | | | public-operator-profile, public-site | |
 | E81 | Mineur | B | CORRIGÉ | total accepté avec avenants + montant réglé | 10c6008 | phase2-lot-b-e81-artisan-paid-amount | artisan-space.tsx | rouge : seul « 60,00 € » ; vert : 90,00 € accepté et réglé, déclarations historiques non présentées comme confirmées |
@@ -103,7 +103,7 @@ Sous-cas externes avec condition ouverte (PUB-10.1, CLI-05.2, CLI-08.1, ADM-01.1
 
 Mise à jour à chaque commit d’item.
 
-- CORRIGÉ (39 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E06, E08, E12, E13, E14, E15, E18, E20, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E39, E40, E41, E42, E44, E45, E48, E49, E50, E52, E53, E54, E55, E56, E62, E63, E64, E72, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : A f58df31).
+- CORRIGÉ (41 IDs, rouge→vert sur tests ciblés, suite globale non qualifiée verte) : E03, E04, E06, E08, E12, E13, E14, E15, E18, E20, E22, E26, E27, E29, E30, E31, E34, E35, E36, E38, E39, E40, E41, E42, E44, E45, E48, E49, E50, E52, E53, E54, E55, E56, E62, E63, E64, E71, E72, E80, E81. E15/E18/E29/E34/E36/E41/E53/E72/E80 exigent les contrats A à l’intégration (E80 : A f58df31).
 - VÉRIFIÉ À L’INTÉGRATION sans code B : E21, E24.
 - ROUGE : aucun.
 - À REPRODUIRE : voir tableau.
@@ -164,6 +164,8 @@ H01 (preview hébergée), E70/E72 (Stripe Connect), sous-cas mobiles/SMS/verseme
 12. montages : profil client après les moyens de paiement…
 
 Ces échecs ne sont ni affaiblis ni supprimés par B.
+
+Exécution intermédiaire de la suite complète sur B (03239bd, `tsx --test` sans filtre, donc `.mjs` inclus) : 2302 réussis, 13 échecs = les 12 échecs ci-dessus à l’identique + `tests/restore-drill.test.mjs` (hors du glob `npm test` qui ne prend que `*.test.ts`, non attribué à B). Aucune autre régression observée. La suite n’est pas qualifiée verte.
 
 ## Journal
 
