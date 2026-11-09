@@ -81,7 +81,7 @@ function fakeSession(user) {
   return { token, cookie, user };
 }
 
-export async function withNext(db, check, extraEnv = {}, { users = [actor], rpcAllowlist = rpcNames, handle } = {}) {
+export async function withNext(db, check, extraEnv = {}, { users = [actor], rpcAllowlist = rpcNames, serviceRpcAllowlist = deliveryRpcs, handle } = {}) {
   const sessions = new Map(users.map(user => [user.id, fakeSession(user)]));
   const byAuthorization = new Map([...sessions.values()].map(session => ["Bearer " + session.token, session.user]));
   const rejectedSql = [];
@@ -96,7 +96,7 @@ export async function withNext(db, check, extraEnv = {}, { users = [actor], rpcA
         return send(200, signedIn);
       if (handle && await handle(request, response, { user: signedIn, isService, send })) return;
       const rpc = request.url?.match(/^\/rest\/v1\/rpc\/([a-z_]+)$/)?.[1];
-      if (request.method !== "POST" || !rpc || !(isService ? deliveryRpcs : rpcAllowlist).has(rpc))
+      if (request.method !== "POST" || !rpc || !(isService ? serviceRpcAllowlist : rpcAllowlist).has(rpc))
         return send(404, { error: "Unexpected fixture RPC" });
       let body = "";
       for await (const chunk of request) body += chunk;

@@ -28,6 +28,7 @@ export const eventTypes = {
 export const account = z.string().regex(/^acct_[A-Za-z0-9]{1,200}$/),
   charge = z.string().regex(/^ch_[A-Za-z0-9_]{1,240}$/),
   money = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
+export const feeConnectedReference = z.string().regex(/^(?:ch|py)_[A-Za-z0-9_]{1,240}$/);
 export const observationEvent = z
   .object({
     id: eventId,
@@ -41,7 +42,7 @@ export const observationEvent = z
         id: z.string().regex(/^[a-z]+_[A-Za-z0-9_]{1,240}$/),
         amount: money,
         currency: z.string().regex(/^[a-z]{3}$/),
-        source_charge: charge.nullable(),
+        source_charge: feeConnectedReference.nullable(),
         destination: account.nullable(),
         amount_reversed: money.nullable(),
         reversed: z.boolean().nullable(),
@@ -50,7 +51,8 @@ export const observationEvent = z
       .strict(),
   })
   .strict()
-  .refine((e) => (eventTypes[e.family] as readonly string[]).includes(e.type));
+  .refine((e) => (eventTypes[e.family] as readonly string[]).includes(e.type))
+  .refine((e) => e.family === "fee" || e.object.source_charge === null || charge.safeParse(e.object.source_charge).success);
 export const result = z
   .object({
     state: z.enum(["matched", "needs_review"]),

@@ -85,6 +85,15 @@ try {
  await as('reader');const readFee=(eventId='evt_fee')=>one('select public.read_checkout_fee_proof($1,$2)v',[payment,eventId]);const qualified=await readFee();eq(qualified.qualification.provider_amount_refunded_cents,600);eq(qualified.qualification.provider_refunded,false);
  await as('', 'service_role');await ingest(event('evt_fee_refunded',{type:'application_fee.refunded',family:'fee',object:{...event('x').object,id:'fee_QA',amount:2400,source_charge:'ch_connected',status:null}}));
  const second=crypto.randomUUID(),secondSource=(await beginFee('evt_fee_refunded',second)).source;await storeFee({...fee,amount_refunded:2400,refunded:true,observed_at:new Date().toISOString()},secondSource,second);
+ const connectedPayment='py_connected_QA', destinationCommand=crypto.randomUUID();
+ await ingest(event('evt_destination_fee',{type:'application_fee.created',family:'fee',object:{...event('x').object,id:'fee_destination_QA',amount:2400,source_charge:connectedPayment,status:null}}));
+ const destinationSource=(await beginFee('evt_destination_fee',destinationCommand)).source;
+ eq(destinationSource.connected_charge_id,connectedPayment);
+ eq(destinationSource.charge_id,'ch_QA');
+ await deny(storeFee({...fee,id:'fee_destination_QA',charge:'py_other'},destinationSource,destinationCommand),'P0001');
+ await storeFee({...fee,id:'fee_destination_QA',charge:connectedPayment},destinationSource,destinationCommand);
+ eq((await beginFee('evt_destination_fee',destinationCommand)).completed,true);
+ await deny(ingest(event('evt_invalid_dispute',{object:{...event('x').object,source_charge:connectedPayment}})),'22023');
  await ingest(event('evt_fee_child',{type:'application_fee.refund.updated',family:'fee',object:{...event('x').object,id:'fr_QA',amount:2400,source_charge:'ch_connected',status:null}}));await deny(beginFee('evt_fee_child',crypto.randomUUID()),'P0001');
  await as('reader');eq((await readFee()).qualification.provider_amount_refunded_cents,600);eq((await readFee('evt_fee_refunded')).qualification.provider_amount_refunded_cents,2400);
  await as('client');await deny(readFee());await as('', 'anon');await deny(readFee());

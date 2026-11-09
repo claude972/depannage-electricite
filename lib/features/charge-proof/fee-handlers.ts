@@ -1,9 +1,10 @@
 import {z}from'zod';
 import type Stripe from'stripe';
 import type{Db}from'./handlers';
+import { feeConnectedReference } from '../stripe-reconciliation/contract';
 export interface FeeDependencies{authenticate():Promise<{db:Db;userId:string}>;admin():Db;stripe():Pick<Stripe,'applicationFees'>;env():Record<string,string|undefined>;now?():number}
 const sid=(p:string)=>z.string().regex(new RegExp(`^${p}_[A-Za-z0-9_]{1,240}$`)),uuid=z.uuid(),money=z.number().int().min(0).max(2147483647),stamp=z.string().refine(x=>Number.isFinite(Date.parse(x)));
-const sourceSchema=z.object({payment_id:uuid,event_id:sid('evt'),live:z.boolean(),fee_id:sid('fee'),charge_id:sid('ch'),connected_charge_id:sid('ch'),destination_account:sid('acct'),amount_cents:money,currency:z.literal('eur'),observation_fingerprint:z.string().regex(/^[a-f0-9]{64}$/),observation_created:stamp}).strict();
+const sourceSchema=z.object({payment_id:uuid,event_id:sid('evt'),live:z.boolean(),fee_id:sid('fee'),charge_id:sid('ch'),connected_charge_id:feeConnectedReference,destination_account:sid('acct'),amount_cents:money,currency:z.literal('eur'),observation_fingerprint:z.string().regex(/^[a-f0-9]{64}$/),observation_created:stamp}).strict();
 const feeSchema=z.object({id:sid('fee'),object:z.literal('application_fee'),livemode:z.boolean(),currency:z.literal('eur'),account:z.unknown(),amount:money,charge:z.unknown(),originating_transaction:z.unknown(),amount_refunded:money.nullable(),refunded:z.boolean(),created:z.number().int().nonnegative()});
 const qualificationSchema=z.object({event_id:sid('evt'),payment_id:uuid,source:sourceSchema,provider_amount_refunded_cents:money.nullable(),provider_refunded:z.boolean(),fee_created:z.number().int().nonnegative(),provider_observed_at:stamp,qualified_at:stamp}).strict();
 const headers={'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer'};
