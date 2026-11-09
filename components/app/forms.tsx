@@ -1127,23 +1127,48 @@ type PhotoPhase = "ready" | "uploading" | "upload_unknown" | "sending" | "send_r
  *  command are kept for an identical replay (same send id), in memory only. */
 type PhotoDraft = { file: File | null; caption: string; sendId: string; documentId: string | null; command: PhotoCommand | null; phase: PhotoPhase; error: string };
 
+/** E02: uploads in flight per draft store + key. A conversation switch unmounts the composer; the
+ *  upload's outcome is still written to the (identity + dossier keyed) draft store, and a composer
+ *  mounted again for the same key waits for it instead of staying stuck in « uploading ». */
+const photoFlights = new WeakMap<Map<string, PhotoDraft>, Map<string, Promise<void>>>();
+const flightsOf = (store: Map<string, PhotoDraft>) => {
+  let m = photoFlights.get(store);
+  if (!m) photoFlights.set(store, (m = new Map()));
+  return m;
+};
+
 function PhotoCompose({ interventionId, context, fetchImpl, store, storeKey, onSent }: { interventionId: string; context: PhotoContext; fetchImpl: PhotoFetch; store: Map<string, PhotoDraft>; storeKey: string; onSent: (message: Message) => void }) {
   const [draft, setDraftState] = useState<PhotoDraft | null>(() => store.get(storeKey) ?? null);
   const [pickError, setPickError] = useState("");
   const draftRef = useRef(draft);
+  const alive = useRef(false);
   const put = (next: PhotoDraft | null) => {
     draftRef.current = next;
     if (next && next.phase !== "done") store.set(storeKey, next);
     else store.delete(storeKey);
-    setDraftState(next);
+    if (alive.current) setDraftState(next);
   };
   const inFlight = useRef(false);
-  const alive = useRef(false);
   useEffect(() => {
     alive.current = true;
+    // E02: a draft left « uploading » by an unmounted composer: follow its flight, or — if none is
+    // in flight any more — reread the store (its outcome was written there).
+    const stored = store.get(storeKey) ?? null;
+    if (stored?.phase === "uploading") {
+      const flight = flightsOf(store).get(storeKey);
+      const reread = () => {
+        if (!alive.current) return;
+        const now = store.get(storeKey) ?? null;
+        draftRef.current = now;
+        setDraftState(now?.phase === "uploading" ? { ...now, phase: "upload_unknown", error: PHOTO_COPY.uploadUnknown } : now);
+      };
+      if (flight) void flight.then(reread);
+      else reread();
+    }
     return () => {
       alive.current = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const pick = (file: File | undefined) => {
@@ -1162,16 +1187,31 @@ function PhotoCompose({ interventionId, context, fetchImpl, store, storeKey, onS
     // Identity + generation + dossier captured now, re-checked after every await.
     const uid = context.userId(), gen = context.generation();
     const same = () => alive.current && context.userId() === uid && context.generation() === gen;
+    // E02: the store (keyed by identity + dossier) is updated as long as the IDENTITY is unchanged,
+    // even if this composer was unmounted by a conversation switch.
+    const sameIdentity = () => context.userId() === uid && context.generation() === gen;
     try {
       let documentId = d.documentId;
       if (!documentId) {
         if (!d.file) return;
         put({ ...d, phase: "uploading", error: "" });
-        const up = await uploadPhoto(d.file, interventionId, fetchImpl);
-        if (!same()) return; // stale: nothing applied
-        if (up.kind === "unknown") return put({ ...d, phase: "upload_unknown", error: up.message });
-        if (up.kind === "failed") return put({ ...d, phase: "ready", error: up.message });
-        documentId = up.documentId;
+        const flights = flightsOf(store);
+        let settle!: () => void;
+        flights.set(storeKey, new Promise<void>((r) => (settle = r)));
+        let up: Awaited<ReturnType<typeof uploadPhoto>>;
+        try {
+          up = await uploadPhoto(d.file, interventionId, fetchImpl);
+          if (!sameIdentity()) return; // another identity: nothing applied
+          if (up.kind === "unknown") return put({ ...d, phase: "upload_unknown", error: up.message });
+          if (up.kind === "failed") return put({ ...d, phase: "ready", error: up.message });
+          documentId = up.documentId;
+          // Receipt kept; when the composer is gone, stop here: the send is resumed explicitly on
+          // the same dossier (no second upload, never on another thread).
+          if (!same()) return put({ ...d, documentId, phase: "ready", error: "" });
+        } finally {
+          flights.delete(storeKey);
+          settle();
+        }
       }
       // The command is frozen once (stable id, confirmed document, caption): a replay is identical.
       const current = draftRef.current ?? d;
