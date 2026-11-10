@@ -7,7 +7,7 @@ Branche `release-candidate/codex-2026-11-09` sur le disque externe. Base Web et 
 | Bloc | État | Résultat |
 | --- | --- | --- |
 | 1 · Fiabilité mobile | Fait. Suite complète verte. | Brouillons par compte et dossier, photos chiffrées et reprise, session renouvelée sans perte de saisie, demande et reçu persistants. Code applicatif `afd7c7c98a4b35263bc72127585280ef9d1eacbf`. Tête de vérification `ef719e1`, qui modifie uniquement l’attente de rendu d’un test. La recette Android physique est reportée au bloc 6. |
-| 2 · Client mobile | En cours | Préparation de l’accueil Mobile B, du catalogue partagé et du parcours de demande par téléphone. |
+| 2 · Client mobile | Partiellement fait | Accueil Mobile B, huit fiches et tarifs communs intégrés. Demande et historique par téléphone codés. La réception du code SMS et la conversion du même compte restent à prouver sur l’environnement de test. |
 | 3 · Artisan mobile | Non commencé | Le passage dépend de la qualification du bloc 2. |
 | 4 · SMS et Stripe | Non commencé | Les essais de ce bloc nécessitent les environnements test et leurs preuves de livraison et de rapprochement. |
 | 5 · Version à livrer | Non commencé | Contrat commun, publications et builds signés à traiter après la qualification des parcours. |
@@ -28,6 +28,15 @@ La preview Vercel est READY sur le code `afd7c7c`. Accueil, tarifs et options r�
 
 [Preview protégée](https://depannage-electricite-i3a8r16oy-brafas-projects.vercel.app/)
 
+## Bloc 2 · Écrans et API intégrés
+
+- Claude Fable 5.2 a livré l’accueil, le catalogue et les fiches à partir de Mobile B en clair et sombre. Codex a intégré ces écrans en `a722e21`, restauré l’accès direct à la connexion, relié les conseils à l’aide existante et ajouté les tarifs dans le catalogue. L’adresse d’intervention est saisissable manuellement. La localisation propose une adresse à confirmer.
+- Le catalogue API reprend les huit fiches Web en `a922e79`. La réservation et l’historique natifs utilisent la vérification et l’identité téléphone dans `f5a2f5b` et `3b4420a`. Le brouillon est enregistré avant la demande de code. La réservation conserve la référence tant que la confirmation manque. Le choix « Régler après l’intervention » utilise le flux plateforme existant. L’accès par e-mail est proposé après une demande et conserve l’identifiant Supabase.
+- Sur `79bc04c`, TypeScript Web et les builds Turbopack et Webpack passent. La suite complète donne 2 247 réussites, 0 échec et 2 contrôles historiques ignorés faute de capture fournie à ce lancement. Les deux fichiers de tests concernés ont ensuite passé leurs 62 contrôles, dont les deux historiques, avec la capture privée réelle.
+- Les exports Expo iOS et Android et le contrôle TypeScript mobile passent sur le code applicatif `a722e21`. Chromium a vérifié l’export Web Expo à 360 et 390 px dans les deux thèmes, avec réponses HTTP de recette. Les huit tarifs sont affichés. Le bouton reste dans la zone visible de la fiche, la catégorie est présélectionnée après le clic et le catalogue se recharge après une erreur 503. Les vérifications sur appareil restent ouvertes.
+- La vraie route Next.js et PostgreSQL isolé en `79bc04c` confirment le même dossier après trois réessais, une ligne en base, le refus d’un numéro différent et un historique cloisonné. L’identité de test est synthétique. Aucun SMS ni débit n’a eu lieu.
+- La preview Vercel protégée `dpl_6tU4qJTzsP6AFUFCTHD1cxDkdnQU` est READY au SHA Git `79bc04c71d56c14a209c3cada6397f7c38d9c59a`. Accueil, catalogue, tarifs et modalités répondent 200. L’espace et l’historique anonymes répondent 401. L’API indique que le SMS et l’empreinte de carte sont indisponibles. [Preview protégée du bloc 2](https://depannage-electricite-80labkhvt-brafas-projects.vercel.app/)
+
 ## Décisions prises
 
 - Les brouillons privés sont chiffrés par le stockage sécurisé du système. La photo en attente est stockée sous forme chiffrée et l’écriture est terminée avant de conserver sa référence. Une copie en clair temporaire sert au dépôt natif. L’alternative d’un brouillon général en cache a été écartée au profit d’une restauration par compte et dossier.
@@ -37,6 +46,8 @@ La preview Vercel est READY sur le code `afd7c7c`. Accueil, tarifs et options r�
 - Si un brouillon de devis ou de compte rendu est illisible, l’artisan peut continuer dans un emplacement local distinct qui conserve l’enregistrement initial. Pour une demande d’état inconnu, l’application conserve la clé existante pour éviter la création d’un doublon.
 
 ## Fournisseurs, actions externes et dettes
+
+La recette SMS du bloc 2 demande une configuration de test qui limite réellement les envois aux numéros vérifiés de `TEST_PHONE_NUMBERS`. La liste est absente des fichiers d’environnement du candidat consultés et des variables Vercel applicables à la branche. Le SMS est désactivé dans la preview. La réception du code, la consultation après reconnexion et la confirmation de l’accès e-mail avec le même historique restent à vérifier avant le bloc 3.
 
 Aucun appel Stripe ou SMS et aucun montant observé au bloc 1. Les montants attendus et le rapprochement au centime seront établis à partir du devis de recette et de la configuration sandbox lors du bloc 4.
 
