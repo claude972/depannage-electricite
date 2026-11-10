@@ -12,6 +12,9 @@ function Navigator() {
     <StatusBar style="auto"/>
     <Stack key={session?.user.id??'guest'} screenOptions={{headerTintColor:palette.blue,headerStyle:{backgroundColor:palette.surface},contentStyle:{backgroundColor:palette.background}}}>
       <Stack.Screen name="index" options={{headerShown:false}}/>
+      <Stack.Screen name="demande-client" options={{title:'Votre demande'}}/>
+      <Stack.Screen name="retrouver" options={{title:'Mes demandes'}}/>
+      <Stack.Screen name="aide-mobile" options={{title:'Aide'}}/>
       <Stack.Protected guard={!session}>
         <Stack.Screen name="bienvenue" options={{title:'Dépannage électrique'}}/>
         <Stack.Screen name="connexion" options={{title:'Connexion'}}/>

@@ -3,9 +3,12 @@ import { openBrowserAsync } from 'expo-web-browser';
 import { Action, Card, Copy, ReadState, Screen } from '@/components/ui';
 import { useWorkspace } from '@/lib/use-workspace';
 import { apiOrigin } from '@/lib/config';
+import { verifiedPhone } from '@/lib/phone-client';
+import { useSession } from '@/lib/session';
 
 export default function SpaceHome() {
   const router=useRouter(), state=useWorkspace(), profile=state.data?.profile;
+  const hasPhone = Boolean(verifiedPhone(useSession().session?.user));
   return <Screen top>
     <Copy kind="label">ESPACE {profile?.role==='artisan'?'ARTISAN':'PERSONNEL'}</Copy>
     <Copy kind="title">{profile?.first_name ? `Bonjour, ${profile.first_name}` : 'Votre accueil'}</Copy>
@@ -13,7 +16,8 @@ export default function SpaceHome() {
     {profile?.role==='client'&&<Card>
       <Copy kind="subtitle">Un problème électrique ?</Copy>
       <Copy>Décrivez la panne et choisissez l’adresse d’intervention.</Copy>
-      <Action label="Nouvelle demande" onPress={()=>router.push('/demande')}/>
+      <Action label={hasPhone ? 'Nouvelle demande ou demande en cours' : 'Nouvelle demande'} onPress={()=>router.push(hasPhone ? '/demande-client' : '/demande')}/>
+      {hasPhone && <Action secondary label="Retrouver mes demandes" onPress={()=>router.push('/retrouver')}/>}
     </Card>}
     {profile?.role==='artisan'&&<Card>
       <Copy kind="subtitle">Vos missions</Copy>
