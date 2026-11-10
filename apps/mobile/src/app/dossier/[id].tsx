@@ -11,6 +11,7 @@ import { api, useResource } from '@/lib/api';
 import { categories, creation, detail, euros, link, operations, signature, statuses, success, timestamp } from '@/lib/contracts';
 import { useSession } from '@/lib/session';
 import { supabaseOrigin } from '@/lib/config';
+import { quoteDraftKey, reportDraftKey } from '@/lib/draft-store';
 
 const uuid=z.uuid();
 const bookingOptions=z.object({payment_methods:z.array(z.object({id:z.string(),available:z.boolean()}))});
@@ -19,8 +20,8 @@ export default function Dossier() {
   const auth=useSession().session;
   const id=uuid.safeParse(params.id).data;
   const token=auth?.access_token, base=id?`/api/interventions/${id}`:null;
-  const data=useResource(token?base:null,detail,token);
-  const ops=useResource(base&&token?base+'/operations':null,operations,token);
+  const data=useResource(token?base:null,detail,token,true);
+  const ops=useResource(base&&token?base+'/operations':null,operations,token,true);
   const paymentOptions=useResource('/api/bookings/options',bookingOptions);
   const [error,setError]=useState<string|null>(null), [busy,setBusy]=useState(false);
   const [ack,setAck]=useState(false), [name,setName]=useState(''), [reason,setReason]=useState('');
@@ -35,9 +36,12 @@ export default function Dossier() {
     catch(issue){setError(issue instanceof Error?issue.message:'Action indisponible.');}
     finally{lock.current=false;setBusy(false);if(refresh)reload();}
   }
-  function action(body:object) {
+  function action(body:object, onSaved?:()=>Promise<void>) {
     if(!base||!token)return;
-    void run(()=>api(base+'/actions',creation,{token,method:'POST',body}));
+    void run(async()=>{
+      await api(base+'/actions',creation,{token,method:'POST',body});
+      await onSaved?.();
+    });
   }
   function operation(body:object) {
     if(!base||!token)return;
@@ -85,7 +89,7 @@ export default function Dossier() {
 
       <ReadState loading={ops.loading} error={ops.error} onRetry={ops.reload}/>
       {ops.data?.appointment&&<Card><Copy kind="subtitle">Rendez-vous</Copy><Copy>{timestamp(ops.data.appointment.starts_at)} – {timestamp(ops.data.appointment.ends_at)}</Copy></Card>}
-      {artisan&&job.status==='assigned'&&<QuoteEditor busy={busy} onSend={(lines,tax_rate)=>confirm('Envoyer le devis ?', 'Le client pourra examiner le devis et décider avant les travaux.',()=>action({action:'send_quote',lines,tax_rate}))}/>}
+      {artisan&&auth&&job.status==='assigned'&&<QuoteEditor key={quoteDraftKey(auth.user.id,id)} draftKey={quoteDraftKey(auth.user.id,id)} busy={busy} onSend={(lines,tax_rate,onSaved)=>confirm('Envoyer le devis ?', 'Le client pourra examiner le devis et décider avant les travaux.',()=>action({action:'send_quote',lines,tax_rate},onSaved))}/>}
       {data.data?.quotes.status==='error'&&<Copy kind="error">Les devis n’ont pas pu être chargés.</Copy>}
       {data.data?.quotes.status==='ok'&&data.data.quotes.items.map(quote=><Card key={quote.id}>
         <Copy kind="subtitle">Devis {quote.status==='accepted'?'accepté':quote.status==='rejected'?'refusé':'proposé'}</Copy>
@@ -105,8 +109,8 @@ export default function Dossier() {
         <Action secondary label="Signaler mon arrivée" disabled={busy||ops.data?.travel_stage==='on_site'} onPress={()=>operation({action:'set_travel_stage',stage:'on_site'})}/>
         <Action label="Démarrer l’intervention" disabled={busy} onPress={()=>confirm('Démarrer ?', 'Le dossier passera au statut en cours.',()=>action({action:'start'}))}/>
       </Card>}
-      {artisan&&job.status==='in_progress'&&token&&ops.data&&<>
-        <ReportEditor token={token} id={id} report={report??null} required={ops.data.report_evidence_required} onSaved={reload}/>
+      {artisan&&auth&&job.status==='in_progress'&&token&&ops.data&&<>
+        <ReportEditor key={reportDraftKey(auth.user.id,id)} draftKey={reportDraftKey(auth.user.id,id)} token={token} id={id} report={report??null} required={ops.data.report_evidence_required} onSaved={reload}/>
         <Action label="Clôturer l’intervention" disabled={busy||!report} onPress={()=>confirm('Clôturer l’intervention ?', 'Vérifiez le compte rendu et ses pièces jointes.',()=>action({action:'complete'}))}/>
       </>}
       {report&&<Card>

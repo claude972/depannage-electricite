@@ -51,11 +51,14 @@ export async function api<T>(path: string, schema: ZodType<T>, options: {
   }
 }
 
-export function useResource<T>(path: string | null, schema: ZodType<T>, token?: string) {
+export function useResource<T>(path: string | null, schema: ZodType<T>, token?: string, retainWhileRefreshing = false) {
   type Read = { path: string; revision:number; token?: string; data: T | null; error: string | null };
   const [read, setRead] = useState<Read | null>(null);
   const [revision, setRevision] = useState(0);
-  const reload = useCallback(() => { setRead(null); setRevision(value => value + 1); }, []);
+  const reload = useCallback(() => {
+    if (!retainWhileRefreshing) setRead(null);
+    setRevision(value => value + 1);
+  }, [retainWhileRefreshing]);
   useEffect(() => {
     const subscription = AppState.addEventListener('change', state => { if (state === 'active') reload(); });
     return () => subscription.remove();
@@ -69,6 +72,7 @@ export function useResource<T>(path: string | null, schema: ZodType<T>, token?: 
     );
     return () => controller.abort();
   }, [path, schema, token, revision]);
-  const visible = read?.path === path && read.token === token && read.revision === revision ? read : null;
+  const visible = read?.path === path && read.token === token &&
+    (read.revision === revision || (retainWhileRefreshing && read.data !== null)) ? read : null;
   return { data: visible?.data ?? null, error: visible?.error ?? null, loading: Boolean(path && !visible), reload };
 }
