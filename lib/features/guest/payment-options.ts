@@ -1,3 +1,4 @@
+import { checkoutConfigurationAvailable } from "../payments/checkout";
 import { testSmsRecipients } from "./test-sms-recipients";
 
 /** Configuration is a capability hint, never evidence of a card authorization or SMS delivery. */
@@ -40,6 +41,7 @@ export async function bookingOptions(
       ...(phoneAvailable !== true ? { reason: phoneAvailable === false
         ? "La vérification par SMS n’est pas encore activée. Vous pouvez préparer votre demande ; rien n’est encore envoyé."
         : "La disponibilité du service SMS n’a pas pu être vérifiée. Réessayez." } : {}) },
+    test_checkout_available: /^(sk|rk)_test_/.test(env.STRIPE_SECRET_KEY ?? "") && checkoutConfigurationAvailable(env),
     currency: "eur",
   };
 }

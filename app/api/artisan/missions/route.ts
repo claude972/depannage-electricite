@@ -1,5 +1,7 @@
+import { env } from "node:process";
 import { ApiError, authenticatedClient, dbError } from "@/lib/supabase/server";
 import { missionCursorSchema, missionSnapshotSchema, rankedCursorSchema, rankedSnapshotSchema } from "@/lib/features/artisan-missions/schema";
+import { checkoutCommissionBps } from "@/lib/features/platform-operations/config";
 import { comparePostgresTime } from "@/lib/shared/postgres-time-order";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -22,7 +24,7 @@ function cursorJson(raw: string): unknown {
 
 export async function GET(request: Request) {
   try {
-    const { db, user } = await authenticatedClient();
+    const { db, user } = await authenticatedClient(request);
     const query = new URL(request.url).searchParams;
     const ranked = query.get("order") === "nearest";
     if (request.url.length > 2048 || [...query.keys()].some(k => !["cursor", "id", "order"].includes(k) || query.getAll(k).length !== 1) ||
@@ -69,7 +71,12 @@ export async function GET(request: Request) {
       actor_id: user.id, created_at: last.created_at, id: last.id,
       ...("distance_band_km" in last ? { distance_band_km: last.distance_band_km, radius_version: version } : {}),
     } : null;
-    return Response.json({ items, eligible: data.eligible, captured_at: data.captured_at,
+    const fee = selected ? checkoutCommissionBps(env) : null;
+    const selectedEstimate = selected && items[0] && fee !== null && fee < 10000 ? {
+      min_cents: items[0].estimate_min_cents - Math.round(items[0].estimate_min_cents * fee / 10000),
+      max_cents: items[0].estimate_max_cents - Math.round(items[0].estimate_max_cents * fee / 10000),
+    } : null;
+    return Response.json({ items, ...(selected ? { net_estimate: selectedEstimate } : {}), eligible: data.eligible, captured_at: data.captured_at,
       page: { limit: 50, has_more: hasMore, next_cursor: next ? Buffer.from(JSON.stringify(next)).toString("base64url") : null },
       projection: "anonymized", order: ranked ? "nearest_first" : "oldest_first", distance: ranked ? "commune_centre_bands" : "not_calculated",
       ...(ranked ? { radius_version: version } : {}),

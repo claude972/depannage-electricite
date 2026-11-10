@@ -24,6 +24,7 @@ function Navigator() {
       <Stack.Protected guard={Boolean(session)}>
         <Stack.Screen name="(espace)" options={{headerShown:false}}/>
         <Stack.Screen name="demande" options={{title:'Nouvelle demande'}}/>
+        <Stack.Screen name="offre/[id]" options={{title:"Offre de mission"}}/>
         <Stack.Screen name="dossier/[id]" options={{title:'Intervention'}}/>
         <Stack.Screen name="dossier/messages" options={{title:'Messages'}}/>
       </Stack.Protected>

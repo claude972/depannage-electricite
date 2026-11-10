@@ -49,7 +49,9 @@ function checkSession(s:any,l:CheckoutContext,live:boolean){
  * No browser amount, recipient, commission, actor or redirect is accepted. */
 export async function createQuoteCheckout(request:Request){
  try{
-  assertOrigin(request);const{db,user}=await authenticatedClient(request);const input=await validated(request,z.object({quote_id:uuid}).strict());const quote_id=input.quote_id.toLowerCase();
+  assertOrigin(request);const{db,user}=await authenticatedClient(request);const input=await validated(request,z.object({quote_id:uuid,native_test:z.literal(true).optional()}).strict());const quote_id=input.quote_id.toLowerCase();
+  if(input.native_test&&!/^(sk|rk)_test_/.test(env.STRIPE_SECRET_KEY??""))
+    throw new ApiError(503,"Le paiement Stripe de test est indisponible.");
   const guard=await db.rpc("guard_phone_booking_checkout",{p_quote_id:quote_id});dbError(guard.error);
   // Config errors precede any durable financial intent/provider operation.
   const stripe=stripeClient(),origin=appUrl(),fee=commissionBps();

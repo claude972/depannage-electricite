@@ -153,6 +153,7 @@ export default function CourantApp() {
   const [capabilities, setCapabilities] =
     useState<Capabilities>(UNKNOWN_CAPABILITIES);
   const [returnContext, setReturnContext] = useState<ReturnContext | null>(null);
+  const [mobileReturnId, setMobileReturnId] = useState<string | null>(null);
   const returnRef = useRef<ReturnContext | null>(null);
   returnRef.current = returnContext;
   /** E47: a successful card return seen while signed out, kept across the FIRST sign-in only. It is
@@ -404,6 +405,8 @@ export default function CourantApp() {
       if (token && INVITE_TOKEN.test(token)) setPendingInvitation(token);
     } catch {}
     const back = parseReturnParams(window.location.search);
+    if (back?.kind === "payment" && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(back.interventionId))
+      setMobileReturnId(back.interventionId);
     if (back) {
       const url = new URL(window.location.href);
       url.search = "";
@@ -3025,9 +3028,14 @@ export default function CourantApp() {
         Chargement…
       </main>
     );
-  if (mode === "public") return <PublicSite key="public" session={publicSession} />;
-  if (role === "artisan") return <ArtisanSpace key={sessionKey} session={session} />;
-  if (role === "manager") return <EnterpriseSpace key={sessionKey} session={session} />;
-  if (role === "admin") return <AdminSpace key={sessionKey} session={session} />;
-  return <ClientSpace key={sessionKey} session={session} />;
+  const space = mode === "public" ? <PublicSite key="public" session={publicSession} /> :
+    role === "artisan" ? <ArtisanSpace key={sessionKey} session={session} /> :
+    role === "manager" ? <EnterpriseSpace key={sessionKey} session={session} /> :
+    role === "admin" ? <AdminSpace key={sessionKey} session={session} /> : <ClientSpace key={sessionKey} session={session} />;
+  return <>
+    {mobileReturnId && <div className="notice" role="region" aria-label="Retour du paiement">
+      <a href={`depannageelectrique://dossier/${mobileReturnId}?retourPaiement=1`}>Revenir à mon dossier dans l’application mobile</a>
+    </div>}
+    {space}
+  </>;
 }

@@ -7,6 +7,12 @@ import { z } from 'zod';
 import { Action, Card, Copy, Field, ReadState, Screen } from '@/components/ui';
 import { QuoteEditor } from '@/components/quote-editor';
 import { ReportEditor } from '@/components/report-editor';
+import { AppointmentEditor } from '@/components/appointment-editor';
+import { MissionTracking } from '@/components/mission-tracking';
+import { OfferPhotoConsent } from '@/components/offer-photos';
+import { PaymentReturnStatus } from '@/components/payment-return-status';
+import { deviceDrafts } from '@/lib/device-drafts';
+import { paymentReturnKey } from '@/lib/payment-return';
 import { api, useResource } from '@/lib/api';
 import { categories, creation, detail, euros, link, operations, signature, statuses, success, timestamp } from '@/lib/contracts';
 import { useSession } from '@/lib/session';
@@ -14,9 +20,9 @@ import { supabaseOrigin } from '@/lib/config';
 import { quoteDraftKey, reportDraftKey } from '@/lib/draft-store';
 
 const uuid=z.uuid();
-const bookingOptions=z.object({payment_methods:z.array(z.object({id:z.string(),available:z.boolean()}))});
+const bookingOptions=z.object({test_checkout_available:z.boolean().optional()});
 export default function Dossier() {
-  const params=useLocalSearchParams<{id:string}>(), router=useRouter();
+  const params=useLocalSearchParams<{id:string;retourPaiement?:string}>(), router=useRouter();
   const auth=useSession().session;
   const id=uuid.safeParse(params.id).data;
   const token=auth?.access_token, base=id?`/api/interventions/${id}`:null;
@@ -24,6 +30,7 @@ export default function Dossier() {
   const ops=useResource(base&&token?base+'/operations':null,operations,token,auth?.user.id);
   const paymentOptions=useResource('/api/bookings/options',bookingOptions);
   const [error,setError]=useState<string|null>(null), [busy,setBusy]=useState(false);
+  const [returnEpoch,setReturnEpoch]=useState(0);
   const [ack,setAck]=useState(false), [name,setName]=useState(''), [reason,setReason]=useState('');
   const lock=useRef(false);
   const job=data.data?.intervention;
@@ -51,13 +58,15 @@ export default function Dossier() {
     Alert.alert(title,message,[{text:'Revenir',style:'cancel'},{text:'Confirmer',onPress:work}]);
   }
   function pay(quoteId:string){
-    if(!token)return;
+    if(!token||!auth||!id)return;
     void run(async()=>{
-      const result=await api('/api/payments/checkout',link,{token,method:'POST',body:{quote_id:quoteId}});
+      await deviceDrafts.write(paymentReturnKey(auth.user.id),{dossier:id,quote:quoteId,startedAt:Date.now()});
+      const result=await api('/api/payments/checkout',link,{token,method:'POST',body:{quote_id:quoteId,native_test:true}});
       const checkout=new URL(result.url);
       if(checkout.origin!=='https://checkout.stripe.com'||!/(?:^|\/)cs_test_/.test(checkout.pathname)||checkout.username||checkout.password)
         throw Error('L’application de recette accepte uniquement un paiement Stripe de test.');
       await openBrowserAsync(checkout.toString());
+      setReturnEpoch(value=>value+1);
     });
   }
   function openDocument(documentId:string){
@@ -88,7 +97,7 @@ export default function Dossier() {
         <Action secondary label="Annuler ma demande" disabled={busy} onPress={()=>confirm('Annuler la demande ?', 'Le serveur vérifiera que le dossier peut être annulé.',()=>action({action:'cancel'}))}/>}
 
       <ReadState loading={ops.loading} error={ops.error} onRetry={ops.reload}/>
-      {ops.data?.appointment&&<Card><Copy kind="subtitle">Rendez-vous</Copy><Copy>{timestamp(ops.data.appointment.starts_at)} – {timestamp(ops.data.appointment.ends_at)}</Copy></Card>}
+      {artisan && ops.data && ['assigned','quoted','accepted'].includes(job.status) ? <AppointmentEditor current={ops.data.appointment} busy={busy} save={operation} /> : ops.data?.appointment&&<Card><Copy kind="subtitle">Rendez-vous</Copy><Copy>{timestamp(ops.data.appointment.starts_at)} – {timestamp(ops.data.appointment.ends_at)}</Copy></Card>}
       {artisan&&auth&&job.status==='assigned'&&<QuoteEditor key={quoteDraftKey(auth.user.id,id)} draftKey={quoteDraftKey(auth.user.id,id)} busy={busy} onSend={(lines,tax_rate,onSaved)=>confirm('Envoyer le devis ?', 'Le client pourra examiner le devis et décider avant les travaux.',()=>action({action:'send_quote',lines,tax_rate},onSaved))}/>}
       {data.data?.quotes.status==='error'&&<Copy kind="error">Les devis n’ont pas pu être chargés.</Copy>}
       {data.data?.quotes.status==='ok'&&data.data.quotes.items.map(quote=><Card key={quote.id}>
@@ -100,9 +109,12 @@ export default function Dossier() {
           <Field label="Motif si vous refusez" value={reason} onChangeText={setReason} maxLength={2000}/>
           <Action secondary label="Refuser ce devis" disabled={busy||!reason.trim()} onPress={()=>confirm('Refuser ce devis ?', 'Le motif sera transmis à l’artisan.',()=>operation({action:'reject_quote',quote_id:quote.id,reason:reason.trim()}))}/>
         </>}
-        {owner&&quote.status==='accepted'&&job.status==='completed'&&paymentOptions.data?.payment_methods.some(option=>option.id==='card_hold'&&option.available)&&
+        {owner&&quote.status==='accepted'&&job.status==='completed'&&paymentOptions.data?.test_checkout_available&&
           <Action label="Régler sur Stripe en mode test" disabled={busy} onPress={()=>pay(quote.id)}/>}
+        {owner && quote.status==='accepted' && token && auth && <PaymentReturnStatus key={quote.id+':'+returnEpoch} id={id} actor={auth.user.id} token={token}
+          quote={quote.id} fromLink={params.retourPaiement==='1'} onPaid={reload} />}
       </Card>)}
+      {(artisan || owner) && token && auth && ['assigned','quoted','accepted','in_progress'].includes(job.status) && <MissionTracking key={auth.user.id+id} id={id} actor={auth.user.id} token={token} artisan={artisan} address={[job.address,job.postal_code,job.city].filter(Boolean).join(' ')} />}
       {artisan&&job.status==='accepted'&&<Card>
         <Copy kind="subtitle">Déplacement</Copy>
         <Action secondary label="Signaler mon départ" disabled={busy||ops.data?.travel_stage==='en_route'} onPress={()=>operation({action:'set_travel_stage',stage:'en_route'})}/>
@@ -122,6 +134,7 @@ export default function Dossier() {
           <Action label="Signer le compte rendu" disabled={busy||!ack||!signature.safeParse(name).success} onPress={()=>operation({action:'sign_report',acknowledged:true,signature_name:name.trim(),report_revision:report.report_revision})}/>
         </>}
       </Card>}
+      {owner && job.status==='requested' && token && data.data?.documents.status==='ok' && <OfferPhotoConsent id={id} token={token} documents={data.data.documents.items} onUploaded={data.reload} />}
       {data.data?.documents.status==='ok'&&data.data.documents.items.length>0&&<Card><Copy kind="subtitle">Pièces du dossier</Copy>
         {data.data.documents.items.map(item=><Action key={item.id} label={item.name} disabled={busy} secondary onPress={()=>openDocument(item.id)}/>)}
       </Card>}
