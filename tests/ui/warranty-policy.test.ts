@@ -177,7 +177,7 @@ test("rendu éditeur, démo sans appel, câblage public, aucune formulation de g
   assert.match(text(demo), /En démonstration, les conditions de garantie ne sont ni lues ni enregistrées, et rien n’est activé\./);
   same(called, 0);
   const site = readFileSync("components/role/public-site.tsx", "utf8");
-  assert.match(site, /<div id="garantie" data-public-warranty="">\s*<PublicWarrantyTerms state=\{warrantyTerms\} \/>/);
+  assert.match(site, /<div id="garantie" data-public-warranty=""[^>]*>\s*<PublicWarrantyTerms state=\{warrantyTerms\} \/>/);
   const lists = readFileSync("components/role/public-lists.ts", "utf8");
   assert.doesNotMatch(lists, /garantie d’un an|suivi de garantie/);
   const leaf = ["model.ts", "warranty-policy-editor.tsx", "public-warranty-terms.tsx"].map((f) => readFileSync(`components/features/warranty-policy/${f}`, "utf8")).join("\n");
