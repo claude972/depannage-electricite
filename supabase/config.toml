@@ -12,6 +12,10 @@ content_path = "./supabase/templates/confirmation.html"
 subject = "Réinitialisez votre mot de passe"
 content_path = "./supabase/templates/recovery.html"
 
+[auth.email.template.email_change]
+subject = "Confirmez votre nouvelle adresse e-mail"
+content_path = "./supabase/templates/email-change.html"
+
 # Phone verification is activated for the provider recipe in the dedicated environment.
 [auth.sms]
 enable_signup = false

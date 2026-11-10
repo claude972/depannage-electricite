@@ -1,5 +1,5 @@
 // Only two callback contracts are accepted. Opaque credentials are never decoded or logged.
-type OtpType = "signup" | "email" | "recovery";
+type OtpType = "signup" | "email" | "recovery" | "email_change";
 export type EmailConfirmation =
   | { kind: "pkce"; code: string }
   | { kind: "otp"; tokenHash: string; type: OtpType };
@@ -25,7 +25,7 @@ export function parseEmailConfirmation(params: URLSearchParams): EmailConfirmati
     return params.size === 1 && opaque(code) ? { kind: "pkce", code } : null;
   }
   const tokenHash = params.get("token_hash"), type = params.get("type");
-  return params.size === 2 && opaque(tokenHash) && (type === "signup" || type === "email" || type === "recovery")
+  return params.size === 2 && opaque(tokenHash) && (type === "signup" || type === "email" || type === "recovery" || type === "email_change")
     ? { kind: "otp", tokenHash, type }
     : null;
 }

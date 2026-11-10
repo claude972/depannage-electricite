@@ -54,6 +54,17 @@ test("OTP signup/email/recovery: existing verifier and fixed destinations preser
   }
 });
 
+test("the optional account email-change link verifies the token without changing the destination", async () => {
+  const r = route();
+  const link = ORIGIN + "/auth/confirm?token_hash=opaque-change&type=email_change";
+  await check(await r.GET(new Request(link)), "/?auth=confirmed");
+  assert.deepEqual(r.calls.map(c => c.op), ["factory", "otp"]);
+  assert.deepEqual({ ...r.calls[1].value as object }, { token_hash: "opaque-change", type: "email_change" });
+
+  const missingSession = route({ error: null, data: { user: null, session: null } });
+  await check(await missingSession.GET(new Request(link)), "/?auth=expired");
+});
+
 test("ambiguous, duplicate, empty, oversized, unknown queries refuse BEFORE auth client", async () => {
   const invalid = ["", "code=", "code=%20", "code=x%0A", "code=x&code=y", "code=x&%63ode=y",
     "code=x&token_hash=y&type=signup", "code=x&type=signup", "token_hash=x", "type=signup",
