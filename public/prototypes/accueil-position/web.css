@@ -10,33 +10,16 @@
   white-space: nowrap;
 }
 
-.web-hero {
-  border-radius: 20px;
-  background: var(--artisan-blue);
-  color: var(--on-night);
-}
-
-.web-hero .service-tabs button { color: var(--on-night-muted); }
-.web-hero .service-tabs [aria-pressed="true"] { color: var(--on-night); }
-.web-hero .service-tabs [aria-pressed="true"] .icon { color: var(--night-link); }
-.web-hero .problem-entry, .web-hero .problem-results { background: var(--paper); color: var(--ink); }
-.web-hero .problem-entry:focus-within { border-color: var(--blue); box-shadow: 0 0 0 2px var(--night-link); }
-.web-header :focus-visible,
-.web-hero :is(.service-tabs button, .web-location, .web-continue):focus-visible { outline-color: var(--night-link); }
+.web-hero .service-tabs [aria-pressed="true"] { color: var(--blue); }
+.web-hero .service-tabs [aria-pressed="true"]::after { background: var(--blue); }
+.web-hero .problem-entry:focus-within { border-color: var(--blue); box-shadow: 0 0 0 2px var(--blue-soft); }
+.web-header :focus-visible { outline-color: var(--night-link); }
 
 #services-rail .photo-card {
   align-self: stretch;
   overflow: hidden;
-  background: var(--service-color, var(--artisan-blue));
-  color: var(--service-text, var(--paper));
-}
-
-.photo-card[data-service="outage"] { --service-color: #934326; }
-.photo-card:is([data-service="socket"], [data-service="add"]) { --service-color: #244fb1; }
-.photo-card:is([data-service="panel"], [data-service="check"]) { --service-color: #59408d; }
-.photo-card:is([data-service="light"], [data-service="fitting"]) {
-  --service-color: #f1c651;
-  --service-text: #2b210d;
+  background: #244fb1;
+  color: var(--paper);
 }
 
 #services-rail .photo-card :is(strong, small, .photo-card-arrow) { color: inherit; }
@@ -117,7 +100,7 @@
   .web-hero {
     display: flex;
     align-self: stretch;
-    padding: var(--home-panel-padding);
+    padding-block: var(--home-panel-padding);
   }
 
   .web-hero-content, .web-hero .home-search {
@@ -133,7 +116,7 @@
     gap: 3px;
     padding: 3px;
     border-radius: 12px;
-    background: var(--night-raised);
+    background: var(--surface);
   }
   .web-hero .service-tabs button {
     min-height: 44px;
@@ -141,16 +124,14 @@
     border-radius: 9px;
     font-size: 12px;
   }
-  .web-hero .service-tabs button[aria-pressed="true"] { background: var(--paper); color: var(--blue); }
-  .web-hero .service-tabs [aria-pressed="true"] .icon { color: var(--blue); }
+  .web-hero .service-tabs button[aria-pressed="true"] { background: var(--paper); }
   .web-hero .service-tabs button:focus-visible { outline-offset: -2px; }
-  .web-hero .service-tabs button[aria-pressed="true"]:focus-visible { outline-color: var(--blue); }
   .web-hero .service-tabs button::after { display: none; }
 
   .web-lead {
     display: block;
     margin: 12px 0 16px;
-    color: var(--on-night-muted);
+    color: var(--muted);
     font-size: 14px;
     line-height: 1.55;
     max-width: 39ch;
@@ -166,14 +147,14 @@
     padding: 8px 13px;
     margin-bottom: 7px;
     border-radius: 13px;
-    border: 1px solid var(--night-rule);
+    border: 1px solid var(--rule);
     text-align: left;
-    background: var(--night-raised);
+    background: var(--paper);
   }
 
-  .web-location > .icon { color: var(--night-link); }
+  .web-location > .icon { color: var(--blue); }
   .web-location small, .web-location strong { display: block; }
-  .web-location small { color: var(--on-night-muted); font-size: 11px; }
+  .web-location small { color: var(--muted); font-size: 11px; }
   .web-location strong { margin-top: 2px; font-size: 14px; }
   .web-hero .problem-entry { min-height: 58px; border-radius: 13px; border-color: var(--rule); box-shadow: none; }
 
@@ -186,9 +167,9 @@
     padding-top: 12px;
   }
 
-  .web-continue { display: inline-flex; gap: 6px; align-items: center; border: 1px solid #728aff; }
-  .web-actions span { display: inline-flex; gap: 4px; align-items: center; color: var(--on-night-muted); font-size: 11px; }
-  .web-actions span .icon { color: var(--night-link); }
+  .web-continue { display: inline-flex; gap: 6px; align-items: center; }
+  .web-actions span { display: inline-flex; gap: 4px; align-items: center; color: var(--muted); font-size: 11px; }
+  .web-actions span .icon { color: var(--blue); }
 
   #home-screen .mobile-shortcuts,
   #home-screen .help,
@@ -301,7 +282,7 @@
 
 @media (min-width: 940px) and (hover: hover) {
   .web-nav button:hover { background: var(--night-raised); color: var(--on-night); }
-  .web-location:hover { border-color: var(--night-link); }
+  .web-location:hover { border-color: var(--blue); }
 }
 
 @media (hover: hover) {
@@ -310,9 +291,6 @@
 
 @media (max-width: 939px) {
   .prototype-home .home-content { padding-top: 0; }
-  .web-hero { margin-inline: -8px; padding: 0 8px 10px; }
-  .web-hero .tabs-line { border-color: var(--night-rule); }
-  .web-hero .service-tabs [aria-pressed="true"]::after { background: var(--night-link); }
   .web-hero .problem-entry { margin-top: 12px; box-shadow: none; }
   .location-picker .search-pill { margin-inline: var(--gutter); }
   .location-picker > .prototype-label { text-align: left; margin-inline: var(--gutter); padding-top: 13px; }
