@@ -7,7 +7,7 @@ Branche `release-candidate/codex-2026-11-09` sur le disque externe. Base Web et 
 | Bloc | État | Résultat |
 | --- | --- | --- |
 | 1 · Fiabilité mobile | Fait. Suite complète verte. | Brouillons par compte et dossier, photos chiffrées et reprise, session renouvelée sans perte de saisie, demande et reçu persistants. Code applicatif `afd7c7c98a4b35263bc72127585280ef9d1eacbf`. Tête de vérification `ef719e1`, qui modifie uniquement l’attente de rendu d’un test. La recette Android physique est reportée au bloc 6. |
-| 2 · Client mobile | Partiellement fait | Accueil Mobile B, huit fiches et tarifs communs intégrés. Demande, historique et conversion du même compte vérifiés localement. La réception d’un SMS réel reste à prouver sur l’environnement de recette. |
+| 2 · Client mobile | Recette réelle bloquée | Accueil Mobile B, huit fiches et tarifs communs intégrés. Demande, historique et conversion du même compte vérifiés localement. La réception d’un SMS réel reste à prouver sur l’environnement de recette. |
 | 3 · Artisan mobile | Non commencé | Le passage dépend de la qualification du bloc 2. |
 | 4 · SMS et Stripe | Non commencé | Les essais de ce bloc nécessitent les environnements test et leurs preuves de livraison et de rapprochement. |
 | 5 · Version à livrer | Non commencé | Contrat commun, publications et builds signés à traiter après la qualification des parcours. |
@@ -45,6 +45,14 @@ La [preview protégée du correctif](https://depannage-electricite-2or3678xu-bra
 
 La recette locale a exécuté les 125 migrations de la branche sur PostgreSQL Supabase. Next.js a refusé un code erroné et accepté le code synthétique prévu par Supabase Auth local. Le parcours a créé une intervention réelle en base locale, refusé l’historique anonyme, puis capturé l’e-mail de changement dans Mailpit. La connexion par e-mail échouait avant confirmation. Après ouverture du lien, elle a retrouvé le même identifiant utilisateur, le même téléphone et le même dossier. La boîte et le code de recette étaient locaux. Aucun SMS externe, e-mail externe ou paiement n’a été émis.
 
+### Périmètre des SMS de recette
+
+Le commit `5a4095d` impose `TEST_PHONE_NUMBERS` aux demandes et vérifications de code en preview. Une liste absente ou invalide désactive la vérification SMS avant tout appel au SDK. Avec une liste valide, les routes Web et native vérifient le numéro normalisé avant de joindre Supabase. Les 30 tests ciblés couvrent notamment les formats +596 et +590, le rejet hors liste et l’absence d’appel fournisseur. Sur le même SHA, les 2 253 tests Web passent sans échec ni test ignoré, ainsi que TypeScript et les deux compilations Next.js. Les sessions déjà établies gardent les règles d’accès existantes.
+
+Le contrôle applicatif couvre les appels à l’API du candidat. Le compte Vonage de recette doit aussi être confirmé en mode démo, avec uniquement les destinataires vérifiés autorisés pour cette recette. Cette restriction fournisseur s’applique également aux envois déclenchés directement par Supabase Auth. [Restriction de destinataires du mode démo Vonage](https://api.support.vonage.com/hc/en-us/articles/212107987-How-can-I-get-full-account-features-enabled)
+
+La [preview protégée avec contrôle SMS](https://depannage-electricite-2ksbreqd0-brafas-projects.vercel.app/) sert exactement `5a4095db0a8900e4b5abdb9b063d76af47444e60`. Accueil et options répondent 200. Sans `TEST_PHONE_NUMBERS`, les tentatives synthétiques de demande et de vérification répondent 503, avec une réponse générique sans cache. La liste est absente des variables serveur applicables à cette branche. L’ancienne preview, dont la route d’options lit directement la disponibilité du projet Auth, indique également que le téléphone est désactivé.
+
 ## Décisions prises
 
 - Les brouillons privés sont chiffrés par le stockage sécurisé du système. La photo en attente est stockée sous forme chiffrée et l’écriture est terminée avant de conserver sa référence. Une copie en clair temporaire sert au dépôt natif. L’alternative d’un brouillon général en cache a été écartée au profit d’une restauration par compte et dossier.
@@ -55,7 +63,7 @@ La recette locale a exécuté les 125 migrations de la branche sur PostgreSQL Su
 
 ## Fournisseurs, actions externes et dettes
 
-La recette SMS du bloc 2 demande une configuration de test qui limite réellement les envois aux numéros vérifiés de `TEST_PHONE_NUMBERS`. La liste est absente des fichiers d’environnement du candidat consultés et des variables Vercel applicables à la branche. Le SMS est désactivé dans la preview. Le test local couvre la reconnexion et l’accès e-mail avec le même historique. Il reste à vérifier la réception du code par le fournisseur de test, puis le même parcours en ligne, avant le bloc 3.
+La recette SMS du bloc 2 demande une configuration de test qui limite réellement les envois aux numéros vérifiés de `TEST_PHONE_NUMBERS`. La liste est absente des fichiers d’environnement du candidat consultés et des variables Vercel applicables à la branche. Le SMS est désactivé dans la preview. Le test local couvre la reconnexion et l’accès e-mail avec le même historique. Il reste à vérifier la réception du code par le fournisseur de test, puis le même parcours en ligne, avant le bloc 3. La configuration attendue est la liste E.164 dans les variables serveur de la seule branche candidate, le fournisseur d’essai restreint dans le projet Supabase de recette et le modèle e-mail avec l’URL exacte de confirmation autorisée. Le contrôle final doit constater le SMS sur un numéro vérifié, utiliser son code et retrouver le même dossier après ajout de l’e-mail. Les identifiants fournisseur, numéros et codes restent hors Git.
 
 Aucun appel Stripe ou SMS et aucun montant observé au bloc 1. Les montants attendus et le rapprochement au centime seront établis à partir du devis de recette et de la configuration sandbox lors du bloc 4.
 
