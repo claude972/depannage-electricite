@@ -2,7 +2,7 @@
 
 ## Décisions courantes — palette B et encaissement plateforme
 
-L’application iPhone et Android (Mobile B) sert de maquette au Web et à la PWA. L’accueil public reprend sa carte photo, son entrée par l’adresse, ses dépannages en vedette et la navigation basse sur téléphone. Le catalogue et les fiches prolongent cette présentation. Sur ordinateur, les mêmes éléments profitent d’une grille plus large. Les écrans métier conservent leurs parcours.
+La version du 10 novembre 2026 sert de référence pour l’accueil et le blog Web/PWA. L’accueil reprend la recherche, les cartes bleues, le menu à droite, les engagements avant le catalogue et la navigation basse sur téléphone. Les bannières urgence et candidature utilisent le jaune `#F4D649` avec des actions bleu nuit. Les deux pages publiques sont en thème clair. Les tarifs viennent du catalogue publié et l’entrée par l’adresse utilise le formulaire de demande existant. [Fichier Figma](https://www.figma.com/design/yHq46klgSoXkIXvG3dQBB1/accueil-web-pwa-bannieres-jaunes)
 
 Les dernières décisions du propriétaire priment sur les sections historiques ci-dessous. Référence Figma : `hec6XdQ7IbOFVeFhq6KPDw`, pages MOBILE B. Aucun nom de marque retenu : ne plus présenter « Courant » comme nom de l’application. Palette B validée : cobalt `#2246E5`, accent orange `#FF6B35`, surfaces blanches en clair et anthracite en sombre, Plus Jakarta Sans. Préserver la structure métier et les états accessibles ; pas de simple remplacement global de couleurs aux usages contradictoires. Mobile puis déclinaisons web complètes.
 

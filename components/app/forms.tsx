@@ -120,6 +120,8 @@ export function RequestForm({
   finalStep,
   initialPhotos,
   addressFirst = false,
+  initialDescription = "",
+  initialUrgency = "scheduled",
 }: {
   initialCategory: Category;
   initialValues: RequestValues | null;
@@ -139,6 +141,8 @@ export function RequestForm({
   initialPhotos?: File[];
   /** Home address shortcut uses the same draft fields before the problem step. */
   addressFirst?: boolean;
+  initialDescription?: RequestValues["description"];
+  initialUrgency?: RequestValues["urgency"];
 }) {
   const [step, setStep] = useState(1);
   const phase = addressFirst && step < 3 ? 3 - step : step;
@@ -182,7 +186,7 @@ export function RequestForm({
     setPhotoError(problems.join(" "));
   }
   const [values, setValues] = useState<RequestValues>(() => {
-    const fresh: RequestValues = initialValues || { category: initialCategory, description: "", address: "", postal_code: "", city: "", urgency: "scheduled" };
+    const fresh: RequestValues = initialValues || { category: initialCategory, description: initialDescription, address: "", postal_code: "", city: "", urgency: initialUrgency };
     return preferredPrefill(fresh, initialValues, preferredAddress) ?? fresh;
   });
   // The preferred address may arrive after mount: same rule, applied once, never over typed text.

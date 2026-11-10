@@ -13,6 +13,7 @@ import { Icon } from "../app/icons";
 import { InstallPanel } from "../app/install-panel";
 import { CATEGORIES, category, money } from "../app/format";
 import { PublicHome } from "./public-home";
+import { requestPrefill } from "./public-request-prefill";
 import { PublicChrome, type HomeHandlers } from "./public-chrome";
 import formStyles from "./public-forms.module.css";
 import { ABOUT_VALUES, CONTACT_CHANNELS, FAQ, HELP_PROCESS, JOIN_FACTS, JOIN_REVIEW, JOIN_STEPS, JOIN_TILES, LEGAL_SECTIONS, OPERATOR_FIELDS, PENDING, PRICING_PENDING, PRIVACY_CONTROLS, PRIVACY_DATA, PRIVACY_THIRD_PARTIES, numbered, pricingRows } from "./public-lists";
@@ -60,6 +61,16 @@ export function PublicSite({ session, operatorProfile }: { session: PublicSessio
   const [signupAs, setSignupAs] = useState<Role | null>(null);
   const fetched = usePublishedOperatorProfile(operatorProfile === undefined && OPERATOR_VIEWS.includes(view), undefined, view);
   const operator = operatorProfile ?? fetched;
+  useEffect(() => {
+    const id = view === "help" && session.param === "contact" ? "help-contact"
+      : view === "help" && session.param === "garantie" ? "garantie"
+      : view === "pricing" && session.param === "zones" ? "zones" : null;
+    if (id) {
+      const section = document.getElementById(id);
+      section?.scrollIntoView({ block: "start" });
+      section?.focus({ preventScroll: true });
+    }
+  }, [view, session.param]);
 
   const navigate = (target: View) => {
     session.go(target);
@@ -106,13 +117,14 @@ export function PublicSite({ session, operatorProfile }: { session: PublicSessio
   // keeps priority (its own values, and the session category untouched).
   if (view === "new") {
     const linked = CATEGORIES.find((c) => c.id === session.param)?.id;
-    const initialCategory = !session.pendingDraft && linked ? linked : session.categoryId;
+    const prefill = session.pendingDraft ? undefined : requestPrefill(session.param);
+    const initialCategory = !session.pendingDraft ? prefill?.category ?? linked ?? session.categoryId : session.categoryId;
     return (
       <PublicChrome current="new" handlers={chromeHandlers} onHome={() => navigate("home")} mainClassName={formStyles.page}>
         <div className={formStyles.wrap}>
           {themedAlerts}
           <div className={formStyles.requestSkin} data-public-skin="request">
-            <RequestForm addressFirst={session.param === "address"} initialCategory={initialCategory} initialValues={session.pendingDraft} sites={[]} mode="public" busy={session.busy} onBack={() => session.go("home")} onSubmit={async (values) => { session.saveDraft(values); }} onDemo={() => session.startDemo("client", "new")} />
+            <RequestForm key={session.param} addressFirst={session.param === "address" || session.param === "scheduled"} initialCategory={initialCategory} initialValues={session.pendingDraft} initialDescription={prefill?.description} initialUrgency={prefill?.urgency} sites={[]} mode="public" busy={session.busy} onBack={() => session.go("home")} onSubmit={async (values) => { session.saveDraft(values); }} onDemo={() => session.startDemo("client", "new")} />
           </div>
         </div>
       </PublicChrome>
@@ -258,7 +270,7 @@ function ContactBlock({ onLogin, headingId }: { onLogin: () => void; headingId: 
   const operator = useContext(OperatorContext);
   return (
     <section className={`panel ${styles.block}`} aria-labelledby={headingId} data-public-contact="">
-      <h3 id={headingId}>Contact</h3>
+      <h3 id={headingId} tabIndex={-1} style={{ scrollMarginTop: 88 }}>Contact</h3>
       <dl className={styles.legalFields}>
         {/* The callback channel is described only by its live form (« Être rappelé »), never statically. */}
         {CONTACT_CHANNELS.map((c) => (
@@ -379,7 +391,7 @@ function HelpView({ onNew, onLogin, warrantyTerms }: { onNew: () => void; onLogi
         </aside>
       </div>
       {/* PUB-06: the PUBLISHED warranty conditions only, as plain text; none ⇒ pending sentence. */}
-      <div id="garantie" data-public-warranty="">
+      <div id="garantie" data-public-warranty="" tabIndex={-1} style={{ scrollMarginTop: 88 }}>
         <PublicWarrantyTerms state={warrantyTerms} />
       </div>
       <PublicCallbackForm />
@@ -402,7 +414,7 @@ function PricingView({ onNew }: { onNew: () => void }) {
           <PendingFields fields={PRICING_PENDING} label="Décisions tarifaires en attente" sources={{ "Zone desservie": { fields: ["service_area"] } }} />
         </div>
       </div>
-      <PostalCoverageCheck />
+      <div id="zones" tabIndex={-1} style={{ scrollMarginTop: 88 }}><PostalCoverageCheck /></div>
       <section className={`panel ${styles.priceTableCard}`} aria-labelledby="pricing-table">
         <h2 id="pricing-table" className={styles.srOnly}>Fourchettes indicatives par type de panne</h2>
         <table className={styles.table}>

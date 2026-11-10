@@ -80,7 +80,7 @@ export function useUiTheme(): ThemeContextValue {
  * colour scheme to its subtree only, and keeps meta theme-color in sync while mounted (restored
  * exactly when the last surface unmounts). Non-migrated screens never render it.
  */
-export function ThemeSurface({ children, className }: { children: ReactNode; className?: string }) {
+export function ThemeSurface({ children, className, appearance }: { children: ReactNode; className?: string; appearance?: "light" }) {
   const { theme, acquireSurface } = useUiTheme();
   useEffect(() => {
     if (theme === null) return; // wait for the controller (mounted)
@@ -88,5 +88,5 @@ export function ThemeSurface({ children, className }: { children: ReactNode; cla
     // re-acquire only when the controller becomes available, not on every theme change
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [theme === null]);
-  return <div className={className ? `ui-v2 ${className}` : "ui-v2"}>{children}</div>;
+  return <div className={className ? `ui-v2 ${className}` : "ui-v2"} data-ui-appearance={appearance}>{children}</div>;
 }

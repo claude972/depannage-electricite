@@ -131,6 +131,7 @@ export function PublicChrome({
   mainClassName,
   footerNote,
   appNavigation = false,
+  editorial = false,
   children,
 }: {
   current: ChromeView;
@@ -144,6 +145,7 @@ export function PublicChrome({
   mainClassName?: string;
   footerNote?: ReactNode;
   appNavigation?: boolean;
+  editorial?: boolean;
   children: ReactNode;
 }) {
   const navId = `${useId()}-nav`;
@@ -169,70 +171,76 @@ export function PublicChrome({
     onHome();
   };
 
-  const surface = [styles.chrome, appNavigation ? styles.appChrome : "", className].filter(Boolean).join(" ");
+  const surface = [styles.chrome, appNavigation ? styles.appChrome : "", editorial ? styles.editorialChrome : "", className].filter(Boolean).join(" ");
+  const navigation = (
+    <nav id={navId} className={`${styles.nav} ${menuOpen ? styles.navOpen : ""}`} aria-label="Navigation principale">
+      {(editorial || current !== "home" || !sections) && (
+        <button type="button" className={styles.navLink} data-chrome-home="" onClick={home}>Accueil</button>
+      )}
+      {current === "home" && sections?.map((item) => (
+        <button type="button" key={item.id} className={styles.navLink} data-home-anchor={item.id} onClick={() => { close(); onSection?.(item.id); }}>
+          {item.label}
+        </button>
+      ))}
+      {editorial ? (
+        <>
+          {current !== "home" && <a className={styles.navLink} href="/prestations">Services</a>}
+          <a className={styles.navLink} href="/suivi">Activité</a>
+          <button className={styles.navLink} {...act({ type: "login" })}>Compte</button>
+        </>
+      ) : (
+        <>
+          {NAV_VIEWS.map((item) => (
+            <button key={item.view} className={styles.navLink} aria-current={current === item.view ? "page" : undefined} {...act({ type: "view", view: item.view })}>
+              {item.label}
+            </button>
+          ))}
+          <button className={`${styles.navLink} ${styles.navLogin}`} aria-current={current === "auth" ? "page" : undefined} {...act({ type: "login" })}>Se connecter</button>
+        </>
+      )}
+    </nav>
+  );
+  const menu = (
+    <button ref={menuToggle} type="button" className={styles.menuButton} aria-expanded={menuOpen} aria-controls={navId} aria-label={menuOpen ? "Fermer le menu" : "Ouvrir le menu"} onClick={() => setMenuOpen((open) => !open)}>
+      <Icon name={menuOpen ? "close" : "menu"} size={22} />
+    </button>
+  );
 
   return (
-    <ThemeSurface className={surface}>
+    <ThemeSurface className={surface} appearance={editorial ? "light" : undefined}>
       <header className={styles.topbar}>
         <div className={`${styles.wrap} ${styles.topbarInner}`}>
           <button type="button" className={styles.brand} aria-label="Accueil" aria-current={current === "home" ? "page" : undefined} data-chrome-home="" onClick={home}>
             <BrandMark />
             <span className={styles.brandText}>
               <strong>Dépannage</strong>
-              <small className={styles.brandKind}>ÉLECTRIQUE</small>
+              <small className={styles.brandKind}>{editorial ? "électrique" : "ÉLECTRIQUE"}</small>
             </span>
           </button>
-          <nav id={navId} className={`${styles.nav} ${menuOpen ? styles.navOpen : ""}`} aria-label="Navigation principale">
-            {current === "home" && sections
-              ? sections.map((item) => (
-                  <button
-                    type="button"
-                    key={item.id}
-                    className={styles.navLink}
-                    data-home-anchor={item.id}
-                    onClick={() => {
-                      close();
-                      onSection?.(item.id);
-                    }}
-                  >
-                    {item.label}
-                  </button>
-                ))
-              : (
-                  <button type="button" className={styles.navLink} data-chrome-home="" onClick={home}>
-                    Accueil
-                  </button>
-                )}
-            {NAV_VIEWS.map((item) => (
-              <button key={item.view} className={styles.navLink} aria-current={current === item.view ? "page" : undefined} {...act({ type: "view", view: item.view })}>
-                {item.label}
+          {editorial ? (
+            <>
+              <button className={styles.recruit} {...act({ type: "view", view: "join" })}>
+                <Icon name="briefcase" size={20} /><span><strong>Rejoindre le réseau</strong><small>Candidature électricien</small></span>
               </button>
-            ))}
-            <button className={`${styles.navLink} ${styles.navLogin}`} aria-current={current === "auth" ? "page" : undefined} {...act({ type: "login" })}>
-              Se connecter
-            </button>
-          </nav>
-          <div className={styles.topbarActions}>
-            <ThemeToggle className={styles.themeToggle} />
-            {appNavigation && (
-              <button className={styles.notifications} aria-label="Notifications" {...act({ type: "login" })}>
-                <Icon name="bell" size={22} />
-              </button>
-            )}
-            <button className={`${styles.btn} ${styles.btnGhost} ${styles.loginButton}`} aria-current={current === "auth" ? "page" : undefined} {...act({ type: "login" })}>
-              Se connecter
-            </button>
-            {!appNavigation && (
+              <div className={styles.editorialActions}>
+                <a className={styles.follow} href="/suivi">Suivre mon intervention</a>
+                <a className={styles.contact} href="/#help/contact"><Icon name="mail" size={16} />Nous contacter</a>
+              </div>
+              <div className={styles.menuWrap}>{menu}{navigation}</div>
+            </>
+          ) : (
+            <>
+              {navigation}
+              <div className={styles.topbarActions}>
+                <ThemeToggle className={styles.themeToggle} />
+                <button className={`${styles.btn} ${styles.btnGhost} ${styles.loginButton}`} aria-current={current === "auth" ? "page" : undefined} {...act({ type: "login" })}>Se connecter</button>
               <button className={`${styles.btn} ${styles.btnPrimary} ${styles.headerCta}`} aria-current={current === "new" ? "page" : undefined} {...act({ type: "new" })}>
                 Décrire ma panne
               </button>
-            )}
-            <button ref={menuToggle} type="button" className={styles.menuButton} aria-expanded={menuOpen} aria-controls={navId} aria-label={menuOpen ? "Fermer le menu" : "Ouvrir le menu"} onClick={() => setMenuOpen((open) => !open)}>
-              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-                <path d={menuOpen ? "M6 6l12 12M18 6L6 18" : "M4 7h16M4 12h16M4 17h16"} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </button>
-          </div>
+                {menu}
+              </div>
+            </>
+          )}
         </div>
       </header>
 
@@ -241,6 +249,36 @@ export function PublicChrome({
       </main>
 
       <footer className={styles.footer}>
+        {editorial ? (
+          <div className={`${styles.wrap} ${styles.editorialFooter}`}>
+            <div>
+              <strong>Dépannage électrique</strong>
+              <p>De la demande au suivi de votre intervention électrique.</p>
+            </div>
+            <nav aria-label="Services et tarifs">
+              <strong>Services</strong>
+              <a href="/prestations">Voir les dépannages</a>
+              <button {...act({ type: "view", view: "pricing" })}>Tarifs indicatifs</button>
+              <a href="/#pricing/zones">Zones d’intervention</a>
+            </nav>
+            <nav aria-label="Assistance et suivi">
+              <strong>Assistance</strong>
+              <a href="/suivi">Suivre mon intervention</a>
+              <a href="/#help/contact">Nous contacter</a>
+              <a href="/#help/garantie">Garantie</a>
+            </nav>
+            <nav aria-label="À propos et mentions">
+              <strong>À propos</strong>
+              <button {...act({ type: "view", view: "join" })}>Candidature électricien</button>
+              <a href="/conseils">Le blog du dépannage</a>
+              {FOOTER_VIEWS.filter(({ view }) => view !== "help").map((item) => (
+                <button key={item.view} {...act({ type: "view", view: item.view })}>{item.label}</button>
+              ))}
+              <button {...act({ type: "demo", role: "manager" })}>Démonstration espace professionnel</button>
+            </nav>
+            {footerNote && <p className={styles.credits}>{footerNote}</p>}
+          </div>
+        ) : (
         <div className={`${styles.wrap} ${styles.footerInner}`}>
           <span className={styles.brandText}>
             <strong>Dépannage électrique</strong>
@@ -256,12 +294,14 @@ export function PublicChrome({
           </nav>
           {footerNote && <p className={styles.credits}>{footerNote}</p>}
         </div>
+        )}
       </footer>
       {appNavigation && (
         <nav className={styles.appNav} aria-label="Navigation rapide">
           <button type="button" aria-current="page" onClick={home}><Icon name="home" size={20} /> Accueil</button>
-          <button {...act({ type: "login" })}><Icon name="document" size={20} /> Mes demandes</button>
-          <button {...act({ type: "view", view: "help" })}><Icon name="help" size={20} /> Aide</button>
+          <button type="button" onClick={() => onSection?.("accueil-services")}><Icon name="list" size={20} /> Services</button>
+          <a href="/suivi"><Icon name="document" size={20} /> Activité</a>
+          <button {...act({ type: "login" })}><Icon name="person" size={20} /> Compte</button>
         </nav>
       )}
     </ThemeSurface>

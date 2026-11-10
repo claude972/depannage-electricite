@@ -9,59 +9,11 @@
   padding-inline: 24px;
 }
 .wrap h1,
-.wrap h2,
-.wrap p {
-  margin: 0;
-}
-.wrap h2 {
-  font-size: clamp(1.25rem, 3vw, 1.6rem);
-  line-height: 1.25;
-  letter-spacing: -0.025em;
-}
-.gate,
-.join {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid var(--ui-border);
-  border-radius: 18px;
-  background: var(--ui-card);
-}
-.join p,
 .cataloguePage > p {
   color: var(--ui-text-muted);
 }
-.address,
-.advice {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 12px 14px;
-  border: 0;
-  border-radius: 16px;
-  background: var(--ui-surface);
-  color: var(--ui-text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.address > span {
-  display: grid;
-  flex: 1;
-}
-.address svg:first-child,
-.proofs svg,
 .ivc > svg {
   color: var(--ui-accent);
-}
-.address svg,
-.advice svg,
-.ivc > svg,
-.proofs svg {
   flex: none;
 }
 .eyebrow {
@@ -72,57 +24,6 @@
   letter-spacing: .025em;
   text-transform: uppercase;
 }
-.hero {
-  position: relative;
-  display: grid;
-  align-items: center;
-  min-height: 248px;
-  overflow: hidden;
-  isolation: isolate;
-  border-radius: 24px;
-  background: #141922;
-  color: #fff;
-}
-.hero::after,
-.hero img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-.hero img {
-  z-index: -2;
-  display: block;
-  object-fit: cover;
-  object-position: center 44%;
-}
-.hero::after {
-  z-index: -1;
-  background: linear-gradient(90deg, rgb(6 10 23 / 89%), rgb(6 10 23 / 53%) 75%, rgb(6 10 23 / 42%));
-  content: "";
-}
-.heroBody {
-  display: grid;
-  justify-items: start;
-  gap: 14px;
-  padding: 22px 24px;
-}
-.hero .eyebrow,
-.hero p {
-  color: #fff;
-}
-.hero h1 {
-  color: #fff;
-  font-size: clamp(1.72rem, 7vw, 2.125rem);
-  font-weight: 750;
-  line-height: 1.15;
-  letter-spacing: -0.045em;
-}
-.hero p {
-  font-size: .875rem;
-  line-height: 1.45;
-}
-.primary,
 .textLink {
   display: inline-flex;
   align-items: center;
@@ -134,28 +35,6 @@
   font-weight: 650;
   cursor: pointer;
 }
-.primary {
-  min-height: 48px;
-  max-width: 100%;
-  padding: 8px 16px;
-  border-radius: 14px;
-  background: var(--ui-primary);
-  color: var(--ui-on-primary);
-  text-align: center;
-}
-.primary:hover {
-  background: var(--ui-primary-hover);
-}
-.hero .primary {
-  min-width: min(228px, 100%);
-  background: #2246e5;
-}
-.hero .primary:hover {
-  background: #1a37b8;
-}
-.hero :focus-visible {
-  outline-color: #fff;
-}
 .textLink {
   justify-self: start;
   padding: 4px 0;
@@ -165,34 +44,6 @@
 }
 .textLink:hover {
   text-decoration: underline;
-}
-.proofs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  color: var(--ui-text-muted);
-  font-size: .75rem;
-  font-weight: 650;
-}
-.proofs li {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.section {
-  display: grid;
-  gap: 12px;
-  scroll-margin-top: calc(var(--h-header-h) + 12px);
-}
-.sectionHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 4px 12px;
 }
 .ivGrid {
   display: grid;
@@ -238,82 +89,6 @@
   color: var(--ui-text-muted);
   font-size: .75rem;
 }
-.adviceSection {
-  gap: 2px;
-  padding: 14px 16px 6px;
-  border-radius: 18px;
-  background: #ff6b35;
-  color: #12151c;
-}
-.adviceSection h2 {
-  font-size: 1rem;
-}
-.advice {
-  justify-content: space-between;
-  min-height: 44px;
-  padding: 4px 0;
-  background: transparent;
-  color: inherit;
-  font-size: .875rem;
-  font-weight: 650;
-}
-.adviceSection :focus-visible {
-  outline-color: #12151c;
-}
-.tablist {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.tablist button,
-.tabLinks button {
-  min-height: 44px;
-  padding: 8px 12px;
-  border: 1px solid var(--ui-border);
-  border-radius: 12px;
-  background: var(--ui-card);
-  color: var(--ui-text);
-  font: inherit;
-  font-size: .875rem;
-  text-align: left;
-  cursor: pointer;
-}
-.tablist button[aria-selected="true"] {
-  border-color: var(--ui-accent);
-  color: var(--ui-accent);
-  font-weight: 700;
-}
-.tabpanel {
-  padding: 16px;
-  border: 1px solid var(--ui-border);
-  border-radius: 18px;
-  background: var(--ui-card);
-}
-.tabpanel[hidden] {
-  display: none;
-}
-.panelLead {
-  color: var(--ui-text-muted);
-}
-.tabLinks {
-  display: grid;
-  gap: 8px;
-  margin: 12px 0;
-  padding: 0;
-  list-style: none;
-}
-.tabLinks button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-}
-.tabLinks button:hover {
-  border-color: var(--ui-accent);
-}
-.tabLinks button span {
-  color: var(--ui-accent);
-}
 .cataloguePage {
   gap: 14px;
   padding-top: 12px;
@@ -330,9 +105,6 @@
   .wrap {
     padding-inline: 16px;
   }
-  .heroBody {
-    padding-inline: 18px;
-  }
   .ivc {
     gap: 8px;
     padding: 10px;
@@ -347,23 +119,7 @@
     width: min(100%, 1160px);
     padding-inline: 32px;
   }
-  .address {
-    max-width: 440px;
-  }
-  .hero {
-    min-height: clamp(310px, 30vw, 410px);
-  }
-  .heroBody {
-    padding: clamp(28px, 5vw, 60px);
-  }
-  .hero h1 {
-    font-size: clamp(2.4rem, 5vw, 3.75rem);
-  }
-  .hero p {
-    font-size: 1rem;
-  }
-  .ivGrid,
-  .tabLinks {
+  .ivGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

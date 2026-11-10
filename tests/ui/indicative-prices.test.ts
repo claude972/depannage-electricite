@@ -126,7 +126,7 @@ test("« Préparer une version » : commande stockée/relue avant le POST, motif
 
 test("montages : affichages publics lus depuis le GET, réservation inchangée, barème admin sans « Publier »", () => {
   const home = readFileSync("components/role/public-home.tsx", "utf8");
-  assert.match(home, /<PublicServiceList services=\{FEATURED_SERVICES\} \/>/);
+  assert.match(home, /<PublicServiceList services=\{SERVICES\} \/>/);
   const list = readFileSync("components/role/public-service-list.tsx", "utf8");
   assert.match(list, /<IndicativeRange category=\{service\.category\} \/>/);
   assert.match(list, /<PublicServiceList services=\{SERVICES\} \/>/);

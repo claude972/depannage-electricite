@@ -4751,7 +4751,8 @@ body {
   --ui-success: #5bd49a; /* success stays green: 9.95 / 8.20:1 on bg / card */
   --ui-scheme: dark;
 }
-[data-ui-theme="light"] {
+[data-ui-theme="light"],
+[data-ui-appearance="light"] {
   --ui-bg: #ffffff;
   --ui-surface: #f4f6fa;
   --ui-card: #ffffff;
@@ -4770,7 +4771,7 @@ body {
   --ui-scheme: light;
 }
 :root {
-  /* « Conseils et formation » only — never an alert or validation colour. */
+  /* Editorial yellow for featured content and home banners. */
   --ui-advice: #f4d649;
   --ui-on-advice: #141414;
   --ui-on-advice-muted: #343434;

@@ -9,6 +9,7 @@ import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { ROOT, loadModule } from "../documents/harness";
 import { CATEGORIES } from "../../components/app/format";
+import { SERVICES } from "../../components/role/public-service-catalog";
 import { forbiddenClaims } from "../../components/role/public-lists";
 import type * as Home from "../../components/role/public-home";
 import type { HomeAction, HomeHandlers } from "../../components/role/public-home";
@@ -19,7 +20,7 @@ const loadHome = () => {
   const tp = themeProvider();
   return { tp, home: loadModule("components/role/public-home.tsx", { "@/components/app/theme-provider": tp }) as unknown as typeof Home };
 };
-const { FEATURED_SERVICES, HOME_SITUATIONS, actionKey, parseActionKey, runHomeAction, tabKeyTarget } = loadHome().home;
+const { actionKey, parseActionKey, runHomeAction, tabKeyTarget } = loadHome().home;
 
 type Calls = string[];
 function recordingHandlers(calls: Calls): HomeHandlers {
@@ -40,11 +41,11 @@ const attr = (html: string, name: string) => [...html.matchAll(new RegExp(`${nam
 const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/&amp;/g, "&").replace(/\s+/g, " ");
 
 test("onglets : ←/→ bouclent, Home/End, autres touches ignorées", () => {
-  assert.equal(tabKeyTarget("ArrowRight", 4, 5), 0);
-  assert.equal(tabKeyTarget("ArrowLeft", 0, 5), 4);
-  assert.equal(tabKeyTarget("Home", 3, 5), 0);
-  assert.equal(tabKeyTarget("End", 1, 5), 4);
-  assert.equal(tabKeyTarget("Enter", 1, 5), null);
+  assert.equal(tabKeyTarget("ArrowRight", 2, 3), 0);
+  assert.equal(tabKeyTarget("ArrowLeft", 0, 3), 2);
+  assert.equal(tabKeyTarget("Home", 2, 3), 0);
+  assert.equal(tabKeyTarget("End", 1, 3), 2);
+  assert.equal(tabKeyTarget("Enter", 1, 3), null);
   assert.equal(tabKeyTarget("ArrowRight", 0, 0), null);
 });
 
@@ -64,52 +65,40 @@ test("actions : clé ↔ action aller-retour, clés inconnues refusées, callbac
   assert.deepEqual(calls, ["new()", "new(socket)", "login()", "address()", "navigate(join)", "demo()", "demo(manager)"]);
 });
 
-test("contenu : trois interventions dans l’ordre de l’application et onglets métier complets", () => {
-  const ids = CATEGORIES.map((c) => c.id);
-  assert.deepEqual([...FEATURED_SERVICES.map((s) => s.slug)], ["plusieurs-prises-sans-courant", "disjoncteur-qui-saute", "coupure-de-courant-partielle"]);
-  for (const service of FEATURED_SERVICES) assert.ok(ids.includes(service.category), service.title);
-  assert.deepEqual(Object.keys(HOME_SITUATIONS).sort(), [...ids].sort());
-});
-
-test("SSR sans window : structure Mobile B, 5 onglets métier, thème, aucune ancre de hash", () => {
+test("SSR : maquette Web et PWA, menu à droite, trois onglets et les huit fiches réelles", () => {
   assert.equal(typeof (globalThis as { window?: unknown }).window, "undefined");
   const html = renderHome({ handlers: recordingHandlers([]) });
   assert.match(html, /class="ui-v2 /);
-  assert.match(html, /data-theme-toggle="pending"/); // thème inconnu avant montage : pas d’état faux
+  assert.match(html, /data-ui-appearance="light"/);
+  assert.doesNotMatch(html, /data-theme-toggle/);
   assert.match(html, /<main id="main"/);
-  assert.match(html, /aria-label="Navigation principale"/);
-  assert.match(html, /<h1[^>]*>Un dépannage,<br\/>en toute clarté\./);
+  assert.match(html, /<h1[^>]*>.*Dépannage électrique.*Un problème<br\/>électrique/);
   assert.match(html, /aria-label="Navigation rapide"/);
   assert.match(html, /data-home-action="address"[^>]*>.*Choisir mon adresse/);
   assert.match(html, /data-home-action="new"[^>]*>Présenter mon besoin/);
-  // Onglets : exactement les 5 CATEGORIES, dans l’ordre, un seul sélectionné et tabulable.
-  const tabs = [...html.matchAll(/<button[^>]*role="tab"[^>]*>([^<]+)<\/button>/g)];
-  assert.deepEqual(tabs.map((m) => m[1]), CATEGORIES.map((c) => c.label));
-  assert.equal(tabs.filter((m) => /aria-selected="true"/.test(m[0])).length, 1);
-  assert.equal(tabs.filter((m) => /tabindex="0"/.test(m[0])).length, 1);
-  const panels = [...html.matchAll(/<div[^>]*role="tabpanel"[^>]*>/g)];
-  assert.equal(panels.length, 5);
-  assert.equal(panels.filter((m) => /hidden=""/.test(m[0])).length, 4);
-  assert.doesNotMatch(html, /aria-roledescription="carrousel"/);
-  const links = [...html.matchAll(/<a\s[^>]*href="([^"]*)"/g)].map((m) => m[1]);
-  assert.deepEqual(links, ["/prestations", ...FEATURED_SERVICES.map((s) => `/prestations/${s.slug}`)]);
-  assert.ok(attr(html, "href").every((h) => h.startsWith("/home/") || h === "/prestations" || h.startsWith("/prestations/")));
+  assert.match(html, /Candidature électricien.*href="\/suivi".*Nous contacter.*aria-label="Ouvrir le menu".*aria-label="Navigation principale"/);
+
+  const tabs = [...html.matchAll(/<button[^>]*role="tab"[^>]*>[\s\S]*?<\/button>/g)];
+  assert.deepEqual(tabs.map(([tab]) => text(tab).trim()), ["Dépannage", "Installation", "Diagnostic"]);
+  assert.equal(tabs.filter(([tab]) => /aria-selected="true"/.test(tab)).length, 1);
+  assert.equal(tabs.filter(([tab]) => /tabindex="0"/.test(tab)).length, 1);
+  assert.match(html, /id="accueil-services"[^>]*role="tabpanel" aria-labelledby="mode-repair"/);
+  assert.deepEqual(attr(html, "data-service-card"), SERVICES.map((service) => service.slug));
   assert.deepEqual(attr(html, "data-home-anchor").sort(), ["accueil-conseils", "accueil-interventions", "accueil-services"]);
   for (const id of attr(html, "data-home-anchor")) assert.match(html, new RegExp(`id="${id}"`));
-  // Copie : aucun prix (hors fourchette indicative des cartes, vérifiée dans public-service.test.ts),
-  // avis, délai ou promesse interdite.
+
   const copy = text(html.replace(/<span class="ivcPrice">[\s\S]*?<\/span>/g, ""));
-  assert.doesNotMatch(copy, /€|\bavis\b|note moyenne|\d+\s*min\b|certifi|qualifi/i);
+  assert.doesNotMatch(copy, /€|\bavis\b|note moyenne|\d+\s*min\b|certifi|qualifi|publicité|sponsoris/i);
   assert.deepEqual(forbiddenClaims(copy), []);
-  assert.doesNotMatch(copy, /publicité|sponsoris/i);
-  assert.match(copy, /Conseils & prévention/);
-  assert.match(copy, /Nous rejoindre/);
+  assert(copy.indexOf("Nos engagements") < copy.indexOf("Les interventions électriques les plus courantes"));
+  for (const href of ["/#new/urgent", "/#new/scheduled", "/suivi", "/#help/contact", "/#help/garantie", "/#pricing/zones", "/conseils#prises", "/conseils#devis", "/conseils#rendez-vous"]) {
+    assert(attr(html, "href").includes(href), href);
+  }
 });
 
 test("SSR : chaque contrôle rendu appelle le bon callback réel", () => {
   const html = renderHome({ handlers: recordingHandlers([]) });
   const keys = attr(html, "data-home-action");
-  assert.ok(keys.length > 20);
   const calls: Calls = [];
   const h = recordingHandlers(calls);
   for (const key of keys) {
@@ -117,21 +106,8 @@ test("SSR : chaque contrôle rendu appelle le bon callback réel", () => {
     assert.ok(action, `clé rendue inconnue : ${key}`);
     runHomeAction(action, h);
   }
-  const seen = new Set(calls);
-  for (const expected of ["new()", ...CATEGORIES.map((c) => `new(${c.id})`), "login()", "address()", "navigate(join)", "navigate(help)", "navigate(pricing)", "navigate(about)", "navigate(privacy)", "navigate(legal)", "demo()", "demo(manager)"]) assert.ok(seen.has(expected), expected);
-  for (const call of seen) assert.match(call, /^(new\((outage|panel|socket|lighting|diagnostic)?\)|login\(\)|address\(\)|navigate\((help|pricing|join|about|privacy|legal)\)|demo\((manager)?\))$/);
-  // Chaque panneau d’onglet mène à sa propre catégorie.
-  const panels = new Map([...html.matchAll(/<div role="tabpanel" id="[^"]*-panel-(\w+)"[^>]*>([\s\S]*?)<\/div>/g)].map((m) => [m[1], m[2]]));
-  assert.deepEqual([...panels.keys()], CATEGORIES.map((c) => c.id));
-  for (const c of CATEGORIES) {
-    const panelKeys = attr(panels.get(c.id)!, "data-home-action");
-    assert.equal(panelKeys.length, HOME_SITUATIONS[c.id].length + 1, c.id);
-    assert.ok(panelKeys.every((k) => k === `new:${c.id}`), c.id);
-  }
-  // « Nous rejoindre » → vue réelle join ; « Conseils » → aide réelle uniquement.
-  assert.match(html, /data-home-action="view:join"[^>]*>Nous rejoindre/);
-  const advice = html.slice(html.indexOf('id="accueil-conseils"'), html.indexOf("</section>", html.indexOf('id="accueil-conseils"')));
-  assert.ok(attr(advice, "data-home-action").every((k) => k === "view:help"));
+  assert.deepEqual([...new Set(calls)].sort(), ["new()", "login()", "address()", "navigate(join)", "navigate(pricing)", "navigate(about)", "navigate(privacy)", "navigate(legal)", "demo(manager)"].sort());
+  assert.match(html, /data-home-action="view:join"[^>]*>Découvrir la candidature/);
 });
 
 test("SSR : vue inconnue → message de connexion conservé", () => {
@@ -139,12 +115,11 @@ test("SSR : vue inconnue → message de connexion conservé", () => {
   assert.match(html, /role="status"[^>]*>.*Connectez-vous pour accéder à cet espace/s);
 });
 
-test("photos : même photo principale que l’app et photos des interventions créditées", () => {
+test("photos : illustrations locales créditées et texte alternatif pour chaque image", () => {
   const html = renderHome({ handlers: recordingHandlers([]) });
   const srcs = new Set(attr(html, "src"));
-  const kept = [...new Set(["/home/hero-photo-1.jpg", ...FEATURED_SERVICES.map((s) => s.photo.src)])];
+  const kept = [...new Set(SERVICES.map((service) => service.photo.src))];
   assert.deepEqual([...srcs].sort(), kept.sort());
-  assert.deepEqual(readFileSync(path.join(ROOT, "public/home/hero-photo-1.jpg")), readFileSync(path.join(ROOT, "apps/mobile/assets/mobile-b/337b8.jpg")));
   const credits = readFileSync(path.join(ROOT, "public/home/CREDITS.md"), "utf8");
   for (const f of kept) {
     assert.ok(existsSync(path.join(ROOT, "public", f)), f);
@@ -230,6 +205,28 @@ test("parcours brouillon : home → décrire (catégorie pré-remplie) → broui
   assert.deepEqual(auth.calls, []);
 });
 
+test("Les raccourcis urgence, planning et installation préremplissent le formulaire réel sans écraser un brouillon", () => {
+  const captured: Record<string, unknown> = {};
+  const site = loadSite(captured);
+  const formFor = (params: Record<string, unknown>) => {
+    const { session, calls } = fakeSession({ view: "new", ...params });
+    renderToString(createElement(site.PublicSite as never, { session } as never));
+    assert.deepEqual(calls, []);
+    return captured.form as { initialUrgency?: string; initialDescription?: string; initialCategory: string; initialValues?: object; addressFirst: boolean };
+  };
+  assert.equal(formFor({ param: "urgent" }).initialUrgency, "urgent");
+  const scheduled = formFor({ param: "scheduled" });
+  assert.equal(scheduled.initialUrgency, "scheduled");
+  assert.equal(scheduled.addressFirst, true);
+  const installation = formFor({ param: "installation-prise" });
+  assert.equal(installation.initialCategory, "socket");
+  assert.equal(installation.initialDescription, "Ajouter une prise");
+  const draft = { category: "lighting", description: "Brouillon", urgency: "scheduled" };
+  const existing = formFor({ param: "urgent", pendingDraft: draft });
+  assert.equal(existing.initialUrgency, undefined);
+  assert.equal(existing.initialValues, draft);
+});
+
 // ---- Navigation interne : jamais de hash ni de session (routeur par hash de l’app) ---------------
 test("sections : défilement + focus du titre, sans toucher location/history ; mouvement réduit respecté", () => {
   const { scrollToSection } = loadHome().home;
@@ -257,7 +254,7 @@ test("PublicSite réel : liens de section = boutons sans href ni action de sessi
   const siteWithTp = loadModule("components/role/public-site.tsx", { "@/components/app/theme-provider": siteTp });
   const html = renderToString(createElement(siteTp.ThemeProvider as never, null, createElement(siteWithTp.PublicSite as never, { session } as never)));
   const anchors = [...html.matchAll(/<button[^>]*data-home-anchor="([^"]+)"[^>]*>/g)];
-  assert.deepEqual(anchors.map((m) => m[1]), ["accueil-interventions", "accueil-services", "accueil-conseils"]);
+  assert.deepEqual(anchors.map((m) => m[1]), ["accueil-services", "accueil-interventions", "accueil-conseils"]);
   for (const [tag] of anchors) {
     assert.match(tag, /type="button"/);
     assert.doesNotMatch(tag, /href=|data-home-action=/);
