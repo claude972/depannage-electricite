@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light">
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#ffffff">
-  <title>Accueil et position · Maquette dépannage électrique</title>
+  <title>Maquette interactive · Dépannage électrique</title>
   <link rel="stylesheet" href="./style.css">
   <script defer src="./prototype.js"></script>
 </head>
@@ -29,6 +29,14 @@
   <symbol id="i-bolt" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M13.7 2.4 5 13.4h5.8L9.9 22l9.1-12h-5.7l.4-7.6Z"/></symbol>
   <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2-5 4 10 2-5h6"/></symbol>
   <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 3v5m6-5v5M6 8h12v3a6 6 0 0 1-12 0zm6 9v4"/></symbol>
+  <symbol id="i-person" viewBox="0 0 24 24"><circle cx="12" cy="7" r="3.2"/><path d="M5 20v-2.5a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4V20z"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22c5-2.1 8-5.8 8-11V5l-8-3-8 3v6c0 5.2 3 8.9 8 11Z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M20 8V6a2 2 0 0 0-2-2H6a3 3 0 0 0 0 6h14v10H6a3 3 0 0 1-3-3V7m17 6h-4a2 2 0 0 0 0 4h4"/><path d="M16 15h.01"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 8 8 6 8-6"/></symbol>
+  <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M5 3h14v18l-3.5-2-3.5 2-3.5-2L5 21zM9 8h6m-6 4h6"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 1 1 8 0v3m-4 5v2"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="m9.5 3-.6 2.5-2 .9-2.3-.8-2.1 3.6 1.7 1.7v2.2l-1.7 1.7 2.1 3.6 2.3-.8 2 .9.6 2.5h5l.6-2.5 2-.9 2.3.8 2.1-3.6-1.7-1.7v-2.2l1.7-1.7-2.1-3.6-2.3.8-2-.9-.6-2.5z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 17.5h2"/></symbol>
   <symbol id="art-outage" viewBox="0 0 80 80">
     <ellipse cx="40" cy="62" rx="25" ry="6" fill="#eadbc8"/>
     <circle cx="40" cy="37" r="24" fill="#f9ad65"/><circle cx="39" cy="34" r="22" fill="#ffc98a"/>
@@ -101,17 +109,11 @@
     </section>
     <footer class="prototype-label">Maquette interactive · Données de démonstration</footer>
   </main>
-  <nav class="dock" aria-label="Navigation de la maquette">
-    <button type="button" data-home aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-home"/></svg>Accueil</button>
-    <button type="button" data-section="services"><svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg>Services</button>
-    <button type="button" data-position><svg class="icon" aria-hidden="true"><use href="#i-pin"/></svg>Position</button>
-    <button type="button" data-section="help"><svg class="icon" aria-hidden="true"><use href="#i-help"/></svg>Aide</button>
-  </nav>
 </section>
 
 <section id="position-screen" class="location-page" aria-labelledby="position-title" hidden>
   <header class="location-header">
-    <button type="button" class="back" data-home aria-label="Retour à l’accueil"><svg class="icon" aria-hidden="true"><use href="#i-back"/></svg></button>
+    <button type="button" class="back" data-return="accueil" aria-label="Revenir à l’écran précédent"><svg class="icon" aria-hidden="true"><use href="#i-back"/></svg></button>
     <h1 id="position-title" tabindex="-1">Définir votre localisation</h1>
   </header>
   <main class="location-main">
@@ -129,6 +131,108 @@
     <p class="prototype-label">Lieux d’exemple en Martinique · Position simulée</p>
   </main>
 </section>
+
+<section id="account-screen" class="account-page" aria-labelledby="account-title" hidden>
+  <main>
+    <header class="account-identity">
+      <div>
+        <h1 id="account-title" tabindex="-1">Camille Martin</h1>
+        <span class="demo-label">Profil de démonstration</span>
+      </div>
+      <button type="button" class="account-avatar" data-settings="apercu" aria-label="Gérer mon compte">
+        <svg class="icon" aria-hidden="true"><use href="#i-person"/></svg>
+      </button>
+    </header>
+    <button type="button" class="account-space" data-account-action="profile">
+      <svg class="icon" aria-hidden="true"><use href="#i-person"/></svg>
+      <strong id="profile-space">Espace particulier</strong>
+      <svg class="icon small" aria-hidden="true"><use href="#i-down"/></svg>
+    </button>
+    <div class="account-grid" aria-label="Raccourcis du compte">
+      <button type="button" class="account-tile" data-account-action="help"><svg class="icon" aria-hidden="true"><use href="#i-help"/></svg>Aide</button>
+      <button type="button" class="account-tile" data-account-action="payments"><svg class="icon" aria-hidden="true"><use href="#i-wallet"/></svg>Paiements</button>
+      <button type="button" class="account-tile" data-settings="securite"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg>Sécurité</button>
+      <button type="button" class="account-tile" data-account-action="messages"><svg class="icon" aria-hidden="true"><use href="#i-mail"/></svg>Messages</button>
+    </div>
+    <button type="button" class="account-feature" data-screen="activite">
+      <span><strong>Retrouvez vos interventions</strong><small>Suivez vos demandes et consultez vos devis.</small></span>
+      <span class="feature-art"><svg class="icon" aria-hidden="true"><use href="#i-receipt"/></svg></span>
+    </button>
+    <div class="account-rows">
+      <button type="button" class="account-row" data-settings="apercu"><svg class="icon" aria-hidden="true"><use href="#i-settings"/></svg><span><strong>Paramètres du compte</strong><small>Vos informations et vos accès</small></span><svg class="icon small" aria-hidden="true"><use href="#i-next"/></svg></button>
+      <button type="button" class="account-row" data-position><svg class="icon" aria-hidden="true"><use href="#i-pin"/></svg><span><strong>Adresses enregistrées</strong><small id="account-location">Domicile, travail et lieux favoris</small></span><svg class="icon small" aria-hidden="true"><use href="#i-next"/></svg></button>
+      <button type="button" class="account-row" data-settings="confidentialite"><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg><span><strong>Confidentialité et données</strong><small>Consulter les options de confidentialité</small></span><svg class="icon small" aria-hidden="true"><use href="#i-next"/></svg></button>
+    </div>
+  </main>
+</section>
+
+<section id="settings-screen" class="location-page settings-page" aria-labelledby="settings-title" hidden>
+  <header class="location-header">
+    <button type="button" class="back" data-return="compte" aria-label="Fermer les paramètres"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button>
+    <h1 id="settings-title" tabindex="-1">Gérer mon compte</h1>
+  </header>
+  <main>
+    <div class="settings-tabs" role="tablist" aria-label="Paramètres du compte">
+      <button type="button" role="tab" id="tab-apercu" data-settings-tab="apercu" aria-controls="panel-apercu" aria-selected="true" tabindex="0">Vue d’ensemble</button>
+      <button type="button" role="tab" id="tab-infos" data-settings-tab="infos" aria-controls="panel-infos" aria-selected="false" tabindex="-1">Infos personnelles</button>
+      <button type="button" role="tab" id="tab-securite" data-settings-tab="securite" aria-controls="panel-securite" aria-selected="false" tabindex="-1">Sécurité</button>
+      <button type="button" role="tab" id="tab-confidentialite" data-settings-tab="confidentialite" aria-controls="panel-confidentialite" aria-selected="false" tabindex="-1">Confidentialité</button>
+    </div>
+    <div class="settings-panel" id="panel-apercu" role="tabpanel" aria-labelledby="tab-apercu" tabindex="0">
+      <div class="settings-identity"><span class="account-avatar" aria-hidden="true"><svg class="icon"><use href="#i-person"/></svg></span><h2>Camille Martin</h2><p>camille@example.test</p></div>
+      <div class="settings-shortcuts">
+        <button type="button" class="account-tile" data-settings="infos"><svg class="icon" aria-hidden="true"><use href="#i-person"/></svg>Infos personnelles</button>
+        <button type="button" class="account-tile" data-settings="securite"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg>Sécurité</button>
+        <button type="button" class="account-tile" data-settings="confidentialite"><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>Confidentialité et données</button>
+      </div>
+      <h2 class="suggestions-title">Suggestions</h2>
+      <article class="account-suggestion">
+        <span class="feature-art"><svg class="icon" aria-hidden="true"><use href="#i-phone"/></svg></span>
+        <h3>Vérifiez votre numéro</h3>
+        <p>La vérification du numéro permet de retrouver vos demandes et de suivre vos interventions.</p>
+        <button type="button" class="schedule" data-settings="securite">Voir la vérification</button>
+      </article>
+    </div>
+    <div class="settings-panel settings-detail" id="panel-infos" role="tabpanel" aria-labelledby="tab-infos" tabindex="0" hidden>
+      <h2>Informations personnelles</h2>
+      <dl class="account-info"><div><dt>Nom complet</dt><dd>Camille Martin</dd></div><div><dt>Adresse e-mail</dt><dd>camille@example.test</dd></div><div><dt>Téléphone</dt><dd>À vérifier</dd></div></dl>
+      <p class="demo-label">Coordonnées fictives</p>
+    </div>
+    <div class="settings-panel settings-detail" id="panel-securite" role="tabpanel" aria-labelledby="tab-securite" tabindex="0" hidden>
+      <h2>Sécurité</h2>
+      <article class="account-suggestion">
+        <span class="feature-art"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg></span>
+        <h3>Vérification du téléphone</h3>
+        <p>Un code SMS sert à confirmer le numéro utilisé pour accéder aux interventions.</p>
+        <button type="button" class="schedule" data-account-action="verification">Voir la simulation</button>
+      </article>
+    </div>
+    <div class="settings-panel settings-detail" id="panel-confidentialite" role="tabpanel" aria-labelledby="tab-confidentialite" tabindex="0" hidden>
+      <h2>Confidentialité et données</h2>
+      <p>Consultez les informations que vous partagez pour vos interventions.</p>
+      <button type="button" class="account-row" data-settings="infos"><svg class="icon" aria-hidden="true"><use href="#i-person"/></svg><span><strong>Consulter mes informations</strong></span><svg class="icon small" aria-hidden="true"><use href="#i-next"/></svg></button>
+    </div>
+  </main>
+</section>
+
+<section id="activity-screen" class="account-page" aria-labelledby="activity-title" hidden>
+  <main>
+    <header class="account-identity"><h1 id="activity-title" tabindex="-1">Activité</h1><span class="demo-label">Démo</span></header>
+    <article class="account-suggestion activity-empty">
+      <span class="feature-art"><svg class="icon" aria-hidden="true"><use href="#i-receipt"/></svg></span>
+      <h2>Aucune intervention</h2>
+      <p>Vos demandes et leurs devis apparaîtront ici.</p>
+      <button type="button" class="schedule" data-section="services">Voir les services</button>
+    </article>
+  </main>
+</section>
+
+<nav class="dock" aria-label="Navigation de la maquette">
+  <button type="button" data-screen="accueil" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-home"/></svg>Accueil</button>
+  <button type="button" data-section="services"><svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg>Services</button>
+  <button type="button" data-screen="activite"><svg class="icon" aria-hidden="true"><use href="#i-receipt"/></svg>Activité</button>
+  <button type="button" data-screen="compte"><svg class="icon" aria-hidden="true"><use href="#i-person"/></svg>Compte</button>
+</nav>
 
 <dialog id="sheet" aria-labelledby="sheet-title">
   <div class="sheet-header"><h2 id="sheet-title"></h2><form method="dialog"><button class="back" aria-label="Fermer"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></form></div>

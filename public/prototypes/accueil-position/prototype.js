@@ -21,8 +21,16 @@ const places = [
   { id: 'robert', title: 'Bourg du Robert', area: 'Le Robert', context: 'Lieu favori · Démo', icon: 'star', favorite: true },
 ];
 const demoPosition = { title: 'Position actuelle', area: 'Le Lamentin' };
-const home = $('#home-screen');
-const position = $('#position-screen');
+const screens = {
+  accueil: $('#home-screen'),
+  position: $('#position-screen'),
+  compte: $('#account-screen'),
+  parametres: $('#settings-screen'),
+  activite: $('#activity-screen'),
+};
+const dock = $('.dock');
+const settingsTabs = Array.from(document.querySelectorAll('[data-settings-tab]'));
+const returnFocus = new Map();
 const rail = $('#services-rail');
 const problem = $('#problem-input');
 const problemResults = $('#problem-results');
@@ -33,7 +41,6 @@ const sheetBody = $('#sheet-body');
 let mode = 'repair';
 let filter = '';
 let selected = null;
-let lastPositionTrigger = null;
 let alertTimer;
 
 const normalized = (value) => value.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replaceAll('œ', 'oe').trim();
@@ -44,35 +51,79 @@ function announce(message) {
   alertTimer = setTimeout(() => { $('#status').textContent = ''; }, 3600);
 }
 
-function updateScreen(focus = false) {
-  const onPosition = location.hash === '#position';
-  home.hidden = onPosition;
-  position.hidden = !onPosition;
-  if (!focus) return;
-  window.scrollTo(0, 0);
-  if (onPosition) $('#position-title').focus({ preventScroll: true });
-  else if (lastPositionTrigger?.isConnected) lastPositionTrigger.focus({ preventScroll: true });
+function currentScreen() {
+  const [screen] = location.hash.slice(1).split('/');
+  return Object.hasOwn(screens, screen) ? screen : 'accueil';
 }
 
-function openPosition(trigger) {
-  lastPositionTrigger = home.contains(trigger) ? trigger : $('[data-position]');
+function routeFor(screen, tab) {
+  if (screen === 'accueil') return location.pathname + location.search;
+  return screen === 'parametres' ? `#parametres/${tab}` : `#${screen}`;
+}
+
+function renderSettingsTab(tabId) {
+  const tab = settingsTabs.find((button) => button.dataset.settingsTab === tabId) ?? settingsTabs[0];
+  for (const button of settingsTabs) {
+    const active = button === tab;
+    button.tabIndex = active ? 0 : -1;
+    button.setAttribute('aria-selected', String(active));
+    document.getElementById(button.getAttribute('aria-controls')).hidden = !active;
+  }
+  return tab;
+}
+
+function selectSettingsTab(tabId) {
+  history.replaceState(history.state, '', routeFor('parametres', tabId));
+  renderSettingsTab(tabId).focus({ preventScroll: true });
+}
+
+function updateScreen(focus = false, restore = false) {
+  const current = currentScreen();
+  for (const [id, screen] of Object.entries(screens)) screen.hidden = id !== current;
+  dock.hidden = current === 'position' || current === 'parametres';
+  dock.querySelectorAll('[data-screen]').forEach((button) => {
+    if (button.dataset.screen === current) button.setAttribute('aria-current', 'page');
+    else button.removeAttribute('aria-current');
+  });
+  if (current === 'parametres') renderSettingsTab(location.hash.split('/')[1]);
+  if (current === 'position') {
+    const label = history.state?.from === 'compte' ? 'Retour au compte' : 'Retour à l’accueil';
+    screens.position.querySelector('[data-return]').setAttribute('aria-label', label);
+  }
+  if (current === 'accueil') requestAnimationFrame(updateArrows);
+  if (!focus) return;
+  window.scrollTo(0, 0);
+  const preferred = restore ? returnFocus.get(current) : null;
+  const target = preferred?.isConnected && !preferred.closest('[hidden]') ? preferred : screens[current].querySelector('h1');
+  target.focus({ preventScroll: true });
+}
+
+function openScreen(screen, trigger, tab = 'apercu') {
+  const current = currentScreen();
+  if (screen === current) {
+    if (screen === 'parametres') selectSettingsTab(tab);
+    else window.scrollTo(0, 0);
+    return;
+  }
   if (sheet.open) sheet.close();
+  const origin = trigger?.closest('dialog') ? document.activeElement : trigger;
+  returnFocus.set(current, origin);
   clearTimeout(alertTimer);
   $('#status').textContent = '';
-  place.value = '';
-  setFilter('');
-  history.pushState({ position: true }, '', '#position');
+  history.pushState({ from: current }, '', routeFor(screen, tab));
   updateScreen(true);
 }
 
-function goHome() {
-  if (position.hidden) {
-    window.scrollTo(0, 0);
-    return;
-  }
-  if (history.state?.position) history.back();
+function openPosition(trigger) {
+  place.value = '';
+  setFilter('');
+  openScreen('position', trigger);
+}
+
+function goBack(fallback) {
+  if (history.state?.from) history.back();
   else {
-    history.replaceState(null, '', location.pathname + location.search);
+    history.replaceState(null, '', routeFor(fallback));
     updateScreen(true);
   }
 }
@@ -125,9 +176,10 @@ function renderPlaces() {
 function choosePlace(value) {
   selected = value;
   $('#home-location').textContent = value.area;
+  $('#account-location').textContent = value.area;
   if (sheet.open) sheet.close();
   renderPlaces();
-  goHome();
+  goBack('accueil');
   announce(`${value.area} sélectionné pour cette maquette.`);
 }
 
@@ -143,14 +195,49 @@ function openMap() {
   $('#confirm-map').addEventListener('click', () => choosePlace(pin));
 }
 
+const accountNotes = {
+  help: { title: 'Aide', text: 'Décrivez votre panne et précisez le lieu d’intervention. L’artisan vous présente un devis avant les travaux.' },
+  payments: { title: 'Paiements et factures', text: 'Aucun règlement enregistré. Les factures et justificatifs apparaissent ici après un paiement sur la plateforme.' },
+  messages: { title: 'Messages', text: 'Aucun message pour le moment. Retrouvez ici les échanges associés à vos interventions.' },
+  verification: { title: 'Vérification de démonstration', text: 'Dans le parcours connecté, vous saisissez le code reçu par SMS pour confirmer votre numéro.' },
+};
+
+function openAccountAction(action) {
+  if (action === 'profile') {
+    showSheet('Choisir un espace', '<p>Changez le libellé du profil dans la maquette.</p><div class="sheet-actions"><button type="button" class="option" data-profile="Espace particulier">Particulier</button><button type="button" class="option" data-profile="Espace entreprise">Entreprise</button></div>');
+    sheetBody.querySelectorAll('[data-profile]').forEach((button) => button.addEventListener('click', () => {
+      $('#profile-space').textContent = button.dataset.profile;
+      sheet.close();
+    }));
+    return;
+  }
+  const note = accountNotes[action];
+  showSheet(note.title, `<p>${note.text}</p>`);
+}
+
+$('.settings-tabs').addEventListener('keydown', (event) => {
+  const index = settingsTabs.indexOf(event.target);
+  if (index < 0) return;
+  const last = settingsTabs.length - 1;
+  const next = { ArrowLeft: index === 0 ? last : index - 1, ArrowRight: index === last ? 0 : index + 1, Home: 0, End: last }[event.key];
+  if (next === undefined) return;
+  event.preventDefault();
+  selectSettingsTab(settingsTabs[next].dataset.settingsTab);
+});
+
 $('#shortcuts').innerHTML = ['outage', 'socket', 'panel', 'light'].map((id) => `<button type="button" data-service="${id}"><span class="shortcut-art"><svg aria-hidden="true"><use href="#art-${id}"/></svg></span>${services[id].label}</button>`).join('');
 document.addEventListener('click', (event) => {
   const trigger = event.target.closest('button');
   if (!trigger) return;
-  const { mode: nextMode, service, place: placeId, filter: nextFilter, section } = trigger.dataset;
+  const { mode: nextMode, service, place: placeId, filter: nextFilter, section, screen, settings, settingsTab, accountAction } = trigger.dataset;
   if ('position' in trigger.dataset) openPosition(trigger);
-  else if ('home' in trigger.dataset) goHome();
+  else if (trigger.dataset.return) goBack(trigger.dataset.return);
+  else if (screen) openScreen(screen, trigger);
+  else if (settings) openScreen('parametres', trigger, settings);
+  else if (settingsTab) selectSettingsTab(settingsTab);
+  else if (accountAction) openAccountAction(accountAction);
   else if (section) {
+    openScreen('accueil', trigger);
     const target = document.getElementById(section);
     target.scrollIntoView({ block: 'start' });
     target.querySelector('h2').focus({ preventScroll: true });
@@ -182,7 +269,10 @@ for (const id of ['#problem-search', '#place-search']) $(id).addEventListener('s
 for (const [id, direction] of [['#cards-prev', -1], ['#cards-next', 1]]) $(id).addEventListener('click', () => rail.scrollBy({ left: direction * ((rail.firstElementChild?.offsetWidth ?? 0) + 14), behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' }));
 rail.addEventListener('scroll', updateArrows, { passive: true });
 window.addEventListener('resize', updateArrows);
-window.addEventListener('popstate', () => updateScreen(true));
+window.addEventListener('popstate', () => {
+  if (sheet.open) sheet.close();
+  updateScreen(true, true);
+});
 renderCards();
 renderPlaces();
 updateScreen();
