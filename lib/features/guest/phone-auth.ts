@@ -5,7 +5,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import type { User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { z } from "zod";
-import { ApiError, assertOrigin } from "@/lib/supabase/server";
+import { ApiError, assertOrigin, authenticatedClient } from "@/lib/supabase/server";
 
 const HEADERS = { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" };
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -75,12 +75,12 @@ async function current(ctx: Context): Promise<User | null> {
   if (r.data.user === null && !ctx.hadCookie) return null;
   return checkedUser(r.data.user);
 }
-async function role(ctx: Context, user: User): Promise<string> {
+async function role(ctx: Pick<Context, "db">, user: User): Promise<string> {
   const r = await ctx.db.from("profiles").select("id,role").eq("id", user.id).maybeSingle();
   if (r.error || !object(r.data) || r.data.id !== user.id || typeof r.data.role !== "string" || !["client", "artisan", "manager", "admin"].includes(r.data.role)) fail();
   return r.data.role;
 }
-async function clientRole(ctx: Context, user: User) { if (await role(ctx, user) !== "client") fail(409); }
+async function clientRole(ctx: Pick<Context, "db">, user: User) { if (await role(ctx, user) !== "client") fail(409); }
 const confirmed = (user: User, expected?: string) => {
   const n = authPhone(user.phone);
   return n !== null && (!expected || n === expected) && typeof user.phone_confirmed_at === "string" && Number.isFinite(Date.parse(user.phone_confirmed_at));
@@ -133,7 +133,7 @@ async function start(request: Request, ctx: Context, data: z.output<typeof start
   }
   return { status: "code_requested", kind, retry_after: 60, phone_suffix: data.phone.slice(-4) };
 }
-async function verify(request: Request, ctx: Context, data: z.output<typeof verifySchema>) {
+async function verify(request: Request, ctx: Context, data: z.output<typeof verifySchema>, native: boolean) {
   const before = await current(ctx);
   if (data.kind === "sms" && before) fail(409);
   if (data.kind === "phone_change" && !before) fail(401);
@@ -150,6 +150,9 @@ async function verify(request: Request, ctx: Context, data: z.output<typeof veri
   const after = await current(ctx);
   if (!after || after.id !== returned.id || (before && after.id !== before.id) || !confirmed(after, data.phone)) fail();
   await clientRole(ctx, after);
+  if (native && session) {
+    return { verified: true, session: { access_token: session.access_token, refresh_token: session.refresh_token } };
+  }
   return { verified: true };
 }
 async function session(ctx: Context) {
@@ -176,15 +179,26 @@ async function upgrade(request: Request, ctx: Context, data: z.output<typeof upg
   if (target !== data.email) fail();
   return { confirmation_required: true };
 }
-export async function phoneRoute(operation: "start" | "verify" | "session" | "upgrade" | "history", request: Request): Promise<Response> {
+export async function phoneRoute(operation: "start" | "verify" | "nativeVerify" | "session" | "upgrade" | "history", request: Request): Promise<Response> {
   try {
     assertOrigin(request);
     if (operation !== "history" && new URL(request.url).searchParams.size) fail(422);
+    if (operation === "history" && request.headers.has("authorization")) {
+      const { db, user } = await authenticatedClient(request);
+      return Response.json(await history({ db }, request, user), { headers: HEADERS });
+    }
+    if (operation === "nativeVerify" && (request.headers.has("cookie") || request.headers.has("authorization"))) fail(409);
     // Validate before the SDK is even constructed (including a possible session refresh).
-    const parsed = operation === "start" ? await input(request, startSchema) : operation === "verify" ? await input(request, verifySchema) : operation === "upgrade" ? await input(request, upgradeSchema) : null;
+    const parsed = operation === "start" ? await input(request, startSchema)
+      : operation === "verify" || operation === "nativeVerify" ? await input(request, verifySchema)
+      : operation === "upgrade" ? await input(request, upgradeSchema) : null;
+    if (operation === "nativeVerify" && (parsed as z.output<typeof verifySchema>).kind !== "sms") fail(422);
     const ctx = await context();
-    const body = operation === "start" ? await start(request, ctx, parsed as z.output<typeof startSchema>) : operation === "verify" ? await verify(request, ctx, parsed as z.output<typeof verifySchema>) : operation === "upgrade" ? await upgrade(request, ctx, parsed as z.output<typeof upgradeSchema>) : operation === "history" ? await history(ctx, request) : await session(ctx);
-    ctx.commit();
+    const body = operation === "start" ? await start(request, ctx, parsed as z.output<typeof startSchema>)
+      : operation === "verify" || operation === "nativeVerify" ? await verify(request, ctx, parsed as z.output<typeof verifySchema>, operation === "nativeVerify")
+      : operation === "upgrade" ? await upgrade(request, ctx, parsed as z.output<typeof upgradeSchema>)
+      : operation === "history" ? await history(ctx, request, await current(ctx)) : await session(ctx);
+    if (operation !== "nativeVerify") ctx.commit();
     return Response.json(body, { headers: HEADERS });
   } catch (error) {
     const status = error instanceof PhoneError || error instanceof ApiError ? error.status : 503;
@@ -221,8 +235,8 @@ export function phoneHistoryQuery(url: string, userId: string, verifiedPhone: st
 // Preserve PostgreSQL's fractional microseconds: Date alone rounds keyset boundaries to ms.
 const historyMicros = (s: string) => BigInt(Date.parse(s)) * 1000n + BigInt((/\.(\d{1,6})(?:Z|[+-]\d\d:\d\d)$/.exec(s)?.[1] ?? "").slice(3).padEnd(3, "0") || "0");
 const historyBefore = (a: { created_at: string; id: string }, b: { created_at: string; id: string }) => historyMicros(a.created_at) < historyMicros(b.created_at) || (historyMicros(a.created_at) === historyMicros(b.created_at) && a.id.toLowerCase() < b.id.toLowerCase());
-async function history(ctx: Context, request: Request) {
-  const user = await current(ctx); if (!user) fail(401);
+async function history(ctx: Pick<Context, "db">, request: Request, user: User | null) {
+  if (!user) fail(401);
   await clientRole(ctx, user); const phone = authPhone(user.phone);
   if (!phone || !confirmed(user)) fail(403);
   const q = phoneHistoryQuery(request.url, user.id, phone);

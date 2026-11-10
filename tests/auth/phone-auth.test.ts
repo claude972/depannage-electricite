@@ -11,8 +11,8 @@ const anonymous = { data: { user: null }, error: { name: "AuthSessionMissingErro
 const started = { error: null, data: { user: null, session: null } };
 const startBody = { phone: "0696 12 34 56", first_name: "QA", last_name: "Essai", purpose: "booking" };
 const verifyBody = { phone: PHONE, token: "123456", kind: "sms" };
-type Operation = "start" | "verify" | "session" | "upgrade" | "history";
-function fixture(op: Operation, options: { users?: unknown[]; profileRole?: string; profileId?: string; profileError?: boolean; cookie?: boolean; otp?: unknown; verify?: unknown; update?: unknown; transport?: boolean; historyRows?: unknown; historyError?: boolean; historyCount?: unknown; historyCap?: number } = {}) {
+type Operation = "start" | "verify" | "nativeVerify" | "session" | "upgrade" | "history";
+function fixture(op: Operation, options: { users?: unknown[]; profileRole?: string; profileId?: string; profileError?: boolean; cookie?: boolean; otp?: unknown; verify?: unknown; update?: unknown; transport?: boolean; historyRows?: unknown; historyError?: boolean; historyCount?: unknown; historyCap?: number; nativeUser?: ReturnType<typeof user> } = {}) {
   let sdkOptions: any, index = 0, created = 0;
   const calls: { op: string; value?: any; extra?: any }[] = [], written: unknown[] = [];
   const nextUser = () => (options.users ?? [anonymous])[Math.min(index++, (options.users ?? [anonymous]).length - 1)];
@@ -38,13 +38,18 @@ function fixture(op: Operation, options: { users?: unknown[]; profileRole?: stri
     }
     return { select: (columns: string) => ({ eq: (_key: string, id: string) => ({ maybeSingle: async () => { calls.push({ op: "profile", value: { table, columns, id } }); return { error: options.profileError ? { code: "broken" } : null, data: { id: options.profileId ?? id, role: options.profileRole ?? "client" } }; } }) }) };
   } };
-  const module = loadModule(`app/api/auth/phone/${op}/route.ts`, {
+  const route = op === "nativeVerify" ? "native/verify" : op;
+  const module = loadModule(`app/api/auth/phone/${route}/route.ts`, {
     "node:process": { env: { NEXT_PUBLIC_SUPABASE_URL: "https://fake.supabase.co", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "FAKE_PUBLIC_KEY" } },
     "@supabase/ssr": { createServerClient: (_url: string, _key: string, config: unknown) => { created++; sdkOptions = config; return db; } },
     "next/headers": { cookies: async () => ({ getAll: () => options.cookie ? [{ name: "sb-fake-auth-token", value: "OLD_COOKIE" }] : [], set: (...value: unknown[]) => written.push(value) }) },
-    "@/lib/supabase/server": { ApiError, assertOrigin: (request: Request) => { const o = request.headers.get("origin"); if (o && o !== new URL(request.url).origin) throw new ApiError(403, "ORIGIN"); } },
+    "@/lib/supabase/server": { ApiError, authenticatedClient: async (request: Request) => {
+      assert.equal(request.headers.get("authorization"), "Bearer qa.native.session");
+      if (!options.nativeUser) throw new ApiError(401, "Unauthorized");
+      return { db, user: options.nativeUser };
+    }, assertOrigin: (request: Request) => { const o = request.headers.get("origin"); if (o && o !== new URL(request.url).origin) throw new ApiError(403, "ORIGIN"); } },
   });
-  const request = (body?: unknown, headers: Record<string, string> = {}, suffix = "") => (module[(op === "session" || op === "history") ? "GET" : "POST"] as (r: Request) => Promise<Response>)(new Request(`${ORIGIN}/api/auth/phone/${op}${suffix}`, { method: (op === "session" || op === "history") ? "GET" : "POST", headers: { Origin: ORIGIN, "Content-Type": "application/json", ...headers }, ...((op === "session" || op === "history") ? {} : { body: JSON.stringify(body) }) }));
+  const request = (body?: unknown, headers: Record<string, string> = {}, suffix = "") => (module[(op === "session" || op === "history") ? "GET" : "POST"] as (r: Request) => Promise<Response>)(new Request(`${ORIGIN}/api/auth/phone/${route}${suffix}`, { method: (op === "session" || op === "history") ? "GET" : "POST", headers: { Origin: ORIGIN, "Content-Type": "application/json", ...headers }, ...((op === "session" || op === "history") ? {} : { body: JSON.stringify(body) }) }));
   return { request, calls, written, created: () => created, raw: (r: Request) => (module[op === "session" || op === "history" ? "GET" : "POST"] as (request: Request) => Promise<Response>)(r) };
 }
 async function result(response: Response, status: number) {
@@ -226,4 +231,44 @@ test("history boundaries N=limit and N=limit+1 have an exact terminal/continuing
     const f = fixture("history", { users: active(), historyRows: historyRows.slice(0, length) }); const b = await result(await f.request(), 200);
     assert.equal(b.interventions.length, 25); assert.equal(b.page.has_more, length === 26); assert.equal(typeof b.page.next_cursor === "string", length === 26);
   }
+});
+
+
+test("native verification returns only the verified client’s session and never sets a cookie", async () => {
+  const users = [anonymous, { data: { user: user() }, error: null }];
+  const valid = fixture("nativeVerify", { users });
+  const response = await valid.request(verifyBody);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "private, no-store");
+  assert.equal(response.headers.has("set-cookie"), false);
+  assert.equal(valid.written.length, 0);
+  assert.deepEqual(await response.json(), {
+    verified: true, session: { access_token: "OPAQUE_ACCESS", refresh_token: "OPAQUE_REFRESH" },
+  });
+  const role = fixture("nativeVerify", { users, profileRole: "artisan" });
+  await result(await role.request(verifyBody), 409);
+  for (const headers of [{ cookie: "sb-qa-auth-token=other" }, { authorization: "Bearer another.session.token" }]) {
+    const mixed = fixture("nativeVerify");
+    await result(await mixed.request(verifyBody, headers as Record<string, string>), 409);
+    assert.equal(mixed.created(), 0);
+  }
+  const update = fixture("nativeVerify");
+  await result(await update.request({ ...verifyBody, kind: "phone_change" }), 422);
+  assert.equal(update.created(), 0);
+});
+
+test("native history authorizes the bearer identity and keeps the existing phone and client scope", async () => {
+  const authorization = { authorization: "Bearer qa.native.session" };
+  const valid = fixture("history", { nativeUser: user() });
+  await result(await valid.request(undefined, authorization), 200);
+  assert.equal(valid.created(), 0);
+  assert.equal(valid.calls.find(call => call.op === "history")?.value.eq.value, ID);
+  const wrongRole = fixture("history", { nativeUser: user(), profileRole: "artisan" });
+  await result(await wrongRole.request(undefined, authorization), 409);
+  assert.equal(wrongRole.calls.some(call => call.op === "history"), false);
+  const unconfirmed = fixture("history", { nativeUser: user({ phone_confirmed_at: null }) });
+  await result(await unconfirmed.request(undefined, authorization), 403);
+  const invalid = fixture("history", { cookie: true });
+  await result(await invalid.request(undefined, authorization), 401);
+  assert.equal(invalid.created(), 0);
 });

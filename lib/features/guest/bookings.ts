@@ -19,8 +19,8 @@ async function body(request: Request) {
   const bytes = new Uint8Array(size); let at = 0; for (const chunk of chunks) { bytes.set(chunk, at); at += chunk.length; }
   try { return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); } catch { throw new ApiError(422, "Vérifiez les informations saisies."); }
 }
-async function identity() {
-  const result = await authenticatedClient();
+async function identity(request: Request) {
+  const result = await authenticatedClient(request);
   const profile = await result.db.from("profiles").select("id,role").eq("id", result.user.id).maybeSingle();
   dbError(profile.error);
   if (!profile.data || profile.data.id !== result.user.id) throw unavailable();
@@ -49,7 +49,7 @@ function validResult(value: unknown) {
 export async function bookingRoute(request: Request, operation: "create" | "status" | "cancel" | "finalize") {
   try {
     assertOrigin(request);
-    const { db, user } = await identity();
+    const { db, user } = await identity(request);
     if (operation === "status") {
       const query = new URL(request.url).searchParams;
       if ([...query.keys()].some(k => !["request_id", "intervention_id"].includes(k)) || [...query].length !== 1) throw new ApiError(422, "Vérifiez la référence.");
