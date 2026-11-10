@@ -98,7 +98,7 @@ export const screens = [
     form('Décrivez la panne', [fieldProblem, fieldDescription, ['Ajouter une illustration de démonstration', 'photo']], 'Continuer vers le lieu', 'adresse-demande'),
   ]),
   screen('adresse-demande', 'client', 'Lieu et rendez-vous', [], 'Précisez où et quand intervenir.', [
-    form('Adresse d’intervention', [fieldCity, ['Adresse de démonstration', 'text', 'Résidence Exemple'], ['Créneau souhaité', ['Dès que possible', 'Matin', 'Après-midi']]], 'Voir le récapitulatif', 'recapitulatif'),
+    form('Adresse d’intervention', [fieldCity, ['Adresse de démonstration', 'text', 'Résidence Exemple'], ['Créneau souhaité', ['Dès que possible', 'Un autre jour', 'Matin', 'Après-midi']]], 'Voir le récapitulatif', 'recapitulatif'),
   ], [link('Ouvrir la sélection de position', 'position')]),
   screen('recapitulatif', 'client', 'Récapitulatif de la demande', [], 'Vérifiez les informations avant de confirmer.', [
     facts('Demande de démonstration', [['Problème', 'Prises sans courant'], ['Lieu', 'Fort-de-France'], ['Créneau', 'Matin'], ['Estimation d’exemple', '90–190 € TTC']]),

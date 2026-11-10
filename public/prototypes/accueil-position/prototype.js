@@ -14,6 +14,10 @@ const modes = {
   install: { title: 'Installations courantes', cards: ['add', 'fitting'] },
   diagnose: { title: 'Situations à vérifier', cards: ['check', 'panel', 'outage'] },
 };
+const demoCategories = {
+  outage: 'Coupure de courant', socket: 'Prise ou interrupteur', panel: 'Tableau électrique', light: 'Éclairage',
+  add: 'Prise ou interrupteur', fitting: 'Éclairage', check: 'Diagnostic',
+};
 const places = [
   { id: 'home', title: 'Domicile', area: 'Fort-de-France', context: 'Lieu enregistré · Démo', icon: 'home', favorite: true },
   { id: 'work', title: 'Travail', area: 'Le Lamentin', context: 'Lieu enregistré · Démo', icon: 'work' },
@@ -29,6 +33,7 @@ const screens = {
   activite: $('#activity-screen'),
 };
 const dock = $('.dock');
+const webHeader = $('#web-header');
 const settingsTabs = Array.from(document.querySelectorAll('[data-settings-tab]'));
 const returnFocus = new Map();
 const rail = $('#services-rail');
@@ -81,7 +86,8 @@ function updateScreen(focus = false, restore = false) {
   const current = currentScreen();
   for (const [id, screen] of Object.entries(screens)) screen.hidden = id !== current;
   dock.hidden = current === 'position' || current === 'parametres';
-  dock.querySelectorAll('[data-screen]').forEach((button) => {
+  webHeader.hidden = dock.hidden;
+  document.querySelectorAll('.dock [data-screen], .web-nav [data-screen]').forEach((button) => {
     if (button.dataset.screen === current) button.setAttribute('aria-current', 'page');
     else button.removeAttribute('aria-current');
   });
@@ -89,12 +95,13 @@ function updateScreen(focus = false, restore = false) {
   if (current === 'position') {
     const label = history.state?.from === 'compte' ? 'Retour au compte' : 'Retour à l’accueil';
     screens.position.querySelector('[data-return]').setAttribute('aria-label', label);
+    renderMap($('#web-map'));
   }
   if (current === 'accueil') requestAnimationFrame(updateArrows);
   if (!focus) return;
   window.scrollTo(0, 0);
   const preferred = restore ? returnFocus.get(current) : null;
-  const target = preferred?.isConnected && !preferred.closest('[hidden]') ? preferred : screens[current].querySelector('h1');
+  const target = preferred?.isConnected && preferred.getClientRects().length ? preferred : screens[current].querySelector('h1');
   target.focus({ preventScroll: true });
 }
 
@@ -157,7 +164,7 @@ function renderProblemResults() {
   const matches = Object.entries(services).filter(([, s]) => normalized(`${s.title} ${s.label} ${s.detail}`).includes(query));
   problemResults.innerHTML = matches.length
     ? matches.map(([id, s]) => `<button type="button" data-service="${id}">${s.title}${icon('next', 'small')}</button>`).join('')
-    : '<p>Aucun résultat. Essayez « prise », « coupure » ou « tableau ».</p>';
+    : '<p role="status">Aucun résultat. Essayez « prise », « coupure » ou « tableau ».</p>';
 }
 
 function setFilter(value) {
@@ -176,6 +183,7 @@ function renderPlaces() {
 function choosePlace(value) {
   selected = value;
   $('#home-location').textContent = value.area;
+  $('#web-location-label').textContent = value.area;
   $('#account-location').textContent = value.area;
   if (sheet.open) sheet.close();
   renderPlaces();
@@ -183,16 +191,30 @@ function choosePlace(value) {
   announce(`${value.area} sélectionné pour cette maquette.`);
 }
 
-function openMap() {
-  const mapPlaces = [places[0], places[1], places[3]];
-  showSheet('Choisir sur la carte', `<p>Carte schématique de démonstration. Sélectionnez une commune.</p><div class="map"><svg viewBox="0 0 390 230" preserveAspectRatio="none" aria-hidden="true"><path d="M0 21C82 2 116 72 89 111c-18 26-61 47-89 40zM390 101c-48 15-49 49-73 52-40 5-55 42-40 77h113z" fill="#bddef2"/><path d="M-5 195C92 147 134 151 178 149s72-36 109-61 57-20 106-37M37 13c44 27 85 45 105 74s9 79 48 107l60 41M-8 102c101 30 126-23 184-33 69-12 125-14 213 37" fill="none" stroke="#fffdf4" stroke-width="10"/><path d="M37 13c44 27 85 45 105 74s9 79 48 107l60 41" fill="none" stroke="#e3c98b" stroke-width="2"/></svg>${mapPlaces.map((p, i) => `<button type="button" class="map-pin" data-pin="${p.id}" aria-pressed="${i === 0}">${p.area}</button>`).join('')}</div><button class="primary" type="button" id="confirm-map">Choisir Fort-de-France</button>`);
-  let pin = mapPlaces[0];
-  sheetBody.querySelectorAll('[data-pin]').forEach((button) => button.addEventListener('click', () => {
-    pin = mapPlaces.find((p) => p.id === button.dataset.pin);
-    sheetBody.querySelectorAll('[data-pin]').forEach((candidate) => candidate.setAttribute('aria-pressed', String(candidate === button)));
-    $('#confirm-map').textContent = `Choisir ${pin.area}`;
+const mapPlaces = [places[0], places[1], places[3]];
+
+function renderMap(root) {
+  let pin = mapPlaces.includes(selected) ? selected : mapPlaces[0];
+  root.innerHTML = `<div class="map"><svg viewBox="0 0 390 230" preserveAspectRatio="none" aria-hidden="true"><path d="M0 21C82 2 116 72 89 111c-18 26-61 47-89 40zM390 101c-48 15-49 49-73 52-40 5-55 42-40 77h113z" fill="#bddef2"/><path d="M-5 195C92 147 134 151 178 149s72-36 109-61 57-20 106-37M37 13c44 27 85 45 105 74s9 79 48 107l60 41M-8 102c101 30 126-23 184-33 69-12 125-14 213 37" fill="none" stroke="#fffdf4" stroke-width="10"/><path d="M37 13c44 27 85 45 105 74s9 79 48 107l60 41" fill="none" stroke="#e3c98b" stroke-width="2"/></svg>${mapPlaces.map((value) => `<button type="button" class="map-pin" data-pin="${value.id}" aria-pressed="${value === pin}">${value.area}</button>`).join('')}</div><button class="primary" type="button" data-map-confirm>Choisir ${pin.area}</button>`;
+  const buttons = Array.from(root.querySelectorAll('[data-pin]'));
+  const confirm = root.querySelector('[data-map-confirm]');
+  buttons.forEach((button) => button.addEventListener('click', () => {
+    pin = mapPlaces.find((value) => value.id === button.dataset.pin);
+    buttons.forEach((candidate) => candidate.setAttribute('aria-pressed', String(candidate === button)));
+    confirm.textContent = `Choisir ${pin.area}`;
   }));
-  $('#confirm-map').addEventListener('click', () => choosePlace(pin));
+  confirm.addEventListener('click', () => choosePlace(pin));
+}
+
+function openMap() {
+  showSheet('Choisir sur la carte', '<p>Carte de démonstration. Sélectionnez une commune.</p><div data-map-dialog></div>');
+  renderMap(sheetBody.querySelector('[data-map-dialog]'));
+}
+
+function focusSection(section) {
+  const target = document.getElementById(section);
+  target.scrollIntoView({ block: 'start' });
+  target.querySelector('h2').focus({ preventScroll: true });
 }
 
 const accountNotes = {
@@ -238,16 +260,27 @@ document.addEventListener('click', (event) => {
   else if (accountAction) openAccountAction(accountAction);
   else if (section) {
     openScreen('accueil', trigger);
-    const target = document.getElementById(section);
-    target.scrollIntoView({ block: 'start' });
-    target.querySelector('h2').focus({ preventScroll: true });
+    focusSection(section);
   } else if (nextMode) {
     mode = nextMode;
     document.querySelectorAll('[data-mode]').forEach((button) => button.setAttribute('aria-pressed', String(button === trigger)));
     renderCards();
   } else if (service) {
     const item = services[service];
-    showSheet(item.title, `<p>${item.detail} Pour tester la suite, choisissez un lieu d’intervention.</p><button type="button" class="primary" data-position>Choisir une position</button>`);
+    const next = selected
+      ? `<p><strong>Lieu d’intervention</strong> · ${selected.area}</p><div class="service-sheet-actions"><a class="primary web-form-link" id="test-request-link">Voir le formulaire de test</a><button type="button" class="secondary" data-position>Modifier l’adresse</button></div>`
+      : '<button type="button" class="primary" data-position>Choisir une position</button>';
+    showSheet(item.title, `<p>${item.detail}</p>${next}`);
+    if (selected) {
+      const request = new URL('./maquettes.html', location.href);
+      request.searchParams.set('panne', demoCategories[service]);
+      request.searchParams.set('lieu', selected.area);
+      if ($('#schedule').dataset.planned === 'true') request.searchParams.set('creneau', 'Un autre jour');
+      request.hash = 'ecran/demande';
+      const link = $('#test-request-link');
+      link.href = request.href;
+      link.addEventListener('click', () => sheet.close());
+    }
   } else if (nextFilter) setFilter(filter === nextFilter ? '' : nextFilter);
   else if (placeId) choosePlace(places.find((p) => p.id === placeId));
 });
@@ -265,7 +298,17 @@ $('#demo-position').addEventListener('click', () => choosePlace(demoPosition));
 $('#open-map').addEventListener('click', openMap);
 problem.addEventListener('input', renderProblemResults);
 place.addEventListener('input', renderPlaces);
-for (const id of ['#problem-search', '#place-search']) $(id).addEventListener('submit', (e) => e.preventDefault());
+$('#place-search').addEventListener('submit', (event) => event.preventDefault());
+$('#problem-search').addEventListener('submit', (event) => {
+  event.preventDefault();
+  if (!normalized(problem.value)) {
+    focusSection('services');
+    return;
+  }
+  const matches = problemResults.querySelectorAll('button');
+  if (matches.length === 1) matches[0].click();
+  else (matches[0] ?? problem).focus();
+});
 for (const [id, direction] of [['#cards-prev', -1], ['#cards-next', 1]]) $(id).addEventListener('click', () => rail.scrollBy({ left: direction * ((rail.firstElementChild?.offsetWidth ?? 0) + 14), behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' }));
 rail.addEventListener('scroll', updateArrows, { passive: true });
 window.addEventListener('resize', updateArrows);

@@ -83,7 +83,12 @@ function section(title, content, className = '') {
 function renderField([label, type, placeholder = ''], index) {
   const id = `atlas-field-${index}`;
   if (type === 'photo') return `<div class="atlas-field"><span>${label}</span><button class="atlas-photo-add" type="button" data-photo>${icon('camera')}Ajouter la photo d’exemple</button><img class="atlas-added-photo" src="/home/section-outlet.jpg" width="128" height="92" alt="Mécanismes de prises de démonstration" hidden></div>`;
-  if (Array.isArray(type)) return `<div class="atlas-field"><label for="${id}">${label}</label><select id="${id}" name="${escaped(label)}" required>${type.map((option) => `<option>${escaped(option)}</option>`).join('')}</select></div>`;
+  if (Array.isArray(type)) {
+    const demoFields = { demande: { 'Type de problème': 'panne' }, 'adresse-demande': { Commune: 'lieu', 'Créneau souhaité': 'creneau' } };
+    const key = demoFields[currentScreen?.id]?.[label];
+    const initial = key ? new URLSearchParams(location.search).get(key) : null;
+    return `<div class="atlas-field"><label for="${id}">${label}</label><select id="${id}" name="${escaped(label)}" required>${type.map((option) => `<option${option === initial ? ' selected' : ''}>${escaped(option)}</option>`).join('')}</select></div>`;
+  }
   const optional = type.endsWith('?');
   const required = optional ? '' : ' required';
   const attributes = `id="${id}" name="${escaped(label)}" placeholder="${escaped(placeholder)}"${required}`;

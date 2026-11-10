@@ -8,9 +8,10 @@
   <meta name="theme-color" content="#ffffff">
   <title>Maquette interactive · Dépannage électrique</title>
   <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./web.css">
   <script defer src="./prototype.js"></script>
 </head>
-<body>
+<body class="prototype-home">
 <svg class="symbols" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
   <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
   <symbol id="i-next" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
@@ -70,6 +71,18 @@
   </symbol>
 </svg>
 
+<header class="web-header" id="web-header">
+  <div class="wrap web-header-inner">
+    <button class="brand web-brand" type="button" data-screen="accueil" aria-label="Dépannage électrique, accueil"><span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-bolt"/></svg></span><span>Dépannage<br>électrique</span></button>
+    <nav class="web-nav" aria-label="Navigation principale">
+      <button type="button" data-screen="accueil">Accueil</button>
+      <button type="button" data-section="services">Services</button>
+      <button type="button" data-screen="activite">Activité</button>
+      <button class="web-account" type="button" data-screen="compte"><svg class="icon small" aria-hidden="true"><use href="#i-person"/></svg>Compte</button>
+    </nav>
+  </div>
+</header>
+
 <section id="home-screen" aria-label="Accueil">
   <header class="top wrap">
     <button type="button" class="current-location" data-position>
@@ -87,12 +100,32 @@
     </div>
   </div>
   <main class="wrap home-content">
-    <h1 class="visually-hidden" tabindex="-1">Dépannage électrique</h1>
-    <form class="search-pill home-search" id="problem-search">
-      <label class="search-input"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg><span class="visually-hidden">Rechercher un problème électrique</span><input type="search" id="problem-input" placeholder="Quel est le problème ?" autocomplete="off" aria-controls="problem-results"></label>
-      <button type="button" class="schedule" id="schedule"><svg class="icon" aria-hidden="true"><use href="#i-calendar"/></svg><span>Plus tard</span></button>
-    </form>
-    <div id="problem-results" class="problem-results" hidden></div>
+    <div class="web-hero">
+      <div class="web-hero-content">
+        <h1 class="home-heading" tabindex="-1">Dépannage électrique</h1>
+        <p class="web-lead web-only">Indiquez le lieu et ce qui ne fonctionne plus pour trouver la bonne intervention.</p>
+        <form class="home-search" id="problem-search">
+          <button class="web-location web-only" type="button" data-position>
+            <svg class="icon" aria-hidden="true"><use href="#i-pin"/></svg>
+            <span><small>Adresse d’intervention</small><strong id="web-location-label">Choisir une position</strong></span>
+            <svg class="icon small" aria-hidden="true"><use href="#i-next"/></svg>
+          </button>
+          <div class="search-pill problem-entry">
+            <label class="search-input"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg><span class="visually-hidden">Rechercher un problème électrique</span><input type="search" id="problem-input" placeholder="Quel est le problème ?" autocomplete="off" aria-controls="problem-results"></label>
+            <button type="button" class="schedule" id="schedule"><svg class="icon" aria-hidden="true"><use href="#i-calendar"/></svg><span>Plus tard</span></button>
+          </div>
+          <div id="problem-results" class="problem-results" hidden></div>
+          <div class="web-actions web-only">
+            <button class="primary web-continue" type="submit">Voir les interventions <svg class="icon small" aria-hidden="true"><use href="#i-next"/></svg></button>
+            <span><svg class="icon small" aria-hidden="true"><use href="#i-check"/></svg>Devis avant travaux</span>
+          </div>
+        </form>
+      </div>
+      <figure class="web-hero-image web-only">
+        <img src="/home/hero-photo-1.jpg" width="1800" height="1200" alt="Un électricien inspecte une armoire électrique">
+        <figcaption>Intervention électrique · Photo d’illustration</figcaption>
+      </figure>
+    </div>
 
     <section class="section" aria-labelledby="quick-title">
       <h2 id="quick-title">Pour vous</h2>
@@ -117,18 +150,25 @@
     <h1 id="position-title" tabindex="-1">Définir votre localisation</h1>
   </header>
   <main class="location-main">
-    <form class="search-pill" id="place-search">
-      <label class="search-input"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg><span class="visually-hidden">Rechercher un lieu ou une commune</span><input type="search" id="place-input" placeholder="Recherchez un lieu" autocomplete="off" aria-controls="place-results"></label>
-    </form>
-    <div class="place-chips" aria-label="Filtres de lieux">
-      <button type="button" data-filter="home" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-home"/></svg>Domicile</button>
-      <button type="button" data-filter="work" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-work"/></svg>Travail</button>
-      <button type="button" data-filter="favorite" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-star"/></svg>Favoris</button>
+    <div class="location-picker">
+      <form class="search-pill" id="place-search">
+        <label class="search-input"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg><span class="visually-hidden">Rechercher un lieu ou une commune</span><input type="search" id="place-input" placeholder="Recherchez un lieu" autocomplete="off" aria-controls="place-results"></label>
+      </form>
+      <div class="place-chips" aria-label="Filtres de lieux">
+        <button type="button" data-filter="home" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-home"/></svg>Domicile</button>
+        <button type="button" data-filter="work" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-work"/></svg>Travail</button>
+        <button type="button" data-filter="favorite" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-star"/></svg>Favoris</button>
+      </div>
+      <button type="button" class="place-row current-place" id="demo-position"><span class="place-icon"><span class="position-dot" aria-hidden="true"></span></span><span><strong>Position actuelle</strong><small>Exemple au Lamentin</small></span><svg class="icon small" aria-hidden="true"><use href="#i-next"/></svg></button>
+      <div class="location-results" id="place-results"></div>
+      <button type="button" class="place-row map-link" id="open-map"><span class="place-icon"><svg class="icon" aria-hidden="true"><use href="#i-pin"/></svg></span><span><strong>Définir le lieu sur la carte</strong></span><svg class="icon small" aria-hidden="true"><use href="#i-next"/></svg></button>
+      <p class="prototype-label">Lieux d’exemple en Martinique · Position simulée</p>
     </div>
-    <button type="button" class="place-row current-place" id="demo-position"><span class="place-icon"><span class="position-dot" aria-hidden="true"></span></span><span><strong>Position actuelle</strong><small>Exemple au Lamentin</small></span><svg class="icon small" aria-hidden="true"><use href="#i-next"/></svg></button>
-    <div class="location-results" id="place-results"></div>
-    <button type="button" class="place-row map-link" id="open-map"><span class="place-icon"><svg class="icon" aria-hidden="true"><use href="#i-pin"/></svg></span><span><strong>Définir le lieu sur la carte</strong></span><svg class="icon small" aria-hidden="true"><use href="#i-next"/></svg></button>
-    <p class="prototype-label">Lieux d’exemple en Martinique · Position simulée</p>
+    <section class="web-map-panel web-only" aria-labelledby="web-map-title">
+      <h2 id="web-map-title">Choisir sur la carte</h2>
+      <p>Carte de démonstration. Sélectionnez une commune.</p>
+      <div id="web-map"></div>
+    </section>
   </main>
 </section>
 
