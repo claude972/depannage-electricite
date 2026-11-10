@@ -178,7 +178,7 @@ function renderCatalogue(ids, showEstimate = false) {
     const estimate = showEstimate ? `<small>${demoEstimates[demoCategories[id]]}</small>` : '';
     return `<button class="catalogue-item" type="button" data-service="${id}">
       <img src="${service.image}" alt="" width="144" height="144" loading="lazy" decoding="async" style="object-position:${service.position}">
-      <span class="catalogue-item-copy"><span class="catalogue-meta"><span>${service.label}</span>${estimate}</span><strong>${service.title}</strong></span>
+      <span class="catalogue-item-copy"><span class="catalogue-category">${service.label}</span><strong>${service.title}</strong>${estimate}</span>
       ${icon('next', 'small')}
     </button>`;
   }).join('');
@@ -334,6 +334,14 @@ $('#schedule').addEventListener('click', () => {
 });
 $('#demo-position').addEventListener('click', () => choosePlace(demoPosition));
 $('#open-map').addEventListener('click', openMap);
+$('#catalogue-toggle').addEventListener('click', (event) => {
+  const button = event.currentTarget;
+  const extra = $('#catalogue-extra');
+  const expanded = extra.hidden;
+  extra.hidden = !expanded;
+  button.setAttribute('aria-expanded', String(expanded));
+  button.querySelector('span').textContent = expanded ? 'Réduire le catalogue' : 'Voir toutes les interventions';
+});
 $('#start-diagnostic').addEventListener('click', () => {
   $('.service-tabs [data-mode="diagnose"]').click();
   focusSection('services');
@@ -359,7 +367,7 @@ window.addEventListener('popstate', () => {
   updateScreen(true, true);
 });
 renderCards();
-$('#catalogue-cards').innerHTML = renderCatalogue(featuredServices, true);
+$('#catalogue-cards').insertAdjacentHTML('afterbegin', renderCatalogue(featuredServices, true));
 $('#catalogue-extra').innerHTML = renderCatalogue(['add', 'fitting', 'check']);
 renderPlaces();
 updateScreen();

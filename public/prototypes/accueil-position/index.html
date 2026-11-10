@@ -149,49 +149,45 @@
     <div class="home-editorial">
       <section class="home-catalogue" id="catalogue" aria-labelledby="catalogue-title">
         <div class="editorial-intro">
-          <h2 id="catalogue-title" tabindex="-1">Quel dépannage vous faut-il&nbsp;?</h2>
-          <p>Choisissez la situation qui ressemble à la vôtre. Les fourchettes TTC sont des exemples. Le prix final figure sur le devis que vous acceptez.</p>
+          <h2 id="catalogue-title" tabindex="-1">Interventions électriques</h2>
+          <p>Fourchettes TTC d’exemple. Le prix final figure sur le devis que vous acceptez.</p>
         </div>
-        <div class="catalogue-grid" id="catalogue-cards"></div>
-        <details class="catalogue-more">
-          <summary><span>Voir toutes les interventions</span><span>Réduire le catalogue</span><svg class="icon small" aria-hidden="true"><use href="#i-down"/></svg></summary>
-          <div class="catalogue-grid" id="catalogue-extra"></div>
-        </details>
+        <div class="catalogue-grid" id="catalogue-cards">
+          <button class="catalogue-more" id="catalogue-toggle" type="button" aria-expanded="false" aria-controls="catalogue-extra"><span>Voir toutes les interventions</span><svg class="icon small" aria-hidden="true"><use href="#i-down"/></svg></button>
+        </div>
+        <div class="catalogue-grid" id="catalogue-extra" hidden></div>
       </section>
 
       <section class="home-urgent" aria-labelledby="urgent-title">
         <svg class="icon" aria-hidden="true"><use href="#i-bolt"/></svg>
         <div>
-          <h2 id="urgent-title">Besoin d’un dépannage rapidement&nbsp;?</h2>
-          <p>Décrivez ce qui se passe et indiquez votre adresse. Le rendez-vous dépend des disponibilités dans votre commune.</p>
+          <h2 id="urgent-title">Votre panne est urgente&nbsp;?</h2>
+          <p>Décrivez la panne et indiquez votre commune. Le créneau dépend des disponibilités.</p>
         </div>
         <a class="editorial-button" id="urgent-request" href="./maquettes.html?creneau=D%C3%A8s+que+possible#ecran/demande">Décrire ma panne urgente <svg class="icon small" aria-hidden="true"><use href="#i-next"/></svg></a>
       </section>
 
       <section class="home-matching" aria-labelledby="matching-title">
-        <div class="editorial-intro">
-          <h2 id="matching-title">Un électricien pour votre situation</h2>
-          <p>De votre demande au suivi de l’intervention, voici comment ça se passe.</p>
-        </div>
+        <h2 id="matching-title">Comment on trouve votre électricien</h2>
         <div class="matching-layout">
           <img src="/home/section-real-panel.jpg" alt="Un électricien examine un tableau électrique" width="1200" height="900" loading="lazy" decoding="async">
           <div class="matching-copy">
             <div class="faq-list matching-list">
               <details name="matching" open>
-                <summary>Décrivez ce que vous constatez <svg class="icon small" aria-hidden="true"><use href="#i-down"/></svg></summary>
-                <p>Indiquez les pièces ou les équipements concernés et depuis quand la panne se manifeste. Cela aide à orienter votre demande.</p>
+                <summary>Vous décrivez la panne <svg class="icon small" aria-hidden="true"><use href="#i-down"/></svg></summary>
+                <p>Indiquez les pièces ou appareils concernés et depuis quand la panne se manifeste.</p>
               </details>
               <details name="matching">
-                <summary>La recherche tient compte de votre commune <svg class="icon small" aria-hidden="true"><use href="#i-down"/></svg></summary>
-                <p>Nous tenons compte du type d’intervention et des disponibilités. Le rendez-vous apparaît dans votre dossier une fois confirmé.</p>
+                <summary>On recherche un artisan dans votre secteur <svg class="icon small" aria-hidden="true"><use href="#i-down"/></svg></summary>
+                <p>La recherche tient compte du type de panne et des disponibilités. Le rendez-vous confirmé apparaît dans votre dossier.</p>
               </details>
               <details name="matching">
-                <summary>Examinez le devis <svg class="icon small" aria-hidden="true"><use href="#i-down"/></svg></summary>
-                <p>L’électricien vérifie la panne et chiffre les travaux. Vous décidez si vous souhaitez les faire réaliser.</p>
+                <summary>Vous décidez après le devis <svg class="icon small" aria-hidden="true"><use href="#i-down"/></svg></summary>
+                <p>L’électricien vérifie la panne et détaille les travaux et leur coût. Vous pouvez accepter ou refuser.</p>
               </details>
               <details name="matching">
-                <summary>Suivez la demande au même endroit <svg class="icon small" aria-hidden="true"><use href="#i-down"/></svg></summary>
-                <p>Votre dossier rassemble le rendez-vous, les échanges et les documents de l’intervention.</p>
+                <summary>Vous retrouvez le suivi dans votre dossier <svg class="icon small" aria-hidden="true"><use href="#i-down"/></svg></summary>
+                <p>Le rendez-vous, les échanges et les documents sont regroupés dans le même dossier.</p>
               </details>
             </div>
             <button class="primary" id="start-diagnostic" type="button">Lancer le diagnostic</button>
@@ -204,15 +200,15 @@
         <ul>
           <li>
             <svg class="icon" aria-hidden="true"><use href="#i-receipt"/></svg>
-            <div><h3>Un budget expliqué</h3><p>Une fourchette vous donne un premier repère. Le devis précise le coût des travaux, du déplacement et des pièces, selon l’intervention.</p></div>
+            <div><h3>Le détail du prix</h3><p>Le devis indique le coût de la main-d’œuvre, du déplacement et des pièces, selon l’intervention.</p></div>
           </li>
           <li>
             <svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg>
-            <div><h3>Vous choisissez de poursuivre</h3><p>Les travaux commencent après votre accord sur le devis. Si des travaux s’ajoutent, vous pouvez examiner le devis mis à jour.</p></div>
+            <div><h3>Votre accord avant les travaux</h3><p>Les travaux commencent après votre accord. Si d’autres travaux sont nécessaires, le devis mis à jour vous est soumis.</p></div>
           </li>
           <li>
             <svg class="icon" aria-hidden="true"><use href="#i-help"/></svg>
-            <div><h3>De l’aide après l’intervention</h3><p>Retrouvez vos justificatifs et les conditions de garantie applicables. Si le problème persiste, l’assistance est accessible depuis votre dossier.</p><a class="editorial-link" href="./maquettes.html#ecran/garantie">Garantie et assistance <svg class="icon small" aria-hidden="true"><use href="#i-next"/></svg></a></div>
+            <div><h3>Une aide après l’intervention</h3><p>Votre dossier donne accès aux justificatifs, aux conditions de garantie et à l’assistance.</p><a class="editorial-link" href="./maquettes.html#ecran/garantie">Garantie et assistance <svg class="icon small" aria-hidden="true"><use href="#i-next"/></svg></a></div>
           </li>
         </ul>
       </section>
