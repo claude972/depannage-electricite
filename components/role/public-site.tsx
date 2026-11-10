@@ -25,6 +25,7 @@ import { PostalCoverageCheck } from "../features/coverage/postal-coverage-check"
 import { PublicWarrantyTerms } from "../features/warranty-policy/public-warranty-terms";
 import type { PublicTermsState } from "../features/warranty-policy/model";
 import type { OperatorField } from "../../lib/features/public-operator-profile/contract";
+import { releaseLabel } from "../../shared/release";
 import viewStyles from "./public-views.module.css";
 
 const PUBLIC_VIEWS: View[] = ["home", "new", "auth", "help", "pricing", "join", "join-organization", "demo", "about", "privacy", "legal"];
@@ -672,11 +673,15 @@ function PrivacyView({ onHome, onLogin }: { onHome: () => void; onLogin: () => v
 }
 
 // ---- Legal notice (M63) ----------------------------------------------------------------------
+// The SIRET is optional: its row exists only once published (never as a pending field).
+const SIRET_ROW = "Numéro SIRET de l’établissement";
+const SIRET_AFTER = "Numéro SIREN et numéro de TVA";
 const LEGAL_SOURCES: Record<string, Record<string, Source>> = {
   "Éditeur": {
     "Raison sociale et forme juridique": { fields: ["legal_name", "legal_form"] },
     "Adresse du siège": { fields: ["hq_address"] },
     "Numéro SIREN et numéro de TVA": { fields: ["siren"], optional: ["vat_number"], join: " · TVA " },
+    [SIRET_ROW]: { fields: ["siret"] },
     "Directeur ou directrice de la publication": { fields: ["publication_director"] },
     "Adresse de contact": { fields: ["public_email"] },
   },
@@ -698,6 +703,8 @@ function OperatorAbout() {
   );
 }
 function LegalView({ onHome }: { onHome: () => void }) {
+  const siretPublished = publishedValue(useContext(OperatorContext), "siret") !== null;
+  const rows = (fields: string[]) => (siretPublished ? fields.flatMap((field) => (field === SIRET_AFTER ? [field, SIRET_ROW] : [field])) : fields);
   return (
     <div className={`${styles.page} ${styles.document}`}>
       <Crumb onHome={onHome} current="Mentions légales" />
@@ -706,10 +713,11 @@ function LegalView({ onHome }: { onHome: () => void }) {
       {LEGAL_SECTIONS.map((section, index) => (
         <section key={section.title} className={styles.docSection} aria-labelledby={`legal-section-${index}`}>
           <h2 id={`legal-section-${index}`}>{numbered(index, section.title)}</h2>
-          <PendingFields fields={section.fields} label={section.title} sources={LEGAL_SOURCES[section.title]} />
+          <PendingFields fields={rows(section.fields)} label={section.title} sources={LEGAL_SOURCES[section.title]} />
         </section>
       ))}
       <PublishedStamp />
+      <p className={styles.footnote} data-app-version="">{releaseLabel()}</p>
       <WhenUnpublished>
         <Unavailable title="Mentions légales à compléter" reason="Aucune société, adresse ou identifiant fictif n’est affiché. Les informations ci-dessus seront renseignées par l’exploitant avant l’ouverture commerciale." blocker="PUB-08" />
       </WhenUnpublished>

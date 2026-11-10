@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { siretMatchesSiren } from "../../../shared/public-contract";
 
 const uuid = z.string().uuid();
 const text = (max: number) => z.string().trim().min(1).max(max);
@@ -16,7 +17,12 @@ export const operatorProfile = z.object({
   display_name: text(120), about_text: text(2000), service_area: text(500),
   public_phone: z.string().regex(/^\+[1-9][0-9]{6,14}$/),
   vat_number: z.string().regex(/^[A-Z]{2}[0-9A-Z]{2,14}$/),
-}).partial().strict();
+  // Optional establishment number: 14 digits, only alongside the SIREN it starts with.
+  siret: z.string().regex(/^[0-9]{14}$/),
+}).partial().strict().superRefine((profile, ctx) => {
+  if (profile.siret !== undefined && !siretMatchesSiren(profile.siret, profile.siren))
+    ctx.addIssue({ code: "custom", path: ["siret"], message: "siret_siren_mismatch" });
+});
 export type OperatorProfile = z.infer<typeof operatorProfile>;
 export type OperatorField = keyof OperatorProfile;
 export const MINIMUM_FIELDS: readonly OperatorField[] = [

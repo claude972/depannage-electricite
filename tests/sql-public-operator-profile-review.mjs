@@ -55,6 +55,14 @@ try {
   await rejects(() => write("outside",key,0,"save",draft), "42501");
   await rejects(() => write("owner",key,0,"save",{ ...draft, internal_key: "never public" }), "22023");
   await rejects(() => write("owner",key,0,"save",{ ...draft, public_email: "incorrect" }), "22023");
+  // Optional SIRET: 14 digits, only alongside the SIREN it starts with.
+  await rejects(() => write("owner",key,0,"save",{ ...draft, siret: "0000000010001" }), "22023");
+  await rejects(() => write("owner",key,0,"save",{ ...draft, siret: "00000000200012" }), "22023");
+  await rejects(() => write("owner",key,0,"save",{ siret: "00000000100012" }), "22023");
+  const valid = async (profile) => (await db.query("select public.valid_public_operator_profile($1) v", [profile])).rows[0].v;
+  assert.equal(await valid(draft), true);
+  assert.equal(await valid({ ...draft, siret: "00000000100012" }), true);
+  assert.equal(await valid({ ...draft, siret: "00000000200012" }), false);
   assert.deepEqual(await write("owner",key,0,"save",{ about_text: "Brouillon partiel" }), { version: 1, action: "save" });
   assert.equal(await published(), null);
   await rejects(() => write("owner",crypto.randomUUID(),1,"publish"), "22023");
@@ -79,6 +87,10 @@ try {
   assert.equal(await published(), null);
   assert.deepEqual(await write("owner",withdraw,4,"withdraw"), { version: 5, action: "withdraw" });
   assert.equal((await db.query("select count(*)::int v from public.audit_log where action like 'public_operator_profile:%'")).rows[0].v, 5);
+  // A coherent SIRET is kept in the draft; saving it publishes nothing.
+  assert.deepEqual(await write("owner",crypto.randomUUID(),5,"save",{ ...draft, siret: "00000000100012" }), { version: 6, action: "save" });
+  assert.equal((await editor("owner")).draft.siret, "00000000100012");
+  assert.equal(await published(), null);
   const coverage = (postal) => as("anon", "select public.read_public_coverage($1) v", [postal]);
   const coverageEditor = (actor) => as(actor, "select public.read_coverage_editor() v");
   const publishCodes = (actor, command, version, action, codes = null) =>

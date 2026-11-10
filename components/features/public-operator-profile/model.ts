@@ -18,6 +18,7 @@ export const FIELD_LABELS: Record<OperatorField, string> = {
   legal_name: "Raison sociale",
   legal_form: "Forme juridique",
   siren: "SIREN (9 chiffres)",
+  siret: "SIRET de l’établissement (14 chiffres, facultatif)",
   vat_number: "Numéro de TVA intracommunautaire",
   hq_address: "Adresse du siège",
   publication_director: "Directeur ou directrice de la publication",
@@ -37,11 +38,11 @@ export const FIELD_LABELS: Record<OperatorField, string> = {
   about_text: "Présentation de l’exploitant",
   service_area: "Zone d’intervention couverte",
 };
-export const FIELD_ORDER: OperatorField[] = ["legal_name", "legal_form", "siren", "vat_number", "hq_address", "publication_director", "public_email", "privacy_email", "privacy_controller", "privacy_retention", "privacy_notice", "public_phone", "host_name", "host_address", "host_contact", "rights_holder", "display_name", "about_text", "team_text", "service_area", "network_terms"];
+export const FIELD_ORDER: OperatorField[] = ["legal_name", "legal_form", "siren", "siret", "vat_number", "hq_address", "publication_director", "public_email", "privacy_email", "privacy_controller", "privacy_retention", "privacy_notice", "public_phone", "host_name", "host_address", "host_contact", "rights_holder", "display_name", "about_text", "team_text", "service_area", "network_terms"];
 /** Same maximum lengths as the contract (lib/features/public-operator-profile/contract.ts). */
 export const FIELD_MAX: Record<OperatorField, number> = {
-  // siren / VAT / phone: room for the spaces the form strips before validation.
-  legal_name: 160, legal_form: 80, siren: 11, vat_number: 20, hq_address: 500, publication_director: 160,
+  // siren / siret / VAT / phone: room for the spaces the form strips before validation.
+  legal_name: 160, legal_form: 80, siren: 11, siret: 17, vat_number: 20, hq_address: 500, publication_director: 160,
   public_email: 254, privacy_email: 254, privacy_controller: 200, privacy_retention: 2000, privacy_notice: 8000,
   public_phone: 20, host_name: 160, host_address: 500, host_contact: 254, rights_holder: 160,
   display_name: 120, about_text: 2000, service_area: 500, team_text: 4000, network_terms: 8000,
@@ -138,19 +139,21 @@ export type EditorView = {
 };
 export const EDITOR_INITIAL: EditorView = { phase: "loading", data: null, busy: false, error: "", pending: null, notice: "" };
 
+export const SIRET_MISMATCH = "SIRET : il doit commencer par les 9 chiffres du SIREN saisi au-dessus.";
 /** Form values → profile for the save command (empty fields are omitted), or field errors. */
 export function formToProfile(values: Partial<Record<OperatorField, string>>): { profile: OperatorProfile } | { errors: Partial<Record<OperatorField, string>> } {
   const candidate: Record<string, string> = {};
   for (const f of FIELD_ORDER) {
     const v = (values[f] ?? "").trim();
-    if (v) candidate[f] = f === "vat_number" ? v.replace(/\s/g, "").toUpperCase() : f === "public_phone" || f === "siren" ? v.replace(/[\s.-]/g, "") : v;
+    if (v) candidate[f] = f === "vat_number" ? v.replace(/\s/g, "").toUpperCase() : f === "public_phone" || f === "siren" || f === "siret" ? v.replace(/[\s.-]/g, "") : v;
   }
   const parsed = operatorProfile.safeParse(candidate);
   if (parsed.success) return { profile: parsed.data };
   const errors: Partial<Record<OperatorField, string>> = {};
   for (const issue of parsed.error.issues) {
     const f = String(issue.path[0] ?? "") as OperatorField;
-    if (f in FIELD_LABELS && !errors[f]) errors[f] = `${FIELD_LABELS[f]} : valeur invalide.`;
+    // The only cross-field rule of the contract: a well-formed SIRET that does not extend the SIREN.
+    if (f in FIELD_LABELS && !errors[f]) errors[f] = f === "siret" && issue.code === "custom" ? SIRET_MISMATCH : `${FIELD_LABELS[f]} : valeur invalide.`;
   }
   return { errors };
 }

@@ -1,7 +1,8 @@
 {
   "cli": {
     "version": ">= 27.2.0",
-    "requireCommit": true
+    "requireCommit": true,
+    "appVersionSource": "local"
   },
   "build": {
     "preview": {
@@ -13,6 +14,29 @@
       },
       "ios": {
         "simulator": true
+      }
+    },
+    "simulator": {
+      "distribution": "internal",
+      "environment": "preview",
+      "android": {
+        "buildType": "apk",
+        "credentialsSource": "local"
+      },
+      "ios": {
+        "simulator": true
+      }
+    },
+    "device": {
+      "distribution": "internal",
+      "environment": "preview",
+      "android": {
+        "buildType": "apk",
+        "credentialsSource": "local"
+      },
+      "ios": {
+        "simulator": false,
+        "credentialsSource": "remote"
       }
     }
   }
