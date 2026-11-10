@@ -22,6 +22,15 @@ test("mobile Bearer route: a lost response and three exact replays yield one int
       const route = "/api/interventions";
       const post = body => http(route, { method: "POST", body }, requester, "bearer");
       assert.equal((await post(JSON.stringify(payload))).status, 422);
+      const changedEstimate = await post(JSON.stringify({ ...payload, request_id: requestId, reviewed_estimate_version: 2 }));
+      assert.equal(changedEstimate.status, 409);
+      assert.equal((await changedEstimate.json()).code, "estimate_review_required");
+      await db.query(`insert into public.action_limits(actor_id,action,window_start,count)
+        select $1,'create_intervention',date_trunc('minute',now()) + minute_offset * interval '1 minute',5
+        from generate_series(0,1) minute_offset`, [requester.id]);
+      assert.equal((await post(body)).status, 429);
+      await db.query("update public.action_limits set count=0 where actor_id=$1 and action='create_intervention'", [requester.id]);
+
       const initial = [];
       const relay = createServer(async (request, response) => {
         try {
@@ -45,6 +54,8 @@ test("mobile Bearer route: a lost response and three exact replays yield one int
         assert.equal(initial[0].status, 201, String(initial[0].error ?? ""));
         assert.equal(initial[0].body, body);
         const id = initial[0].data.intervention.id;
+        const expired = await http(route, { method: "POST", body, headers: { authorization: "Bearer invalid.expired.token" } }, requester, "bearer");
+        assert.equal(expired.status, 401);
         for (let attempt = 0; attempt < 3; attempt++) {
           const replay = await post(body);
           assert.equal(replay.status, 201);
@@ -56,7 +67,11 @@ test("mobile Bearer route: a lost response and three exact replays yield one int
         relay.closeAllConnections();
         await new Promise(resolve => relay.close(resolve));
       }
-    }, {}, { users: [requester], rpcAllowlist: new Set(["create_intervention_once_reviewed"]) });
+    }, {}, {
+      users: [requester],
+      rpcAllowlist: new Set(["create_intervention_once_reviewed"]),
+      sqlMessageAllowlist: new Set(["Estimate review required"]),
+    });
     const jobs = await db.query("select count(*)::int as count from public.interventions where client_id=$1", [requester.id]);
     const key = await db.query("select count(*)::int as count from public.intervention_request_keys where actor_id=$1 and request_id=$2", [requester.id, requestId]);
     assert.equal(jobs.rows[0].count, 1);

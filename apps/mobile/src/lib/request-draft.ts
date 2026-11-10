@@ -8,4 +8,7 @@ export const requestIntent = z.object({
   reviewRequired: z.boolean(),
 });
 export type RequestIntent = z.infer<typeof requestIntent>;
-export const requestDraft = z.object({ intent: requestIntent.nullable() });
+export const requestDraft = z.object({
+  intent: requestIntent.nullable(),
+  confirmedId: z.uuid().nullable().default(null),
+});

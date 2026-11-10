@@ -25,20 +25,21 @@ export default function RequestForm() {
 function ClientRequest({ actor, token }: { actor: string; token: string }) {
   const router = useRouter();
   const catalogue = useResource('/api/public/indicative-prices', prices);
-  const draft = useDeviceDraft(requestDraftKey(actor), requestDraft, { intent: null });
+  const draft = useDeviceDraft(requestDraftKey(actor), requestDraft, { intent: null, confirmedId: null });
   const [category, setCategory] = useState<Category>('outage'), [description, setDescription] = useState('');
   const [address, setAddress] = useState(''), [postal, setPostal] = useState(''), [city, setCity] = useState('');
   const [urgency, setUrgency] = useState<'urgent' | 'scheduled' | null>(null);
   const [error, setError] = useState<string | null>(null), [busy, setBusy] = useState(false), [locating, setLocating] = useState(false);
   const [suggestion, setSuggestion] = useState<{ address: string; postal: string; city: string } | null>(null);
   const lock = useRef(false);
-  const completed = useRef(false);
+  const currentToken = useRef(token);
+  currentToken.current = token;
   const active = useRef<AbortController | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     active.current = controller;
     return () => { controller.abort(); active.current = null; };
-  }, [token]);
+  }, [actor]);
   const intent = draft.value?.intent;
   const chosen = intent?.payload.category ?? category;
   const range = intent && !intent.reviewRequired ? intent.estimate : catalogue.data?.ranges[chosen];
@@ -60,7 +61,7 @@ function ClientRequest({ actor, token }: { actor: string; token: string }) {
 
   async function submit() {
     const signal = active.current?.signal;
-    if (!draft.value || lock.current || completed.current || !signal || signal.aborted) return;
+    if (!draft.value || draft.value.confirmedId || lock.current || !signal || signal.aborted) return;
     setError(null);
     let current = intent;
     if (!current || current.reviewRequired) {
@@ -85,16 +86,17 @@ function ClientRequest({ actor, token }: { actor: string; token: string }) {
     setBusy(true);
     try {
       // A key is usable only once its exact payload survives a process restart.
-      await draft.update(() => ({ intent: sending }));
+      await draft.update(() => ({ intent: sending, confirmedId: null }));
       if (signal.aborted) return;
-      const result = await api('/api/interventions', creation, { token, method: 'POST', body: { ...sending.payload, request_id: sending.id }, signal });
-      completed.current = true;
-      try { await draft.clear(); }
-      finally { if (!signal.aborted) router.replace({ pathname: '/dossier/[id]', params: { id: result.intervention.id } }); }
+      const result = await api('/api/interventions', creation, {
+        token: currentToken.current, method: 'POST', body: { ...sending.payload, request_id: sending.id }, signal,
+      });
+      await draft.update(() => ({ intent: null, confirmedId: result.intervention.id }));
+      if (!signal.aborted) openConfirmed(result.intervention.id);
     } catch (issue) {
       if (signal.aborted) return;
       if (issue instanceof ApiFailure && issue.status === 409 && issue.code === 'estimate_review_required') {
-        try { await draft.update(() => ({ intent: { ...sending, reviewRequired: true } })); }
+        try { await draft.update(() => ({ intent: { ...sending, reviewRequired: true }, confirmedId: null })); }
         catch { /* The request is still frozen and the storage error is shown. */ }
         catalogue.reload();
       }
@@ -102,6 +104,19 @@ function ClientRequest({ actor, token }: { actor: string; token: string }) {
     } finally { lock.current = false; setBusy(false); }
   }
 
+  function openConfirmed(id: string) {
+    router.replace({ pathname: '/dossier/[id]', params: { id } });
+  }
+
+  if (draft.value?.confirmedId) {
+    const id = draft.value.confirmedId;
+    return <Screen>
+      <Copy kind="title">Votre demande est transmise</Copy>
+      {draft.error && <ReadState loading={false} error={draft.error} onRetry={draft.retry} />}
+      <Action label="Ouvrir mon intervention" onPress={() => openConfirmed(id)} />
+      <Action secondary label="Commencer une autre demande" disabled={draft.pending} onPress={() => draft.edit(() => ({ intent: null, confirmedId: null }))} />
+    </Screen>;
+  }
   if (!draft.value) return <Screen><ReadState loading={!draft.error} error={draft.error} onRetry={draft.retry} /></Screen>;
   const disabled = busy || Boolean(intent);
   const shownUrgency = intent?.payload.urgency ?? urgency;
@@ -132,9 +147,21 @@ function ClientRequest({ actor, token }: { actor: string; token: string }) {
       {draft.error && <ReadState loading={false} error={draft.error} onRetry={draft.retry} />}
       {error && <Copy kind="error">{error}</Copy>}
       {intent && !intent.reviewRequired && <Copy kind="muted">L’envoi reste à confirmer. Le prochain essai réutilise la même référence.</Copy>}
-      {intent?.reviewRequired && <Action secondary label="Actualiser le tarif" disabled={busy} onPress={catalogue.reload} />}
+      {intent?.reviewRequired && <>
+        <Action secondary label="Actualiser le tarif" disabled={busy} onPress={catalogue.reload} />
+        <Action secondary label="Modifier ma demande" disabled={busy || draft.pending} onPress={() => {
+          setCategory(intent.payload.category);
+          setDescription(intent.payload.description);
+          setAddress(intent.payload.address);
+          setPostal(intent.payload.postal_code);
+          setCity(intent.payload.city);
+          setUrgency(intent.payload.urgency);
+          setError(null);
+          draft.edit(() => ({ intent: null, confirmedId: null }));
+        }} />
+      </>}
       <Action label={busy ? 'Envoi…' : intent?.reviewRequired ? 'Confirmer le nouveau tarif' : intent ? 'Vérifier ou réessayer la même demande' : 'Confirmer la demande'}
-        disabled={busy || !range || Boolean(intent?.reviewRequired && catalogue.data?.version === intent.payload.reviewed_estimate_version)}
+        disabled={busy || draft.pending || !range || Boolean(intent?.reviewRequired && catalogue.data?.version === intent.payload.reviewed_estimate_version)}
         onPress={() => {
           if (intent && !intent.reviewRequired) { void submit(); return; }
           Alert.alert('Confirmer la demande ?', 'Le montant affiché est une estimation. Vous pourrez examiner le devis avant les travaux.', [
