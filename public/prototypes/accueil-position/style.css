@@ -369,6 +369,7 @@ h1,h2,p { margin: 0; }
 
 .photo-card {
   display: block;
+  align-self: start;
   min-width: 0;
   text-align: left;
   scroll-snap-align: start;
