@@ -3,7 +3,8 @@ import { Action, Card, Copy, Field } from './ui';
 import { appointmentFields, appointmentTime } from '@/lib/appointment-time';
 import { timestamp } from '@/lib/contracts';
 
-type Appointment = { version: number; starts_at: string; ends_at: string; note?: string };
+// The server row names its slot revision `reminder_version` (same field as the Web client).
+type Appointment = { reminder_version: number; starts_at: string; ends_at: string; note?: string };
 
 export function AppointmentEditor({ current, busy, save }: {
   current: Appointment | null; busy: boolean;
@@ -14,7 +15,7 @@ export function AppointmentEditor({ current, busy, save }: {
   const [date, setDate] = useState(''), [endDate, setEndDate] = useState('');
   const [from, setFrom] = useState(''), [to, setTo] = useState(''), [note, setNote] = useState('');
   const reviewed = useRef(0);
-  const version = current?.version ?? 0;
+  const version = current?.reminder_version ?? 0;
   function edit() {
     setDate(start?.date ?? ''); setEndDate(end?.date ?? ''); setFrom(start?.time ?? ''); setTo(end?.time ?? '');
     setNote(current?.note ?? ''); setError(null); reviewed.current = version; setOpen(true);

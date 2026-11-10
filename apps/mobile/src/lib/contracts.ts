@@ -46,7 +46,7 @@ export const workspace = z.object({
 export const detail = z.object({intervention: job, quotes: list(quote), documents: list(attachment), payments: list(payment)});
 export const operations = z.object({
   travel_stage: z.enum(['planned','en_route','on_site']),
-  appointment: z.object({starts_at: z.iso.datetime({ offset: true }), ends_at: z.iso.datetime({ offset: true }), version: z.number().int().positive(), note: z.string().optional()}).nullable(),
+  appointment: z.object({starts_at: z.iso.datetime({ offset: true }), ends_at: z.iso.datetime({ offset: true }), reminder_version: z.number().int().positive(), note: z.string().optional()}).nullable(),
   report_evidence_required: z.boolean(),
   report: z.object({summary: z.string(), signature_name: z.string(), report_revision: id.nullish(), before_photo_id: id.nullish(), after_photo_id: id.nullish()}).nullable(),
   report_receipt: z.object({signed_at: z.string(), signature_name: z.string()}).nullable(),
