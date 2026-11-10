@@ -16,8 +16,13 @@ export async function stageReportPhoto(source: File): Promise<PendingPhoto> {
   photoDirectory().create({ idempotent: true, intermediates: true });
   const file = encryptedFile(reference.fileId);
   file.create();
-  file.write(bytes);
-  return reference;
+  try {
+    await file.write(bytes);
+    return reference;
+  } catch (error) {
+    discardTemporaryPhoto(file);
+    throw error;
+  }
 }
 
 export async function openReportPhoto(photo: PendingPhoto) {
@@ -29,7 +34,7 @@ export async function openReportPhoto(photo: PendingPhoto) {
   const temporary = new File(Paths.cache, `report-upload-${randomUUID()}.jpg`);
   temporary.create();
   try {
-    temporary.write(bytes);
+    await temporary.write(bytes);
     return temporary;
   } catch (error) {
     discardTemporaryPhoto(temporary);

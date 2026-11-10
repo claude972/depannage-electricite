@@ -10,6 +10,7 @@ type Storage = {
 // each key so that a late write cannot overwrite a confirmed save or a newer edit.
 export function createDraftStore(storage: Storage) {
   const queues = new Map<string, Promise<unknown>>();
+  const pendingWrites = new Map<string, { value: string; done: Promise<void> }>();
   function enqueue<T>(key: string, action: () => Promise<T>): Promise<T> {
     const operation = (queues.get(key) ?? Promise.resolve()).then(action, action);
     queues.set(key, operation);
@@ -21,6 +22,7 @@ export function createDraftStore(storage: Storage) {
   }
   return {
     read<T>(key: string, schema: ZodType<T>): Promise<T | null> {
+      pendingWrites.delete(key);
       return enqueue(key, async () => {
         const raw = await storage.getItem(key);
         return raw === null ? null : schema.parse(JSON.parse(raw));
@@ -28,9 +30,24 @@ export function createDraftStore(storage: Storage) {
     },
     write(key: string, value: unknown): Promise<void> {
       const raw = JSON.stringify(value);
-      return enqueue(key, () => storage.setItem(key, raw));
+      const pending = pendingWrites.get(key);
+      if (pending) {
+        pending.value = raw;
+        return pending.done;
+      }
+      // Coalesce only writes that have not started. Reads and clears are
+      // barriers, so a later edit cannot be moved before either of them.
+      let write: { value: string; done: Promise<void> };
+      const done = enqueue(key, () => {
+        if (pendingWrites.get(key) === write) pendingWrites.delete(key);
+        return storage.setItem(key, write.value);
+      });
+      write = { value: raw, done };
+      pendingWrites.set(key, write);
+      return done;
     },
     clear(key: string): Promise<void> {
+      pendingWrites.delete(key);
       return enqueue(key, () => storage.removeItem(key));
     },
   };

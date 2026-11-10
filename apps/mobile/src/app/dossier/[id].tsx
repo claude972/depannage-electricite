@@ -20,8 +20,8 @@ export default function Dossier() {
   const auth=useSession().session;
   const id=uuid.safeParse(params.id).data;
   const token=auth?.access_token, base=id?`/api/interventions/${id}`:null;
-  const data=useResource(token?base:null,detail,token,true);
-  const ops=useResource(base&&token?base+'/operations':null,operations,token,true);
+  const data=useResource(token?base:null,detail,token,auth?.user.id);
+  const ops=useResource(base&&token?base+'/operations':null,operations,token,auth?.user.id);
   const paymentOptions=useResource('/api/bookings/options',bookingOptions);
   const [error,setError]=useState<string|null>(null), [busy,setBusy]=useState(false);
   const [ack,setAck]=useState(false), [name,setName]=useState(''), [reason,setReason]=useState('');

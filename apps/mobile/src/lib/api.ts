@@ -53,14 +53,14 @@ export async function api<T>(path: string, schema: ZodType<T>, options: {
   }
 }
 
-export function useResource<T>(path: string | null, schema: ZodType<T>, token?: string, retainWhileRefreshing = false) {
-  type Read = { path: string; revision:number; token?: string; data: T | null; error: string | null };
+export function useResource<T>(path: string | null, schema: ZodType<T>, token?: string, refreshActor?: string) {
+  type Read = { path: string; revision:number; token?: string; actor?: string; data: T | null; error: string | null };
   const [read, setRead] = useState<Read | null>(null);
   const [revision, setRevision] = useState(0);
   const reload = useCallback(() => {
-    if (!retainWhileRefreshing) setRead(null);
+    if (!refreshActor) setRead(null);
     setRevision(value => value + 1);
-  }, [retainWhileRefreshing]);
+  }, [refreshActor]);
   useEffect(() => {
     const subscription = AppState.addEventListener('change', state => { if (state === 'active') reload(); });
     return () => subscription.remove();
@@ -69,12 +69,15 @@ export function useResource<T>(path: string | null, schema: ZodType<T>, token?: 
     if (!path) return;
     const controller = new AbortController();
     void api(path, schema, { token, signal: controller.signal }).then(
-      data => { if (!controller.signal.aborted) setRead({ path, revision, token, data, error: null }); },
-      error => { if (!controller.signal.aborted) setRead({ path, revision, token, data: null, error: error instanceof Error ? error.message : 'Lecture indisponible.' }); },
+      data => { if (!controller.signal.aborted) setRead({ path, revision, token, actor: refreshActor, data, error: null }); },
+      error => { if (!controller.signal.aborted) setRead({ path, revision, token, actor: refreshActor, data: null, error: error instanceof Error ? error.message : 'Lecture indisponible.' }); },
     );
     return () => controller.abort();
-  }, [path, schema, token, revision]);
-  const visible = read?.path === path && read.token === token &&
-    (read.revision === revision || (retainWhileRefreshing && read.data !== null)) ? read : null;
+  }, [path, schema, token, revision, refreshActor]);
+  // A token rotation can refresh an already visible resource for the same
+  // account. A different account or a denied read never inherits that data.
+  const visible = read?.path === path && read.actor === refreshActor &&
+    ((read.token === token && read.revision === revision) || (token && refreshActor && read.data !== null))
+    ? read : null;
   return { data: visible?.data ?? null, error: visible?.error ?? null, loading: Boolean(path && !visible), reload };
 }

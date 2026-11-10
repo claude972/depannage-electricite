@@ -29,7 +29,7 @@ export async function withScenarios(entry: string, body: (run: Run, ctx: { error
       stubs.forEach((s, i) => {
         b.onResolve({ filter: s.filter }, (args) => ({ path: `stub-${i}:${args.path}`, namespace: "lot-b-stub" }));
       });
-      b.onLoad({ filter: /.*/, namespace: "lot-b-stub" }, (args) => ({ contents: stubs[Number(args.path.split(":")[0].slice(5))].contents, loader: "js" }));
+      b.onLoad({ filter: /.*/, namespace: "lot-b-stub" }, (args) => ({ contents: stubs[Number(args.path.split(":")[0].slice(5))].contents, loader: "js", resolveDir: ROOT }));
     } }] : [],
   });
   const js = out.outputFiles.find((f) => f.path.endsWith(".js"))!.text;

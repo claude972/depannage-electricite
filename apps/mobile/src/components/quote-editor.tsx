@@ -11,7 +11,7 @@ export function QuoteEditor({ draftKey, busy, onSend }: {
   busy: boolean;
   onSend: (lines: PricedLine[], rate: number, onSaved: () => Promise<void>) => void;
 }) {
-  const draft = useDeviceDraft(draftKey, quoteDraft, { lines: [newLine()], rate: null });
+  const draft = useDeviceDraft(draftKey, quoteDraft, { lines: [newLine()], rate: null }, true);
   const [error, setError] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
   const disabled = busy || preparing;
@@ -43,7 +43,10 @@ export function QuoteEditor({ draftKey, busy, onSend }: {
     }
   }
 
-  if (!draft.value) return <ReadState loading={!draft.error} error={draft.error} onRetry={draft.retry} />;
+  if (!draft.value) return <Card>
+    <ReadState loading={!draft.error} error={draft.error} onRetry={draft.retry} />
+    {draft.canRecover && <Action secondary disabled={draft.pending} label="Préparer un nouveau brouillon" onPress={() => void draft.recover()} />}
+  </Card>;
   const { lines, rate } = draft.value;
   return <Card>
     <Copy kind="subtitle">Préparer le devis</Copy>
