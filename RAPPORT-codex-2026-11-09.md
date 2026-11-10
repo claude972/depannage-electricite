@@ -8,9 +8,9 @@ Branche `release-candidate/codex-2026-11-09` sur le disque externe. Base Web et 
 | --- | --- | --- |
 | 1 · Fiabilité mobile | Fait. Suite complète verte. | Brouillons par compte et dossier, photos chiffrées et reprise, session renouvelée sans perte de saisie, demande et reçu persistants. Code applicatif `afd7c7c98a4b35263bc72127585280ef9d1eacbf`. Tête de vérification `ef719e1`, qui modifie uniquement l’attente de rendu d’un test. La recette Android physique est reportée au bloc 6. |
 | 2 · Client mobile | Recette réelle bloquée | Accueil Mobile B, huit fiches et tarifs communs intégrés. Demande, historique et conversion du même compte vérifiés localement. La réception d’un SMS réel reste à prouver sur l’environnement de recette. |
-| 3 · Artisan mobile | Non commencé | Le passage dépend de la qualification du bloc 2. |
+| 3 · Artisan mobile | Intégré, recette partielle | Fiche et refus d’offre, partage de photos sur consentement, rendez-vous, GPS/ETA et retour de paiement intégrés. SMS et retour Stripe réels à vérifier. |
 | 4 · SMS et Stripe | Non commencé | Les essais de ce bloc nécessitent les environnements test et leurs preuves de livraison et de rapprochement. |
-| 5 · Version à livrer | Non commencé | Contrat commun, publications et builds signés à traiter après la qualification des parcours. |
+| 5 · Version à livrer | Intégré, préparation des builds vérifiée | Version commune 0.1.0, builds 2, contrats publics, SIRET, aide mobile et profils EAS. Les publications officielles et builds physiques restent ouverts. |
 | 6 · Recette | Non commencé | Recette intégrée et essais sur téléphones physiques à effectuer sur le candidat figé. |
 
 ## Preuves acquises au bloc 1
@@ -52,6 +52,28 @@ Le commit `5a4095d` impose `TEST_PHONE_NUMBERS` aux demandes et vérifications d
 Le contrôle applicatif couvre les appels à l’API du candidat. Le compte Vonage de recette doit aussi être confirmé en mode démo, avec uniquement les destinataires vérifiés autorisés pour cette recette. Cette restriction fournisseur s’applique également aux envois déclenchés directement par Supabase Auth. [Restriction de destinataires du mode démo Vonage](https://api.support.vonage.com/hc/en-us/articles/212107987-How-can-I-get-full-account-features-enabled)
 
 La [preview protégée avec contrôle SMS](https://depannage-electricite-2ksbreqd0-brafas-projects.vercel.app/) sert exactement `5a4095db0a8900e4b5abdb9b063d76af47444e60`. Accueil et options répondent 200. Sans `TEST_PHONE_NUMBERS`, les tentatives synthétiques de demande et de vérification répondent 503, avec une réponse générique sans cache. La liste est absente des variables serveur applicables à cette branche. L’ancienne preview, dont la route d’options lit directement la disponibilité du projet Auth, indique également que le téléphone est désactivé.
+
+## Blocs 3 et 5 · Reprise demandée le 10 novembre
+
+À la demande du propriétaire, les blocs 3 et 5 ont avancé pendant que le SMS réel du bloc 2 reste en attente. Le bloc 4 et la recette finale restent distincts.
+
+### Artisan et retour du règlement
+
+- Le flux mobile lit le catalogue d’offres anonymisé sous identité artisan. La fiche indique la commune, le code postal masqué, l’urgence, l’estimation et le montant indicatif après commission si le taux est configuré. Pour les demandes planifiées, le créneau se fixe après attribution. L’artisan peut accepter ou refuser avec un motif, puis créer ou déplacer le rendez-vous depuis le dossier avec le contrôle de version existant. Le rendez-vous émet la notification interne existante. L’adaptateur SMS de notification et la preuve de réception restent au bloc 4.
+- Le client choisit explicitement les photos visibles sur une offre. Le serveur borne la sélection à six, vérifie l’artisan et la version du dossier, et sert une image redimensionnée et réencodée sans chemin de stockage ni métadonnées originales. Le test SQL couvre le refus d’un tiers, le retrait du partage, l’invalidation à un changement du dossier et la fin de l’accès pré-attribution. Le flux de pièce privée ordinaire reste séparé.
+- Le GPS demande un consentement, fonctionne au premier plan sur le dossier actif et s’arrête à l’arrivée, à la clôture, à la sortie de l’écran ou lors du changement d’identité. Le client lit une ETA IGN quand une destination est confirmée et qu’un point récent est disponible. Le serveur contrôle l’attribution, la version et l’expiration des points. L’arrêt serveur à la sortie est tenté et la péremption des points reste la protection si le réseau est coupé. Recette terrain à effectuer.
+- Le mobile persiste la référence de règlement par compte. La page de retour propose d’ouvrir le dossier et l’app relit le statut serveur au retour et à la relance, avec quelques vérifications automatiques si le webhook tarde. Les trois ordres d’arrivée sont testés avec états injectés. Un appel mobile demande Stripe test explicitement. Le retour d’un vrai Checkout et son webhook restent à qualifier.
+
+### Version, publications et signature
+
+- Claude Fable 5.2 a livré la source commune de version, le contrat des trois lectures publiques, l’aide mobile, le SIRET de l’éditeur à la publication et les profils EAS. Codex a intégré et vérifié ces éléments. Le contrôle de dérive compare les versions des paquets et d’Expo, et les trois contrats publics de zone, d’exploitant et de garantie. La valeur SIRET est facultative, a 14 chiffres et commence par le SIREN renseigné.
+- L’API, le Web et le mobile réutilisent les publications administrables existantes. En recette, le code postal vérifié indique « zone non publiée », et l’exploitant et la garantie sont non publiés. Les valeurs officielles approuvées restent à renseigner dans le back-office.
+- EAS résout les profils internes iOS et Android en version 0.1.0, build 2, après vérification de l’historique du build 1. Le keystore Android de recette existe dans l’ancien espace de travail, hors Git. Aucun profil ad hoc iOS local pour cet identifiant n’a été trouvé. Les scripts iPhone et Android gèlent les identifiants de signature. EAS pointe encore vers l’ancienne API de recette. Il faut configurer une URL candidate joignable depuis les téléphones et confirmer la disponibilité du profil ad hoc iOS sur EAS avant de produire les binaires signés.
+
+### Vérifications
+
+- Les 2 274 tests Web passent sans échec ni test ignoré, ainsi que TypeScript et les deux compilations Next.js. Les 49 tests ciblés, TypeScript mobile et les exports Expo iOS et Android passent. Les tests SQL isolés de consentement photo, d’offres et de publication passent.
+- La [preview protégée](https://depannage-electricite-8nimgrdre-brafas-projects.vercel.app/) sert le code Git `d59fc8ef688929a5ea0a9414408066630e907862`. Les deux migrations ont été appliquées uniquement au projet de recette, qui en compte 127. L’accueil et les lectures publiques répondent 200, les accès anonymes aux offres, au suivi et aux photos répondent 401. Les options indiquent que le SMS et Stripe test sont désactivés.
 
 ## Décisions prises
 
