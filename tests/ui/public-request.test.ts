@@ -25,10 +25,11 @@ test("chrome accueil : sections en boutons, marque courante, note de pied", () =
   assert.match(html, /class="ui-v2 /);
   assert.match(html, /aria-label="Accueil" aria-current="page"/);
   assert.match(html, /data-home-anchor="a"[^>]*>Interventions/);
-  assert.doesNotMatch(html, />Accueil</);
+  assert.match(html, /data-chrome-home=""[^>]*>Accueil/);
   assert.match(html, /<main id="main"[^>]*><p>contenu<\/p><\/main>/);
   assert.match(html, />Crédits</);
-  assert.doesNotMatch(html, /<a\s/);
+  assert.match(html, /Candidature électricien.*href="\/suivi".*Nous contacter.*aria-label="Ouvrir le menu"/);
+  assert.doesNotMatch(html, /data-theme-toggle/);
 });
 
 test("chrome hors accueil : « Accueil » au lieu des sections, page courante marquée, sans note", () => {
@@ -36,10 +37,13 @@ test("chrome hors accueil : « Accueil » au lieu des sections, page courante ma
   assert.doesNotMatch(html, /data-home-anchor/); // pas de sections hors accueil
   assert.match(html, /data-chrome-home=""[^>]*>Accueil</);
   assert.doesNotMatch(html, /aria-label="Accueil" aria-current/);
+  assert.match(html, /Candidature électricien.*href="\/suivi".*Nous contacter.*aria-label="Ouvrir le menu"/);
+  assert.doesNotMatch(html, /data-theme-toggle/);
+  assert.match(html, /href="\/prestations"[^>]*>Services/);
   assert.match(html, /aria-current="page"[^>]*data-home-action="new"[^>]*>Décrire ma panne/);
   assert.doesNotMatch(html, /Crédits photo/);
   const auth = renderChrome({ current: "auth" });
-  assert.equal([...auth.matchAll(/aria-current="page"[^>]*data-home-action="login"/g)].length, 2); // menu + en-tête
+  assert.match(auth, /aria-current="page"[^>]*data-home-action="login"[^>]*>Compte/);
   assert.doesNotMatch(auth, /aria-current="page"[^>]*data-home-action="new"/);
 });
 
@@ -182,7 +186,7 @@ test("auth (SSR réel) : login / signup / reset dans le chrome thémé, classes 
     const { html, calls } = renderSite({ view: "auth", authMode: mode });
     assert.match(html, /class="ui-v2 /);
     assert.match(html, /data-public-skin="auth"/);
-    assert.equal([...html.matchAll(/aria-current="page"[^>]*data-home-action="login"/g)].length, 2, mode);
+    assert.match(html, /aria-current="page"[^>]*data-home-action="login"[^>]*>Compte/, mode);
     assert.match(html, new RegExp(`<h2>${titles[mode]}</h2>`));
     for (const cls of guards[mode]) assert.match(html, new RegExp(`class="${cls}`), `${mode}: ${cls}`);
     assert.equal(/type="password"/.test(html), mode !== "reset", mode);

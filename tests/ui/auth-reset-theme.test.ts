@@ -1,4 +1,4 @@
-// Reset password page theme (FASTSPLIT-AUTH-RESET-THEME-001): ThemeSurface + ThemeToggle, tokens
+// Reset password page theme (FASTSPLIT-AUTH-RESET-THEME-001): ThemeSurface + PublicHeader, tokens
 // only (no legacy blue / #f5f7fb), 44 px targets, visible focus. Self-contained (no git history).
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -13,14 +13,15 @@ const page = loadModule("app/auth/reset-password/page.tsx", {
   "@/lib/supabase/client": { createClient: () => { throw new Error("no network in SSR test"); } },
 }) as Record<string, any>;
 
-test("SSR: themed surface, theme toggle, home link, loading status (link check in progress)", () => {
+test("SSR: themed surface, shared public header and loading status (link check in progress)", () => {
   const html = renderToString(createElement(tp.ThemeProvider as never, null, createElement(page.default))).replaceAll("<!-- -->", "");
   assert.match(html, /class="[^"]*ui-v2/);
-  assert.match(html, /aria-label="Retour à l’accueil"/);
+  assert.match(html, /aria-label="Accueil"/);
   assert.match(html, /role="status"[^>]*>Vérification de votre lien…/);
   assert.match(html, /<h1 id="reset-title">Choisir un nouveau mot de passe<\/h1>/);
   assert.match(html, /aria-busy="true"/);
-  assert.match(html, /data-theme-toggle=/, "theme toggle rendered (SSR placeholder until mounted)");
+  assert.match(html, /data-public-header="".*Candidature électricien.*href="\/suivi".*Nous contacter.*aria-label="Ouvrir le menu"/);
+  assert.doesNotMatch(html, /data-theme-toggle/);
 });
 
 test("CSS: tokens only, no legacy blue or #f5f7fb, 44 px targets, visible focus, mobile layout", () => {

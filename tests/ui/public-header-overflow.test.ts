@@ -1,9 +1,5 @@
-// Hosted preview bug (7b4eed7, 1280 px, light + dark): the public header overflowed by 7 px
-// (topbarActions / « Décrire ma panne » right edge 1286.6). Mounts the real PublicChrome with the
-// real globals.css, home module and self-hosted Plus Jakarta Sans, then sweeps widths in both
-// themes, on the home (in-page sections) and on another view: no horizontal overflow, and the
-// navigation stays reachable (inline nav or the menu button). Skipped — never passed — without
-// local Playwright/Chromium.
+// Mount the public header with the production CSS and self-hosted Plus Jakarta Sans.
+// Check its layout and disclosure under both system preferences.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
@@ -25,7 +21,6 @@ import { createElement as h } from "react";
 import { createRoot } from "react-dom/client";
 import { PublicChrome } from "./components/role/public-chrome";
 import { ThemeProvider } from "./components/app/theme-provider";
-import home from "./components/role/public-home.module.css";
 const noop = () => {};
 const handlers = { onNew: noop, onLogin: noop, onNavigate: noop, onDemo: noop };
 const view = new URLSearchParams(location.search).get("view");
@@ -34,7 +29,7 @@ const div = document.createElement("div");
 document.body.appendChild(div);
 createRoot(div).render(h(ThemeProvider, null,
   view === "home"
-    ? h(PublicChrome, { current: "home", handlers, onHome: noop, sections, onSection: noop, className: home.home }, h("p", null, "contenu"))
+    ? h(PublicChrome, { current: "home", handlers, onHome: noop, sections, onSection: noop, editorial: true }, h("p", null, "contenu"))
     : h(PublicChrome, { current: "pricing", handlers, onHome: noop }, h("p", null, "contenu")),
 ));
 `;
@@ -44,7 +39,10 @@ const FONT_CSS = [400, 500, 600, 700]
 const MEASURE = `(() => {
   const vw = document.documentElement.clientWidth;
   const visible = (el) => !!el && getComputedStyle(el).display !== "none" && el.getBoundingClientRect().width > 0;
-  const header = document.querySelector("header");
+  const header = document.querySelector("[data-public-header]");
+  const menu = header.querySelector("button[aria-controls]");
+  const nav = header.querySelector('nav[aria-label="Navigation principale"]');
+  const contact = header.querySelector('a[href="/#help/contact"]');
   const offenders = [...header.querySelectorAll("*")]
     .filter((el) => visible(el) && el.getBoundingClientRect().right > vw + 0.5)
     .map((el) => el.tagName + "." + String(el.className).slice(0, 40) + " r=" + el.getBoundingClientRect().right.toFixed(1));
@@ -52,14 +50,15 @@ const MEASURE = `(() => {
     vw,
     scroll: document.documentElement.scrollWidth,
     offenders,
-    nav: visible(document.querySelector('nav[aria-label="Navigation principale"]')),
-    menu: visible(document.querySelector("button[aria-controls]")),
+    right: menu.getBoundingClientRect().left >= contact.getBoundingClientRect().right,
+    panelRight: nav.getBoundingClientRect().right,
+    menuRight: menu.getBoundingClientRect().right,
     headerH: header.getBoundingClientRect().height,
   };
 })()`;
-const WIDTHS = [390, 641, 1241, 1280, 1366, 1440];
+const WIDTHS = [320, 390, 641, 939, 940, 1280, 1440];
 
-test("public header: no horizontal overflow 360–1440 px, light and dark, home and other views; nav reachable", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
+test("public header: right-aligned menu and no overflow at 320–1440 px under both system preferences", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
   const out = await build({ absWorkingDir: ROOT, stdin: { contents: ENTRY, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, outdir: "out", platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "local-css", ".ttf": "empty", ".woff2": "empty", ".svg": "empty", ".png": "empty" }, define: { "process.env.NODE_ENV": '"development"' }, logLevel: "error" });
   const js = out.outputFiles.find((f) => f.path.endsWith(".js"))!.text;
   // globals.css is global CSS in Next (not a module): served verbatim, before the module CSS.
@@ -88,12 +87,14 @@ test("public header: no horizontal overflow 360–1440 px, light and dark, home 
         await page.setViewportSize({ width: 1280, height: 800 });
         await page.goto(`http://127.0.0.1:${port}/?view=${view}`);
         await page.evaluate(() => (document as Document & { fonts: FontFaceSet }).fonts.ready);
-        await page.waitForSelector('[data-theme-toggle="ready"]', { timeout: 8000 }).catch(async () => {
-          throw new Error(`theme toggle never ready; page errors: ${errors.join(" | ")}; body: ${(await page.content()).slice(0, 300)}`);
-        });
-        const isDark = () => page.evaluate(() => document.querySelector('[data-theme-toggle="ready"]')!.getAttribute("aria-pressed") === "true");
-        if ((await isDark()) !== (theme === "dark")) await page.click('[data-theme-toggle="ready"]');
-        assert.equal(await isDark(), theme === "dark", `${view}: theme ${theme} applied`);
+        await page.emulateMedia({ colorScheme: theme });
+        await page.waitForFunction((scheme: string) => document.documentElement.dataset.uiTheme === scheme, theme);
+        const header = page.locator("[data-public-header]");
+        assert.equal(await header.evaluate((el: Element) => getComputedStyle(el).backgroundColor), "rgb(255, 255, 255)");
+        assert.equal(await header.locator("[data-theme-toggle]").count(), 0);
+        await header.getByText("Candidature électricien", { exact: true }).waitFor();
+        const toggle = header.getByRole("button", { name: "Ouvrir le menu" });
+        const nav = header.getByRole("navigation", { name: "Navigation principale" });
         const font = await page.evaluate(async () => {
           const fonts = (document as Document & { fonts: FontFaceSet }).fonts;
           await Promise.all(["400", "500", "600", "700"].map((w) => fonts.load(`${w} 16px "JakartaQA"`)));
@@ -104,12 +105,19 @@ test("public header: no horizontal overflow 360–1440 px, light and dark, home 
         assert.match(font.used, /JakartaQA/, "header text is set in Plus Jakarta Sans");
         for (const width of WIDTHS) {
           await page.setViewportSize({ width, height: 800 });
-          await page.waitForTimeout(30);
+          await toggle.press("Enter");
+          await nav.waitFor();
+          assert.equal(await nav.getByRole("link", { name: "Services" }).count(), view === "home" ? 0 : 1);
+          assert.equal(await nav.getByRole("button", { name: "Services" }).count(), view === "home" ? 1 : 0);
           // Passed as source text: tsx's keepNames would inject an undefined __name helper.
-          const r = (await page.evaluate(MEASURE)) as { vw: number; scroll: number; offenders: string[]; nav: boolean; menu: boolean; headerH: number };
+          const r = (await page.evaluate(MEASURE)) as { vw: number; scroll: number; offenders: string[]; right: boolean; panelRight: number; menuRight: number; headerH: number };
           if (r.scroll > r.vw || r.offenders.length) failures.push(`${view}/${theme}/${width}: scroll ${r.scroll} > ${r.vw} ${r.offenders.join(", ")}`);
-          if (!r.nav && !r.menu) failures.push(`${view}/${theme}/${width}: navigation unreachable`);
-          if (r.headerH > 100) failures.push(`${view}/${theme}/${width}: header wraps (${r.headerH}px)`);
+          assert.ok(r.right, `${view}/${theme}/${width}: menu à droite`);
+          assert.ok(Math.abs(r.panelRight - r.menuRight) < 2, "menu déroulant aligné à droite");
+          assert.ok(r.headerH <= (width < 940 ? 110 : 76), `${width}: hauteur ${r.headerH}px`);
+          await page.keyboard.press("Escape");
+          assert.equal(await nav.isVisible(), false);
+          assert.equal(await toggle.evaluate((el: Element) => el === document.activeElement), true);
         }
         assert.deepEqual(errors, []);
       }

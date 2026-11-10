@@ -1,14 +1,9 @@
 "use client";
-// Public chrome (UI-PUBLIC-REQUEST-001 P1): the themed header + footer shared by the public home,
-// the request view and the account view. Extracted from PublicHome without visual change. Not a
-// navigation system: every entry calls the existing PublicSession callbacks through
-// `HomeHandlers`. In-page sections exist only on the home (buttons, never `href="#…"`); on the
-// other views the brand and « Accueil » call `onHome` (session.go("home")).
+// Shared header and footer for the public site and its booking and account pages.
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { Category } from "../app/types";
 import { CATEGORIES } from "../app/format";
 import { ThemeSurface } from "../app/theme-provider";
-import { ThemeToggle } from "../app/theme-toggle";
 import { Icon } from "../app/icons";
 import styles from "./public-chrome.module.css";
 
@@ -95,10 +90,6 @@ export function serviceChromeHandlers(go: (href: string) => void = (href) => win
   };
 }
 
-const NAV_VIEWS: { view: HomeTargetView; label: string }[] = [
-  { view: "pricing", label: "Tarifs" },
-  { view: "join", label: "Vous êtes artisan ?" },
-];
 const FOOTER_VIEWS: { view: HomeTargetView; label: string }[] = [
   { view: "help", label: "Aide" },
   { view: "about", label: "À propos" },
@@ -106,8 +97,6 @@ const FOOTER_VIEWS: { view: HomeTargetView; label: string }[] = [
   { view: "legal", label: "Mentions légales" },
 ];
 
-/** Current public view: home/new/auth have their own header controls; informational views are
- *  marked in the nav or footer link that opens them. */
 export type ChromeView = "home" | "new" | "auth" | HomeTargetView | (string & {});
 export type ChromeSection = { id: string; label: string };
 
@@ -118,6 +107,91 @@ function BrandMark() {
         <path d="M13 2L5 14h6l-1 8 8-12h-6l1-8z" fill="currentColor" />
       </svg>
     </span>
+  );
+}
+
+type PublicHeaderProps = {
+  current?: ChromeView;
+  handlers?: HomeHandlers;
+  onHome?: () => void;
+  sections?: ChromeSection[];
+  onSection?: (id: string) => void;
+};
+
+export function PublicHeader({
+  current,
+  handlers = serviceChromeHandlers(),
+  onHome = () => window.location.assign("/"),
+  sections,
+  onSection,
+}: PublicHeaderProps) {
+  const navId = `${useId()}-nav`;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuToggle = useRef<HTMLButtonElement>(null);
+  const menuWrap = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setMenuOpen(false);
+        menuToggle.current?.focus();
+      }
+    };
+    const onPointer = (e: PointerEvent) => {
+      if (e.target instanceof Node && !menuWrap.current?.contains(e.target)) setMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("pointerdown", onPointer);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pointerdown", onPointer);
+    };
+  }, [menuOpen]);
+
+  const close = () => setMenuOpen(false);
+  const act = (action: HomeAction) => actionButton(action, handlers, close);
+  const home = () => {
+    close();
+    onHome();
+  };
+
+  return (
+    <header className={styles.topbar} data-public-header="" data-ui-appearance="light">
+      <div className={`${styles.wrap} ${styles.topbarInner}`}>
+        <button type="button" className={styles.brand} aria-label="Accueil" aria-current={current === "home" ? "page" : undefined} data-chrome-home="" onClick={home}>
+          <BrandMark />
+          <span className={styles.brandText}>
+            <strong>Dépannage</strong>
+            <small className={styles.brandKind}>électrique</small>
+          </span>
+        </button>
+        <button className={styles.recruit} aria-current={current === "join" ? "page" : undefined} {...act({ type: "view", view: "join" })}>
+          <Icon name="briefcase" size={20} /><span><strong>Rejoindre le réseau</strong><small>Candidature électricien</small></span>
+        </button>
+        <div className={styles.editorialActions}>
+          <a className={styles.follow} href="/suivi" aria-current={current === "suivi" ? "page" : undefined} onClick={close}>Suivre mon intervention</a>
+          <a className={styles.contact} href="/#help/contact" onClick={close}><Icon name="mail" size={16} />Nous contacter</a>
+        </div>
+        <div ref={menuWrap} className={styles.menuWrap}>
+          <button ref={menuToggle} type="button" className={styles.menuButton} aria-expanded={menuOpen} aria-controls={navId} aria-label={menuOpen ? "Fermer le menu" : "Ouvrir le menu"} onClick={() => setMenuOpen((open) => !open)}>
+            <Icon name={menuOpen ? "close" : "menu"} size={22} />
+          </button>
+          <nav id={navId} className={`${styles.nav} ${menuOpen ? styles.navOpen : ""}`} aria-label="Navigation principale">
+            <button type="button" className={styles.navLink} data-chrome-home="" aria-current={current === "home" ? "page" : undefined} onClick={home}>Accueil</button>
+            {current === "home" && sections?.length ? sections.map((item) => (
+              <button type="button" key={item.id} className={styles.navLink} data-home-anchor={item.id} onClick={() => { close(); onSection?.(item.id); }}>
+                {item.label}
+              </button>
+            )) : <a className={styles.navLink} href="/prestations" aria-current={current === "catalogue" ? "page" : undefined} onClick={close}>Services</a>}
+            <button className={styles.navLink} aria-current={current === "new" ? "page" : undefined} {...act({ type: "new" })}>Décrire ma panne</button>
+            <button className={styles.navLink} aria-current={current === "pricing" ? "page" : undefined} {...act({ type: "view", view: "pricing" })}>Tarifs</button>
+            <a className={styles.navLink} href="/suivi" aria-current={current === "suivi" ? "page" : undefined} onClick={close}>Activité</a>
+            <button className={styles.navLink} aria-current={current === "auth" ? "page" : undefined} {...act({ type: "login" })}>Compte</button>
+          </nav>
+        </div>
+      </div>
+    </header>
   );
 }
 
@@ -148,101 +222,12 @@ export function PublicChrome({
   editorial?: boolean;
   children: ReactNode;
 }) {
-  const navId = `${useId()}-nav`;
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuToggle = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setMenuOpen(false);
-        menuToggle.current?.focus();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [menuOpen]);
-
-  const close = () => setMenuOpen(false);
-  const act = (action: HomeAction) => actionButton(action, handlers, close);
-  const home = () => {
-    close();
-    onHome();
-  };
-
+  const act = (action: HomeAction) => actionButton(action, handlers);
   const surface = [styles.chrome, appNavigation ? styles.appChrome : "", editorial ? styles.editorialChrome : "", className].filter(Boolean).join(" ");
-  const navigation = (
-    <nav id={navId} className={`${styles.nav} ${menuOpen ? styles.navOpen : ""}`} aria-label="Navigation principale">
-      {(editorial || current !== "home" || !sections) && (
-        <button type="button" className={styles.navLink} data-chrome-home="" onClick={home}>Accueil</button>
-      )}
-      {current === "home" && sections?.map((item) => (
-        <button type="button" key={item.id} className={styles.navLink} data-home-anchor={item.id} onClick={() => { close(); onSection?.(item.id); }}>
-          {item.label}
-        </button>
-      ))}
-      {editorial ? (
-        <>
-          {current !== "home" && <a className={styles.navLink} href="/prestations">Services</a>}
-          <a className={styles.navLink} href="/suivi">Activité</a>
-          <button className={styles.navLink} {...act({ type: "login" })}>Compte</button>
-        </>
-      ) : (
-        <>
-          {NAV_VIEWS.map((item) => (
-            <button key={item.view} className={styles.navLink} aria-current={current === item.view ? "page" : undefined} {...act({ type: "view", view: item.view })}>
-              {item.label}
-            </button>
-          ))}
-          <button className={`${styles.navLink} ${styles.navLogin}`} aria-current={current === "auth" ? "page" : undefined} {...act({ type: "login" })}>Se connecter</button>
-        </>
-      )}
-    </nav>
-  );
-  const menu = (
-    <button ref={menuToggle} type="button" className={styles.menuButton} aria-expanded={menuOpen} aria-controls={navId} aria-label={menuOpen ? "Fermer le menu" : "Ouvrir le menu"} onClick={() => setMenuOpen((open) => !open)}>
-      <Icon name={menuOpen ? "close" : "menu"} size={22} />
-    </button>
-  );
 
   return (
     <ThemeSurface className={surface} appearance={editorial ? "light" : undefined}>
-      <header className={styles.topbar}>
-        <div className={`${styles.wrap} ${styles.topbarInner}`}>
-          <button type="button" className={styles.brand} aria-label="Accueil" aria-current={current === "home" ? "page" : undefined} data-chrome-home="" onClick={home}>
-            <BrandMark />
-            <span className={styles.brandText}>
-              <strong>Dépannage</strong>
-              <small className={styles.brandKind}>{editorial ? "électrique" : "ÉLECTRIQUE"}</small>
-            </span>
-          </button>
-          {editorial ? (
-            <>
-              <button className={styles.recruit} {...act({ type: "view", view: "join" })}>
-                <Icon name="briefcase" size={20} /><span><strong>Rejoindre le réseau</strong><small>Candidature électricien</small></span>
-              </button>
-              <div className={styles.editorialActions}>
-                <a className={styles.follow} href="/suivi">Suivre mon intervention</a>
-                <a className={styles.contact} href="/#help/contact"><Icon name="mail" size={16} />Nous contacter</a>
-              </div>
-              <div className={styles.menuWrap}>{menu}{navigation}</div>
-            </>
-          ) : (
-            <>
-              {navigation}
-              <div className={styles.topbarActions}>
-                <ThemeToggle className={styles.themeToggle} />
-                <button className={`${styles.btn} ${styles.btnGhost} ${styles.loginButton}`} aria-current={current === "auth" ? "page" : undefined} {...act({ type: "login" })}>Se connecter</button>
-              <button className={`${styles.btn} ${styles.btnPrimary} ${styles.headerCta}`} aria-current={current === "new" ? "page" : undefined} {...act({ type: "new" })}>
-                Décrire ma panne
-              </button>
-                {menu}
-              </div>
-            </>
-          )}
-        </div>
-      </header>
+      <PublicHeader current={current} handlers={handlers} onHome={onHome} sections={sections} onSection={onSection} />
 
       <main id="main" className={mainClassName}>
         {children}
@@ -298,7 +283,7 @@ export function PublicChrome({
       </footer>
       {appNavigation && (
         <nav className={styles.appNav} aria-label="Navigation rapide">
-          <button type="button" aria-current="page" onClick={home}><Icon name="home" size={20} /> Accueil</button>
+          <button type="button" aria-current="page" onClick={onHome}><Icon name="home" size={20} /> Accueil</button>
           <button type="button" onClick={() => onSection?.("accueil-services")}><Icon name="list" size={20} /> Services</button>
           <a href="/suivi"><Icon name="document" size={20} /> Activité</a>
           <button {...act({ type: "login" })}><Icon name="person" size={20} /> Compte</button>

@@ -13,7 +13,7 @@
 /* Summary: sticky on desktop, compact strip on mobile */
 .summary {
   position: sticky;
-  top: calc(var(--h-header-h, 76px) + 16px);
+  top: 16px;
   display: grid;
   gap: 6px;
   padding: 16px;
@@ -88,7 +88,7 @@
   color: var(--ui-text);
   font-size: 26px;
   font-weight: 700;
-  scroll-margin-top: calc(var(--h-header-h, 76px) + 16px);
+  scroll-margin-top: 16px;
 }
 
 .form {
