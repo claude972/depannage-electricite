@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#ffffff">
+  <title>Accueil et position · Maquette dépannage électrique</title>
+  <link rel="stylesheet" href="./style.css">
+  <script defer src="./prototype.js"></script>
+</head>
+<body>
+<svg class="symbols" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m12 5-7 7 7 7M5 12h14"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v4m10-4v4M3 10h18m-13 5h2m4 0h2"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v9a2 2 0 0 1-2 2h-4v-7H9v7H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1.2"/><rect x="14" y="4" width="6" height="6" rx="1.2"/><rect x="4" y="14" width="6" height="6" rx="1.2"/><rect x="14" y="14" width="6" height="6" rx="1.2"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2.4"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.7 9a2.4 2.4 0 0 1 4.8 0c0 2-2.5 2.3-2.5 4m0 3h.01"/></symbol>
+  <symbol id="i-work" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M3 12h18"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3 2.7 5.7 6.3.8-4.6 4.4 1.1 6.3-5.5-3-5.5 3 1.1-6.3L3 9.5l6.3-.8z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M13.7 2.4 5 13.4h5.8L9.9 22l9.1-12h-5.7l.4-7.6Z"/></symbol>
+  <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2-5 4 10 2-5h6"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 3v5m6-5v5M6 8h12v3a6 6 0 0 1-12 0zm6 9v4"/></symbol>
+  <symbol id="art-outage" viewBox="0 0 80 80">
+    <ellipse cx="40" cy="62" rx="25" ry="6" fill="#eadbc8"/>
+    <circle cx="40" cy="37" r="24" fill="#f9ad65"/><circle cx="39" cy="34" r="22" fill="#ffc98a"/>
+    <path d="m44 16-18 24h13l-3 15 19-24H42z" fill="#bb451e" transform="translate(1 2)"/>
+    <path d="m44 16-18 24h13l-3 15 19-24H42z" fill="#f65e29"/>
+    <path d="M16 24l-4-3m51 29 5 3m-5-30 4-4" stroke="#e5793e" stroke-width="2.8" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="art-socket" viewBox="0 0 80 80">
+    <ellipse cx="40" cy="61" rx="25" ry="6" fill="#dedfe8"/>
+    <g transform="rotate(-10 40 40)"><rect x="17" y="19" width="46" height="44" rx="11" fill="#bdc2d3"/>
+    <rect x="16" y="16" width="46" height="43" rx="11" fill="#ffffff" stroke="#d7dae8" stroke-width="1.2"/>
+    <circle cx="39" cy="37.5" r="14" fill="#eaecf5" stroke="#d4d8e9"/>
+    <circle cx="34" cy="38" r="2.3" fill="#47506a"/><circle cx="44" cy="38" r="2.3" fill="#47506a"/>
+    <path d="M39 31v2" stroke="#546386" stroke-width="2.1" stroke-linecap="round"/></g>
+  </symbol>
+  <symbol id="art-panel" viewBox="0 0 80 80">
+    <ellipse cx="40" cy="62" rx="26" ry="6" fill="#d9e0f2"/>
+    <g transform="rotate(8 40 40)"><rect x="15" y="21" width="51" height="41" rx="7" fill="#879de0"/>
+    <rect x="14" y="17" width="51" height="42" rx="7" fill="#b7c7f2"/>
+    <rect x="19" y="23" width="41" height="30" rx="4" fill="#f7f9ff"/>
+    <path d="M32 25v26m14-26v26" stroke="#d1dbf6"/>
+    <rect x="23" y="34" width="7" height="10" rx="2" fill="#3154db"/><rect x="36" y="32" width="7" height="10" rx="2" fill="#3154db"/>
+    <rect x="49" y="36" width="7" height="10" rx="2" fill="#e66d44"/></g>
+  </symbol>
+  <symbol id="art-light" viewBox="0 0 80 80">
+    <ellipse cx="40" cy="63" rx="24" ry="5" fill="#ece3bd"/>
+    <path d="M25 33a15 15 0 1 1 27 10c-4 4-5 7-5 10H33c0-3-2-6-5-10-2-2-3-6-3-10Z" fill="#f6bd4a" transform="translate(2 2)"/>
+    <path d="M25 32a15 15 0 1 1 27 10c-4 4-5 7-5 10H33c0-3-2-6-5-10-2-2-3-6-3-10Z" fill="#ffda70"/>
+    <path d="M34 52h13v5c0 3-3 5-6.5 5S34 60 34 57z" fill="#68728a"/><path d="M35 56h11M40 51V39l5-5m-5 5-5-5" stroke="#a77522" stroke-width="1.7" stroke-linecap="round" fill="none"/>
+    <path d="M40 12V7m17 12 4-4m-37 4-4-4M17 32h-5m51 0h5" stroke="#df9f25" stroke-width="2.5" stroke-linecap="round"/>
+  </symbol>
+</svg>
+
+<section id="home-screen" aria-label="Accueil">
+  <header class="top wrap">
+    <button type="button" class="current-location" data-position>
+      <span class="position-dot" aria-hidden="true"></span>
+      <span class="current-text"><small>Lieu d’intervention</small><strong id="home-location">Choisir une position</strong></span>
+      <svg class="icon small" aria-hidden="true"><use href="#i-down"/></svg>
+    </button>
+    <span class="brand" aria-label="Dépannage électrique"><span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-bolt"/></svg></span><span>Dépannage<br>électrique</span></span>
+  </header>
+  <div class="tabs-line">
+    <div class="wrap service-tabs" aria-label="Type de service">
+      <button type="button" data-mode="repair" aria-pressed="true"><svg class="icon" aria-hidden="true"><use href="#i-bolt"/></svg>Dépannage</button>
+      <button type="button" data-mode="install" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg>Installation</button>
+      <button type="button" data-mode="diagnose" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-pulse"/></svg>Diagnostic</button>
+    </div>
+  </div>
+  <main class="wrap home-content">
+    <h1 class="visually-hidden" tabindex="-1">Dépannage électrique</h1>
+    <form class="search-pill home-search" id="problem-search">
+      <label class="search-input"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg><span class="visually-hidden">Rechercher un problème électrique</span><input type="search" id="problem-input" placeholder="Quel est le problème ?" autocomplete="off" aria-controls="problem-results"></label>
+      <button type="button" class="schedule" id="schedule"><svg class="icon" aria-hidden="true"><use href="#i-calendar"/></svg><span>Plus tard</span></button>
+    </form>
+    <div id="problem-results" class="problem-results" hidden></div>
+
+    <section class="section" aria-labelledby="quick-title">
+      <h2 id="quick-title">Pour vous</h2>
+      <div class="shortcuts" id="shortcuts"></div>
+    </section>
+
+    <section class="section" id="services" aria-labelledby="services-title">
+      <div class="section-heading"><h2 id="services-title" tabindex="-1">Dépannages courants</h2><span class="carousel-controls"><button type="button" id="cards-prev" aria-label="Cartes précédentes"><svg class="icon" aria-hidden="true"><use href="#i-back"/></svg></button><button type="button" id="cards-next" aria-label="Cartes suivantes"><svg class="icon" aria-hidden="true"><use href="#i-next"/></svg></button></span></div>
+      <div class="photo-rail" id="services-rail"></div>
+    </section>
+    <section class="section help" id="help" aria-labelledby="help-title">
+      <div><h2 id="help-title" tabindex="-1">De l’adresse au devis</h2><p>Choisissez où intervenir et décrivez votre besoin. L’artisan vous présente un devis avant les travaux.</p></div>
+      <button type="button" class="secondary" data-position>Choisir le lieu<svg class="icon" aria-hidden="true"><use href="#i-next"/></svg></button>
+    </section>
+    <footer class="prototype-label">Maquette interactive · Données de démonstration</footer>
+  </main>
+  <nav class="dock" aria-label="Navigation de la maquette">
+    <button type="button" data-home aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-home"/></svg>Accueil</button>
+    <button type="button" data-section="services"><svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg>Services</button>
+    <button type="button" data-position><svg class="icon" aria-hidden="true"><use href="#i-pin"/></svg>Position</button>
+    <button type="button" data-section="help"><svg class="icon" aria-hidden="true"><use href="#i-help"/></svg>Aide</button>
+  </nav>
+</section>
+
+<section id="position-screen" class="location-page" aria-labelledby="position-title" hidden>
+  <header class="location-header">
+    <button type="button" class="back" data-home aria-label="Retour à l’accueil"><svg class="icon" aria-hidden="true"><use href="#i-back"/></svg></button>
+    <h1 id="position-title" tabindex="-1">Définir votre localisation</h1>
+  </header>
+  <main class="location-main">
+    <form class="search-pill" id="place-search">
+      <label class="search-input"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg><span class="visually-hidden">Rechercher un lieu ou une commune</span><input type="search" id="place-input" placeholder="Recherchez un lieu" autocomplete="off" aria-controls="place-results"></label>
+    </form>
+    <div class="place-chips" aria-label="Filtres de lieux">
+      <button type="button" data-filter="home" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-home"/></svg>Domicile</button>
+      <button type="button" data-filter="work" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-work"/></svg>Travail</button>
+      <button type="button" data-filter="favorite" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-star"/></svg>Favoris</button>
+    </div>
+    <button type="button" class="place-row current-place" id="demo-position"><span class="place-icon"><span class="position-dot" aria-hidden="true"></span></span><span><strong>Position actuelle</strong><small>Exemple au Lamentin</small></span><svg class="icon small" aria-hidden="true"><use href="#i-next"/></svg></button>
+    <div class="location-results" id="place-results"></div>
+    <button type="button" class="place-row map-link" id="open-map"><span class="place-icon"><svg class="icon" aria-hidden="true"><use href="#i-pin"/></svg></span><span><strong>Définir le lieu sur la carte</strong></span><svg class="icon small" aria-hidden="true"><use href="#i-next"/></svg></button>
+    <p class="prototype-label">Lieux d’exemple en Martinique · Position simulée</p>
+  </main>
+</section>
+
+<dialog id="sheet" aria-labelledby="sheet-title">
+  <div class="sheet-header"><h2 id="sheet-title"></h2><form method="dialog"><button class="back" aria-label="Fermer"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></form></div>
+  <div id="sheet-body"></div>
+</dialog>
+<div class="status" role="status" aria-live="polite" id="status"></div>
+</body>
+</html>
