@@ -9,6 +9,7 @@
   <title>Maquette interactive · Dépannage électrique</title>
   <link rel="stylesheet" href="./style.css">
   <link rel="stylesheet" href="./web.css">
+  <link rel="stylesheet" href="./editorial.css">
   <script defer src="./prototype.js"></script>
 </head>
 <body class="prototype-home">
@@ -145,8 +146,122 @@
       <div><h2 id="help-title" tabindex="-1">De l’adresse au devis</h2><p>Choisissez où intervenir et décrivez votre besoin. L’artisan vous présente un devis avant les travaux.</p></div>
       <button type="button" class="secondary" data-position>Choisir le lieu<svg class="icon" aria-hidden="true"><use href="#i-next"/></svg></button>
     </section>
-    <footer class="prototype-label">Maquette interactive · Données de démonstration · <a href="./maquettes.html">Toutes les maquettes</a></footer>
+    <div class="home-editorial">
+      <section class="commitments" aria-labelledby="commitments-title">
+        <h2 id="commitments-title">Nos engagements</h2>
+        <ul>
+          <li>
+            <svg class="icon" aria-hidden="true"><use href="#i-receipt"/></svg>
+            <div><h3>Un premier repère sur le prix</h3><p>La fourchette vous aide à estimer le budget. L’artisan précise le montant après avoir examiné la panne.</p></div>
+          </li>
+          <li>
+            <svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg>
+            <div><h3>Votre accord avant les travaux</h3><p>L’artisan détaille les travaux, les pièces et le prix dans son devis. Vous décidez si vous l’acceptez.</p></div>
+          </li>
+          <li>
+            <svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg>
+            <div><h3>Un dossier pour tout retrouver</h3><p>Le rendez-vous, les échanges et les documents restent au même endroit, y compris après l’intervention.</p></div>
+          </li>
+        </ul>
+      </section>
+
+      <section class="home-faq" id="faq" aria-labelledby="home-faq-title">
+        <div class="editorial-intro">
+          <h2 id="home-faq-title" tabindex="-1">Questions fréquentes</h2>
+          <p>Les réponses utiles avant de demander un dépannage.</p>
+          <a class="editorial-link" href="./maquettes.html#ecran/contact">Voir l’assistance <svg class="icon small" aria-hidden="true"><use href="#i-next"/></svg></a>
+        </div>
+        <div class="faq-list">
+          <details>
+            <summary>Quel sera le prix du dépannage&nbsp;? <svg class="icon small" aria-hidden="true"><use href="#i-down"/></svg></summary>
+            <p>La fourchette affichée est indicative. Après le diagnostic, l’artisan présente un devis avec le coût des travaux. Si le périmètre change ensuite, un devis mis à jour est soumis à votre accord.</p>
+          </details>
+          <details>
+            <summary>Que se passe-t-il après ma demande&nbsp;? <svg class="icon small" aria-hidden="true"><use href="#i-down"/></svg></summary>
+            <p>La recherche d’un électricien tient compte de votre commune et des disponibilités. Le créneau souhaité devient un rendez-vous une fois confirmé dans votre dossier.</p>
+          </details>
+          <details>
+            <summary>Dois-je créer un compte pour suivre ma demande&nbsp;? <svg class="icon small" aria-hidden="true"><use href="#i-down"/></svg></summary>
+            <p>Le compte est facultatif. Pour retrouver vos interventions, vous pouvez vérifier le numéro de téléphone associé à la demande. <a href="./maquettes.html#ecran/connexion-client">Voir le parcours de suivi</a>.</p>
+          </details>
+          <details>
+            <summary>Comment se passe le règlement&nbsp;? <svg class="icon small" aria-hidden="true"><use href="#i-down"/></svg></summary>
+            <p>Le règlement passe par la plateforme. Si vous choisissez une empreinte bancaire, elle réserve le montant annoncé sans débit immédiat. Le règlement final intervient après les travaux sur la base du devis accepté.</p>
+          </details>
+          <details>
+            <summary>À qui m’adresser après les travaux&nbsp;? <svg class="icon small" aria-hidden="true"><use href="#i-down"/></svg></summary>
+            <p>Depuis le dossier de l’intervention, vous pouvez retrouver le devis et les justificatifs disponibles, ou contacter l’assistance si un problème persiste.</p>
+          </details>
+        </div>
+      </section>
+
+      <section class="home-recruitment" aria-labelledby="recruitment-title">
+        <div class="recruitment-copy">
+          <h2 id="recruitment-title">Vous êtes électricien&nbsp;?</h2>
+          <p>Rejoignez notre réseau pour recevoir des propositions de mission selon votre secteur, vos compétences et vos disponibilités.</p>
+          <a class="editorial-button" href="./maquettes.html#ecran/recrutement">Découvrir la candidature <svg class="icon small" aria-hidden="true"><use href="#i-next"/></svg></a>
+        </div>
+        <img src="/home/hero-photo-2.jpg" alt="" width="1800" height="1350" loading="lazy" decoding="async">
+      </section>
+
+      <section class="home-blog" id="blog" aria-labelledby="home-blog-title">
+        <div class="blog-heading">
+          <div class="editorial-intro"><h2 id="home-blog-title">Le blog du dépannage</h2><p>Des conseils pour préparer votre intervention.</p></div>
+          <a class="editorial-link" href="./conseils.html">Voir tous les conseils <svg class="icon small" aria-hidden="true"><use href="#i-next"/></svg></a>
+        </div>
+        <div class="blog-grid">
+          <a class="blog-story" href="./conseils.html#prises">
+            <img src="/home/section-outlet.jpg" alt="" width="1000" height="1498" loading="lazy" decoding="async">
+            <div><p class="story-topic">Pannes courantes</p><h3>Plusieurs prises sans courant&nbsp;?</h3><p>Les observations utiles à transmettre à l’électricien.</p></div>
+          </a>
+          <a class="blog-story" href="./conseils.html#devis">
+            <img src="/home/section-real-panel.jpg" alt="" width="1200" height="900" loading="lazy" decoding="async">
+            <div><p class="story-topic">Prix et devis</p><h3>Comment lire un devis d’électricité&nbsp;?</h3><p>Les lignes à regarder avant de donner votre accord.</p></div>
+          </a>
+          <a class="blog-story" href="./conseils.html#rendez-vous">
+            <img src="/home/hero-photo-1.jpg" alt="" width="1800" height="1200" loading="lazy" decoding="async">
+            <div><p class="story-topic">Rendez-vous</p><h3>Préparer la venue de l’électricien</h3><p>Les informations à partager avant le rendez-vous.</p></div>
+          </a>
+        </div>
+      </section>
+    </div>
   </main>
+  <footer class="editorial-footer" role="contentinfo">
+    <div class="wrap">
+      <div class="footer-columns">
+        <div>
+          <span class="brand"><span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-bolt"/></svg></span><span>Dépannage<br>électrique</span></span>
+          <p>De la demande au suivi de votre intervention électrique.</p>
+        </div>
+        <nav aria-label="Services et tarifs">
+          <h2>Services</h2>
+          <button type="button" data-section="services">Voir les dépannages</button>
+          <a href="./maquettes.html#ecran/tarifs">Tarifs indicatifs</a>
+          <a href="./maquettes.html#ecran/zones">Zones d’intervention</a>
+        </nav>
+        <nav aria-label="Aide et conseils">
+          <h2>Aide et conseils</h2>
+          <button type="button" data-section="faq">Questions fréquentes</button>
+          <a href="./maquettes.html#ecran/connexion-client">Suivre une intervention</a>
+          <a href="./maquettes.html#ecran/contact">Assistance</a>
+          <a href="./conseils.html">Blog</a>
+        </nav>
+        <nav aria-label="Espaces professionnels">
+          <h2>Professionnels</h2>
+          <a href="./maquettes.html#ecran/recrutement">Rejoindre le réseau</a>
+          <a href="./maquettes.html#ecran/connexion-artisan">Connexion artisan</a>
+        </nav>
+      </div>
+      <div class="footer-bottom">
+        <p>Maquette interactive. Données de démonstration.</p>
+        <nav aria-label="Informations sur la maquette">
+          <a href="./maquettes.html#ecran/mentions">Mentions légales</a>
+          <a href="./maquettes.html#ecran/confidentialite">Confidentialité</a>
+          <a href="./maquettes.html">Toutes les maquettes</a>
+        </nav>
+      </div>
+    </div>
+  </footer>
 </section>
 
 <section id="position-screen" class="location-page" aria-labelledby="position-title" hidden>

@@ -1,0 +1,193 @@
+.prototype-home { --editorial-width: 1064px; }
+.prototype-home .home-content { padding-bottom: 0; }
+
+.home-editorial {
+  grid-column: 1/-1;
+  display: grid;
+  gap: clamp(40px, 5.5vw, 76px);
+  margin-top: 28px;
+}
+
+.home-editorial h2, .advice-main h1 {
+  font-size: clamp(26px, 3vw, 36px);
+  line-height: 1.15;
+  letter-spacing: -.048em;
+}
+
+.home-editorial h3 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.4;
+  letter-spacing: -.022em;
+}
+
+.home-editorial p, .advice-main p {
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+.commitments {
+  padding: clamp(22px, 3.4vw, 42px);
+  background: var(--blue-soft);
+  border-radius: 20px;
+}
+
+.commitments ul {
+  display: grid;
+  gap: 22px 25px;
+  padding: 0;
+  margin: 22px 0 0;
+  list-style: none;
+}
+
+.commitments li {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-content: start;
+  gap: 12px;
+}
+
+.commitments .icon { color: var(--blue); }
+.commitments p { margin-top: 5px; }
+.editorial-intro p { margin-top: 9px; }
+
+.editorial-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  color: var(--blue);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.editorial-link:hover { text-decoration: underline; }
+.home-faq { display: grid; gap: 14px 36px; }
+.faq-list { border-top: 1px solid var(--rule); }
+.faq-list details { border-bottom: 1px solid var(--rule); }
+
+.faq-list summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding-block: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.faq-list summary::-webkit-details-marker { display: none; }
+.faq-list summary .icon { color: var(--blue); }
+.faq-list details[open] summary .icon { transform: rotate(180deg); }
+.faq-list p { margin: 0 26px 15px 0; max-width: 66ch; }
+.faq-list a { color: var(--blue); }
+
+.home-recruitment {
+  display: grid;
+  overflow: clip;
+  border-radius: 20px;
+  background: #16277a;
+  color: var(--paper);
+}
+
+.recruitment-copy { align-self: center; padding: clamp(22px, 4vw, 48px); }
+.home-recruitment p { margin: 12px 0 20px; max-width: 44ch; color: #edf0ff; }
+.home-recruitment img { display: block; width: 100%; height: 180px; object-fit: cover; object-position: 50% 45%; }
+
+.editorial-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 48px;
+  padding: 10px 14px;
+  border-radius: 11px;
+  background: var(--paper);
+  color: #16277a;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.editorial-button:hover { background: var(--blue-soft); }
+.editorial-button:focus-visible { outline-color: var(--paper); }
+.blog-heading { display: flex; justify-content: space-between; flex-wrap: wrap; align-items: end; gap: 3px 16px; }
+.blog-grid { display: grid; gap: 16px; margin-top: 14px; }
+
+.blog-story {
+  min-width: 0;
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  border-radius: 16px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.blog-story img { display: block; width: 100%; height: auto; aspect-ratio: 2/1; object-fit: cover; }
+.blog-story > div { padding: 15px; }
+.blog-story .story-topic { color: var(--blue); font-size: 12px; font-weight: 700; margin: 0 0 5px; }
+.blog-story h3 + p { margin-top: 4px; font-size: 14px; }
+.blog-story:hover h3 { color: var(--blue); text-decoration: underline; }
+
+.editorial-footer {
+  margin-top: clamp(38px, 5.5vw, 72px);
+  padding: 30px 0 calc(94px + env(safe-area-inset-bottom));
+  background: var(--surface);
+  border-top: 1px solid var(--rule);
+}
+
+.editorial-footer > .wrap { max-width: var(--editorial-width); }
+.footer-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 14px; }
+.footer-columns > div:first-child { grid-column: 1/-1; }
+.footer-columns .brand { justify-content: start; }
+.footer-columns p { max-width: 28ch; margin-top: 12px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.footer-columns h2 { margin: 0 0 5px; font-size: 14px; }
+.footer-columns nav { display: grid; align-content: start; justify-items: start; }
+
+.editorial-footer a, .editorial-footer button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: left;
+  text-decoration: none;
+  scroll-margin-bottom: 92px;
+}
+
+.editorial-footer a:hover, .editorial-footer button:hover { color: var(--blue); text-decoration: underline; }
+.footer-bottom { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 5px 20px; margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.footer-bottom p { color: var(--muted); font-size: 12px; line-height: 1.45; }
+.footer-bottom nav { display: flex; flex-wrap: wrap; gap: 0 16px; }
+
+.advice-main { max-width: 792px; padding-block: 18px 45px; }
+.advice-main header { padding: clamp(20px, 4vw, 36px); margin: 14px 0 28px; border-radius: 20px; background: var(--blue-soft); }
+.advice-main header p { margin-top: 10px; }
+.advice-main nav { display: flex; flex-wrap: wrap; gap: 0 18px; margin-top: 8px; }
+.advice-main article { padding-block: 26px; border-top: 1px solid var(--rule); scroll-margin-top: 16px; }
+.advice-main article h2 { font-size: clamp(22px, 3vw, 28px); letter-spacing: -.035em; }
+.advice-main article p { max-width: 68ch; margin-top: 10px; }
+
+@media (min-width: 650px) {
+  .home-faq { grid-template-columns: minmax(0, .78fr) minmax(0, 1.22fr); }
+  .home-recruitment { grid-template-columns: minmax(0, 1fr) minmax(0, .84fr); }
+  .home-recruitment img { height: 100%; max-height: 330px; min-height: 240px; }
+  .blog-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (min-width: 940px) {
+  .prototype-home { --editorial-width: var(--web-width); }
+  .home-editorial { margin-top: 4px; }
+  .commitments ul { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .home-faq { grid-template-columns: minmax(0, .72fr) minmax(0, 1.28fr); }
+  .editorial-footer { padding-bottom: 20px; }
+  .editorial-footer a, .editorial-footer button { scroll-margin-bottom: 0; }
+  .footer-columns { grid-template-columns: 1.18fr repeat(3, 1fr); }
+  .footer-columns > div:first-child { grid-column: auto; }
+}
