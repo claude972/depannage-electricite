@@ -2,7 +2,34 @@
 
 Branche `release-candidate/codex-2026-11-09` sur le disque externe. Base Web et native `adba084341054168d819adb87ceb6b2bcbf8e4fe`. Ce rapport distingue l’avancement et la qualification de la version candidate.
 
-## Avancement par bloc
+## Recette interne · 10 novembre 2026
+
+La candidate 0.1.0 utilise la base Supabase de recette séparée et ses 127 migrations. Le Web et le mobile partagent la version et le contrat API. La décision de mise en production revient au propriétaire.
+
+| Surface | Source et accès | Vérification |
+| --- | --- | --- |
+| Web et PWA | [Preview Vercel](https://depannage-electricite-8nimgrdre-brafas-projects.vercel.app/) · `d59fc8ef688929a5ea0a9414408066630e907862` · `dpl_5C5dY4E6TcX92mPUDyzXzaaXiGQU` | READY. Accueil et catalogue accessibles sans session Vercel. Fiche, bouton fixe, bouton dans le formulaire et demande jusqu’à la connexion vérifiés en clair et sombre à 390 et 1440 px. |
+| Android | [Build EAS interne](https://expo.dev/accounts/claude972/projects/depannage-electrique-mobile/builds/50d88f8e-7bf2-4f23-af36-41923c73977b) · `36bdbe2`, build 2 | FINISHED. APK signé et vérifié. Installation et démarrage sur Pixel API 36 simulé. L’accueil, le catalogue alimenté par l’API, la fiche et l’ouverture du formulaire ont passé. |
+| iOS simulateur | [Build EAS simulateur](https://expo.dev/accounts/claude972/projects/depannage-electrique-mobile/builds/beefc881-39fe-495b-9797-cb95ccaacfe5) · `36bdbe2`, build 2 | FINISHED. Binaire et origine API vérifiés. Installation sur iPhone 16e simulé sous iOS 26.3. Le test Maestro accueil → fiche → formulaire passe. |
+| iPhone physique | Bundle `com.claude972.depannageelectrique.preview` | EAS refuse la compilation interne avec les identifiants existants. Aucun appareil enregistré dans EAS pour cette équipe Apple et aucun profil ad hoc compatible local ou sur EAS. Le propriétaire doit enregistrer son iPhone sur l’équipe et rendre disponible le profil correspondant. La PWA est accessible entre-temps. |
+
+Claude Fable 5.2 a identifié que le contrat mobile attendait `appointment.version`, alors que l’API renvoie `reminder_version`. Avec un créneau existant, toute la réponse opérations était rejetée, ce qui masquait le compte rendu et la signature. Codex a reproduit l’échec avant d’intégrer le correctif. Les profils de build `device` et `simulator` pointent explicitement vers la preview testée. Les différences entre la source Web `d59fc8e` et la source mobile `36bdbe2` concernent le mobile, ses tests et le rapport.
+
+Le contrôle de la candidate donne 2 277 tests réussis, zéro échec, zéro test ignoré, ainsi que TypeScript Web et mobile et les builds Next Turbopack et Webpack. Les contrôles SQL isolés couvrent les rendez-vous, les offres avec consentement photo, les accès aux sites, l’administration et le support. Ils exécutent les 127 migrations avec Auth, Storage et Cron simulés. En ligne, les quatre démonstrations de rôle s’ouvrent avec des données fictives. Cinq lectures privées anonymes renvoient 401 sans cache, dont l’administration et le suivi. Le service worker est actif, le formulaire de brouillon hors ligne répond et le cache ne contient que les trois ressources publiques prévues.
+
+Le propriétaire a retenu les preuves précédentes des fournisseurs. Sur cette candidate, l’API annonce SMS et Stripe test indisponibles. L’Auth du projet de recette annonce le téléphone désactivé et aucune liste de destinataires vérifiés n’est appliquée à la branche. Les épreuves précédentes Stripe sont liées à un autre environnement. Le test de demande s’arrête donc à la connexion avec un compte existant. Les espaces entreprise et administration sont disponibles sur le Web. Le mobile ouvre ces espaces par le portail Web. La zone desservie, la fiche opérateur et les conditions de garantie attendent les valeurs officielles dans cette base.
+
+L’accès navigateur et natif a nécessité une exception de protection limitée à l’URL de la preview test. L’URL conserve `noindex`. Les données privées restent sous authentification applicative. Les deux binaires incorporent l’origine API et l’origine Supabase de recette. Le code, les compilations locales et les binaires sont sur le volume externe. Le contrôle iOS a utilisé un simulateur macOS existant après un refus de création sur le volume externe. Cette livraison correspond à une version de recette. La qualification sur téléphones physiques et l’activation des fonctions fournisseurs sur le candidat restent à réaliser avant la mise en service.
+
+### Vérifications restant à faire sur appareils
+
+1. Installer le build 2 sur les appareils enregistrés. Vérifier le démarrage, la version, l’affichage du catalogue et le chargement depuis un réseau mobile.
+2. Créer une demande de test. Revenir de la caméra, arrêter puis relancer l’app et confirmer la restauration des champs et des photos. En cas de coupure réseau, confirmer qu’une seule demande est créée au réessai.
+3. Sur une mission test, modifier un rendez-vous deux fois puis ouvrir le compte rendu. Les deux modifications doivent apparaître. Vérifier le dépôt avant et après, la signature client et le suivi GPS qui s’arrête à la clôture.
+4. Vérifier l’installation PWA depuis Safari et Chrome sur téléphone et le brouillon hors ligne. Une fois reconnecté, ouvrir le compte avec ses autorisations normales.
+5. Une fois les configurations test réutilisées sur ce candidat, vérifier l’accès téléphone avec un destinataire vérifié et le retour au dossier après un paiement sandbox. Conserver le bandeau test.
+
+## Historique des blocs précédents
 
 | Bloc | État | Résultat |
 | --- | --- | --- |
