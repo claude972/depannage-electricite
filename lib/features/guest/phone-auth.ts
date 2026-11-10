@@ -6,6 +6,7 @@ import type { User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { z } from "zod";
 import { ApiError, assertOrigin, authenticatedClient } from "@/lib/supabase/server";
+import { testSmsRecipients } from "./test-sms-recipients";
 
 const HEADERS = { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" };
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -193,6 +194,11 @@ export async function phoneRoute(operation: "start" | "verify" | "nativeVerify" 
       : operation === "verify" || operation === "nativeVerify" ? await input(request, verifySchema)
       : operation === "upgrade" ? await input(request, upgradeSchema) : null;
     if (operation === "nativeVerify" && (parsed as z.output<typeof verifySchema>).kind !== "sms") fail(422);
+    if (parsed && "phone" in parsed) {
+      const recipients = testSmsRecipients(env);
+      if (recipients?.length === 0) fail();
+      if (recipients && !recipients.includes(parsed.phone)) fail(403);
+    }
     const ctx = await context();
     const body = operation === "start" ? await start(request, ctx, parsed as z.output<typeof startSchema>)
       : operation === "verify" || operation === "nativeVerify" ? await verify(request, ctx, parsed as z.output<typeof verifySchema>, operation === "nativeVerify")

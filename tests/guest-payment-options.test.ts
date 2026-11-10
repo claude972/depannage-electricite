@@ -29,3 +29,17 @@ test("deferred booking means platform-only collection; unavailable card hold nev
  assert.equal(deferred.available,true);assert.match(deferred.label,/plateforme/);assert.match(deferred.description,/Aucun paiement direct/);
  assert.doesNotMatch(deferred.label,/sur place/i);assert.match(options.payment_methods[1].reason!,/plateforme après l’intervention/);
 });
+
+test("a preview with no valid test list never advertises phone auth or requests provider settings", async () => {
+  const env = { NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "PUBLIC_FAKE" };
+  let reads = 0;
+  const fetcher: typeof fetch = async () => { reads++; return Response.json({ external: { phone: true } }); };
+  for (const list of [undefined, "", "+590690000101,malformed"]) {
+    const options = await bookingOptions({ ...env, VERCEL_ENV: "preview", TEST_PHONE_NUMBERS: list }, fetcher);
+    assert.equal(options.phone_auth.available, false);
+  }
+  assert.equal(reads, 0);
+  const options = await bookingOptions({ ...env, VERCEL_ENV: "preview", TEST_PHONE_NUMBERS: "+596696000101" }, fetcher);
+  assert.equal(options.phone_auth.available, true);
+  assert.equal(reads, 1);
+});

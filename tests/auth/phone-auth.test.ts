@@ -12,7 +12,7 @@ const started = { error: null, data: { user: null, session: null } };
 const startBody = { phone: "0696 12 34 56", first_name: "QA", last_name: "Essai", purpose: "booking" };
 const verifyBody = { phone: PHONE, token: "123456", kind: "sms" };
 type Operation = "start" | "verify" | "nativeVerify" | "session" | "upgrade" | "history";
-function fixture(op: Operation, options: { users?: unknown[]; profileRole?: string; profileId?: string; profileError?: boolean; cookie?: boolean; otp?: unknown; verify?: unknown; update?: unknown; transport?: boolean; historyRows?: unknown; historyError?: boolean; historyCount?: unknown; historyCap?: number; nativeUser?: ReturnType<typeof user> } = {}) {
+function fixture(op: Operation, options: { users?: unknown[]; profileRole?: string; profileId?: string; profileError?: boolean; cookie?: boolean; otp?: unknown; verify?: unknown; update?: unknown; transport?: boolean; historyRows?: unknown; historyError?: boolean; historyCount?: unknown; historyCap?: number; nativeUser?: ReturnType<typeof user>; environment?: Record<string, string> } = {}) {
   let sdkOptions: any, index = 0, created = 0;
   const calls: { op: string; value?: any; extra?: any }[] = [], written: unknown[] = [];
   const nextUser = () => (options.users ?? [anonymous])[Math.min(index++, (options.users ?? [anonymous]).length - 1)];
@@ -40,7 +40,7 @@ function fixture(op: Operation, options: { users?: unknown[]; profileRole?: stri
   } };
   const route = op === "nativeVerify" ? "native/verify" : op;
   const module = loadModule(`app/api/auth/phone/${route}/route.ts`, {
-    "node:process": { env: { NEXT_PUBLIC_SUPABASE_URL: "https://fake.supabase.co", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "FAKE_PUBLIC_KEY" } },
+    "node:process": { env: { NEXT_PUBLIC_SUPABASE_URL: "https://fake.supabase.co", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "FAKE_PUBLIC_KEY", ...options.environment } },
     "@supabase/ssr": { createServerClient: (_url: string, _key: string, config: unknown) => { created++; sdkOptions = config; return db; } },
     "next/headers": { cookies: async () => ({ getAll: () => options.cookie ? [{ name: "sb-fake-auth-token", value: "OLD_COOKIE" }] : [], set: (...value: unknown[]) => written.push(value) }) },
     "@/lib/supabase/server": { ApiError, authenticatedClient: async (request: Request) => {
@@ -69,6 +69,36 @@ test("start: anonymous booking creates only OTP client identity metadata, never 
   assert.deepEqual(b, { status: "code_requested", kind: "sms", retry_after: 60, phone_suffix: "3456" });
   const otp = f.calls.find(c => c.op === "otp")!;
   assert.equal(otp.value.phone, PHONE); assert.equal(otp.value.options.shouldCreateUser, true); assert.equal(otp.value.options.data.role, "client"); assert.equal(otp.value.options.data.full_name, "QA Essai"); assert.equal(f.written.length, 0);
+});
+
+test("preview SMS rejects missing, malformed and unlisted numbers before Auth", async () => {
+  for (const [list, status] of [["", 503], [`${PHONE},bad-number`, 503], ["+590690000101", 403]] as const) {
+    for (const operation of ["start", "verify", "nativeVerify"] as const) {
+      const f = fixture(operation, { environment: { VERCEL_ENV: "preview", TEST_PHONE_NUMBERS: list } });
+      const body = await result(await f.request(operation === "start" ? startBody : verifyBody), status);
+      assert.doesNotMatch(JSON.stringify(body), /596|590|bad-number/);
+      assert.equal(f.created(), 0);
+    }
+  }
+  const missing = fixture("start", { environment: { VERCEL_ENV: "preview" } });
+  await result(await missing.request(startBody), 503);
+  assert.equal(missing.created(), 0);
+  const isolated = fixture("start", { environment: { TEST_PHONE_NUMBERS: "+590690000101" } });
+  await result(await isolated.request(startBody), 403);
+  assert.equal(isolated.created(), 0);
+});
+
+test("preview SMS allows only the configured normalized Martinique and Guadeloupe numbers", async () => {
+  const guadeloupe = "+590690000101";
+  const environment = { VERCEL_ENV: "preview", TEST_PHONE_NUMBERS: `${PHONE}, ${guadeloupe}` };
+  for (const [input, expected] of [["0696 12 34 56", PHONE], ["+590 (690) 000 101", guadeloupe]]) {
+    const f = fixture("start", { environment });
+    await result(await f.request({ ...startBody, phone: input }), 200);
+    assert.equal(f.calls.find(c => c.op === "otp")?.value.phone, expected);
+  }
+  const check = fixture("nativeVerify", { environment, users: [anonymous, { data: { user: user() }, error: null }] });
+  assert.equal((await check.request(verifyBody)).status, 200);
+  assert.equal(check.calls.filter(call => call.op === "verify").length, 1);
 });
 
 test("lookup unknown is uniform, never creates user and makes no SMS delivery claim", async () => {

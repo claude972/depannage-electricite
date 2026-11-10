@@ -1,3 +1,5 @@
+import { testSmsRecipients } from "./test-sms-recipients";
+
 /** Configuration is a capability hint, never evidence of a card authorization or SMS delivery. */
 export function cardHoldConfigured(env: Record<string, string | undefined>): boolean {
   const key = env.STRIPE_SECRET_KEY ?? "";
@@ -9,8 +11,9 @@ export async function bookingOptions(
   env: Record<string, string | undefined>,
   fetcher: typeof fetch = fetch,
 ) {
-  let phoneAvailable: boolean | null = null;
-  if (env.NEXT_PUBLIC_SUPABASE_URL && env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
+  const recipients = testSmsRecipients(env);
+  let phoneAvailable: boolean | null = recipients?.length === 0 ? false : null;
+  if (phoneAvailable === null && env.NEXT_PUBLIC_SUPABASE_URL && env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
     try {
       const response = await fetcher(new URL("/auth/v1/settings", env.NEXT_PUBLIC_SUPABASE_URL), {
         headers: { apikey: env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY },
