@@ -247,9 +247,10 @@ test("native verification returns only the verified client’s session and never
   });
   const role = fixture("nativeVerify", { users, profileRole: "artisan" });
   await result(await role.request(verifyBody), 409);
-  for (const headers of [{ cookie: "sb-qa-auth-token=other" }, { authorization: "Bearer another.session.token" }]) {
+  const mixedHeaders: Record<string, string>[] = [{ cookie: "sb-qa-auth-token=other" }, { authorization: "Bearer another.session.token" }];
+  for (const headers of mixedHeaders) {
     const mixed = fixture("nativeVerify");
-    await result(await mixed.request(verifyBody, headers as Record<string, string>), 409);
+    await result(await mixed.request(verifyBody, headers), 409);
     assert.equal(mixed.created(), 0);
   }
   const update = fixture("nativeVerify");
