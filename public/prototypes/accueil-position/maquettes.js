@@ -1,6 +1,7 @@
 import { roles, screens } from './maquettes-data.js';
 import { sourceFiles, sourceRefs } from './maquettes-sources.js';
 import { approvalState, bindWorkboard, renderPriority, renderWorkboard, workspaceNav } from './maquettes-pro.js';
+import { demoEstimates } from './demo-estimates.js';
 
 const main = document.querySelector('#atlas-main');
 const directory = new Map(screens.map((screen) => [screen.id, screen]));
@@ -96,17 +97,9 @@ function renderField([label, type, placeholder = ''], index) {
   return `<div class="atlas-field"><label for="${id}">${label}</label>${control}</div>`;
 }
 
-const estimates = {
-  'Coupure de courant': '150–250 € TTC',
-  'Prise ou interrupteur': '90–190 € TTC',
-  'Tableau électrique': '150–350 € TTC',
-  'Éclairage': '80–200 € TTC',
-  'Diagnostic': 'À préciser sur devis',
-};
-
 function currentFacts(screen, items) {
   if (screen.id !== 'recapitulatif') return items;
-  return items.map(([key, value]) => [key, key === 'Estimation d’exemple' ? estimates[sample.get('Problème')] ?? value : sample.get(key) ?? value]);
+  return items.map(([key, value]) => [key, key === 'Estimation d’exemple' ? demoEstimates[sample.get('Problème')] ?? value : sample.get(key) ?? value]);
 }
 
 function screenBlocks(screen) {

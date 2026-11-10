@@ -27,11 +27,117 @@
   color: var(--muted);
 }
 
-.commitments {
-  padding: clamp(22px, 3.4vw, 42px);
-  background: var(--night-raised);
-  color: var(--on-night);
+.catalogue-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.home-catalogue .editorial-intro p { max-width: 70ch; }
+
+.catalogue-item {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 104px;
+  padding: 12px;
+  text-align: left;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 16px;
+}
+
+.catalogue-item img {
+  width: 68px;
+  height: 68px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.catalogue-item-copy { min-width: 0; }
+.catalogue-item strong { display: block; margin-top: 4px; font-size: 15px; line-height: 1.35; }
+.catalogue-item > .icon { color: var(--blue); }
+
+.catalogue-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.catalogue-meta small { font-size: inherit; }
+.catalogue-meta > span { color: var(--muted); }
+.catalogue-item:hover { border-color: var(--blue); }
+.catalogue-item:hover strong { text-decoration: underline; }
+
+.catalogue-more { margin-top: 16px; }
+
+.catalogue-more summary {
+  display: flex;
+  align-items: center;
+  width: fit-content;
+  gap: 8px;
+  min-height: 48px;
+  margin-inline-start: auto;
+  padding: 10px 16px;
+  border-radius: 11px;
+  background: var(--blue);
+  color: var(--paper);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.catalogue-more summary::-webkit-details-marker { display: none; }
+.catalogue-more:not([open]) summary span:nth-child(2),
+.catalogue-more[open] summary span:first-child { display: none; }
+.catalogue-more[open] summary .icon { transform: rotate(180deg); }
+.catalogue-more .catalogue-grid { margin-top: 12px; }
+
+.home-urgent {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  padding: clamp(20px, 3.4vw, 42px);
+  background: var(--artisan-blue);
+  color: var(--paper);
   border-radius: 20px;
+}
+
+.home-urgent > .icon { align-self: start; width: 34px; height: 34px; color: var(--night-link); }
+.home-urgent h2 { font-size: clamp(23px, 2.8vw, 33px); }
+.home-urgent p { color: var(--on-night-muted); margin-top: 8px; max-width: 60ch; }
+.home-urgent .editorial-button { grid-column: 2; justify-self: start; }
+
+.matching-layout {
+  display: grid;
+  gap: 22px;
+  align-items: start;
+  margin-top: 20px;
+}
+
+.matching-layout > img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4/3;
+  object-fit: cover;
+  object-position: 50% 44%;
+  border-radius: 18px;
+}
+
+.matching-copy > .primary { margin-top: 18px; }
+
+.commitments {
+  padding-block: clamp(22px, 3.4vw, 42px);
+  border-block: 1px solid var(--rule);
 }
 
 .commitments ul {
@@ -49,8 +155,9 @@
   gap: 12px;
 }
 
-.commitments .icon { color: var(--night-link); }
-.commitments p { margin-top: 5px; color: var(--on-night-muted); }
+.commitments li > .icon { color: var(--blue); }
+.commitments p { margin-top: 5px; }
+.commitments .editorial-link { margin-top: 4px; }
 .editorial-intro p { margin-top: 9px; }
 
 .editorial-link {
@@ -178,6 +285,8 @@
 .advice-main article p { max-width: 68ch; margin-top: 10px; }
 
 @media (min-width: 650px) {
+  .catalogue-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .matching-layout { grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); }
   .home-faq { grid-template-columns: minmax(0, .78fr) minmax(0, 1.22fr); }
   .home-recruitment { grid-template-columns: minmax(0, 1fr) minmax(0, .84fr); }
   .home-recruitment img { height: 100%; max-height: 330px; min-height: 240px; }
@@ -187,7 +296,13 @@
 @media (min-width: 940px) {
   .prototype-home { --editorial-width: var(--web-width); }
   .home-editorial { margin-top: 4px; }
+  .catalogue-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .home-urgent { grid-template-columns: 34px minmax(0, 1fr) auto; gap: 22px; }
+  .home-urgent .editorial-button { grid-column: auto; }
+  .matching-layout { gap: 40px; }
   .commitments ul { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .commitments li { grid-template-columns: 1fr; }
+  .commitments li > .icon { width: 30px; height: 30px; }
   .home-faq { grid-template-columns: minmax(0, .72fr) minmax(0, 1.28fr); }
   .editorial-footer { padding-bottom: 20px; }
   .editorial-footer a, .editorial-footer button { scroll-margin-bottom: 0; }

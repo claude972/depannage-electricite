@@ -1,3 +1,5 @@
+import { demoEstimates } from './demo-estimates.js';
+
 export const roles = {
   public: { label: 'Public', icon: 'bolt', description: 'Découvrir le service et préparer une demande.' },
   client: { label: 'Client', icon: 'person', description: 'Demande, devis, suivi et règlement.' },
@@ -43,7 +45,7 @@ export const screens = [
     faq([['Quand le prix est-il confirmé ?', 'L’artisan établit le devis après le diagnostic et avant les travaux.']]),
   ], [link('Décrire la panne', 'demande'), link('Voir les estimations', 'tarifs')]),
   screen('tarifs', 'public', 'Tarifs indicatifs', ['M38'], 'Exemples de fourchettes TTC pour comparer la présentation.', [
-    facts('Exemples de dépannage', [['Coupure électrique', '150–250 €'], ['Prise ou interrupteur', '90–190 €'], ['Tableau électrique', '150–350 €'], ['Éclairage', '80–200 €']]),
+    facts('Exemples de dépannage', Object.entries(demoEstimates)),
     info('Devis avant travaux', 'Le prix final dépend du diagnostic, des pièces nécessaires et du devis accepté.'),
   ], [link('Décrire mon besoin', 'demande')]),
   screen('zones', 'public', 'Zones d’intervention', ['M59'], 'Aperçu de la recherche par commune en Martinique.', [
@@ -101,7 +103,7 @@ export const screens = [
     form('Adresse d’intervention', [fieldCity, ['Adresse de démonstration', 'text', 'Résidence Exemple'], ['Créneau souhaité', ['Dès que possible', 'Un autre jour', 'Matin', 'Après-midi']]], 'Voir le récapitulatif', 'recapitulatif'),
   ], [link('Ouvrir la sélection de position', 'position')]),
   screen('recapitulatif', 'client', 'Récapitulatif de la demande', [], 'Vérifiez les informations avant de confirmer.', [
-    facts('Demande de démonstration', [['Problème', 'Prises sans courant'], ['Lieu', 'Fort-de-France'], ['Créneau', 'Matin'], ['Estimation d’exemple', '90–190 € TTC']]),
+    facts('Demande de démonstration', [['Problème', 'Prises sans courant'], ['Lieu', 'Fort-de-France'], ['Créneau', 'Matin'], ['Estimation d’exemple', demoEstimates['Prise ou interrupteur']]]),
     form('Règlement sur la plateforme', [['Moment du règlement', ['Empreinte bancaire', 'Après l’intervention']]], 'Simuler la confirmation', 'confirmation'),
   ], [link('Modifier le lieu', 'adresse-demande')]),
   screen('confirmation', 'client', 'Demande envoyée', ['M54'], 'Exemple de confirmation pour le dossier DÉMO-021.', [

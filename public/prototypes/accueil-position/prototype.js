@@ -1,3 +1,5 @@
+import { demoEstimates } from './demo-estimates.js';
+
 const $ = (selector) => document.querySelector(selector);
 const icon = (name, size = '') => `<svg class="icon ${size}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 const services = {
@@ -8,16 +10,22 @@ const services = {
   add: { title: 'Ajouter une prise', label: 'Prises', detail: 'Préparez la pose d’un nouveau point électrique.', image: '/home/section-outlet.jpg', position: '50% 53%' },
   fitting: { title: 'Installer un luminaire', label: 'Éclairage', detail: 'Décrivez le luminaire et son emplacement.', image: '/home/section-socket.jpg', position: '38% 43%' },
   check: { title: 'Faire vérifier le tableau', label: 'Tableau', detail: 'Décrivez le problème pour orienter la vérification.', image: '/home/section-real-panel.jpg', position: '52% 45%' },
+  board: { title: 'Panne de tableau électrique', label: 'Tableau', detail: 'Un module ne répond plus ou le tableau n’alimente plus certains circuits.', image: '/home/section-real-panel.jpg', position: '52% 45%' },
+  damaged: { title: 'Prise abîmée ou qui chauffe', label: 'Prises', detail: 'Le mécanisme est endommagé ou montre des signes de chauffe.', image: '/home/section-outlet.jpg', position: '50% 47%' },
+  multiple: { title: 'Plusieurs prises sans courant', label: 'Prises', detail: 'Plusieurs prises d’une même zone restent sans courant.', image: '/home/section-outlet.jpg', position: '50% 56%' },
+  unknown: { title: 'Origine de la panne inconnue', label: 'Diagnostic', detail: 'Vous constatez une anomalie sans avoir identifié son origine.', image: '/home/hero-photo-1.jpg', position: '42% 45%' },
 };
 const modes = {
   repair: { title: 'Dépannages courants', cards: ['outage', 'socket', 'panel', 'light'] },
   install: { title: 'Installations courantes', cards: ['add', 'fitting'] },
-  diagnose: { title: 'Situations à vérifier', cards: ['check', 'panel', 'outage'] },
+  diagnose: { title: 'Situations à vérifier', cards: ['unknown', 'check', 'panel'] },
 };
 const demoCategories = {
   outage: 'Coupure de courant', socket: 'Prise ou interrupteur', panel: 'Tableau électrique', light: 'Éclairage',
   add: 'Prise ou interrupteur', fitting: 'Éclairage', check: 'Diagnostic',
+  board: 'Tableau électrique', damaged: 'Prise ou interrupteur', multiple: 'Prise ou interrupteur', unknown: 'Diagnostic',
 };
+const featuredServices = ['board', 'socket', 'panel', 'outage', 'damaged', 'light', 'multiple', 'unknown'];
 const places = [
   { id: 'home', title: 'Domicile', area: 'Fort-de-France', context: 'Lieu enregistré · Démo', icon: 'home', favorite: true },
   { id: 'work', title: 'Travail', area: 'Le Lamentin', context: 'Lieu enregistré · Démo', icon: 'work' },
@@ -164,6 +172,18 @@ function updateArrows() {
   $('#cards-next').disabled = rail.scrollLeft + rail.clientWidth >= rail.scrollWidth - 1;
 }
 
+function renderCatalogue(ids, showEstimate = false) {
+  return ids.map((id) => {
+    const service = services[id];
+    const estimate = showEstimate ? `<small>${demoEstimates[demoCategories[id]]}</small>` : '';
+    return `<button class="catalogue-item" type="button" data-service="${id}">
+      <img src="${service.image}" alt="" width="144" height="144" loading="lazy" decoding="async" style="object-position:${service.position}">
+      <span class="catalogue-item-copy"><span class="catalogue-meta"><span>${service.label}</span>${estimate}</span><strong>${service.title}</strong></span>
+      ${icon('next', 'small')}
+    </button>`;
+  }).join('');
+}
+
 function renderProblemResults() {
   const query = normalized(problem.value);
   problemResults.hidden = !query;
@@ -192,6 +212,10 @@ function choosePlace(value) {
   $('#home-location').textContent = value.area;
   $('#web-location-label').textContent = value.area;
   $('#account-location').textContent = value.area;
+  const urgentLink = $('#urgent-request');
+  const request = new URL(urgentLink.href);
+  request.searchParams.set('lieu', value.area);
+  urgentLink.href = request.href;
   if (sheet.open) sheet.close();
   renderPlaces();
   serviceToResume = history.state?.service ?? null;
@@ -310,6 +334,10 @@ $('#schedule').addEventListener('click', () => {
 });
 $('#demo-position').addEventListener('click', () => choosePlace(demoPosition));
 $('#open-map').addEventListener('click', openMap);
+$('#start-diagnostic').addEventListener('click', () => {
+  $('.service-tabs [data-mode="diagnose"]').click();
+  focusSection('services');
+});
 problem.addEventListener('input', renderProblemResults);
 place.addEventListener('input', renderPlaces);
 $('#place-search').addEventListener('submit', (event) => event.preventDefault());
@@ -331,5 +359,7 @@ window.addEventListener('popstate', () => {
   updateScreen(true, true);
 });
 renderCards();
+$('#catalogue-cards').innerHTML = renderCatalogue(featuredServices, true);
+$('#catalogue-extra').innerHTML = renderCatalogue(['add', 'fitting', 'check']);
 renderPlaces();
 updateScreen();
