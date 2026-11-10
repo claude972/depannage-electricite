@@ -3,11 +3,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { transformSync } from "esbuild";
 
 const nodeRequire = createRequire(import.meta.url);
-export const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 export class ApiError extends Error {
   constructor(
