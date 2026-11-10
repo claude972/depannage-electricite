@@ -1,5 +1,6 @@
 import { roles, screens } from './maquettes-data.js';
 import { sourceFiles, sourceRefs } from './maquettes-sources.js';
+import { approvalState, bindWorkboard, renderPriority, renderWorkboard, workspaceNav } from './maquettes-pro.js';
 
 const main = document.querySelector('#atlas-main');
 const directory = new Map(screens.map((screen) => [screen.id, screen]));
@@ -11,7 +12,7 @@ const normalize = (text) => text.normalize('NFD').replace(/\p{Diacritic}/gu, '')
 const escaped = (text) => String(text).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
 const selected = (on) => on ? ' aria-current="page"' : '';
 const sample = new Map();
-const viewsWithSidebar = new Set(['entreprise', 'admin']);
+const workContext = { icon, targetFor, sample };
 let currentScreen;
 let noticeTimer;
 
@@ -23,11 +24,22 @@ function notify(message) {
 }
 
 function nav(active, screen) {
-  const entries = Object.entries(roles).map(([id, role]) => `<a href="#role/${id}"${selected(active === id)}>${icon(role.icon)}${role.label}</a>`).join('');
-  const roleViews = screen ? inRole(screen.role) : [];
-  const links = screen && viewsWithSidebar.has(screen.role) ? `<div class="atlas-screen-nav"><strong>${roles[screen.role].label} · Écrans</strong>${roleViews.map((item) => `<a href="${targetFor(item.id)}"${selected(item.id === screen.id)}>${item.title}</a>`).join('')}</div>` : '';
-  document.querySelector('#atlas-nav').innerHTML = `<a href="#maquettes"${selected(active === 'maquettes')}>${icon('grid')}Toutes les maquettes</a>${entries}<a href="#sources"${selected(active === 'sources')}>${icon('document')}Références PDF</a>${links}`;
-  document.querySelector('#atlas-dock').innerHTML = `<a href="#maquettes"${selected(active !== 'sources' && active !== 'parcours')}>${icon('grid')}Maquettes</a><a href="#role/parcours"${selected(active === 'parcours')}>${icon('steps')}Parcours</a><a href="#sources"${selected(active === 'sources')}>${icon('document')}Sources</a><a href="./index.html">${icon('bolt')}Accueil</a>`;
+  const entries = Object.entries(roles).map(([id, role]) => `<a href="#role/${id}"${selected(active === id && !screen)}>${icon(role.icon)}${role.label}</a>`).join('');
+  const gallery = `<a href="#maquettes"${selected(active === 'maquettes')}>${icon('grid')}Toutes les maquettes</a>`;
+  const sources = `<a href="#sources"${selected(active === 'sources')}>${icon('document')}Références PDF</a>`;
+  const sidebar = document.querySelector('#atlas-nav');
+  const dock = document.querySelector('#atlas-dock');
+  const workspace = screen && workspaceNav[screen.role];
+  if (workspace) {
+    const localLink = ([label, id, symbol]) => `<a href="${targetFor(id)}"${selected(screen.id === id)}>${icon(symbol)}${label}</a>`;
+    const shortcuts = new Set(workspace.links.map(([, id]) => id));
+    const extraLinks = inRole(screen.role).filter(({ id }) => !shortcuts.has(id));
+    sidebar.innerHTML = `<div class="work-sidebar"><strong>${workspace.label}</strong>${workspace.links.map(localLink).join('')}</div><details class="work-sidebar-more"${extraLinks.some(({ id }) => screen.id === id) ? ' open' : ''}><summary>Autres écrans</summary>${extraLinks.map((item) => `<a href="${targetFor(item.id)}"${selected(item.id === screen.id)}>${item.title}</a>`).join('')}</details><div class="atlas-screen-nav"><strong>Bibliothèque de test</strong>${gallery}${entries}${sources}</div>`;
+    dock.innerHTML = `${workspace.links.slice(0, 3).map(localLink).join('')}<a href="#role/${screen.role}">${icon('grid')}Maquettes</a>`;
+    return;
+  }
+  sidebar.innerHTML = `${gallery}${entries}${sources}`;
+  dock.innerHTML = `<a href="#maquettes"${selected(active !== 'sources' && active !== 'parcours')}>${icon('grid')}Maquettes</a><a href="#role/parcours"${selected(active === 'parcours')}>${icon('steps')}Parcours</a><a href="#sources"${selected(active === 'sources')}>${icon('document')}Sources</a><a href="./index.html">${icon('bolt')}Accueil</a>`;
 }
 
 function roleLinks(active = '') {
@@ -42,9 +54,10 @@ function renderCards(list) {
 function renderGallery(roleId) {
   const role = roles[roleId];
   const title = role ? `Maquettes · ${role.label}` : 'Toutes les maquettes';
+  const workspace = workspaceNav[roleId];
   const featured = ['parcours-client', 'parcours-artisan', 'parcours-b2b'].map((id) => directory.get(id));
   const categoryCards = Object.entries(roles).map(([id, meta]) => `<a class="atlas-card atlas-role-card" href="#role/${id}"><span class="atlas-card-icon">${icon(meta.icon)}</span><span><strong>${meta.label}</strong><small>${meta.description}</small><span class="atlas-count">${inRole(id).length} écrans et planches</span></span>${icon('next', true)}</a>`).join('');
-  main.innerHTML = `<div class="atlas-intro"><h1 tabindex="-1">${title}</h1><p>${role?.description ?? `${screens.length} écrans et planches à explorer par espace, de la demande au compte rendu.`}</p></div>
+  main.innerHTML = `<div class="atlas-intro"><h1 tabindex="-1">${title}</h1><p>${role?.description ?? `${screens.length} écrans et planches à explorer par espace, de la demande au compte rendu.`}</p>${workspace ? `<a class="primary work-gallery-link" href="${targetFor(workspace.home)}">Ouvrir le tableau de bord ${icon('next', true)}</a>` : ''}</div>
     <label class="atlas-search search-pill"><span class="search-input">${icon('search')}<span class="visually-hidden">Rechercher une maquette</span><input id="atlas-search" type="search" placeholder="Rechercher une maquette" aria-controls="atlas-results"></span></label>
     ${roleLinks(roleId)}
     <div id="atlas-results">${role ? renderCards(inRole(roleId)) : `<section aria-labelledby="spaces-heading"><h2 id="spaces-heading">Choisir un espace</h2><div class="atlas-cards">${categoryCards}</div></section><section aria-labelledby="journeys-heading"><h2 id="journeys-heading">Tester un parcours</h2>${renderCards(featured)}</section><a class="atlas-inline" href="#sources">Consulter les ${sourceRefs.length} références PDF ${icon('next', true)}</a>`}</div>`;
@@ -92,12 +105,18 @@ function currentFacts(screen, items) {
 }
 
 function screenBlocks(screen) {
+  if (screen.role === 'entreprise' && sample.has('Décision entreprise')) {
+    const [label] = approvalState(sample.get('Décision entreprise'));
+    return screen.blocks.map((block) => block.type === 'rows' ? { ...block, items: block.items.map((item) => item[3] === 'ent-approbation' ? [item[0], item[1], label, item[3]] : item) } : block);
+  }
   if (screen.id !== 'decision-devis' || sample.get('Décision devis') !== 'Refuser le devis') return screen.blocks;
   return screen.blocks.map((block) => block.type === 'rows' ? { ...block, items: block.items.filter((item) => item[3] !== 'paiement') } : block);
 }
 
 function renderBlock(block, screen) {
   switch (block.type) {
+    case 'workboard': return renderWorkboard(block.board, workContext);
+    case 'priority': return renderPriority(block, workContext);
     case 'rows':
       return section(block.title, `<ul class="atlas-rows">${block.items.map(([title, subtitle, state, id]) => {
         const text = `<span><strong>${title}</strong>${subtitle ? `<small>${subtitle}</small>` : ''}</span>${state ? `<span class="atlas-badge">${state}</span>` : ''}${id ? icon('next', true) : ''}`;
@@ -132,14 +151,18 @@ function renderScreen(screen) {
   if (screen.href) { location.replace(screen.href); return; }
   const actions = screen.actions.map(({ label, target }, index) => `<a class="${index === 0 ? 'primary' : 'atlas-secondary'}" href="${targetFor(target)}">${label}${index === 0 ? icon('next', true) : ''}</a>`).join('');
   const demoDecision = screen.id === 'decision-devis' && sample.has('Décision devis') ? `<p class="atlas-selection" role="status">Choix dans cette simulation · ${escaped(sample.get('Décision devis'))}</p>` : '';
-  main.innerHTML = `<article class="atlas-view${viewsWithSidebar.has(screen.role) ? ' atlas-workspace' : ''}">
+  const workspace = workspaceNav[screen.role];
+  const [approvalLabel, approvalTone] = approvalState(sample.get('Décision entreprise'));
+  const approvalSummary = screen.id === 'ent-approbation' ? `<section class="work-approval-summary" aria-label="Montant et état du devis"><div><p>Montant du devis</p><strong>176,00 € <small>TTC</small></strong></div><span class="work-status" data-tone="${approvalTone}">${approvalLabel}</span></section>` : '';
+  main.innerHTML = `<article class="atlas-view${workspace ? ' atlas-workspace' : ''}">
     <a class="atlas-back" href="#role/${screen.role}">${icon('back', true)}Maquettes ${role.label.toLowerCase()}</a>
     <header class="atlas-view-head"><div class="atlas-view-mark">${icon(role.icon)}</div><div><h1 tabindex="-1">${screen.title}</h1><p>${screen.intro}</p></div></header>
-    ${demoDecision}${screenBlocks(screen).map((block) => renderBlock(block, screen)).join('')}
+    ${approvalSummary}${demoDecision}${screenBlocks(screen).map((block) => renderBlock(block, screen)).join('')}
     ${actions ? `<div class="atlas-view-actions">${actions}</div>` : ''}
     ${screen.refs.length ? `<p class="atlas-ref-foot"><a href="#sources">Références de cette planche</a> · ${screen.refs.join(', ')}</p>` : ''}
   </article>`;
   nav(screen.role, screen);
+  bindWorkboard(main);
 }
 
 function renderSources() {
@@ -154,6 +177,7 @@ function render(focus = true) {
   document.querySelector('#atlas-status').textContent = '';
   const [section, id] = location.hash.slice(1).split('/');
   currentScreen = section === 'ecran' ? directory.get(id) : null;
+  document.body.classList.toggle('pro-view', Boolean(workspaceNav[currentScreen?.role]));
   if (currentScreen) renderScreen(currentScreen);
   else if (section === 'sources') renderSources();
   else if (section === 'role' && Object.hasOwn(roles, id)) renderGallery(id);
@@ -162,6 +186,7 @@ function render(focus = true) {
   if (heading) document.title = `${heading.textContent} · Maquette dépannage électrique`;
   if (focus) {
     window.scrollTo(0, 0);
+    document.querySelector('.atlas-shell').scrollTop = 0;
     heading?.focus({ preventScroll: true });
   }
 }
@@ -184,7 +209,7 @@ main.addEventListener('submit', (event) => {
     form.reset();
     return;
   }
-  const keep = { demande: { 'Type de problème': 'Problème' }, 'adresse-demande': { Commune: 'Lieu', 'Créneau souhaité': 'Créneau' }, 'devis-client': { Choix: 'Décision devis' } }[currentScreen?.id];
+  const keep = { demande: { 'Type de problème': 'Problème' }, 'adresse-demande': { Commune: 'Lieu', 'Créneau souhaité': 'Créneau' }, 'devis-client': { Choix: 'Décision devis' }, 'ent-approbation': { Décision: 'Décision entreprise' } }[currentScreen?.id];
   for (const [name, key] of Object.entries(keep ?? {})) sample.set(key, values.get(name));
   if (form.dataset.next) location.href = targetFor(form.dataset.next);
 });

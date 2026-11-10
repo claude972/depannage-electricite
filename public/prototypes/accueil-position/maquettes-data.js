@@ -19,6 +19,7 @@ const info = (title, text) => ({ type: 'info', title, text });
 const faq = (items) => ({ type: 'faq', items });
 const picture = (src, alt, caption) => ({ type: 'photo', src, alt, caption });
 const map = (caption) => ({ type: 'map', caption });
+const priority = (tone, label, title, detail, action, target) => ({ type: 'priority', tone, label, title, detail, action, target });
 const comparison = (title, items) => ({ type: 'bars', title, items });
 
 const photoTableau = '/home/hero-photo-1.jpg';
@@ -166,9 +167,8 @@ export const screens = [
     info('Dossier à examiner', 'L’espace professionnel affiche les pièces reçues et les éventuelles demandes de complément.'),
   ], [link('Voir mes justificatifs', 'documents-artisan'), link('Ouvrir l’espace artisan', 'artisan')]),
   screen('artisan', 'artisan', 'Tableau de bord artisan', ['M35'], 'Vos missions, vos rendez-vous et vos devis.', [
-    stats([['Missions du jour','2'],['Offres à examiner','1'],['Devis à préparer','1']]),
-    rows('À suivre', [['Prises sans courant', 'Aujourd’hui · Fort-de-France', 'Mission', 'mission-artisan'], ['Tableau électrique', 'Aujourd’hui · Le Lamentin', 'Nouvelle offre', 'offre-artisan'], ['Rendez-vous', 'Voir les créneaux de la semaine', '', 'planning-artisan']]),
-  ], [link('Voir les offres', 'offres'), link('Voir le profil', 'profil-artisan')]),
+    { type: 'workboard', board: 'artisan' },
+  ], [link('Consulter mon profil', 'profil-artisan')]),
   screen('offres', 'artisan', 'Offres de mission', [], 'Choisissez une offre à examiner.', [
     rows('Offres de démonstration', [['Tableau électrique', 'Secteur Le Lamentin', 'Disponible', 'offre-artisan'], ['Éclairage', 'Secteur Schœlcher', 'À examiner', 'offre-artisan']]),
   ]),
@@ -181,6 +181,7 @@ export const screens = [
     form('Votre réponse', [['Motif', ['Créneau indisponible','Hors zone','Compétence ou matériel']]], 'Simuler le refus', 'offres'),
   ]),
   screen('mission-artisan', 'artisan', 'Mission attribuée', [], 'DÉMO-021 · Dossier de mission et prochaines actions.', [
+    priority('neutral', 'Mission confirmée', 'Déplacement vers Fort-de-France', 'Créneau de démonstration de 14 h à 16 h.', 'Ouvrir le déplacement', 'partage-artisan'),
     facts('Sur place', [['Lieu', 'Fort-de-France · Adresse fictive'], ['Créneau', '14 h – 16 h'], ['Consigne', 'Vérifier le circuit des prises du séjour']]),
     rows('Actions de la mission', [['Déplacement', 'Consulter le partage de position', '', 'partage-artisan'], ['Devis', 'Établir la proposition avant travaux', '', 'devis-artisan'], ['Compte rendu', 'Préparer les preuves et la remise', '', 'rapport-artisan']]),
   ], [link('Créer le devis', 'devis-artisan'), link('Voir le planning', 'planning-artisan')]),
@@ -212,14 +213,14 @@ export const screens = [
     facts('Exemple DÉMO-021', [['Montant client', '176,00 € TTC'], ['Frais de plateforme', 'Selon les conditions du dossier'], ['Net artisan', 'Affiché après rapprochement']]),
   ], [link('Retour au profil', 'profil-artisan')]),
 
-  screen('entreprise', 'entreprise', 'Portefeuille entreprise', ['M66'], 'Organisation Démo · Pilotage des sites et des interventions.', [
-    stats([['Sites','4'],['Interventions ouvertes','3'],['Approbations en attente','1']]),
-    rows('Vos espaces', [['Syndic', 'Immeubles, travaux et budgets', '', 'syndic'], ['Restauration', 'Équipements critiques et tickets', '', 'restauration'], ['Bureaux', 'Maintenance, zones et énergie', '', 'bureaux'], ['ERP', 'Audits et réserves', '', 'erp']]),
-  ], [link('Voir les interventions', 'ent-interventions'), link('Gérer l’organisation', 'ent-membres')]),
+  screen('entreprise', 'entreprise', 'Portefeuille entreprise', ['M66'], 'Suivez les décisions, les budgets et les interventions de vos sites.', [
+    { type: 'workboard', board: 'entreprise' },
+  ], [link('Gérer l’organisation', 'ent-membres')]),
   screen('ent-interventions', 'entreprise', 'Interventions multisites', ['M4'], 'Retrouvez les dossiers par site, priorité et étape.', [
     rows('Dossiers de démonstration', [['DÉMO-021 · Prises sans courant', 'Résidence Exemple · Fort-de-France', 'Devis à valider', 'ent-approbation'], ['DÉMO-035 · Éclairage cuisine', 'Restaurant Exemple · Le Lamentin', 'Prioritaire', 'site-restauration'], ['DÉMO-052 · Éclairage étage', 'Immeuble de bureaux · Schœlcher', 'Planifiée', 'site-bureaux']]),
   ], [link('Créer une demande', 'ent-demande'), link('Voir les rapports', 'ent-rapports')]),
   screen('syndic', 'entreprise', 'Tableau de bord syndic', ['M13'], 'Immeubles, interventions, budgets et documents.', [
+    priority('action', 'Décision sur un devis', 'Prises en parties communes', 'Devis D-021 · Résidence Exemple · 176,00 € TTC.', 'Examiner le devis', 'ent-approbation'),
     stats([['Immeubles','2'],['Demandes en cours','3'],['Devis à valider','1']]),
     rows('Portefeuille', [['Résidence Exemple', 'Fort-de-France · 24 lots d’exemple', 'À suivre', 'site-syndic'], ['Devis D-021', 'Réparation des prises en parties communes', 'À valider', 'ent-approbation'], ['Budget de l’exercice', 'Engagé, réalisé et restant', '', 'ent-budget']]),
   ], [link('Ouvrir la résidence', 'site-syndic'), link('Créer une demande', 'ent-demande')]),
@@ -228,6 +229,7 @@ export const screens = [
     rows('Activité de la résidence', [['DÉMO-021 · Prises sans courant','Parties communes', 'À valider', 'ent-approbation'], ['Budget de l’exercice','Consulter la répartition par poste', '', 'ent-budget'], ['Rapports et documents','Compte rendu et suivi annuel', '', 'ent-rapports']]),
   ], [link('Déclarer un problème', 'ent-demande')]),
   screen('restauration', 'entreprise', 'Tableau de bord restauration', ['M56'], 'Suivez les équipements et l’impact des pannes sur le service.', [
+    priority('urgent', 'Ticket prioritaire', 'Circuit de la cuisine à contrôler', 'DÉMO-035 · Restaurant Exemple · Impact sur le service.', 'Ouvrir la fiche du restaurant', 'site-restauration'),
     stats([['Restaurants','2'],['Tickets ouverts','2'],['Équipements à suivre','1']]),
     rows('Exploitation', [['Restaurant Exemple','Cuisine, froid et éclairage', 'Actif', 'site-restauration'], ['Circuit cuisine','Ticket DÉMO-035', 'Prioritaire', 'site-restauration'], ['Contrats et SLA','Priorités et conditions par site', '', 'ent-contrats']]),
   ], [link('Ouvrir le restaurant', 'site-restauration')]),
@@ -236,6 +238,7 @@ export const screens = [
     facts('Site et contrat', [['Commune','Le Lamentin'], ['Accès','Prévenir le responsable du site'], ['SLA','Voir le contrat applicable']]),
   ], [link('Déclarer un ticket', 'ent-demande'), link('Voir les contrats', 'ent-contrats')]),
   screen('bureaux', 'entreprise', 'Tableau de bord bureaux', ['V5-C05'], 'Portefeuille de bâtiments, maintenance et consommation.', [
+    priority('neutral', 'Prochaine maintenance', 'Contrôle des protections', 'Immeuble de bureaux · Vérification à planifier par zone.', 'Voir la maintenance', 'ent-maintenance'),
     stats([['Bâtiments','2'],['Consommation exemple','18,4 MWh'],['Maintenances planifiées','3']]),
     comparison('Consommation par bâtiment · Exemple', [['Immeuble de bureaux','11,2 MWh', 61], ['Annexe de bureaux','7,2 MWh', 39]]),
     rows('Suivi des bâtiments', [['Immeuble de bureaux','Zones, interventions et budget', '', 'site-bureaux'], ['Prochain entretien','Contrôle des protections', 'Planifié', 'ent-maintenance']]),
@@ -249,6 +252,7 @@ export const screens = [
     rows('Calendrier', [['Contrôle des protections','Immeuble de bureaux', 'Planifié', 'site-bureaux'], ['Vérification de l’éclairage','Annexe de bureaux', 'À programmer']]),
   ]),
   screen('erp', 'entreprise', 'Tableau de bord ERP', ['M37'], 'Suivi des audits électriques et des réserves par établissement.', [
+    priority('action', 'Réserve à suivre', 'Repérage du circuit à compléter', 'R-07 · Établissement Exemple · Preuve de levée à examiner.', 'Consulter la réserve', 'ent-reserves'),
     stats([['Établissements','2'],['Audits planifiés','1'],['Réserves ouvertes','2']]),
     rows('Établissements', [['Établissement Exemple','Audit électrique en suivi', 'Réserve ouverte', 'site-erp'], ['Réserves et preuves','Consulter la levée de réserve', '', 'ent-reserves'], ['Signalement sécurité','Préparer une demande prioritaire', '', 'ent-demande']]),
   ], [link('Ouvrir la fiche ERP', 'site-erp')]),
@@ -265,7 +269,7 @@ export const screens = [
     info('Budget du site', 'Les règles d’approbation applicables sont affichées dans le dossier du site.'),
   ]),
   screen('ent-approbation', 'entreprise', 'Approbation du devis D-021', ['V5-C08'], 'Résidence Exemple · Travaux électriques en parties communes.', [
-    facts('Devis soumis', [['Émetteur','Entreprise artisanale de démonstration'], ['Montant TTC','176,00 €'], ['Version','1 · À valider']]),
+    facts('Devis soumis', [['Émetteur','Entreprise artisanale de démonstration'], ['Version','1']]),
     form('Décision de démonstration', [['Décision', ['Approuver','Refuser','Demander un complément']], ['Commentaire facultatif','textarea?']], 'Simuler l’enregistrement', 'ent-interventions'),
     steps('Historique', [['Devis reçu','Dossier DÉMO-021'], ['Approbation','Décision attendue']], 1),
   ], [link('Consulter le détail du devis', 'devis-client')]),
@@ -287,9 +291,8 @@ export const screens = [
   ]),
 
   screen('admin', 'admin', 'Tableau de bord plateforme', ['M43'], 'Supervision des demandes, candidatures et incidents.', [
-    stats([['Interventions ouvertes','5'],['Candidatures à examiner','2'],['Tickets ouverts','1']]),
-    rows('À traiter', [['Candidature artisan','Dossier C-012', 'À examiner', 'admin-artisans'], ['Intervention DÉMO-021','Affectation et suivi', 'En cours', 'admin-interventions'], ['Règlements et remboursements','Contrôle des dossiers financiers', '', 'admin-finance']]),
-  ], [link('Ouvrir la file de support', 'admin-support'), link('Voir les accès', 'admin-droits')]),
+    { type: 'workboard', board: 'admin' },
+  ], []),
   screen('admin-artisans', 'admin', 'Artisans et candidatures', [], 'Identifiez le statut du dossier et les justificatifs à examiner.', [
     rows('Dossiers de démonstration', [['C-012 · Entreprise Exemple','Électricité générale', 'À examiner', 'admin-candidature'], ['C-008 · Atelier Exemple','Justificatif manquant', 'Complément demandé', 'admin-candidature']]),
   ], [link('Voir le dossier C-012', 'admin-candidature')]),
@@ -318,6 +321,7 @@ export const screens = [
     form('Décision de démonstration', [['Décision', ['Publier','Masquer','Demander une précision']]], 'Voir le tableau de bord', 'admin'),
   ]),
   screen('admin-support', 'admin', 'Support et escalades', [], 'Consultez les tickets et leur dossier associé.', [
+    priority('urgent', 'Escalade prioritaire', 'Justificatif de règlement', 'S-019 · Dossier DÉMO-014 transmis à la finance.', 'Ouvrir la file finance', 'admin-finance'),
     rows('File de démonstration', [['S-014 · Suivi de rendez-vous','DÉMO-021', 'Ouvert', 'intervention'], ['S-019 · Justificatif de règlement','DÉMO-014', 'Escaladé', 'admin-finance']]),
     form('Aperçu de l’escalade', [['Destinataire', ['Support','Finance','Supervision']], ['Note','textarea','Précisez le motif.']], 'Voir la file des interventions', 'admin-interventions'),
   ]),
