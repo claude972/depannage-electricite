@@ -45,7 +45,10 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:simulator": "npx --yes eas-cli@27.5.0 build --profile simulator --platform ios --non-interactive",
+    "build:iphone": "npx --yes eas-cli@27.5.0 build --profile device --platform ios --non-interactive --freeze-credentials",
+    "build:android": "npx --yes eas-cli@27.5.0 build --profile device --platform android --non-interactive --freeze-credentials"
   },
   "private": true
 }
