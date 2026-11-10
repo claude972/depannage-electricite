@@ -46,6 +46,7 @@ const sheetBody = $('#sheet-body');
 let mode = 'repair';
 let filter = '';
 let selected = null;
+let serviceToResume = null;
 let alertTimer;
 
 const normalized = (value) => value.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replaceAll('œ', 'oe').trim();
@@ -103,6 +104,11 @@ function updateScreen(focus = false, restore = false) {
   const preferred = restore ? returnFocus.get(current) : null;
   const target = preferred?.isConnected && preferred.getClientRects().length ? preferred : screens[current].querySelector('h1');
   target.focus({ preventScroll: true });
+  if (current === 'accueil' && serviceToResume) {
+    const service = serviceToResume;
+    serviceToResume = null;
+    showService(service);
+  }
 }
 
 function openScreen(screen, trigger, tab = 'apercu') {
@@ -117,7 +123,7 @@ function openScreen(screen, trigger, tab = 'apercu') {
   returnFocus.set(current, origin);
   clearTimeout(alertTimer);
   $('#status').textContent = '';
-  history.pushState({ from: current }, '', routeFor(screen, tab));
+  history.pushState({ from: current, service: trigger?.dataset.serviceLocation }, '', routeFor(screen, tab));
   updateScreen(true);
 }
 
@@ -144,9 +150,10 @@ function showSheet(title, content) {
 function renderCards() {
   const data = modes[mode];
   $('#services-title').textContent = data.title;
+  $('#web-service-count').textContent = `${data.cards.length} situations`;
   rail.innerHTML = data.cards.map((id) => {
     const service = services[id];
-    return `<button type="button" class="photo-card" data-service="${id}"><img src="${service.image}" alt="" width="320" height="178" decoding="async" style="object-position:${service.position}"><strong>${service.title}</strong><small>${service.detail}</small></button>`;
+    return `<button type="button" class="photo-card" data-service="${id}"><img src="${service.image}" alt="" width="320" height="178" decoding="async" style="object-position:${service.position}"><span class="photo-card-copy"><strong>${service.title}</strong><small>${service.detail}</small></span><span class="photo-card-arrow web-only">${icon('next', 'small')}</span></button>`;
   }).join('');
   rail.scrollLeft = 0;
   requestAnimationFrame(updateArrows);
@@ -187,8 +194,10 @@ function choosePlace(value) {
   $('#account-location').textContent = value.area;
   if (sheet.open) sheet.close();
   renderPlaces();
+  serviceToResume = history.state?.service ?? null;
+  const resume = Boolean(serviceToResume);
   goBack('accueil');
-  announce(`${value.area} sélectionné pour cette maquette.`);
+  if (!resume) announce(`${value.area} sélectionné pour cette maquette.`);
 }
 
 const mapPlaces = [places[0], places[1], places[3]];
@@ -213,8 +222,27 @@ function openMap() {
 
 function focusSection(section) {
   const target = document.getElementById(section);
-  target.scrollIntoView({ block: 'start' });
+  const block = section === 'services' && matchMedia('(min-width: 940px)').matches ? 'nearest' : 'start';
+  target.scrollIntoView({ block });
   target.querySelector('h2').focus({ preventScroll: true });
+}
+
+function showService(service) {
+  const item = services[service];
+  const next = selected
+    ? `<p><strong>Lieu d’intervention</strong> · ${selected.area}</p><div class="service-sheet-actions"><a class="primary web-form-link" id="test-request-link">Voir le formulaire de test</a><button type="button" class="secondary" data-position data-service-location="${service}">Modifier l’adresse</button></div>`
+    : `<button type="button" class="primary" data-position data-service-location="${service}">Choisir une commune</button>`;
+  showSheet(item.title, `<p>${item.detail}</p>${next}`);
+  if (selected) {
+    const request = new URL('./maquettes.html', location.href);
+    request.searchParams.set('panne', demoCategories[service]);
+    request.searchParams.set('lieu', selected.area);
+    if ($('#schedule').dataset.planned === 'true') request.searchParams.set('creneau', 'Un autre jour');
+    request.hash = 'ecran/demande';
+    const link = $('#test-request-link');
+    link.href = request.href;
+    link.addEventListener('click', () => sheet.close());
+  }
 }
 
 const accountNotes = {
@@ -266,21 +294,7 @@ document.addEventListener('click', (event) => {
     document.querySelectorAll('[data-mode]').forEach((button) => button.setAttribute('aria-pressed', String(button === trigger)));
     renderCards();
   } else if (service) {
-    const item = services[service];
-    const next = selected
-      ? `<p><strong>Lieu d’intervention</strong> · ${selected.area}</p><div class="service-sheet-actions"><a class="primary web-form-link" id="test-request-link">Voir le formulaire de test</a><button type="button" class="secondary" data-position>Modifier l’adresse</button></div>`
-      : '<button type="button" class="primary" data-position>Choisir une position</button>';
-    showSheet(item.title, `<p>${item.detail}</p>${next}`);
-    if (selected) {
-      const request = new URL('./maquettes.html', location.href);
-      request.searchParams.set('panne', demoCategories[service]);
-      request.searchParams.set('lieu', selected.area);
-      if ($('#schedule').dataset.planned === 'true') request.searchParams.set('creneau', 'Un autre jour');
-      request.hash = 'ecran/demande';
-      const link = $('#test-request-link');
-      link.href = request.href;
-      link.addEventListener('click', () => sheet.close());
-    }
+    showService(service);
   } else if (nextFilter) setFilter(filter === nextFilter ? '' : nextFilter);
   else if (placeId) choosePlace(places.find((p) => p.id === placeId));
 });

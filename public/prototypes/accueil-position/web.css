@@ -14,6 +14,9 @@
 .web-form-link { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 
 @media (min-width: 940px) {
+  .prototype-home { --web-width: 1160px; }
+  .prototype-home .web-header-inner { max-width: var(--web-width); }
+
   .prototype-home .web-header {
     display: block;
     border-bottom: 1px solid var(--rule);
@@ -49,15 +52,14 @@
   .web-nav .web-account { margin-left: 5px; border: 1px solid var(--rule); color: var(--ink); }
   .prototype-home #home-screen .top,
   .prototype-home > .dock { display: none; }
-  .prototype-home .service-tabs button { min-height: 47px; }
-  .prototype-home .home-content { padding-top: 29px; padding-bottom: 30px; }
-
-  .web-hero {
+  .prototype-home .home-content {
     display: grid;
-    grid-template-columns: minmax(0,.9fr) minmax(0,1.1fr);
-    align-items: center;
-    gap: 36px;
-    padding: 0 0 7px;
+    grid-template-columns: minmax(0,.88fr) minmax(0,1.12fr);
+    align-items: start;
+    gap: 27px 42px;
+    max-width: var(--web-width);
+    padding-top: 34px;
+    padding-bottom: 25px;
   }
 
   .home-heading {
@@ -67,11 +69,31 @@
     overflow: visible;
     clip-path: none;
     white-space: normal;
-    max-width: 9ch;
-    font-size: clamp(42px, 5vw, 57px);
+    max-width: 12ch;
+    font-size: clamp(39px, 4.8vw, 55px);
     line-height: 1.06;
-    letter-spacing: -.063em;
+    letter-spacing: -.054em;
   }
+
+  .home-heading .mobile-title { display: none; }
+  .home-heading .desktop-title { display: inline; }
+
+  .web-hero .tabs-line { border-bottom: 0; margin-bottom: 14px; }
+  .web-hero .service-tabs {
+    grid-template-columns: repeat(3, minmax(0,1fr));
+    gap: 3px;
+    padding: 3px;
+    border-radius: 12px;
+    background: var(--surface);
+  }
+  .web-hero .service-tabs button {
+    min-height: 44px;
+    padding: 4px;
+    border-radius: 9px;
+    font-size: 12px;
+  }
+  .web-hero .service-tabs button[aria-pressed="true"] { background: var(--paper); color: var(--blue); box-shadow: 0 1px 2px #24384d18; }
+  .web-hero .service-tabs button::after { display: none; }
 
   .web-lead {
     display: block;
@@ -116,37 +138,89 @@
   .web-actions span { display: inline-flex; gap: 4px; align-items: center; color: var(--muted); font-size: 11px; }
   .web-actions span .icon { color: var(--blue); }
 
-  .web-hero-image {
-    display: block;
-    margin: 0;
-    position: relative;
-    background: var(--surface);
-    border-radius: 22px;
-    overflow: hidden;
+  #home-screen .mobile-shortcuts,
+  #home-screen .help,
+  #services .carousel-controls { display: none; }
+
+  #services {
+    margin-top: 0;
+    padding: 20px;
+    border: 1px solid var(--rule);
+    border-radius: 20px;
+    background: #f7f8fc;
   }
 
-  .web-hero-image img {
-    display: block;
-    width: 100%;
-    height: auto;
-    aspect-ratio: 1.38;
-    object-fit: cover;
-    object-position: 45% 43%;
+  #services .section-heading { margin-bottom: 4px; }
+  #services-title { font-size: 22px; }
+  .service-count {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    padding: 5px 8px;
+    border-radius: 999px;
+    background: var(--blue-soft);
+    color: #203da8;
+    font-size: 11px;
+    font-weight: 700;
   }
 
-  .web-hero-image figcaption {
-    position: absolute;
-    bottom: 10px;
-    right: 10px;
-    margin-left: 10px;
-    border-radius: 8px;
-    background: var(--paper);
+  .service-lead {
+    display: block;
+    margin: 0 0 12px;
     color: var(--muted);
-    padding: 5px 7px;
-    font-size: 10px;
+    font-size: 13px;
+    line-height: 1.45;
   }
 
-  .prototype-home #position-screen { max-width: 1064px; padding: 15px var(--gutter) 25px; }
+  #services-rail {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    gap: 7px;
+    padding: 0;
+    margin: 0;
+    overflow: visible;
+  }
+
+  #services-rail .photo-card {
+    display: grid;
+    grid-template-columns: 72px minmax(0,1fr) 18px;
+    align-items: center;
+    gap: 10px;
+    min-height: 66px;
+    padding: 6px;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 13px;
+  }
+
+  #services-rail .photo-card img {
+    height: 52px;
+    margin: 0;
+    border-radius: 8px;
+    aspect-ratio: auto;
+  }
+
+  #services-rail .photo-card-copy { min-width: 0; }
+  #services-rail .photo-card strong { font-size: 14px; line-height: 1.25; }
+  #services-rail .photo-card small { margin-top: 3px; }
+  .photo-card-arrow { display: inline-grid; place-items: center; color: var(--blue); }
+
+  .web-steps {
+    display: block;
+    grid-column: 1/-1;
+    border-top: 1px solid var(--rule);
+    padding-top: 16px;
+  }
+
+  .web-steps h2 { font-size: 19px; letter-spacing: -.04em; }
+  .web-steps ol { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 13px; margin: 12px 0 0; padding: 0; list-style: none; }
+  .web-steps li { display: flex; align-items: flex-start; gap: 8px; }
+  .web-steps li > span { display: grid; place-items: center; width: 26px; height: 26px; flex: none; border-radius: 50%; color: var(--blue); background: var(--blue-soft); font-weight: 700; font-size: 11px; }
+  .web-steps strong { font-size: 13px; }
+  .web-steps p { margin-top: 3px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+  .home-content > .prototype-label { grid-column: 1/-1; padding-top: 0; }
+
+  .prototype-home #position-screen { max-width: var(--web-width); padding: 15px var(--gutter) 25px; }
   #position-screen .location-header { grid-template-columns: 44px minmax(0,1fr); gap: 7px; padding-inline: 0; }
   #position-screen .location-header h1 { text-align: left; font-size: 31px; letter-spacing: -.05em; }
   #position-screen .location-main { display: grid; grid-template-columns: minmax(0,.85fr) minmax(0,1.15fr); gap: 20px; align-items: start; }
@@ -165,10 +239,14 @@
 }
 
 @media (min-width: 940px) and (hover: hover) {
-  .web-nav button:hover, .web-location:hover { background: var(--blue-soft); }
+  .web-nav button:hover, .web-location:hover, #services-rail .photo-card:hover { background: var(--blue-soft); }
 }
 
 @media (max-width: 939px) {
+  .prototype-home .home-content { padding-top: 0; }
+  .web-hero .tabs-line { margin-inline: calc(var(--gutter) * -1); }
+  .web-hero .service-tabs { padding-inline: var(--gutter); }
+  .web-hero .problem-entry { margin-top: 21px; }
   .location-picker .search-pill { margin-inline: var(--gutter); }
   .location-picker > .prototype-label { text-align: left; margin-inline: var(--gutter); padding-top: 13px; }
 }

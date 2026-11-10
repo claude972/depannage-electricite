@@ -92,22 +92,22 @@
     </button>
     <span class="brand" aria-label="Dépannage électrique"><span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-bolt"/></svg></span><span>Dépannage<br>électrique</span></span>
   </header>
-  <div class="tabs-line">
-    <div class="wrap service-tabs" aria-label="Type de service">
-      <button type="button" data-mode="repair" aria-pressed="true"><svg class="icon" aria-hidden="true"><use href="#i-bolt"/></svg>Dépannage</button>
-      <button type="button" data-mode="install" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg>Installation</button>
-      <button type="button" data-mode="diagnose" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-pulse"/></svg>Diagnostic</button>
-    </div>
-  </div>
   <main class="wrap home-content">
     <div class="web-hero">
       <div class="web-hero-content">
-        <h1 class="home-heading" tabindex="-1">Dépannage électrique</h1>
-        <p class="web-lead web-only">Indiquez le lieu et ce qui ne fonctionne plus pour trouver la bonne intervention.</p>
+        <h1 class="home-heading" tabindex="-1"><span class="mobile-title">Dépannage électrique</span><span class="web-only desktop-title">Un problème électrique&nbsp;?</span></h1>
+        <p class="web-lead web-only">Choisissez le lieu d’intervention et décrivez ce qui se passe.</p>
+        <div class="tabs-line">
+          <div class="service-tabs" role="group" aria-label="Type de service">
+            <button type="button" data-mode="repair" aria-pressed="true"><svg class="icon" aria-hidden="true"><use href="#i-bolt"/></svg>Dépannage</button>
+            <button type="button" data-mode="install" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg>Installation</button>
+            <button type="button" data-mode="diagnose" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-pulse"/></svg>Diagnostic</button>
+          </div>
+        </div>
         <form class="home-search" id="problem-search">
           <button class="web-location web-only" type="button" data-position>
             <svg class="icon" aria-hidden="true"><use href="#i-pin"/></svg>
-            <span><small>Adresse d’intervention</small><strong id="web-location-label">Choisir une position</strong></span>
+            <span><small>Adresse d’intervention</small><strong id="web-location-label">Choisir une commune</strong></span>
             <svg class="icon small" aria-hidden="true"><use href="#i-next"/></svg>
           </button>
           <div class="search-pill problem-entry">
@@ -116,25 +116,30 @@
           </div>
           <div id="problem-results" class="problem-results" hidden></div>
           <div class="web-actions web-only">
-            <button class="primary web-continue" type="submit">Voir les interventions <svg class="icon small" aria-hidden="true"><use href="#i-next"/></svg></button>
+            <button class="primary web-continue" type="submit">Trouver une intervention <svg class="icon small" aria-hidden="true"><use href="#i-next"/></svg></button>
             <span><svg class="icon small" aria-hidden="true"><use href="#i-check"/></svg>Devis avant travaux</span>
           </div>
         </form>
       </div>
-      <figure class="web-hero-image web-only">
-        <img src="/home/hero-photo-1.jpg" width="1800" height="1200" alt="Un électricien inspecte une armoire électrique">
-        <figcaption>Intervention électrique · Photo d’illustration</figcaption>
-      </figure>
     </div>
 
-    <section class="section" aria-labelledby="quick-title">
+    <section class="section mobile-shortcuts" aria-labelledby="quick-title">
       <h2 id="quick-title">Pour vous</h2>
       <div class="shortcuts" id="shortcuts"></div>
     </section>
 
     <section class="section" id="services" aria-labelledby="services-title">
-      <div class="section-heading"><h2 id="services-title" tabindex="-1">Dépannages courants</h2><span class="carousel-controls"><button type="button" id="cards-prev" aria-label="Cartes précédentes"><svg class="icon" aria-hidden="true"><use href="#i-back"/></svg></button><button type="button" id="cards-next" aria-label="Cartes suivantes"><svg class="icon" aria-hidden="true"><use href="#i-next"/></svg></button></span></div>
+      <div class="section-heading"><h2 id="services-title" tabindex="-1">Dépannages courants</h2><span class="web-only service-count" id="web-service-count"></span><span class="carousel-controls"><button type="button" id="cards-prev" aria-label="Cartes précédentes"><svg class="icon" aria-hidden="true"><use href="#i-back"/></svg></button><button type="button" id="cards-next" aria-label="Cartes suivantes"><svg class="icon" aria-hidden="true"><use href="#i-next"/></svg></button></span></div>
+      <p class="web-only service-lead">Choisissez la situation qui ressemble à la vôtre.</p>
       <div class="photo-rail" id="services-rail"></div>
+    </section>
+    <section class="web-only web-steps" aria-labelledby="web-steps-title">
+      <h2 id="web-steps-title">De la demande au devis</h2>
+      <ol>
+        <li><span>1</span><div><strong>Décrivez la panne</strong><p>Indiquez ce qui ne fonctionne plus.</p></div></li>
+        <li><span>2</span><div><strong>Précisez le lieu</strong><p>Choisissez la commune et le créneau souhaité.</p></div></li>
+        <li><span>3</span><div><strong>Examinez le devis</strong><p>L’artisan présente son devis avant les travaux.</p></div></li>
+      </ol>
     </section>
     <section class="section help" id="help" aria-labelledby="help-title">
       <div><h2 id="help-title" tabindex="-1">De l’adresse au devis</h2><p>Choisissez où intervenir et décrivez votre besoin. L’artisan vous présente un devis avant les travaux.</p></div>
