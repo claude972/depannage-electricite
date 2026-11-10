@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   authenticatedClient,
+  ApiError,
   apiError,
   assertOrigin,
   dbError,
@@ -26,6 +27,8 @@ export async function POST(request: Request) {
     assertOrigin(request);
     const { db } = await authenticatedClient(request);
     const data = await validated(request, schema);
+    if (request.headers.has("authorization") && !data.request_id)
+      throw new ApiError(422, "La référence de la demande est obligatoire.");
     const { data: result, error } = await db.rpc(data.request_id ? "create_intervention_once_reviewed" : "create_intervention_reviewed", {
       ...(data.request_id ? { p_request_id: data.request_id } : {}),
       p_category: data.category,

@@ -4,7 +4,7 @@ import type { ZodType } from 'zod';
 import { apiOrigin } from './config';
 
 export class ApiFailure extends Error {
-  constructor(message: string, readonly status: number) { super(message); }
+  constructor(message: string, readonly status: number, readonly code?: string) { super(message); }
 }
 
 export async function api<T>(path: string, schema: ZodType<T>, options: {
@@ -37,7 +37,9 @@ export async function api<T>(path: string, schema: ZodType<T>, options: {
     if (!response.ok) {
       const message = data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
         ? data.error.slice(0, 350) : 'Le service est momentanément indisponible.';
-      throw new ApiFailure(message, response.status);
+      const code = data && typeof data === 'object' && 'code' in data && typeof data.code === 'string'
+        ? data.code.slice(0, 80) : undefined;
+      throw new ApiFailure(message, response.status, code);
     }
     const parsed = schema.safeParse(data);
     if (!parsed.success) throw new ApiFailure('La réponse du service est incomplète. Réessayez.', 502);

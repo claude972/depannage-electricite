@@ -147,9 +147,11 @@ export async function withNext(db, check, extraEnv = {}, { users = [actor], rpcA
       await sleep(100);
     }
     assert.match(logs, /Ready in/, "Next.js did not start on the local loopback");
-    const http = (route, options = {}, user = users[0]) => fetch(origin + route, {
+    const http = (route, options = {}, user = users[0], auth = "cookie") => fetch(origin + route, {
       ...options,
-      headers: { cookie: sessions.get(user.id).cookie, ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }), ...options.headers },
+      headers: {
+        ...(auth === "bearer" ? { authorization: "Bearer " + sessions.get(user.id).token } : { cookie: sessions.get(user.id).cookie }),
+        ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }), ...options.headers },
       signal: AbortSignal.timeout(20_000),
     });
     await check(http, rejectedSql);
