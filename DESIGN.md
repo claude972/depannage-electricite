@@ -2,6 +2,8 @@
 
 ## Décisions courantes — palette B et encaissement plateforme
 
+L’application iPhone et Android (Mobile B) sert de maquette au Web et à la PWA. L’accueil public reprend sa carte photo, son entrée par l’adresse, ses dépannages en vedette et la navigation basse sur téléphone. Le catalogue et les fiches prolongent cette présentation. Sur ordinateur, les mêmes éléments profitent d’une grille plus large. Les écrans métier conservent leurs parcours.
+
 Les dernières décisions du propriétaire priment sur les sections historiques ci-dessous. Référence Figma : `hec6XdQ7IbOFVeFhq6KPDw`, pages MOBILE B. Aucun nom de marque retenu : ne plus présenter « Courant » comme nom de l’application. Palette B validée : cobalt `#2246E5`, accent orange `#FF6B35`, surfaces blanches en clair et anthracite en sombre, Plus Jakarta Sans. Préserver la structure métier et les états accessibles ; pas de simple remplacement global de couleurs aux usages contradictoires. Mobile puis déclinaisons web complètes.
 
 Le devis et la facture de prestation sont émis au nom de l’entreprise de l’artisan, via son dossier professionnel. Accord sur une version avant travaux ; supplément soumis à un nouvel accord. Tous les paiements doivent être encaissés par la plateforme : espace client, lien sécurisé ou QR associé au dossier. Aucun règlement espèces, TPE personnel, virement personnel ou déclaration artisan « reçu » n’est accepté pour les nouvelles opérations. Les anciennes opérations restent dans l’historique, sans les renommer en confirmations bancaires. Le choix après intervention signifie paiement sur la plateforme après travaux, jamais encaissement direct. Les codes internes historiques `on_site` peuvent rester transitoirement compatibles s’ils sont strictement interprétés comme paiement plateforme différé et ne donnent aucun droit de déclarer un encaissement.
@@ -11,7 +13,7 @@ Stripe et l’envoi SMS sont les deux liaisons fournisseur explicitement différ
 ---
 
 ## Statut et références
-Le 31 octobre 2026, le propriétaire a retenu la maquette Delivo adaptée comme nouvelle direction UI/UX : « Je pense qu’on tient une partie de nos maquettes ça sera la nouvelle direction UI/ux ». La référence visuelle courante est le prototype `6bc0cab3a9eabcc52ac62802b5ddfb953a5cb78e`, `prototypes/delivo-test/web-network.html`, consultable sur https://depannage-electricite-mgyxn7dsb-brafas-projects.vercel.app/web-network.html. Voir `docs/DIRECTION_UI_UX_VALIDEE.md` pour les décisions et leur adoption progressive.
+Le 31 octobre 2026, le propriétaire a retenu la maquette Delivo adaptée comme nouvelle direction UI/UX : « Je pense qu’on tient une partie de nos maquettes ça sera la nouvelle direction UI/ux ». La référence visuelle retenue à cette date était le prototype `6bc0cab3a9eabcc52ac62802b5ddfb953a5cb78e`, `prototypes/delivo-test/web-network.html`, consultable sur https://depannage-electricite-mgyxn7dsb-brafas-projects.vercel.app/web-network.html. Voir `docs/DIRECTION_UI_UX_VALIDEE.md` pour les décisions et leur adoption progressive.
 
 Cette décision remplace la proposition initiale bleu/blanc pour la direction graphique. Les PDF restent les références fonctionnelles et de structure propres à chaque rôle. Le prototype valide une direction et une partie des compositions ; il ne prouve ni la migration de l’application, ni la validation de tous ses écrans.
 

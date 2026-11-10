@@ -119,6 +119,7 @@ export function RequestForm({
   preferredAddress = null,
   finalStep,
   initialPhotos,
+  addressFirst = false,
 }: {
   initialCategory: Category;
   initialValues: RequestValues | null;
@@ -136,8 +137,12 @@ export function RequestForm({
   finalStep?: { label: string; note: string };
   /** Photos already chosen for a kept booking (edit): shown and editable, same 6-photo cap. */
   initialPhotos?: File[];
+  /** Home address shortcut uses the same draft fields before the problem step. */
+  addressFirst?: boolean;
 }) {
   const [step, setStep] = useState(1);
+  const phase = addressFirst && step < 3 ? 3 - step : step;
+  const labels = addressFirst ? ["Le lieu et le besoin", "Le problème"] : ["Le problème", "Le lieu et le besoin"];
   // On each step change (not on first render) move focus AND the viewport to the new step title,
   // so mobile users never land at the bottom after « Continuer » and screen readers announce it.
   const stepTitle = useRef<HTMLHeadingElement>(null);
@@ -198,7 +203,7 @@ export function RequestForm({
   function next(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setValidation("");
-    if (step === 1 && values.description.trim().length < 15) {
+    if (phase === 1 && values.description.trim().length < 15) {
       setValidation("Décrivez le problème en au moins 15 caractères.");
       return;
     }
@@ -222,7 +227,7 @@ export function RequestForm({
         <p>Le bon point de départ pour résoudre votre problème électrique.</p>
       </div>
       <ol className="stepper">
-        {["Le problème", "Le lieu et le besoin", finalStep ? "Règlement et confirmation" : "Le récapitulatif"].map(
+        {[...labels, finalStep ? "Règlement et confirmation" : "Le récapitulatif"].map(
           (s, i) => (
             <li key={s} className={step >= i + 1 ? "current" : ""}>
               <span>
@@ -239,7 +244,7 @@ export function RequestForm({
             {validation}
           </div>
         )}
-        {step === 1 ? (
+        {phase === 1 ? (
           <>
             <h2 ref={stepTitle} tabIndex={-1} style={STEP_TITLE_STYLE}>Que se passe-t-il ?</h2>
             <div className="category-grid">
@@ -324,7 +329,7 @@ export function RequestForm({
               </p>
             </div>
           </>
-        ) : step === 2 ? (
+        ) : phase === 2 ? (
           <>
             <h2 ref={stepTitle} tabIndex={-1} style={STEP_TITLE_STYLE}>Où faut-il intervenir ?</h2>
             {sites.length > 0 && (

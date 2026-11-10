@@ -88,7 +88,7 @@ export function PublicSite({ session, operatorProfile }: { session: PublicSessio
   // UI-PUBLIC-HOME-001 / UI-PUBLIC-REQUEST-001: every public view renders in PublicChrome (theme
   // foundation). home, new and auth first; the informational views below since
   // UI-PUBLIC-VIEWS-001, in the opt-in `viewStyles.skin` (same markup, texts and handlers).
-  const chromeHandlers: HomeHandlers = { onNew: newRequest, onLogin: login, onNavigate: navigate, onDemo: (role) => session.startDemo(role) };
+  const chromeHandlers: HomeHandlers = { onNew: newRequest, onLogin: login, onAddress: () => session.go("new", "address"), onNavigate: navigate, onDemo: (role) => session.startDemo(role) };
   if (view === "home")
     return (
       <>
@@ -112,7 +112,7 @@ export function PublicSite({ session, operatorProfile }: { session: PublicSessio
         <div className={formStyles.wrap}>
           {themedAlerts}
           <div className={formStyles.requestSkin} data-public-skin="request">
-            <RequestForm initialCategory={initialCategory} initialValues={session.pendingDraft} sites={[]} mode="public" busy={session.busy} onBack={() => session.go("home")} onSubmit={async (values) => { session.saveDraft(values); }} onDemo={() => session.startDemo("client", "new")} />
+            <RequestForm addressFirst={session.param === "address"} initialCategory={initialCategory} initialValues={session.pendingDraft} sites={[]} mode="public" busy={session.busy} onBack={() => session.go("home")} onSubmit={async (values) => { session.saveDraft(values); }} onDemo={() => session.startDemo("client", "new")} />
           </div>
         </div>
       </PublicChrome>

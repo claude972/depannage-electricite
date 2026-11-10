@@ -359,8 +359,8 @@
     width: 100%;
   }
 }
-/* Compact bar (closed service page): range + caption + « Confirmer » on ONE row at every width.
-   Content: 8 + 48 + 8 + 1 = 65 px <= its declared --booking-bar-h (72 px, set by the page). */
+/* Compact bar on a closed service page. Narrow screens keep the full-width action of Mobile B;
+   the estimate is already displayed above it in the service sheet. */
 .bar.barCompact {
   padding-top: 8px;
   padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
@@ -377,8 +377,13 @@
     align-items: center;
     gap: 12px;
   }
+  .barCompact .barText {
+    display: none;
+  }
   .barCompact .barButton {
-    width: auto;
+    width: 100%;
+    padding-inline: 12px;
+    white-space: normal;
   }
 }
 

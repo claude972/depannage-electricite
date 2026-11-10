@@ -1,4 +1,4 @@
-// FASTSPLIT-SERVICE-BOOKING-FLOW-001 — booking wizard on the service pages: fixed bar « Confirmer »
+// FASTSPLIT-SERVICE-BOOKING-FLOW-001 — booking wizard on the service pages: fixed bar « Demander cette intervention »
 // sharing the main CTA's action, urgency/slot step, private contact validation, address rules,
 // summary on every step, and the final local save (two drafts, no personal data in the
 // description, honest failure without navigation). SSR + pure; no browser.
@@ -40,9 +40,9 @@ class MemoryStorage {
   removeItem(k: string) { this.data.delete(k); }
 }
 
-test("page : barre fixe « Confirmer » = même action que le CTA principal (ouvre l’assistant sur place)", () => {
+test("page : barre fixe « Demander cette intervention » = même action que le CTA principal (ouvre l’assistant sur place)", () => {
   const html = render(createElement(servicePage.PublicServicePage, { service }));
-  // Page fermée : barre COMPACTE (fourchette + légende + « Confirmer », sans titre long).
+  // Page fermée : barre COMPACTE (fourchette + légende + « Demander cette intervention », sans titre long).
   assert.match(html, /data-booking-bar="compact"/);
   const bar = html.slice(html.indexOf("data-booking-bar"));
   assert.doesNotMatch(bar, new RegExp(service.title));
@@ -50,8 +50,8 @@ test("page : barre fixe « Confirmer » = même action que le CTA principal (ouv
   assert.match(text(bar), /lecture en cours.*Estimation indicative/);
   assert.doesNotMatch(text(bar), /\d+,\d{2}\s?€/);
   const opens = [...html.matchAll(/<button type="button" class="([^"]*)"[^>]*data-booking-open=""[^>]*>([^<]*)/g)].map((m) => m[2].trim());
-  same(opens, ["Confirmer", "Confirmer"]); // héros + barre : même action
-  assert.match(bar, /data-booking-open="">Confirmer<\/button>/); // libellé exact
+  same(opens, ["Demander cette intervention", "Demander cette intervention"]); // héros + barre : même action
+  assert.match(bar, /data-booking-open="">Demander cette intervention<\/button>/); // libellé exact
   assert.doesNotMatch(html, /href="\/#new/); // jamais le formulaire générique
   // Réserve basse sur le conteneur ThemeSurface ENTIER (en-tête, main ET pied de page) : la barre
   // fixe ne masque jamais les derniers boutons du pied de page.

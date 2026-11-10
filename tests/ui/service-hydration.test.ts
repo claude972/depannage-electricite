@@ -1,5 +1,5 @@
-// Service page before hydration (ROOT lab repro on 820: a click on the server-rendered « Confirmer »
-// before JS was lost). The server HTML must render BOTH « Confirmer » buttons disabled + aria-busy
+// Service page before hydration (ROOT lab repro on 820: a click on the server-rendered « Demander cette intervention »
+// before JS was lost). The server HTML must render BOTH « Demander cette intervention » buttons disabled + aria-busy
 // with a visible « Préparation du formulaire… » status; openBooking refuses until ready.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -15,12 +15,12 @@ const page = loadModule("components/role/public-service-page.tsx", overrides) as
 const catalog = loadModule("components/role/public-service-catalog.ts") as Record<string, any>;
 const service = catalog.SERVICES[0];
 
-test("SSR (= before hydration): both « Confirmer » are disabled, aria-busy, label kept, status shown", () => {
+test("SSR (= before hydration): both « Demander cette intervention » are disabled, aria-busy, label kept, status shown", () => {
   const html = renderToString(createElement(tp.ThemeProvider as never, null, createElement(page.PublicServicePage, { service }))).replaceAll("<!-- -->", "");
   const buttons = [...html.matchAll(/<button[^>]*data-booking-open=""[^>]*>([^<]*)<\/button>/g)];
   assert.equal(buttons.length, 2, "main CTA + fixed bar");
   for (const [tag, label] of buttons) {
-    assert.equal(label.trim(), "Confirmer");
+    assert.equal(label.trim(), "Demander cette intervention");
     assert.match(tag, /disabled=""/);
     assert.match(tag, /aria-busy="true"/);
   }

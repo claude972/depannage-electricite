@@ -9,6 +9,7 @@ import type { Category } from "../app/types";
 import { CATEGORIES } from "../app/format";
 import { ThemeSurface } from "../app/theme-provider";
 import { ThemeToggle } from "../app/theme-toggle";
+import { Icon } from "../app/icons";
 import styles from "./public-chrome.module.css";
 
 // ---- Actions: one table between rendered controls and the real session callbacks --------------
@@ -16,11 +17,13 @@ export type HomeTargetView = "help" | "pricing" | "join" | "about" | "privacy" |
 export type HomeAction =
   | { type: "new"; category?: Category }
   | { type: "login" }
+  | { type: "address" }
   | { type: "view"; view: HomeTargetView }
   | { type: "demo"; role?: "manager" };
 export type HomeHandlers = {
   onNew(category?: Category): void;
   onLogin(): void;
+  onAddress?(): void;
   onNavigate(view: HomeTargetView): void;
   onDemo(role?: "manager"): void;
 };
@@ -31,7 +34,8 @@ export function runHomeAction(action: HomeAction, handlers: HomeHandlers): void 
   if (action.type === "new") {
     if (action.category) handlers.onNew(action.category);
     else handlers.onNew();
-  } else if (action.type === "login") handlers.onLogin();
+  } else if (action.type === "address") (handlers.onAddress ?? handlers.onNew)();
+  else if (action.type === "login") handlers.onLogin();
   else if (action.type === "view") handlers.onNavigate(action.view);
   else if (action.role) handlers.onDemo(action.role);
   else handlers.onDemo();
@@ -41,12 +45,12 @@ export function actionKey(action: HomeAction): string {
   if (action.type === "new") return action.category ? `new:${action.category}` : "new";
   if (action.type === "view") return `view:${action.view}`;
   if (action.type === "demo") return action.role ? `demo:${action.role}` : "demo";
-  return "login";
+  return action.type;
 }
 export function parseActionKey(key: string): HomeAction | null {
   const [type, arg, extra] = key.split(":");
   if (extra !== undefined) return null;
-  if (type === "login" && arg === undefined) return { type: "login" };
+  if ((type === "login" || type === "address") && arg === undefined) return { type };
   if (type === "new") {
     if (arg === undefined) return { type: "new" };
     return (CATEGORY_IDS as string[]).includes(arg) ? { type: "new", category: arg as Category } : null;
@@ -68,6 +72,26 @@ export function actionButton(action: HomeAction, handlers: HomeHandlers, before?
       before?.();
       runHomeAction(action, handlers);
     },
+  };
+}
+
+/** Navigation back to the public app from a standalone catalogue or service page. */
+export function serviceChromeHref(action: HomeAction | { type: "home" }): string {
+  if (action.type === "new") return action.category ? `/#new/${action.category}` : "/#new";
+  if (action.type === "address") return "/#new/address";
+  if (action.type === "login") return "/#auth";
+  if (action.type === "view") return `/#${action.view}`;
+  if (action.type === "demo") return `/#demo/${action.role ?? "client"}`;
+  return "/";
+}
+
+export function serviceChromeHandlers(go: (href: string) => void = (href) => window.location.assign(href)): HomeHandlers {
+  return {
+    onNew: (category) => go(serviceChromeHref({ type: "new", category })),
+    onAddress: () => go(serviceChromeHref({ type: "address" })),
+    onLogin: () => go(serviceChromeHref({ type: "login" })),
+    onNavigate: (view) => go(serviceChromeHref({ type: "view", view })),
+    onDemo: (role) => go(serviceChromeHref({ type: "demo", role })),
   };
 }
 
@@ -106,6 +130,7 @@ export function PublicChrome({
   className,
   mainClassName,
   footerNote,
+  appNavigation = false,
   children,
 }: {
   current: ChromeView;
@@ -118,6 +143,7 @@ export function PublicChrome({
   className?: string;
   mainClassName?: string;
   footerNote?: ReactNode;
+  appNavigation?: boolean;
   children: ReactNode;
 }) {
   const navId = `${useId()}-nav`;
@@ -143,14 +169,17 @@ export function PublicChrome({
     onHome();
   };
 
+  const surface = [styles.chrome, appNavigation ? styles.appChrome : "", className].filter(Boolean).join(" ");
+
   return (
-    <ThemeSurface className={className ? `${styles.chrome} ${className}` : styles.chrome}>
+    <ThemeSurface className={surface}>
       <header className={styles.topbar}>
         <div className={`${styles.wrap} ${styles.topbarInner}`}>
           <button type="button" className={styles.brand} aria-label="Accueil" aria-current={current === "home" ? "page" : undefined} data-chrome-home="" onClick={home}>
             <BrandMark />
             <span className={styles.brandText}>
-              <strong>Dépannage électrique</strong>
+              <strong>Dépannage</strong>
+              <small className={styles.brandKind}>ÉLECTRIQUE</small>
             </span>
           </button>
           <nav id={navId} className={`${styles.nav} ${menuOpen ? styles.navOpen : ""}`} aria-label="Navigation principale">
@@ -185,12 +214,19 @@ export function PublicChrome({
           </nav>
           <div className={styles.topbarActions}>
             <ThemeToggle className={styles.themeToggle} />
+            {appNavigation && (
+              <button className={styles.notifications} aria-label="Notifications" {...act({ type: "login" })}>
+                <Icon name="bell" size={22} />
+              </button>
+            )}
             <button className={`${styles.btn} ${styles.btnGhost} ${styles.loginButton}`} aria-current={current === "auth" ? "page" : undefined} {...act({ type: "login" })}>
               Se connecter
             </button>
-            <button className={`${styles.btn} ${styles.btnPrimary} ${styles.headerCta}`} aria-current={current === "new" ? "page" : undefined} {...act({ type: "new" })}>
-              Décrire ma panne
-            </button>
+            {!appNavigation && (
+              <button className={`${styles.btn} ${styles.btnPrimary} ${styles.headerCta}`} aria-current={current === "new" ? "page" : undefined} {...act({ type: "new" })}>
+                Décrire ma panne
+              </button>
+            )}
             <button ref={menuToggle} type="button" className={styles.menuButton} aria-expanded={menuOpen} aria-controls={navId} aria-label={menuOpen ? "Fermer le menu" : "Ouvrir le menu"} onClick={() => setMenuOpen((open) => !open)}>
               <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
                 <path d={menuOpen ? "M6 6l12 12M18 6L6 18" : "M4 7h16M4 12h16M4 17h16"} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -221,6 +257,13 @@ export function PublicChrome({
           {footerNote && <p className={styles.credits}>{footerNote}</p>}
         </div>
       </footer>
+      {appNavigation && (
+        <nav className={styles.appNav} aria-label="Navigation rapide">
+          <button type="button" aria-current="page" onClick={home}><Icon name="home" size={20} /> Accueil</button>
+          <button {...act({ type: "login" })}><Icon name="document" size={20} /> Mes demandes</button>
+          <button {...act({ type: "view", view: "help" })}><Icon name="help" size={20} /> Aide</button>
+        </nav>
+      )}
     </ThemeSurface>
   );
 }

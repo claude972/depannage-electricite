@@ -19,13 +19,14 @@ const loadHome = () => {
   const tp = themeProvider();
   return { tp, home: loadModule("components/role/public-home.tsx", { "@/components/app/theme-provider": tp }) as unknown as typeof Home };
 };
-const { HOME_CARDS, HOME_SITUATIONS, HOME_SLIDES, actionKey, parseActionKey, runHomeAction, slideKeyDelta, stepSlide, tabKeyTarget } = loadHome().home;
+const { FEATURED_SERVICES, HOME_SITUATIONS, actionKey, parseActionKey, runHomeAction, tabKeyTarget } = loadHome().home;
 
 type Calls = string[];
 function recordingHandlers(calls: Calls): HomeHandlers {
   return {
     onNew: (...args: unknown[]) => calls.push(`new(${args.join(",")})`),
     onLogin: () => calls.push("login()"),
+    onAddress: () => calls.push("address()"),
     onNavigate: (view) => calls.push(`navigate(${view})`),
     onDemo: (...args: unknown[]) => calls.push(`demo(${args.join(",")})`),
   };
@@ -38,20 +39,6 @@ function renderHome(props: Record<string, unknown>) {
 const attr = (html: string, name: string) => [...html.matchAll(new RegExp(`${name}="([^"]*)"`, "g"))].map((m) => m[1]);
 const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/&amp;/g, "&").replace(/\s+/g, " ");
 
-test("slides manuelles : bouclage dans les deux sens, flèches clavier seulement", () => {
-  assert.equal(stepSlide(0, 2, 1), 1);
-  assert.equal(stepSlide(1, 2, 1), 0);
-  assert.equal(stepSlide(0, 2, -1), 1);
-  assert.equal(stepSlide(0, 0, 1), 0);
-  assert.equal(slideKeyDelta("ArrowLeft"), -1);
-  assert.equal(slideKeyDelta("ArrowRight"), 1);
-  for (const key of ["Enter", " ", "ArrowUp", "Tab"]) assert.equal(slideKeyDelta(key), null);
-  assert.equal(HOME_SLIDES.length, 2);
-  // Aucune lecture automatique : pas de minuterie dans le composant.
-  const source = readFileSync(path.join(ROOT, "components/role/public-home.tsx"), "utf8");
-  assert.doesNotMatch(source, /setInterval|setTimeout|requestAnimationFrame/);
-});
-
 test("onglets : ←/→ bouclent, Home/End, autres touches ignorées", () => {
   assert.equal(tabKeyTarget("ArrowRight", 4, 5), 0);
   assert.equal(tabKeyTarget("ArrowLeft", 0, 5), 4);
@@ -62,7 +49,7 @@ test("onglets : ←/→ bouclent, Home/End, autres touches ignorées", () => {
 });
 
 test("actions : clé ↔ action aller-retour, clés inconnues refusées, callbacks exacts", () => {
-  const actions: HomeAction[] = [{ type: "new" }, ...CATEGORIES.map((c) => ({ type: "new" as const, category: c.id })), { type: "login" }, { type: "view", view: "join" }, { type: "view", view: "help" }, { type: "demo" }, { type: "demo", role: "manager" }];
+  const actions: HomeAction[] = [{ type: "new" }, ...CATEGORIES.map((c) => ({ type: "new" as const, category: c.id })), { type: "login" }, { type: "address" }, { type: "view", view: "join" }, { type: "view", view: "help" }, { type: "demo" }, { type: "demo", role: "manager" }];
   for (const a of actions) assert.equal(JSON.stringify(parseActionKey(actionKey(a))), JSON.stringify(a)); // objets d’un autre realm (vm)
   for (const bad of ["", "new:heating", "view:admin", "view:new", "demo:admin", "login:x", "new:socket:x", "pay"]) assert.equal(parseActionKey(bad), null, bad);
   const calls: Calls = [];
@@ -70,27 +57,31 @@ test("actions : clé ↔ action aller-retour, clés inconnues refusées, callbac
   runHomeAction({ type: "new" }, h);
   runHomeAction({ type: "new", category: "socket" }, h);
   runHomeAction({ type: "login" }, h);
+  runHomeAction({ type: "address" }, h);
   runHomeAction({ type: "view", view: "join" }, h);
   runHomeAction({ type: "demo" }, h);
   runHomeAction({ type: "demo", role: "manager" }, h);
-  assert.deepEqual(calls, ["new()", "new(socket)", "login()", "navigate(join)", "demo()", "demo(manager)"]);
+  assert.deepEqual(calls, ["new()", "new(socket)", "login()", "address()", "navigate(join)", "demo()", "demo(manager)"]);
 });
 
-test("contenu : cartes et onglets = catégories métier réelles, sans prix ni promesse", () => {
+test("contenu : trois interventions dans l’ordre de l’application et onglets métier complets", () => {
   const ids = CATEGORIES.map((c) => c.id);
-  for (const card of HOME_CARDS) assert.ok(ids.includes(card.category), card.title);
-  assert.deepEqual(new Set(HOME_CARDS.map((c) => c.category)), new Set(ids)); // chaque catégorie a une carte
+  assert.deepEqual([...FEATURED_SERVICES.map((s) => s.slug)], ["plusieurs-prises-sans-courant", "disjoncteur-qui-saute", "coupure-de-courant-partielle"]);
+  for (const service of FEATURED_SERVICES) assert.ok(ids.includes(service.category), service.title);
   assert.deepEqual(Object.keys(HOME_SITUATIONS).sort(), [...ids].sort());
 });
 
-test("SSR sans window : structure, 5 onglets métier, slides, thème, aucune ancre de hash", () => {
+test("SSR sans window : structure Mobile B, 5 onglets métier, thème, aucune ancre de hash", () => {
   assert.equal(typeof (globalThis as { window?: unknown }).window, "undefined");
   const html = renderHome({ handlers: recordingHandlers([]) });
   assert.match(html, /class="ui-v2 /);
   assert.match(html, /data-theme-toggle="pending"/); // thème inconnu avant montage : pas d’état faux
   assert.match(html, /<main id="main"/);
   assert.match(html, /aria-label="Navigation principale"/);
-  assert.match(html, /<h1[^>]*>Une panne électrique/);
+  assert.match(html, /<h1[^>]*>Un dépannage,<br\/>en toute clarté\./);
+  assert.match(html, /aria-label="Navigation rapide"/);
+  assert.match(html, /data-home-action="address"[^>]*>.*Choisir mon adresse/);
+  assert.match(html, /data-home-action="new"[^>]*>Présenter mon besoin/);
   // Onglets : exactement les 5 CATEGORIES, dans l’ordre, un seul sélectionné et tabulable.
   const tabs = [...html.matchAll(/<button[^>]*role="tab"[^>]*>([^<]+)<\/button>/g)];
   assert.deepEqual(tabs.map((m) => m[1]), CATEGORIES.map((c) => c.label));
@@ -99,17 +90,10 @@ test("SSR sans window : structure, 5 onglets métier, slides, thème, aucune anc
   const panels = [...html.matchAll(/<div[^>]*role="tabpanel"[^>]*>/g)];
   assert.equal(panels.length, 5);
   assert.equal(panels.filter((m) => /hidden=""/.test(m[0])).length, 4);
-  // Slides : 2 diapositives, la seconde masquée ; commandes ≥ 44 px côté CSS.
-  const slides = [...html.matchAll(/<div[^>]*aria-roledescription="diapositive"[^>]*>/g)];
-  assert.equal(slides.length, 2);
-  assert.match(slides[1][0], /hidden=""/);
-  assert.match(html, /aria-roledescription="carrousel"/);
-  assert.equal(attr(html, "aria-current").filter((v) => v === "true").length, 1);
-  // Routage par hash : aucun href="#…" (les sections s’atteignent par boutons) ; les seuls liens
-  // sont les 8 cartes d’intervention vers leur page de prestation (FASTSPLIT-PUBLIC-SERVICE-PAGES-001).
+  assert.doesNotMatch(html, /aria-roledescription="carrousel"/);
   const links = [...html.matchAll(/<a\s[^>]*href="([^"]*)"/g)].map((m) => m[1]);
-  assert.equal(JSON.stringify(links), JSON.stringify(HOME_CARDS.map((c) => `/prestations/${c.slug}`)));
-  assert.ok(attr(html, "href").every((h) => h.startsWith("/home/") || h.startsWith("/prestations/")), "préchargements d’images et pages de prestation");
+  assert.deepEqual(links, ["/prestations", ...FEATURED_SERVICES.map((s) => `/prestations/${s.slug}`)]);
+  assert.ok(attr(html, "href").every((h) => h.startsWith("/home/") || h === "/prestations" || h.startsWith("/prestations/")));
   assert.deepEqual(attr(html, "data-home-anchor").sort(), ["accueil-conseils", "accueil-interventions", "accueil-services"]);
   for (const id of attr(html, "data-home-anchor")) assert.match(html, new RegExp(`id="${id}"`));
   // Copie : aucun prix (hors fourchette indicative des cartes, vérifiée dans public-service.test.ts),
@@ -118,7 +102,7 @@ test("SSR sans window : structure, 5 onglets métier, slides, thème, aucune anc
   assert.doesNotMatch(copy, /€|\bavis\b|note moyenne|\d+\s*min\b|certifi|qualifi/i);
   assert.deepEqual(forbiddenClaims(copy), []);
   assert.doesNotMatch(copy, /publicité|sponsoris/i);
-  assert.match(copy, /Conseils et formation/);
+  assert.match(copy, /Conseils & prévention/);
   assert.match(copy, /Nous rejoindre/);
 });
 
@@ -134,8 +118,8 @@ test("SSR : chaque contrôle rendu appelle le bon callback réel", () => {
     runHomeAction(action, h);
   }
   const seen = new Set(calls);
-  for (const expected of ["new()", ...CATEGORIES.map((c) => `new(${c.id})`), "login()", "navigate(join)", "navigate(help)", "navigate(pricing)", "navigate(about)", "navigate(privacy)", "navigate(legal)", "demo()", "demo(manager)"]) assert.ok(seen.has(expected), expected);
-  for (const call of seen) assert.match(call, /^(new\((outage|panel|socket|lighting|diagnostic)?\)|login\(\)|navigate\((help|pricing|join|about|privacy|legal)\)|demo\((manager)?\))$/);
+  for (const expected of ["new()", ...CATEGORIES.map((c) => `new(${c.id})`), "login()", "address()", "navigate(join)", "navigate(help)", "navigate(pricing)", "navigate(about)", "navigate(privacy)", "navigate(legal)", "demo()", "demo(manager)"]) assert.ok(seen.has(expected), expected);
+  for (const call of seen) assert.match(call, /^(new\((outage|panel|socket|lighting|diagnostic)?\)|login\(\)|address\(\)|navigate\((help|pricing|join|about|privacy|legal)\)|demo\((manager)?\))$/);
   // Chaque panneau d’onglet mène à sa propre catégorie.
   const panels = new Map([...html.matchAll(/<div role="tabpanel" id="[^"]*-panel-(\w+)"[^>]*>([\s\S]*?)<\/div>/g)].map((m) => [m[1], m[2]]));
   assert.deepEqual([...panels.keys()], CATEGORIES.map((c) => c.id));
@@ -146,7 +130,7 @@ test("SSR : chaque contrôle rendu appelle le bon callback réel", () => {
   }
   // « Nous rejoindre » → vue réelle join ; « Conseils » → aide réelle uniquement.
   assert.match(html, /data-home-action="view:join"[^>]*>Nous rejoindre/);
-  const advice = html.slice(html.indexOf('id="accueil-conseils"'), html.indexOf("Rejoignez notre réseau"));
+  const advice = html.slice(html.indexOf('id="accueil-conseils"'), html.indexOf("</section>", html.indexOf('id="accueil-conseils"')));
   assert.ok(attr(advice, "data-home-action").every((k) => k === "view:help"));
 });
 
@@ -155,15 +139,16 @@ test("SSR : vue inconnue → message de connexion conservé", () => {
   assert.match(html, /role="status"[^>]*>.*Connectez-vous pour accéder à cet espace/s);
 });
 
-test("photos : uniquement les 5 retenues de 6bc0cab, présentes, créditées ; électroménager exclu", () => {
+test("photos : même photo principale que l’app et photos des interventions créditées", () => {
   const html = renderHome({ handlers: recordingHandlers([]) });
   const srcs = new Set(attr(html, "src"));
-  const kept = ["hero-photo-1.jpg", "hero-photo-2.jpg", "section-real-panel.jpg", "section-socket.jpg", "section-outlet.jpg"];
-  assert.deepEqual([...srcs].sort(), kept.map((f) => `/home/${f}`).sort());
+  const kept = [...new Set(["/home/hero-photo-1.jpg", ...FEATURED_SERVICES.map((s) => s.photo.src)])];
+  assert.deepEqual([...srcs].sort(), kept.sort());
+  assert.deepEqual(readFileSync(path.join(ROOT, "public/home/hero-photo-1.jpg")), readFileSync(path.join(ROOT, "apps/mobile/assets/mobile-b/337b8.jpg")));
   const credits = readFileSync(path.join(ROOT, "public/home/CREDITS.md"), "utf8");
   for (const f of kept) {
-    assert.ok(existsSync(path.join(ROOT, "public/home", f)), f);
-    assert.match(credits, new RegExp(f.replace(".", "\\.")));
+    assert.ok(existsSync(path.join(ROOT, "public", f)), f);
+    assert.match(credits, new RegExp(path.basename(f).replace(".", "\\.")));
   }
   for (const id of ["17842832", "27928762", "27928760", "7647233", "5691599"]) assert.match(credits, new RegExp(id));
   assert.doesNotMatch(html, /section-panel\.jpg|section-tech\.jpg|34054464|34054474/);
@@ -202,11 +187,12 @@ test("PublicSite : la vue home rend PublicHome avec les callbacks réels de la s
   handlers.onNew();
   handlers.onNew("panel");
   handlers.onLogin();
+  handlers.onAddress?.();
   handlers.onNavigate("join");
   handlers.onNavigate("help");
   handlers.onDemo();
   handlers.onDemo("manager");
-  assert.deepEqual(calls, ["go(new)", "setCategory(panel)", "go(new)", "setAuthMode(login)", "go(auth)", "go(join)", "go(help)", "startDemo(undefined)", "startDemo(manager)"]);
+  assert.deepEqual(calls, ["go(new)", "setCategory(panel)", "go(new)", "setAuthMode(login)", "go(auth)", "go(new,address)", "go(join)", "go(help)", "startDemo(undefined)", "startDemo(manager)"]);
 });
 
 test("PublicSite : vue inconnue → accueil avec message de connexion ; autres vues rendues dans le chrome partagé", () => {

@@ -4,35 +4,16 @@
 // so every chrome action is a real navigation back to it (/#new/<category>, /#auth, /#help…).
 // The price is the canonical indicative estimate of the category, labelled as such.
 import { useEffect, useState } from "react";
-import { money } from "../app/format";
-import type { Category } from "../app/types";
-import { PublicChrome, type HomeHandlers, type HomeTargetView } from "./public-chrome";
-import { SERVICE_STEPS, relatedServices, serviceEstimate, servicePath, serviceRequestHref, type ServiceEntry } from "./public-service-catalog";
+import { category, money } from "../app/format";
+import { PublicChrome, serviceChromeHandlers } from "./public-chrome";
+import { SERVICE_STEPS, relatedServices, serviceEstimate, servicePath, type ServiceEntry } from "./public-service-catalog";
 import { Icon } from "../app/icons";
 import { BookingBar, BookingWizard } from "./public-booking";
 import { IndicativeRange, useIndicativeText } from "../features/indicative-prices/indicative-range";
 import bookingStyles from "./public-booking.module.css";
 import styles from "./public-service.module.css";
 
-type Go = (href: string) => void;
-const browserGo: Go = (href) => window.location.assign(href);
-
-/** Chrome actions → URLs of the hash-routed app (pure: testable without a browser). */
-export function serviceChromeHref(action: { type: "new"; category?: Category } | { type: "login" } | { type: "view"; view: HomeTargetView } | { type: "demo"; role?: "manager" } | { type: "home" }): string {
-  if (action.type === "new") return action.category ? serviceRequestHref(action.category) : "/#new";
-  if (action.type === "login") return "/#auth";
-  if (action.type === "view") return `/#${action.view}`;
-  if (action.type === "demo") return `/#demo/${action.role ?? "client"}`;
-  return "/";
-}
-export function serviceChromeHandlers(go: Go = browserGo): HomeHandlers {
-  return {
-    onNew: (category) => go(serviceChromeHref({ type: "new", category })),
-    onLogin: () => go(serviceChromeHref({ type: "login" })),
-    onNavigate: (view) => go(serviceChromeHref({ type: "view", view })),
-    onDemo: (role) => go(serviceChromeHref({ type: "demo", role })),
-  };
-}
+export { serviceChromeHref, serviceChromeHandlers } from "./public-chrome";
 
 /** Shared third question of the hero FAQ (each service brings its own two first). */
 const COMMON_FAQ = {
@@ -70,7 +51,7 @@ export function PublicServicePage({ service, initialOpen = false }: { service: S
   );
   if (open)
     return (
-      <PublicChrome current="service" className={styles.withBar} handlers={serviceChromeHandlers()} onHome={() => browserGo("/")} mainClassName={styles.main}>
+      <PublicChrome current="service" className={styles.withBar} handlers={serviceChromeHandlers()} onHome={() => window.location.assign("/")} mainClassName={styles.main}>
         <div className={styles.wrap}>
           {crumb}
           <BookingWizard service={service} range={range} onClose={() => setOpen(false)} />
@@ -78,23 +59,26 @@ export function PublicServicePage({ service, initialOpen = false }: { service: S
       </PublicChrome>
     );
   return (
-    <PublicChrome current="service" className={`${styles.withBar} ${styles.withCompactBar}`} handlers={serviceChromeHandlers()} onHome={() => browserGo("/")} mainClassName={styles.main}>
+    <PublicChrome current="service" className={`${styles.withBar} ${styles.withCompactBar}`} handlers={serviceChromeHandlers()} onHome={() => window.location.assign("/")} mainClassName={styles.main}>
       <div className={styles.wrap}>
-        <a className={styles.backLink} href="/">
-          <span aria-hidden="true">←</span> Retour
+        <a className={styles.backLink} href="/prestations">
+          <span aria-hidden="true">←</span> Catalogue
         </a>
 
         {/* Hero: photo left; right column: title, indicative range, pictogram panel, CTA, top FAQ. */}
         <section className={styles.hero} aria-labelledby="service-title">
+          <div className={styles.heroHeading}>
+            <span className={styles.eyebrow}>{category(service.category).label}</span>
+            <h1 id="service-title" className={styles.heroTitle}>{service.title}</h1>
+            <p>{service.intro}</p>
+          </div>
           <figure className={styles.heroMedia}>
             <img src={service.photo.src} alt={service.alt} width={service.photo.width} height={service.photo.height} decoding="async" style={{ objectPosition: service.position }} />
           </figure>
-          {/* Single grid, no wrapper: desktop photo left / column right; mobile title → price →
-              pictograms → photo → Confirmer → FAQ (grid-template-areas in the CSS). */}
-          <h1 id="service-title" className={styles.heroTitle}>{service.title}</h1>
           <div className={styles.price} data-service-price="">
             <span>Estimation indicative</span>
             <strong data-indicative-range={service.category}>{shownRange}</strong>
+            <p>Le prix final est fixé par le devis que vous acceptez.</p>
           </div>
           <div className={styles.pictoPanel}>
             <ul className={styles.pictos} aria-label="Précisés dans le devis" data-service-pictos="">
@@ -121,7 +105,7 @@ export function PublicServicePage({ service, initialOpen = false }: { service: S
               </span>
             )}
             <button type="button" className={styles.cta} onClick={openBooking} {...confirmProps} data-service-cta="" data-booking-open="">
-              Confirmer
+              Demander cette intervention
             </button>
           </div>
           <div className={styles.topFaq} data-service-faq="">
@@ -142,7 +126,6 @@ export function PublicServicePage({ service, initialOpen = false }: { service: S
               <h2 id="service-know">Ce qu’il faut savoir</h2>
             </div>
             <div className={styles.bandBody}>
-              <p>{service.intro}</p>
               <ul className={styles.list}>
                 {service.covers.map((item) => (
                   <li key={item}>{item}</li>
@@ -222,7 +205,7 @@ export function PublicServicePage({ service, initialOpen = false }: { service: S
       </div>
       <BookingBar title={service.title} range={shownRange} compact>
         <button type="button" className={bookingStyles.barButton} onClick={openBooking} {...confirmProps} data-booking-open="">
-          Confirmer
+          Demander cette intervention
         </button>
       </BookingBar>
     </PublicChrome>
