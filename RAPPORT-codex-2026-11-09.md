@@ -7,7 +7,7 @@ Branche `release-candidate/codex-2026-11-09` sur le disque externe. Base Web et 
 | Bloc | État | Résultat |
 | --- | --- | --- |
 | 1 · Fiabilité mobile | Fait. Suite complète verte. | Brouillons par compte et dossier, photos chiffrées et reprise, session renouvelée sans perte de saisie, demande et reçu persistants. Code applicatif `afd7c7c98a4b35263bc72127585280ef9d1eacbf`. Tête de vérification `ef719e1`, qui modifie uniquement l’attente de rendu d’un test. La recette Android physique est reportée au bloc 6. |
-| 2 · Client mobile | Partiellement fait | Accueil Mobile B, huit fiches et tarifs communs intégrés. Demande et historique par téléphone codés. La réception du code SMS et la conversion du même compte restent à prouver sur l’environnement de test. |
+| 2 · Client mobile | Partiellement fait | Accueil Mobile B, huit fiches et tarifs communs intégrés. Demande, historique et conversion du même compte vérifiés localement. La réception d’un SMS réel reste à prouver sur l’environnement de recette. |
 | 3 · Artisan mobile | Non commencé | Le passage dépend de la qualification du bloc 2. |
 | 4 · SMS et Stripe | Non commencé | Les essais de ce bloc nécessitent les environnements test et leurs preuves de livraison et de rapprochement. |
 | 5 · Version à livrer | Non commencé | Contrat commun, publications et builds signés à traiter après la qualification des parcours. |
@@ -37,6 +37,14 @@ La preview Vercel est READY sur le code `afd7c7c`. Accueil, tarifs et options r�
 - La vraie route Next.js et PostgreSQL isolé en `79bc04c` confirment le même dossier après trois réessais, une ligne en base, le refus d’un numéro différent et un historique cloisonné. L’identité de test est synthétique. Aucun SMS ni débit n’a eu lieu.
 - La preview Vercel protégée `dpl_6tU4qJTzsP6AFUFCTHD1cxDkdnQU` est READY au SHA Git `79bc04c71d56c14a209c3cada6397f7c38d9c59a`. Accueil, catalogue, tarifs et modalités répondent 200. L’espace et l’historique anonymes répondent 401. L’API indique que le SMS et l’empreinte de carte sont indisponibles. [Preview protégée du bloc 2](https://depannage-electricite-80labkhvt-brafas-projects.vercel.app/)
 
+### Confirmation de l’adresse e-mail
+
+Le test de régression échouait avec le type Supabase `email_change`. Le commit `a145972` ajoute ce type au lien de confirmation et fournit le modèle d’e-mail Supabase correspondant. La confirmation exige toujours une session valide. Les 24 tests ciblés Auth passent. La suite Web sur le même code termine avec 2 250 réussites, aucun échec et aucun test ignoré. TypeScript, Turbopack et Webpack passent. Le modèle versionné doit être configuré sur le projet Auth de recette pour valider le lien qu’il émet.
+
+La [preview protégée du correctif](https://depannage-electricite-2or3678xu-brafas-projects.vercel.app/) sert le SHA exact `a145972c4ca27f78f745c7b96e9f7cf9af7b26fe`. Un lien invalide répond 307 vers `/?auth=expired`, sans cache et sans référent. Les options de réservation répondent 200, avec le SMS et l’empreinte de carte désactivés.
+
+La recette locale a exécuté les 125 migrations de la branche sur PostgreSQL Supabase. Next.js a refusé un code erroné et accepté le code synthétique prévu par Supabase Auth local. Le parcours a créé une intervention réelle en base locale, refusé l’historique anonyme, puis capturé l’e-mail de changement dans Mailpit. La connexion par e-mail échouait avant confirmation. Après ouverture du lien, elle a retrouvé le même identifiant utilisateur, le même téléphone et le même dossier. La boîte et le code de recette étaient locaux. Aucun SMS externe, e-mail externe ou paiement n’a été émis.
+
 ## Décisions prises
 
 - Les brouillons privés sont chiffrés par le stockage sécurisé du système. La photo en attente est stockée sous forme chiffrée et l’écriture est terminée avant de conserver sa référence. Une copie en clair temporaire sert au dépôt natif. L’alternative d’un brouillon général en cache a été écartée au profit d’une restauration par compte et dossier.
@@ -47,7 +55,7 @@ La preview Vercel est READY sur le code `afd7c7c`. Accueil, tarifs et options r�
 
 ## Fournisseurs, actions externes et dettes
 
-La recette SMS du bloc 2 demande une configuration de test qui limite réellement les envois aux numéros vérifiés de `TEST_PHONE_NUMBERS`. La liste est absente des fichiers d’environnement du candidat consultés et des variables Vercel applicables à la branche. Le SMS est désactivé dans la preview. La réception du code, la consultation après reconnexion et la confirmation de l’accès e-mail avec le même historique restent à vérifier avant le bloc 3.
+La recette SMS du bloc 2 demande une configuration de test qui limite réellement les envois aux numéros vérifiés de `TEST_PHONE_NUMBERS`. La liste est absente des fichiers d’environnement du candidat consultés et des variables Vercel applicables à la branche. Le SMS est désactivé dans la preview. Le test local couvre la reconnexion et l’accès e-mail avec le même historique. Il reste à vérifier la réception du code par le fournisseur de test, puis le même parcours en ligne, avant le bloc 3.
 
 Aucun appel Stripe ou SMS et aucun montant observé au bloc 1. Les montants attendus et le rapprochement au centime seront établis à partir du devis de recette et de la configuration sandbox lors du bloc 4.
 
