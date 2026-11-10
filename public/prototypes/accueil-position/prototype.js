@@ -42,6 +42,7 @@ const screens = {
 };
 const dock = $('.dock');
 const webHeader = $('#web-header');
+const siteMenu = $('#site-menu');
 const settingsTabs = Array.from(document.querySelectorAll('[data-settings-tab]'));
 const returnFocus = new Map();
 const rail = $('#services-rail');
@@ -301,8 +302,13 @@ $('.settings-tabs').addEventListener('keydown', (event) => {
 
 $('#shortcuts').innerHTML = ['outage', 'socket', 'panel', 'light'].map((id) => `<button type="button" data-service="${id}"><span class="shortcut-art"><svg aria-hidden="true"><use href="#art-${id}"/></svg></span>${services[id].label}</button>`).join('');
 document.addEventListener('click', (event) => {
+  if (siteMenu.open && !siteMenu.contains(event.target)) siteMenu.open = false;
   const trigger = event.target.closest('button');
   if (!trigger) return;
+  if (siteMenu.open && siteMenu.contains(trigger)) {
+    siteMenu.open = false;
+    siteMenu.querySelector('summary').focus();
+  }
   const { mode: nextMode, service, place: placeId, filter: nextFilter, section, screen, settings, settingsTab, accountAction } = trigger.dataset;
   if ('position' in trigger.dataset) openPosition(trigger);
   else if (trigger.dataset.return) goBack(trigger.dataset.return);
@@ -321,6 +327,13 @@ document.addEventListener('click', (event) => {
     showService(service);
   } else if (nextFilter) setFilter(filter === nextFilter ? '' : nextFilter);
   else if (placeId) choosePlace(places.find((p) => p.id === placeId));
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape' || !siteMenu.open) return;
+  event.preventDefault();
+  siteMenu.open = false;
+  siteMenu.querySelector('summary').focus();
 });
 
 $('#schedule').addEventListener('click', () => {
@@ -363,6 +376,7 @@ for (const [id, direction] of [['#cards-prev', -1], ['#cards-next', 1]]) $(id).a
 rail.addEventListener('scroll', updateArrows, { passive: true });
 window.addEventListener('resize', updateArrows);
 window.addEventListener('popstate', () => {
+  siteMenu.open = false;
   if (sheet.open) sheet.close();
   updateScreen(true, true);
 });

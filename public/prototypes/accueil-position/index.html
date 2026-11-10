@@ -74,13 +74,23 @@
 
 <header class="web-header" id="web-header">
   <div class="wrap web-header-inner">
-    <button class="brand web-brand" type="button" data-screen="accueil" aria-label="Dépannage électrique, accueil"><span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-bolt"/></svg></span><span>Dépannage<br>électrique</span></button>
-    <nav class="web-nav" aria-label="Navigation principale">
-      <button type="button" data-screen="accueil">Accueil</button>
-      <button type="button" data-section="services">Services</button>
-      <button type="button" data-screen="activite">Activité</button>
-      <button class="web-account" type="button" data-screen="compte"><svg class="icon small" aria-hidden="true"><use href="#i-person"/></svg>Compte</button>
-    </nav>
+    <div class="web-header-brand">
+      <details class="web-menu" id="site-menu">
+        <summary aria-label="Menu"><span class="web-menu-icon" aria-hidden="true"><span></span><span></span><span></span></span></summary>
+        <nav class="web-nav" aria-label="Navigation principale">
+          <button type="button" data-screen="accueil">Accueil</button>
+          <button type="button" data-section="services">Services</button>
+          <button type="button" data-screen="activite">Activité</button>
+          <button type="button" data-screen="compte">Compte</button>
+        </nav>
+      </details>
+      <button class="brand web-brand" type="button" data-screen="accueil" aria-label="Dépannage électrique, accueil"><span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-bolt"/></svg></span><span class="web-brand-name">Dépannage électrique</span></button>
+    </div>
+    <a class="web-recruit" href="./maquettes.html#ecran/recrutement"><svg class="icon" aria-hidden="true"><use href="#i-work"/></svg><span><strong>Rejoindre le réseau</strong><small>Candidature artisan</small></span></a>
+    <div class="web-header-actions">
+      <a class="web-follow" href="./maquettes.html#ecran/connexion-client">Suivre mon intervention</a>
+      <a class="web-contact" href="./maquettes.html#ecran/contact"><svg class="icon small" aria-hidden="true"><use href="#i-mail"/></svg>Nous contacter</a>
+    </div>
   </div>
 </header>
 
@@ -91,7 +101,6 @@
       <span class="current-text"><small>Lieu d’intervention</small><strong id="home-location">Choisir une position</strong></span>
       <svg class="icon small" aria-hidden="true"><use href="#i-down"/></svg>
     </button>
-    <span class="brand" aria-label="Dépannage électrique"><span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-bolt"/></svg></span><span>Dépannage<br>électrique</span></span>
   </header>
   <main class="wrap home-content">
     <div class="web-hero">
