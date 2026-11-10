@@ -25,6 +25,9 @@
       },
       "ios": {
         "simulator": true
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://depannage-electricite-8nimgrdre-brafas-projects.vercel.app"
       }
     },
     "device": {
@@ -37,6 +40,9 @@
       "ios": {
         "simulator": false,
         "credentialsSource": "remote"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://depannage-electricite-8nimgrdre-brafas-projects.vercel.app"
       }
     }
   }
