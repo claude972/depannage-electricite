@@ -161,7 +161,7 @@ export const screens = [
   screen('connexion-artisan', 'artisan', 'Connexion artisan', ['M49'], 'Accédez à l’espace professionnel de démonstration.', [
     form('Profil professionnel', [['Adresse e-mail d’exemple', 'email', 'artisan@example.test']], 'Ouvrir le tableau de bord démo', 'artisan'),
   ], [link('Préparer une candidature', 'candidature')]),
-  screen('candidature', 'artisan', 'Candidature artisan', ['M65'], 'Le dossier professionnel en cinq étapes.', [
+  screen('candidature', 'artisan', 'Candidature électricien', ['M65'], 'Le dossier professionnel en cinq étapes.', [
     steps('Votre dossier', [['Identité','Coordonnées professionnelles'], ['Entreprise','Statut et activité'], ['Justificatifs','Pièces à joindre'], ['Zones','Communes couvertes'], ['Disponibilités','Créneaux et capacité']], 0),
     form('Identité et activité', [['Nom professionnel', 'text', 'Entreprise Exemple'], ['Activité', ['Électricité générale','Dépannage électrique']], fieldCity], 'Continuer vers les justificatifs', 'documents-artisan'),
   ]),
