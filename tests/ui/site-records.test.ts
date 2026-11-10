@@ -278,7 +278,11 @@ window.run = async () => {
   a.div.querySelector("[data-site-due-complete]").click(); await tick(400);
   out.upcomingReread = a.calls.filter((u) => u.includes("kind=upcoming")).length - n;
   out.saved = a.saved();
-  segment(a.div, "Filtre des interventions du site", "Passées").click(); await tick(300);
+  segment(a.div, "Filtre des interventions du site", "Passées").click();
+  const pastDeadline = performance.now() + 5000;
+  while (!a.div.querySelector('[data-site-job="' + J(500) + '"]') && performance.now() < pastDeadline) {
+    await tick(25);
+  }
   out.pastRows = [...a.div.querySelectorAll("[data-site-job]")].map((x) => x.getAttribute("data-site-job"));
   out.pastCalls = a.calls.filter((u) => u.includes("kind=past"));
   out.auditRows = a.div.querySelectorAll("[data-site-audit]").length;
