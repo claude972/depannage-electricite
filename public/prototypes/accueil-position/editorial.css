@@ -92,7 +92,7 @@
   display: grid;
   overflow: clip;
   border-radius: 20px;
-  background: #16277a;
+  background: var(--artisan-blue);
   color: var(--paper);
 }
 
@@ -108,7 +108,7 @@
   padding: 10px 14px;
   border-radius: 11px;
   background: var(--paper);
-  color: #16277a;
+  color: var(--artisan-blue);
   font-size: 14px;
   font-weight: 700;
   text-decoration: none;
@@ -138,7 +138,7 @@
 .editorial-footer {
   margin-top: clamp(38px, 5.5vw, 72px);
   padding: 30px 0 calc(94px + env(safe-area-inset-bottom));
-  background: var(--night);
+  background: var(--artisan-blue);
   color: var(--on-night);
 }
 
@@ -168,7 +168,7 @@
 .footer-bottom nav { display: flex; flex-wrap: wrap; gap: 0 16px; }
 
 .advice-main { max-width: 792px; padding-block: 18px 45px; }
-.advice-main header { padding: clamp(20px, 4vw, 36px); margin: 14px 0 28px; border-radius: 20px; background: var(--night); color: var(--on-night); }
+.advice-main header { padding: clamp(20px, 4vw, 36px); margin: 14px 0 28px; border-radius: 20px; background: var(--artisan-blue); color: var(--on-night); }
 .advice-main header p { margin-top: 10px; color: var(--on-night-muted); }
 .advice-main header a { color: var(--night-link); }
 .editorial-footer :focus-visible, .advice-main header :focus-visible { outline-color: var(--night-link); }

@@ -21,12 +21,12 @@
   --rule: #e4e6ec;
   --blue: #2246e5;
   --blue-soft: #eef2ff;
-  --night: #101a35;
-  --night-raised: #1c2b4c;
-  --night-rule: #536589;
+  --artisan-blue: #16277a;
+  --night-raised: #243891;
+  --night-rule: #8496d0;
   --on-night: #f8faff;
-  --on-night-muted: #c6d2ec;
-  --night-link: #aabfff;
+  --on-night-muted: #d8e0ff;
+  --night-link: #c5d4ff;
   --orange: #ff6b35;
   --gutter: 20px;
   font-family: Jakarta,system-ui,sans-serif;
