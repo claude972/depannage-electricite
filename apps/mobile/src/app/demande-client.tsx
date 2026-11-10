@@ -7,7 +7,8 @@ import { Action, Card, Copy, Field, ReadState, Screen } from '@/components/ui';
 import { PhoneChallenge } from '@/components/phone-challenge';
 import { OptionalEmailAccount } from '@/components/optional-email-account';
 import { ApiFailure, api, useResource } from '@/lib/api';
-import { category, categories, euros, prices } from '@/lib/contracts';
+import { categories, euros, prices } from '@/lib/contracts';
+import { usePublicServices } from '@/lib/public-services';
 import { deviceDrafts } from '@/lib/device-drafts';
 import { bookingInput, bookingReceipt, emptyPhoneBooking, phoneBookingDraft, phoneBookingKey, stagedPhoneBooking, stagePhoneBookingKey, type StagedPhoneBooking } from '@/lib/phone-booking-draft';
 import { normalizeInternationalPhone, phoneContact, verifiedPhone } from '@/lib/phone-client';
@@ -15,19 +16,19 @@ import { useDeviceDraft } from '@/lib/use-device-draft';
 import { useSession } from '@/lib/session';
 import { useWorkspace } from '@/lib/use-workspace';
 
-const services = z.object({ items: z.array(z.object({ slug: z.string(), title: z.string(), category })) });
 const options = z.object({ payment_methods: z.array(z.object({ id: z.string(), available: z.boolean() })) });
 
 export default function ClientBooking() {
   const auth = useSession();
-  const { service } = useLocalSearchParams<{ service?: string }>();
+  const { service, field } = useLocalSearchParams<{ service?: string; field?: string }>();
+  const addressFirst = field === 'address';
   const phone = verifiedPhone(auth.session?.user);
   useEffect(() => {
     if (auth.phoneResume === 'booking') auth.consumePhoneResume();
   }, [auth.phoneResume]);
-  if (!auth.session) return <BookingFields service={service} />;
+  if (!auth.session) return <BookingFields service={service} addressFirst={addressFirst} />;
   if (!phone) return <SignedInFallback />;
-  return <VerifiedBooking key={auth.session.user.id + phone} actor={auth.session.user.id} phone={phone} token={auth.session.access_token} service={service} />;
+  return <VerifiedBooking key={auth.session.user.id + phone} actor={auth.session.user.id} phone={phone} token={auth.session.access_token} service={service} addressFirst={addressFirst} />;
 }
 
 function SignedInFallback() {
@@ -39,12 +40,13 @@ function SignedInFallback() {
   </Screen>;
 }
 
-function BookingFields({ service, owner }: {
+function BookingFields({ service, addressFirst, owner }: {
   service?: string;
+  addressFirst?: boolean;
   owner?: { phone: string; first: string; last: string; onReady: (request: StagedPhoneBooking) => Promise<void> };
 }) {
   const router = useRouter();
-  const catalogue = useResource('/api/public/services', services);
+  const catalogue = usePublicServices();
   const price = useResource('/api/public/indicative-prices', prices);
   const [slug, setSlug] = useState(service ?? ''), [description, setDescription] = useState('');
   const [address, setAddress] = useState(''), [postal, setPostal] = useState(''), [city, setCity] = useState('');
@@ -100,8 +102,23 @@ function BookingFields({ service, owner }: {
     <Action secondary label="Revenir à ma demande" onPress={() => setPending(null)} />
   </Screen>;
 
+  const addressFields = <Card>
+        <Copy kind="subtitle">Adresse d’intervention</Copy>
+        <Action secondary label={locating ? 'Recherche…' : 'Utiliser ma position'} disabled={locating} onPress={() => void locate()} />
+        {suggestion && <>
+          <Copy>{suggestion.address}, {suggestion.postal} {suggestion.city}</Copy>
+          <Action secondary label="Utiliser cette adresse" onPress={() => {
+            setAddress(suggestion.address); setPostal(suggestion.postal); setCity(suggestion.city); setSuggestion(null);
+          }} />
+        </>}
+        <Field label="Adresse" value={address} onChangeText={setAddress} maxLength={500} />
+        <Field label="Code postal" value={postal} onChangeText={setPostal} keyboardType="numeric" maxLength={5} />
+        <Field label="Commune" value={city} onChangeText={setCity} maxLength={120} />
+      </Card>;
+
   return <Screen>
     <Copy kind="title">Votre demande de dépannage</Copy>
+    {addressFirst && addressFields}
     <ReadState loading={catalogue.loading} error={catalogue.error} onRetry={catalogue.reload} />
     {chosen ? <Card>
       <Copy kind="subtitle">{chosen.title}</Copy>
@@ -121,19 +138,7 @@ function BookingFields({ service, owner }: {
         <Field label="Nom" value={last} onChangeText={setLast} autoComplete="family-name" maxLength={60} />
         <Field label="Téléphone" value={phone} onChangeText={setPhone} placeholder="+596 ou +590…" keyboardType="phone-pad" autoComplete="tel" maxLength={40} editable={!owner} />
       </Card>
-      <Card>
-        <Copy kind="subtitle">Adresse d’intervention</Copy>
-        <Action secondary label={locating ? 'Recherche…' : 'Utiliser ma position'} disabled={locating} onPress={() => void locate()} />
-        {suggestion && <>
-          <Copy>{suggestion.address}, {suggestion.postal} {suggestion.city}</Copy>
-          <Action secondary label="Utiliser cette adresse" onPress={() => {
-            setAddress(suggestion.address); setPostal(suggestion.postal); setCity(suggestion.city); setSuggestion(null);
-          }} />
-        </>}
-        <Field label="Adresse" value={address} onChangeText={setAddress} maxLength={500} />
-        <Field label="Code postal" value={postal} onChangeText={setPostal} keyboardType="numeric" maxLength={5} />
-        <Field label="Commune" value={city} onChangeText={setCity} maxLength={120} />
-      </Card>
+      {!addressFirst && addressFields}
       <Card>
         <Copy kind="subtitle">Estimation indicative</Copy>
         <ReadState loading={price.loading} error={price.error} onRetry={price.reload} />
@@ -145,7 +150,7 @@ function BookingFields({ service, owner }: {
   </Screen>;
 }
 
-function VerifiedBooking({ actor, phone, token, service }: { actor: string; phone: string; token: string; service?: string }) {
+function VerifiedBooking({ actor, phone, token, service, addressFirst }: { actor: string; phone: string; token: string; service?: string; addressFirst?: boolean }) {
   const account = useWorkspace(true);
   const [key, setKey] = useState<string | null>(null), [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -162,11 +167,11 @@ function VerifiedBooking({ actor, phone, token, service }: { actor: string; phon
     }} />
   </Screen>;
   if (account.data.profile.role !== 'client') return <Screen><Copy>Ce formulaire est réservé à l’espace client.</Copy></Screen>;
-  return <ConfirmBooking actor={actor} phone={phone} token={token} service={service} stageKey={key} profile={account.data.profile} />;
+  return <ConfirmBooking actor={actor} phone={phone} token={token} service={service} addressFirst={addressFirst} stageKey={key} profile={account.data.profile} />;
 }
 
-function ConfirmBooking({ actor, phone, token, service, stageKey, profile }: {
-  actor: string; phone: string; token: string; service?: string; stageKey: string;
+function ConfirmBooking({ actor, phone, token, service, addressFirst, stageKey, profile }: {
+  actor: string; phone: string; token: string; service?: string; addressFirst?: boolean; stageKey: string;
   profile: { first_name?: string | null; last_name?: string | null };
 }) {
   const router = useRouter();
@@ -246,7 +251,7 @@ function ConfirmBooking({ actor, phone, token, service, stageKey, profile }: {
     <Action secondary label="Commencer une autre demande" disabled={draft.pending} onPress={() => setNewRequest(true)} />
     <OptionalEmailAccount />
   </Screen>;
-  if (!request) return <BookingFields service={service} owner={{
+  if (!request) return <BookingFields service={service} addressFirst={addressFirst} owner={{
     phone, first: profile.first_name ?? '', last: profile.last_name ?? '',
     onReady: async next => { await deviceDrafts.write(stageKey, next); setStage({ request: next }); },
   }} />;

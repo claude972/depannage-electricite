@@ -15,8 +15,10 @@ function Navigator() {
       <Stack.Screen name="demande-client" options={{title:'Votre demande'}}/>
       <Stack.Screen name="retrouver" options={{title:'Mes demandes'}}/>
       <Stack.Screen name="aide-mobile" options={{title:'Aide'}}/>
+      <Stack.Screen name="catalogue" options={{title:'Catalogue'}}/>
+      <Stack.Screen name="prestation/[slug]" options={{title:'Votre dépannage'}}/>
       <Stack.Protected guard={!session}>
-        <Stack.Screen name="bienvenue" options={{title:'Dépannage électrique'}}/>
+        <Stack.Screen name="bienvenue" options={{headerShown:false}}/>
         <Stack.Screen name="connexion" options={{title:'Connexion'}}/>
       </Stack.Protected>
       <Stack.Protected guard={Boolean(session)}>
