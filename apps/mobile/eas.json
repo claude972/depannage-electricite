@@ -13,7 +13,8 @@
         "credentialsSource": "local"
       },
       "ios": {
-        "simulator": true
+        "simulator": true,
+        "scheme": "DomDepannage"
       }
     },
     "simulator": {
@@ -24,7 +25,8 @@
         "credentialsSource": "local"
       },
       "ios": {
-        "simulator": true
+        "simulator": true,
+        "scheme": "DomDepannage"
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://depannage-electricite-8nimgrdre-brafas-projects.vercel.app"
@@ -39,7 +41,8 @@
       },
       "ios": {
         "simulator": false,
-        "credentialsSource": "remote"
+        "credentialsSource": "remote",
+        "scheme": "DomDepannage"
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://depannage-electricite-8nimgrdre-brafas-projects.vercel.app"
