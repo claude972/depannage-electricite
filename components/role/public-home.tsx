@@ -134,7 +134,7 @@ export function PublicHome({ gated = false, handlers }: { gated?: boolean; handl
   const rail = useRef<HTMLUListElement>(null);
   const mode = MODES[modeIndex];
   const terms = normalize(query).split(/\s+/).filter(Boolean);
-  const cards = mode.cards.filter((card) => {
+  const cards: Situation[] = mode.cards.filter((card) => {
     const content = normalize(`${card.title} ${card.description}`);
     return terms.every((term) => content.includes(term));
   });
