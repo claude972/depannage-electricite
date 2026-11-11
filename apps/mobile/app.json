@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "DomDépannage",
+    "name": "DomDepannage",
     "slug": "depannage-electrique-mobile",
     "owner": "claude972",
     "version": "0.1.0",
@@ -34,6 +34,7 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/with-android-display-name",
       "expo-secure-store",
       [
         "expo-splash-screen",
