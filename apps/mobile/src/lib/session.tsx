@@ -5,7 +5,7 @@ import { createContext, useContext, useEffect, useState, type PropsWithChildren 
 import { apiOrigin, configured, publishableKey, supabaseOrigin } from './config';
 import { secureStorage } from './secure-storage';
 import { verifiedPhone, verifyNativePhoneCode, type PhonePurpose } from './phone-client';
-import { clientInterventionSnapshot } from '../../../../lib/features/client-interventions/contract';
+import { clientInterventionSnapshot } from '../../../../shared/client-interventions';
 import { orderReference, parseOrderReference } from '../../../../shared/order-reference';
 
 const supabase = configured ? createClient(supabaseOrigin!, publishableKey!, {

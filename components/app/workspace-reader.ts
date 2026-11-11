@@ -9,7 +9,7 @@ import { ApiRequestError } from "./api";
 import type { Role, Status, Workspace } from "./types";
 import type { ReadResult } from "./workspace-refresh";
 import { workspaceLimitsSchema } from "../../lib/features/workspace/detail-read";
-import { clientWorkspaceCounters } from "../../lib/features/client-interventions/contract";
+import { clientWorkspaceCounters } from "../../shared/client-interventions";
 
 const ROLES: readonly Role[] = ["client", "artisan", "manager", "admin"];
 /** Same set as the database check constraint on interventions.status (migration 0001) and `Status`. */

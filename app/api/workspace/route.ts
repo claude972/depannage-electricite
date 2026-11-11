@@ -1,7 +1,7 @@
 import { enrichAcceptedTotals, AcceptedTotalsUnavailable } from "@/lib/features/workspace/accepted-totals";
 import { authenticatedClient, apiError, dbError } from "@/lib/supabase/server";
 import { DetailReadUnavailable, workspaceWindow } from "@/lib/features/workspace/detail-read";
-import { clientWorkspaceCounters } from "@/lib/features/client-interventions/contract";
+import { clientWorkspaceCounters } from "@/shared/client-interventions";
 export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   try {

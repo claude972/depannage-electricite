@@ -476,7 +476,7 @@ export type ArtisanPerformanceReport = {
 };
 export type Workspace = {
   limits?: WorkspaceLimits;
-  client_counts?: import("../../lib/features/client-interventions/contract").ClientWorkspaceCounters;
+  client_counts?: import("../../shared/client-interventions").ClientWorkspaceCounters;
   documents: StoredDocument[];
   reviews: Review[];
   profile: Profile | null;

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { ApiError, authenticatedClient, dbError } from "@/lib/supabase/server";
-import { clientInterventionInput, clientInterventionRow, clientInterventionSnapshot } from "@/lib/features/client-interventions/contract";
+import { clientInterventionInput, clientInterventionRow, clientInterventionSnapshot } from "@/shared/client-interventions";
 import { comparePostgresTime } from "@/lib/shared/postgres-time-order";
 
 export const dynamic = "force-dynamic";
