@@ -1,20 +1,18 @@
 .chrome {
-  --h-footer: #070707;
+  --public-width: 1160px;
+  --public-gutter: clamp(15px, 4vw, 28px);
+  --editorial-yellow: var(--ui-advice);
   min-height: 100vh;
 }
-:global([data-ui-theme="light"]) .chrome { --h-footer: var(--ui-surface); }
 .chrome :is(h1, h2, h3) { color: inherit; }
 .wrap {
   width: 100%;
-  max-width: 1200px;
+  max-width: var(--public-width, 1160px);
   margin: 0 auto;
-  padding-inline: 32px;
-}
-@media (max-width: 640px) {
-  .wrap { padding-inline: 18px; }
+  padding-inline: var(--public-gutter, clamp(15px, 4vw, 28px));
 }
 
-.topbar, .editorialChrome { --editorial-navy: #16277a; }
+.topbar, .chrome { --editorial-navy: #16277a; }
 .topbar {
   position: relative;
   z-index: 20;
@@ -24,8 +22,6 @@
   color-scheme: light;
 }
 .topbar button, .footer button { font: inherit; color: inherit; }
-.editorialChrome { --editorial-yellow: var(--ui-advice); }
-.editorialChrome .footer { background: var(--editorial-navy); }
 
 .brand {
   display: inline-flex;
@@ -68,8 +64,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
   gap: 4px 12px;
-  max-width: 1160px;
-  padding: calc(6px + env(safe-area-inset-top, 0px)) clamp(15px, 4vw, 28px) 6px;
+  padding-block: calc(6px + env(safe-area-inset-top, 0px)) 6px;
 }
 .topbar .brand { gap: 6px; }
 .topbar .brandMark { width: 34px; height: 34px; border-radius: 10px; }
@@ -172,34 +167,7 @@
 
 .footer {
   border-top: 1px solid var(--ui-border);
-  background: var(--h-footer);
-}
-.footerInner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding-top: 20px;
-}
-.footerNav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.footer .footerNav button {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 0 12px;
-  border: 0;
-  background: none;
-  color: var(--ui-text-muted);
-  font-size: 14px;
-  cursor: pointer;
-}
-.footer .footerNav button:hover {
-  color: var(--ui-accent);
+  background: var(--editorial-navy);
 }
 .credits {
   flex-basis: 100%;

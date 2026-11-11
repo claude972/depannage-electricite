@@ -1,8 +1,8 @@
 .main { padding: 0 0 44px; }
 .wrap {
-  width: min(100%, 1160px);
+  width: min(100%, var(--public-width));
   margin-inline: auto;
-  padding-inline: clamp(15px, 4vw, 28px);
+  padding-inline: var(--public-gutter);
 }
 .wrap > section { margin-block-start: clamp(32px, 5vw, 64px); }
 .wrap :is(h1, h2, h3, p) { margin: 0; }

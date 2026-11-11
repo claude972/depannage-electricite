@@ -205,7 +205,6 @@ export function PublicChrome({
   mainClassName,
   footerNote,
   appNavigation = false,
-  editorial = false,
   children,
 }: {
   current: ChromeView;
@@ -219,14 +218,13 @@ export function PublicChrome({
   mainClassName?: string;
   footerNote?: ReactNode;
   appNavigation?: boolean;
-  editorial?: boolean;
   children: ReactNode;
 }) {
   const act = (action: HomeAction) => actionButton(action, handlers);
-  const surface = [styles.chrome, appNavigation ? styles.appChrome : "", editorial ? styles.editorialChrome : "", className].filter(Boolean).join(" ");
+  const surface = [styles.chrome, appNavigation ? styles.appChrome : "", className].filter(Boolean).join(" ");
 
   return (
-    <ThemeSurface className={surface} appearance={editorial ? "light" : undefined}>
+    <ThemeSurface className={surface} appearance="light">
       <PublicHeader current={current} handlers={handlers} onHome={onHome} sections={sections} onSection={onSection} />
 
       <main id="main" className={mainClassName}>
@@ -234,52 +232,35 @@ export function PublicChrome({
       </main>
 
       <footer className={styles.footer}>
-        {editorial ? (
-          <div className={`${styles.wrap} ${styles.editorialFooter}`}>
-            <div>
-              <strong>Dépannage électrique</strong>
-              <p>De la demande au suivi de votre intervention électrique.</p>
-            </div>
-            <nav aria-label="Services et tarifs">
-              <strong>Services</strong>
-              <a href="/prestations">Voir les dépannages</a>
-              <button {...act({ type: "view", view: "pricing" })}>Tarifs indicatifs</button>
-              <a href="/#pricing/zones">Zones d’intervention</a>
-            </nav>
-            <nav aria-label="Assistance et suivi">
-              <strong>Assistance</strong>
-              <a href="/suivi">Suivre mon intervention</a>
-              <a href="/#help/contact">Nous contacter</a>
-              <a href="/#help/garantie">Garantie</a>
-            </nav>
-            <nav aria-label="À propos et mentions">
-              <strong>À propos</strong>
-              <button {...act({ type: "view", view: "join" })}>Candidature électricien</button>
-              <a href="/conseils">Le blog du dépannage</a>
-              {FOOTER_VIEWS.filter(({ view }) => view !== "help").map((item) => (
-                <button key={item.view} {...act({ type: "view", view: item.view })}>{item.label}</button>
-              ))}
-              <button {...act({ type: "demo", role: "manager" })}>Démonstration espace professionnel</button>
-            </nav>
-            {footerNote && <p className={styles.credits}>{footerNote}</p>}
-          </div>
-        ) : (
-        <div className={`${styles.wrap} ${styles.footerInner}`}>
-          <span className={styles.brandText}>
+        <div className={`${styles.wrap} ${styles.editorialFooter}`}>
+          <div>
             <strong>Dépannage électrique</strong>
-            <small>Application en préparation.</small>
-          </span>
-          <nav className={styles.footerNav} aria-label="Informations">
-            {FOOTER_VIEWS.map((item) => (
-              <button key={item.view} aria-current={current === item.view ? "page" : undefined} {...act({ type: "view", view: item.view })}>
-                {item.label}
-              </button>
+            <p>De la demande au suivi de votre intervention électrique.</p>
+          </div>
+          <nav aria-label="Services et tarifs">
+            <strong>Services</strong>
+            <a href="/prestations">Voir les dépannages</a>
+            <button aria-current={current === "pricing" ? "page" : undefined} {...act({ type: "view", view: "pricing" })}>Tarifs indicatifs</button>
+            <a href="/#pricing/zones">Zones d’intervention</a>
+          </nav>
+          <nav aria-label="Assistance et suivi">
+            <strong>Assistance</strong>
+            <button aria-current={current === "help" ? "page" : undefined} {...act({ type: "view", view: "help" })}>Aide</button>
+            <a href="/suivi">Suivre mon intervention</a>
+            <a href="/#help/contact">Nous contacter</a>
+            <a href="/#help/garantie">Garantie</a>
+          </nav>
+          <nav aria-label="À propos et mentions">
+            <strong>À propos</strong>
+            <button {...act({ type: "view", view: "join" })}>Candidature électricien</button>
+            <a href="/conseils">Le blog du dépannage</a>
+            {FOOTER_VIEWS.filter(({ view }) => view !== "help").map((item) => (
+              <button key={item.view} aria-current={current === item.view ? "page" : undefined} {...act({ type: "view", view: item.view })}>{item.label}</button>
             ))}
             <button {...act({ type: "demo", role: "manager" })}>Démonstration espace professionnel</button>
           </nav>
           {footerNote && <p className={styles.credits}>{footerNote}</p>}
         </div>
-        )}
       </footer>
       {appNavigation && (
         <nav className={styles.appNav} aria-label="Navigation rapide">

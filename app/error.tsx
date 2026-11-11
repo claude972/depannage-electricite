@@ -6,7 +6,7 @@ import styles from "./error-pages.module.css";
 // Generic message only: the error object (message, stack, digest) is never rendered.
 export default function ErrorPage({ reset }: { reset: () => void }) {
   return (
-    <ThemeSurface className={styles.page}>
+    <ThemeSurface className={styles.page} appearance="light">
       <PublicHeader />
       <main id="main" className={styles.main}>
         <section className={styles.card} aria-labelledby="error-title">

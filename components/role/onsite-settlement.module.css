@@ -23,8 +23,10 @@
   color: var(--ui-text-muted);
 }
 .declared {
-  padding-left: 12px;
-  border-left: 3px solid var(--ui-success);
+  padding: 8px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface);
   color: var(--ui-text);
 }
 .error {

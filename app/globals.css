@@ -4801,3 +4801,6 @@ body {
   outline: 3px solid var(--ui-focus);
   outline-offset: 2px;
 }
+.ui-v2 .panel {
+  border-radius: var(--ui-radius-lg);
+}

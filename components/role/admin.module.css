@@ -1390,7 +1390,6 @@ button.row:hover {
 .timeline .fromAdmin {
   background: var(--surface);
   border-color: #c9d9f2;
-  border-left: 3px solid var(--blue);
 }
 .timeline .fromAdmin header strong {
   color: var(--blue);
@@ -1868,7 +1867,6 @@ button.row:hover {
 :global(.ui-v2) .timeline .fromAdmin {
   background: var(--ui-card);
   border-color: var(--ui-border);
-  border-left: 3px solid var(--ui-accent);
 }
 :global(.ui-v2) .timeline .fromAdmin header strong {
   color: var(--ui-accent);
@@ -1893,9 +1891,10 @@ button.row:hover {
 :global(.ui-v2) .statusControl {
   border-top: 1px solid var(--ui-border);
 }
-/* Manual corrections. Active nav item: inset accent bar, as in the enterprise skin. */
+/* Manual corrections. Active nav item: light fill + full 1px outline (no side accent bar), as in
+   the enterprise skin; the outline separates it from the hover fill. */
 :global(.ui-v2) .navItem[aria-current="page"] {
-  box-shadow: inset 3px 0 0 var(--ui-accent);
+  box-shadow: inset 0 0 0 1px var(--ui-border);
 }
 /* Header bell (notifications leaf, fixed #fff button): repainted from the admin header itself. */
 :global(.ui-v2) .tools > button:not(:global(.button)) {

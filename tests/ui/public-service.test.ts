@@ -154,16 +154,15 @@ test("héros : ordre mobile titre → photo → prix → pictos → demande → 
   const areas = (block: string) => [...block.matchAll(/"([a-z ]+)"/g)].map((m) => m[1].trim());
   const desktop = css.match(/\.hero \{[^}]*grid-template-areas:([^;]+);/)![1];
   same(areas(desktop), ["media heading", "media price", "media panel", "media cta", "media faq"]);
-  // Colonnes égales, gouttière 56 px ; conteneur 1440 max + 72 px de marge ⇒ contenu à x = 72 en 1440.
   assert.match(css, /\.hero \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[^}]*column-gap: 56px;/);
+  const chromeCss = readFileSync(path.join(ROOT, "components/role/public-chrome.module.css"), "utf8");
+  assert.match(chromeCss, /--public-width: 1160px;/);
+  assert.match(chromeCss, /--public-gutter: clamp\(15px, 4vw, 28px\);/);
   for (const cls of ["wrap", "bandInner"]) {
-    const rule = css.match(new RegExp(`\\.${cls} \\{([^}]*)\\}`))![1];
-    const max = Number(rule.match(/max-width: (\d+)px/)![1]);
-    const pad = Number(rule.match(/padding: 0 (\d+)px/)![1]);
-    assert.equal(max, 1440, cls);
-    assert.equal((1440 - Math.min(1440, max)) / 2 + pad, 72, `${cls} : contenu à x = 72 en 1440`);
+    const rule = css.match(new RegExp("\\." + cls + " \\{([^}]*)\\}"))![1];
+    assert.match(rule, /max-width: var\(--public-width\);/);
+    assert.match(rule, /padding-inline: var\(--public-gutter\);/);
   }
-  assert.match(css.slice(css.indexOf("@media (max-width: 640px)")), /\.wrap,\s*\.bandInner \{\s*padding: 0 16px;/);
   const mobile = css.slice(css.indexOf("@media (max-width: 860px)")).match(/\.hero \{[^}]*grid-template-areas:([^;]+);/)![1];
   same(areas(mobile), ["heading", "media", "price", "panel", "cta", "faq"]);
   for (const [cls, area] of [["heroMedia", "media"], ["heroHeading", "heading"], ["price", "price"], ["pictoPanel", "panel"], ["ctaRow", "cta"], ["topFaq", "faq"]])

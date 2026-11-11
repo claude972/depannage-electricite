@@ -2954,7 +2954,7 @@
 }
 :global(.ui-v2) .navItemActive,
 :global(.ui-v2) .navItemActive:hover {
-  box-shadow: inset 3px 0 0 var(--ui-accent);
+  box-shadow: inset 0 0 0 1px var(--ui-border);
 }
 :global(.ui-v2) .openCountNone {
   background: var(--ui-text-muted);

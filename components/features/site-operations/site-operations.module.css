@@ -73,8 +73,7 @@
   font-size: 13px;
 }
 .readOnly {
-  border: 1px solid #d8e0eb;
-  border-left: 3px solid #925c00;
+  border: 1px solid #925c00;
   border-radius: 6px;
   padding: 10px 12px;
   background: #fff;
@@ -449,7 +448,7 @@
 :global(.ui-v2) .meta dt,
 :global(.ui-v2) .table thead th,
 :global(.ui-v2) .track small { color: var(--ui-text-muted); }
-:global(.ui-v2) .readOnly { border-color: var(--ui-border); border-left-color: var(--ui-warning); background: var(--ui-card); color: var(--ui-text); }
+:global(.ui-v2) .readOnly { border-color: var(--ui-warning); background: var(--ui-surface); color: var(--ui-text); }
 :global(.ui-v2) .spinner { border-color: var(--ui-border); border-top-color: var(--ui-accent); }
 :global(.ui-v2) .statRow > div,
 :global(.ui-v2) .card,

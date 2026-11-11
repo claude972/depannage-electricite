@@ -8,25 +8,9 @@
   padding-bottom: 24px;
 }
 .wrap {
-  width: 100%;
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 0 48px;
-}
-@media (max-width: 1150px) {
-  .wrap {
-    padding: 0 32px;
-  }
-}
-@media (max-width: 760px) {
-  .wrap {
-    padding: 0 22px;
-  }
-}
-@media (max-width: 430px) {
-  .wrap {
-    padding: 0 19px;
-  }
+  width: min(100%, var(--public-width));
+  margin-inline: auto;
+  padding-inline: var(--public-gutter);
 }
 
 /* ---- Element colours: low specificity so the local classes keep theirs -------------------- */

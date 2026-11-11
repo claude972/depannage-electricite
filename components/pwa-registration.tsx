@@ -62,7 +62,6 @@ body:has(.ui-v2) .pwa-notice {
   color: var(--ui-text);
   background: var(--ui-surface);
   border-bottom-color: var(--ui-border);
-  box-shadow: inset 4px 0 0 var(--ui-warning);
   font-family: var(--ui-font);
   color-scheme: var(--ui-scheme);
 }

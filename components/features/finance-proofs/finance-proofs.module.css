@@ -5,7 +5,7 @@
 .proof h4, .sub { margin: 0; font-size: 14px; }
 .hint { margin: 0; font-size: 13px; color: var(--ui-text-muted); overflow-wrap: anywhere; }
 .note { margin: 0; padding: 10px 12px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); overflow-wrap: anywhere; }
-.scope { margin: 0; padding: 8px 12px; border-left: 3px solid var(--ui-warning); background: var(--ui-surface); font-size: 13px; overflow-wrap: anywhere; }
+.scope { margin: 0; padding: 8px 12px; border: 1px solid var(--ui-warning); border-radius: var(--ui-radius-md); background: var(--ui-surface); font-size: 13px; overflow-wrap: anywhere; }
 .error { margin: 0; color: var(--ui-danger); font-size: 14px; }
 .ok { margin: 0; color: var(--ui-success); font-size: 14px; }
 .kv { display: grid; gap: 4px; margin: 0; }

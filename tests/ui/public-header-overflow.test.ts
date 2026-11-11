@@ -29,7 +29,7 @@ const div = document.createElement("div");
 document.body.appendChild(div);
 createRoot(div).render(h(ThemeProvider, null,
   view === "home"
-    ? h(PublicChrome, { current: "home", handlers, onHome: noop, sections, onSection: noop, editorial: true }, h("p", null, "contenu"))
+    ? h(PublicChrome, { current: "home", handlers, onHome: noop, sections, onSection: noop }, h("p", null, "contenu"))
     : h(PublicChrome, { current: "pricing", handlers, onHome: noop }, h("p", null, "contenu")),
 ));
 `;

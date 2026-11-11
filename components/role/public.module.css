@@ -353,13 +353,6 @@
   color: var(--muted);
   text-align: center;
 }
-.rule {
-  display: block;
-  width: 48px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--blue);
-}
 .stepsCard {
   margin-top: -48px;
   padding: 24px 16px;
@@ -1269,7 +1262,6 @@
     font-size: 15px;
   }
   .nav .navLink[aria-current="page"] {
-    box-shadow: inset 3px 0 0 var(--blue);
     border-radius: 7px;
     background: #f0f5ff;
   }
@@ -1406,7 +1398,7 @@
   color: var(--ui-accent);
 }
 :global(.ui-v2) .accent {
-  color: var(--ui-accent);
+  color: inherit;
 }
 :global(.ui-v2) .title {
   color: var(--ui-text);
@@ -1460,9 +1452,6 @@
 }
 :global(.ui-v2) .heroCopy > p {
   color: var(--ui-text);
-}
-:global(.ui-v2) .rule {
-  background: var(--ui-primary);
 }
 :global(.ui-v2) .block > h2,
 :global(.ui-v2) .block > h3 {

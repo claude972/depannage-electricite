@@ -64,6 +64,9 @@ test("page : barre fixe « Demander cette intervention » = même action que le 
   // marge de défilement des champs : 88 px (réserve 112 px) ; 152 px empilée en étroit (réserve 176 px).
   const serviceCss = readFileSync(path.join(ROOT, "components/role/public-service.module.css"), "utf8");
   const bookingCss = readFileSync(path.join(ROOT, "components/role/public-booking.module.css"), "utf8");
+  const summaryStyle = bookingCss.match(/\.summary \{([^}]*)\}/)![1];
+  assert.match(summaryStyle, /border: 1px solid var\(--ui-border\);/);
+  assert.doesNotMatch(summaryStyle, /border-(?:left|inline-start)|box-shadow/);
   const wide = Number(serviceCss.match(/\.withBar \{\s*--booking-bar-h: (\d+)px;/)![1]);
   const narrowH = Number(serviceCss.match(/@media \(max-width: 480px\) \{\s*\.withBar \{\s*--booking-bar-h: (\d+)px;/)![1]);
   assert.match(serviceCss, /\.withBar \{[^}]*padding-bottom: calc\(var\(--booking-bar-h\) \+ 24px \+ env\(safe-area-inset-bottom, 0px\)\);/);

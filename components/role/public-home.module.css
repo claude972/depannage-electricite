@@ -4,12 +4,16 @@
 .wrap {
   display: grid;
   gap: 20px;
-  width: min(100%, 650px);
+  width: min(100%, var(--public-width));
   margin-inline: auto;
-  padding-inline: 24px;
+  padding-inline: var(--public-gutter);
 }
-.wrap h1,
+.cataloguePage > h1 {
+  margin: 0;
+  color: var(--ui-text);
+}
 .cataloguePage > p {
+  margin: 0;
   color: var(--ui-text-muted);
 }
 .ivc > svg {
@@ -102,9 +106,6 @@
   margin-top: 8px;
 }
 @media (max-width: 359px) {
-  .wrap {
-    padding-inline: 16px;
-  }
   .ivc {
     gap: 8px;
     padding: 10px;
@@ -116,8 +117,6 @@
   }
   .wrap {
     gap: 24px;
-    width: min(100%, 1160px);
-    padding-inline: 32px;
   }
   .ivGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -14,7 +14,7 @@
 .field textarea { min-height: 88px; resize: vertical; }
 .list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .item { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); min-width: 0; }
-.item[data-state="needs_review"] { border-left: 3px solid var(--ui-warning); }
+.item[data-state="needs_review"] { border-color: var(--ui-warning); background: var(--ui-surface); }
 .kicker { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; color: var(--ui-text-muted); text-transform: uppercase; }
 .headline { margin: 0; }
 .kv { display: grid; gap: 4px; margin: 0; }

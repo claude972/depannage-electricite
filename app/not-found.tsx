@@ -5,7 +5,7 @@ import styles from "./error-pages.module.css";
 
 export default function NotFound() {
   return (
-    <ThemeSurface className={styles.page}>
+    <ThemeSurface className={styles.page} appearance="light">
       <PublicHeader />
       <main id="main" className={styles.main}>
         <section className={styles.card} aria-labelledby="not-found-title">

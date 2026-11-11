@@ -110,7 +110,6 @@
   gap: 2px;
   padding: 6px 8px;
   border: 1px solid #d8e0eb;
-  border-left-width: 4px;
   border-radius: 6px;
   font-size: 13px;
   color: #172b4d;
@@ -124,24 +123,25 @@
 .block small {
   color: #526178;
 }
+/* Slot kinds: full 1px outline in the kind colour + fill (no side accent bar). */
 .blockFree {
-  border-left-color: #167344;
+  border-color: #167344;
   background: #f3faf6;
 }
 .blockAppointment {
-  border-left-color: #1457d9;
+  border-color: #1457d9;
   background: #f1f6ff;
 }
 .blockBusy {
-  border-left-color: #526178;
+  border-color: #526178;
   background: #f5f7fb;
 }
 .blockUnavailable {
-  border-left-color: #925c00;
+  border-color: #925c00;
   background: repeating-linear-gradient(135deg, #fff 0 6px, #f5f7fb 6px 12px);
 }
 .blockAvailable {
-  border-left-color: #167344;
+  border-color: #167344;
   border-style: dashed;
 }
 .blockActions {
@@ -242,8 +242,7 @@
 .readOnly {
   margin: 0;
   padding: 12px 16px;
-  border: 1px solid #d8e0eb;
-  border-left: 4px solid #925c00;
+  border: 1px solid #925c00;
   border-radius: 6px;
   background: #fff;
   color: #172b4d;
@@ -266,9 +265,10 @@
 /* ---- Opt-in theme (FASTSPLIT-DOCUMENTS-PLANNING-THEME-001) -----------------------------------
    Active only under the parent ThemeSurface (`.ui-v2`): --ui-* tokens, light and dark, same
    selectors +1 class. Outside a themed space nothing changes. Slot kinds stay distinguishable
-   without relying on colour alone: free = success bar on a tinted surface, appointment = strong
-   text-colour bar on the card, busy = muted bar, unavailable = warning bar + stripes, available =
-   dashed success border. One accent (green) for « today » and the free / available states. */
+   without relying on colour alone: free = success outline on a tinted surface, appointment =
+   strong text-colour outline on the card, busy = muted outline on the surface, unavailable =
+   warning outline + stripes, available = dashed success outline. Full 1px outlines only, no side
+   accent bar. */
 :global(.ui-v2) .weekTitle,
 :global(.ui-v2) .dayHead strong,
 :global(.ui-v2) .block time,
@@ -310,23 +310,23 @@
   background: var(--ui-card);
 }
 :global(.ui-v2) .blockFree {
-  border-left-color: var(--ui-success);
+  border-color: var(--ui-success);
   background: var(--ui-surface);
 }
 :global(.ui-v2) .blockAppointment {
-  border-left-color: var(--ui-text);
+  border-color: var(--ui-text);
   background: var(--ui-card);
 }
 :global(.ui-v2) .blockBusy {
-  border-left-color: var(--ui-text-muted);
+  border-color: var(--ui-text-muted);
   background: var(--ui-surface);
 }
 :global(.ui-v2) .blockUnavailable {
-  border-left-color: var(--ui-warning);
+  border-color: var(--ui-warning);
   background: repeating-linear-gradient(135deg, var(--ui-card) 0 6px, var(--ui-surface) 6px 12px);
 }
 :global(.ui-v2) .blockAvailable {
-  border-left-color: var(--ui-success);
+  border-color: var(--ui-success);
 }
 :global(.ui-v2) .outside {
   color: var(--ui-warning);
@@ -338,8 +338,7 @@
   color: var(--ui-success);
 }
 :global(.ui-v2) .readOnly {
-  border-color: var(--ui-border);
-  border-left-color: var(--ui-warning);
+  border-color: var(--ui-warning);
   background: var(--ui-surface);
   color: var(--ui-text);
 }

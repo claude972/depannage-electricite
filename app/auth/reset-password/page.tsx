@@ -75,7 +75,7 @@ export default function ResetPasswordPage() {
   }
   // Visual layer only (FASTSPLIT-AUTH-RESET-THEME-001): same Auth calls, states and texts as before.
   return (
-    <ThemeSurface className={styles.page}>
+    <ThemeSurface className={styles.page} appearance="light">
       <PublicHeader />
       <main id="main" className={styles.main}>
         <section className={styles.card} aria-labelledby="reset-title" aria-busy={loading || saving ? true : undefined}>

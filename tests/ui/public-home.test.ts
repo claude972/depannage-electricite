@@ -106,7 +106,7 @@ test("SSR : chaque contrôle rendu appelle le bon callback réel", () => {
     assert.ok(action, `clé rendue inconnue : ${key}`);
     runHomeAction(action, h);
   }
-  assert.deepEqual([...new Set(calls)].sort(), ["new()", "login()", "address()", "navigate(join)", "navigate(pricing)", "navigate(about)", "navigate(privacy)", "navigate(legal)", "demo(manager)"].sort());
+  assert.deepEqual([...new Set(calls)].sort(), ["new()", "login()", "address()", "navigate(join)", "navigate(pricing)", "navigate(about)", "navigate(privacy)", "navigate(legal)", "navigate(help)", "demo(manager)"].sort());
   assert.match(html, /data-home-action="view:join"[^>]*>Découvrir la candidature/);
 });
 

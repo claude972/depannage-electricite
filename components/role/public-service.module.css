@@ -9,7 +9,7 @@
    (reserve 176 px). Inherited by the bar, which lives inside this ThemeSurface root. */
 .withBar {
   --booking-bar-h: 88px;
-  overflow-x: clip; /* full-bleed bands (100vw) never add a horizontal scroll; sticky header kept */
+  overflow-x: clip; /* full-bleed bands (100vw) never add a horizontal scroll; public header is unaffected */
   padding-bottom: calc(var(--booking-bar-h) + 24px + env(safe-area-inset-bottom, 0px));
 }
 @media (max-width: 480px) {
@@ -22,12 +22,12 @@
 .withBar.withCompactBar {
   --booking-bar-h: 72px;
 }
-/* Container: 1440 max with 72 px gutters ⇒ content starts at x = 72 on a 1440 viewport. */
+/* Shared width and gutters with the landing and catalogue. */
 .wrap {
   width: 100%;
-  max-width: 1440px;
+  max-width: var(--public-width);
   margin: 0 auto;
-  padding: 0 72px;
+  padding-inline: var(--public-gutter);
 }
 .crumb {
   display: flex;
@@ -271,9 +271,9 @@
   align-items: start;
 }
 .bandInner {
-  max-width: 1440px;
+  max-width: var(--public-width);
   margin: 0 auto;
-  padding: 0 72px;
+  padding-inline: var(--public-gutter);
 }
 .section {
   padding: 32px 0;
@@ -430,10 +430,6 @@
 }
 
 @media (max-width: 1100px) {
-  .wrap,
-  .bandInner {
-    padding: 0 32px;
-  }
   .hero {
     column-gap: 32px;
   }
@@ -465,10 +461,6 @@
   }
 }
 @media (max-width: 640px) {
-  .wrap,
-  .bandInner {
-    padding: 0 16px;
-  }
   .pictos {
     grid-template-columns: minmax(0, 1fr);
     gap: 8px;

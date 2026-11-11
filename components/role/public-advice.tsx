@@ -6,7 +6,7 @@ import styles from "./public-landing.module.css";
 
 export function PublicAdvice() {
   return (
-    <PublicChrome current="advice" editorial handlers={serviceChromeHandlers()} onHome={() => window.location.assign("/")}>
+    <PublicChrome current="advice" handlers={serviceChromeHandlers()} onHome={() => window.location.assign("/")}>
       <div className={`${styles.wrap} ${styles.advicePage}`}>
         <a className={styles.textLink} href="/">← Retour à l’accueil</a>
         <header>

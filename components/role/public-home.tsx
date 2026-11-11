@@ -176,7 +176,6 @@ export function PublicHome({ gated = false, handlers }: { gated?: boolean; handl
       onHome={() => window.scrollTo({ top: 0 })}
       sections={SECTIONS}
       onSection={scrollToSection}
-      editorial
       appNavigation
       mainClassName={styles.main}
       footerNote="Crédits photo (Pexels) : Fatih Yurtman, ranjeet, Anastasia Shuraeva, Ksenia Chernaya."

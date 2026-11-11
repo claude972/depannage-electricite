@@ -47,7 +47,6 @@
   margin: 0;
   padding: 12px 14px;
   border: 1px solid var(--ui-success);
-  border-left-width: 4px;
   border-radius: var(--ui-radius-sm);
   color: var(--ui-text);
   line-height: 1.6;
@@ -56,7 +55,6 @@
   margin: 0 0 16px;
   padding: 12px 14px;
   border: 1px solid var(--ui-danger);
-  border-left-width: 4px;
   border-radius: var(--ui-radius-sm);
   color: var(--ui-text);
   line-height: 1.6;

@@ -554,7 +554,6 @@ function AboutView({ onNew, onJoin, onLogin }: { onNew: () => void; onJoin: () =
           <div className={styles.heroCopy}>
             <h1 id="about-title" className={styles.title}>À propos de l’application</h1>
             <p>Une application de dépannage électrique en préparation. Cette page décrit ce qu’elle fait, pas plus.</p>
-            <span className={styles.rule} aria-hidden="true" />
           </div>
         </div>
       </section>

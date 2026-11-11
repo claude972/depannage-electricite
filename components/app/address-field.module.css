@@ -106,8 +106,8 @@
 .option:hover,
 .option[aria-selected="true"] {
   background: var(--af-surface);
-  box-shadow: inset 3px 0 0 var(--af-accent);
 }
+.option[aria-selected="true"] { outline: 1px solid var(--af-accent); outline-offset: -1px; }
 .attribution {
   margin: 0;
   padding: 8px 12px;
