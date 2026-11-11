@@ -3,6 +3,7 @@
 // loading with late-response protection, and every mutation (live contract or explicit demo
 // counterpart). Role spaces under components/role render the screens.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { createClient } from "../lib/supabase/client";
 import { UNVERIFIED_RECEIPT, validSupportReceipt } from "./app/support-receipt";
 import { api, ApiRequestError, contractStateFromError, uploadDocument } from "./app/api";
@@ -134,11 +135,22 @@ import {
   type Workspace,
 } from "./app/types";
 import { PublicSite } from "./role/public-site";
-import { ClientSpace } from "./role/client-space";
-import { ArtisanSpace } from "./role/artisan-space";
-import { EnterpriseSpace } from "./role/enterprise-space";
-import { AdminSpace } from "./role/admin-space";
 import { isTaxRate } from "./app/tax-rate";
+
+function SpaceLoader() {
+  return (
+    <main id="main" className="page-loader boot" role="status">
+      <span className="spinner" />
+      Chargement…
+    </main>
+  );
+}
+
+// Public visits need the session controller, but none of the private role screens.
+const ClientSpace = dynamic(() => import("./role/client-space").then(module => module.ClientSpace), { ssr: false, loading: SpaceLoader });
+const ArtisanSpace = dynamic(() => import("./role/artisan-space").then(module => module.ArtisanSpace), { ssr: false, loading: SpaceLoader });
+const EnterpriseSpace = dynamic(() => import("./role/enterprise-space").then(module => module.EnterpriseSpace), { ssr: false, loading: SpaceLoader });
+const AdminSpace = dynamic(() => import("./role/admin-space").then(module => module.AdminSpace), { ssr: false, loading: SpaceLoader });
 
 const DRAFT_KEY = "courant-request-draft";
 const INVITE_KEY = "courant-invitation-code";
@@ -3024,13 +3036,7 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
     reprobeFeature,
   };
 
-  if (booting)
-    return (
-      <main id="main" className="page-loader boot" role="status">
-        <span className="spinner" />
-        Chargement…
-      </main>
-    );
+  if (booting) return <SpaceLoader />;
   const space = mode === "public" ? <PublicSite key="public" session={publicSession} supportWhatsAppPhone={supportWhatsAppPhone} showSupportPreview={showSupportPreview} /> :
     role === "artisan" ? <ArtisanSpace key={sessionKey} session={session} /> :
     role === "manager" ? <EnterpriseSpace key={sessionKey} session={session} /> :
