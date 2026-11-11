@@ -8,14 +8,15 @@ export default function BookingMap({ target, onMove }: { target: MapPoint | null
   const map = useRef<Map | null>(null);
   const latest = useRef(onMove);
   latest.current = onMove;
-  const initial = useRef(target);
+  const latestTarget = useRef(target);
+  latestTarget.current = target;
   const [message, setMessage] = useState("");
   useEffect(() => {
     let disposed = false;
     let observer: ResizeObserver | undefined;
     void import("leaflet").then(L => {
       if (disposed || !host.current) return;
-      const point = initial.current;
+      const point = latestTarget.current;
       const instance = L.map(host.current, { center: point ? [point.latitude, point.longitude] : [14.6415, -61.0242], zoom: point ? 17 : 11, scrollWheelZoom: false, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false });
       map.current = instance;
       L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', referrerPolicy: "strict-origin-when-cross-origin" })
