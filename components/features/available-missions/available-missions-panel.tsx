@@ -161,6 +161,12 @@ export function AvailableMissionsPanel(props: AvailableMissionsProps) {
                 <div><dt>Code postal</dt><dd>{point.offer.postal_code}</dd></div>
                 <div><dt>Besoin</dt><dd>{point.offer.urgency === "urgent" ? "Urgent" : "À planifier"}</dd></div>
                 <div><dt>Estimation indicative</dt><dd>{money(point.offer.estimate_min_cents)} – {money(point.offer.estimate_max_cents)}</dd></div>
+                {point.offer.net_estimate && (
+                  <div>
+                    <dt>Estimation après commission</dt>
+                    <dd>{money(point.offer.net_estimate.min_cents)} – {money(point.offer.net_estimate.max_cents)}</dd>
+                  </div>
+                )}
                 <div><dt>Demande créée</dt><dd>{dateTime(point.offer.created_at)}</dd></div>
                 <div><dt>Distance</dt><dd>{nearest ? `${bandLabel(bandOf(point.id))} (approximation entre centres de communes)` : "non calculée"}</dd></div>
               </dl>

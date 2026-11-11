@@ -110,7 +110,7 @@ test("curseur refusé (422) ⇒ redémarrage en page 1 ; échec de la suite ⇒ 
 });
 
 test("lecture ponctuelle ?id : résumé anonymisé ; 404 ⇒ « plus disponible » et retrait local ; jamais la route privée", async () => {
-  const h = harness([ok(pageBody([offer(1), offer(2)], null))], { [id(1)]: ok(pageBody([offer(1)], null)) });
+  const h = harness([ok(pageBody([offer(1), offer(2)], null))], { [id(1)]: ok({ ...pageBody([offer(1)], null), net_estimate: null }) });
   await h.ctrl.load();
   await h.ctrl.open(id(1));
   assert.equal(h.get().point?.phase, "ready");
@@ -129,6 +129,20 @@ test("lecture ponctuelle ?id : résumé anonymisé ; 404 ⇒ « plus disponible 
   assert.doesNotMatch(src, /\/api\/interventions|\/api\/workspace|openIntervention|session\./, "no private dossier route from the leaf");
   // A point reply for another offer is an error, never shown.
   assert.equal(m.parsePoint(pageBody([offer(3)], null), id(1)), null);
+});
+
+test("la lecture ponctuelle accepte l’estimation nette du serveur avec des bornes sûres", async () => {
+  const page = pageBody([offer(1)], null);
+  const net = { min_cents: 6800, max_cents: 15300 };
+  assert.equal(m.parseMissionsPage({ ...page, net_estimate: net }), null);
+  assert.equal(m.parsePoint({ ...page, net_estimate: { ...net, max_cents: 20000 } }, id(1)), null);
+  assert.equal(m.parsePoint({ ...page, net_estimate: { ...net, address: "adresse privée" } }, id(1)), null);
+  const h = harness([ok(page)], { [id(1)]: ok({ ...page, net_estimate: net }) });
+  await h.ctrl.load();
+  await h.ctrl.open(id(1));
+  assert.deepEqual(h.get().point?.offer?.net_estimate, net);
+  const out = html(createElement(p.AvailableMissionsPanel as never, { initial: h.get(), onAccept: async () => true, onOpenAccepted() {} } as never));
+  assert.match(out, /<dt>Estimation après commission<\/dt><dd>68,00\s€ – 153,00\s€<\/dd>/);
 });
 
 test("acceptation : un seul appel à l’action existante, puis ouverture du dossier privé ; échec ⇒ message, pas de retrait", async () => {

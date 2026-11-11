@@ -94,6 +94,12 @@ const rankedPageSchema = z
     radius_version: z.number().int().min(1).max(2147483647),
   })
   .strict();
+const netEstimateSchema = z.object({
+  min_cents: z.number().int().nonnegative(),
+  max_cents: z.number().int().nonnegative(),
+}).strict().refine(estimate => estimate.min_cents <= estimate.max_cents);
+const pointSchema = pageSchema.extend({ net_estimate: netEstimateSchema.nullish() });
+type PointOffer = MissionOffer & { net_estimate?: z.infer<typeof netEstimateSchema> };
 export type MissionsPageDTO = { items: ListedOffer[]; eligible: boolean; captured_at: string; page: { limit: 50; has_more: boolean; next_cursor: string | null }; radius_version?: number | null };
 /** radius_version carried by a ranked cursor (base64url JSON, strict); null if absent/undecodable. */
 export function cursorRadiusVersion(cursor: string | null): number | null {
@@ -150,10 +156,15 @@ export const NEAREST_COPY = {
   stale: "Ces offres ont été classées avec un autre rayon que celui confirmé : elles ne sont pas affichées. Le réglage du rayon est relu, puis les offres sont rechargées.",
   back: "Revenir au chronologique",
 } as const;
-export function parsePoint(body: unknown, id: string): MissionOffer | null {
-  const p = parseMissionsPage(body);
-  if (!p || !p.eligible || p.items.length !== 1 || p.items[0].id.toLowerCase() !== id.toLowerCase()) return null;
-  return p.items[0];
+export function parsePoint(body: unknown, id: string): PointOffer | null {
+  const point = pointSchema.safeParse(body);
+  if (!point.success) return null;
+  const { eligible, items, page, net_estimate } = point.data;
+  const offer = items[0];
+  if (!eligible || items.length !== 1 || offer.id.toLowerCase() !== id.toLowerCase() || page.has_more || page.next_cursor !== null) return null;
+  if (!net_estimate) return offer;
+  if (net_estimate.min_cents > offer.estimate_min_cents || net_estimate.max_cents > offer.estimate_max_cents) return null;
+  return { ...offer, net_estimate };
 }
 
 // ---- Wording --------------------------------------------------------------------------------------
@@ -175,7 +186,7 @@ export const MISSIONS_COPY = {
 export const shownCount = (n: number, hasMore: boolean) => `${n} offre${n > 1 ? "s" : ""} affichée${n > 1 ? "s" : ""}${hasMore ? " · il y en a d’autres" : ""}`;
 
 // ---- State + controller ---------------------------------------------------------------------------
-export type PointState = { id: string; phase: "loading" | "ready" | "gone" | "error"; offer: MissionOffer | null };
+export type PointState = { id: string; phase: "loading" | "ready" | "gone" | "error"; offer: PointOffer | null };
 export type MissionsState = {
   phase: "loading" | "ready" | "error";
   eligible: boolean;
