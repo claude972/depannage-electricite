@@ -1,13 +1,11 @@
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SUPPORT_CONTACT, supportContactHref } from '../../../../shared/support-contact';
 import { useResource } from '@/lib/api';
 import { operatorPublicationSchema, PUBLIC_PATHS } from '@/lib/published-info';
-import { AppSheet } from './app-sheet';
 import { MobileIcon } from './mobile-chrome';
-import { Action, Copy, editorial, usePalette } from './ui';
+import { editorial, usePalette } from './ui';
 
 type Channel = keyof typeof SUPPORT_CONTACT;
 const whatsappHref = supportContactHref('whatsapp', process.env.EXPO_PUBLIC_SUPPORT_WHATSAPP_PHONE);
@@ -17,19 +15,24 @@ export function MobileContactActions() {
   const palette = usePalette();
   const operator = useResource(PUBLIC_PATHS.operatorProfile, operatorPublicationSchema);
   const phoneHref = supportContactHref('phone', operator.data?.published?.profile.public_phone);
-  const [help, setHelp] = useState<{ channel: Channel; message: string } | null>(null);
+  function showHelp(channel: Channel, message: string) {
+    Alert.alert(SUPPORT_CONTACT[channel].label, message, [
+      { text: 'Fermer', style: 'cancel' },
+      { text: 'Voir les options de contact', onPress: () => router.push('/aide-mobile') },
+    ], { cancelable: true });
+  }
 
   function open(channel: Channel, href: string | null) {
     if (!href) {
-      setHelp({ channel, message: SUPPORT_CONTACT[channel].unavailable });
+      showHelp(channel, SUPPORT_CONTACT[channel].unavailable);
       return;
     }
     void Linking.openURL(href).catch(() => {
-      setHelp({ channel, message: 'Ce moyen de contact n’a pas pu être ouvert sur cet appareil.' });
+      showHelp(channel, 'Ce moyen de contact n’a pas pu être ouvert sur cet appareil.');
     });
   }
 
-  return <>
+  return (
     <View style={styles.actions}>
       <Pressable accessibilityRole="button" accessibilityLabel={SUPPORT_CONTACT.phone.label}
         onPress={() => open('phone', phoneHref)}
@@ -43,14 +46,7 @@ export function MobileContactActions() {
         <Image source={require('../../assets/public/contact-whatsapp.png')} style={styles.icon} accessible={false} />
       </Pressable>
     </View>
-    <AppSheet title={help ? SUPPORT_CONTACT[help.channel].label : ''} open={help !== null} onClose={() => setHelp(null)}>
-      <Copy>{help?.message}</Copy>
-      <Action label="Voir les options de contact" onPress={() => {
-        setHelp(null);
-        router.push('/aide-mobile');
-      }} />
-    </AppSheet>
-  </>;
+  );
 }
 
 const styles = StyleSheet.create({
