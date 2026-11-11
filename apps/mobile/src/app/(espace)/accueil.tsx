@@ -24,7 +24,8 @@ export default function SpaceHome() {
   const p = usePalette();
   const profile = state.data?.profile;
   const hasPhone = Boolean(verifiedPhone(useSession().session?.user));
-  const recent = [...(state.data?.interventions ?? [])]
+  const recent = (state.data?.interventions ?? [])
+    .filter(job => profile?.role !== 'artisan' || job.artisan_id === profile.id)
     .sort((left, right) => right.created_at.localeCompare(left.created_at)).slice(0, 4);
   const isClient = profile?.role === 'client';
   const isArtisan = profile?.role === 'artisan';
