@@ -69,6 +69,9 @@ test("booking draft: neutral slug, no catalogue service, no invented last name, 
   assert.deepEqual(splitFullName("  "), { first_name: "", last_name: "" });
   assert.equal(bookingFromSignedRequest({ ...values, contact_phone: "+590690123456" }, { full_name: "Camille Dupont", phone: "+596696123456" }).contact.phone, "+590690123456");
   assert.equal(bookingFromSignedRequest(values, null).contact.first_name, "");
+  // Signed-in request: the contact e-mail is the account address (read from the session), never invented.
+  assert.equal(b.contact.email, "");
+  assert.equal(bookingFromSignedRequest(values, { full_name: "Camille Dupont", phone: "0696 12 34 56" }, "  camille@example.test ").contact.email, "camille@example.test");
   const s = memory();
   writePhotoCount(s, 3);
   assert.equal(readPhotoCount(s), 3);
@@ -99,7 +102,7 @@ test("wiring: client #new never posts the legacy route in live; manager create s
   assert.match(client, /if \(session\.startBooking\(values, photos\)\) return;\s+if \(session\.mode === "demo"\) await session\.createIntervention\(values, photos\);/);
   const bc = readFileSync("components/role/booking-confirm.tsx", "utf8");
   const send = bc.slice(bc.indexOf("async function send()"), bc.indexOf("return (", bc.indexOf("async function send()")));
-  assert.ok(send.indexOf("if (!booking.payment)") < send.indexOf("contactErrors(contact)"), "payment choice checked before the contact");
+  assert.ok(send.indexOf("if (!booking.payment)") > 0 && send.indexOf("if (!booking.payment)") < send.indexOf("contactErrors(contact, contactRule)"), "payment choice checked before the contact");
 });
 
 test("editing a booking keeps the catalogue identity until the category changes", () => {

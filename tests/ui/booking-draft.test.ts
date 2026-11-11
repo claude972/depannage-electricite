@@ -73,13 +73,21 @@ test("guest checkout: payment choice strict (legacy without it accepted), phone 
   assert.equal(normalizePhone("12"), null);
 });
 
-test("contact: email OPTIONAL (empty ok), non-empty must be valid ≤ 254; phone via the contract E.164 normalisation", () => {
-  const base = { civility: "" as const, first_name: "Léa", last_name: "Martin", email: "", phone: "0696000000", company: false };
-  assert.deepEqual(contactErrors(base), {}, "no email + 0696000000 passes (guest without account)");
-  assert.deepEqual(contactErrors({ ...base, email: "   " }), {}, "blank email = empty");
+test("contact: e-mail REQUIRED and valid ≤ 254 (optional for the demonstration only); phone in +596, +590 or +33", () => {
+  const base = { civility: "" as const, first_name: "Léa", last_name: "Martin", email: "lea@example.test", phone: "0696000000", company: false };
+  assert.deepEqual(contactErrors(base), {});
+  // The website account is an e-mail address: no e-mail, no request.
+  for (const empty of ["", "   "]) assert.match(contactErrors({ ...base, email: empty }).email ?? "", /Indiquez votre adresse e-mail/, JSON.stringify(empty));
   assert.ok(contactErrors({ ...base, email: "pas-un-email" }).email);
   assert.ok(contactErrors({ ...base, email: `${"a".repeat(250)}@x.fr` }).email, "> 254");
-  assert.deepEqual(contactErrors({ ...base, email: "lea@example.test" }), {});
-  for (const bad of ["12", "0596 12 34 56", "abc", ""]) assert.ok(contactErrors({ ...base, phone: bad }).phone, bad);
-  for (const good of ["0696 00 00 00", "0697.12.34.56", "06 12 34 56 78", "+44 7700 900123"]) assert.equal(contactErrors({ ...base, phone: good }).phone, undefined, good);
+  // Demonstration: nothing is sent and there is no account, the e-mail may stay empty — but never invalid.
+  assert.deepEqual(contactErrors({ ...base, email: "" }, { emailRequired: false }), {});
+  assert.ok(contactErrors({ ...base, email: "pas-un-email" }, { emailRequired: false }).email);
+  // Phone: always required; one clear message naming the three codes.
+  for (const bad of ["12", "0596 12 34 56", "abc", "", "+44 7700 900123", "+1 202 555 0100", "0692 12 34 56", "0639 12 34 56", "+596 696 12 34"]) {
+    assert.match(contactErrors({ ...base, phone: bad }).phone ?? "", /\+596, \+590 ou \+33/, bad);
+    assert.ok(contactErrors({ ...base, phone: bad }, { emailRequired: false }).phone, bad);
+  }
+  for (const good of ["0696 00 00 00", "0697.12.34.56", "0690 12 34 56", "0691 12 34 56", "06 12 34 56 78", "07 12 34 56 78", "+596 696 12 34 56", "+596 (0)696 12 34 56", "+590 690 12 34 56", "+33 6 12 34 56 78", "0033 6 12 34 56 78", "+596 596 12 34 56"]) assert.equal(contactErrors({ ...base, phone: good }).phone, undefined, good);
+  for (const field of ["first_name", "last_name"] as const) assert.ok(contactErrors({ ...base, [field]: "  " })[field], field);
 });

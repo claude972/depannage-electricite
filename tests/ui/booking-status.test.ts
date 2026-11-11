@@ -52,11 +52,12 @@ test("client detail: booking-status hooks run BEFORE any early return (deep link
   assert.match(view, /bookingStatus && bookingStatus\.key === statusKey \? bookingStatus\.value : null/, "stale key ⇒ null at once");
 });
 
-test("optional account: offered in the profile and on a booking dossier only, never a step", () => {
+test("website account: nothing to convert — no phone-to-e-mail upgrade in the profile, on a dossier or on the send path", () => {
   const src = readFileSync("components/role/client-space.tsx", "utf8");
-  assert.match(src, /\{session\.mode === "live" && <AccountUpgrade \/>\}\s*<ProfileView session=\{session\} \/>/);
-  assert.match(src, /\{currentBookingStatus\?\.kind === "booking" && <AccountUpgrade \/>\}/);
-  assert.doesNotMatch(readFileSync("components/role/booking-confirm.tsx", "utf8"), /AccountUpgrade/, "not part of the send path");
+  for (const file of ["components/role/client-space.tsx", "components/role/booking-confirm.tsx"]) assert.doesNotMatch(readFileSync(file, "utf8"), /AccountUpgrade|account-upgrade|api\/auth\/phone/, file);
+  // The profile is the client's landing view and carries the requests itself.
+  assert.match(src, /<ProfileView session=\{session\} rows=\{rows\} activeCount=\{activeCount\} \/>/);
+  assert.match(src, /const view = session\.view === "overview" \? "profile" : session\.view;/);
 });
 
 test("settlement leaf: mounted only for a completed card-hold booking with an accepted quote, keyed by UID + job, with the session identity context", () => {

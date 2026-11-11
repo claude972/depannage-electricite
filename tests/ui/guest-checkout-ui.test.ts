@@ -114,7 +114,7 @@ test("dernière étape : « Créer mon compte » puis « J’ai déjà un compte
     assert.doesNotMatch(t, /SMS|Recevoir un code|Valider le code|Vérifier mon téléphone|code à 6 chiffres/i);
   }
   // Une ancienne réponse d’options (clé phone_auth des binaires mobiles) ne rouvre rien sur le site.
-  const legacy = { status: "ready", options: { ...OPTS().options, phone_auth: { available: true } } };
+  const legacy = { status: "ready", options: { ...(OPTS() as { options: Options.BookingOptions }).options, phone_auth: { available: true } } };
   assert.doesNotMatch(wizard({ initial: state({ step: 5, payment: "on_site" }), initialOptions: legacy, initialPhase: "phone" }), /data-phone-access|Recevoir un code|Vérifier mon téléphone/);
 });
 

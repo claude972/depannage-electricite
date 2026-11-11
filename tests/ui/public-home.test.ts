@@ -230,7 +230,7 @@ test("parcours brouillon : home → décrire (catégorie pré-remplie) → broui
   // Vue « auth » avec brouillon : reprise annoncée, aucune autre commande.
   const auth = fakeSession({ view: "auth", pendingDraft: { category: "socket" } });
   const html = renderToString(createElement(site.PublicSite as never, { session: auth.session } as never));
-  assert.match(html, /Votre brouillon de demande sera repris après connexion/);
+  assert.match(html, /Votre demande est conservée dans cet onglet : vous la relirez et confirmerez son envoi après connexion\./);
   assert.deepEqual(auth.calls, []);
 });
 

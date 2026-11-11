@@ -28,7 +28,9 @@ test("send logic: one confirmBooking call, double click refused, invalid contact
   const src = readFileSync("components/role/booking-confirm.tsx", "utf8");
   assert.match(src, /if \(inFlight\.current \|\| busy\) return; \/\/ one POST only/);
   const send = src.slice(src.indexOf("async function send()"));
-  assert.ok(send.indexOf("contactErrors(contact)") < send.indexOf("await confirmBooking()"));
+  const checked = send.indexOf("contactErrors(contact, contactRule)");
+  assert.ok(checked > 0 && checked < send.indexOf("await confirmBooking()"));
+  assert.match(src, /const contactRule = \{ emailRequired: !demo \};/, "live: the contact e-mail is required before sending");
   assert.ok(send.indexOf("if (!booking.payment)") < send.indexOf("await confirmBooking()"));
   const code = src.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, "");
   assert.doesNotMatch(code, /updateProfile|createIntervention|\/api\/interventions/, "booking never uses the legacy create");
@@ -39,10 +41,15 @@ test("wiring: client « new » shows the confirmation only with a draft + bookin
   assert.match(client, /if \(session\.booking && session\.pendingDraft && !editBooking\)/);
   assert.match(client, /initialValues=\{session\.pendingDraft\}/);
   const app = readFileSync("components/courant-app.tsx", "utf8");
-  assert.match(app, /booking: mode === "live" \? \(pendingDraft \? booking : null\) : demoBooking\?\.booking \?\? null/);
+  assert.match(app, /booking: mode === "live" \? \(pendingDraft \? liveBooking : null\) : demoBooking\?\.booking \?\? null/);
+  // liveBooking = the kept booking, with the account address as contact e-mail only when it has none.
+  assert.match(app, /const liveBooking = booking && !booking\.contact\.email\.trim\(\) && accountEmail \? \{ \.\.\.booking, contact: \{ \.\.\.booking\.contact, email: accountEmail \} \} : booking;/);
   assert.match(app, /clearBooking\(getDraftStorage\(\)\);\s*try \{\s*sessionStorage\.removeItem\(DRAFT_KEY\);/, "dropped on identity reset");
   assert.match(app, /bookingCarry\.current = pendingDraft \? booking : null;/);
-  assert.match(app, /emailRedirectTo: `\$\{window\.location\.origin\}\/auth\/confirm`/);
+  // Account creation goes through the server route (fields required there, confirmation link sent there).
+  assert.match(app, /api<\{ status: "signed_in"; user_id: string \} \| \{ status: "confirmation_required" \}>\("\/api\/auth\/signup", \{/);
+  assert.doesNotMatch(app, /auth\.signUp\(|signInWithOtp|api\/auth\/phone/);
+  assert.match(readFileSync("lib/features/auth/signup.ts", "utf8"), /emailRedirectTo: new URL\("\/auth\/confirm", url\.origin\)\.href/);
   const identity = readFileSync("components/app/identity.ts", "utf8");
   assert.doesNotMatch(identity, /createIntervention|\/api\/interventions/, "login never creates a request");
 });

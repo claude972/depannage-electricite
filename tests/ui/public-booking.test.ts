@@ -28,8 +28,8 @@ const same = (a: unknown, b: unknown, msg = "") => assert.equal(JSON.stringify(a
 const contact = { civility: "mme" as const, first_name: "Camille", last_name: "Durand", email: "camille.durand@example.test", phone: "06 12 34 56 78", company: true };
 const address = { address: "12 rue des Lilas", postal_code: "97200", city: "Fort-de-France" };
 const filled = (over: Partial<Booking.BookingState> = {}): Booking.BookingState => ({ ...booking.EMPTY_BOOKING, urgent: false, slot: "day_after", notes: "La prise noircit autour d’une broche.", contact, address, payment: "on_site", ...over });
-// Server options (GET /api/bookings/options) as a fake: on-site available, phone auth on.
-const OPTIONS = { status: "ready", options: { payment_methods: [{ id: "on_site", available: true }, { id: "card_hold", available: false }], phone_auth: { available: true }, currency: "eur" } } as const;
+// Server options (GET /api/bookings/options) as a fake: on-site available.
+const OPTIONS = { status: "ready", options: { payment_methods: [{ id: "on_site", available: true }, { id: "card_hold", available: false }], currency: "eur" } } as const;
 const AVAILABLE = { on_site: { available: true } };
 const wizard = (over: Partial<Booking.BookingState> = {}) => render(createElement(booking.BookingWizard as never, { service, range: "80 € – 180 €", onClose() {}, initial: { ...booking.EMPTY_BOOKING, ...over }, initialOptions: OPTIONS } as never));
 class MemoryStorage {
@@ -121,11 +121,17 @@ test("étape 1 : Oui masque les créneaux, Non affiche exactement les 3 souhaits
 
 test("étape 2 : coordonnées privées, civilité, entreprise informative, validation contactErrors", () => {
   const html = wizard({ step: 2, urgent: true });
-  for (const label of ["Madame", "Monsieur", "Non précisé", "Prénom", "Nom", "Adresse email", "Téléphone", "Je fais cette demande pour une entreprise"]) assert.match(html, new RegExp(label), label);
+  for (const label of ["Madame", "Monsieur", "Non précisé", "Prénom", "Nom", "Adresse e-mail", "Téléphone", "Je fais cette demande pour une entreprise"]) assert.match(html, new RegExp(label), label);
   assert.match(text(html), /restent privées : elles ne figurent pas dans la demande proposée aux artisans/);
   const errors = booking.stepErrors({ ...booking.EMPTY_BOOKING, step: 2, contact: { ...contact, first_name: " ", email: "pas-un-email", phone: "12" } });
   same(Object.keys(errors).sort(), ["email", "first_name", "phone"]);
   same(booking.stepErrors({ ...booking.EMPTY_BOOKING, step: 2, contact }), {});
+  // Site : l’adresse e-mail est obligatoire (elle devient le compte), le téléphone en +596, +590 ou +33.
+  assert.doesNotMatch(text(html), /Facultatif/);
+  assert.match(text(html), /Elle servira à créer votre compte et à suivre la demande\./);
+  assert.match(text(html), /Indicatif \+596, \+590 ou \+33\./);
+  same(Object.keys(booking.stepErrors({ ...booking.EMPTY_BOOKING, step: 2, contact: { ...contact, email: "" } })), ["email"]);
+  same(Object.keys(booking.stepErrors({ ...booking.EMPTY_BOOKING, step: 2, contact: { ...contact, phone: "+44 7700 900123" } })), ["phone"]);
 });
 
 test("étape 3 : AddressField réutilisé et mêmes contraintes que la demande (adresse 5+, CP 5 chiffres, commune 2+)", () => {
@@ -136,7 +142,7 @@ test("étape 3 : AddressField réutilisé et mêmes contraintes que la demande (
   same(booking.addressErrors(address), {});
 });
 
-test("résumé visible à chaque étape ; récapitulatif complet et rien d’envoyé avant la vérification du téléphone", () => {
+test("résumé visible à chaque étape ; récapitulatif complet et rien d’envoyé avant le compte e-mail confirmé", () => {
   for (const step of [1, 2, 3, 4, 5] as const) {
     const html = wizard({ ...filled(), step });
     const summary = html.slice(html.indexOf("data-booking-summary"), html.indexOf("</aside>"));
@@ -148,9 +154,11 @@ test("résumé visible à chaque étape ; récapitulatif complet et rien d’env
   const recap = wizard({ ...filled(), step: 5 });
   const t = text(recap);
   for (const part of [service.title, "lecture en cours", "Après-demain", "12 rue des Lilas", "97200 Fort-de-France", "Vos coordonnées (privées)", "Camille Durand", "Demande pour une entreprise", "Règlement", "Après intervention — paiement sur la plateforme"]) assert.ok(t.includes(part), part);
-  assert.match(t, /Rien n’est encore envoyé\. À l’étape suivante, vous vérifiez votre téléphone avec un code \(sans créer de compte\), puis vous confirmez l’envoi/);
-  assert.match(recap, /form="booking-step-5"[^>]*>Vérifier mon téléphone<\/button>/);
-  assert.match(recap, /data-booking-inline-submit="5">Vérifier mon téléphone<\/button>/);
+  assert.match(t, /Rien n’est encore envoyé\. Votre demande est conservée dans cet onglet pendant 30 minutes\. Créez votre compte avec votre adresse e-mail et un mot de passe, ouvrez le lien de confirmation reçu par e-mail, puis connectez-vous dans cet onglet : vous relirez la demande avant de confirmer son envoi\./);
+  assert.match(recap, /form="booking-step-5"[^>]*>Créer mon compte<\/button>/);
+  assert.match(recap, /data-booking-inline-submit="5">Créer mon compte<\/button>/);
+  assert.match(recap, /data-booking-account="">J’ai déjà un compte<\/button>/);
+  assert.doesNotMatch(t, /SMS|code à|Vérifier mon téléphone/);
 });
 
 test("fin : les deux brouillons sont écrits, description sans nom/email/téléphone, puis /#auth", () => {

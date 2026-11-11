@@ -195,7 +195,7 @@ test("auth (SSR réel) : login / signup / reset dans le chrome thémé, classes 
     assert.deepEqual(calls, []);
   }
   const withDraft = renderSite({ view: "auth", authMode: "signup", pendingDraft: { category: "socket" } }).html;
-  assert.match(withDraft, /Votre brouillon de demande sera repris après connexion/);
+  assert.match(withDraft, /Votre demande est conservée dans cet onglet : vous la relirez et confirmerez son envoi après connexion\./);
 });
 
 test("auth : props de l’AuthForm inchangées, chaque mode appelle son seul callback de session", async () => {
@@ -228,7 +228,7 @@ test("parcours brouillon sans inscription automatique : home → new (catégorie
   assert.deepEqual(form.calls, [`saveDraft(${JSON.stringify(draft)})`]); // aucun signUp / signIn
   // saveDraft (session réelle) bascule en signup : la vue auth s’affiche sans rien soumettre.
   const auth = spySite({ view: "auth", authMode: "signup", pendingDraft: draft });
-  assert.match(auth.html, /Votre brouillon de demande sera repris après connexion/);
+  assert.match(auth.html, /Votre demande est conservée dans cet onglet : vous la relirez et confirmerez son envoi après connexion\./);
   assert.equal(auth.captured.auth.mode, "signup");
   assert.deepEqual(auth.calls, []);
   // Retour au formulaire : valeurs restaurées depuis le brouillon.

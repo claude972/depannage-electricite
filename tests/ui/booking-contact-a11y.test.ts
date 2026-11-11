@@ -54,7 +54,7 @@ test("Chromium 390 : erreur Téléphone hors du libellé (aria-describedby + ari
     const describedBy = await phone.getAttribute("aria-describedby");
     assert.ok(describedBy, "error linked by aria-describedby");
     const errorText = await page.evaluate(`document.getElementById(${JSON.stringify(describedBy)})?.textContent`);
-    assert.equal(errorText, "Indiquez un numéro de mobile valide (ex. 0696 12 34 56).");
+    assert.equal(errorText, "Indiquez un numéro de téléphone en +596, +590 ou +33 (ex. 0696 12 34 56 ou +590 690 12 34 56).");
     assert.equal(await page.locator("[data-booking-contact-edit] label").filter({ hasText: "Indiquez" }).count(), 0, "no error inside any label");
     assert.equal(await page.locator("[data-booking-contact-edit] label").count(), 3);
     assert.equal(await page.getByRole("textbox", { name: "Prénom", exact: true }).count(), 1);
