@@ -254,8 +254,9 @@ test("app réelle : préférences de notification (démo) — note push honnête
   await withApp(async (open) => {
     for (const width of [360, 1280]) {
       const { page, errors, api } = await open("client-profile", width);
-      await page.waitForTimeout(1200);
+      await page.getByRole("button", { name: "Paramètres du compte" }).click();
       const panel = page.locator('[data-web-push="demo"]');
+      await panel.waitFor();
       assert.equal(await panel.count(), 1);
       assert.match(await panel.innerText(), /aucun appel n’est fait/);
       const overflow = await page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth");

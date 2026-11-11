@@ -1,6 +1,5 @@
-// Phase 2 lot B (suite R01) — profils réels en démonstration : chaque panneau de compte est monté une
-// seule fois (aucune collision de clé React entre panneaux frères : données du compte, adresses,
-// moyens de paiement, abonnements). Vraie app (démo, aucun /api), Chromium 360 et 1280 px.
+// Profils réels en démonstration : le profil client affiche ses adresses et demandes.
+// Les panneaux de compte sont montés une seule fois dans les paramètres client ou le profil artisan.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { withApp, skip } from "./real-app-harness";
@@ -10,7 +9,14 @@ test("profils client et artisan démo : chaque panneau de compte monté une seul
     for (const route of ["client-profile", "artisan-profile"])
       for (const width of [360, 1280]) {
         const { page, errors, api } = await open(route, width);
-        await page.waitForTimeout(1200);
+        if (route === "client-profile") {
+          await page.getByRole("heading", { name: "Mon profil", exact: true }).waitFor();
+          assert.equal(await page.locator("[data-client-addresses]").count(), 1);
+          assert.equal(await page.locator("[data-profile-requests]").count(), 2);
+          assert.equal(await page.locator("[data-account-data],[data-saved-methods],[data-subscriptions]").count(), 0);
+          await page.getByRole("button", { name: "Paramètres du compte" }).click();
+        }
+        await page.locator("[data-account-data]").waitFor();
         const where = `${route} ${width}px`;
         const counts = (await page.evaluate(`({
           data: document.querySelectorAll('[data-account-data]').length,

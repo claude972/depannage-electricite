@@ -144,7 +144,7 @@ test("Chromium : changement d’identité en pleine collecte ⇒ aucun fichier ;
   }
 });
 
-test("app réelle : « Mon profil » client monte « Mes données » (démo honnête, aucun /api, aucune erreur) — 360/390/1280, clair/sombre", { skip: appSkip }, async () => {
+test("app réelle : les paramètres du compte client montent « Mes données » (démo, aucun /api) — 360/390/1280, clair/sombre", { skip: appSkip }, async () => {
   await withApp(async (open) => {
     for (const theme of ["light", "dark"])
       for (const width of [360, 390, 1280]) {
@@ -153,9 +153,10 @@ test("app réelle : « Mon profil » client monte « Mes données » (démo honn
         const origin = new URL(page.url()).origin;
         await page.goto("about:blank");
         await page.goto(`${origin}/#demo/client-profile`);
-        await page.waitForTimeout(1200);
+        await page.getByRole("button", { name: "Paramètres du compte" }).click();
         const where = `${theme} ${width}px`;
         const panel = page.locator('[data-account-data="demo"]');
+        await panel.waitFor();
         assert.equal(await panel.count(), 1, where);
         assert.match(await panel.innerText(), /En démonstration, aucune donnée n’est lue ni téléchargée/);
         assert.equal(await panel.locator("button").count(), 0, where);

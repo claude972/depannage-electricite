@@ -477,6 +477,8 @@ test("app réelle (démo, profils client ET artisan) : note honnête, aucun appe
   await withApp(async (open) => {
     for (const route of ["client-profile", "artisan-profile"]) {
       const { page, errors, api } = await open(route, 390);
+      if (route === "client-profile") await page.getByRole("button", { name: "Paramètres du compte" }).click();
+      await page.locator('[data-subscriptions="demo"]').waitFor();
       const r = await page.evaluate(() => ({ note: document.querySelector('[data-subscriptions="demo"]')?.textContent ?? null, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
       assert.match(r.note ?? "", /aucune offre n’est lue ni souscrite/, route);
       same([r.overflow <= 0, api, errors], [true, [], []], route);

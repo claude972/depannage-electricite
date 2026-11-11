@@ -1795,3 +1795,15 @@
 .space fieldset label > input[type="checkbox"] {
   flex: none;
 }
+.profileDetails {
+  display: grid;
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 16px;
+}
+
+@media (min-width: 1024px) {
+  .profileDetails {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

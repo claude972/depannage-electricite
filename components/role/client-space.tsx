@@ -345,7 +345,9 @@ export function ClientSpace({ session }: { session: Session }) {
       case "documents":
         return <DocumentsView session={session} rows={rows} />;
       case "profile":
-        return <ProfileView session={session} rows={rows} activeCount={activeCount} />;
+        return session.param === "parametres"
+          ? <ProfileSettings session={session} />
+          : <ProfileView session={session} rows={rows} activeCount={activeCount} />;
       case "help":
         return <HelpView session={session} />;
       case "support":
@@ -468,6 +470,14 @@ export function ClientSpace({ session }: { session: Session }) {
                 Connexion temps réel : {session.connection === "SUBSCRIBED" ? "Connecté" : "non connectée"} · Actualiser
               </button>
             )}
+            <button
+              type="button"
+              className={styles.bellButton}
+              aria-label="Paramètres du compte"
+              onClick={() => session.go("profile", "parametres")}
+            >
+              <Icon name="settings" size={20} />
+            </button>
             <ThemeToggle />
             <HeaderBell session={session} />
             <button
@@ -502,6 +512,14 @@ export function ClientSpace({ session }: { session: Session }) {
             <Brand compact />
           </button>
           <div className={styles.mobileHeaderTools}>
+            <button
+              type="button"
+              className={styles.bellButton}
+              aria-label="Paramètres du compte"
+              onClick={() => session.go("profile", "parametres")}
+            >
+              <Icon name="settings" size={20} />
+            </button>
             <ThemeToggle />
             <HeaderBell session={session} />
             <button
@@ -2170,33 +2188,35 @@ function ProfileView({ session, rows, activeCount }: { session: Session; rows: I
   const demo = session.mode === "demo";
   return (
     <>
-      <PageTitle
-        title="Mon profil"
-        subtitle="Vos coordonnées, vos adresses et vos demandes."
-        action={
-          <button type="button" className="button primary" onClick={() => session.go("new")}>
-            <Icon name="plus" />
-            Nouvelle demande
-          </button>
-        }
-      />
+      <PageTitle title="Mon profil" subtitle="Vos coordonnées, vos adresses et vos demandes." />
+      <div className={styles.profileDetails}>
+        <ProfileForm
+          name={demo ? session.displayName : realName(session.profile?.full_name) ?? ""}
+          phone={session.profile?.phone || ""}
+          role={session.role}
+          demo={demo}
+          busy={session.busy}
+          email={!demo && session.accountEmail ? session.accountEmail : undefined}
+          phoneRequired={!demo}
+          structuredName={demo ? undefined : { first_name: session.profile?.first_name ?? null, last_name: session.profile?.last_name ?? null }}
+          onSubmit={async (values) => {
+            await session.updateProfile(values);
+          }}
+        />
+        <ClientAddressesPanel key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} demo={demo} context={session.mutationContext} />
+      </div>
+      <ProfileRequests session={session} rows={rows} activeCount={activeCount} />
+    </>
+  );
+}
+
+function ProfileSettings({ session }: { session: Session }) {
+  const demo = session.mode === "demo";
+  return (
+    <>
+      <PageTitle title="Paramètres du compte" />
       <div className={styles.twoColumns}>
         <div>
-          <ProfileForm
-            name={demo ? session.displayName : realName(session.profile?.full_name) ?? ""}
-            phone={session.profile?.phone || ""}
-            role={session.role}
-            demo={demo}
-            busy={session.busy}
-            email={!demo && session.accountEmail ? session.accountEmail : undefined}
-            phoneRequired={!demo}
-            structuredName={demo ? undefined : { first_name: (session.profile as { first_name?: string | null } | null | undefined)?.first_name ?? null, last_name: (session.profile as { last_name?: string | null } | null | undefined)?.last_name ?? null }}
-            onSubmit={async (values) => {
-              await session.updateProfile(values);
-            }}
-          />
-          <ClientAddressesPanel key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} demo={demo} context={session.mutationContext} />
-          <ProfileRequests session={session} rows={rows} activeCount={activeCount} />
           {/* ART-12: shown only when the server returns a team invitation or membership for this account. */}
           <ProviderTeamsPanel key={`teams|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`} audience="member" context={session.mutationContext} demo={demo} />
           <ProfileNotificationPreferences session={session} />

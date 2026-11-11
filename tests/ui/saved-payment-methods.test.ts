@@ -233,9 +233,11 @@ test("panneau monté (Chromium, StrictMode) : suppression après confirmation se
   }
 });
 
-test("app réelle (démo client « Mon profil ») : note honnête, aucun appel /api, pas de débordement à 390, cibles 44 px", { skip }, async () => {
+test("app réelle (paramètres client démo) : note honnête, aucun appel /api, pas de débordement à 390", { skip }, async () => {
   await withApp(async (open) => {
     const { page, errors, api } = await open("client-profile", 390);
+    await page.getByRole("button", { name: "Paramètres du compte" }).click();
+    await page.locator('[data-saved-methods="demo"]').waitFor();
     const r = await page.evaluate(() => ({ note: document.querySelector('[data-saved-methods="demo"]')?.textContent ?? null, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
     assert.match(r.note ?? "", /aucune banque n’est contactée/);
     same([r.overflow <= 0, api, errors], [true, [], []]);
