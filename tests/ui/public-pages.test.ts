@@ -72,7 +72,7 @@ test("contact (PUB-04) : canaux réels seulement, aucun faux formulaire d’envo
 test("confidentialité (PUB-10) : traitements réels, tiers réellement appelés (dont OpenStreetMap et IGN), contrôles réels", () => {
   const html = page("privacy");
   const t = text(html);
-  for (const label of ["Compte", "Demandes", "Devis", "Messages", "Documents", "Paiements", "Téléphone vérifié", "Adresses enregistrées", "Préférences de notification", "Position pendant le déplacement", "Dans votre navigateur"]) assert.match(t, new RegExp(`${label} :`), label);
+  for (const label of ["Compte", "Demandes", "Devis", "Messages", "Documents", "Paiements", "Application mobile", "Adresses enregistrées", "Préférences de notification", "Position pendant le déplacement", "Dans votre navigateur"]) assert.match(t, new RegExp(`${label} :`), label);
   // Retention proofs: unreadable at 60 s, then an ASYNCHRONOUS server purge — never claimed as a hard erase at 60 s.
   assert.match(t, /n’est plus lisible 60 secondes après sa mesure, puis elle est supprimée par une purge automatique du serveur, qui peut intervenir un peu plus tard/);
   assert.doesNotMatch(t, /effacée automatiquement 60 secondes/);
