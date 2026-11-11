@@ -13,6 +13,7 @@ const icons = {
   next: '<path d="m9 6 6 6-6 6"/>',
   back: '<path d="m15 6-6 6 6 6"/>',
   close: '<path d="m6 6 12 12M18 6 6 18"/>',
+  phone: '<path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A17 17 0 0 1 3 5a2 2 0 0 1 2-2Z"/>',
   help: '<circle cx="12" cy="12" r="9"/><path d="M9 9a3 3 0 1 1 4 2.8c-1 .4-1 1.2-1 2.2m0 3h.01"/>',
   message: '<path d="M4 5h16v12H9l-5 4z"/><path d="M8 9h8m-8 4h6"/>',
   shield: '<path d="m12 3 8 3v5c0 5-3 8-8 10-5-2-8-5-8-10V6z"/><path d="m8 12 3 3 5-6"/>',
@@ -59,6 +60,7 @@ const stages = [
 
 const screen = document.getElementById('screen');
 const tabs = [...document.querySelectorAll('[data-tab]')];
+const floatingContact = document.querySelector('[data-floating-contact]');
 const dialog = document.getElementById('details');
 const dialogTitle = document.getElementById('dialog-title');
 const dialogBody = document.getElementById('dialog-body');
@@ -83,6 +85,7 @@ function serviceList(ids) {
 function home() {
   return `<div class="stack">
     <section class="entry" aria-label="Chercher une intervention">
+      ${audit ? '<img class="app-brand" src="/brand/domdepannage-transparent.png" width="440" height="254" alt="DomDépannage">' : ''}
       <button type="button" class="address" data-action="address">
         <span data-icon="pin">${icon('pin')}</span><span><small>Lieu d’intervention</small>${esc(state.city || 'Choisir mon adresse')}</span>${arrow}
       </button>
@@ -93,7 +96,6 @@ function home() {
         ${icon('search')}<input type="search" id="query" aria-label="Rechercher un problème électrique" placeholder="Quel est le problème ?" value="${esc(state.query)}">
         <button type="button" class="later" data-action="schedule">${icon('calendar')}Plus tard</button>
       </div>
-      ${audit ? `<button class="audit-urgent" type="button" data-action="audit-urgent">${icon('bolt')}Aide urgente</button>` : ''}
     </section>
     <section>
       <h2>Pour vous</h2>
@@ -244,6 +246,7 @@ function render(focus = false) {
   const key = Object.hasOwn(views, selected) ? selected : 'accueil';
   screen.innerHTML = views[key]();
   screen.scrollTop = 0;
+  floatingContact.hidden = !audit || (key !== 'accueil' && key !== 'services');
   const activeTab = key === 'connexion' || key === 'mot-de-passe-oublie' ? 'compte' : key;
   for (const tab of tabs) {
     if (tab.dataset.tab === activeTab) tab.setAttribute('aria-current', 'page');
@@ -270,7 +273,7 @@ function navigate(hash) {
   else location.hash = hash;
 }
 
-document.querySelectorAll('.tabs [data-icon], .dialog-bar [data-icon]').forEach(el => {
+document.querySelectorAll('.tabs [data-icon], .dialog-bar [data-icon], .contact-actions [data-icon]').forEach(el => {
   el.innerHTML = icon(el.dataset.icon);
 });
 window.addEventListener('hashchange', () => render(true));
@@ -331,8 +334,10 @@ document.addEventListener('click', event => {
       <p class="muted">camille@example.test</p><button class="primary">Enregistrer</button></form>`);
   } else if (audit && action === 'payment') {
     open('Empreinte bancaire', '<div class="audit-card"><strong>Carte de démonstration</strong><p>•••• &nbsp; 4242</p></div><p><strong>Aucun débit immédiat lors de l’empreinte.</strong> Un montant peut être temporairement réservé. Le règlement se fait selon le devis accepté, par carte depuis votre espace, un lien sécurisé ou le QR code du dossier.</p>');
-  } else if (audit && action === 'audit-urgent') {
-    open('Aide urgente', `<p>Le numéro d’assistance reste à publier. Décrivez votre panne et renseignez votre commune pour demander un créneau.</p>${primary('Décrire ma panne urgente', 'urgent')}`);
+  } else if (audit && (action === 'call' || action === 'whatsapp')) {
+    const title = action === 'call' ? 'Appelez-nous' : 'WhatsApp';
+    const copy = action === 'call' ? 'Le numéro d’assistance reste à publier.' : 'Le contact WhatsApp reste à configurer.';
+    open(title, `<p>${copy}</p>${primary('Préparer ma demande', 'request')}`);
   } else if (action === 'schedule' || action === 'urgent' || action === 'request') {
     if (dialog.open) dialog.close();
     open(action === 'schedule' ? 'Prévoir un dépannage' : 'Préparer ma demande',

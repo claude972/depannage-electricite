@@ -130,9 +130,6 @@ export function PublicHome({ gated = false, handlers }: { gated?: boolean; handl
   useEffect(() => { setAudit(new URLSearchParams(window.location.search).get("maquette") === "audit"); }, []);
   const operator = usePublishedOperatorProfile(audit);
   const phone = publishedValue(operator, "public_phone");
-  const priorityContact = audit
-    ? { label: phone ? "Appeler l’assistance" : "Aide urgente", href: phone ? `tel:${phone.replace(/[^+\d]/g, "")}` : "/#help/contact" }
-    : undefined;
   const [query, setQuery] = useState("");
   const modeButtons = useRef<(HTMLButtonElement | null)[]>([]);
   const rail = useRef<HTMLUListElement>(null);
@@ -182,7 +179,7 @@ export function PublicHome({ gated = false, handlers }: { gated?: boolean; handl
       sections={SECTIONS}
       onSection={scrollToSection}
       appNavigation
-      priorityContact={priorityContact}
+      contactPreview={audit ? { phone } : undefined}
       mainClassName={styles.main}
       footerNote="Crédits photo (Pexels) : Fatih Yurtman, ranjeet, Anastasia Shuraeva, Ksenia Chernaya."
     >

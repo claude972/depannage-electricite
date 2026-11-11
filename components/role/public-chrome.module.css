@@ -226,4 +226,89 @@
   .contact { padding-inline: 14px; }
 }
 
-.priorityTopbar { position: sticky; top: 0; }
+.transparentBrand {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: clamp(.77rem, 2.8vw, .94rem);
+  font-weight: 800;
+  letter-spacing: -.035em;
+  white-space: nowrap;
+}
+.brandMark { display: block; width: 34px; height: 15px; overflow: hidden; }
+.brandMark img { display: block; width: 100%; height: auto; }
+.editorialFooter .transparentBrand { font-size: .94rem; }
+.editorialFooter .brandMark img { filter: brightness(0) invert(1); }
+
+.contactActions {
+  position: fixed;
+  right: max(24px, calc((100vw - var(--public-width)) / 2 + var(--public-gutter)));
+  bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+  z-index: 22;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.contactActions :is(button, a) {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 48px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  box-shadow: 0 4px 15px #121c3930;
+  font: inherit;
+  font-weight: 700;
+  font-size: .875rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+.contactActions .callButton {
+  gap: 8px;
+  padding: 0 17px;
+  background: var(--ui-primary);
+  color: white;
+}
+.contactActions .callButton:hover { background: #1a35bb; }
+.contactActions .whatsappButton {
+  width: 48px;
+  border-color: var(--ui-border);
+  background: white;
+}
+.contactActions .whatsappButton:hover { background: #effaf4; }
+
+.contactDialog {
+  position: fixed;
+  width: min(420px, calc(100% - 32px));
+  padding: 22px;
+  border: 1px solid var(--ui-border);
+  border-radius: 18px;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+}
+.contactDialog::backdrop { background: #121c3970; }
+.contactDialog h2 { margin: 0; padding-right: 44px; font-size: 1.25rem; }
+.contactDialog p { margin: 8px 0; }
+.contactDialog a { display: inline-flex; align-items: center; min-height: 44px; color: var(--ui-accent); font-weight: 700; }
+.contactDialog button {
+  position: absolute;
+  inset: 9px 9px auto auto;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+@media (max-width: 767px) {
+  .appChrome.contactChrome { padding-bottom: calc(130px + env(safe-area-inset-bottom, 0px)); }
+  .contactActions {
+    inset: auto 0 calc(78px + env(safe-area-inset-bottom, 0px));
+    width: max-content;
+    margin-inline: auto;
+  }
+}

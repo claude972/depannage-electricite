@@ -176,7 +176,40 @@ dialog::backdrop { background: #141d3e5c; }
 @media (min-width: 520px) { .app { border-inline: 1px solid var(--line); } }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 
-.audit-urgent { justify-self: end; display: inline-flex; align-items: center; gap: 5px; min-height: 44px; padding: 3px 0; border: 0; background: none; color: var(--blue); font-size: 13px; font-weight: 700; }
-.audit-urgent svg { width: 15px; height: 15px; }
 .audit-price { display: block; margin-top: 4px; font-weight: 700; }
 .audit-card { padding: 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); }
+
+.app-brand { display: block; width: 82px; height: auto; }
+
+.contact-actions {
+  position: absolute;
+  inset: auto 0 calc(78px + env(safe-area-inset-bottom, 0px));
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  gap: 9px;
+  width: max-content;
+  margin-inline: auto;
+}
+#screen:has(+ .contact-actions:not([hidden])) { padding-bottom: 73px; }
+.contact-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  box-shadow: 0 4px 15px #121c3930;
+  font-size: 14px;
+  font-weight: 700;
+}
+.contact-actions .call-button {
+  gap: 8px;
+  padding: 0 17px;
+  background: var(--blue);
+  color: white;
+}
+.call-button svg { width: 19px; height: 19px; }
+.contact-actions .whatsapp-button { width: 48px; border-color: var(--line); background: white; }
+.contact-actions .call-button:hover { background: #1a35bb; }
+.contact-actions .whatsapp-button:hover { background: #effaf4; }

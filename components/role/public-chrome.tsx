@@ -101,10 +101,8 @@ const FOOTER_VIEWS: { view: HomeTargetView; label: string }[] = [
 export type ChromeView = "home" | "new" | "auth" | HomeTargetView | (string & {});
 export type ChromeSection = { id: string; label: string };
 
-type PriorityContact = { label: string; href: string };
-
 type PublicHeaderProps = {
-  priorityContact?: PriorityContact;
+  transparentBrand?: boolean;
   current?: ChromeView;
   handlers?: HomeHandlers;
   onHome?: () => void;
@@ -114,7 +112,7 @@ type PublicHeaderProps = {
 
 export function PublicHeader({
   current,
-  priorityContact,
+  transparentBrand = false,
   handlers = serviceChromeHandlers(),
   onHome = () => window.location.assign("/"),
   sections,
@@ -152,17 +150,17 @@ export function PublicHeader({
   };
 
   return (
-    <header className={priorityContact ? `${styles.topbar} ${styles.priorityTopbar}` : styles.topbar} data-public-header="" data-ui-appearance="light">
+    <header className={styles.topbar} data-public-header="" data-ui-appearance="light">
       <div className={`${styles.wrap} ${styles.topbarInner}`}>
         <button type="button" className={styles.brand} aria-label="Accueil" aria-current={current === "home" ? "page" : undefined} data-chrome-home="" onClick={home}>
-          <img decoding="async" src="/brand/domdepannage-noir.png" width={331} height={103} className={styles.headerLogo} alt="" />
+          {transparentBrand ? <TransparentBrand /> : <img decoding="async" src="/brand/domdepannage-noir.png" width={331} height={103} className={styles.headerLogo} alt="" />}
         </button>
         <button className={styles.recruit} aria-current={current === "join" ? "page" : undefined} {...act({ type: "view", view: "join" })}>
           <Icon name="briefcase" size={20} /><span><strong>Rejoindre le réseau</strong><small>Candidature électricien</small></span>
         </button>
         <div className={styles.editorialActions}>
           <a className={styles.follow} href="/suivi" aria-current={current === "suivi" ? "page" : undefined} onClick={close}>Suivre mon intervention</a>
-          <a className={styles.contact} href={priorityContact?.href ?? "/#help/contact"} onClick={close}><Icon name="mail" size={16} />{priorityContact?.label ?? "Nous contacter"}</a>
+          <a className={styles.contact} href="/#help/contact" onClick={close}><Icon name="mail" size={16} />Nous contacter</a>
         </div>
         <div ref={menuWrap} className={styles.menuWrap}>
           <button ref={menuToggle} type="button" className={styles.menuButton} aria-expanded={menuOpen} aria-controls={navId} aria-label={menuOpen ? "Fermer le menu" : "Ouvrir le menu"} onClick={() => setMenuOpen((open) => !open)}>
@@ -186,6 +184,45 @@ export function PublicHeader({
   );
 }
 
+function TransparentBrand() {
+  return (
+    <span className={styles.transparentBrand}>
+      <span className={styles.brandMark}><img src="/brand/domdepannage-transparent.png" width={440} height={254} alt="" /></span>
+      <span>{BRAND_NAME}</span>
+    </span>
+  );
+}
+
+function FloatingContact({ phone }: { phone: string | null }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  const [channel, setChannel] = useState<"phone" | "whatsapp">("phone");
+  const showContact = (next: typeof channel) => {
+    setChannel(next);
+    dialog.current?.showModal();
+  };
+  const callLabel = <><Icon name="phone" size={19} /> Appelez-nous</>;
+
+  return (
+    <>
+      <div className={styles.contactActions} role="group" aria-label="Contacter DomDépannage" data-floating-contact="">
+        {phone
+          ? <a className={styles.callButton} href={`tel:${phone}`}>{callLabel}</a>
+          : <button className={styles.callButton} type="button" onClick={() => showContact("phone")}>{callLabel}</button>}
+        <button className={styles.whatsappButton} type="button" aria-label="WhatsApp" onClick={() => showContact("whatsapp")}>
+          <img src="/brand/contact-whatsapp.svg" alt="" width={23} height={23} />
+        </button>
+      </div>
+      <dialog ref={dialog} className={styles.contactDialog} aria-labelledby={titleId}>
+        <h2 id={titleId}>{channel === "phone" ? "Appelez-nous" : "WhatsApp"}</h2>
+        <p>{channel === "phone" ? "Le numéro d’assistance reste à publier." : "Le contact WhatsApp reste à configurer."}</p>
+        <a href="/#help/contact" onClick={() => dialog.current?.close()}>Voir les options de contact</a>
+        <form method="dialog"><button type="submit" aria-label="Fermer"><Icon name="close" size={20} /></button></form>
+      </dialog>
+    </>
+  );
+}
+
 export function PublicChrome({
   current,
   handlers,
@@ -196,7 +233,7 @@ export function PublicChrome({
   mainClassName,
   footerNote,
   appNavigation = false,
-  priorityContact,
+  contactPreview,
   children,
 }: {
   current: ChromeView;
@@ -210,15 +247,15 @@ export function PublicChrome({
   mainClassName?: string;
   footerNote?: ReactNode;
   appNavigation?: boolean;
-  priorityContact?: PriorityContact;
+  contactPreview?: { phone: string | null };
   children: ReactNode;
 }) {
   const act = (action: HomeAction) => actionButton(action, handlers);
-  const surface = [styles.chrome, appNavigation ? styles.appChrome : "", className].filter(Boolean).join(" ");
+  const surface = [styles.chrome, appNavigation ? styles.appChrome : "", contactPreview ? styles.contactChrome : "", className].filter(Boolean).join(" ");
 
   return (
     <ThemeSurface className={surface} appearance="light">
-      <PublicHeader current={current} handlers={handlers} onHome={onHome} sections={sections} onSection={onSection} priorityContact={priorityContact} />
+      <PublicHeader current={current} handlers={handlers} onHome={onHome} sections={sections} onSection={onSection} transparentBrand={Boolean(contactPreview)} />
 
       <main id="main" className={mainClassName}>
         {children}
@@ -227,7 +264,7 @@ export function PublicChrome({
       <footer className={styles.footer}>
         <div className={`${styles.wrap} ${styles.editorialFooter}`}>
           <div>
-            <img decoding="async" src="/brand/domdepannage-bleu.png" width={331} height={102} className={styles.footerLogo} loading="lazy" alt={BRAND_NAME} />
+            {contactPreview ? <TransparentBrand /> : <img decoding="async" src="/brand/domdepannage-bleu.png" width={331} height={102} className={styles.footerLogo} loading="lazy" alt={BRAND_NAME} />}
             <p>De la demande au suivi de votre intervention électrique.</p>
           </div>
           <nav aria-label="Services et tarifs">
@@ -255,6 +292,7 @@ export function PublicChrome({
           {footerNote && <p className={styles.credits}>{footerNote}</p>}
         </div>
       </footer>
+      {contactPreview && <FloatingContact phone={contactPreview.phone} />}
       {appNavigation && (
         <nav className={styles.appNav} aria-label="Navigation rapide">
           <button type="button" aria-current="page" onClick={onHome}><Icon name="home" size={20} /> Accueil</button>
