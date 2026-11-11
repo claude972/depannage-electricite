@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#ffffff">
+  <title>DomDépannage · Maquette application</title>
+  <link rel="stylesheet" href="application.css">
+  <script src="application.js" defer></script>
+</head>
+<body>
+  <div class="app">
+    <main id="screen" tabindex="-1"></main>
+    <nav class="tabs" aria-label="Navigation de l’application">
+      <a href="#accueil" data-tab="accueil"><span data-icon="home"></span>Accueil</a>
+      <a href="#services" data-tab="services"><span data-icon="grid"></span>Services</a>
+      <a href="#activite" data-tab="activite"><span data-icon="activity"></span>Activité</a>
+      <a href="#compte" data-tab="compte"><span data-icon="user"></span>Compte</a>
+    </nav>
+  </div>
+  <dialog id="details" aria-labelledby="dialog-title">
+    <div class="dialog-bar"><h2 id="dialog-title"></h2><button class="icon-button" data-action="close" aria-label="Fermer"><span data-icon="close"></span></button></div>
+    <div id="dialog-body"></div>
+  </dialog>
+</body>
+</html>
