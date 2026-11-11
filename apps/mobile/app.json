@@ -10,7 +10,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.claude972.depannageelectrique.preview",
-      "buildNumber": "2",
+      "buildNumber": "3",
       "supportsTablet": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -19,9 +19,9 @@
     },
     "android": {
       "package": "com.claude972.depannageelectrique.preview",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
-        "backgroundColor": "#080808",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/android-foreground.png"
       },
       "blockedPermissions": [

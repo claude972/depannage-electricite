@@ -144,7 +144,7 @@ export function MobileClientHome({ notificationsHref = '/connexion', requestsHre
     <ScrollView style={styles.flex} contentContainerStyle={[styles.content, compact && styles.contentCompact]}>
       <View style={styles.brand}>
         <View accessible accessibilityRole="header" accessibilityLabel="DomDépannage" style={styles.grow}>
-          <Image source={require('../../assets/images/domdepannage-noir.png')} style={styles.brandLogo}
+          <Image source={require('../../assets/images/splash.png')} style={styles.brandLogo}
             contentFit="contain" accessible={false}/>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Notifications"
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 24, gap: 20, width: '100%', maxWidth: 650, alignSelf: 'center' },
   contentCompact: { paddingHorizontal: 16 },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  brandLogo: { width: '100%', maxWidth: 170, aspectRatio: 331 / 103, borderRadius: 8 },
+  brandLogo: { width: '100%', maxWidth: 112, aspectRatio: 313 / 181, borderRadius: 8 },
   bell: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   address: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 16, minHeight: 48 },
   eyebrow: { fontFamily: 'JakartaBold', fontSize: 11, lineHeight: 15 },
