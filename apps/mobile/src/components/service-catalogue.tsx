@@ -1,3 +1,4 @@
+import { MobileContactActions } from '@/components/mobile-contact-actions';
 import { ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PublicTabs } from '@/components/mobile-chrome';
@@ -22,6 +23,7 @@ export function ServiceCatalogue({ embedded = false }: { embedded?: boolean }) {
         context="Les estimations ne sont pas disponibles pour le moment." />}
       {items.map(item => <PublicServiceRow key={item.slug} item={item} price={prices.data} />)}
     </ScrollView>
+    <MobileContactActions />
     {!embedded && <PublicTabs />}
   </SafeAreaView>;
 }

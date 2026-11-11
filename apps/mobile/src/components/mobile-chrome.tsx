@@ -14,6 +14,7 @@ const symbols = {
   close: { ios: 'xmark', android: 'close' },
   work: { ios: 'briefcase', android: 'work_outline' },
   mail: { ios: 'envelope', android: 'mail_outline' },
+  phone: { ios: 'phone', android: 'call' },
   pin: { ios: 'mappin', android: 'location_on' },
   bolt: { ios: 'bolt.fill', android: 'bolt' },
   plug: { ios: 'powerplug', android: 'power' },

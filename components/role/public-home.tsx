@@ -6,6 +6,7 @@ import { COMMITMENTS, FAQ, MATCHING, STEPS } from "../../shared/public-home";
 import { PUBLIC_ADVICE } from "./public-advice-content";
 import { SERVICES, SERVICE_PHOTOS, servicePath, type ServicePhoto } from "./public-service-catalog";
 import { PublicServiceList } from "./public-service-list";
+import { PublicContactActions } from "./public-contact-actions";
 import { PublicChrome, actionButton, type HomeAction, type HomeHandlers } from "./public-chrome";
 import styles from "./public-landing.module.css";
 
@@ -313,6 +314,7 @@ export function PublicHome({ gated = false, handlers }: { gated?: boolean; handl
           ))}</div>
         </section>
       </div>
+      <PublicContactActions />
     </PublicChrome>
   );
 }

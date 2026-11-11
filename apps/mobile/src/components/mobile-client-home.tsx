@@ -1,3 +1,4 @@
+import { MobileContactActions } from '@/components/mobile-contact-actions';
 import { useRef, useState } from 'react';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -291,6 +292,7 @@ export function MobileClientHome({ embedded = false }: { embedded?: boolean }) {
         </View>
       </View>
     </ScrollView>
+    <MobileContactActions />
     {!embedded && <PublicTabs />}
     <AppSheet title="Lieu d’intervention" open={locationOpen} onClose={() => setLocationOpen(false)}>
       <Field label="Commune" value={cityDraft} onChangeText={setCityDraft}

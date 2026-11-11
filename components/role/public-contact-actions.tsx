@@ -1,0 +1,46 @@
+"use client";
+
+import { useId, useRef, useState } from "react";
+import { SUPPORT_CONTACT, supportContactHref } from "../../shared/support-contact";
+import { Icon } from "../app/icons";
+import { publishedValue } from "../features/public-operator-profile/model";
+import { usePublishedOperatorProfile } from "../features/public-operator-profile/use-published-profile";
+import styles from "./public-contact-actions.module.css";
+
+type Channel = keyof typeof SUPPORT_CONTACT;
+const whatsappHref = supportContactHref("whatsapp", process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP_PHONE);
+
+export function PublicContactActions() {
+  const operator = usePublishedOperatorProfile(true);
+  const phoneHref = supportContactHref("phone", publishedValue(operator, "public_phone"));
+  const dialog = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  const [channel, setChannel] = useState<Channel>("phone");
+
+  function showHelp(next: Channel) {
+    setChannel(next);
+    dialog.current?.showModal();
+  }
+
+  const phoneContent = <><Icon name="phone" size={19} /> {SUPPORT_CONTACT.phone.label}</>;
+  const whatsappIcon = <span className={styles.whatsappIcon} aria-hidden="true" />;
+
+  return (
+    <>
+      <div className={styles.actions} role="group" aria-label="Contacter DomDépannage" data-floating-contact="">
+        {phoneHref
+          ? <a className={styles.call} href={phoneHref}>{phoneContent}</a>
+          : <button type="button" className={styles.call} onClick={() => showHelp("phone")}>{phoneContent}</button>}
+        {whatsappHref
+          ? <a className={styles.whatsapp} href={whatsappHref} aria-label={SUPPORT_CONTACT.whatsapp.label}>{whatsappIcon}</a>
+          : <button type="button" className={styles.whatsapp} aria-label={SUPPORT_CONTACT.whatsapp.label} onClick={() => showHelp("whatsapp")}>{whatsappIcon}</button>}
+      </div>
+      <dialog ref={dialog} className={styles.dialog} aria-labelledby={titleId}>
+        <h2 id={titleId}>{SUPPORT_CONTACT[channel].label}</h2>
+        <p>{SUPPORT_CONTACT[channel].unavailable}</p>
+        <a href="/#help/contact" onClick={() => dialog.current?.close()}>Voir les options de contact</a>
+        <form method="dialog"><button type="submit" aria-label="Fermer"><Icon name="close" size={20} /></button></form>
+      </dialog>
+    </>
+  );
+}

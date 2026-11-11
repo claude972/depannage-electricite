@@ -1,0 +1,72 @@
+.actions {
+  position: fixed;
+  z-index: 22;
+  right: max(24px, calc((100vw - var(--public-width, 1160px)) / 2 + var(--public-gutter, 24px)));
+  bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.actions :is(button, a) {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 48px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  box-shadow: 0 4px 15px #121c3930;
+  font: inherit;
+  font-weight: 700;
+  font-size: .875rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.actions .call {
+  gap: 8px;
+  padding: 0 17px;
+  background: var(--ui-primary);
+  color: white;
+}
+
+.actions .call:hover { background: #1a35bb; }
+.actions .whatsapp { width: 48px; border-color: var(--ui-border); background: white; }
+.actions .whatsapp:hover { background: #effaf4; }
+.whatsappIcon { width: 23px; height: 23px; background: url("/brand/contact-whatsapp.svg") center / contain no-repeat; }
+
+.dialog {
+  position: fixed;
+  width: min(420px, calc(100% - 32px));
+  padding: 22px;
+  border: 1px solid var(--ui-border);
+  border-radius: 18px;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+}
+
+.dialog::backdrop { background: #121c3970; }
+.dialog h2 { margin: 0; padding-right: 44px; font-size: 1.25rem; }
+.dialog p { margin: 8px 0; }
+.dialog a { display: inline-flex; align-items: center; min-height: 44px; color: var(--ui-accent); font-weight: 700; }
+.dialog button {
+  position: absolute;
+  inset: 9px 9px auto auto;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+@media (max-width: 767px) {
+  .actions {
+    inset: auto 0 calc(78px + env(safe-area-inset-bottom, 0px));
+    width: max-content;
+    margin-inline: auto;
+  }
+}
