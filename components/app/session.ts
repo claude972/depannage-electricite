@@ -100,6 +100,8 @@ export function canAccess(view: View, role: Role | null, mode: Mode): boolean {
 }
 export function homeFor(role: Role | null, mode: Mode): View {
   if (mode === "public" || !role) return "home";
+  // A client lands on their profile (contact details, addresses, requests): no other dashboard.
+  if (role === "client") return "profile";
   return role === "admin" ? "admin" : "overview";
 }
 export function parseHash(hash: string): { view: View | null; param: string } {

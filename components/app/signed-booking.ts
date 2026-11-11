@@ -1,6 +1,6 @@
 // Signed-in client request ⇒ booking draft (ROOT decision). Pure, no React, no network.
 // Neutral service slug `demande-<catégorie>` (no catalogue service, price or service invented);
-// the contact comes from the profile WITHOUT inventing a last name: a single-word full name leaves
+// the contact comes from the profile and the account address WITHOUT inventing a last name: a single-word full name leaves
 // the last name empty for the client to complete on BookingConfirm (existing validation).
 import type { BookingDraft } from "./booking-draft";
 import type { Profile, RequestValues } from "./types";
@@ -13,7 +13,8 @@ export function splitFullName(full: string): { first_name: string; last_name: st
   return { first_name: parts[0], last_name: parts.slice(1).join(" ") };
 }
 
-export function bookingFromSignedRequest(values: RequestValues, profile: Pick<Profile, "full_name" | "phone" | "first_name" | "last_name"> | null): BookingDraft {
+/** `accountEmail`: the sign-in address of the account, used as the contact e-mail of the request. */
+export function bookingFromSignedRequest(values: RequestValues, profile: Pick<Profile, "full_name" | "phone" | "first_name" | "last_name"> | null, accountEmail = ""): BookingDraft {
   const first = profile?.first_name?.trim(), last = profile?.last_name?.trim();
   const name = first && last ? { first_name: first, last_name: last } : splitFullName(profile?.full_name ?? "");
   return {
@@ -22,7 +23,7 @@ export function bookingFromSignedRequest(values: RequestValues, profile: Pick<Pr
     urgent: values.urgency === "urgent",
     slot: null,
     notes: "",
-    contact: { civility: "", first_name: name.first_name, last_name: name.last_name, email: "", phone: values.contact_phone ?? profile?.phone ?? "", company: false },
+    contact: { civility: "", first_name: name.first_name, last_name: name.last_name, email: accountEmail.trim(), phone: values.contact_phone ?? profile?.phone ?? "", company: false },
   };
 }
 

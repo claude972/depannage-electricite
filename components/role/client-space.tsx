@@ -60,16 +60,15 @@ import type {
 } from "../app/types";
 import { BookingConfirm } from "./booking-confirm";
 import { CardReturnPanel } from "./card-return-panel";
-import { AccountUpgrade } from "./account-upgrade";
 import { BookingSettlement } from "./booking-settlement";
 import { OnsiteSettlement } from "./onsite-settlement";
-import { createOptionsApi } from "./phone-access";
+import { createOptionsApi } from "./booking-options";
 import { bookingPaymentText, fetchBookingStatus, isDeclaredOnSite, type BookingStatus } from "../app/booking-status";
 import styles from "./client.module.css";
 import theme from "./client-theme.module.css";
 import { ThemeSurface } from "../app/theme-provider";
 import { ThemeToggle } from "../app/theme-toggle";
-import { CLIENT_STEPS, currentStepIndex, detailHistory, quoteDecisionState, quoteLineCells, recentRowDescriptor } from "./client-lists";
+import { CLIENT_STEPS, currentStepIndex, detailHistory, quoteDecisionState, quoteLineCells } from "./client-lists";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { PreferencesPanel } from "../features/notifications/notification-center";
 import { FeatureUnavailable, useProbeWhenUnknown } from "./feature-unavailable";
@@ -117,7 +116,6 @@ const CLIENT_VIEWS: readonly View[] = [
   "support",
 ];
 const VIEW_NAMES: Partial<Record<View, string>> = {
-  overview: "Vue d’ensemble",
   requests: "Mes demandes",
   new: "Nouvelle demande",
   detail: "Intervention",
@@ -134,17 +132,18 @@ const VIEW_NAMES: Partial<Record<View, string>> = {
   help: "Aide",
   support: "Assistance",
 };
+// A client's space opens on the profile: contact details, addresses, requests. No other dashboard.
 const SIDE_NAV: { id: View; label: string; icon: string }[] = [
-  { id: "overview", label: "Vue d’ensemble", icon: "home" },
+  { id: "profile", label: "Mon profil", icon: "person" },
   { id: "requests", label: "Mes demandes", icon: "list" },
   { id: "messages", label: "Messages", icon: "message" },
   { id: "documents", label: "Documents", icon: "document" },
 ];
 const BOTTOM_NAV: { id: View; label: string; icon: string; also: View[] }[] = [
-  { id: "overview", label: "Accueil", icon: "home", also: [] },
+  { id: "profile", label: "Profil", icon: "person", also: ["documents"] },
   { id: "requests", label: "Demandes", icon: "list", also: ["new", "detail", "quote"] },
   { id: "messages", label: "Messages", icon: "message", also: [] },
-  { id: "profile", label: "Profil", icon: "person", also: ["help", "documents", "support"] },
+  { id: "help", label: "Aide", icon: "help", also: ["support"] },
 ];
 const FAQ: [string, string][] = [
   [
@@ -224,7 +223,8 @@ function recapText(q: Quote, i: Pick<Intervention, "id" | "category"> | undefine
 }
 
 export function ClientSpace({ session }: { session: Session }) {
-  const view = session.view;
+  // An old « #overview » link opens the profile: the client space has no separate dashboard.
+  const view = session.view === "overview" ? "profile" : session.view;
   const inSpace = CLIENT_VIEWS.includes(view);
   const demo = session.mode === "demo";
   // CLI-09: the preferred saved address is only read for the request form (explicit preselection).
@@ -253,16 +253,8 @@ export function ClientSpace({ session }: { session: Session }) {
 
   function content() {
     if (session.loading) return <Loader label="Chargement de votre espace…" />;
-    if (!inSpace) return <Forbidden onHome={() => session.go("overview")} />;
+    if (!inSpace) return <Forbidden onHome={() => session.go("profile")} />;
     switch (view) {
-      case "overview":
-        return (
-          <>
-            <OverviewView session={session} rows={rows} />
-            {/* ART-12: shown only when the server returns a team invitation or membership for this account. */}
-            <ProviderTeamsPanel key={`teams|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`} audience="member" context={session.mutationContext} demo={session.mode === "demo"} />
-          </>
-        );
       case "requests":
         return <RequestsView session={session} rows={rows} />;
       case "new":
@@ -353,19 +345,13 @@ export function ClientSpace({ session }: { session: Session }) {
       case "documents":
         return <DocumentsView session={session} rows={rows} />;
       case "profile":
-        return (
-          <>
-            {/* Optional email access for a phone-verified client (renders nothing otherwise). */}
-            {session.mode === "live" && <AccountUpgrade />}
-            <ProfileView session={session} />
-          </>
-        );
+        return <ProfileView session={session} rows={rows} activeCount={activeCount} />;
       case "help":
         return <HelpView session={session} />;
       case "support":
-        return <SupportCenter session={session} interventions={rows} backView="overview" />;
+        return <SupportCenter session={session} interventions={rows} backView="profile" />;
       default:
-        return <Forbidden onHome={() => session.go("overview")} />;
+        return <Forbidden onHome={() => session.go("profile")} />;
     }
   }
 
@@ -376,8 +362,8 @@ export function ClientSpace({ session }: { session: Session }) {
         <button
           type="button"
           className={styles.sidebarBrand}
-          onClick={() => session.go("overview")}
-          aria-label="Vue d’ensemble"
+          onClick={() => session.go("profile")}
+          aria-label="Mon profil"
         >
           <Brand />
         </button>
@@ -456,14 +442,6 @@ export function ClientSpace({ session }: { session: Session }) {
             <Icon name="shield" size={18} />
             Assistance
           </button>
-          <button
-            type="button"
-            aria-current={view === "profile" ? "page" : undefined}
-            onClick={() => session.go("profile")}
-          >
-            <Icon name="person" size={18} />
-            Mon profil
-          </button>
           <button type="button" onClick={() => void session.logout()}>
             <Icon name="logout" size={18} />
             {demo ? "Quitter la démonstration" : "Se déconnecter"}
@@ -518,8 +496,8 @@ export function ClientSpace({ session }: { session: Session }) {
         <header className={styles.mobileHeader}>
           <button
             type="button"
-            onClick={() => session.go("overview")}
-            aria-label="Accueil"
+            onClick={() => session.go("profile")}
+            aria-label="Mon profil"
           >
             <Brand compact />
           </button>
@@ -617,259 +595,6 @@ export function ClientSpace({ session }: { session: Session }) {
       </nav>
     </div>
     </ThemeSurface>
-  );
-}
-
-// ---- Vue d’ensemble ----------------------------------------------------------------
-function OverviewView({ session, rows }: { session: Session; rows: Intervention[] }) {
-  const hello = session.firstName ? `Bonjour ${session.firstName}` : "Bonjour";
-  const active = rows.filter((i) => isOpen(i.status));
-  const awaiting = rows.filter((i) => i.status === "quoted");
-  const completed = rows.filter((i) => i.status === "paid");
-  const focus = awaiting[0] || active[0];
-  const recent = rows.slice(0, 4);
-  const emptyList = (
-    <Empty
-      title="Aucune demande pour le moment"
-      action={
-        <button type="button" className="button primary" onClick={() => session.go("new")}>
-          Créer une demande
-        </button>
-      }
-    >
-      Vos interventions apparaîtront ici dès la première demande.
-    </Empty>
-  );
-  return (
-    <>
-      {/* Mobile : structure M61 */}
-      <div className={styles.mobileOnly}>
-        <div className={styles.hello}>
-          <h1>{hello}</h1>
-          <p>Comment pouvons-nous vous aider ?</p>
-        </div>
-        <button type="button" className={styles.ctaButton} onClick={() => session.go("new")}>
-          <span>
-            <Icon name="bolt" size={20} />
-          </span>
-          <span>J’ai besoin d’un électricien</span>
-          <Icon name="arrow" size={20} />
-        </button>
-        <div className={styles.sectionRow}>
-          <h2>Actions rapides</h2>
-          <button type="button" className={styles.linkButton} onClick={() => session.go("new")}>
-            Voir tout <Icon name="arrow" size={15} />
-          </button>
-        </div>
-        <div className={styles.tiles}>
-          {CATEGORIES.slice(0, 4).map((c) => (
-            <button type="button" key={c.id} onClick={() => session.go("new", c.id)}>
-              <Icon name={c.icon} size={28} />
-              {c.label}
-            </button>
-          ))}
-        </div>
-        <div className={styles.sectionRow}>
-          <h2>Interventions récentes</h2>
-          <button
-            type="button"
-            className={styles.linkButton}
-            onClick={() => session.go("requests")}
-          >
-            Voir tout <Icon name="arrow" size={15} />
-          </button>
-        </div>
-        {recent.length ? (
-          <div className={styles.recentList}>
-            {recent.map((i) => {
-              const row = recentRowDescriptor(i, (id) => category(id).label);
-              return (
-                <button
-                  type="button"
-                  key={i.id}
-                  className={styles.recentRow}
-                  onClick={() => session.openIntervention(i.id)}
-                >
-                  <span>
-                    <Icon name={category(i.category).icon} size={22} />
-                  </span>
-                  <span className={styles.recentBody}>
-                    <strong>{row.title}</strong>
-                    <span>{row.address}</span>
-                    <span className={styles.recentMeta}>
-                      <Badge status={row.status} />
-                      <time dateTime={row.createdAt}>{date(row.createdAt)}</time>
-                    </span>
-                  </span>
-                  <Icon name="arrow" size={18} />
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <section className="panel">{emptyList}</section>
-        )}
-      </div>
-
-      {/* Desktop : composition tableau de bord */}
-      <div className={styles.desktopOnly}>
-        <div className="welcome">
-          <div>
-            <h1>
-              {hello}
-              <span className="hello-dot">.</span>
-            </h1>
-            <p>Le point sur vos demandes et vos interventions.</p>
-          </div>
-          <button type="button" className="button primary" onClick={() => session.go("new")}>
-            <Icon name="plus" />
-            Nouvelle demande
-          </button>
-        </div>
-        <div className="stats-strip">
-          <div>
-            <span className="stat-icon blue">
-              <Icon name="list" />
-            </span>
-            <section>
-              <span>Interventions en cours</span>
-              <strong>{String(active.length).padStart(2, "0")}</strong>
-            </section>
-          </div>
-          <div>
-            <span className="stat-icon amber">
-              <Icon name="document" />
-            </span>
-            <section>
-              <span>Devis à valider</span>
-              <strong>{String(awaiting.length).padStart(2, "0")}</strong>
-            </section>
-          </div>
-          <div>
-            <span className="stat-icon green">
-              <Icon name="check" />
-            </span>
-            <section>
-              <span>Interventions terminées et réglées</span>
-              <strong>{String(completed.length).padStart(2, "0")}</strong>
-            </section>
-          </div>
-        </div>
-        <p className={styles.statsNote}>
-          Compteurs calculés sur les dossiers chargés dans votre espace.
-        </p>
-        <div className="overview-grid">
-          <div className="main-column">
-            {focus && (
-              <section className="attention-panel">
-                <div className="attention-title">
-                  <span>
-                    <Icon name={focus.status === "quoted" ? "document" : "clock"} size={22} />
-                  </span>
-                  <strong>
-                    {focus.status === "quoted"
-                      ? "Un devis attend votre décision"
-                      : "Votre prochaine étape"}
-                  </strong>
-                  <Badge status={focus.status} />
-                </div>
-                <div className="attention-body">
-                  <section>
-                    <h2>{category(focus.category).label}</h2>
-                    <p>
-                      <Icon name="location" size={15} />
-                      {focus.address}, {focus.city}
-                    </p>
-                    <span>
-                      {focus.status === "quoted"
-                        ? "Consultez les prestations proposées et le montant détaillé avant d’accepter."
-                        : "Ouvrez la demande pour retrouver son avancement."}
-                    </span>
-                  </section>
-                  <button
-                    type="button"
-                    className="button primary"
-                    onClick={() => session.openIntervention(focus.id)}
-                  >
-                    {focus.status === "quoted" ? "Consulter le devis" : "Voir la demande"}
-                    <Icon name="arrow" size={16} />
-                  </button>
-                </div>
-              </section>
-            )}
-            <section className="panel">
-              <div className="section-heading">
-                <h2>Interventions récentes</h2>
-                <button
-                  type="button"
-                  className="text-button"
-                  onClick={() => session.go("requests")}
-                >
-                  Tout voir <Icon name="arrow" size={15} />
-                </button>
-              </div>
-              {recent.length ? <RequestList session={session} items={recent} /> : emptyList}
-            </section>
-            <section className="quick-start">
-              <div>
-                <h2>Un nouveau problème électrique ?</h2>
-                <p>Quelques informations suffisent pour commencer votre demande.</p>
-              </div>
-              <div className="quick-categories">
-                {CATEGORIES.slice(0, 4).map((c) => (
-                  <button type="button" key={c.id} onClick={() => session.go("new", c.id)}>
-                    <Icon name={c.icon} size={24} />
-                    <span>{c.label}</span>
-                  </button>
-                ))}
-              </div>
-            </section>
-          </div>
-          <aside className="side-column">
-            <section className="help-panel">
-              <span className="help-symbol">
-                <Icon name="shield" size={27} />
-              </span>
-              <h2>
-                Le devis vous donne
-                <br />
-                le dernier mot.
-              </h2>
-              <p>
-                L’estimation est indicative. Avant de commencer, votre artisan vous propose un
-                devis détaillé à accepter.
-              </p>
-              <button type="button" className={`text-button ${styles.linkTarget}`} onClick={() => session.go("help")}>
-                Comprendre les étapes <Icon name="arrow" size={15} />
-              </button>
-            </section>
-            <section className="sidebar-note">
-              <Icon name="document" />
-              <h3>Vos documents, rassemblés.</h3>
-              <p>Retrouvez les devis de vos interventions dans votre espace.</p>
-              <button
-                type="button"
-                className="text-button"
-                onClick={() => session.go("documents")}
-              >
-                Voir mes documents <Icon name="arrow" size={15} />
-              </button>
-            </section>
-            <div className="support-link">
-              <span>
-                <Icon name="help" />
-              </span>
-              <section>
-                <strong>Une question sur le parcours ?</strong>
-                <button type="button" className={styles.linkTarget} onClick={() => session.go("help")}>
-                  Consulter l’aide
-                </button>
-              </section>
-            </div>
-          </aside>
-        </div>
-      </div>
-    </>
   );
 }
 
@@ -1678,8 +1403,6 @@ function DetailView({
       {(i.status === "completed" || i.status === "paid") && (
         <CustomerInvoicesPanel title="Factures et avoirs de ce dossier" filters={{ intervention_id: i.id, basis: "service" }} context={session.mutationContext} demo={demo} />
       )}
-      {/* After a booking: optional email access (self-hides unless phone-verified, client, no email account). */}
-      {currentBookingStatus?.kind === "booking" && <AccountUpgrade />}
       {accepted && payment && (
         <p
           className={`${styles.paymentLine} ${payment.status === "paid" ? styles.ok : payment.status === "failed" ? styles.ko : ""}`}
@@ -2389,11 +2112,74 @@ export function ProfileNotificationPreferences({ session }: { session: Session }
   );
 }
 
-function ProfileView({ session }: { session: Session }) {
+/** How many requests of each group the profile lists before sending to « Mes demandes ». */
+const PROFILE_REQUESTS = 5;
+/** Profile section: the client's current and past requests, from the files loaded in the space. */
+function ProfileRequests({ session, rows, activeCount }: { session: Session; rows: Intervention[]; activeCount: number }) {
+  const current = rows.filter((i) => isOpen(i.status));
+  const past = rows.filter((i) => !isOpen(i.status));
+  const all = (
+    <button type="button" className="text-button" onClick={() => session.go("requests")}>
+      Toutes mes demandes <Icon name="arrow" size={15} />
+    </button>
+  );
+  return (
+    <>
+      <section className="panel" aria-labelledby="profile-current" data-profile-requests="current">
+        <div className="section-heading">
+          <h2 id="profile-current">Demandes en cours{Math.max(activeCount, current.length) > 0 ? ` (${Math.max(activeCount, current.length)})` : ""}</h2>
+          {current.length > 0 && all}
+        </div>
+        {current.length ? (
+          <RequestList session={session} items={current.slice(0, PROFILE_REQUESTS)} />
+        ) : (
+          <Empty
+            title="Aucune demande en cours"
+            action={
+              <button type="button" className="button primary" onClick={() => session.go("new")}>
+                Créer une demande
+              </button>
+            }
+          >
+            Une demande apparaît ici dès son envoi, avec son état et son devis.
+          </Empty>
+        )}
+        {current.length > PROFILE_REQUESTS && (
+          <p className="form-note">Les {PROFILE_REQUESTS} plus récentes sont affichées. Ouvrez « Toutes mes demandes » pour les autres.</p>
+        )}
+      </section>
+      <section className="panel" aria-labelledby="profile-past" data-profile-requests="past">
+        <div className="section-heading">
+          <h2 id="profile-past">Demandes passées</h2>
+          {past.length > 0 && all}
+        </div>
+        {past.length ? (
+          <RequestList session={session} items={past.slice(0, PROFILE_REQUESTS)} />
+        ) : (
+          <Empty title="Aucune demande passée">Les demandes réglées ou annulées sont rangées ici.</Empty>
+        )}
+        {past.length > PROFILE_REQUESTS && (
+          <p className="form-note">Les {PROFILE_REQUESTS} plus récentes sont affichées. Ouvrez « Toutes mes demandes » pour les autres.</p>
+        )}
+      </section>
+    </>
+  );
+}
+
+function ProfileView({ session, rows, activeCount }: { session: Session; rows: Intervention[]; activeCount: number }) {
   const demo = session.mode === "demo";
   return (
     <>
-      <PageTitle title="Mon profil" subtitle="Vos informations de compte et votre espace." />
+      <PageTitle
+        title="Mon profil"
+        subtitle="Vos coordonnées, vos adresses et vos demandes."
+        action={
+          <button type="button" className="button primary" onClick={() => session.go("new")}>
+            <Icon name="plus" />
+            Nouvelle demande
+          </button>
+        }
+      />
       <div className={styles.twoColumns}>
         <div>
           <ProfileForm
@@ -2402,14 +2188,19 @@ function ProfileView({ session }: { session: Session }) {
             role={session.role}
             demo={demo}
             busy={session.busy}
+            email={!demo && session.accountEmail ? session.accountEmail : undefined}
+            phoneRequired={!demo}
             structuredName={demo ? undefined : { first_name: (session.profile as { first_name?: string | null } | null | undefined)?.first_name ?? null, last_name: (session.profile as { last_name?: string | null } | null | undefined)?.last_name ?? null }}
             onSubmit={async (values) => {
               await session.updateProfile(values);
             }}
           />
+          <ClientAddressesPanel key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} demo={demo} context={session.mutationContext} />
+          <ProfileRequests session={session} rows={rows} activeCount={activeCount} />
+          {/* ART-12: shown only when the server returns a team invitation or membership for this account. */}
+          <ProviderTeamsPanel key={`teams|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`} audience="member" context={session.mutationContext} demo={demo} />
           <ProfileNotificationPreferences session={session} />
           <InstallPanel />
-          <ClientAddressesPanel key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} demo={demo} context={session.mutationContext} />
           <AccountSessionsPanel key={`sessions:${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} demo={demo} context={session.mutationContext} />
           <AccountDataPanel
             key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}

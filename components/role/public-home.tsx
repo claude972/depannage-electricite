@@ -4,7 +4,7 @@ import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Icon } from "../app/icons";
 import { INTERVENTION_PROFILES, repairSituations, type RepairSituation } from "../../shared/intervention-profile";
 import { HOME_SUPPORT_PREVIEW } from "../../shared/support-contact";
-import { COMMITMENTS, FAQ, MATCHING, STEPS } from "../../shared/public-home";
+import { COMMITMENTS, MATCHING, STEPS, WEB_FAQ as FAQ } from "../../shared/public-home";
 import { PUBLIC_ADVICE } from "./public-advice-content";
 import { SERVICES, SERVICE_PHOTOS, servicePath, type ServicePhoto } from "./public-service-catalog";
 import { PublicServiceList } from "./public-service-list";

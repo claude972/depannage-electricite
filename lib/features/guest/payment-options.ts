@@ -12,6 +12,8 @@ export async function bookingOptions(
   env: Record<string, string | undefined>,
   fetcher: typeof fetch = fetch,
 ) {
+  // `phone_auth` is read by the native builds already delivered, whose parser requires the key.
+  // The website ignores it: it has no SMS code (see native-phone-auth.ts).
   const recipients = testSmsRecipients(env);
   let phoneAvailable: boolean | null = recipients?.length === 0 ? false : null;
   if (phoneAvailable === null && env.NEXT_PUBLIC_SUPABASE_URL && env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {

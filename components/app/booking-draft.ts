@@ -1,5 +1,5 @@
 import { parseBookingLocation, type BookingLocation } from "../../shared/booking-location";
-import { normalizeBookingPhone as normalizePhone } from "../../shared/booking-contact";
+import { ACCOUNT_PHONE_MESSAGE, normalizeAccountPhone, normalizeBookingPhone as normalizePhone } from "../../shared/booking-contact";
 // Service booking flow (FASTSPLIT-SERVICE-BOOKING-FLOW-001). Pure, no React, no network.
 //
 // The request itself travels in the canonical public draft (lib/shared/request-draft.ts:
@@ -201,16 +201,19 @@ export function profilePatch(contact: BookingContact): { full_name: string; phon
   return { full_name, phone };
 }
 
-/** Minimal client-side checks of the contact step (the server re-validates everything). */
-export function contactErrors(c: BookingContact): Partial<Record<"first_name" | "last_name" | "email" | "phone", string>> {
+/** Client-side checks of the contact step (the server re-validates everything). The website
+ *  asks for a name, an e-mail address and a +596, +590 or +33 number. `emailRequired: false` is
+ *  for the demonstration only (no account, nothing sent). */
+export function contactErrors(c: BookingContact, { emailRequired = true }: { emailRequired?: boolean } = {}): Partial<Record<"first_name" | "last_name" | "email" | "phone", string>> {
   const errors: Partial<Record<"first_name" | "last_name" | "email" | "phone", string>> = {};
   if (!c.first_name.trim()) errors.first_name = "Indiquez votre prénom.";
   if (!c.last_name.trim()) errors.last_name = "Indiquez votre nom.";
   else if (fullName(c).length > FULL_NAME_MAX) errors.last_name = `Prénom et nom : ${FULL_NAME_MAX} caractères au plus.`;
-  // Email is OPTIONAL (guest checkout: account optional); when given it must be valid, ≤ 254.
   const email = c.email.trim();
-  if (email && (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) errors.email = "Indiquez un email valide, ou laissez ce champ vide.";
-  // Same E.164 normalisation as the server contract (0696/0697 → +596, 06/07 → +33, « + » kept).
-  if (!normalizePhone(c.phone)) errors.phone = "Indiquez un numéro de mobile valide (ex. 0696 12 34 56).";
+  if (!email) {
+    if (emailRequired) errors.email = "Indiquez votre adresse e-mail : elle sert à créer votre compte et à suivre la demande.";
+  } else if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = "Indiquez une adresse e-mail valide (ex. prenom.nom@exemple.fr).";
+  // Same rule as the server: +596, +590 or +33 (0696/0697 → +596, 0690/0691 → +590, 06/07 → +33).
+  if (!normalizeAccountPhone(c.phone)) errors.phone = ACCOUNT_PHONE_MESSAGE;
   return errors;
 }

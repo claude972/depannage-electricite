@@ -13,6 +13,14 @@ import { Field } from "../app/ui";
 import { ReservedEstimate, ReviewEstimate } from "../features/indicative-prices/indicative-range";
 import { REVIEW_COPY, REVIEW_SCOPES } from "../features/indicative-prices/model";
 
+const CONTACT_KEYS = ["first_name", "last_name", "email", "phone"] as const;
+const CONTACT_FIELD: Record<(typeof CONTACT_KEYS)[number], { label: string; type: "text" | "email" | "tel"; max: number; autoComplete: string; inputMode?: "email" | "tel" }> = {
+  first_name: { label: "Prénom", type: "text", max: 60, autoComplete: "given-name" },
+  last_name: { label: "Nom", type: "text", max: 60, autoComplete: "family-name" },
+  email: { label: "Adresse e-mail", type: "email", max: 254, autoComplete: "email", inputMode: "email" },
+  phone: { label: "Téléphone", type: "tel", max: 30, autoComplete: "tel", inputMode: "tel" },
+};
+
 export function BookingConfirm({
   draft,
   booking,
@@ -52,7 +60,9 @@ export function BookingConfirm({
   const [problem, setProblem] = useState("");
   const [editingContact, setEditingContact] = useState(false);
   const [contactDraft, setContactDraft] = useState(booking.contact);
-  const contactProblems = contactErrors(contactDraft);
+  // The demonstration has no account and sends nothing: its contact needs no e-mail address.
+  const contactRule = { emailRequired: !demo };
+  const contactProblems = contactErrors(contactDraft, contactRule);
   const inFlight = useRef(false);
   const alive = useRef(true);
   const identity = useRef(profileId);
@@ -82,8 +92,9 @@ export function BookingConfirm({
         setProblem("Choisissez un mode de paiement avant d’envoyer ; rien n’a été envoyé.");
         return;
       }
-      if (Object.keys(contactErrors(contact)).length) {
-        setProblem("Vos coordonnées sont incomplètes ou trop longues. Modifiez-les avant d’envoyer ; rien n’a été envoyé.");
+      if (Object.keys(contactErrors(contact, contactRule)).length) {
+        setProblem("Vos coordonnées sont incomplètes : nom, adresse e-mail et téléphone (+596, +590 ou +33) sont nécessaires. Complétez-les avant d’envoyer ; rien n’a été envoyé.");
+        setContactDraft(contact);
         setEditingContact(true);
         return;
       }
@@ -217,17 +228,18 @@ export function BookingConfirm({
             {editingContact ? (
               <div className="booking-contact-edit" data-booking-contact-edit="">
                 {/* CLI-05: Field keeps the label stable; the error is linked by aria-describedby. */}
-                {(["first_name", "last_name", "phone"] as const).map((key) => (
+                {(demo ? CONTACT_KEYS.filter((key) => key !== "email") : CONTACT_KEYS).map((key) => (
                   <Field
                     key={key}
-                    label={key === "first_name" ? "Prénom" : key === "last_name" ? "Nom" : "Téléphone"}
+                    label={CONTACT_FIELD[key].label}
                     error={contactProblems[key] || undefined}
                   >
                     <input
                       value={contactDraft[key]}
-                      maxLength={key === "phone" ? 30 : 60}
-                      autoComplete={key === "first_name" ? "given-name" : key === "last_name" ? "family-name" : "tel"}
-                      inputMode={key === "phone" ? "tel" : undefined}
+                      type={CONTACT_FIELD[key].type}
+                      maxLength={CONTACT_FIELD[key].max}
+                      autoComplete={CONTACT_FIELD[key].autoComplete}
+                      inputMode={CONTACT_FIELD[key].inputMode}
                       onChange={(e) => setContactDraft({ ...contactDraft, [key]: e.target.value })}
                     />
                   </Field>
@@ -248,7 +260,8 @@ export function BookingConfirm({
             ) : (
               <>
                 {[contact.first_name, contact.last_name].filter(Boolean).join(" ")}
-                {contact.phone ? ` · ${contact.phone}` : ""}{" "}
+                {contact.email ? <><br />{contact.email}</> : null}
+                {contact.phone ? <><br />{contact.phone}</> : null}{" "}
                 <button type="button" className="text-button" disabled={sending || busy} onClick={() => setEditingContact(true)}>
                   Modifier mes coordonnées
                 </button>

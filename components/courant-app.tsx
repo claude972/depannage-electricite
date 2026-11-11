@@ -190,6 +190,9 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
   const [notice, setNotice] = useState("");
   const [connection, setConnection] = useState("");
   const [authMode, setAuthMode] = useState<AuthMode>("login");
+  // Sign-in address of the live account (auth session, never the profile): shown read-only on the
+  // client profile and used as the contact e-mail of a request made while signed in.
+  const [accountEmail, setAccountEmail] = useState("");
   const [categoryId, setCategoryId] = useState<Category>("panel");
   const [pendingDraft, setPendingDraft] = useState<RequestValues | null>(null);
   // Service booking extras (FASTSPLIT-SERVICE-BOOKING-FLOW-001): kept with the draft across login
@@ -209,6 +212,9 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
   /** Demo only: the same booking confirmation step, kept in memory (never in tab storage, never sent). */
   const [demoBooking, setDemoBooking] = useState<{ draft: RequestValues; booking: BookingDraft } | null>(null);
   bookingRef.current = booking;
+  // A request made while signed in carries the account address as its contact e-mail when the
+  // kept booking has none (prepared before the address was known); the client can still edit it.
+  const liveBooking = booking && !booking.contact.email.trim() && accountEmail ? { ...booking, contact: { ...booking.contact, email: accountEmail } } : booking;
   const cardContext = { generation: () => guard.generation(), userId: () => userId.current };
   // Pending card attempt lookup: once per identity (after login / opening the requests), no polling.
   const [pendingLookup, setPendingLookup] = useState<"idle" | "error">("idle");
@@ -475,9 +481,33 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
     };
   }, [refresh, clearSessionState]);
 
+  // The address comes from the session of the SAME user as the loaded profile; anything else ⇒ "".
+  const liveProfileId = mode === "live" ? data.profile?.id ?? "" : "";
+  useEffect(() => {
+    if (!liveProfileId) {
+      setAccountEmail("");
+      return;
+    }
+    let active = true;
+    const apply = (email: string) => {
+      if (active) setAccountEmail(email);
+    };
+    try {
+      void createClient()
+        .auth.getSession()
+        .then(({ data: current }) => apply(current.session?.user.id === liveProfileId ? current.session.user.email ?? "" : ""))
+        .catch(() => apply(""));
+    } catch {
+      apply("");
+    }
+    return () => {
+      active = false;
+    };
+  }, [liveProfileId]);
+
   useEffect(() => {
     if (mode !== "live" || booting || role !== "client" || !userId.current) return;
-    if (!["overview", "requests", "new", "detail"].includes(view)) return;
+    if (!["overview", "profile", "requests", "new", "detail"].includes(view)) return;
     if (pendingCheckedFor.current === userId.current) return;
     void checkPendingCardHold();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -608,6 +638,8 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
         if (link) pendingLink.current = link;
       }
       hashSeen.current = true;
+      // End of the service booking wizard: « Créer mon compte » opens the account form on creation.
+      if (mode === "public" && parsed.view === "auth" && parsed.param === "signup") setAuthMode("signup");
       const followFromAccount = mode === "live" && parsed.view === "auth" && parsed.param === "requests";
       const target = followFromAccount ? (role === "client" ? "requests" : homeFor(role, mode)) : parsed.view ?? homeFor(mode === "public" ? null : role, mode);
       setParam(followFromAccount ? "" : parsed.param);
@@ -1207,7 +1239,7 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
     return run(async (ctx) => {
       const demo = modeRef.current === "demo";
       const draft = demo ? demoBooking?.draft ?? null : pendingDraft;
-      const current = demo ? demoBooking?.booking ?? null : booking;
+      const current = demo ? demoBooking?.booking ?? null : liveBooking;
       if (!draft || !current) throw new Error("Aucune demande en attente de confirmation dans cet onglet.");
       if (!current.payment) throw new Error("Choisissez un mode de paiement avant d’envoyer votre demande ; rien n’a été envoyé.");
       if (demo) {
@@ -1323,7 +1355,7 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
       return true;
     }
     if (modeRef.current !== "live") return false;
-    const next = bookingFromSignedRequest(values, data.profile);
+    const next = bookingFromSignedRequest(values, data.profile, accountEmail);
     const storage = getDraftStorage();
     if (!saveBooking(storage, next) || !savePublicDraft(storage, values).ok) {
       setError("Votre demande n’a pas été préparée : ce navigateur ne permet pas de la conserver en sécurité. Rien n’a été envoyé ; réessayez ou rechargez la page.");
@@ -2757,30 +2789,35 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
     },
     async signUp(values) {
       return run(async (ctx) => {
-        const client = createClient();
-        const result = await client.auth.signUp({
+        // The server requires and checks every field (name, e-mail, +596/+590/+33 phone, password)
+        // and sends the confirmation link; nothing is created from the browser directly.
+        const result = await api<{ status: "signed_in"; user_id: string } | { status: "confirmation_required" }>("/api/auth/signup", {
+          first_name: values.first_name ?? "",
+          last_name: values.last_name ?? "",
           email: values.email,
+          phone: values.phone ?? "",
           password: values.password,
-          // Confirmation link lands on the server callback (token_hash verify), never a fake session.
-          options: {
-            data: { full_name: values.full_name, first_name: values.first_name, last_name: values.last_name, role: values.role },
-            emailRedirectTo: `${window.location.origin}/auth/confirm`,
-          },
+          role: values.role,
         });
-        if (result.error) throw result.error;
-        if (result.data.session) {
+        if (result.status === "signed_in") {
+          // Only where e-mail confirmation is switched off (local development): session cookies are
+          // already set by the server.
           bookingCarry.current = pendingDraft ? booking : null;
-        const outcome = await adoptIdentity(ctx, result.data.user?.id ?? null, pendingDraft, identityDeps);
+          const outcome = await adoptIdentity(ctx, result.user_id, pendingDraft, identityDeps);
           if (outcome === "superseded")
             throw new Error(
               "Une autre connexion a été établie entre-temps dans ce navigateur. Rechargez la page pour continuer avec le compte actif.",
             );
-        } else
-          ctx.notice(
-            pendingDraft && booking
-              ? "Votre compte a été créé. Confirmez votre adresse depuis l’email reçu, puis revenez dans CET onglet et connectez-vous : votre demande y est gardée 30 minutes. Rien n’a encore été envoyé."
-              : "Votre compte a été créé. Consultez votre email pour confirmer votre inscription avant de vous connecter.",
-          );
+          return;
+        }
+        if (result.status !== "confirmation_required")
+          throw new Error("La création de compte n’a pas pu être confirmée. Réessayez.");
+        ctx.when(setAuthMode)("login");
+        ctx.notice(
+          pendingDraft
+            ? "Votre compte est créé. Ouvrez le lien de confirmation reçu par e-mail, puis revenez dans CET onglet et connectez-vous : votre demande y est gardée 30 minutes. Rien n’a encore été envoyé."
+            : "Votre compte est créé. Ouvrez le lien de confirmation reçu par e-mail, puis connectez-vous.",
+        );
       });
     },
     async resetPassword(email) {
@@ -2867,6 +2904,7 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
     profileId: mode === "live" ? profile?.id || "" : `demo-${role}`,
     displayName,
     firstName,
+    accountEmail: mode === "live" ? accountEmail : "",
     // Live: only the draft adopted by THIS identity chain (clearSessionState drops it on any
     // identity change); demo never inherits a public draft.
     pendingDraft: mode === "live" ? pendingDraft : demoBooking?.draft ?? null,
@@ -2907,7 +2945,7 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
       setBooking(next);
       saveBooking(getDraftStorage(), next);
     },
-    booking: mode === "live" ? (pendingDraft ? booking : null) : demoBooking?.booking ?? null,
+    booking: mode === "live" ? (pendingDraft ? liveBooking : null) : demoBooking?.booking ?? null,
     cardReturn: mode === "live" ? cardReturn : null,
     mutationContext: cardContext,
     pendingLookupFailed: mode === "live" && pendingLookup === "error",

@@ -2,7 +2,7 @@
 
 import { PublicChrome } from "./public-chrome";
 import { serviceChromeHandlers } from "./public-service-page";
-import styles from "./phone-access.module.css";
+import styles from "./account-lookup-page.module.css";
 
 export function AccountLookupPage() {
   const go = (href: string) => window.location.assign(href);

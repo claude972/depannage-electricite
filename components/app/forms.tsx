@@ -7,6 +7,7 @@ import { api, ApiRequestError, PHOTO_TYPES, validateUpload } from "./api";
 import { classifyRefusal } from "./refusal";
 import { AddressField, createAddressApi } from "./address-field";
 import { normalizePhone } from "./booking-draft";
+import { ACCOUNT_PHONE_MESSAGE, normalizeAccountPhone } from "../../shared/booking-contact";
 import {
   applyOutcome,
   fetchHistoryPage,
@@ -1486,6 +1487,8 @@ export function ProfileForm({
   busy,
   onSubmit,
   structuredName,
+  email,
+  phoneRequired = false,
 }: {
   name: string;
   phone: string;
@@ -1496,6 +1499,10 @@ export function ProfileForm({
   /** Opt-in (client profile): the stored first / last name. Both present ⇒ structured fields;
    *  otherwise the existing full name stays as is (never split) with an explicit action. */
   structuredName?: { first_name?: string | null; last_name?: string | null };
+  /** Opt-in (client profile): the sign-in address, shown read-only (it is changed nowhere here). */
+  email?: string;
+  /** Opt-in (client profile): a +596, +590 or +33 number is required, as the server requires it. */
+  phoneRequired?: boolean;
 }) {
   const known = Boolean(structuredName?.first_name?.trim() && structuredName?.last_name?.trim());
   const [fullName, setFullName] = useState(name);
@@ -1506,12 +1513,16 @@ export function ProfileForm({
   const [last, setLast] = useState(known ? structuredName!.last_name!.trim() : "");
   const [edited, setEdited] = useState(false);
   const [nameError, setNameError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
   const shownName = structured && (edited || known) ? joinName(first, last) || name : fullName;
   return (
     <form
       className="panel profile-form"
       onSubmit={(e) => {
         e.preventDefault();
+        const phoneProblem = phoneRequired && !normalizeAccountPhone(number) ? ACCOUNT_PHONE_MESSAGE : "";
+        setPhoneError(phoneProblem);
+        if (phoneProblem) return;
         // Structured fields are sent only when filled or edited; a phone-only save sends neither.
         const filled = structured && (edited || (!known && (first.trim() || last.trim())));
         if (filled) {
@@ -1596,14 +1607,25 @@ export function ProfileForm({
           )}
         </>
       )}
-      <Field label="Téléphone (facultatif)">
+      {email !== undefined && (
+        <Field label="Adresse e-mail" hint="C’est l’adresse de connexion de votre compte.">
+          <input type="email" value={email} readOnly autoComplete="email" data-profile-email="" />
+        </Field>
+      )}
+      <Field
+        label={phoneRequired ? "Téléphone" : "Téléphone (facultatif)"}
+        hint={phoneRequired ? "Indicatif +596, +590 ou +33. Ex. 0696 12 34 56." : undefined}
+        error={phoneError || undefined}
+      >
         <input
+          required={phoneRequired}
           type="tel"
+          inputMode="tel"
           maxLength={30}
           autoComplete="tel"
           value={number}
           onChange={(e) => setNumber(e.target.value)}
-          placeholder="Votre numéro de téléphone"
+          placeholder={phoneRequired ? undefined : "Votre numéro de téléphone"}
         />
       </Field>
       <p className="form-note">
@@ -1633,14 +1655,15 @@ export function AuthForm({
     password: string;
     full_name: string;
     role: Role;
-    /** Signup only: both always sent there, with full_name = « Prénom Nom ». */
+    /** Signup only: all three always sent there, with full_name = « Prénom Nom ». */
     first_name?: string;
     last_name?: string;
+    phone?: string;
   }) => Promise<void>;
   onDemo: () => void;
-  /** Prefill from the service booking flow (email, first and last name typed there); never a
+  /** Prefill from the service booking flow (email, name and phone typed there); never a
    *  password, and a full name is never split into first / last name. */
-  initial?: { email?: string; first_name?: string; last_name?: string };
+  initial?: { email?: string; first_name?: string; last_name?: string; phone?: string };
   /** E65: profile preselected by the entry point (« Créer mon compte artisan »); default client. */
   initialRole?: Role;
 }) {
@@ -1649,6 +1672,8 @@ export function AuthForm({
   const [first, setFirst] = useState(initial?.first_name?.trim().slice(0, NAME_PART_MAX) ?? "");
   const [last, setLast] = useState(initial?.last_name?.trim().slice(0, NAME_PART_MAX) ?? "");
   const [nameError, setNameError] = useState("");
+  const [phone, setPhone] = useState(initial?.phone?.trim().slice(0, 30) ?? "");
+  const [phoneError, setPhoneError] = useState("");
   const [role, setRole] = useState<Role>(initialRole ?? "client");
   return (
     <div className="auth-layout">
@@ -1675,9 +1700,12 @@ export function AuthForm({
           e.preventDefault();
           if (mode === "signup") {
             const error = structuredNameError(first, last);
+            // Same rule as POST /api/auth/signup: +596, +590 or +33, stored in international form.
+            const normalized = normalizeAccountPhone(phone);
             setNameError(error);
-            if (error) return;
-            void onSubmit({ email, password, role, full_name: joinName(first, last), first_name: first.trim(), last_name: last.trim() });
+            setPhoneError(normalized ? "" : ACCOUNT_PHONE_MESSAGE);
+            if (error || !normalized) return;
+            void onSubmit({ email, password, role, full_name: joinName(first, last), first_name: first.trim(), last_name: last.trim(), phone: normalized });
             return;
           }
           // Login and reset keep their existing fields.
@@ -1695,7 +1723,7 @@ export function AuthForm({
           {mode === "login"
             ? "Ravi de vous retrouver."
             : mode === "signup"
-              ? "Choisissez l’espace qui correspond à votre besoin."
+              ? "Votre nom, votre adresse e-mail et votre téléphone sont nécessaires. Un lien envoyé par e-mail confirme le compte."
               : "Recevez un lien pour choisir un nouveau mot de passe."}
         </p>
         {mode === "signup" && (
@@ -1739,16 +1767,31 @@ export function AuthForm({
             )}
           </>
         )}
-        <Field label="Adresse email">
+        <Field label="Adresse e-mail">
           <input
             required
             type="email"
             autoComplete="email"
+            inputMode="email"
             maxLength={254}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
         </Field>
+        {mode === "signup" && (
+          <Field label="Téléphone" hint="Indicatif +596, +590 ou +33. Ex. 0696 12 34 56." error={phoneError || undefined}>
+            <input
+              required
+              type="tel"
+              autoComplete="tel"
+              inputMode="tel"
+              maxLength={30}
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              data-signup-phone=""
+            />
+          </Field>
+        )}
         {mode !== "reset" && (
           <Field
             label="Mot de passe"

@@ -252,10 +252,10 @@ function AuthView({ session, initialRole }: { session: PublicSession; initialRol
       {session.pendingDraft && (
         <div className="alert warning" role="status">
           <Icon name="document" />
-          <span>Votre brouillon de demande sera repris après connexion.</span>
+          <span>Votre demande est conservée dans cet onglet : vous la relirez et confirmerez son envoi après connexion.</span>
         </div>
       )}
-      <AuthForm mode={session.authMode} onMode={(mode) => session.setAuthMode(mode)} busy={session.busy} onSubmit={async (values) => { if (session.authMode === "signup") await session.signUp(values); else if (session.authMode === "reset") await session.resetPassword(values.email); else await session.signIn(values.email, values.password); }} onDemo={() => session.startDemo("client")} initial={session.booking?.contact ? { email: session.booking.contact.email, first_name: session.booking.contact.first_name, last_name: session.booking.contact.last_name } : undefined} key={initialRole ?? "client"} initialRole={initialRole} />
+      <AuthForm mode={session.authMode} onMode={(mode) => session.setAuthMode(mode)} busy={session.busy} onSubmit={async (values) => { if (session.authMode === "signup") await session.signUp(values); else if (session.authMode === "reset") await session.resetPassword(values.email); else await session.signIn(values.email, values.password); }} onDemo={() => session.startDemo("client")} initial={session.booking?.contact ? { email: session.booking.contact.email, first_name: session.booking.contact.first_name, last_name: session.booking.contact.last_name, phone: session.booking.contact.phone } : session.pendingDraft?.contact_phone ? { phone: session.pendingDraft.contact_phone } : undefined} key={initialRole ?? "client"} initialRole={initialRole} />
     </div>
   );
 }

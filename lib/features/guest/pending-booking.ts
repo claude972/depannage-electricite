@@ -1,7 +1,6 @@
 import {estimateSnapshot,estimateMatchesCap} from './estimate-snapshot';
 import { z } from "zod";
 import { ApiError, authenticatedClient, assertOrigin, dbError } from "@/lib/supabase/server";
-import { normalizePhone } from "./phone-auth";
 const headers = { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" };
 const pending = z.object({
   request_id: z.string().uuid(), method: z.literal("card_hold"),
@@ -21,8 +20,8 @@ export async function pendingBooking(request: Request) {
     dbError(profile.error);
     if (!profile.data || profile.data.id !== user.id) throw unavailable();
     if (profile.data.role !== "client") throw new ApiError(409, "Utilisez votre espace professionnel pour cette action.");
-    const phone = user.phone ? normalizePhone(`+${user.phone.replace(/^\+/, "")}`) : null;
-    if (!(phone && user.phone_confirmed_at) && !user.email_confirmed_at) throw new ApiError(403, "Confirmez votre identité pour retrouver votre tentative.");
+    // Website only (cookie session): the account is an e-mail address confirmed by its link.
+    if (!user.email_confirmed_at) throw new ApiError(403, "Confirmez l’adresse e-mail de votre compte pour retrouver votre tentative.");
     const response = await db.rpc("guest_booking_pending"); dbError(response.error);
     const parsed = result.safeParse(response.data);
     if (!parsed.success) throw unavailable();

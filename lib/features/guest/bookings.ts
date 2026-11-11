@@ -4,7 +4,7 @@ import { TextDecoder } from "node:util";
 import { z } from "zod";
 import { ApiError, authenticatedClient, assertOrigin, dbError } from "@/lib/supabase/server";
 import { estimateReviewRefusal } from "@/lib/features/indicative-prices/review-refusal";
-import { normalizePhone } from "./phone-auth";
+import { nativeTransport, normalizePhone, normalizeWebPhone, WEB_PHONE_MESSAGE } from "./phone-number";
 import { cardHoldContext, openCardHold, authorizeCardHold, releaseCardHold } from "./card-hold";
 
 const uuid = z.string().uuid();
@@ -21,15 +21,40 @@ async function body(request: Request) {
   const bytes = new Uint8Array(size); let at = 0; for (const chunk of chunks) { bytes.set(chunk, at); at += chunk.length; }
   try { return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); } catch { throw new ApiError(422, "Vérifiez les informations saisies."); }
 }
+const EMAIL_ACCOUNT_REQUIRED = "Réservez depuis un compte dont l’adresse e-mail est confirmée : créez votre compte ou ouvrez le lien reçu par e-mail, puis connectez-vous.";
 async function identity(request: Request) {
   const result = await authenticatedClient(request);
   const profile = await result.db.from("profiles").select("id,role").eq("id", result.user.id).maybeSingle();
   dbError(profile.error);
   if (!profile.data || profile.data.id !== result.user.id) throw unavailable();
   if (profile.data.role !== "client") throw new ApiError(409, "Utilisez votre espace professionnel pour cette action.");
+  // Website (cookie session): the account is an e-mail address confirmed by its link, nothing else.
+  if (!nativeTransport(request)) {
+    if (!result.user.email_confirmed_at) throw new ApiError(403, EMAIL_ACCOUNT_REQUIRED);
+    return result;
+  }
+  // Native builds already delivered (bearer token) keep the identity contract they were built with.
   const phone = result.user.phone ? normalizePhone(`+${result.user.phone.replace(/^\+/, "")}`) : null;
   if (!(result.user.phone_confirmed_at && phone) && !result.user.email_confirmed_at) throw new ApiError(403, "Confirmez votre identité avant de réserver.");
   return result;
+}
+const sentContact = (raw: unknown): Record<string, unknown> | null =>
+  raw && typeof raw === "object" && "contact" in raw && raw.contact && typeof raw.contact === "object" && !Array.isArray(raw.contact) ? raw.contact as Record<string, unknown> : null;
+/** Website contract on top of the shared body: an e-mail and a +596, +590 or +33 number are required.
+ *  Returns the message to show for the contact as it was typed, or null when it satisfies the website rule. */
+function webContactProblem(raw: unknown): string | null {
+  const typed = sentContact(raw);
+  if (!typed) return null;
+  if (typeof typed.email === "string" && !typed.email.trim()) return "Indiquez l’adresse e-mail de contact de cette demande.";
+  if (typeof typed.phone === "string" && !normalizeWebPhone(typed.phone)) return WEB_PHONE_MESSAGE;
+  return null;
+}
+function webContact<T extends { email: string; phone: string | null }>(contact: T, raw: unknown): T {
+  const problem = webContactProblem(raw);
+  if (problem) throw new ApiError(422, problem);
+  const typed = sentContact(raw), phone = typed && typeof typed.phone === "string" ? normalizeWebPhone(typed.phone) : null;
+  if (!phone || !contact.email) throw new ApiError(422, "Vérifiez les informations saisies.");
+  return { ...contact, phone };
 }
 
 function validResult(value: unknown) {
@@ -60,8 +85,10 @@ export async function bookingRoute(request: Request, operation: "create" | "stat
       const r = await db.rpc("phone_booking_status", { p_request_id: key === "request_id" ? parsed.data : null, p_intervention_id: key === "intervention_id" ? parsed.data : null }); dbError(r.error);
       return Response.json(validResult(r.data), { headers });
     }
-    const parsed = (operation === "create" ? schema : keySchema).safeParse(await body(request));
-    if (!parsed.success) throw new ApiError(422, "Vérifiez les informations saisies.");
+    const sent = await body(request);
+    const parsed = (operation === "create" ? schema : keySchema).safeParse(sent);
+    // The website names the contact field to correct; every other refusal stays generic.
+    if (!parsed.success) throw new ApiError(422, (operation === "create" && !nativeTransport(request) && webContactProblem(sent)) || "Vérifiez les informations saisies.");
     if (operation === "finalize") {
       const { request_id } = keySchema.parse(parsed.data);
       const context = cardHoldContext();
@@ -76,7 +103,8 @@ export async function bookingRoute(request: Request, operation: "create" | "stat
     if (operation === "create") {
       const data = schema.parse(parsed.data);
       const card = data.payment_choice === "card_hold" ? cardHoldContext() : null; // Before prepare/quota/provider mutation.
-      const { request_id, contact, payment_choice, reviewed_estimate_version, location, ...payload } = data;
+      const { request_id, payment_choice, reviewed_estimate_version, contact: sentContact, location, ...payload } = data;
+      const contact = nativeTransport(request) ? sentContact : webContact(sentContact, sent);
       if (!card) {
         const submitted = await db.rpc(location ? "create_on_site_booking_located" : "create_on_site_booking_reviewed", { ...(location ? { p_location: location } : {}), p_reviewed_estimate_version:reviewed_estimate_version??null, p_request_id: request_id, p_payload: payload, p_contact: { ...contact, email: contact.email.toLowerCase() } });
         const refusal = estimateReviewRefusal(submitted.error);

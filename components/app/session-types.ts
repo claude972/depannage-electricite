@@ -76,7 +76,8 @@ export interface PublicSession {
   /** Stores a manually shared organisation invitation code, then routes to login. */
   keepInvitation(token: string): void;
   signIn(email: string, password: string): Promise<boolean>;
-  signUp(values: { email: string; password: string; full_name: string; first_name?: string; last_name?: string; role: Role }): Promise<boolean>;
+  /** POST /api/auth/signup: name, e-mail, +596/+590/+33 phone and password are checked by the server. */
+  signUp(values: { email: string; password: string; full_name: string; first_name?: string; last_name?: string; phone?: string; role: Role }): Promise<boolean>;
   resetPassword(email: string): Promise<boolean>;
 }
 
@@ -89,6 +90,8 @@ export interface Session {
   displayName: string;
   /** First name from the real profile (live) or the demo cast (demo); null when unknown — never invented. */
   firstName: string | null;
+  /** Sign-in e-mail address of the live account (auth user, never the profile); "" when unknown or in demo. */
+  accountEmail: string;
   /** Public request draft kept across login (same identity chain only); cleared after POST 201. */
   pendingDraft: RequestValues | null;
   /** Booking extras of the service flow (private contact included), same identity chain only. */

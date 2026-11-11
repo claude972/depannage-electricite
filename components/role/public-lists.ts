@@ -73,14 +73,14 @@ export const ABOUT_VALUES: PublicStep[] = [
   { icon: "shield", title: "Attribution contrôlée", text: "Une mission ne peut être acceptée que par un seul artisan éligible. Aucun délai d’intervention n’est garanti à ce stade." },
 ];
 export const PRIVACY_DATA: { label: string; text: string }[] = [
-  { label: "Compte", text: "adresse email, nom complet, rôle choisi et, si vous le renseignez, numéro de téléphone. L’authentification est gérée par le service d’identité de l’application." },
+  { label: "Compte", text: "adresse e-mail, prénom, nom, numéro de téléphone et rôle choisi. Le compte est confirmé par un lien envoyé à votre adresse e-mail ; l’authentification est gérée par le service d’identité de l’application." },
   { label: "Demandes", text: "type de panne, description, adresse, code postal, ville, niveau d’urgence et état de la demande." },
   { label: "Devis", text: "lignes de prestation, montants, taux de TVA, état et date d’acceptation." },
   { label: "Messages", text: "les échanges liés à une intervention entre le client et l’artisan affecté." },
   { label: "Demande de rappel", text: "si le formulaire est ouvert, le numéro saisi, le motif choisi et votre accord au rappel sont enregistrés pour l’assistance habilitée." },
   { label: "Documents", text: "les fichiers déposés (justificatifs, pièces liées à une intervention) sont conservés dans un stockage privé, accessible uniquement aux rôles autorisés." },
   { label: "Paiements", text: "le règlement est traité avec Stripe. L’application conserve l’état du paiement et son montant ; elle ne stocke aucun numéro de carte." },
-  { label: "Téléphone vérifié", text: "si vous vérifiez votre numéro, un code à usage unique vous est envoyé par SMS par le service d’identité ; l’application ne conserve pas le code." },
+  { label: "Application mobile", text: "le site n’envoie aucun code par SMS. Dans les versions de l’application mobile qui proposent de vérifier un numéro, un code à usage unique est envoyé par SMS par le service d’identité ; l’application ne conserve pas le code." },
   { label: "Adresses enregistrées", text: "les adresses que vous choisissez de mémoriser dans votre profil (nom, prénom, adresse, éventuelle position déclarée par vous). Elles sont privées ; vous pouvez les modifier ou les archiver." },
   { label: "Préférences de notification", text: "les canaux que vous activez ou désactivez dans votre profil." },
   { label: "Notifications du navigateur", text: "si vous les activez, l’adresse technique et les clés de l’abonnement de ce navigateur servent à lui envoyer une notification chiffrée. Vous pouvez désactiver cet abonnement." },

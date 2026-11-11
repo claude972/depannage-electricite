@@ -3,16 +3,16 @@
 // Five steps: urgency (or a wished slot: a wish, never a booked appointment), private contact
 // details, intervention address, payment choice (on site, or a card authorisation that is NOT a
 // charge), summary. Nothing is sent here: the last step stores the canonical public request draft +
-// the booking extras (components/app/booking-draft.ts, payment included) in this tab, then the
-// phone is verified inline (PhoneAccess, no account required); the request is sent only after that
-// and an explicit confirmation. Contact details never enter the request description. The category
-// comes from the service: never re-asked.
+// the booking extras (components/app/booking-draft.ts, payment included) in this tab, then opens the
+// account entry (/#auth): an e-mail + password account, confirmed by the link sent by e-mail. The
+// request is sent only after sign-in and an explicit confirmation. Contact details never enter the
+// request description. The category comes from the service: never re-asked.
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { type AddressValue } from "../app/address-field";
 import { BookingLocationField } from "../app/booking-location";
 import type { BookingLocation } from "../../shared/booking-location";
 import { BOOKING_DRAFT_KEY, CIVILITIES, PAYMENT_LABEL, SLOTS, SLOT_LABEL, bookingDescription, contactErrors, newRequestId, parseBooking, readBooking, saveBooking, type BookingContact, type BookingDraft, type Civility, type PaymentChoice, type Slot } from "../app/booking-draft";
-import { PhoneAccess, phoneActionLabel, phoneAuthOn, useBookingOptions, type OptionsApi, type OptionsState, type PhoneApi, type PhoneState } from "./phone-access";
+import { useBookingOptions, type OptionsApi, type OptionsState } from "./booking-options";
 import { getDraftStorage } from "../app/request-draft-boot";
 import { PUBLIC_DRAFT_KEY, parsePublicDraftValues, readPublicDraft, savePublicDraft } from "../../lib/shared/request-draft";
 import { Field } from "../app/ui";
@@ -43,7 +43,7 @@ export const EMPTY_BOOKING: BookingState = {
   payment: null,
 };
 export const STEP_TITLES: Record<BookingStep, string> = { 1: "Urgence", 2: "Vos coordonnées", 3: "Adresse d’intervention", 4: "Paiement", 5: "Récapitulatif" };
-export const STEP_ACTIONS: Record<BookingStep, string> = { 1: "Continuer", 2: "Continuer", 3: "Continuer", 4: "Continuer", 5: "Vérifier mon téléphone" };
+export const STEP_ACTIONS: Record<BookingStep, string> = { 1: "Continuer", 2: "Continuer", 3: "Continuer", 4: "Continuer", 5: "Créer mon compte" };
 /** Payment copy: honest, no « payé », no guarantee. */
 export const STEP_ACTION = STEP_ACTIONS;
 export const PAYMENT_COPY: Record<PaymentChoice, { title: string; text: string }> = {
@@ -53,10 +53,11 @@ export const PAYMENT_COPY: Record<PaymentChoice, { title: string; text: string }
 export const CARD_UNAVAILABLE = "Bientôt disponible. En attendant, choisissez le paiement après intervention sur la plateforme.";
 export const METHOD_UNAVAILABLE = "Ce mode de règlement n’est pas disponible pour le moment.";
 export const OPTIONS_FAILED = "Options de paiement momentanément indisponibles, réessayez.";
-export const SMS_OFF = "La vérification par SMS n’est pas encore disponible.";
-/** Optional alternative (and the only path while phone auth is off): sign in to an existing
- *  account; the saved booking is kept and confirmed after login. */
-export const ACCOUNT_ACTION = "Utiliser mon compte existant";
+/** Second action of the last step: sign in to an existing account; the saved request is kept. */
+export const ACCOUNT_ACTION = "J’ai déjà un compte";
+/** What happens after the last step, said before the visitor leaves the summary. */
+export const ACCOUNT_NEXT =
+  "Rien n’est encore envoyé. Votre demande est conservée dans cet onglet pendant 30 minutes. Créez votre compte avec votre adresse e-mail et un mot de passe, ouvrez le lien de confirmation reçu par e-mail, puis connectez-vous dans cet onglet : vous relirez la demande avant de confirmer son envoi.";
 export type PaymentAvailability = Partial<Record<PaymentChoice, { available: boolean; reason?: string }>>;
 /** Availability from the server options only: unknown / failed ⇒ nothing available. */
 export function paymentAvailability(o: OptionsState): PaymentAvailability {
@@ -116,7 +117,7 @@ export function toBooking(service: Pick<ServiceEntry, "slug">, s: BookingState):
   return { ...(s.location ? { location: s.location } : {}), slug: service.slug, urgent, slot: urgent ? null : s.slot, notes: s.notes, contact: { ...s.contact, first_name: s.contact.first_name.trim(), last_name: s.contact.last_name.trim(), email: s.contact.email.trim(), phone: s.contact.phone.trim() }, ...(s.payment ? { payment: s.payment } : {}) };
 }
 
-/** Last step (BEFORE the phone check), all-or-nothing on the PAIR (public draft + booking extras): the two previous raw
+/** Last step (BEFORE the account entry), all-or-nothing on the PAIR (public draft + booking extras): the two previous raw
  *  entries are read first; both new entries are written then proven by readback; on any failure
  *  the two previous raw values are restored (or removed when absent) and proven again. Navigation
  *  only when both new entries are proven; never a mixed pair announced as saved. */
@@ -124,7 +125,7 @@ export function finishBooking({ storage, service, state, onSaved = () => {}, now
   storage: Storage | null;
   service: Pick<ServiceEntry, "slug" | "title" | "category">;
   state: BookingState;
-  /** Called once both entries are proven (the wizard then opens the phone check). */
+  /** Called once both entries are proven (the wizard then opens the account entry). */
   onSaved?: () => void;
   now?: number;
 }): { ok: true } | { ok: false; message: string } {
@@ -201,11 +202,13 @@ export function finishBooking({ storage, service, state, onSaved = () => {}, now
   return { ok: false, message: restored ? SAVE_FAILED_MESSAGE : ROLLBACK_FAILED_MESSAGE };
 }
 
-/** End of the wizard: both drafts saved FIRST (atomic pair); then the phone check (only when the
- *  server says phone auth is available) or the existing-account login (/#auth keeps the booking).
- *  Nothing is navigated when the save fails. */
-export function completeBooking({ storage, service, state, mode, go, openPhone, now }: { storage: Storage | null; service: Pick<ServiceEntry, "slug" | "title" | "category">; state: BookingState; mode: "phone" | "account"; go: (href: string) => void; openPhone: () => void; now?: number }) {
-  return finishBooking({ storage, service, state, now, onSaved: () => (mode === "phone" ? openPhone() : go("/#auth")) });
+/** Where each end of the wizard leads: account creation, or sign-in to an existing account. */
+export const ACCOUNT_HREF = { signup: "/#auth/signup", login: "/#auth" } as const;
+/** End of the wizard: both drafts saved FIRST (atomic pair); then the account entry, which keeps
+ *  the booking (creation by default, sign-in for an existing account). Nothing is navigated when
+ *  the save fails. */
+export function completeBooking({ storage, service, state, mode, go, now }: { storage: Storage | null; service: Pick<ServiceEntry, "slug" | "title" | "category">; state: BookingState; mode: "signup" | "login"; go: (href: string) => void; now?: number }) {
+  return finishBooking({ storage, service, state, now, onSaved: () => go(ACCOUNT_HREF[mode]) });
 }
 
 // ---- Bottom bar (closed page: « Confirmer » ; wizard: the active step's real submit) -----------
@@ -242,10 +245,8 @@ export function BookingWizard({
   initial = EMPTY_BOOKING,
   go = (href: string) => window.location.assign(href),
   storage = () => getDraftStorage(),
-  phoneApi,
   optionsApi,
   initialOptions,
-  initialPhase = "steps",
 }: {
   service: ServiceEntry;
   range: string;
@@ -253,28 +254,18 @@ export function BookingWizard({
   initial?: BookingState;
   go?: (href: string) => void;
   storage?: () => Storage | null;
-  phoneApi?: PhoneApi;
-  /** GET /api/bookings/options (payment methods + phone auth availability), loaded once. */
+  /** GET /api/bookings/options (payment methods offered by the server), loaded once. */
   optionsApi?: OptionsApi;
   /** Tests only. */
   initialOptions?: OptionsState;
-  /** Tests only. */
-  initialPhase?: "steps" | "phone";
 }) {
   // PUB-02: the wizard shows the active version's range (public GET), never the static amount; the
   // final explicit confirmation (BookingConfirm) records the version actually reviewed. `range` is
   // kept only for compatibility.
   void range;
   const liveRange = useIndicativeText(service.category);
-  // After the summary, the drafts are saved and the phone is verified inline (same page).
-  const [phase, setPhase] = useState<"steps" | "phone">(initialPhase);
-  const [phoneState, setPhoneState] = useState<PhoneState | null>(null);
   const { options, retry: retryOptions } = useBookingOptions(optionsApi, initialOptions);
   const availability = paymentAvailability(options);
-  const phoneOn = phoneAuthOn(options);
-  // Labels of THIS render: step 5 opens the phone check only when the server says phone auth is
-  // available; otherwise its action is the existing-account path.
-  const STEP_ACTION: Record<BookingStep, string> = { ...STEP_ACTIONS, 5: phoneOn ? STEP_ACTIONS[5] : ACCOUNT_ACTION };
   const [state, setState] = useState<BookingState>(initial);
   const [errors, setErrors] = useState<Errors>({});
   const [failure, setFailure] = useState("");
@@ -289,12 +280,11 @@ export function BookingWizard({
     title.current?.focus({ preventScroll: first.current ? false : true });
     if (!first.current) title.current?.scrollIntoView({ block: "start", behavior: "auto" });
     first.current = false;
-  }, [state.step, phase]);
+  }, [state.step]);
 
   const set = (patch: Partial<BookingState>) => setState((s) => ({ ...s, ...patch }));
   const setContact = (patch: Partial<BookingContact>) => setState((s) => ({ ...s, contact: { ...s.contact, ...patch } }));
   const formId = `booking-step-${state.step}`;
-  const phoneFormId = "booking-phone";
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFailure("");
@@ -304,18 +294,17 @@ export function BookingWizard({
       if (step.state !== state) setState(step.state);
       return;
     }
-    finish(phoneOn ? "phone" : "account");
+    finish("signup");
   };
-  const finish = (mode: "phone" | "account") => {
+  const finish = (mode: "signup" | "login") => {
     setFailure("");
-    const result = completeBooking({ storage: storage(), service, state, mode, go, openPhone: () => setPhase("phone") });
+    const result = completeBooking({ storage: storage(), service, state, mode, go });
     if (!result.ok) setFailure(result.message);
   };
   const back = () => {
     setErrors({});
     setFailure("");
-    if (phase === "phone") setPhase("steps");
-    else if (state.step === 1) onClose();
+    if (state.step === 1) onClose();
     else set({ step: (state.step - 1) as BookingStep });
   };
 
@@ -342,25 +331,9 @@ export function BookingWizard({
             ))}
           </ol>
           <h2 ref={title} tabIndex={-1} className={styles.stepTitle}>
-            {phase === "phone" && phoneOn ? "Vérifier mon téléphone" : STEP_TITLES[state.step]}
+            {STEP_TITLES[state.step]}
           </h2>
 
-          {phase === "phone" && phoneOn ? (
-            <div className={styles.form} data-booking-phone="">
-              <p className={styles.private}>Votre demande est conservée dans ce navigateur. Vérifiez votre téléphone avec le code reçu : aucun compte ni mot de passe n’est nécessaire. Vous confirmerez ensuite l’envoi de la demande.</p>
-              <PhoneAccess
-                purpose="booking"
-                formId={phoneFormId}
-                api={phoneApi}
-                prefill={{ phone: state.contact.phone, first_name: state.contact.first_name, last_name: state.contact.last_name }}
-                onStateChange={setPhoneState}
-                onVerified={() => go("/#new")}
-              />
-              <button type="button" className={styles.secondary} onClick={() => go("/#auth")} data-booking-account="">
-                {ACCOUNT_ACTION}
-              </button>
-            </div>
-          ) : (
           <form id={formId} className={styles.form} onSubmit={submit} noValidate>
             {state.step === 1 && (
               <>
@@ -412,10 +385,10 @@ export function BookingWizard({
                   <Field label="Nom" error={errors.last_name}>
                     <input autoComplete="family-name" maxLength={60} value={state.contact.last_name} onChange={(e) => setContact({ last_name: e.target.value })} />
                   </Field>
-                  <Field label="Adresse email" hint="Facultatif" error={errors.email}>
-                    <input type="email" autoComplete="email" inputMode="email" maxLength={254} value={state.contact.email} onChange={(e) => setContact({ email: e.target.value })} />
+                  <Field label="Adresse e-mail" hint="Elle servira à créer votre compte et à suivre la demande." error={errors.email}>
+                    <input required type="email" autoComplete="email" inputMode="email" maxLength={254} value={state.contact.email} onChange={(e) => setContact({ email: e.target.value })} />
                   </Field>
-                  <Field label="Téléphone de contact (obligatoire)" error={errors.phone}>
+                  <Field label="Téléphone" hint="Indicatif +596, +590 ou +33. Ex. 0696 12 34 56." error={errors.phone}>
                     <input required type="tel" autoComplete="tel" inputMode="tel" maxLength={30} value={state.contact.phone} onChange={(e) => setContact({ phone: e.target.value })} />
                   </Field>
                 </div>
@@ -478,11 +451,7 @@ export function BookingWizard({
                   <div><dt>Règlement</dt><dd>{state.payment ? PAYMENT_LABEL[state.payment] : "À préciser"}</dd></div>
                   {state.notes.trim() && <div><dt>Précisions</dt><dd>{state.notes}</dd></div>}
                 </dl>
-                {phoneOn ? (
-                  <p className={styles.next} role="note">Rien n’est encore envoyé. À l’étape suivante, vous vérifiez votre téléphone avec un code (sans créer de compte), puis vous confirmez l’envoi de la demande. Vous pouvez aussi utiliser votre compte existant.</p>
-                ) : (
-                  <p className={styles.next} role="note" data-booking-sms-off="">{SMS_OFF} Rien n’est encore envoyé : vous pouvez vous connecter à votre compte existant, votre demande est conservée, puis vous confirmez son envoi.</p>
-                )}
+                <p className={styles.next} role="note" data-booking-next="">{ACCOUNT_NEXT}</p>
               </>
             )}
             {failure && <p className={styles.failure} role="alert">{failure}</p>}
@@ -492,29 +461,20 @@ export function BookingWizard({
               <button type="submit" className={styles.inlineSubmit} data-booking-inline-submit={state.step}>
                 {STEP_ACTION[state.step]}
               </button>
-              {state.step === 5 && phoneOn && (
-                <button type="button" className={styles.secondary} onClick={() => finish("account")} data-booking-account="">
+              {state.step === 5 && (
+                <button type="button" className={styles.secondary} onClick={() => finish("login")} data-booking-account="">
                   {ACCOUNT_ACTION}
                 </button>
               )}
             </div>
           </form>
-          )}
         </div>
       </div>
 
       <BookingBar title={service.title} range={liveRange}>
-        {phase === "phone" && phoneOn ? (
-          phoneState?.stage !== "verified" && (
-            <button type="submit" form={phoneFormId} className={styles.barButton} data-booking-submit="phone" disabled={phoneState?.stage === "sending" || phoneState?.stage === "verifying"}>
-              {phoneState ? phoneActionLabel(phoneState) : "Recevoir un code"}
-            </button>
-          )
-        ) : (
-          <button type="submit" form={formId} className={styles.barButton} data-booking-submit={state.step}>
-            {STEP_ACTION[state.step]}
-          </button>
-        )}
+        <button type="submit" form={formId} className={styles.barButton} data-booking-submit={state.step}>
+          {STEP_ACTION[state.step]}
+        </button>
       </BookingBar>
     </div>
   );

@@ -1,10 +1,12 @@
 import { z } from "zod";
 import {
+  ApiError,
   authenticatedClient,
   apiError,
   assertOrigin,
   dbError,
 } from "@/lib/supabase/server";
+import { nativeTransport, normalizeWebPhone, WEB_PHONE_MESSAGE } from "@/lib/features/guest/phone-number";
 import { validated } from "@/lib/supabase/validation";
 const schema = z
   .object({
@@ -21,8 +23,19 @@ const schema = z
 export async function PATCH(request: Request) {
   try {
     assertOrigin(request);
-    const { db } = await authenticatedClient(request);
+    const { db, user } = await authenticatedClient(request);
     const data = await validated(request, schema);
+    // Website: a client account always keeps a reachable number (+596, +590 or +33), stored in
+    // international form. Professionals, administrators and native builds keep the former rule.
+    if (!nativeTransport(request)) {
+      const own = await db.from("profiles").select("role").eq("id", user.id).maybeSingle();
+      dbError(own.error);
+      if (own.data?.role === "client") {
+        const phone = normalizeWebPhone(data.phone);
+        if (!phone) throw new ApiError(422, WEB_PHONE_MESSAGE);
+        data.phone = phone;
+      }
+    }
     const { data: profile, error } = await (data.first_name !== undefined && data.last_name !== undefined
       ? db.rpc("update_profile_name", {
           p_first_name: data.first_name,

@@ -4,7 +4,7 @@ import { env } from "node:process";
 import { z } from "zod";
 import { adminClient, ApiError, authenticatedClient, dbError } from "@/lib/supabase/server";
 import { validated } from "@/lib/supabase/validation";
-import { normalizeCallbackPhone } from "@/lib/features/guest/phone-auth";
+import { normalizeCallbackPhone } from "@/lib/features/guest/phone-number";
 import { comparePostgresTime } from "@/lib/shared/postgres-time-order";
 import { callbackPageNumber, callbackPageSize, callbackQueue, callbackReason } from "./contract";
 

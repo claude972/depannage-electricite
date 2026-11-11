@@ -1,0 +1,40 @@
+/* /suivi page: one sentence and one link to the e-mail sign-in. */
+.page {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 32px 16px 72px;
+}
+.page h1 {
+  margin: 0 0 8px;
+  color: var(--ui-text);
+  font-size: 28px;
+  font-weight: 700;
+}
+.lead {
+  margin: 0 0 20px;
+  color: var(--ui-text-muted);
+  line-height: 1.6;
+}
+.submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 24px;
+  border-radius: 14px;
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.submit:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+@media (max-width: 640px) {
+  .submit {
+    display: flex;
+  }
+}
