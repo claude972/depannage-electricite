@@ -449,7 +449,9 @@ test("équipes prestataires paginées (Chromium) : une reprise par section, déd
 
 test("câblage réel (démo client / gestionnaire « Vue d’ensemble ») : aucun bloc sans données serveur, aucun appel /api, pas de débordement à 390", { skip }, async () => {
   const client = readFileSync("components/role/client-space.tsx", "utf8");
-  assert.match(client, /<ProviderTeamsPanel key=\{`teams\|\$\{session\.mutationContext\.userId\(\) \?\? "-"\}\|\$\{session\.mutationContext\.generation\(\)\}`\} audience="member" context=\{session\.mutationContext\} demo=\{session\.mode === "demo"\} \/>/);
+  const settings = client.slice(client.indexOf("function ProfileSettings("));
+  assert.match(settings, /const demo = session\.mode === "demo"/);
+  assert.match(settings, /<ProviderTeamsPanel key=\{`teams\|\$\{session\.mutationContext\.userId\(\) \?\? "-"\}\|\$\{session\.mutationContext\.generation\(\)\}`\} audience="member" context=\{session\.mutationContext\} demo=\{demo\} \/>/);
   const enterprise = readFileSync("components/role/enterprise-space.tsx", "utf8");
   assert.match(enterprise, /<ProviderTeamsPanel key=\{`teams\|\$\{c\.session\.mutationContext\.userId\(\) \?\? "-"\}\|\$\{c\.session\.mutationContext\.generation\(\)\}`\} audience="member" context=\{c\.session\.mutationContext\} demo=\{c\.session\.mode === "demo"\} \/>/);
   assert.doesNotMatch(readFileSync("components/features/provider-teams/provider-teams-panel.tsx", "utf8"), /window\.confirm/);
