@@ -1,3 +1,4 @@
+import { PublicTabs } from '@/components/mobile-chrome';
 import { useRouter } from 'expo-router';
 import { openBrowserAsync } from 'expo-web-browser';
 import { useState } from 'react';
@@ -18,7 +19,7 @@ export default function MobileHelp() {
   const operator = publishedState(operatorRead);
   const warranty = publishedState(warrantyRead);
   const profile = operator.phase === 'published' ? operator.value.profile : null;
-  return <Screen>
+  return <Screen footer={<PublicTabs />}>
     <Copy kind="title">Comment pouvons-nous vous aider ?</Copy>
     <Card>
       <Copy kind="subtitle">Une intervention en cours ?</Copy>

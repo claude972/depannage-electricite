@@ -61,7 +61,7 @@ test("une seule version : source commune, package.json Web et mobile, verrous et
 
 test("profils EAS : preview et identifiants conservés, simulateur et appareil distincts, ni production ni envoi aux stores", () => {
   const eas = json(`${MOBILE}/eas.json`), expo = json(`${MOBILE}/app.json`).expo;
-  assert.deepEqual(eas.build.preview, { distribution: "internal", environment: "preview", android: { buildType: "apk", credentialsSource: "local" }, ios: { simulator: true } });
+  assert.deepEqual(eas.build.preview, { distribution: "internal", environment: "preview", android: { buildType: "apk", credentialsSource: "local" }, ios: { simulator: true, scheme: "DomDepannage" } });
   assert.equal(eas.cli.requireCommit, true);
   assert.equal("submit" in eas, false);
   assert.equal("production" in eas.build, false);

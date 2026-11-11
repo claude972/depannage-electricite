@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
 import * as Location from 'expo-location';
 import { z } from 'zod';
-import { Action, Card, Copy, Field, ReadState, Screen } from '@/components/ui';
+import { Action, BookingProgress, Card, Copy, Field, ReadState, Screen } from '@/components/ui';
 import { PhoneChallenge } from '@/components/phone-challenge';
 import { OptionalEmailAccount } from '@/components/optional-email-account';
 import { ApiFailure, api, useResource } from '@/lib/api';
@@ -20,29 +20,41 @@ const options = z.object({ payment_methods: z.array(z.object({ id: z.string(), a
 
 export default function ClientBooking() {
   const auth = useSession();
-  const { service, field } = useLocalSearchParams<{ service?: string; field?: string }>();
+  const { service, field, urgency } = useLocalSearchParams<{ service?: string; field?: string; urgency?: string }>();
   const addressFirst = field === 'address';
+  const initialUrgency = urgency === 'urgent' || urgency === 'scheduled' ? urgency : undefined;
   const phone = verifiedPhone(auth.session?.user);
   useEffect(() => {
     if (auth.phoneResume === 'booking') auth.consumePhoneResume();
   }, [auth.phoneResume]);
-  if (!auth.session) return <BookingFields service={service} addressFirst={addressFirst} />;
-  if (!phone) return <SignedInFallback />;
-  return <VerifiedBooking key={auth.session.user.id + phone} actor={auth.session.user.id} phone={phone} token={auth.session.access_token} service={service} addressFirst={addressFirst} />;
+  if (!auth.session) return <BookingFields service={service} addressFirst={addressFirst} initialUrgency={initialUrgency} />;
+  if (!phone) return <SignedInFallback service={service} />;
+  return <VerifiedBooking key={auth.session.user.id + phone} actor={auth.session.user.id} phone={phone} token={auth.session.access_token} service={service} addressFirst={addressFirst} initialUrgency={initialUrgency} />;
 }
 
-function SignedInFallback() {
+function SignedInFallback({ service }: { service?: string }) {
   const router = useRouter();
+  const catalogue = usePublicServices();
+  const type = catalogue.data?.items.find(item => item.slug === service)?.category;
   return <Screen>
     <Copy kind="title">Nouvelle demande</Copy>
     <Copy>Continuez depuis votre espace connecté.</Copy>
-    <Action label="Ouvrir le formulaire" onPress={() => router.replace('/demande')} />
+    <Action label="Ouvrir le formulaire" onPress={() => router.replace({ pathname: '/demande', params: type ? { type } : {} })} />
   </Screen>;
 }
 
-function BookingFields({ service, addressFirst, owner }: {
+type BookingStep = 'urgency' | 'contact' | 'address' | 'review';
+const stepNames: Record<BookingStep, string> = {
+  urgency: 'Urgence', contact: 'Vos coordonnées', address: 'Adresse d’intervention', review: 'Récapitulatif',
+};
+const defaultSteps: BookingStep[] = ['urgency', 'contact', 'address', 'review'];
+const addressSteps: BookingStep[] = ['address', 'urgency', 'contact', 'review'];
+type InitialUrgency = 'urgent' | 'scheduled';
+
+function BookingFields({ service, addressFirst, initialUrgency, owner }: {
   service?: string;
   addressFirst?: boolean;
+  initialUrgency?: InitialUrgency;
   owner?: { phone: string; first: string; last: string; onReady: (request: StagedPhoneBooking) => Promise<void> };
 }) {
   const router = useRouter();
@@ -50,7 +62,10 @@ function BookingFields({ service, addressFirst, owner }: {
   const price = useResource('/api/public/indicative-prices', prices);
   const [slug, setSlug] = useState(service ?? ''), [description, setDescription] = useState('');
   const [address, setAddress] = useState(''), [postal, setPostal] = useState(''), [city, setCity] = useState('');
-  const [urgency, setUrgency] = useState<'urgent' | 'scheduled' | null>(null);
+  const [urgency, setUrgency] = useState<InitialUrgency | null>(initialUrgency ?? null);
+  const steps = addressFirst ? addressSteps : defaultSteps;
+  const [stepIndex, setStepIndex] = useState(0);
+  const step = steps[stepIndex];
   const [first, setFirst] = useState(owner?.first ?? ''), [last, setLast] = useState(owner?.last ?? '');
   const [phone, setPhone] = useState(owner?.phone ?? '');
   const [locating, setLocating] = useState(false), [saving, setSaving] = useState(false);
@@ -60,6 +75,25 @@ function BookingFields({ service, addressFirst, owner }: {
   const savingLock = useRef(false);
   const chosen = catalogue.data?.items.find(item => item.slug === slug);
   const range = chosen && price.data?.ranges[chosen.category];
+  const values = { service_slug: chosen?.slug, category: chosen?.category, description, address, postal_code: postal, city, urgency };
+  const addressSchema = bookingInput.pick({ address: true, postal_code: true, city: true });
+  const situationSchema = bookingInput.pick({ service_slug: true, category: true, urgency: true, description: true });
+  const contactValues = { first_name: first, last_name: last, phone: normalizeInternationalPhone(phone) };
+
+  function nextStep() {
+    setError(null);
+    if (step === 'urgency' && !chosen) { setError('Sélectionnez votre dépannage.'); return; }
+    if (step === 'urgency' && !urgency) { setError('Indiquez si l’intervention est urgente.'); return; }
+    const result = step === 'address' ? addressSchema.safeParse(values)
+      : step === 'contact' ? phoneContact.safeParse(contactValues)
+        : situationSchema.safeParse(values);
+    if (!result.success) {
+      const phoneIssue = step === 'contact' && result.error.issues[0].path[0] === 'phone';
+      setError(phoneIssue ? 'Renseignez un numéro au format international.' : result.error.issues[0].message);
+      return;
+    }
+    setStepIndex(stepIndex + 1);
+  }
 
   async function locate() {
     setLocating(true); setError(null); setSuggestion(null);
@@ -79,9 +113,9 @@ function BookingFields({ service, addressFirst, owner }: {
   async function continueRequest() {
     if (!chosen || !range || savingLock.current) return;
     if (!urgency) { setError('Indiquez si l’intervention est urgente.'); return; }
-    const input = bookingInput.safeParse({ service_slug: chosen.slug, category: chosen.category, description, address, postal_code: postal, city, urgency });
+    const input = bookingInput.safeParse(values);
     if (!input.success) { setError(input.error.issues[0].message); return; }
-    const contact = phoneContact.safeParse({ first_name: first, last_name: last, phone: normalizeInternationalPhone(phone) });
+    const contact = phoneContact.safeParse(contactValues);
     if (!contact.success) { setError('Renseignez vos prénom, nom et numéro au format international.'); return; }
     const request = { id: randomUUID(), input: input.data, contact: contact.data };
     savingLock.current = true;
@@ -116,41 +150,57 @@ function BookingFields({ service, addressFirst, owner }: {
         <Field label="Commune" value={city} onChangeText={setCity} maxLength={120} />
       </Card>;
 
-  return <Screen>
+  return <Screen key={step}>
     <Copy kind="title">Votre demande de dépannage</Copy>
-    {addressFirst && addressFields}
-    <ReadState loading={catalogue.loading} error={catalogue.error} onRetry={catalogue.reload} />
-    {chosen ? <Card>
+    <BookingProgress labels={steps.map(item => stepNames[item])} index={stepIndex} />
+    {chosen && <Card>
       <Copy kind="subtitle">{chosen.title}</Copy>
-      <Action secondary label="Changer de dépannage" onPress={() => router.push('/catalogue')} />
-      <Copy kind="subtitle">Est-ce urgent ?</Copy>
-      <Action label="Oui, c’est urgent" secondary={urgency !== 'urgent'} onPress={() => setUrgency('urgent')} />
-      <Action label="Non, je peux planifier" secondary={urgency !== 'scheduled'} onPress={() => setUrgency('scheduled')} />
-      <Field label="Décrivez la panne" value={description} onChangeText={setDescription} multiline maxLength={4000} />
-    </Card> : catalogue.data && <Card>
-      <Copy kind="subtitle">Sélectionnez votre dépannage</Copy>
-      {catalogue.data.items.map(item => <Action key={item.slug} secondary label={item.title} onPress={() => setSlug(item.slug)} />)}
+      {range && <Copy kind="muted">Estimation indicative : {euros(range.min_cents)} à {euros(range.max_cents)}</Copy>}
     </Card>}
-    {chosen && <>
-      <Card>
-        <Copy kind="subtitle">Vos coordonnées</Copy>
-        <Field label="Prénom" value={first} onChangeText={setFirst} autoComplete="given-name" maxLength={60} />
-        <Field label="Nom" value={last} onChangeText={setLast} autoComplete="family-name" maxLength={60} />
-        <Field label="Téléphone" value={phone} onChangeText={setPhone} placeholder="+596 ou +590…" keyboardType="phone-pad" autoComplete="tel" maxLength={40} editable={!owner} />
-      </Card>
-      {!addressFirst && addressFields}
-      <Card>
-        <Copy kind="subtitle">Estimation indicative</Copy>
-        <ReadState loading={price.loading} error={price.error} onRetry={price.reload} />
-        {range && <Copy>{euros(range.min_cents)} à {euros(range.max_cents)}. Le devis fixe le prix final.</Copy>}
-        {error && <Copy kind="error">{error}</Copy>}
-        <Action label={saving ? 'Enregistrement…' : 'Continuer'} disabled={!range || saving} onPress={() => void continueRequest()} />
-      </Card>
+
+    {step === 'urgency' && <>
+      <ReadState loading={catalogue.loading} error={catalogue.error} onRetry={catalogue.reload} />
+      {chosen ? <Card>
+        <Copy kind="subtitle">Est-ce urgent ?</Copy>
+        <Action label="Oui, c’est urgent" secondary={urgency !== 'urgent'} onPress={() => setUrgency('urgent')} />
+        <Action label="Non, je peux planifier" secondary={urgency !== 'scheduled'} onPress={() => setUrgency('scheduled')} />
+        <Field label="Décrivez la panne" value={description} onChangeText={setDescription} multiline maxLength={4000} />
+        <Action secondary label="Changer de dépannage" onPress={() => setSlug('')} />
+      </Card> : catalogue.data && <Card>
+        <Copy kind="subtitle">Sélectionnez votre dépannage</Copy>
+        {catalogue.data.items.length === 0 && <Copy kind="muted">Aucune intervention n’est proposée pour le moment.</Copy>}
+        {catalogue.data.items.map(item => <Action key={item.slug} secondary label={item.title} onPress={() => setSlug(item.slug)} />)}
+      </Card>}
     </>}
+    {step === 'contact' && <Card>
+      <Copy kind="subtitle">Vos coordonnées</Copy>
+      <Field label="Prénom" value={first} onChangeText={setFirst} autoComplete="given-name" maxLength={60} />
+      <Field label="Nom" value={last} onChangeText={setLast} autoComplete="family-name" maxLength={60} />
+      <Field label="Téléphone" value={phone} onChangeText={setPhone} placeholder="+596 ou +590…" keyboardType="phone-pad" autoComplete="tel" maxLength={40} editable={!owner} />
+    </Card>}
+    {step === 'address' && addressFields}
+    {step === 'review' && <Card>
+      <Copy kind="subtitle">Vérifiez votre demande</Copy>
+      <Copy>{description}</Copy>
+      <Copy>{address}, {postal} {city}</Copy>
+      <Copy>{first} {last} · {phone}</Copy>
+      <ReadState loading={price.loading} error={price.error} onRetry={price.reload} />
+      <Copy kind="muted">Le devis fixe le prix final. La vérification du numéro permet de retrouver votre intervention.</Copy>
+    </Card>}
+
+    {error && <Copy kind="error">{error}</Copy>}
+    {step === 'review'
+      ? <Action label={saving ? 'Enregistrement…' : owner ? 'Continuer vers le règlement' : 'Vérifier mon numéro'} disabled={!range || saving}
+          onPress={() => void continueRequest()} />
+      : <Action label="Continuer" disabled={step === 'urgency' && !catalogue.data} onPress={nextStep} />}
+    {stepIndex > 0 && <Action secondary label="Étape précédente" disabled={saving}
+      onPress={() => { setError(null); setStepIndex(stepIndex - 1); }} />}
   </Screen>;
 }
 
-function VerifiedBooking({ actor, phone, token, service, addressFirst }: { actor: string; phone: string; token: string; service?: string; addressFirst?: boolean }) {
+function VerifiedBooking({ actor, phone, token, service, addressFirst, initialUrgency }: {
+  actor: string; phone: string; token: string; service?: string; addressFirst?: boolean; initialUrgency?: InitialUrgency;
+}) {
   const account = useWorkspace(true);
   const [key, setKey] = useState<string | null>(null), [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -167,11 +217,11 @@ function VerifiedBooking({ actor, phone, token, service, addressFirst }: { actor
     }} />
   </Screen>;
   if (account.data.profile.role !== 'client') return <Screen><Copy>Ce formulaire est réservé à l’espace client.</Copy></Screen>;
-  return <ConfirmBooking actor={actor} phone={phone} token={token} service={service} addressFirst={addressFirst} stageKey={key} profile={account.data.profile} />;
+  return <ConfirmBooking actor={actor} phone={phone} token={token} service={service} addressFirst={addressFirst} initialUrgency={initialUrgency} stageKey={key} profile={account.data.profile} />;
 }
 
-function ConfirmBooking({ actor, phone, token, service, addressFirst, stageKey, profile }: {
-  actor: string; phone: string; token: string; service?: string; addressFirst?: boolean; stageKey: string;
+function ConfirmBooking({ actor, phone, token, service, addressFirst, initialUrgency, stageKey, profile }: {
+  actor: string; phone: string; token: string; service?: string; addressFirst?: boolean; initialUrgency?: InitialUrgency; stageKey: string;
   profile: { first_name?: string | null; last_name?: string | null };
 }) {
   const router = useRouter();
@@ -182,6 +232,7 @@ function ConfirmBooking({ actor, phone, token, service, addressFirst, stageKey, 
   const [stageError, setStageError] = useState<string | null>(null), [attempt, setAttempt] = useState(0);
   const [error, setError] = useState<string | null>(null), [busy, setBusy] = useState(false);
   const [onSite, setOnSite] = useState(false), [newRequest, setNewRequest] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
   const lock = useRef(false);
   const latestToken = useRef(token);
   latestToken.current = token;
@@ -251,13 +302,15 @@ function ConfirmBooking({ actor, phone, token, service, addressFirst, stageKey, 
     <Action secondary label="Commencer une autre demande" disabled={draft.pending} onPress={() => setNewRequest(true)} />
     <OptionalEmailAccount />
   </Screen>;
-  if (!request) return <BookingFields service={service} addressFirst={addressFirst} owner={{
+  if (!request) return <BookingFields service={service} addressFirst={addressFirst} initialUrgency={initialUrgency} owner={{
     phone, first: profile.first_name ?? '', last: profile.last_name ?? '',
     onReady: async next => { await deviceDrafts.write(stageKey, next); setStage({ request: next }); },
   }} />;
 
-  return <Screen>
-    <Copy kind="title">Confirmer ma demande</Copy>
+  const review = reviewing || alreadySending;
+  return <Screen key={review ? 'review' : 'payment'}>
+    <Copy kind="title">{review ? 'Confirmer ma demande' : 'Mode de règlement'}</Copy>
+    <BookingProgress labels={['Règlement', 'Récapitulatif']} index={review ? 1 : 0} />
     <Card>
       <Copy kind="subtitle">{categories[request.input.category]}</Copy>
       <Copy>{request.input.description}</Copy>
@@ -267,17 +320,21 @@ function ConfirmBooking({ actor, phone, token, service, addressFirst, stageKey, 
       {range && <Copy>Estimation indicative : {euros(range.min_cents)} à {euros(range.max_cents)}.</Copy>}
     </Card>
     <Card>
-      <Copy kind="subtitle">Mode de règlement</Copy>
+      <Copy kind="subtitle">{review ? "Récapitulatif" : "Choisir le règlement"}</Copy>
       {!alreadySending && <ReadState loading={bookingOptions.loading} error={bookingOptions.error} onRetry={bookingOptions.reload} />}
-      {eligible && <Action secondary={!onSite && !alreadySending} label="Régler après l’intervention" disabled={busy || alreadySending} onPress={() => setOnSite(true)} />}
+      {eligible && !review && <Action secondary={!onSite} label="Régler après l’intervention" onPress={() => setOnSite(true)} />}
+      {review && (onSite || alreadySending) && <Copy>Règlement après l’intervention via DomDépannage.</Copy>}
       {alreadySending && <Copy>Le prochain essai réutilise la même référence de demande.</Copy>}
       {!alreadySending && !eligible && !bookingOptions.loading && !bookingOptions.error && <Copy kind="muted">Ce mode de règlement est indisponible pour le moment.</Copy>}
       {draft.error && <ReadState loading={false} error={draft.error} onRetry={draft.retry} />}
       {error && <Copy kind="error">{error}</Copy>}
       {intent?.reviewRequired && <Action secondary label="Actualiser le tarif" disabled={busy} onPress={price.reload} />}
-      <Action label={busy ? 'Envoi…' : alreadySending ? 'Réessayer la même demande' : intent?.reviewRequired ? 'Confirmer avec la nouvelle estimation' : 'Confirmer ma demande'}
-        disabled={busy || draft.pending || !range || !version || (!alreadySending && (!onSite || !eligible)) || Boolean(intent?.reviewRequired && version === intent.version)}
-        onPress={() => void submit()} />
+      {review ? <>
+        <Action label={busy ? 'Envoi…' : alreadySending ? 'Réessayer la même demande' : intent?.reviewRequired ? 'Confirmer avec la nouvelle estimation' : 'Confirmer ma demande'}
+          disabled={busy || draft.pending || !range || !version || (!alreadySending && (!onSite || !eligible)) || Boolean(intent?.reviewRequired && version === intent.version)}
+          onPress={() => void submit()} />
+        {!alreadySending && <Action secondary label="Revenir au règlement" disabled={busy} onPress={() => setReviewing(false)} />}
+      </> : <Action label="Continuer vers le récapitulatif" disabled={!onSite || !eligible} onPress={() => setReviewing(true)} />}
     </Card>
   </Screen>;
 }

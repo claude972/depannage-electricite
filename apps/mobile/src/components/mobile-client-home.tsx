@@ -1,296 +1,355 @@
-import { Image, type ImageProps } from 'expo-image';
-import { useRouter, type Href } from 'expo-router';
-import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, useColorScheme, useWindowDimensions } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  categoryLabel, featuredServices, indicativeRange, servicePhotoPosition, servicePhotoUri,
-  useIndicativePrices, usePublicServices, type PublicService,
-} from '@/lib/public-services';
+import { useRef, useState } from 'react';
+import { Image } from 'expo-image';
+import { useRouter } from 'expo-router';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions, type ScrollViewInstance } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { COMMITMENTS, FAQ, MATCHING, STEPS } from '../../../../shared/public-home';
+import { PUBLIC_ADVICE } from '../../../../shared/public-advice';
+import { useIndicativePrices, usePublicServices } from '@/lib/public-services';
+import { MobileIcon, MobilePublicHeader, PublicTabs, type Glyph } from './mobile-chrome';
+import { articlePhoto, PublicEditorialFooter, PublicLink, publicPhotos, PublicReadState, PublicServiceRow, usePublicPortal } from './mobile-public-content';
+import { Action, Card, Copy, editorial, usePalette } from './ui';
 
-// Direction Mobile B (Figma hec6XdQ7IbOFVeFhq6KPDw) : couleurs exactes des
-// écrans client clair et sombre.
-const lightPalette = {
-  background: '#FFFFFF', surface: '#FFFFFF', navigation: '#FFFFFF', text: '#12151C', muted: '#515B6B',
-  border: '#DFE3EB', accent: '#2246E5', primary: '#2246E5', onPrimary: '#FFFFFF', danger: '#B42318',
-};
-const darkPalette: typeof lightPalette = {
-  background: '#111318', surface: '#1B2028', navigation: '#1B2028', text: '#F7F9FC', muted: '#B9C2D0',
-  border: '#343C49', accent: '#91A4FF', primary: '#2246E5', onPrimary: '#FFFFFF', danger: '#FF9F9F',
-};
-// Pictogrammes Figma, un fichier par thème (assets-manifest.json).
-const lightIcons = {
-  bell: require('../../assets/mobile-b/3861f.svg'),
-  pin: require('../../assets/mobile-b/697ca.svg'), chevron: require('../../assets/mobile-b/7ab3e.svg'),
-  check: require('../../assets/mobile-b/a0a32.svg'), chevronAccent: require('../../assets/mobile-b/c8f21.svg'),
-  home: require('../../assets/mobile-b/1165a.svg'), file: require('../../assets/mobile-b/783ab.svg'),
-  help: require('../../assets/mobile-b/cdf42.svg'),
-};
-const darkIcons: typeof lightIcons = {
-  bell: require('../../assets/mobile-b/f58c4.svg'),
-  pin: require('../../assets/mobile-b/19cee.svg'), chevron: require('../../assets/mobile-b/ef4a7.svg'),
-  check: require('../../assets/mobile-b/f0c76.svg'), chevronAccent: require('../../assets/mobile-b/4e40c.svg'),
-  home: require('../../assets/mobile-b/9e7c4.svg'), file: require('../../assets/mobile-b/54537.svg'),
-  help: require('../../assets/mobile-b/3e4ba.svg'),
-};
-/** Photographies de la maquette, aux emplacements qu’elle représente. */
-export const mobileBPhotos = {
-  editorial: require('../../assets/mobile-b/337b8.jpg') as number,
-  sockets: require('../../assets/mobile-b/93981.jpg') as number,
+const situations = {
+  outage: { title: 'Coupure de courant partielle', description: 'Une pièce ou une partie du logement reste sans courant.',
+    slug: 'coupure-de-courant-partielle', photo: publicPhotos.cabinet },
+  socket: { title: 'Prise qui ne fonctionne plus', description: 'Une ou plusieurs prises n’alimentent plus les appareils.',
+    slug: 'prise-qui-ne-fonctionne-plus', photo: publicPhotos.outlet },
+  panel: { title: 'Disjoncteur qui saute', description: 'Le courant se coupe lorsqu’un circuit ou un appareil démarre.',
+    slug: 'disjoncteur-qui-saute', photo: publicPhotos.electrician },
+  light: { title: 'Éclairage en panne', description: 'Un luminaire ou une zone reste sans éclairage.',
+    slug: 'eclairage-qui-ne-sallume-plus', photo: publicPhotos.lighting },
 };
 
-export function useMobileB() {
-  const dark = useColorScheme() === 'dark';
-  return { palette: dark ? darkPalette : lightPalette, icons: dark ? darkIcons : lightIcons };
+const shortcuts = [
+  { label: 'Coupure', situation: situations.outage, art: require('../../assets/public/outage.png'), background: '#FCF0E4' },
+  { label: 'Prises', situation: situations.socket, art: require('../../assets/public/socket.png'), background: '#F0F1F6' },
+  { label: 'Tableau', situation: situations.panel, art: require('../../assets/public/panel.png'), background: '#E8EEFC' },
+  { label: 'Éclairage', situation: situations.light, art: require('../../assets/public/light.png'), background: '#FBF2DC' },
+];
+
+type Situation = { title: string; description: string; photo: number } &
+  ({ slug: string; portal?: never } | { portal: string; slug?: never });
+const modes: { label: string; title: string; icon: Glyph; items: Situation[] }[] = [
+  { label: 'Dépannage', title: 'Dépannages courants', icon: 'bolt', items: Object.values(situations) },
+  { label: 'Installation', title: 'Installations courantes', icon: 'plug', items: [
+    { title: 'Ajouter une prise', description: 'Préparez la pose d’un nouveau point électrique.', photo: publicPhotos.outlet,
+      portal: '/#new/installation-prise' },
+    { title: 'Installer un luminaire', description: 'Décrivez le luminaire et son emplacement.', photo: publicPhotos.lighting,
+      portal: '/#new/installation-luminaire' },
+  ] },
+  { label: 'Diagnostic', title: 'Situations à vérifier', icon: 'search', items: [
+    { title: 'Origine de la panne inconnue', description: 'Vous constatez une anomalie sans avoir identifié son origine.',
+      slug: 'origine-de-la-panne-inconnue', photo: publicPhotos.cabinet },
+    { title: 'Faire vérifier le tableau', description: 'Décrivez le problème pour orienter la vérification.',
+      slug: 'panne-tableau-electrique', photo: publicPhotos.panel },
+    situations.panel,
+  ] },
+];
+
+const commitmentIcons = { receipt: 'price', shield: 'shield', help: 'help' } as const;
+
+function normalize(value: string) {
+  return value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('fr').trim();
 }
 
-function Icon({ source, size }: { source: number; size: number }) {
-  return <Image source={source} contentFit="contain" accessible={false} accessibilityElementsHidden
-    importantForAccessibility="no" style={{ width: size, height: size }}/>;
-}
+type Detail = { title: string; text: string; link?: { text: string; href: string } };
 
-/**
- * Photo de fiche : image de l’API lorsqu’elle est valide et se charge, sinon
- * la photographie locale de la maquette. Un échec distant ne casse rien.
- */
-export function ServicePhoto({ service, fallback, decorative = false, style }: {
-  service: PublicService; fallback: number; decorative?: boolean; style: ImageProps['style'];
-}) {
-  const uri = servicePhotoUri(service.photo?.src);
-  const [failed, setFailed] = useState<string | null>(null);
-  const remote = uri !== null && failed !== uri;
-  const described = !decorative && remote && service.alt.length > 0;
-  return <Image
-    source={remote && uri ? { uri } : fallback} placeholder={fallback} placeholderContentFit="cover"
-    contentFit="cover" contentPosition={remote ? servicePhotoPosition(service.position) : undefined}
-    onError={() => setFailed(uri)} transition={150} style={style}
-    accessible={described} accessibilityRole={described ? 'image' : undefined}
-    accessibilityLabel={described ? service.alt : undefined}
-    accessibilityElementsHidden={!described} importantForAccessibility={described ? 'yes' : 'no'}/>;
-}
-
-/** États de lecture d’une ressource publique : chargement, puis erreur avec reprise. */
-export function MobileBState({ loading, error, onRetry, context }: {
-  loading: boolean; error: string | null; onRetry: () => void; context: string;
-}) {
-  const { palette } = useMobileB();
-  if (loading) return <View accessible accessibilityRole="progressbar" accessibilityLabel="Chargement en cours" style={styles.loading}>
-    <ActivityIndicator color={palette.accent}/>
-    <Text style={[styles.note, { color: palette.muted }]}>Chargement…</Text>
-  </View>;
-  if (!error) return null;
-  return <View accessibilityLiveRegion="polite" style={[styles.stateCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-    <Text style={[styles.stateTitle, { color: palette.text }]}>{context}</Text>
-    <Text style={[styles.note, { color: palette.danger }]}>{error}</Text>
-    <Pressable accessibilityRole="button" onPress={onRetry}
-      style={({ pressed }) => [styles.retry, { borderColor: palette.border, opacity: pressed ? .76 : 1 }]}>
-      <Text style={[styles.retryText, { color: palette.accent }]}>Réessayer</Text>
-    </Pressable>
-  </View>;
-}
-
-/**
- * Action basse fixe. À placer après la zone défilante, dans une colonne
- * flex : elle occupe sa propre zone et ne recouvre jamais le contenu.
- */
-export function MobileBFooterAction({ label, onPress }: { label: string; onPress: () => void }) {
-  const { palette } = useMobileB();
-  const insets = useSafeAreaInsets();
-  return <View style={[styles.footer, { backgroundColor: palette.background, paddingBottom: insets.bottom + 12 }]}>
-    <Pressable accessibilityRole="button" onPress={onPress}
-      style={({ pressed }) => [styles.footerAction, { backgroundColor: palette.primary, opacity: pressed ? .76 : 1 }]}>
-      <Text style={[styles.actionText, { color: palette.onPrimary }]}>{label}</Text>
-    </Pressable>
-  </View>;
-}
-
-// Voile de lisibilité de la maquette (dégradé horizontal 88 % → 25 %), rendu
-// en bandes pour ne dépendre d’aucune bibliothèque de dégradé.
-const veil = Array.from({ length: 18 }, (_, index) => `rgba(6,10,23,${(.88 - .63 * index / 17).toFixed(3)})`);
-
-function NavigationItem({ label, icon, selected = false, onPress }: {
-  label: string; icon: number; selected?: boolean; onPress?: () => void;
-}) {
-  const { palette } = useMobileB();
-  const content = <>
-    <Icon source={icon} size={20}/>
-    <Text numberOfLines={1} maxFontSizeMultiplier={1.4}
-      style={[selected ? styles.navigationActive : styles.navigationLabel, { color: selected ? palette.accent : palette.muted }]}>{label}</Text>
-  </>;
-  if (!onPress) return <View accessible accessibilityRole="tab" accessibilityLabel={label}
-    accessibilityState={{ selected }} style={styles.navigationItem}>{content}</View>;
-  return <Pressable accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected }} onPress={onPress}
-    style={({ pressed }) => [styles.navigationItem, { opacity: pressed ? .6 : 1 }]}>{content}</Pressable>;
-}
-
-/**
- * Accueil client Mobile B. Par défaut : visiteur sans compte (cloche vers la
- * connexion, « Mes demandes » vers la recherche de dossier). L’accueil
- * authentifié peut fournir ses propres destinations.
- */
-export function MobileClientHome({ notificationsHref = '/connexion', requestsHref = '/retrouver' }: {
-  notificationsHref?: Href; requestsHref?: Href;
-}) {
+function DetailRows({ items, firstOpen = false }: { items: Detail[]; firstOpen?: boolean }) {
   const router = useRouter();
-  const { palette, icons } = useMobileB();
-  const insets = useSafeAreaInsets();
+  const p = usePalette();
+  const [expanded, setExpanded] = useState<string | null>(firstOpen ? items[0]?.title ?? null : null);
+  return <View>
+    {items.map(item => {
+      const open = expanded === item.title;
+      return <View key={item.title} style={[styles.detail, { borderColor: p.border }]}>
+        <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} style={styles.detailButton}
+          onPress={() => setExpanded(open ? null : item.title)}>
+          <Text style={[styles.strong, styles.grow, { color: p.text }]}>{item.title}</Text>
+          <MobileIcon name={open ? 'collapse' : 'expand'} color={p.blue} size={15} />
+        </Pressable>
+        {open && <>
+          <Copy kind="muted">{item.text}</Copy>
+          {item.link && <PublicLink label={item.link.text}
+            onPress={() => router.navigate(item.link?.href === '/suivi' ? '/retrouver' : '/aide-mobile')} />}
+        </>}
+      </View>;
+    })}
+  </View>;
+}
+
+export function MobileClientHome() {
+  const router = useRouter();
+  const p = usePalette();
   const { width } = useWindowDimensions();
   const services = usePublicServices();
-  const pricing = useIndicativePrices();
-  const compact = width < 360;
-  const featured = services.data ? featuredServices(services.data.items) : [];
+  const prices = useIndicativePrices();
+  const { openPortal, portalError } = usePublicPortal();
+  const [modeIndex, setModeIndex] = useState(0);
+  const [query, setQuery] = useState('');
+  const scroll = useRef<ScrollViewInstance>(null);
+  const rail = useRef<ScrollViewInstance>(null);
+  const railOffset = useRef(0);
+  const railY = useRef(0);
+  const headerHeight = useRef(0);
+  const mode = modes[modeIndex];
+  const normalized = normalize(query);
+  const items = mode.items.filter(item => !normalized || normalize(item.title + ' ' + item.description).includes(normalized));
+  const cardWidth = Math.min(Math.max(190, (width - 32) * .78), 290);
 
-  return <SafeAreaView edges={['top', 'left', 'right']} style={[styles.flex, { backgroundColor: palette.background }]}>
-    <ScrollView style={styles.flex} contentContainerStyle={[styles.content, compact && styles.contentCompact]}>
-      <View style={styles.brand}>
-        <View accessible accessibilityRole="header" accessibilityLabel="DomDépannage" style={styles.grow}>
-          <Image source={require('../../assets/images/splash.png')} style={styles.brandLogo}
-            contentFit="contain" accessible={false}/>
-        </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="Notifications"
-          accessibilityHint="Ouvre la connexion, nécessaire pour recevoir des notifications."
-          onPress={() => router.push(notificationsHref)}
-          style={({ pressed }) => [styles.bell, { backgroundColor: palette.surface, opacity: pressed ? .6 : 1 }]}>
-          <Icon source={icons.bell} size={22}/>
-        </Pressable>
+  function openSituation(item: Situation) {
+    if (item.portal) openPortal(item.portal);
+    else router.push({ pathname: '/prestation/[slug]', params: { slug: item.slug } });
+  }
+
+  function selectMode(index: number) {
+    setModeIndex(index);
+    setQuery('');
+    railOffset.current = 0;
+    rail.current?.scrollTo({ x: 0, animated: false });
+  }
+
+  function moveRail(direction: -1 | 1) {
+    const next = Math.max(0, Math.min((items.length - 1) * (cardWidth + 10), railOffset.current + direction * (cardWidth + 10)));
+    rail.current?.scrollTo({ x: next, animated: true });
+  }
+
+  return <SafeAreaView edges={['top', 'left', 'right']} style={[styles.flex, { backgroundColor: p.background }]}>
+    <ScrollView ref={scroll} style={styles.flex} keyboardShouldPersistTaps="handled">
+      <View onLayout={event => { headerHeight.current = event.nativeEvent.layout.height; }}>
+        <MobilePublicHeader />
       </View>
-
-      <Pressable accessibilityRole="button" accessibilityLabel="Lieu d’intervention. Choisir mon adresse"
-        onPress={() => router.push({ pathname: '/demande-client', params: { field: 'address' } })}
-        style={({ pressed }) => [styles.address, { backgroundColor: palette.surface, opacity: pressed ? .76 : 1 }]}>
-        <Icon source={icons.pin} size={20}/>
-        <View style={styles.grow}>
-          <Text style={[styles.eyebrow, { color: palette.muted }]}>LIEU D’INTERVENTION</Text>
-          <Text style={[styles.addressValue, { color: palette.text }]}>Choisir mon adresse</Text>
-        </View>
-        <Icon source={icons.chevron} size={16}/>
-      </Pressable>
-
-      <View style={styles.hero}>
-        <Image source={mobileBPhotos.editorial} contentFit="cover" accessible={false} accessibilityElementsHidden
-          importantForAccessibility="no" style={StyleSheet.absoluteFill}/>
-        <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.veil]}>
-          {veil.map((backgroundColor, index) => <View key={index} style={[styles.grow, { backgroundColor }]}/>)}
-        </View>
-        <View style={[styles.heroBody, compact && styles.heroBodyCompact]}>
-          <Text style={[styles.eyebrow, styles.onPhoto]}>UN PROBLÈME ÉLECTRIQUE ?</Text>
-          <Text accessibilityRole="header" maxFontSizeMultiplier={1.3}
-            style={[styles.heroTitle, compact && styles.heroTitleCompact, styles.onPhoto]}>{'Un dépannage,\nen toute clarté.'}</Text>
-          <Text style={[styles.heroCopy, styles.onPhoto]}>{'Expliquez ce qui ne va pas.\nL’artisan vous proposera un devis.'}</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel="Présenter mon besoin"
-            onPress={() => router.push('/demande-client')}
-            style={({ pressed }) => [styles.heroAction, { backgroundColor: palette.primary, opacity: pressed ? .76 : 1 }]}>
-            <Text style={[styles.actionText, { color: palette.onPrimary }]}>Présenter mon besoin  →</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      <View style={styles.proofs}>
-        {['Devis avant travaux', 'Compte facultatif'].map(label => <View key={label} style={styles.proof}>
-          <Icon source={icons.check} size={16}/>
-          <Text style={[styles.proofText, { color: palette.muted }]}>{label}</Text>
-        </View>)}
-      </View>
-
-      <View style={styles.services}>
-        <View style={styles.servicesHeading}>
-          <Text accessibilityRole="header" style={[styles.sectionTitle, { color: palette.text }]}>Quel est votre besoin ?</Text>
-          <Pressable accessibilityRole="link" accessibilityLabel="Tout voir" accessibilityHint="Ouvre le catalogue complet."
-            hitSlop={14} onPress={() => router.push('/catalogue')} style={({ pressed }) => [styles.seeAll, { opacity: pressed ? .6 : 1 }]}>
-            <Text style={[styles.seeAllText, { color: palette.accent }]}>Tout voir</Text>
-          </Pressable>
-        </View>
-        <MobileBState loading={services.loading} error={services.error} onRetry={services.reload}
-          context="Les interventions ne peuvent pas être affichées pour le moment."/>
-        {services.data && !featured.length && <Text style={[styles.note, { color: palette.muted }]}>
-          Aucune intervention n’est proposée pour le moment. Vous pouvez tout de même présenter votre besoin.
-        </Text>}
-        {featured.map((item, index) => {
-          const range = indicativeRange(pricing.data, item.category);
-          const estimate = range ? `${range.text} · fourchette indicative` : 'Diagnostic et devis à confirmer';
-          const spoken = range ? `Fourchette indicative ${range.spoken}` : 'Diagnostic et devis à confirmer';
-          return <Pressable key={item.slug} accessibilityRole="link"
-            accessibilityLabel={`${item.title}. ${categoryLabel(item.category)}. ${spoken}.`}
-            accessibilityHint="Ouvre la fiche de cette intervention."
-            onPress={() => router.push({ pathname: '/prestation/[slug]', params: { slug: item.slug } })}
-            style={({ pressed }) => [styles.card, { backgroundColor: palette.surface, borderColor: palette.border, opacity: pressed ? .76 : 1 }]}>
-            <ServicePhoto decorative service={item} fallback={index === 0 ? mobileBPhotos.sockets : mobileBPhotos.editorial}
-              style={styles.cardPhoto}/>
-            <View style={styles.cardBody}>
-              <Text style={[styles.eyebrow, { color: palette.muted }]}>{categoryLabel(item.category).toLocaleUpperCase('fr-FR')}</Text>
-              <Text style={[styles.cardTitle, { color: palette.text }]}>{item.title}</Text>
-              <Text style={[styles.cardEstimate, { color: palette.muted }]}>{estimate}</Text>
+      <View style={styles.content}>
+        <View style={styles.entry}>
+          <Pressable accessibilityRole="link" onPress={() => router.push({ pathname: '/demande-client', params: { field: 'address' } })}
+            style={styles.address}>
+            <MobileIcon name="pin" color={p.blue} />
+            <View style={styles.grow}>
+              <Text style={[styles.small, { color: p.muted }]}>Lieu d’intervention</Text>
+              <Text style={[styles.strong, { color: p.text }]}>Choisir mon adresse</Text>
             </View>
-            <Icon source={icons.chevronAccent} size={16}/>
-          </Pressable>;
-        })}
-      </View>
-      <Pressable accessibilityRole="link" onPress={() => router.push('/aide-mobile')}
-        style={({ pressed }) => [styles.advice, { opacity: pressed ? .8 : 1 }]}>
-        <Text style={styles.adviceTitle}>Conseils &amp; prévention</Text>
-        <Text style={styles.adviceCopy}>Les bons réflexes en cas de panne électrique →</Text>
-      </Pressable>
-      <Pressable accessibilityRole="link" onPress={() => router.push('/connexion')}
-        style={({ pressed }) => [styles.retry, { borderColor: palette.border, opacity: pressed ? .76 : 1 }]}>
-        <Text style={[styles.retryText, { color: palette.accent }]}>Accéder à mon espace</Text>
-      </Pressable>
-    </ScrollView>
+            <MobileIcon name="next" color={p.blue} size={16} />
+          </Pressable>
+          <View accessibilityRole="tablist" accessibilityLabel="Type de service" style={[styles.modes, { borderColor: p.border }]}>
+            {modes.map((item, index) => {
+              const selected = index === modeIndex;
+              const color = selected ? p.blue : p.muted;
+              return <Pressable key={item.label} accessibilityRole="tab" accessibilityState={{ selected }}
+                style={[styles.mode, { borderColor: selected ? p.primary : 'transparent' }]} onPress={() => selectMode(index)}>
+                <MobileIcon name={item.icon} color={color} size={15} />
+                <Text style={[styles.modeText, { color }]}>{item.label}</Text>
+              </Pressable>;
+            })}
+          </View>
+          <View style={[styles.searchRow, { borderColor: p.border }]}>
+            <MobileIcon name="search" color={p.muted} size={20} />
+            <TextInput style={[styles.search, { color: p.text, fontSize: width < 360 ? 12 : 14 }]} accessibilityLabel="Rechercher un problème électrique"
+              placeholder="Quel est le problème ?" placeholderTextColor={p.muted} value={query} onChangeText={value => {
+                setQuery(value); railOffset.current = 0; rail.current?.scrollTo({ x: 0, animated: false });
+              }}
+              returnKeyType="search" maxLength={120} onSubmitEditing={() => {
+                if (items.length === 1) openSituation(items[0]);
+                else scroll.current?.scrollTo({ y: headerHeight.current + railY.current, animated: true });
+              }} />
+            <Pressable accessibilityRole="link" onPress={() => router.push({ pathname: '/demande-client', params: { field: 'address', urgency: 'scheduled' } })}
+              style={[styles.later, { backgroundColor: p.subtle }]}>
+              <MobileIcon name="calendar" color={p.text} size={15} />
+              <Text style={[styles.strong, { color: p.text }]}>Plus tard</Text>
+            </Pressable>
+          </View>
+        </View>
 
-    <View accessibilityRole="tablist" style={[styles.navigation, { backgroundColor: palette.navigation, paddingBottom: Math.max(insets.bottom, 12) }]}>
-      <NavigationItem selected label="Accueil" icon={icons.home}/>
-      <NavigationItem label="Mes demandes" icon={icons.file} onPress={() => router.push(requestsHref)}/>
-      <NavigationItem label="Aide" icon={icons.help} onPress={() => router.push('/aide-mobile')}/>
-    </View>
+        <View style={styles.section}>
+          <Copy kind="subtitle">Pour vous</Copy>
+          <View style={styles.shortcuts}>
+            {shortcuts.map(item => <Pressable key={item.label} accessibilityRole="link" style={styles.shortcut}
+              onPress={() => openSituation(item.situation)}>
+              <View style={[styles.shortcutCircle, { backgroundColor: item.background }]}>
+                <Image source={item.art} style={styles.shortcutImage} accessible={false} />
+              </View>
+              <Text style={[styles.shortcutText, { color: p.text }]}>{item.label}</Text>
+            </Pressable>)}
+          </View>
+        </View>
+
+        <View onLayout={event => { railY.current = event.nativeEvent.layout.y; }} style={styles.section}>
+          <View style={styles.split}>
+            <Copy kind="subtitle">{mode.title}</Copy>
+            {items.length > 1 && <View style={styles.railControls}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Cartes précédentes" onPress={() => moveRail(-1)}
+                style={[styles.railButton, { backgroundColor: p.subtle }]}>
+                <MobileIcon name="back" color={p.text} size={16} />
+              </Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="Cartes suivantes" onPress={() => moveRail(1)}
+                style={[styles.railButton, { backgroundColor: p.subtle }]}>
+                <MobileIcon name="next" color={p.text} size={16} />
+              </Pressable>
+            </View>}
+          </View>
+          {items.length ? <ScrollView horizontal ref={rail} keyboardShouldPersistTaps="handled" showsHorizontalScrollIndicator={false}
+            snapToInterval={cardWidth + 10} decelerationRate="fast" onScroll={event => { railOffset.current = event.nativeEvent.contentOffset.x; }}
+            scrollEventThrottle={64} contentContainerStyle={styles.rail}>
+            {items.map(item => <Pressable key={item.title} accessibilityRole="link" accessibilityLabel={item.title}
+              onPress={() => openSituation(item)} style={[styles.situation, { width: cardWidth }]}>
+              <Image source={item.photo} style={styles.situationPhoto} contentFit="cover" accessible={false} />
+              <View style={styles.situationBody}>
+                <View style={styles.grow}>
+                  <Text style={[styles.strong, styles.white]}>{item.title}</Text>
+                  <Text style={[styles.small, styles.white]}>{item.description}</Text>
+                </View>
+                <MobileIcon name="next" color={editorial.white} size={15} />
+              </View>
+            </Pressable>)}
+          </ScrollView> : <Card>
+            <Copy>Aucune situation ne correspond à votre recherche.</Copy>
+            <PublicLink label="Décrire mon besoin" onPress={() => router.push('/demande-client')} />
+            <PublicLink label="Effacer la recherche" onPress={() => setQuery('')} />
+          </Card>}
+          {portalError && <Copy kind="error">{portalError}</Copy>}
+        </View>
+
+        <View style={[styles.steps, { borderColor: p.border }]}>
+          <Copy kind="subtitle">De la demande au devis</Copy>
+          {STEPS.map((step, index) => <View key={step.title} style={styles.step}>
+            <View style={styles.stepNumber}><Text style={[styles.strong, { color: p.blue }]}>{index + 1}</Text></View>
+            <View style={styles.grow}>
+              <Text style={[styles.strong, { color: p.text }]}>{step.title}</Text>
+              <Copy kind="muted">{step.text}</Copy>
+            </View>
+          </View>)}
+          <PublicLink label="Présenter mon besoin" onPress={() => router.push('/demande-client')} />
+        </View>
+
+        <View style={styles.banner}>
+          <View style={styles.step}>
+            <View style={styles.bannerIcon}><MobileIcon name="bolt" color={editorial.white} /></View>
+            <View style={styles.grow}>
+              <Copy kind="subtitle">Votre panne est urgente ?</Copy>
+              <Copy>Décrivez la panne et indiquez votre commune. Le créneau dépend des disponibilités.</Copy>
+            </View>
+          </View>
+          <BannerButton label="Décrire ma panne urgente" onPress={() => router.push({ pathname: '/demande-client', params: { urgency: 'urgent' } })} />
+        </View>
+
+        <View style={[styles.feature, { backgroundColor: p.subtle }]}>
+          <Copy kind="subtitle">Comment on trouve votre électricien</Copy>
+          <Image source={publicPhotos.panel} style={styles.featurePhoto} contentFit="cover" accessible={false} />
+          <DetailRows items={MATCHING} firstOpen />
+          <Action label="Lancer le diagnostic" onPress={() => { selectMode(2); scroll.current?.scrollTo({ y: headerHeight.current + railY.current, animated: true }); }} />
+        </View>
+
+        <View style={styles.section}>
+          <Copy kind="subtitle">Nos engagements</Copy>
+          {COMMITMENTS.map(item => <Card key={item.title}>
+            <View style={styles.step}>
+              <MobileIcon name={commitmentIcons[item.icon]} color={p.blue} size={20} />
+              <View style={styles.grow}>
+                <Text style={[styles.strong, { color: p.text }]}>{item.title}</Text>
+                <Copy kind="muted">{item.text}</Copy>
+                {item.link && <PublicLink label={item.link.text} onPress={() => router.navigate('/aide-mobile')} />}
+              </View>
+            </View>
+          </Card>)}
+        </View>
+
+        <View style={styles.section}>
+          <Copy kind="subtitle">Les interventions électriques les plus courantes</Copy>
+          <Copy kind="muted">Fourchettes indicatives TTC. Le prix final figure sur le devis que vous acceptez.</Copy>
+          <PublicReadState loading={services.loading} error={services.error} onRetry={services.reload}
+            context="Le catalogue ne peut pas être affiché pour le moment." />
+          {services.data && services.data.items.length === 0 && <Copy kind="muted">Aucune intervention n’est proposée pour le moment.</Copy>}
+          {Boolean(services.data?.items.length) && <PublicReadState loading={prices.loading} error={prices.error} onRetry={prices.reload}
+            context="Les estimations ne sont pas disponibles pour le moment." />}
+          {services.data?.items.map(item => <PublicServiceRow key={item.slug} item={item} price={prices.data} />)}
+          <PublicLink label="Voir toutes les interventions" onPress={() => router.navigate('/catalogue')} />
+        </View>
+
+        <Card>
+          <Copy kind="subtitle">Questions fréquentes</Copy>
+          <Copy kind="muted">Les réponses utiles avant de demander un dépannage.</Copy>
+          <PublicLink label="Voir l’assistance" onPress={() => router.navigate('/aide-mobile')} />
+          <DetailRows items={FAQ} />
+        </Card>
+
+        <View style={styles.recruitment}>
+          <View style={styles.banner}>
+            <Copy kind="subtitle">Vous êtes électricien ?</Copy>
+            <Copy>Rejoignez notre réseau pour recevoir des propositions de mission selon votre secteur, vos compétences et vos disponibilités.</Copy>
+            <BannerButton label="Découvrir la candidature" onPress={() => router.navigate('/candidature')} />
+          </View>
+          <Image source={publicPhotos.electrician} style={styles.recruitPhoto} contentFit="cover" accessible={false} />
+        </View>
+
+        <View style={styles.section}>
+          <Copy kind="subtitle">Le blog du dépannage</Copy>
+          <Copy kind="muted">Des conseils pour préparer votre intervention.</Copy>
+          <PublicLink label="Voir tous les conseils" onPress={() => router.navigate('/conseils')} />
+          {PUBLIC_ADVICE.map(article => <Pressable key={article.id} accessibilityRole="link"
+            onPress={() => router.push({ pathname: '/conseils', params: { article: article.id } })}
+            style={[styles.article, { borderColor: p.border }]}>
+            <Image source={articlePhoto(article.image)} style={styles.articlePhoto} contentFit="cover" accessible={false} />
+            <View style={styles.articleBody}>
+              <Text style={[styles.small, { color: p.blue }]}>{article.topic}</Text>
+              <Text style={[styles.strong, { color: p.text }]}>{article.title}</Text>
+              <Copy kind="muted">{article.summary}</Copy>
+            </View>
+          </Pressable>)}
+        </View>
+      </View>
+      <PublicEditorialFooter />
+    </ScrollView>
+    <PublicTabs />
   </SafeAreaView>;
+}
+
+function BannerButton({ label, onPress }: { label: string; onPress: () => void }) {
+  return <Pressable accessibilityRole="button" onPress={onPress} style={styles.bannerButton}>
+    <Text style={[styles.strong, styles.white]}>{label}</Text>
+    <MobileIcon name="next" color={editorial.white} size={15} />
+  </Pressable>;
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   grow: { flex: 1, minWidth: 0 },
-  content: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 24, gap: 20, width: '100%', maxWidth: 650, alignSelf: 'center' },
-  contentCompact: { paddingHorizontal: 16 },
-  brand: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  brandLogo: { width: '100%', maxWidth: 112, aspectRatio: 313 / 181, borderRadius: 8 },
-  bell: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  address: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 16, minHeight: 48 },
-  eyebrow: { fontFamily: 'JakartaBold', fontSize: 11, lineHeight: 15 },
-  addressValue: { fontFamily: 'JakartaSemiBold', fontSize: 13, lineHeight: 18 },
-  hero: { minHeight: 248, borderRadius: 24, overflow: 'hidden' },
-  veil: { flexDirection: 'row' },
-  heroBody: { paddingHorizontal: 24, paddingVertical: 22, gap: 14, alignItems: 'flex-start' },
-  heroBodyCompact: { paddingHorizontal: 18 },
-  onPhoto: { color: '#FFFFFF' },
-  heroTitle: { fontFamily: 'JakartaBold', fontSize: 33, lineHeight: 38 },
-  heroTitleCompact: { fontSize: 27, lineHeight: 32 },
-  heroCopy: { fontFamily: 'JakartaRegular', fontSize: 13, lineHeight: 18 },
-  heroAction: { minHeight: 48, minWidth: 228, maxWidth: '100%', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  actionText: { fontFamily: 'JakartaSemiBold', fontSize: 14, lineHeight: 22, letterSpacing: -.28, textAlign: 'center' },
-  proofs: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 12, rowGap: 8 },
-  proof: { flexDirection: 'row', alignItems: 'center', gap: 6, flexGrow: 1, flexBasis: 140 },
-  proofText: { fontFamily: 'JakartaSemiBold', fontSize: 11, lineHeight: 16, flexShrink: 1 },
-  services: { gap: 12 },
-  servicesHeading: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  sectionTitle: { flex: 1, fontFamily: 'JakartaBold', fontSize: 20, lineHeight: 28 },
-  seeAll: { minHeight: 28, justifyContent: 'center' },
-  seeAllText: { fontFamily: 'JakartaSemiBold', fontSize: 12, lineHeight: 17, textAlign: 'right' },
-  card: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderWidth: .7, borderRadius: 18 },
-  cardPhoto: { width: 62, height: 60, borderRadius: 12 },
-  cardBody: { flex: 1, minWidth: 0, gap: 3 },
-  cardTitle: { fontFamily: 'JakartaBold', fontSize: 14, lineHeight: 20 },
-  cardEstimate: { fontFamily: 'JakartaRegular', fontSize: 12, lineHeight: 17 },
-  navigation: { flexDirection: 'row', gap: 12, paddingHorizontal: 24, paddingTop: 12 },
-  navigationItem: { flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', gap: 3 },
-  navigationLabel: { fontFamily: 'JakartaSemiBold', fontSize: 11, lineHeight: 15, textAlign: 'center' },
-  navigationActive: { fontFamily: 'JakartaBold', fontSize: 11, lineHeight: 15, textAlign: 'center' },
-  loading: { alignItems: 'center', gap: 10, padding: 16 },
-  advice: { backgroundColor: '#FF6B35', borderRadius: 18, padding: 16, gap: 6 },
-  adviceTitle: { fontFamily: 'JakartaBold', fontSize: 16, lineHeight: 22, color: '#12151C' },
-  adviceCopy: { fontFamily: 'JakartaSemiBold', fontSize: 13, lineHeight: 19, color: '#12151C' },
-  note: { fontFamily: 'JakartaRegular', fontSize: 14, lineHeight: 20 },
-  stateCard: { padding: 16, gap: 10, borderWidth: 1, borderRadius: 18 },
-  stateTitle: { fontFamily: 'JakartaBold', fontSize: 15, lineHeight: 22 },
-  retry: { minHeight: 44, paddingHorizontal: 16, borderWidth: 1, borderRadius: 14, alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-start' },
-  retryText: { fontFamily: 'JakartaSemiBold', fontSize: 14, lineHeight: 22 },
-  footer: { paddingHorizontal: 24, paddingTop: 12 },
-  footerAction: { minHeight: 52, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 14, alignItems: 'center', justifyContent: 'center', width: '100%', maxWidth: 602, alignSelf: 'center' },
+  content: { paddingHorizontal: 16, paddingBottom: 28, gap: 28, width: '100%', maxWidth: 650, alignSelf: 'center' },
+  entry: { gap: 10, paddingTop: 6 },
+  address: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 46 },
+  strong: { fontFamily: 'JakartaBold', fontSize: 14, lineHeight: 20 },
+  small: { fontFamily: 'JakartaRegular', fontSize: 12, lineHeight: 17 },
+  modes: { flexDirection: 'row', borderBottomWidth: 1 },
+  mode: { flex: 1, minHeight: 45, borderBottomWidth: 3, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
+  modeText: { fontFamily: 'JakartaBold', fontSize: 11, flexShrink: 1 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 5, minHeight: 55, borderWidth: 1, borderRadius: 28, padding: 4, paddingStart: 12 },
+  search: { flex: 1, minWidth: 0, minHeight: 44, fontFamily: 'JakartaRegular', paddingHorizontal: 4 },
+  later: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 9, gap: 5, borderRadius: 24 },
+  section: { gap: 10 },
+  shortcuts: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
+  shortcut: { flex: 1, minWidth: 0, alignItems: 'center', gap: 5 },
+  shortcutCircle: { width: '100%', maxWidth: 76, aspectRatio: 1, borderRadius: 50, alignItems: 'center', justifyContent: 'center' },
+  shortcutImage: { width: '78%', height: '78%' },
+  shortcutText: { fontFamily: 'JakartaBold', fontSize: 12, textAlign: 'center' },
+  split: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
+  railControls: { flexDirection: 'row', gap: 4 },
+  railButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  rail: { gap: 10 },
+  situation: { overflow: 'hidden', borderRadius: 16, backgroundColor: editorial.cards },
+  situationPhoto: { width: '100%', height: 144 },
+  situationBody: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 11 },
+  white: { color: editorial.white },
+  steps: { gap: 9, borderTopWidth: 1, borderBottomWidth: 1, paddingVertical: 13 },
+  step: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  stepNumber: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EDF1FF' },
+  detail: { borderBottomWidth: 1, paddingBottom: 4 },
+  detailButton: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
+  feature: { padding: 16, gap: 12, borderRadius: 20 },
+  featurePhoto: { width: '100%', height: 165, borderRadius: 14 },
+  recruitment: { backgroundColor: editorial.yellow, borderRadius: 20, overflow: 'hidden' },
+  banner: { padding: 16, gap: 12, borderRadius: 20, backgroundColor: editorial.yellow },
+  bannerIcon: { width: 44, height: 44, backgroundColor: editorial.navy, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  bannerButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, minHeight: 44, borderRadius: 12, backgroundColor: editorial.navy, alignSelf: 'flex-start' },
+  recruitPhoto: { width: '100%', height: 180 },
+  article: { borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
+  articlePhoto: { width: '100%', height: 140 },
+  articleBody: { gap: 3, padding: 12 },
 });

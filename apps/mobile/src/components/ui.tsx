@@ -1,20 +1,37 @@
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useColorScheme, type TextInputProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import type { PropsWithChildren } from 'react';
+import { useSegments } from 'expo-router';
+import type { PropsWithChildren, ReactNode } from 'react';
+
+const publicPalette = {
+  background: '#FFFFFF', surface: '#FFFFFF', subtle: '#F4F6FA', text: '#111318',
+  muted: '#4B5563', border: '#D9DEE7', blue: '#2246E5', primary: '#2246E5',
+  accent: '#B93A0A', danger: '#B42318',
+};
+const darkPalette: typeof publicPalette = {
+  background: '#121417', surface: '#22262C', subtle: '#1B1E23', text: '#F5F7FA',
+  muted: '#B5BAC4', border: '#343A44', blue: '#8EA2FF', primary: '#2246E5',
+  accent: '#FF885F', danger: '#FF9F9F',
+};
+export const editorial = { navy: '#16277A', yellow: '#F4D649', cards: '#244FB1', white: '#FFFFFF' };
 
 export function usePalette() {
-  return useColorScheme() === 'dark'
-    ? {background:'#11141C', surface:'#1C2230', text:'#F5F7FF', muted:'#ADB7CD', border:'#364259', blue:'#ADC0FF', primary:'#2246E5', accent:'#FF885F', danger:'#FF9F9F'}
-    : {background:'#F5F7FF', surface:'#FFFFFF', text:'#111A32', muted:'#4C5770', border:'#DCE3F3', blue:'#2246E5', primary:'#2246E5', accent:'#A62B03', danger:'#A52020'};
+  const scheme = useColorScheme();
+  const [section] = useSegments();
+  const connected = section === '(espace)' || section === 'demande' || section === 'dossier' || section === 'offre';
+  return connected && scheme === 'dark' ? darkPalette : publicPalette;
 }
-export function Screen({ children, top=false }: PropsWithChildren<{top?:boolean}>) {
+export function Screen({ children, top=false, footer }: PropsWithChildren<{ top?: boolean; footer?: ReactNode }>) {
   const palette = usePalette();
-  return <SafeAreaView edges={top?['top','left','right','bottom']:['left','right','bottom']} style={[styles.flex,{backgroundColor:palette.background}]}>
+  const [section] = useSegments();
+  const edges = top ? ['top','left','right'] as const : ['left','right'] as const;
+  return <SafeAreaView edges={footer || section === '(espace)' ? edges : [...edges, 'bottom']} style={[styles.flex,{backgroundColor:palette.background}]}>
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.screen}>
         {children}
       </ScrollView>
     </KeyboardAvoidingView>
+    {footer}
   </SafeAreaView>;
 }
 export function Copy({ children, kind='body' }: PropsWithChildren<{kind?:'body'|'title'|'subtitle'|'muted'|'label'|'error'}>) {
@@ -45,12 +62,28 @@ export function ReadState({ loading,error,onRetry }: {loading:boolean;error:stri
   if (error) return <Card><Copy kind="error">{error}</Copy><Action secondary label="Réessayer" onPress={onRetry}/></Card>;
   return null;
 }
-const styles = StyleSheet.create({
-  flex:{flex:1}, screen:{padding:20,gap:16,paddingBottom:34,width:'100%',maxWidth:650,alignSelf:'center'},
-  card:{padding:16,gap:12,borderWidth:1,borderRadius:20},
-  action:{minHeight:50,paddingVertical:13,paddingHorizontal:16,borderWidth:1,borderRadius:14,alignItems:'center',justifyContent:'center'},
+export function BookingProgress({ labels, index }: { labels: string[]; index: number }) {
+  const p = usePalette();
+  return <View accessibilityLabel={'Étape ' + (index + 1) + ' sur ' + labels.length + '. ' + labels[index]} style={styles.progress}>
+    {labels.map((label, position) => <View key={label} style={styles.progressItem}>
+      <View style={[styles.progressNumber, { backgroundColor: position === index ? p.primary : p.subtle, borderColor: p.border }]}>
+        <Text style={[styles.progressLabel, { color: position === index ? '#FFFFFF' : p.muted }]}>{position + 1}</Text>
+      </View>
+      <Text style={[styles.progressLabel, { color: position === index ? p.text : p.muted }]}>{label}</Text>
+    </View>)}
+  </View>;
+}
+
+const styles = StyleSheet.create({  progress: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
+  progressItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  progressNumber: { width: 23, height: 23, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  progressLabel: { fontFamily: 'JakartaBold', fontSize: 11, lineHeight: 16 },
+
+  flex:{flex:1}, screen:{padding:16,gap:16,paddingBottom:30,width:'100%',maxWidth:650,alignSelf:'center'},
+  card:{padding:16,gap:12,borderWidth:1,borderRadius:16},
+  action:{minHeight:48,paddingVertical:11,paddingHorizontal:16,borderWidth:1,borderRadius:12,alignItems:'center',justifyContent:'center'},
   actionText:{fontFamily:'JakartaBold',fontSize:15,textAlign:'center'},
-  title:{fontFamily:'JakartaBold',fontSize:30,lineHeight:38},
+  title:{fontFamily:'JakartaBold',fontSize:30,lineHeight:37,letterSpacing:-1},
   subtitle:{fontFamily:'JakartaBold',fontSize:20,lineHeight:27},
   body:{fontFamily:'JakartaRegular',fontSize:15,lineHeight:23},
   muted:{fontFamily:'JakartaRegular',fontSize:14,lineHeight:22},

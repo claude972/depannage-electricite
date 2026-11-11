@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
 import * as Location from 'expo-location';
-import { Action, Card, Copy, Field, ReadState, Screen } from '@/components/ui';
+import { Action, BookingProgress, Card, Copy, Field, ReadState, Screen } from '@/components/ui';
 import { ApiFailure, api, useResource } from '@/lib/api';
-import { categories, creation, euros, prices, requestFields, type Category } from '@/lib/contracts';
+import { categories, category as categorySchema, creation, euros, prices, requestFields, type Category } from '@/lib/contracts';
 import { requestDraftKey } from '@/lib/draft-store';
 import { requestDraft, type RequestIntent } from '@/lib/request-draft';
 import { useDeviceDraft } from '@/lib/use-device-draft';
@@ -26,7 +26,10 @@ function ClientRequest({ actor, token }: { actor: string; token: string }) {
   const router = useRouter();
   const catalogue = useResource('/api/public/indicative-prices', prices);
   const draft = useDeviceDraft(requestDraftKey(actor), requestDraft, { intent: null, confirmedId: null });
-  const [category, setCategory] = useState<Category>('outage'), [description, setDescription] = useState('');
+  const { type } = useLocalSearchParams<{ type?: string }>();
+  const [category, setCategory] = useState<Category>(() => categorySchema.safeParse(type).data ?? 'outage');
+  const [description, setDescription] = useState('');
+  const [step, setStep] = useState(0);
   const [address, setAddress] = useState(''), [postal, setPostal] = useState(''), [city, setCity] = useState('');
   const [urgency, setUrgency] = useState<'urgent' | 'scheduled' | null>(null);
   const [error, setError] = useState<string | null>(null), [busy, setBusy] = useState(false), [locating, setLocating] = useState(false);
@@ -43,6 +46,20 @@ function ClientRequest({ actor, token }: { actor: string; token: string }) {
   const intent = draft.value?.intent;
   const chosen = intent?.payload.category ?? category;
   const range = intent && !intent.reviewRequired ? intent.estimate : catalogue.data?.ranges[chosen];
+  const fields = { category, description, address, postal_code: postal, city, urgency };
+  const progress = intent ? 2 : step;
+
+  function nextStep() {
+    setError(null);
+    if (progress === 0 && !urgency) { setError('Indiquez si l’intervention est urgente.'); return; }
+    const schema = progress === 0
+      ? requestFields.pick({ category: true, description: true, urgency: true })
+      : requestFields.pick({ address: true, postal_code: true, city: true });
+    const input = schema.safeParse(fields);
+    if (!input.success) { setError(input.error.issues[0].message); return; }
+    setStep(step + 1);
+  }
+
 
   async function locate() {
     setLocating(true); setError(null); setSuggestion(null);
@@ -75,7 +92,7 @@ function ClientRequest({ actor, token }: { actor: string; token: string }) {
         current = { ...current, payload: { ...current.payload, reviewed_estimate_version: version }, estimate: range, reviewRequired: false };
       } else {
         if (!urgency) { setError('Indiquez si l’intervention est urgente.'); return; }
-        const input = requestFields.safeParse({ category, description, address, postal_code: postal, city, urgency });
+        const input = requestFields.safeParse(fields);
         if (!input.success) { setError(input.error.issues[0].message); return; }
         current = { id: randomUUID(), payload: { ...input.data, reviewed_estimate_version: version }, estimate: range, reviewRequired: false };
       }
@@ -120,17 +137,18 @@ function ClientRequest({ actor, token }: { actor: string; token: string }) {
   if (!draft.value) return <Screen><ReadState loading={!draft.error} error={draft.error} onRetry={draft.retry} /></Screen>;
   const disabled = busy || Boolean(intent);
   const shownUrgency = intent?.payload.urgency ?? urgency;
-  return <Screen>
-    <Copy kind="title">Décrivez votre panne</Copy>
-    <Card>
+  return <Screen key={progress}>
+    <Copy kind="title">Votre demande de dépannage</Copy>
+    <BookingProgress labels={['Votre besoin', 'Adresse d’intervention', 'Récapitulatif']} index={progress} />
+    {progress === 0 && <Card>
       <Copy kind="subtitle">Type de panne</Copy>
       {Object.entries(categories).map(([key, label]) => <Action key={key} disabled={disabled} secondary={chosen !== key} label={label} onPress={() => setCategory(key as Category)} />)}
       <Field label="Description" value={intent?.payload.description ?? description} onChangeText={setDescription} maxLength={4000} multiline editable={!disabled} />
       <Copy kind="subtitle">Est-ce urgent ?</Copy>
       <Action label="Oui, c’est urgent" secondary={shownUrgency !== 'urgent'} disabled={disabled} onPress={() => setUrgency('urgent')} />
       <Action label="Non, je peux planifier" secondary={shownUrgency !== 'scheduled'} disabled={disabled} onPress={() => setUrgency('scheduled')} />
-    </Card>
-    <Card>
+    </Card>}
+    {progress === 1 && <Card>
       <Copy kind="subtitle">Adresse d’intervention</Copy>
       <Action secondary label={locating ? 'Recherche…' : 'Utiliser ma position'} disabled={locating || disabled} onPress={() => void locate()} />
       {suggestion && !intent && <View><Copy>{suggestion.address}, {suggestion.postal} {suggestion.city}</Copy>
@@ -139,13 +157,15 @@ function ClientRequest({ actor, token }: { actor: string; token: string }) {
       <Field label="Adresse" value={intent?.payload.address ?? address} onChangeText={setAddress} maxLength={500} editable={!disabled} />
       <Field label="Code postal" value={intent?.payload.postal_code ?? postal} onChangeText={setPostal} keyboardType="numeric" maxLength={5} editable={!disabled} />
       <Field label="Commune" value={intent?.payload.city ?? city} onChangeText={setCity} maxLength={120} editable={!disabled} />
-    </Card>
-    <Card>
-      <Copy kind="subtitle">Estimation indicative</Copy>
+    </Card>}
+    {progress === 2 && <Card>
+      <Copy kind="subtitle">Vérifiez votre demande</Copy>
+      <Copy>{categories[chosen]} · {shownUrgency === 'urgent' ? 'Urgent' : 'À planifier'}</Copy>
+      <Copy>{intent?.payload.description ?? description}</Copy>
+      <Copy>{intent?.payload.address ?? address}, {intent?.payload.postal_code ?? postal} {intent?.payload.city ?? city}</Copy>
       {(!intent || intent.reviewRequired) && <ReadState loading={catalogue.loading} error={catalogue.error} onRetry={catalogue.reload} />}
       {range && <Copy>{euros(range.min_cents)} à {euros(range.max_cents)}. Le devis fixe le prix final.</Copy>}
       {draft.error && <ReadState loading={false} error={draft.error} onRetry={draft.retry} />}
-      {error && <Copy kind="error">{error}</Copy>}
       {intent && !intent.reviewRequired && <Copy kind="muted">L’envoi reste à confirmer. Le prochain essai réutilise la même référence.</Copy>}
       {intent?.reviewRequired && <>
         <Action secondary label="Actualiser le tarif" disabled={busy} onPress={catalogue.reload} />
@@ -157,6 +177,7 @@ function ClientRequest({ actor, token }: { actor: string; token: string }) {
           setCity(intent.payload.city);
           setUrgency(intent.payload.urgency);
           setError(null);
+          setStep(0);
           draft.edit(() => ({ intent: null, confirmedId: null }));
         }} />
       </>}
@@ -168,6 +189,12 @@ function ClientRequest({ actor, token }: { actor: string; token: string }) {
             { text: 'Revenir', style: 'cancel' }, { text: 'Confirmer', onPress: () => void submit() },
           ]);
         }} />
-    </Card>
+    </Card>}
+    {error && <Copy kind="error">{error}</Copy>}
+    {progress < 2 && <Action label="Continuer" onPress={nextStep} />}
+    {progress > 0 && !intent && <Action secondary label="Étape précédente" onPress={() => {
+      setError(null);
+      setStep(step - 1);
+    }} />}
   </Screen>;
 }

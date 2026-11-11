@@ -1,3 +1,4 @@
+import { PublicTabs } from '@/components/mobile-chrome';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { z } from 'zod';
@@ -25,7 +26,7 @@ export default function FindRequests() {
   const session = auth.session;
   if (session && verifiedPhone(session.user))
     return <PhoneHistory key={session.user.id} token={session.access_token} />;
-  return <Screen>
+  return <Screen footer={<PublicTabs />}>
     <Copy kind="title">Mes demandes</Copy>
     {session ? <>
       <Copy>Retrouvez vos interventions depuis votre espace connecté.</Copy>
@@ -72,7 +73,7 @@ function PhoneHistory({ token }: { token: string }) {
     }
   }
 
-  return <Screen>
+  return <Screen footer={<PublicTabs />}>
     <Copy kind="title">Mes demandes</Copy>
     <ReadState loading={first.loading} error={first.error} onRetry={first.reload} />
     {first.data && rows.length === 0 && <Copy kind="muted">Aucune intervention pour le moment.</Copy>}

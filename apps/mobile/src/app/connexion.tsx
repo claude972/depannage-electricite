@@ -1,3 +1,4 @@
+import { PublicTabs } from '@/components/mobile-chrome';
 import { useRef, useState } from 'react';
 import { Action, Card, Copy, Field, Screen } from '@/components/ui';
 import { useSession } from '@/lib/session';
@@ -18,7 +19,7 @@ export default function Login() {
     catch(issue) { setError(issue instanceof Error?issue.message:'Connexion indisponible.'); }
     finally { locked.current=false;setBusy(false); }
   }
-  return <Screen>
+  return <Screen footer={<PublicTabs />}>
     <Copy kind="title">Votre espace</Copy>
     <Copy kind="muted">Connectez-vous avec votre compte client ou artisan.</Copy>
     <Card>

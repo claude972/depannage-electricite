@@ -25,21 +25,11 @@ const service = z.object({
 export const catalogueSchema = z.object({ items: z.array(service).max(60) });
 export type PublicService = z.infer<typeof service>;
 
-export const featuredSlugs = ['plusieurs-prises-sans-courant', 'disjoncteur-qui-saute', 'coupure-de-courant-partielle'] as const;
-
 export function usePublicServices() {
   return useResource('/api/public/services', catalogueSchema);
 }
 export function useIndicativePrices() {
   return useResource('/api/public/indicative-prices', prices);
-}
-
-/** Fiches mises en avant sur l’accueil ; à défaut, les premières du catalogue. */
-export function featuredServices(items: PublicService[]) {
-  const picked = featuredSlugs
-    .map(slug => items.find(item => item.slug === slug))
-    .filter((item): item is PublicService => Boolean(item));
-  return picked.length ? picked : items.slice(0, featuredSlugs.length);
 }
 
 export const categoryLabel = (key: Category) => categories[key];
