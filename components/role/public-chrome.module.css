@@ -185,7 +185,7 @@
 
 .appNav { display: none; }
 @media (max-width: 767px) {
-  .homeTopbar { display: none; }
+  .appChrome .homeTopbar { display: none; }
   .appChrome { padding-bottom: calc(134px + env(safe-area-inset-bottom, 0px)); }
   .appNav {
     position: fixed;

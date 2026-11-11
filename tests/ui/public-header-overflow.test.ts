@@ -28,8 +28,8 @@ const sections = [{ id: "a", label: "Interventions" }, { id: "b", label: "Servic
 const div = document.createElement("div");
 document.body.appendChild(div);
 createRoot(div).render(h(ThemeProvider, null,
-  view === "home"
-    ? h(PublicChrome, { current: "home", handlers, onHome: noop, sections, onSection: noop }, h("p", null, "contenu"))
+  view !== "pricing"
+    ? h(PublicChrome, { current: "home", handlers, onHome: noop, sections, onSection: noop, appNavigation: view === "pwa" }, h("p", null, "contenu"))
     : h(PublicChrome, { current: "pricing", handlers, onHome: noop }, h("p", null, "contenu")),
 ));
 `;
@@ -82,7 +82,7 @@ test("public header: right-aligned menu and no overflow at 320–1440 px under b
     const page = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
     const errors: string[] = [];
     page.on("pageerror", (e: Error) => errors.push(String(e)));
-    for (const view of ["home", "pricing"]) {
+    for (const view of ["home", "pricing", "pwa"]) {
       for (const theme of ["light", "dark"]) {
         await page.setViewportSize({ width: 1280, height: 800 });
         await page.goto(`http://127.0.0.1:${port}/?view=${view}`);
@@ -105,10 +105,15 @@ test("public header: right-aligned menu and no overflow at 320–1440 px under b
         assert.match(font.used, /JakartaQA/, "header text is set in Plus Jakarta Sans");
         for (const width of WIDTHS) {
           await page.setViewportSize({ width, height: 800 });
+          if (view === "pwa" && width <= 767) {
+            assert.equal(await header.isVisible(), false);
+            await page.getByRole("navigation", { name: "Navigation rapide" }).waitFor();
+            continue;
+          }
           await toggle.press("Enter");
           await nav.waitFor();
-          assert.equal(await nav.getByRole("link", { name: "Services" }).count(), view === "home" ? 0 : 1);
-          assert.equal(await nav.getByRole("button", { name: "Services" }).count(), view === "home" ? 1 : 0);
+          assert.equal(await nav.getByRole("link", { name: "Services" }).count(), view === "pricing" ? 1 : 0);
+          assert.equal(await nav.getByRole("button", { name: "Services" }).count(), view === "pricing" ? 0 : 1);
           // Passed as source text: tsx's keepNames would inject an undefined __name helper.
           const r = (await page.evaluate(MEASURE)) as { vw: number; scroll: number; offenders: string[]; right: boolean; panelRight: number; menuRight: number; headerH: number };
           if (r.scroll > r.vw || r.offenders.length) failures.push(`${view}/${theme}/${width}: scroll ${r.scroll} > ${r.vw} ${r.offenders.join(", ")}`);
