@@ -1,11 +1,15 @@
 "use client";
 
-import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Icon } from "../app/icons";
 import { COMMITMENTS, FAQ, MATCHING, STEPS } from "../../shared/public-home";
 import { PUBLIC_ADVICE } from "./public-advice-content";
 import { SERVICES, SERVICE_PHOTOS, servicePath, type ServicePhoto } from "./public-service-catalog";
 import { PublicServiceList } from "./public-service-list";
+import { IndicativeRange } from "../features/indicative-prices/indicative-range";
+import type { PriceCategory } from "../features/indicative-prices/model";
+import { publishedValue } from "../features/public-operator-profile/model";
+import { usePublishedOperatorProfile } from "../features/public-operator-profile/use-published-profile";
 import { PublicChrome, actionButton, type HomeAction, type HomeHandlers } from "./public-chrome";
 import styles from "./public-landing.module.css";
 
@@ -18,22 +22,23 @@ type Situation = {
   href: string;
   photo: ServicePhoto;
   position: string;
+  category?: PriceCategory;
 };
 
 const outage: Situation = {
-  title: "Coupure de courant partielle", description: "Une pièce ou une partie du logement reste sans courant.",
+  category: "outage", title: "Coupure de courant partielle", description: "Une pièce ou une partie du logement reste sans courant.",
   href: servicePath("coupure-de-courant-partielle"), photo: SERVICE_PHOTOS.cabinet, position: "34% 44%",
 };
 const socket: Situation = {
-  title: "Prise qui ne fonctionne plus", description: "Une ou plusieurs prises n’alimentent plus les appareils.",
+  category: "socket", title: "Prise qui ne fonctionne plus", description: "Une ou plusieurs prises n’alimentent plus les appareils.",
   href: servicePath("prise-qui-ne-fonctionne-plus"), photo: SERVICE_PHOTOS.outlet, position: "50% 51%",
 };
 const panel: Situation = {
-  title: "Disjoncteur qui saute", description: "Le courant se coupe lorsqu’un circuit ou un appareil démarre.",
+  category: "panel", title: "Disjoncteur qui saute", description: "Le courant se coupe lorsqu’un circuit ou un appareil démarre.",
   href: servicePath("disjoncteur-qui-saute"), photo: SERVICE_PHOTOS.panelWork, position: "56% 43%",
 };
 const lighting: Situation = {
-  title: "Éclairage en panne", description: "Un luminaire ou une zone reste sans éclairage.",
+  category: "lighting", title: "Éclairage en panne", description: "Un luminaire ou une zone reste sans éclairage.",
   href: servicePath("eclairage-qui-ne-sallume-plus"), photo: SERVICE_PHOTOS.fixture, position: "38% 42%",
 };
 const SHORTCUTS = [
@@ -54,8 +59,8 @@ const MODES = [
   {
     id: "diagnose", label: "Diagnostic", icon: "search", title: "Situations à vérifier",
     cards: [
-      { title: "Origine de la panne inconnue", description: "Vous constatez une anomalie sans avoir identifié son origine.", href: servicePath("origine-de-la-panne-inconnue"), photo: SERVICE_PHOTOS.cabinet, position: "42% 45%" },
-      { title: "Faire vérifier le tableau", description: "Décrivez le problème pour orienter la vérification.", href: servicePath("panne-tableau-electrique"), photo: SERVICE_PHOTOS.panel, position: "52% 45%" },
+      { category: "diagnostic", title: "Origine de la panne inconnue", description: "Vous constatez une anomalie sans avoir identifié son origine.", href: servicePath("origine-de-la-panne-inconnue"), photo: SERVICE_PHOTOS.cabinet, position: "42% 45%" },
+      { category: "panel", title: "Faire vérifier le tableau", description: "Décrivez le problème pour orienter la vérification.", href: servicePath("panne-tableau-electrique"), photo: SERVICE_PHOTOS.panel, position: "52% 45%" },
       panel,
     ],
   },
@@ -91,6 +96,16 @@ export function scrollToSection(id: string, doc: ScrollDoc = document, win: Scro
 
 type Detail = { title: string; text: string; link?: { href: string; text: string } };
 
+const auditQuestions: Detail[] = [
+  { title: "Que faire si la panne revient ?", text: "Retrouvez les justificatifs dans votre dossier et consultez les conditions de garantie applicables à votre intervention.", link: { href: "/#help/garantie", text: "Garantie et assistance" } },
+  { title: "Comment annuler ou signaler un litige ?", text: "Consultez les conditions d’annulation de votre dossier. L’assistance peut vous orienter vers les recours publiés par l’exploitant.", link: { href: "/#legal", text: "Informations et recours" } },
+  { title: "DomDépannage intervient-il dans ma commune ?", text: "Vérifiez votre code postal et consultez les informations publiées par l’exploitant.", link: { href: "/#pricing/zones", text: "Vérifier ma commune" } },
+];
+const auditMatching: Detail = {
+  title: "Qui intervient chez vous ?",
+  text: "Après l’affectation, retrouvez l’électricien et le créneau dans votre dossier. Vous pourrez lire le devis avant de vous engager.",
+};
+
 function Details({ items, name }: { items: Detail[]; name?: string }) {
   return (
     <div className={styles.details}>
@@ -106,6 +121,14 @@ function Details({ items, name }: { items: Detail[]; name?: string }) {
 
 export function PublicHome({ gated = false, handlers }: { gated?: boolean; handlers: HomeHandlers }) {
   const [modeIndex, setModeIndex] = useState(0);
+  const [audit, setAudit] = useState(false);
+  const cardPreview = useRef<HTMLDialogElement>(null);
+  useEffect(() => { setAudit(new URLSearchParams(window.location.search).get("maquette") === "audit"); }, []);
+  const operator = usePublishedOperatorProfile(audit);
+  const phone = publishedValue(operator, "public_phone");
+  const priorityContact = audit
+    ? { label: phone ? "Appeler l’assistance" : "Aide urgente", href: phone ? `tel:${phone.replace(/[^+\d]/g, "")}` : "/#help/contact" }
+    : undefined;
   const [query, setQuery] = useState("");
   const modeButtons = useRef<(HTMLButtonElement | null)[]>([]);
   const rail = useRef<HTMLUListElement>(null);
@@ -155,10 +178,11 @@ export function PublicHome({ gated = false, handlers }: { gated?: boolean; handl
       sections={SECTIONS}
       onSection={scrollToSection}
       appNavigation
+      priorityContact={priorityContact}
       mainClassName={styles.main}
       footerNote="Crédits photo (Pexels) : Fatih Yurtman, ranjeet, Anastasia Shuraeva, Ksenia Chernaya."
     >
-      <div className={styles.wrap}>
+      <div className={styles.wrap} data-home-audit={audit ? "" : undefined}>
         {gated && (
           <div className={styles.gate} role="status">
             <span>Connectez-vous pour accéder à cet espace.</span>
@@ -230,7 +254,9 @@ export function PublicHome({ gated = false, handlers }: { gated?: boolean; handl
                   <li key={card.href}>
                     <a href={card.href}>
                       <img src={card.photo.src} width={card.photo.width} height={card.photo.height} alt="" decoding="async" style={{ objectPosition: card.position }} />
-                      <span><strong>{card.title}</strong><small>{card.description}</small></span>
+                      <span><strong>{card.title}</strong><small>{card.description}</small>
+                        {audit && card.category && <small className={styles.auditPrice}><IndicativeRange category={card.category} bare /> · indicatif TTC</small>}
+                      </span>
                       <Icon name="arrow" size={17} />
                     </a>
                   </li>
@@ -263,7 +289,7 @@ export function PublicHome({ gated = false, handlers }: { gated?: boolean; handl
           <div className={styles.matchingGrid}>
             <img src="/home/section-real-panel.jpg" alt="Un électricien examine un tableau électrique" width={1200} height={900} loading="lazy" decoding="async" />
             <div>
-              <Details items={MATCHING} name="matching" />
+              <Details items={audit ? [...MATCHING, auditMatching] : MATCHING} name="matching" />
               <button className={styles.primary} type="button" onClick={() => { chooseMode(2); scrollToSection("accueil-services"); }}>Lancer le diagnostic <Icon name="arrow" size={16} /></button>
             </div>
           </div>
@@ -288,8 +314,18 @@ export function PublicHome({ gated = false, handlers }: { gated?: boolean; handl
 
         <section className={styles.faq} aria-labelledby="home-faq">
           <div><h2 id="home-faq">Questions fréquentes</h2><p>Les réponses utiles avant de demander un dépannage.</p><a className={styles.textLink} href="/#help/contact">Voir l’assistance <Icon name="arrow" size={16} /></a></div>
-          <Details items={FAQ} />
+          {audit ? <div>
+            <Details items={[...FAQ, ...auditQuestions]} />
+            <button className={styles.textLink} type="button" onClick={() => cardPreview.current?.showModal()}>Voir l’étape carte <Icon name="arrow" size={16} /></button>
+          </div> : <Details items={FAQ} />}
         </section>
+
+        {audit && <dialog ref={cardPreview} className={styles.auditCardPreview} aria-labelledby="audit-card-title">
+          <h2 id="audit-card-title">Empreinte bancaire</h2>
+          <p className={styles.auditCardNumber}>Carte de démonstration · •••• 4242</p>
+          <p><strong>Aucun débit immédiat lors de l’empreinte.</strong> Un montant peut être temporairement réservé. Le règlement se fait sur DomDépannage selon le devis accepté, par carte depuis votre espace, un lien sécurisé ou le QR code du dossier.</p>
+          <form method="dialog"><button className={styles.primary}>Fermer</button></form>
+        </dialog>}
 
         <section className={styles.recruitment} aria-labelledby="home-recruitment">
           <div>

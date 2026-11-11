@@ -276,3 +276,24 @@
   .modes svg { width: 15px; }
   .carouselControls { gap: 3px; }
 }
+
+.situationList .auditPrice { margin-top: 4px; font-weight: 700; }
+.auditCardPreview {
+  width: min(calc(100% - 28px), 480px);
+  max-height: 85dvh;
+  padding: 20px;
+  border: 1px solid var(--ui-border);
+  border-radius: 16px;
+  color: var(--ui-text);
+  background: var(--ui-bg);
+}
+.auditCardPreview::backdrop { background: #121d4488; }
+.auditCardPreview h2 { margin: 0 0 14px; }
+.auditCardPreview form { margin-top: 16px; }
+.auditCardNumber {
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-surface);
+}

@@ -101,7 +101,10 @@ const FOOTER_VIEWS: { view: HomeTargetView; label: string }[] = [
 export type ChromeView = "home" | "new" | "auth" | HomeTargetView | (string & {});
 export type ChromeSection = { id: string; label: string };
 
+type PriorityContact = { label: string; href: string };
+
 type PublicHeaderProps = {
+  priorityContact?: PriorityContact;
   current?: ChromeView;
   handlers?: HomeHandlers;
   onHome?: () => void;
@@ -111,6 +114,7 @@ type PublicHeaderProps = {
 
 export function PublicHeader({
   current,
+  priorityContact,
   handlers = serviceChromeHandlers(),
   onHome = () => window.location.assign("/"),
   sections,
@@ -148,7 +152,7 @@ export function PublicHeader({
   };
 
   return (
-    <header className={styles.topbar} data-public-header="" data-ui-appearance="light">
+    <header className={priorityContact ? `${styles.topbar} ${styles.priorityTopbar}` : styles.topbar} data-public-header="" data-ui-appearance="light">
       <div className={`${styles.wrap} ${styles.topbarInner}`}>
         <button type="button" className={styles.brand} aria-label="Accueil" aria-current={current === "home" ? "page" : undefined} data-chrome-home="" onClick={home}>
           <img decoding="async" src="/brand/domdepannage-noir.png" width={331} height={103} className={styles.headerLogo} alt="" />
@@ -158,7 +162,7 @@ export function PublicHeader({
         </button>
         <div className={styles.editorialActions}>
           <a className={styles.follow} href="/suivi" aria-current={current === "suivi" ? "page" : undefined} onClick={close}>Suivre mon intervention</a>
-          <a className={styles.contact} href="/#help/contact" onClick={close}><Icon name="mail" size={16} />Nous contacter</a>
+          <a className={styles.contact} href={priorityContact?.href ?? "/#help/contact"} onClick={close}><Icon name="mail" size={16} />{priorityContact?.label ?? "Nous contacter"}</a>
         </div>
         <div ref={menuWrap} className={styles.menuWrap}>
           <button ref={menuToggle} type="button" className={styles.menuButton} aria-expanded={menuOpen} aria-controls={navId} aria-label={menuOpen ? "Fermer le menu" : "Ouvrir le menu"} onClick={() => setMenuOpen((open) => !open)}>
@@ -192,6 +196,7 @@ export function PublicChrome({
   mainClassName,
   footerNote,
   appNavigation = false,
+  priorityContact,
   children,
 }: {
   current: ChromeView;
@@ -205,6 +210,7 @@ export function PublicChrome({
   mainClassName?: string;
   footerNote?: ReactNode;
   appNavigation?: boolean;
+  priorityContact?: PriorityContact;
   children: ReactNode;
 }) {
   const act = (action: HomeAction) => actionButton(action, handlers);
@@ -212,7 +218,7 @@ export function PublicChrome({
 
   return (
     <ThemeSurface className={surface} appearance="light">
-      <PublicHeader current={current} handlers={handlers} onHome={onHome} sections={sections} onSection={onSection} />
+      <PublicHeader current={current} handlers={handlers} onHome={onHome} sections={sections} onSection={onSection} priorityContact={priorityContact} />
 
       <main id="main" className={mainClassName}>
         {children}

@@ -25,6 +25,14 @@ const esc = value => String(value).replace(/[&<>"']/g, character => ({
 })[character]);
 const norm = value => value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('fr').trim();
 
+const audit = new URLSearchParams(location.search).get('maquette') === 'audit';
+const auditRanges = {
+  outage: '150 à 250 €', socket: '80 à 180 €', panel: '150 à 350 €',
+  light: '80 à 200 €', check: '120 à 280 €',
+};
+const auditPrice = id => audit && Object.hasOwn(auditRanges, id)
+  ? `<small class="audit-price">${auditRanges[id]} · indicatif TTC</small>` : '';
+
 const services = {
   outage: { title: 'Coupure de courant partielle', summary: 'Une pièce ou une partie du logement reste sans courant.', category: 'Coupure de courant', photo: 'hero-photo-1.jpg' },
   socket: { title: 'Prise qui ne fonctionne plus', summary: 'Une ou plusieurs prises n’alimentent plus les appareils.', category: 'Prise ou interrupteur', photo: 'section-outlet.jpg' },
@@ -67,7 +75,7 @@ function serviceList(ids) {
     const item = services[id];
     return `<button type="button" class="service" data-action="service" data-value="${id}">
       <img src="/home/${item.photo}" alt="" loading="lazy">
-      <div><small>${item.category}</small><strong>${item.title}</strong></div>${arrow}
+      <div><small>${item.category}</small><strong>${item.title}</strong>${auditPrice(id)}</div>${arrow}
     </button>`;
   }).join('')}</div>`;
 }
@@ -85,6 +93,7 @@ function home() {
         ${icon('search')}<input type="search" id="query" aria-label="Rechercher un problème électrique" placeholder="Quel est le problème ?" value="${esc(state.query)}">
         <button type="button" class="later" data-action="schedule">${icon('calendar')}Plus tard</button>
       </div>
+      ${audit ? `<button class="audit-urgent" type="button" data-action="audit-urgent">${icon('bolt')}Aide urgente</button>` : ''}
     </section>
     <section>
       <h2>Pour vous</h2>
@@ -100,6 +109,7 @@ function home() {
     <section class="banner">
       <h2>Votre panne est urgente ?</h2>
       <p>Décrivez la panne et indiquez votre commune. Le créneau dépend des disponibilités.</p>
+      ${audit ? '<p class="muted">Le délai est confirmé dans votre dossier une fois le rendez-vous fixé.</p>' : ''}
       ${primary('Décrire ma panne urgente', 'urgent')}
     </section>
     <section>
@@ -108,6 +118,7 @@ function home() {
         ${row('activity', 'Le détail du prix', 'Un devis détaille les travaux et leur coût.', 'prices')}
         ${row('shield', 'Votre accord avant les travaux', 'Vous examinez le devis avant de décider.', 'agreement')}
         ${row('help', 'Une aide après l’intervention', 'Assistance et justificatifs depuis votre dossier.', 'help')}
+        ${audit ? row('shield', 'Informations sur DomDépannage', 'Exploitant et zone d’intervention', 'audit-operator') : ''}
       </div>
     </section>
     <section><h2>Les interventions électriques les plus courantes</h2>${serviceList(modes[0].items)}${link('Voir toutes les interventions', 'services')}</section>
@@ -117,6 +128,8 @@ function home() {
         ${row('activity', 'Quel sera le prix du dépannage ?', '', 'prices')}
         ${row('help', 'Que se passe-t-il après ma demande ?', '', 'next-steps')}
         ${row('shield', 'Comment se passe le règlement ?', '', 'payment')}
+        ${audit ? row('user', 'Qui intervient chez vous ?', '', 'audit-electrician') : ''}
+        ${audit ? row('help', 'Garantie, annulation et recours', '', 'audit-recourse') : ''}
       </div>
     </section>
     <section class="banner"><h2>Vous êtes électricien ?</h2><p>Rejoignez notre réseau pour recevoir des propositions de mission.</p>${primary('Découvrir la candidature', 'recruit')}</section>
@@ -139,7 +152,7 @@ function updateSituations() {
     const item = services[id];
     return `<button type="button" class="situation" data-action="service" data-value="${id}">
       <img src="/home/${item.photo}" alt="">
-      <div><span><strong>${item.title}</strong><small>${item.summary}</small></span>${icon('next')}</div>
+      <div><span><strong>${item.title}</strong><small>${item.summary}</small>${auditPrice(id)}</span>${icon('next')}</div>
     </button>`;
   }).join('')}</div>` : `<div class="empty"><p>Aucune situation ne correspond à votre recherche.</p>${link('Effacer la recherche', 'reset')}</div>`}`;
 }
@@ -221,6 +234,9 @@ const details = {
   payment: ['Règlement', 'Le règlement s’effectue sur la plateforme sur la base du devis accepté.'],
   recruit: ['Candidature électricien', 'Le parcours de candidature permet de renseigner ton secteur, tes compétences et tes disponibilités.'],
   advice: ['Lire un devis d’électricité', 'Vérifie les lignes de main-d’œuvre, de matériel et de déplacement, puis le total à régler.'],
+  'audit-operator': ['Informations sur DomDépannage', 'La raison sociale, le SIRET, le contact et la liste des communes couvertes restent à publier dans cet aperçu.'],
+  'audit-electrician': ['Qui intervient chez vous ?', 'Après l’affectation, retrouvez l’électricien et le créneau dans votre dossier. Vous pourrez lire le devis avant de vous engager.'],
+  'audit-recourse': ['Garantie, annulation et recours', 'Consultez les conditions de votre dossier et contactez l’assistance si la panne revient. Les conditions et les coordonnées de médiation restent à publier dans cette maquette.'],
 };
 
 function render(focus = false) {
@@ -245,7 +261,7 @@ function open(title, body) {
 
 function showService(id) {
   const item = services[id];
-  open(item.title, `<p>${item.summary}</p>${primary('Préparer ma demande', 'request')}`);
+  open(item.title, `<p>${item.summary}</p>${auditPrice(id)}${audit && auditRanges[id] ? '<p class="muted">Fourchette de démonstration. Le montant final figure sur le devis que vous acceptez.</p>' : ''}${primary('Préparer ma demande', 'request')}`);
 }
 
 function navigate(hash) {
@@ -313,6 +329,10 @@ document.addEventListener('click', event => {
     open('Informations personnelles', `<form class="form" id="edit-profile">
       <label>Nom complet<input name="name" required maxlength="80" value="${esc(state.name)}"></label>
       <p class="muted">camille@example.test</p><button class="primary">Enregistrer</button></form>`);
+  } else if (audit && action === 'payment') {
+    open('Empreinte bancaire', '<div class="audit-card"><strong>Carte de démonstration</strong><p>•••• &nbsp; 4242</p></div><p><strong>Aucun débit immédiat lors de l’empreinte.</strong> Un montant peut être temporairement réservé. Le règlement se fait selon le devis accepté, par carte depuis votre espace, un lien sécurisé ou le QR code du dossier.</p>');
+  } else if (audit && action === 'audit-urgent') {
+    open('Aide urgente', `<p>Le numéro d’assistance reste à publier. Décrivez votre panne et renseignez votre commune pour demander un créneau.</p>${primary('Décrire ma panne urgente', 'urgent')}`);
   } else if (action === 'schedule' || action === 'urgent' || action === 'request') {
     if (dialog.open) dialog.close();
     open(action === 'schedule' ? 'Prévoir un dépannage' : 'Préparer ma demande',

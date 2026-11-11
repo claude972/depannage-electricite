@@ -175,3 +175,8 @@ dialog::backdrop { background: #141d3e5c; }
 #dialog-body { display: grid; gap: 10px; }
 @media (min-width: 520px) { .app { border-inline: 1px solid var(--line); } }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+
+.audit-urgent { justify-self: end; display: inline-flex; align-items: center; gap: 5px; min-height: 44px; padding: 3px 0; border: 0; background: none; color: var(--blue); font-size: 13px; font-weight: 700; }
+.audit-urgent svg { width: 15px; height: 15px; }
+.audit-price { display: block; margin-top: 4px; font-weight: 700; }
+.audit-card { padding: 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); }
