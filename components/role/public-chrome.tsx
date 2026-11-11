@@ -148,7 +148,7 @@ export function PublicHeader({
   };
 
   return (
-    <header className={styles.topbar} data-public-header="" data-ui-appearance="light">
+    <header className={current === "home" ? `${styles.topbar} ${styles.homeTopbar}` : styles.topbar} data-public-header="" data-ui-appearance="light">
       <div className={`${styles.wrap} ${styles.topbarInner}`}>
         <button type="button" className={styles.brand} aria-label="Accueil" aria-current={current === "home" ? "page" : undefined} data-chrome-home="" onClick={home}>
           <img decoding="async" src="/brand/domdepannage-noir.png" width={331} height={103} className={styles.headerLogo} alt="" />

@@ -156,7 +156,7 @@
 }
 .shortcuts ul { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; max-width: 460px; margin-top: 12px; }
 .shortcuts a { display: grid; justify-items: center; gap: 7px; color: var(--ui-text); font-size: .76rem; font-weight: 700; text-decoration: none; }
-.shortcuts a > span { display: grid; place-items: center; width: min(100%, 76px); aspect-ratio: 1; border-radius: 50%; background: light-dark(#f1f1f1, #282828); color: var(--ui-primary); }
+.shortcuts a > span { display: grid; place-items: center; width: min(100%, 76px); aspect-ratio: 1; border-radius: 50%; background: #f1f1f1; color: var(--ui-primary); }
 .shortcuts a:hover > span { outline: 1px solid var(--ui-border); }
 .situations { min-width: 0; }
 .situationsHeading { display: flex; align-items: center; justify-content: space-between; gap: 4px 10px; margin-bottom: 8px; }
@@ -206,7 +206,7 @@
 
 .urgent, .recruitment, .responseBanner { border-radius: 20px; background: var(--home-yellow); color: var(--home-ink); }
 .wrap :is(.urgent, .recruitment) p { margin-top: 8px; color: inherit; }
-.wrap .responseBanner p { color: inherit; }
+.wrap .responseBanner p { color: inherit; font-size: .875rem; }
 .responseBanner { display: flex; align-items: center; gap: 11px; min-height: 54px; padding: 10px 15px; border-radius: 13px; }
 .responseBanner svg { flex-shrink: 0; }
 .responseBanner strong { white-space: nowrap; }
@@ -291,6 +291,9 @@
   .situationList img { height: clamp(144px, 14vw, 205px); }
   .urgent { grid-template-columns: 44px minmax(0, 1fr) auto; }
   .urgentActions { grid-column: auto; }
+}
+@media (max-width: 767px) {
+  .main { padding-top: max(12px, env(safe-area-inset-top, 0px)); }
 }
 @media (max-width: 380px) {
   .modes button { gap: 4px; }

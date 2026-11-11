@@ -71,6 +71,7 @@
   cursor: pointer;
 }
 .topbar .recruit:hover { border-color: var(--ui-accent); }
+.homeTopbar .recruit { background: #f1f1f1; }
 .recruit strong, .recruit small { display: block; }
 .recruit small { margin-top: 2px; font-size: .69rem; color: var(--ui-accent); }
 .recruit svg { display: none; color: var(--ui-accent); flex-shrink: 0; }
@@ -184,6 +185,7 @@
 
 .appNav { display: none; }
 @media (max-width: 767px) {
+  .homeTopbar { display: none; }
   .appChrome { padding-bottom: calc(134px + env(safe-area-inset-bottom, 0px)); }
   .appNav {
     position: fixed;
