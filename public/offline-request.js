@@ -10,7 +10,7 @@ const object = value => value !== null && typeof value === "object" && !Array.is
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function parsePublicDraftValues(value) {
-  if (!object(value) || Object.keys(value).some(key => !["category", "urgency", "site_id", ...Object.keys(fields)].includes(key)) || !own(value, "category") || !categories.includes(value.category)) return null;
+  if (!object(value) || Object.keys(value).some(key => !["category", "urgency", "site_id", "contact_phone", ...Object.keys(fields)].includes(key)) || !own(value, "category") || !categories.includes(value.category)) return null;
   const result = { category: value.category };
   for (const [name, limit] of Object.entries(fields)) {
     const text = own(value, name) ? value[name] : "";
@@ -23,6 +23,10 @@ export function parsePublicDraftValues(value) {
   if (own(value, "site_id")) {
     if (typeof value.site_id !== "string" || (value.site_id !== "" && !uuid.test(value.site_id))) return null;
     result.site_id = value.site_id;
+  }
+  if (own(value, "contact_phone")) {
+    if (typeof value.contact_phone !== "string" || !/^\+[1-9][0-9]{7,14}$/.test(value.contact_phone)) return null;
+    result.contact_phone = value.contact_phone;
   }
   return result;
 }

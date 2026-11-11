@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { api, ApiRequestError, PHOTO_TYPES, validateUpload } from "./api";
 import { classifyRefusal } from "./refusal";
 import { AddressField, createAddressApi } from "./address-field";
+import { normalizePhone } from "./booking-draft";
 import {
   applyOutcome,
   fetchHistoryPage,
@@ -122,6 +123,7 @@ export function RequestForm({
   addressFirst = false,
   initialDescription = "",
   initialUrgency = "scheduled",
+  contactPhone,
 }: {
   initialCategory: Category;
   initialValues: RequestValues | null;
@@ -143,6 +145,8 @@ export function RequestForm({
   addressFirst?: boolean;
   initialDescription?: RequestValues["description"];
   initialUrgency?: RequestValues["urgency"];
+  /** Defined for client forms, with an optional value to prefill from the profile or booking. */
+  contactPhone?: string;
 }) {
   const [step, setStep] = useState(1);
   const phase = addressFirst && step < 3 ? 3 - step : step;
@@ -203,6 +207,8 @@ export function RequestForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preferredAddress]);
   const [validation, setValidation] = useState("");
+  const [phone, setPhone] = useState(contactPhone ?? "");
+  const [phoneError, setPhoneError] = useState("");
   const c = category(values.category);
   function next(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -211,14 +217,20 @@ export function RequestForm({
       setValidation("Décrivez le problème en au moins 15 caractères.");
       return;
     }
+    const normalizedPhone = contactPhone === undefined ? null : normalizePhone(phone);
+    if (phase === 2 && contactPhone !== undefined && !normalizedPhone) {
+      setPhoneError("Saisissez un numéro de téléphone valide (ex. +596 ou +590).");
+      return;
+    }
+    const submitted = normalizedPhone ? { ...values, contact_phone: normalizedPhone } : values;
     // Booking hand-off: the address step (native validation passed) goes straight to the payment
     // choice; the form's recap would duplicate the final confirmation.
     if (finalStep && step === 2) {
-      void onSubmit(values, photos);
+      void onSubmit(submitted, photos);
       return;
     }
     if (step < 3) setStep(step + 1);
-    else void onSubmit(values, photos);
+    else void onSubmit(submitted, photos);
   }
   return (
     <div className="form-page">
@@ -373,6 +385,11 @@ export function RequestForm({
               reverse={mode === "demo" ? undefined : addressApi.reverse}
               geolocation={mode === "demo" ? null : geolocation}
             />
+            {contactPhone !== undefined && (
+              <Field label="Téléphone de contact (obligatoire)" error={phoneError || undefined}>
+                <input type="tel" autoComplete="tel" maxLength={30} required value={phone} onChange={(e) => { setPhone(e.target.value); setPhoneError(""); }} />
+              </Field>
+            )}
             <fieldset className="urgency-options">
               <legend>Quel est votre besoin ?</legend>
               {[
@@ -457,6 +474,7 @@ export function RequestForm({
                 {values.postal_code} {values.city}
               </span>
             </div>
+            {contactPhone !== undefined && <p>Téléphone de contact · {phone}</p>}
             <div className="estimate-box">
               <span>Estimation indicative</span>
               {/* PUB-02: demo keeps the local V1 range; live shows the server's active version (or

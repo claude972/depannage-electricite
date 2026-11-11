@@ -67,6 +67,7 @@ test("booking draft: neutral slug, no catalogue service, no invented last name, 
   assert.equal(b.request_id, undefined, "the key is created by confirmBooking, proven stored before the POST");
   assert.deepEqual(splitFullName("Camille"), { first_name: "Camille", last_name: "" });
   assert.deepEqual(splitFullName("  "), { first_name: "", last_name: "" });
+  assert.equal(bookingFromSignedRequest({ ...values, contact_phone: "+590690123456" }, { full_name: "Camille Dupont", phone: "+596696123456" }).contact.phone, "+590690123456");
   assert.equal(bookingFromSignedRequest(values, null).contact.first_name, "");
   const s = memory();
   writePhotoCount(s, 3);

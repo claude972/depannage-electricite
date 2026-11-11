@@ -28,8 +28,8 @@ export function OptionalEmailAccount() {
   }
 
   return <Card>
-    <Copy kind="subtitle">Compte facultatif</Copy>
-    <Copy>Vous pouvez continuer à utiliser votre numéro pour retrouver vos interventions.</Copy>
+    <Copy kind="subtitle">Accès par e-mail</Copy>
+    <Copy>Ajoutez une adresse e-mail et un mot de passe à votre accès actuel pour retrouver vos interventions.</Copy>
     {sent ? <Copy>Confirmez l’adresse e-mail demandée. Vos interventions restent liées à votre accès actuel.</Copy>
       : open ? <>
         <Field label="Adresse e-mail" autoComplete="email" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail} maxLength={254} editable={!busy} />

@@ -21,7 +21,7 @@ export function bookingFromSignedRequest(values: RequestValues, profile: Pick<Pr
     urgent: values.urgency === "urgent",
     slot: null,
     notes: "",
-    contact: { civility: "", first_name: name.first_name, last_name: name.last_name, email: "", phone: profile?.phone ?? "", company: false },
+    contact: { civility: "", first_name: name.first_name, last_name: name.last_name, email: "", phone: values.contact_phone ?? profile?.phone ?? "", company: false },
   };
 }
 
@@ -32,6 +32,7 @@ export function bookingForEditedRequest(current: BookingDraft, previousCategory:
     slug: previousCategory === values.category ? current.slug : signedSlug(values.category),
     urgent,
     slot: urgent ? null : current.slot,
+    contact: { ...current.contact, phone: values.contact_phone ?? current.contact.phone },
   };
 }
 

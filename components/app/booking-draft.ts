@@ -1,3 +1,4 @@
+import { normalizeBookingPhone as normalizePhone } from "../../shared/booking-contact";
 // Service booking flow (FASTSPLIT-SERVICE-BOOKING-FLOW-001). Pure, no React, no network.
 //
 // The request itself travels in the canonical public draft (lib/shared/request-draft.ts:
@@ -64,15 +65,7 @@ export const PAYMENT_LABEL: Record<PaymentChoice, string> = {
   card_hold: "Empreinte bancaire (aucun débit à la réservation)",
 };
 
-/** E.164 as the contract normalises it (display/validation only; the server re-normalises):
- *  Martinique 0696/0697 → +596…, metropolitan 06/07 → +33…, international « + » kept. */
-export function normalizePhone(input: string): string | null {
-  const raw = input.replace(/[\s.()-]/g, "");
-  if (/^\+[1-9][0-9]{7,14}$/.test(raw)) return raw;
-  if (/^069[67][0-9]{6}$/.test(raw)) return `+596${raw.slice(1)}`;
-  if (/^0[67][0-9]{8}$/.test(raw)) return `+33${raw.slice(1)}`;
-  return null;
-}
+export { normalizePhone };
 export type StoredBooking = { savedAt: number; booking: BookingDraft };
 
 const LIMITS = { slug: 80, notes: 1500, first_name: 60, last_name: 60, email: 254, phone: 30 } as const;

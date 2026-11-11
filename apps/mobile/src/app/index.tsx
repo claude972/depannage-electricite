@@ -17,7 +17,6 @@ export default function Entry() {
     return () => { live = false; };
   }, [actor]);
   if (session && phoneResume === 'booking') return <Redirect href="/demande-client" />;
-  if (session && phoneResume === 'lookup') return <Redirect href="/retrouver" />;
   if (actor && pending?.actor !== actor) return null;
   if (pending?.actor === actor && pending?.dossier)
     return <Redirect href={{ pathname:'/dossier/[id]', params:{ id:pending.dossier, retourPaiement:'1' } }} />;

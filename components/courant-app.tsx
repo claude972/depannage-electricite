@@ -596,8 +596,9 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
         if (link) pendingLink.current = link;
       }
       hashSeen.current = true;
-      const target = parsed.view ?? homeFor(mode === "public" ? null : role, mode);
-      setParam(parsed.param);
+      const followFromAccount = mode === "live" && parsed.view === "auth" && parsed.param === "requests";
+      const target = followFromAccount ? (role === "client" ? "requests" : homeFor(role, mode)) : parsed.view ?? homeFor(mode === "public" ? null : role, mode);
+      setParam(followFromAccount ? "" : parsed.param);
       setView(canAccess(target, mode === "public" ? null : role, mode) ? target : "forbidden");
     };
     onHash();
@@ -1464,7 +1465,8 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
       try {
         stored = storageNow ? readRequestKey(storageNow.getItem(REQUEST_KEY_STORAGE)) : null;
       } catch {}
-      let reviewed: RequestValues = values;
+      const { contact_phone: _contactPhone, ...interventionValues } = values;
+      let reviewed: RequestValues = interventionValues;
       if (!stored || stored.estimate_review_required) {
         const rendered = shownVersion(REVIEW_SCOPES.requestForm);
         await loadPrices(undefined, true);
@@ -1475,12 +1477,12 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
           if (decision.kind === "omit") throw new Error(REVIEW_COPY.blocked);
           if (!updateFrozenVersion(storageNow, stored.request_id, decision.version))
             throw new Error("Votre demande n’a pas été envoyée : ce navigateur n’a pas pu enregistrer votre confirmation. Réessayez.");
-        } else if (decision.kind === "send") reviewed = { ...values, reviewed_estimate_version: decision.version } as RequestValues;
+        } else if (decision.kind === "send") reviewed = { ...interventionValues, reviewed_estimate_version: decision.version } as RequestValues;
       }
       if (stored) {
         // Replay: compare the content only (the frozen version is not « content »).
         const frozen = (readRequestKey(storageNow?.getItem(REQUEST_KEY_STORAGE) ?? null)?.payload ?? stored.payload) as { reviewed_estimate_version?: number };
-        if (frozen.reviewed_estimate_version !== undefined) reviewed = { ...values, reviewed_estimate_version: frozen.reviewed_estimate_version } as RequestValues;
+        if (frozen.reviewed_estimate_version !== undefined) reviewed = { ...interventionValues, reviewed_estimate_version: frozen.reviewed_estimate_version } as RequestValues;
       }
       if (!ctx.alive()) return;
       const prepared = prepareRequestKey(getDraftStorage(), reviewed);

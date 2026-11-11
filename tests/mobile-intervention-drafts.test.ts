@@ -80,6 +80,16 @@ if (index !== -1) {
     assert.deepEqual(JSON.parse(reopened.stdout), [quote, report, null, null, request, null, receipt]);
   });
 
+  test('the new booking intent requires valid private contact and keeps legacy pending intents readable', () => {
+    const booking = { service_slug: 'demande-socket', contact: { first_name: 'Camille', last_name: 'Recette', phone: '+596696123456' } };
+    const current = { ...request, intent: { ...request.intent, booking } };
+    assert.deepEqual(requestDraft.parse(current), current);
+    assert.deepEqual(requestDraft.parse(request), request);
+    for (const invalid of ['', '0696', 'un numéro']) {
+      assert.equal(requestDraft.safeParse({ ...current, intent: { ...current.intent, booking: { ...booking, contact: { ...booking.contact, phone: invalid } } } }).success, false);
+    }
+  });
+
   test('the last local edit wins and a confirmed save clears only its own draft', async t => {
     const directory = await mkdtemp(path.join(tmpdir(), 'mobile-draft-order-'));
     t.after(() => rm(directory, { recursive: true, force: true }));

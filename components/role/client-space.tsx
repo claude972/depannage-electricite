@@ -289,6 +289,7 @@ export function ClientSpace({ session }: { session: Session }) {
             initialCategory={session.pendingDraft?.category ?? (isCategory(session.param) ? session.param : "panel")}
             initialValues={session.pendingDraft}
             preferredAddress={preferredAddress}
+            contactPhone={session.booking?.contact.phone ?? session.pendingDraft?.contact_phone ?? session.profile?.phone ?? ""}
             initialPhotos={editBooking && session.booking ? session.bookingPhotos() : undefined}
             finalStep={
               editBooking && session.booking

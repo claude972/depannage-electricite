@@ -235,6 +235,8 @@ test("deep link: a #detail hash set during the login refresh is kept, not overwr
 test("deep link: pending link from the signed-out visit is used once, role-guarded, else home", () => {
   const pending = { view: "detail" as View, param: "job-old-1" };
   // Login form in the address bar: the remembered link wins.
+  assert.deepEqual(loginLanding("#auth/requests", null, "client"), { view: "requests", param: "" });
+  assert.equal(loginLanding("#auth/requests", null, "artisan"), null);
   assert.deepEqual(loginLanding("#auth", pending, "client"), pending);
   // A view the role may not open is never a landing (role guard first, server re-checks).
   assert.equal(loginLanding("#admin-settings", null, "client"), null);

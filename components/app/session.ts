@@ -130,6 +130,7 @@ export type DeepLink = { view: View; param: string };
 /** A hash that names a signed-in view (e.g. #detail/<id>), whatever the current mode; else null. */
 export function protectedLink(hash: string): DeepLink | null {
   const parsed = parseHash(hash);
+  if (parsed.view === "auth" && parsed.param === "requests") return { view: "requests", param: "" };
   return parsed.view && !isPublicView(parsed.view) ? { view: parsed.view, param: parsed.param } : null;
 }
 // Landing of a login chain (WEB-DEEPLINK-LOGIN-001). A signed-in view already in the address bar

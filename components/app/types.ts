@@ -533,6 +533,7 @@ export type RequestValues = {
   city: string;
   urgency: Urgency;
   site_id?: string;
+  contact_phone?: string;
 };
 
 // Availability of a backend contract as observed by the browser, never assumed.

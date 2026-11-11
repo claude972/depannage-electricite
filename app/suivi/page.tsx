@@ -1,13 +1,11 @@
-// /suivi (docs/GUEST_CHECKOUT_CONTRACT.md): find one's requests again with a verified phone.
-// No public lookup by name or phone: nothing is listed before the code is verified.
 import type { Metadata } from "next";
-import { PhoneLookupPage } from "@/components/role/phone-access";
+import { AccountLookupPage } from "@/components/role/account-lookup-page";
 
 export const metadata: Metadata = {
   title: "Suivre ma demande — Dépannage électrique",
-  description: "Retrouvez vos demandes avec votre téléphone vérifié par un code.",
+  description: "Connectez-vous à votre compte pour retrouver une intervention avec son numéro de commande.",
 };
 
 export default function Page() {
-  return <PhoneLookupPage />;
+  return <AccountLookupPage />;
 }

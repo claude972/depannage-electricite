@@ -412,8 +412,8 @@ export function BookingWizard({
                   <Field label="Adresse email" hint="Facultatif" error={errors.email}>
                     <input type="email" autoComplete="email" inputMode="email" maxLength={254} value={state.contact.email} onChange={(e) => setContact({ email: e.target.value })} />
                   </Field>
-                  <Field label="Téléphone" error={errors.phone}>
-                    <input type="tel" autoComplete="tel" inputMode="tel" maxLength={30} value={state.contact.phone} onChange={(e) => setContact({ phone: e.target.value })} />
+                  <Field label="Téléphone de contact (obligatoire)" error={errors.phone}>
+                    <input required type="tel" autoComplete="tel" inputMode="tel" maxLength={30} value={state.contact.phone} onChange={(e) => setContact({ phone: e.target.value })} />
                   </Field>
                 </div>
                 <label className={styles.check}>

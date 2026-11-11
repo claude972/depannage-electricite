@@ -217,29 +217,14 @@ test("PhoneAccess : validation locale (numéro, noms, code 6 chiffres) et requê
 });
 
 // ---- /suivi ----------------------------------------------------------------------------------
-test("/suivi : SMS désactivé ⇒ aucun formulaire téléphone, message honnête + « Me connecter à mon compte »", () => {
-  const off = render(createElement(phone.PhoneLookupPage as never, { initialOptions: OPTS({ phone: false }), go() {} } as never));
-  assert.match(off, /class="ui-v2 /);
-  assert.match(off, /<h1>Suivre ma demande<\/h1>/);
-  assert.doesNotMatch(off, /data-phone-access|type="tel"/);
-  assert.match(text(off), /Le suivi par SMS sera disponible prochainement\./);
-  assert.match(off, /<a class="submit" href="\/#auth">Me connecter à mon compte<\/a>/);
-  for (const initialOptions of [{ status: "error" }, { status: "loading" }]) assert.doesNotMatch(render(createElement(phone.PhoneLookupPage as never, { initialOptions, go() {} } as never)), /data-phone-access/);
-  // La page réelle (chargement initial) n’affiche aucun formulaire avant la réponse du serveur.
+test("/suivi : retrouve une intervention par connexion e-mail, sans demander de numéro ni de code SMS", () => {
   const page = render(createElement(suivi.default as never));
-  assert.doesNotMatch(page, /data-phone-access/);
+  assert.match(page, /class="ui-v2 /);
+  assert.match(page, /<h1>Suivre ma demande<\/h1>/);
+  assert.doesNotMatch(page, /data-phone-access|type="tel"|suivi par SMS|data-request|INT-[a-f0-9]{6}/i);
+  assert.match(page, /href="\/#auth\/requests">Me connecter à mon compte<\/a>/);
+  assert.match(text(page), /par e-mail.*Mes demandes.*numéro de commande/);
   assert.equal(suivi.metadata.title, "Suivre ma demande — Dépannage électrique");
-});
-
-test("/suivi : SMS activé ⇒ PhoneAccess « lookup » (téléphone + nom + prénom), rien de listé avant vérification", () => {
-  const went: string[] = [];
-  const on = render(createElement(phone.PhoneLookupPage as never, { initialOptions: OPTS({ phone: true }), go: (h: string) => went.push(h) } as never));
-  assert.match(on, /data-phone-access="lookup" data-phone-stage="form"/);
-  for (const label of ["Prénom", "Nom", "Téléphone mobile"]) assert.match(on, new RegExp(`>${label}<`), label);
-  assert.doesNotMatch(on, /data-request|INT-[a-f0-9]{6}/i);
-  assert.match(on, /<a class="submit" href="\/#auth">Me connecter à mon compte<\/a>/);
-  assert.match(text(on), /recherchez-le dans « Mes demandes »/);
-  same(went, []);
 });
 
 // ---- Robustesse PhoneAccess (revue ROOT) : délai, vol unique, réponses tardives -------------------

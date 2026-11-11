@@ -31,6 +31,7 @@ test("parcours interactif client ↔ artisan (démo) : demande → offre → dev
     await page.getByLabel("Adresse d’intervention").fill("8 rue Victor Hugo");
     await page.getByLabel("Code postal").fill("97200");
     await page.getByLabel("Ville").fill("Fort-de-France");
+    await page.getByLabel("Téléphone de contact (obligatoire)").fill("0696 12 34 56");
     const place = await main(page);
     // Nothing is sent on the address step: no « Enregistrer », the next step is the payment choice.
     assert.match(place, /Rien n’est encore envoyé : vous choisirez ensuite le mode de règlement, puis vous confirmerez l’envoi de votre demande\./);
@@ -42,17 +43,8 @@ test("parcours interactif client ↔ artisan (démo) : demande → offre → dev
     assert.match(confirm, /Confirmez l’envoi de votre demande/);
     assert.match(confirm, /Choisissez votre mode de règlement/);
     assert.ok(!(await store(page)).data.interventions.some((i) => i.description === DESCRIPTION), "nothing created before the confirmation");
+    assert.match(confirm, /\+596696123456/, "phone entered on the previous step is kept");
     await page.locator('[data-booking-choose="on_site"]').click();
-    await page.locator("[data-booking-send]").click();
-    await page.waitForTimeout(300);
-    // The demo profile phone is an example, not a valid mobile: the existing validation asks for it.
-    assert.match(await main(page), /Vos coordonnées sont incomplètes/);
-    await page.locator('[data-booking-contact-edit] input[autocomplete="tel"]').fill("0696 12 34 56");
-    // No invented last name from a single-word profile name: the client completes it here.
-    const last = page.locator('[data-booking-contact-edit] input[autocomplete="family-name"]');
-    if (!(await last.inputValue())) await last.fill("Durand");
-    assert.equal(await page.locator('[data-booking-contact-edit] input[autocomplete="given-name"]').inputValue(), "Camille", "first name from the demo cast, not invented");
-    await click(page, "Enregistrer mes coordonnées");
     await page.locator("[data-booking-send]").click();
     await page.waitForTimeout(600);
     const created = await main(page);
@@ -185,6 +177,14 @@ test("#new connecté : le choix de règlement est proposé après l’adresse ; 
     await page.waitForTimeout(200);
     assert.match(await main(page), /Où faut-il intervenir \?/, "still on the address step");
     await page.getByLabel("Ville").fill("Fort-de-France");
+    const phone = page.getByLabel("Téléphone de contact (obligatoire)");
+    await phone.fill("");
+    await click(page, "Continuer vers le règlement");
+    assert.equal(await phone.evaluate((el: HTMLInputElement) => el.validity.valueMissing), true);
+    await phone.fill("1234");
+    await click(page, "Continuer vers le règlement");
+    assert.match(await main(page), /Saisissez un numéro de téléphone valide/);
+    await phone.fill("+590 690 12 34 56");
     await click(page, "Continuer vers le règlement");
     await page.waitForTimeout(400);
     assert.match(await main(page), /Après intervention — paiement sur la plateforme/);
@@ -212,6 +212,7 @@ test("#new connecté : le choix de règlement est proposé après l’adresse ; 
     const again = await main(page);
     assert.match(again, /Confirmez l’envoi de votre demande/);
     assert.match(again, /12 rue Lamartine, 97200 Fort-de-France/);
+    assert.match(again, /\+590690123456/, "contact phone kept after editing the address");
     assert.match(again, /Après intervention — paiement sur la plateforme/, "payment choice kept");
     assert.equal((await store(page)).data.interventions.filter((i) => i.description === DESCRIPTION).length, 0, "nothing created between the steps");
     // The edited photo set is what the kept booking now holds.

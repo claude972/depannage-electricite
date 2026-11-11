@@ -2,16 +2,19 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, Keyboard, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
+import type { z } from 'zod';
 import * as Location from 'expo-location';
 import { Action, BookingProgress, Card, Copy, Field, ReadState, Screen } from '@/components/ui';
 import { ApiFailure, api, useResource } from '@/lib/api';
-import { categories, category as categorySchema, creation, euros, prices, requestFields, type Category } from '@/lib/contracts';
+import { categories, category as categorySchema, creation, euros, prices, requestFields, workspace, type Category } from '@/lib/contracts';
 import { requestDraftKey } from '@/lib/draft-store';
-import { requestDraft, type RequestIntent } from '@/lib/request-draft';
+import { requestContact, requestDraft, type RequestIntent } from '@/lib/request-draft';
+import { bookingReceipt } from '@/lib/phone-booking-draft';
 import { useDeviceDraft } from '@/lib/use-device-draft';
 import { useSession } from '@/lib/session';
 import { useWorkspace } from '@/lib/use-workspace';
 import { orderReference } from '../../../../shared/order-reference';
+import { normalizeBookingPhone } from '../../../../shared/booking-contact';
 
 export default function RequestForm() {
   const session = useSession().session;
@@ -20,19 +23,22 @@ export default function RequestForm() {
   if (!account.data) return <Screen><ReadState loading={account.loading} error={account.error} onRetry={account.reload} /></Screen>;
   if (account.data.profile.role !== 'client' || account.data.profile.id !== session.user.id)
     return <Screen><Copy>Ce formulaire est réservé à l’espace client.</Copy></Screen>;
-  return <ClientRequest key={session.user.id} actor={session.user.id} token={session.access_token} />;
+  return <ClientRequest key={session.user.id} actor={session.user.id} token={session.access_token} profile={account.data.profile} />;
 }
 
-function ClientRequest({ actor, token }: { actor: string; token: string }) {
+function ClientRequest({ actor, token, profile }: { actor: string; token: string; profile: z.infer<typeof workspace>['profile'] }) {
   const router = useRouter();
   const catalogue = useResource('/api/public/indicative-prices', prices);
   const draft = useDeviceDraft(requestDraftKey(actor), requestDraft, { intent: null, confirmedId: null });
-  const { type, commune } = useLocalSearchParams<{ type?: string; commune?: string }>();
+  const { type, commune, service, urgence } = useLocalSearchParams<{ type?: string; commune?: string; service?: string; urgence?: string }>();
+  const [phone, setPhone] = useState(profile.phone ?? '');
+  const [firstName, setFirstName] = useState(profile.first_name?.trim() ?? '');
+  const [lastName, setLastName] = useState(profile.last_name?.trim() ?? '');
   const [category, setCategory] = useState<Category>(() => categorySchema.safeParse(type).data ?? 'outage');
   const [description, setDescription] = useState('');
   const [step, setStep] = useState(0);
   const [address, setAddress] = useState(''), [postal, setPostal] = useState(''), [city, setCity] = useState(typeof commune === 'string' ? commune.trim().slice(0, 120) : '');
-  const [urgency, setUrgency] = useState<'urgent' | 'scheduled' | null>(null);
+  const [urgency, setUrgency] = useState<'urgent' | 'scheduled' | null>(() => urgence === 'urgent' || urgence === 'scheduled' ? urgence : null);
   const [error, setError] = useState<string | null>(null), [busy, setBusy] = useState(false), [locating, setLocating] = useState(false);
   const [suggestion, setSuggestion] = useState<{ address: string; postal: string; city: string } | null>(null);
   const lock = useRef(false);
@@ -48,6 +54,8 @@ function ClientRequest({ actor, token }: { actor: string; token: string }) {
   const chosen = intent?.payload.category ?? category;
   const range = intent && !intent.reviewRequired ? intent.estimate : catalogue.data?.ranges[chosen];
   const fields = { category, description, address, postal_code: postal, city, urgency };
+  const contact = { first_name: firstName, last_name: lastName, phone: normalizeBookingPhone(phone) ?? '' };
+  const contactPhone = intent ? intent.booking?.contact.phone : contact.phone;
   const progress = intent ? 2 : step;
 
   function nextStep() {
@@ -58,6 +66,10 @@ function ClientRequest({ actor, token }: { actor: string; token: string }) {
       : requestFields.pick({ address: true, postal_code: true, city: true });
     const input = schema.safeParse(fields);
     if (!input.success) { setError(input.error.issues[0].message); return; }
+    if (progress === 1) {
+      const checked = requestContact.safeParse(contact);
+      if (!checked.success) { setError(checked.error.issues[0].message); return; }
+    }
     Keyboard.dismiss();
     setStep(step + 1);
   }
@@ -96,7 +108,15 @@ function ClientRequest({ actor, token }: { actor: string; token: string }) {
         if (!urgency) { setError('Indiquez si l’intervention est urgente.'); return; }
         const input = requestFields.safeParse(fields);
         if (!input.success) { setError(input.error.issues[0].message); return; }
-        current = { id: randomUUID(), payload: { ...input.data, reviewed_estimate_version: version }, estimate: range, reviewRequired: false };
+        const checked = requestContact.safeParse(contact);
+        if (!checked.success) { setError(checked.error.issues[0].message); return; }
+        current = {
+          id: randomUUID(),
+          payload: { ...input.data, reviewed_estimate_version: version },
+          booking: { service_slug: service && type === input.data.category ? service : `demande-${input.data.category}`, contact: checked.data },
+          estimate: range,
+          reviewRequired: false,
+        };
       }
     }
     if (!current) return;
@@ -107,9 +127,14 @@ function ClientRequest({ actor, token }: { actor: string; token: string }) {
       // A key is usable only once its exact payload survives a process restart.
       await draft.update(() => ({ intent: sending, confirmedId: null }));
       if (signal.aborted) return;
-      const result = await api('/api/interventions', creation, {
-        token: currentToken.current, method: 'POST', body: { ...sending.payload, request_id: sending.id }, signal,
-      });
+      const body = { ...sending.payload, request_id: sending.id };
+      const options = { token: currentToken.current, method: 'POST' as const, signal };
+      // A pending intent saved by an earlier app version must replay against its original endpoint.
+      const result = sending.booking
+        ? await api('/api/bookings', bookingReceipt, {
+          ...options, body: { ...body, service_slug: sending.booking.service_slug, contact: { ...sending.booking.contact, email: '' }, payment_choice: 'on_site' },
+        })
+        : await api('/api/interventions', creation, { ...options, body });
       await draft.update(() => ({ intent: null, confirmedId: result.intervention.id }));
       if (!signal.aborted) openConfirmed(result.intervention.id);
     } catch (issue) {
@@ -161,13 +186,18 @@ function ClientRequest({ actor, token }: { actor: string; token: string }) {
       </View>}
       <Field label="Adresse" value={intent?.payload.address ?? address} onChangeText={setAddress} maxLength={500} editable={!disabled} />
       <Field label="Code postal" value={intent?.payload.postal_code ?? postal} onChangeText={setPostal} keyboardType="numeric" maxLength={5} editable={!disabled} />
-      <Field label="Commune" value={intent?.payload.city ?? city} onChangeText={setCity} maxLength={120} editable={!disabled} />
+      <Field label="Commune" value={city} onChangeText={setCity} maxLength={120} editable={!disabled} />
+      {!profile.first_name?.trim() && <Field label="Prénom" value={firstName} onChangeText={setFirstName} autoComplete="given-name" maxLength={60} />}
+      {!profile.last_name?.trim() && <Field label="Nom" value={lastName} onChangeText={setLastName} autoComplete="family-name" maxLength={60} />}
+      <Field label="Téléphone de contact (obligatoire)" value={phone} onChangeText={setPhone} keyboardType="phone-pad" autoComplete="tel" maxLength={30} placeholder="+596 ou +590…" />
+      <Copy kind="muted">Ce numéro sert à vous joindre au sujet de l’intervention.</Copy>
     </Card>}
     {progress === 2 && <Card>
       <Copy kind="subtitle">Vérifiez votre demande</Copy>
       <Copy>{categories[chosen]} · {shownUrgency === 'urgent' ? 'Urgent' : 'À planifier'}</Copy>
       <Copy>{intent?.payload.description ?? description}</Copy>
       <Copy>{intent?.payload.address ?? address}, {intent?.payload.postal_code ?? postal} {intent?.payload.city ?? city}</Copy>
+      {contactPhone && <Copy>Téléphone de contact · {contactPhone}</Copy>}
       {(!intent || intent.reviewRequired) && <ReadState loading={catalogue.loading} error={catalogue.error} onRetry={catalogue.reload} />}
       {range && <Copy>{euros(range.min_cents)} à {euros(range.max_cents)}. Le devis fixe le prix final.</Copy>}
       {draft.error && <ReadState loading={false} error={draft.error} onRetry={draft.retry} />}
@@ -181,6 +211,11 @@ function ClientRequest({ actor, token }: { actor: string; token: string }) {
           setPostal(intent.payload.postal_code);
           setCity(intent.payload.city);
           setUrgency(intent.payload.urgency);
+          if (intent.booking) {
+            setPhone(intent.booking.contact.phone);
+            setFirstName(intent.booking.contact.first_name);
+            setLastName(intent.booking.contact.last_name);
+          }
           setError(null);
           setStep(0);
           draft.edit(() => ({ intent: null, confirmedId: null }));

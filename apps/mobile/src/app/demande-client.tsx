@@ -31,18 +31,22 @@ export default function ClientBooking() {
     if (auth.phoneResume === 'booking') auth.consumePhoneResume();
   }, [auth.phoneResume]);
   if (!auth.session) return <BookingFields service={service} addressFirst={addressFirst} initialUrgency={initialUrgency} initialCity={initialCity} />;
-  if (!phone) return <SignedInFallback service={service} initialCity={initialCity} />;
+  if (!phone) return <SignedInFallback service={service} initialCity={initialCity} initialUrgency={initialUrgency} />;
   return <VerifiedBooking key={auth.session.user.id + phone} actor={auth.session.user.id} phone={phone} token={auth.session.access_token} service={service} addressFirst={addressFirst} initialUrgency={initialUrgency} initialCity={initialCity} />;
 }
 
-function SignedInFallback({ service, initialCity }: { service?: string; initialCity: string }) {
+function SignedInFallback({ service, initialCity, initialUrgency }: { service?: string; initialCity: string; initialUrgency?: InitialUrgency }) {
   const router = useRouter();
   const catalogue = usePublicServices();
-  const type = catalogue.data?.items.find(item => item.slug === service)?.category;
+  const selected = catalogue.data?.items.find(item => item.slug === service);
   return <Screen>
     <Copy kind="title">Nouvelle demande</Copy>
     <Copy>Continuez depuis votre espace connecté.</Copy>
-    <Action label="Ouvrir le formulaire" onPress={() => router.replace({ pathname: '/demande', params: { ...(type ? { type } : {}), ...(initialCity ? { commune: initialCity } : {}) } })} />
+    <Action label="Ouvrir le formulaire" disabled={Boolean(service && catalogue.loading)} onPress={() => router.replace({ pathname: '/demande', params: {
+      ...(selected ? { type: selected.category, service: selected.slug } : {}),
+      ...(initialCity ? { commune: initialCity } : {}),
+      ...(initialUrgency ? { urgence: initialUrgency } : {}),
+    } })} />
   </Screen>;
 }
 
@@ -182,7 +186,7 @@ function BookingFields({ service, addressFirst, initialUrgency, initialCity, own
       <Copy kind="subtitle">Vos coordonnées</Copy>
       <Field label="Prénom" value={first} onChangeText={setFirst} autoComplete="given-name" maxLength={60} />
       <Field label="Nom" value={last} onChangeText={setLast} autoComplete="family-name" maxLength={60} />
-      <Field label="Téléphone" value={phone} onChangeText={setPhone} placeholder="+596 ou +590…" keyboardType="phone-pad" autoComplete="tel" maxLength={40} editable={!owner} />
+      <Field label="Téléphone de contact (obligatoire)" value={phone} onChangeText={setPhone} placeholder="+596 ou +590…" keyboardType="phone-pad" autoComplete="tel" maxLength={40} editable={!owner} />
     </Card>}
     {step === 'address' && addressFields}
     {step === 'review' && <Card>

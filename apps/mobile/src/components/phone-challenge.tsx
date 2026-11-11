@@ -59,7 +59,7 @@ export function PhoneChallenge({ purpose, contact, beforeRequest }: {
   }
 
   return <Card>
-    <Copy kind="subtitle">{requested ? 'Vérifiez votre téléphone' : 'Continuer avec mon téléphone'}</Copy>
+    <Copy kind="subtitle">{requested ? 'Saisissez le code reçu' : 'Vérifiez votre téléphone'}</Copy>
     {!contact && !requested && <>
       <Field label="Prénom" value={first} onChangeText={setFirst} autoComplete="given-name" maxLength={60} editable={!busy} />
       <Field label="Nom" value={last} onChangeText={setLast} autoComplete="family-name" maxLength={60} editable={!busy} />

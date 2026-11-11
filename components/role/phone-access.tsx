@@ -10,8 +10,6 @@ import { STATUS, category as categoryOf, date as formatDate, money } from "../ap
 import type { Status } from "../app/types";
 import { Field } from "../app/ui";
 import { createClient } from "../../lib/supabase/client";
-import { PublicChrome } from "./public-chrome";
-import { serviceChromeHandlers } from "./public-service-page";
 import styles from "./phone-access.module.css";
 
 export type PhonePurpose = "booking" | "lookup";
@@ -572,41 +570,6 @@ export function PhoneHistory({ api, onExpired, initial, watchIdentity = supabase
   );
 }
 
-// ---- /suivi: find one's requests with a verified phone (no public lookup, no listing before) ----
-// While phone auth is off (server options), no phone form at all: honest message + account login.
-export function PhoneLookupPage({ api, optionsApi, historyApi, watchIdentity, initialOptions, initialVerified = false, go = (href: string) => window.location.assign(href) }: { api?: PhoneApi; optionsApi?: OptionsApi; historyApi?: HistoryApi; watchIdentity?: IdentityWatch; initialOptions?: OptionsState; initialVerified?: boolean; go?: (href: string) => void }) {
-  const { options } = useBookingOptions(optionsApi, initialOptions);
-  const [verified, setVerified] = useState(initialVerified);
-  const [expired, setExpired] = useState(false);
-  return (
-    <PublicChrome current="suivi" handlers={serviceChromeHandlers(go)} onHome={() => go("/")}>
-      <div className={styles.page}>
-        <h1>Suivre ma demande</h1>
-        <p className={styles.lead}>Votre numéro de commande commence par INT-. Connectez-vous par e-mail, puis recherchez-le dans « Mes demandes ».</p>
-        {options.status === "loading" ? (
-          <p className={styles.lead} role="status">Chargement…</p>
-        ) : !phoneAuthOn(options) ? (
-          <div className={styles.card} data-suivi-off="">
-            <p className={styles.lead}>{SUIVI_OFF}</p>
-            <a className={styles.submit} href="/#auth">Me connecter à mon compte</a>
-          </div>
-        ) : verified ? (
-          <PhoneHistory api={historyApi} watchIdentity={watchIdentity} onExpired={() => { setExpired(true); setVerified(false); }} />
-        ) : (
-          <>
-            {expired && <p className={styles.error} role="alert">{HISTORY_COPY.expired}</p>}
-            <p className={styles.lead}>Indiquez le téléphone utilisé pour votre demande, avec votre nom et votre prénom. Après vérification du code, vos demandes s’affichent ici.</p>
-            <div className={styles.card}>
-              <PhoneAccess purpose="lookup" api={api} onVerified={() => { setExpired(false); setVerified(true); }} />
-            </div>
-            <a className={styles.submit} href="/#auth">Me connecter à mon compte</a>
-          </>
-        )}
-      </div>
-    </PublicChrome>
-  );
-}
-
 // ---- Booking options (GET /api/bookings/options): availability decided by the server only -------
 export type PaymentMethodOption = { id: "on_site" | "card_hold"; available: boolean; label?: string; description?: string; reason?: string };
 export type BookingOptions = { payment_methods: PaymentMethodOption[]; phone_auth: { available: boolean | null; reason?: string }; currency: string };
@@ -653,4 +616,3 @@ export function useBookingOptions(api?: OptionsApi, initial?: OptionsState): { o
   return { options, retry: () => setAttempt((n) => Math.max(0, n) + 1) };
 }
 export const phoneAuthOn = (o: OptionsState) => o.status === "ready" && o.options.phone_auth.available === true;
-export const SUIVI_OFF = "Le suivi par SMS sera disponible prochainement.";

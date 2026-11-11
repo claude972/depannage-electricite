@@ -68,11 +68,11 @@ export default function Login() {
       {(error || auth.error || !configured) && <Copy kind="error">{error ?? auth.error ?? 'L’environnement mobile n’est pas configuré.'}</Copy>}
       <Action label={busy ? 'Connexion…' : 'Se connecter'} disabled={busy || !configured} onPress={() => void submit()} />
     </View>
-    <View style={[styles.guest, { borderColor: palette.border }]}>
+    {retour !== 'interventions' && <View style={[styles.guest, { borderColor: palette.border }]}>
       <Copy kind="subtitle">Une intervention à demander ?</Copy>
       <Copy kind="muted">Vous pouvez commencer votre demande depuis l’accueil.</Copy>
       <PublicLink label="Continuer sans compte" onPress={() => router.navigate('/bienvenue')} />
-    </View>
+    </View>}
     <PublicLink label="Créer un compte par e-mail" onPress={() => router.push({ pathname: '/inscription', params: retour === 'interventions' ? { retour } : {} })} />
   </AccountEntry>;
 }
