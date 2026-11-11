@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#ffffff">
+  <title>DomDépannage · Trouver une intervention électrique</title>
+  <script>if (new URLSearchParams(location.search).get('vue') === 'app') document.documentElement.dataset.view = 'app';</script>
+  <link rel="stylesheet" href="accueil.css">
+  <script src="accueil.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#contenu">Aller au contenu</a>
+  <div class="shell">
+    <header class="site-head">
+      <div class="head-inner wrap">
+        <a class="brand" href="#accueil" aria-label="DomDépannage, accueil"><img src="/brand/domdepannage-noir.png" width="158" alt="DomDépannage"></a>
+        <nav class="site-nav" aria-label="Navigation principale">
+          <a href="#services">Interventions</a><a href="#parcours">Comment ça marche</a><a href="#questions">Questions fréquentes</a>
+        </nav>
+        <button class="urgent" type="button" data-panel="urgent"><span class="urgent-dot" aria-hidden="true"></span>Aide urgente</button>
+      </div>
+    </header>
+    <main id="contenu">
+      <div class="app-help"><button class="urgent" type="button" data-panel="urgent"><span class="urgent-dot" aria-hidden="true"></span>Aide urgente</button></div>
+      <section id="accueil" class="hero wrap" aria-labelledby="titre">
+        <div class="hero-copy">
+          <img class="app-brand" src="/brand/domdepannage-noir.png" width="134" alt="DomDépannage">
+          <h1 id="titre">Un problème<br class="wide-break"> électrique&nbsp;?</h1>
+          <p class="intro">Décrivez votre panne et voyez ce que l’intervention peut coûter. Vous décidez après avoir reçu le devis.</p>
+          <form id="finder" class="finder">
+            <div class="fields">
+              <label for="commune">Lieu d’intervention
+                <input id="commune" name="commune" autocomplete="address-level2" placeholder="Votre commune" maxlength="120" required>
+              </label>
+              <label for="situation">Quel est le problème ?
+                <select id="situation" name="situation" required>
+                  <option value="">Choisir une situation</option>
+                  <option value="outage">Coupure de courant partielle</option>
+                  <option value="socket">Prise qui ne fonctionne plus</option>
+                  <option value="panel">Disjoncteur qui saute</option>
+                  <option value="lighting">Éclairage en panne</option>
+                  <option value="diagnostic">Je ne connais pas la cause</option>
+                </select>
+              </label>
+            </div>
+            <button class="button" type="submit">Trouver une intervention <span aria-hidden="true">→</span></button>
+            <p class="finder-note">Le créneau est confirmé selon les disponibilités dans votre commune.</p>
+          </form>
+        </div>
+        <figure class="hero-photo">
+          <img src="/home/hero-photo-2.jpg" alt="Électricien intervenant sur un tableau électrique" fetchpriority="high">
+          <figcaption><strong>Vous gardez la main sur le devis</strong><span>Les travaux commencent après votre accord.</span></figcaption>
+        </figure>
+      </section>
+
+      <section class="commitments" aria-label="Nos engagements">
+        <div class="wrap trust-grid">
+          <div><span class="trust-icon" aria-hidden="true">€</span><p><strong>Un prix estimé dès le départ</strong><span>Une fourchette pour vous repérer.</span></p></div>
+          <div><span class="trust-icon" aria-hidden="true">✓</span><p><strong>Votre accord avant les travaux</strong><span>Le devis détaillé reste libre d’acceptation.</span></p></div>
+          <div><span class="trust-icon" aria-hidden="true">↗</span><p><strong>Un dossier à suivre</strong><span>Retrouvez le rendez-vous et les justificatifs.</span></p></div>
+        </div>
+      </section>
+
+      <section id="services" class="section wrap">
+        <div class="section-title">
+          <h2>Les interventions électriques les plus courantes</h2>
+          <p>Exemples de fourchettes TTC dans la maquette. Le montant final figure sur le devis.</p>
+        </div>
+        <div class="service-grid">
+          <button class="service" type="button" data-service="outage">
+            <img src="/home/hero-photo-1.jpg" alt="" loading="lazy"><span class="service-copy"><strong>Coupure de courant partielle</strong><span class="price">150 à 250&nbsp;€</span><span class="service-note">Une partie du logement reste sans courant.</span></span>
+          </button>
+          <button class="service" type="button" data-service="socket">
+            <img src="/home/section-outlet.jpg" alt="" loading="lazy"><span class="service-copy"><strong>Prise qui ne fonctionne plus</strong><span class="price">80 à 180&nbsp;€</span><span class="service-note">Un ou plusieurs appareils ne sont plus alimentés.</span></span>
+          </button>
+          <button class="service" type="button" data-service="panel">
+            <img src="/home/section-real-panel.jpg" alt="" loading="lazy"><span class="service-copy"><strong>Disjoncteur qui saute</strong><span class="price">150 à 350&nbsp;€</span><span class="service-note">Le courant se coupe dès qu’un circuit démarre.</span></span>
+          </button>
+          <button class="service" type="button" data-service="lighting">
+            <img src="/home/section-socket.jpg" alt="" loading="lazy"><span class="service-copy"><strong>Éclairage en panne</strong><span class="price">80 à 200&nbsp;€</span><span class="service-note">Un luminaire ou une pièce reste dans le noir.</span></span>
+          </button>
+        </div>
+      </section>
+
+      <section id="parcours" class="journey">
+        <div class="wrap journey-grid section">
+          <div>
+            <h2>De la panne au rendez-vous</h2>
+            <ol class="steps">
+              <li><strong>Précisez le lieu et le problème</strong><span>Indiquez votre commune et ce qui ne fonctionne plus.</span></li>
+              <li><strong>Retrouvez l’électricien dans votre dossier</strong><span>Le rendez-vous et l’intervenant apparaissent après l’affectation.</span></li>
+              <li><strong>Examinez le devis avant de décider</strong><span>Vous pouvez le refuser si les travaux proposés ne vous conviennent pas.</span></li>
+            </ol>
+          </div>
+          <article class="technician">
+            <img src="/home/hero-photo-2.jpg" alt="Exemple illustré d’un électricien au travail" loading="lazy">
+            <div class="technician-copy">
+              <span class="sample">Exemple de dossier</span>
+              <h3>Qui vient chez vous&nbsp;?</h3>
+              <p>Dans votre dossier, retrouvez l’électricien affecté, votre rendez-vous et les informations utiles avant sa venue.</p>
+              <button class="text-button" type="button" data-panel="artisan">Voir l’exemple de fiche <span aria-hidden="true">→</span></button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section wrap">
+        <div class="payment-band">
+          <div><h2>Vous savez quand vous payez</h2><p>Le règlement se fait sur DomDépannage, sur la base du devis accepté. Vous pouvez accéder au paiement par carte depuis votre espace, un lien sécurisé ou le QR code du dossier.</p></div>
+          <button class="button button-light" type="button" data-panel="paiement">Voir l’étape carte</button>
+        </div>
+      </section>
+
+      <section class="section wrap faq-grid" id="questions">
+        <div class="section-title"><h2>Avant de vous lancer</h2><p>Les réponses aux questions sur le prix, le paiement et le suivi.</p></div>
+        <div class="questions">
+          <details><summary>La fourchette est-elle le prix final ?</summary><p>Elle aide à prévoir votre budget. L’électricien détaille les travaux et leur coût dans le devis soumis à votre accord.</p></details>
+          <details><summary>Quand un débit peut-il avoir lieu ?</summary><p>Lorsqu’une empreinte est proposée, elle réserve un montant sur la carte. Elle ne débite rien au moment de la réservation. Le règlement dépend du devis accepté.</p></details>
+          <details><summary>Que faire si la panne revient ?</summary><p>Ouvrez votre dossier pour retrouver les justificatifs et contacter l’assistance. Consultez les conditions de garantie de votre intervention lorsqu’elles sont disponibles.</p></details>
+          <details><summary>Comment annuler ou signaler un litige ?</summary><p>Vérifiez les conditions applicables dans votre dossier avant d’annuler. En cas de litige, utilisez l’assistance et consultez les informations de recours publiées par l’exploitant.</p><button class="text-button" type="button" data-panel="recours">Voir les informations de recours</button></details>
+          <details><summary>DomDépannage intervient-il dans ma commune ?</summary><p>La disponibilité est vérifiée pour le lieu que vous renseignez. La liste des communes couvertes reste à publier pour cette maquette.</p></details>
+          <details><summary>Qui exploite DomDépannage ?</summary><p>DomDépannage est le nom du service.</p><button class="text-button" type="button" data-panel="operateur">Informations de l’exploitant</button></details>
+        </div>
+      </section>
+      <section class="wrap extras" aria-label="Réseau et conseils">
+        <article class="recruit">
+          <div><h2>Vous êtes électricien&nbsp;?</h2><p>Rejoignez le réseau DomDépannage pour recevoir des propositions de mission dans votre secteur.</p></div>
+          <a class="button" href="/#join">Candidature électricien</a>
+        </article>
+        <article class="advice">
+          <div><h2>Le blog du dépannage</h2><p>Comprendre un devis et préparer la venue de l’électricien.</p></div>
+          <a class="button button-outline" href="/conseils">Lire les conseils</a>
+        </article>
+      </section>
+    </main>
+    <footer class="site-foot">
+      <div class="wrap foot-inner">
+        <div><strong>DomDépannage</strong><p>De la demande au suivi de votre intervention électrique.</p></div>
+        <nav aria-label="Informations et assistance">
+          <button type="button" data-panel="operateur">Informations de l’exploitant</button>
+          <button type="button" data-panel="recours">Conditions et recours</button>
+          <button type="button" data-panel="urgent">Aide et contact</button>
+        </nav>
+      </div>
+    </footer>
+    <nav class="app-tabs" aria-label="Navigation de l’application">
+      <a href="#accueil" aria-current="page"><span aria-hidden="true">⌂</span>Accueil</a>
+      <a href="#services"><span aria-hidden="true">▦</span>Services</a>
+      <a href="/prototypes/application/index.html#activite" data-app-link><span aria-hidden="true">≡</span>Activité</a>
+      <a href="/prototypes/application/index.html#compte" data-app-link><span aria-hidden="true">○</span>Compte</a>
+    </nav>
+  </div>
+  <dialog id="dialog" aria-labelledby="dialog-title">
+    <div class="dialog-head"><h2 id="dialog-title"></h2><button id="close" type="button" aria-label="Fermer">×</button></div>
+    <div id="dialog-body"></div>
+  </dialog>
+  <template id="panel-urgent">
+    <p>Le numéro d’assistance et les délais d’intervention restent à publier. Vous pouvez décrire votre panne pour demander un créneau.</p>
+    <button type="button" class="button" data-finder>Décrire ma panne</button>
+  </template>
+  <template id="panel-artisan">
+    <p class="sample">Données de démonstration</p>
+    <dl class="receipt"><div><dt>Intervenant</dt><dd>Alex Exemple · Électricien</dd></div><div><dt>Rendez-vous</dt><dd>À confirmer dans le dossier</dd></div><div><dt>Devis</dt><dd>À examiner avant les travaux</dd></div></dl>
+  </template>
+  <template id="panel-paiement">
+    <p class="sample">Aperçu de l’écran de paiement</p>
+    <div class="card-preview"><strong>Carte bancaire</strong><span aria-label="Numéro de carte masqué">•••• &nbsp; •••• &nbsp; •••• &nbsp; 4242</span></div>
+    <p class="callout"><strong>Aucun débit immédiat lors de l’empreinte.</strong> Un montant peut être temporairement réservé. Le règlement se fait sur la base du devis accepté.</p>
+    <p>Cette maquette permet de voir l’étape carte. Elle ne collecte pas de coordonnées bancaires.</p>
+  </template>
+  <template id="panel-operateur">
+    <p><strong>DomDépannage</strong> est le nom du service. La raison sociale, le SIRET, les coordonnées, la zone desservie et les justificatifs d’assurance restent à publier.</p>
+  </template>
+  <template id="panel-recours">
+    <p>Les conditions de garantie, les éventuels frais d’annulation et les coordonnées de médiation restent à publier. Pour une intervention, retrouvez les conditions applicables et l’assistance dans votre dossier.</p>
+  </template>
+</body>
+</html>
