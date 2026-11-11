@@ -8,10 +8,18 @@ import { usePublishedOperatorProfile } from "../features/public-operator-profile
 import styles from "./public-contact-actions.module.css";
 
 type Channel = keyof typeof SUPPORT_CONTACT;
-export function PublicContactActions({ whatsappPhone }: { whatsappPhone?: string }) {
-  const whatsappHref = supportContactHref("whatsapp", whatsappPhone);
+export function usePublishedSupportPhone() {
   const operator = usePublishedOperatorProfile(true);
-  const phoneHref = supportContactHref("phone", publishedValue(operator, "public_phone"));
+  return supportContactHref("phone", publishedValue(operator, "public_phone"));
+}
+
+export function PublicContactActions({ phoneHref, whatsappPhone, inline = false, phoneLabel = SUPPORT_CONTACT.phone.label }: {
+  phoneHref: string | null;
+  whatsappPhone?: string;
+  inline?: boolean;
+  phoneLabel?: string;
+}) {
+  const whatsappHref = supportContactHref("whatsapp", whatsappPhone);
   const dialog = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const [channel, setChannel] = useState<Channel>("phone");
@@ -21,19 +29,21 @@ export function PublicContactActions({ whatsappPhone }: { whatsappPhone?: string
     dialog.current?.showModal();
   }
 
-  const phoneContent = <><Icon name="phone" size={19} /> {SUPPORT_CONTACT.phone.label}</>;
+  const phoneContent = <><Icon name="phone" size={19} /> {phoneLabel}</>;
+  const callClass = inline ? styles.inlineCall : styles.call;
+  const phoneAction = phoneHref
+    ? <a className={callClass} href={phoneHref}>{phoneContent}</a>
+    : <button type="button" className={callClass} onClick={() => showHelp("phone")}>{phoneContent}</button>;
   const whatsappIcon = <svg viewBox="0 0 24 24" width={23} height={23} aria-hidden="true"><use href="/brand/contact-whatsapp.svg#whatsapp-mark" /></svg>;
 
   return (
     <>
-      <div className={styles.actions} role="group" aria-label="Contacter DomDépannage" data-floating-contact="">
-        {phoneHref
-          ? <a className={styles.call} href={phoneHref}>{phoneContent}</a>
-          : <button type="button" className={styles.call} onClick={() => showHelp("phone")}>{phoneContent}</button>}
+      {inline ? phoneAction : <div className={styles.actions} role="group" aria-label="Contacter DomDépannage" data-floating-contact="">
+        {phoneAction}
         {whatsappHref
           ? <a className={styles.whatsapp} href={whatsappHref} aria-label={SUPPORT_CONTACT.whatsapp.label}>{whatsappIcon}</a>
           : <button type="button" className={styles.whatsapp} aria-label={SUPPORT_CONTACT.whatsapp.label} onClick={() => showHelp("whatsapp")}>{whatsappIcon}</button>}
-      </div>
+      </div>}
       <dialog ref={dialog} className={styles.dialog} aria-labelledby={titleId}>
         <h2 id={titleId}>{SUPPORT_CONTACT[channel].label}</h2>
         <p>{SUPPORT_CONTACT[channel].unavailable}</p>

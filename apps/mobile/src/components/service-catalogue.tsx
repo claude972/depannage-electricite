@@ -1,4 +1,4 @@
-import { MobileContactActions } from '@/components/mobile-contact-actions';
+import { MobileContactActions, useMobileSupportPhone } from '@/components/mobile-contact-actions';
 import { ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PublicTabs } from '@/components/mobile-chrome';
@@ -10,6 +10,7 @@ export function ServiceCatalogue({ embedded = false }: { embedded?: boolean }) {
   const palette = usePalette();
   const services = usePublicServices();
   const prices = useIndicativePrices();
+  const phoneHref = useMobileSupportPhone();
   const items = services.data?.items ?? [];
 
   return <SafeAreaView edges={['top', 'left', 'right']} style={[styles.flex, { backgroundColor: palette.background }]}>
@@ -23,7 +24,7 @@ export function ServiceCatalogue({ embedded = false }: { embedded?: boolean }) {
         context="Les estimations ne sont pas disponibles pour le moment." />}
       {items.map(item => <PublicServiceRow key={item.slug} item={item} price={prices.data} />)}
     </ScrollView>
-    <MobileContactActions />
+    <MobileContactActions phoneHref={phoneHref} />
     {!embedded && <PublicTabs />}
   </SafeAreaView>;
 }

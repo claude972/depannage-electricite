@@ -144,7 +144,7 @@ const DRAFT_KEY = "courant-request-draft";
 const INVITE_KEY = "courant-invitation-code";
 type AuthMode = "login" | "signup" | "reset";
 
-export default function CourantApp({ supportWhatsAppPhone }: { supportWhatsAppPhone?: string } = {}) {
+export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }: { supportWhatsAppPhone?: string; showSupportPreview?: boolean } = {}) {
   const [mode, setMode] = useState<Mode>("public");
   const [role, setRole] = useState<Role>("client");
   const [data, setData] = useState<Workspace>(EMPTY_WORKSPACE);
@@ -3028,7 +3028,7 @@ export default function CourantApp({ supportWhatsAppPhone }: { supportWhatsAppPh
         Chargement…
       </main>
     );
-  const space = mode === "public" ? <PublicSite key="public" session={publicSession} supportWhatsAppPhone={supportWhatsAppPhone} /> :
+  const space = mode === "public" ? <PublicSite key="public" session={publicSession} supportWhatsAppPhone={supportWhatsAppPhone} showSupportPreview={showSupportPreview} /> :
     role === "artisan" ? <ArtisanSpace key={sessionKey} session={session} /> :
     role === "manager" ? <EnterpriseSpace key={sessionKey} session={session} /> :
     role === "admin" ? <AdminSpace key={sessionKey} session={session} /> : <ClientSpace key={sessionKey} session={session} />;

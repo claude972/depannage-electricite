@@ -29,7 +29,8 @@
         "scheme": "DomDepannage"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://depannage-electricite-8nimgrdre-brafas-projects.vercel.app"
+        "EXPO_PUBLIC_API_URL": "https://depannage-electricite-8nimgrdre-brafas-projects.vercel.app",
+        "EXPO_PUBLIC_HOME_SUPPORT_PREVIEW": "true"
       }
     },
     "device": {
@@ -45,7 +46,8 @@
         "scheme": "DomDepannage"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://depannage-electricite-8nimgrdre-brafas-projects.vercel.app"
+        "EXPO_PUBLIC_API_URL": "https://depannage-electricite-8nimgrdre-brafas-projects.vercel.app",
+        "EXPO_PUBLIC_HOME_SUPPORT_PREVIEW": "true"
       }
     }
   }

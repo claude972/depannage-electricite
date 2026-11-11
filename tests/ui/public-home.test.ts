@@ -11,6 +11,7 @@ import { ROOT, loadModule } from "../documents/harness";
 import { CATEGORIES } from "../../components/app/format";
 import { SERVICES } from "../../components/role/public-service-catalog";
 import { forbiddenClaims } from "../../components/role/public-lists";
+import { INTERVENTION_PROFILES, repairSituations } from "../../shared/intervention-profile";
 import type * as Home from "../../components/role/public-home";
 import type { HomeAction, HomeHandlers } from "../../components/role/public-home";
 
@@ -72,9 +73,10 @@ test("SSR : maquette Web et PWA, menu à droite, trois onglets et les huit fiche
   assert.match(html, /data-ui-appearance="light"/);
   assert.doesNotMatch(html, /data-theme-toggle/);
   assert.match(html, /<main id="main"/);
-  assert.match(html, /<h1[^>]*>.*Dépannage électrique.*Un problème<br\/>électrique/);
+  assert.match(html, /<h1[^>]*>.*Dépannage électrique.*Un problème électrique/);
   assert.match(html, /aria-label="Navigation rapide"/);
   assert.match(html, /data-home-action="address"[^>]*>.*Choisir mon adresse/);
+  assert.match(html, /aria-label="Je suis un"/);
   assert.match(html, /data-home-action="new"[^>]*>Présenter mon besoin/);
   assert.match(html, /Candidature électricien.*href="\/suivi".*Nous contacter.*aria-label="Ouvrir le menu".*aria-label="Navigation principale"/);
 
@@ -90,9 +92,32 @@ test("SSR : maquette Web et PWA, menu à droite, trois onglets et les huit fiche
   const copy = text(html.replace(/<span class="ivcPrice">[\s\S]*?<\/span>/g, ""));
   assert.doesNotMatch(copy, /€|\bavis\b|note moyenne|\d+\s*min\b|certifi|qualifi|publicité|sponsoris/i);
   assert.deepEqual(forbiddenClaims(copy), []);
+  assert.doesNotMatch(copy, /24 h\/24/);
   assert(copy.indexOf("Nos engagements") < copy.indexOf("Les interventions électriques les plus courantes"));
   for (const href of ["/#new/urgent", "/#new/scheduled", "/suivi", "/#help/contact", "/#help/garantie", "/#pricing/zones", "/conseils#prises", "/conseils#devis", "/conseils#rendez-vous"]) {
     assert(attr(html, "href").includes(href), href);
+  }
+});
+
+test("accueil de recette : délai moyen et appel 24 h/24 dans les bannières", () => {
+  const html = renderHome({ handlers: recordingHandlers([]), showSupportPreview: true });
+  const copy = text(html);
+  assert(copy.indexOf("20 min en moyenne pour vous répondre") > copy.indexOf("Devis avant travaux"));
+  assert(copy.indexOf("20 min en moyenne pour vous répondre") < copy.indexOf("Pour vous"));
+  assert.match(copy, /Votre panne est urgente \?.*Appelez-nous 24 h\/24, 7 j\/7.*Décrire ma panne urgente/);
+});
+
+test("Web et mobile partagent les situations électriques et leurs fiches publiées par profil", () => {
+  const household = repairSituations("particulier");
+  assert.deepEqual(repairSituations("airbnb"), household);
+  assert.deepEqual(repairSituations("autre"), household);
+  assert.equal(repairSituations("restaurant")[0].title, "Coupure de courant en cuisine");
+  assert.equal(repairSituations("bureau")[0].title, "Prises des postes de travail hors service");
+  for (const { value } of INTERVENTION_PROFILES) {
+    const cards = repairSituations(value);
+    assert.equal(cards.length, 4);
+    assert.equal(new Set(cards.map(card => card.title)).size, 4);
+    assert(cards.every(card => SERVICES.some(service => service.slug === card.slug)));
   }
 });
 

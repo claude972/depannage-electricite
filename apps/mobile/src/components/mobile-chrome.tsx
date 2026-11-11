@@ -20,6 +20,7 @@ const symbols = {
   plug: { ios: 'powerplug', android: 'power' },
   search: { ios: 'magnifyingglass', android: 'search' },
   calendar: { ios: 'calendar', android: 'calendar_today' },
+  clock: { ios: 'clock', android: 'schedule' },
   next: { ios: 'chevron.right', android: 'chevron_right' },
   back: { ios: 'chevron.left', android: 'chevron_left' },
   expand: { ios: 'chevron.down', android: 'expand_more' },

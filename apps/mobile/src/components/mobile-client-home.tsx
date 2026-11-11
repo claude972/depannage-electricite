@@ -1,12 +1,14 @@
-import { MobileContactActions } from '@/components/mobile-contact-actions';
+import { MobileContactActions, useMobileSupportPhone } from '@/components/mobile-contact-actions';
 import { useRef, useState } from 'react';
 import { Host, Picker } from '@expo/ui';
+import { MenuView } from '@expo/ui/community/menu';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions, type ScrollViewInstance } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions, type ScrollViewInstance } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COMMITMENTS, FAQ, STEPS } from '../../../../shared/public-home';
-import { INTERVENTION_PROFILES } from '../../../../shared/intervention-profile';
+import { INTERVENTION_PROFILES, repairSituations, type RepairSituation } from '../../../../shared/intervention-profile';
+import { HOME_SUPPORT_PREVIEW } from '../../../../shared/support-contact';
 import { PUBLIC_ADVICE } from '../../../../shared/public-advice';
 import { useIndicativePrices, usePublicServices } from '@/lib/public-services';
 import { MobileIcon, PublicTabs, type Glyph } from './mobile-chrome';
@@ -14,28 +16,31 @@ import { articlePhoto, PublicLink, publicPhotos, PublicReadState, PublicServiceR
 import { Action, Card, Copy, Field, editorial, usePalette } from './ui';
 import { AppSheet } from './app-sheet';
 
-const situations = {
-  outage: { title: 'Coupure de courant partielle', description: 'Une pièce ou une partie du logement reste sans courant.',
-    slug: 'coupure-de-courant-partielle', photo: publicPhotos.cabinet },
-  socket: { title: 'Prise qui ne fonctionne plus', description: 'Une ou plusieurs prises n’alimentent plus les appareils.',
-    slug: 'prise-qui-ne-fonctionne-plus', photo: publicPhotos.outlet },
-  panel: { title: 'Disjoncteur qui saute', description: 'Le courant se coupe lorsqu’un circuit ou un appareil démarre.',
-    slug: 'disjoncteur-qui-saute', photo: publicPhotos.electrician },
-  light: { title: 'Éclairage en panne', description: 'Un luminaire ou une zone reste sans éclairage.',
-    slug: 'eclairage-qui-ne-sallume-plus', photo: publicPhotos.lighting },
-};
-
-const shortcuts = [
-  { label: 'Coupure', situation: situations.outage, art: require('../../assets/public/outage.png'), background: '#FCF0E4' },
-  { label: 'Prises', situation: situations.socket, art: require('../../assets/public/socket.png'), background: '#F0F1F6' },
-  { label: 'Tableau', situation: situations.panel, art: require('../../assets/public/panel.png'), background: '#E8EEFC' },
-  { label: 'Éclairage', situation: situations.light, art: require('../../assets/public/light.png'), background: '#FBF2DC' },
-];
-
 type Situation = { title: string; description: string; photo: number } &
   ({ slug: string; portal?: never } | { portal: string; slug?: never });
+
+const repairPhotos: Record<RepairSituation['photo'], number> = {
+  outage: publicPhotos.cabinet,
+  socket: publicPhotos.outlet,
+  panel: publicPhotos.electrician,
+  light: publicPhotos.lighting,
+  inspection: publicPhotos.electrician,
+};
+function toSituation({ title, description, slug, photo }: RepairSituation): Situation {
+  return { title, description, slug, photo: repairPhotos[photo] };
+}
+
+const household = repairSituations('particulier');
+const shortcuts = [
+  { label: 'Coupure', art: require('../../assets/public/outage.png') },
+  { label: 'Prises', art: require('../../assets/public/socket.png') },
+  { label: 'Tableau', art: require('../../assets/public/panel.png') },
+  { label: 'Éclairage', art: require('../../assets/public/light.png') },
+].map((item, index) => ({ ...item, situation: toSituation(household[index]) }));
+const showSupportPreview = process.env.EXPO_PUBLIC_HOME_SUPPORT_PREVIEW === 'true';
+
 const modes: { label: string; title: string; icon: Glyph; items: Situation[] }[] = [
-  { label: 'Dépannage', title: 'Dépannages courants', icon: 'bolt', items: Object.values(situations) },
+  { label: 'Dépannage', title: 'Dépannages courants', icon: 'bolt', items: [] },
   { label: 'Installation', title: 'Installations courantes', icon: 'plug', items: [
     { title: 'Ajouter une prise', description: 'Préparez la pose d’un nouveau point électrique.', photo: publicPhotos.outlet,
       portal: '/#new/installation-prise' },
@@ -47,7 +52,7 @@ const modes: { label: string; title: string; icon: Glyph; items: Situation[] }[]
       slug: 'origine-de-la-panne-inconnue', photo: publicPhotos.cabinet },
     { title: 'Faire vérifier le tableau', description: 'Décrivez le problème pour orienter la vérification.',
       slug: 'panne-tableau-electrique', photo: publicPhotos.panel },
-    situations.panel,
+    toSituation(household[2]),
   ] },
 ];
 
@@ -88,11 +93,12 @@ export function MobileClientHome({ embedded = false }: { embedded?: boolean }) {
   const { width } = useWindowDimensions();
   const services = usePublicServices();
   const prices = useIndicativePrices();
+  const phoneHref = useMobileSupportPhone();
   const { openPortal, portalError } = usePublicPortal();
   const [modeIndex, setModeIndex] = useState(0);
   const [query, setQuery] = useState('');
   const [city, setCity] = useState('');
-  const [profile, setProfile] = useState('');
+  const [profile, setProfile] = useState('particulier');
   const [cityDraft, setCityDraft] = useState('');
   const [locationOpen, setLocationOpen] = useState(false);
   const locationParams = city ? { commune: city } : {};
@@ -102,7 +108,11 @@ export function MobileClientHome({ embedded = false }: { embedded?: boolean }) {
   const railY = useRef(0);
   const mode = modes[modeIndex];
   const normalized = normalize(query);
-  const items = mode.items.filter(item => !normalized || normalize(item.title + ' ' + item.description).includes(normalized));
+  const situations = modeIndex === 0 ? repairSituations(profile).map(toSituation) : mode.items;
+  const items = situations.filter(item => !normalized || normalize(item.title + ' ' + item.description).includes(normalized));
+  const profileLabel = INTERVENTION_PROFILES.find(item => item.value === profile)?.label;
+  const scheme = p.background === editorial.white ? 'light' : 'dark';
+  const profileWidth = (Math.min(width, 650) - 40) / 2.4;
   const cardWidth = Math.min(Math.max(190, (width - 32) * .78), 290);
 
   function openSituation(item: Situation) {
@@ -113,6 +123,12 @@ export function MobileClientHome({ embedded = false }: { embedded?: boolean }) {
   function selectMode(index: number) {
     setModeIndex(index);
     setQuery('');
+    railOffset.current = 0;
+    rail.current?.scrollTo({ x: 0, animated: false });
+  }
+
+  function selectProfile(value: string) {
+    setProfile(value);
     railOffset.current = 0;
     rail.current?.scrollTo({ x: 0, animated: false });
   }
@@ -128,23 +144,43 @@ export function MobileClientHome({ embedded = false }: { embedded?: boolean }) {
         <View style={styles.entry}>
           <View style={styles.locationAndProfile}>
             <Pressable accessibilityRole="button" onPress={() => { setCityDraft(city); setLocationOpen(true); }}
-              style={styles.address}>
-              <MobileIcon name="pin" color={p.blue} />
+              style={[styles.address, styles.identityField]}>
+              <MobileIcon name="pin" color={p.blue} size={18} />
               <View style={styles.grow}>
                 <Text style={[styles.small, { color: p.muted }]}>Lieu d’intervention</Text>
                 <Text style={[styles.strong, { color: p.text }]}>{city || 'Choisir mon adresse'}</Text>
               </View>
               <MobileIcon name="next" color={p.blue} size={16} />
             </Pressable>
-            <View style={styles.profilePicker}>
-              <Text style={[styles.small, { color: p.muted }]}>Qui êtes-vous ?</Text>
-              <Host style={styles.pickerHost} colorScheme={p.background === editorial.white ? 'light' : 'dark'}>
-                <Picker<string> selectedValue={profile} onValueChange={setProfile} appearance="menu" testID="intervention-profile">
-                  <Picker.Item label="Choisir" value="" />
-                  {INTERVENTION_PROFILES.map(({ value, label }) => <Picker.Item key={value} label={label} value={value} />)}
-                </Picker>
-              </Host>
-            </View>
+            {Platform.OS === 'web' ? (
+              <View style={styles.profilePicker}>
+                <Text style={[styles.small, { color: p.muted }]}>Je suis un</Text>
+                <Host style={styles.pickerHost} colorScheme={scheme}>
+                  <Picker<string> selectedValue={profile} onValueChange={selectProfile} appearance="menu" testID="intervention-profile">
+                    {INTERVENTION_PROFILES.map(({ value, label }) => <Picker.Item key={value} label={label} value={value} />)}
+                  </Picker>
+                </Host>
+              </View>
+            ) : (
+              <MenuView
+                testID="intervention-profile"
+                style={{ width: profileWidth }}
+                colorScheme={scheme}
+                actions={INTERVENTION_PROFILES.map(({ value, label }) => ({
+                  id: value, title: label, state: profile === value ? 'on' : 'off',
+                }))}
+                onPressAction={({ nativeEvent }) => selectProfile(nativeEvent.event)}
+              >
+                <View accessible accessibilityRole="button" accessibilityLabel={`Je suis un · ${profileLabel}`} style={[styles.identityField, { width: profileWidth }]}>
+                  <MobileIcon name="account" color={p.blue} size={18} />
+                  <View style={styles.grow}>
+                    <Text style={[styles.small, { color: p.muted }]}>Je suis un</Text>
+                    <Text style={[styles.strong, { color: p.text }]}>{profileLabel}</Text>
+                  </View>
+                  <MobileIcon name="expand" color={p.blue} size={16} />
+                </View>
+              </MenuView>
+            )}
           </View>
           <View accessibilityRole="tablist" accessibilityLabel="Type de service" style={[styles.modes, { borderColor: p.border }]}>
             {modes.map((item, index) => {
@@ -173,6 +209,12 @@ export function MobileClientHome({ embedded = false }: { embedded?: boolean }) {
               <Text style={[styles.strong, { color: p.text }]}>Plus tard</Text>
             </Pressable>
           </View>
+          {showSupportPreview && <View style={styles.responseBanner}>
+            <MobileIcon name="clock" color={editorial.homeInk} size={20} />
+            <Text style={[styles.responseText, styles.grow]}>
+              <Text style={styles.strong}>{HOME_SUPPORT_PREVIEW.average}</Text> {HOME_SUPPORT_PREVIEW.message}
+            </Text>
+          </View>}
         </View>
 
         <View style={styles.section}>
@@ -180,7 +222,7 @@ export function MobileClientHome({ embedded = false }: { embedded?: boolean }) {
           <View style={styles.shortcuts}>
             {shortcuts.map(item => <Pressable key={item.label} accessibilityRole="link" style={styles.shortcut}
               onPress={() => openSituation(item.situation)}>
-              <View style={[styles.shortcutCircle, { backgroundColor: item.background }]}>
+              <View style={[styles.shortcutCircle, { backgroundColor: scheme === 'dark' ? '#282828' : '#F1F1F1' }]}>
                 <Image source={item.art} style={styles.shortcutImage} accessible={false} />
               </View>
               <Text style={[styles.shortcutText, { color: p.text }]}>{item.label}</Text>
@@ -224,6 +266,22 @@ export function MobileClientHome({ embedded = false }: { embedded?: boolean }) {
           {portalError && <Copy kind="error">{portalError}</Copy>}
         </View>
 
+        <View style={styles.banner}>
+          <View style={styles.step}>
+            <View style={styles.bannerIcon}><MobileIcon name="bolt" color={editorial.homeYellow} /></View>
+            <View style={styles.grow}>
+              <Text accessibilityRole="header" style={styles.bannerTitle}>Votre panne est urgente ?</Text>
+              <Text style={styles.responseText}>Décrivez la panne et indiquez votre commune. Le créneau dépend des disponibilités.</Text>
+            </View>
+          </View>
+          <MobileContactActions inline phoneHref={phoneHref} phoneLabel={showSupportPreview ? HOME_SUPPORT_PREVIEW.callLabel : undefined} />
+          <Pressable accessibilityRole="link" onPress={() => router.push({ pathname: '/demande-client', params: { urgency: 'urgent', ...locationParams } })}
+            style={[styles.bannerButton, styles.urgentRequest]}>
+            <Text style={[styles.strong, styles.ink]}>Décrire ma panne urgente</Text>
+            <MobileIcon name="next" color={editorial.homeInk} size={15} />
+          </Pressable>
+        </View>
+
         <View style={[styles.steps, { borderColor: p.border }]}>
           <Copy kind="subtitle">De la demande au devis</Copy>
           {STEPS.map((step, index) => <View key={step.title} style={styles.step}>
@@ -234,17 +292,6 @@ export function MobileClientHome({ embedded = false }: { embedded?: boolean }) {
             </View>
           </View>)}
           <PublicLink label="Présenter mon besoin" onPress={() => router.push({ pathname: '/demande-client', params: locationParams })} />
-        </View>
-
-        <View style={styles.banner}>
-          <View style={styles.step}>
-            <View style={styles.bannerIcon}><MobileIcon name="bolt" color={editorial.white} /></View>
-            <View style={styles.grow}>
-              <Copy kind="subtitle">Votre panne est urgente ?</Copy>
-              <Copy>Décrivez la panne et indiquez votre commune. Le créneau dépend des disponibilités.</Copy>
-            </View>
-          </View>
-          <BannerButton label="Décrire ma panne urgente" onPress={() => router.push({ pathname: '/demande-client', params: { urgency: 'urgent', ...locationParams } })} />
         </View>
 
         <View style={styles.section}>
@@ -282,8 +329,8 @@ export function MobileClientHome({ embedded = false }: { embedded?: boolean }) {
 
         <View style={styles.recruitment}>
           <View style={styles.banner}>
-            <Copy kind="subtitle">Vous êtes électricien ?</Copy>
-            <Copy>Rejoignez notre réseau pour recevoir des propositions de mission selon votre secteur, vos compétences et vos disponibilités.</Copy>
+            <Text accessibilityRole="header" style={styles.bannerTitle}>Vous êtes électricien ?</Text>
+            <Text style={styles.responseText}>Rejoignez notre réseau pour recevoir des propositions de mission selon votre secteur, vos compétences et vos disponibilités.</Text>
             <BannerButton label="Découvrir la candidature" onPress={() => router.navigate('/candidature')} />
           </View>
           <Image source={publicPhotos.electrician} style={styles.recruitPhoto} contentFit="cover" accessible={false} />
@@ -306,7 +353,7 @@ export function MobileClientHome({ embedded = false }: { embedded?: boolean }) {
         </View>
       </View>
     </ScrollView>
-    <MobileContactActions />
+    <MobileContactActions phoneHref={phoneHref} />
     {!embedded && <PublicTabs />}
     <AppSheet title="Lieu d’intervention" open={locationOpen} onClose={() => setLocationOpen(false)}>
       <Field label="Commune" value={cityDraft} onChangeText={setCityDraft}
@@ -332,9 +379,10 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 28, gap: 26, width: '100%', maxWidth: 650, alignSelf: 'center' },
   entry: { gap: 10, paddingTop: 6 },
   locationAndProfile: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  profilePicker: { flex: 1, minWidth: 112, maxWidth: 180, gap: 2 },
+  profilePicker: { flex: 1, minWidth: 0 },
   pickerHost: { minHeight: 54 },
-  address: { flex: 1.35, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 46 },
+  identityField: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 57 },
+  address: { flex: 1.4, minWidth: 0 },
   strong: { fontFamily: 'JakartaBold', fontSize: 14, lineHeight: 20 },
   small: { fontFamily: 'JakartaRegular', fontSize: 12, lineHeight: 17 },
   modes: { flexDirection: 'row', borderBottomWidth: 1 },
@@ -353,18 +401,23 @@ const styles = StyleSheet.create({
   railControls: { flexDirection: 'row', gap: 4 },
   railButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   rail: { gap: 10 },
-  situation: { overflow: 'hidden', borderRadius: 16, backgroundColor: editorial.cards },
+  situation: { overflow: 'hidden', borderRadius: 16, backgroundColor: '#183AA0' },
   situationPhoto: { width: '100%', height: 144 },
   situationBody: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 11 },
   white: { color: editorial.white },
   steps: { gap: 9, borderTopWidth: 1, borderBottomWidth: 1, paddingVertical: 13 },
   step: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  stepNumber: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EDF1FF' },
+  stepNumber: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent', borderWidth: 1, borderColor: editorial.navy },
   detail: { borderBottomWidth: 1, paddingBottom: 4 },
   detailButton: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
-  recruitment: { backgroundColor: editorial.yellow, borderRadius: 20, overflow: 'hidden' },
-  banner: { padding: 16, gap: 12, borderRadius: 20, backgroundColor: editorial.yellow },
-  bannerIcon: { width: 44, height: 44, backgroundColor: editorial.navy, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  recruitment: { backgroundColor: editorial.homeYellow, borderRadius: 20, overflow: 'hidden' },
+  banner: { padding: 16, gap: 9, borderRadius: 20, backgroundColor: editorial.homeYellow },
+  responseBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 54, padding: 12, borderRadius: 13, backgroundColor: editorial.homeYellow },
+  responseText: { color: editorial.homeInk, fontFamily: 'JakartaRegular', fontSize: 13, lineHeight: 20 },
+  bannerTitle: { color: editorial.homeInk, fontFamily: 'JakartaBold', fontSize: 20, lineHeight: 25, marginBottom: 4 },
+  ink: { color: editorial.homeInk },
+  urgentRequest: { borderWidth: 1, borderColor: editorial.homeInk, backgroundColor: 'transparent', alignSelf: 'stretch', justifyContent: 'center' },
+  bannerIcon: { width: 44, height: 44, backgroundColor: editorial.homeInk, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   bannerButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, minHeight: 44, borderRadius: 12, backgroundColor: editorial.navy, alignSelf: 'flex-start' },
   recruitPhoto: { width: '100%', height: 180 },
   article: { borderRadius: 16, borderWidth: 1, overflow: 'hidden' },

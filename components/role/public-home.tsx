@@ -2,12 +2,13 @@
 
 import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Icon } from "../app/icons";
-import { INTERVENTION_PROFILES } from "../../shared/intervention-profile";
+import { INTERVENTION_PROFILES, repairSituations, type RepairSituation } from "../../shared/intervention-profile";
+import { HOME_SUPPORT_PREVIEW } from "../../shared/support-contact";
 import { COMMITMENTS, FAQ, MATCHING, STEPS } from "../../shared/public-home";
 import { PUBLIC_ADVICE } from "./public-advice-content";
 import { SERVICES, SERVICE_PHOTOS, servicePath, type ServicePhoto } from "./public-service-catalog";
 import { PublicServiceList } from "./public-service-list";
-import { PublicContactActions } from "./public-contact-actions";
+import { PublicContactActions, usePublishedSupportPhone } from "./public-contact-actions";
 import { PublicChrome, actionButton, type HomeAction, type HomeHandlers } from "./public-chrome";
 import styles from "./public-landing.module.css";
 
@@ -22,30 +23,23 @@ type Situation = {
   position: string;
 };
 
-const outage: Situation = {
-  title: "Coupure de courant partielle", description: "Une pièce ou une partie du logement reste sans courant.",
-  href: servicePath("coupure-de-courant-partielle"), photo: SERVICE_PHOTOS.cabinet, position: "34% 44%",
+const repairPhotos: Record<RepairSituation["photo"], [ServicePhoto, string]> = {
+  outage: [SERVICE_PHOTOS.cabinet, "34% 44%"],
+  socket: [SERVICE_PHOTOS.outlet, "50% 51%"],
+  panel: [SERVICE_PHOTOS.panelWork, "56% 43%"],
+  light: [SERVICE_PHOTOS.fixture, "38% 42%"],
+  inspection: [SERVICE_PHOTOS.panelWork, "56% 43%"],
 };
-const socket: Situation = {
-  title: "Prise qui ne fonctionne plus", description: "Une ou plusieurs prises n’alimentent plus les appareils.",
-  href: servicePath("prise-qui-ne-fonctionne-plus"), photo: SERVICE_PHOTOS.outlet, position: "50% 51%",
-};
-const panel: Situation = {
-  title: "Disjoncteur qui saute", description: "Le courant se coupe lorsqu’un circuit ou un appareil démarre.",
-  href: servicePath("disjoncteur-qui-saute"), photo: SERVICE_PHOTOS.panelWork, position: "56% 43%",
-};
-const lighting: Situation = {
-  title: "Éclairage en panne", description: "Un luminaire ou une zone reste sans éclairage.",
-  href: servicePath("eclairage-qui-ne-sallume-plus"), photo: SERVICE_PHOTOS.fixture, position: "38% 42%",
-};
-const SHORTCUTS = [
-  { label: "Coupure", art: "outage", href: outage.href },
-  { label: "Prises", art: "socket", href: socket.href },
-  { label: "Tableau", art: "panel", href: panel.href },
-  { label: "Éclairage", art: "light", href: lighting.href },
-];
+function toSituation({ title, description, slug, photo: key }: RepairSituation): Situation {
+  const [photo, position] = repairPhotos[key];
+  return { title, description, href: servicePath(slug), photo, position };
+}
+
+const household = repairSituations("particulier");
+const shortcuts = ["Coupure", "Prises", "Tableau", "Éclairage"];
+const SHORTCUTS = household.map(({ slug, photo }, index) => ({ label: shortcuts[index], art: photo, href: servicePath(slug) }));
 const MODES = [
-  { id: "repair", label: "Dépannage", icon: "bolt", title: "Dépannages courants", cards: [outage, socket, panel, lighting] },
+  { id: "repair", label: "Dépannage", icon: "bolt", title: "Dépannages courants", cards: [] },
   {
     id: "install", label: "Installation", icon: "plug", title: "Installations courantes",
     cards: [
@@ -58,7 +52,7 @@ const MODES = [
     cards: [
       { title: "Origine de la panne inconnue", description: "Vous constatez une anomalie sans avoir identifié son origine.", href: servicePath("origine-de-la-panne-inconnue"), photo: SERVICE_PHOTOS.cabinet, position: "42% 45%" },
       { title: "Faire vérifier le tableau", description: "Décrivez le problème pour orienter la vérification.", href: servicePath("panne-tableau-electrique"), photo: SERVICE_PHOTOS.panel, position: "52% 45%" },
-      panel,
+      toSituation(household[2]),
     ],
   },
 ] satisfies { id: string; label: string; icon: string; title: string; cards: Situation[] }[];
@@ -106,15 +100,17 @@ function Details({ items, name }: { items: Detail[]; name?: string }) {
   );
 }
 
-export function PublicHome({ gated = false, handlers, supportWhatsAppPhone }: { gated?: boolean; handlers: HomeHandlers; supportWhatsAppPhone?: string }) {
+export function PublicHome({ gated = false, handlers, supportWhatsAppPhone, showSupportPreview = false }: { gated?: boolean; handlers: HomeHandlers; supportWhatsAppPhone?: string; showSupportPreview?: boolean }) {
+  const phoneHref = usePublishedSupportPhone();
   const [modeIndex, setModeIndex] = useState(0);
-  const [profile, setProfile] = useState("");
+  const [profile, setProfile] = useState("particulier");
   const [query, setQuery] = useState("");
   const modeButtons = useRef<(HTMLButtonElement | null)[]>([]);
   const rail = useRef<HTMLUListElement>(null);
   const mode = MODES[modeIndex];
   const terms = normalize(query).split(/\s+/).filter(Boolean);
-  const cards = mode.cards.filter((card) => {
+  const situations = mode.id === "repair" ? repairSituations(profile).map(toSituation) : mode.cards;
+  const cards = situations.filter((card) => {
     const content = normalize(`${card.title} ${card.description}`);
     return terms.every((term) => content.includes(term));
   });
@@ -142,25 +138,6 @@ export function PublicHome({ gated = false, handlers, supportWhatsAppPhone }: { 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     list.scrollBy({ left: direction * (card.getBoundingClientRect().width + 10), behavior: reduced ? "auto" : "smooth" });
   };
-  const locationAndProfile = (className: string) => (
-    <div className={`${styles.locationAndProfile} ${className}`}>
-      <button className={styles.address} {...act({ type: "address" })}>
-        <Icon name="location" size={22} />
-        <span><small>Lieu d’intervention</small><strong>Choisir mon adresse</strong></span>
-        <Icon name="arrow" size={16} />
-      </button>
-      <label className={styles.profileSelect}>
-        <span>Qui êtes-vous ?</span>
-        <span className={styles.profileOptions}>
-          <select value={profile} onChange={event => setProfile(event.target.value)}>
-            <option value="">Choisir</option>
-            {INTERVENTION_PROFILES.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
-          </select>
-          <Icon name="arrow" size={15} />
-        </span>
-      </label>
-    </div>
-  );
 
   return (
     <PublicChrome
@@ -185,10 +162,27 @@ export function PublicHome({ gated = false, handlers, supportWhatsAppPhone }: { 
           <section className={styles.entry} aria-labelledby="public-home-title">
             <h1 id="public-home-title">
               <span className={styles.mobileTitle}>Dépannage électrique</span>
-              <span className={styles.desktopTitle}>Un problème<br />électrique ?</span>
+              <span className={styles.desktopTitle}>Un problème électrique ?</span>
             </h1>
             <p className={styles.heroLead}>Choisissez le lieu d’intervention et décrivez ce qui se passe.</p>
-            {locationAndProfile(styles.mobileAddress)}
+            <div className={styles.locationAndProfile}>
+              <button className={styles.address} {...act({ type: "address" })}>
+                <Icon name="location" size={20} />
+                <span><small>Lieu d’intervention</small><strong>Choisir mon adresse</strong></span>
+                <Icon name="arrow" size={15} />
+              </button>
+              <label className={styles.profileSelect}>
+                <Icon name="users" size={20} />
+                <span><small>Je suis un</small></span>
+                <select aria-label="Je suis un" value={profile} onChange={event => {
+                  setProfile(event.target.value);
+                  if (rail.current) rail.current.scrollLeft = 0;
+                }}>
+                  {INTERVENTION_PROFILES.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+                </select>
+                <Icon name="arrow" size={15} />
+              </label>
+            </div>
             <div className={styles.modes} role="tablist" aria-label="Type de service" onKeyDown={onModeKey}>
               {MODES.map((item, index) => (
                 <button
@@ -201,7 +195,6 @@ export function PublicHome({ gated = false, handlers, supportWhatsAppPhone }: { 
                 </button>
               ))}
             </div>
-            {locationAndProfile(styles.desktopAddress)}
             <form className={styles.searchForm} onSubmit={onSearch}>
               <div className={styles.searchRow}>
                 <label>
@@ -215,6 +208,12 @@ export function PublicHome({ gated = false, handlers, supportWhatsAppPhone }: { 
                 <span><Icon name="check" size={17} /> Devis avant travaux</span>
               </div>
             </form>
+            {showSupportPreview && (
+              <aside className={styles.responseBanner} aria-label="Délai moyen de réponse">
+                <Icon name="clock" size={22} />
+                <p><strong>{HOME_SUPPORT_PREVIEW.average}</strong> {HOME_SUPPORT_PREVIEW.message}</p>
+              </aside>
+            )}
           </section>
 
           <section className={styles.shortcuts} aria-labelledby="home-shortcuts">
@@ -232,17 +231,16 @@ export function PublicHome({ gated = false, handlers, supportWhatsAppPhone }: { 
           <section id="accueil-services" className={styles.situations} role="tabpanel" aria-labelledby={`mode-${mode.id}`}>
             <div className={styles.situationsHeading}>
               <h2 tabIndex={-1}>{mode.title}</h2>
-              <span aria-live="polite">{cards.length} {cards.length === 1 ? "situation" : "situations"}</span>
+              <span aria-live="polite">{cards.length} {cards.length === 1 ? "situation" : "situations"}{mode.id === "repair" && ` · ${INTERVENTION_PROFILES.find(item => item.value === profile)?.label}`}</span>
               {cards.length > 1 && <div className={styles.carouselControls}>
                 <button type="button" aria-label="Cartes précédentes" onClick={() => moveCards(-1)}><Icon name="back" size={17} /></button>
                 <button type="button" aria-label="Cartes suivantes" onClick={() => moveCards(1)}><Icon name="arrow" size={17} /></button>
               </div>}
             </div>
-            <p className={styles.situationsLead}>Choisissez la situation qui ressemble à la vôtre.</p>
             {cards.length > 0 ? (
               <ul ref={rail} className={styles.situationList}>
                 {cards.map((card) => (
-                  <li key={card.href}>
+                  <li key={card.title}>
                     <a href={card.href}>
                       <img src={card.photo.src} width={card.photo.width} height={card.photo.height} alt="" decoding="async" style={{ objectPosition: card.position }} />
                       <span><strong>{card.title}</strong><small>{card.description}</small></span>
@@ -261,16 +259,19 @@ export function PublicHome({ gated = false, handlers, supportWhatsAppPhone }: { 
           </section>
         </div>
 
+        <section className={styles.urgent} aria-labelledby="home-urgent">
+          <span className={styles.urgentIcon}><Icon name="bolt" size={28} /></span>
+          <div><h2 id="home-urgent">Votre panne est urgente ?</h2><p>Décrivez la panne et indiquez votre commune. Le créneau dépend des disponibilités.</p></div>
+          <div className={styles.urgentActions}>
+            <PublicContactActions inline phoneHref={phoneHref} phoneLabel={showSupportPreview ? HOME_SUPPORT_PREVIEW.callLabel : undefined} />
+            <a className={styles.bannerButton} href="/#new/urgent">Décrire ma panne urgente <Icon name="arrow" size={16} /></a>
+          </div>
+        </section>
+
         <section className={styles.steps} aria-labelledby="home-steps">
           <h2 id="home-steps">De la demande au devis</h2>
           <ol>{STEPS.map((step) => <li key={step.title}><strong>{step.title}</strong><p>{step.text}</p></li>)}</ol>
           <button className={styles.textLink} {...act({ type: "new" })}>Présenter mon besoin <Icon name="arrow" size={16} /></button>
-        </section>
-
-        <section className={styles.urgent} aria-labelledby="home-urgent">
-          <span className={styles.urgentIcon}><Icon name="bolt" size={28} /></span>
-          <div><h2 id="home-urgent">Votre panne est urgente ?</h2><p>Décrivez la panne et indiquez votre commune. Le créneau dépend des disponibilités.</p></div>
-          <a className={styles.bannerButton} href="/#new/urgent">Décrire ma panne urgente <Icon name="arrow" size={16} /></a>
         </section>
 
         <section className={styles.matching} aria-labelledby="home-matching">
@@ -328,7 +329,7 @@ export function PublicHome({ gated = false, handlers, supportWhatsAppPhone }: { 
           ))}</div>
         </section>
       </div>
-      <PublicContactActions whatsappPhone={supportWhatsAppPhone} />
+      <PublicContactActions phoneHref={phoneHref} whatsappPhone={supportWhatsAppPhone} />
     </PublicChrome>
   );
 }

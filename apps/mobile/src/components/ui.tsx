@@ -13,7 +13,7 @@ const darkPalette: typeof publicPalette = {
   muted: '#B5BAC4', border: '#343A44', blue: '#8EA2FF', primary: '#2246E5',
   accent: '#FF885F', danger: '#FF9F9F',
 };
-export const editorial = { navy: '#16277A', yellow: '#F4D649', cards: '#244FB1', white: '#FFFFFF' };
+export const editorial = { navy: '#16277A', yellow: '#F4D649', cards: '#244FB1', white: '#FFFFFF', homeYellow: '#FFCC00', homeInk: '#101B3C' };
 
 export function usePalette() {
   const scheme = useColorScheme();
