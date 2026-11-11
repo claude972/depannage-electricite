@@ -4,6 +4,9 @@ project_id = "depannage-web-pwa-preview"
 site_url = "https://depannage-electricite-git-integration-web-pwa-brafas-projects.vercel.app"
 additional_redirect_urls = ["https://depannage-electricite-git-integration-web-pwa-brafas-projects.vercel.app/auth/confirm", "https://depannage-electricite-git-integration-web-pwa-brafas-projects.vercel.app/auth/reset-password"]
 
+[auth.email]
+enable_confirmations = true
+
 [auth.email.template.confirmation]
 subject = "Confirmez votre adresse e-mail"
 content_path = "./supabase/templates/confirmation.html"
