@@ -105,7 +105,7 @@ function Details({ items, name }: { items: Detail[]; name?: string }) {
   );
 }
 
-export function PublicHome({ gated = false, handlers }: { gated?: boolean; handlers: HomeHandlers }) {
+export function PublicHome({ gated = false, handlers, supportWhatsAppPhone }: { gated?: boolean; handlers: HomeHandlers; supportWhatsAppPhone?: string }) {
   const [modeIndex, setModeIndex] = useState(0);
   const [query, setQuery] = useState("");
   const modeButtons = useRef<(HTMLButtonElement | null)[]>([]);
@@ -314,7 +314,7 @@ export function PublicHome({ gated = false, handlers }: { gated?: boolean; handl
           ))}</div>
         </section>
       </div>
-      <PublicContactActions />
+      <PublicContactActions whatsappPhone={supportWhatsAppPhone} />
     </PublicChrome>
   );
 }

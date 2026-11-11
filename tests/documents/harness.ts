@@ -81,7 +81,7 @@ export function loadModule(relativeFromRoot: string, overrides: Record<string, u
       if (resolved) return compile(resolved);
       return nodeRequire(name);
     };
-    vm.runInNewContext(code, { process: { env: env ?? {} }, module, exports: module.exports, require: localRequire, URL, Request, Response, ReadableStream, TextEncoder, Buffer, SyntaxError, console, Date, Math, Number, JSON, Promise, Array, Object, String, Error, TypeError, Symbol, Map, Set, Proxy, Reflect, RegExp, ArrayBuffer, Uint8Array, Intl, setTimeout, clearTimeout, queueMicrotask }, { filename: file });
+    vm.runInNewContext(code, { ...(env && { process: { env } }), module, exports: module.exports, require: localRequire, URL, Request, Response, ReadableStream, TextEncoder, Buffer, SyntaxError, console, Date, Math, Number, JSON, Promise, Array, Object, String, Error, TypeError, Symbol, Map, Set, Proxy, Reflect, RegExp, ArrayBuffer, Uint8Array, Intl, setTimeout, clearTimeout, queueMicrotask }, { filename: file });
     cache.set(file, module.exports);
     return module.exports;
   };

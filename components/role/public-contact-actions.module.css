@@ -33,7 +33,6 @@
 .actions .call:hover { background: #1a35bb; }
 .actions .whatsapp { width: 48px; border-color: var(--ui-border); background: white; }
 .actions .whatsapp:hover { background: #effaf4; }
-.whatsappIcon { width: 23px; height: 23px; background: url("/brand/contact-whatsapp.svg") center / contain no-repeat; }
 
 .dialog {
   position: fixed;

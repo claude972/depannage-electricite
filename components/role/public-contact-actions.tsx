@@ -8,9 +8,8 @@ import { usePublishedOperatorProfile } from "../features/public-operator-profile
 import styles from "./public-contact-actions.module.css";
 
 type Channel = keyof typeof SUPPORT_CONTACT;
-const whatsappHref = supportContactHref("whatsapp", process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP_PHONE);
-
-export function PublicContactActions() {
+export function PublicContactActions({ whatsappPhone }: { whatsappPhone?: string }) {
+  const whatsappHref = supportContactHref("whatsapp", whatsappPhone);
   const operator = usePublishedOperatorProfile(true);
   const phoneHref = supportContactHref("phone", publishedValue(operator, "public_phone"));
   const dialog = useRef<HTMLDialogElement>(null);
@@ -23,7 +22,7 @@ export function PublicContactActions() {
   }
 
   const phoneContent = <><Icon name="phone" size={19} /> {SUPPORT_CONTACT.phone.label}</>;
-  const whatsappIcon = <span className={styles.whatsappIcon} aria-hidden="true" />;
+  const whatsappIcon = <svg viewBox="0 0 24 24" width={23} height={23} aria-hidden="true"><use href="/brand/contact-whatsapp.svg#whatsapp-mark" /></svg>;
 
   return (
     <>

@@ -55,7 +55,7 @@ function PublishedStamp() {
   return stamp ? <p className={styles.footnote} data-operator-published-stamp="">{stamp}</p> : null;
 }
 
-export function PublicSite({ session, operatorProfile }: { session: PublicSession; /** Tests only. */ operatorProfile?: PublicProfileState }) {
+export function PublicSite({ session, operatorProfile, supportWhatsAppPhone }: { session: PublicSession; /** Tests only. */ operatorProfile?: PublicProfileState; supportWhatsAppPhone?: string }) {
   const known = PUBLIC_VIEWS.includes(session.view);
   const view: View = known ? session.view : "home";
   const [signupAs, setSignupAs] = useState<Role | null>(null);
@@ -104,7 +104,7 @@ export function PublicSite({ session, operatorProfile }: { session: PublicSessio
     return (
       <>
         {alerts}
-        <PublicHome gated={!known} handlers={chromeHandlers} />
+        <PublicHome gated={!known} handlers={chromeHandlers} supportWhatsAppPhone={supportWhatsAppPhone} />
       </>
     );
   const themedAlerts = (session.error || session.notice) && (
