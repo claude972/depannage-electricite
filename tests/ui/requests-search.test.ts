@@ -178,7 +178,7 @@ test("câblage : RequestsView utilise la recherche serveur en direct, garde le f
   const src = readFileSync("components/role/client-space.tsx", "utf8");
   const view = src.slice(src.indexOf("export function RequestsView"), src.indexOf("// ---- Détail d’intervention"));
   assert.match(view, /const live = session\.mode === "live";/);
-  assert.match(view, /useRequestsSearch\(\{ enabled: live, context: session\.mutationContext, filter, search, signal: live \? rowsSignal\(rows\) : "" \}\)/);
+  assert.match(view, /useRequestsSearch\(\{ enabled: live, context: session\.mutationContext, filter, search: searchValue, signal: live \? rowsSignal\(rows\) : "" \}\)/);
   assert.match(view, /data-requests-refresh=""/);
   assert.match(view, /if \(live\) items = toListRows\(remote\.state\.items\);/);
   assert.match(view, /<RequestList session=\{session\} items=\{items\} \/>/);

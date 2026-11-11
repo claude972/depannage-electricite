@@ -236,7 +236,9 @@ test("/suivi : SMS activé ⇒ PhoneAccess « lookup » (téléphone + nom + pr�
   const on = render(createElement(phone.PhoneLookupPage as never, { initialOptions: OPTS({ phone: true }), go: (h: string) => went.push(h) } as never));
   assert.match(on, /data-phone-access="lookup" data-phone-stage="form"/);
   for (const label of ["Prénom", "Nom", "Téléphone mobile"]) assert.match(on, new RegExp(`>${label}<`), label);
-  assert.doesNotMatch(on, /data-request|Mes demandes|INT-/);
+  assert.doesNotMatch(on, /data-request|INT-[a-f0-9]{6}/i);
+  assert.match(on, /<a class="submit" href="\/#auth">Me connecter à mon compte<\/a>/);
+  assert.match(text(on), /recherchez-le dans « Mes demandes »/);
   same(went, []);
 });
 
