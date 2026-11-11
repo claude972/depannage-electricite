@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { clientInterventionInput, clientInterventionRow } from "../client-interventions/contract";
+import { clientInterventionInput, clientInterventionRow } from "../../../shared/client-interventions";
 
 export const ENTERPRISE_PAGE_SIZE = 10;
 export const ENTERPRISE_EXPORT_LIMIT = 5000;
