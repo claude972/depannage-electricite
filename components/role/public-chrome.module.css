@@ -26,7 +26,7 @@
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  min-width: 0;
   min-height: 48px;
   padding: 0;
   border: 0;
@@ -34,43 +34,21 @@
   cursor: pointer;
   text-align: left;
 }
-.brandMark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: var(--ui-primary);
-  color: var(--ui-on-primary);
-  flex-shrink: 0;
+.headerLogo, .footerLogo {
+  display: block;
+  height: auto;
+  max-width: 100%;
+  border-radius: 5% / 16%;
 }
-.brandText {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.15;
-}
-.brandText strong {
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.3px;
-}
-.brandText small {
-  font-size: 12px;
-  white-space: nowrap;
-  color: var(--ui-text-muted);
-}
+.headerLogo { width: 154px; }
+.footerLogo { width: 164px; }
+
 .topbarInner {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
+  grid-template-columns: minmax(123px, 1fr) minmax(0, 1fr) 44px;
   gap: 4px 12px;
   padding-block: calc(6px + env(safe-area-inset-top, 0px)) 6px;
 }
-.topbar .brand { gap: 6px; }
-.topbar .brandMark { width: 34px; height: 34px; border-radius: 10px; }
-.topbar .brandText { color: var(--editorial-navy); }
-.topbar .brandText strong,
-.topbar .brandKind { margin: 0; color: inherit; font-size: .72rem; letter-spacing: -.035em; }
 .topbar .recruit,
 .editorialActions a {
   display: flex;
@@ -242,10 +220,7 @@
 }
 @media (min-width: 940px) {
   .topbarInner { display: flex; gap: 20px; min-height: 74px; }
-  .topbar .brandText { display: inline; white-space: nowrap; }
-  .topbar .brandMark { width: 37px; height: 37px; }
-  .topbar .brandText :is(strong, small) { display: inline; font-size: .9rem; font-weight: 700; }
-  .topbar .brandKind::before { content: " "; white-space: pre; }
+  .headerLogo { width: 174px; }
   .topbar .recruit { min-height: 48px; padding-inline: 16px; font-size: .88rem; }
   .editorialActions { margin-inline-start: auto; gap: 20px; font-size: .81rem; }
   .contact { padding-inline: 14px; }

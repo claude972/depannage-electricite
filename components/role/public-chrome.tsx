@@ -1,5 +1,6 @@
 "use client";
 // Shared header and footer for the public site and its booking and account pages.
+import { BRAND_NAME } from "@/lib/brand";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { Category } from "../app/types";
 import { CATEGORIES } from "../app/format";
@@ -100,16 +101,6 @@ const FOOTER_VIEWS: { view: HomeTargetView; label: string }[] = [
 export type ChromeView = "home" | "new" | "auth" | HomeTargetView | (string & {});
 export type ChromeSection = { id: string; label: string };
 
-function BrandMark() {
-  return (
-    <span className={styles.brandMark} aria-hidden="true">
-      <svg viewBox="0 0 24 24" width="22" height="22">
-        <path d="M13 2L5 14h6l-1 8 8-12h-6l1-8z" fill="currentColor" />
-      </svg>
-    </span>
-  );
-}
-
 type PublicHeaderProps = {
   current?: ChromeView;
   handlers?: HomeHandlers;
@@ -160,11 +151,7 @@ export function PublicHeader({
     <header className={styles.topbar} data-public-header="" data-ui-appearance="light">
       <div className={`${styles.wrap} ${styles.topbarInner}`}>
         <button type="button" className={styles.brand} aria-label="Accueil" aria-current={current === "home" ? "page" : undefined} data-chrome-home="" onClick={home}>
-          <BrandMark />
-          <span className={styles.brandText}>
-            <strong>Dépannage</strong>
-            <small className={styles.brandKind}>électrique</small>
-          </span>
+          <img decoding="async" src="/brand/domdepannage-noir.png" width={331} height={103} className={styles.headerLogo} alt="" />
         </button>
         <button className={styles.recruit} aria-current={current === "join" ? "page" : undefined} {...act({ type: "view", view: "join" })}>
           <Icon name="briefcase" size={20} /><span><strong>Rejoindre le réseau</strong><small>Candidature électricien</small></span>
@@ -234,7 +221,7 @@ export function PublicChrome({
       <footer className={styles.footer}>
         <div className={`${styles.wrap} ${styles.editorialFooter}`}>
           <div>
-            <strong>Dépannage électrique</strong>
+            <img decoding="async" src="/brand/domdepannage-bleu.png" width={331} height={102} className={styles.footerLogo} loading="lazy" alt={BRAND_NAME} />
             <p>De la demande au suivi de votre intervention électrique.</p>
           </div>
           <nav aria-label="Services et tarifs">

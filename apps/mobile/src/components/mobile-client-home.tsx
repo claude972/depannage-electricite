@@ -20,14 +20,14 @@ const darkPalette: typeof lightPalette = {
 };
 // Pictogrammes Figma, un fichier par thème (assets-manifest.json).
 const lightIcons = {
-  bolt: require('../../assets/mobile-b/a01d4.svg'), bell: require('../../assets/mobile-b/3861f.svg'),
+  bell: require('../../assets/mobile-b/3861f.svg'),
   pin: require('../../assets/mobile-b/697ca.svg'), chevron: require('../../assets/mobile-b/7ab3e.svg'),
   check: require('../../assets/mobile-b/a0a32.svg'), chevronAccent: require('../../assets/mobile-b/c8f21.svg'),
   home: require('../../assets/mobile-b/1165a.svg'), file: require('../../assets/mobile-b/783ab.svg'),
   help: require('../../assets/mobile-b/cdf42.svg'),
 };
 const darkIcons: typeof lightIcons = {
-  bolt: require('../../assets/mobile-b/c64ba.svg'), bell: require('../../assets/mobile-b/f58c4.svg'),
+  bell: require('../../assets/mobile-b/f58c4.svg'),
   pin: require('../../assets/mobile-b/19cee.svg'), chevron: require('../../assets/mobile-b/ef4a7.svg'),
   check: require('../../assets/mobile-b/f0c76.svg'), chevronAccent: require('../../assets/mobile-b/4e40c.svg'),
   home: require('../../assets/mobile-b/9e7c4.svg'), file: require('../../assets/mobile-b/54537.svg'),
@@ -143,10 +143,9 @@ export function MobileClientHome({ notificationsHref = '/connexion', requestsHre
   return <SafeAreaView edges={['top', 'left', 'right']} style={[styles.flex, { backgroundColor: palette.background }]}>
     <ScrollView style={styles.flex} contentContainerStyle={[styles.content, compact && styles.contentCompact]}>
       <View style={styles.brand}>
-        <View style={[styles.symbol, { backgroundColor: palette.primary }]}><Icon source={icons.bolt} size={22}/></View>
-        <View accessible accessibilityRole="header" accessibilityLabel="Dépannage électrique" style={styles.grow}>
-          <Text maxFontSizeMultiplier={1.6} style={[styles.brandName, { color: palette.text }]}>Dépannage</Text>
-          <Text maxFontSizeMultiplier={1.6} style={[styles.brandKind, { color: palette.muted }]}>ÉLECTRIQUE</Text>
+        <View accessible accessibilityRole="header" accessibilityLabel="DomDépannage" style={styles.grow}>
+          <Image source={require('../../assets/images/domdepannage-noir.png')} style={styles.brandLogo}
+            contentFit="contain" accessible={false}/>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Notifications"
           accessibilityHint="Ouvre la connexion, nécessaire pour recevoir des notifications."
@@ -251,9 +250,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 24, gap: 20, width: '100%', maxWidth: 650, alignSelf: 'center' },
   contentCompact: { paddingHorizontal: 16 },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  symbol: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  brandName: { fontFamily: 'JakartaBold', fontSize: 22, lineHeight: 30 },
-  brandKind: { fontFamily: 'JakartaBold', fontSize: 11, lineHeight: 15, letterSpacing: 1 },
+  brandLogo: { width: '100%', maxWidth: 170, aspectRatio: 331 / 103, borderRadius: 8 },
   bell: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   address: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 16, minHeight: 48 },
   eyebrow: { fontFamily: 'JakartaBold', fontSize: 11, lineHeight: 15 },

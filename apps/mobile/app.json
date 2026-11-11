@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Depannage electrique",
+    "name": "DomDépannage",
     "slug": "depannage-electrique-mobile",
     "owner": "claude972",
     "version": "0.1.0",
@@ -14,14 +14,14 @@
       "supportsTablet": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "CFBundleDisplayName": "Dépannage électrique"
+        "CFBundleDisplayName": "DomDépannage"
       }
     },
     "android": {
       "package": "com.claude972.depannageelectrique.preview",
       "versionCode": 2,
       "adaptiveIcon": {
-        "backgroundColor": "#2246E5",
+        "backgroundColor": "#080808",
         "foregroundImage": "./assets/images/android-foreground.png"
       },
       "blockedPermissions": [
@@ -38,9 +38,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#2246E5",
+          "backgroundColor": "#FFFFFF",
           "image": "./assets/images/splash.png",
-          "imageWidth": 150
+          "imageWidth": 174
         }
       ],
       [

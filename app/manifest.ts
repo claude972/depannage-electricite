@@ -1,12 +1,13 @@
 import type { MetadataRoute } from "next";
+import { BRAND_NAME } from "@/lib/brand";
 
 // Next.js App Router manifest convention:
 // https://nextjs.org/docs/app/guides/progressive-web-apps#creating-the-web-app-manifest
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "Dépannage électrique",
-    short_name: "Dépannage",
+    name: BRAND_NAME,
+    short_name: BRAND_NAME,
     description:
       "Vos demandes, devis et interventions électriques. Une connexion est nécessaire pour accéder aux dossiers.",
     lang: "fr",

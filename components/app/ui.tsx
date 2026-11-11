@@ -1,4 +1,5 @@
 "use client";
+import { BRAND_NAME } from "@/lib/brand";
 import {
   cloneElement,
   isValidElement,
@@ -14,11 +15,11 @@ import type { ContractState, Status } from "./types";
 export function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <span className="brand">
-      <span className="brand-mark">
-        <Icon name="bolt" size={23} />
+      <span className="brand-mark" aria-hidden="true">
+        <img decoding="async" src="/brand/domdepannage-sigle.png" width={64} height={64} alt="" />
       </span>
       <span>
-        Dépannage électrique
+        {BRAND_NAME}
         {!compact && <small>Le dépannage électrique, au clair.</small>}
       </span>
     </span>

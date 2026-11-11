@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
+import { BRAND_NAME } from "@/lib/brand";
 import "./globals.css";
 import { PwaRegistration } from "@/components/pwa-registration";
 import { ThemeProvider } from "@/components/app/theme-provider";
@@ -20,15 +21,15 @@ const jakarta = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Dépannage électrique",
+  title: `${BRAND_NAME} — Dépannage électrique`,
   description:
     "Votre demande, votre devis et votre intervention électrique, au même endroit.",
   robots: { index: false, follow: false },
   manifest: "/manifest.webmanifest",
-  applicationName: "Dépannage électrique",
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "Dépannage" },
+  applicationName: BRAND_NAME,
+  appleWebApp: { capable: true, statusBarStyle: "default", title: BRAND_NAME },
   icons: {
-    icon: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+    icon: [{ url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" }],
     apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
 };
