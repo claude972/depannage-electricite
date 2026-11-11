@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { CATEGORIES } from "../../lib/domain";
 import { Icon } from "../app/icons";
 import { COMMITMENTS, FAQ, MATCHING, STEPS } from "../../shared/public-home";
 import { PUBLIC_ADVICE } from "./public-advice-content";
 import { SERVICES, SERVICE_PHOTOS, servicePath, type ServicePhoto } from "./public-service-catalog";
 import { PublicServiceList } from "./public-service-list";
-import { IndicativeRange } from "../features/indicative-prices/indicative-range";
-import type { PriceCategory } from "../features/indicative-prices/model";
+import { rangeText, type PriceCategory } from "../features/indicative-prices/model";
 import { publishedValue } from "../features/public-operator-profile/model";
 import { usePublishedOperatorProfile } from "../features/public-operator-profile/use-published-profile";
 import { PublicChrome, actionButton, type HomeAction, type HomeHandlers } from "./public-chrome";
@@ -24,6 +24,10 @@ type Situation = {
   position: string;
   category?: PriceCategory;
 };
+
+const AUDIT_EXAMPLE_PRICES = Object.fromEntries(CATEGORIES.map(({ id, min, max }) => [
+  id, rangeText({ min_cents: min, max_cents: max }),
+]));
 
 const outage: Situation = {
   category: "outage", title: "Coupure de courant partielle", description: "Une pièce ou une partie du logement reste sans courant.",
@@ -255,7 +259,7 @@ export function PublicHome({ gated = false, handlers }: { gated?: boolean; handl
                     <a href={card.href}>
                       <img src={card.photo.src} width={card.photo.width} height={card.photo.height} alt="" decoding="async" style={{ objectPosition: card.position }} />
                       <span><strong>{card.title}</strong><small>{card.description}</small>
-                        {audit && card.category && <small className={styles.auditPrice}><IndicativeRange category={card.category} bare /> · indicatif TTC</small>}
+                        {audit && card.category && <small className={styles.auditPrice} data-audit-price={card.category}>{AUDIT_EXAMPLE_PRICES[card.category]} · exemple indicatif TTC</small>}
                       </span>
                       <Icon name="arrow" size={17} />
                     </a>

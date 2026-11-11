@@ -31,7 +31,7 @@ const auditRanges = {
   light: '80 à 200 €', check: '120 à 280 €',
 };
 const auditPrice = id => audit && Object.hasOwn(auditRanges, id)
-  ? `<small class="audit-price">${auditRanges[id]} · indicatif TTC</small>` : '';
+  ? `<small class="audit-price">${auditRanges[id]} · exemple indicatif TTC</small>` : '';
 
 const services = {
   outage: { title: 'Coupure de courant partielle', summary: 'Une pièce ou une partie du logement reste sans courant.', category: 'Coupure de courant', photo: 'hero-photo-1.jpg' },
