@@ -14,18 +14,66 @@ const services = {
   damaged: { title: 'Prise abîmée ou qui chauffe', label: 'Prises', detail: 'Le mécanisme est endommagé ou montre des signes de chauffe.', image: '/home/section-outlet.jpg', position: '50% 47%' },
   multiple: { title: 'Plusieurs prises sans courant', label: 'Prises', detail: 'Plusieurs prises d’une même zone restent sans courant.', image: '/home/section-outlet.jpg', position: '50% 56%' },
   unknown: { title: 'Origine de la panne inconnue', label: 'Diagnostic', detail: 'Vous constatez une anomalie sans avoir identifié son origine.', image: '/home/hero-photo-1.jpg', position: '42% 45%' },
+  // Restaurant. Les photos sont celles de la maquette, en attendant des visuels de cuisine et de salle.
+  coldroom: { title: 'Chambre froide ou frigo sans alimentation', label: 'Froid', detail: 'Un équipement de froid n’est plus alimenté ou fait disjoncter.', image: '/home/section-real-panel.jpg', position: '52% 45%', art: 'outage' },
+  kitchen: { title: 'Équipement de cuisine qui fait disjoncter', label: 'Cuisine', detail: 'Le courant se coupe au démarrage d’un four, d’une friteuse ou d’un lave-vaisselle.', image: '/home/hero-photo-2.jpg', position: '56% 43%', art: 'panel' },
+  hood: { title: 'Hotte ou extraction à l’arrêt', label: 'Extraction', detail: 'La hotte ne démarre plus ou s’arrête pendant le service.', image: '/home/hero-photo-1.jpg', position: '42% 45%', art: 'socket' },
+  dining: { title: 'Éclairage de salle en panne', label: 'Éclairage', detail: 'Une zone de la salle ou de la terrasse reste sans éclairage.', image: '/home/section-socket.jpg', position: '38% 42%', art: 'light' },
+  service: { title: 'Coupure pendant le service', label: 'Coupure', detail: 'Une partie de l’établissement reste sans courant.', image: '/home/hero-photo-1.jpg', position: '34% 44%', art: 'outage' },
+  sign: { title: 'Enseigne lumineuse en panne', label: 'Enseigne', detail: 'L’enseigne ou l’éclairage extérieur ne s’allume plus.', image: '/home/section-socket.jpg', position: '38% 43%', art: 'light' },
+  kitchenplug: { title: 'Raccorder un équipement de cuisine', label: 'Cuisine', detail: 'Préparez l’alimentation d’un nouvel appareil.', image: '/home/section-outlet.jpg', position: '50% 53%', art: 'socket' },
+  diningplug: { title: 'Ajouter des prises en salle ou au bar', label: 'Prises', detail: 'Indiquez l’emplacement et les appareils à brancher.', image: '/home/section-outlet.jpg', position: '50% 51%', art: 'socket' },
+  // Bureau
+  desks: { title: 'Postes de travail sans courant', label: 'Postes', detail: 'Plusieurs postes ou une rangée de bureaux ne sont plus alimentés.', image: '/home/section-outlet.jpg', position: '50% 56%', art: 'socket' },
+  rack: { title: 'Baie informatique ou onduleur sans alimentation', label: 'Informatique', detail: 'La baie, le serveur ou l’onduleur n’est plus alimenté.', image: '/home/section-real-panel.jpg', position: '52% 45%', art: 'outage' },
+  officelight: { title: 'Éclairage des bureaux en panne', label: 'Éclairage', detail: 'Un plateau, un couloir ou une salle de réunion reste sans éclairage.', image: '/home/section-socket.jpg', position: '38% 42%', art: 'light' },
+  aircon: { title: 'Climatisation qui fait disjoncter', label: 'Tableau', detail: 'Le courant se coupe au démarrage de la climatisation.', image: '/home/hero-photo-2.jpg', position: '56% 43%', art: 'panel' },
+  emergency: { title: 'Éclairage de sécurité en défaut', label: 'Sécurité', detail: 'Un bloc de secours ne s’allume plus ou signale un défaut.', image: '/home/section-socket.jpg', position: '38% 43%', art: 'light' },
+  deskplug: { title: 'Ajouter des prises pour des postes', label: 'Postes', detail: 'Indiquez le nombre de postes et leur emplacement.', image: '/home/section-outlet.jpg', position: '50% 53%', art: 'socket' },
 };
-const modes = {
-  repair: { title: 'Dépannages courants', cards: ['outage', 'socket', 'panel', 'light'] },
-  install: { title: 'Installations courantes', cards: ['add', 'fitting'] },
-  diagnose: { title: 'Situations à vérifier', cards: ['unknown', 'check', 'panel'] },
+const modeTitles = { repair: 'Dépannages courants', install: 'Installations courantes', diagnose: 'Situations à vérifier' };
+// Un catalogue par type de site. `estimates` : les fourchettes d’exemple viennent du catalogue des particuliers,
+// elles ne sont donc pas affichées pour un restaurant ou un bureau.
+const catalogues = {
+  home: {
+    modes: { repair: ['outage', 'socket', 'panel', 'light'], install: ['add', 'fitting'], diagnose: ['unknown', 'check', 'panel'] },
+    shortcuts: ['outage', 'socket', 'panel', 'light'],
+    featured: ['board', 'socket', 'panel', 'outage', 'damaged', 'light', 'multiple', 'unknown'],
+    extra: ['add', 'fitting', 'check'],
+    estimates: true,
+  },
+  restaurant: {
+    modes: { repair: ['coldroom', 'kitchen', 'hood', 'dining'], install: ['kitchenplug', 'diningplug'], diagnose: ['unknown', 'check', 'kitchen'] },
+    shortcuts: ['coldroom', 'kitchen', 'hood', 'dining'],
+    featured: ['coldroom', 'kitchen', 'hood', 'service', 'dining', 'sign', 'board', 'unknown'],
+    extra: ['kitchenplug', 'diningplug', 'check'],
+    estimates: false,
+  },
+  office: {
+    modes: { repair: ['desks', 'rack', 'officelight', 'aircon'], install: ['deskplug', 'fitting'], diagnose: ['unknown', 'check', 'aircon'] },
+    shortcuts: ['desks', 'rack', 'officelight', 'aircon'],
+    featured: ['desks', 'rack', 'officelight', 'aircon', 'emergency', 'board', 'panel', 'unknown'],
+    extra: ['deskplug', 'fitting', 'check'],
+    estimates: false,
+  },
 };
+const profiles = {
+  particulier: { label: 'Particulier', catalogue: 'home' },
+  restaurant: { label: 'Restaurant', catalogue: 'restaurant' },
+  airbnb: { label: 'Airbnb', catalogue: 'home' },
+  bureau: { label: 'Bureau', catalogue: 'office' },
+  autre: { label: 'Autre', catalogue: 'home' },
+};
+// Catégorie du formulaire de demande pour chaque situation.
 const demoCategories = {
   outage: 'Coupure de courant', socket: 'Prise ou interrupteur', panel: 'Tableau électrique', light: 'Éclairage',
   add: 'Prise ou interrupteur', fitting: 'Éclairage', check: 'Diagnostic',
   board: 'Tableau électrique', damaged: 'Prise ou interrupteur', multiple: 'Prise ou interrupteur', unknown: 'Diagnostic',
+  coldroom: 'Coupure de courant', kitchen: 'Tableau électrique', hood: 'Diagnostic', dining: 'Éclairage',
+  service: 'Coupure de courant', sign: 'Éclairage', kitchenplug: 'Prise ou interrupteur', diningplug: 'Prise ou interrupteur',
+  desks: 'Prise ou interrupteur', rack: 'Coupure de courant', officelight: 'Éclairage', aircon: 'Tableau électrique',
+  emergency: 'Éclairage', deskplug: 'Prise ou interrupteur',
 };
-const featuredServices = ['board', 'socket', 'panel', 'outage', 'damaged', 'light', 'multiple', 'unknown'];
 const places = [
   { id: 'home', title: 'Domicile', area: 'Fort-de-France', context: 'Lieu enregistré · Démo', icon: 'home', favorite: true },
   { id: 'work', title: 'Travail', area: 'Le Lamentin', context: 'Lieu enregistré · Démo', icon: 'work' },
@@ -52,7 +100,11 @@ const place = $('#place-input');
 const placeResults = $('#place-results');
 const sheet = $('#sheet');
 const sheetBody = $('#sheet-body');
+const profileSelects = Array.from(document.querySelectorAll('[data-profile-select]'));
+const scheduleButton = $('#schedule');
 let mode = 'repair';
+let profile = 'particulier';
+let slot = { key: 'today', label: 'Aujourd’hui', short: 'Aujourd’hui' };
 let filter = '';
 let selected = null;
 let serviceToResume = null;
@@ -150,6 +202,23 @@ function goBack(fallback) {
   }
 }
 
+const catalogue = () => catalogues[profiles[profile].catalogue];
+
+// Situations proposées au profil courant, tous onglets confondus.
+function profileServices() {
+  const { modes, featured, extra } = catalogue();
+  return [...new Set([...Object.values(modes).flat(), ...featured, ...extra])];
+}
+
+// Lien vers le formulaire de demande, avec ce qui a déjà été indiqué sur l’accueil.
+function requestUrl(fields = {}) {
+  const request = new URL('./maquettes.html', location.href);
+  const values = { profil: profiles[profile].label, lieu: selected?.area, creneau: slot.label, ...fields };
+  for (const [name, value] of Object.entries(values)) if (value) request.searchParams.set(name, value);
+  request.hash = 'ecran/demande';
+  return request.href;
+}
+
 function showSheet(title, content) {
   $('#sheet-title').textContent = title;
   sheetBody.innerHTML = content;
@@ -157,10 +226,10 @@ function showSheet(title, content) {
 }
 
 function renderCards() {
-  const data = modes[mode];
-  $('#services-title').textContent = data.title;
-  $('#web-service-count').textContent = `${data.cards.length} situations`;
-  rail.innerHTML = data.cards.map((id) => {
+  const cards = catalogue().modes[mode];
+  $('#services-title').textContent = modeTitles[mode];
+  $('#web-service-count').textContent = `${cards.length} situations`;
+  rail.innerHTML = cards.map((id) => {
     const service = services[id];
     return `<button type="button" class="photo-card" data-service="${id}"><img src="${service.image}" alt="" width="320" height="178" decoding="async" style="object-position:${service.position}"><span class="photo-card-copy"><strong>${service.title}</strong><small>${service.detail}</small></span><span class="photo-card-arrow web-only">${icon('next', 'small')}</span></button>`;
   }).join('');
@@ -189,10 +258,47 @@ function renderProblemResults() {
   const query = normalized(problem.value);
   problemResults.hidden = !query;
   if (!query) return;
-  const matches = Object.entries(services).filter(([, s]) => normalized(`${s.title} ${s.label} ${s.detail}`).includes(query));
+  const matches = matchingServices(query);
   problemResults.innerHTML = matches.length
-    ? matches.map(([id, s]) => `<button type="button" data-service="${id}">${s.title}${icon('next', 'small')}</button>`).join('')
-    : '<p role="status">Aucun résultat. Essayez « prise », « coupure » ou « tableau ».</p>';
+    ? matches.map((id) => `<button type="button" data-service="${id}">${services[id].title}${icon('next', 'small')}</button>`).join('')
+    : '<p role="status">Aucune situation type ne correspond. Validez pour décrire votre problème dans le formulaire.</p>';
+}
+
+function matchingServices(query) {
+  return profileServices().filter((id) => {
+    const service = services[id];
+    return normalized(`${service.title} ${service.label} ${service.detail}`).includes(query);
+  });
+}
+
+function renderProfile() {
+  const { shortcuts, featured, extra, estimates } = catalogue();
+  $('#shortcuts').innerHTML = shortcuts.map((id) => `<button type="button" data-service="${id}"><span class="shortcut-art"><svg aria-hidden="true"><use href="#art-${services[id].art ?? id}"/></svg></span>${services[id].label}</button>`).join('');
+  document.querySelectorAll('#catalogue-cards .catalogue-item').forEach((item) => item.remove());
+  $('#catalogue-cards').insertAdjacentHTML('afterbegin', renderCatalogue(featured, estimates));
+  $('#catalogue-extra').innerHTML = renderCatalogue(extra);
+  $('#catalogue-note').textContent = estimates
+    ? 'Fourchettes TTC d’exemple. Le prix final figure sur le devis que vous acceptez.'
+    : 'Le prix figure sur le devis que vous acceptez avant les travaux.';
+  renderCards();
+  renderProblemResults();
+  syncUrgentLink();
+}
+
+function setProfile(value) {
+  if (!Object.hasOwn(profiles, value)) return;
+  profile = value;
+  for (const select of profileSelects) select.value = value;
+  renderProfile();
+  announce(`Interventions affichées pour le profil ${profiles[value].label}.`);
+}
+
+function syncUrgentLink() {
+  const urgentLink = $('#urgent-request');
+  const request = new URL(urgentLink.href);
+  request.searchParams.set('profil', profiles[profile].label);
+  if (selected) request.searchParams.set('lieu', selected.area);
+  urgentLink.href = request.href;
 }
 
 function setFilter(value) {
@@ -213,10 +319,7 @@ function choosePlace(value) {
   $('#home-location').textContent = value.area;
   $('#web-location-label').textContent = value.area;
   $('#account-location').textContent = value.area;
-  const urgentLink = $('#urgent-request');
-  const request = new URL(urgentLink.href);
-  request.searchParams.set('lieu', value.area);
-  urgentLink.href = request.href;
+  syncUrgentLink();
   if (sheet.open) sheet.close();
   renderPlaces();
   serviceToResume = history.state?.service ?? null;
@@ -255,19 +358,102 @@ function focusSection(section) {
 function showService(service) {
   const item = services[service];
   const next = selected
-    ? `<p><strong>Lieu d’intervention</strong> · ${selected.area}</p><div class="service-sheet-actions"><a class="primary web-form-link" id="test-request-link">Voir le formulaire de test</a><button type="button" class="secondary" data-position data-service-location="${service}">Modifier l’adresse</button></div>`
+    ? `<p><strong>Lieu d’intervention</strong> · ${selected.area}</p><p><strong>Jour souhaité</strong> · ${slot.label}</p><div class="service-sheet-actions"><a class="primary web-form-link" id="test-request-link">Voir le formulaire de test</a><button type="button" class="secondary" data-position data-service-location="${service}">Modifier l’adresse</button></div>`
     : `<button type="button" class="primary" data-position data-service-location="${service}">Choisir une commune</button>`;
   showSheet(item.title, `<p>${item.detail}</p>${next}`);
   if (selected) {
-    const request = new URL('./maquettes.html', location.href);
-    request.searchParams.set('panne', demoCategories[service]);
-    request.searchParams.set('lieu', selected.area);
-    if ($('#schedule').dataset.planned === 'true') request.searchParams.set('creneau', 'Un autre jour');
-    request.hash = 'ecran/demande';
     const link = $('#test-request-link');
-    link.href = request.href;
+    link.href = requestUrl({ panne: demoCategories[service] });
     link.addEventListener('click', () => sheet.close());
   }
+}
+
+// --- Jour souhaité : aujourd’hui, demain, après-demain ou une date choisie dans le calendrier.
+const dayFormat = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+const shortDayFormat = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' });
+const monthFormat = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' });
+const quickDays = [['today', 'Aujourd’hui', 0], ['tomorrow', 'Demain', 1], ['after', 'Après-demain', 2]];
+const moments = ['Matin', 'Après-midi'];
+const calendarMonths = 3; // mois affichables, mois courant compris
+
+function startOfToday() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+function addDays(date, days) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+}
+
+function setSlot(next) {
+  slot = next;
+  $('#schedule-label').textContent = next.short;
+  scheduleButton.dataset.planned = String(next.key !== 'today');
+  if (sheet.open) sheet.close();
+  announce(`Jour souhaité : ${next.label}.`);
+}
+
+function renderCalendar(root, state) {
+  const today = startOfToday();
+  const first = new Date(today.getFullYear(), today.getMonth() + state.month, 1);
+  const lead = (first.getDay() + 6) % 7; // lundi en première colonne
+  const count = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+  const days = Array.from({ length: count }, (_, index) => {
+    const date = new Date(first.getFullYear(), first.getMonth(), index + 1);
+    const past = date < today;
+    const pressed = state.date?.getTime() === date.getTime();
+    return `<button type="button" class="calendar-day" data-day="${date.getTime()}" aria-label="${dayFormat.format(date)}" aria-pressed="${pressed}"${past ? ' disabled' : ''}>${index + 1}</button>`;
+  }).join('');
+  const chosen = state.date ? `${dayFormat.format(state.date)}${state.moment ? ` · ${state.moment}` : ''}` : 'Choisissez une date';
+  root.innerHTML = `<div class="calendar-head"><button type="button" class="back" data-month="-1" aria-label="Mois précédent"${state.month === 0 ? ' disabled' : ''}>${icon('back')}</button><strong aria-live="polite">${monthFormat.format(first)}</strong><button type="button" class="back" data-month="1" aria-label="Mois suivant"${state.month >= calendarMonths - 1 ? ' disabled' : ''}>${icon('next')}</button></div>
+    <div class="calendar-grid" role="group" aria-label="Jours de ${monthFormat.format(first)}">${['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((day) => `<span aria-hidden="true">${day}</span>`).join('')}${'<span></span>'.repeat(lead)}${days}</div>
+    <div class="slot-moments" role="group" aria-label="Moment de la journée">${moments.map((moment) => `<button type="button" class="option" data-moment="${moment}" aria-pressed="${state.moment === moment}">${moment}</button>`).join('')}</div>
+    <p class="calendar-choice" role="status">${chosen}</p>
+    <button type="button" class="primary" data-slot-confirm${state.date && state.moment ? '' : ' disabled'}>Valider ce créneau</button>`;
+}
+
+function openSchedule() {
+  const today = startOfToday();
+  const custom = slot.key === 'custom';
+  const state = { month: 0, date: custom ? slot.date : null, moment: custom ? slot.moment : null };
+  if (state.date) state.month = Math.max(0, (state.date.getFullYear() - today.getFullYear()) * 12 + state.date.getMonth() - today.getMonth());
+  const quick = quickDays.map(([key, label, offset]) => `<button type="button" class="option slot-option" data-slot="${key}" aria-pressed="${slot.key === key}"><span>${label}</span><small>${dayFormat.format(addDays(today, offset))}</small></button>`).join('');
+  showSheet('Quand faut-il intervenir ?', `<p>Indiquez le jour souhaité. Le rendez-vous est confirmé ensuite dans votre dossier.</p><div class="sheet-actions">${quick}<button type="button" class="option slot-option" data-slot="custom" aria-expanded="${custom}" aria-controls="slot-calendar"><span>Choisir un créneau</span>${icon('calendar', 'small')}</button></div><div class="slot-calendar" id="slot-calendar"${custom ? '' : ' hidden'}></div>`);
+  const calendar = sheetBody.querySelector('#slot-calendar');
+  renderCalendar(calendar, state);
+  sheetBody.querySelectorAll('[data-slot]').forEach((button) => button.addEventListener('click', () => {
+    const choice = quickDays.find(([key]) => key === button.dataset.slot);
+    if (choice) {
+      setSlot({ key: choice[0], label: choice[1], short: choice[1] });
+      return;
+    }
+    calendar.hidden = false;
+    button.setAttribute('aria-expanded', 'true');
+    sheetBody.querySelectorAll('[data-slot][aria-pressed]').forEach((quickButton) => quickButton.setAttribute('aria-pressed', 'false'));
+    calendar.querySelector('.calendar-day:not([disabled])')?.focus();
+  }));
+  calendar.addEventListener('click', (event) => {
+    const button = event.target.closest('button');
+    if (!button) return;
+    if (button.dataset.slotConfirm !== undefined) {
+      const day = dayFormat.format(state.date);
+      setSlot({ key: 'custom', date: state.date, moment: state.moment, label: `${day} · ${state.moment}`, short: `${shortDayFormat.format(state.date)} · ${state.moment}` });
+      return;
+    }
+    let focus;
+    if (button.dataset.month) {
+      state.month += Number(button.dataset.month);
+      focus = `[data-month="${button.dataset.month}"]:not([disabled]), [data-month]:not([disabled])`;
+    } else if (button.dataset.day) {
+      state.date = new Date(Number(button.dataset.day));
+      focus = `[data-day="${button.dataset.day}"]`;
+    } else if (button.dataset.moment) {
+      state.moment = button.dataset.moment;
+      focus = `[data-moment="${button.dataset.moment}"]`;
+    }
+    renderCalendar(calendar, state);
+    calendar.querySelector(focus)?.focus();
+  });
 }
 
 const accountNotes = {
@@ -300,7 +486,6 @@ $('.settings-tabs').addEventListener('keydown', (event) => {
   selectSettingsTab(settingsTabs[next].dataset.settingsTab);
 });
 
-$('#shortcuts').innerHTML = ['outage', 'socket', 'panel', 'light'].map((id) => `<button type="button" data-service="${id}"><span class="shortcut-art"><svg aria-hidden="true"><use href="#art-${id}"/></svg></span>${services[id].label}</button>`).join('');
 document.addEventListener('click', (event) => {
   if (siteMenu.open && !siteMenu.contains(event.target)) siteMenu.open = false;
   const trigger = event.target.closest('button');
@@ -336,15 +521,8 @@ document.addEventListener('keydown', (event) => {
   siteMenu.querySelector('summary').focus();
 });
 
-$('#schedule').addEventListener('click', () => {
-  showSheet('Quand faut-il intervenir ?', '<p>Choisissez un moment indicatif pour la maquette.</p><div class="sheet-actions"><button type="button" class="option" data-time="Dès que possible">Dès que possible</button><button type="button" class="option" data-time="Plus tard">Prévoir un autre jour</button></div>');
-  sheetBody.querySelectorAll('[data-time]').forEach((button) => button.addEventListener('click', () => {
-    const schedule = $('#schedule');
-    schedule.dataset.planned = String(button.dataset.time === 'Plus tard');
-    sheet.close();
-    announce(`${button.dataset.time} · Préférence de démonstration`);
-  }));
-});
+scheduleButton.addEventListener('click', openSchedule);
+for (const select of profileSelects) select.addEventListener('change', () => setProfile(select.value));
 $('#demo-position').addEventListener('click', () => choosePlace(demoPosition));
 $('#open-map').addEventListener('click', openMap);
 $('#catalogue-toggle').addEventListener('click', (event) => {
@@ -364,13 +542,11 @@ place.addEventListener('input', renderPlaces);
 $('#place-search').addEventListener('submit', (event) => event.preventDefault());
 $('#problem-search').addEventListener('submit', (event) => {
   event.preventDefault();
-  if (!normalized(problem.value)) {
-    focusSection('services');
-    return;
-  }
-  const matches = problemResults.querySelectorAll('button');
-  if (matches.length === 1) matches[0].click();
-  else (matches[0] ?? problem).focus();
+  // La recherche aboutit toujours au formulaire de demande : le texte saisi devient la description,
+  // et le type de problème est prérempli lorsqu’une seule situation correspond.
+  const description = problem.value.trim();
+  const matches = description ? matchingServices(normalized(description)) : [];
+  location.href = requestUrl({ description, panne: matches.length === 1 ? demoCategories[matches[0]] : '' });
 });
 for (const [id, direction] of [['#cards-prev', -1], ['#cards-next', 1]]) $(id).addEventListener('click', () => rail.scrollBy({ left: direction * ((rail.firstElementChild?.offsetWidth ?? 0) + 14), behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' }));
 rail.addEventListener('scroll', updateArrows, { passive: true });
@@ -380,8 +556,9 @@ window.addEventListener('popstate', () => {
   if (sheet.open) sheet.close();
   updateScreen(true, true);
 });
-renderCards();
-$('#catalogue-cards').insertAdjacentHTML('afterbegin', renderCatalogue(featuredServices, true));
-$('#catalogue-extra').innerHTML = renderCatalogue(['add', 'fitting', 'check']);
+// Le navigateur peut restaurer un choix de profil au rechargement : repartir de sa valeur.
+if (Object.hasOwn(profiles, profileSelects[0].value)) profile = profileSelects[0].value;
+for (const select of profileSelects) select.value = profile;
+renderProfile();
 renderPlaces();
 updateScreen();

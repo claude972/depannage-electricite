@@ -235,6 +235,21 @@
     background: var(--paper);
   }
 
+  /* Lieu et profil côte à côte */
+  .web-context { display: grid; grid-template-columns: minmax(0, 1fr) minmax(132px, 36%); gap: 7px; margin-bottom: 7px; }
+  .web-context .web-location { margin-bottom: 0; }
+  .web-profile {
+    align-content: center;
+    min-height: 58px;
+    padding: 8px 6px 6px 13px;
+    border: 1px solid var(--rule);
+    border-radius: 13px;
+    background: var(--paper);
+  }
+  .web-profile select { min-height: 24px; margin-top: 2px; border: 0; border-radius: 6px; padding: 0 26px 0 0; background-position: right 4px center; }
+  .web-profile:focus-within { border-color: var(--blue); box-shadow: 0 0 0 2px var(--blue-soft); }
+  .web-profile select:focus-visible { outline: none; }
+
   .web-location > .icon { color: var(--blue); }
   .web-location small, .web-location strong { display: block; }
   .web-location small { color: var(--muted); font-size: 11px; }

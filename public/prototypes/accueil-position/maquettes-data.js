@@ -30,6 +30,7 @@ const quote = [ ['Déplacement', '40,00 €'], ['Main-d’œuvre', '100,00 €']
 const fieldProblem = ['Type de problème', ['Coupure de courant', 'Prise ou interrupteur', 'Tableau électrique', 'Éclairage', 'Diagnostic']];
 const fieldCity = ['Commune', ['Fort-de-France', 'Le Lamentin', 'Schœlcher', 'Le Robert']];
 const fieldDescription = ['Décrivez le problème', 'textarea', 'Plusieurs prises du séjour ne répondent plus.'];
+const fieldProfile = ['Vous êtes', ['Particulier', 'Restaurant', 'Airbnb', 'Bureau', 'Autre']];
 const jobSteps = [ ['Demande reçue', 'Le besoin et le lieu d’intervention ont été enregistrés.'], ['Artisan affecté', 'Le rendez-vous a été confirmé.'], ['En déplacement', 'Le partage de position a été activé pour la mission.'], ['Sur place', 'L’artisan établit le diagnostic et présente le devis.'], ['Travaux terminés', 'Le compte rendu et le règlement sont accessibles depuis le dossier.'] ];
 
 export const screens = [
@@ -97,13 +98,13 @@ export const screens = [
   ]),
   screen('demande', 'client', 'Créer une demande', ['M5','M15'], 'Indiquez ce qui ne fonctionne plus et ajoutez les détails utiles.', [
     steps('Votre demande', [['Le problème',''], ['Le lieu et le créneau',''], ['Le récapitulatif','']], 0),
-    form('Décrivez la panne', [fieldProblem, fieldDescription, ['Ajouter une illustration de démonstration', 'photo']], 'Continuer vers le lieu', 'adresse-demande'),
+    form('Décrivez la panne', [fieldProfile, fieldProblem, fieldDescription, ['Ajouter une illustration de démonstration', 'photo']], 'Continuer vers le lieu', 'adresse-demande'),
   ]),
   screen('adresse-demande', 'client', 'Lieu et rendez-vous', [], 'Précisez où et quand intervenir.', [
-    form('Adresse d’intervention', [fieldCity, ['Adresse de démonstration', 'text', 'Résidence Exemple'], ['Créneau souhaité', ['Dès que possible', 'Un autre jour', 'Matin', 'Après-midi']]], 'Voir le récapitulatif', 'recapitulatif'),
+    form('Adresse d’intervention', [fieldCity, ['Adresse de démonstration', 'text', 'Résidence Exemple'], ['Créneau souhaité', ['Dès que possible', 'Aujourd’hui', 'Demain', 'Après-demain']]], 'Voir le récapitulatif', 'recapitulatif'),
   ], [link('Ouvrir la sélection de position', 'position')]),
   screen('recapitulatif', 'client', 'Récapitulatif de la demande', [], 'Vérifiez les informations avant de confirmer.', [
-    facts('Demande de démonstration', [['Problème', 'Prises sans courant'], ['Lieu', 'Fort-de-France'], ['Créneau', 'Matin'], ['Estimation d’exemple', demoEstimates['Prise ou interrupteur']]]),
+    facts('Demande de démonstration', [['Profil', 'Particulier'], ['Problème', 'Prises sans courant'], ['Lieu', 'Fort-de-France'], ['Créneau', 'Aujourd’hui'], ['Estimation d’exemple', demoEstimates['Prise ou interrupteur']]]),
     form('Règlement sur la plateforme', [['Moment du règlement', ['Empreinte bancaire', 'Après l’intervention']]], 'Simuler la confirmation', 'confirmation'),
   ], [link('Modifier le lieu', 'adresse-demande')]),
   screen('confirmation', 'client', 'Demande envoyée', ['M54'], 'Exemple de confirmation pour le dossier DÉMO-021.', [

@@ -38,7 +38,7 @@
 
 body { margin: 0; min-width: 0; }
 
-button,input { font: inherit; color: inherit; }
+button,input,select { font: inherit; color: inherit; }
 
 button {
   border: 0;
@@ -705,6 +705,51 @@ h1,h2,p { margin: 0; }
   pointer-events: none;
 }
 
+/* Profil du demandeur, à côté du lieu d’intervention */
+.profile-field, .web-profile { display: grid; gap: 2px; min-width: 0; }
+.profile-field { flex: none; max-width: 46%; }
+.profile-field small, .web-profile small { font-size: 11px; color: var(--muted); }
+.profile-field select, .web-profile select {
+  appearance: none;
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  padding: 0 34px 0 12px;
+  background: var(--paper) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23555d6b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center / 16px;
+  font-size: 14px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+/* Choix du jour et calendrier */
+.slot-option { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.slot-option small { color: var(--muted); font-size: 12px; font-weight: 400; }
+.option[aria-pressed="true"], .slot-option[aria-expanded="true"] { border-color: var(--blue); background: var(--blue-soft); color: var(--blue); }
+.slot-calendar { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.calendar-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.calendar-head strong { font-size: 15px; text-transform: capitalize; }
+.calendar-head button:disabled { opacity: .35; }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+.calendar-grid > span { display: grid; place-items: center; min-height: 24px; color: var(--muted); font-size: 11px; font-weight: 700; }
+.calendar-day { min-height: 44px; border-radius: 11px; font-size: 14px; font-weight: 700; }
+.calendar-day:disabled { color: var(--muted); font-weight: 400; opacity: .45; }
+.calendar-day[aria-pressed="true"] { background: var(--blue); color: #fff; }
+.slot-moments { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.slot-moments .option { text-align: center; }
+#sheet-body .calendar-choice { margin: 12px 0 10px; color: var(--ink); font-weight: 700; }
+#sheet-body .calendar-choice::first-letter { text-transform: uppercase; }
+.slot-calendar .primary { width: 100%; }
+.slot-calendar .primary:disabled { opacity: .45; }
+
+/* Le libellé du jour est plus long que l’ancien bouton : gagner la place sur téléphone. */
+@media (max-width:459px) {
+  .problem-entry .search-input { padding-inline: 10px; gap: 8px; }
+  .problem-entry .schedule { padding-inline: 10px; gap: 5px; }
+}
+.problem-entry .search-input input { text-overflow: ellipsis; }
+
 @media (max-width:359px) {
   :root { --gutter: 15px; }
   .service-tabs { gap: 4px; }
@@ -758,6 +803,8 @@ h1,h2,p { margin: 0; }
 
 @media (hover:hover) {
   .place-row:hover,.problem-results button:hover,.option:hover { background: var(--blue-soft); }
+  .calendar-day:not(:disabled,[aria-pressed="true"]):hover { background: var(--blue-soft); }
+  .profile-field select:hover, .web-profile:hover { border-color: var(--blue); }
   .photo-card:hover strong,.current-location:hover strong,.secondary:hover { color: var(--blue); }
   .dock button:hover { background: var(--surface); }
 }

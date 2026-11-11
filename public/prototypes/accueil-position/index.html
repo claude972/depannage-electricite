@@ -99,6 +99,7 @@
       <span class="current-text"><small>Lieu d’intervention</small><strong id="home-location">Choisir une position</strong></span>
       <svg class="icon small" aria-hidden="true"><use href="#i-down"/></svg>
     </button>
+    <label class="profile-field"><small>Je suis</small><select data-profile-select><option value="particulier">Particulier</option><option value="restaurant">Restaurant</option><option value="airbnb">Airbnb</option><option value="bureau">Bureau</option><option value="autre">Autre</option></select></label>
   </header>
   <main class="wrap home-content">
     <div class="web-hero">
@@ -113,14 +114,17 @@
           </div>
         </div>
         <form class="home-search" id="problem-search">
-          <button class="web-location web-only" type="button" data-position>
-            <svg class="icon" aria-hidden="true"><use href="#i-pin"/></svg>
-            <span><small>Adresse d’intervention</small><strong id="web-location-label">Choisir une commune</strong></span>
-            <svg class="icon small" aria-hidden="true"><use href="#i-next"/></svg>
-          </button>
+          <div class="web-context web-only">
+            <button class="web-location" type="button" data-position>
+              <svg class="icon" aria-hidden="true"><use href="#i-pin"/></svg>
+              <span><small>Adresse d’intervention</small><strong id="web-location-label">Choisir une commune</strong></span>
+              <svg class="icon small" aria-hidden="true"><use href="#i-next"/></svg>
+            </button>
+            <label class="web-profile"><small>Je suis</small><select data-profile-select><option value="particulier">Particulier</option><option value="restaurant">Restaurant</option><option value="airbnb">Airbnb</option><option value="bureau">Bureau</option><option value="autre">Autre</option></select></label>
+          </div>
           <div class="search-pill problem-entry">
             <label class="search-input"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg><span class="visually-hidden">Rechercher un problème électrique</span><input type="search" id="problem-input" placeholder="Quel est le problème ?" autocomplete="off" aria-controls="problem-results"></label>
-            <button type="button" class="schedule" id="schedule"><svg class="icon" aria-hidden="true"><use href="#i-calendar"/></svg><span>Plus tard</span></button>
+            <button type="button" class="schedule" id="schedule" aria-haspopup="dialog"><svg class="icon" aria-hidden="true"><use href="#i-calendar"/></svg><span class="visually-hidden">Jour souhaité : </span><span id="schedule-label">Aujourd’hui</span></button>
           </div>
           <div id="problem-results" class="problem-results" hidden></div>
           <div class="web-actions web-only">
@@ -212,7 +216,7 @@
       <section class="home-catalogue" id="catalogue" aria-labelledby="catalogue-title">
         <div class="editorial-intro">
           <h2 id="catalogue-title" tabindex="-1">Les interventions électriques les plus courantes</h2>
-          <p>Fourchettes TTC d’exemple. Le prix final figure sur le devis que vous acceptez.</p>
+          <p id="catalogue-note">Fourchettes TTC d’exemple. Le prix final figure sur le devis que vous acceptez.</p>
         </div>
         <div class="catalogue-grid" id="catalogue-cards">
           <button class="catalogue-more" id="catalogue-toggle" type="button" aria-expanded="false" aria-controls="catalogue-extra"><span>Voir toutes les interventions</span><svg class="icon small" aria-hidden="true"><use href="#i-down"/></svg></button>

@@ -81,25 +81,34 @@ function section(title, content, className = '') {
   return `<section class="atlas-block ${className}">${title ? `<h2>${title}</h2>` : ''}${content}</section>`;
 }
 
+const demoFields = { demande: { 'Vous êtes': 'profil', 'Type de problème': 'panne', 'Décrivez le problème': 'description' }, 'adresse-demande': { Commune: 'lieu', 'Créneau souhaité': 'creneau' } };
+
+function demoValue(label) {
+  const key = demoFields[currentScreen?.id]?.[label];
+  return key ? new URLSearchParams(location.search).get(key) : null;
+}
+
 function renderField([label, type, placeholder = ''], index) {
   const id = `atlas-field-${index}`;
   if (type === 'photo') return `<div class="atlas-field"><span>${label}</span><button class="atlas-photo-add" type="button" data-photo>${icon('camera')}Ajouter la photo d’exemple</button><img class="atlas-added-photo" src="/home/section-outlet.jpg" width="128" height="92" alt="Mécanismes de prises de démonstration" hidden></div>`;
   if (Array.isArray(type)) {
-    const demoFields = { demande: { 'Type de problème': 'panne' }, 'adresse-demande': { Commune: 'lieu', 'Créneau souhaité': 'creneau' } };
-    const key = demoFields[currentScreen?.id]?.[label];
-    const initial = key ? new URLSearchParams(location.search).get(key) : null;
-    return `<div class="atlas-field"><label for="${id}">${label}</label><select id="${id}" name="${escaped(label)}" required>${type.map((option) => `<option${option === initial ? ' selected' : ''}>${escaped(option)}</option>`).join('')}</select></div>`;
+    const initial = demoValue(label);
+    // Un créneau choisi dans le calendrier de l’accueil n’est pas dans la liste : il est ajouté tel quel.
+    const options = label === 'Créneau souhaité' && initial && !type.includes(initial) ? [...type, initial] : type;
+    return `<div class="atlas-field"><label for="${id}">${label}</label><select id="${id}" name="${escaped(label)}" required>${options.map((option) => `<option${option === initial ? ' selected' : ''}>${escaped(option)}</option>`).join('')}</select></div>`;
   }
   const optional = type.endsWith('?');
   const required = optional ? '' : ' required';
   const attributes = `id="${id}" name="${escaped(label)}" placeholder="${escaped(placeholder)}"${required}`;
-  const control = type.startsWith('textarea') ? `<textarea ${attributes} rows="3" maxlength="500"></textarea>` : `<input type="${type === 'code' ? 'text' : type}" ${attributes}${type === 'code' ? ' inputmode="numeric" pattern="[0-9]{6}" maxlength="6"' : ''}${type === 'number' ? ' min="0" step="0.01"' : ''}>`;
+  const control = type.startsWith('textarea') ? `<textarea ${attributes} rows="3" maxlength="500">${escaped((demoValue(label) ?? '').slice(0, 500))}</textarea>` : `<input type="${type === 'code' ? 'text' : type}" ${attributes}${type === 'code' ? ' inputmode="numeric" pattern="[0-9]{6}" maxlength="6"' : ''}${type === 'number' ? ' min="0" step="0.01"' : ''}>`;
   return `<div class="atlas-field"><label for="${id}">${label}</label>${control}</div>`;
 }
 
 function currentFacts(screen, items) {
   if (screen.id !== 'recapitulatif') return items;
-  return items.map(([key, value]) => [key, key === 'Estimation d’exemple' ? demoEstimates[sample.get('Problème')] ?? value : sample.get(key) ?? value]);
+  // Les fourchettes d’exemple sont celles du catalogue des particuliers : pas de montant affiché pour un site professionnel.
+  const estimate = ['Restaurant', 'Bureau'].includes(sample.get('Profil')) ? 'Sur devis après diagnostic' : demoEstimates[sample.get('Problème')];
+  return items.map(([key, value]) => [key, key === 'Estimation d’exemple' ? estimate ?? value : sample.get(key) ?? value]);
 }
 
 function screenBlocks(screen) {
@@ -207,7 +216,7 @@ main.addEventListener('submit', (event) => {
     form.reset();
     return;
   }
-  const keep = { demande: { 'Type de problème': 'Problème' }, 'adresse-demande': { Commune: 'Lieu', 'Créneau souhaité': 'Créneau' }, 'devis-client': { Choix: 'Décision devis' }, 'ent-approbation': { Décision: 'Décision entreprise' } }[currentScreen?.id];
+  const keep = { demande: { 'Vous êtes': 'Profil', 'Type de problème': 'Problème' }, 'adresse-demande': { Commune: 'Lieu', 'Créneau souhaité': 'Créneau' }, 'devis-client': { Choix: 'Décision devis' }, 'ent-approbation': { Décision: 'Décision entreprise' } }[currentScreen?.id];
   for (const [name, key] of Object.entries(keep ?? {})) sample.set(key, values.get(name));
   if (form.dataset.next) location.href = targetFor(form.dataset.next);
 });
