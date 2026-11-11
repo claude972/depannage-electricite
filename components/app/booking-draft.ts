@@ -1,3 +1,4 @@
+import { parseBookingLocation, type BookingLocation } from "../../shared/booking-location";
 import { normalizeBookingPhone as normalizePhone } from "../../shared/booking-contact";
 // Service booking flow (FASTSPLIT-SERVICE-BOOKING-FLOW-001). Pure, no React, no network.
 //
@@ -31,6 +32,7 @@ export type BookingContact = {
   company: boolean;
 };
 export type BookingDraft = {
+  location?: BookingLocation;
   slug: string;
   urgent: boolean;
   /** Wished slot when not urgent; null when urgent. A wish, never a booked appointment. */
@@ -74,6 +76,8 @@ const str = (v: unknown, max: number) => (typeof v === "string" && v.length <= m
 
 export function parseBooking(input: unknown): BookingDraft | null {
   if (!isObject(input) || !isObject(input.contact)) return null;
+  const location = input.location === undefined ? undefined : parseBookingLocation(input.location);
+  if (location === null) return null;
   const slug = str(input.slug, LIMITS.slug);
   const notes = str(input.notes ?? "", LIMITS.notes);
   if (!slug || !/^[a-z0-9-]+$/.test(slug) || notes === null || typeof input.urgent !== "boolean") return null;
@@ -111,7 +115,7 @@ export function parseBooking(input: unknown): BookingDraft | null {
     range = { min_cents: r.min_cents, max_cents: r.max_cents };
   }
   if (input.estimate_review_required !== undefined && (input.estimate_review_required !== true || !request_id)) return null;
-  return { slug, urgent: input.urgent, slot, notes, contact: { civility, first_name, last_name, email, phone, company: Boolean(c.company) }, ...(request_id ? { request_id } : {}), ...(payment ? { payment } : {}), ...(reviewed !== undefined ? { reviewed_estimate_version: reviewed } : {}), ...(range ? { reviewed_estimate_range: range } : {}), ...(input.estimate_review_required === true ? { estimate_review_required: true as const } : {}) };
+  return { ...(location ? { location } : {}), slug, urgent: input.urgent, slot, notes, contact: { civility, first_name, last_name, email, phone, company: Boolean(c.company) }, ...(request_id ? { request_id } : {}), ...(payment ? { payment } : {}), ...(reviewed !== undefined ? { reviewed_estimate_version: reviewed } : {}), ...(range ? { reviewed_estimate_range: range } : {}), ...(input.estimate_review_required === true ? { estimate_review_required: true as const } : {}) };
 }
 
 export const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

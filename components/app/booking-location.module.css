@@ -1,0 +1,16 @@
+.location { display: grid; gap: 16px; min-width: 0; }
+.search { display: flex; gap: 8px; align-items: end; }
+.search label { flex: 1; display: grid; gap: 8px; min-width: 0; }
+.location input, .location textarea { width: 100%; min-height: 44px; padding: 12px; border: 1px solid var(--ui-border, #cbd5e1); border-radius: 10px; background: var(--ui-surface, white); color: inherit; font: inherit; }
+.location button { min-height: 44px; padding: 10px 16px; border-radius: 10px; border: 1px solid #2246e5; background: var(--ui-surface, white); color: #2246e5; font: inherit; cursor: pointer; }
+.location button:disabled { opacity: .6; cursor: wait; }
+.location :focus-visible { outline: 3px solid #2246e5; outline-offset: 3px; }
+.results { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.results button { width: 100%; text-align: left; }
+.mapFrame { position: relative; isolation: isolate; border: 1px solid #cbd5e1; border-radius: 12px; overflow: hidden; }
+.map { height: 300px; width: 100%; background: #e8edf2; }
+.map :global(.leaflet-control-zoom a) { min-width: 44px; min-height: 44px; line-height: 44px; }
+.pin { pointer-events: none; position: absolute; z-index: 500; left: 50%; top: 50%; transform: translate(-50%, -100%); width: 32px; height: 42px; filter: drop-shadow(0 2px 3px #0005); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.help { margin: 0; font-size: .9rem; line-height: 1.5; }
+@media (max-width: 480px) { .search { flex-wrap: wrap; } .search label { flex-basis: 100%; } .map { height: 260px; } }

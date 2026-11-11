@@ -1229,6 +1229,7 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
               urgency: draft.urgency,
               contact: { first_name: c.first_name.trim(), last_name: c.last_name.trim(), email: c.email.trim(), phone: c.phone.trim() },
               payment_choice: current.payment,
+              ...(current.location ? { location: current.location } : {}),
             };
           },
           post: (body) => api<BookingReceipt | { status: "authorization_required"; url: string }>("/api/bookings", body),

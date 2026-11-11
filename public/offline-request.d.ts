@@ -7,6 +7,7 @@ export type PublicDraftValues = {
   urgency: "urgent" | "scheduled";
   site_id?: string;
   contact_phone?: string;
+  location?: import("../shared/booking-location").BookingLocation;
 };
 export type PublicDraft = { savedAt: number; values: PublicDraftValues };
 export const PUBLIC_DRAFT_KEY: "courant-request-draft";

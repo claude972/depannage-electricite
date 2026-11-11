@@ -1,4 +1,5 @@
 "use client";
+import { BookingLocationField } from "./booking-location";
 // Operational forms extracted from the original monolith; behaviour preserved, shared by the
 // role spaces. Styling classes live in app/globals.css.
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
@@ -373,18 +374,23 @@ export function RequestForm({
                 preferred={preselected}
                 onClear={() => {
                   setPreselected(null);
-                  setValues((current) => ({ ...current, address: "", postal_code: "", city: "" }));
+                  setValues((current) => { const { location: _location, ...rest } = current; return { ...rest, address: "", postal_code: "", city: "" }; });
                 }}
               />
             )}
-            <AddressField
+            {(mode === "public" || finalStep) ? <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><BookingLocationField
+              value={{ address: values.address, postal_code: values.postal_code, city: values.city }}
+              location={values.location}
+              onChange={(next, location) => setValues((current) => ({ ...current, ...next, location }))}
+              geolocation={mode === "demo" ? null : geolocation}
+            /></fieldset> : <AddressField
               value={{ address: values.address, postal_code: values.postal_code, city: values.city }}
               onChange={(next) => setValues((current) => ({ ...current, ...next }))}
               disabled={busy}
               search={mode === "demo" ? undefined : addressApi.search}
               reverse={mode === "demo" ? undefined : addressApi.reverse}
               geolocation={mode === "demo" ? null : geolocation}
-            />
+            />}
             {contactPhone !== undefined && (
               <Field label="Téléphone de contact (obligatoire)" error={phoneError || undefined}>
                 <input type="tel" autoComplete="tel" maxLength={30} required value={phone} onChange={(e) => { setPhone(e.target.value); setPhoneError(""); }} />

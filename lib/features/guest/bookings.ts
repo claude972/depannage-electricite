@@ -1,3 +1,4 @@
+import { parseBookingLocation, type BookingLocation } from "../../../shared/booking-location";
 import {estimateSnapshot,estimateMatchesCap} from './estimate-snapshot';
 import { TextDecoder } from "node:util";
 import { z } from "zod";
@@ -8,7 +9,8 @@ import { cardHoldContext, openCardHold, authorizeCardHold, releaseCardHold } fro
 
 const uuid = z.string().uuid();
 const contact = z.object({ first_name: z.string().trim().min(1).max(60), last_name: z.string().trim().min(1).max(60), email: z.string().trim().max(254).refine(v => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)), phone: z.string().max(64).transform(normalizePhone).refine(v => v !== null) }).strict().refine(v => `${v.first_name} ${v.last_name}`.length <= 120);
-const schema = z.object({ request_id: uuid, service_slug: z.string().max(80), category: z.enum(["outage", "panel", "socket", "lighting", "diagnostic"]), description: z.string().trim().min(10).max(4000), address: z.string().trim().min(5).max(500), postal_code: z.string().regex(/^\d{5}$/), city: z.string().trim().min(2).max(120), urgency: z.enum(["urgent", "scheduled"]), contact, payment_choice: z.enum(["on_site", "card_hold"]), reviewed_estimate_version:z.number().int().min(1).max(2147483647).optional() }).strict();
+const locationSchema = z.custom<BookingLocation>(value => parseBookingLocation(value) !== null);
+const schema = z.object({ location: locationSchema.optional(), request_id: uuid, service_slug: z.string().max(80), category: z.enum(["outage", "panel", "socket", "lighting", "diagnostic"]), description: z.string().trim().min(10).max(4000), address: z.string().trim().min(5).max(500), postal_code: z.string().regex(/^\d{5}$/), city: z.string().trim().min(2).max(120), urgency: z.enum(["urgent", "scheduled"]), contact, payment_choice: z.enum(["on_site", "card_hold"]), reviewed_estimate_version:z.number().int().min(1).max(2147483647).optional() }).strict();
 const keySchema = z.object({ request_id: uuid }).strict();
 const headers = { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" };
 const unavailable = () => new ApiError(503, "La réservation est momentanément indisponible. Réessayez.");
@@ -74,16 +76,16 @@ export async function bookingRoute(request: Request, operation: "create" | "stat
     if (operation === "create") {
       const data = schema.parse(parsed.data);
       const card = data.payment_choice === "card_hold" ? cardHoldContext() : null; // Before prepare/quota/provider mutation.
-      const { request_id, contact, payment_choice, reviewed_estimate_version, ...payload } = data;
+      const { request_id, contact, payment_choice, reviewed_estimate_version, location, ...payload } = data;
       if (!card) {
-        const submitted = await db.rpc("create_on_site_booking_reviewed", { p_reviewed_estimate_version:reviewed_estimate_version??null, p_request_id: request_id, p_payload: payload, p_contact: { ...contact, email: contact.email.toLowerCase() } });
+        const submitted = await db.rpc(location ? "create_on_site_booking_located" : "create_on_site_booking_reviewed", { ...(location ? { p_location: location } : {}), p_reviewed_estimate_version:reviewed_estimate_version??null, p_request_id: request_id, p_payload: payload, p_contact: { ...contact, email: contact.email.toLowerCase() } });
         const refusal = estimateReviewRefusal(submitted.error);
         if (refusal) return refusal;
         dbError(submitted.error);
         const result = validResult(submitted.data); if (result.status !== "confirmed" || result.payment.method !== "on_site") throw unavailable();
         return Response.json(result, { status: 201, headers });
       }
-      const prepared = await db.rpc("prepare_phone_booking_reviewed", { p_reviewed_estimate_version:reviewed_estimate_version??null, p_request_id: request_id, p_payload: payload, p_contact: { ...contact, email: contact.email.toLowerCase() }, p_method: payment_choice });
+      const prepared = await db.rpc(location ? "prepare_phone_booking_located" : "prepare_phone_booking_reviewed", { ...(location ? { p_location: location } : {}), p_reviewed_estimate_version:reviewed_estimate_version??null, p_request_id: request_id, p_payload: payload, p_contact: { ...contact, email: contact.email.toLowerCase() }, p_method: payment_choice });
       const refusal = estimateReviewRefusal(prepared.error);
       if (refusal) return refusal;
       dbError(prepared.error);

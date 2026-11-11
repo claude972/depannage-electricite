@@ -10,7 +10,7 @@ const object = value => value !== null && typeof value === "object" && !Array.is
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function parsePublicDraftValues(value) {
-  if (!object(value) || Object.keys(value).some(key => !["category", "urgency", "site_id", "contact_phone", ...Object.keys(fields)].includes(key)) || !own(value, "category") || !categories.includes(value.category)) return null;
+  if (!object(value) || Object.keys(value).some(key => !["category", "urgency", "site_id", "contact_phone", "location", ...Object.keys(fields)].includes(key)) || !own(value, "category") || !categories.includes(value.category)) return null;
   const result = { category: value.category };
   for (const [name, limit] of Object.entries(fields)) {
     const text = own(value, name) ? value[name] : "";
@@ -27,6 +27,14 @@ export function parsePublicDraftValues(value) {
   if (own(value, "contact_phone")) {
     if (typeof value.contact_phone !== "string" || !/^\+[1-9][0-9]{7,14}$/.test(value.contact_phone)) return null;
     result.contact_phone = value.contact_phone;
+  }
+  if (own(value, "location")) {
+    const l = value.location;
+    const coordinate = (n, bound) => typeof n === "number" && Number.isFinite(n) && Math.abs(n) <= bound;
+    if (!object(l) || Object.keys(l).some(k => !["latitude", "longitude", "access_details"].includes(k)) ||
+      !((l.latitude === null && l.longitude === null) || (coordinate(l.latitude, 90) && coordinate(l.longitude, 180))) ||
+      typeof l.access_details !== "string" || l.access_details.length > 1000) return null;
+    result.location = { latitude: l.latitude, longitude: l.longitude, access_details: l.access_details };
   }
   return result;
 }

@@ -17,6 +17,7 @@ export function bookingFromSignedRequest(values: RequestValues, profile: Pick<Pr
   const first = profile?.first_name?.trim(), last = profile?.last_name?.trim();
   const name = first && last ? { first_name: first, last_name: last } : splitFullName(profile?.full_name ?? "");
   return {
+    ...(values.location ? { location: values.location } : {}),
     slug: signedSlug(values.category),
     urgent: values.urgency === "urgent",
     slot: null,
@@ -27,8 +28,10 @@ export function bookingFromSignedRequest(values: RequestValues, profile: Pick<Pr
 
 export function bookingForEditedRequest(current: BookingDraft, previousCategory: RequestValues["category"], values: RequestValues): BookingDraft {
   const urgent = values.urgency === "urgent";
+  const { location: _location, ...rest } = current;
   return {
-    ...current,
+    ...rest,
+    ...(values.location ? { location: values.location } : {}),
     slug: previousCategory === values.category ? current.slug : signedSlug(values.category),
     urgent,
     slot: urgent ? null : current.slot,

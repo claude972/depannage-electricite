@@ -7,7 +7,7 @@ const prepared={request_id:ID,status:"prepared",expected_max_cents:18000,payment
 const confirmed={status:"confirmed",intervention:{id:JOB,status:"requested",estimate_min_cents:8000,estimate_max_cents:18000},payment:{method:"on_site",status:"due_on_site"}};
 function fixture(operation="create",options:{auth?:boolean;role?:string;verified?:boolean;email?:boolean;error?:string;malformed?:boolean;card?:boolean}={}){
  const calls:any[]=[];
- const db={from:(table:string)=>({select:(columns:string)=>({eq:(key:string,id:string)=>({maybeSingle:async()=>({data:{id,role:options.role??"client"},error:null})})})}),rpc:async(name:string,args:any)=>{calls.push({name,args});if(options.error)return{data:null,error:{code:options.error,message:"PRIVATE_PROVIDER_DETAILS"}};return{error:null,data:options.malformed?{token:"PRIVATE_PROVIDER_DETAILS"}:["submit_phone_booking","create_on_site_booking_reviewed"].includes(name)?confirmed:name==="phone_booking_status"?{...prepared,payment:{...prepared.payment,method:options.card?"card_hold":"on_site"}}:name.includes("cancel")?{...prepared,status:"cancelled",payment:{method:"on_site",status:"cancelled"}}:prepared}}};
+ const db={from:(table:string)=>({select:(columns:string)=>({eq:(key:string,id:string)=>({maybeSingle:async()=>({data:{id,role:options.role??"client"},error:null})})})}),rpc:async(name:string,args:any)=>{calls.push({name,args});if(options.error)return{data:null,error:{code:options.error,message:"PRIVATE_PROVIDER_DETAILS"}};return{error:null,data:options.malformed?{token:"PRIVATE_PROVIDER_DETAILS"}:["submit_phone_booking","create_on_site_booking_reviewed","create_on_site_booking_located"].includes(name)?confirmed:name==="phone_booking_status"?{...prepared,payment:{...prepared.payment,method:options.card?"card_hold":"on_site"}}:name.includes("cancel")?{...prepared,status:"cancelled",payment:{method:"on_site",status:"cancelled"}}:prepared}}};
  const helpers=fakeServerHelpers({authenticated:options.auth,db});
  const route=loadModule(`app/api/bookings/${operation==="create"?"":operation+"/"}route.ts`,{"node:process":{env:{}},"@/lib/supabase/server":{...helpers,authenticatedClient:async()=>{if(options.auth===false)throw new ApiError(401,"Session requise");return{db,user:{id:ID,phone:"596696123456",phone_confirmed_at:options.verified===false?null:"2026-11-01T00:00:00Z",email_confirmed_at:options.email?"2026-11-01T00:00:00Z":null}}}}});
  const raw=(r:Request)=>(route[operation==="status"?"GET":"POST"] as (r:Request)=>Promise<Response>)(r);
@@ -68,4 +68,16 @@ test('reviewed version is outside booking payload; stale SQL refusal prevents pr
  assert.equal(opened,0);
  assert.deepEqual(calls.map(call => call.name), ['prepare_phone_booking_reviewed', 'create_on_site_booking_reviewed', 'prepare_phone_booking_reviewed']);
  assert.equal(calls[0].args.p_reviewed_estimate_version,1);
+});
+
+
+test("optional location uses atomic RPC, remains private and validates before mutation", async () => {
+ const location = {latitude:14.61,longitude:-61.07,access_details:"Entrée cour QA"};
+ const f=fixture(); await check(await f.request({...payload,location}),201);
+ assert.equal(f.calls[0].name,"create_on_site_booking_located");
+ assert.deepEqual(f.calls[0].args.p_location,location);
+ assert.equal(Object.hasOwn(f.calls[0].args.p_payload,"location"),false);
+ for(const invalid of [{...location,latitude:91},{...location,longitude:null},{...location,access_details:"a".repeat(1001)},{...location,actor_id:ID}]) {
+  const h=fixture(); await check(await h.request({...payload,location:invalid}),422); assert.equal(h.calls.length,0);
+ }
 });

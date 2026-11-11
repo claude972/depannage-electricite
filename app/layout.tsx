@@ -1,3 +1,4 @@
+import "leaflet/dist/leaflet.css";
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { BRAND_NAME } from "@/lib/brand";

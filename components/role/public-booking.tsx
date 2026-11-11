@@ -8,7 +8,9 @@
 // and an explicit confirmation. Contact details never enter the request description. The category
 // comes from the service: never re-asked.
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { AddressField, createAddressApi, type AddressValue } from "../app/address-field";
+import { type AddressValue } from "../app/address-field";
+import { BookingLocationField } from "../app/booking-location";
+import type { BookingLocation } from "../../shared/booking-location";
 import { BOOKING_DRAFT_KEY, CIVILITIES, PAYMENT_LABEL, SLOTS, SLOT_LABEL, bookingDescription, contactErrors, newRequestId, parseBooking, readBooking, saveBooking, type BookingContact, type BookingDraft, type Civility, type PaymentChoice, type Slot } from "../app/booking-draft";
 import { PhoneAccess, phoneActionLabel, phoneAuthOn, useBookingOptions, type OptionsApi, type OptionsState, type PhoneApi, type PhoneState } from "./phone-access";
 import { getDraftStorage } from "../app/request-draft-boot";
@@ -28,6 +30,7 @@ export type BookingState = {
   notes: string;
   contact: BookingContact;
   address: AddressValue;
+  location?: BookingLocation;
   payment: PaymentChoice | null;
 };
 export const EMPTY_BOOKING: BookingState = {
@@ -110,7 +113,7 @@ export function advanceBooking(s: BookingState, availability: PaymentAvailabilit
 }
 export function toBooking(service: Pick<ServiceEntry, "slug">, s: BookingState): BookingDraft {
   const urgent = s.urgent === true;
-  return { slug: service.slug, urgent, slot: urgent ? null : s.slot, notes: s.notes, contact: { ...s.contact, first_name: s.contact.first_name.trim(), last_name: s.contact.last_name.trim(), email: s.contact.email.trim(), phone: s.contact.phone.trim() }, ...(s.payment ? { payment: s.payment } : {}) };
+  return { ...(s.location ? { location: s.location } : {}), slug: service.slug, urgent, slot: urgent ? null : s.slot, notes: s.notes, contact: { ...s.contact, first_name: s.contact.first_name.trim(), last_name: s.contact.last_name.trim(), email: s.contact.email.trim(), phone: s.contact.phone.trim() }, ...(s.payment ? { payment: s.payment } : {}) };
 }
 
 /** Last step (BEFORE the phone check), all-or-nothing on the PAIR (public draft + booking extras): the two previous raw
@@ -230,7 +233,7 @@ export function BookingBar({ title, range, compact = false, children }: { title:
 }
 
 // ---- Wizard ----------------------------------------------------------------------------------
-const addressApi = createAddressApi();
+
 
 export function BookingWizard({
   service,
@@ -425,12 +428,11 @@ export function BookingWizard({
 
             {state.step === 3 && (
               <>
-                <AddressField
+                <BookingLocationField
                   value={state.address}
-                  onChange={(next) => set({ address: next })}
+                  location={state.location}
+                  onChange={(next, location) => set({ address: next, location })}
                   error={errors.address ?? errors.postal_code ?? errors.city}
-                  search={addressApi.search}
-                  reverse={addressApi.reverse}
                   geolocation={geolocation}
                 />
               </>
@@ -471,7 +473,7 @@ export function BookingWizard({
                   <div><dt>Prestation</dt><dd>{service.title}</dd></div>
                   <div><dt>Estimation indicative</dt><dd data-indicative-range={service.category}>{liveRange}</dd></div>
                   <div><dt>Urgence</dt><dd>{urgencyLabel(state)}</dd></div>
-                  <div><dt>Adresse d’intervention</dt><dd>{state.address.address}<br />{state.address.postal_code} {state.address.city}</dd></div>
+                  <div><dt>Adresse d’intervention</dt><dd>{state.address.address}<br />{state.address.postal_code} {state.address.city}{state.location?.access_details && <><br />{state.location.access_details}</>}</dd></div>
                   <div><dt>Vos coordonnées (privées)</dt><dd>{[CIVILITY_LABEL[state.contact.civility] === "Non précisé" ? "" : CIVILITY_LABEL[state.contact.civility], state.contact.first_name, state.contact.last_name].filter(Boolean).join(" ")}<br />{state.contact.email} · {state.contact.phone}{state.contact.company ? <><br />Demande pour une entreprise</> : null}</dd></div>
                   <div><dt>Règlement</dt><dd>{state.payment ? PAYMENT_LABEL[state.payment] : "À préciser"}</dd></div>
                   {state.notes.trim() && <div><dt>Précisions</dt><dd>{state.notes}</dd></div>}

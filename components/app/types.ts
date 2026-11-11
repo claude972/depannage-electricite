@@ -534,6 +534,7 @@ export type RequestValues = {
   urgency: Urgency;
   site_id?: string;
   contact_phone?: string;
+  location?: import("../../shared/booking-location").BookingLocation;
 };
 
 // Availability of a backend contract as observed by the browser, never assumed.

@@ -215,7 +215,7 @@ test("activation only removes obsolete Courant public caches and claims clients"
   await Promise.all(h.emit("activate").waits);
   assert.equal(h.stores.has("courant-pwa-public-v0"), false);
   assert.equal(h.stores.has("another-application"), true);
-  assert.equal(h.stores.has("courant-pwa-public-v8"), true);
+  assert.equal(h.stores.has("courant-pwa-public-v9"), true);
   assert.equal(h.claims(), 1);
 });
 
@@ -357,13 +357,13 @@ test("a put failure rolls back the partial new cache; even failed rollback never
   for (const failedRollback of [false, true]) {
     const h = workerHarness(); h.stores.set("courant-pwa-public-v5", new Map()); h.failPut(2, failedRollback);
     await assert.rejects(Promise.all(h.emit("install").waits), /Cache write failed/);
-    assert.equal(h.stores.has("courant-pwa-public-v5"), true); if (!failedRollback) assert.equal(h.stores.has("courant-pwa-public-v8"), false);
+    assert.equal(h.stores.has("courant-pwa-public-v5"), true); if (!failedRollback) assert.equal(h.stores.has("courant-pwa-public-v9"), false);
     await assert.rejects(Promise.all(h.emit("activate").waits), /Public offline cache incomplete/);
     assert.equal(h.claims(), 0); assert.equal(h.activations(), 0); assert.equal(h.stores.has("courant-pwa-public-v5"), true);
   }
 });
 test("activation revalidates every asset after eviction, preserving the previous worker cache", async () => {
-  const h = workerHarness(); await Promise.all(h.emit("install").waits); h.stores.set("courant-pwa-public-v5", new Map()); h.stores.get("courant-pwa-public-v8")!.delete("/offline-request.js");
+  const h = workerHarness(); await Promise.all(h.emit("install").waits); h.stores.set("courant-pwa-public-v5", new Map()); h.stores.get("courant-pwa-public-v9")!.delete("/offline-request.js");
   await assert.rejects(Promise.all(h.emit("activate").waits), /Public offline cache incomplete/); assert.equal(h.claims(), 0); assert.equal(h.stores.has("courant-pwa-public-v5"), true);
 });
 test("offline form navigation and exact public module script are served from cache; private and RSC requests remain bypassed", async () => {
@@ -397,17 +397,17 @@ async function cacheBits(store: Map<string, Response> | undefined) {
 }
 test("a reused active v5 generation is immutable even when a new install would fail its first put", async () => {
   const h = workerHarness(); await Promise.all(h.emit("install").waits); await Promise.all(h.emit("activate").waits);
-  const before = await cacheBits(h.stores.get("courant-pwa-public-v8")); const requests = h.fetched.length;
+  const before = await cacheBits(h.stores.get("courant-pwa-public-v9")); const requests = h.fetched.length;
   h.failPut(4); // Old implementation wrote into the active v5 and then deleted it on failure.
   await assert.rejects(Promise.all(h.emit("install").waits), /generation already exists; version bump required/);
-  assert.deepEqual(await cacheBits(h.stores.get("courant-pwa-public-v8")), before);
+  assert.deepEqual(await cacheBits(h.stores.get("courant-pwa-public-v9")), before);
   assert.equal(h.fetched.length, requests, "a reused generation is refused before even fetching replacement assets"); assert.equal(h.claims(), 1); assert.equal(h.activations(), 0);
 });
 test("a partial orphan generation is preserved and refused, never repaired in place or claimed", async () => {
-  const h = workerHarness(); await Promise.all(h.emit("install").waits); h.stores.get("courant-pwa-public-v8")!.delete("/offline-request.js");
-  h.stores.set("courant-pwa-public-v5", new Map()); const before = await cacheBits(h.stores.get("courant-pwa-public-v8"));
+  const h = workerHarness(); await Promise.all(h.emit("install").waits); h.stores.get("courant-pwa-public-v9")!.delete("/offline-request.js");
+  h.stores.set("courant-pwa-public-v5", new Map()); const before = await cacheBits(h.stores.get("courant-pwa-public-v9"));
   await assert.rejects(Promise.all(h.emit("install").waits), /generation already exists/);
-  assert.deepEqual(await cacheBits(h.stores.get("courant-pwa-public-v8")), before);
+  assert.deepEqual(await cacheBits(h.stores.get("courant-pwa-public-v9")), before);
   await assert.rejects(Promise.all(h.emit("activate").waits), /Public offline cache incomplete/); assert.equal(h.claims(), 0); assert.equal(h.stores.has("courant-pwa-public-v5"), true);
 });
 test("the old active generation stays byte-identical while every new public asset is in flight and after install", async () => {
@@ -416,8 +416,8 @@ test("the old active generation stays byte-identical while every new public asse
     ["/offline-request.html", new Response("old public form")], ["/offline-request.js", new Response("old public script")],
   ]); h.stores.set("courant-pwa-public-v5", old); const before = await cacheBits(old); const release = h.holdFetch();
   const install = Promise.all(h.emit("install").waits); await new Promise<void>(resolve => setImmediate(resolve));
-  assert.equal(h.fetched.length, 3); assert.equal(h.stores.has("courant-pwa-public-v8"), false); assert.deepEqual(await cacheBits(old), before);
-  release(); await install; assert.deepEqual(await cacheBits(old), before); assert.equal(h.stores.get("courant-pwa-public-v8")!.size, 3);
+  assert.equal(h.fetched.length, 3); assert.equal(h.stores.has("courant-pwa-public-v9"), false); assert.deepEqual(await cacheBits(old), before);
+  release(); await install; assert.deepEqual(await cacheBits(old), before); assert.equal(h.stores.get("courant-pwa-public-v9")!.size, 3);
   await Promise.all(h.emit("activate").waits); assert.equal(h.claims(), 1); assert.equal(h.stores.has("courant-pwa-public-v5"), false);
 });
 test("missing-cache offline reads never create an orphan cache that could collide with an installer", async () => {
