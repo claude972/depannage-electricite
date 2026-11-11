@@ -151,7 +151,7 @@ test("profile: professionals, administrators and delivered native builds keep th
 });
 
 test("migration: the profile receives the validated phone at account creation, and refuses nothing", () => {
-  const sql = readFileSync("supabase/migrations/20261111120000_signup_profile_phone.sql", "utf8");
+  const sql = readFileSync("supabase/migrations/20261111120100_signup_profile_phone.sql", "utf8");
   assert.match(sql, /create or replace function public\.create_profile\(\)/);
   assert.match(sql, /security definer\s+set search_path = ''/);
   assert.match(sql, /raw_user_meta_data->>'phone' ~ '\^\\\+\(596\|590\|33\)\[1-9\]\[0-9\]\{8\}\$'/);

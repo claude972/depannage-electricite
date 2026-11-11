@@ -36,7 +36,7 @@ class Mem {
 }
 
 // ---- Options serveur (GET /api/bookings/options) ---------------------------------------------
-const OPTS = ({ card = false, reason = "Le paiement par carte n’est pas encore activé." } = {}): Options.OptionsState => ({
+const OPTS = ({ card = false, reason = "Le paiement par carte n’est pas encore activé." } = {}): Extract<Options.OptionsState, { status: "ready" }> => ({
   status: "ready",
   options: {
     payment_methods: [
