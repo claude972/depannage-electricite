@@ -177,7 +177,7 @@
 }
 
 .editorialFooter { display: grid; gap: 18px; padding-block: 28px; color: white; }
-.editorialFooter p { margin: 5px 0 0; font-size: .82rem; }
+.editorialFooter p { margin: 5px 0 0; font-size: .82rem; color: #edf1ff; }
 .editorialFooter nav { display: grid; justify-items: start; align-content: start; }
 .editorialFooter nav > strong { margin-bottom: 5px; }
 .editorialFooter nav :is(a, button) {
@@ -195,7 +195,6 @@
 }
 .editorialFooter nav :is(a, button):hover { text-decoration: underline; }
 .editorialFooter :focus-visible { outline-color: white; }
-.editorialFooter .credits { color: #edf1ff; }
 @media (min-width: 460px) {
   .topbar .recruit { justify-self: end; padding-inline: 14px; text-align: left; }
   .recruit svg { display: block; }
