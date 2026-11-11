@@ -21,9 +21,10 @@ const goHash = async (page: Page, hash: string) => {
 };
 const DESCRIPTION = "La prise du salon ne fonctionne plus depuis hier soir.";
 
-test("parcours interactif client ↔ artisan (démo) : demande → offre → devis 8,5 % → acceptation → intervention → règlement", { skip }, async () => {
+for (const width of [390, 1440])
+test(`parcours interactif client ↔ artisan (démo) à ${width} px : demande → offre → devis 8,5 % → acceptation → intervention → règlement`, { skip }, async () => {
   await withApp(async (open) => {
-    const { page, errors, api } = await open("client-new");
+    const { page, errors, api } = await open("client-new", width);
     // 1. Client request: problem → validated address → payment choice → single final recap/confirmation.
     await page.getByRole("button", { name: /Prise ou interrupteur/ }).click();
     await page.getByLabel(/Décrivez le problème/).fill(DESCRIPTION);
