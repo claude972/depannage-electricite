@@ -1,4 +1,5 @@
 import { CATEGORIES as DOMAIN_CATEGORIES } from "../../lib/domain";
+import { orderReference } from "../../shared/order-reference";
 import type { Category, Role, Status, TravelStage } from "./types";
 
 export const CATEGORIES: {
@@ -107,10 +108,7 @@ export const category = (id: string) => {
   const domain = DOMAIN_CATEGORIES.find((c) => c.id === visual.id)!;
   return { ...visual, min: domain.min, max: domain.max };
 };
-export const shortId = (id: string) =>
-  id.startsWith("demo-")
-    ? `INT-${id.toUpperCase()}`
-    : `INT-${id.replaceAll("-", "").slice(0, 6).toUpperCase()}`;
+export const shortId = orderReference;
 export const quoteRef = (id: string) =>
   id.startsWith("quote-")
     ? `DEV-${id.slice(6).toUpperCase()}`

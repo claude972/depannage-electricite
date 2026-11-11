@@ -5,19 +5,26 @@ import { createContext, useContext, useEffect, useState, type PropsWithChildren 
 import { apiOrigin, configured, publishableKey, supabaseOrigin } from './config';
 import { secureStorage } from './secure-storage';
 import { verifiedPhone, verifyNativePhoneCode, type PhonePurpose } from './phone-client';
+import { clientInterventionSnapshot } from '../../../../lib/features/client-interventions/contract';
+import { orderReference, parseOrderReference } from '../../../../shared/order-reference';
 
-const auth = configured ? createClient(supabaseOrigin!, publishableKey!, {
+const supabase = configured ? createClient(supabaseOrigin!, publishableKey!, {
   auth: { storage: secureStorage, autoRefreshToken: true, persistSession: true, detectSessionInUrl: false, lock: processLock },
-}).auth : null;
+}) : null;
+const auth = supabase?.auth;
+
+type LoginDestination = 'profile' | 'interventions';
+type SignupValues = { email: string; password: string; firstName: string; lastName: string };
 
 type SessionContext = {
   session: Session | null;
   ready: boolean;
   error: string | null;
-  signIn(email: string, password: string): Promise<void>;
+  signIn(email: string, password: string, destination?: LoginDestination): Promise<void>;
+  signUp(values: SignupValues, destination?: LoginDestination): Promise<boolean>;
   signOut(): Promise<void>;
   resetPassword(email: string): Promise<void>;
-  loginResume: boolean;
+  loginResume: LoginDestination | null;
   consumeLoginResume(): void;
   verifyPhone(phone: string, code: string, purpose: PhonePurpose): Promise<void>;
   addEmailAccount(email: string, password: string): Promise<void>;
@@ -48,17 +55,55 @@ async function signOut() {
   if (error) throw new Error('La déconnexion n’a pas pu être confirmée. Réessayez.');
 }
 
+export async function findMyOrders(input: string, signal: AbortSignal) {
+  const reference = parseOrderReference(input);
+  if (!reference) throw new Error('Saisissez un numéro de commande, par exemple INT-1A2B3C.');
+  if (!supabase) throw new Error('L’environnement mobile n’est pas configuré.');
+  // The same invoker RPC as the Web search limits results to auth.uid() and the client role.
+  const { data, error } = await supabase.rpc('client_intervention_search', {
+    p_filter: 'all', p_search: reference, p_after_at: null, p_after_id: null,
+  }).abortSignal(signal);
+  if (error) throw new Error('La recherche est indisponible. Réessayez.');
+  const snapshot = clientInterventionSnapshot.safeParse(data);
+  if (!snapshot.success) throw new Error('La réponse du service est incomplète. Réessayez.');
+  return snapshot.data.items.filter(order => orderReference(order.id) === reference);
+}
+
 export function SessionProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(!auth);
   const [error, setError] = useState<string | null>(null);
   const [phoneResume, setPhoneResume] = useState<PhonePurpose | null>(null);
-  const [loginResume, setLoginResume] = useState(false);
+  const [loginResume, setLoginResume] = useState<LoginDestination | null>(null);
 
-  async function connect(email: string, password: string) {
-    setLoginResume(true);
+  async function connect(email: string, password: string, destination: LoginDestination = 'profile') {
+    setLoginResume(destination);
     try { await signIn(email, password); }
-    catch (issue) { setLoginResume(false); throw issue; }
+    catch (issue) { setLoginResume(null); throw issue; }
+  }
+
+  async function signUp(values: SignupValues, destination: LoginDestination = 'profile') {
+    if (!auth || !apiOrigin) throw new Error('L’environnement mobile n’est pas configuré.');
+    setLoginResume(destination);
+    try {
+      const { data, error: issue } = await auth.signUp({
+        email: values.email.trim(),
+        password: values.password,
+        options: {
+          data: { first_name: values.firstName, last_name: values.lastName,
+            full_name: `${values.firstName} ${values.lastName}`, role: 'client' },
+          emailRedirectTo: apiOrigin + '/auth/confirm',
+        },
+      });
+      if (issue?.status === 429) throw new Error('Patientez avant de demander une nouvelle inscription.');
+      if (issue) throw new Error('L’inscription par e-mail est indisponible. Vérifiez votre adresse ou réessayez.');
+      if (data.session) return true;
+      setLoginResume(null);
+      return false;
+    } catch (issue) {
+      setLoginResume(null);
+      throw issue;
+    }
   }
 
   async function verifyPhone(phone: string, code: string, purpose: PhonePurpose) {
@@ -101,7 +146,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       setSession(value);
       if (!value) {
         setPhoneResume(null);
-        setLoginResume(false);
+        setLoginResume(null);
       }
       setError(null);
       setReady(true);
@@ -129,8 +174,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
     };
   }, []);
   return <Context.Provider value={{
-    session, ready, error, signIn: connect, signOut, resetPassword, verifyPhone, addEmailAccount,
-    loginResume, consumeLoginResume: () => setLoginResume(false),
+    session, ready, error, signIn: connect, signUp, signOut, resetPassword, verifyPhone, addEmailAccount,
+    loginResume, consumeLoginResume: () => setLoginResume(null),
     phoneResume, consumePhoneResume: () => setPhoneResume(null),
   }}>{children}</Context.Provider>;
 }

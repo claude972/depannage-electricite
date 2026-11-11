@@ -24,6 +24,7 @@ function Navigator() {
         <Stack.Screen name="bienvenue" options={{headerShown:false}}/>
         <Stack.Screen name="compte" options={{headerShown:false}}/>
         <Stack.Screen name="connexion" options={{headerShown:false}}/>
+        <Stack.Screen name="inscription" options={{headerShown:false}}/>
       </Stack.Protected>
       <Stack.Protected guard={Boolean(session)}>
         <Stack.Screen name="(espace)" options={{headerShown:false}}/>

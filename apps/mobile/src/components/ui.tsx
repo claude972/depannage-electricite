@@ -27,17 +27,17 @@ export function Screen({ children, top=false, footer }: PropsWithChildren<{ top?
   const edges = top ? ['top','left','right'] as const : ['left','right'] as const;
   return <SafeAreaView edges={footer || section === '(espace)' ? edges : [...edges, 'bottom']} style={[styles.flex,{backgroundColor:palette.background}]}>
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.screen}>
+      <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} contentContainerStyle={styles.screen}>
         {children}
       </ScrollView>
     </KeyboardAvoidingView>
     {footer}
   </SafeAreaView>;
 }
-export function Copy({ children, kind='body' }: PropsWithChildren<{kind?:'body'|'title'|'subtitle'|'muted'|'label'|'error'}>) {
+export function Copy({ children, kind='body', selectable }: PropsWithChildren<{kind?:'body'|'title'|'subtitle'|'muted'|'label'|'error'; selectable?:boolean}>) {
   const p=usePalette();
   const color = kind==='muted' ? p.muted : kind==='label' ? p.blue : kind==='error' ? p.danger : p.text;
-  return <Text accessibilityRole={kind==='title'||kind==='subtitle'?'header':undefined} accessibilityLiveRegion={kind==='error'?'polite':undefined} style={[styles[kind],{color}]}>{children}</Text>;
+  return <Text selectable={selectable} accessibilityRole={kind==='title'||kind==='subtitle'?'header':undefined} accessibilityLiveRegion={kind==='error'?'polite':undefined} style={[styles[kind],{color}]}>{children}</Text>;
 }
 export function Card({ children }: PropsWithChildren) {
   const p=usePalette();

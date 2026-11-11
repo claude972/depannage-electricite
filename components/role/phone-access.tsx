@@ -582,6 +582,7 @@ export function PhoneLookupPage({ api, optionsApi, historyApi, watchIdentity, in
     <PublicChrome current="suivi" handlers={serviceChromeHandlers(go)} onHome={() => go("/")}>
       <div className={styles.page}>
         <h1>Suivre ma demande</h1>
+        <p className={styles.lead}>Votre numéro de commande commence par INT-. Connectez-vous par e-mail, puis recherchez-le dans « Mes demandes ».</p>
         {options.status === "loading" ? (
           <p className={styles.lead} role="status">Chargement…</p>
         ) : !phoneAuthOn(options) ? (
@@ -598,6 +599,7 @@ export function PhoneLookupPage({ api, optionsApi, historyApi, watchIdentity, in
             <div className={styles.card}>
               <PhoneAccess purpose="lookup" api={api} onVerified={() => { setExpired(false); setVerified(true); }} />
             </div>
+            <a className={styles.submit} href="/#auth">Me connecter à mon compte</a>
           </>
         )}
       </div>

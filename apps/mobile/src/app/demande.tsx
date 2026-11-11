@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, View } from 'react-native';
+import { Alert, Keyboard, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
 import * as Location from 'expo-location';
@@ -11,6 +11,7 @@ import { requestDraft, type RequestIntent } from '@/lib/request-draft';
 import { useDeviceDraft } from '@/lib/use-device-draft';
 import { useSession } from '@/lib/session';
 import { useWorkspace } from '@/lib/use-workspace';
+import { orderReference } from '../../../../shared/order-reference';
 
 export default function RequestForm() {
   const session = useSession().session;
@@ -57,6 +58,7 @@ function ClientRequest({ actor, token }: { actor: string; token: string }) {
       : requestFields.pick({ address: true, postal_code: true, city: true });
     const input = schema.safeParse(fields);
     if (!input.success) { setError(input.error.issues[0].message); return; }
+    Keyboard.dismiss();
     setStep(step + 1);
   }
 
@@ -129,6 +131,8 @@ function ClientRequest({ actor, token }: { actor: string; token: string }) {
     const id = draft.value.confirmedId;
     return <Screen>
       <Copy kind="title">Votre demande est transmise</Copy>
+      <Copy>Numéro de commande</Copy>
+      <Copy kind="label" selectable>{orderReference(id)}</Copy>
       {draft.error && <ReadState loading={false} error={draft.error} onRetry={draft.retry} />}
       <Action label="Ouvrir mon intervention" onPress={() => openConfirmed(id)} />
       <Action secondary label="Commencer une autre demande" disabled={draft.pending} onPress={() => draft.edit(() => ({ intent: null, confirmedId: null }))} />
@@ -143,7 +147,8 @@ function ClientRequest({ actor, token }: { actor: string; token: string }) {
     {progress === 0 && <Card>
       <Copy kind="subtitle">Type de panne</Copy>
       {Object.entries(categories).map(([key, label]) => <Action key={key} disabled={disabled} secondary={chosen !== key} label={label} onPress={() => setCategory(key as Category)} />)}
-      <Field label="Description" value={intent?.payload.description ?? description} onChangeText={setDescription} maxLength={4000} multiline editable={!disabled} />
+      <Field label="Description" value={intent?.payload.description ?? description} onChangeText={setDescription} maxLength={4000} multiline editable={!disabled}
+        returnKeyType="done" submitBehavior="blurAndSubmit" />
       <Copy kind="subtitle">Est-ce urgent ?</Copy>
       <Action label="Oui, c’est urgent" secondary={shownUrgency !== 'urgent'} disabled={disabled} onPress={() => setUrgency('urgent')} />
       <Action label="Non, je peux planifier" secondary={shownUrgency !== 'scheduled'} disabled={disabled} onPress={() => setUrgency('scheduled')} />

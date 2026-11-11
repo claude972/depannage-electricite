@@ -21,6 +21,7 @@ export default function Entry() {
   if (actor && pending?.actor !== actor) return null;
   if (pending?.actor === actor && pending?.dossier)
     return <Redirect href={{ pathname:'/dossier/[id]', params:{ id:pending.dossier, retourPaiement:'1' } }} />;
-  if (session && loginResume) return <Redirect href="/(espace)/profil" />;
+  if (session && loginResume === 'interventions') return <Redirect href="/(espace)/interventions" />;
+  if (session && loginResume === 'profile') return <Redirect href="/(espace)/profil" />;
   return <Redirect href={session ? '/(espace)/accueil' : '/bienvenue'} />;
 }

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { fakeServerHelpers, loadModule } from "./documents/harness";
+import { orderReference, parseOrderReference } from "../shared/order-reference";
 
 const origin = "https://app.test";
 const path = `${origin}/api/client/interventions/search`;
@@ -23,6 +24,19 @@ function setup(data: unknown, { actor = id(500), authenticated = true, error = n
   } });
   return { post: m.POST as (req: Request) => Promise<Response>, calls };
 }
+
+test("order references use the assigned dossier id, normalize copy/paste and support completed orders", async () => {
+  const reference = orderReference(id(1));
+  assert.equal(reference, "INT-200000");
+  assert.equal(parseOrderReference("  int-200000  "), reference);
+  assert.equal(parseOrderReference("200000"), reference);
+  assert.equal(parseOrderReference("INT-20000"), null);
+  const { post, calls } = setup({ total: 1, items: [{ ...row(1), status: "paid" }] });
+  const response = await post(request({ filter: "all", search: reference, cursor: null }));
+  assert.equal(response.status, 200);
+  assert.equal(calls[0].args.p_search, "int-200000");
+  assert.equal((await response.json()).items[0].status, "paid");
+});
 
 test("private client search returns 50 sorted results, an exact total and a filter-bound cursor", async () => {
   const first = setup({ total: 135, items: Array.from({ length: 51 }, (_, i) => row(135 - i)) });

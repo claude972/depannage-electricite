@@ -3,6 +3,7 @@
 // `session.*`. Références : M61 (accueil mobile), V8-C07 (détail d’intervention), V8-C06
 // (devis), M7 (suivi). Mobile < 1024 px : navigation basse ; desktop : barre latérale.
 import { realName } from "../app/display-name";
+import { parseOrderReference } from "../../shared/order-reference";
 import { reportDeclarant } from "../app/report-declarant";
 import { ReportEvidenceSummary, ReportReceiptForm, canSignReport, dossierPhotos } from "../app/report-evidence";
 import { Fragment, useEffect, useRef, useState, type FormEvent } from "react";
@@ -917,16 +918,18 @@ export function RequestsView({ session, rows }: { session: Session; rows: Interv
   const [search, setSearch] = useState("");
   // Live: server search over ALL the client's requests (not only the cached 100). Demo: local only, zero call.
   const live = session.mode === "live";
+  const searchedReference = parseOrderReference(search);
+  const searchValue = searchedReference ?? search;
   // Rows are bound to identity + filter + search AT RENDER (never an old frame). A real change of the
   // mounted workspace rows (realtime / focus refresh) triggers a bounded re-read of page 1.
-  const remote = useRequestsSearch({ enabled: live, context: session.mutationContext, filter, search, signal: live ? rowsSignal(rows) : "" });
+  const remote = useRequestsSearch({ enabled: live, context: session.mutationContext, filter, search: searchValue, signal: live ? rowsSignal(rows) : "" });
   let items = rows.filter(
     (i) =>
       filter === "all" ||
       (filter === "active" && isOpen(i.status)) ||
       (filter === "past" && !isOpen(i.status)),
   );
-  const needle = search.trim().toLowerCase();
+  const needle = searchValue.trim().toLowerCase();
   if (needle)
     items = items.filter((i) =>
       `${category(i.category).label} ${i.address} ${i.city} ${i.postal_code} ${shortId(i.id)}`
@@ -939,7 +942,7 @@ export function RequestsView({ session, rows }: { session: Session; rows: Interv
     <>
       <PageTitle
         title="Mes demandes"
-        subtitle="Retrouvez chaque intervention et son avancement."
+        subtitle="Retrouvez vos interventions et leur avancement, par exemple avec le numéro de commande INT-…"
         action={
           <button type="button" className="button primary" onClick={() => session.go("new")}>
             <Icon name="plus" />
@@ -965,7 +968,10 @@ export function RequestsView({ session, rows }: { session: Session; rows: Interv
             type="search"
             placeholder="Rechercher une intervention"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              if (parseOrderReference(e.target.value)) setFilter("all");
+            }}
           />
         </label>
       </div>
@@ -1221,7 +1227,7 @@ function DetailView({
           <div>
             <small>Statut</small>
             <strong id="status-title">{STATUS[i.status]}</strong>
-            <span>Intervention n° {shortId(i.id)}</span>
+            <span>Numéro de commande · {shortId(i.id)}</span>
           </div>
         </div>
         {i.status === "cancelled" ? (

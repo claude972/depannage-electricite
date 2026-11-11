@@ -287,6 +287,8 @@ w.run = async () => {
   const filterBefore = bodies.length;
   [...div.querySelectorAll("[aria-label='Filtrer les demandes'] button")].find((b) => b.textContent === "Terminées").click(); await tick(150);
   const filterBody = bodies[filterBefore];
+  setter.call(input, " int-a1b2c3 "); input.dispatchEvent(new Event("input", { bubbles: true })); await tick(450);
+  const referenceBody = bodies.at(-1);
   const storage = sessionStorage.length + localStorage.length;
   root.unmount();
   // Demo: local filtering, ZERO fetch.
@@ -295,7 +297,7 @@ w.run = async () => {
   const demoRows = [{ ...item(5), description: "" }, { ...item(6, { status: "paid" }), description: "" }];
   createRoot(d).render(h(StrictMode, null, h(RequestsView, { session: session("demo", [], gen), rows: demoRows })));
   await tick(500);
-  return { firstRows, afterMore, moreGone, duringTyping, searchBodies, opened, filterBody, urls, storage, href: location.href, demoCalls: bodies.length - demoStart, demoRows: d.querySelectorAll(".request-row").length, heights, overflow };
+  return { firstRows, afterMore, moreGone, duringTyping, searchBodies, opened, filterBody, referenceBody, urls, storage, href: location.href, demoCalls: bodies.length - demoStart, demoRows: d.querySelectorAll(".request-row").length, heights, overflow };
 };
 `;
 test("aucun ancien cadre (Chromium, StrictMode) : 1er rendu après changement de filtre / recherche / identité sans anciennes lignes ; « Actualiser » relit ; signal d’espace de travail borné", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)", timeout: 60_000 }, async () => {
@@ -345,11 +347,12 @@ test("RequestsView réelle (Chromium 390 px, StrictMode) : POST JSON sans rien d
     page.on("pageerror", (e: Error) => errors.push(String(e)));
     const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}/`;
     await page.goto(origin);
-    const r = (await page.evaluate(() => (window as unknown as { run: () => Promise<unknown> }).run())) as { firstRows: number; afterMore: number; moreGone: boolean; duringTyping: number; searchBodies: unknown[]; opened: string[]; filterBody: unknown; urls: string[]; storage: number; href: string; demoCalls: number; demoRows: number; heights: number[]; overflow: number };
+    const r = (await page.evaluate(() => (window as unknown as { run: () => Promise<unknown> }).run())) as { firstRows: number; afterMore: number; moreGone: boolean; duringTyping: number; searchBodies: unknown[]; opened: string[]; filterBody: unknown; referenceBody: unknown; urls: string[]; storage: number; href: string; demoCalls: number; demoRows: number; heights: number[]; overflow: number };
     same([r.firstRows, r.afterMore, r.moreGone], [2, 3, true], "page 2 appended, duplicate dropped, no more cursor");
     same([r.duringTyping, r.searchBodies], [0, [{ filter: "active", search: "old", cursor: null }]], "debounced: one request for the final text");
     same(r.opened, [ID(900)], "a dossier outside the cache opens through session.openIntervention");
     same(r.filterBody, { filter: "past", search: "old", cursor: null }, "filter change ⇒ immediate, cursor reset");
+    same(r.referenceBody, { filter: "all", search: "INT-A1B2C3", cursor: null }, "reference searches all order statuses");
     assert.ok(r.urls.every((u) => u === "/api/client/interventions/search"), r.urls.join(","));
     same([r.storage, r.href], [0, origin], "nothing stored, nothing in the URL");
     same([r.demoCalls, r.demoRows], [0, 1], "demo: local filter (« En cours »), zero fetch");

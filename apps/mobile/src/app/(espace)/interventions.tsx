@@ -1,25 +1,35 @@
 import { FlatList, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Action, Card, Copy, ReadState, usePalette } from '@/components/ui';
 import { JobCard } from '@/components/job-card';
 import { useWorkspace } from '@/lib/use-workspace';
 import { ArtisanOffers } from '@/components/artisan-offers';
+import { OrderLookup } from '@/components/order-lookup';
+import { useSession } from '@/lib/session';
 
 export default function Interventions() {
   const router=useRouter(), p=usePalette(), state=useWorkspace();
+  const auth=useSession();
   const profile=state.data?.profile;
   const reload=state.reload;
   useFocusEffect(useCallback(()=>{reload();},[reload]));
+  useEffect(() => {
+    if (auth.loginResume === 'interventions') auth.consumeLoginResume();
+  }, [auth.loginResume, auth.consumeLoginResume]);
   return <SafeAreaView style={[styles.fill,{backgroundColor:p.background}]} edges={['top','left','right']}>
     <FlatList
       data={(state.data?.interventions??[]).filter(job => profile?.role !== 'artisan' || job.artisan_id === profile.id)} keyExtractor={job=>job.id}
       refreshing={state.loading&&Boolean(state.data)} onRefresh={state.reload}
+      keyboardShouldPersistTaps="handled"
       contentContainerStyle={styles.list}
       ListHeaderComponent={<View style={styles.list}>
         <Copy kind="title">{profile?.role==='artisan'?'Missions':'Activité'}</Copy>
-        {profile?.role==='client'&&<Action label="Nouvelle demande" onPress={()=>router.push('/demande')}/>}
+        {profile?.role==='client'&&<>
+          <Action label="Nouvelle demande" onPress={()=>router.push('/demande')}/>
+          <OrderLookup key={profile.id} />
+        </>}
         {profile?.role==='artisan'&&<ArtisanOffers />}
         <ReadState loading={state.loading} error={state.error} onRetry={state.reload}/>
         {state.data?.limits?.interventions.limited&&<Copy kind="muted">Les 100 dossiers les plus récents sont affichés.</Copy>}

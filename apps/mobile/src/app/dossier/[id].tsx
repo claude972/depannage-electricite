@@ -18,6 +18,7 @@ import { categories, creation, detail, euros, link, operations, signature, statu
 import { useSession } from '@/lib/session';
 import { supabaseOrigin } from '@/lib/config';
 import { quoteDraftKey, reportDraftKey } from '@/lib/draft-store';
+import { orderReference } from '../../../../../shared/order-reference';
 
 const uuid=z.uuid();
 const bookingOptions=z.object({test_checkout_available:z.boolean().optional()});
@@ -88,6 +89,7 @@ export default function Dossier() {
     {job&&<>
       <Copy kind="label">{statuses[job.status]}</Copy>
       <Copy kind="title">{categories[job.category]}</Copy>
+      {owner && <Copy kind="muted" selectable>Numéro de commande · {orderReference(job.id)}</Copy>}
       <Copy>{job.description}</Copy>
       <Copy kind="muted">{[job.address,job.postal_code,job.city].filter(Boolean).join(', ')}</Copy>
       <Card><Copy kind="subtitle">Estimation indicative</Copy><Copy>{euros(job.estimate_min_cents)} à {euros(job.estimate_max_cents)}</Copy></Card>

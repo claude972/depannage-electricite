@@ -9,6 +9,7 @@ import { ApiFailure, api, useResource } from '@/lib/api';
 import { categories, job, statuses } from '@/lib/contracts';
 import { verifiedPhone } from '@/lib/phone-client';
 import { useSession } from '@/lib/session';
+import { orderReference } from '../../../../shared/order-reference';
 
 const route = '/api/auth/phone/history';
 const row = job.pick({ id: true, category: true, status: true, city: true, created_at: true, estimate_min_cents: true, estimate_max_cents: true });
@@ -32,9 +33,10 @@ export default function FindRequests() {
       <Copy>Retrouvez vos interventions depuis votre espace connecté.</Copy>
       <Action label="Voir mes interventions" onPress={() => router.push('/interventions')} />
     </> : <>
-      <Copy>Retrouvez vos interventions avec le numéro utilisé pour votre demande.</Copy>
+      <Copy>Connectez-vous par e-mail pour rechercher une intervention avec votre numéro de commande.</Copy>
+      <Action label="Me connecter par e-mail" onPress={() => router.push({ pathname: '/connexion', params: { retour: 'interventions' } })} />
+      <Copy kind="muted">Vous pouvez aussi utiliser le téléphone associé à une demande existante.</Copy>
       <PhoneChallenge purpose="lookup" />
-      <Action secondary label="Me connecter par e-mail" onPress={() => router.push('/connexion')} />
     </>}
   </Screen>;
 }
@@ -79,6 +81,7 @@ function PhoneHistory({ token }: { token: string }) {
     {first.data && rows.length === 0 && <Copy kind="muted">Aucune intervention pour le moment.</Copy>}
     {rows.map(item => <Card key={item.id}>
       <Copy kind="subtitle">{categories[item.category]}</Copy>
+      <Copy kind="label" selectable>{orderReference(item.id)}</Copy>
       <Copy>{item.city} · {statuses[item.status]}</Copy>
       <Action label="Ouvrir l’intervention" onPress={() => router.push({ pathname: '/dossier/[id]', params: { id: item.id } })} />
     </Card>)}

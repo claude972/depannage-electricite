@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
+import { Keyboard } from 'react-native';
 import * as Location from 'expo-location';
 import { z } from 'zod';
 import { Action, BookingProgress, Card, Copy, Field, ReadState, Screen } from '@/components/ui';
@@ -15,6 +16,7 @@ import { normalizeInternationalPhone, phoneContact, verifiedPhone } from '@/lib/
 import { useDeviceDraft } from '@/lib/use-device-draft';
 import { useSession } from '@/lib/session';
 import { useWorkspace } from '@/lib/use-workspace';
+import { orderReference } from '../../../../shared/order-reference';
 
 const options = z.object({ payment_methods: z.array(z.object({ id: z.string(), available: z.boolean() })) });
 
@@ -94,6 +96,7 @@ function BookingFields({ service, addressFirst, initialUrgency, initialCity, own
       setError(phoneIssue ? 'Renseignez un numéro au format international.' : result.error.issues[0].message);
       return;
     }
+    Keyboard.dismiss();
     setStepIndex(stepIndex + 1);
   }
 
@@ -166,7 +169,8 @@ function BookingFields({ service, addressFirst, initialUrgency, initialCity, own
         <Copy kind="subtitle">Est-ce urgent ?</Copy>
         <Action label="Oui, c’est urgent" secondary={urgency !== 'urgent'} onPress={() => setUrgency('urgent')} />
         <Action label="Non, je peux planifier" secondary={urgency !== 'scheduled'} onPress={() => setUrgency('scheduled')} />
-        <Field label="Décrivez la panne" value={description} onChangeText={setDescription} multiline maxLength={4000} />
+        <Field label="Décrivez la panne" value={description} onChangeText={setDescription} multiline maxLength={4000}
+          returnKeyType="done" submitBehavior="blurAndSubmit" />
         <Action secondary label="Changer de dépannage" onPress={() => setSlug('')} />
       </Card> : catalogue.data && <Card>
         <Copy kind="subtitle">Sélectionnez votre dépannage</Copy>
@@ -299,6 +303,8 @@ function ConfirmBooking({ actor, phone, token, service, addressFirst, initialUrg
   }} /></Screen>;
   if (!request && receipt && !newRequest) return <Screen>
     <Copy kind="title">Votre demande est transmise</Copy>
+    <Copy>Numéro de commande</Copy>
+    <Copy kind="label" selectable>{orderReference(receipt.interventionId)}</Copy>
     {draft.error && <ReadState loading={false} error={draft.error} onRetry={draft.retry} />}
     <Action label="Ouvrir mon intervention" onPress={() => router.replace({ pathname: '/dossier/[id]', params: { id: receipt.interventionId } })} />
     <Action secondary label="Commencer une autre demande" disabled={draft.pending} onPress={() => setNewRequest(true)} />

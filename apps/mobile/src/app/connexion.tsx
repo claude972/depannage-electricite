@@ -1,20 +1,20 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useRef, useState, type ComponentRef } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { z } from 'zod';
 import { AccountEntry } from '@/components/account-entry';
-import { PublicLink, usePublicPortal } from '@/components/mobile-public-content';
+import { PublicLink } from '@/components/mobile-public-content';
 import { Action, Copy, Field, usePalette } from '@/components/ui';
 import { useSession } from '@/lib/session';
-import { apiOrigin, configured } from '@/lib/config';
+import { configured } from '@/lib/config';
 
 const emailAddress = z.email();
 
 export default function Login() {
   const router = useRouter();
+  const { retour } = useLocalSearchParams<{ retour?: string }>();
   const auth = useSession();
   const palette = usePalette();
-  const { openPortal, portalError } = usePublicPortal();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -37,7 +37,7 @@ export default function Login() {
     locked.current = true;
     setBusy(true);
     setError(null);
-    try { await auth.signIn(email, password); }
+    try { await auth.signIn(email, password, retour === 'interventions' ? 'interventions' : 'profile'); }
     catch (issue) { setError(issue instanceof Error ? issue.message : 'Connexion indisponible.'); }
     finally {
       locked.current = false;
@@ -73,8 +73,7 @@ export default function Login() {
       <Copy kind="muted">Vous pouvez commencer votre demande depuis l’accueil.</Copy>
       <PublicLink label="Continuer sans compte" onPress={() => router.navigate('/bienvenue')} />
     </View>
-    {apiOrigin && <PublicLink label="Créer un compte sur le site" onPress={() => openPortal('/#auth')} />}
-    {portalError && <Copy kind="error">{portalError}</Copy>}
+    <PublicLink label="Créer un compte par e-mail" onPress={() => router.push({ pathname: '/inscription', params: retour === 'interventions' ? { retour } : {} })} />
   </AccountEntry>;
 }
 
