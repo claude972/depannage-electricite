@@ -6,12 +6,12 @@
 // dans app.json avant chaque build remis à un testeur ; ils ne redescendent jamais.
 export const RELEASE = {
   version: "0.1.0",
-  build: { ios: 6, android: 6 },
+  build: { ios: 7, android: 7 },
 } as const;
 
 export type BuildPlatform = keyof typeof RELEASE.build;
 
-/** « Version 0.1.0 » sur le Web, « Version 0.1.0 (build 6) » sur une plateforme native. */
+/** « Version 0.1.0 » sur le Web, « Version 0.1.0 (build 7) » sur une plateforme native. */
 export function releaseLabel(platform?: string | null): string {
   const build = platform === "ios" || platform === "android" ? RELEASE.build[platform] : null;
   return build === null ? `Version ${RELEASE.version}` : `Version ${RELEASE.version} (build ${build})`;
