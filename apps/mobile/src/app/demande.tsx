@@ -26,11 +26,11 @@ function ClientRequest({ actor, token }: { actor: string; token: string }) {
   const router = useRouter();
   const catalogue = useResource('/api/public/indicative-prices', prices);
   const draft = useDeviceDraft(requestDraftKey(actor), requestDraft, { intent: null, confirmedId: null });
-  const { type } = useLocalSearchParams<{ type?: string }>();
+  const { type, commune } = useLocalSearchParams<{ type?: string; commune?: string }>();
   const [category, setCategory] = useState<Category>(() => categorySchema.safeParse(type).data ?? 'outage');
   const [description, setDescription] = useState('');
   const [step, setStep] = useState(0);
-  const [address, setAddress] = useState(''), [postal, setPostal] = useState(''), [city, setCity] = useState('');
+  const [address, setAddress] = useState(''), [postal, setPostal] = useState(''), [city, setCity] = useState(typeof commune === 'string' ? commune.trim().slice(0, 120) : '');
   const [urgency, setUrgency] = useState<'urgent' | 'scheduled' | null>(null);
   const [error, setError] = useState<string | null>(null), [busy, setBusy] = useState(false), [locating, setLocating] = useState(false);
   const [suggestion, setSuggestion] = useState<{ address: string; postal: string; city: string } | null>(null);

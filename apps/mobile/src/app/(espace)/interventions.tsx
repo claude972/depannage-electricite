@@ -2,7 +2,7 @@ import { FlatList, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Action, Copy, ReadState, usePalette } from '@/components/ui';
+import { Action, Card, Copy, ReadState, usePalette } from '@/components/ui';
 import { JobCard } from '@/components/job-card';
 import { useWorkspace } from '@/lib/use-workspace';
 import { ArtisanOffers } from '@/components/artisan-offers';
@@ -18,13 +18,16 @@ export default function Interventions() {
       refreshing={state.loading&&Boolean(state.data)} onRefresh={state.reload}
       contentContainerStyle={styles.list}
       ListHeaderComponent={<View style={styles.list}>
-        <Copy kind="title">{profile?.role==='artisan'?'Missions':'Interventions'}</Copy>
+        <Copy kind="title">{profile?.role==='artisan'?'Missions':'Activité'}</Copy>
         {profile?.role==='client'&&<Action label="Nouvelle demande" onPress={()=>router.push('/demande')}/>}
         {profile?.role==='artisan'&&<ArtisanOffers />}
         <ReadState loading={state.loading} error={state.error} onRetry={state.reload}/>
         {state.data?.limits?.interventions.limited&&<Copy kind="muted">Les 100 dossiers les plus récents sont affichés.</Copy>}
       </View>}
-      ListEmptyComponent={state.data?<Copy kind="muted">Aucun dossier visible pour le moment.</Copy>:undefined}
+      ListEmptyComponent={state.data && !state.loading && !state.error ? <Card>
+        <Copy kind="subtitle">{profile?.role === 'artisan' ? 'Aucune mission affectée' : 'Aucune intervention en cours'}</Copy>
+        <Copy kind="muted">Les dossiers accessibles depuis votre compte apparaîtront ici.</Copy>
+      </Card> : undefined}
       renderItem={({item})=><JobCard job={item} onOpen={()=>router.push({pathname:'/dossier/[id]',params:{id:item.id}})}/>}
     />
   </SafeAreaView>;

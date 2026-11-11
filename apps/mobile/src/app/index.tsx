@@ -5,7 +5,7 @@ import { deviceDrafts } from '@/lib/device-drafts';
 import { paymentReturn, paymentReturnKey, recentPaymentReturn } from '@/lib/payment-return';
 
 export default function Entry() {
-  const { session, phoneResume } = useSession();
+  const { session, phoneResume, loginResume } = useSession();
   const actor = session?.user.id;
   const [pending, setPending] = useState<{ actor: string; dossier: string | null } | null>(null);
   useEffect(() => {
@@ -21,5 +21,6 @@ export default function Entry() {
   if (actor && pending?.actor !== actor) return null;
   if (pending?.actor === actor && pending?.dossier)
     return <Redirect href={{ pathname:'/dossier/[id]', params:{ id:pending.dossier, retourPaiement:'1' } }} />;
+  if (session && loginResume) return <Redirect href="/(espace)/profil" />;
   return <Redirect href={session ? '/(espace)/accueil' : '/bienvenue'} />;
 }

@@ -7,7 +7,7 @@ import { categoryLabel, indicativeRange, useIndicativePrices, usePublicServices 
 
 export default function ServiceSheet() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ slug?: string | string[] }>();
+  const params = useLocalSearchParams<{ slug?: string | string[]; commune?: string }>();
   const slug = Array.isArray(params.slug) ? params.slug[0] : params.slug;
   const palette = usePalette();
   const services = usePublicServices();
@@ -74,7 +74,7 @@ export default function ServiceSheet() {
       </>}
     </ScrollView>
     {service && <PublicFooterAction label="Demander cette intervention"
-      onPress={() => router.push({ pathname: '/demande-client', params: { service: service.slug } })}/>}
+      onPress={() => router.push({ pathname: '/demande-client', params: { service: service.slug, ...(params.commune ? { commune: params.commune } : {}) } })}/>}
   </SafeAreaView>;
 }
 

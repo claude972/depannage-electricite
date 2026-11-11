@@ -16,6 +16,9 @@ type SessionContext = {
   error: string | null;
   signIn(email: string, password: string): Promise<void>;
   signOut(): Promise<void>;
+  resetPassword(email: string): Promise<void>;
+  loginResume: boolean;
+  consumeLoginResume(): void;
   verifyPhone(phone: string, code: string, purpose: PhonePurpose): Promise<void>;
   addEmailAccount(email: string, password: string): Promise<void>;
   phoneResume: PhonePurpose | null;
@@ -32,6 +35,13 @@ async function signIn(email: string, password: string) {
     : error.status === 400 ? 'Identifiants incorrects.' : 'Connexion indisponible. Réessayez.');
 }
 
+async function resetPassword(email: string) {
+  if (!auth || !apiOrigin) throw new Error('L’environnement mobile n’est pas configuré.');
+  const { error } = await auth.resetPasswordForEmail(email.trim(), { redirectTo: apiOrigin + '/auth/reset-password' });
+  if (error?.status === 429) throw new Error('Patientez avant de demander un nouveau lien.');
+  if (error) throw new Error('La demande de récupération n’a pas pu être envoyée. Réessayez.');
+}
+
 async function signOut() {
   if (!auth) return;
   const { error } = await auth.signOut({ scope: 'local' });
@@ -43,6 +53,13 @@ export function SessionProvider({ children }: PropsWithChildren) {
   const [ready, setReady] = useState(!auth);
   const [error, setError] = useState<string | null>(null);
   const [phoneResume, setPhoneResume] = useState<PhonePurpose | null>(null);
+  const [loginResume, setLoginResume] = useState(false);
+
+  async function connect(email: string, password: string) {
+    setLoginResume(true);
+    try { await signIn(email, password); }
+    catch (issue) { setLoginResume(false); throw issue; }
+  }
 
   async function verifyPhone(phone: string, code: string, purpose: PhonePurpose) {
     if (!auth) throw new Error('L’environnement mobile n’est pas configuré.');
@@ -82,7 +99,10 @@ export function SessionProvider({ children }: PropsWithChildren) {
       if (!live || event === 'INITIAL_SESSION') return;
       changed = true;
       setSession(value);
-      if (!value) setPhoneResume(null);
+      if (!value) {
+        setPhoneResume(null);
+        setLoginResume(false);
+      }
       setError(null);
       setReady(true);
     });
@@ -109,7 +129,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
     };
   }, []);
   return <Context.Provider value={{
-    session, ready, error, signIn, signOut, verifyPhone, addEmailAccount,
+    session, ready, error, signIn: connect, signOut, resetPassword, verifyPhone, addEmailAccount,
+    loginResume, consumeLoginResume: () => setLoginResume(false),
     phoneResume, consumePhoneResume: () => setPhoneResume(null),
   }}>{children}</Context.Provider>;
 }

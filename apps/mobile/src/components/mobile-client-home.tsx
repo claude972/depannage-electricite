@@ -3,12 +3,13 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions, type ScrollViewInstance } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COMMITMENTS, FAQ, MATCHING, STEPS } from '../../../../shared/public-home';
+import { COMMITMENTS, FAQ, STEPS } from '../../../../shared/public-home';
 import { PUBLIC_ADVICE } from '../../../../shared/public-advice';
 import { useIndicativePrices, usePublicServices } from '@/lib/public-services';
-import { MobileIcon, MobilePublicHeader, PublicTabs, type Glyph } from './mobile-chrome';
-import { articlePhoto, PublicEditorialFooter, PublicLink, publicPhotos, PublicReadState, PublicServiceRow, usePublicPortal } from './mobile-public-content';
-import { Action, Card, Copy, editorial, usePalette } from './ui';
+import { MobileIcon, PublicTabs, type Glyph } from './mobile-chrome';
+import { articlePhoto, PublicLink, publicPhotos, PublicReadState, PublicServiceRow, usePublicPortal } from './mobile-public-content';
+import { Action, Card, Copy, Field, editorial, usePalette } from './ui';
+import { AppSheet } from './app-sheet';
 
 const situations = {
   outage: { title: 'Coupure de courant partielle', description: 'Une pièce ou une partie du logement reste sans courant.',
@@ -55,10 +56,10 @@ function normalize(value: string) {
 
 type Detail = { title: string; text: string; link?: { text: string; href: string } };
 
-function DetailRows({ items, firstOpen = false }: { items: Detail[]; firstOpen?: boolean }) {
+function DetailRows({ items }: { items: Detail[] }) {
   const router = useRouter();
   const p = usePalette();
-  const [expanded, setExpanded] = useState<string | null>(firstOpen ? items[0]?.title ?? null : null);
+  const [expanded, setExpanded] = useState<string | null>(null);
   return <View>
     {items.map(item => {
       const open = expanded === item.title;
@@ -78,7 +79,7 @@ function DetailRows({ items, firstOpen = false }: { items: Detail[]; firstOpen?:
   </View>;
 }
 
-export function MobileClientHome() {
+export function MobileClientHome({ embedded = false }: { embedded?: boolean }) {
   const router = useRouter();
   const p = usePalette();
   const { width } = useWindowDimensions();
@@ -87,11 +88,14 @@ export function MobileClientHome() {
   const { openPortal, portalError } = usePublicPortal();
   const [modeIndex, setModeIndex] = useState(0);
   const [query, setQuery] = useState('');
+  const [city, setCity] = useState('');
+  const [cityDraft, setCityDraft] = useState('');
+  const [locationOpen, setLocationOpen] = useState(false);
+  const locationParams = city ? { commune: city } : {};
   const scroll = useRef<ScrollViewInstance>(null);
   const rail = useRef<ScrollViewInstance>(null);
   const railOffset = useRef(0);
   const railY = useRef(0);
-  const headerHeight = useRef(0);
   const mode = modes[modeIndex];
   const normalized = normalize(query);
   const items = mode.items.filter(item => !normalized || normalize(item.title + ' ' + item.description).includes(normalized));
@@ -99,7 +103,7 @@ export function MobileClientHome() {
 
   function openSituation(item: Situation) {
     if (item.portal) openPortal(item.portal);
-    else router.push({ pathname: '/prestation/[slug]', params: { slug: item.slug } });
+    else router.push({ pathname: '/prestation/[slug]', params: { slug: item.slug, ...locationParams } });
   }
 
   function selectMode(index: number) {
@@ -116,17 +120,14 @@ export function MobileClientHome() {
 
   return <SafeAreaView edges={['top', 'left', 'right']} style={[styles.flex, { backgroundColor: p.background }]}>
     <ScrollView ref={scroll} style={styles.flex} keyboardShouldPersistTaps="handled">
-      <View onLayout={event => { headerHeight.current = event.nativeEvent.layout.height; }}>
-        <MobilePublicHeader />
-      </View>
       <View style={styles.content}>
         <View style={styles.entry}>
-          <Pressable accessibilityRole="link" onPress={() => router.push({ pathname: '/demande-client', params: { field: 'address' } })}
+          <Pressable accessibilityRole="button" onPress={() => { setCityDraft(city); setLocationOpen(true); }}
             style={styles.address}>
             <MobileIcon name="pin" color={p.blue} />
             <View style={styles.grow}>
               <Text style={[styles.small, { color: p.muted }]}>Lieu d’intervention</Text>
-              <Text style={[styles.strong, { color: p.text }]}>Choisir mon adresse</Text>
+              <Text style={[styles.strong, { color: p.text }]}>{city || 'Choisir mon adresse'}</Text>
             </View>
             <MobileIcon name="next" color={p.blue} size={16} />
           </Pressable>
@@ -149,9 +150,9 @@ export function MobileClientHome() {
               }}
               returnKeyType="search" maxLength={120} onSubmitEditing={() => {
                 if (items.length === 1) openSituation(items[0]);
-                else scroll.current?.scrollTo({ y: headerHeight.current + railY.current, animated: true });
+                else scroll.current?.scrollTo({ y: railY.current, animated: true });
               }} />
-            <Pressable accessibilityRole="link" onPress={() => router.push({ pathname: '/demande-client', params: { field: 'address', urgency: 'scheduled' } })}
+            <Pressable accessibilityRole="link" onPress={() => router.push({ pathname: '/demande-client', params: { field: 'address', urgency: 'scheduled', ...locationParams } })}
               style={[styles.later, { backgroundColor: p.subtle }]}>
               <MobileIcon name="calendar" color={p.text} size={15} />
               <Text style={[styles.strong, { color: p.text }]}>Plus tard</Text>
@@ -202,7 +203,7 @@ export function MobileClientHome() {
             </Pressable>)}
           </ScrollView> : <Card>
             <Copy>Aucune situation ne correspond à votre recherche.</Copy>
-            <PublicLink label="Décrire mon besoin" onPress={() => router.push('/demande-client')} />
+            <PublicLink label="Décrire mon besoin" onPress={() => router.push({ pathname: '/demande-client', params: locationParams })} />
             <PublicLink label="Effacer la recherche" onPress={() => setQuery('')} />
           </Card>}
           {portalError && <Copy kind="error">{portalError}</Copy>}
@@ -217,7 +218,7 @@ export function MobileClientHome() {
               <Copy kind="muted">{step.text}</Copy>
             </View>
           </View>)}
-          <PublicLink label="Présenter mon besoin" onPress={() => router.push('/demande-client')} />
+          <PublicLink label="Présenter mon besoin" onPress={() => router.push({ pathname: '/demande-client', params: locationParams })} />
         </View>
 
         <View style={styles.banner}>
@@ -228,14 +229,7 @@ export function MobileClientHome() {
               <Copy>Décrivez la panne et indiquez votre commune. Le créneau dépend des disponibilités.</Copy>
             </View>
           </View>
-          <BannerButton label="Décrire ma panne urgente" onPress={() => router.push({ pathname: '/demande-client', params: { urgency: 'urgent' } })} />
-        </View>
-
-        <View style={[styles.feature, { backgroundColor: p.subtle }]}>
-          <Copy kind="subtitle">Comment on trouve votre électricien</Copy>
-          <Image source={publicPhotos.panel} style={styles.featurePhoto} contentFit="cover" accessible={false} />
-          <DetailRows items={MATCHING} firstOpen />
-          <Action label="Lancer le diagnostic" onPress={() => { selectMode(2); scroll.current?.scrollTo({ y: headerHeight.current + railY.current, animated: true }); }} />
+          <BannerButton label="Décrire ma panne urgente" onPress={() => router.push({ pathname: '/demande-client', params: { urgency: 'urgent', ...locationParams } })} />
         </View>
 
         <View style={styles.section}>
@@ -261,7 +255,7 @@ export function MobileClientHome() {
           {Boolean(services.data?.items.length) && <PublicReadState loading={prices.loading} error={prices.error} onRetry={prices.reload}
             context="Les estimations ne sont pas disponibles pour le moment." />}
           {services.data?.items.map(item => <PublicServiceRow key={item.slug} item={item} price={prices.data} />)}
-          <PublicLink label="Voir toutes les interventions" onPress={() => router.navigate('/catalogue')} />
+          <PublicLink label="Voir toutes les interventions" onPress={() => router.navigate(embedded ? '/(espace)/services' : '/catalogue')} />
         </View>
 
         <Card>
@@ -296,9 +290,16 @@ export function MobileClientHome() {
           </Pressable>)}
         </View>
       </View>
-      <PublicEditorialFooter />
     </ScrollView>
-    <PublicTabs />
+    {!embedded && <PublicTabs />}
+    <AppSheet title="Lieu d’intervention" open={locationOpen} onClose={() => setLocationOpen(false)}>
+      <Field label="Commune" value={cityDraft} onChangeText={setCityDraft}
+        placeholder="Fort-de-France" maxLength={120} autoCapitalize="words" />
+      <Action label="Utiliser cette commune" disabled={!cityDraft.trim()} onPress={() => {
+        setCity(cityDraft.trim());
+        setLocationOpen(false);
+      }} />
+    </AppSheet>
   </SafeAreaView>;
 }
 
@@ -312,7 +313,7 @@ function BannerButton({ label, onPress }: { label: string; onPress: () => void }
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   grow: { flex: 1, minWidth: 0 },
-  content: { paddingHorizontal: 16, paddingBottom: 28, gap: 28, width: '100%', maxWidth: 650, alignSelf: 'center' },
+  content: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 28, gap: 26, width: '100%', maxWidth: 650, alignSelf: 'center' },
   entry: { gap: 10, paddingTop: 6 },
   address: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 46 },
   strong: { fontFamily: 'JakartaBold', fontSize: 14, lineHeight: 20 },
@@ -342,8 +343,6 @@ const styles = StyleSheet.create({
   stepNumber: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EDF1FF' },
   detail: { borderBottomWidth: 1, paddingBottom: 4 },
   detailButton: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
-  feature: { padding: 16, gap: 12, borderRadius: 20 },
-  featurePhoto: { width: '100%', height: 165, borderRadius: 14 },
   recruitment: { backgroundColor: editorial.yellow, borderRadius: 20, overflow: 'hidden' },
   banner: { padding: 16, gap: 12, borderRadius: 20, backgroundColor: editorial.yellow },
   bannerIcon: { width: 44, height: 44, backgroundColor: editorial.navy, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },

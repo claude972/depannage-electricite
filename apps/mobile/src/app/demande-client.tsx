@@ -20,26 +20,27 @@ const options = z.object({ payment_methods: z.array(z.object({ id: z.string(), a
 
 export default function ClientBooking() {
   const auth = useSession();
-  const { service, field, urgency } = useLocalSearchParams<{ service?: string; field?: string; urgency?: string }>();
+  const { service, field, urgency, commune } = useLocalSearchParams<{ service?: string; field?: string; urgency?: string; commune?: string }>();
+  const initialCity = typeof commune === 'string' ? commune.trim().slice(0, 120) : '';
   const addressFirst = field === 'address';
   const initialUrgency = urgency === 'urgent' || urgency === 'scheduled' ? urgency : undefined;
   const phone = verifiedPhone(auth.session?.user);
   useEffect(() => {
     if (auth.phoneResume === 'booking') auth.consumePhoneResume();
   }, [auth.phoneResume]);
-  if (!auth.session) return <BookingFields service={service} addressFirst={addressFirst} initialUrgency={initialUrgency} />;
-  if (!phone) return <SignedInFallback service={service} />;
-  return <VerifiedBooking key={auth.session.user.id + phone} actor={auth.session.user.id} phone={phone} token={auth.session.access_token} service={service} addressFirst={addressFirst} initialUrgency={initialUrgency} />;
+  if (!auth.session) return <BookingFields service={service} addressFirst={addressFirst} initialUrgency={initialUrgency} initialCity={initialCity} />;
+  if (!phone) return <SignedInFallback service={service} initialCity={initialCity} />;
+  return <VerifiedBooking key={auth.session.user.id + phone} actor={auth.session.user.id} phone={phone} token={auth.session.access_token} service={service} addressFirst={addressFirst} initialUrgency={initialUrgency} initialCity={initialCity} />;
 }
 
-function SignedInFallback({ service }: { service?: string }) {
+function SignedInFallback({ service, initialCity }: { service?: string; initialCity: string }) {
   const router = useRouter();
   const catalogue = usePublicServices();
   const type = catalogue.data?.items.find(item => item.slug === service)?.category;
   return <Screen>
     <Copy kind="title">Nouvelle demande</Copy>
     <Copy>Continuez depuis votre espace connecté.</Copy>
-    <Action label="Ouvrir le formulaire" onPress={() => router.replace({ pathname: '/demande', params: type ? { type } : {} })} />
+    <Action label="Ouvrir le formulaire" onPress={() => router.replace({ pathname: '/demande', params: { ...(type ? { type } : {}), ...(initialCity ? { commune: initialCity } : {}) } })} />
   </Screen>;
 }
 
@@ -51,17 +52,18 @@ const defaultSteps: BookingStep[] = ['urgency', 'contact', 'address', 'review'];
 const addressSteps: BookingStep[] = ['address', 'urgency', 'contact', 'review'];
 type InitialUrgency = 'urgent' | 'scheduled';
 
-function BookingFields({ service, addressFirst, initialUrgency, owner }: {
+function BookingFields({ service, addressFirst, initialUrgency, initialCity, owner }: {
   service?: string;
   addressFirst?: boolean;
   initialUrgency?: InitialUrgency;
+  initialCity?: string;
   owner?: { phone: string; first: string; last: string; onReady: (request: StagedPhoneBooking) => Promise<void> };
 }) {
   const router = useRouter();
   const catalogue = usePublicServices();
   const price = useResource('/api/public/indicative-prices', prices);
   const [slug, setSlug] = useState(service ?? ''), [description, setDescription] = useState('');
-  const [address, setAddress] = useState(''), [postal, setPostal] = useState(''), [city, setCity] = useState('');
+  const [address, setAddress] = useState(''), [postal, setPostal] = useState(''), [city, setCity] = useState(initialCity ?? '');
   const [urgency, setUrgency] = useState<InitialUrgency | null>(initialUrgency ?? null);
   const steps = addressFirst ? addressSteps : defaultSteps;
   const [stepIndex, setStepIndex] = useState(0);
@@ -198,8 +200,8 @@ function BookingFields({ service, addressFirst, initialUrgency, owner }: {
   </Screen>;
 }
 
-function VerifiedBooking({ actor, phone, token, service, addressFirst, initialUrgency }: {
-  actor: string; phone: string; token: string; service?: string; addressFirst?: boolean; initialUrgency?: InitialUrgency;
+function VerifiedBooking({ actor, phone, token, service, addressFirst, initialUrgency, initialCity }: {
+  actor: string; phone: string; token: string; service?: string; addressFirst?: boolean; initialUrgency?: InitialUrgency; initialCity?: string;
 }) {
   const account = useWorkspace(true);
   const [key, setKey] = useState<string | null>(null), [error, setError] = useState<string | null>(null);
@@ -217,11 +219,11 @@ function VerifiedBooking({ actor, phone, token, service, addressFirst, initialUr
     }} />
   </Screen>;
   if (account.data.profile.role !== 'client') return <Screen><Copy>Ce formulaire est réservé à l’espace client.</Copy></Screen>;
-  return <ConfirmBooking actor={actor} phone={phone} token={token} service={service} addressFirst={addressFirst} initialUrgency={initialUrgency} stageKey={key} profile={account.data.profile} />;
+  return <ConfirmBooking actor={actor} phone={phone} token={token} service={service} addressFirst={addressFirst} initialUrgency={initialUrgency} initialCity={initialCity} stageKey={key} profile={account.data.profile} />;
 }
 
-function ConfirmBooking({ actor, phone, token, service, addressFirst, initialUrgency, stageKey, profile }: {
-  actor: string; phone: string; token: string; service?: string; addressFirst?: boolean; initialUrgency?: InitialUrgency; stageKey: string;
+function ConfirmBooking({ actor, phone, token, service, addressFirst, initialUrgency, initialCity, stageKey, profile }: {
+  actor: string; phone: string; token: string; service?: string; addressFirst?: boolean; initialUrgency?: InitialUrgency; initialCity?: string; stageKey: string;
   profile: { first_name?: string | null; last_name?: string | null };
 }) {
   const router = useRouter();
@@ -302,7 +304,7 @@ function ConfirmBooking({ actor, phone, token, service, addressFirst, initialUrg
     <Action secondary label="Commencer une autre demande" disabled={draft.pending} onPress={() => setNewRequest(true)} />
     <OptionalEmailAccount />
   </Screen>;
-  if (!request) return <BookingFields service={service} addressFirst={addressFirst} initialUrgency={initialUrgency} owner={{
+  if (!request) return <BookingFields service={service} addressFirst={addressFirst} initialUrgency={initialUrgency} initialCity={initialCity} owner={{
     phone, first: profile.first_name ?? '', last: profile.last_name ?? '',
     onReady: async next => { await deviceDrafts.write(stageKey, next); setStage({ request: next }); },
   }} />;

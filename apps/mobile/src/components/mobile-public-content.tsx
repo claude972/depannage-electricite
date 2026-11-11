@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Image, type ImageProps } from 'expo-image';
 import { openBrowserAsync } from 'expo-web-browser';
-import { useRouter, type Href } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiOrigin } from '@/lib/config';
@@ -101,36 +101,6 @@ export function usePublicPortal() {
   return { openPortal, portalError };
 }
 
-const groups: { title: string; links: { label: string; href: Href }[] }[] = [
-  { title: 'Services', links: [
-    { label: 'Voir les dépannages', href: '/catalogue' }, { label: 'Zones d’intervention', href: '/aide-mobile' },
-  ] },
-  { title: 'Assistance', links: [
-    { label: 'Aide', href: '/aide-mobile' }, { label: 'Suivre mon intervention', href: '/retrouver' },
-    { label: 'Nous contacter', href: '/aide-mobile' }, { label: 'Garantie', href: '/aide-mobile' },
-  ] },
-  { title: 'À propos', links: [
-    { label: 'Candidature électricien', href: '/candidature' }, { label: 'Le blog du dépannage', href: '/conseils' },
-  ] },
-];
-
-export function PublicEditorialFooter() {
-  const router = useRouter();
-  const { openPortal, portalError } = usePublicPortal();
-  return <View style={styles.editorialFooter}>
-    <Image source={require('../../assets/images/splash.png')} style={styles.footerLogo} contentFit="contain"
-      accessible accessibilityLabel="DomDépannage" />
-    <Text style={styles.footerCopy}>De la demande au suivi de votre intervention électrique.</Text>
-    {groups.map(group => <View key={group.title}>
-      <Text accessibilityRole="header" style={styles.footerTitle}>{group.title}</Text>
-      {group.links.map(link => <PublicLink key={link.label} label={link.label} light onPress={() => router.navigate(link.href)} />)}
-    </View>)}
-    <PublicLink label="Confidentialité" light onPress={() => openPortal('/#privacy')} />
-    <PublicLink label="Mentions légales" light onPress={() => openPortal('/#legal')} />
-    {portalError && <Text accessibilityLiveRegion="polite" style={styles.footerCopy}>{portalError}</Text>}
-  </View>;
-}
-
 const styles = StyleSheet.create({
   grow: { flex: 1, minWidth: 0 },
   service: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 9, borderWidth: 1, borderRadius: 14 },
@@ -141,8 +111,4 @@ const styles = StyleSheet.create({
   footerAction: { borderTopWidth: 1, paddingHorizontal: 16, paddingTop: 10 },
   link: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6 },
   linkText: { fontFamily: 'JakartaBold', fontSize: 13 },
-  editorialFooter: { gap: 9, backgroundColor: editorial.navy, padding: 22 },
-  footerLogo: { width: 90, height: 52, borderRadius: 6 },
-  footerCopy: { fontFamily: 'JakartaRegular', fontSize: 13, lineHeight: 20, color: '#EDF1FF' },
-  footerTitle: { fontFamily: 'JakartaBold', fontSize: 15, color: editorial.white, marginTop: 8 },
 });

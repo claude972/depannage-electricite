@@ -1,4 +1,5 @@
 import { PublicTabs } from '@/components/mobile-chrome';
+import { PublicLink, usePublicPortal } from '@/components/mobile-public-content';
 import { useRouter } from 'expo-router';
 import { openBrowserAsync } from 'expo-web-browser';
 import { useState } from 'react';
@@ -14,6 +15,7 @@ import { releaseLabel } from '@/lib/release';
 
 export default function MobileHelp() {
   const router = useRouter();
+  const { openPortal, portalError } = usePublicPortal();
   const operatorRead = useResource(PUBLIC_PATHS.operatorProfile, operatorPublicationSchema);
   const warrantyRead = useResource(PUBLIC_PATHS.warrantyTerms, warrantyTermsSchema);
   const operator = publishedState(operatorRead);
@@ -57,6 +59,9 @@ export default function MobileHelp() {
     </Card>
 
     {apiOrigin && <Action secondary label="Ouvrir le centre d’aide sur le Web" onPress={() => void openBrowserAsync(apiOrigin + '/#help')} />}
+    <PublicLink label="Mentions légales" onPress={() => openPortal('/#legal')} />
+    <PublicLink label="Confidentialité" onPress={() => openPortal('/#privacy')} />
+    {portalError && <Copy kind="error">{portalError}</Copy>}
     <Copy kind="muted">{releaseLabel(Platform.OS)}</Copy>
   </Screen>;
 }

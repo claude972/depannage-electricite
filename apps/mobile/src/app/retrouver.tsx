@@ -26,8 +26,8 @@ export default function FindRequests() {
   const session = auth.session;
   if (session && verifiedPhone(session.user))
     return <PhoneHistory key={session.user.id} token={session.access_token} />;
-  return <Screen footer={<PublicTabs />}>
-    <Copy kind="title">Mes demandes</Copy>
+  return <Screen top footer={<PublicTabs />}>
+    <Copy kind="title">Activité</Copy>
     {session ? <>
       <Copy>Retrouvez vos interventions depuis votre espace connecté.</Copy>
       <Action label="Voir mes interventions" onPress={() => router.push('/interventions')} />
@@ -73,8 +73,8 @@ function PhoneHistory({ token }: { token: string }) {
     }
   }
 
-  return <Screen footer={<PublicTabs />}>
-    <Copy kind="title">Mes demandes</Copy>
+  return <Screen top footer={<PublicTabs />}>
+    <Copy kind="title">Activité</Copy>
     <ReadState loading={first.loading} error={first.error} onRetry={first.reload} />
     {first.data && rows.length === 0 && <Copy kind="muted">Aucune intervention pour le moment.</Copy>}
     {rows.map(item => <Card key={item.id}>
