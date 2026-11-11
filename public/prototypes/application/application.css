@@ -148,6 +148,26 @@ svg { width: 22px; height: 22px; display: block; flex: none; }
 .form { display: grid; gap: 12px; }
 .form label { display: grid; gap: 4px; font-weight: 700; }
 .form input, .form select { width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: white; color: #111318; }
+.auth { display: grid; gap: 28px; padding: 32px 4px 16px; }
+.auth-intro { display: grid; gap: 12px; }
+.auth-intro h1 { font-size: 34px; letter-spacing: -.045em; }
+.auth-intro p, .auth-guest p { color: var(--muted); }
+.auth-form { gap: 10px; }
+.auth-form > label { margin-top: 8px; }
+.auth-form input { min-height: 52px; font-size: 16px; background: var(--surface); }
+.password-field { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.password-field input { min-width: 0; border: none; background: transparent; }
+.password-toggle { min-width: 72px; min-height: 48px; border: none; padding: 6px 10px; border-radius: 9px; background: transparent; color: var(--blue); font-size: 13px; font-weight: 700; }
+.auth-recovery { justify-self: start; display: inline-flex; align-items: center; min-height: 44px; color: var(--blue); font-size: 14px; }
+.auth-form .primary { min-height: 52px; margin-top: 4px; }
+.primary:disabled { opacity: .65; cursor: wait; }
+.auth-guest { display: grid; gap: 8px; padding-top: 22px; border-top: 1px solid var(--line); }
+.auth-guest h2 { font-size: 18px; }
+.auth-guest a { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; color: var(--blue); font-weight: 700; text-decoration: none; }
+.auth-demo { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.auth-demo button { margin-top: 7px; min-height: 44px; padding: 0; border: none; background: transparent; color: var(--blue); font-size: 12px; text-align: left; text-decoration: underline; text-underline-offset: 3px; }
+.form-error { color: #a42320; font-size: 13px; }
+.auth-form input[aria-invalid="true"] { border-color: #a42320; }
 dialog { width: min(calc(100% - 28px),405px); border: 1px solid var(--line); border-radius: 20px; padding: 16px; color: #111318; max-height: 85dvh; }
 dialog::backdrop { background: #141d3e5c; }
 .dialog-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 13px; }

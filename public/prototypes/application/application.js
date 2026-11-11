@@ -55,7 +55,8 @@ const dialog = document.getElementById('details');
 const dialogTitle = document.getElementById('dialog-title');
 const dialogBody = document.getElementById('dialog-body');
 const state = { mode: 0, query: '', city: '', name: 'Camille Exemple', connected: true };
-const views = { accueil: home, services: catalogue, activite: activity, compte: account };
+const demoAccount = { email: 'camille@example.test', password: 'Demonstration2026!' };
+const views = { accueil: home, services: catalogue, activite: activity, compte: account, connexion: login, 'mot-de-passe-oublie': recover };
 
 const arrow = `<span data-icon="next">${icon('next')}</span>`;
 const link = (label, action) => `<button type="button" class="link-button" data-action="${action}">${label}${arrow}</button>`;
@@ -156,7 +157,7 @@ function row(glyph, title, summary, action) {
 }
 function account() {
   if (!state.connected) return `<div class="account"><h1>Votre espace</h1><p class="muted">Retrouvez votre profil et le suivi de vos interventions.</p>
-    ${primary('Voir le compte de démonstration', 'sign-in')}${link('Retrouver une intervention', 'activity')}</div>`;
+    ${primary('Se connecter', 'login')}${link('Voir le compte de démonstration', 'sign-in')}${link('Retrouver une intervention', 'activity')}</div>`;
   const initials = state.name.split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase();
   return `<div class="account">
     <div class="identity"><div><h1>${esc(state.name)}</h1><p>Compte particulier</p></div><span class="avatar" aria-hidden="true">${esc(initials)}</span></div>
@@ -173,6 +174,40 @@ function account() {
     </section>
     <button class="signout" type="button" data-action="sign-out">Se déconnecter</button>
   </div>`;
+}
+
+function login() {
+  return `<section class="auth">
+    <div class="auth-intro"><h1>Connectez-vous</h1><p>Retrouvez vos interventions, vos devis et vos échanges.</p></div>
+    <form class="form auth-form" id="login-form" novalidate>
+      <label for="login-email">Adresse e-mail</label>
+      <input id="login-email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="vous@exemple.fr" required>
+      <label for="login-password">Mot de passe</label>
+      <div class="password-field"><input id="login-password" name="password" type="password" autocomplete="current-password" required>
+        <button type="button" class="password-toggle" data-action="toggle-password" aria-controls="login-password" aria-pressed="false">Afficher</button></div>
+      <a class="auth-recovery" href="#mot-de-passe-oublie">Mot de passe oublié ?</a>
+      <p id="login-error" class="form-error" role="alert" hidden></p>
+      <button class="primary" type="submit">Se connecter</button>
+    </form>
+    <div class="auth-guest"><h2>Une intervention à demander ?</h2><p>Vous pouvez commencer votre demande depuis l’accueil.</p><a href="#accueil">Continuer sans compte${arrow}</a></div>
+    <div class="auth-demo"><p>Maquette test. La connexion et la récupération du compte sont simulées.</p>
+      <button type="button" data-action="fill-demo">Remplir les identifiants de démonstration</button></div>
+  </section>`;
+}
+
+function recover() {
+  return `<section class="auth">
+    <div class="auth-intro"><h1>Mot de passe oublié ?</h1><p>Indiquez l’adresse e-mail associée à votre compte.</p></div>
+    <form class="form auth-form" id="recovery-form" novalidate>
+      <label for="recovery-email">Adresse e-mail</label>
+      <input id="recovery-email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="vous@exemple.fr" required>
+      <p id="recovery-error" class="form-error" role="alert" hidden></p>
+      <button class="primary" type="submit">Envoyer le lien de récupération</button>
+      <p id="recovery-result" class="auth-demo" role="status" hidden></p>
+    </form>
+    <a class="auth-recovery" href="#connexion">Revenir à la connexion</a>
+    <p class="auth-demo">Maquette test. La récupération du compte est simulée.</p>
+  </section>`;
 }
 
 const details = {
@@ -193,8 +228,9 @@ function render(focus = false) {
   const key = Object.hasOwn(views, selected) ? selected : 'accueil';
   screen.innerHTML = views[key]();
   screen.scrollTop = 0;
+  const activeTab = key === 'connexion' || key === 'mot-de-passe-oublie' ? 'compte' : key;
   for (const tab of tabs) {
-    if (tab.dataset.tab === key) tab.setAttribute('aria-current', 'page');
+    if (tab.dataset.tab === activeTab) tab.setAttribute('aria-current', 'page');
     else tab.removeAttribute('aria-current');
   }
   if (key === 'accueil') updateSituations();
@@ -253,6 +289,19 @@ document.addEventListener('click', event => {
   } else if (action === 'service') showService(value);
   else if (action === 'services') navigate('services');
   else if (action === 'activity') navigate('activite');
+  else if (action === 'login') navigate('connexion');
+  else if (action === 'toggle-password') {
+    const field = document.getElementById('login-password');
+    const visible = field.type === 'password';
+    field.type = visible ? 'text' : 'password';
+    control.textContent = visible ? 'Masquer' : 'Afficher';
+    control.setAttribute('aria-pressed', String(visible));
+  } else if (action === 'fill-demo') {
+    document.getElementById('login-email').value = demoAccount.email;
+    document.getElementById('login-password').value = demoAccount.password;
+    document.getElementById('login-error').hidden = true;
+    document.querySelector('#login-form [type="submit"]').focus();
+  }
   else if (action === 'sign-out' || action === 'sign-in') {
     state.connected = action === 'sign-in';
     render(true);
@@ -272,6 +321,54 @@ document.addEventListener('click', event => {
     const [title, copy] = details[action];
     open(title, `<p>${copy}</p>`);
   }
+});
+screen.addEventListener('submit', async event => {
+  event.preventDefault();
+  const form = event.target;
+  if (form.id !== 'login-form' && form.id !== 'recovery-form') return;
+  if (form.getAttribute('aria-busy') === 'true') return;
+  const email = form.elements.email;
+  const error = form.querySelector('[role="alert"]');
+  error.hidden = true;
+  email.removeAttribute('aria-invalid');
+  if (!email.validity.valid) {
+    error.textContent = 'Saisissez une adresse e-mail valide.';
+    error.hidden = false;
+    email.setAttribute('aria-invalid', 'true');
+    email.setAttribute('aria-describedby', error.id);
+    email.focus();
+    return;
+  }
+  if (form.id === 'recovery-form') {
+    const result = document.getElementById('recovery-result');
+    result.textContent = 'Récupération simulée. Vous pouvez revenir à la connexion pour poursuivre le test.';
+    result.hidden = false;
+    return;
+  }
+  const password = form.elements.password;
+  password.removeAttribute('aria-invalid');
+  if (!password.value) {
+    error.textContent = 'Saisissez votre mot de passe.';
+    error.hidden = false;
+    password.setAttribute('aria-invalid', 'true');
+    password.setAttribute('aria-describedby', error.id);
+    password.focus();
+    return;
+  }
+  if (email.value.trim().toLowerCase() !== demoAccount.email || password.value !== demoAccount.password) {
+    error.textContent = 'Pour essayer la maquette, utilisez les identifiants de démonstration proposés ci-dessous.';
+    error.hidden = false;
+    return;
+  }
+  form.setAttribute('aria-busy', 'true');
+  const submit = form.querySelector('[type="submit"]');
+  submit.disabled = true;
+  submit.textContent = 'Connexion…';
+  await new Promise(resolve => setTimeout(resolve, 350));
+  if (!form.isConnected) return;
+  password.value = '';
+  state.connected = true;
+  navigate('compte');
 });
 dialog.addEventListener('submit', event => {
   event.preventDefault();
