@@ -1,10 +1,12 @@
 import { MobileContactActions } from '@/components/mobile-contact-actions';
 import { useRef, useState } from 'react';
+import { Host, Picker } from '@expo/ui';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions, type ScrollViewInstance } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COMMITMENTS, FAQ, STEPS } from '../../../../shared/public-home';
+import { INTERVENTION_PROFILES } from '../../../../shared/intervention-profile';
 import { PUBLIC_ADVICE } from '../../../../shared/public-advice';
 import { useIndicativePrices, usePublicServices } from '@/lib/public-services';
 import { MobileIcon, PublicTabs, type Glyph } from './mobile-chrome';
@@ -90,6 +92,7 @@ export function MobileClientHome({ embedded = false }: { embedded?: boolean }) {
   const [modeIndex, setModeIndex] = useState(0);
   const [query, setQuery] = useState('');
   const [city, setCity] = useState('');
+  const [profile, setProfile] = useState('');
   const [cityDraft, setCityDraft] = useState('');
   const [locationOpen, setLocationOpen] = useState(false);
   const locationParams = city ? { commune: city } : {};
@@ -123,15 +126,26 @@ export function MobileClientHome({ embedded = false }: { embedded?: boolean }) {
     <ScrollView ref={scroll} style={styles.flex} keyboardShouldPersistTaps="handled">
       <View style={styles.content}>
         <View style={styles.entry}>
-          <Pressable accessibilityRole="button" onPress={() => { setCityDraft(city); setLocationOpen(true); }}
-            style={styles.address}>
-            <MobileIcon name="pin" color={p.blue} />
-            <View style={styles.grow}>
-              <Text style={[styles.small, { color: p.muted }]}>Lieu d’intervention</Text>
-              <Text style={[styles.strong, { color: p.text }]}>{city || 'Choisir mon adresse'}</Text>
+          <View style={styles.locationAndProfile}>
+            <Pressable accessibilityRole="button" onPress={() => { setCityDraft(city); setLocationOpen(true); }}
+              style={styles.address}>
+              <MobileIcon name="pin" color={p.blue} />
+              <View style={styles.grow}>
+                <Text style={[styles.small, { color: p.muted }]}>Lieu d’intervention</Text>
+                <Text style={[styles.strong, { color: p.text }]}>{city || 'Choisir mon adresse'}</Text>
+              </View>
+              <MobileIcon name="next" color={p.blue} size={16} />
+            </Pressable>
+            <View style={styles.profilePicker}>
+              <Text style={[styles.small, { color: p.muted }]}>Qui êtes-vous ?</Text>
+              <Host style={styles.pickerHost} colorScheme={p.background === editorial.white ? 'light' : 'dark'}>
+                <Picker<string> selectedValue={profile} onValueChange={setProfile} appearance="menu" testID="intervention-profile">
+                  <Picker.Item label="Choisir" value="" />
+                  {INTERVENTION_PROFILES.map(({ value, label }) => <Picker.Item key={value} label={label} value={value} />)}
+                </Picker>
+              </Host>
             </View>
-            <MobileIcon name="next" color={p.blue} size={16} />
-          </Pressable>
+          </View>
           <View accessibilityRole="tablist" accessibilityLabel="Type de service" style={[styles.modes, { borderColor: p.border }]}>
             {modes.map((item, index) => {
               const selected = index === modeIndex;
@@ -317,7 +331,10 @@ const styles = StyleSheet.create({
   grow: { flex: 1, minWidth: 0 },
   content: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 28, gap: 26, width: '100%', maxWidth: 650, alignSelf: 'center' },
   entry: { gap: 10, paddingTop: 6 },
-  address: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 46 },
+  locationAndProfile: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  profilePicker: { flex: 1, minWidth: 112, maxWidth: 180, gap: 2 },
+  pickerHost: { minHeight: 54 },
+  address: { flex: 1.35, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 46 },
   strong: { fontFamily: 'JakartaBold', fontSize: 14, lineHeight: 20 },
   small: { fontFamily: 'JakartaRegular', fontSize: 12, lineHeight: 17 },
   modes: { flexDirection: 'row', borderBottomWidth: 1 },

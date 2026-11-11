@@ -2,6 +2,7 @@
 
 import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Icon } from "../app/icons";
+import { INTERVENTION_PROFILES } from "../../shared/intervention-profile";
 import { COMMITMENTS, FAQ, MATCHING, STEPS } from "../../shared/public-home";
 import { PUBLIC_ADVICE } from "./public-advice-content";
 import { SERVICES, SERVICE_PHOTOS, servicePath, type ServicePhoto } from "./public-service-catalog";
@@ -107,6 +108,7 @@ function Details({ items, name }: { items: Detail[]; name?: string }) {
 
 export function PublicHome({ gated = false, handlers, supportWhatsAppPhone }: { gated?: boolean; handlers: HomeHandlers; supportWhatsAppPhone?: string }) {
   const [modeIndex, setModeIndex] = useState(0);
+  const [profile, setProfile] = useState("");
   const [query, setQuery] = useState("");
   const modeButtons = useRef<(HTMLButtonElement | null)[]>([]);
   const rail = useRef<HTMLUListElement>(null);
@@ -140,12 +142,24 @@ export function PublicHome({ gated = false, handlers, supportWhatsAppPhone }: { 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     list.scrollBy({ left: direction * (card.getBoundingClientRect().width + 10), behavior: reduced ? "auto" : "smooth" });
   };
-  const address = (className: string) => (
-    <button className={`${styles.address} ${className}`} {...act({ type: "address" })}>
-      <Icon name="location" size={22} />
-      <span><small>Lieu d’intervention</small><strong>Choisir mon adresse</strong></span>
-      <Icon name="arrow" size={16} />
-    </button>
+  const locationAndProfile = (className: string) => (
+    <div className={`${styles.locationAndProfile} ${className}`}>
+      <button className={styles.address} {...act({ type: "address" })}>
+        <Icon name="location" size={22} />
+        <span><small>Lieu d’intervention</small><strong>Choisir mon adresse</strong></span>
+        <Icon name="arrow" size={16} />
+      </button>
+      <label className={styles.profileSelect}>
+        <span>Qui êtes-vous ?</span>
+        <span className={styles.profileOptions}>
+          <select value={profile} onChange={event => setProfile(event.target.value)}>
+            <option value="">Choisir</option>
+            {INTERVENTION_PROFILES.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+          </select>
+          <Icon name="arrow" size={15} />
+        </span>
+      </label>
+    </div>
   );
 
   return (
@@ -174,7 +188,7 @@ export function PublicHome({ gated = false, handlers, supportWhatsAppPhone }: { 
               <span className={styles.desktopTitle}>Un problème<br />électrique ?</span>
             </h1>
             <p className={styles.heroLead}>Choisissez le lieu d’intervention et décrivez ce qui se passe.</p>
-            {address(styles.mobileAddress)}
+            {locationAndProfile(styles.mobileAddress)}
             <div className={styles.modes} role="tablist" aria-label="Type de service" onKeyDown={onModeKey}>
               {MODES.map((item, index) => (
                 <button
@@ -187,7 +201,7 @@ export function PublicHome({ gated = false, handlers, supportWhatsAppPhone }: { 
                 </button>
               ))}
             </div>
-            {address(styles.desktopAddress)}
+            {locationAndProfile(styles.desktopAddress)}
             <form className={styles.searchForm} onSubmit={onSearch}>
               <div className={styles.searchRow}>
                 <label>

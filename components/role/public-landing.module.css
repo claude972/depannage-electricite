@@ -46,6 +46,48 @@
 .address small { font-size: 11px; color: var(--ui-text-muted); }
 .address strong { font-size: .9rem; }
 .address svg { color: var(--ui-accent); flex-shrink: 0; }
+.locationAndProfile {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(112px, 1fr);
+  align-items: stretch;
+  gap: 8px;
+}
+.profileSelect {
+  position: relative;
+  display: block;
+  min-width: 0;
+  min-height: 54px;
+  padding: 6px 8px 3px;
+  border: 1px solid var(--ui-border);
+  border-radius: 13px;
+  background: var(--ui-card);
+}
+.profileSelect > span:first-child { color: var(--ui-text-muted); font-size: 11px; }
+.profileOptions select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  min-height: 44px;
+  padding: 16px 24px 0 8px;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--ui-text);
+  font: inherit;
+  font-size: .875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.profileOptions svg {
+  position: absolute;
+  top: 64%;
+  right: 8px;
+  transform: translateY(-50%) rotate(90deg);
+  color: var(--ui-accent);
+  pointer-events: none;
+}
+.locationAndProfile .address { min-width: 0; }
+.locationAndProfile .address strong { overflow-wrap: anywhere; }
 .desktopAddress { display: none; }
 .modes {
   display: grid;
@@ -256,7 +298,8 @@
   .modes { padding: 3px; border: 0; border-radius: 12px; background: var(--ui-surface); }
   .modes button { border: 1px solid transparent; border-radius: 9px; }
   .modes button[aria-selected="true"] { border-color: var(--ui-border); background: var(--ui-card); }
-  .desktopAddress { display: inline-flex; padding: 8px 12px; border: 1px solid var(--ui-border); border-radius: 13px; }
+  .desktopAddress { display: grid; }
+  .desktopAddress .address { padding: 8px 12px; border: 1px solid var(--ui-border); border-radius: 13px; }
   .searchForm { margin-top: auto; }
   .searchRow { border-radius: 13px; }
   .searchActions { display: flex; }
