@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { requestFields } from './contracts';
+import { bookingLocation } from './phone-booking-draft';
 
 export const requestContact = z.object({
   first_name: z.string().trim().min(1, 'Renseignez votre prénom.').max(60),
@@ -9,7 +10,7 @@ export const requestContact = z.object({
 
 export const requestIntent = z.object({
   id: z.uuid(),
-  payload: requestFields.extend({ reviewed_estimate_version: z.number().int().positive().max(2147483647) }),
+  payload: requestFields.extend({ location: bookingLocation.optional(), reviewed_estimate_version: z.number().int().positive().max(2147483647) }),
   booking: z.object({ service_slug: z.string().min(1).max(80), contact: requestContact }).optional(),
   estimate: z.object({ min_cents: z.number().int().nonnegative(), max_cents: z.number().int().nonnegative() }),
   reviewRequired: z.boolean(),

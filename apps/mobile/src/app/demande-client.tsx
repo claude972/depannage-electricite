@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
 import { Keyboard } from 'react-native';
-import * as Location from 'expo-location';
 import { z } from 'zod';
 import { Action, BookingProgress, Card, Copy, Field, ReadState, Screen } from '@/components/ui';
+import { BookingLocationField } from '@/components/booking-location-field';
+import type { BookingLocation } from '../../../../shared/booking-location';
 import { PhoneChallenge } from '@/components/phone-challenge';
 import { OptionalEmailAccount } from '@/components/optional-email-account';
 import { ApiFailure, api, useResource } from '@/lib/api';
@@ -70,20 +71,20 @@ function BookingFields({ service, addressFirst, initialUrgency, initialCity, own
   const price = useResource('/api/public/indicative-prices', prices);
   const [slug, setSlug] = useState(service ?? ''), [description, setDescription] = useState('');
   const [address, setAddress] = useState(''), [postal, setPostal] = useState(''), [city, setCity] = useState(initialCity ?? '');
+  const [location, setLocation] = useState<BookingLocation>();
   const [urgency, setUrgency] = useState<InitialUrgency | null>(initialUrgency ?? null);
   const steps = addressFirst ? addressSteps : defaultSteps;
   const [stepIndex, setStepIndex] = useState(0);
   const step = steps[stepIndex];
   const [first, setFirst] = useState(owner?.first ?? ''), [last, setLast] = useState(owner?.last ?? '');
   const [phone, setPhone] = useState(owner?.phone ?? '');
-  const [locating, setLocating] = useState(false), [saving, setSaving] = useState(false);
-  const [suggestion, setSuggestion] = useState<{ address: string; postal: string; city: string } | null>(null);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<StagedPhoneBooking | null>(null);
   const savingLock = useRef(false);
   const chosen = catalogue.data?.items.find(item => item.slug === slug);
   const range = chosen && price.data?.ranges[chosen.category];
-  const values = { service_slug: chosen?.slug, category: chosen?.category, description, address, postal_code: postal, city, urgency };
+  const values = { service_slug: chosen?.slug, category: chosen?.category, description, address, postal_code: postal, city, urgency, ...(location ? { location } : {}) };
   const addressSchema = bookingInput.pick({ address: true, postal_code: true, city: true });
   const situationSchema = bookingInput.pick({ service_slug: true, category: true, urgency: true, description: true });
   const contactValues = { first_name: first, last_name: last, phone: normalizeInternationalPhone(phone) };
@@ -102,21 +103,6 @@ function BookingFields({ service, addressFirst, initialUrgency, initialCity, own
     }
     Keyboard.dismiss();
     setStepIndex(stepIndex + 1);
-  }
-
-  async function locate() {
-    setLocating(true); setError(null); setSuggestion(null);
-    try {
-      const permission = await Location.requestForegroundPermissionsAsync();
-      if (!permission.granted) throw new Error('Localisation refusée. Vous pouvez saisir votre adresse.');
-      const { coords } = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const [place] = await Location.reverseGeocodeAsync(coords);
-      const street = place?.street || place?.name;
-      const commune = place?.city || place?.subregion;
-      if (!street || !place?.postalCode || !commune) throw new Error('Adresse introuvable à cette position. Saisissez-la manuellement.');
-      setSuggestion({ address: [place.streetNumber, street].filter(Boolean).join(' '), postal: place.postalCode, city: commune });
-    } catch (issue) { setError(issue instanceof Error ? issue.message : 'Localisation indisponible.'); }
-    finally { setLocating(false); }
   }
 
   async function continueRequest() {
@@ -144,20 +130,6 @@ function BookingFields({ service, addressFirst, initialUrgency, initialCity, own
     }} />
     <Action secondary label="Revenir à ma demande" onPress={() => setPending(null)} />
   </Screen>;
-
-  const addressFields = <Card>
-        <Copy kind="subtitle">Adresse d’intervention</Copy>
-        <Action secondary label={locating ? 'Recherche…' : 'Utiliser ma position'} disabled={locating} onPress={() => void locate()} />
-        {suggestion && <>
-          <Copy>{suggestion.address}, {suggestion.postal} {suggestion.city}</Copy>
-          <Action secondary label="Utiliser cette adresse" onPress={() => {
-            setAddress(suggestion.address); setPostal(suggestion.postal); setCity(suggestion.city); setSuggestion(null);
-          }} />
-        </>}
-        <Field label="Adresse" value={address} onChangeText={setAddress} maxLength={500} />
-        <Field label="Code postal" value={postal} onChangeText={setPostal} keyboardType="numeric" maxLength={5} />
-        <Field label="Commune" value={city} onChangeText={setCity} maxLength={120} />
-      </Card>;
 
   return <Screen key={step}>
     <Copy kind="title">Votre demande de dépannage</Copy>
@@ -188,7 +160,11 @@ function BookingFields({ service, addressFirst, initialUrgency, initialCity, own
       <Field label="Nom" value={last} onChangeText={setLast} autoComplete="family-name" maxLength={60} />
       <Field label="Téléphone de contact (obligatoire)" value={phone} onChangeText={setPhone} placeholder="+596 ou +590…" keyboardType="phone-pad" autoComplete="tel" maxLength={40} editable={!owner} />
     </Card>}
-    {step === 'address' && addressFields}
+    {step === 'address' && <Card>
+      <BookingLocationField value={{ address, postal_code: postal, city }} location={location} onChange={(value, nextLocation) => {
+        setAddress(value.address); setPostal(value.postal_code); setCity(value.city); setLocation(nextLocation);
+      }} />
+    </Card>}
     {step === 'review' && <Card>
       <Copy kind="subtitle">Vérifiez votre demande</Copy>
       <Copy>{description}</Copy>

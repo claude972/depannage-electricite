@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Keyboard, View } from 'react-native';
+import { Alert, Keyboard } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
 import type { z } from 'zod';
-import * as Location from 'expo-location';
 import { Action, BookingProgress, Card, Copy, Field, ReadState, Screen } from '@/components/ui';
+import { BookingLocationField } from '@/components/booking-location-field';
+import type { BookingLocation } from '../../../../shared/booking-location';
 import { ApiFailure, api, useResource } from '@/lib/api';
 import { categories, category as categorySchema, creation, euros, prices, requestFields, workspace, type Category } from '@/lib/contracts';
 import { requestDraftKey } from '@/lib/draft-store';
@@ -38,9 +39,9 @@ function ClientRequest({ actor, token, profile }: { actor: string; token: string
   const [description, setDescription] = useState('');
   const [step, setStep] = useState(0);
   const [address, setAddress] = useState(''), [postal, setPostal] = useState(''), [city, setCity] = useState(typeof commune === 'string' ? commune.trim().slice(0, 120) : '');
+  const [location, setLocation] = useState<BookingLocation>();
   const [urgency, setUrgency] = useState<'urgent' | 'scheduled' | null>(() => urgence === 'urgent' || urgence === 'scheduled' ? urgence : null);
-  const [error, setError] = useState<string | null>(null), [busy, setBusy] = useState(false), [locating, setLocating] = useState(false);
-  const [suggestion, setSuggestion] = useState<{ address: string; postal: string; city: string } | null>(null);
+  const [error, setError] = useState<string | null>(null), [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const currentToken = useRef(token);
   currentToken.current = token;
@@ -75,21 +76,6 @@ function ClientRequest({ actor, token, profile }: { actor: string; token: string
   }
 
 
-  async function locate() {
-    setLocating(true); setError(null); setSuggestion(null);
-    try {
-      const permission = await Location.requestForegroundPermissionsAsync();
-      if (!permission.granted) throw Error('Localisation refusée. Vous pouvez saisir votre adresse.');
-      const { coords } = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const [place] = await Location.reverseGeocodeAsync(coords);
-      const street = place?.street || place?.name;
-      if (!street || !place?.postalCode || !(place.city || place.subregion))
-        throw Error('Adresse introuvable à cette position. Saisissez-la manuellement.');
-      setSuggestion({ address: [place.streetNumber, street].filter(Boolean).join(' '), postal: place.postalCode, city: place.city || place.subregion || '' });
-    } catch (issue) { setError(issue instanceof Error ? issue.message : 'Localisation indisponible.'); }
-    finally { setLocating(false); }
-  }
-
   async function submit() {
     const signal = active.current?.signal;
     if (!draft.value || draft.value.confirmedId || lock.current || !signal || signal.aborted) return;
@@ -112,7 +98,7 @@ function ClientRequest({ actor, token, profile }: { actor: string; token: string
         if (!checked.success) { setError(checked.error.issues[0].message); return; }
         current = {
           id: randomUUID(),
-          payload: { ...input.data, reviewed_estimate_version: version },
+          payload: { ...input.data, ...(location ? { location } : {}), reviewed_estimate_version: version },
           booking: { service_slug: service && type === input.data.category ? service : `demande-${input.data.category}`, contact: checked.data },
           estimate: range,
           reviewRequired: false,
@@ -179,14 +165,9 @@ function ClientRequest({ actor, token, profile }: { actor: string; token: string
       <Action label="Non, je peux planifier" secondary={shownUrgency !== 'scheduled'} disabled={disabled} onPress={() => setUrgency('scheduled')} />
     </Card>}
     {progress === 1 && <Card>
-      <Copy kind="subtitle">Adresse d’intervention</Copy>
-      <Action secondary label={locating ? 'Recherche…' : 'Utiliser ma position'} disabled={locating || disabled} onPress={() => void locate()} />
-      {suggestion && !intent && <View><Copy>{suggestion.address}, {suggestion.postal} {suggestion.city}</Copy>
-        <Action secondary label="Utiliser l’adresse proposée" disabled={disabled} onPress={() => { setAddress(suggestion.address); setPostal(suggestion.postal); setCity(suggestion.city); setSuggestion(null); }} />
-      </View>}
-      <Field label="Adresse" value={intent?.payload.address ?? address} onChangeText={setAddress} maxLength={500} editable={!disabled} />
-      <Field label="Code postal" value={intent?.payload.postal_code ?? postal} onChangeText={setPostal} keyboardType="numeric" maxLength={5} editable={!disabled} />
-      <Field label="Commune" value={city} onChangeText={setCity} maxLength={120} editable={!disabled} />
+      <BookingLocationField value={{ address, postal_code: postal, city }} location={location} disabled={disabled} onChange={(value, nextLocation) => {
+        setAddress(value.address); setPostal(value.postal_code); setCity(value.city); setLocation(nextLocation);
+      }} />
       {!profile.first_name?.trim() && <Field label="Prénom" value={firstName} onChangeText={setFirstName} autoComplete="given-name" maxLength={60} />}
       {!profile.last_name?.trim() && <Field label="Nom" value={lastName} onChangeText={setLastName} autoComplete="family-name" maxLength={60} />}
       <Field label="Téléphone de contact (obligatoire)" value={phone} onChangeText={setPhone} keyboardType="phone-pad" autoComplete="tel" maxLength={30} placeholder="+596 ou +590…" />
@@ -210,6 +191,7 @@ function ClientRequest({ actor, token, profile }: { actor: string; token: string
           setAddress(intent.payload.address);
           setPostal(intent.payload.postal_code);
           setCity(intent.payload.city);
+          setLocation(intent.payload.location);
           setUrgency(intent.payload.urgency);
           if (intent.booking) {
             setPhone(intent.booking.contact.phone);
