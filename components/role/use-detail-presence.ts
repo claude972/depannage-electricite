@@ -100,7 +100,9 @@ export function useDetailPresence(
     void readDetail(fetchJson, id).then((outcome) => {
       if (pointsContext !== startedIn) return; // identity/role/org/site changed: drop the reply
       if (outcome.kind === "loaded") {
-        cache.set(id, outcome.detail);
+        // Location is fetched separately on the open dossier and stays out of the point-read cache.
+        const { booking_location: _location, ...detail } = outcome.detail;
+        cache.set(id, detail);
         loadedOnce.add(id);
         points.delete(id);
       } else if (outcome.kind === "not_found") {

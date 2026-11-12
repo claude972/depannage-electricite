@@ -1,6 +1,8 @@
 import { taxRateSchema } from "@/lib/tax-rates";
 import { enrichAcceptedTotals, AcceptedTotalsUnavailable } from "./accepted-totals";
 import { z } from "zod";
+import { parseBookingLocation, type BookingLocation } from "../../../shared/booking-location";
+import { readBookingLocation } from "./booking-location-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const DETAIL_PROJECTIONS = {
@@ -57,6 +59,7 @@ export const detailReadSchema = z.object({
   intervention: rowSchemas.intervention, site: entity(rowSchemas.site), organization: entity(rowSchemas.organization),
   quotes: list(rowSchemas.quotes, 20), messages: list(rowSchemas.messages, 200), documents: list(rowSchemas.documents, 50), appointments: list(rowSchemas.appointments, 50),
   payments: z.union([z.object({ status: z.literal("ok"), items: z.array(rowSchemas.payments).max(20), limited: z.boolean(), incomplete: z.boolean() }).strict(), unavailable]),
+  booking_location: z.custom<BookingLocation>((value) => parseBookingLocation(value) !== null).nullable().optional(),
   generated_at: date,
 }).strict();
 export type DetailRead = z.infer<typeof detailReadSchema>;
@@ -133,12 +136,14 @@ export async function readInterventionDetail(db: SupabaseClient, id: string): Pr
       return { status: "ok" as const, items: rows.slice(0, 20), limited: rows.length > 20, incomplete };
     } catch { return { status: "error" as const }; }
   };
-  const [entities, quotes, messages, documents, appointments, payments] = await Promise.all([
+  const [entities, quotes, messages, documents, appointments, payments, bookingLocation] = await Promise.all([
     relatedEntities(), relatedList("quotes", "quotes", 20), relatedList("messages", "messages", 200), relatedList("documents", "documents", 50), relatedList("appointments", "intervention_appointments", 50), relatedPayments(),
+    // This optional projection may be unavailable during a rolling migration.
+    readBookingLocation(db, id).catch(() => undefined),
   ]);
   // Rights/assignment may have changed while reading dependencies. Discard rather than mix epochs.
   const current = await parent();
   if (!current) return null;
   if (["updated_at", "client_id", "artisan_id", "site_id", "status"].some(key => current[key as keyof typeof current] !== intervention[key as keyof typeof intervention])) throw new DetailReadUnavailable();
-  return detailReadSchema.parse({ intervention, ...entities, quotes, messages, documents, appointments, payments, generated_at: new Date().toISOString() });
+  return detailReadSchema.parse({ intervention, ...entities, quotes, messages, documents, appointments, payments, ...(bookingLocation === undefined ? {} : { booking_location: bookingLocation }), generated_at: new Date().toISOString() });
 }

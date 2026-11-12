@@ -89,6 +89,7 @@ import { DossierHelpLink, SupportCenter } from "./support-tickets";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
 import { TrackingAnchor } from "./tracking-anchor";
+import { BookingLocationRows } from "./booking-location-rows";
 import { useDetailPresence } from "./use-detail-presence";
 import { PointReadState } from "./detail-read-view";
 import { ArtisanPlanning } from "../features/planning/artisan-planning";
@@ -1308,7 +1309,7 @@ function MissionView({
   if (id && !i) {
     if (presence.decision === "loading") return <Loader label="Recherche du dossier…" />;
     if (presence.decision === "detail" || presence.decision === "detail_loading" || presence.decision === "detail_error")
-      return <PointReadState presence={presence} backLabel="Missions" onBack={() => session.go("missions")} />;
+      return <PointReadState presence={presence} backLabel="Missions" onBack={() => session.go("missions")} bookingLocationContext={session.refreshContext} />;
     if (presence.decision === "error")
       return (
         <Unavailable
@@ -1574,6 +1575,9 @@ function WorkDossier({ session, intervention: i }: { session: Session; intervent
                   {i.postal_code} {i.city}
                 </dd>
               </div>
+              {session.mode === "live" && (
+                <BookingLocationRows key={`${session.refreshContext}|${i.id}|${i.updated_at}|${i.artisan_id}`} interventionId={i.id} />
+              )}
               <div>
                 <dt>Besoin</dt>
                 <dd>{i.urgency === "urgent" ? "Demande urgente" : "Intervention à planifier"}</dd>
