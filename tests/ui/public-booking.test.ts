@@ -123,13 +123,15 @@ test("étape 1 : Oui masque les créneaux, Non affiche exactement les 3 souhaits
 test("une réservation entreprise ouvre la liste des sites du compte professionnel sans soumettre le formulaire", () => {
   const html = wizard();
   const href = html.match(/href="([^"]+)">Ouvrir l’espace entreprise/)?.[1];
-  assert.equal(href, "/#sites");
+  assert.equal(href, "/#auth/sites");
   assert.match(text(html), /créez la demande pour un site auquel vous avez accès/);
   const hash = new URL(href!, "https://app.example").hash;
   const pending = protectedLink(hash);
   assert.equal(pending?.view, "sites");
   assert.equal(canAccess("sites", null, "public"), false);
   assert.equal(canAccess("sites", "client", "live"), false);
+  assert.equal(loginLanding(hash, null, "client"), null);
+  assert.deepEqual(loginLanding(hash, null, "manager"), { view: "sites", param: "" });
   assert.equal(loginLanding("", pending, "client"), null);
   assert.equal(loginLanding("", pending, "manager")?.view, "sites");
 });

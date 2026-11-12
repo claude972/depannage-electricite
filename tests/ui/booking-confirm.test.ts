@@ -35,7 +35,7 @@ test("un ancien brouillon déclaré entreprise ne peut pas être envoyé comme d
     onContactChange() {},
     verifyCardHold: async () => { throw new Error("Vérification inattendue"); },
   }));
-  assert.match(html, /href="\/#sites">Ouvrir l’espace entreprise/);
+  assert.match(html, /href="\/#auth\/sites">Ouvrir l’espace entreprise/);
   assert.doesNotMatch(html, /data-booking-send|Vérifier mon empreinte|Modifier la demande/);
 });
 

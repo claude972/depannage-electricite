@@ -653,8 +653,11 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
       // End of the service booking wizard: « Créer mon compte » opens the account form on creation.
       if (mode === "public" && parsed.view === "auth" && parsed.param === "signup") setAuthMode("signup");
       const followFromAccount = mode === "live" && parsed.view === "auth" && parsed.param === "requests";
-      const target = followFromAccount ? (role === "client" ? "requests" : homeFor(role, mode)) : parsed.view ?? homeFor(mode === "public" ? null : role, mode);
-      setParam(followFromAccount ? "" : parsed.param);
+      const sitesFromAccount = mode === "live" && parsed.view === "auth" && parsed.param === "sites";
+      const target = sitesFromAccount ? (role === "manager" ? "sites" : homeFor(role, mode))
+        : followFromAccount ? (role === "client" ? "requests" : homeFor(role, mode))
+          : parsed.view ?? homeFor(mode === "public" ? null : role, mode);
+      setParam(followFromAccount || sitesFromAccount ? "" : parsed.param);
       setView(canAccess(target, mode === "public" ? null : role, mode) ? target : "forbidden");
     };
     onHash();
