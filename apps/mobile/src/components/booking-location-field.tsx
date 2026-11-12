@@ -3,7 +3,8 @@ import * as Location from 'expo-location';
 import { z } from 'zod';
 import { Action, Copy, Field } from '@/components/ui';
 import BookingMap from '@/components/booking-map-dom';
-import { api } from '@/lib/api';
+import { ApiFailure, api } from '@/lib/api';
+import { nearbyBanUrl, parseNearbyBan } from '../../../../shared/ban-nearby';
 import { BOOKING_ADDRESS_COPY as copy, type BookingAddress, type BookingPoint } from '../../../../shared/booking-address';
 import type { BookingLocation } from '../../../../shared/booking-location';
 import { useBookingAddress } from '../../../../shared/use-booking-address';
@@ -18,8 +19,23 @@ const lookup = {
     try {
       const reply = await api(`/api/addresses/reverse?lat=${latitude}&lon=${longitude}`, suggestions, { signal });
       if (reply.candidates[0]) return reply.candidates[0];
-    } catch (error) { if (signal.aborted) throw error; }
-    // iOS and Android also provide a geocoder when the shared address API is unavailable.
+    } catch (error) {
+      if (signal.aborted || (error instanceof ApiFailure && error.status === 429)) throw error;
+      // Older preview backends lack the WFS fallback. Use the same official BAN layer.
+      const request = new AbortController();
+      const abort = () => request.abort();
+      signal.addEventListener('abort', abort, { once: true });
+      const timer = setTimeout(abort, 4000);
+      try {
+        const response = await fetch(nearbyBanUrl(latitude, longitude), { signal: request.signal, headers: { Accept: 'application/json' } });
+        if (response.ok) {
+          const match = parseNearbyBan(await response.json(), latitude, longitude)[0];
+          if (match) return match;
+        }
+      } catch (issue) { if (signal.aborted) throw issue; }
+      finally { clearTimeout(timer); signal.removeEventListener('abort', abort); }
+    }
+    // iOS and Android also provide a geocoder when the BAN has no usable point.
     if (!(await Location.getForegroundPermissionsAsync()).granted || signal.aborted) return null;
     const [place] = await Location.reverseGeocodeAsync({ latitude, longitude });
     const street = place?.street || place?.name;

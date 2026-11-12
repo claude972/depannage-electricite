@@ -2,9 +2,8 @@ import { CryptoDigestAlgorithm, digestStringAsync } from 'expo-crypto';
 import { z } from 'zod';
 import { requestFields } from './contracts';
 import { phoneContact } from './phone-client';
-import { parseBookingLocation, type BookingLocation } from '../../../../shared/booking-location';
+import { bookingLocation } from './booking-location';
 
-export const bookingLocation = z.custom<BookingLocation>(value => parseBookingLocation(value) !== null);
 const bookingFields = requestFields.extend({ service_slug: z.string().min(1).max(80), location: bookingLocation.optional() });
 export const bookingInput = bookingFields;
 export const stagedPhoneBooking = z.object({

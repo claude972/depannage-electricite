@@ -129,4 +129,12 @@ if (index !== -1) {
     assert.equal(written.length, 3);
     assert.equal((await store.read(key, quoteDraft))?.rate, 20);
   });
+
+  test('booking drafts retain confirmed location metadata while legacy drafts remain readable', () => {
+    const location = { latitude: 14.6049, longitude: -61.0685, access_details: 'Entrée côté cour' };
+    const current = { ...request, intent: { ...request.intent, payload: { ...request.intent.payload, location } } };
+    assert.deepEqual(requestDraft.parse(current), current);
+    assert.deepEqual(requestDraft.parse(request), request);
+    assert.equal(requestDraft.safeParse({ ...current, intent: { ...current.intent, payload: { ...current.intent.payload, location: { ...location, longitude: null } } } }).success, false);
+  });
 }

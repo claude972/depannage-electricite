@@ -31,7 +31,7 @@ test(`parcours interactif client ↔ artisan (démo) à ${width} px : demande �
     await click(page, "Continuer");
     await page.getByLabel("Adresse d’intervention").fill("8 rue Victor Hugo");
     await page.getByLabel("Code postal").fill("97200");
-    await page.getByLabel("Ville").fill("Fort-de-France");
+    await page.getByLabel(/^(Ville|Commune)$/).fill("Fort-de-France");
     await page.getByLabel("Téléphone de contact (obligatoire)").fill("0696 12 34 56");
     const place = await main(page);
     // Nothing is sent on the address step: no « Enregistrer », the next step is the payment choice.
@@ -173,11 +173,11 @@ test("#new connecté : le choix de règlement est proposé après l’adresse ; 
     await page.getByLabel("Adresse d’intervention").fill("8 rue Victor Hugo");
     await page.getByLabel("Code postal").fill("97200");
     // Revalidation: an empty city blocks the hand-off (native validation), nothing moves forward.
-    await page.getByLabel("Ville").fill("");
+    await page.getByLabel(/^(Ville|Commune)$/).fill("");
     await click(page, "Continuer vers le règlement");
     await page.waitForTimeout(200);
     assert.match(await main(page), /Où faut-il intervenir \?/, "still on the address step");
-    await page.getByLabel("Ville").fill("Fort-de-France");
+    await page.getByLabel(/^(Ville|Commune)$/).fill("Fort-de-France");
     const phone = page.getByLabel("Téléphone de contact (obligatoire)");
     await phone.fill("");
     await click(page, "Continuer vers le règlement");

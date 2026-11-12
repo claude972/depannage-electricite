@@ -9,6 +9,7 @@ import type { BookingLocation } from '../../../../shared/booking-location';
 import { PhoneChallenge } from '@/components/phone-challenge';
 import { OptionalEmailAccount } from '@/components/optional-email-account';
 import { ApiFailure, api, useResource } from '@/lib/api';
+import { locationCapability } from '@/lib/booking-location';
 import { categories, euros, prices } from '@/lib/contracts';
 import { usePublicServices } from '@/lib/public-services';
 import { deviceDrafts } from '@/lib/device-drafts';
@@ -19,7 +20,7 @@ import { useSession } from '@/lib/session';
 import { useWorkspace } from '@/lib/use-workspace';
 import { orderReference } from '../../../../shared/order-reference';
 
-const options = z.object({ payment_methods: z.array(z.object({ id: z.string(), available: z.boolean() })) });
+const options = locationCapability.extend({ payment_methods: z.array(z.object({ id: z.string(), available: z.boolean() })) });
 
 export default function ClientBooking() {
   const auth = useSession();
@@ -251,7 +252,10 @@ function ConfirmBooking({ actor, phone, token, service, addressFirst, initialUrg
     const signal = active.current?.signal;
     if (!request || !range || !version || lock.current || !signal || signal.aborted || (!alreadySending && (!onSite || !eligible))) return;
     if (intent?.reviewRequired && version === intent.version) return;
-    const sending = { ...request, version, range, reviewRequired: false };
+    // Freeze the actual payload before sending, including compatibility with a previous API.
+    const { location, ...details } = request.input;
+    const input = intent?.input ?? { ...details, ...(location && bookingOptions.data?.accepts_location === true ? { location } : {}) };
+    const sending = { ...request, input, version, range, reviewRequired: false };
     lock.current = true;
     setBusy(true); setError(null);
     try {

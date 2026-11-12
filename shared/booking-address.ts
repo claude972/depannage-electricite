@@ -1,6 +1,7 @@
 import type { BookingLocation } from './booking-location';
 
 export type BookingPoint = { latitude: number; longitude: number };
+export type BookingMapTarget = BookingPoint & { revision: number };
 export type BookingAddress = { address: string; postal_code: string; city: string };
 export type BookingAddressCandidate = BookingPoint & BookingAddress & { id: string; label: string };
 

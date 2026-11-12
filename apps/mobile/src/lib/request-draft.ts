@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { requestFields } from './contracts';
-import { bookingLocation } from './phone-booking-draft';
+import { bookingLocation } from './booking-location';
 
 export const requestContact = z.object({
   first_name: z.string().trim().min(1, 'Renseignez votre prénom.').max(60),

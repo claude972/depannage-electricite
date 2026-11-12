@@ -7,6 +7,7 @@ import { Action, BookingProgress, Card, Copy, Field, ReadState, Screen } from '@
 import { BookingLocationField } from '@/components/booking-location-field';
 import type { BookingLocation } from '../../../../shared/booking-location';
 import { ApiFailure, api, useResource } from '@/lib/api';
+import { locationCapability } from '@/lib/booking-location';
 import { categories, category as categorySchema, creation, euros, prices, requestFields, workspace, type Category } from '@/lib/contracts';
 import { requestDraftKey } from '@/lib/draft-store';
 import { requestContact, requestDraft, type RequestIntent } from '@/lib/request-draft';
@@ -30,6 +31,7 @@ export default function RequestForm() {
 function ClientRequest({ actor, token, profile }: { actor: string; token: string; profile: z.infer<typeof workspace>['profile'] }) {
   const router = useRouter();
   const catalogue = useResource('/api/public/indicative-prices', prices);
+  const bookingOptions = useResource('/api/bookings/options', locationCapability);
   const draft = useDeviceDraft(requestDraftKey(actor), requestDraft, { intent: null, confirmedId: null });
   const { type, commune, service, urgence } = useLocalSearchParams<{ type?: string; commune?: string; service?: string; urgence?: string }>();
   const [phone, setPhone] = useState(profile.phone ?? '');
@@ -98,7 +100,7 @@ function ClientRequest({ actor, token, profile }: { actor: string; token: string
         if (!checked.success) { setError(checked.error.issues[0].message); return; }
         current = {
           id: randomUUID(),
-          payload: { ...input.data, ...(location ? { location } : {}), reviewed_estimate_version: version },
+          payload: { ...input.data, ...(location && bookingOptions.data?.accepts_location === true ? { location } : {}), reviewed_estimate_version: version },
           booking: { service_slug: service && type === input.data.category ? service : `demande-${input.data.category}`, contact: checked.data },
           estimate: range,
           reviewRequired: false,

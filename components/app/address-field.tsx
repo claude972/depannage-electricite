@@ -316,6 +316,7 @@ export function AddressField({
   value,
   onChange,
   disabled = false,
+  cityLabel = "Ville",
   error,
   search,
   reverse,
@@ -324,6 +325,7 @@ export function AddressField({
   value: AddressValue;
   onChange(next: AddressValue): void;
   disabled?: boolean;
+  cityLabel?: string;
   error?: string;
   search?: AddressSearch;
   reverse?: AddressReverse;
@@ -491,7 +493,7 @@ export function AddressField({
           />
         </div>
         <div className={styles.field}>
-          <label htmlFor={ids.city}>Ville</label>
+          <label htmlFor={ids.city}>{cityLabel}</label>
           <input
             id={ids.city}
             required

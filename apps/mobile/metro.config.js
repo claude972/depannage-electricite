@@ -11,7 +11,7 @@ config.resolver.nodeModulesPaths = [...(config.resolver.nodeModulesPaths ?? []),
 // Les composants partagés utilisent la même instance de React que l’arbre Expo.
 const resolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, name, platform) => {
-  const origin = context.originModulePath.startsWith(shared + path.sep) && /^(react(?:\/|$)|leaflet(?:\/|$))/.test(name)
+  const origin = context.originModulePath.startsWith(shared + path.sep) && /^(react(?:\/|$)|leaflet(?:\/|$)|zod(?:\/|$))/.test(name)
     ? { ...context, originModulePath: __filename }
     : context;
   return (resolveRequest ?? context.resolveRequest)(origin, name, platform);

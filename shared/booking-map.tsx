@@ -2,8 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { Map } from "leaflet";
 import styles from "./booking-map.module.css";
-import { BOOKING_MAP_CENTER, type BookingPoint } from "./booking-address";
-export default function BookingMap({ target, onMove }: { target: BookingPoint | null; onMove(point: BookingPoint): void }) {
+import { BOOKING_MAP_CENTER, type BookingMapTarget, type BookingPoint } from "./booking-address";
+export default function BookingMap({ target, onMove }: { target: BookingMapTarget | null; onMove(point: BookingPoint): void }) {
   const host = useRef<HTMLDivElement>(null);
   const map = useRef<Map | null>(null);
   const movingToTarget = useRef(false);
@@ -38,11 +38,12 @@ export default function BookingMap({ target, onMove }: { target: BookingPoint | 
     }).catch(() => { if (!disposed) setMessage("La carte n’a pas pu charger. Saisissez l’adresse ci-dessous."); });
     return () => { disposed = true; observer?.disconnect(); map.current?.remove(); map.current = null; };
   }, []);
+  const { latitude, longitude, revision } = target ?? {};
   useEffect(() => {
-    if (!target || !map.current) return;
+    if (latitude === undefined || longitude === undefined || !map.current) return;
     movingToTarget.current = true;
-    try { map.current.setView([target.latitude, target.longitude], 17, { animate: false }); }
+    try { map.current.setView([latitude, longitude], 17, { animate: false }); }
     finally { movingToTarget.current = false; }
-  }, [target]);
+  }, [latitude, longitude, revision]);
   return <><div className={styles.mapFrame}><div ref={host} className={styles.map} role="region" aria-label="Carte du lieu d’intervention. Flèches pour déplacer, plus et moins pour zoomer." /><svg className={styles.pin} aria-hidden="true" viewBox="0 0 32 44"><path d="M16 42C13 36 2 25 2 16a14 14 0 1 1 28 0c0 9-11 20-14 26Z" fill="#2246e5" stroke="white" strokeWidth="2"/><circle cx="16" cy="16" r="5" fill="white"/></svg></div>{message && <p role="status">{message}</p>}</>;
 }

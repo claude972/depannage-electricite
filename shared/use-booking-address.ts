@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { BOOKING_ADDRESS_COPY as copy, EMPTY_BOOKING_LOCATION, bookingAddressFields, bookingLocationForPoint, type BookingAddress, type BookingAddressCandidate, type BookingPoint } from './booking-address';
+import { BOOKING_ADDRESS_COPY as copy, EMPTY_BOOKING_LOCATION, bookingAddressFields, bookingLocationForPoint, type BookingAddress, type BookingAddressCandidate, type BookingMapTarget, type BookingPoint } from './booking-address';
 import type { BookingLocation } from './booking-location';
 
 type Locate = () => Promise<BookingPoint & { accuracy: number | null }>;
@@ -18,7 +18,7 @@ export function useBookingAddress({ value, location, onChange, lookup, locate }:
   const current = location ?? EMPTY_BOOKING_LOCATION;
   const latest = useRef({ value, current, onChange });
   latest.current = { value, current, onChange };
-  const [target, setTarget] = useState<BookingPoint | null>(() => current.latitude !== null && current.longitude !== null ? { latitude: current.latitude, longitude: current.longitude } : null);
+  const [target, setTarget] = useState<BookingMapTarget | null>(() => current.latitude !== null && current.longitude !== null ? { latitude: current.latitude, longitude: current.longitude, revision: 0 } : null);
   const [pendingPoint, setPendingPoint] = useState<BookingPoint | null>(null);
   const [candidate, setCandidate] = useState<BookingAddress | null>(null);
   const [query, setQuery] = useState('');
@@ -95,7 +95,7 @@ export function useBookingAddress({ value, location, onChange, lookup, locate }:
       const { latitude, longitude, accuracy } = await locate();
       if (controller.signal.aborted) return;
       const point = { latitude, longitude };
-      setTarget(point);
+      setTarget(previous => ({ ...point, revision: (previous?.revision ?? 0) + 1 }));
       setPendingPoint(point);
       setBusy('reverse');
       await reverse(point, controller, accuracy);
@@ -140,7 +140,7 @@ export function useBookingAddress({ value, location, onChange, lookup, locate }:
     setResults([]);
     setBusy(null);
     const point = { latitude: result.latitude, longitude: result.longitude };
-    setTarget(point);
+    setTarget(previous => ({ ...point, revision: (previous?.revision ?? 0) + 1 }));
     apply(result, point);
     setPointMessage(copy.filled);
   }

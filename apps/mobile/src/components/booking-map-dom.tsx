@@ -1,10 +1,10 @@
 'use dom';
 import 'leaflet/dist/leaflet.css';
 import BookingMap from '../../../../shared/booking-map';
-import type { BookingPoint } from '../../../../shared/booking-address';
+import type { BookingMapTarget, BookingPoint } from '../../../../shared/booking-address';
 
 export default function BookingMapDom({ target, updatePoint }: {
-  target: BookingPoint | null;
+  target: BookingMapTarget | null;
   updatePoint(point: BookingPoint): Promise<void>;
   dom?: import('expo/dom').DOMProps;
 }) {
