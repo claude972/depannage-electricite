@@ -14,10 +14,11 @@ import { PAYMENT_HEADERS } from "@/lib/features/payments/checkout";
 export const runtime = "nodejs";
 export async function POST(request: Request) {
   try {
-    const stripe = stripeClient();
-    const secret = env.STRIPE_WEBHOOK_SECRET;
-    if (!secret)
+    const connected = new URL(request.url).searchParams.get("source") === "connect";
+    const secret = connected ? env.STRIPE_CONNECT_WEBHOOK_SECRET : env.STRIPE_WEBHOOK_SECRET;
+    if (!secret || (connected && secret === env.STRIPE_WEBHOOK_SECRET))
       throw new ApiError(503, "Le webhook de paiement n’est pas configuré.");
+    const stripe = stripeClient();
     const signature = request.headers.get("stripe-signature");
     if (!signature) throw new ApiError(400, "Signature de paiement absente.");
     if (Number(request.headers.get("content-length") || 0) > 1048576)
@@ -32,13 +33,19 @@ export async function POST(request: Request) {
     } catch {
       throw new ApiError(400, "Signature de paiement invalide.");
     }
-    const live=/^(sk|rk)_live_/.test(env.STRIPE_SECRET_KEY??"");
-    if(event.livemode!==live)throw new ApiError(400,"Contexte du paiement invalide.");
-    if(financialEventType(event.type)){
+    const live = /^(sk|rk)_live_/.test(env.STRIPE_SECRET_KEY ?? "");
+    const financial = financialEventType(event.type);
+    const validContext = connected
+      ? /^acct_[A-Za-z0-9]{1,200}$/.test(event.account ?? "")
+        && (event.context == null || event.context === event.account)
+        && financial
+      : event.account == null && event.context == null;
+    if (event.livemode !== live || !validContext)
+      throw new ApiError(400, "Contexte du paiement invalide.");
+    if (financial) {
       await dispatchFinancialEvent(event,body,adminClient(),live);
       return Response.json({received:true},{headers:PAYMENT_HEADERS});
     }
-    if(event.account)throw new ApiError(400,"Contexte du paiement invalide.");
     if(["refund.created","refund.updated","refund.failed"].includes(event.type)){
       await dispatchRefundEvent(event,stripe,adminClient(),live);
       return Response.json({received:true},{headers:PAYMENT_HEADERS});

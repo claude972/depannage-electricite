@@ -17,7 +17,9 @@ export async function settlementRoute(request:Request,capture:boolean){
   let status=await read();
   if(!settlementConfigured()){
    if(capture&&status.status!=="paid")throw new ApiError(503,"Le règlement par empreinte n’est pas encore configuré.");
-   const{reason:_reason,...rest}=status;return Response.json({...rest,available:false,reason:"configuration_required"},{headers});
+   const{reason,...rest}=status;
+   const disabledReason=status.available?"configuration_required":reason;
+   return Response.json({...rest,available:false,...(disabledReason?{reason:disabledReason}:{})},{headers});
   }
   if(capture&&status.status!=="paid"){
    if(!status.available)throw new ApiError(409,"Le dossier, ses avenants ou son empreinte ne permettent pas ce règlement.");

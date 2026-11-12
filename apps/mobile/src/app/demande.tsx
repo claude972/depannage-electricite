@@ -198,6 +198,7 @@ function ClientRequest({ actor, token, profile }: { actor: string; token: string
       {locationBlocked && !bookingOptions.loading && !bookingOptions.error && <Action secondary label="Actualiser les options" onPress={bookingOptions.reload} />}
       {(!intent || intent.reviewRequired) && <ReadState loading={catalogue.loading} error={catalogue.error} onRetry={catalogue.reload} />}
       {range && <Copy>{euros(range.min_cents)} à {euros(range.max_cents)}. Le devis fixe le prix final.</Copy>}
+      <Copy>Règlement après l’intervention via DomDépannage. Le paiement en ligne apparaît dans votre suivi lorsqu’il est disponible.</Copy>
       {draft.error && <ReadState loading={false} error={draft.error} onRetry={draft.retry} />}
       {intent && !intent.reviewRequired && <Copy kind="muted">L’envoi reste à confirmer. Le prochain essai réutilise la même référence.</Copy>}
       {intent?.reviewRequired && <>

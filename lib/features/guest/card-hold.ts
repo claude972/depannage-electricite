@@ -1,18 +1,20 @@
 import { env } from "node:process";
 import type Stripe from "stripe";
 import { ApiError, adminClient, dbError } from "@/lib/supabase/server";
-import { appUrl, stripeClient } from "@/lib/supabase/stripe";
+import { stripeClient } from "@/lib/supabase/stripe";
 import { cardHoldConfigured } from "./payment-options";
+import { paymentOrigin, stripePaymentMode } from "../payments/configuration";
 
 type Booking = { actor_id: string; request_id: string; method: string; expected_max_cents: number; status: string; intervention_id: string | null; stripe_session_id: string | null; stripe_payment_intent_id: string | null; created_at: string };
 const unavailable = () => new ApiError(503, "L’empreinte bancaire est momentanément indisponible. Aucun paiement n’est confirmé.");
 const conflict = () => new ApiError(409, "Cette empreinte ne permet pas de confirmer la demande. Réessayez après annulation.");
 const sessionId = /^cs_(?:test_|live_)?[A-Za-z0-9]{1,200}$/;
 const intentId = /^pi_[A-Za-z0-9]{1,200}$/;
-/** Configuration is checked BEFORE prepare: no nonce/quota/business mutation without it. */
-export function cardHoldContext() {
-  if (!cardHoldConfigured(env)) throw unavailable();
-  return { stripe: stripeClient(), origin: appUrl(), live: /^(sk|rk)_live_/.test(env.STRIPE_SECRET_KEY ?? "") };
+/** Existing sessions can be checked or released even when new authorizations are disabled. */
+export function cardHoldContext(operation: "existing" | "create" = "existing") {
+  const mode = stripePaymentMode(env);
+  if (!mode || (operation === "create" && !cardHoldConfigured(env))) throw unavailable();
+  return { stripe: stripeClient(), origin: paymentOrigin(env.NEXT_PUBLIC_APP_URL), live: mode === "live" };
 }
 type Context = ReturnType<typeof cardHoldContext>;
 async function booking(actor: string, request: string) {
@@ -52,6 +54,7 @@ async function record(admin: ReturnType<typeof adminClient>, b: Booking, session
 }
 async function ensureSession(b: Booking, context: Context) {
   if (b.stripe_session_id) return sessionProof(await context.stripe.checkout.sessions.retrieve(b.stripe_session_id), b, context);
+  if (!context.origin) throw unavailable();
   // Stripe idempotency records may expire after 24h. Never create an ambiguous replacement then.
   if (Date.now() - Date.parse(b.created_at) > 23 * 3600000 || Date.parse(b.created_at) > Date.now() + 30000) throw unavailable();
   const tags = { booking_actor: b.actor_id, booking_request: b.request_id, booking_method: "card_hold" };

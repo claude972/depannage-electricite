@@ -2,10 +2,11 @@ import { env } from "node:process";
 import type Stripe from "stripe";
 import { ApiError, adminClient, dbError } from "@/lib/supabase/server";
 import { stripeClient, commissionBps } from "@/lib/supabase/stripe";
+import { guestSettlementConfigured } from "../payments/configuration";
 export type Settlement = { id:string; intervention_id:string; actor_id:string; quote_id:string; artisan_id:string; request_id:string; intent_id:string; session_id:string; authorized_max:number; amount_cents:number; account_id:string; fee_bps:number|null; transfer_cents:number|null; status:string; charge_id:string|null; transfer_id:string|null; created_at:string; transfer_started_at:string|null; retired_at?:string|null; generation?:number };
 const unknown=()=>new ApiError(503,"Le statut du règlement doit être vérifié. Réessayez avec la même demande.");
 const conflict=()=>new ApiError(409,"L’empreinte ou le règlement ne correspond plus au montant accepté. Aucun nouveau paiement n’est lancé.");
-export function settlementConfigured(){const key=env.STRIPE_SECRET_KEY??"";const fee=env.PLATFORM_FEE_BPS;const feeValue=Number(fee);return !!fee&&Number.isInteger(feeValue)&&feeValue>=0&&feeValue<=10000&&env.GUEST_SETTLEMENT_ENABLED==="true"&&(/^(sk|rk)_test_/.test(key)||(/^(sk|rk)_live_/.test(key)&&env.STRIPE_LIVE_PAYMENTS_ENABLED==="true"&&env.GUEST_SETTLEMENT_LIVE_ENABLED==="true"));}
+export function settlementConfigured() { return guestSettlementConfigured(env); }
 export function settlementProvider(){if(!settlementConfigured())throw unknown();return{stripe:stripeClient(),fee:commissionBps(),live:/^(sk|rk)_live_/.test(env.STRIPE_SECRET_KEY??"")};}
 type Provider=ReturnType<typeof settlementProvider>;
 const idOf=(v:unknown)=>typeof v==="string"?v:v&&typeof v==="object"&&"id"in v?String(v.id):null;

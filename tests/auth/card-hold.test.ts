@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { loadModule, ApiError } from "../documents/harness";
 const ACTOR="10000000-0000-4000-8000-000000000001", KEY="20000000-0000-4000-8000-000000000002";
 const tags={booking_actor:ACTOR,booking_request:KEY,booking_method:"card_hold"};
-function fixture(options:{row?:Record<string,any>;session?:Record<string,any>;intent?:Record<string,any>;missing?:boolean;emptyKey?:boolean;liveKey?:boolean;liveFlag?:boolean;transport?:boolean;recordError?:boolean}={}){
+function fixture(options:{row?:Record<string,any>;session?:Record<string,any>;intent?:Record<string,any>;missing?:boolean;emptyKey?:boolean;liveKey?:boolean;liveFlag?:boolean;transport?:boolean;recordError?:boolean;withoutOrigin?:boolean;capture?:boolean}={}){
  const calls:{op:string;args:any[]}[]=[];
  const row={actor_id:ACTOR,request_id:KEY,method:"card_hold",expected_max_cents:18000,status:"prepared",intervention_id:null,stripe_session_id:null,stripe_payment_intent_id:null,created_at:new Date().toISOString(),...options.row};
  let s:any={id:"cs_test_QAhold",mode:"payment",livemode:false,client_reference_id:KEY,metadata:tags,currency:"eur",amount_total:18000,status:"open",url:"https://checkout.stripe.com/c/pay/QAopaque",payment_intent:null,...options.session};
@@ -11,12 +11,29 @@ function fixture(options:{row?:Record<string,any>;session?:Record<string,any>;in
  const save=(op:string,...args:any[])=>{calls.push({op,args});if(options.transport)throw Error("PRIVATE_PROVIDER_ERROR")};
  const stripe={checkout:{sessions:{create:async(...args:any[])=>{save("create",...args);return s},retrieve:async(...args:any[])=>{save("retrieveSession",...args);return s},expire:async(...args:any[])=>{save("expire",...args);s={...s,status:"expired"};return s}}},paymentIntents:{retrieve:async(...args:any[])=>{save("retrieveIntent",...args);return pi},cancel:async(...args:any[])=>{save("cancelIntent",...args);pi={...pi,status:"canceled",amount_capturable:0};return pi}}};
  const admin={from:(table:string)=>{const query:any={select:(projection:string)=>{save("select",table,projection);return query},eq:(key:string,value:string)=>{save("eq",key,value);return query},maybeSingle:async()=>({data:options.missing?null:row,error:null})};return query},rpc:async(...args:any[])=>{save("record",...args);return{error:options.recordError?{code:"P0001"}:null}}};
- const module=loadModule("lib/features/guest/card-hold.ts",{"node:process":{env:{STRIPE_SECRET_KEY:options.emptyKey?undefined:options.liveKey?"sk_live_FAKE":"sk_test_FAKE",STRIPE_LIVE_PAYMENTS_ENABLED:options.liveFlag?"true":undefined}},"@/lib/supabase/server":{ApiError,adminClient:()=>admin,dbError:(e:any)=>{if(e)throw new ApiError(409,"Conflict")}},"@/lib/supabase/stripe":{stripeClient:()=>stripe,appUrl:()=>"https://app.example.test"}});
- const context=(module.cardHoldContext as()=>any);
+ const module=loadModule("lib/features/guest/card-hold.ts",{"node:process":{env:{STRIPE_SECRET_KEY:options.emptyKey?undefined:options.liveKey?"sk_live_FAKE":"sk_test_FAKE",STRIPE_LIVE_PAYMENTS_ENABLED:options.liveFlag?"true":undefined,NEXT_PUBLIC_APP_URL:options.withoutOrigin?undefined:"https://app.example.test",...(options.capture?{GUEST_SETTLEMENT_ENABLED:"true",PLATFORM_FEE_BPS:"2000"}:{})}},"@/lib/supabase/server":{ApiError,adminClient:()=>admin,dbError:(e:any)=>{if(e)throw new ApiError(409,"Conflict")}},"@/lib/supabase/stripe":{stripeClient:()=>stripe}});
+ const context=(module.cardHoldContext as(operation?:"existing"|"create")=>any);
  const invoke=(op:string)=>(module[op] as(...args:any[])=>Promise<any>)(ACTOR,KEY,context());
  return{calls,row,context,invoke};
 }
 const refused=async(f:ReturnType<typeof fixture>,op:string,status=503)=>{await assert.rejects(f.invoke(op),(e:any)=>e.status===status)};
+test("capture configuration only gates new holds, with linked authorizations still verifiable and releasable",async()=>{
+ const row={stripe_session_id:"cs_test_QAhold",stripe_payment_intent_id:"pi_QAhold"};
+ const session={status:"complete",payment_intent:"pi_QAhold"};
+ const read=fixture({row,session,withoutOrigin:true});
+ assert.throws(()=>read.context("create"),(e:any)=>e.status===503);
+ assert.equal(read.calls.length,0);
+ await read.invoke("authorizeCardHold");
+ const release=fixture({row:{...row,status:"cancelling"},session,withoutOrigin:true});
+ await release.invoke("releaseCardHold");
+ assert.equal(release.calls.some(c=>c.op==="cancelIntent"),true);
+ assert.equal(release.calls.some(c=>c.op==="create"),false);
+ const unknown=fixture({row:{status:"cancelling"},withoutOrigin:true});
+ await refused(unknown,"releaseCardHold");
+ assert.equal(unknown.calls.some(c=>c.op==="create"||c.op==="record"),false);
+ assert.throws(()=>fixture({capture:true,withoutOrigin:true}).context("create"),(e:any)=>e.status===503);
+ assert.equal(fixture({capture:true}).context("create").origin,"https://app.example.test");
+});
 test("manual hold: idempotent Stripe request, server max, fixed same-origin returns, no capture or job",async()=>{const f=fixture();assert.equal((await f.invoke("openCardHold")).status,"authorization_required");const c=f.calls.find(c=>c.op==="create")!;assert.equal(c.args[0].payment_intent_data.capture_method,"manual");assert.deepEqual(JSON.parse(JSON.stringify(c.args[0].allowed_payment_method_types)),["card"]);assert.equal(c.args[0].line_items[0].price_data.unit_amount,18000);assert.equal(c.args[0].line_items[0].price_data.currency,"eur");assert.equal(c.args[1].idempotencyKey,`booking-hold:${ACTOR}:${KEY}`);assert.equal(new URL(c.args[0].success_url).origin,"https://app.example.test");assert.equal(new URL(c.args[0].success_url).searchParams.get("booking_request_id"),KEY);assert.equal(f.calls.find(c=>c.op==="record")!.args[1].p_action,"session");assert.ok(f.calls.some(c=>c.op==="eq"&&c.args[0]==="actor_id"&&c.args[1]===ACTOR));assert.equal(f.calls.some(c=>/capture|submit/.test(c.op)),false);assert.equal((await fixture({session:{url:"https://checkout.stripe.com/c/pay/QA#opaque-provider-fragment"}}).invoke("openCardHold")).status,"authorization_required")});
 test("missing config/live disallowed fails before any private query",()=>{for(const options of [{emptyKey:true},{liveKey:true}]){const f=fixture(options);assert.throws(f.context,(e:any)=>e.status===503);assert.equal(f.calls.length,0)}assert.doesNotThrow(fixture({liveKey:true,liveFlag:true}).context)});
 test("scoped private read refuses foreign/malformed/missing, old unresolved creation never duplicates after idempotency expiry",async()=>{for(const row of [{actor_id:KEY},{request_id:ACTOR},{method:"on_site"},{expected_max_cents:-1},{status:"unknown"},{created_at:"bad"},{stripe_session_id:"bad"},{created_at:new Date(Date.now()-24*3600000).toISOString()}]){const f=fixture({row});await refused(f,"openCardHold");assert.equal(f.calls.some(c=>c.op==="create"),false)}await refused(fixture({missing:true}),"openCardHold",404)});

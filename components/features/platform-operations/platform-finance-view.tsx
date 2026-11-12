@@ -1,6 +1,6 @@
 "use client";
 // Prepared finance (contract A1/A2): ledger, reconciliation, invoices/credit notes, refund requests, disputes, settings.
-// No control here moves money; "approuvée" never means "remboursée".
+// Approving a request and executing its refund are separate actions.
 import { useCallback, useState, type ReactNode } from "react";
 import type { ContractState, Dispute, DisputeOutcome, FinanceConfig, FinanceReport, Invoice, InvoiceReadiness, LedgerEntry, Page, PlatformAccess, PlatformClient, PlatformViewScope, RefundRequest } from "../../../lib/features/platform-operations/types";
 import { COMMISSION_NOT_CONFIGURED, REFUND_EXECUTION_MESSAGE } from "../../../lib/features/platform-operations/config";
@@ -130,10 +130,11 @@ function Inner({ scope, client, context, demo, onNavigate }: PlatformFinanceView
   if (me.loading && !me.data) return <Loading label="Chargement des droits…" />;
   if (me.error && !me.data) return <ErrorBox message={me.error} onRetry={me.reload} />;
   if (!me.data?.capabilities.finance) return <div className="forbidden"><strong>Cet espace nécessite le scope finance.</strong><p>Demandez l’habilitation à un super administrateur.</p></div>;
-  const ctx: Ctx = { client, demo, canWrite: scope.authority.canWrite && !demo && (me.data.super_admin || me.data.scopes.includes("finance_write")), superAdmin: !demo && scope.authority.canWrite && me.data.super_admin, notify, busy, act, scopeKey: scopeKey(scope), rendering: me.data.capabilities.invoice_rendering === true, refundExecution: !demo && me.data.capabilities.refund_execution === true, userId: scope.userId, onNavigate };
+  const canWrite = scope.authority.canWrite && !demo && (me.data.super_admin || me.data.scopes.includes("finance_write"));
+  const ctx: Ctx = { client, demo, canWrite, superAdmin: !demo && scope.authority.canWrite && me.data.super_admin, notify, busy, act, scopeKey: scopeKey(scope), rendering: me.data.capabilities.invoice_rendering === true, refundExecution: canWrite && me.data.capabilities.refund_execution === true, userId: scope.userId, onNavigate };
   return (
     <div className={styles.view} data-module="platform-operations" data-platform-view="finance">
-      <div className={styles.head}><div><h2>Finance plateforme</h2><p>Ledger en centimes, rapprochement avec les paiements confirmés et suivi documentaire. Aucune action réelle auprès du fournisseur de paiement n’est disponible dans cette version.</p></div></div>
+      <div className={styles.head}><div><h2>Finance plateforme</h2><p>Consultez les paiements confirmés et les documents associés. {ctx.refundExecution ? "Les demandes approuvées et éligibles peuvent être remboursées via Stripe." : "L’exécution des remboursements est indisponible dans cet espace."}</p></div></div>
       {!scope.authority.canWrite && <ReadOnly reason={scope.authority.reason} />}
       {scope.authority.canWrite && !ctx.canWrite && !demo && <ReadOnly reason="votre scope finance est en lecture seule." />}
       {demo && <p className={styles.alert}>{DEMO_NOTE}</p>}
