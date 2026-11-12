@@ -316,6 +316,8 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
         apply: (ws) => {
           const profileOfWs = ws.profile!; // validated by createWorkspaceReader
           userId.current = profileOfWs.id;
+          // Login resolves its protected destination before React renders the new workspace.
+          roleRef.current = profileOfWs.role;
           setData({ ...EMPTY_WORKSPACE, ...ws });
           setRole(profileOfWs.role);
           setMode("live");
