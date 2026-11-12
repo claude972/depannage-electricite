@@ -391,6 +391,7 @@ const APP = `
 import { useState, createElement as h } from "react";
 import { createRoot } from "react-dom/client";
 import { AddressField } from "./components/app/address-field";
+import { useBookingAddress } from "./shared/use-booking-address";
 const cand = (address, postal_code, city) => ({ id: address, label: address, address, postal_code, city, latitude: 14.6, longitude: -61.07 });
 window.searches = [];
 // Delayed fake search: resolved by the test through window.reply(index, candidates).
@@ -403,7 +404,27 @@ function App() {
   window.value = value;
   return h("div", null, h(AddressField, { value, onChange: setValue, search }), h("pre", { id: "value" }, JSON.stringify(value)));
 }
-createRoot(document.getElementById("app")).render(h(App));
+const reverseRequests = [];
+window.reverseRequests = reverseRequests;
+const lookup = {
+  search: async () => ({ candidates: [] }),
+  reverse: (_point, signal) => new Promise(resolve => reverseRequests.push({ resolve, signal })),
+};
+function GpsForm() {
+  const [value, setValue] = useState({ address: "", postal_code: "", city: "" });
+  const [location, setLocation] = useState({ latitude: null, longitude: null, access_details: "Entrée côté cour" });
+  const state = useBookingAddress({ value, location, lookup,
+    locate: async () => ({ latitude: 14.6, longitude: -61.07, accuracy: 8 }),
+    onChange: (next, point) => { setValue(next); setLocation(point); },
+  });
+  return h("div", null,
+    h("button", { onClick: state.usePosition }, "Ma position"),
+    ...Object.entries(value).map(([key, text]) => h("input", { key, "aria-label": key, value: text,
+      onChange: event => state.edit({ ...value, [key]: event.target.value }) })),
+    h("pre", { id: "location" }, JSON.stringify(location)),
+  );
+}
+createRoot(document.getElementById("app")).render(h(window.location.hash === "#gps" ? GpsForm : App));
 `;
 // CSS modules → class-name proxy (no stylesheet needed for behaviour).
 const cssStub: Plugin = {
@@ -416,7 +437,7 @@ const cssStub: Plugin = {
 
 type W = Window & { searches: { q: string }[]; reply(i: number, list: [string, string, string][]): void; aborted(i: number): boolean; setValue(v: unknown): void; value: { address: string; postal_code: string; city: string } };
 
-test("<AddressField> in real React: external draft replacement drops A's late reply; own typing echo does not reset", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
+test("<AddressField> in real React: external draft replacement drops A's late reply; own typing echo does not reset", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async t => {
   const bundle = await build({ absWorkingDir: ROOT, stdin: { contents: APP, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, platform: "browser", format: "iife", plugins: [cssStub], define: { "process.env.NODE_ENV": '"development"' } });
   const js = bundle.outputFiles[0].text;
   const server = createServer((_rq, rs) => {
@@ -471,6 +492,28 @@ test("<AddressField> in real React: external draft replacement drops A's late re
     await page.waitForFunction(() => (window as unknown as W).value.city === "Fort-de-France");
     assert.deepEqual(await page.evaluate(() => (window as unknown as W).value), { address: "8 rue C", postal_code: "97200", city: "Fort-de-France" });
     assert.deepEqual(errors, []);
+    await t.test("Ma position fills the three fields and keeps manual edits during a later lookup", async () => {
+      type GpsWindow = Window & { reverseRequests: { signal: AbortSignal; resolve(address: AddressValue): void }[] };
+      await page.goto(`http://127.0.0.1:${port}/#gps`);
+      await page.reload();
+      const address = page.getByLabel("address", { exact: true });
+      const locate = page.getByRole("button", { name: "Ma position" });
+      await locate.click();
+      await page.waitForFunction(() => (window as unknown as GpsWindow).reverseRequests.length === 1);
+      const found = { address: "4 rue de la Recette", postal_code: "97200", city: "Fort-de-France" };
+      await page.evaluate((reply: AddressValue) => (window as unknown as GpsWindow).reverseRequests[0].resolve(reply), found);
+      await page.waitForFunction((expected: string) => (document.querySelector('[aria-label="address"]') as HTMLInputElement).value === expected, found.address);
+      assert.equal(await page.getByLabel("postal_code", { exact: true }).inputValue(), found.postal_code);
+      assert.equal(await page.getByLabel("city", { exact: true }).inputValue(), found.city);
+      assert.deepEqual(JSON.parse(await page.locator("#location").innerText()), { latitude: 14.6, longitude: -61.07, access_details: "Entrée côté cour" });
+      await locate.click();
+      await page.waitForFunction(() => (window as unknown as GpsWindow).reverseRequests.length === 2);
+      await address.fill("25 rue saisie à la main");
+      assert.equal(await page.evaluate(() => (window as unknown as GpsWindow).reverseRequests[1].signal.aborted), true);
+      await page.evaluate((reply: AddressValue) => (window as unknown as GpsWindow).reverseRequests[1].resolve(reply), found);
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+      assert.equal(await address.inputValue(), "25 rue saisie à la main");
+    });
     await page.close();
   } finally {
     await browser.close();
