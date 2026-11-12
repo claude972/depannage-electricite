@@ -222,11 +222,11 @@ test("parcours brouillon : home → décrire (catégorie pré-remplie) → broui
   // Vue « new » : le formulaire reçoit la catégorie choisie et n’enregistre qu’un brouillon local.
   const form = fakeSession({ view: "new", categoryId: "socket" });
   renderToString(createElement(site.PublicSite as never, { session: form.session } as never));
-  const props = captured.form as { initialCategory: string; mode: string; onSubmit: (v: unknown) => Promise<void> };
+  const props = captured.form as { initialCategory: string; mode: string; onSubmit: (v: unknown, photos: File[]) => Promise<void> };
   assert.equal(props.initialCategory, "socket");
   assert.equal(props.mode, "public");
-  await props.onSubmit({ category: "socket", description: "Prise sans courant" });
-  assert.deepEqual(form.calls, ['saveDraft({"category":"socket","description":"Prise sans courant"})']);
+  await props.onSubmit({ category: "socket", description: "" }, []);
+  assert.deepEqual(form.calls, ['saveDraft({"category":"socket","description":""},[])']);
   // Vue « auth » avec brouillon : reprise annoncée, aucune autre commande.
   const auth = fakeSession({ view: "auth", pendingDraft: { category: "socket" } });
   const html = renderToString(createElement(site.PublicSite as never, { session: auth.session } as never));

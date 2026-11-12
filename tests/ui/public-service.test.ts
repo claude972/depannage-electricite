@@ -17,7 +17,13 @@ import type * as Catalog from "../../components/role/public-service-catalog";
 const NOT_FOUND = "NEXT_NOT_FOUND_TEST";
 const graph = () => {
   const tp = loadModule("components/app/theme-provider.tsx");
-  const overrides = { "@/components/app/theme-provider": tp, "next/navigation": { notFound: () => { throw new Error(NOT_FOUND); } } };
+  const overrides = {
+    "@/components/app/theme-provider": tp,
+    "next/navigation": {
+      notFound: () => { throw new Error(NOT_FOUND); },
+      useRouter: () => ({ push: () => assert.fail("SSR must not navigate") }),
+    },
+  };
   return {
     tp,
     page: loadModule("app/prestations/[slug]/page.tsx", overrides) as Record<string, any>,

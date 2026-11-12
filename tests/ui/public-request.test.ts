@@ -91,16 +91,26 @@ test("new (SSR réel, étape 1) : chrome thémé + habillage opt-in autour du Re
   for (const cls of ["form-page", "back-link", "form-heading", "stepper", "panel request-form", "category-grid", "radio-dot", "field", "inline-note", "form-actions", "button primary"]) assert.match(html, new RegExp(`class="${cls}`), cls);
   // Pré-remplissage réel : la catégorie de la session est sélectionnée.
   assert.match(html, /class="selected"[^>]*>(?:(?!<\/button>).)*Prise ou interrupteur/s);
-  assert.match(html, /<textarea[^>]*required=""[^>]*minLength="15"[^>]*maxLength="2000"/);
-  assert.match(html, /accept="image\/jpeg,image\/png,image\/webp"/);
-  assert.match(html, /Les photos ne sont pas conservées avec le brouillon/);
+  const textarea = html.match(/<textarea[^>]*>/)?.[0] ?? "";
+  assert.match(html, /Décrivez la panne \(facultatif\)/);
+  assert.match(textarea, /maxLength="2000"/);
+  assert.doesNotMatch(textarea, /required|minLength/);
+  const file = html.match(/<input[^>]*type="file"[^>]*>/)?.[0] ?? "";
+  assert.match(html, /Ajouter des photos \(facultatif\)/);
+  assert.match(file, /accept="image\/jpeg,image\/png,image\/webp"/);
+  assert.doesNotMatch(file, /required/);
+  assert.match(html, /Gardez cet onglet ouvert/);
   assert.doesNotMatch(html, /class="public-main/); // ancien shell absent
   assert.deepEqual(calls, []);
 });
 
-test("new : props du RequestForm strictement inchangées, retour = session.go(\"home\")", async () => {
+test("new : props du RequestForm et transmission des photos, retour = session.go(\"home\")", async () => {
   const draft = { category: "panel", description: "Disjoncteur qui saute", address: "1 rue A", postal_code: "97200", city: "FdF", urgency: "scheduled" };
-  const { captured, calls } = spySite({ view: "new", categoryId: "panel", pendingDraft: draft, busy: true });
+  const submissions: { values: unknown; photos: File[] }[] = [];
+  const { captured, calls } = spySite({
+    view: "new", categoryId: "panel", pendingDraft: draft, busy: true,
+    saveDraft: (values: unknown, photos: File[]) => submissions.push({ values, photos }),
+  });
   const f = captured.form;
   assert.equal(f.initialCategory, "panel");
   assert.deepEqual(JSON.parse(JSON.stringify(f.initialValues)), draft);
@@ -109,8 +119,12 @@ test("new : props du RequestForm strictement inchangées, retour = session.go(\"
   assert.equal(f.busy, true);
   f.onBack();
   f.onDemo();
-  await f.onSubmit(draft, []);
-  assert.deepEqual(calls, ["go(home)", "startDemo(client,new)", `saveDraft(${JSON.stringify(draft)})`]);
+  const photo = new File(["fixture"], "panne.png", { type: "image/png" });
+  await f.onSubmit(draft, [photo]);
+  assert.equal(submissions.length, 1);
+  assert.equal(submissions[0].values, draft);
+  assert.equal(submissions[0].photos[0], photo);
+  assert.deepEqual(calls, ["go(home)", "startDemo(client,new)"]);
   // Chrome : vue courante, accueil par la session (jamais window.scrollTo), callbacks réels.
   const c = captured.chrome;
   assert.equal(c.current, "new");
@@ -225,7 +239,7 @@ test("parcours brouillon sans inscription automatique : home → new (catégorie
   const form = spySite({ view: "new", categoryId: "socket" });
   assert.equal(form.captured.form.initialCategory, "socket");
   await form.captured.form.onSubmit(draft, []);
-  assert.deepEqual(form.calls, [`saveDraft(${JSON.stringify(draft)})`]); // aucun signUp / signIn
+  assert.deepEqual(form.calls, [`saveDraft(${JSON.stringify(draft)},[])`]); // aucun signUp / signIn
   // saveDraft (session réelle) bascule en signup : la vue auth s’affiche sans rien soumettre.
   const auth = spySite({ view: "auth", authMode: "signup", pendingDraft: draft });
   assert.match(auth.html, /Votre demande est conservée dans cet onglet : vous la relirez et confirmerez son envoi après connexion\./);
