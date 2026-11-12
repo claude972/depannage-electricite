@@ -1,0 +1,68 @@
+# Audit de lancement DomDépannage · 11 novembre 2026
+
+## Verdict
+
+**Ouverture commerciale à reporter.** La preview permet une recette interne avec comptes de test. Le parcours d’un nouveau client dans l’app, le règlement de bout en bout sur le candidat et la reprise après incident restent des conditions de lancement. Les données et opérations examinées sont limitées à la recette et aux contrôles publics.
+
+| Version examinée | Référence vérifiée |
+| --- | --- |
+| Code et documentation | Branche `feat/pwa-autonomie-2026-11-11` à `46b0865b`. |
+| Web/PWA de recette | Déploiement Vercel READY, commit applicatif `d5578a2d`. |
+| iPhone et Android | Builds internes 14 du même commit. Le profil EAS pointe cependant vers une API de recette antérieure, commit `d59fc8ef`. |
+| Site public actuel | Déploiement de production `56ea1669`. Accueil HTTP 200, options publiques HTTP 200, espace connecté HTTP 401 en anonyme. Ce contrôle ne valide pas l’API avec un compte connecté. |
+
+Deux revues ont travaillé en parallèle. Astra a audité les parcours, le serveur et l’exploitation. Le contre-audit Codex a relu les parcours et les contrats, puis j’ai recoupé les résultats avec les réponses des deux API, les tests et les fichiers cités. Claude Fable 5.2 a été demandé par son identifiant officiel. Claude Code a refusé de démarrer, avec une session OAuth expirée et aucun compte connecté. Aucun constat du rapport ne lui est attribué. [Identifiant Claude Fable 5.2](https://platform.claude.com/docs/en/models/fable-5-2/overview)
+
+## Écarts vérifiés et conditions ouvertes
+
+P0 bloque le lancement commercial concerné. P1 doit être réglé avant d’ouvrir le parcours correspondant. P2 peut rester dans un pilote interne avec un périmètre explicite. « Code » désigne un comportement constaté dans les sources. « Preuve ouverte » désigne une validation qui reste à obtenir.
+
+| ID | Priorité | Constat et conséquence | Preuve |
+| --- | --- | --- | --- |
+| L01 | P0 | Un nouveau client natif non connecté arrive à la vérification par SMS, alors que son API annonce le SMS indisponible. Le brouillon n’offre aucune reprise e-mail à cette étape. L’inscription native séparée ne demande pas le téléphone de contact comme l’inscription Web. | GET mobile, HTTP 200 avec `phone_auth.available=false`. `apps/mobile/src/app/demande-client.tsx:131`, `apps/mobile/src/components/phone-challenge.tsx:69`, `apps/mobile/src/app/inscription.tsx:11`, `lib/features/auth/signup.ts:13`. |
+| L02 | P0 | Le build mobile et le Web exécutent deux contrats d’API. L’app affiche le repère et le complément d’accès, puis peut les omettre à l’envoi quand l’ancienne API ne déclare pas la capacité. Le retour de confirmation e-mail, les pages publiques natives et les droits doivent être qualifiés sur l’API commune. | GET des deux environnements. `accepts_location:true` côté Web et champ absent côté mobile. `apps/mobile/eas.json:31`, `apps/mobile/src/app/demande.tsx:108`, `apps/mobile/src/app/demande-client.tsx:261`. |
+| L03 | P1 | Le Web enregistre le repère et le complément. Le dossier de l’électricien attribué n’expose pas ces informations. | Table à lecture propriétaire, absence de projection dans le dossier. `supabase/migrations/20261111120000_booking_location.sql:14`, `RAPPORT.md:59`. |
+| L04 | P0 payant | Une configuration Stripe partielle peut afficher et préparer une empreinte, puis refuser sa capture. Le Checkout différé exclut les dossiers avec empreinte. Dans l’app, le bouton de règlement est limité à Stripe TEST et la demande connectée fixe le paiement différé. | Cas de configuration factice reproduit par le contre-audit. `lib/features/guest/payment-options.ts:5`, `lib/features/guest/card-hold.ts:12`, `lib/features/guest/settlement-provider.ts:8`, `supabase/migrations/20261107173501_delegated_payer.sql:140`, `apps/mobile/src/app/dossier/[id].tsx:61`, `apps/mobile/src/app/demande.tsx:127`. |
+| L05 | P0 payant | L’encaissement et les virements Stripe/Connect ne sont pas qualifiés sur ce couple de versions. Les deux API annoncent l’empreinte et le Checkout TEST indisponibles lors du contrôle. Le guide Stripe ne prescrit que deux événements alors que le code traite aussi les échecs, remboursements, transferts et litiges. | GET options des deux API. `docs/SETUP.md:61`, `app/api/payments/webhook/route.ts:37`, `lib/payment-events.ts:27`, `lib/features/stripe-reconciliation/contract.ts:5`. La configuration effective du webhook fournisseur reste à lire. |
+| L06 | P0 données réelles | Restauration de la base, de l’authentification et des fichiers privés, rollback de l’application avec schéma compatible, alertes et astreinte opérationnelle restent à démontrer. | `docs/SETUP.md:71`, `docs/PLAN_LIVRAISON_INTEGRALE.md:67`, `docs/RESTE_A_LIVRER_ACTUEL.md:25`. Déploiement précédent identifié. Aucune restauration ou alerte déclenchée pendant l’audit. |
+| L07 | P0 public | Le profil exploitant publié est vide sur les deux API de recette. Les tarifs viennent du barème de base et la publication y est annoncée indisponible. L’identité, le contact, les zones, les conditions et la promesse de délai doivent être approuvés et visibles sur l’origine de lancement. La délivrabilité e-mail sur cette origine reste à valider. | GET exploitant et tarifs, `components/role/public-site.tsx:666`, `RAPPORT.md:64`. HTTP 200 sur la couverture ne valide pas à lui seul le territoire à publier. |
+| L08 | P1 | La case « Je fais cette demande pour une entreprise » est affichée dans le récapitulatif du formulaire public, mais aucune donnée entreprise ou site correspondante n’est envoyée à la création publique. | `components/role/public-booking.tsx:417`, `components/role/public-booking.tsx:472`, `components/courant-app.tsx:1265`, `lib/features/guest/bookings.ts:31`. |
+| L09 | P1 | Les contrôles serveur examinés vérifient l’identité, le rôle et les droits. Une élévation MFA pour les actions sensibles n’apparaît pas dans les contrôles applicatifs examinés. Vérifier aussi les restrictions réellement configurées chez le fournisseur. | `lib/supabase/server.ts:32`, `supabase/migrations/202610310014_platform_operators.sql:76`. Aucun contournement tenté. |
+| L10 | P1 | Le point et le complément sont absents de l’export personnel. L’information publique doit décrire la collecte du formulaire, les fournisseurs et la rétention. L’exécution réelle d’une suppression de compte et ses règles de conservation restent à prouver avant les boutiques. | `app/api/profile/data/route.ts:16`, `components/role/public-lists.ts:77`, `shared/booking-map.tsx:21`, `components/features/account-data/model.ts:148`. [Apple App Review](https://developer.apple.com/help/app-review/guideline-reference/5-1-1-account-deletion) · [Google Play](https://support.google.com/googleplay/android-developer/answer/13327111?hl=fr) |
+| L11 | P1 boutiques | Les builds 14 utilisent des profils de distribution interne. Entreprise et administration sont renvoyées vers le Web depuis l’app. L’installation physique, le GPS, la galerie, les reprises réseau et les bascules de portail restent à vérifier sur les versions distribuées. | `apps/mobile/eas.json:8`, `apps/mobile/app.json:12`, `apps/mobile/src/app/(espace)/accueil.tsx:41`, `RAPPORT.md:94`. |
+| L12 | P2 | La recherche textuelle « Fort-de-France » répond HTTP 503 sur les deux API examinées. Le géocodage inverse renvoie des candidats sur la preview Web. L’adresse manuelle reste accessible. | GET frais, `lib/features/addresses/server.ts:62`. |
+| L13 | P2 | Quand le panneau de remboursement est activé, l’en-tête Finance peut encore indiquer qu’aucune action fournisseur n’est disponible. | `components/features/finance-reconciliation/platform-finance-view.tsx:136` et `:405`. |
+| L14 | P2 | Quatre entrées modérées dans l’audit npm mobile, autour de `glob` et `minimatch` et de leurs dépendants Expo. Ce résultat concerne l’arbre de dépendances installé. Il ne démontre pas une atteinte à un téléphone. | `npm audit --omit=dev --json`. Zéro entrée signalée pour le Web lors du contrôle. [Avis glob](https://github.com/advisories/GHSA-3g3m-2fjr-6pw4) · [Avis minimatch](https://github.com/advisories/GHSA-g3hv-75wg-m249) |
+| L15 | P1 qualification | La reprise du profil après confirmation e-mail a réussi à 1440 px en local. Le même essai à 390 px a atteint une réponse workspace HTTP 503 puis est resté sur la connexion. Le test de demande connecté à 1440 px visait un ancien libellé et doit être actualisé. | Exécution Chromium sur Supabase local. Origine et scénario à rejouer sans déduire un 503 hébergé. |
+
+## Couverture de recette
+
+| Parcours | Résultat et limite |
+| --- | --- |
+| Client Web/PWA | Accueil, filtre « Je suis un », connexion unique, fiche, créneau souhaité, carte, récapitulatif et choix du paiement différé contrôlés à 390 et 1440 px. Deux créations HTTP 201 sont confirmées par le rejeu sur base isolée. La demande à 390 px contient sa photo dans le stockage privé. Celle à 1440 px a été envoyée sans photo ni description. Confirmation e-mail publique et règlement final du candidat à qualifier. |
+| Client iPhone et Android | Vérification du contrat réel des builds et des deux API. L’iPhone avait franchi l’étape description/photo facultatives sur simulateur lors de la recette précédente. L01 et L02 bloquent la qualification métier. |
+| Électricien | La recette précédente sur base isolée a couvert offre, devis, intervention, photos et clôture à 390 et 1440 px. L’approbation du compte avait été préparée dans cette base. Candidature et approbation par un opérateur, visibilité du complément d’accès et règlement restent ouverts. |
+| Entreprise cliente | Le code contient les sites, membres, approbations et payeurs. La qualification en navigateur du cycle invitation, révocation, seuil et payeur sur ce candidat reste ouverte. La case publique et le renvoi natif vers le Web ont été contre-vérifiés. |
+| Administration | Lectures de gestion et refus 403 d’un client prouvés par la recette isolée précédente. Mutations sur le candidat, élévation de sécurité, rapprochement fournisseur et exercice de rollback restent ouverts. |
+| PWA et desktop | Manifest, icônes, service worker, hors ligne, retour en ligne, focus clavier, survol, absence de débordement et navigateur WebKit contrôlés dans les limites détaillées ci-dessous. Installation depuis l’écran d’accueil d’un iPhone et d’un Android à faire sur appareil. |
+
+## Interprétation des preuves
+
+- L’ancienne alerte de production sur un HTTP 503 reste un fait historique. Le contrôle public actuel ne le reproduit pas. L’espace privé renvoie le 401 attendu en anonyme. Une vérification authentifiée de la production et de ses migrations reste ouverte.
+- Les essais Stripe et SMS antérieurs sont des preuves historiques. Le contrôle d’options actuel ne démontre ni une panne fournisseur ni une capacité de paiement active. Les preuves manquantes sont inscrites au plan avec les montants et états à capturer en TEST.
+- Les essais réalisés avec des fournisseurs simulés valident les règles et les contrats testés. Astra a obtenu 131 succès ciblés. Le contre-audit a vérifié l’écart d’empreinte avec une configuration factice.
+- Les contrôles détaillés sont listés ci-dessous. La production, les données réelles et les clés live n’ont fait l’objet d’aucune mutation.
+
+
+## Vérifications finales
+
+- 11 contrôles publics réussis sur la preview de référence après reprise du test de navigation. Chromium à 390 et 1440 px, ainsi que WebKit. Les ressources hors ligne sont publiques. La vérification d’installabilité en profil Chromium isolé indique le mode navigation privée. L’installation sur téléphone reste ouverte.
+- Sur la base isolée, le rejeu a confirmé les lectures de gestion admin aux deux largeurs, l’inscription avec e-mail confirmé à 1440 px, la récupération du mot de passe et le chargement des offres après approbation préparée. Le passage offre → clôture et les photos avant/après restent attestés par la recette précédente, avec les limites inscrites dans la couverture.
+- Le dépôt contient 129 migrations. L’instance locale restaurée en enregistre 127 et expose aussi la table et la fonction des deux migrations suivantes, contrôlées séparément. Cela ne constitue pas un exercice de reconstruction vierge du candidat ni une attestation de la base hébergée.
+- TypeScript Web et mobile vérifiés. Suite complète fraîche, 2 275 réussis, 2 échecs Chromium et 2 ignorés faute de preuves HTML privées. Les deux fichiers en échec, rappels et catalogue d’abonnements, passent au rejeu séquentiel avec 9 succès. Une exécution intégrale stable en CI sur la version de lancement reste à obtenir.
+- Lighthouse à 390 px sur l’accueil, dans un premier essai sous charge. Performance 35, accessibilité 100, bonnes pratiques 100, SEO 63. Le second lancement Chromium desktop n’a pas ouvert son port de diagnostic. Refaire deux mesures isolées par taille sur le candidat avant de fixer un seuil. Ce score d’accessibilité automatisé ne remplace pas la vérification au lecteur d’écran.
+- Builds 14 revérifiés sur EAS en état terminé. Les vérifications Stripe, SMS, déploiement stores et récupération après incident du plan portent sur le prochain candidat.
+
+La copie publique temporaire est hébergée dans un projet distinct et utilise le code applicatif de la preview, une base de recette et une règle d’expiration au 12 novembre à 9 h 49, heure de Martinique. L’accueil, la fiche et le manifest répondent directement HTTP 200 sans session Vercel. L’espace privé refuse l’accès anonyme avec HTTP 401. La navigation a été contrôlée dans Chrome et WebKit. [Preview publique temporaire](https://domdepannage-essai-12h-ykcpzg.vercel.app/)
+
+[Plan des correctifs et critères d’acceptation](PLAN_CORRECTIFS_LANCEMENT_2026-11-11.md)
