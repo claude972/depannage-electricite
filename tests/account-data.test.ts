@@ -78,3 +78,37 @@ test('personal erasure list is account scoped and strips all ticket content',asy
  const h=harness({rows:[{...requestRow(),subject:'SECRET',body:'SECRET'}],next_cursor:null});const r=await h.GET(new Request(url+'?section=erasure_requests'));assert.equal(r.status,200);const data=await r.json();assert.equal(data.rows[0].execution_state,'not_started');assert.equal(JSON.stringify(data).includes('SECRET'),false);assert.deepEqual(JSON.parse(JSON.stringify(h.queries)),[['rpc','list_data_erasure_requests',{p_all:false,p_after:null,p_limit:100}]]);
  const other=harness({rows:[requestRow(id(500))],next_cursor:null});assert.equal((await other.GET(new Request(url+'?section=erasure_requests'))).status,503);
 });
+
+test("personal booking locations include pending and confirmed reservations and strip the account key", async () => {
+  const point = { latitude: 14.605, longitude: -61.07, access_details: "Entrée côté jardin" };
+  const manual = { latitude: null, longitude: null, access_details: "Code communiqué sur place" };
+  const pending = { id: id(6), actor_id: actor, intervention_id: null, location: manual };
+  const confirmed = { id: id(7), actor_id: actor, intervention_id: id(95), location: point };
+  const h = harness([pending, confirmed]);
+  const request = () => new Request(url + "?section=booking_locations&after=" + id(5));
+  const response = await h.GET(request());
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  assert.deepEqual(await response.json(), {
+    section: "booking_locations",
+    rows: [
+      { id: pending.id, intervention_id: null, location: manual },
+      { id: confirmed.id, intervention_id: confirmed.intervention_id, location: point },
+    ],
+    next_cursor: null,
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(h.queries)), [["rpc", "export_personal_booking_locations", { p_after: id(5) }]]);
+
+  const foreign = { ...confirmed, actor_id: id(999) };
+  assert.equal((await harness([pending, foreign]).GET(request())).status, 503);
+  assert.equal((await harness([pending, { ...confirmed, location: { ...point, latitude: null } }]).GET(request())).status, 503);
+  assert.equal((await harness([confirmed, pending]).GET(request())).status, 503);
+  assert.equal((await harness([pending], false).GET(request())).status, 401);
+
+  const many = Array.from({ length: 101 }, (_, i) => ({ ...confirmed, id: id(i + 6) }));
+  const paged = await (await harness(many).GET(request())).json();
+  assert.equal(paged.rows.length, 100);
+  assert.equal(paged.next_cursor, id(105));
+  const untrustedLookahead = [...many.slice(0, 100), { ...many[100], actor_id: foreign.actor_id }];
+  assert.equal((await harness(untrustedLookahead).GET(request())).status, 503);
+});

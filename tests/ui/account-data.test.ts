@@ -22,6 +22,7 @@ const ACCOUNT = { section: "account", data: { email: "c@example.test", verified_
 const row = {
   addresses: (n: number) => ({ id: id(n), user_id: UID, label: "Maison", first_name: "C", last_name: "D", address: "1 rue", postal_code: "97200", city: "FdF", country_code: "MQ", latitude: null, longitude: null, geo_source: null, is_preferred: false, created_at: T, updated_at: T, archived_at: null }),
   requests: (n: number) => ({ id: id(n), client_id: UID, site_id: null, category: "panne", description: "x", address: "1 rue", postal_code: "97200", city: "FdF", urgency: "normal", status: "new", created_at: T, updated_at: T }),
+  booking_locations: (n: number) => ({ id: id(n), intervention_id: id(9000), location: { latitude: 14.605, longitude: -61.07, access_details: "Portail bleu" } }),
   messages: (n: number) => ({ id: id(n), author_id: UID, intervention_id: id(9000), body: "bonjour", created_at: T }),
   documents: (n: number) => ({ id: id(n), owner_id: UID, intervention_id: null, name: "devis.pdf", mime_type: "application/pdf", created_at: T }),
   support: (n: number) => ({ id: id(n), creator_id: UID, intervention_id: null, subject: "Aide", status: "open", created_at: T, updated_at: T }),
@@ -39,7 +40,7 @@ const json = (body: unknown, status = 200, headers: Record<string, string> = {})
 test("URLs exactes : section explicite, after seulement pour les sections paginées", () => {
   assert.equal(m.dataUrl("account", null), "/api/profile/data?section=account");
   assert.equal(m.dataUrl("messages", id(100)), `/api/profile/data?section=messages&after=${id(100)}`);
-  assert.deepEqual([...m.SECTIONS], ["account", "addresses", "requests", "messages", "documents", "support", "erasure_requests", "payment_reminders"]);
+  assert.deepEqual([...m.SECTIONS], ["account", "addresses", "requests", "booking_locations", "messages", "documents", "support", "erasure_requests", "payment_reminders"]);
 });
 
 test("projections strictes : clé en plus/en moins, propriétaire étranger, ordre, curseur, site d’organisation ⇒ refus", () => {
@@ -56,6 +57,15 @@ test("projections strictes : clé en plus/en moins, propriétaire étranger, ord
   assert.equal(m.parsePage({ ...page("messages", 1, 3, false), next_cursor: id(3) }, "messages", null, UID), null, "cursor on a short page");
   assert.equal(m.parsePage({ ...page("requests", 1, 1, false), rows: [{ ...row.requests(1), site_id: id(77) }] }, "requests", null, UID), null, "organisation dossier");
   assert.ok(m.parsePage(page("support", 1, 100, true), "support", null, UID));
+});
+
+test("l’export accepte les lieux personnels en attente et vérifie la paire de coordonnées", () => {
+  const place = row.booking_locations(1);
+  assert.ok(m.parsePage(page("booking_locations", 1, 1, false), "booking_locations", null, UID));
+  const parse = (r: unknown) => m.parsePage({ section: "booking_locations", rows: [r], next_cursor: null }, "booking_locations", null, UID);
+  assert.ok(parse({ ...place, intervention_id: null, location: { latitude: null, longitude: null, access_details: "Portail bleu" } }));
+  assert.equal(parse({ ...place, actor_id: UID }), null);
+  assert.equal(parse({ ...place, location: { ...place.location, longitude: null } }), null);
 });
 
 function collector(reply: (url: string, n: number) => Response | Promise<Response>, ctx = { gen: 1, uid: UID as string | null }) {
@@ -85,21 +95,22 @@ const happy = (url: string) => {
 test("téléchargement : toutes les sections, pagination jusqu’à next_cursor null, un seul fichier JSON", async () => {
   const { c, urls, saved, states } = collector(happy);
   await c.run();
-  assert.deepEqual(urls, ["account", "addresses", "requests", "messages", `messages&after=${id(100)}`, "documents", "support", "erasure_requests", "payment_reminders"].map((s) => `/api/profile/data?section=${s}`));
+  assert.deepEqual(urls, ["account", "addresses", "requests", "booking_locations", "messages", `messages&after=${id(100)}`, "documents", "support", "erasure_requests", "payment_reminders"].map((s) => `/api/profile/data?section=${s}`));
   assert.equal(saved.length, 1);
   assert.equal(saved[0].filename, "mes-donnees-2026-11-07.json");
   const doc = JSON.parse(saved[0].json);
   assert.equal(doc.messages.length, 102);
+  assert.deepEqual(doc.booking_locations, [row.booking_locations(1)]);
   assert.equal(doc.account.profile.id, UID);
-  assert.deepEqual(Object.keys(doc), ["exported_at", "source", "note", "account", "addresses", "requests", "messages", "documents", "support", "erasure_requests", "payment_reminders"]);
+  assert.deepEqual(Object.keys(doc), ["exported_at", "source", "note", "account", "addresses", "requests", "booking_locations", "messages", "documents", "support", "erasure_requests", "payment_reminders"]);
   const last = states[states.length - 1];
   assert.equal(last.phase, "done");
   assert.equal(last.progress.messages.rows, 102);
 });
 
 test("changement d’identité pendant la collecte ⇒ interrompu, rien d’enregistré, reprise repart de zéro", async () => {
-  const h = collector((url, n) => {
-    if (n === 4) h.ctx.gen = 2; // account switch while messages page 1 is in flight
+  const h = collector((url) => {
+    if (url.endsWith("section=messages")) h.ctx.gen = 2; // account switch while messages page 1 is in flight
     return happy(url);
   });
   await h.c.run();
