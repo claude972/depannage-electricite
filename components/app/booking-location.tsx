@@ -60,7 +60,10 @@ export function BookingLocationField({ value, location, onChange, error, geoloca
     {address.candidate && <p className={styles.help}>{address.candidate.address}, {address.candidate.postal_code} {address.candidate.city}</p>}
     {address.pendingPoint && <button type="button" disabled={Boolean(address.busy)} onClick={address.confirmPoint}>{copy.confirmPoint}</button>}
     <AddressField value={value} error={error} cityLabel={copy.city} onChange={address.edit} />
-    <label htmlFor={`${id}-access`}>{copy.access}<textarea id={`${id}-access`} rows={3} maxLength={1000} value={address.current.access_details} placeholder={copy.accessPlaceholder} onChange={event => address.editAccess(event.target.value)} /></label>
+    <div className={styles.access}>
+      <label htmlFor={`${id}-access`}>{copy.access}</label>
+      <textarea id={`${id}-access`} rows={3} maxLength={1000} value={address.current.access_details} placeholder={copy.accessPlaceholder} onChange={event => address.editAccess(event.target.value)} />
+    </div>
     <p className={styles.help}>Source des adresses : Base Adresse Nationale.</p>
   </div>;
 }

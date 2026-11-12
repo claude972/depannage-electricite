@@ -1,4 +1,5 @@
 .location { display: grid; gap: 16px; min-width: 0; }
+.access { display: grid; gap: 8px; }
 .search { display: flex; gap: 8px; align-items: end; }
 .search label { flex: 1; display: grid; gap: 8px; min-width: 0; }
 .location input, .location textarea { width: 100%; min-height: 44px; padding: 12px; border: 1px solid var(--ui-border, #cbd5e1); border-radius: 10px; background: var(--ui-surface, white); color: inherit; font: inherit; }
