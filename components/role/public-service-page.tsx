@@ -4,6 +4,7 @@
 // so every chrome action is a real navigation back to it (/#new/<category>, /#auth, /#help…).
 // The price is the canonical indicative estimate of the category, labelled as such.
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { category, money } from "../app/format";
 import { PublicChrome, serviceChromeHandlers } from "./public-chrome";
 import { SERVICE_STEPS, relatedServices, serviceEstimate, servicePath, type ServiceEntry } from "./public-service-catalog";
@@ -21,7 +22,12 @@ const COMMON_FAQ = {
   answer: "Après le diagnostic, dans le devis détaillé de l’artisan. Rien n’est engagé tant que vous ne l’avez pas accepté.",
 };
 
-export function PublicServicePage({ service, initialOpen = false }: { service: ServiceEntry; initialOpen?: boolean }) {
+export function RoutedPublicServicePage({ service }: { service: ServiceEntry }) {
+  const router = useRouter();
+  return <PublicServicePage service={service} go={href => router.push(href)} />;
+}
+
+export function PublicServicePage({ service, initialOpen = false, go }: { service: ServiceEntry; initialOpen?: boolean; go?: (href: string) => void }) {
   const estimate = serviceEstimate(service.category);
   // Booking wizard: unchanged existing estimate (the server reserves its own snapshot). Public
   // displays (hero, fixed bar, related cards): the five ranges of GET /api/public/indicative-prices.
@@ -54,7 +60,7 @@ export function PublicServicePage({ service, initialOpen = false }: { service: S
       <PublicChrome current="service" className={styles.withBar} handlers={serviceChromeHandlers()} onHome={() => window.location.assign("/")} mainClassName={styles.main}>
         <div className={styles.wrap}>
           {crumb}
-          <BookingWizard service={service} range={range} onClose={() => setOpen(false)} />
+          <BookingWizard service={service} range={range} go={go} onClose={() => setOpen(false)} />
         </div>
       </PublicChrome>
     );

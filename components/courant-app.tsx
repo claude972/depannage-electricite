@@ -57,6 +57,7 @@ type BookingReceipt = {
   intervention: { id: string; status: string; estimate_min_cents?: number; estimate_max_cents?: number };
   payment?: { method: "on_site" | "card_hold"; status: string };
 };
+import { publicBookingPhoto } from "./app/public-booking-photo";
 import { savePublicDraft } from "../lib/shared/request-draft";
 import { REALTIME_CHANNEL_CONFIG, REALTIME_TABLES, createRealtimeCatchUp, nextConnection } from "./app/realtime";
 import { category, uid } from "./app/format";
@@ -199,6 +200,7 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
   // by the SAME identity chain only, consumed after POST 201, dropped on any identity reset.
   const [booking, setBooking] = useState<BookingDraft | null>(null);
   const bookingCarry = useRef<BookingDraft | null>(null);
+  const anonymousPhotos = useRef<File[]>([]);
   // Card-hold provider return, independent of the booking draft (see components/app/card-return.ts).
   const [cardReturn, setCardReturn] = useState<CardReturn | null>(null);
   const cardReturnRef = useRef<CardReturn | null>(null);
@@ -1312,15 +1314,16 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
         result.payment?.method === "on_site"
           ? "Demande confirmée. Paiement après l’intervention, sur la plateforme : rien n’est payé maintenant."
           : "Demande confirmée.";
-      await uploadBookingPhotos(ctx, result.intervention.id, confirmedText);
+      await uploadBookingPhotos(ctx, result.intervention.id, confirmedText, current);
     });
   }
   /** After a CONFIRMED creation only: the photos kept in memory are uploaded through the existing
    *  queue; if they were lost (reload, bank return), say so — never a silent or fake upload. */
-  async function uploadBookingPhotos(ctx: RunContext, interventionId: string, confirmedText: string) {
+  async function uploadBookingPhotos(ctx: RunContext, interventionId: string, confirmedText: string, current?: BookingDraft) {
     if (!ctx.alive()) return;
-    const files = bookingPhotos.current;
-    const announced = readPhotoCount(getDraftStorage());
+    const stagedPhoto = publicBookingPhoto(current?.request_id, true);
+    const files = bookingPhotos.current.length ? bookingPhotos.current : stagedPhoto ? [stagedPhoto] : [];
+    const announced = readPhotoCount(getDraftStorage()) || (current?.photo_selected ? 1 : 0);
     bookingPhotos.current = [];
     writePhotoCount(getDraftStorage(), 0);
     if (!files.length) {
@@ -1382,7 +1385,8 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
       setCardReturn((c) => (c?.requestId === requestId ? null : c));
       await refresh();
       if (!still()) return false; // re-checked AFTER the refresh: never clear another identity's draft
-      if (bookingRef.current?.request_id === requestId) {
+      const returnedBooking = bookingRef.current?.request_id === requestId ? bookingRef.current : null;
+      if (returnedBooking) {
         setPendingDraft(null);
         setBooking(null);
         clearBooking(getDraftStorage());
@@ -1392,7 +1396,9 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
       }
       setSelectedId(result.interventionId);
       navigate("detail", result.interventionId);
-      setNotice("Demande confirmée. Empreinte bancaire enregistrée : aucun débit ; seul le montant du devis accepté pourra être prélevé.");
+      setNotice("Demande confirmée. Empreinte bancaire enregistrée : aucun débit ; seul le montant du devis accepté pourra être prélevé." +
+        (returnedBooking?.photo_selected || readPhotoCount(getDraftStorage()) ? " Vous pouvez ajouter la photo depuis le dossier." : ""));
+      writePhotoCount(getDraftStorage(), 0);
       return true;
     });
   }
@@ -2714,6 +2720,8 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
       setPendingDraft(draft);
       if (!draft) return;
       savePublicDraft(getDraftStorage(), draft);
+      bookingPhotos.current = anonymousPhotos.current;
+      anonymousPhotos.current = [];
       const carried = bookingCarry.current;
       bookingCarry.current = null;
       if (carried) {
@@ -2763,7 +2771,8 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
     setError,
     setNotice,
     startDemo,
-    saveDraft(values) {
+    saveDraft(values, photos = []) {
+      anonymousPhotos.current = photos;
       setPendingDraft(values);
       // Same canonical format as /offline-request.html; storage refusal keeps the in-memory draft.
       const saved = savePublicDraft(getDraftStorage(), values);
@@ -2910,7 +2919,10 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
     pendingDraft: mode === "live" ? pendingDraft : demoBooking?.draft ?? null,
     // « Modifier » on the booking confirmation: the edited request replaces the kept draft (same
     // tab storage), nothing is sent; the confirmation then shows it again.
-    updatePendingDraft(values: RequestValues) {
+    updatePendingDraft(values: RequestValues, photos: File[]) {
+      publicBookingPhoto(booking?.request_id, true);
+      bookingPhotos.current = photos.slice(0, 6);
+      if (modeRef.current === "live") writePhotoCount(getDraftStorage(), bookingPhotos.current.length);
       if (modeRef.current === "demo") {
         setDemoBooking((d) => (d ? { draft: values, booking: bookingForEditedRequest(d.booking, d.draft.category, values) } : d));
         return;
@@ -2920,7 +2932,8 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
       const storage = getDraftStorage();
       savePublicDraft(storage, values);
       if (booking && pendingDraft) {
-        const updated = bookingForEditedRequest(booking, pendingDraft.category, values);
+        const { photo_selected: _photoSelected, ...current } = booking;
+        const updated = bookingForEditedRequest(current, pendingDraft.category, values);
         setBooking(updated);
         saveBooking(storage, updated);
       }
@@ -3017,10 +3030,9 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
     loadPaymentStatus,
     createIntervention,
     startBooking,
-    bookingPhotos: () => bookingPhotos.current,
-    updateBookingPhotos(photos: File[]) {
-      bookingPhotos.current = photos.slice(0, 6);
-      if (modeRef.current === "live") writePhotoCount(getDraftStorage(), bookingPhotos.current.length);
+    bookingPhotos: () => {
+      const stagedPhoto = publicBookingPhoto(booking?.request_id);
+      return bookingPhotos.current.length ? bookingPhotos.current : stagedPhoto ? [stagedPhoto] : [];
     },
     confirmBooking,
     cancelBooking,

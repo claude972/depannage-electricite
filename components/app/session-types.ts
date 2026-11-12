@@ -70,7 +70,7 @@ export interface PublicSession {
   /** Opens the isolated demonstration with the given role, view and optional demo dossier id. */
   startDemo(role?: Role, view?: View, param?: string): void;
   /** Keeps an anonymous request draft and routes to account creation. */
-  saveDraft(values: RequestValues): void;
+  saveDraft(values: RequestValues, photos?: File[]): void;
   /** Invitation code waiting for a login (view join-organization/CODE). */
   pendingInvitation: string | null;
   /** Stores a manually shared organisation invitation code, then routes to login. */
@@ -104,7 +104,7 @@ export interface Session {
   pendingLookupFailed: boolean;
   retryPendingLookup(): void;
   /** Booking confirmation « Modifier »: replace the kept request draft / private contact (no send). */
-  updatePendingDraft(values: RequestValues): void;
+  updatePendingDraft(values: RequestValues, photos: File[]): void;
   updateBookingContact(contact: BookingDraft["contact"]): void;
   updateBookingPayment(payment: NonNullable<BookingDraft["payment"]>): void;
   data: Workspace;
@@ -212,7 +212,6 @@ export interface Session {
   /** Photos kept in memory for the pending booking (never stored; lost on reload). */
   bookingPhotos(): File[];
   /** « Modifier » on a kept booking: replaces the in-memory photos (nothing sent). */
-  updateBookingPhotos(photos: File[]): void;
   /** Service booking: POST /api/bookings (idempotent key), never the legacy route. */
   confirmBooking(): Promise<boolean>;
   /** Cancels the current card-hold attempt on the server (releases it); the draft stays. */

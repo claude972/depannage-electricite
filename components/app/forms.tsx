@@ -1,5 +1,6 @@
 "use client";
 import { BookingLocationField } from "./booking-location";
+import { REQUEST_DESCRIPTION_LABEL } from "../../shared/request-details";
 // Operational forms extracted from the original monolith; behaviour preserved, shared by the
 // role spaces. Styling classes live in app/globals.css.
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
@@ -208,17 +209,11 @@ export function RequestForm({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preferredAddress]);
-  const [validation, setValidation] = useState("");
   const [phone, setPhone] = useState(contactPhone ?? "");
   const [phoneError, setPhoneError] = useState("");
   const c = category(values.category);
   function next(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setValidation("");
-    if (phase === 1 && values.description.trim().length < 15) {
-      setValidation("Décrivez le problème en au moins 15 caractères.");
-      return;
-    }
     const normalizedPhone = contactPhone === undefined ? null : normalizePhone(phone);
     if (phase === 2 && contactPhone !== undefined && !normalizedPhone) {
       setPhoneError("Saisissez un numéro de téléphone valide (ex. +596 ou +590).");
@@ -257,11 +252,6 @@ export function RequestForm({
         )}
       </ol>
       <form className="panel request-form" onSubmit={next}>
-        {validation && (
-          <div className="alert error" role="alert">
-            {validation}
-          </div>
-        )}
         {phase === 1 ? (
           <>
             <h2 ref={stepTitle} tabIndex={-1} style={STEP_TITLE_STYLE}>Que se passe-t-il ?</h2>
@@ -283,13 +273,11 @@ export function RequestForm({
               ))}
             </div>
             <Field
-              label="Décrivez le problème"
-              hint="Ce que vous constatez, les pièces concernées et depuis quand. 15 caractères minimum."
+              label={REQUEST_DESCRIPTION_LABEL}
+              hint="Ce que vous constatez, les pièces concernées et depuis quand."
             >
               <textarea
                 value={values.description}
-                required
-                minLength={15}
                 maxLength={2000}
                 rows={4}
                 placeholder="Par exemple : le disjoncteur se déclenche depuis ce matin lorsque j’allume le four…"
@@ -299,13 +287,13 @@ export function RequestForm({
               />
             </Field>
             <Field
-              label="Photos du problème (facultatif)"
+              label="Ajouter des photos (facultatif)"
               hint={
                 mode === "live"
                   ? "JPEG, PNG ou WebP, 4 Mo par photo, six au plus. Elles sont envoyées dans votre espace privé juste après l’enregistrement de la demande."
                   : mode === "demo"
                     ? "La démonstration n’envoie aucun fichier : la sélection sert seulement à visualiser l’étape."
-                    : "Les photos ne sont pas conservées avec le brouillon : vous pourrez les ajouter une fois connecté."
+                    : "Gardez cet onglet ouvert. En cas de rechargement, vous pourrez ajouter les photos depuis le dossier."
               }
               error={photoError || undefined}
             >

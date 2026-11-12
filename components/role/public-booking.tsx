@@ -16,6 +16,9 @@ import { useBookingOptions, type OptionsApi, type OptionsState } from "./booking
 import { getDraftStorage } from "../app/request-draft-boot";
 import { PUBLIC_DRAFT_KEY, parsePublicDraftValues, readPublicDraft, savePublicDraft } from "../../lib/shared/request-draft";
 import { Field } from "../app/ui";
+import { PHOTO_TYPES, validateUpload } from "../app/api";
+import { stagePublicBookingPhoto } from "../app/public-booking-photo";
+import { REQUEST_DESCRIPTION_LABEL, REQUEST_PHOTO_LABEL } from "../../shared/request-details";
 import type { ServiceEntry } from "./public-service-catalog";
 import styles from "./public-booking.module.css";
 import { useIndicativeText } from "../features/indicative-prices/indicative-range";
@@ -121,10 +124,11 @@ export function toBooking(service: Pick<ServiceEntry, "slug">, s: BookingState):
  *  entries are read first; both new entries are written then proven by readback; on any failure
  *  the two previous raw values are restored (or removed when absent) and proven again. Navigation
  *  only when both new entries are proven; never a mixed pair announced as saved. */
-export function finishBooking({ storage, service, state, onSaved = () => {}, now = Date.now() }: {
+export function finishBooking({ storage, service, state, photo, onSaved = () => {}, now = Date.now() }: {
   storage: Storage | null;
   service: Pick<ServiceEntry, "slug" | "title" | "category">;
   state: BookingState;
+  photo?: File | null;
   /** Called once both entries are proven (the wizard then opens the account entry). */
   onSaved?: () => void;
   now?: number;
@@ -139,7 +143,7 @@ export function finishBooking({ storage, service, state, onSaved = () => {}, now
   } catch {
     keptId = undefined;
   }
-  const booking = { ...toBooking(service, state), request_id: keptId ?? newRequestId() };
+  const booking = { ...toBooking(service, state), request_id: keptId ?? newRequestId(), ...(photo ? { photo_selected: true as const } : {}) };
   const values = {
     category: service.category,
     description: bookingDescription(service.title, booking),
@@ -174,6 +178,7 @@ export function finishBooking({ storage, service, state, onSaved = () => {}, now
     written = false;
   }
   if (written) {
+    if (photo !== undefined) stagePublicBookingPhoto(booking.request_id, photo);
     onSaved();
     return { ok: true };
   }
@@ -207,8 +212,8 @@ export const ACCOUNT_HREF = { signup: "/#auth/signup", login: "/#auth" } as cons
 /** End of the wizard: both drafts saved FIRST (atomic pair); then the account entry, which keeps
  *  the booking (creation by default, sign-in for an existing account). Nothing is navigated when
  *  the save fails. */
-export function completeBooking({ storage, service, state, mode, go, now }: { storage: Storage | null; service: Pick<ServiceEntry, "slug" | "title" | "category">; state: BookingState; mode: "signup" | "login"; go: (href: string) => void; now?: number }) {
-  return finishBooking({ storage, service, state, now, onSaved: () => go(ACCOUNT_HREF[mode]) });
+export function completeBooking({ storage, service, state, mode, go, now, photo }: { storage: Storage | null; service: Pick<ServiceEntry, "slug" | "title" | "category">; state: BookingState; mode: "signup" | "login"; go: (href: string) => void; now?: number; photo?: File | null }) {
+  return finishBooking({ storage, service, state, now, photo, onSaved: () => go(ACCOUNT_HREF[mode]) });
 }
 
 // ---- Bottom bar (closed page: « Confirmer » ; wizard: the active step's real submit) -----------
@@ -269,6 +274,8 @@ export function BookingWizard({
   const [state, setState] = useState<BookingState>(initial);
   const [errors, setErrors] = useState<Errors>({});
   const [failure, setFailure] = useState("");
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoError, setPhotoError] = useState("");
   const [geolocation, setGeolocation] = useState<Geolocation | null>(null);
   const title = useRef<HTMLHeadingElement>(null);
   const first = useRef(true);
@@ -298,7 +305,7 @@ export function BookingWizard({
   };
   const finish = (mode: "signup" | "login") => {
     setFailure("");
-    const result = completeBooking({ storage: storage(), service, state, mode, go });
+    const result = completeBooking({ storage: storage(), service, state, mode, go, photo });
     if (!result.ok) setFailure(result.message);
   };
   const back = () => {
@@ -360,9 +367,24 @@ export function BookingWizard({
                     {errors.slot && <small className={styles.error} role="alert">{errors.slot}</small>}
                   </fieldset>
                 )}
-                <Field label="Précisions sur la panne (facultatif)" hint="Ce que vous constatez. N’indiquez ici ni nom, ni téléphone, ni email.">
+                <Field label={REQUEST_DESCRIPTION_LABEL} hint="Ce que vous constatez. N’indiquez ici ni nom, ni téléphone, ni email.">
                   <textarea value={state.notes} maxLength={1500} rows={4} onChange={(e) => set({ notes: e.target.value })} />
                 </Field>
+                <Field label={REQUEST_PHOTO_LABEL} hint="JPEG, PNG ou WebP, 4 Mo maximum. La photo est envoyée dans le dossier privé après confirmation." error={photoError || undefined}>
+                  <input type="file" accept={PHOTO_TYPES.join(",")} onChange={event => {
+                    const file = event.currentTarget.files?.[0];
+                    if (file) {
+                      const error = validateUpload(file, PHOTO_TYPES);
+                      setPhotoError(error ?? "");
+                      if (!error) setPhoto(file);
+                    }
+                    event.currentTarget.value = "";
+                  }} />
+                </Field>
+                {photo && <ul className="photo-list" aria-label="Photo sélectionnée"><li>
+                  <span>{photo.name}</span>
+                  <button className="button secondary" type="button" onClick={() => { setPhoto(null); setPhotoError(""); }}>Retirer la photo</button>
+                </li></ul>}
               </>
             )}
 
@@ -450,6 +472,7 @@ export function BookingWizard({
                   <div><dt>Vos coordonnées (privées)</dt><dd>{[CIVILITY_LABEL[state.contact.civility] === "Non précisé" ? "" : CIVILITY_LABEL[state.contact.civility], state.contact.first_name, state.contact.last_name].filter(Boolean).join(" ")}<br />{state.contact.email} · {state.contact.phone}{state.contact.company ? <><br />Demande pour une entreprise</> : null}</dd></div>
                   <div><dt>Règlement</dt><dd>{state.payment ? PAYMENT_LABEL[state.payment] : "À préciser"}</dd></div>
                   {state.notes.trim() && <div><dt>Précisions</dt><dd>{state.notes}</dd></div>}
+                  {photo && <div><dt>Photo</dt><dd>{photo.name}</dd></div>}
                 </dl>
                 <p className={styles.next} role="note" data-booking-next="">{ACCOUNT_NEXT}</p>
               </>

@@ -2,7 +2,7 @@
 // Unknown slugs are 404 (dynamicParams off + explicit notFound()).
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { PublicServicePage } from "@/components/role/public-service-page";
+import { RoutedPublicServicePage } from "@/components/role/public-service-page";
 import { SERVICES, serviceBySlug } from "@/components/role/public-service-catalog";
 
 type Props = { params: Promise<{ slug: string }> };
@@ -26,5 +26,5 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function Page({ params }: Props) {
   const service = serviceBySlug((await params).slug);
   if (!service) notFound();
-  return <PublicServicePage service={service} />;
+  return <RoutedPublicServicePage service={service} />;
 }

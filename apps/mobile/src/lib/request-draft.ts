@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { requestFields } from './contracts';
 import { bookingLocation } from './booking-location';
+import { pendingPhoto } from './intervention-drafts';
 
 export const requestContact = z.object({
   first_name: z.string().trim().min(1, 'Renseignez votre prénom.').max(60),
@@ -14,9 +15,11 @@ export const requestIntent = z.object({
   booking: z.object({ service_slug: z.string().min(1).max(80), contact: requestContact }).optional(),
   estimate: z.object({ min_cents: z.number().int().nonnegative(), max_cents: z.number().int().nonnegative() }),
   reviewRequired: z.boolean(),
+  photo: pendingPhoto.optional(),
 });
 export type RequestIntent = z.infer<typeof requestIntent>;
 export const requestDraft = z.object({
   intent: requestIntent.nullable(),
   confirmedId: z.uuid().nullable().default(null),
+  confirmedPhoto: pendingPhoto.optional(),
 });

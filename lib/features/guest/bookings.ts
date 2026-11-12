@@ -1,3 +1,5 @@
+import { CATEGORIES } from "@/lib/domain";
+import { requestDescription } from "../../../shared/request-details";
 import { parseBookingLocation, type BookingLocation } from "../../../shared/booking-location";
 import {estimateSnapshot,estimateMatchesCap} from './estimate-snapshot';
 import { TextDecoder } from "node:util";
@@ -10,7 +12,7 @@ import { cardHoldContext, openCardHold, authorizeCardHold, releaseCardHold } fro
 const uuid = z.string().uuid();
 const contact = z.object({ first_name: z.string().trim().min(1).max(60), last_name: z.string().trim().min(1).max(60), email: z.string().trim().max(254).refine(v => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)), phone: z.string().max(64).transform(normalizePhone).refine(v => v !== null) }).strict().refine(v => `${v.first_name} ${v.last_name}`.length <= 120);
 const locationSchema = z.custom<BookingLocation>(value => parseBookingLocation(value) !== null);
-const schema = z.object({ location: locationSchema.optional(), request_id: uuid, service_slug: z.string().max(80), category: z.enum(["outage", "panel", "socket", "lighting", "diagnostic"]), description: z.string().trim().min(10).max(4000), address: z.string().trim().min(5).max(500), postal_code: z.string().regex(/^\d{5}$/), city: z.string().trim().min(2).max(120), urgency: z.enum(["urgent", "scheduled"]), contact, payment_choice: z.enum(["on_site", "card_hold"]), reviewed_estimate_version:z.number().int().min(1).max(2147483647).optional() }).strict();
+const schema = z.object({ location: locationSchema.optional(), request_id: uuid, service_slug: z.string().max(80), category: z.enum(["outage", "panel", "socket", "lighting", "diagnostic"]), description: z.string().trim().max(4000).default(""), address: z.string().trim().min(5).max(500), postal_code: z.string().regex(/^\d{5}$/), city: z.string().trim().min(2).max(120), urgency: z.enum(["urgent", "scheduled"]), contact, payment_choice: z.enum(["on_site", "card_hold"]), reviewed_estimate_version:z.number().int().min(1).max(2147483647).optional() }).strict();
 const keySchema = z.object({ request_id: uuid }).strict();
 const headers = { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" };
 const unavailable = () => new ApiError(503, "La réservation est momentanément indisponible. Réessayez.");
@@ -102,6 +104,7 @@ export async function bookingRoute(request: Request, operation: "create" | "stat
     }
     if (operation === "create") {
       const data = schema.parse(parsed.data);
+      data.description = requestDescription(data.description, CATEGORIES.find(category => category.id === data.category)!.label);
       const card = data.payment_choice === "card_hold" ? cardHoldContext() : null; // Before prepare/quota/provider mutation.
       const { request_id, payment_choice, reviewed_estimate_version, contact: sentContact, location, ...payload } = data;
       const contact = nativeTransport(request) ? sentContact : webContact(sentContact, sent);

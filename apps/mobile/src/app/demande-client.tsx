@@ -4,6 +4,8 @@ import { randomUUID } from 'expo-crypto';
 import { Keyboard } from 'react-native';
 import { z } from 'zod';
 import { Action, BookingProgress, Card, Copy, Field, ReadState, Screen } from '@/components/ui';
+import { BookingPhotoPicker, BookingPhotoReceipt } from '@/components/booking-photo';
+import type { PendingPhoto } from '@/lib/intervention-drafts';
 import { BookingLocationField } from '@/components/booking-location-field';
 import type { BookingLocation } from '../../../../shared/booking-location';
 import { PhoneChallenge } from '@/components/phone-challenge';
@@ -18,6 +20,7 @@ import { normalizeInternationalPhone, phoneContact, verifiedPhone } from '@/lib/
 import { useDeviceDraft } from '@/lib/use-device-draft';
 import { useSession } from '@/lib/session';
 import { useWorkspace } from '@/lib/use-workspace';
+import { REQUEST_DESCRIPTION_LABEL, requestDescription } from '../../../../shared/request-details';
 import { orderReference } from '../../../../shared/order-reference';
 
 const options = locationCapability.extend({ payment_methods: z.array(z.object({ id: z.string(), available: z.boolean() })) });
@@ -73,6 +76,8 @@ function BookingFields({ service, addressFirst, initialUrgency, initialCity, own
   const [slug, setSlug] = useState(service ?? ''), [description, setDescription] = useState('');
   const [address, setAddress] = useState(''), [postal, setPostal] = useState(''), [city, setCity] = useState(initialCity ?? '');
   const [location, setLocation] = useState<BookingLocation>();
+  const [photo, setPhoto] = useState<PendingPhoto>();
+  const [picking, setPicking] = useState(false);
   const [urgency, setUrgency] = useState<InitialUrgency | null>(initialUrgency ?? null);
   const steps = addressFirst ? addressSteps : defaultSteps;
   const [stepIndex, setStepIndex] = useState(0);
@@ -85,7 +90,7 @@ function BookingFields({ service, addressFirst, initialUrgency, initialCity, own
   const savingLock = useRef(false);
   const chosen = catalogue.data?.items.find(item => item.slug === slug);
   const range = chosen && price.data?.ranges[chosen.category];
-  const values = { service_slug: chosen?.slug, category: chosen?.category, description, address, postal_code: postal, city, urgency, ...(location ? { location } : {}) };
+  const values = { service_slug: chosen?.slug, category: chosen?.category, description: requestDescription(description, chosen?.title ?? ""), address, postal_code: postal, city, urgency, ...(location ? { location } : {}) };
   const addressSchema = bookingInput.pick({ address: true, postal_code: true, city: true });
   const situationSchema = bookingInput.pick({ service_slug: true, category: true, urgency: true, description: true });
   const contactValues = { first_name: first, last_name: last, phone: normalizeInternationalPhone(phone) };
@@ -113,7 +118,7 @@ function BookingFields({ service, addressFirst, initialUrgency, initialCity, own
     if (!input.success) { setError(input.error.issues[0].message); return; }
     const contact = phoneContact.safeParse(contactValues);
     if (!contact.success) { setError('Renseignez vos prénom, nom et numéro au format international.'); return; }
-    const request = { id: randomUUID(), input: input.data, contact: contact.data };
+    const request = { id: randomUUID(), input: input.data, contact: contact.data, ...(photo ? { photo } : {}) };
     savingLock.current = true;
     setError(null); setSaving(true);
     try {
@@ -146,9 +151,10 @@ function BookingFields({ service, addressFirst, initialUrgency, initialCity, own
         <Copy kind="subtitle">Est-ce urgent ?</Copy>
         <Action label="Oui, c’est urgent" secondary={urgency !== 'urgent'} onPress={() => setUrgency('urgent')} />
         <Action label="Non, je peux planifier" secondary={urgency !== 'scheduled'} onPress={() => setUrgency('scheduled')} />
-        <Field label="Décrivez la panne" value={description} onChangeText={setDescription} multiline maxLength={4000}
+        <Field label={REQUEST_DESCRIPTION_LABEL} value={description} onChangeText={setDescription} multiline maxLength={4000}
           returnKeyType="done" submitBehavior="blurAndSubmit" />
-        <Action secondary label="Changer de dépannage" onPress={() => setSlug('')} />
+        <BookingPhotoPicker photo={photo} onChange={setPhoto} onPicking={setPicking} />
+        <Action secondary disabled={picking} label="Changer de dépannage" onPress={() => setSlug('')} />
       </Card> : catalogue.data && <Card>
         <Copy kind="subtitle">Sélectionnez votre dépannage</Copy>
         {catalogue.data.items.length === 0 && <Copy kind="muted">Aucune intervention n’est proposée pour le moment.</Copy>}
@@ -179,8 +185,8 @@ function BookingFields({ service, addressFirst, initialUrgency, initialCity, own
     {step === 'review'
       ? <Action label={saving ? 'Enregistrement…' : owner ? 'Continuer vers le règlement' : 'Vérifier mon numéro'} disabled={!range || saving}
           onPress={() => void continueRequest()} />
-      : <Action label="Continuer" disabled={step === 'urgency' && !catalogue.data} onPress={nextStep} />}
-    {stepIndex > 0 && <Action secondary label="Étape précédente" disabled={saving}
+      : <Action label="Continuer" disabled={picking || (step === 'urgency' && !catalogue.data)} onPress={nextStep} />}
+    {stepIndex > 0 && <Action secondary label="Étape précédente" disabled={saving || picking}
       onPress={() => { setError(null); setStepIndex(stepIndex - 1); }} />}
   </Screen>;
 }
@@ -270,7 +276,7 @@ function ConfirmBooking({ actor, phone, token, service, addressFirst, initialUrg
           reviewed_estimate_version: sending.version,
         },
       });
-      await draft.update(() => ({ intent: null, receipt: { requestId: sending.id, interventionId: response.intervention.id } }));
+      await draft.update(() => ({ intent: null, receipt: { requestId: sending.id, interventionId: response.intervention.id, ...(sending.photo ? { photo: sending.photo } : {}) } }));
     } catch (issue) {
       if (signal.aborted) return;
       if (issue instanceof ApiFailure && issue.status === 409 && issue.code === 'estimate_review_required') {
@@ -290,8 +296,9 @@ function ConfirmBooking({ actor, phone, token, service, addressFirst, initialUrg
     <Copy>Numéro de commande</Copy>
     <Copy kind="label" selectable>{orderReference(receipt.interventionId)}</Copy>
     {draft.error && <ReadState loading={false} error={draft.error} onRetry={draft.retry} />}
+    {receipt.photo && <BookingPhotoReceipt id={receipt.interventionId} token={token} photo={receipt.photo} onSent={() => draft.update(value => ({ ...value, receipt: { requestId: receipt.requestId, interventionId: receipt.interventionId } }))} />}
     <Action label="Ouvrir mon intervention" onPress={() => router.replace({ pathname: '/dossier/[id]', params: { id: receipt.interventionId } })} />
-    <Action secondary label="Commencer une autre demande" disabled={draft.pending} onPress={() => setNewRequest(true)} />
+    <Action secondary label="Commencer une autre demande" disabled={draft.pending || Boolean(receipt.photo)} onPress={() => setNewRequest(true)} />
     <OptionalEmailAccount />
   </Screen>;
   if (!request) return <BookingFields service={service} addressFirst={addressFirst} initialUrgency={initialUrgency} initialCity={initialCity} owner={{

@@ -4,6 +4,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
 import type { z } from 'zod';
 import { Action, BookingProgress, Card, Copy, Field, ReadState, Screen } from '@/components/ui';
+import { BookingPhotoPicker, BookingPhotoReceipt } from '@/components/booking-photo';
+import type { PendingPhoto } from '@/lib/intervention-drafts';
 import { BookingLocationField } from '@/components/booking-location-field';
 import type { BookingLocation } from '../../../../shared/booking-location';
 import { ApiFailure, api, useResource } from '@/lib/api';
@@ -15,6 +17,7 @@ import { bookingReceipt } from '@/lib/phone-booking-draft';
 import { useDeviceDraft } from '@/lib/use-device-draft';
 import { useSession } from '@/lib/session';
 import { useWorkspace } from '@/lib/use-workspace';
+import { REQUEST_DESCRIPTION_LABEL, requestDescription } from '../../../../shared/request-details';
 import { orderReference } from '../../../../shared/order-reference';
 import { normalizeBookingPhone } from '../../../../shared/booking-contact';
 
@@ -42,6 +45,8 @@ function ClientRequest({ actor, token, profile }: { actor: string; token: string
   const [step, setStep] = useState(0);
   const [address, setAddress] = useState(''), [postal, setPostal] = useState(''), [city, setCity] = useState(typeof commune === 'string' ? commune.trim().slice(0, 120) : '');
   const [location, setLocation] = useState<BookingLocation>();
+  const [photo, setPhoto] = useState<PendingPhoto>();
+  const [picking, setPicking] = useState(false);
   const [urgency, setUrgency] = useState<'urgent' | 'scheduled' | null>(() => urgence === 'urgent' || urgence === 'scheduled' ? urgence : null);
   const [error, setError] = useState<string | null>(null), [busy, setBusy] = useState(false);
   const lock = useRef(false);
@@ -56,7 +61,7 @@ function ClientRequest({ actor, token, profile }: { actor: string; token: string
   const intent = draft.value?.intent;
   const chosen = intent?.payload.category ?? category;
   const range = intent && !intent.reviewRequired ? intent.estimate : catalogue.data?.ranges[chosen];
-  const fields = { category, description, address, postal_code: postal, city, urgency };
+  const fields = { category, description: requestDescription(description, categories[category]), address, postal_code: postal, city, urgency };
   const contact = { first_name: firstName, last_name: lastName, phone: normalizeBookingPhone(phone) ?? '' };
   const contactPhone = intent ? intent.booking?.contact.phone : contact.phone;
   const progress = intent ? 2 : step;
@@ -104,6 +109,7 @@ function ClientRequest({ actor, token, profile }: { actor: string; token: string
           booking: { service_slug: service && type === input.data.category ? service : `demande-${input.data.category}`, contact: checked.data },
           estimate: range,
           reviewRequired: false,
+          ...(photo ? { photo } : {}),
         };
       }
     }
@@ -123,8 +129,11 @@ function ClientRequest({ actor, token, profile }: { actor: string; token: string
           ...options, body: { ...body, service_slug: sending.booking.service_slug, contact: { ...sending.booking.contact, email: '' }, payment_choice: 'on_site' },
         })
         : await api('/api/interventions', creation, { ...options, body });
-      await draft.update(() => ({ intent: null, confirmedId: result.intervention.id }));
-      if (!signal.aborted) openConfirmed(result.intervention.id);
+      await draft.update(() => ({ intent: null, confirmedId: result.intervention.id, ...(sending.photo ? { confirmedPhoto: sending.photo } : {}) }));
+      if (!signal.aborted) {
+        setPhoto(undefined);
+        if (!sending.photo) openConfirmed(result.intervention.id);
+      }
     } catch (issue) {
       if (signal.aborted) return;
       if (issue instanceof ApiFailure && issue.status === 409 && issue.code === 'estimate_review_required') {
@@ -147,8 +156,9 @@ function ClientRequest({ actor, token, profile }: { actor: string; token: string
       <Copy>Numéro de commande</Copy>
       <Copy kind="label" selectable>{orderReference(id)}</Copy>
       {draft.error && <ReadState loading={false} error={draft.error} onRetry={draft.retry} />}
+      {draft.value.confirmedPhoto && <BookingPhotoReceipt id={id} token={token} photo={draft.value.confirmedPhoto} onSent={() => draft.update(() => ({ intent: null, confirmedId: id }))} />}
       <Action label="Ouvrir mon intervention" onPress={() => openConfirmed(id)} />
-      <Action secondary label="Commencer une autre demande" disabled={draft.pending} onPress={() => draft.edit(() => ({ intent: null, confirmedId: null }))} />
+      <Action secondary label="Commencer une autre demande" disabled={draft.pending || Boolean(draft.value.confirmedPhoto)} onPress={() => draft.edit(() => ({ intent: null, confirmedId: null }))} />
     </Screen>;
   }
   if (!draft.value) return <Screen><ReadState loading={!draft.error} error={draft.error} onRetry={draft.retry} /></Screen>;
@@ -160,8 +170,9 @@ function ClientRequest({ actor, token, profile }: { actor: string; token: string
     {progress === 0 && <Card>
       <Copy kind="subtitle">Type de panne</Copy>
       {Object.entries(categories).map(([key, label]) => <Action key={key} disabled={disabled} secondary={chosen !== key} label={label} onPress={() => setCategory(key as Category)} />)}
-      <Field label="Description" value={intent?.payload.description ?? description} onChangeText={setDescription} maxLength={4000} multiline editable={!disabled}
+      <Field label={REQUEST_DESCRIPTION_LABEL} value={intent?.payload.description ?? description} onChangeText={setDescription} maxLength={4000} multiline editable={!disabled}
         returnKeyType="done" submitBehavior="blurAndSubmit" />
+      <BookingPhotoPicker photo={photo} onChange={setPhoto} onPicking={setPicking} />
       <Copy kind="subtitle">Est-ce urgent ?</Copy>
       <Action label="Oui, c’est urgent" secondary={shownUrgency !== 'urgent'} disabled={disabled} onPress={() => setUrgency('urgent')} />
       <Action label="Non, je peux planifier" secondary={shownUrgency !== 'scheduled'} disabled={disabled} onPress={() => setUrgency('scheduled')} />
@@ -194,6 +205,7 @@ function ClientRequest({ actor, token, profile }: { actor: string; token: string
           setPostal(intent.payload.postal_code);
           setCity(intent.payload.city);
           setLocation(intent.payload.location);
+          setPhoto(intent.photo);
           setUrgency(intent.payload.urgency);
           if (intent.booking) {
             setPhone(intent.booking.contact.phone);
@@ -215,7 +227,7 @@ function ClientRequest({ actor, token, profile }: { actor: string; token: string
         }} />
     </Card>}
     {error && <Copy kind="error">{error}</Copy>}
-    {progress < 2 && <Action label="Continuer" onPress={nextStep} />}
+    {progress < 2 && <Action label="Continuer" disabled={picking} onPress={nextStep} />}
     {progress > 0 && !intent && <Action secondary label="Étape précédente" onPress={() => {
       setError(null);
       setStep(step - 1);

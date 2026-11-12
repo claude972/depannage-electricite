@@ -27,7 +27,8 @@ test(`parcours interactif client ↔ artisan (démo) à ${width} px : demande �
     const { page, errors, api } = await open("client-new", width);
     // 1. Client request: problem → validated address → payment choice → single final recap/confirmation.
     await page.getByRole("button", { name: /Prise ou interrupteur/ }).click();
-    await page.getByLabel(/Décrivez le problème/).fill(DESCRIPTION);
+    assert.equal(await page.getByLabel(/Décrivez la panne/).getAttribute("required"), null);
+    await page.getByLabel(/Décrivez la panne/).fill(DESCRIPTION);
     await click(page, "Continuer");
     await page.getByLabel("Adresse d’intervention").fill("8 rue Victor Hugo");
     await page.getByLabel("Code postal").fill("97200");
@@ -163,7 +164,8 @@ test("#new connecté : le choix de règlement est proposé après l’adresse ; 
   await withApp(async (open) => {
     const { page } = await open("client-new");
     await page.getByRole("button", { name: /Prise ou interrupteur/ }).click();
-    await page.getByLabel(/Décrivez le problème/).fill(DESCRIPTION);
+    assert.equal(await page.getByLabel(/Décrivez la panne/).getAttribute("required"), null);
+    await page.getByLabel(/Décrivez la panne/).fill(DESCRIPTION);
     // Stepper announces the real third step on the booking path.
     assert.match(await page.locator("ol.stepper").innerText(), /Règlement et confirmation/);
     assert.doesNotMatch(await page.locator("ol.stepper").innerText(), /Le récapitulatif/);
@@ -198,7 +200,7 @@ test("#new connecté : le choix de règlement est proposé après l’adresse ; 
     await page.locator('[data-booking-choose="on_site"]').click();
     await click(page, "Modifier la demande");
     await page.waitForTimeout(300);
-    assert.equal(await page.getByLabel(/Décrivez le problème/).inputValue(), DESCRIPTION, "kept problem text");
+    assert.equal(await page.getByLabel(/Décrivez la panne/).inputValue(), DESCRIPTION, "kept problem text");
     // Photos already chosen are kept, shown and editable (contract: same 6-photo cap).
     const photosList = () => page.locator('ul[aria-label="Photos sélectionnées"]').innerText();
     assert.match(await photosList(), /tableau\.png/, "existing photo shown in edit");

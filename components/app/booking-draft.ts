@@ -44,6 +44,7 @@ export type BookingDraft = {
    *  lifetime, carried across login/reload/back/errors). Legacy drafts may lack it: a key is then
    *  created and PROVEN persisted before the first POST. */
   request_id?: string;
+  photo_selected?: true;
   /** Guest checkout: the customer's choice. « on_site » (historical code) = pay AFTER the
    *  intervention ON THE PLATFORM (card via the follow-up, secure link or QR code) — never a direct
    *  payment to the artisan; « card_hold » = card authorisation (empreinte, NOT a charge).
@@ -115,7 +116,7 @@ export function parseBooking(input: unknown): BookingDraft | null {
     range = { min_cents: r.min_cents, max_cents: r.max_cents };
   }
   if (input.estimate_review_required !== undefined && (input.estimate_review_required !== true || !request_id)) return null;
-  return { ...(location ? { location } : {}), slug, urgent: input.urgent, slot, notes, contact: { civility, first_name, last_name, email, phone, company: Boolean(c.company) }, ...(request_id ? { request_id } : {}), ...(payment ? { payment } : {}), ...(reviewed !== undefined ? { reviewed_estimate_version: reviewed } : {}), ...(range ? { reviewed_estimate_range: range } : {}), ...(input.estimate_review_required === true ? { estimate_review_required: true as const } : {}) };
+  return { ...(location ? { location } : {}), ...(input.photo_selected === true ? { photo_selected: true as const } : {}), slug, urgent: input.urgent, slot, notes, contact: { civility, first_name, last_name, email, phone, company: Boolean(c.company) }, ...(request_id ? { request_id } : {}), ...(payment ? { payment } : {}), ...(reviewed !== undefined ? { reviewed_estimate_version: reviewed } : {}), ...(range ? { reviewed_estimate_range: range } : {}), ...(input.estimate_review_required === true ? { estimate_review_required: true as const } : {}) };
 }
 
 export const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
