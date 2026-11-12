@@ -7,7 +7,7 @@
 // 401 or a foreign identity touches the session.
 import { ApiRequestError } from "./api";
 import type { Role, Status, Workspace } from "./types";
-import type { ReadResult } from "./workspace-refresh";
+import type { ReadResult, RefreshCoordinator, RefreshOutcome } from "./workspace-refresh";
 import { workspaceLimitsSchema } from "../../lib/features/workspace/detail-read";
 import { clientWorkspaceCounters } from "../../shared/client-interventions";
 
@@ -74,6 +74,19 @@ export function validateWorkspace(raw: unknown): WorkspaceValidation {
 
 export const INVALID_WORKSPACE_MESSAGE =
   "Le service a répondu sans données exploitables. Vos dossiers n’ont pas été modifiés : réessayez dans un instant.";
+
+/** One retry for a transient first load. Other refresh causes retain their normal behavior. */
+export async function loadInitialWorkspace(
+  ensureFresh: RefreshCoordinator["request"],
+  isCurrent: () => boolean,
+  wait = () => new Promise<void>((resolve) => setTimeout(resolve, 750)),
+): Promise<RefreshOutcome> {
+  if (!isCurrent()) return { kind: "superseded" };
+  const outcome = await ensureFresh({ barrier: false });
+  if (outcome.kind !== "failed" || outcome.status !== 503) return outcome;
+  await wait();
+  return isCurrent() ? ensureFresh() : { kind: "superseded" };
+}
 
 export type WorkspaceReaderDeps = {
   api(path: string): Promise<unknown>;
