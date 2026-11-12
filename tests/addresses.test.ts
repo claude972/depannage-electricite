@@ -61,3 +61,27 @@ test("warm-instance budget bounds traffic without claiming a distributed quota",
   }
   assert.equal(calls, 10);
 });
+
+test("reverse falls back to nearby BAN points when the geocoder times out", async t => {
+  budget(t);
+  const point = (id: string, number: string, lon: number) => ({
+    geometry: { type: "Point", coordinates: [lon, 14.6049] },
+    properties: { id, numero: number, rep: "", nom_voie: "Rue Perrinon", code_postal: "97200", nom_commune: "Fort-de-France", extra: "not returned" },
+  });
+  const paths: string[] = [];
+  const response = await addressResponse(req("lat=14.6049&lon=-61.0685"), "reverse", async input => {
+    const url = new URL(String(input));
+    assert.equal(url.hostname, "data.geopf.fr");
+    paths.push(url.pathname);
+    if (url.pathname === "/geocodage/reverse") return new Response(null, { status: 504 });
+    assert.equal(url.searchParams.get("typeNames"), "BAN.DATA.GOUV:ban");
+    const [south, west, north, east] = url.searchParams.get("bbox")!.split(",").map(Number);
+    assert.ok(south < 14.6049 && 14.6049 < north && west < -61.0685 && -61.0685 < east);
+    return Response.json(data([point("far", "50", -61.04), point("second", "8", -61.0680), point("closest", "4", -61.06852)]));
+  });
+  check(response, 200);
+  assert.deepEqual(paths, ["/geocodage/reverse", "/wfs"]);
+  const body = await response.json();
+  assert.deepEqual(body.candidates.map((entry: typeof body.candidates[number]) => entry.id), ["closest", "second"]);
+  assert.deepEqual(body.candidates[0], { id: "closest", address: "4 Rue Perrinon", postal_code: "97200", city: "Fort-de-France", label: "4 Rue Perrinon, 97200 Fort-de-France", latitude: 14.6049, longitude: -61.06852 });
+});
