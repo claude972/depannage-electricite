@@ -7,6 +7,9 @@ import { UUID_RE } from "../../../lib/features/platform-operations/state-machine
 import { SCOPE_DESCRIPTIONS, SCOPE_LABELS, WRITE_WITHOUT_READ_WARNING, writeScopeWithoutRead } from "../../../lib/features/platform-operations/scope-labels";
 import type { PlatformDemo } from "../../../lib/features/platform-operations/demo";
 import { EmptyState, ErrorBox, Field, Gate, Loading, Pager, Panel, ReadOnly, commandRefused, dateTime, errorText, scopeKey, shortId, useLoad } from "./shared";
+import { ApiRequestError } from "../../app/api";
+import { platformMfaRequired } from "../../../shared/platform-mfa";
+import { PlatformMfaPanel } from "./platform-mfa-panel";
 import styles from "./platform-operations.module.css";
 
 export type PlatformOperatorsViewProps = { state: ContractState; unavailableMessage: string; scope: PlatformViewScope; client: PlatformClient; demo?: PlatformDemo; onNavigate?: (view: string, param?: string) => void };
@@ -23,18 +26,23 @@ function Inner({ scope, client, demo, onNavigate }: PlatformOperatorsViewProps) 
   const list = useLoad(() => (demo ? Promise.resolve({ grants: demo.grants.filter((g) => !status || g.status === status), page: { limit: 25, total: demo.grants.length, has_more: false, next_cursor: null } }) : client.load.operators({ status: status || null, cursor, limit: 25 })), [demo, status, cursor]);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [mfaRequired, setMfaRequired] = useState(false);
   const canWrite = scope.authority.canWrite && me.data?.super_admin === true && !demo;
   const act = useCallback(async (work: () => Promise<unknown | null>, done: string) => {
-    if (busy) return;
+    if (busy || mfaRequired) return;
     if (demo) { setMessage({ kind: "error", text: DEMO_NOTE }); return; }
     setBusy(true); setMessage(null);
     try { const result = await work(); if (result !== null) { setMessage({ kind: "ok", text: done }); list.reload(); me.reload(); } }
     catch (e) {
+      if (e instanceof ApiRequestError && platformMfaRequired(e.status, e)) {
+        setMfaRequired(true);
+        return;
+      }
       setMessage({ kind: "error", text: errorText(e) });
       // E30: a refused revocation / grant re-reads the rights (/me) and the list before anything else.
       if (commandRefused(e)) { me.reload(); list.reload(); }
     } finally { setBusy(false); }
-  }, [busy, demo, list, me]);
+  }, [busy, mfaRequired, demo, list, me]);
   if (me.loading && !me.data) return <Loading label="Chargement des droits…" />;
   if (me.error && !me.data) return <ErrorBox message={me.error} onRetry={me.reload} />;
   if (!me.data?.super_admin) return <div className="forbidden"><strong>Gestion des opérateurs réservée aux super administrateurs.</strong><p>Vos droits actuels : {me.data?.scopes.length ? me.data.scopes.map((s) => SCOPE_LABELS[s]).join(", ") : "aucun scope plateforme"}.</p></div>;
@@ -44,13 +52,17 @@ function Inner({ scope, client, demo, onNavigate }: PlatformOperatorsViewProps) 
       {!scope.authority.canWrite && <ReadOnly reason={scope.authority.reason} />}
       {demo && <p className={styles.alert}>{DEMO_NOTE}</p>}
       {message && <p className={message.kind === "ok" ? styles.success : styles.error} role={message.kind === "ok" ? "status" : "alert"}>{message.text}</p>}
+      {canWrite && mfaRequired && <PlatformMfaPanel userId={scope.userId} onVerified={() => {
+        setMfaRequired(false);
+        setMessage({ kind: "ok", text: "Identité vérifiée. Vous pouvez confirmer à nouveau l’action." });
+      }} />}
       <Panel title="Scopes accordés" intro={`Super administrateurs actifs : ${me.data.super_admin_count ?? "—"}. Un super administrateur détient tout implicitement et ne reçoit aucun scope.`}
         action={<div className={styles.toolbar}><label>Statut<select value={status} onChange={(e) => { setStatus(e.target.value as typeof status); setCursors([null]); }}><option value="">Tous</option><option value="active">Actifs</option><option value="revoked">Révoqués</option></select></label></div>}>
-        <GrantTable list={list} canWrite={canWrite} busy={busy} onNavigate={onNavigate} onRevoke={(grant) => act(() => client.command.revoke({ grant_id: grant.id, note: "" }), "Scope révoqué ; l’historique est conservé.")} />
+        <GrantTable list={list} canWrite={canWrite} busy={busy || mfaRequired} onNavigate={onNavigate} onRevoke={(grant) => act(() => client.command.revoke({ grant_id: grant.id, note: "" }), "Scope révoqué ; l’historique est conservé.")} />
         {list.data && <Pager page={list.data.page} canPrev={cursors.length > 1} onPrev={() => setCursors((c) => c.slice(0, -1))} onNext={() => list.data?.page.next_cursor && setCursors((c) => [...c, list.data!.page.next_cursor])} />}
       </Panel>
-      {canWrite && <GrantForm busy={busy} grants={list.data?.grants ?? []} onSubmit={(input) => act(() => client.command.grant(input), "Scope accordé et audité.")} />}
-      {canWrite && <SuperAdminForm busy={busy} selfId={scope.userId} onSubmit={(input) => act(() => client.command.setSuperAdmin(input), input.enabled ? "Compte promu super administrateur ; ses scopes ont été révoqués." : "Statut super administrateur retiré.")} />}
+      {canWrite && <GrantForm busy={busy || mfaRequired} grants={list.data?.grants ?? []} onSubmit={(input) => act(() => client.command.grant(input), "Scope accordé et audité.")} />}
+      {canWrite && <SuperAdminForm busy={busy || mfaRequired} selfId={scope.userId} onSubmit={(input) => act(() => client.command.setSuperAdmin(input), input.enabled ? "Compte promu super administrateur ; ses scopes ont été révoqués." : "Statut super administrateur retiré.")} />}
     </div>
   );
 }

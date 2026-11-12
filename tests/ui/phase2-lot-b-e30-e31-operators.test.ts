@@ -45,6 +45,53 @@ window.scenarios = {
     if (again && !again.disabled) { again.click(); await tick(20); btn(div, "Confirmer la révocation")?.click(); await tick(300); }
     return { linkTarget, meReread: calls.me - meBefore, revokes: calls.revoke, name: /Opératrice Recette/.test(txt(div)), note: /Habilitation note interne/.test(txt(div)), revokeButtons: !!btn(div, "Révoquer") };
   },
+  async mfa(enrolled) {
+    window.mfa = { id: SELF, enrolled, verified: false, enrolls: 0, attempts: 0 };
+    const writes = [];
+    const client = {
+      load: {
+        me: async () => access(true),
+        operators: async () => ({ grants: [grant], page: { limit: 25, total: 1, has_more: false, next_cursor: null } }),
+      },
+      command: {
+        revoke: async (command) => {
+          writes.push(command);
+          if (!window.mfa.verified) throw new ApiRequestError(403, "Vérification requise.", { code: "platform_mfa_required" });
+          return { ok: true };
+        },
+      },
+    };
+    const div = mountPoint();
+    const root = createRoot(div);
+    root.render(h(StrictMode, null, h(PlatformOperatorsView, { state: "available", unavailableMessage: "", scope, client })));
+    const click = async (name) => {
+      if (!(await until(() => btn(div, name) && !btn(div, name).disabled))) throw new Error("Action indisponible : " + name);
+      btn(div, name).click();
+    };
+    await click("Révoquer");
+    await click("Confirmer la révocation");
+    if (!(await until(() => div.querySelector("[data-platform-mfa]")))) throw new Error("Vérification absente");
+    const focused = document.activeElement.textContent;
+    await click("Commencer la vérification");
+    if (!enrolled) await click("Configurer mon application");
+    if (!(await until(() => div.querySelector("[autocomplete=one-time-code]")))) throw new Error("Champ code absent");
+    const hasQr = Boolean(div.querySelector("img[alt*=configuration]"));
+    const code = div.querySelector("[autocomplete=one-time-code]");
+    setInput(code, "000000");
+    await click("Vérifier le code");
+    const invalid = await until(() => txt(div).includes("Code non vérifié ou expiré"));
+    const writesAfterFailure = writes.length;
+    setInput(code, "123456");
+    await click("Vérifier le code");
+    const success = await until(() => txt(div).includes("Identité vérifiée"));
+    const writesAfterVerification = writes.length;
+    await click("Révoquer");
+    await click("Confirmer la révocation");
+    await until(() => txt(div).includes("Scope révoqué"));
+    root.unmount();
+    div.remove();
+    return { ...window.mfa, focused, hasQr, invalid, success, writesAfterFailure, writesAfterVerification, writes };
+  },
 };
 `;
 
@@ -60,4 +107,46 @@ test("E31 · account_role ⇒ lien vers la fiche client ; E30 · 403 ⇒ relectu
     assert.deepEqual(errors, []);
     assert.deepEqual(requests.filter((u) => u.startsWith("/api/")), []);
   });
+});
+
+const AUTH_STUB = `
+export function createClient() {
+  return { auth: {
+    getUser: async () => ({ data: { user: { id: window.mfa.id,
+      factors: window.mfa.enrolled ? [{ id: "existing", status: "verified", factor_type: "totp" }] : [] } }, error: null }),
+    getClaims: async () => ({ data: { claims: { sub: window.mfa.id, aal: window.mfa.verified ? "aal2" : "aal1" } }, error: null }),
+    mfa: {
+      enroll: async () => { window.mfa.enrolls++; return { data: { id: "new", totp: {
+        qr_code: "data:image/svg+xml;utf-8,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27/%3E",
+        secret: "CLERECETTESYNTHETIQUE",
+      } }, error: null }; },
+      challengeAndVerify: async ({ factorId, code }) => {
+        window.mfa.attempts++;
+        if (factorId !== (window.mfa.enrolled ? "existing" : "new") || code !== "123456") return { error: true };
+        window.mfa.verified = true;
+        return { error: null };
+      },
+    },
+  } };
+}
+`;
+
+test("Chromium : le panneau MFA vérifie ou configure le TOTP et n’envoie jamais l’action automatiquement", { skip }, async () => {
+  await withScenarios(ENTRY, async (run, { errors, requests }) => {
+    for (const enrolled of [true, false]) {
+      const result = await run("mfa", enrolled);
+      assert.equal(result.focused, "Vérification à deux étapes");
+      assert.equal(result.enrolls, enrolled ? 0 : 1);
+      assert.equal(result.hasQr, !enrolled);
+      assert.equal(result.attempts, 2);
+      assert.equal(result.invalid, true);
+      assert.equal(result.success, true);
+      assert.equal(result.writesAfterFailure, 1);
+      assert.equal(result.writesAfterVerification, 1);
+      assert.equal(result.writes.length, 2);
+      assert.deepEqual(result.writes[0], result.writes[1]);
+    }
+    assert.deepEqual(errors, []);
+    assert.deepEqual(requests.filter((u) => u.startsWith("/api/")), []);
+  }, 390, [{ filter: /lib\/supabase\/client$/, contents: AUTH_STUB }]);
 });

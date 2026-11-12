@@ -7,6 +7,7 @@
 // by the webhook-qualified bank confirmation, in one SQL transaction).
 // command_id: the existing execution_id, else a UUID persisted in tab storage (keyed by operator,
 // request and approved version) BEFORE the POST; a lost reply resumes with the same key.
+import { PLATFORM_MFA_MESSAGE, platformMfaRequired } from "../../../shared/platform-mfa";
 import { afterWriteRefusal } from "../../app/refusal";
 import { z } from "zod";
 
@@ -181,8 +182,9 @@ export type RxState = {
   notice: string;
   conflict: string;
   writeError: string;
+  mfaRequired: boolean;
 };
-export const RX_INITIAL: RxState = { phase: "loading", read: null, error: "", confirming: false, writing: false, pending: null, notice: "", conflict: "", writeError: "" };
+export const RX_INITIAL: RxState = { phase: "loading", read: null, error: "", confirming: false, writing: false, pending: null, notice: "", conflict: "", writeError: "", mfaRequired: false };
 
 export function applyRead(s: RxState, r: RxResult): RxState {
   if (r.status === 200) {
@@ -211,6 +213,8 @@ export function applyExecute(s: RxState, r: RxResult, cmd: RxCommand): { state: 
     if (!reply) return { state: { ...base, pending: cmd, writeError: RX_COPY.replyUnreadable, notice: "" }, reload: true };
     return { state: { ...base, pending: null, writeError: "", conflict: "", notice: RX_COPY.submitted }, reload: true };
   }
+  if (platformMfaRequired(r.status, r.body))
+    return { state: { ...base, pending: cmd, writeError: PLATFORM_MFA_MESSAGE, mfaRequired: true, notice: "" }, reload: false };
   if (r.status === 409) return { state: { ...base, pending: null, conflict: RX_COPY.conflict, notice: "" }, reload: false };
   if (r.status === 503 || r.status === REFUND_EXEC_TIMEOUT || r.status === 0 || r.status >= 500)
     return { state: { ...base, pending: cmd, writeError: RX_COPY.retry, notice: "" }, reload: false };
@@ -315,10 +319,15 @@ export function createRxController({
       }
       return send(cmd);
     },
+    finishMfa() {
+      if (ok() && get().mfaRequired) {
+        set({ ...get(), mfaRequired: false, writeError: "Identité vérifiée. Vous pouvez confirmer la reprise." });
+      }
+    },
     /** Replays EXACTLY the pending command (same id + version). Never after a 409. */
     async retry(): Promise<boolean> {
       const cmd = get().pending;
-      if (writing || demo || !cmd || !cap()) return false;
+      if (writing || demo || !cmd || !cap() || get().mfaRequired) return false;
       return send(cmd);
     },
     attach() {

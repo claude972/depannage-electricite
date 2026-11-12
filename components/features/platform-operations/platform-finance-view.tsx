@@ -4,6 +4,9 @@
 import { useCallback, useState, type ReactNode } from "react";
 import type { ContractState, Dispute, DisputeOutcome, FinanceConfig, FinanceReport, Invoice, InvoiceReadiness, LedgerEntry, Page, PlatformAccess, PlatformClient, PlatformViewScope, RefundRequest } from "../../../lib/features/platform-operations/types";
 import { COMMISSION_NOT_CONFIGURED, REFUND_EXECUTION_MESSAGE } from "../../../lib/features/platform-operations/config";
+import { ApiRequestError } from "../../app/api";
+import { platformMfaRequired } from "../../../shared/platform-mfa";
+import { PlatformMfaPanel } from "./platform-mfa-panel";
 import { RefundExecutionPanel } from "../refund-execution/refund-execution-panel";
 import { ReconciliationPanel } from "../finance-reconciliation/reconciliation-panel";
 import { SubscriptionsCatalogPanel } from "../subscriptions-catalog/catalog-panel";
@@ -120,18 +123,22 @@ function Inner({ scope, client, context, demo, onNavigate }: PlatformFinanceView
   const me = useLoad<PlatformAccess>(() => (demo ? Promise.resolve(demo.access) : client.load.me()), [demo]);
   const [message, notify] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [mfaRequired, setMfaRequired] = useState(false);
   const act = useCallback(async (work: () => Promise<unknown | null>, done: string, after?: () => void) => {
-    if (busy) return;
+    if (busy || (tab === "refunds" && mfaRequired)) return;
     if (demo) { notify({ kind: "error", text: DEMO_NOTE }); return; }
     setBusy(true); notify(null);
     try { const result = await work(); if (result !== null) { notify({ kind: "ok", text: done }); after?.(); } }
-    catch (e) { notify({ kind: "error", text: errorText(e) }); } finally { setBusy(false); }
-  }, [busy, demo]);
+    catch (e) {
+      if (e instanceof ApiRequestError && platformMfaRequired(e.status, e)) setMfaRequired(true);
+      else notify({ kind: "error", text: errorText(e) });
+    } finally { setBusy(false); }
+  }, [busy, demo, mfaRequired, tab]);
   if (me.loading && !me.data) return <Loading label="Chargement des droits…" />;
   if (me.error && !me.data) return <ErrorBox message={me.error} onRetry={me.reload} />;
   if (!me.data?.capabilities.finance) return <div className="forbidden"><strong>Cet espace nécessite le scope finance.</strong><p>Demandez l’habilitation à un super administrateur.</p></div>;
   const canWrite = scope.authority.canWrite && !demo && (me.data.super_admin || me.data.scopes.includes("finance_write"));
-  const ctx: Ctx = { client, demo, canWrite, superAdmin: !demo && scope.authority.canWrite && me.data.super_admin, notify, busy, act, scopeKey: scopeKey(scope), rendering: me.data.capabilities.invoice_rendering === true, refundExecution: canWrite && me.data.capabilities.refund_execution === true, userId: scope.userId, onNavigate };
+  const ctx: Ctx = { client, demo, canWrite, superAdmin: !demo && scope.authority.canWrite && me.data.super_admin, notify, busy: busy || (tab === "refunds" && mfaRequired), act, scopeKey: scopeKey(scope), rendering: me.data.capabilities.invoice_rendering === true, refundExecution: canWrite && me.data.capabilities.refund_execution === true, userId: scope.userId, onNavigate };
   return (
     <div className={styles.view} data-module="platform-operations" data-platform-view="finance">
       <div className={styles.head}><div><h2>Finance plateforme</h2><p>Consultez les paiements confirmés et les documents associés. {ctx.refundExecution ? "Les demandes approuvées et éligibles peuvent être remboursées via Stripe." : "L’exécution des remboursements est indisponible dans cet espace."}</p></div></div>
@@ -144,6 +151,10 @@ function Inner({ scope, client, context, demo, onNavigate }: PlatformFinanceView
       {tab === "overview" && <Overview ctx={ctx} />}
       {tab === "ledger" && <Ledger ctx={ctx} />}
       {tab === "invoices" && <Invoices ctx={ctx} />}
+      {tab === "refunds" && canWrite && mfaRequired && <PlatformMfaPanel userId={scope.userId} onVerified={() => {
+        setMfaRequired(false);
+        notify({ kind: "ok", text: "Identité vérifiée. Vous pouvez confirmer à nouveau l’action." });
+      }} />}
       {tab === "refunds" && <Refunds ctx={ctx} />}
       {tab === "disputes" && <Disputes ctx={ctx} />}
       {tab === "observations" && <ReconciliationPanel demo={Boolean(demo)} canRead={me.data.super_admin || me.data.scopes.includes("finance_read")} canWrite={scope.authority.canWrite && !demo && (me.data.super_admin || (me.data.scopes.includes("finance_read") && me.data.scopes.includes("finance_write")))} context={context} onOpenDossier={onNavigate ? (id) => onNavigate("intervention", id) : undefined} />}

@@ -20,6 +20,7 @@ import {
   type RxState,
   type RxStore,
 } from "./refund-execution-model";
+import { PlatformMfaPanel } from "../platform-operations/platform-mfa-panel";
 import styles from "./refund-execution.module.css";
 
 export type RefundExecutionPanelProps = {
@@ -127,7 +128,10 @@ function Inner({ request, capability, api, context = DEFAULT_RX_CONTEXT, demo = 
           <button type="button" className={styles.button} onClick={c.load} data-rx-reload="">Actualiser</button>
         </div>
       )}
-      {state.writeError && (
+      {state.mfaRequired && capability && (
+        <PlatformMfaPanel userId={context.userId() ?? ""} onVerified={() => controller.current?.finishMfa()} />
+      )}
+      {state.writeError && !state.mfaRequired && (
         <div role="alert" data-rx-write-error="">
           <p className={styles.error}>{state.writeError}</p>
           {state.pending && capability ? (

@@ -29,7 +29,7 @@ declare answer jsonb;
 begin
  if actor is null then execute 'set local role anon'; else execute 'set local role authenticated'; end if;
  perform set_config('request.jwt.claim.sub',coalesce(actor::text,''),true);
- perform set_config('request.jwt.claims',jsonb_build_object('sub',actor,'role',case when actor is null then 'anon' else 'authenticated' end)::text,true);
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',actor,'role',case when actor is null then 'anon' else 'authenticated' end,'aal',case when actor is null then null else 'aal2' end)::text,true);
  execute 'select to_jsonb(qa_result.qa_value) from ('||statement||') qa_result(qa_value)' into answer;
  execute 'reset role';
  return answer;
@@ -155,6 +155,7 @@ if(process.argv[2]==='--emit-rollback'){
  await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;
  create schema auth;create table auth.users(id uuid primary key,aud text,role text,raw_user_meta_data jsonb default '{}',email text,email_confirmed_at timestamptz,created_at timestamptz,updated_at timestamptz,phone text,phone_confirmed_at timestamptz);
  create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+ create function auth.jwt() returns jsonb language sql stable as $$select nullif(current_setting('request.jwt.claims',true),'')::jsonb$$;
  grant usage on schema auth to authenticated,anon,service_role;grant execute on function auth.uid() to authenticated,anon,service_role;
  create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
  create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text);alter table storage.objects enable row level security;`);
