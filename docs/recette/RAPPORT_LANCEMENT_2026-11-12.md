@@ -4,6 +4,8 @@
 
 [Ouvrir la recette Web/PWA](https://domdepannage-recette-20261112.vercel.app/) · [Plan initial](PLAN_CORRECTIFS_LANCEMENT_2026-11-11.md) · [Guide d’exploitation et procédure LIVE](EXPLOITATION_CANDIDAT_LANCEMENT.md)
 
+[Mise à jour de la recette · iPhone 15, alertes et restauration](SUIVI_LANCEMENT_2026-11-12.md)
+
 L’alias public sert le candidat Web/API `450d2dd1` dans le projet Vercel isolé `domdepannage-recette-20261112`. Aucun compte Vercel n’est nécessaire pour ouvrir le site. L’espace privé exige une session applicative. L’API commune des builds internes cible cette même origine. Le candidat utilise 132 migrations sur Supabase de recette. Les changements après le commit natif `bf6a6932` portent sur le retour après connexion Web et deux montages de tests. Le code natif, ses dépendances, les routes d’API et les migrations sont identiques entre ces deux commits.
 
 ## Résultats par phase
@@ -25,7 +27,7 @@ L’alias public sert le candidat Web/API `450d2dd1` dans le projet Vercel isol�
 - **Vérification Web GitHub.** TypeScript, 2 025 tests réussis, 280 ignorés et zéro échec sur le commit `450d2dd1`. Les builds Next.js par Turbopack et Webpack passent. Le rejeu local de l’ensemble a eu deux échecs Chromium. Les dix tests des deux fichiers concernés passent ensuite en exécution séquentielle. [Exécution GitHub](https://github.com/claude972/depannage-electricite/actions/runs/43215127069)
 - **SQL.** Le travail GitHub PostgreSQL isolé passe. Les 132 migrations ont aussi été appliquées sur la base de recette locale et la recette hébergée est à jour. Les tests ciblés vérifient les remboursements historiques avec MFA, la preuve de levée de réserve et le choix de capacité 3 ou 4 missions. La restauration PostgreSQL, Auth et Storage a utilisé des services Supabase réels en local.
 - **Android 15.** EAS indique `FINISHED` pour le commit natif `bf6a6932`. L’APK répond HTTP 200, passe la vérification Android v2 et embarque l’URL de recette. [Build Android 15](https://expo.dev/accounts/claude972/projects/depannage-electrique-mobile/builds/e512ff81-5e17-450b-964b-e1f1266ba33f)
-- **iPhone 15.** L’export JavaScript iOS et la génération des ressources de carte passent. EAS refuse la compilation iOS car le quota est épuisé jusqu’au 1er décembre 2026. En local, le profil et le certificat existants ont été contrôlés. En sélectionnant ce certificat et en isolant le cache de compilation, Xcode a lancé l’archivage, puis Swift a échoué dans `ExpoModulesJSI` sur `sending 'slot' risks causing data races`. Ce Mac utilise Xcode 26.3 et Expo SDK 58 requiert Xcode 26.4 ou plus récent. Le build iPhone 15 est à reconstruire avec cette version de Xcode ou avec le quota EAS rétabli. [Versions Xcode prises en charge par Expo](https://docs.expo.dev/versions/v58.0.0/#support-for-android-and-ios-versions)
+- **iPhone 15.** La relance EAS a réussi à 08 h 56 après le refus initial du quota. Le profil interne est inclus et la signature de l’IPA a été vérifiée. [Build iPhone 15](https://expo.dev/accounts/claude972/projects/depannage-electrique-mobile/builds/a0393553-a40b-43e4-b447-2dcf0952e292)
 
 ## Décisions prises
 
