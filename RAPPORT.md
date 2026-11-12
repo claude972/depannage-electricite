@@ -1,5 +1,7 @@
 # Recette DomDépannage · Web et PWA
 
+La recette du candidat de lancement du 12 novembre et son lien public sont disponibles dans le [rapport de lancement](docs/recette/RAPPORT_LANCEMENT_2026-11-12.md).
+
 11 novembre 2026 · Branche `feat/pwa-autonomie-2026-11-11` · Base `4a753922`
 
 [Ouvrir la preview Vercel](https://depannage-electricite-git-feat-pwa-auton-e327e4-brafas-projects.vercel.app/)
