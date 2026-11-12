@@ -21,6 +21,7 @@ import { stagePublicBookingPhoto } from "../app/public-booking-photo";
 import { REQUEST_DESCRIPTION_LABEL, REQUEST_PHOTO_LABEL } from "../../shared/request-details";
 import type { ServiceEntry } from "./public-service-catalog";
 import styles from "./public-booking.module.css";
+import { EnterpriseBookingLink } from "./enterprise-booking-link";
 import { useIndicativeText } from "../features/indicative-prices/indicative-range";
 
 // ---- State and pure rules ------------------------------------------------------------------------
@@ -341,6 +342,8 @@ export function BookingWizard({
             {STEP_TITLES[state.step]}
           </h2>
 
+          {state.step === 1 && <div className={styles.private}><EnterpriseBookingLink /></div>}
+
           <form id={formId} className={styles.form} onSubmit={submit} noValidate>
             {state.step === 1 && (
               <>
@@ -414,10 +417,6 @@ export function BookingWizard({
                     <input required type="tel" autoComplete="tel" inputMode="tel" maxLength={30} value={state.contact.phone} onChange={(e) => setContact({ phone: e.target.value })} />
                   </Field>
                 </div>
-                <label className={styles.check}>
-                  <input type="checkbox" checked={state.contact.company} onChange={(e) => setContact({ company: e.target.checked })} />
-                  Je fais cette demande pour une entreprise
-                </label>
               </>
             )}
 
@@ -469,7 +468,7 @@ export function BookingWizard({
                   <div><dt>Estimation indicative</dt><dd data-indicative-range={service.category}>{liveRange}</dd></div>
                   <div><dt>Urgence</dt><dd>{urgencyLabel(state)}</dd></div>
                   <div><dt>Adresse d’intervention</dt><dd>{state.address.address}<br />{state.address.postal_code} {state.address.city}{state.location?.access_details && <><br />{state.location.access_details}</>}</dd></div>
-                  <div><dt>Vos coordonnées (privées)</dt><dd>{[CIVILITY_LABEL[state.contact.civility] === "Non précisé" ? "" : CIVILITY_LABEL[state.contact.civility], state.contact.first_name, state.contact.last_name].filter(Boolean).join(" ")}<br />{state.contact.email} · {state.contact.phone}{state.contact.company ? <><br />Demande pour une entreprise</> : null}</dd></div>
+                  <div><dt>Vos coordonnées (privées)</dt><dd>{[CIVILITY_LABEL[state.contact.civility] === "Non précisé" ? "" : CIVILITY_LABEL[state.contact.civility], state.contact.first_name, state.contact.last_name].filter(Boolean).join(" ")}<br />{state.contact.email} · {state.contact.phone}</dd></div>
                   <div><dt>Règlement</dt><dd>{state.payment ? PAYMENT_LABEL[state.payment] : "À préciser"}</dd></div>
                   {state.notes.trim() && <div><dt>Précisions</dt><dd>{state.notes}</dd></div>}
                   {photo && <div><dt>Photo</dt><dd>{photo.name}</dd></div>}

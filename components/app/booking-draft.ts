@@ -6,7 +6,7 @@ import { ACCOUNT_PHONE_MESSAGE, normalizeAccountPhone, normalizeBookingPhone as 
 // category, description, address, postal_code, city, urgency). The booking EXTRAS live in a
 // separate tab-scoped entry, same 30 min TTL:
 //  - the chosen service slug and the wished slot (non-personal, may be written in the description);
-//  - the contact details (civility, names, email, phone, company flag): PRIVATE — never written
+//  - the contact details (civility, names, email, phone): PRIVATE — never written
 //    into the description (offers can read it). After login they go to PATCH /api/profile
 //    {full_name, phone}; the email is the Auth email.
 export const BOOKING_DRAFT_KEY = "courant-booking-draft";
@@ -29,6 +29,7 @@ export type BookingContact = {
   last_name: string;
   email: string;
   phone: string;
+  /** Legacy drafts marked for an organization must never be sent as personal requests. */
   company: boolean;
 };
 export type BookingDraft = {

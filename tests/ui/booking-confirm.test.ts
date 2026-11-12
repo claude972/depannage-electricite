@@ -24,6 +24,21 @@ test("confirmation renders the recap, private contact apart from the description
   assert.ok(!draft.description.includes("Martin") && !draft.description.includes("0696"), "contact never in the description");
 });
 
+test("un ancien brouillon déclaré entreprise ne peut pas être envoyé comme demande personnelle", () => {
+  const html = renderToStaticMarkup(createElement(BookingConfirm, {
+    draft,
+    booking: { ...booking, contact: { ...booking.contact, company: true }, payment: "card_hold" },
+    busy: false,
+    profileId: "u1",
+    confirmBooking: async () => { throw new Error("Envoi inattendu"); },
+    onEdit() {},
+    onContactChange() {},
+    verifyCardHold: async () => { throw new Error("Vérification inattendue"); },
+  }));
+  assert.match(html, /href="\/#sites">Ouvrir l’espace entreprise/);
+  assert.doesNotMatch(html, /data-booking-send|Vérifier mon empreinte|Modifier la demande/);
+});
+
 test("send logic: one confirmBooking call, double click refused, invalid contact or missing payment ⇒ no call", () => {
   const src = readFileSync("components/role/booking-confirm.tsx", "utf8");
   assert.match(src, /if \(inFlight\.current \|\| busy\) return; \/\/ one POST only/);
