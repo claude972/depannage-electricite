@@ -9,7 +9,7 @@ npm run typecheck
 npx expo start
 ```
 
-Le profil EAS `preview` produit un APK Android et un build simulateur iOS. Les variables `EXPO_PUBLIC_*` du profil pointent vers la preview. Voir [le plan de livraison](../../docs/MOBILE_DELIVERY.md).
+Le profil EAS `preview` produit un APK Android et un build simulateur iOS. Les trois profils internes utilisent la même URL Web/API de recette, définie dans `preview.env.EXPO_PUBLIC_API_URL` et héritée par `simulator` et `device`. [Candidat Web/API](https://domdepannage-recette-20261112.vercel.app) Voir [le plan de livraison](../../docs/MOBILE_DELIVERY.md).
 
 ## Profils simulateur et appareil
 
@@ -23,5 +23,5 @@ npm run build:android
 - iOS `device` n’utilise que des identifiants déjà enregistrés sur le compte Expo `claude972` pour `com.claude972.depannageelectrique.preview` : certificat de distribution, profil ad hoc et iPhone de test déjà inscrit. Le script combine `--non-interactive` et `--freeze-credentials` pour empêcher la création et le renouvellement automatiques.
 - Android n’utilise que le keystore local existant : `credentials.json` et le fichier `.jks` qu’il désigne, à la racine de `apps/mobile`, tous deux ignorés par git. Rien n’est généré s’ils manquent.
 - La version et les compteurs de build sont locaux (`appVersionSource: local`) : `version`, `ios.buildNumber` et `android.versionCode` de `app.json` suivent `shared/release.ts`. Augmenter les deux compteurs avant chaque build remis à un testeur ; `npm test` à la racine refuse un écart.
-- Avant le build, vérifier que les variables publiques de l’environnement EAS `preview` pointent sur le candidat joignable depuis les téléphones, avec le même projet Supabase de recette. Ne pas mettre de jeton de contournement Vercel dans l’application.
+- Avant le build, vérifier l’accès au candidat HTTPS depuis un téléphone et la correspondance de `EXPO_PUBLIC_SUPABASE_URL` et `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` dans l’environnement EAS `preview` avec le projet Supabase de recette. Utiliser le domaine du candidat directement dans l’application.
 - `requireCommit` impose un dépôt propre ; le dossier `shared/` du dépôt doit faire partie du commit envoyé, Metro le lit (`metro.config.js`).
