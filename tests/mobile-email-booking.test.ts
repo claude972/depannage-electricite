@@ -4,8 +4,30 @@ import test from 'node:test';
 import { createDraftStore } from '../apps/mobile/src/lib/draft-store';
 import { accountContact, confirmedAccountEmail } from '../apps/mobile/src/lib/email-account';
 import { hasPrivateLocation } from '../apps/mobile/src/lib/booking-location';
-import type { StagedPhoneBooking } from '../apps/mobile/src/lib/phone-booking-draft';
+import type { requestFields } from '../apps/mobile/src/lib/contracts';
+import type { PendingPhoto } from '../apps/mobile/src/lib/intervention-drafts';
+import type { BookingLocation } from '../shared/booking-location';
 import { ApiError, loadModule } from './documents/harness';
+
+type StagedBooking = {
+  id: string;
+  input: ReturnType<typeof requestFields.parse> & { service_slug: string; location?: BookingLocation };
+  contact: { first_name: string; last_name: string; phone: string };
+  photo?: PendingPhoto;
+};
+
+// The isolated loader runs the native module with injected device bindings in Node.
+// Keep its test-facing contract free of the native runtime's global type declarations.
+type IsolatedDraftModule = {
+  PendingEmailBooking: new () => Error;
+  stageEmailBookingKey(email: string): Promise<string>;
+  emailBookingKey(actor: string, stageKey: string): string;
+  saveEmailBooking(stageKey: string, email: string, request: StagedBooking, actor: string | null, editExisting?: boolean): Promise<void>;
+  discardUnclaimedEmailBooking(stageKey: string, email: string, requestId: string): Promise<boolean>;
+  claimEmailBooking(stageKey: string, email: string, actor: string): Promise<StagedBooking | null>;
+  clearEmailBooking(stageKey: string, email: string, actor: string, requestId: string): Promise<void>;
+  hasEmailBooking(email: string, actor: string): Promise<boolean>;
+};
 
 const ORIGIN = 'https://preview.example.test';
 const EMAIL = 'camille@example.test';
@@ -24,7 +46,7 @@ const draft = {
   },
   contact: { first_name: 'Camille', last_name: 'Recette', phone: '+596696123456' },
   photo,
-} satisfies StagedPhoneBooking;
+} satisfies StagedBooking;
 
 function fixture() {
   const state = new Map<string, string>();
@@ -38,7 +60,7 @@ function fixture() {
     './config': { apiOrigin: ORIGIN },
     './device-drafts': { deviceDrafts },
     './api': {},
-  }) as unknown as typeof import('../apps/mobile/src/lib/email-booking-draft');
+  }) as unknown as IsolatedDraftModule;
   return { load, deviceDrafts, state };
 }
 
