@@ -45,11 +45,11 @@ export async function executeSettlement(admin:ReturnType<typeof adminClient>,l:S
   const before=proof.charge.payment_method_details?.card?.capture_before;
   if(proof.pi.status!=="requires_capture"||proof.pi.amount!==l.authorized_max||proof.pi.amount_received!==0||proof.pi.amount_capturable<l.amount_cents||proof.charge.captured||proof.charge.paid!==true||proof.charge.status!=="succeeded"||!Number.isSafeInteger(before)||(before??0)<=Date.now()/1000)throw conflict();
   if(!freshAttempt(l.created_at)){await markReview(admin,l);return;}
-  // Final partial capture = EXACT accepted base + accepted amendments. No arbitrary partial amount.
+  // Stripe finalizes a single capture by default and rejects final_capture without multicapture.
   if(!await qualifiedAccount(p,l.account_id,l.artisan_id))throw conflict();
   const permission=await admin.rpc("authorize_guest_settlement_operation",{p_id:l.id,p_actor:l.actor_id,p_phase:"capture"});dbError(permission.error);
   if(!freshAttempt(l.created_at))throw conflict();
-  await p.stripe.paymentIntents.capture(l.intent_id,{amount_to_capture:l.amount_cents,final_capture:true},{idempotencyKey:`guest-capture:${l.id}`});
+  await p.stripe.paymentIntents.capture(l.intent_id,{amount_to_capture:l.amount_cents},{idempotencyKey:`guest-capture:${l.id}`});
   proof=await paymentProof(p,l);if(!captured(l,proof))throw unknown();
  }
  const recorded=await admin.rpc("record_guest_settlement",{p_id:l.id,p_actor:l.actor_id,p_charge:proof.charge.id,p_amount:l.amount_cents});dbError(recorded.error);l=await settlementLedger(admin,l.id,l.actor_id);
