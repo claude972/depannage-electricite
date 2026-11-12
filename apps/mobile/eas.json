@@ -8,6 +8,9 @@
     "preview": {
       "distribution": "internal",
       "environment": "preview",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://domdepannage-recette-20261112.vercel.app"
+      },
       "android": {
         "buildType": "apk",
         "credentialsSource": "local"
@@ -18,35 +21,18 @@
       }
     },
     "simulator": {
-      "distribution": "internal",
-      "environment": "preview",
-      "android": {
-        "buildType": "apk",
-        "credentialsSource": "local"
-      },
-      "ios": {
-        "simulator": true,
-        "scheme": "DomDepannage"
-      },
+      "extends": "preview",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://depannage-electricite-8nimgrdre-brafas-projects.vercel.app",
         "EXPO_PUBLIC_HOME_SUPPORT_PREVIEW": "true"
       }
     },
     "device": {
-      "distribution": "internal",
-      "environment": "preview",
-      "android": {
-        "buildType": "apk",
-        "credentialsSource": "local"
-      },
+      "extends": "preview",
       "ios": {
         "simulator": false,
-        "credentialsSource": "remote",
-        "scheme": "DomDepannage"
+        "credentialsSource": "remote"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://depannage-electricite-8nimgrdre-brafas-projects.vercel.app",
         "EXPO_PUBLIC_HOME_SUPPORT_PREVIEW": "true"
       }
     }

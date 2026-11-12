@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { DETAIL_PROJECTIONS, detailReadSchema } from "../lib/features/workspace/detail-read";
+import { fakeServerHelpers, loadModule } from "./documents/harness";
 import { routeHarness, job, quote, payment, site, org, JOB, USER, ARTISAN, SITE, ORG, id, stamp } from "./detail-read-fixtures";
 const noStore = (r: Response) => assert.equal(r.headers.get("Cache-Control"), "private, no-store");
 
@@ -13,6 +14,10 @@ test("real GET route reads the requested old dossier and related records by id, 
   assert.equal(body.payments.items.length, 1); assert.equal(body.payments.incomplete, false);
   assert.ok(!JSON.stringify(body).includes("session_id"));
   for (const c of h.calls) {
+    if (c.table === "read_booking_location") {
+      assert.equal(c.url.pathname, "/rest/v1/rpc/read_booking_location");
+      continue;
+    }
     const key = c.table === "interventions" ? "intervention" : c.table === "sites" ? "site" : c.table === "organizations" ? "organization" : c.table === "intervention_appointments" ? "appointments" : c.table;
     assert.equal(c.projection, c.table === "quotes" && c.projection === "id" ? "id" : DETAIL_PROJECTIONS[key as keyof typeof DETAIL_PROJECTIONS]);
     assert.ok(c.url.searchParams.has("id") || c.url.searchParams.has("intervention_id") || c.url.searchParams.has("quote_id"));
@@ -156,5 +161,59 @@ test("detail and workspace preserve payment provenance without exposing provider
     assert.equal(rows[0].method, "on_site_declared");
     assert.equal(JSON.stringify(body).includes("server-only-never-return"), false);
     if (mode === "detail") assert.equal(detailReadSchema.safeParse(body).success, true);
+  }
+});
+
+
+test("the detail contract can include a private booking location and tolerate a rolling migration", async () => {
+  const location = { latitude: 14.6049, longitude: -61.0685, access_details: "Portillon bleu" };
+  for (const [rpc, expected] of [[location, location], [null, null], [{ ...location, contact: "private" }, undefined]] as const) {
+    const h = routeHarness("detail", { intercept: (call) => {
+      if (call.table === "read_booking_location") return Response.json(rpc);
+    } });
+    const response = await h.get();
+    noStore(response);
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.deepEqual(body.booking_location, expected);
+    assert.equal(detailReadSchema.safeParse(body).success, true);
+    assert.ok(!JSON.stringify(body).includes('"contact"'));
+  }
+  const oldSchema = routeHarness("detail", { intercept: (call) => call.table === "read_booking_location"
+    ? Response.json({ code: "PGRST202" }, { status: 404 }) : undefined });
+  assert.equal((await oldSchema.get()).status, 200);
+  assert.equal((await (await oldSchema.get()).json()).booking_location, undefined);
+});
+
+
+test("booking location point read is private, scoped by the RPC and keeps absent and failed responses distinct", async () => {
+  type Read = (request: Request, context: { params: Promise<{ id: string }> }) => Promise<Response>;
+  const path = "/api/interventions/" + JOB + "/booking-location";
+  const location = { latitude: null, longitude: null, access_details: "Porte de service" };
+  for (const scenario of [
+    { authenticated: false, data: location, status: 401, calls: 0 },
+    { authenticated: true, data: location, status: 200, calls: 1 },
+    { authenticated: true, data: null, status: 200, calls: 1 },
+    { authenticated: true, data: { ...location, phone: "private" }, status: 503, calls: 1 },
+  ]) {
+    const seen: Array<{ name: string; id: string }> = [];
+    const db = {
+      rpc: async (name: string, params: { p_intervention_id: string }) => {
+        seen.push({ name, id: params.p_intervention_id });
+        return { data: scenario.data, error: null };
+      },
+    };
+    const route = loadModule("app/api/interventions/[id]/booking-location/route.ts", {
+      "@/lib/supabase/server": fakeServerHelpers({ authenticated: scenario.authenticated, db }),
+    });
+    const response = await (route.GET as Read)(new Request("https://app.example.test" + path), { params: Promise.resolve({ id: JOB }) });
+    noStore(response);
+    assert.equal(response.status, scenario.status);
+    assert.deepEqual(seen, scenario.calls ? [{ name: "read_booking_location", id: JOB }] : []);
+    if (scenario.status === 200) assert.deepEqual(await response.json(), { booking_location: scenario.data });
+    else {
+      assert.ok(!(await response.text()).includes("private"));
+      if (scenario.status === 503) assert.equal(response.headers.get("Retry-After"), "2");
+    }
   }
 });

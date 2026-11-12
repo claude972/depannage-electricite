@@ -6,6 +6,7 @@
 // lists flagged). Actions stay in the dossier views once the dossier is in the recent list.
 import { Loader, PageTitle, Tag, Unavailable } from "../app/ui";
 import { CATEGORIES, STATUS, date, dateTime, money } from "../app/format";
+import { BookingLocationRows } from "./booking-location-rows";
 import { chronologicalMessages } from "../app/detail-read-client";
 import type { DetailRead } from "../../lib/features/workspace/detail-read";
 
@@ -15,6 +16,7 @@ type Props = {
   onBack: () => void;
   /** Enterprise: the dossier belongs to a site other than the active one. */
   outsideActivePerimeter?: boolean;
+  bookingLocationContext?: string;
 };
 
 const QUOTE_STATUS: Record<string, string> = { sent: "Envoyé", accepted: "Accepté", rejected: "Refusé" };
@@ -40,7 +42,7 @@ function Unreadable() {
   );
 }
 
-export function DetailReadView({ detail, backLabel, onBack, outsideActivePerimeter }: Props) {
+export function DetailReadView({ detail, backLabel, onBack, outsideActivePerimeter, bookingLocationContext }: Props) {
   const i = detail.intervention;
   const cat = CATEGORIES.find((c) => c.id === i.category)?.label ?? "Intervention";
   const messages = chronologicalMessages(detail);
@@ -71,6 +73,7 @@ export function DetailReadView({ detail, backLabel, onBack, outsideActivePerimet
               {i.address}, {i.postal_code} {i.city}
             </dd>
           </div>
+          {bookingLocationContext && <BookingLocationRows key={`${bookingLocationContext}|${i.id}|${i.updated_at}|${i.artisan_id}`} interventionId={i.id} />}
           <div>
             <dt>Estimation initiale (indicative)</dt>
             <dd>
@@ -182,11 +185,13 @@ export function PointReadState({
   backLabel,
   onBack,
   outsideActivePerimeter,
+  bookingLocationContext,
 }: {
   presence: { decision: string; detail?: DetailRead; retry: () => void; retryInS?: number };
   backLabel: string;
   onBack: () => void;
   outsideActivePerimeter?: (detail: DetailRead) => boolean;
+  bookingLocationContext?: string;
 }) {
   if (presence.decision === "detail" && presence.detail)
     return (
@@ -195,6 +200,7 @@ export function PointReadState({
         backLabel={backLabel}
         onBack={onBack}
         outsideActivePerimeter={outsideActivePerimeter?.(presence.detail)}
+        bookingLocationContext={bookingLocationContext}
       />
     );
   if (presence.decision === "detail_loading") return <Loader label="Ouverture du dossier…" />;

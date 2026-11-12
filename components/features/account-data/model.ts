@@ -7,12 +7,14 @@
 //   POST /api/profile/data { action: "request_erasure", request_id: UUID, confirmed: true }
 //        → { ticket_id, status, replayed } through the existing support tickets. NOTHING is erased.
 // Organisation dossiers and third-party messages are not part of the personal download (MISSIONS SYS-09).
-// SYS-09 / PUB-10 completion (MISSIONS 1e17ca7): two more paged sections, same paging rule:
+// Additional sections use the same paging rule and never expose the owner key:
+//   booking_locations → { id, intervention_id, location: { latitude, longitude, access_details } }
 //   erasure_requests  → { id, ticket_id, state, execution_state, version, created_at, updated_at }
 //   payment_reminders → { id, version, remind_at, status, processed_at }
 //   The server checks the identity of every row WITHOUT projecting it: no owner key is expected (and
 //   any extra key — quote / notification ids, fingerprint, organisation data — refuses the page).
 import { z } from "zod";
+import { parseBookingLocation } from "../../../shared/booking-location";
 
 export const DATA_PATH = "/api/profile/data";
 export const AD_TIMEOUT_MS = 15_000;
@@ -21,13 +23,14 @@ export const PAGE_SIZE = 100;
 export type Result = { status: number; body: unknown; retryAfterS: number | null };
 export type Context = { generation(): number; userId(): string | null };
 
-export const SECTIONS = ["account", "addresses", "requests", "messages", "documents", "support", "erasure_requests", "payment_reminders"] as const;
+export const SECTIONS = ["account", "addresses", "requests", "booking_locations", "messages", "documents", "support", "erasure_requests", "payment_reminders"] as const;
 export type Section = (typeof SECTIONS)[number];
 export type PagedSection = Exclude<Section, "account">;
 export const SECTION_LABEL: Record<Section, string> = {
   account: "Compte et préférences",
   addresses: "Adresses enregistrées",
   requests: "Demandes d’intervention personnelles",
+  booking_locations: "Lieux et compléments d’accès des réservations",
   messages: "Messages que vous avez écrits",
   documents: "Documents dont vous êtes propriétaire",
   support: "Demandes d’assistance",
@@ -40,6 +43,7 @@ const uuid = z.string().uuid();
 const FIELDS: Record<PagedSection, { owner: string | null; fields: string }> = {
   addresses: { owner: "user_id", fields: "id,user_id,label,first_name,last_name,address,postal_code,city,country_code,latitude,longitude,geo_source,is_preferred,created_at,updated_at,archived_at" },
   requests: { owner: "client_id", fields: "id,client_id,site_id,category,description,address,postal_code,city,urgency,status,created_at,updated_at" },
+  booking_locations: { owner: null, fields: "id,intervention_id,location" },
   messages: { owner: "author_id", fields: "id,author_id,intervention_id,body,created_at" },
   documents: { owner: "owner_id", fields: "id,owner_id,intervention_id,name,mime_type,created_at" },
   support: { owner: "creator_id", fields: "id,creator_id,intervention_id,subject,status,created_at,updated_at" },
@@ -50,8 +54,10 @@ const FIELDS: Record<PagedSection, { owner: string | null; fields: string }> = {
 const isIso = (v: unknown) => typeof v === "string" && /T.*(Z|[+-]\d{2}:\d{2})$/.test(v) && Number.isFinite(Date.parse(v));
 const ERASURE_STATES = ["requested", "in_review", "needs_information", "approved", "rejected"];
 const REMINDER_STATUSES = ["scheduled", "cancelled", "sent", "invalidated", "muted"];
-/** Value checks of the two identity-less sections (exact keys are checked by the caller). */
+/** The caller checks the exact projection keys. */
 function validRow(section: PagedSection, r: Row): boolean {
+  if (section === "booking_locations")
+    return (r.intervention_id === null || uuid.safeParse(r.intervention_id).success) && parseBookingLocation(r.location) !== null;
   if (section === "erasure_requests")
     return uuid.safeParse(r.ticket_id).success && ERASURE_STATES.includes(String(r.state)) && r.execution_state === "not_started"
       && Number.isInteger(r.version) && (r.version as number) >= 1 && (r.version as number) <= 100 && isIso(r.created_at) && isIso(r.updated_at);
@@ -138,7 +144,7 @@ export async function timed(fetcher: typeof fetch, url: string, init: RequestIni
 export const COPY = {
   title: "Mes données",
   intro: "Téléchargez une copie des données personnelles liées à votre compte, ou demandez leur effacement.",
-  scope: "Le fichier JSON contient votre compte, vos préférences de notification, vos adresses, vos demandes d’intervention personnelles, les messages que vous avez écrits, vos documents et vos demandes d’assistance. Les dossiers d’une organisation et les messages écrits par d’autres personnes n’en font pas partie.",
+  scope: "Le fichier JSON contient votre compte, vos préférences de notification, vos adresses, vos demandes d’intervention personnelles, leurs points sur la carte et les compléments d’accès que vous avez renseignés, les messages que vous avez écrits, vos documents et vos demandes d’assistance. Les dossiers d’une organisation et les messages écrits par d’autres personnes n’en font pas partie.",
   download: "Télécharger mes données",
   collecting: "Collecte en cours…",
   done: (name: string) => `Fichier « ${name} » généré sur cet appareil. Il n’est conservé nulle part ailleurs.`,
@@ -200,6 +206,7 @@ export function exportDocument(c: Collected, now: Date) {
     account: c.account,
     addresses: c.rows.addresses,
     requests: c.rows.requests,
+    booking_locations: c.rows.booking_locations,
     messages: c.rows.messages,
     documents: c.rows.documents,
     support: c.rows.support,
@@ -244,7 +251,7 @@ export function createCollector({ fetcher, context, save, now = () => new Date()
       if (!owner || owner.uid !== me.uid || owner.gen !== me.gen) {
         reset();
         owner = me;
-        collected = { account: null, rows: { addresses: [], requests: [], messages: [], documents: [], support: [], erasure_requests: [], payment_reminders: [] } };
+        collected = { account: null, rows: { addresses: [], requests: [], booking_locations: [], messages: [], documents: [], support: [], erasure_requests: [], payment_reminders: [] } };
         state = { ...state, progress: initialProgress() };
       }
       running = true;

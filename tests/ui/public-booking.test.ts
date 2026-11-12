@@ -10,6 +10,7 @@ import { renderToString } from "react-dom/server";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { ROOT, loadModule } from "../documents/harness";
+import { canAccess, loginLanding, protectedLink } from "../../components/app/session";
 import { BOOKING_DRAFT_KEY, SLOT_LABEL, readBooking } from "../../components/app/booking-draft";
 import { PUBLIC_DRAFT_KEY, readPublicDraft } from "../../lib/shared/request-draft";
 import type * as Booking from "../../components/role/public-booking";
@@ -25,7 +26,7 @@ const render = (node: unknown) => renderToString(createElement(tp.ThemeProvider 
 const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/&amp;/g, "&").replace(/\s+/g, " ");
 const same = (a: unknown, b: unknown, msg = "") => assert.equal(JSON.stringify(a), JSON.stringify(b), msg);
 
-const contact = { civility: "mme" as const, first_name: "Camille", last_name: "Durand", email: "camille.durand@example.test", phone: "06 12 34 56 78", company: true };
+const contact = { civility: "mme" as const, first_name: "Camille", last_name: "Durand", email: "camille.durand@example.test", phone: "06 12 34 56 78", company: false };
 const address = { address: "12 rue des Lilas", postal_code: "97200", city: "Fort-de-France" };
 const filled = (over: Partial<Booking.BookingState> = {}): Booking.BookingState => ({ ...booking.EMPTY_BOOKING, urgent: false, slot: "day_after", notes: "La prise noircit autour d’une broche.", contact, address, payment: "on_site", ...over });
 // Server options (GET /api/bookings/options) as a fake: on-site available.
@@ -119,9 +120,26 @@ test("étape 1 : Oui masque les créneaux, Non affiche exactement les 3 souhaits
   same(booking.urgencyErrors({ urgent: false, slot: "tomorrow" }), {});
 });
 
-test("étape 2 : coordonnées privées, civilité, entreprise informative, validation contactErrors", () => {
+test("une réservation entreprise ouvre la liste des sites du compte professionnel sans soumettre le formulaire", () => {
+  const html = wizard();
+  const href = html.match(/href="([^"]+)">Ouvrir l’espace entreprise/)?.[1];
+  assert.equal(href, "/#auth/sites");
+  assert.match(text(html), /créez la demande pour un site auquel vous avez accès/);
+  const hash = new URL(href!, "https://app.example").hash;
+  const pending = protectedLink(hash);
+  assert.equal(pending?.view, "sites");
+  assert.equal(canAccess("sites", null, "public"), false);
+  assert.equal(canAccess("sites", "client", "live"), false);
+  assert.equal(loginLanding(hash, null, "client"), null);
+  assert.deepEqual(loginLanding(hash, null, "manager"), { view: "sites", param: "" });
+  assert.equal(loginLanding("", pending, "client"), null);
+  assert.equal(loginLanding("", pending, "manager")?.view, "sites");
+});
+
+test("étape 2 : coordonnées privées, civilité, validation contactErrors", () => {
   const html = wizard({ step: 2, urgent: true });
-  for (const label of ["Madame", "Monsieur", "Non précisé", "Prénom", "Nom", "Adresse e-mail", "Téléphone", "Je fais cette demande pour une entreprise"]) assert.match(html, new RegExp(label), label);
+  for (const label of ["Madame", "Monsieur", "Non précisé", "Prénom", "Nom", "Adresse e-mail", "Téléphone"]) assert.match(html, new RegExp(label), label);
+  assert.doesNotMatch(html, /Je fais cette demande pour une entreprise/);
   assert.match(text(html), /restent privées : elles ne figurent pas dans la demande proposée aux artisans/);
   const errors = booking.stepErrors({ ...booking.EMPTY_BOOKING, step: 2, contact: { ...contact, first_name: " ", email: "pas-un-email", phone: "12" } });
   same(Object.keys(errors).sort(), ["email", "first_name", "phone"]);
@@ -153,7 +171,7 @@ test("résumé visible à chaque étape ; récapitulatif complet et rien d’env
   }
   const recap = wizard({ ...filled(), step: 5 });
   const t = text(recap);
-  for (const part of [service.title, "lecture en cours", "Après-demain", "12 rue des Lilas", "97200 Fort-de-France", "Vos coordonnées (privées)", "Camille Durand", "Demande pour une entreprise", "Règlement", "Après intervention — paiement sur la plateforme"]) assert.ok(t.includes(part), part);
+  for (const part of [service.title, "lecture en cours", "Après-demain", "12 rue des Lilas", "97200 Fort-de-France", "Vos coordonnées (privées)", "Camille Durand", "Règlement", "Après intervention — paiement sur la plateforme"]) assert.ok(t.includes(part), part);
   assert.match(t, /Rien n’est encore envoyé\. Votre demande est conservée dans cet onglet pendant 30 minutes\. Créez votre compte avec votre adresse e-mail et un mot de passe, ouvrez le lien de confirmation reçu par e-mail, puis connectez-vous dans cet onglet : vous relirez la demande avant de confirmer son envoi\./);
   assert.match(recap, /form="booking-step-5"[^>]*>Créer mon compte<\/button>/);
   assert.match(recap, /data-booking-inline-submit="5">Créer mon compte<\/button>/);

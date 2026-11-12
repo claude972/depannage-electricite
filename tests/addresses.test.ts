@@ -85,3 +85,65 @@ test("reverse falls back to nearby BAN points when the geocoder times out", asyn
   assert.deepEqual(body.candidates.map((entry: typeof body.candidates[number]) => entry.id), ["closest", "second"]);
   assert.deepEqual(body.candidates[0], { id: "closest", address: "4 Rue Perrinon", postal_code: "97200", city: "Fort-de-France", label: "4 Rue Perrinon, 97200 Fort-de-France", latitude: 14.6049, longitude: -61.06852 });
 });
+
+test("search uses the distinct IGN completion operation on upstream failure and keeps the house number", async t => {
+  budget(t);
+  const paths: string[] = [];
+  const response = await addressResponse(req("q=8+rue+Victor+Hugo+97200"), "search", async (input, init) => {
+    const url = new URL(String(input));
+    paths.push(url.pathname);
+    if (paths.length === 1) return new Response(null, { status: 503 });
+    assert.equal(url.origin, "https://data.geopf.fr");
+    assert.equal(url.searchParams.get("text"), "8 rue Victor Hugo 97200");
+    assert.equal(url.searchParams.get("type"), "StreetAddress");
+    assert.equal(url.searchParams.get("maximumResponses"), "5");
+    assert.equal(init?.cache, "no-store");
+    assert.equal(init?.redirect, "error");
+    return Response.json({ status: "OK", results: [{
+      country: "StreetAddress", x: -61.069056, y: 14.603291,
+      city: "Fort-de-France", zipcode: "97200", fulltext: "8 Rue Victor Hugo, 97200 Fort-de-France",
+      internal: "ignored",
+    }] });
+  });
+  check(response, 200);
+  assert.deepEqual(paths, ["/geocodage/search", "/geocodage/completion"]);
+  const result = await response.json();
+  assert.deepEqual(result.candidates.map(({ id: _id, ...candidate }: (typeof result.candidates)[number]) => candidate), [{
+    address: "8 Rue Victor Hugo", label: "8 Rue Victor Hugo, 97200 Fort-de-France",
+    postal_code: "97200", city: "Fort-de-France", latitude: 14.603291, longitude: -61.069056,
+  }]);
+});
+
+test("search does not query the fallback after a quota refusal or a user abort", async t => {
+  budget(t);
+  let count = 0;
+  const rate = await addressResponse(req("q=Fort-de-France"), "search", async () => {
+    count++;
+    return new Response(null, { status: 429 });
+  });
+  check(rate, 429);
+  assert.equal(count, 1);
+
+  const controller = new AbortController();
+  const cancelled = await addressResponse(new Request(req("q=Fort-de-France"), { signal: controller.signal }), "search", async () => {
+    count++;
+    controller.abort();
+    throw controller.signal.reason;
+  });
+  check(cancelled, 503);
+  assert.equal(count, 2);
+});
+
+test("the completion fallback preserves a valid empty answer, retryable errors and its quota", async t => {
+  budget(t);
+  const responses = [
+    [Response.json({ status: "OK", results: [] }), 200],
+    [Response.json({ status: "ERR", results: [] }), 503],
+    [new Response(null, { status: 429 }), 429],
+  ] as const;
+  for (const [fallback, code] of responses) {
+    const r = await addressResponse(req("q=Fort-de-France"), "search", async input =>
+      new URL(String(input)).pathname === "/geocodage/search" ? new Response(null, { status: 503 }) : fallback);
+    check(r, code);
+  }
+});

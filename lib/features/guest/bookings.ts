@@ -105,7 +105,7 @@ export async function bookingRoute(request: Request, operation: "create" | "stat
     if (operation === "create") {
       const data = schema.parse(parsed.data);
       data.description = requestDescription(data.description, CATEGORIES.find(category => category.id === data.category)!.label);
-      const card = data.payment_choice === "card_hold" ? cardHoldContext() : null; // Before prepare/quota/provider mutation.
+      const card = data.payment_choice === "card_hold" ? cardHoldContext("create") : null; // Before prepare/quota/provider mutation.
       const { request_id, payment_choice, reviewed_estimate_version, contact: sentContact, location, ...payload } = data;
       const contact = nativeTransport(request) ? sentContact : webContact(sentContact, sent);
       if (!card) {

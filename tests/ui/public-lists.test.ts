@@ -34,8 +34,8 @@ test("legal and privacy documents keep their fields and number their sections li
   assert.equal(numbered(0, "Éditeur"), "1. Éditeur");
   assert.equal(numbered(3, "Données personnelles"), "4. Données personnelles");
   assert.deepEqual(LEGAL_SECTIONS.map((s) => s.fields.length), [5, 3, 1, 2]);
-  assert.equal(PRIVACY_DATA.length, 14);
-  for (const label of ["Demande de rappel", "Notifications du navigateur", "Préanalyse d’une photo"]) {
+  assert.equal(PRIVACY_DATA.length, 15);
+  for (const label of ["Lieu d’intervention", "Demande de rappel", "Notifications du navigateur", "Préanalyse d’une photo"]) {
     assert.ok(PRIVACY_DATA.some((entry) => entry.label === label), label);
   }
   assert.ok(PRIVACY_DATA.every((d) => /^[a-zé]/i.test(d.text)));

@@ -31,7 +31,7 @@ const create = URL.createObjectURL.bind(URL), revoke = URL.revokeObjectURL.bind(
 URL.createObjectURL = (b) => { window.created++; return create(b); };
 URL.revokeObjectURL = (u) => { window.revoked++; return revoke(u); };
 // Contract 6625a97 also exports erasure_requests and payment_reminders (empty here); realigned in lot B.
-const rows = { addresses: [], requests: [], documents: [], support: [{ id: id(1), creator_id: UID, intervention_id: null, subject: "Aide", status: "open", created_at: T, updated_at: T }], erasure_requests: [], payment_reminders: [] };
+const rows = { addresses: [], requests: [], booking_locations: [{ id: id(2), intervention_id: null, location: { latitude: 14.605, longitude: -61.07, access_details: "Portail bleu" } }], documents: [], support: [{ id: id(1), creator_id: UID, intervention_id: null, subject: "Aide", status: "open", created_at: T, updated_at: T }], erasure_requests: [], payment_reminders: [] };
 const msg = (n) => ({ id: id(n), author_id: UID, intervention_id: null, body: "m" + n, created_at: T });
 const reply = (url, init) => {
   if (init && init.method === "POST") return { ticket_id: id(900), status: "open", replayed: false };
@@ -81,10 +81,11 @@ test("Chromium : téléchargement complet paginé (1 GET par page), vrai fichier
     assert.match(file.suggestedFilename(), /^mes-donnees-\d{4}-\d{2}-\d{2}\.json$/);
     const saved = JSON.parse(readFileSync(await file.path(), "utf8"));
     assert.equal(saved.messages.length, 101);
+    assert.deepEqual(saved.booking_locations[0].location, { latitude: 14.605, longitude: -61.07, access_details: "Portail bleu" });
     assert.equal(saved.support.length, 1);
     await page.waitForTimeout(100);
     let s = await state(page);
-    assert.deepEqual(s.calls, ["account", "addresses", "requests", "messages", "messages&after=30000000-0000-4000-8000-000000000100", "documents", "support", "erasure_requests", "payment_reminders"].map((x) => `GET /api/profile/data?section=${x}`));
+    assert.deepEqual(s.calls, ["account", "addresses", "requests", "booking_locations", "messages", "messages&after=30000000-0000-4000-8000-000000000100", "documents", "support", "erasure_requests", "payment_reminders"].map((x) => `GET /api/profile/data?section=${x}`));
     assert.equal(s.created, 1);
     assert.equal(s.revoked, 1);
     assert.match(await page.locator('[data-account-download="done"]').innerText(), /généré sur cet appareil/);

@@ -1,11 +1,10 @@
 import { checkoutConfigurationAvailable } from "../payments/checkout";
+import { guestSettlementConfigured, paymentOrigin } from "../payments/configuration";
 import { testSmsRecipients } from "./test-sms-recipients";
 
 /** Configuration is a capability hint, never evidence of a card authorization or SMS delivery. */
 export function cardHoldConfigured(env: Record<string, string | undefined>): boolean {
-  const key = env.STRIPE_SECRET_KEY ?? "";
-  return /^(sk|rk)_test_/.test(key) ||
-    (/^(sk|rk)_live_/.test(key) && env.STRIPE_LIVE_PAYMENTS_ENABLED === "true");
+  return guestSettlementConfigured(env) && paymentOrigin(env.NEXT_PUBLIC_APP_URL) !== null;
 }
 
 export async function bookingOptions(

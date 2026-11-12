@@ -1,4 +1,5 @@
 import { refundPolicy } from "../lib/features/refund-execution/policy";
+import * as platformMfa from "../shared/platform-mfa";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -117,7 +118,8 @@ test('operator list cursor remains bound to filters and exact counts fail closed
 test('platform me advertises the three combined support capabilities without finance or operator management',async()=>{
   for(const [scopes,expected] of [[[],[false,false,false]],[['support_reply','support_status'],[false,false,false]],[['support_read'],[true,false,false]],[['support_read','support_reply'],[true,true,false]],[['support_read','support_status'],[true,false,true]]] as const){
     const h=harness({scopes:[...scopes]});
-    const http=h.compile('../lib/features/platform-operations/http.ts',{'../refund-execution/policy':{refundPolicy},'node:process':{env:{}},'@/lib/supabase/server':h.helpers,'@/lib/supabase/validation':{uuid:{}},'./config':{INVOICE_RENDERING_AVAILABLE:true,financeConfig:()=>({})}});
+    const mfa=h.compile('../lib/features/platform-operations/mfa.ts',{'@/lib/supabase/server':h.helpers,'@/shared/platform-mfa':platformMfa});
+    const http=h.compile('../lib/features/platform-operations/http.ts',{'../refund-execution/policy':{refundPolicy},'node:process':{env:{}},'@/lib/supabase/server':h.helpers,'@/lib/supabase/validation':{uuid:{}},'./config':{INVOICE_RENDERING_AVAILABLE:true,financeConfig:()=>({})},'./mfa':mfa});
     const access=await (http.describeAccess as (db:unknown)=>Promise<{capabilities:Record<string,boolean>}>)(h.db);
     assert.deepEqual([access.capabilities.support,access.capabilities.support_reply,access.capabilities.support_status],[...expected]);
     assert.equal(access.capabilities.finance,false);assert.equal(access.capabilities.operators,false);assert.equal(access.capabilities.audit,false);assert.equal(access.capabilities.reviews_moderation,false);

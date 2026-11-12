@@ -120,3 +120,52 @@ test("E78 — a revoked operator cannot emit, and the new operator resumes the s
     await db.close();
   }
 });
+
+test("MFA protects role and refund mutations without changing read permissions", async () => {
+  const db = await freshDatabase();
+  try {
+    const f = await seed(db);
+    const noMfa = { code: "PT403", message: "platform_mfa_required" };
+    const adminAal1 = { ...assignee, aal: "aal1" };
+    const operatorAal1 = { ...actor, aal: "aal1" };
+    const operatorWithoutClaim = { ...actor, aal: null };
+    const attempt = randomUUID();
+
+    await assert.rejects(asUser(db, adminAal1, "select public.platform_grant_scope($1,'audit_read','QA') v", [requester.id]), noMfa);
+    await assert.rejects(asUser(db, adminAal1, "select public.platform_revoke_scope($1,'QA') v", [f.grant]), noMfa);
+    await assert.rejects(asUser(db, adminAal1, "select public.platform_set_super_admin($1,true,'client','QA') v", [requester.id]), noMfa);
+    await assert.rejects(asUser(db, actor, "select public.platform_set_super_admin($1,true,'client','QA') v", [requester.id]), { code: "42501" });
+    assert.equal((await asUser(db, operatorAal1, "select public.platform_access() v")).scopes.includes("finance_write"), true);
+    assert.equal((await asUser(db, adminAal1, "select public.platform_access() v")).super_admin, true);
+
+    await assert.rejects(asUser(db, operatorAal1, "select public.platform_request_refund($1,$2,2000,'Motif de recette MFA') v", [attempt, f.payment]), noMfa);
+    await assert.rejects(asUser(db, operatorAal1, "select public.platform_decide_refund($1,'cancel',2,'QA') v", [f.id]), noMfa);
+    await assert.rejects(asUser(db, operatorWithoutClaim, "select public.begin_refund_execution($1,$2,2) v", [f.id, attempt]), noMfa);
+    assert.equal((await asUser(db, operatorAal1, "select public.read_refund_execution($1) v", [f.id])).execution_status, null);
+    assert.equal((await db.query("select count(*)::int as n from public.platform_refund_requests")).rows[0].n, 1);
+
+    assert.equal(await asUser(db, actor, "select public.begin_refund_execution($1,$2,2) v", [f.id, attempt]), attempt);
+    await db.transaction(async tx => {
+      await tx.exec("set local role service_role");
+      await tx.query("select public.qualify_refund_execution($1,$2,$3,'ch_QA','pi_QA')", [attempt, actor.id,
+        { version: "qa", reverse_transfer: true, refund_application_fee: false, livemode: false }]);
+    });
+    await assert.rejects(asUser(db, operatorAal1, "select public.authorize_refund_execution($1) v", [attempt]), noMfa);
+    assert.equal((await asUser(db, operatorAal1, "select public.read_refund_execution($1) v", [f.id])).execution_status, "preparing");
+    await asUser(db, actor, "select public.authorize_refund_execution($1) v", [attempt]);
+    assert.equal((await asUser(db, operatorAal1, "select public.read_refund_execution($1) v", [f.id])).execution_status, "unknown");
+
+    const newGrant = await asUser(db, assignee, "select public.platform_grant_scope($1,'audit_read','QA') v", [requester.id]);
+    assert.equal((await asUser(db, assignee, "select public.platform_revoke_scope($1,'QA') v", [newGrant.grant.id])).grant.status, "revoked");
+    assert.equal((await asUser(db, assignee, "select public.platform_set_super_admin($1,true,'client','QA') v", [requester.id])).role, "admin");
+    assert.equal((await asUser(db, assignee, "select public.platform_set_super_admin($1,false,'client','QA') v", [requester.id])).role, "client");
+    await asUser(db, assignee, "select public.platform_revoke_scope($1,'QA') v", [f.grant]);
+    await assert.rejects(asUser(db, actor, "select public.authorize_refund_execution($1) v", [attempt]), { code: "42501" });
+    assert.equal((await asUser(db, operatorAal1, "select public.read_refund_execution($1) v", [f.id])).reason, "read_only");
+
+    const { rows } = await db.query("select has_function_privilege('anon','public.require_platform_mfa()','EXECUTE') as anon, has_function_privilege('authenticated','public.require_platform_mfa()','EXECUTE') as authenticated");
+    assert.deepEqual(rows, [{ anon: false, authenticated: false }]);
+  } finally {
+    await db.close();
+  }
+});

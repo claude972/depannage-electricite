@@ -12,6 +12,7 @@ create role anon; create role authenticated; create role service_role bypassrls;
 create schema auth;
 create table auth.users(id uuid primary key,raw_user_meta_data jsonb default '{}',email text,email_confirmed_at timestamptz,phone text,phone_confirmed_at timestamptz);
 create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+create function auth.jwt() returns jsonb language sql stable as $$select nullif(current_setting('request.jwt.claims',true),'')::jsonb$$;
 grant usage on schema auth to authenticated,anon,service_role;
 grant execute on function auth.uid() to authenticated,anon,service_role;
 create schema storage;
@@ -28,7 +29,7 @@ for(const[name,id]of Object.entries(ids))await db.query('insert into auth.users(
 const org=(await db.query("insert into public.organizations(name,owner_id)values('QA org',$1)returning id",[ids.owner])).rows[0].id;for(const[a,r]of [['owner','owner'],['reader','viewer']])await db.query('insert into public.organization_members values($1,$2,$3)',[org,ids[a],r]);
 const site=(await db.query("insert into public.sites(organization_id,name,type,address,budget_cents)values($1,'QA site','office','QA address fixture',100000)returning id",[org])).rows[0].id;
 const siteB=(await db.query("insert into public.sites(organization_id,name,type,address)values($1,'QA other site','office','QA address fixture')returning id",[org])).rows[0].id;await db.query("insert into public.organization_member_site_scopes values($1,$2,'selected')",[org,ids.reader]);await db.query('insert into public.organization_member_site_grants values($1,$2,$3,false)',[org,ids.reader,site]);
-async function as(actor,sql,args=[]){await db.exec('set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[ids[actor]||'']);try{return await db.query(sql,args);}finally{await db.exec('reset role');}}
+async function as(actor,sql,args=[]){await db.exec('set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[ids[actor]||'']);await db.query("select set_config('request.jwt.claims','{\"aal\":\"aal2\"}',false)");try{return await db.query(sql,args);}finally{await db.exec('reset role');}}
 async function service(sql,args=[]){await db.exec('set role service_role');await db.query("select set_config('request.jwt.claim.sub','',false)");try{return await db.query(sql,args);}finally{await db.exec('reset role');}}
 function ok(v,m){assert.ok(v,m);checks++;}async function denied(fn,code){await assert.rejects(fn,e=>e.code===code);checks++;}
 // Genuine historical receipt is seeded BEFORE the retirement migration, with old RPC.

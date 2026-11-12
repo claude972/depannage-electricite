@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { PAYMENT_LABEL, SLOT_LABEL, contactErrors, type BookingDraft, type PaymentChoice } from "../app/booking-draft";
 import { category, money } from "../app/format";
 import type { RequestValues } from "../app/types";
+import { EnterpriseBookingLink } from "./enterprise-booking-link";
 import { serviceBySlug } from "./public-service-catalog";
 import { Field } from "../app/ui";
 import { ReservedEstimate, ReviewEstimate } from "../features/indicative-prices/indicative-range";
@@ -108,6 +109,16 @@ export function BookingConfirm({
       inFlight.current = false;
       if (alive.current) setSending(false);
     }
+  }
+
+  if (booking.contact.company) {
+    return (
+      <section className="panel" aria-labelledby="booking-confirm-title">
+        <h1 id="booking-confirm-title">Votre demande pour une entreprise</h1>
+        <p>Ce brouillon a été préparé depuis le parcours particulier. Créez le dossier depuis votre espace entreprise pour le rattacher au bon site.</p>
+        <EnterpriseBookingLink />
+      </section>
+    );
   }
 
   return (

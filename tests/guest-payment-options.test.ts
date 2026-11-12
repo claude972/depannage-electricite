@@ -1,14 +1,29 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { bookingOptions, cardHoldConfigured } from "../lib/features/guest/payment-options";
-test("card capability never enables live keys by their presence alone", () => {
+const testConfig = {
+  STRIPE_SECRET_KEY: "sk_test_FAKE",
+  GUEST_SETTLEMENT_ENABLED: "true",
+  PLATFORM_FEE_BPS: "2000",
+  NEXT_PUBLIC_APP_URL: "https://app.example.test",
+};
+test("new holds require a valid mode, capture switch, commission and return origin", () => {
   for (const value of [undefined, "", "not-a-key", "sk_live_example", "rk_live_example"])
-    assert.equal(cardHoldConfigured({ STRIPE_SECRET_KEY: value }), false);
-  assert.equal(cardHoldConfigured({ STRIPE_SECRET_KEY: "sk_test_example" }), true);
-  assert.equal(cardHoldConfigured({ STRIPE_SECRET_KEY: "rk_live_example", STRIPE_LIVE_PAYMENTS_ENABLED: "true" }), true);
+    assert.equal(cardHoldConfigured({ ...testConfig, STRIPE_SECRET_KEY: value }), false);
+  for (const partial of [
+    { GUEST_SETTLEMENT_ENABLED: undefined }, { GUEST_SETTLEMENT_ENABLED: "false" },
+    ...[undefined, " ", "-1", "1.5", "10000"].map(PLATFORM_FEE_BPS => ({ PLATFORM_FEE_BPS })),
+    ...[undefined, "malformed", "http://app.example.test", "https://user@app.example.test"].map(NEXT_PUBLIC_APP_URL => ({ NEXT_PUBLIC_APP_URL })),
+  ]) assert.equal(cardHoldConfigured({ ...testConfig, ...partial }), false);
+  assert.equal(cardHoldConfigured({ STRIPE_SECRET_KEY: testConfig.STRIPE_SECRET_KEY }), false);
+  assert.equal(cardHoldConfigured(testConfig), true);
+  assert.equal(cardHoldConfigured({ ...testConfig, PLATFORM_FEE_BPS: "0", NEXT_PUBLIC_APP_URL: "http://localhost:3000" }), true);
+  const live = { ...testConfig, STRIPE_SECRET_KEY: "rk_live_example", STRIPE_LIVE_PAYMENTS_ENABLED: "true" };
+  assert.equal(cardHoldConfigured(live), false);
+  assert.equal(cardHoldConfigured({ ...live, GUEST_SETTLEMENT_LIVE_ENABLED: "true" }), true);
 });
 test("phone disabled, unknown and enabled remain distinct; response never includes credentials", async () => {
-  const env = { NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "PUBLIC_FAKE", STRIPE_SECRET_KEY: "sk_test_FAKE" };
+  const env = { ...testConfig, NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "PUBLIC_FAKE" };
   for (const phone of [false, true, null]) {
     const options = await bookingOptions(env, (async (url, init) => {
       assert.equal(String(url), "https://example.supabase.co/auth/v1/settings");

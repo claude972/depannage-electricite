@@ -76,6 +76,7 @@ import { demoPreferences } from "../../lib/features/notifications/demo";
 import { QuoteDocumentsAnchor } from "./quote-documents-anchor";
 import { TrackingAnchor } from "./tracking-anchor";
 import { DossierMapPanel } from "../features/dossier-map/dossier-map-panel";
+import { BookingLocationRows } from "./booking-location-rows";
 import { useDetailPresence } from "./use-detail-presence";
 import { PointReadState } from "./detail-read-view";
 import { PlatformPage } from "./platform-anchor";
@@ -838,7 +839,7 @@ function DetailView({
     if (presence.decision === "detail" || presence.decision === "detail_loading" || presence.decision === "detail_error")
       return (
         <>
-          <PointReadState presence={presence} backLabel="Mes demandes" onBack={() => session.go("requests")} />
+          <PointReadState presence={presence} backLabel="Mes demandes" onBack={() => session.go("requests")} bookingLocationContext={session.refreshContext} />
           {/* PUB-06: warranty follow-up of an authorized out-of-cache paid dossier (exact id). */}
           {presence.decision === "detail" && presence.detail?.intervention.status === "paid" && (
             <WarrantyPanel
@@ -1050,6 +1051,11 @@ function DetailView({
           <br />
           {i.postal_code} {i.city}
         </address>
+        {!demo && i.client_id === session.profileId && (
+          <dl>
+            <BookingLocationRows key={`${session.refreshContext}|${i.id}|${i.updated_at}`} interventionId={i.id} />
+          </dl>
+        )}
         <DossierMapPanel
           key={`${i.id}:${session.mode}:${session.profileId}`}
           address={{ address: i.address, postal_code: i.postal_code, city: i.city }}

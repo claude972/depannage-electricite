@@ -18,7 +18,7 @@ import { createRevalidationScheduler } from "./app/revalidate";
 import { createRefreshCoordinator, refreshContextKey, type ReadResult, type RefreshCoordinator } from "./app/workspace-refresh";
 import { safeCheckoutUrl } from "./app/booking-status";
 import { CARD_RETURN_COPY, PENDING_COPY, cancelCardReturn, cardAction, lookupPending, sameReturn, verifyCardReturn, type CardReturn } from "./app/card-return";
-import { createWorkspaceReader } from "./app/workspace-reader";
+import { createWorkspaceReader, loadInitialWorkspace } from "./app/workspace-reader";
 import {
   acknowledgeUpload,
   allUploaded,
@@ -316,6 +316,8 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
         apply: (ws) => {
           const profileOfWs = ws.profile!; // validated by createWorkspaceReader
           userId.current = profileOfWs.id;
+          // Login resolves its protected destination before React renders the new workspace.
+          roleRef.current = profileOfWs.role;
           setData({ ...EMPTY_WORKSPACE, ...ws });
           setRole(profileOfWs.role);
           setMode("live");
@@ -355,6 +357,10 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
     });
   /** Every cause (post-write, « Actualiser », realtime event, focus, deep link) takes a barrier. */
   const ensureFresh = useCallback((options?: { barrier?: boolean }) => (coordinator.current as RefreshCoordinator).request(options), []);
+  const initialWorkspace = useCallback((id: string, active: () => boolean = () => true) => {
+    const generation = guard.generation();
+    return loadInitialWorkspace(ensureFresh, () => active() && guard.alive(generation) && userId.current === id);
+  }, [ensureFresh, guard]);
   const refresh = useCallback(async () => {
     await ensureFresh();
   }, [ensureFresh]);
@@ -437,15 +443,15 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
         const client = createClient();
         const { data: auth } = await client.auth.getUser();
         if (!active) return;
-        if (auth.user) {
-          userId.current = auth.user.id;
-          await refresh();
-          pendingLink.current = null; // already signed in: the hash routing handles the link
-        }
+        const initialUserId = auth.user?.id ?? null;
+        const initialGeneration = guard.generation();
+        if (initialUserId) userId.current = initialUserId;
         const sub = client.auth.onAuthStateChange((event, session) => {
           if (!active) return;
           const nextId = session?.user?.id ?? null;
-          if (event === "SIGNED_OUT" || (!nextId && modeRef.current === "live")) {
+          // The initial snapshot of the identity already checked by getUser is not a new login.
+          if (event === "INITIAL_SESSION" && nextId === initialUserId) return;
+          if (event === "SIGNED_OUT" || (!nextId && userId.current !== null)) {
             pendingLink.current = null;
             inheritedReturn.current = null;
             clearSessionState();
@@ -466,6 +472,12 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
           }
         });
         unsubscribe = () => sub.data.subscription.unsubscribe();
+        if (initialUserId) {
+          const isInitialSession = () => active && guard.alive(initialGeneration);
+          const outcome = await initialWorkspace(initialUserId, isInitialSession);
+          if (outcome.kind === "loaded" && isInitialSession() && userId.current === initialUserId)
+            pendingLink.current = null; // already signed in: the hash routing handles the link
+        }
       } catch {
         /* Public access stays available without a configured backend. */
       } finally {
@@ -481,7 +493,7 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
       active = false;
       unsubscribe?.();
     };
-  }, [refresh, clearSessionState]);
+  }, [initialWorkspace, refresh, clearSessionState, guard]);
 
   // The address comes from the session of the SAME user as the loaded profile; anything else ⇒ "".
   const liveProfileId = mode === "live" ? data.profile?.id ?? "" : "";
@@ -643,8 +655,11 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
       // End of the service booking wizard: « Créer mon compte » opens the account form on creation.
       if (mode === "public" && parsed.view === "auth" && parsed.param === "signup") setAuthMode("signup");
       const followFromAccount = mode === "live" && parsed.view === "auth" && parsed.param === "requests";
-      const target = followFromAccount ? (role === "client" ? "requests" : homeFor(role, mode)) : parsed.view ?? homeFor(mode === "public" ? null : role, mode);
-      setParam(followFromAccount ? "" : parsed.param);
+      const sitesFromAccount = mode === "live" && parsed.view === "auth" && parsed.param === "sites";
+      const target = sitesFromAccount ? (role === "manager" ? "sites" : homeFor(role, mode))
+        : followFromAccount ? (role === "client" ? "requests" : homeFor(role, mode))
+          : parsed.view ?? homeFor(mode === "public" ? null : role, mode);
+      setParam(followFromAccount || sitesFromAccount ? "" : parsed.param);
       setView(canAccess(target, mode === "public" ? null : role, mode) ? target : "forbidden");
     };
     onHash();
@@ -2712,7 +2727,12 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
     setUserId(id: string | null) {
       userId.current = id;
     },
-    refresh,
+    async refresh() {
+      if (!userId.current) return;
+      const outcome = await initialWorkspace(userId.current);
+      if (outcome.kind === "failed" && outcome.status === 503)
+        throw new Error("Votre espace est momentanément indisponible. Réessayez dans quelques instants.");
+    },
     navigate,
     // Restored by the login chain of THIS identity: the cleared storage is written back so a reload
     // before sending keeps the draft and the booking (never deleted before POST 201).

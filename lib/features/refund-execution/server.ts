@@ -4,6 +4,7 @@ import {authenticatedClient,adminClient,ApiError,assertOrigin,dbError}from '@/li
 import {stripeClient}from '@/lib/supabase/stripe';
 import {uuid,validated}from '@/lib/supabase/validation';
 import {PAYMENT_HEADERS}from '@/lib/features/payments/checkout';
+import {platformMfaRefusal,platformWriteError}from '@/lib/features/platform-operations/mfa';
 const unavailable=()=>new ApiError(503,'Le remboursement doit être vérifié. Aucune confirmation bancaire ne peut être donnée.');
 const conflict=()=>new ApiError(409,'Ce remboursement nécessite un rapprochement avant toute nouvelle émission.');
 import {refundPolicy}from './policy';
@@ -13,7 +14,7 @@ const policy=z.object({version:z.string().min(1).max(80),reverse_transfer:z.bool
 const execution=z.object({id:uuid,request_id:uuid,actor_id:uuid,request_version:z.number().int().positive(),policy:policy.nullable(),charge_id:id.nullable(),payment_intent_id:id.nullable(),provider_refund_id:id.nullable(),state:z.enum(['preparing','submitted','pending','requires_action','failed','canceled','succeeded','unknown','needs_review']),created_at:z.string(),updated_at:z.string()}).strict();
 const source=z.object({execution,request:z.object({id:uuid,status:z.string(),version:z.number().int().positive(),payment_id:uuid,amount_cents:money,currency:z.literal('eur')}).strict(),payment:z.object({id:uuid,quote_id:uuid,session_id:id,total_cents:money,currency:z.literal('eur'),status:z.literal('paid'),paid_at:z.string().min(1)}).strict(),checkout:z.object({id:uuid,account_id:id,fee_cents:z.number().int().nonnegative(),amount_cents:money}).strict().nullable()}).strict();
 type Source=z.infer<typeof source>;type Admin=ReturnType<typeof adminClient>;
-async function rpc(db:{rpc:Function},name:string,args:Record<string,unknown>){const r=await db.rpc(name,args);dbError(r.error);return r.data;}
+async function rpc(db:{rpc:Function},name:string,args:Record<string,unknown>){const r=await db.rpc(name,args);platformWriteError(r.error);return r.data;}
 async function read(admin:Admin,id:string,actor:string|null){const data=source.safeParse(await rpc(admin,'refund_execution_private',{p_id:id,p_actor:actor}));if(!data.success||data.data.execution.id!==id||(actor!==null&&data.data.execution.actor_id!==actor)||data.data.request.id!==data.data.execution.request_id||data.data.payment.id!==data.data.request.payment_id||data.data.request.amount_cents>data.data.payment.total_cents||(data.success&&data.data.execution.state==='succeeded'&&(data.data.request.status!=='settled'||data.data.execution.provider_refund_id===null)))throw unavailable();return data.data;}
 function objectId(v:any){return typeof v==='string'?v:v?.id;}
 function meta(s:Source){return{platform_refund_execution_id:s.execution.id,platform_refund_request_id:s.request.id,payment_id:s.payment.id,quote_id:s.payment.quote_id};}
@@ -28,7 +29,7 @@ async function qualifiedCharge(stripe:ReturnType<typeof stripeClient>,s:Source,l
  return{charge:charge.id,intent:pi.id};
 }
 function result(s:Source){return{request_status:s.request.status,execution_status:s.execution.state,execution_id:s.execution.id,bank_confirmation:s.execution.state==='succeeded'};}
-function failure(e:unknown){const status=e instanceof ApiError?e.status:e instanceof SyntaxError?400:503;return Response.json({error:e instanceof ApiError?e.message:'Le remboursement ne peut pas être confirmé.'},{status,headers:{...PAYMENT_HEADERS,...(status===503?{'Retry-After':'2'}:{})}});}
+function failure(e:unknown){const status=e instanceof ApiError?e.status:e instanceof SyntaxError?400:503;return Response.json(platformMfaRefusal(e)??{error:e instanceof ApiError?e.message:'Le remboursement ne peut pas être confirmé.'},{status,headers:{...PAYMENT_HEADERS,...(status===503?{'Retry-After':'2'}:{})}});}
 export async function executeRefund(request:Request,context:{params:Promise<{id:string}>}){try{
  assertOrigin(request);const{db,user}=await authenticatedClient();const{id}=await context.params;if(!uuid.safeParse(id).success)throw new ApiError(404,'Demande introuvable.');if(new URL(request.url).searchParams.size)throw new ApiError(422,'Paramètres inattendus.');
  const input=await validated(request,z.object({command_id:uuid,expected_version:z.number().int().positive()}).strict());

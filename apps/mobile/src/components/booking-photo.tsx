@@ -10,8 +10,9 @@ import { detail, fileSaved } from '@/lib/contracts';
 import { discardTemporaryPhoto, openReportPhoto, releaseReportPhoto, stageReportPhoto } from '@/lib/draft-photos';
 import type { PendingPhoto } from '@/lib/intervention-drafts';
 
-export function BookingPhotoPicker({ photo, onChange, onPicking }: {
+export function BookingPhotoPicker({ photo, preservedPhotoId, onChange, onPicking }: {
   photo?: PendingPhoto;
+  preservedPhotoId?: string;
   onChange(photo: PendingPhoto | undefined): void;
   onPicking(picking: boolean): void;
 }) {
@@ -40,7 +41,7 @@ export function BookingPhotoPicker({ photo, onChange, onPicking }: {
         const staged = await stageReportPhoto(file);
         if (!alive.current) { releaseReportPhoto(staged); return; }
         onChange(staged);
-        if (photo) releaseReportPhoto(photo);
+        if (photo && photo.fileId !== preservedPhotoId) releaseReportPhoto(photo);
       } finally { if (image.uri !== asset.uri) discardTemporaryPhoto(file); }
     } catch { if (alive.current) setError('Cette photo n’a pas pu être ajoutée. Réessayez ou continuez sans photo.'); }
     finally {
@@ -54,7 +55,11 @@ export function BookingPhotoPicker({ photo, onChange, onPicking }: {
     <Action secondary label={busy ? 'Préparation de la photo…' : photo ? 'Remplacer la photo (facultatif)' : REQUEST_PHOTO_LABEL} disabled={busy} onPress={() => void choose()} />
     {photo && <>
       <Copy kind="muted">Photo sélectionnée. Elle sera ajoutée au dossier après confirmation.</Copy>
-      <Action secondary label="Retirer la photo" disabled={busy} onPress={() => { onChange(undefined); releaseReportPhoto(photo); setError(''); }} />
+      <Action secondary label="Retirer la photo" disabled={busy} onPress={() => {
+        onChange(undefined);
+        if (photo.fileId !== preservedPhotoId) releaseReportPhoto(photo);
+        setError('');
+      }} />
     </>}
     {error ? <Copy kind="error">{error}</Copy> : null}
   </>;

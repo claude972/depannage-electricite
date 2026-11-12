@@ -12,6 +12,7 @@ try {
       email text, email_confirmed_at timestamptz, phone text, phone_confirmed_at timestamptz);
     create function auth.uid() returns uuid language sql stable as
       $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+    create function auth.jwt() returns jsonb language sql stable as $$select nullif(current_setting('request.jwt.claims',true),'')::jsonb$$;
     grant usage on schema auth to authenticated, anon, service_role;
     grant execute on function auth.uid() to authenticated, anon, service_role;
     create schema storage;
@@ -35,6 +36,7 @@ try {
     await db.exec("set role " + role);
     try {
       await db.query("select set_config('request.jwt.claim.sub',$1,false)", [actors[actor] ?? ""]);
+      await db.query("select set_config('request.jwt.claims',$1,false)", [role === "authenticated" ? JSON.stringify({ aal: "aal2" }) : ""]);
       return (await db.query(sql, args)).rows[0]?.v;
     } finally { await db.exec("reset role"); }
   }

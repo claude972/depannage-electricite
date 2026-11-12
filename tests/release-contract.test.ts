@@ -59,21 +59,28 @@ test("une seule version : source commune, package.json Web et mobile, verrous et
   assert.equal(major(mobile.dependencies.zod), major(web.dependencies.zod), "zod");
 });
 
-test("profils EAS : preview et identifiants conservés, simulateur et appareil distincts, ni production ni envoi aux stores", () => {
+test("profils EAS : même API de recette, simulateur et appareil distincts, aucune soumission aux stores", () => {
   const eas = json(`${MOBILE}/eas.json`), expo = json(`${MOBILE}/app.json`).expo;
-  assert.deepEqual(eas.build.preview, { distribution: "internal", environment: "preview", android: { buildType: "apk", credentialsSource: "local" }, ios: { simulator: true, scheme: "DomDepannage" } });
+  assert.deepEqual(eas.build, {
+    preview: {
+      distribution: "internal",
+      environment: "preview",
+      env: { EXPO_PUBLIC_API_URL: "https://domdepannage-recette-20261112.vercel.app" },
+      android: { buildType: "apk", credentialsSource: "local" },
+      ios: { simulator: true, scheme: "DomDepannage" },
+    },
+    simulator: {
+      extends: "preview",
+      env: { EXPO_PUBLIC_HOME_SUPPORT_PREVIEW: "true" },
+    },
+    device: {
+      extends: "preview",
+      ios: { simulator: false, credentialsSource: "remote" },
+      env: { EXPO_PUBLIC_HOME_SUPPORT_PREVIEW: "true" },
+    },
+  });
   assert.equal(eas.cli.requireCommit, true);
   assert.equal("submit" in eas, false);
-  assert.equal("production" in eas.build, false);
-  assert.equal(eas.build.simulator.ios.simulator, true);
-  assert.equal("credentialsSource" in eas.build.simulator.ios, false, "aucune signature pour le simulateur iOS");
-  assert.equal(eas.build.device.ios.simulator, false);
-  assert.equal(eas.build.device.ios.credentialsSource, "remote", "iOS physique : identifiants déjà enregistrés uniquement");
-  for (const [name, profile] of Object.entries<{ distribution: string; environment: string; android: Record<string, unknown> }>(eas.build)) {
-    assert.equal(profile.distribution, "internal", name);
-    assert.equal(profile.environment, "preview", name);
-    assert.deepEqual(profile.android, { buildType: "apk", credentialsSource: "local" }, `${name} : keystore local existant uniquement`);
-  }
   assert.equal(expo.ios.bundleIdentifier, "com.claude972.depannageelectrique.preview");
   assert.equal(expo.android.package, "com.claude972.depannageelectrique.preview");
   assert.equal(expo.owner, "claude972");

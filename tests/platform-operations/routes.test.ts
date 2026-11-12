@@ -1,3 +1,4 @@
+import * as platformMfa from "../../shared/platform-mfa";
 import { refundPolicy } from "../../lib/features/refund-execution/policy";
 // HTTP-layer refusal matrix for app/api/platform-operations/** with a mocked PostgREST, no network.
 import test from "node:test";
@@ -28,12 +29,13 @@ const operatorProfiles: Row[] = [
   { id: uuid(21), full_name: "Artisan de test", role: "artisan" },
   { id: uuid(22), full_name: "Gestionnaire de test", role: "manager" },
 ];
-function harness(actor: keyof typeof ACCESS | null, env: Record<string, string> = {}) {
+function harness(actor: keyof typeof ACCESS | null, env: Record<string, string> = {}, rejectedRpc?: { name: string; code: string; message: string }) {
   const calls: { rpc?: string; args?: Row; table?: string; url: URL; method: string }[] = [];
   const fetch: typeof globalThis.fetch = async (input, init) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url); const table = url.pathname.split("/").at(-1)!; const method = init?.method ?? "GET";
     if (url.pathname.includes("/rpc/")) {
       const args = init?.body ? JSON.parse(String(init.body)) : {}; calls.push({ rpc: table, args, url, method });
+      if (table === rejectedRpc?.name) return Response.json({ code: rejectedRpc.code, message: rejectedRpc.message }, { status: 403 });
       if (table === "platform_access") return Response.json(ACCESS[actor ?? "none"]);
       if (table === "platform_finance_report") return Response.json({ payments: {}, ledger: {}, refund_requests: {}, disputes: {}, invoices: {}, commission_setting: null, currency: "eur", generated_at: "2026-10-31T00:00:00Z" });
       return Response.json({ ok: true, rpc: table, args });
@@ -67,9 +69,10 @@ function harness(actor: keyof typeof ACCESS | null, env: Record<string, string> 
   const validation = compile("../../lib/supabase/validation.ts", { "./server": helpers });
   const types = compile("../../lib/features/platform-operations/types.ts", {});
   const config = compile("../../lib/features/platform-operations/config.ts", { "./types": types });
-  const http = compile("../../lib/features/platform-operations/http.ts", { "../refund-execution/policy": { refundPolicy }, "node:process": { env }, "@/lib/supabase/server": helpers, "@/lib/supabase/validation": validation, "./types": types, "./config": config });
+  const mfa = compile("../../lib/features/platform-operations/mfa.ts", { "@/lib/supabase/server": helpers, "@/shared/platform-mfa": platformMfa });
+  const http = compile("../../lib/features/platform-operations/http.ts", { "../refund-execution/policy": { refundPolicy }, "node:process": { env }, "@/lib/supabase/server": helpers, "@/lib/supabase/validation": validation, "./types": types, "./config": config, "./mfa": mfa });
   const document = compile("../../lib/features/platform-operations/invoice-document.ts", { "./types": types });
-  const imports = { "@/lib/supabase/server": helpers, "@/lib/supabase/validation": validation, "@/lib/features/platform-operations/http": http, "@/lib/features/platform-operations/types": types, "@/lib/features/platform-operations/invoice-document": document, "@/lib/features/platform-operations/config": config };
+  const imports = { "@/lib/features/platform-operations/mfa": mfa, "@/lib/supabase/server": helpers, "@/lib/supabase/validation": validation, "@/lib/features/platform-operations/http": http, "@/lib/features/platform-operations/types": types, "@/lib/features/platform-operations/invoice-document": document, "@/lib/features/platform-operations/config": config };
   const route = (path: string) => compile(`../../app/api/platform-operations/${path}/route.ts`, imports) as Record<string, (r: Request, c?: { params: Promise<{ id: string }> }) => Promise<Response>>;
   const request = (path: string, body?: unknown, method = body === undefined ? "GET" : "POST", origin: string | null = "https://app.example.test") => new Request(`https://app.example.test/api/platform-operations${path}`, body === undefined ? { method } : { method, headers: { ...(origin ? { origin } : {}), "Content-Type": "application/json" }, body: JSON.stringify(body) });
   return { calls, route, request, ctx: (id: string) => ({ params: Promise.resolve({ id }) }) };
@@ -164,4 +167,25 @@ test("/me reflects server scopes and configuration states without exposing secre
   assert.deepEqual(await support("supportFull"), [true, true, true]);
   assert.deepEqual(await support("admin"), [true, true, true]);
   assert.deepEqual(await support("finWrite"), [false, false, false]);
+});
+
+test("protected operator and refund writes translate only the dedicated SQL MFA refusal", async () => {
+  const cases = [
+    { actor: "admin", path: "operators", rpc: "platform_grant_scope", body: { action: "grant", user_id: uuid(9), scope: "finance_read", note: "" } },
+    { actor: "admin", path: "operators", rpc: "platform_revoke_scope", body: { action: "revoke", grant_id: uuid(9), note: "" } },
+    { actor: "admin", path: "super-admins", rpc: "platform_set_super_admin", body: { user_id: uuid(9), enabled: true, note: "" } },
+    { actor: "finWrite", path: "finance/refund-requests", rpc: "platform_request_refund", body: { request_id: uuid(3), payment_id: uuid(4), amount_cents: 500, reason: "Motif suffisamment long." } },
+    { actor: "finWrite", path: "finance/refund-requests/[id]", rpc: "platform_decide_refund", body: { action: "approve", expected_version: 1, note: "" } },
+  ];
+  for (const row of cases) {
+    const h = harness(row.actor, {}, { name: row.rpc, code: "PT403", message: platformMfa.PLATFORM_MFA_REQUIRED });
+    const response = await h.route(row.path).POST(h.request("/" + row.path.replace("[id]", uuid(5)), row.body), h.ctx(uuid(5)));
+    assert.equal(response.status, 403, row.rpc);
+    assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+    assert.deepEqual(await response.json(), { error: platformMfa.PLATFORM_MFA_MESSAGE, code: platformMfa.PLATFORM_MFA_REQUIRED });
+  }
+  const h = harness("finWrite", {}, { name: "platform_request_refund", code: "42501", message: "Insufficient scope" });
+  const response = await h.route("finance/refund-requests").POST(h.request("/finance/refund-requests", cases[3].body));
+  assert.equal(response.status, 403);
+  assert.equal((await response.json()).code, undefined);
 });

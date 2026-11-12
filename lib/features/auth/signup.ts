@@ -2,6 +2,7 @@
 // first name, last name, e-mail, phone (+596, +590 or +33) and password. The account is confirmed
 // by the link sent to the e-mail address (/auth/confirm); no code is sent by SMS.
 import { z } from "zod";
+import { createClient } from "@supabase/supabase-js";
 import { ApiError, serverClient } from "@/lib/supabase/server";
 import { validated } from "@/lib/supabase/validation";
 import { normalizeWebPhone, WEB_PHONE_MESSAGE } from "@/lib/features/guest/phone-number";
@@ -35,14 +36,25 @@ function refused(error: unknown): never {
   throw new ApiError(503, "La création de compte est momentanément indisponible. Réessayez.");
 }
 
-export async function signupRoute(request: Request): Promise<Response> {
+function statelessSignupClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !key) throw new ApiError(503, "La création de compte est momentanément indisponible. Réessayez.");
+  // The browser that opens the e-mail never shares a PKCE verifier with the native request.
+  return createClient(url, key, { auth: { flowType: "implicit", persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+}
+
+export async function signupRoute(request: Request, transport: "web" | "native" = "web"): Promise<Response> {
   try {
     const url = new URL(request.url);
-    // A browser always names its origin on this request; nothing else creates a website account.
-    if (request.headers.get("origin") !== url.origin) throw new ApiError(403, "Origine de la requête non autorisée.");
+    const origin = request.headers.get("origin");
+    const native = transport === "native";
+    if ((!native || origin !== null) && origin !== url.origin)
+      throw new ApiError(403, "Origine de la requête non autorisée.");
     if (url.search) throw new ApiError(422, "Vérifiez les informations saisies.");
     const data = await validated(request, signupSchema);
-    const db = await serverClient();
+    if (native && data.role !== "client") throw new ApiError(422, "L’inscription dans l’application est réservée aux particuliers.");
+    const db = native ? statelessSignupClient() : await serverClient();
     const result = await db.auth.signUp({
       email: data.email,
       password: data.password,
@@ -53,11 +65,11 @@ export async function signupRoute(request: Request): Promise<Response> {
     });
     if (result.error) refused(result.error);
     if (!record(result.data) || !record(result.data.user) || typeof result.data.user.id !== "string") refused(null);
-    // A session exists only where e-mail confirmation is switched off (local development).
-    // Its cookies are set by the SDK; no token is ever put in the answer.
-    return Response.json(result.data.session
-      ? { status: "signed_in", user_id: result.data.user!.id }
-      : { status: "confirmation_required" }, { status: 201, headers: HEADERS });
+    // Native sign-in always takes place in the app, regardless of the provider's confirmation setting.
+    const status = !result.data.session ? { status: "confirmation_required" }
+      : native ? { status: "sign_in_required" }
+      : { status: "signed_in", user_id: result.data.user!.id };
+    return Response.json(status, { status: 201, headers: HEADERS });
   } catch (error) {
     const status = error instanceof ApiError ? error.status : error instanceof SyntaxError ? 400 : 503;
     const message = error instanceof ApiError ? error.message : status === 400 ? "Le contenu envoyé est invalide." : "La création de compte est momentanément indisponible. Réessayez.";

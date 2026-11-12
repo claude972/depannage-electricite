@@ -2,10 +2,11 @@ import { env } from "node:process";
 import type Stripe from "stripe";
 import { ApiError, adminClient, dbError } from "@/lib/supabase/server";
 import { stripeClient, commissionBps } from "@/lib/supabase/stripe";
+import { guestSettlementConfigured } from "../payments/configuration";
 export type Settlement = { id:string; intervention_id:string; actor_id:string; quote_id:string; artisan_id:string; request_id:string; intent_id:string; session_id:string; authorized_max:number; amount_cents:number; account_id:string; fee_bps:number|null; transfer_cents:number|null; status:string; charge_id:string|null; transfer_id:string|null; created_at:string; transfer_started_at:string|null; retired_at?:string|null; generation?:number };
 const unknown=()=>new ApiError(503,"Le statut du règlement doit être vérifié. Réessayez avec la même demande.");
 const conflict=()=>new ApiError(409,"L’empreinte ou le règlement ne correspond plus au montant accepté. Aucun nouveau paiement n’est lancé.");
-export function settlementConfigured(){const key=env.STRIPE_SECRET_KEY??"";const fee=env.PLATFORM_FEE_BPS;const feeValue=Number(fee);return !!fee&&Number.isInteger(feeValue)&&feeValue>=0&&feeValue<=10000&&env.GUEST_SETTLEMENT_ENABLED==="true"&&(/^(sk|rk)_test_/.test(key)||(/^(sk|rk)_live_/.test(key)&&env.STRIPE_LIVE_PAYMENTS_ENABLED==="true"&&env.GUEST_SETTLEMENT_LIVE_ENABLED==="true"));}
+export function settlementConfigured() { return guestSettlementConfigured(env); }
 export function settlementProvider(){if(!settlementConfigured())throw unknown();return{stripe:stripeClient(),fee:commissionBps(),live:/^(sk|rk)_live_/.test(env.STRIPE_SECRET_KEY??"")};}
 type Provider=ReturnType<typeof settlementProvider>;
 const idOf=(v:unknown)=>typeof v==="string"?v:v&&typeof v==="object"&&"id"in v?String(v.id):null;
@@ -44,11 +45,11 @@ export async function executeSettlement(admin:ReturnType<typeof adminClient>,l:S
   const before=proof.charge.payment_method_details?.card?.capture_before;
   if(proof.pi.status!=="requires_capture"||proof.pi.amount!==l.authorized_max||proof.pi.amount_received!==0||proof.pi.amount_capturable<l.amount_cents||proof.charge.captured||proof.charge.paid!==true||proof.charge.status!=="succeeded"||!Number.isSafeInteger(before)||(before??0)<=Date.now()/1000)throw conflict();
   if(!freshAttempt(l.created_at)){await markReview(admin,l);return;}
-  // Final partial capture = EXACT accepted base + accepted amendments. No arbitrary partial amount.
+  // Stripe finalizes a single capture by default and rejects final_capture without multicapture.
   if(!await qualifiedAccount(p,l.account_id,l.artisan_id))throw conflict();
   const permission=await admin.rpc("authorize_guest_settlement_operation",{p_id:l.id,p_actor:l.actor_id,p_phase:"capture"});dbError(permission.error);
   if(!freshAttempt(l.created_at))throw conflict();
-  await p.stripe.paymentIntents.capture(l.intent_id,{amount_to_capture:l.amount_cents,final_capture:true},{idempotencyKey:`guest-capture:${l.id}`});
+  await p.stripe.paymentIntents.capture(l.intent_id,{amount_to_capture:l.amount_cents},{idempotencyKey:`guest-capture:${l.id}`});
   proof=await paymentProof(p,l);if(!captured(l,proof))throw unknown();
  }
  const recorded=await admin.rpc("record_guest_settlement",{p_id:l.id,p_actor:l.actor_id,p_charge:proof.charge.id,p_amount:l.amount_cents});dbError(recorded.error);l=await settlementLedger(admin,l.id,l.actor_id);

@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { authenticatedClient, ApiError, assertOrigin, dbError } from "@/lib/supabase/server";
+import { authenticatedClient, ApiError, assertOrigin } from "@/lib/supabase/server";
+import { platformWriteError } from "@/lib/features/platform-operations/mfa";
 import { uuid, validated } from "@/lib/supabase/validation";
 import { failed, invalidQuery, objectResult, ok, requireScope } from "@/lib/features/platform-operations/http";
 export const dynamic = "force-dynamic";
@@ -16,7 +17,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     await requireScope(db, "finance_write");
     const data = await validated(request, schema);
     const result = await db.rpc("platform_decide_refund", { p_id: id, p_action: data.action, p_expected_version: data.expected_version, p_note: data.note });
-    dbError(result.error);
+    platformWriteError(result.error);
     return ok(objectResult(result.data, "La décision n’a pas été confirmée."));
   } catch (error) { return failed(error); }
 }

@@ -1,9 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import Stripe from "stripe";
 import { loadModule, fakeServerHelpers } from "../documents/harness";
 const ID = "evt_FINQA",
   U = "10000000-0000-4000-8000-000000000001",
   KEY = "20000000-0000-4000-8000-000000000001";
+const PLATFORM_SECRET = "whsec_synthetic_platform";
+const CONNECT_SECRET = "whsec_synthetic_connect";
+const stripe = new Stripe("sk_test_synthetic_local");
 function event(type = "transfer.created", account?: string) {
   return {
     id: ID,
@@ -32,12 +36,14 @@ function webhook(
   badSignature = false,
   error: string | null = null,
   ack: any = { event_id: ID, version: 1, replayed: false },
+  connectSecret: string | null = CONNECT_SECRET,
 ) {
   const calls: any[] = [];
   const m = loadModule("app/api/payments/webhook/route.ts", {
     "node:process": {
       env: {
-        STRIPE_WEBHOOK_SECRET: "FAKE_LOCAL_ONLY",
+        STRIPE_WEBHOOK_SECRET: PLATFORM_SECRET,
+        STRIPE_CONNECT_WEBHOOK_SECRET: connectSecret,
         STRIPE_SECRET_KEY: "sk_test_FAKE",
       },
     },
@@ -51,26 +57,22 @@ function webhook(
       }),
     },
     "@/lib/supabase/stripe": {
-      stripeClient: () => ({
-        webhooks: {
-          constructEvent: (body: string) => {
-            if (badSignature) throw Error("invalid");
-            return JSON.parse(body);
-          },
-        },
-      }),
+      stripeClient: () => stripe,
     },
   });
   return {
     calls,
-    post: (e: any = event(), signature = "LOCAL_ONLY") =>
-      (m.POST as any)(
-        new Request("https://qa.invalid/api/payments/webhook", {
+    post: (e: any = event(), signature?: string, connected = false, signedForConnect = connected) => {
+      const body = JSON.stringify(e);
+      const signed = stripe.webhooks.generateTestHeaderString({ payload: body, secret: signedForConnect ? CONNECT_SECRET : PLATFORM_SECRET });
+      return (m.POST as any)(
+        new Request("https://qa.invalid/api/payments/webhook" + (connected ? "?source=connect" : ""), {
           method: "POST",
-          headers: { "stripe-signature": signature },
-          body: JSON.stringify(e),
+          headers: { "stripe-signature": signature ?? (badSignature ? "invalid" : signed) },
+          body,
         }),
-      ),
+      );
+    },
   };
 }
 test("real signed webhook records transfer proof only, never payment mutation or metadata binding", async () => {
@@ -114,16 +116,36 @@ test("invalid signature, missing signature, mode mismatch and malformed proof ca
 test("connected transfer context is preserved for review; other connected payment paths stay refused", async () => {
   const f = webhook();
   assert.equal(
-    (await f.post(event("transfer.created", "acct_QA"))).status,
+    (await f.post(event("transfer.created", "acct_QA"), undefined, true)).status,
     200,
   );
   assert.equal(f.calls[0].args.p_event.source_account, "acct_QA");
   const q = webhook();
   assert.equal(
-    (await q.post(event("checkout.session.completed", "acct_QA"))).status,
+    (await q.post(event("checkout.session.completed", "acct_QA"), undefined, true)).status,
     400,
   );
   assert.equal(q.calls.length, 0);
+});
+test("Stripe destinations require distinct signatures and matching snapshot provenance", async () => {
+  const f = webhook();
+  const connected = event("transfer.created", "acct_QA");
+  assert.equal((await f.post(connected, undefined, true, false)).status, 400);
+  assert.equal((await f.post(event(), undefined, false, true)).status, 400);
+  assert.equal((await f.post(connected)).status, 400);
+  assert.equal((await f.post(event(), undefined, true)).status, 400);
+  assert.equal((await f.post({ ...event(), context: "acct_QA" })).status, 400);
+  assert.equal((await f.post({ ...connected, context: "acct_OTHER" }, undefined, true)).status, 400);
+  assert.equal((await f.post({ ...connected, livemode: true }, undefined, true)).status, 400);
+  assert.equal((await f.post(event("refund.created", "acct_QA"), undefined, true)).status, 400);
+  assert.equal(f.calls.length, 0);
+
+  for (const badSecret of [null, PLATFORM_SECRET]) {
+    const platformOnly = webhook(false, null, undefined, badSecret);
+    assert.equal((await platformOnly.post(connected, undefined, true)).status, 503);
+    assert.equal((await platformOnly.post()).status, 200);
+    assert.equal(platformOnly.calls.length, 1);
+  }
 });
 test("payout contains no bank destination, no dossier inference, and keeps source account", async () => {
   const e = {
@@ -142,7 +164,7 @@ test("payout contains no bank destination, no dossier inference, and keeps sourc
     },
   };
   const f = webhook();
-  assert.equal((await f.post(e)).status, 200);
+  assert.equal((await f.post(e, undefined, true)).status, 200);
   const p = f.calls[0].args.p_event;
   assert.equal(p.family, "payout");
   assert.equal(p.object.destination, null);

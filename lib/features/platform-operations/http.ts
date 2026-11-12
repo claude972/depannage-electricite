@@ -4,6 +4,7 @@ import { refundPolicy } from '../refund-execution/policy';
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { ApiError, apiError, authenticatedClient, dbError } from "@/lib/supabase/server";
+import { platformMfaRefusal } from "./mfa";
 import { uuid } from "@/lib/supabase/validation";
 import type { PlatformAccess, PlatformScopeKey } from "./types";
 import { INVOICE_RENDERING_AVAILABLE, financeConfig } from "./config";
@@ -13,7 +14,13 @@ export const privateHeaders = { "Cache-Control": "private, no-store" };
 export const invoiceFields = "id,request_id,kind,basis,number,issuer_key,issuer,recipient,payment_id,quote_id,intervention_id,related_invoice_id,lines,subtotal_cents,tax_rate,tax_cents,total_cents,currency,reason,issued_by,issued_at";
 export const refundFields = "id,request_id,payment_id,amount_cents,currency,reason,status,version,requested_by,created_at,updated_at,decided_by,decided_at,decision_note,provider_reference,settled_event_id,settled_at";
 export type Database = Awaited<ReturnType<typeof authenticatedClient>>["db"];
-export function failed(error: unknown) { const response = apiError(error); response.headers.set("Cache-Control", "private, no-store"); return response; }
+export function failed(error: unknown) {
+  const mfa = platformMfaRefusal(error);
+  if (mfa) return Response.json(mfa, { status: 403, headers: privateHeaders });
+  const response = apiError(error);
+  response.headers.set("Cache-Control", "private, no-store");
+  return response;
+}
 export function invalidQuery(): never { throw new ApiError(422, "Vérifiez les filtres ou rechargez la liste sans son ancien curseur."); }
 export function count(value: number | null, label = "Le comptage"): number { if (value === null || !Number.isSafeInteger(value) || value < 0) throw new ApiError(503, `${label} est indisponible.`); return value; }
 export function ok(data: unknown, status = 200) { return Response.json(data, { status, headers: privateHeaders }); }

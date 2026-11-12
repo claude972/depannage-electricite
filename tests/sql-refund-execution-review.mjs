@@ -12,6 +12,7 @@ create role anon; create role authenticated; create role service_role bypassrls;
 create schema auth;
 create table auth.users(id uuid primary key,raw_user_meta_data jsonb default '{}',email text,email_confirmed_at timestamptz,phone text,phone_confirmed_at timestamptz);
 create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+create function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb,'{}'::jsonb)$$;
 grant usage on schema auth to authenticated,anon,service_role;
 grant execute on function auth.uid() to authenticated,anon,service_role;
 create schema storage;
@@ -21,13 +22,14 @@ alter table storage.objects enable row level security;
 `);
 const dir=new URL('../supabase/migrations/',import.meta.url),files=(await readdir(dir)).filter(n=>n.endsWith('.sql')).sort();
 async function apply(file){await db.exec((await isolatedMigrationSql(db,file,await readFile(new URL(file,dir),'utf8'))).replace('create extension if not exists pgcrypto;','-- extension simulated'));}
-const executionMigrations = files.filter(name => name.endsWith('_refund_execution.sql') || name.endsWith('_refund_preparation_handoff.sql'));
+// Seed the historical refund before installing the execution tables and their MFA guard.
+const executionMigrations = files.filter(name => /_(refund_execution|refund_preparation_handoff|platform_mfa)\.sql$/.test(name));
 for (const file of files.filter(name => !executionMigrations.includes(name))) await apply(file);
 const ids={admin:'10000000-0000-4000-8000-000000000001',operator:'10000000-0000-4000-8000-000000000002',client:'10000000-0000-4000-8000-000000000003',artisan:'10000000-0000-4000-8000-000000000004'};let checks=0;
 function ok(v,m){assert.ok(v,m);checks++;}async function denied(fn,code){await assert.rejects(fn,e=>e.code===code);checks++;}
 for(const[n,id]of Object.entries(ids))await db.query('insert into auth.users(id,raw_user_meta_data,email,email_confirmed_at)values($1,$2,$3,now())',[id,JSON.stringify({role:n==='artisan'?'artisan':'client',full_name:'QA '+n}),n+'@example.invalid']);await db.query("update public.profiles set role='admin'where id=$1",[ids.admin]);
 await db.query("insert into public.platform_operator_grants(user_id,scope,granted_by)values($1,'finance_write',$2),($1,'finance_read',$2)",[ids.operator,ids.admin]);
-async function as(actor,sql,args=[]){await db.exec('set role '+(actor==='service'?'service_role':'authenticated'));await db.query("select set_config('request.jwt.claim.sub',$1,false)",[ids[actor]||'']);try{return await db.query(sql,args);}finally{await db.exec('reset role');}}
+async function as(actor,sql,args=[]){await db.exec('set role '+(actor==='service'?'service_role':'authenticated'));await db.query("select set_config('request.jwt.claim.sub',$1,false),set_config('request.jwt.claims',$2,false)",[ids[actor]||'',JSON.stringify({aal:actor==='admin'||actor==='operator'?'aal2':'aal1'})]);try{return await db.query(sql,args);}finally{await db.exec('reset role');}}
 const org=(await db.query("insert into public.organizations(name,owner_id)values('QA org',$1)returning id",[ids.client])).rows[0].id;await db.query("insert into public.organization_members values($1,$2,'owner')",[org,ids.client]);const site=(await db.query("insert into public.sites(organization_id,name,type,address,budget_cents)values($1,'QA site','office','QA adresse fixture',100000)returning id",[org])).rows[0].id;
 async function fixture(siteId=site){const job=(await db.query("insert into public.interventions(client_id,artisan_id,site_id,category,description,address,postal_code,city,urgency,status,estimate_min_cents,estimate_max_cents)values($1,$2,$3,'panel','QA panne synthétique','QA adresse fixture','97200','QA ville','scheduled','completed',10000,20000)returning id",[ids.client,ids.artisan,siteId])).rows[0].id;
 const quote=(await db.query("insert into public.quotes(intervention_id,artisan_id,lines,subtotal_cents,tax_rate,tax_cents,total_cents,status)values($1,$2,'[{\"label\":\"QA prestation\",\"quantity\":1,\"unit_price_cents\":10000}]',10000,20,2000,12000,'accepted')returning id",[job,ids.artisan])).rows[0].id;

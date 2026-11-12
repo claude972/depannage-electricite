@@ -27,6 +27,7 @@ export async function freshDatabase() {
       );
       create function auth.uid() returns uuid language sql stable as
         $$select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid$$;
+      create function auth.jwt() returns jsonb language sql stable as $$select nullif(current_setting('request.jwt.claims',true),'')::jsonb$$;
       grant usage on schema auth to anon, authenticated, service_role;
       grant execute on function auth.uid() to anon, authenticated, service_role;
       create schema storage;
@@ -53,6 +54,8 @@ export async function asUser(db, user, query, args = []) {
   return db.transaction(async tx => {
     await tx.exec("set local role authenticated");
     await tx.query("select set_config('request.jwt.claim.sub', $1, true)", [user.id]);
+    const aal = user.aal === undefined ? "aal2" : user.aal;
+    await tx.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ sub: user.id, role: "authenticated", ...(aal ? { aal } : {}) })]);
     return (await tx.query(query, args)).rows[0]?.v;
   });
 }
@@ -73,7 +76,7 @@ export const dispatchSecret = randomBytes(32).toString("base64url");
 const encode = value => Buffer.from(JSON.stringify(value)).toString("base64url");
 function fakeSession(user) {
   const expires = Math.floor(Date.now() / 1000) + 3600;
-  const token = `${encode({ alg: "HS256" })}.${encode({ sub: user.id, exp: expires })}.synthetic`;
+  const token = `${encode({ alg: "HS256" })}.${encode({ sub: user.id, exp: expires, ...(user.aal === null ? {} : { aal: user.aal ?? "aal2" }) })}.synthetic`;
   const cookie = "sb-127-auth-token=base64-" + encode({
     access_token: token, refresh_token: "synthetic-refresh", expires_at: expires,
     expires_in: 3600, token_type: "bearer", user,

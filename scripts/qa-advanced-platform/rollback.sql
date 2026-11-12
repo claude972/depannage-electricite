@@ -59,7 +59,7 @@ begin if ok is distinct from true then perform pg_temp.qa_fail(label); end if; p
 create function pg_temp.qa_as(p_uid uuid, p_role text default 'authenticated') returns void language plpgsql as $$
 begin
  perform set_config('request.jwt.claim.sub', coalesce(p_uid::text,''), true);
- perform set_config('request.jwt.claims', case when p_uid is null then '' else json_build_object('sub',p_uid,'role',p_role,'aud','authenticated')::text end, true);
+ perform set_config('request.jwt.claims', case when p_uid is null then '' else json_build_object('sub',p_uid,'role',p_role,'aud','authenticated','aal','aal2')::text end, true);
  execute format('set local role %I', p_role);
 end $$;
 create function pg_temp.qa_root() returns void language plpgsql as $$

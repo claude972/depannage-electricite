@@ -7,14 +7,21 @@ import {
   dbError,
 } from "@/lib/supabase/server";
 import { uuid, validated } from "@/lib/supabase/validation";
+import { parseBookingLocation } from "@/shared/booking-location";
 
 import {requestSchema,checked,publicRequest,checkedPage} from "@/lib/features/data-requests/contracts";
 
 export const dynamic = "force-dynamic";
 
 const headers = { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" };
-const sections = z.enum(["account", "addresses", "requests", "messages", "documents", "support", "erasure_requests", "payment_reminders"]);
+const sections = z.enum(["account", "addresses", "requests", "booking_locations", "messages", "documents", "support", "erasure_requests", "payment_reminders"]);
 const pageSize = 100;
+const bookingLocationRows = z.array(z.object({
+  id: uuid,
+  actor_id: uuid,
+  intervention_id: uuid.nullable(),
+  location: z.unknown(),
+}).strict()).max(pageSize + 1);
 const records = {
   addresses: {
     table: "client_addresses",
@@ -96,6 +103,25 @@ export async function GET(request: Request) {
     if(section.data==='erasure_requests'){
       const result=await db.rpc('list_data_erasure_requests',{p_all:false,p_after:after.data,p_limit:100});dbError(result.error);
       return Response.json({section:section.data,...checkedPage(result.data,after.data,user.id)},{headers});
+    }
+
+    if (section.data === "booking_locations") {
+      const result = await db.rpc("export_personal_booking_locations", { p_after: after.data });
+      dbError(result.error);
+      const page = checked(bookingLocationRows, result.data);
+      let previous = after.data?.toLowerCase() ?? "";
+      const rows = page.map(({ actor_id, id, intervention_id, location: rawLocation }) => {
+        const location = parseBookingLocation(rawLocation);
+        if (actor_id !== user.id || id <= previous || !location)
+          throw new ApiError(503, "Les données reçues doivent être vérifiées.");
+        previous = id;
+        return { id, intervention_id, location };
+      });
+      return Response.json({
+        section: section.data,
+        rows: rows.slice(0, pageSize),
+        next_cursor: rows.length > pageSize ? rows[pageSize - 1].id : null,
+      }, { headers });
     }
 
     if (section.data === "payment_reminders") {

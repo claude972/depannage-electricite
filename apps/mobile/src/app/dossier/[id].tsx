@@ -80,6 +80,7 @@ export default function Dossier() {
       await openBrowserAsync(target.toString());
     },false);
   }
+  const access = owner || artisan ? data.data?.booking_location : null;
   const report=ops.data?.report;
   const receipt=ops.data?.report_receipt;
   if(!id)return <Screen><Copy kind="error">Dossier introuvable.</Copy></Screen>;
@@ -92,6 +93,12 @@ export default function Dossier() {
       {owner && <Copy kind="muted" selectable>Numéro de commande · {orderReference(job.id)}</Copy>}
       <Copy>{job.description}</Copy>
       <Copy kind="muted">{[job.address,job.postal_code,job.city].filter(Boolean).join(', ')}</Copy>
+      {access && (access.access_details || access.latitude !== null) && <Card>
+        <Copy kind="subtitle">Accès à l’intervention</Copy>
+        {access.access_details && <Copy selectable>{access.access_details}</Copy>}
+        {access.latitude !== null && access.longitude !== null &&
+          <Copy kind="muted" selectable>Repère GPS · {access.latitude.toFixed(6)}, {access.longitude.toFixed(6)}</Copy>}
+      </Card>}
       <Card><Copy kind="subtitle">Estimation indicative</Copy><Copy>{euros(job.estimate_min_cents)} à {euros(job.estimate_max_cents)}</Copy></Card>
       <Action secondary label="Ouvrir la conversation" onPress={()=>router.push({pathname:'/dossier/messages',params:{id}})}/>
       <Action secondary label="Actualiser le dossier" disabled={busy} onPress={reload}/>

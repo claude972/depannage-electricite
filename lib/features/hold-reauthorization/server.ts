@@ -11,7 +11,6 @@ import { uuid, validated } from "@/lib/supabase/validation";
 import { cardHoldConfigured } from "@/lib/features/guest/payment-options";
 import { appUrl } from "@/lib/supabase/stripe";
 import {
-  settlementConfigured,
   settlementProvider,
   qualifiedAccount,
   settlementLedger,
@@ -273,7 +272,7 @@ export async function POST(request: Request) {
     if (new URL(request.url).searchParams.size)
       throw new ApiError(422, "Paramètres inattendus.");
     const input = await validated(request, schema);
-    if (!settlementConfigured() || !cardHoldConfigured(env))
+    if (!cardHoldConfigured(env))
       throw new ApiError(
         503,
         "La nouvelle autorisation bancaire n’est pas encore configurée.",
@@ -465,7 +464,7 @@ export async function GET(request: Request) {
       v.source.amount_cents < 1
     )
       throw unavailable();
-    const configured = settlementConfigured() && cardHoldConfigured(env);
+    const configured = cardHoldConfigured(env);
     let status = v.attempt?.status ?? "eligible",
       reason = configured ? null : "configuration_required";
     if (v.source.job_status !== "completed") reason = "not_completed";

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { ApiRequestError, parseApiBody } from "../../components/app/api";
-import { createWorkspaceReader, INVALID_WORKSPACE_MESSAGE, validateWorkspace } from "../../components/app/workspace-reader";
+import { createWorkspaceReader, INVALID_WORKSPACE_MESSAGE, loadInitialWorkspace, validateWorkspace } from "../../components/app/workspace-reader";
 import { createRefreshCoordinator } from "../../components/app/workspace-refresh";
 import { decideDetail } from "../../components/app/detail-resolution";
 import type { Workspace } from "../../components/app/types";
@@ -28,9 +28,12 @@ const valid = (over: Record<string, unknown> = {}) => ({
 /** The REAL reader the shell uses, with an injected api and every side effect observed. */
 function reader(reply: () => Promise<unknown>, expected: string | null = USER) {
   let seq = 0;
-  const log = { applied: [] as Workspace[], signOuts: [] as (string | undefined)[], errors: [] as string[] };
+  const log = { applied: [] as Workspace[], signOuts: [] as (string | undefined)[], errors: [] as string[], paths: [] as string[] };
   const read = createWorkspaceReader({
-    api: () => reply(),
+    api: (path) => {
+      log.paths.push(path);
+      return reply();
+    },
     nextSeq: () => ++seq,
     currentSeq: () => seq,
     expectedUser: () => expected,
@@ -130,6 +133,50 @@ test("403, 503 and transport ⇒ failed, session kept", async () => {
   const t = reader(() => Promise.reject(new ApiRequestError(0, "Connexion indisponible.")));
   assert.deepEqual(await t.read(), { kind: "failed", status: 0 });
   assert.equal(t.log.signOuts.length, 0);
+});
+
+test("workspace bootstrap retries one 503 and applies the next valid response", async () => {
+  let first = true;
+  const r = reader(() => {
+    if (!first) return Promise.resolve(valid());
+    first = false;
+    return http(503, '{"error":"Indisponible"}')();
+  });
+  const c = createRefreshCoordinator({ read: r.read, contextKey: () => "g1|client||" });
+  let waits = 0;
+  const result = await loadInitialWorkspace(c.request, () => true, async () => { waits++; });
+  assert.equal(result.kind, "loaded");
+  assert.equal(waits, 1);
+  assert.deepEqual(r.log.paths, ["/api/workspace", "/api/workspace"]);
+  assert.equal(r.log.applied.length, 1);
+  assert.equal(r.log.signOuts.length, 0);
+});
+
+test("workspace bootstrap never retries 401/403 and stops after a second 503", async () => {
+  for (const [status, reads, outcome] of [[401, 1, "signed_out"], [403, 1, "failed"], [503, 2, "failed"]] as const) {
+    const r = reader(http(status, '{"error":"Indisponible"}'));
+    const c = createRefreshCoordinator({ read: r.read, contextKey: () => "g1|client||" });
+    assert.equal((await loadInitialWorkspace(c.request, () => true, async () => {})).kind, outcome);
+    assert.equal(r.log.paths.length, reads);
+    assert.equal(r.log.applied.length, 0);
+    assert.equal(r.log.signOuts.length, status === 401 ? 1 : 0);
+  }
+});
+
+test("workspace bootstrap drops its retry after a different identity or generation is installed", async () => {
+  for (const next of [{ userId: "other", generation: 2 }, { userId: USER, generation: 2 }]) {
+    let session = { userId: USER, generation: 1 };
+    const initial = session;
+    const r = reader(http(503, '{"error":"Indisponible"}'));
+    const c = createRefreshCoordinator({ read: r.read, contextKey: () => String(session.generation) });
+    const result = await loadInitialWorkspace(
+      c.request,
+      () => session.userId === initial.userId && session.generation === initial.generation,
+      async () => { session = next; },
+    );
+    assert.equal(result.kind, "superseded");
+    assert.deepEqual(r.log.paths, ["/api/workspace"]);
+  }
 });
 
 test("foreign identity ⇒ signed_out + reset, nothing applied", async () => {

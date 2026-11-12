@@ -152,8 +152,7 @@
   width: 100%;
   margin-bottom: 8px;
 }
-.choice,
-.check {
+.choice {
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -170,15 +169,7 @@
   border-color: var(--ui-accent);
   box-shadow: inset 0 0 0 1px var(--ui-accent);
 }
-.check {
-  justify-self: start;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  font-weight: 500;
-}
-.choice input,
-.check input {
+.choice input {
   width: 20px;
   height: 20px;
   accent-color: var(--ui-primary);
@@ -307,8 +298,7 @@
 .back:focus-visible,
 .barButton:focus-visible,
 .stepTitle:focus-visible,
-.choice:has(input:focus-visible),
-.check:has(input:focus-visible) {
+.choice:has(input:focus-visible) {
   outline: 3px solid var(--ui-focus);
   outline-offset: 2px;
 }
