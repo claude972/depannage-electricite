@@ -1,21 +1,20 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useRef, useState, type ComponentRef } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { z } from 'zod';
 import { AccountEntry } from '@/components/account-entry';
 import { PublicLink } from '@/components/mobile-public-content';
 import { Action, Copy, Field, usePalette } from '@/components/ui';
 import { useSession } from '@/lib/session';
 import { configured } from '@/lib/config';
-
-const emailAddress = z.email();
+import { accountEmail } from '@/lib/email-account';
 
 export default function Login() {
   const router = useRouter();
   const { retour } = useLocalSearchParams<{ retour?: string }>();
   const auth = useSession();
   const palette = usePalette();
-  const [email, setEmail] = useState('');
+  const prepared = retour === 'demande' ? auth.bookingContact : null;
+  const [email, setEmail] = useState(prepared?.email ?? '');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,8 +24,13 @@ export default function Login() {
 
   async function submit() {
     if (locked.current || !configured) return;
-    if (!emailAddress.safeParse(email.trim()).success) {
+    const address = accountEmail.safeParse(email);
+    if (!address.success) {
       setError('Saisissez une adresse e-mail valide.');
+      return;
+    }
+    if (prepared && prepared.email !== address.data) {
+      setError('Utilisez l’adresse e-mail renseignée dans votre demande.');
       return;
     }
     if (!password) {
@@ -37,7 +41,7 @@ export default function Login() {
     locked.current = true;
     setBusy(true);
     setError(null);
-    try { await auth.signIn(email, password, retour === 'interventions' ? 'interventions' : 'profile'); }
+    try { await auth.signIn(address.data, password, retour === 'demande' ? 'booking' : retour === 'interventions' ? 'interventions' : 'profile'); }
     catch (issue) { setError(issue instanceof Error ? issue.message : 'Connexion indisponible.'); }
     finally {
       locked.current = false;
@@ -49,7 +53,7 @@ export default function Login() {
     <View style={styles.form}>
       <Field label="Adresse e-mail" value={email} onChangeText={value => { setEmail(value); setError(null); }}
         placeholder="vous@exemple.fr" autoCapitalize="none" autoCorrect={false} autoComplete="email"
-        keyboardType="email-address" returnKeyType="next" editable={!busy} onSubmitEditing={() => passwordField.current?.focus()}
+        keyboardType="email-address" returnKeyType="next" editable={!busy && !prepared} onSubmitEditing={() => passwordField.current?.focus()}
         style={{ backgroundColor: palette.subtle }} />
       <View style={styles.passwordGroup}>
         <Copy>Mot de passe</Copy>
@@ -68,12 +72,12 @@ export default function Login() {
       {(error || auth.error || !configured) && <Copy kind="error">{error ?? auth.error ?? 'L’environnement mobile n’est pas configuré.'}</Copy>}
       <Action label={busy ? 'Connexion…' : 'Se connecter'} disabled={busy || !configured} onPress={() => void submit()} />
     </View>
-    {retour !== 'interventions' && <View style={[styles.guest, { borderColor: palette.border }]}>
+    {retour !== 'interventions' && retour !== 'demande' && <View style={[styles.guest, { borderColor: palette.border }]}>
       <Copy kind="subtitle">Une intervention à demander ?</Copy>
       <Copy kind="muted">Vous pouvez commencer votre demande depuis l’accueil.</Copy>
       <PublicLink label="Continuer sans compte" onPress={() => router.navigate('/bienvenue')} />
     </View>}
-    <PublicLink label="Créer un compte par e-mail" onPress={() => router.push({ pathname: '/inscription', params: retour === 'interventions' ? { retour } : {} })} />
+    <PublicLink label="Créer un compte par e-mail" onPress={() => router.push({ pathname: '/inscription', params: retour === 'interventions' || retour === 'demande' ? { retour } : {} })} />
   </AccountEntry>;
 }
 

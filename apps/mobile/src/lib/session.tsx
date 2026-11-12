@@ -4,6 +4,7 @@ import { AppState } from 'react-native';
 import { createContext, useContext, useEffect, useState, type PropsWithChildren } from 'react';
 import { apiOrigin, configured, publishableKey, supabaseOrigin } from './config';
 import { secureStorage } from './secure-storage';
+import type { AccountContact } from './email-account';
 import { verifiedPhone, verifyNativePhoneCode, type PhonePurpose } from './phone-client';
 import { clientInterventionSnapshot } from '../../../../shared/client-interventions';
 import { orderReference, parseOrderReference } from '../../../../shared/order-reference';
@@ -13,15 +14,15 @@ const supabase = configured ? createClient(supabaseOrigin!, publishableKey!, {
 }) : null;
 const auth = supabase?.auth;
 
-type LoginDestination = 'profile' | 'interventions';
-type SignupValues = { email: string; password: string; firstName: string; lastName: string };
+type LoginDestination = 'profile' | 'interventions' | 'booking';
 
 type SessionContext = {
   session: Session | null;
   ready: boolean;
   error: string | null;
   signIn(email: string, password: string, destination?: LoginDestination): Promise<void>;
-  signUp(values: SignupValues, destination?: LoginDestination): Promise<boolean>;
+  bookingContact: AccountContact | null;
+  setBookingContact(value: AccountContact | null): void;
   signOut(): Promise<void>;
   resetPassword(email: string): Promise<void>;
   loginResume: LoginDestination | null;
@@ -75,35 +76,12 @@ export function SessionProvider({ children }: PropsWithChildren) {
   const [error, setError] = useState<string | null>(null);
   const [phoneResume, setPhoneResume] = useState<PhonePurpose | null>(null);
   const [loginResume, setLoginResume] = useState<LoginDestination | null>(null);
+  const [bookingContact, setBookingContact] = useState<AccountContact | null>(null);
 
   async function connect(email: string, password: string, destination: LoginDestination = 'profile') {
     setLoginResume(destination);
     try { await signIn(email, password); }
     catch (issue) { setLoginResume(null); throw issue; }
-  }
-
-  async function signUp(values: SignupValues, destination: LoginDestination = 'profile') {
-    if (!auth || !apiOrigin) throw new Error('L’environnement mobile n’est pas configuré.');
-    setLoginResume(destination);
-    try {
-      const { data, error: issue } = await auth.signUp({
-        email: values.email.trim(),
-        password: values.password,
-        options: {
-          data: { first_name: values.firstName, last_name: values.lastName,
-            full_name: `${values.firstName} ${values.lastName}`, role: 'client' },
-          emailRedirectTo: apiOrigin + '/auth/confirm',
-        },
-      });
-      if (issue?.status === 429) throw new Error('Patientez avant de demander une nouvelle inscription.');
-      if (issue) throw new Error('L’inscription par e-mail est indisponible. Vérifiez votre adresse ou réessayez.');
-      if (data.session) return true;
-      setLoginResume(null);
-      return false;
-    } catch (issue) {
-      setLoginResume(null);
-      throw issue;
-    }
   }
 
   async function verifyPhone(phone: string, code: string, purpose: PhonePurpose) {
@@ -144,6 +122,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       if (!live || event === 'INITIAL_SESSION') return;
       changed = true;
       setSession(value);
+      setBookingContact(null);
       if (!value) {
         setPhoneResume(null);
         setLoginResume(null);
@@ -174,7 +153,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
     };
   }, []);
   return <Context.Provider value={{
-    session, ready, error, signIn: connect, signUp, signOut, resetPassword, verifyPhone, addEmailAccount,
+    session, ready, error, signIn: connect, bookingContact, setBookingContact, signOut, resetPassword, verifyPhone, addEmailAccount,
     loginResume, consumeLoginResume: () => setLoginResume(null),
     phoneResume, consumePhoneResume: () => setPhoneResume(null),
   }}>{children}</Context.Provider>;

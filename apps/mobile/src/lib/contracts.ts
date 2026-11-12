@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { bookingLocation } from './booking-location';
 
 export const categories = {
   outage: 'Coupure de courant',
@@ -43,7 +44,13 @@ export const workspace = z.object({
   interventions: z.array(job),
   limits: z.object({interventions: z.object({limited: z.boolean()})}).optional(),
 });
-export const detail = z.object({intervention: job, quotes: list(quote), documents: list(attachment), payments: list(payment)});
+export const detail = z.object({
+  intervention: job,
+  quotes: list(quote),
+  documents: list(attachment),
+  payments: list(payment),
+  booking_location: bookingLocation.nullish(),
+});
 export const operations = z.object({
   travel_stage: z.enum(['planned','en_route','on_site']),
   appointment: z.object({starts_at: z.iso.datetime({ offset: true }), ends_at: z.iso.datetime({ offset: true }), reminder_version: z.number().int().positive(), note: z.string().optional()}).nullable(),

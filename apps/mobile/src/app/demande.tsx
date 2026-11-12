@@ -9,7 +9,7 @@ import type { PendingPhoto } from '@/lib/intervention-drafts';
 import { BookingLocationField } from '@/components/booking-location-field';
 import type { BookingLocation } from '../../../../shared/booking-location';
 import { ApiFailure, api, useResource } from '@/lib/api';
-import { locationCapability } from '@/lib/booking-location';
+import { hasPrivateLocation, locationCapability } from '@/lib/booking-location';
 import { categories, category as categorySchema, creation, euros, prices, requestFields, workspace, type Category } from '@/lib/contracts';
 import { requestDraftKey } from '@/lib/draft-store';
 import { requestContact, requestDraft, type RequestIntent } from '@/lib/request-draft';
@@ -59,6 +59,7 @@ function ClientRequest({ actor, token, profile }: { actor: string; token: string
     return () => { controller.abort(); active.current = null; };
   }, [actor]);
   const intent = draft.value?.intent;
+  const locationBlocked = !intent && hasPrivateLocation(location) && bookingOptions.data?.accepts_location !== true;
   const chosen = intent?.payload.category ?? category;
   const range = intent && !intent.reviewRequired ? intent.estimate : catalogue.data?.ranges[chosen];
   const fields = { category, description: requestDescription(description, categories[category]), address, postal_code: postal, city, urgency };
@@ -85,7 +86,7 @@ function ClientRequest({ actor, token, profile }: { actor: string; token: string
 
   async function submit() {
     const signal = active.current?.signal;
-    if (!draft.value || draft.value.confirmedId || lock.current || !signal || signal.aborted) return;
+    if (!draft.value || draft.value.confirmedId || lock.current || !signal || signal.aborted || locationBlocked) return;
     setError(null);
     let current = intent;
     if (!current || current.reviewRequired) {
@@ -192,6 +193,9 @@ function ClientRequest({ actor, token, profile }: { actor: string; token: string
       <Copy>{intent?.payload.description ?? description}</Copy>
       <Copy>{intent?.payload.address ?? address}, {intent?.payload.postal_code ?? postal} {intent?.payload.city ?? city}</Copy>
       {contactPhone && <Copy>Téléphone de contact · {contactPhone}</Copy>}
+      {locationBlocked && !bookingOptions.loading && <Copy kind="error">Le repère ou le complément d’accès est conservé dans votre formulaire. Le service ne permet pas encore son envoi.</Copy>}
+      {locationBlocked && <ReadState loading={bookingOptions.loading} error={bookingOptions.error} onRetry={bookingOptions.reload} />}
+      {locationBlocked && !bookingOptions.loading && !bookingOptions.error && <Action secondary label="Actualiser les options" onPress={bookingOptions.reload} />}
       {(!intent || intent.reviewRequired) && <ReadState loading={catalogue.loading} error={catalogue.error} onRetry={catalogue.reload} />}
       {range && <Copy>{euros(range.min_cents)} à {euros(range.max_cents)}. Le devis fixe le prix final.</Copy>}
       {draft.error && <ReadState loading={false} error={draft.error} onRetry={draft.retry} />}
@@ -218,7 +222,7 @@ function ClientRequest({ actor, token, profile }: { actor: string; token: string
         }} />
       </>}
       <Action label={busy ? 'Envoi…' : intent?.reviewRequired ? 'Confirmer le nouveau tarif' : intent ? 'Vérifier ou réessayer la même demande' : 'Confirmer la demande'}
-        disabled={busy || draft.pending || !range || Boolean(intent?.reviewRequired && catalogue.data?.version === intent.payload.reviewed_estimate_version)}
+        disabled={busy || draft.pending || locationBlocked || !range || Boolean(intent?.reviewRequired && catalogue.data?.version === intent.payload.reviewed_estimate_version)}
         onPress={() => {
           if (intent && !intent.reviewRequired) { void submit(); return; }
           Alert.alert('Confirmer la demande ?', 'Le montant affiché est une estimation. Vous pourrez examiner le devis avant les travaux.', [

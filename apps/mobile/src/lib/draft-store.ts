@@ -28,6 +28,19 @@ export function createDraftStore(storage: Storage) {
         return raw === null ? null : schema.parse(JSON.parse(raw));
       });
     },
+    update<T>(key: string, schema: ZodType<T>, change: (current: T | null) => T | null): Promise<T | null> {
+      pendingWrites.delete(key);
+      return enqueue(key, async () => {
+        const raw = await storage.getItem(key);
+        const current = raw === null ? null : schema.parse(JSON.parse(raw));
+        const next = change(current);
+        if (next !== current) {
+          if (next === null) await storage.removeItem(key);
+          else await storage.setItem(key, JSON.stringify(next));
+        }
+        return next;
+      });
+    },
     write(key: string, value: unknown): Promise<void> {
       const raw = JSON.stringify(value);
       const pending = pendingWrites.get(key);
