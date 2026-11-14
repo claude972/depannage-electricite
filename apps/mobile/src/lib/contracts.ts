@@ -48,9 +48,10 @@ const list = <T extends z.ZodType>(schema: T) => z.discriminatedUnion('status', 
 export const workspace = z.object({
   profile: z.object({id, role: z.enum(['client', 'artisan', 'manager', 'admin']), full_name: z.string(), first_name: z.string().nullish(), last_name: z.string().nullish(), phone: z.string().nullish(), artisan_approved: z.boolean()}),
   interventions: z.array(job),
+  organizations: z.array(z.object({id, name: z.string(), owner_id: id, created_at: z.string()})).optional(),
   quotes: z.array(quoteSummary).optional(),
   payments: z.array(payment).optional(),
-  limits: z.object({interventions: z.object({limited: z.boolean()}), quotes: z.object({limited: z.boolean()}).optional()}).optional(),
+  limits: z.object({interventions: z.object({limited: z.boolean()}), quotes: z.object({limited: z.boolean()}).optional(), organizations: z.object({limited: z.boolean()}).optional()}).optional(),
 });
 export const detail = z.object({
   intervention: job,

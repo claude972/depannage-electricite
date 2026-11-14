@@ -48,16 +48,20 @@ export function MobileContactActions({ phoneHref, inline = false, phoneLabel = S
     <Text style={styles.label}>{phoneLabel}</Text>
   </Pressable>;
   if (inline) return call;
-  return (
-    <View style={styles.actions}>
-      {call}
-      <Pressable accessibilityRole="button" accessibilityLabel={SUPPORT_CONTACT.whatsapp.label}
-        onPress={() => open('whatsapp', whatsappHref)}
-        style={({ pressed }) => [styles.button, styles.whatsapp, { borderColor: palette.border, opacity: pressed ? .8 : 1 }]}>
-        <Image source={require('../../assets/public/contact-whatsapp.png')} style={styles.icon} accessible={false} />
-      </Pressable>
-    </View>
-  );
+  return <View style={styles.actions}>{call}</View>;
+}
+
+export function WhatsAppContactButton() {
+  const router=useRouter(),palette=usePalette();
+  function open(){
+    if (!whatsappHref) { Alert.alert(SUPPORT_CONTACT.whatsapp.label, SUPPORT_CONTACT.whatsapp.unavailable, [{text:'Fermer',style:'cancel'},{text:'Voir l’aide',onPress:()=>router.push('/aide-mobile')}]); return; }
+    void Linking.openURL(whatsappHref).catch(()=>Alert.alert('WhatsApp','Ce moyen de contact n’a pas pu être ouvert sur cet appareil.'));
+  }
+  return <Pressable accessibilityRole="button" accessibilityLabel="WhatsApp" onPress={open}
+    style={({pressed})=>[styles.button,styles.whatsapp,{borderColor:palette.border,opacity:pressed?.8:1}]}>
+    <Image source={require('../../assets/public/contact-whatsapp.png')} style={styles.icon} accessible={false}/>
+  </Pressable>;
+
 }
 
 const styles = StyleSheet.create({

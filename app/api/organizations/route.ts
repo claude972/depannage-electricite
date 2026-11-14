@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   try {
     const organizationId = new URL(request.url).searchParams.get("organization_id");
     if (!uuid.safeParse(organizationId).success) throw new ApiError(422, "Choisissez une organisation valide.");
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     const result = await db.rpc("organization_member_overview", { p_organization_id: organizationId });
     dbError(result.error);
     return Response.json(result.data, { headers: privateHeaders });

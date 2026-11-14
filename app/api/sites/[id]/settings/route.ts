@@ -9,7 +9,7 @@ function refuseQuery(request: Request) {
 
 export async function GET(request: Request, context: RouteContext) {
   try {
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     refuseQuery(request);
     const id = await routeId(context);
     const result = await db.from("sites").select(siteColumns).eq("id", id).maybeSingle();
@@ -29,7 +29,7 @@ export async function GET(request: Request, context: RouteContext) {
 export async function POST(request: Request, context: RouteContext) {
   try {
     assertOrigin(request);
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     refuseQuery(request);
     const id = await routeId(context);
     const command = await validated(request, siteCommand);

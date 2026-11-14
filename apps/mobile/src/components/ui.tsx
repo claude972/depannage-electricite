@@ -1,7 +1,7 @@
 import { ActivityIndicator, RefreshControl, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useColorScheme, type ScrollViewInstance, type TextInputProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSegments } from 'expo-router';
-import type { PropsWithChildren, ReactNode, Ref } from 'react';
+import type { PropsWithChildren, ReactNode, Ref, ComponentRef } from 'react';
 
 const publicPalette = {
   background: '#FFFFFF', surface: '#FFFFFF', subtle: '#F4F6FA', text: '#111318',
@@ -18,7 +18,7 @@ export const editorial = { navy: '#16277A', yellow: '#F4D649', cards: '#244FB1',
 export function usePalette() {
   const scheme = useColorScheme();
   const [section] = useSegments();
-  const connected = section === '(espace)' || section === 'demande' || section === 'dossier' || section === 'offre';
+  const connected = section === '(espace)' || section === 'demande' || section === 'dossier' || section === 'offre' || section === 'organisation' || section === 'site' || section === 'annuaire';
   return connected && scheme === 'dark' ? darkPalette : publicPalette;
 }
 export function Screen({ children, top=false, footer, scrollRef, refreshing=false, onRefresh }: PropsWithChildren<{ top?: boolean; footer?: ReactNode; scrollRef?: Ref<ScrollViewInstance>; refreshing?: boolean; onRefresh?: () => void }>) {
@@ -50,10 +50,10 @@ export function Action({ label, onPress, disabled=false, secondary=false }: {lab
     <Text style={[styles.actionText,{color:secondary?p.blue:'#FFFFFF'}]}>{label}</Text>
   </Pressable>;
 }
-export function Field({ label, ...props }: TextInputProps & {label:string}) {
+export function Field({ label, inputRef, ...props }: TextInputProps & {label:string; inputRef?: Ref<ComponentRef<typeof TextInput>>}) {
   const p=usePalette();
   return <View style={styles.field}><Copy>{label}</Copy><TextInput
-    accessibilityLabel={label} placeholderTextColor={p.muted} {...props}
+    ref={inputRef} accessibilityLabel={label} placeholderTextColor={p.muted} {...props}
     style={[styles.input,{backgroundColor:p.surface,color:p.text,borderColor:p.border},props.multiline&&styles.multiline,props.style]} /></View>;
 }
 export function ReadState({ loading,error,onRetry }: {loading:boolean;error:string|null;onRetry:()=>void}) {

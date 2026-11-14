@@ -92,7 +92,7 @@ function exactCount(value: number | null): number {
 }
 export async function GET(request: Request) {
   try {
-    const { db, user } = await authenticatedClient();
+    const { db, user } = await authenticatedClient(request);
     const actor = await db.from("profiles").select("role").eq("id", user.id).single();
     dbError(actor.error);
     if (actor.data?.role !== "admin") throw new ApiError(403, "Accès réservé à l’administration.");

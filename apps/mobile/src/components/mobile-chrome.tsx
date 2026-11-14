@@ -1,8 +1,6 @@
-import { usePathname, useRouter, type Href } from 'expo-router';
 import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useSession } from '@/lib/session';
 import { usePalette } from './ui';
 
 const symbols = {
@@ -39,29 +37,13 @@ export function MobileIcon({ name, color, size = 20 }: { name: Glyph; color: str
     accessible={false} accessibilityElementsHidden importantForAccessibility="no" />;
 }
 
-const primaryRoutes = [
-  { label: 'Accueil', guest: '/bienvenue', account: '/(espace)/accueil', icon: 'home' },
-  { label: 'Services', guest: '/catalogue', account: '/(espace)/services', icon: 'services' },
-  { label: 'Activité', guest: '/retrouver', account: '/(espace)/interventions', icon: 'activity' },
-  { label: 'Compte', guest: '/compte', account: '/(espace)/profil', icon: 'account' },
-] as const satisfies readonly { label: string; guest: Href; account: Href; icon: Glyph }[];
-
-export function PublicTabs() {
-  const router = useRouter();
-  const path = usePathname();
-  const { session } = useSession();
-  const active = path === '/aide-mobile' || path === '/connexion' || path === '/mot-de-passe-oublie'
-    ? '/compte' : path;
-  return <MobileTabBar items={primaryRoutes.map(item => ({
-    ...item, selected: active === item.guest,
-    onPress: () => router.navigate(session ? item.account : item.guest),
-  }))} />;
-}
+// The root navigator owns the single persistent menu, including detail/auth screens.
+export function PublicTabs() { return null; }
 
 export function MobileTabBar({ items }: { items: { label: string; icon: Glyph; selected: boolean; onPress: () => void }[] }) {
   const p = usePalette();
   const { bottom } = useSafeAreaInsets();
-  return <View style={[styles.tabsArea, { paddingBottom: Math.max(10, bottom), backgroundColor: p.background }]}>
+  return <View style={[styles.tabsArea, { paddingBottom: 10 + bottom, backgroundColor: p.background }]}>
     <View accessibilityRole="tablist" style={[styles.tabs, { borderColor: p.border, backgroundColor: p.surface }]}>
       {items.map(item => <Pressable key={item.label} accessibilityRole="tab" accessibilityLabel={item.label}
         accessibilityState={{ selected: item.selected }} onPress={item.onPress}
@@ -75,7 +57,7 @@ export function MobileTabBar({ items }: { items: { label: string; icon: Glyph; s
 
 const styles = StyleSheet.create({
   tabsArea: { paddingTop: 6, paddingHorizontal: 12 },
-  tabs: { flexDirection: 'row', gap: 2, borderWidth: 1, borderRadius: 30, padding: 4, width: '100%', maxWidth: 370, alignSelf: 'center' },
+  tabs: { flexDirection: 'row', gap: 2, borderWidth: 1, borderRadius: 999, padding: 4, width: '100%', maxWidth: 370, alignSelf: 'center', boxShadow: '0 4px 18px #101b3c18' },
   tab: { flex: 1, minWidth: 0, minHeight: 46, justifyContent: 'center', alignItems: 'center', gap: 3, borderRadius: 24, padding: 2 },
   tabLabel: { fontFamily: 'JakartaBold', fontSize: 12, textAlign: 'center' },
 });

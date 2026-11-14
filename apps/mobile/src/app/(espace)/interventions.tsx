@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Action, Card, Copy, ReadState, usePalette } from '@/components/ui';
 import { ArtisanAvailability } from '@/components/artisan-availability';
+import { AdminNativeInterventions } from '@/components/admin-native-interventions';
 import { JobCard } from '@/components/job-card';
 import { useWorkspace } from '@/lib/use-workspace';
 import { ArtisanOffers } from '@/components/artisan-offers';
@@ -20,6 +21,7 @@ export default function Interventions() {
   useEffect(() => {
     if (auth.loginResume === 'interventions') auth.consumeLoginResume();
   }, [auth.loginResume, auth.consumeLoginResume]);
+  if (profile?.role === 'admin') return <AdminNativeInterventions />;
   return <SafeAreaView style={[styles.fill,{backgroundColor:p.background}]} edges={['top','left','right']}>
     <FlatList
       data={(state.data?.interventions??[]).filter(job => profile?.role !== 'artisan' || job.artisan_id === profile.id)} keyExtractor={job=>job.id}
@@ -27,7 +29,7 @@ export default function Interventions() {
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={styles.list}
       ListHeaderComponent={<View style={styles.list}>
-        <Copy kind="title">{profile?.role==='artisan'?'Missions':'Mes demandes'}</Copy>
+        <Copy kind="title">{profile?.role==='artisan'?'Missions':profile?.role==='manager'?'Interventions':'Mes demandes'}</Copy>
         {profile?.role==='client'&&<>
           <Action label="Nouvelle demande" onPress={()=>router.push('/demande')}/>
           <OrderLookup key={profile.id} />

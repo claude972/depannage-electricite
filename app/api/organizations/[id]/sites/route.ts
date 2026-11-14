@@ -8,7 +8,7 @@ const limit = 50;
 
 export async function GET(request: Request, context: RouteContext) {
   try {
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     const id = await routeId(context);
     const params = new URL(request.url).searchParams;
     const state = params.get("state") ?? "active";

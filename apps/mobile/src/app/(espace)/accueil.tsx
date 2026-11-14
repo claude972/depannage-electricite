@@ -1,12 +1,10 @@
 import { Redirect, useRouter } from 'expo-router';
-import { openBrowserAsync } from 'expo-web-browser';
 import { StyleSheet, View } from 'react-native';
 import { ArtisanAvailability } from '@/components/artisan-availability';
 import { JobCard } from '@/components/job-card';
 import { PublicLink } from '@/components/mobile-public-content';
 import { Action, Card, Copy, ReadState, Screen } from '@/components/ui';
 import { useWorkspace } from '@/lib/use-workspace';
-import { apiOrigin } from '@/lib/config';
 
 export default function SpaceHome() {
   const router = useRouter();
@@ -39,12 +37,12 @@ export default function SpaceHome() {
       {recent.length === 0 && <Card><Copy kind="muted">Aucune mission affectée pour le moment.</Copy></Card>}
       {recent.map(job => <JobCard key={job.id} role={profile?.role} quotes={state.data?.quotes} payments={state.data?.payments} job={job} onOpen={() => router.push({ pathname: '/dossier/[id]', params: { id: job.id } })} />)}
     </>}
-    {management && <Card>
-      <Copy kind="subtitle">Outils de gestion</Copy>
-      <Copy>Les opérations d’administration et de gestion de site sont accessibles sur le portail Web.</Copy>
-      {apiOrigin && <Action label="Ouvrir le portail" onPress={() => void openBrowserAsync(apiOrigin!)} />}
-    </Card>}
-    {management && <Action secondary label="Voir mes interventions" onPress={() => router.push('/interventions')} />}
+    {management && <>
+      <Card><Copy kind="subtitle">{profile?.role === 'admin' ? 'Administration' : 'Espace entreprise'}</Copy><Copy>Retrouvez les dossiers et les sites autorisés pour votre compte.</Copy></Card>
+      <Action label="Consulter les interventions" onPress={() => router.push('/interventions')} />
+      <Action secondary label={profile?.role === 'admin' ? 'Ouvrir l’annuaire' : 'Organisations et sites'} onPress={() => router.push(profile?.role === 'admin' ? '/annuaire' : '/organisations')} />
+      <Action secondary label="Ouvrir les messages" onPress={() => router.push('/messages')} />
+    </>}
   </Screen>;
 }
 
