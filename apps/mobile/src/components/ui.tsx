@@ -18,7 +18,7 @@ export const editorial = { navy: '#16277A', yellow: '#F4D649', cards: '#244FB1',
 export function usePalette() {
   const scheme = useColorScheme();
   const [section] = useSegments();
-  const connected = section === '(espace)' || section === 'demande' || section === 'dossier' || section === 'offre' || section === 'organisation' || section === 'site' || section === 'annuaire';
+  const connected = section === '(espace)' || section === 'demande' || section === 'dossier' || section === 'offre' || section === 'organisation' || section === 'site' || section === 'annuaire' || section === 'contrat' || section === 'approbation';
   return connected && scheme === 'dark' ? darkPalette : publicPalette;
 }
 export function Screen({ children, top=false, footer, scrollRef, refreshing=false, onRefresh }: PropsWithChildren<{ top?: boolean; footer?: ReactNode; scrollRef?: Ref<ScrollViewInstance>; refreshing?: boolean; onRefresh?: () => void }>) {

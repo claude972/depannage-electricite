@@ -45,7 +45,7 @@ type Context = { params: Promise<{ id: string }> };
 
 async function read(request: Request, context?: Context) {
   try {
-    const { db, user } = await authenticatedClient();
+    const { db, user } = await authenticatedClient(request);
     const actor = uuid.parse(user.id);
     const params = new URL(request.url).searchParams;
     const allowed = context ? ["organization_id"] : ["organization_id", "cursor"];

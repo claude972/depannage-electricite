@@ -16,7 +16,7 @@ export function GlobalMobileChrome(){
  useEffect(()=>{const show=Keyboard.addListener(Platform.OS==='ios'?'keyboardWillShow':'keyboardDidShow',()=>setTyping(true));const hide=Keyboard.addListener(Platform.OS==='ios'?'keyboardWillHide':'keyboardDidHide',()=>setTyping(false));return()=>{show.remove();hide.remove();};},[]);
  if(typing||!auth.ready)return null;
  const role=state.data?.profile.role;
- const active=auth.session ? (/^\/(dossier|offre|demande)(\/|$)/.test(path)?'/interventions':/^\/(site|organisation)(\/|$)/.test(path)?role==='admin'?'/annuaire':'/organisations':path.startsWith('/annuaire/')?'/annuaire':path) : (/^\/(connexion|inscription|aide-mobile|mot-de-passe-oublie)/.test(path)?'/compte':/^\/(prestation|demande-client)/.test(path)?'/catalogue':path);
+ const active=auth.session ? (/^\/(dossier|offre|demande)(\/|$)/.test(path)?'/interventions':/^\/(site|organisation|contrat|approbation)(\/|$)/.test(path)?role==='admin'?'/annuaire':'/organisations':path.startsWith('/annuaire/')?'/annuaire':path) : (/^\/(connexion|inscription|aide-mobile|mot-de-passe-oublie)/.test(path)?'/compte':/^\/(prestation|demande-client)/.test(path)?'/catalogue':path);
  const items=auth.session?spaceTabs(role).map(name=>({route:`/(espace)/${name}`,label:name==='interventions'?(role==='artisan'?'Missions':role==='client'?'Demandes':'Dossiers'):names[name].label,icon:names[name].icon,active:`/${name}`})):guest.map(item=>({...item,active:item.route}));
  return <View style={{backgroundColor:p.background}}>
  {(!auth.session||role==='client')&&<View style={{alignItems:'flex-end',paddingHorizontal:12,paddingTop:4}}><WhatsAppContactButton/></View>}

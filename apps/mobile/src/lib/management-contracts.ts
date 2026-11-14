@@ -29,3 +29,24 @@ export const directoryDetail = z.object({kind:directoryKind,item:directoryRow});
 export function siteEditValues(values: {name:string;address:string;access_notes:string}) {
  return z.object({name:z.string().trim().min(1,'Renseignez le nom du site.').max(160),address:z.string().trim().min(5,'Renseignez une adresse complète.').max(500),access_notes:z.string().trim().max(2000,'Limitez les consignes à 2 000 caractères.')}).safeParse(values);
 }
+
+const cursorPage = z.object({limit:z.number().int().positive(),has_more:z.boolean(),next_cursor:z.string().nullable()});
+export const contractSummary = z.object({id,organization_id:id,title:z.string(),reference:z.string(),starts_on:z.iso.date(),ends_on:z.iso.date().nullable(),status:z.enum(['draft','active','archived']),created_at:z.string()});
+export const contractPage = z.object({items:z.array(contractSummary),page:cursorPage});
+export const contractDetail = z.object({contract:contractSummary.extend({terms:z.string()})});
+export const contractLabels = {draft:'Brouillon',active:'Actif',archived:'Archivé'};
+export const calendarDate = (date:string) => date.split('-').reverse().join('/');
+export const approvalRecord = z.object({id,quote_id:id,site_id:id,status:z.enum(['pending','approved','rejected']),note:z.string(),created_at:z.string(),decided_at:z.string().nullable(),site:z.object({id,name:z.string(),organization_id:id}),quote:z.object({id,intervention_id:id,total_cents:z.number().int().nonnegative(),status:z.enum(['sent','accepted','rejected'])}),intervention:z.object({id,category,status:job.shape.status})});
+export const approvalPage = z.object({items:z.array(approvalRecord),page:cursorPage});
+export const approvalDetail = z.object({approval:approvalRecord,rule:z.object({enabled:z.boolean(),required_role:z.enum(['owner','manager']),threshold_cents:z.number().int().nonnegative()}).nullable()});
+export const approvalLabels = {pending:'En attente',approved:'Approuvée',rejected:'Refusée'};
+export const applicationStatus = z.enum(['draft','submitted','changes_requested','approved','suspended']);
+export const applicationLabels = {draft:'Brouillon',submitted:'Soumise',changes_requested:'Compléments demandés',approved:'Approuvée',suspended:'Suspendue'};
+export const artisanApplication = z.object({artisan_profile:z.object({user_id:id,company_name:z.string(),siret:z.string(),legal_status:z.string(),address:z.string(),postal_codes:z.array(z.string()),categories:z.array(category),application_status:applicationStatus,application_version:z.number().int().positive()}).nullable(),credentials:z.array(z.object({id,document_id:id,kind:z.enum(['registration','liability','qualification','other']),expires_on:z.iso.date().nullable()}))});
+export function applicationActions(status:z.infer<typeof applicationStatus>) {
+ if(status==='submitted')return ['approve','request_changes'] as const;
+ if(status==='approved')return ['suspend'] as const;
+ if(status==='suspended')return ['reinstate'] as const;
+ return [];
+}
+export const applicationActionLabels = {approve:'Approuver la candidature',request_changes:'Demander des compléments',suspend:'Suspendre l’artisan',reinstate:'Réactiver l’artisan'};
