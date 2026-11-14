@@ -510,3 +510,11 @@
 :global(.ui-v2) .root :global(.empty-state) p { color: var(--ui-text-muted); }
 :global(.ui-v2) .root :global(.unavailable) { border-color: var(--ui-border); background: var(--ui-surface); color: var(--ui-text-muted); }
 :global(.ui-v2) .root :global(.unavailable) strong { color: var(--ui-text); }
+
+/* Dates and nested fieldsets must shrink inside the site's mobile column. */
+.form, .subform, .grid2, .fieldset, .lineRow { min-width: 0; max-width: 100%; }
+.form :global(.field), .subform :global(.field) { min-width: 0; }
+.form :is(input, select, textarea), .subform :is(input, select, textarea) { min-width: 0; max-width: 100%; width: 100%; box-sizing: border-box; }
+.panel > section { min-width: 0; max-width: 100%; }
+.form, .subform { grid-template-columns: minmax(0, 1fr); }
+.table { position: relative; max-width: 100%; }

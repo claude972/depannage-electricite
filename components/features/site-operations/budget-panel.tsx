@@ -37,7 +37,7 @@ export function BudgetPanel({ context }: { context: PanelContext }) {
   const openYear = (row: FiscalYear | null) => {
     setYearEditing(row ? { id: row.id, version: row.version } : { id: null, version: null });
     setYearDraft(row ? { label: row.label, starts_on: row.starts_on, ends_on: row.ends_on, status: row.status } : emptyYear());
-    yearForm.setMessage(null);
+    yearForm.begin();
   };
   const openLine = (category: BudgetCategory) => {
     const existing = yearLines.find((l) => l.category === category);
@@ -46,7 +46,7 @@ export function BudgetPanel({ context }: { context: PanelContext }) {
     setLineDraft(values);
     setLineBase({ version: existing?.version ?? null, ...values });
     setLineConflict(false);
-    lineForm.setMessage(null);
+    lineForm.begin();
   };
   const editedLine = lineEditing ? yearLines.find((l) => l.category === lineEditing) ?? null : null;
   useEffect(() => {
@@ -74,7 +74,7 @@ export function BudgetPanel({ context }: { context: PanelContext }) {
       {canWrite && !canWriteOrganization && <p className={styles.hint}>Les exercices sont définis au niveau de l’organisation ; votre accès permet seulement de saisir les lignes de ce site.</p>}
       {yearForm.message && !yearEditing && <Notice tone={yearForm.message.tone} onClose={() => yearForm.setMessage(null)}>{yearForm.message.text}</Notice>}
       {yearEditing && (
-        <form
+        <form ref={yearForm.formRef}
           className={styles.form}
           noValidate
           onSubmit={(event) =>
@@ -94,9 +94,10 @@ export function BudgetPanel({ context }: { context: PanelContext }) {
           }
         >
           <h4>{yearEditing.id ? "Modifier l’exercice" : "Nouvel exercice budgétaire"}</h4>
+          {yearForm.demoNotice}
           {yearForm.message && <Notice tone={yearForm.message.tone}>{yearForm.message.text}</Notice>}
           <div className={styles.grid2}>
-            <Field label="Libellé" error={yearForm.errors.label}>{(a) => <input {...a} value={yearDraft.label} maxLength={80} onChange={(e) => setYearDraft((d) => ({ ...d, label: e.target.value }))} />}</Field>
+            <Field required label="Libellé" error={yearForm.errors.label}>{(a) => <input {...a} value={yearDraft.label} maxLength={80} onChange={(e) => setYearDraft((d) => ({ ...d, label: e.target.value }))} />}</Field>
             <Field label="Statut" error={yearForm.errors.status}>
               {(a) => (
                 <select {...a} value={yearDraft.status} onChange={(e) => setYearDraft((d) => ({ ...d, status: e.target.value as FiscalYearStatus }))}>
@@ -105,8 +106,8 @@ export function BudgetPanel({ context }: { context: PanelContext }) {
                 </select>
               )}
             </Field>
-            <Field label="Début" error={yearForm.errors.starts_on}>{(a) => <input {...a} type="date" value={yearDraft.starts_on} onChange={(e) => setYearDraft((d) => ({ ...d, starts_on: e.target.value }))} />}</Field>
-            <Field label="Fin" hint="Les exercices d’une organisation ne peuvent pas se chevaucher." error={yearForm.errors.ends_on}>{(a) => <input {...a} type="date" value={yearDraft.ends_on} onChange={(e) => setYearDraft((d) => ({ ...d, ends_on: e.target.value }))} />}</Field>
+            <Field required label="Début" error={yearForm.errors.starts_on}>{(a) => <input {...a} type="date" value={yearDraft.starts_on} onChange={(e) => setYearDraft((d) => ({ ...d, starts_on: e.target.value }))} />}</Field>
+            <Field required label="Fin" hint="Les exercices d’une organisation ne peuvent pas se chevaucher." error={yearForm.errors.ends_on}>{(a) => <input {...a} type="date" value={yearDraft.ends_on} onChange={(e) => setYearDraft((d) => ({ ...d, ends_on: e.target.value }))} />}</Field>
           </div>
           <div className={styles.actions}>
             <button type="submit" className="button primary" disabled={yearForm.submitting || context.busy}>{yearForm.submitting ? "Enregistrement…" : "Enregistrer"}</button>
@@ -167,7 +168,7 @@ export function BudgetPanel({ context }: { context: PanelContext }) {
           )}
           {lineForm.message && lineEditing === null && <Notice tone={lineForm.message.tone} onClose={() => lineForm.setMessage(null)}>{lineForm.message.text}</Notice>}
           {year && lineEditing && (
-            <form
+            <form ref={lineForm.formRef}
               className={styles.form}
               noValidate
               onSubmit={(event) => {
@@ -184,7 +185,8 @@ export function BudgetPanel({ context }: { context: PanelContext }) {
               }}
             >
               <h4>{BUDGET_CATEGORY[lineEditing]} — {year.label}</h4>
-              {lineForm.message && <Notice tone={lineForm.message.tone}>{lineForm.message.text}</Notice>}
+              {lineForm.demoNotice}
+          {lineForm.message && <Notice tone={lineForm.message.tone}>{lineForm.message.text}</Notice>}
               {lineConflict && <Notice tone="error">Cette ligne a été modifiée entre-temps : sa version actuelle est rechargée ci-dessous ; vos modifications sont conservées. Vérifiez avant d’enregistrer.</Notice>}
               <div className={styles.grid2}>
                 <Field label="Montant (€)" hint="Montant décidé par votre organisation, sans TVA ajoutée automatiquement." error={lineForm.errors.amount_cents}>

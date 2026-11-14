@@ -60,7 +60,7 @@ export function ErpPanel({ context }: { context: PanelContext }) {
     editor.current++;
     setEditing(row ? { id: row.id, version: row.version } : { id: null, version: null });
     setDraft(row ? fromRow(row, report.site_id) : empty());
-    form.setMessage(null);
+    form.begin();
   };
   /** The body is built once from the locked draft, the exact checklist and its expected version:
    *  after a failure the fields stay as sent, so a retry sends the identical body. The reserve
@@ -112,14 +112,15 @@ export function ErpPanel({ context }: { context: PanelContext }) {
       {form.message && !editing && <Notice tone={form.message.tone} onClose={() => form.setMessage(null)}>{form.message.text}</Notice>}
       {/* Right lost after re-evaluation (canWrite false): no write is offered; the draft is not sent. */}
       {editing && canWrite && (
-        <form className={styles.form} noValidate onSubmit={(event) => void save(event)}>
+        <form ref={form.formRef} className={styles.form} noValidate onSubmit={(event) => void save(event)}>
           <h4>{editing.id ? "Modifier le contrôle" : "Nouveau contrôle déclaratif"}</h4>
           {/* Every input, select and button below is locked while the save is in flight. */}
           <fieldset disabled={locked} aria-busy={locked || undefined} style={{ display: "contents" }} data-erp-lock="">
           <p className={styles.hint}>Les intitulés sont libres et relèvent de votre organisation ; ils ne constituent pas une liste réglementaire fournie par le service.</p>
+          {form.demoNotice}
           {form.message && <Notice tone={form.message.tone}>{form.message.text}</Notice>}
           <div className={styles.grid2}>
-            <Field label="Intitulé" error={form.errors.title}>{(a) => <input {...a} value={draft.title} maxLength={160} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))} />}</Field>
+            <Field required label="Intitulé" error={form.errors.title}>{(a) => <input {...a} value={draft.title} maxLength={160} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))} />}</Field>
             <Field label="Statut" error={form.errors.status}>{(a) => <select {...a} value={draft.status} onChange={(e) => setDraft((d) => ({ ...d, status: e.target.value as ChecklistStatus }))}>{Object.entries(CHECKLIST_STATUS).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}</select>}</Field>
             <Field label="Réalisé le (facultatif)" error={form.errors.performed_on}>{(a) => <input {...a} type="date" value={draft.performed_on} onChange={(e) => setDraft((d) => ({ ...d, performed_on: e.target.value }))} />}</Field>
             <Field label="Réalisé par (texte libre, facultatif)" hint="Mention déclarative, sans vérification d’habilitation par le service." error={form.errors.performed_by_label}>{(a) => <input {...a} value={draft.performed_by_label} maxLength={160} onChange={(e) => setDraft((d) => ({ ...d, performed_by_label: e.target.value }))} />}</Field>
@@ -129,10 +130,10 @@ export function ErpPanel({ context }: { context: PanelContext }) {
             <legend>Points de contrôle {form.errors.items && <span className="field-error" role="alert">{form.errors.items}</span>}</legend>
             {draft.items.map((item, i) => (
               <div key={item.key} className={styles.lineRow}>
-                <Field label={`Point ${i + 1}`}>{(a) => <input {...a} value={item.label} maxLength={240} onChange={(e) => setItem(i, { label: e.target.value })} />}</Field>
+                <Field required label={`Point ${i + 1}`} error={form.errors[`items.${i}.label`]}>{(a) => <input {...a} value={item.label} maxLength={240} onChange={(e) => setItem(i, { label: e.target.value })} />}</Field>
                 <Field label="Constat">{(a) => <select {...a} value={item.state} onChange={(e) => setItem(i, { state: e.target.value as ItemState })}>{Object.entries(ITEM_STATE).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}</select>}</Field>
-                <Field label="Note">{(a) => <input {...a} value={item.note} maxLength={1000} onChange={(e) => setItem(i, { note: e.target.value })} />}</Field>
-                <Field label="Réserve levée le">{(a) => <input {...a} type="date" value={item.reserve_resolved_on} disabled={item.state !== "reserve"} onChange={(e) => setItem(i, { reserve_resolved_on: e.target.value })} />}</Field>
+                <Field label="Note" error={form.errors[`items.${i}.note`]}>{(a) => <input {...a} value={item.note} maxLength={1000} onChange={(e) => setItem(i, { note: e.target.value })} />}</Field>
+                <Field label="Réserve levée le" error={form.errors[`items.${i}.reserve_resolved_on`]}>{(a) => <input {...a} type="date" value={item.reserve_resolved_on} disabled={item.state !== "reserve"} onChange={(e) => setItem(i, { reserve_resolved_on: e.target.value })} />}</Field>
                 <button type="button" className="button outline" onClick={() => setDraft((d) => ({ ...d, items: d.items.filter((_, j) => j !== i) }))} aria-label={`Retirer le point ${i + 1}`}>Retirer</button>
                 {(item.state === "reserve" || item.doc) && (
                   <ReserveDocumentPicker index={i} siteId={report.site_id} enabled={canLink(item)} value={item.doc && item.doc.site === report.site_id ? item.doc : null} options={documents} onChange={(doc) => setDoc(i, doc)} />

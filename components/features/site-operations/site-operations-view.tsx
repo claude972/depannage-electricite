@@ -113,7 +113,7 @@ function Content({ scope, client, demo, onNavigate, siteId, interventionSearch }
     [busy, client, load],
   );
   const authority = resolveAuthority(scope, report, stale);
-  const context: PanelContext | null = report ? { report, ...authority, busy, run, onNavigate, interventionSearch: demo ? undefined : interventionSearch } : null;
+  const context: PanelContext | null = report ? { report, demo: Boolean(demo), ...authority, busy, run, onNavigate, interventionSearch: demo ? undefined : interventionSearch } : null;
   return (
     <div className={styles.root} data-demo={demo ? "true" : undefined}>
       {demo && (

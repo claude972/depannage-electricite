@@ -33,7 +33,7 @@ export function GridsPanel({ context }: { context: PanelContext }) {
   const open = (grid: ContractGrid | null, asNewVersion = false) => {
     setEditing(grid && !asNewVersion ? { id: grid.id, version: grid.version } : { id: null, version: null });
     setDraft(grid ? fromRow(grid, asNewVersion) : { label: "", effective_from: "", lines: [emptyLine()], from_grid_id: null });
-    form.setMessage(null);
+    form.begin();
   };
   const setLine = (index: number, patch: Partial<LineDraft>) => setDraft((d) => ({ ...d, lines: d.lines.map((l, i) => (i === index ? { ...l, ...patch } : l)) }));
   if (grids === null)
@@ -65,7 +65,7 @@ export function GridsPanel({ context }: { context: PanelContext }) {
       {(form.message && !editing) && <Notice tone={form.message.tone} onClose={() => form.setMessage(null)}>{form.message.text}</Notice>}
       {publishForm.message && <Notice tone={publishForm.message.tone} onClose={() => publishForm.setMessage(null)}>{publishForm.message.text}</Notice>}
       {editing && (
-        <form
+        <form ref={form.formRef}
           className={styles.form}
           noValidate
           onSubmit={(event) =>
@@ -82,16 +82,17 @@ export function GridsPanel({ context }: { context: PanelContext }) {
           }
         >
           <h4>{editing.id ? "Modifier le brouillon" : draft.from_grid_id ? "Nouvelle version de la grille" : "Nouvelle grille (brouillon)"}</h4>
+          {form.demoNotice}
           {form.message && <Notice tone={form.message.tone}>{form.message.text}</Notice>}
           <div className={styles.grid2}>
-            <Field label="Intitulé" error={form.errors.label}>{(a) => <input {...a} value={draft.label} maxLength={160} onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))} />}</Field>
+            <Field required label="Intitulé" error={form.errors.label}>{(a) => <input {...a} value={draft.label} maxLength={160} onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))} />}</Field>
             <Field label="Applicable à partir du (facultatif)" error={form.errors.effective_from}>{(a) => <input {...a} type="date" value={draft.effective_from} onChange={(e) => setDraft((d) => ({ ...d, effective_from: e.target.value }))} />}</Field>
           </div>
           <fieldset className={styles.fieldset}>
             <legend>Lignes tarifaires {form.errors.lines && <span className="field-error" role="alert">{form.errors.lines}</span>}</legend>
             {draft.lines.map((line, index) => (
               <div key={index} className={styles.lineRow}>
-                <Field label={`Libellé ${index + 1}`}>{(a) => <input {...a} value={line.label} maxLength={160} onChange={(e) => setLine(index, { label: e.target.value })} />}</Field>
+                <Field required label={`Libellé ${index + 1}`} error={form.errors[`lines.${index}.label`]}>{(a) => <input {...a} value={line.label} maxLength={160} onChange={(e) => setLine(index, { label: e.target.value })} />}</Field>
                 <Field label="Unité">
                   {(a) => (
                     <select {...a} value={line.unit} onChange={(e) => setLine(index, { unit: e.target.value as GridUnit })}>
@@ -99,8 +100,8 @@ export function GridsPanel({ context }: { context: PanelContext }) {
                     </select>
                   )}
                 </Field>
-                <Field label="Montant HT (€)">{(a) => <input {...a} inputMode="decimal" value={line.amount} onChange={(e) => setLine(index, { amount: e.target.value })} />}</Field>
-                <Field label="Note">{(a) => <input {...a} value={line.note} maxLength={400} onChange={(e) => setLine(index, { note: e.target.value })} />}</Field>
+                <Field required label="Montant HT (€)" error={form.errors[`lines.${index}.amount_cents`]}>{(a) => <input {...a} inputMode="decimal" value={line.amount} onChange={(e) => setLine(index, { amount: e.target.value })} />}</Field>
+                <Field label="Note" error={form.errors[`lines.${index}.note`]}>{(a) => <input {...a} value={line.note} maxLength={400} onChange={(e) => setLine(index, { note: e.target.value })} />}</Field>
                 <button type="button" className="button outline" onClick={() => setDraft((d) => ({ ...d, lines: d.lines.filter((_, i) => i !== index) }))} aria-label={`Retirer la ligne ${index + 1}`}>Retirer</button>
               </div>
             ))}

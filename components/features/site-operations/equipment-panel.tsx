@@ -22,7 +22,7 @@ export function EquipmentPanel({ context }: { context: PanelContext }) {
   const open = (row: Equipment | null) => {
     setEditing(row ? { id: row.id, version: row.version } : { id: null, version: null });
     setDraft(row ? fromRow(row) : empty());
-    form.setMessage(null);
+    form.begin();
   };
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((d) => ({ ...d, [key]: value }));
   return (
@@ -41,7 +41,7 @@ export function EquipmentPanel({ context }: { context: PanelContext }) {
       {!canWrite && <ReadOnly reason={context.readOnlyReason} />}
       {form.message && !editing && <Notice tone={form.message.tone} onClose={() => form.setMessage(null)}>{form.message.text}</Notice>}
       {editing && (
-        <form
+        <form ref={form.formRef}
           className={styles.form}
           noValidate
           onSubmit={(event) =>
@@ -56,9 +56,10 @@ export function EquipmentPanel({ context }: { context: PanelContext }) {
           }
         >
           <h4>{editing.id ? "Modifier l’équipement" : "Nouvel équipement"}</h4>
+          {form.demoNotice}
           {form.message && <Notice tone={form.message.tone}>{form.message.text}</Notice>}
           <div className={styles.grid2}>
-            <Field label="Désignation" error={form.errors.name}>
+            <Field required label="Désignation" error={form.errors.name}>
               {(a) => <input {...a} value={draft.name} maxLength={160} onChange={(e) => set("name", e.target.value)} />}
             </Field>
             <Field label="Catégorie" error={form.errors.category}>

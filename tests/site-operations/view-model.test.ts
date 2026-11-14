@@ -54,7 +54,7 @@ test("form helpers: euro text, integers, instants and field-level errors", () =>
   assert.equal(roundTrip, "2026-10-05T07:30:00.000Z");
   const errors = fieldErrors(equipmentPayload, { name: "", category: "panel", criticality: "high", location: "", reference: "", installed_on: "bad", status: "in_service", notes: "" });
   assert.ok(errors.name);
-  assert.match(errors.installed_on, /AAAA-MM-JJ/);
+  assert.equal(errors.installed_on, "Choisissez une date valide.");
   assert.deepEqual(fieldErrors(equipmentPayload, { name: "QA", category: "panel", criticality: "high", location: "", reference: "", installed_on: null, status: "in_service", notes: "" }), {});
 });
 test("a refused or failed load invalidates the displayed report and every write control", () => {

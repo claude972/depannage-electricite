@@ -1,14 +1,23 @@
 // Pure form helpers of the leaf components (testable without a DOM).
 import type { ZodType } from "zod";
 
-/** Field errors keyed by the first path segment of each validation issue ("_" for form-level). */
+/** Field errors keyed by full paths, with an aggregate for the first path segment of each validation issue ("_" for form-level). */
 export function fieldErrors(schema: ZodType, value: unknown): Record<string, string> {
   const parsed = schema.safeParse(value);
   if (parsed.success) return {};
   const errors: Record<string, string> = {};
   for (const issue of parsed.error.issues) {
-    const key = String(issue.path[0] ?? "_");
-    if (!errors[key]) errors[key] = issue.message;
+    const key = issue.path.join(".") || "_";
+    const field = String(issue.path.at(-1) ?? "");
+    const names: Record<string, string> = { name: "la désignation", title: "l’intitulé", label: issue.path[0] === "lines" ? "le libellé de la ligne" : issue.path[0] === "items" ? "l’intitulé du point" : "le libellé", starts_on: "la date de début", ends_on: "la date de fin" };
+    let message = issue.message;
+    if (issue.code === "too_small" && issue.origin === "string") message = `Indiquez ${names[field] ?? "ce champ"}.`;
+    else if (issue.code === "too_big") message = "La valeur saisie est trop longue ou trop élevée.";
+    else if (issue.code === "invalid_type") message = field === "amount_cents" ? "Indiquez un montant valide en euros." : "Indiquez une valeur valide.";
+    else if (message === "Date attendue au format AAAA-MM-JJ.") message = names[field] ? `Indiquez ${names[field]}.` : "Choisissez une date valide.";
+    if (!errors[key]) errors[key] = message;
+    const group = String(issue.path[0] ?? "_");
+    if (!errors[group]) errors[group] = message;
   }
   return errors;
 }

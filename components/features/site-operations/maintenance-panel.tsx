@@ -37,7 +37,7 @@ export function MaintenancePanel({ context }: { context: PanelContext }) {
     setEditing(row ? { id: row.id, version: row.version } : { id: null, version: null });
     setDraft(row ? fromRow(row) : empty());
     setVisitFor(null);
-    form.setMessage(null);
+    form.begin();
   };
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((d) => ({ ...d, [key]: value }));
   const completeness = report.completeness.maintenance;
@@ -61,7 +61,7 @@ export function MaintenancePanel({ context }: { context: PanelContext }) {
       {!canWrite && <ReadOnly reason={context.readOnlyReason} />}
       {form.message && !editing && <Notice tone={form.message.tone} onClose={() => form.setMessage(null)}>{form.message.text}</Notice>}
       {editing && (
-        <form
+        <form ref={form.formRef}
           className={styles.form}
           noValidate
           onSubmit={(event) =>
@@ -76,9 +76,10 @@ export function MaintenancePanel({ context }: { context: PanelContext }) {
           }
         >
           <h4>{editing.id ? "Modifier le plan" : "Nouveau plan de maintenance"}</h4>
+          {form.demoNotice}
           {form.message && <Notice tone={form.message.tone}>{form.message.text}</Notice>}
           <div className={styles.grid2}>
-            <Field label="Intitulé" error={form.errors.title}>
+            <Field required label="Intitulé" error={form.errors.title}>
               {(a) => <input {...a} value={draft.title} maxLength={160} onChange={(e) => set("title", e.target.value)} />}
             </Field>
             <Field label="Équipement concerné (facultatif)" error={form.errors.equipment_id}>
@@ -168,19 +169,20 @@ export function MaintenancePanel({ context }: { context: PanelContext }) {
                 {canWrite && (
                   <div className={styles.cardActions}>
                     <button type="button" className="button outline" onClick={() => open(plan)} disabled={!!editing || visitFor !== null}>Modifier</button>
-                    <button type="button" className="button outline" onClick={() => { setVisitFor(plan.id); setVisit({ done_on: "", summary: "" }); visitForm.setMessage(null); }} disabled={!!editing || visitFor !== null}>Enregistrer une visite</button>
+                    <button type="button" className="button outline" onClick={() => { setVisitFor(plan.id); setVisit({ done_on: "", summary: "" }); visitForm.begin(); }} disabled={!!editing || visitFor !== null}>Enregistrer une visite</button>
                   </div>
                 )}
                 {visitFor === plan.id && (
-                  <form
+                  <form ref={visitForm.formRef}
                     className={styles.subform}
                     noValidate
                     onSubmit={(event) =>
                       visitForm.submit(event, visitSchema, visit, { action: "record_maintenance_visit", plan_id: plan.id, done_on: visit.done_on, summary: visit.summary.trim(), intervention_id: null }, () => setVisitFor(null), "Visite enregistrée.")
                     }
                   >
-                    {visitForm.message && <Notice tone={visitForm.message.tone}>{visitForm.message.text}</Notice>}
-                    <Field label="Date de la visite" error={visitForm.errors.done_on}>
+                    {visitForm.demoNotice}
+          {visitForm.message && <Notice tone={visitForm.message.tone}>{visitForm.message.text}</Notice>}
+                    <Field required label="Date de la visite" error={visitForm.errors.done_on}>
                       {(a) => <input {...a} type="date" value={visit.done_on} onChange={(e) => setVisit((v) => ({ ...v, done_on: e.target.value }))} />}
                     </Field>
                     <Field label="Compte rendu (facultatif)" hint={plan.frequency_kind === "none" ? "Sans périodicité, la prochaine échéance n’est pas recalculée." : "La prochaine échéance est recalculée à partir de cette date et de la périodicité."} error={visitForm.errors.summary}>
