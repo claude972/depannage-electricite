@@ -36,3 +36,15 @@ test('confirmed support clears only the submitted draft, preserving later edits'
  assert.notEqual(supportDraftKey(actor,dossier),supportDraftKey(actor,null));
  assert.throws(()=>supportDraftKey(actor,'../autre'));
 });
+
+test('ticket history rejects another ticket and non-advancing pagination',async()=>{
+ const {supportDetailFor}=await import('../apps/mobile/src/lib/support-contract');
+ const detail={ticket:response().ticket,messages:[response().initial_message],events:[],permissions:{can_reply:false,can_set_status:false},page:{limit:50,after_version:0,next_after_version:null,has_more:false,total_events:1,total_messages:1}};
+ const schema=supportDetailFor(other);
+ assert.equal(schema.safeParse(detail).success,true);
+ assert.equal(supportDetailFor(actor).safeParse(detail).success,false);
+ assert.equal(schema.safeParse({...detail,messages:[{...detail.messages[0],ticket_id:actor}]}).success,false);
+ assert.equal(schema.safeParse({...detail,page:{...detail.page,has_more:true}}).success,false);
+ assert.equal(schema.safeParse({...detail,page:{...detail.page,after_version:2,next_after_version:2,has_more:true}}).success,false);
+ assert.equal(schema.safeParse({...detail,page:{...detail.page,after_version:2,next_after_version:3,has_more:true}}).success,true);
+});

@@ -54,3 +54,29 @@ export function confirmSupportDraft(draft: z.infer<typeof supportDraft>, actor: 
   return { subject: unchanged ? '' : current.subject, body: unchanged ? '' : current.body,
     pending: null, confirmedTicketId: confirmed.ticket.id };
 }
+
+export const supportDetail = z.object({
+  ticket: supportTicket,
+  messages: z.array(supportMessage),
+  events: z.array(z.object({
+    id: z.uuid(), ticket_id: z.uuid(), actor_id: z.uuid(),
+    kind: z.enum(['ticket_created', 'replied', 'status_changed']),
+    from_status: z.enum(['open', 'in_progress', 'awaiting_user', 'resolved']).nullable(),
+    to_status: z.enum(['open', 'in_progress', 'awaiting_user', 'resolved']),
+    version: revision, message_id: z.uuid().nullable(), created_at: stamp,
+  })),
+  permissions: z.object({ can_reply: z.boolean(), can_set_status: z.boolean() }),
+  page: z.object({ limit: z.number().int().positive(), after_version: z.number().int().nonnegative(),
+    next_after_version: revision.nullable(), has_more: z.boolean(),
+    total_events: z.number().int().nonnegative(), total_messages: z.number().int().nonnegative() }),
+}).superRefine((value, ctx) => {
+  if (value.messages.some(message => message.ticket_id !== value.ticket.id) || value.events.some(event => event.ticket_id !== value.ticket.id))
+    ctx.addIssue({ code: 'custom', message: 'Cet historique ne correspond pas à la demande.' });
+  if (value.page.has_more !== (value.page.next_after_version !== null) ||
+    (value.page.next_after_version !== null && value.page.next_after_version <= value.page.after_version))
+    ctx.addIssue({ code: 'custom', message: 'La suite de l’historique est invalide.' });
+});
+export function supportDetailFor(id: string) {
+  z.uuid().parse(id);
+  return supportDetail.refine(value => value.ticket.id === id, 'La réponse concerne une autre demande.');
+}
