@@ -133,22 +133,15 @@
   align-items: center;
   gap: 4px;
 }
-/* The brand shrinks and wraps (never clipped) so the three 44 px tools always fit, down to 360 px. */
-.mobileHeader > button:first-child {
-  display: inline-flex;
+.mobileHeading {
   flex: 1 1 auto;
-  align-items: center;
   min-width: 0;
-  min-height: 44px;
-  margin-right: 8px;
-  padding: 0;
-  text-align: left;
-}
-.mobileHeader > button:first-child :global(.brand) {
-  min-width: 0;
-  font-size: 20px;
-  letter-spacing: -0.4px;
-  overflow-wrap: anywhere;
+  margin-right: 12px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  overflow-wrap: normal;
 }
 .bellButton {
   position: relative;
@@ -1805,5 +1798,13 @@
 @media (min-width: 1024px) {
   .profileDetails {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Keep all three quote columns and full amounts visible on 320 px phones. */
+@media (max-width: 360px) {
+  .quoteTable th,
+  .quoteTable td {
+    padding-inline: 8px;
   }
 }

@@ -457,6 +457,8 @@ export function ArtisanSpace({ session }: { session: Session }) {
     session.go(view, param);
   };
 
+  const availability = <AvailabilityPanel session={session} dossier={dossier} pending={dossierPending} onCommand={command} />;
+
   let content: ReactNode;
   if (session.loading) content = <Loader label="Chargement de votre espace…" />;
   else
@@ -467,13 +469,14 @@ export function ArtisanSpace({ session }: { session: Session }) {
             session={session}
             dossier={dossier}
             declinedIds={declinedIds}
+            availability={availability}
           />
         );
         break;
       case "missions":
         content = (
           <>
-            <Missions session={session} declinedIds={declinedIds} onDeclined={onDeclined} />
+            <Missions session={session} declinedIds={declinedIds} onDeclined={onDeclined} availability={availability} />
             {/* ART-12: provider team (invitations, members, internal assignment, technician follow-up). */}
             <ProviderTeamsPanel
               key={`teams|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`}
@@ -541,6 +544,7 @@ export function ArtisanSpace({ session }: { session: Session }) {
             pending={dossierPending}
             onCommand={command}
             onReload={() => setDossierVersion((v) => v + 1)}
+            availability={availability}
           />
         );
         break;
@@ -761,7 +765,7 @@ function Drawer({
         onClick={(e) => e.stopPropagation()}
       >
         <div className={styles.drawerHead}>
-          <Brand compact />
+          <strong>Espace artisan</strong>
           <button
             ref={closeButton}
             type="button"
@@ -994,10 +998,12 @@ function Overview({
   session,
   dossier,
   declinedIds,
+  availability,
 }: {
   session: Session;
   dossier: ArtisanDossier | null;
   declinedIds: string[];
+  availability: ReactNode;
 }) {
   const { data, profileId } = session;
   const now = new Date();
@@ -1042,8 +1048,9 @@ function Overview({
         </div>
         <PanelArt />
       </section>
+      {availability}
       <div className={styles.sectionHead}>
-        <h2>Missions d’aujourd’hui</h2>
+        <h2>Missions en cours</h2>
         <button type="button" className="text-button" onClick={() => session.go("missions")}>
           Voir tout
         </button>
@@ -1127,7 +1134,7 @@ function toDemoOffer(i: Intervention): MissionOffer {
     created_at: i.created_at,
   };
 }
-function Missions({ session, declinedIds, onDeclined }: { session: Session; declinedIds: string[]; onDeclined(id: string): void }) {
+function Missions({ session, declinedIds, onDeclined, availability }: { session: Session; declinedIds: string[]; onDeclined(id: string): void; availability: ReactNode }) {
   const [segment, setSegment] = useState<MissionSegment>("available");
   const demo = session.mode === "demo";
   // Radius as CONFIRMED by the server for this identity; rev bumps when its version changes.
@@ -1207,6 +1214,7 @@ function Missions({ session, declinedIds, onDeclined }: { session: Session; decl
         title="Missions"
         subtitle={demo ? "Offres, dossiers en cours et terminés, sur les dossiers chargés." : "Offres disponibles, dossiers en cours et terminés."}
       />
+      {availability}
       <div className={styles.segmentsWrap}>
         <Segments label="Filtrer les missions" value={segment} options={options} onChange={setSegment} />
       </div>
@@ -3011,6 +3019,37 @@ function CredentialLinkForm({
 }
 
 // ---- Application (M65) -------------------------------------------------------------------------
+function AvailabilityPanel({ session, dossier, pending, onCommand }: {
+  session: Session;
+  dossier: ArtisanDossier | null;
+  pending: boolean;
+  onCommand: (body: ArtisanCommand) => Promise<boolean>;
+}) {
+  const artisan = dossier?.artisan_profile;
+  return (
+    <section className="panel" aria-labelledby="artisan-availability">
+      <h2 id="artisan-availability" className={styles.availabilityTitle}>
+        Disponibilité
+      </h2>
+      {pending ? (
+        <Loader label="Lecture du dossier…" />
+      ) : artisan ? (
+        <AvailabilitySwitch
+          available={artisan.available}
+          busy={session.busy}
+          onToggle={(next) => onCommand({ action: "set_availability", available: next })}
+        />
+      ) : (
+        <Unavailable
+          title="Disponibilité"
+          reason={dossier ? "Enregistrez d’abord votre dossier de candidature." : undefined}
+          state={dossier ? undefined : session.capabilities.artisan}
+        />
+      )}
+    </section>
+  );
+}
+
 function AvailabilitySwitch({
   available,
   busy,
@@ -3029,6 +3068,7 @@ function AvailabilitySwitch({
       <button
         type="button"
         role="switch"
+        aria-label="Disponible pour de nouvelles missions"
         aria-checked={available}
         className={styles.switchButton}
         disabled={busy}
@@ -3620,12 +3660,14 @@ function Profile({
   pending,
   onCommand,
   onReload,
+  availability,
 }: {
   session: Session;
   dossier: ArtisanDossier | null;
   pending: boolean;
   onCommand: (body: ArtisanCommand) => Promise<boolean>;
   onReload?: () => void;
+  availability: ReactNode;
 }) {
   const [editing, setEditing] = useState(false);
   const { data, profileId } = session;
@@ -3743,26 +3785,7 @@ function Profile({
           Compte artisan approuvé requis ; état du compte actualisé à votre retour.
         </p>
       </div>
-      <section className="panel" aria-labelledby="profile-availability">
-        <h2 id="profile-availability" style={{ fontSize: 17, marginBottom: 6 }}>
-          Disponibilité
-        </h2>
-        {pending ? (
-          <Loader label="Lecture du dossier…" />
-        ) : artisan ? (
-          <AvailabilitySwitch
-            available={artisan.available}
-            busy={session.busy}
-            onToggle={(next) => onCommand({ action: "set_availability", available: next })}
-          />
-        ) : (
-          <Unavailable
-            title="Disponibilité"
-            reason={dossier ? "Enregistrez d’abord votre dossier de candidature." : undefined}
-            state={dossier ? undefined : session.capabilities.artisan}
-          />
-        )}
-      </section>
+      {availability}
       <section className={`panel ${styles.accountLinks}`} aria-label="Mon compte">
         {secondaryNav(session).map((item) => (
           <button key={item.view} type="button" className={styles.accountLink} onClick={() => session.go(item.view)}>

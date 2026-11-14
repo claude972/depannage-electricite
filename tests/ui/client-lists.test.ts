@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { CLIENT_STEPS, currentStepIndex, detailHistory, isSettled, quoteDecisionState, quoteLineCells, recentRowDescriptor } from "../../components/role/client-lists";
+import { CLIENT_STEPS, currentStepIndex, detailHistory, requestAmount, isSettled, quoteDecisionState, quoteLineCells, recentRowDescriptor } from "../../components/role/client-lists";
 
 const label = (id: string) => ({ panel: "Tableau électrique", outage: "Coupure de courant" })[id] ?? id;
 const money = (cents: number) => `${(cents / 100).toFixed(2).replace(".", ",")} €`;
@@ -28,12 +28,12 @@ test("stepper V8-C07 : cinq étapes alignées sur les statuts réels", () => {
   assert.equal(currentStepIndex("requested"), 0);
   assert.equal(currentStepIndex("assigned"), 1);
   assert.equal(currentStepIndex("quoted"), 2);
-  assert.equal(currentStepIndex("accepted"), 2, "accepté = devis validé, intervention pas encore démarrée");
+  assert.equal(currentStepIndex("accepted"), 3, "devis validé : préparation de l’intervention");
   assert.equal(currentStepIndex("in_progress"), 3);
-  assert.equal(currentStepIndex("completed"), 3);
+  assert.equal(currentStepIndex("completed"), 4);
   assert.equal(currentStepIndex("paid"), 4, "payé sans horodatage serveur : dernière étape encore courante");
   assert.equal(currentStepIndex("paid", "2026-10-22T05:00:00Z"), CLIENT_STEPS.length, "règlement confirmé : toutes les étapes terminées");
-  assert.equal(currentStepIndex("completed", "2026-10-22T05:00:00Z"), 3, "un horodatage sans statut payé ne termine rien");
+  assert.equal(currentStepIndex("completed", "2026-10-22T05:00:00Z"), 4, "un horodatage sans statut payé ne termine rien");
   assert.equal(currentStepIndex("cancelled"), -1);
   assert.equal(isSettled({ status: "paid", paid_at: "x" }), true);
   assert.equal(isSettled({ status: "paid", paid_at: null }), false);
@@ -57,11 +57,47 @@ test("chronologie V8-C07 : dates enregistrées seulement, « — » sinon, « À
   assert.equal(paid[6].when, "[p]");
   assert.ok(paid.every((h) => h.state === "done"), "un dossier réglé n’a plus d’étape courante ni à venir");
   const pending = detailHistory({ status: "completed", created_at: "c", completed_at: "f", paid_at: null }, {}, format);
-  assert.equal(pending[5].state, "current", "terminée, règlement non confirmé : l’étape terminée est courante");
-  assert.equal(pending[6].state, "upcoming");
-  assert.equal(pending[6].when, "À venir", "jamais de règlement affiché avant la confirmation serveur");
+  assert.equal(pending[5].state, "done", "les travaux sont terminés");
+  assert.equal(pending[6].state, "current");
+  assert.equal(pending[6].when, "—", "aucune date de règlement inventée");
   const paidWithoutStamp = detailHistory({ status: "paid", created_at: "c", completed_at: "f", paid_at: null }, {}, format);
   assert.equal(paidWithoutStamp[6].state, "current", "statut payé sans horodatage : pas de succès anticipé");
   assert.equal(paidWithoutStamp[6].when, "—");
   assert.deepEqual(detailHistory({ status: "cancelled", created_at: "c", completed_at: null, paid_at: null }, {}, format).map((h) => h.label), ["Demande créée", "Demande annulée"]);
+});
+
+
+test("montant client : estimation, devis accepté et paiement horodaté restent distincts", () => {
+  const intervention = { id: "i1", status: "accepted" as const, estimate_min_cents: 12000, estimate_max_cents: 28000 };
+  const quote = { id: "q1", intervention_id: "i1", status: "accepted", total_cents: 19200, accepted_total_cents: 19200, created_at: "2026-11-01", lines: [], subtotal_cents: 16000, tax_cents: 3200, tax_rate: 20 as const };
+  const payment = { id: "p1", quote_id: "q1", total_cents: 14400, currency: "eur", status: "paid", created_at: "2026-11-02", paid_at: "2026-11-02" };
+  assert.equal(requestAmount(intervention, [], [], money), "Estimation : 120,00 € – 280,00 €");
+  assert.equal(requestAmount(intervention, [{ ...quote, status: "sent" }], [payment], money), "Devis reçu : 192,00 €");
+  assert.equal(requestAmount(intervention, [quote], [], money), "Devis accepté : 192,00 €");
+  assert.equal(requestAmount(intervention, [quote], [{ ...payment, paid_at: null }], money), "Devis accepté : 192,00 €");
+  assert.equal(requestAmount(intervention, [quote], [{ ...payment, status: "pending" }], money), "Devis accepté : 192,00 €");
+  assert.equal(requestAmount(intervention, [quote], [{ ...payment, quote_id: "other" }], money), "Devis accepté : 192,00 €");
+  assert.equal(requestAmount(intervention, [quote], [payment], money), "Montant payé : 144,00 €");
+  assert.equal(requestAmount(intervention, [quote], [{ ...payment, method: "on_site_declared" }], money), "Règlement déclaré : 144,00 €");
+});
+
+test("chronologie : un devis accepté est terminé, l’intervention reste à préparer", () => {
+  const history = detailHistory({ status: "accepted", created_at: "c", completed_at: null, paid_at: null }, { quoteAcceptedAt: "a" }, (x) => x);
+  assert.equal(history[3].state, "done");
+  assert.equal(history[3].when, "a");
+  assert.equal(history[4].state, "current");
+  assert.equal(history[5].state, "upcoming");
+});
+
+
+test("montant client : dernier devis envoyé du dossier et montant accepté à régler après travaux", () => {
+  const intervention = { id: "i1", status: "quoted" as const, estimate_min_cents: 12000, estimate_max_cents: 28000 };
+  const quote = { id: "q1", intervention_id: "i1", status: "sent", total_cents: 19200, created_at: "2026-11-01", lines: [], subtotal_cents: 16000, tax_cents: 3200, tax_rate: 20 as const };
+  const latest = { ...quote, id: "q2", total_cents: 22200, created_at: "2026-11-02" };
+  const irrelevant = [{ ...latest, id: "q3", status: "rejected", total_cents: 99000 }, { ...latest, id: "q4", intervention_id: "other", total_cents: 88000 }];
+  assert.equal(requestAmount(intervention, [quote, ...irrelevant, latest], [], money), "Devis reçu : 222,00 €");
+  assert.equal(requestAmount(intervention, irrelevant, [], money), "Estimation : 120,00 € – 280,00 €");
+  const accepted = { ...quote, status: "accepted", accepted_total_cents: 24200 };
+  assert.equal(requestAmount({ ...intervention, status: "completed" }, [accepted, latest], [], money), "À régler : 242,00 €", "includes server accepted total, never treats completed as paid");
+  assert.equal(requestAmount({ ...intervention, status: "paid" }, [accepted], [], money), "Devis accepté : 242,00 €", "paid dossier alone is not a payment receipt");
 });

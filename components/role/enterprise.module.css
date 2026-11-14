@@ -3027,3 +3027,34 @@
     min-height: 44px;
   }
 }
+
+/* Contain absolutely positioned accessible labels within the scroll viewport. */
+.tablePanel,
+.tableViewport {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+}
+.tableViewport {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+.tableViewport:focus-visible {
+  outline: 3px solid var(--ui-focus, var(--ui-accent, #2246e5));
+  outline-offset: -3px;
+}
+.tableScrollHint {
+  margin: 0;
+  padding: 10px 16px;
+  font-size: 13px;
+  color: var(--ui-text-muted, #526178);
+  background: var(--ui-surface, #f4f6fa);
+}
+@media (max-width: 760px) {
+  :global(.ui-v2) .topbar .brandButton {
+    display: none;
+  }
+  .topbarActions {
+    min-width: 0;
+  }
+}

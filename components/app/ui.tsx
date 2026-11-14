@@ -15,13 +15,15 @@ import type { ContractState, Status } from "./types";
 export function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <span className="brand">
-      <span className="brand-mark" aria-hidden="true">
-        <img decoding="async" src="/brand/domdepannage-sigle.png" width={64} height={64} alt="" />
-      </span>
-      <span>
-        {BRAND_NAME}
-        {!compact && <small>Le dépannage électrique, au clair.</small>}
-      </span>
+      <img
+        className="brand-logo"
+        decoding="async"
+        src="/brand/domdepannage-logo.png"
+        width={compact ? 104 : 140}
+        height={compact ? 60 : 81}
+        alt={BRAND_NAME}
+        style={{ maxWidth: "100%", height: "auto", objectFit: "contain" }}
+      />
     </span>
   );
 }

@@ -1224,7 +1224,7 @@ export function AdminSpace({ session }: { session: Session }) {
         inert={isNarrow && !menuOpen}
       >
         <div className={styles.sidebarTop}>
-          <Brand compact />
+          {isNarrow ? <strong>Administration</strong> : <Brand compact />}
           <button type="button" className={styles.closeButton} onClick={closeMenu} aria-label="Fermer le menu">
             <Icon name="close" size={18} />
           </button>
@@ -2098,6 +2098,7 @@ function InterventionsView({
   const [previous, setPrevious] = useState<PagePosition[]>([]);
   const [search, setSearch] = useState("");
   const [searchError, setSearchError] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   // undefined = loading, null = unavailable (capabilities.adminLists tells why).
   const [page, setPage] = useState<AdminInterventionsPage | null | undefined>(undefined);
   const [attempt, setAttempt] = useState(0);
@@ -2162,7 +2163,8 @@ function InterventionsView({
     setPosition(last);
   };
 
-  const filtering = Boolean(filters.status || filters.category || filters.urgency || filters.q);
+  const advancedFilterCount = [filters.status, filters.category, filters.urgency].filter(Boolean).length;
+  const filtering = Boolean(advancedFilterCount || filters.q);
   const boundedLabel = `${overview?.capabilities.list_limit ?? 100} derniers dossiers chargés`;
   const rows = page?.interventions ?? [];
   const total = page?.page.total;
@@ -2236,7 +2238,7 @@ function InterventionsView({
   return (
     <>
       <Panel title="Dossiers" count={total}>
-        <form className={styles.filters} onSubmit={submitSearch} noValidate>
+        <form className={`${styles.filters} ${styles.dossierFilters}`} onSubmit={submitSearch} noValidate>
           <label className={styles.filter} htmlFor="admin-dossier-search">
             Recherche (description, ville, code postal ou identifiant complet)
             <input
@@ -2257,57 +2259,69 @@ function InterventionsView({
             <Icon name="search" size={16} />
             Rechercher
           </button>
-          <label className={styles.filter}>
-            Statut
-            <select value={filters.status} onChange={(e) => restart({ status: e.target.value as ListFilters["status"] })}>
-              <option value="">Tous les statuts</option>
-              {(Object.keys(STATUS) as Status[]).map((s) => (
-                <option key={s} value={s}>
-                  {STATUS[s]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={styles.filter}>
-            Catégorie
-            <select value={filters.category} onChange={(e) => restart({ category: e.target.value as ListFilters["category"] })}>
-              <option value="">Toutes les catégories</option>
-              {CATEGORIES.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <Segments
-            label="Urgence"
-            value={filters.urgency}
-            options={[
-              ["", "Toutes"],
-              ["urgent", "Urgentes"],
-              ["scheduled", "Planifiées"],
-            ]}
-            onChange={(urgency) => restart({ urgency })}
-          />
-          <label className={styles.filter}>
-            Dossiers par page
-            <select value={limit} onChange={(e) => changeLimit(Number(e.target.value) as PageSize)}>
-              {PAGE_SIZES.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="button" className={styles.link} onClick={reset}>
-            <Icon name="refresh" size={15} />
-            Réinitialiser
+          <button
+            type="button"
+            className={`button outline ${styles.filterDisclosure}`}
+            aria-expanded={filtersOpen}
+            aria-controls="admin-dossier-filters"
+            onClick={() => setFiltersOpen((open) => !open)}
+          >
+            {filtersOpen ? "Masquer les filtres" : "Filtres"}
+            {advancedFilterCount > 0 && <span className={styles.count}>{advancedFilterCount}<span className="sr-only"> actifs</span></span>}
           </button>
+          <div id="admin-dossier-filters" className={styles.advancedFilters} data-open={filtersOpen}>
+            <label className={styles.filter}>
+              Statut
+              <select value={filters.status} onChange={(e) => restart({ status: e.target.value as ListFilters["status"] })}>
+                <option value="">Tous les statuts</option>
+                {(Object.keys(STATUS) as Status[]).map((s) => (
+                  <option key={s} value={s}>
+                    {STATUS[s]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={styles.filter}>
+              Catégorie
+              <select value={filters.category} onChange={(e) => restart({ category: e.target.value as ListFilters["category"] })}>
+                <option value="">Toutes les catégories</option>
+                {CATEGORIES.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Segments
+              label="Urgence"
+              value={filters.urgency}
+              options={[
+                ["", "Toutes"],
+                ["urgent", "Urgentes"],
+                ["scheduled", "Planifiées"],
+              ]}
+              onChange={(urgency) => restart({ urgency })}
+            />
+            <label className={styles.filter}>
+              Dossiers par page
+              <select value={limit} onChange={(e) => changeLimit(Number(e.target.value) as PageSize)}>
+                {PAGE_SIZES.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="button" className={styles.link} onClick={reset}>
+              <Icon name="refresh" size={15} />
+              Réinitialiser
+            </button>
+          </div>
           <p id="admin-dossier-search-help" className={styles.searchHelp} data-error={searchError ? "true" : undefined} role={searchError ? "alert" : undefined}>
             {searchError || SEARCH_HELP}
           </p>
         </form>
-        {body}
+        <div className={styles.dossierResults}>{body}</div>
         {page && (
           <div className={styles.pager}>
             <p className={styles.pagerInfo} role="status">

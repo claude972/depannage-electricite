@@ -1,5 +1,5 @@
-// Client space mobile header at 360 / 390 px, light and dark: no horizontal overflow, the brand
-// shrinks and wraps instead of pushing the tools off-screen, every header control stays ≥ 44 px
+// Client space mobile header at 320 / 360 / 390 px, light and dark: no horizontal overflow, the title
+// wraps between words instead of pushing the tools off-screen, every header control stays ≥ 44 px
 // and fully inside the viewport (nothing hidden with overflow). Real app, demo client, Chromium.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -20,11 +20,11 @@ const MEASURE = `(() => {
   };
 })()`;
 
-test("en-tête mobile client : 360 / 390 px, clair et sombre — aucun débordement, cibles ≥ 44 px", { skip }, async () => {
+test("en-tête mobile client : 320 / 360 / 390 px, clair et sombre — aucun débordement, cibles ≥ 44 px", { skip }, async () => {
   await withApp(async (open) => {
-    for (const width of [360, 390]) for (const theme of ["light", "dark"]) {
+    for (const width of [320, 360, 390]) for (const theme of ["light", "dark"]) {
       const { page, errors } = await open("client", width);
-      await page.evaluate((t: string) => document.documentElement.setAttribute("data-ui-theme", t), theme);
+      await page.evaluate((t: string) => { document.documentElement.setAttribute("data-ui-theme", t); location.hash = "new"; }, theme);
       await page.waitForTimeout(300);
       const m = await page.evaluate(MEASURE);
       const where = `${width}px ${theme}`;
@@ -36,6 +36,10 @@ test("en-tête mobile client : 360 / 390 px, clair et sombre — aucun débordem
         assert.ok(c.height >= 44 && c.width >= 44, `${where}: ${c.label} is ${c.width}×${c.height}`);
         assert.ok(c.left >= 0 && c.right <= m.vw + 0.5, `${where}: ${c.label} fully visible`);
       }
+      assert.equal(m.controls.length, 2, "thème et notifications seulement ; profil/messages restent dans la navigation basse");
+      const nav = page.getByRole("navigation", { name: "Navigation principale", exact: true });
+      assert.equal(await nav.getByRole("button", { name: "Profil", exact: true }).count(), 1);
+      assert.equal(await nav.getByRole("button", { name: /Messages/ }).count(), 1);
       assert.deepEqual(errors, []);
     }
   });

@@ -89,8 +89,9 @@ test("new (SSR réel, étape 1) : chrome thémé + habillage opt-in autour du Re
   assert.match(html, /data-public-skin="request"/);
   // Garde : classes historiques réellement rendues à l’étape 1 (états 2/3 : vérifiés en navigateur).
   for (const cls of ["form-page", "back-link", "form-heading", "stepper", "panel request-form", "category-grid", "radio-dot", "field", "inline-note", "form-actions", "button primary"]) assert.match(html, new RegExp(`class="${cls}`), cls);
-  // Pré-remplissage réel : la catégorie de la session est sélectionnée.
-  assert.match(html, /class="selected"[^>]*>(?:(?!<\/button>).)*Prise ou interrupteur/s);
+  // Une valeur technique de session ne prouve pas un choix sur l’entrée générique.
+  assert.doesNotMatch(html, /aria-pressed="true"/);
+  assert.match(html, /aria-pressed="false"/);
   const textarea = html.match(/<textarea[^>]*>/)?.[0] ?? "";
   assert.match(html, /Décrivez la panne \(facultatif\)/);
   assert.match(textarea, /maxLength="2000"/);
@@ -134,7 +135,7 @@ test("new : props du RequestForm et transmission des photos, retour = session.go
   c.handlers.onNew("lighting");
   c.handlers.onLogin();
   c.handlers.onNavigate("join");
-  assert.deepEqual(calls, ["go(home)", "setCategory(lighting)", "go(new)", "setAuthMode(login)", "go(auth)", "go(join)"]);
+  assert.deepEqual(calls, ["go(home)", "setCategory(lighting)", "go(new,lighting)", "setAuthMode(login)", "go(auth)", "go(join)"]);
 });
 
 test("new : alertes de session rendues dans le thème, au-dessus du formulaire", () => {
@@ -235,8 +236,8 @@ test("parcours brouillon sans inscription automatique : home → new (catégorie
   const draft = { category: "socket", description: "Prise sans courant depuis hier", address: "1 rue A", postal_code: "97200", city: "FdF", urgency: "scheduled" };
   const home = spySite({ view: "home" });
   home.captured.home.handlers.onNew("socket");
-  assert.deepEqual(home.calls, ["setCategory(socket)", "go(new)"]);
-  const form = spySite({ view: "new", categoryId: "socket" });
+  assert.deepEqual(home.calls, ["setCategory(socket)", "go(new,socket)"]);
+  const form = spySite({ view: "new", categoryId: "socket", param: "socket" });
   assert.equal(form.captured.form.initialCategory, "socket");
   await form.captured.form.onSubmit(draft, []);
   assert.deepEqual(form.calls, [`saveDraft(${JSON.stringify(draft)},[])`]); // aucun signUp / signIn

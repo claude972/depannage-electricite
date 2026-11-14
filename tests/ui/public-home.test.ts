@@ -143,7 +143,7 @@ test("SSR : vue inconnue → message de connexion conservé", () => {
 test("photos : illustrations locales créditées et texte alternatif pour chaque image", () => {
   const html = renderHome({ handlers: recordingHandlers([]) });
   const srcs = new Set(attr(html, "src"));
-  for (const logo of ["/brand/domdepannage-noir.png", "/brand/domdepannage-bleu.png"]) {
+  for (const logo of ["/brand/domdepannage-logo.png", "/brand/domdepannage-bleu.png"]) {
     assert.ok(srcs.delete(logo), logo);
     assert.ok(existsSync(path.join(ROOT, "public", logo)), logo);
   }
@@ -196,7 +196,7 @@ test("PublicSite : la vue home rend PublicHome avec les callbacks réels de la s
   handlers.onNavigate("help");
   handlers.onDemo();
   handlers.onDemo("manager");
-  assert.deepEqual(calls, ["go(new)", "setCategory(panel)", "go(new)", "setAuthMode(login)", "go(auth)", "go(new,address)", "go(join)", "go(help)", "startDemo(undefined)", "startDemo(manager)"]);
+  assert.deepEqual(calls, ["go(new)", "setCategory(panel)", "go(new,panel)", "setAuthMode(login)", "go(auth)", "go(new,address)", "go(join)", "go(help)", "startDemo(undefined)", "startDemo(manager)"]);
 });
 
 test("PublicSite : vue inconnue → accueil avec message de connexion ; autres vues rendues dans le chrome partagé", () => {
@@ -218,7 +218,7 @@ test("parcours brouillon : home → décrire (catégorie pré-remplie) → broui
   const home = fakeSession();
   renderToString(createElement(site.PublicSite as never, { session: home.session } as never));
   (captured.home as { handlers: HomeHandlers }).handlers.onNew("socket");
-  assert.deepEqual(home.calls, ["setCategory(socket)", "go(new)"]);
+  assert.deepEqual(home.calls, ["setCategory(socket)", "go(new,socket)"]);
   // Vue « new » : le formulaire reçoit la catégorie choisie et n’enregistre qu’un brouillon local.
   const form = fakeSession({ view: "new", categoryId: "socket" });
   renderToString(createElement(site.PublicSite as never, { session: form.session } as never));

@@ -1,5 +1,9 @@
 # Direction de design
 
+## Décision du 13 novembre 2026 — logo sans cartouche noir
+
+Le propriétaire demande de retirer le logo sur fond noir. La référence approuvée est le sigle DD noir et bleu avec le nom DomDépannage noir, empilé sur fond blanc. La ressource `apps/mobile/assets/images/splash.png` correspond à l’image fournie ; sa copie web est `public/brand/domdepannage-logo.png`. Sur mobile, les en-têtes des espaces connectés particulier, artisan et administration ne portent aucun logo : titre ou contexte, retour/menu et notifications priment. Le logo reste autorisé sur l’accueil public et au lancement natif. Cette décision prévaut sur les anciennes prescriptions de logo horizontal noir. Ne pas recréer un cartouche noir dans les maquettes ou les en-têtes.
+
 ## Décisions courantes — palette B et encaissement plateforme
 
 La version du 10 novembre 2026 sert de référence pour l’accueil et le blog Web/PWA. L’accueil reprend la recherche, les cartes bleues, le menu à droite, les engagements avant le catalogue et la navigation basse sur téléphone. Les bannières urgence et candidature utilisent le jaune `#F4D649` avec des actions bleu nuit. Les pages publiques partagent les surfaces claires, les marges, l’en-tête et le pied de page bleu nuit. Les résumés, cartes et messages d’état utilisent des contours réguliers. Les états et sélections sont identifiés par leur libellé, une surface ou un contour complet. Le focus clavier reste visible. Les tarifs viennent du catalogue publié et l’entrée par l’adresse utilise le formulaire de demande existant. [Fichier Figma](https://www.figma.com/design/yHq46klgSoXkIXvG3dQBB1/accueil-web-pwa-bannieres-jaunes)

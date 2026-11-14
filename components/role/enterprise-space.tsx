@@ -1017,6 +1017,33 @@ function useInterventionList(c: Ctx) {
   };
 }
 
+// Keep wide operational tables reachable without widening the page. Mobile rows
+// already reflow as cards; only overflowing tables add a keyboard scroll stop.
+function ScrollableTable({ label, children }: { label: string; children: ReactNode }) {
+  const viewport = useRef<HTMLDivElement>(null);
+  const [overflowing, setOverflowing] = useState(false);
+  useEffect(() => {
+    const element = viewport.current;
+    if (!element) return;
+    const measure = () => setOverflowing(element.scrollWidth > element.clientWidth + 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    const table = element.querySelector("table");
+    if (table) observer.observe(table);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <>
+      {overflowing && <p className={styles.tableScrollHint}>Faites défiler le tableau horizontalement pour voir toutes les colonnes.</p>}
+      <div ref={viewport} className={styles.tableViewport} role={overflowing ? "region" : undefined}
+        aria-label={overflowing ? label : undefined} tabIndex={overflowing ? 0 : undefined}>
+        {children}
+      </div>
+    </>
+  );
+}
+
 function ExportButton({ list }: { list: InterventionList }) {
   return (
     <span data-enterprise-export="" style={{ display: "contents" }}>
@@ -1163,67 +1190,69 @@ function InterventionsTable({
         </Empty>
       ) : (
         <>
-          <table className={cx(styles.table, styles.interventionsTable)}>
-            <caption className="sr-only">{title}</caption>
-            <thead>
-              <tr>
-                <th scope="col">Site</th>
-                <th scope="col">Type</th>
-                <th scope="col">Artisan</th>
-                <th scope="col">Statut</th>
-                <th scope="col">Date</th>
-                <th scope="col">
-                  <span className="sr-only">Action</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {pageRows.map((i) => (
-                <tr key={i.id}>
-                  <td className={styles.cellSite}>
-                    <button
-                      type="button"
-                      className={styles.rowOpen}
-                      onClick={() => c.session.openIntervention(i.id)}
-                    >
-                      <Icon name="building" size={22} />
-                      <span>
-                        <strong>{i.siteLabel}</strong>
-                        <small>{[i.address, [i.postal_code, i.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")}</small>
-                      </span>
-                    </button>
-                  </td>
-                  <td className={styles.cellType}>
-                    <span>{category(i.category).label}</span>
-                    {i.urgency === "urgent" ? <Tag tone="amber">Urgent</Tag> : <Tag>Planifiée</Tag>}
-                  </td>
-                  <td className={styles.cellArtisan}>
-                    {i.assigned ? "Artisan attribué" : <span className={styles.muted}>Recherche en cours</span>}
-                  </td>
-                  <td className={styles.cellStatus}>
-                    <Badge status={i.status} />
-                  </td>
-                  <td className={styles.cellDate}>
-                    <time dateTime={i.created_at}>
-                      {date(i.created_at)}
-                      <small>{timeOf(i.created_at)}</small>
-                    </time>
-                  </td>
-                  <td className={styles.cellAction}>
-                    <button
-                      type="button"
-                      className={styles.rowMore}
-                      onClick={() => c.session.openIntervention(i.id)}
-                      aria-label={`Ouvrir le dossier ${shortId(i.id)}`}
-                      title="Ouvrir le dossier"
-                    >
-                      <Icon name="arrow" size={18} />
-                    </button>
-                  </td>
+          <ScrollableTable label="Interventions — tableau à défilement horizontal">
+            <table className={cx(styles.table, styles.interventionsTable)}>
+              <caption className="sr-only">{title}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Site</th>
+                  <th scope="col">Type</th>
+                  <th scope="col">Artisan</th>
+                  <th scope="col">Statut</th>
+                  <th scope="col">Date</th>
+                  <th scope="col">
+                    <span className="sr-only">Action</span>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {pageRows.map((i) => (
+                  <tr key={i.id}>
+                    <td className={styles.cellSite}>
+                      <button
+                        type="button"
+                        className={styles.rowOpen}
+                        onClick={() => c.session.openIntervention(i.id)}
+                      >
+                        <Icon name="building" size={22} />
+                        <span>
+                          <strong>{i.siteLabel}</strong>
+                          <small>{[i.address, [i.postal_code, i.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")}</small>
+                        </span>
+                      </button>
+                    </td>
+                    <td className={styles.cellType}>
+                      <span>{category(i.category).label}</span>
+                      {i.urgency === "urgent" ? <Tag tone="amber">Urgent</Tag> : <Tag>Planifiée</Tag>}
+                    </td>
+                    <td className={styles.cellArtisan}>
+                      {i.assigned ? "Artisan attribué" : <span className={styles.muted}>Recherche en cours</span>}
+                    </td>
+                    <td className={styles.cellStatus}>
+                      <Badge status={i.status} />
+                    </td>
+                    <td className={styles.cellDate}>
+                      <time dateTime={i.created_at}>
+                        {date(i.created_at)}
+                        <small>{timeOf(i.created_at)}</small>
+                      </time>
+                    </td>
+                    <td className={styles.cellAction}>
+                      <button
+                        type="button"
+                        className={styles.rowMore}
+                        onClick={() => c.session.openIntervention(i.id)}
+                        aria-label={`Ouvrir le dossier ${shortId(i.id)}`}
+                        title="Ouvrir le dossier"
+                      >
+                        <Icon name="arrow" size={18} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </ScrollableTable>
           <div className={styles.tableFoot}>
             <span>
               {count} · {list.footNote}
@@ -2545,131 +2574,133 @@ function SitesView({ c }: { c: Ctx }) {
         ) : null}
         {scope.sites.length ? (
           <div className={cx("panel", styles.tablePanel, styles.scrollX)}>
-            <table className={cx(styles.table, styles.sitesTable)}>
-              <caption className="sr-only">
-                Sites de l’organisation active ; interventions, budget et alertes {BASIS}
-              </caption>
-              <thead>
-                <tr>
-                  <th scope="col">Site</th>
-                  <th scope="col">Interventions en cours</th>
-                  <th scope="col">Budget engagé</th>
-                  <th scope="col">Montant</th>
-                  <th scope="col">
-                    Alertes
-                    <span className={styles.thHint}>parmi les données chargées</span>
-                  </th>
-                  <th scope="col">
-                    <span className="sr-only">Actions</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {scope.sites.map((s) => {
-                  const f = siteFigures(s, session.data);
-                  const tone = budgetTone(f.ratio ?? 0, f.over);
-                  const alerts = siteAlertSummary(
-                    alertsState,
-                    siteAlerts(
-                      s.id,
-                      scope.approvals,
-                      scope.compliance,
-                      session.data.interventions,
-                      session.data.quotes,
-                    ),
-                  );
-                  const writable = c.authority.canWriteSite(s.id);
-                  return (
-                    <tr key={s.id}>
-                      <td className={styles.cellSite}>
-                        <button type="button" className={styles.rowOpen} onClick={() => c.go("site", s.id)}>
-                          <span className={styles.siteIcon} aria-hidden="true">
-                            <Icon name="building" size={20} />
-                          </span>
-                          <span>
-                            <strong>{s.name}</strong>
-                            <small>
-                              {(s.type && SITE_TYPES[s.type]) || "Site"} · {s.address}
-                            </small>
-                          </span>
-                        </button>
-                      </td>
-                      <td className={styles.cellOpen}>
-                        <span className={styles.openWrap}>
-                          <span className={cx(styles.openCount, f.open === 0 && styles.openCountNone)} aria-hidden="true">
-                            {f.open}
-                          </span>
-                          <span className={f.open ? styles.openText : styles.muted}>
-                            {f.open} en cours
-                            <small>
-                              {f.count} dossier{f.count > 1 ? "s" : ""} au total
-                            </small>
-                          </span>
-                        </span>
-                      </td>
-                      <td className={styles.cellBudget}>
-                        {f.ratio !== null ? (
-                          <span className={styles.budgetLine}>
-                            <span
-                              className={cx(styles.budgetBar, styles[`budget_${tone}`])}
-                              role="img"
-                              aria-label={`${percent(f.ratio)} du budget de référence engagé${f.over ? ", budget dépassé" : ""}`}
-                            >
-                              <span style={{ width: `${f.width}%` }} />
+            <ScrollableTable label="Sites — tableau à défilement horizontal">
+              <table className={cx(styles.table, styles.sitesTable)}>
+                <caption className="sr-only">
+                  Sites de l’organisation active ; interventions, budget et alertes {BASIS}
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Site</th>
+                    <th scope="col">Interventions en cours</th>
+                    <th scope="col">Budget engagé</th>
+                    <th scope="col">Montant</th>
+                    <th scope="col">
+                      Alertes
+                      <span className={styles.thHint}>parmi les données chargées</span>
+                    </th>
+                    <th scope="col">
+                      <span className="sr-only">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scope.sites.map((s) => {
+                    const f = siteFigures(s, session.data);
+                    const tone = budgetTone(f.ratio ?? 0, f.over);
+                    const alerts = siteAlertSummary(
+                      alertsState,
+                      siteAlerts(
+                        s.id,
+                        scope.approvals,
+                        scope.compliance,
+                        session.data.interventions,
+                        session.data.quotes,
+                      ),
+                    );
+                    const writable = c.authority.canWriteSite(s.id);
+                    return (
+                      <tr key={s.id}>
+                        <td className={styles.cellSite}>
+                          <button type="button" className={styles.rowOpen} onClick={() => c.go("site", s.id)}>
+                            <span className={styles.siteIcon} aria-hidden="true">
+                              <Icon name="building" size={20} />
                             </span>
-                            <span className={cx(styles.budgetPercent, f.over && styles.budgetPercentOver)}>
-                              {wholePercent(f.ratio)}
+                            <span>
+                              <strong>{s.name}</strong>
+                              <small>
+                                {(s.type && SITE_TYPES[s.type]) || "Site"} · {s.address}
+                              </small>
                             </span>
-                          </span>
-                        ) : (
-                          <span className={styles.muted}>Pas de budget de référence</span>
-                        )}
-                      </td>
-                      <td className={styles.cellAmount}>
-                        <strong>{money(f.committed)}</strong>
-                        <small>{f.budget > 0 ? `sur ${money(f.budget)}` : "devis acceptés"}</small>
-                      </td>
-                      <td className={styles.cellAlerts}>
-                        {alerts.kind === "alerts" ? (
-                          <span className={alerts.overdue ? styles.alertRed : styles.alertAmber}>
-                            {alerts.parts.join(", ")}
-                          </span>
-                        ) : alerts.kind === "none" ? (
-                          <span className={styles.muted}>
-                            Aucune
-                            {/* Visible sur mobile (en-tête de colonne masqué), lu partout. */}
-                            <span className={styles.alertQualifier}> parmi les données chargées</span>
-                          </span>
-                        ) : alerts.kind === "checking" ? (
-                          <span className={styles.muted}>Vérification…</span>
-                        ) : (
-                          <span className={styles.alertUnverified}>
-                            <Icon name="lock" size={14} />
-                            Non vérifiées
-                          </span>
-                        )}
-                      </td>
-                      <td className={styles.cellActions}>
-                        <button type="button" className={styles.rowLink} onClick={() => c.go("site", s.id)}>
-                          Fiche<span className="sr-only"> du site {s.name}</span>
-                        </button>
-                        {writable ? (
-                          <button type="button" className={styles.rowLink} onClick={() => c.go("new", s.id)}>
-                            <Icon name="plus" size={15} />
-                            Demande<span className="sr-only"> pour {s.name}</span>
                           </button>
-                        ) : (
-                          <span className={styles.readOnlyTag} title="Lecture seule sur ce site">
-                            <Icon name="lock" size={14} />
-                            Lecture seule
+                        </td>
+                        <td className={styles.cellOpen}>
+                          <span className={styles.openWrap}>
+                            <span className={cx(styles.openCount, f.open === 0 && styles.openCountNone)} aria-hidden="true">
+                              {f.open}
+                            </span>
+                            <span className={f.open ? styles.openText : styles.muted}>
+                              {f.open} en cours
+                              <small>
+                                {f.count} dossier{f.count > 1 ? "s" : ""} au total
+                              </small>
+                            </span>
                           </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        </td>
+                        <td className={styles.cellBudget}>
+                          {f.ratio !== null ? (
+                            <span className={styles.budgetLine}>
+                              <span
+                                className={cx(styles.budgetBar, styles[`budget_${tone}`])}
+                                role="img"
+                                aria-label={`${percent(f.ratio)} du budget de référence engagé${f.over ? ", budget dépassé" : ""}`}
+                              >
+                                <span style={{ width: `${f.width}%` }} />
+                              </span>
+                              <span className={cx(styles.budgetPercent, f.over && styles.budgetPercentOver)}>
+                                {wholePercent(f.ratio)}
+                              </span>
+                            </span>
+                          ) : (
+                            <span className={styles.muted}>Pas de budget de référence</span>
+                          )}
+                        </td>
+                        <td className={styles.cellAmount}>
+                          <strong>{money(f.committed)}</strong>
+                          <small>{f.budget > 0 ? `sur ${money(f.budget)}` : "devis acceptés"}</small>
+                        </td>
+                        <td className={styles.cellAlerts}>
+                          {alerts.kind === "alerts" ? (
+                            <span className={alerts.overdue ? styles.alertRed : styles.alertAmber}>
+                              {alerts.parts.join(", ")}
+                            </span>
+                          ) : alerts.kind === "none" ? (
+                            <span className={styles.muted}>
+                              Aucune
+                              {/* Visible sur mobile (en-tête de colonne masqué), lu partout. */}
+                              <span className={styles.alertQualifier}> parmi les données chargées</span>
+                            </span>
+                          ) : alerts.kind === "checking" ? (
+                            <span className={styles.muted}>Vérification…</span>
+                          ) : (
+                            <span className={styles.alertUnverified}>
+                              <Icon name="lock" size={14} />
+                              Non vérifiées
+                            </span>
+                          )}
+                        </td>
+                        <td className={styles.cellActions}>
+                          <button type="button" className={styles.rowLink} onClick={() => c.go("site", s.id)}>
+                            Fiche<span className="sr-only"> du site {s.name}</span>
+                          </button>
+                          {writable ? (
+                            <button type="button" className={styles.rowLink} onClick={() => c.go("new", s.id)}>
+                              <Icon name="plus" size={15} />
+                              Demande<span className="sr-only"> pour {s.name}</span>
+                            </button>
+                          ) : (
+                            <span className={styles.readOnlyTag} title="Lecture seule sur ce site">
+                              <Icon name="lock" size={14} />
+                              Lecture seule
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </ScrollableTable>
           </div>
         ) : (
           <div className="panel">
@@ -2707,41 +2738,43 @@ function SitesView({ c }: { c: Ctx }) {
           </div>
           <div className={cx("panel", styles.tablePanel)}>
             {recent.length ? (
-              <table className={cx(styles.table, styles.recentTable)}>
-                <caption className="sr-only">Cinq dernières interventions de vos sites</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Référence</th>
-                    <th scope="col">Site</th>
-                    <th scope="col">Intervention</th>
-                    <th scope="col">Date</th>
-                    <th scope="col">Statut</th>
-                    <th scope="col">Priorité</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recent.map((i) => (
-                    <tr key={i.id}>
-                      <td className={styles.cellRef}>
-                        <button type="button" className={styles.refLink} onClick={() => c.session.openIntervention(i.id)}>
-                          {shortId(i.id)}
-                        </button>
-                      </td>
-                      <td className={styles.cellRecentSite}>{siteName(i.site_id)}</td>
-                      <td className={styles.cellRecentType}>{category(i.category).label}</td>
-                      <td className={styles.cellRecentDate}>{date(i.created_at)}</td>
-                      <td className={styles.cellStatus}>
-                        <Badge status={i.status} />
-                      </td>
-                      <td className={styles.cellPriority}>
-                        <span className={i.urgency === "urgent" ? styles.priorityUrgent : styles.priorityPlanned}>
-                          {i.urgency === "urgent" ? "Urgent" : "Planifiée"}
-                        </span>
-                      </td>
+              <ScrollableTable label="Interventions récentes — tableau à défilement horizontal">
+                <table className={cx(styles.table, styles.recentTable)}>
+                  <caption className="sr-only">Cinq dernières interventions de vos sites</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Référence</th>
+                      <th scope="col">Site</th>
+                      <th scope="col">Intervention</th>
+                      <th scope="col">Date</th>
+                      <th scope="col">Statut</th>
+                      <th scope="col">Priorité</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {recent.map((i) => (
+                      <tr key={i.id}>
+                        <td className={styles.cellRef}>
+                          <button type="button" className={styles.refLink} onClick={() => c.session.openIntervention(i.id)}>
+                            {shortId(i.id)}
+                          </button>
+                        </td>
+                        <td className={styles.cellRecentSite}>{siteName(i.site_id)}</td>
+                        <td className={styles.cellRecentType}>{category(i.category).label}</td>
+                        <td className={styles.cellRecentDate}>{date(i.created_at)}</td>
+                        <td className={styles.cellStatus}>
+                          <Badge status={i.status} />
+                        </td>
+                        <td className={styles.cellPriority}>
+                          <span className={i.urgency === "urgent" ? styles.priorityUrgent : styles.priorityPlanned}>
+                            {i.urgency === "urgent" ? "Urgent" : "Planifiée"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </ScrollableTable>
             ) : (
               <Empty icon="wrench" title="Aucune intervention sur vos sites">
                 Les demandes créées depuis un site apparaîtront ici.

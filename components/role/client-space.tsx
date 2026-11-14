@@ -68,7 +68,7 @@ import styles from "./client.module.css";
 import theme from "./client-theme.module.css";
 import { ThemeSurface } from "../app/theme-provider";
 import { ThemeToggle } from "../app/theme-toggle";
-import { CLIENT_STEPS, currentStepIndex, detailHistory, quoteDecisionState, quoteLineCells } from "./client-lists";
+import { CLIENT_STEPS, currentStepIndex, detailHistory, requestAmount, quoteDecisionState, quoteLineCells } from "./client-lists";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { PreferencesPanel } from "../features/notifications/notification-center";
 import { FeatureUnavailable, useProbeWhenUnknown } from "./feature-unavailable";
@@ -280,6 +280,7 @@ export function ClientSpace({ session }: { session: Session }) {
           <RequestForm
             key={session.param}
             initialCategory={session.pendingDraft?.category ?? (isCategory(session.param) ? session.param : "panel")}
+            categoryPreselected={Boolean(session.pendingDraft) || isCategory(session.param)}
             initialValues={session.pendingDraft}
             preferredAddress={preferredAddress}
             contactPhone={session.booking?.contact.phone ?? session.pendingDraft?.contact_phone ?? session.profile?.phone ?? ""}
@@ -504,33 +505,12 @@ export function ClientSpace({ session }: { session: Session }) {
         </header>
 
         <header className={styles.mobileHeader}>
-          <button
-            type="button"
-            onClick={() => session.go("profile")}
-            aria-label="Mon profil"
-          >
-            <Brand compact />
-          </button>
+          <strong className={styles.mobileHeading}>
+            {VIEW_NAMES[view] || "Espace particulier"}
+          </strong>
           <div className={styles.mobileHeaderTools}>
-            <button
-              type="button"
-              className={styles.bellButton}
-              aria-label="Paramètres du compte"
-              onClick={() => session.go("profile", "parametres")}
-            >
-              <Icon name="settings" size={20} />
-            </button>
-            <ThemeToggle />
+            <span title="Thème sombre"><ThemeToggle /></span>
             <HeaderBell session={session} />
-            <button
-              type="button"
-              className={styles.bellButton}
-              aria-label={received ? `Messages (${received} reçus)` : "Messages"}
-              onClick={goMessages}
-            >
-              <Icon name="message" size={22} />
-              {received > 0 && <span className={styles.bellDot} aria-hidden="true" />}
-            </button>
           </div>
         </header>
 
@@ -644,7 +624,7 @@ function RequestList({ session, items }: { session: Session; items: Intervention
             <Badge status={i.status} />
             <span className="request-price">
               {i.urgency === "urgent" && <span className="urgent-text">Urgent</span>}
-              {money(i.estimate_min_cents)} – {money(i.estimate_max_cents)}
+              {requestAmount(i, session.data.quotes, session.data.payments, money)}
             </span>
           </span>
           <Icon name="arrow" size={18} />
@@ -993,6 +973,56 @@ function DetailView({
           </ol>
         )}
       </section>
+
+      {primary && <div className={styles.actionBar}>{primary}</div>}
+      {/* On-site booking, completed or paid: the cash widget carries the state (planned / declared);
+          the generic « aucun encaissement » line would contradict a declaration, so it is not shown. */}
+      {currentBookingStatus?.kind === "booking" && currentBookingStatus.payment.method === "on_site" && (i.status === "completed" || i.status === "paid") && (
+        <OnsiteSettlement
+          key={`${session.profileId}|${i.id}`}
+          interventionId={i.id}
+          viewer="client"
+          context={session.mutationContext}
+          onSettled={i.status === "paid" ? undefined : () => void session.refresh()}
+          onPay={!demo && accepted && i.status === "completed" ? () => void session.checkout(accepted.id) : undefined}
+          busy={session.busy}
+        />
+      )}
+      {currentBookingStatus?.kind === "booking" && !(currentBookingStatus.payment.method === "on_site" && (i.status === "completed" || i.status === "paid")) && (
+        <p className={styles.paymentLine} role="status" data-booking-payment-status={currentBookingStatus.payment.method}>
+          <Icon name={currentBookingStatus.payment.method === "on_site" ? "clock" : "lock"} size={16} />
+          <span>{bookingPaymentText(currentBookingStatus.payment, dateTime)}</span>
+        </p>
+      )}
+      {/* Final settlement of a card hold: only a completed booking dossier with an accepted quote.
+          The amount, ledger and proofs are the server's; never the legacy Checkout for a hold. */}
+      {currentBookingStatus?.kind === "booking" && currentBookingStatus.payment.method === "card_hold" && (i.status === "completed" || i.status === "paid") && accepted && (
+        <BookingSettlement
+          key={`${session.profileId}|${i.id}`}
+          interventionId={i.id}
+          context={session.mutationContext}
+          // Re-read the workspace (fresh barrier) once the server reports « paid »; only while the
+          // dossier itself is not « paid » yet (no loop, stale dossier corrected).
+          onSettled={i.status === "paid" ? undefined : () => void session.refresh()}
+        />
+      )}
+      {accepted && payment && (
+        <p
+          className={`${styles.paymentLine} ${payment.status === "paid" ? styles.ok : payment.status === "failed" ? styles.ko : ""}`}
+          role="status"
+        >
+          <Icon name={payment.status === "paid" ? "check" : payment.status === "failed" ? "warning" : "clock"} size={16} />
+          <span>
+            {payment.status === "paid" && isDeclaredOnSite(payment)
+              ? `Règlement de ${money(payment.total_cents)} déclaré reçu sur place par l’artisan${payment.paid_at ? ` le ${dateTime(payment.paid_at)}` : ""}. Ce n’est pas une confirmation bancaire.`
+              : payment.status === "paid"
+              ? `Règlement de ${money(payment.total_cents)} confirmé par la plateforme${payment.paid_at ? ` le ${dateTime(payment.paid_at)}` : ""}.`
+              : payment.status === "failed"
+                ? "Le paiement n’a pas abouti selon Stripe. Le règlement reste à effectuer ; vérifiez auprès de votre banque avant de recommencer."
+                : "Paiement en attente de confirmation Stripe. Rien n’est considéré comme réglé tant que la plateforme ne l’a pas confirmé."}
+          </span>
+        </p>
+      )}
 
       <div className={styles.cardHead}>
         <h2>
@@ -1380,7 +1410,7 @@ function DetailView({
                 <small>{h.when}</small>
               </div>
               <span>
-                {h.state === "done" ? "Terminé" : h.state === "current" ? "En cours" : "À venir"}
+                {h.state === "done" ? "Terminé" : h.state === "current" ? i.status === "accepted" ? "À préparer" : i.status === "completed" ? "À régler" : "En cours" : "À venir"}
               </span>
             </li>
           ))}
@@ -1391,57 +1421,9 @@ function DetailView({
         </p>
       </section>
 
-      {/* On-site booking, completed or paid: the cash widget carries the state (planned / declared);
-          the generic « aucun encaissement » line would contradict a declaration, so it is not shown. */}
-      {currentBookingStatus?.kind === "booking" && currentBookingStatus.payment.method === "on_site" && (i.status === "completed" || i.status === "paid") && (
-        <OnsiteSettlement
-          key={`${session.profileId}|${i.id}`}
-          interventionId={i.id}
-          viewer="client"
-          context={session.mutationContext}
-          onSettled={i.status === "paid" ? undefined : () => void session.refresh()}
-          onPay={!demo && accepted && i.status === "completed" ? () => void session.checkout(accepted.id) : undefined}
-          busy={session.busy}
-        />
-      )}
-      {currentBookingStatus?.kind === "booking" && !(currentBookingStatus.payment.method === "on_site" && (i.status === "completed" || i.status === "paid")) && (
-        <p className={styles.paymentLine} role="status" data-booking-payment-status={currentBookingStatus.payment.method}>
-          <Icon name={currentBookingStatus.payment.method === "on_site" ? "clock" : "lock"} size={16} />
-          <span>{bookingPaymentText(currentBookingStatus.payment, dateTime)}</span>
-        </p>
-      )}
-      {/* Final settlement of a card hold: only a completed booking dossier with an accepted quote.
-          The amount, ledger and proofs are the server's; never the legacy Checkout for a hold. */}
-      {currentBookingStatus?.kind === "booking" && currentBookingStatus.payment.method === "card_hold" && (i.status === "completed" || i.status === "paid") && accepted && (
-        <BookingSettlement
-          key={`${session.profileId}|${i.id}`}
-          interventionId={i.id}
-          context={session.mutationContext}
-          // Re-read the workspace (fresh barrier) once the server reports « paid »; only while the
-          // dossier itself is not « paid » yet (no loop, stale dossier corrected).
-          onSettled={i.status === "paid" ? undefined : () => void session.refresh()}
-        />
-      )}
       {/* Invoices / credit notes issued for THIS dossier (customer routes only; issuing ≠ payment). */}
       {(i.status === "completed" || i.status === "paid") && (
         <CustomerInvoicesPanel title="Factures et avoirs de ce dossier" filters={{ intervention_id: i.id, basis: "service" }} context={session.mutationContext} demo={demo} />
-      )}
-      {accepted && payment && (
-        <p
-          className={`${styles.paymentLine} ${payment.status === "paid" ? styles.ok : payment.status === "failed" ? styles.ko : ""}`}
-          role="status"
-        >
-          <Icon name={payment.status === "paid" ? "check" : payment.status === "failed" ? "warning" : "clock"} size={16} />
-          <span>
-            {payment.status === "paid" && isDeclaredOnSite(payment)
-              ? `Règlement de ${money(payment.total_cents)} déclaré reçu sur place par l’artisan${payment.paid_at ? ` le ${dateTime(payment.paid_at)}` : ""}. Ce n’est pas une confirmation bancaire.`
-              : payment.status === "paid"
-              ? `Règlement de ${money(payment.total_cents)} confirmé par la plateforme${payment.paid_at ? ` le ${dateTime(payment.paid_at)}` : ""}.`
-              : payment.status === "failed"
-                ? "Le paiement n’a pas abouti selon Stripe. Le règlement reste à effectuer ; vérifiez auprès de votre banque avant de recommencer."
-                : "Paiement en attente de confirmation Stripe. Rien n’est considéré comme réglé tant que la plateforme ne l’a pas confirmé."}
-          </span>
-        </p>
       )}
 
       <div className={styles.actionBar}>
@@ -1458,7 +1440,6 @@ function DetailView({
         ) : (
           <span />
         )}
-        {primary}
       </div>
 
       {i.status === "paid" && (

@@ -10,6 +10,7 @@ import { category, money } from "../app/format";
 import type { RequestValues } from "../app/types";
 import { EnterpriseBookingLink } from "./enterprise-booking-link";
 import { serviceBySlug } from "./public-service-catalog";
+import { RequestProgress } from "../app/request-progress";
 import { Field } from "../app/ui";
 import { ReservedEstimate, ReviewEstimate } from "../features/indicative-prices/indicative-range";
 import { REVIEW_COPY, REVIEW_SCOPES } from "../features/indicative-prices/model";
@@ -59,6 +60,8 @@ export function BookingConfirm({
 }) {
   const [sending, setSending] = useState(false);
   const [problem, setProblem] = useState("");
+  const [paymentProblem, setPaymentProblem] = useState("");
+  const paymentOptions = useRef<HTMLDivElement>(null);
   const [editingContact, setEditingContact] = useState(false);
   const [contactDraft, setContactDraft] = useState(booking.contact);
   // The demonstration has no account and sends nothing: its contact needs no e-mail address.
@@ -76,7 +79,7 @@ export function BookingConfirm({
   }, []);
   const service = serviceBySlug(booking.slug);
   const c = category(draft.category);
-  const wish = booking.urgent ? "En urgence" : booking.slot ? SLOT_LABEL[booking.slot] : "Sans préférence";
+  const wish = draft.urgency === "urgent" ? "Demande urgente" : booking.slot ? SLOT_LABEL[booking.slot] : "Intervention à planifier";
   const contact = booking.contact;
 
   async function send() {
@@ -90,17 +93,14 @@ export function BookingConfirm({
     setSending(true);
     try {
       if (!booking.payment) {
-        setProblem("Choisissez un mode de paiement avant d’envoyer ; rien n’a été envoyé.");
+        setPaymentProblem("Choisissez un mode de paiement avant d’envoyer ; rien n’a été envoyé.");
+        paymentOptions.current?.querySelector("button")?.focus();
         return;
       }
       if (Object.keys(contactErrors(contact, contactRule)).length) {
         setProblem("Vos coordonnées sont incomplètes : nom, adresse e-mail et téléphone (+596, +590 ou +33) sont nécessaires. Complétez-les avant d’envoyer ; rien n’a été envoyé.");
         setContactDraft(contact);
         setEditingContact(true);
-        return;
-      }
-      if (!booking.payment) {
-        setProblem("Choisissez un mode de paiement avant d’envoyer ; rien n’a été envoyé.");
         return;
       }
       setProblem("");
@@ -123,7 +123,8 @@ export function BookingConfirm({
 
   return (
     <section className="panel" aria-labelledby="booking-confirm-title" data-booking-confirm="">
-      <p className="eyebrow">Dernière étape</p>
+      {/* The public form may start with the address; drafts do not persist that ordering. */}
+      <RequestProgress step={3} labels={["Étape 1", "Étape 2", "Règlement et confirmation"]} />
       <h1 id="booking-confirm-title">Confirmez l’envoi de votre demande</h1>
       <p>Rien n’a encore été envoyé. Vérifiez votre demande : elle sera transmise aux artisans disponibles après votre confirmation.</p>
       {!demo && booking.estimate_review_required && (
@@ -162,19 +163,22 @@ export function BookingConfirm({
           <div>
             <dt>Paiement</dt>
             <dd data-booking-payment="">
-              <span>Choisissez votre mode de règlement :</span>
-              <br />
-              <button type="button" className="text-button" disabled={sending || busy} onClick={() => { onPaymentChange("on_site"); setProblem(""); }} data-booking-choose="on_site">
-                {PAYMENT_LABEL.on_site}
-              </button>
-              <br />
-              {cardAvailable ? (
-                <button type="button" className="text-button" disabled={sending || busy} onClick={() => { onPaymentChange("card_hold"); setProblem(""); }} data-booking-choose="card_hold">
-                  {PAYMENT_LABEL.card_hold}
+              <div ref={paymentOptions} className="booking-payment-options" role="group" aria-label="Mode de règlement" aria-describedby={paymentProblem ? "booking-payment-error" : undefined}>
+                <span>Choisissez votre mode de règlement :</span>
+                <br />
+                <button type="button" className="button outline booking-payment-option" aria-pressed={false} disabled={sending || busy} onClick={() => { onPaymentChange("on_site"); setProblem(""); setPaymentProblem(""); }} data-booking-choose="on_site">
+                  {PAYMENT_LABEL.on_site}
                 </button>
-              ) : (
-                <small data-booking-choose="card_hold_unavailable">{PAYMENT_LABEL.card_hold} : pas encore disponible sur ce service.</small>
-              )}
+                <br />
+                {cardAvailable ? (
+                  <button type="button" className="button outline booking-payment-option" aria-pressed={false} disabled={sending || busy} onClick={() => { onPaymentChange("card_hold"); setProblem(""); setPaymentProblem(""); }} data-booking-choose="card_hold">
+                    {PAYMENT_LABEL.card_hold}
+                  </button>
+                ) : (
+                  <small data-booking-choose="card_hold_unavailable">{PAYMENT_LABEL.card_hold} : pas encore disponible sur ce service.</small>
+                )}
+                {paymentProblem && <p id="booking-payment-error" className="field-error" role="alert">{paymentProblem}</p>}
+              </div>
             </dd>
           </div>
         )}
@@ -186,7 +190,7 @@ export function BookingConfirm({
               <br />
               <small>
                 {booking.payment === "on_site"
-                  ? "Rien n’est payé à la réservation. Après les travaux, vous réglez le montant du devis accepté sur la plateforme (par carte depuis le suivi du dossier) — jamais directement à l’artisan."
+                  ? "Rien n’est payé à l’envoi de la demande. Après les travaux, vous réglez le montant du devis accepté sur la plateforme (par carte depuis le suivi du dossier) — jamais directement à l’artisan."
                   : "Une empreinte n’est pas un débit ; seul le montant du devis accepté peut être prélevé."}
               </small>
               {booking.payment === "card_hold" && booking.request_id && (verifyCardHold || cancelCardHold) && (
@@ -199,7 +203,7 @@ export function BookingConfirm({
                   )}{" "}
                   {cancelCardHold && (
                     <button type="button" className="text-button" disabled={sending || busy} onClick={() => void cancelCardHold()}>
-                      Annuler la réservation par carte
+                      Annuler la demande d’empreinte bancaire
                     </button>
                   )}
                 </span>
@@ -231,7 +235,7 @@ export function BookingConfirm({
         </div>
         <div>
           <dt>Description transmise aux artisans</dt>
-          <dd style={{ whiteSpace: "pre-line" }}>{draft.description}</dd>
+          <dd style={{ whiteSpace: "pre-line" }}>{draft.description.trim() || "Aucune description ajoutée."}</dd>
         </div>
         <div>
           <dt>Vos coordonnées (privées)</dt>
@@ -279,13 +283,13 @@ export function BookingConfirm({
               </>
             )}
             <br />
-            <small>Transmises avec votre réservation, jamais dans la description visible des artisans.</small>
+            <small>Transmises avec votre demande, jamais dans la description visible des artisans.</small>
           </dd>
         </div>
       </dl>
-      {problem && (
+      {(problem || (!onPaymentChange && paymentProblem)) && (
         <p className="field-error" role="alert">
-          {problem}
+          {problem || paymentProblem}
         </p>
       )}
       <div className="form-actions">

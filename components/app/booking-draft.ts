@@ -66,7 +66,7 @@ export const PAYMENT_CHOICES = ["on_site", "card_hold"] as const;
 export type PaymentChoice = (typeof PAYMENT_CHOICES)[number];
 export const PAYMENT_LABEL: Record<PaymentChoice, string> = {
   on_site: "Après intervention — paiement sur la plateforme",
-  card_hold: "Empreinte bancaire (aucun débit à la réservation)",
+  card_hold: "Empreinte bancaire (aucun débit immédiat)",
 };
 
 export { normalizePhone };

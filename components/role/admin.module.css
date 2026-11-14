@@ -1937,3 +1937,70 @@ button.row:hover {
   outline: 3px solid var(--ui-focus, currentColor);
   outline-offset: 2px;
 }
+
+/* Keep desktop filter flow; only collapse advanced controls on phones. */
+.advancedFilters {
+  display: contents;
+}
+.dossierFilters .filterDisclosure {
+  display: none;
+}
+@media (max-width: 600px) {
+  .dossierFilters > .filter {
+    flex-basis: 100%;
+  }
+  .dossierFilters .filterDisclosure {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 44px;
+  }
+  .advancedFilters {
+    display: flex;
+    flex-wrap: wrap;
+    flex-basis: 100%;
+    gap: 12px;
+    min-width: 0;
+  }
+  .advancedFilters[data-open="false"] {
+    display: none;
+  }
+  .advancedFilters .filter {
+    flex-basis: 100%;
+  }
+  .dossierFilters input,
+  .dossierFilters select {
+    font-size: 16px;
+  }
+  .dossierFilters .link {
+    min-height: 44px;
+  }
+  .dossierFilters :is(button, input, select):focus-visible {
+    outline: 3px solid var(--ui-focus, var(--ui-accent, #2246e5));
+    outline-offset: 3px;
+  }
+  .dossierResults .table td {
+    padding-top: 5px;
+    padding-bottom: 5px;
+    overflow-wrap: anywhere;
+  }
+  .dossierResults .rowAction {
+    min-height: 44px;
+  }
+}
+/* Directory row actions may contain long labels inside a nested flex group. */
+@media (max-width: 600px) {
+  .table td > .actions {
+    min-width: 0;
+    flex: 1;
+  }
+  .table td > .actions > .rowAction {
+    min-width: 0;
+    max-width: 100%;
+    min-height: 44px;
+    white-space: normal;
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+}

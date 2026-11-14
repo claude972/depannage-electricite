@@ -86,8 +86,10 @@ export function PublicSite({ session, operatorProfile, supportWhatsAppPhone, sho
     session.go("auth");
   };
   const newRequest = (c?: Category) => {
-    if (c) session.setCategory(c);
-    session.go("new");
+    if (c) {
+      session.setCategory(c);
+      session.go("new", c);
+    } else session.go("new");
   };
 
   const alerts = (session.error || session.notice) && (
@@ -124,7 +126,7 @@ export function PublicSite({ session, operatorProfile, supportWhatsAppPhone, sho
         <div className={formStyles.wrap}>
           {themedAlerts}
           <div className={formStyles.requestSkin} data-public-skin="request">
-            <RequestForm key={session.param} addressFirst={session.param === "address" || session.param === "scheduled"} initialCategory={initialCategory} initialValues={session.pendingDraft} contactPhone={session.pendingDraft?.contact_phone ?? ""} initialDescription={prefill?.description} initialUrgency={prefill?.urgency} sites={[]} mode="public" busy={session.busy} onBack={() => session.go("home")} onSubmit={async (values, photos) => { session.saveDraft(values, photos); }} onDemo={() => session.startDemo("client", "new")} />
+            <RequestForm key={session.param} addressFirst={session.param === "address" || session.param === "scheduled"} initialCategory={initialCategory} categoryPreselected={Boolean(session.pendingDraft || prefill || linked)} initialValues={session.pendingDraft} contactPhone={session.pendingDraft?.contact_phone ?? ""} initialDescription={prefill?.description} initialUrgency={prefill?.urgency} sites={[]} mode="public" busy={session.busy} onBack={() => session.go("home")} onSubmit={async (values, photos) => { session.saveDraft(values, photos); }} onDemo={() => session.startDemo("client", "new")} />
           </div>
         </div>
       </PublicChrome>

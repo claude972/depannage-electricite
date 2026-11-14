@@ -1,4 +1,5 @@
 "use client";
+import { RequestProgress } from "./request-progress";
 import { BookingLocationField } from "./booking-location";
 import { REQUEST_DESCRIPTION_LABEL } from "../../shared/request-details";
 // Operational forms extracted from the original monolith; behaviour preserved, shared by the
@@ -113,6 +114,7 @@ export function PreferredAddressNote({ preferred, onClear }: { preferred: Prefer
 
 export function RequestForm({
   initialCategory,
+  categoryPreselected = true,
   initialValues,
   sites,
   mode,
@@ -129,6 +131,8 @@ export function RequestForm({
   contactPhone,
 }: {
   initialCategory: Category;
+  /** False for a generic entry: the internal fallback is not a user selection. */
+  categoryPreselected?: boolean;
   initialValues: RequestValues | null;
   sites: Site[];
   mode: string;
@@ -152,6 +156,9 @@ export function RequestForm({
   contactPhone?: string;
 }) {
   const [step, setStep] = useState(1);
+  const [categoryChosen, setCategoryChosen] = useState(Boolean(initialValues) || categoryPreselected);
+  const [categoryError, setCategoryError] = useState("");
+  const categoryChoices = useRef<HTMLDivElement>(null);
   const phase = addressFirst && step < 3 ? 3 - step : step;
   const labels = addressFirst ? ["Le lieu et le besoin", "Le problème"] : ["Le problème", "Le lieu et le besoin"];
   // On each step change (not on first render) move focus AND the viewport to the new step title,
@@ -214,6 +221,11 @@ export function RequestForm({
   const c = category(values.category);
   function next(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (phase === 1 && !categoryChosen) {
+      setCategoryError("Choisissez le problème qui correspond à votre demande.");
+      categoryChoices.current?.querySelector("button")?.focus();
+      return;
+    }
     const normalizedPhone = contactPhone === undefined ? null : normalizePhone(phone);
     if (phase === 2 && contactPhone !== undefined && !normalizedPhone) {
       setPhoneError("Saisissez un numéro de téléphone valide (ex. +596 ou +590).");
@@ -239,29 +251,19 @@ export function RequestForm({
         <h1>Créons votre demande.</h1>
         <p>Le bon point de départ pour résoudre votre problème électrique.</p>
       </div>
-      <ol className="stepper">
-        {[...labels, finalStep ? "Règlement et confirmation" : "Le récapitulatif"].map(
-          (s, i) => (
-            <li key={s} className={step >= i + 1 ? "current" : ""}>
-              <span>
-                {step > i + 1 ? <Icon name="check" size={15} /> : i + 1}
-              </span>
-              <strong>{s}</strong>
-            </li>
-          ),
-        )}
-      </ol>
+      <RequestProgress step={step} labels={[...labels, finalStep ? "Règlement et confirmation" : "Le récapitulatif"]} />
       <form className="panel request-form" onSubmit={next}>
         {phase === 1 ? (
           <>
             <h2 ref={stepTitle} tabIndex={-1} style={STEP_TITLE_STYLE}>Que se passe-t-il ?</h2>
-            <div className="category-grid">
+            <div className="category-grid" ref={categoryChoices} role="group" aria-label="Choisir le problème" aria-describedby={categoryError ? "request-category-error" : undefined}>
               {CATEGORIES.map((cat) => (
                 <button
                   type="button"
-                  className={values.category === cat.id ? "selected" : ""}
+                  className={categoryChosen && values.category === cat.id ? "selected" : ""}
+                  aria-pressed={categoryChosen && values.category === cat.id}
                   key={cat.id}
-                  onClick={() => setValues({ ...values, category: cat.id })}
+                  onClick={() => { setValues({ ...values, category: cat.id }); setCategoryChosen(true); setCategoryError(""); }}
                 >
                   <Icon name={cat.icon} size={25} />
                   <span>
@@ -272,6 +274,7 @@ export function RequestForm({
                 </button>
               ))}
             </div>
+            {categoryError && <p id="request-category-error" className="field-error" role="alert">{categoryError}</p>}
             <Field
               label={REQUEST_DESCRIPTION_LABEL}
               hint="Ce que vous constatez, les pièces concernées et depuis quand."
@@ -298,6 +301,7 @@ export function RequestForm({
               error={photoError || undefined}
             >
               <input
+                key="request-photos"
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 multiple
@@ -382,7 +386,7 @@ export function RequestForm({
             />}
             {contactPhone !== undefined && (
               <Field label="Téléphone de contact (obligatoire)" error={phoneError || undefined}>
-                <input type="tel" autoComplete="tel" maxLength={30} required value={phone} onChange={(e) => { setPhone(e.target.value); setPhoneError(""); }} />
+                <input key="request-phone" type="tel" autoComplete="tel" maxLength={30} required value={phone} onChange={(e) => { setPhone(e.target.value); setPhoneError(""); }} />
               </Field>
             )}
             <fieldset className="urgency-options">

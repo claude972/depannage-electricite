@@ -1,7 +1,7 @@
 // Logique pure de l’espace client (M61 accueil, V8-C06 devis, V8-C07 détail d’intervention).
 // Sans React ni CSS : testée par tests/ui/client-lists.test.ts. Aucune valeur n’est déduite :
 // seuls les champs enregistrés sont décrits, les absences restent explicites.
-import type { Intervention, Quote, Status } from "../app/types";
+import type { Intervention, Payment, Quote, Status } from "../app/types";
 
 /** Ligne « Interventions récentes » (M61) : titre, adresse sur une ligne, état, date. */
 export interface RecentRowDescriptor {
@@ -16,6 +16,25 @@ export function recentRowDescriptor(
 ): RecentRowDescriptor {
   const parts = [i.address.trim(), [i.postal_code, i.city].filter(Boolean).join(" ").trim()].filter(Boolean);
   return { title: categoryLabel(i.category), address: parts.join(", "), status: i.status, createdAt: i.created_at };
+}
+
+/** Prefer recorded settlement, then accepted or received quotes; never infer payment from dossier status. */
+export function requestAmount(
+  i: Pick<Intervention, "id" | "status" | "estimate_min_cents" | "estimate_max_cents">,
+  quotes: Quote[],
+  payments: Payment[],
+  money: (cents: number) => string,
+): string {
+  const accepted = quotes.filter((q) => q.intervention_id === i.id && q.status === "accepted")
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+  const paid = payments.filter((p) => p.quote_id === accepted?.id && p.status === "paid" && p.paid_at)
+    .sort((a, b) => b.paid_at!.localeCompare(a.paid_at!))[0];
+  if (paid) return `${paid.method === "on_site_declared" ? "Règlement déclaré" : "Montant payé"} : ${money(paid.total_cents)}`;
+  if (accepted) return `${i.status === "completed" ? "À régler" : "Devis accepté"} : ${money(accepted.accepted_total_cents ?? accepted.total_cents)}`;
+  const received = quotes.filter((q) => q.intervention_id === i.id && q.status === "sent")
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+  if (received) return `Devis reçu : ${money(received.total_cents)}`;
+  return `Estimation : ${money(i.estimate_min_cents)} – ${money(i.estimate_max_cents)}`;
 }
 
 /** Cellules d’une ligne de devis (V8-C06) : « quantité × PU HT » et total HT de la ligne (affichage). */
@@ -42,8 +61,8 @@ export const CLIENT_STEPS: { label: string; reachedAt: Status }[] = [
   { label: "Demandée", reachedAt: "requested" },
   { label: "Artisan", reachedAt: "assigned" },
   { label: "Devis", reachedAt: "quoted" },
-  { label: "Intervention", reachedAt: "in_progress" },
-  { label: "Terminée", reachedAt: "paid" },
+  { label: "Intervention", reachedAt: "accepted" },
+  { label: "Règlement", reachedAt: "completed" },
 ];
 const PROGRESS: Status[] = ["requested", "assigned", "quoted", "accepted", "in_progress", "completed", "paid"];
 export const progressIndex = (status: Status) => PROGRESS.indexOf(status);
@@ -79,7 +98,8 @@ export function detailHistory(
       { label: "Demande créée", when: format(i.created_at), state: "done" },
       { label: "Demande annulée", when: "—", state: "done" },
     ];
-  const progress = progressIndex(i.status);
+  const reached = progressIndex(i.status);
+  const progress = i.status === "accepted" || i.status === "completed" ? reached + 1 : reached;
   const rows: [string, string][] = [
     ["Demande créée", format(i.created_at)],
     ["Artisan attribué", "—"],

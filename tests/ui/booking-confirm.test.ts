@@ -85,8 +85,8 @@ test("return from the signup email (same tab, ?auth=confirmed) resumes the confi
 test("guest checkout: payment line shown; card hold not available ⇒ honest refusal before any call + switch to on site", () => {
   const onSite = renderToStaticMarkup(createElement(BookingConfirm, { draft, booking: { ...booking, payment: "on_site" }, busy: false, profileId: "u1", confirmBooking: async () => true, onEdit() {}, onContactChange() {} }));
   assert.match(onSite, /data-booking-payment="on_site"/);
-  assert.match(onSite, /Rien n’est payé à la réservation/);
-  assert.doesNotMatch(onSite, /\bpayé\b(?! à la réservation)/, "never « payé »");
+  assert.match(onSite, /Rien n’est payé à l’envoi de la demande/);
+  assert.doesNotMatch(onSite, /\bpayé\b(?! à l’envoi de la demande)/, "never « payé »");
   const card = renderToStaticMarkup(createElement(BookingConfirm, { draft, booking: { ...booking, payment: "card_hold" }, busy: false, profileId: "u1", confirmBooking: async () => true, onEdit() {}, onContactChange() {}, onPaymentChange() {} }));
   assert.match(card, /Une empreinte n’est pas un débit/);
   assert.match(card, /Choisir le paiement après intervention sur la plateforme/);
@@ -99,6 +99,20 @@ test("card hold with a key: « Vérifier mon empreinte » (server finalize) and 
   const card = renderToStaticMarkup(createElement(BookingConfirm, { draft, booking: { ...booking, payment: "card_hold", request_id: "11111111-1111-4111-8111-111111111111" }, busy: false, profileId: "u1", confirmBooking: async () => true, onEdit() {}, onContactChange() {}, onPaymentChange() {}, verifyCardHold: async () => true, cancelCardHold: async () => true }));
   assert.match(card, /data-booking-card-actions=""/);
   assert.match(card, /Vérifier mon empreinte/);
-  assert.match(card, /Annuler la réservation par carte/);
+  assert.match(card, /Annuler la demande d’empreinte bancaire/);
   assert.doesNotMatch(card, /Choisir le paiement après intervention sur la plateforme/, "the mode/key change only after a server « cancelled »");
+});
+
+
+test("récapitulatif : étape 3 explicite, description vide honnête et besoin choisi conservé", () => {
+  const html = renderToStaticMarkup(createElement(BookingConfirm, { draft: { ...draft, description: "", urgency: "scheduled" }, booking: { ...booking, slot: null }, busy: false, profileId: "u1", confirmBooking: async () => true, onEdit() {}, onContactChange() {}, onPaymentChange() {} }));
+  assert.match(html, /aria-label="Étapes de la demande"/);
+  assert.match(html, /<strong>Étape 1<\/strong>/);
+  assert.match(html, /<strong>Étape 2<\/strong>/);
+  assert.doesNotMatch(html, /Le problème|Le lieu et le besoin/, "confirmation does not invent the order of the public address-first journey");
+  assert.match(html, /aria-current="step"[\s\S]*Règlement et confirmation/);
+  assert.match(html, /Aucune description ajoutée/);
+  assert.match(html, /Intervention à planifier/);
+  assert.doesNotMatch(html, /Sans préférence|Dernière étape/);
+  assert.match(html, /class="button outline booking-payment-option" aria-pressed="false"/);
 });

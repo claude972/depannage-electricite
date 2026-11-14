@@ -2306,3 +2306,8 @@
   background: var(--ui-bg);
   color: var(--ui-text);
 }
+
+.availabilityTitle {
+  font-size: 17px;
+  margin-bottom: 6px;
+}

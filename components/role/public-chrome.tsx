@@ -151,7 +151,7 @@ export function PublicHeader({
     <header className={current === "home" ? `${styles.topbar} ${styles.homeTopbar}` : styles.topbar} data-public-header="" data-ui-appearance="light">
       <div className={`${styles.wrap} ${styles.topbarInner}`}>
         <button type="button" className={styles.brand} aria-label="Accueil" aria-current={current === "home" ? "page" : undefined} data-chrome-home="" onClick={home}>
-          <img decoding="async" src="/brand/domdepannage-noir.png" width={331} height={103} className={styles.headerLogo} alt="" />
+          <img decoding="async" src="/brand/domdepannage-logo.png" width={313} height={181} className={styles.headerLogo} alt="" />
         </button>
         <button className={styles.recruit} aria-current={current === "join" ? "page" : undefined} {...act({ type: "view", view: "join" })}>
           <Icon name="briefcase" size={20} /><span><strong>Rejoindre le réseau</strong><small>Candidature électricien</small></span>

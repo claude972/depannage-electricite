@@ -57,7 +57,8 @@ export function BookingLocationField({ value, location, onChange, error, geoloca
     <Map target={address.target} onMove={address.move} />
     {!online && <p role="status">Vous êtes hors ligne. La carte et la recherche nécessitent une connexion. L’adresse peut être saisie manuellement.</p>}
     <p role="status" className={styles.help}>{address.busy === "reverse" ? "Recherche de l’adresse du repère…" : address.pointMessage}</p>
-    {address.candidate && <p className={styles.help}>{address.candidate.address}, {address.candidate.postal_code} {address.candidate.city}</p>}
+    {(address.pendingPoint || address.current.latitude === null) && <p className={styles.help} data-booking-point-unconfirmed="">{address.current.latitude === null ? "Repère non confirmé : le point affiché sur la carte ne sera pas utilisé. Seule l’adresse renseignée ci-dessous sera transmise tant que vous ne confirmez pas un repère." : "Ce nouveau repère n’est pas confirmé. L’adresse et le dernier repère validés restent utilisés tant que vous ne confirmez pas ce changement."}</p>}
+    {address.candidate && <p className={styles.help}>Adresse proposée pour le repère : {address.candidate.address}, {address.candidate.postal_code} {address.candidate.city}</p>}
     {address.pendingPoint && <button type="button" disabled={Boolean(address.busy)} onClick={address.confirmPoint}>{copy.confirmPoint}</button>}
     <AddressField value={value} error={error} cityLabel={copy.city} onChange={address.edit} />
     <div className={styles.access}>

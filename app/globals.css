@@ -4810,3 +4810,50 @@ body {
 .ui-v2 .panel {
   border-radius: var(--ui-radius-lg);
 }
+
+/* Final request recap: readable labels and explicit payment choices in every role skin. */
+[data-booking-confirm] .recap-list {
+  margin: 24px 0;
+  border: 1px solid var(--ui-border, #d9dfe7);
+  border-radius: 12px;
+  overflow: hidden;
+}
+[data-booking-confirm] .recap-list > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 16px;
+}
+[data-booking-confirm] .recap-list > div + div {
+  border-top: 1px solid var(--ui-border, #d9dfe7);
+}
+[data-booking-confirm] .recap-list dt {
+  font-weight: 650;
+}
+[data-booking-confirm] .recap-list dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+[data-booking-confirm] .booking-payment-options {
+  display: grid;
+  gap: 10px;
+}
+[data-booking-confirm] .booking-payment-options > br {
+  display: none;
+}
+[data-booking-confirm] .booking-payment-option {
+  justify-content: flex-start;
+  min-height: 48px;
+  white-space: normal;
+  text-align: left;
+}
+[data-booking-confirm] .field-error {
+  margin: 0;
+}
+@media (min-width: 760px) {
+  [data-booking-confirm] .recap-list > div {
+    grid-template-columns: minmax(140px, 1fr) minmax(0, 2fr);
+    gap: 20px;
+  }
+}
