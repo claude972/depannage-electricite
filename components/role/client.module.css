@@ -1853,3 +1853,29 @@
 :global(.ui-v2) .space :global([data-profile-requests]) :global(.text-button) {
   font-weight: 500;
 }
+
+/* Match the centered tablet request column in the canonical Figma flow. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .space .main > :global(.form-page),
+  .space .main > :global([data-booking-confirm]) {
+    width: 100%;
+    max-width: 608px;
+    margin-inline: auto;
+  }
+}
+
+.space :global(.form-heading) h1,
+.space :global([data-booking-confirm]) > h1 {
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 36px;
+  letter-spacing: -.4px;
+}
+@media (max-width: 1023px) {
+  .space :global(.form-heading) h1,
+  .space :global([data-booking-confirm]) > h1 {
+    font-size: 23px;
+    line-height: 32px;
+    letter-spacing: -.2px;
+  }
+}
