@@ -44,7 +44,13 @@ export function PublicServicePage({ service, initialOpen = false, go }: { servic
   const [ready, setReady] = useState(false);
   useEffect(() => { setReady(true); setResumable(resumeBooking(getDraftStorage(), service)); }, [service]);
   const openBooking = () => {
-    if (ready) { setRestored(undefined); setOpen(true); }
+    if (!ready) return;
+    // Every entry point resumes the same current draft, including the sticky bar.
+    // Re-read at click time so an expired draft is never restored from React state.
+    const current = resumeBooking(getDraftStorage(), service);
+    setResumable(current);
+    setRestored(current ?? undefined);
+    setOpen(true);
   };
   const confirmProps = {
     disabled: !ready,
@@ -77,11 +83,7 @@ export function PublicServicePage({ service, initialOpen = false, go }: { servic
         {resumable && <section className="panel" aria-label="Demande conservée" data-booking-resume="">
           <h2>Votre demande est conservée dans cet onglet</h2>
           <p>Reprenez vos réponses avant l’expiration du brouillon de 30 minutes. Rien n’a été envoyé. Les photos doivent être ajoutées de nouveau après un rechargement.</p>
-          <button type="button" className="button primary" onClick={() => {
-            const current = resumeBooking(getDraftStorage(), service);
-            setResumable(current);
-            if (current) { setRestored(current); setOpen(true); }
-          }}>Reprendre ma demande</button>
+          <button type="button" className="button outline" onClick={openBooking}>Reprendre ma demande</button>
         </section>}
         {/* Hero: photo left; right column: title, indicative range, pictogram panel, CTA, top FAQ. */}
         <section className={styles.hero} aria-labelledby="service-title">
@@ -123,7 +125,7 @@ export function PublicServicePage({ service, initialOpen = false, go }: { servic
               </span>
             )}
             <button type="button" className={styles.cta} onClick={openBooking} {...confirmProps} data-service-cta="" data-booking-open="">
-              Demander cette intervention
+              {resumable ? "Reprendre ma demande" : "Demander cette intervention"}
             </button>
           </div>
           <div className={styles.topFaq} data-service-faq="">
@@ -223,7 +225,7 @@ export function PublicServicePage({ service, initialOpen = false, go }: { servic
       </div>
       <BookingBar title={service.title} range={shownRange} compact>
         <button type="button" className={bookingStyles.barButton} onClick={openBooking} {...confirmProps} data-booking-open="">
-          Demander cette intervention
+          {resumable ? "Reprendre ma demande" : "Demander cette intervention"}
         </button>
       </BookingBar>
     </PublicChrome>

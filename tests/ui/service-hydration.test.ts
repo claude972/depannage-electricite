@@ -29,8 +29,9 @@ test("SSR (= before hydration): both « Demander cette intervention » are disab
 
 test("source: ready only after mount (effect), openBooking guarded, no arbitrary delay", () => {
   const src = readFileSync("components/role/public-service-page.tsx", "utf8");
-  assert.match(src, /const \[ready, setReady\] = useState\(false\);\s*useEffect\(\(\) => setReady\(true\), \[\]\);/);
-  assert.match(src, /const openBooking = \(\) => \{\s*if \(ready\) setOpen\(true\);\s*\};/);
+  assert.match(src, /const \[ready, setReady\] = useState\(false\);/);
+  assert.match(src, /useEffect\(\(\) => \{ setReady\(true\);/);
+  assert.match(src, /const openBooking = \(\) => \{\s*if \(!ready\) return;/);
   assert.equal((src.match(/onClick=\{openBooking\} \{\.\.\.confirmProps\}/g) || []).length, 2);
   assert.doesNotMatch(src, /setTimeout|requestIdleCallback/);
 });
