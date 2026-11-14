@@ -4827,13 +4827,21 @@ body {
 [data-booking-confirm] .recap-list > div + div {
   border-top: 1px solid var(--ui-border, #d9dfe7);
 }
-[data-booking-confirm] .recap-list dt {
-  font-weight: 700;
+.ui-v2 [data-booking-confirm] .recap-list dt {
+  font-weight: 500;
 }
 [data-booking-confirm] .recap-list dd {
   margin: 0;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+.ui-v2 [data-booking-confirm] .booking-contact-edit {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 4px;
+  font-weight: 500;
+  text-align: left;
 }
 [data-booking-confirm] .booking-payment-options {
   display: grid;
