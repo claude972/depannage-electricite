@@ -1,4 +1,4 @@
-import { Text, View } from 'react-native';
+import { Keyboard, Text, View } from 'react-native';
 import { useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
@@ -49,9 +49,11 @@ function Editor({ actor, token, site }: { actor: string; token: string; site: z.
     setError('');
     if (!category) { setError('Choisissez le problème rencontré.'); return; }
     if (step === 1) {
+      if (!urgency) { setError('Choisissez une intervention à planifier ou une demande urgente.'); return; }
       const parsed = requestFields.safeParse(fields);
       if (!parsed.success) { setError(parsed.error.issues[0].message); return; }
     }
+    Keyboard.dismiss();
     editForm({ step: step + 1 });
   }
   async function submit() {
@@ -101,7 +103,7 @@ function Editor({ actor, token, site }: { actor: string; token: string; site: z.
     {progress === 2 && <Card><Copy kind="subtitle">Votre demande, en clair.</Copy><Copy>{site.name} · {chosen && categories[chosen]}</Copy><Copy>{intent?.payload.description ?? fields.description}</Copy><Copy>{intent?.payload.address ?? address}, {intent?.payload.postal_code ?? postal} {intent?.payload.city ?? city}</Copy><Copy>{(intent?.payload.urgency ?? urgency) === 'urgent' ? 'Urgent' : 'À planifier'}</Copy>
       {(!intent || intent.reviewRequired) && <ReadState loading={catalogue.loading} error={catalogue.error} onRetry={catalogue.reload} />}
       {range && <View style={{ padding: 19, gap: 8, borderWidth: 1, borderColor: palette.border, borderRadius: 8, backgroundColor: palette.subtle }}><Copy kind="muted">Estimation indicative</Copy><Text style={{ fontFamily: 'JakartaMedium', fontSize: 24, lineHeight: 40, color: palette.text }}>{euros(range.min_cents)} – {euros(range.max_cents)}</Text><Copy kind="muted">Le prix final et les taxes applicables seront précisés dans un devis à accepter avant intervention.</Copy></View>}
-      {intent?.reviewRequired && <Copy>Le tarif a changé. Vérifiez la nouvelle estimation avant de confirmer.</Copy>}
+      {intent?.reviewRequired && <><Copy>Le tarif a changé. Vérifiez la nouvelle estimation avant de confirmer.</Copy><Action secondary label="Actualiser l’estimation" disabled={busy || catalogue.loading} onPress={catalogue.reload} /></>}
       {intent && !intent.reviewRequired && <Copy>Une tentative est enregistrée. Réessayez pour retrouver son résultat sans créer une autre demande.</Copy>}
     </Card>}
     {draft.error && <ReadState loading={false} error={draft.error} onRetry={draft.retry} />}{error && <Copy kind="error">{error}</Copy>}
