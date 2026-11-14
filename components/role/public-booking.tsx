@@ -11,7 +11,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { type AddressValue } from "../app/address-field";
 import { BookingLocationField } from "../app/booking-location";
 import type { BookingLocation } from "../../shared/booking-location";
-import { BOOKING_DRAFT_KEY, CIVILITIES, PAYMENT_LABEL, SLOTS, SLOT_LABEL, bookingDescription, contactErrors, newRequestId, parseBooking, readBooking, saveBooking, type BookingContact, type BookingDraft, type Civility, type PaymentChoice, type Slot } from "../app/booking-draft";
+import { BOOKING_DRAFT_KEY, BOOKING_TTL_MS, CIVILITIES, PAYMENT_LABEL, SLOTS, SLOT_LABEL, bookingDescription, contactErrors, newRequestId, parseBooking, readBooking, saveBooking, type BookingContact, type BookingDraft, type Civility, type PaymentChoice, type Slot } from "../app/booking-draft";
 import { useBookingOptions, type OptionsApi, type OptionsState } from "./booking-options";
 import { getDraftStorage } from "../app/request-draft-boot";
 import { PUBLIC_DRAFT_KEY, parsePublicDraftValues, readPublicDraft, savePublicDraft } from "../../lib/shared/request-draft";
@@ -121,6 +121,51 @@ export function toBooking(service: Pick<ServiceEntry, "slug">, s: BookingState):
   return { ...(s.location ? { location: s.location } : {}), slug: service.slug, urgent, slot: urgent ? null : s.slot, notes: s.notes, contact: { ...s.contact, first_name: s.contact.first_name.trim(), last_name: s.contact.last_name.trim(), email: s.contact.email.trim(), phone: s.contact.phone.trim() }, ...(s.payment ? { payment: s.payment } : {}) };
 }
 
+export const BOOKING_PROGRESS_KEY = "courant-booking-progress";
+type BookingProgress = { version: 1; savedAt: number; slug: string; state: BookingState };
+/** Separate editable progress; never a submission, idempotency key or uploaded photo. */
+export function readBookingProgress(raw: unknown, slug: string, now = Date.now()): BookingProgress | null {
+  if (typeof raw !== "string" || raw.length > 16000) return null;
+  try {
+    const saved = JSON.parse(raw);
+    const state = saved?.state;
+    if (saved?.version !== 1 || saved.slug !== slug || !Number.isSafeInteger(saved.savedAt) || saved.savedAt > now + 30000 || now - saved.savedAt >= BOOKING_TTL_MS || !state || ![1, 2, 3, 4, 5].includes(state.step) || ![true, false, null].includes(state.urgent)) return null;
+    if (state.payment !== null && state.payment !== "on_site" && state.payment !== "card_hold") return null;
+    const address = state.address;
+    if (!address || !["address", "postal_code", "city"].every(key => typeof address[key] === "string" && address[key].length <= 2000)) return null;
+    // The canonical parser accepts unfinished text while enforcing types, bounds and location shape.
+    const parsed = parseBooking({ slug, urgent: state.urgent === true, slot: state.slot, notes: state.notes, contact: state.contact, ...(state.location ? { location: state.location } : {}), ...(state.payment ? { payment: state.payment } : {}) });
+    if (!parsed) return null;
+    return { version: 1, savedAt: saved.savedAt, slug, state: { step: state.step, urgent: state.urgent, slot: parsed.slot, notes: parsed.notes, contact: parsed.contact, address: { address: address.address, postal_code: address.postal_code, city: address.city }, payment: parsed.payment ?? null, ...(parsed.location ? { location: parsed.location } : {}) } };
+  } catch { return null; }
+}
+export function saveBookingProgress(storage: Pick<Storage, "setItem"> | null, slug: string, state: BookingState, now = Date.now()): boolean {
+  if (!storage) return false;
+  const raw = JSON.stringify({ version: 1, savedAt: now, slug, state });
+  const checked = readBookingProgress(raw, slug, now);
+  if (!checked) return false;
+  try { storage.setItem(BOOKING_PROGRESS_KEY, JSON.stringify(checked)); return true; } catch { return false; }
+}
+
+/** Restore only a matching, unexpired canonical pair; never combine unrelated tab drafts. */
+export function resumeBooking(storage: Pick<Storage, "getItem"> | null, service: Pick<ServiceEntry, "slug" | "category">, now = Date.now()): BookingState | null {
+  if (!storage) return null;
+  try {
+    const progress = readBookingProgress(storage.getItem(BOOKING_PROGRESS_KEY), service.slug, now);
+    const saved = readBooking(storage.getItem(BOOKING_DRAFT_KEY), now);
+    if (progress && (!saved || saved.booking.slug !== service.slug || progress.savedAt > saved.savedAt)) return progress.state;
+    const draft = readPublicDraft(storage.getItem(PUBLIC_DRAFT_KEY), now);
+    if (!saved || !draft || saved.savedAt !== draft.savedAt || saved.booking.slug !== service.slug || draft.values.category !== service.category || draft.values.urgency !== (saved.booking.urgent ? "urgent" : "scheduled")) return null;
+    const b = saved.booking;
+    const state: BookingState = { step: 5, urgent: b.urgent, slot: b.slot, notes: b.notes, contact: b.contact, address: { address: draft.values.address, postal_code: draft.values.postal_code, city: draft.values.city }, ...(b.location ? { location: b.location } : {}), payment: b.payment ?? null };
+    if (Object.keys(urgencyErrors(state)).length) state.step = 1;
+    else if (Object.keys(contactErrors(state.contact)).length) state.step = 2;
+    else if (Object.keys(addressErrors(state.address)).length) state.step = 3;
+    else if (!state.payment) state.step = 4;
+    return state;
+  } catch { return null; }
+}
+
 /** Last step (BEFORE the account entry), all-or-nothing on the PAIR (public draft + booking extras): the two previous raw
  *  entries are read first; both new entries are written then proven by readback; on any failure
  *  the two previous raw values are restored (or removed when absent) and proven again. Navigation
@@ -179,6 +224,8 @@ export function finishBooking({ storage, service, state, photo, onSaved = () => 
     written = false;
   }
   if (written) {
+    // Canonical pair has been proven; only now discard the editable progress.
+    try { storage.removeItem(BOOKING_PROGRESS_KEY); } catch { /* expiry still bounds leftover progress */ }
     if (photo !== undefined) stagePublicBookingPhoto(booking.request_id, photo);
     onSaved();
     return { ok: true };
@@ -275,6 +322,12 @@ export function BookingWizard({
   const [state, setState] = useState<BookingState>(initial);
   const [errors, setErrors] = useState<Errors>({});
   const [failure, setFailure] = useState("");
+  const [progressStored, setProgressStored] = useState(true);
+  const progressStorage = useRef(storage);
+  progressStorage.current = storage;
+  useEffect(() => {
+    setProgressStored(saveBookingProgress(progressStorage.current(), service.slug, state));
+  }, [service.slug, state]);
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoError, setPhotoError] = useState("");
   const [geolocation, setGeolocation] = useState<Geolocation | null>(null);
@@ -306,6 +359,13 @@ export function BookingWizard({
   };
   const finish = (mode: "signup" | "login") => {
     setFailure("");
+    // A resumed draft must re-check today's server options before leaving the recap.
+    const paymentIssue = paymentErrors(state, availability);
+    if (Object.keys(paymentIssue).length) {
+      setErrors(paymentIssue);
+      set({ step: 4 });
+      return;
+    }
     const result = completeBooking({ storage: storage(), service, state, mode, go, photo });
     if (!result.ok) setFailure(result.message);
   };
@@ -330,6 +390,7 @@ export function BookingWizard({
           <button type="button" className={styles.back} onClick={back}>
             <span aria-hidden="true">←</span> Retour
           </button>
+          {!progressStored && <p role="status">Votre saisie reste affichée, mais ce navigateur ne permet pas de la conserver après un rechargement.</p>}
           <ol className={styles.steps} aria-label="Étapes">
             {([1, 2, 3, 4, 5] as BookingStep[]).map((n) => (
               <li key={n} aria-current={n === state.step ? "step" : undefined} data-done={n < state.step ? "true" : undefined}>
@@ -477,8 +538,7 @@ export function BookingWizard({
               </>
             )}
             {failure && <p className={styles.failure} role="alert">{failure}</p>}
-            {/* Visible action at the end of every step (the fixed bar can be off-screen or hidden on
-                short viewports): SAME native submit of this form, same label, same handler. */}
+            {/* One visible primary action: inline on desktop, fixed on mobile. Both submit the same form. */}
             <div className={styles.inlineActions}>
               <button type="submit" className={styles.inlineSubmit} data-booking-inline-submit={state.step}>
                 {STEP_ACTION[state.step]}

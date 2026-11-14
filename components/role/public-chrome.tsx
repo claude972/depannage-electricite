@@ -221,7 +221,7 @@ export function PublicChrome({
       <footer className={styles.footer}>
         <div className={`${styles.wrap} ${styles.editorialFooter}`}>
           <div>
-            <img decoding="async" src="/brand/domdepannage-bleu.png" width={331} height={102} className={styles.footerLogo} loading="lazy" alt={BRAND_NAME} />
+            <img decoding="async" src="/brand/domdepannage-logo.png" width={313} height={181} className={styles.footerLogo} loading="lazy" alt={BRAND_NAME} />
             <p>De la demande au suivi de votre intervention électrique.</p>
           </div>
           <nav aria-label="Services et tarifs">

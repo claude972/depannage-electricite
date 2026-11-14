@@ -89,3 +89,13 @@
     margin-inline: auto;
   }
 }
+
+/* Contacts follow the content, so they never cover the paragraph being read. */
+.actions {
+  position: static;
+  width: fit-content;
+  max-width: calc(100% - 32px);
+  margin: 24px auto;
+  flex-wrap: wrap;
+  justify-content: center;
+}

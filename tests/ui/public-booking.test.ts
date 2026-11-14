@@ -330,3 +330,43 @@ test("« Continuer » après saisie des notes, du téléphone et de l’adresse 
   const kept = booking.advanceBooking(bad);
   same([kept.state.step, Object.keys(kept.errors), kept.state.notes, kept.state.contact.first_name], [2, ["phone"], "gardé", "Camille"]);
 });
+
+
+test("resume restores only the matching unexpired saved pair, without writing or changing its request id", () => {
+  const storage = new MemoryStorage();
+  const now = Date.now();
+  assert.equal(booking.finishBooking({ storage: storage as unknown as Storage, service, state: filled({step: 5}), now }).ok, true);
+  const raw = [...storage.data];
+  const resumed = booking.resumeBooking(storage as unknown as Storage, service, now + 1000);
+  assert.ok(resumed);
+  assert.equal(resumed.step, 5);
+  assert.equal(resumed.contact.email, contact.email);
+  assert.equal(resumed.address.city, address.city);
+  assert.equal(resumed.slot, "day_after");
+  same([...storage.data], raw);
+  assert.equal(booking.resumeBooking(storage as unknown as Storage, {...service, slug: "other-service"}, now), null);
+  assert.equal(booking.resumeBooking(storage as unknown as Storage, service, now + 30 * 60 * 1000), null);
+  storage.removeItem(PUBLIC_DRAFT_KEY);
+  assert.equal(booking.resumeBooking(storage as unknown as Storage, service, now), null);
+});
+
+
+test("partial progress preserves incomplete step 2 and 3, expires and rejects malformed or foreign drafts", () => {
+  const storage = new MemoryStorage(); const now = Date.now();
+  for (const step of [2, 3] as const) {
+    const state = filled({ step, contact: { ...contact, first_name: "Ca", email: "unfinished@" }, address: { address: "1 ru", city: "", postal_code: "97" } });
+    assert.equal(booking.saveBookingProgress(storage, service.slug, state, now), true);
+    const raw = storage.getItem(booking.BOOKING_PROGRESS_KEY);
+    const progress = booking.readBookingProgress(raw, service.slug, now + 1000);
+    assert.ok(progress); assert.equal(progress.state.step, step);
+    assert.equal(progress.state.contact.email, "unfinished@");
+    assert.equal(progress.state.address.address, "1 ru");
+    same(booking.resumeBooking(storage, service, now + 1000), progress.state);
+    assert.equal(booking.readBookingProgress(raw, "other", now), null);
+    assert.equal(booking.readBookingProgress(raw, service.slug, now + 30 * 60 * 1000), null);
+    assert.equal(booking.readBookingProgress(JSON.stringify({ ...JSON.parse(raw!), version: 2 }), service.slug, now), null);
+    assert.equal(booking.readBookingProgress(JSON.stringify({ ...JSON.parse(raw!), state: { ...state, step: 9 } }), service.slug, now), null);
+  }
+  assert.equal(booking.finishBooking({ storage: storage as unknown as Storage, service, state: filled({step: 5}), now: now+2000 }).ok, true);
+  assert.equal(storage.getItem(booking.BOOKING_PROGRESS_KEY), null);
+});

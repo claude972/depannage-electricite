@@ -175,7 +175,7 @@ export function BookingConfirm({
                     {PAYMENT_LABEL.card_hold}
                   </button>
                 ) : (
-                  <small data-booking-choose="card_hold_unavailable">{PAYMENT_LABEL.card_hold} : pas encore disponible sur ce service.</small>
+                  <small data-booking-choose="card_hold_unavailable">{PAYMENT_LABEL.card_hold} : {demo ? "indisponible en démonstration ; aucune empreinte bancaire n’est créée." : "pas encore disponible sur ce service."}</small>
                 )}
                 {paymentProblem && <p id="booking-payment-error" className="field-error" role="alert">{paymentProblem}</p>}
               </div>

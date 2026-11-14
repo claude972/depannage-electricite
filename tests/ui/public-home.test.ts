@@ -143,7 +143,7 @@ test("SSR : vue inconnue → message de connexion conservé", () => {
 test("photos : illustrations locales créditées et texte alternatif pour chaque image", () => {
   const html = renderHome({ handlers: recordingHandlers([]) });
   const srcs = new Set(attr(html, "src"));
-  for (const logo of ["/brand/domdepannage-logo.png", "/brand/domdepannage-bleu.png"]) {
+  for (const logo of ["/brand/domdepannage-logo.png"]) {
     assert.ok(srcs.delete(logo), logo);
     assert.ok(existsSync(path.join(ROOT, "public", logo)), logo);
   }

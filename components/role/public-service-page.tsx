@@ -9,8 +9,9 @@ import { category, money } from "../app/format";
 import { PublicChrome, serviceChromeHandlers } from "./public-chrome";
 import { SERVICE_STEPS, relatedServices, serviceEstimate, servicePath, type ServiceEntry } from "./public-service-catalog";
 import { Icon } from "../app/icons";
-import { BookingBar, BookingWizard } from "./public-booking";
+import { BookingBar, BookingWizard, resumeBooking, type BookingState } from "./public-booking";
 import { IndicativeRange, useIndicativeText } from "../features/indicative-prices/indicative-range";
+import { getDraftStorage } from "../app/request-draft-boot";
 import bookingStyles from "./public-booking.module.css";
 import styles from "./public-service.module.css";
 
@@ -34,14 +35,16 @@ export function PublicServicePage({ service, initialOpen = false, go }: { servic
   const range = `${money(estimate.min)} – ${money(estimate.max)}`;
   const shownRange = useIndicativeText(service.category);
   // Main CTA, final band and the fixed bar's « Confirmer » share ONE action: open the wizard here.
+  const [resumable, setResumable] = useState<BookingState | null>(null);
+  const [restored, setRestored] = useState<BookingState | undefined>();
   const [open, setOpen] = useState(initialOpen);
   // The server HTML shows « Confirmer » before React has hydrated: a click then would be lost
   // (no handler yet). The buttons stay visibly disabled (aria-busy) until the effect runs, i.e.
   // once the handlers are attached; openBooking also refuses before that point.
   const [ready, setReady] = useState(false);
-  useEffect(() => setReady(true), []);
+  useEffect(() => { setReady(true); setResumable(resumeBooking(getDraftStorage(), service)); }, [service]);
   const openBooking = () => {
-    if (ready) setOpen(true);
+    if (ready) { setRestored(undefined); setOpen(true); }
   };
   const confirmProps = {
     disabled: !ready,
@@ -60,7 +63,7 @@ export function PublicServicePage({ service, initialOpen = false, go }: { servic
       <PublicChrome current="service" className={styles.withBar} handlers={serviceChromeHandlers()} onHome={() => window.location.assign("/")} mainClassName={styles.main}>
         <div className={styles.wrap}>
           {crumb}
-          <BookingWizard service={service} range={range} go={go} onClose={() => setOpen(false)} />
+          <BookingWizard service={service} range={range} initial={restored} go={go} onClose={() => { setOpen(false); setResumable(resumeBooking(getDraftStorage(), service)); }} />
         </div>
       </PublicChrome>
     );
@@ -71,6 +74,15 @@ export function PublicServicePage({ service, initialOpen = false, go }: { servic
           <span aria-hidden="true">←</span> Catalogue
         </a>
 
+        {resumable && <section className="panel" aria-label="Demande conservée" data-booking-resume="">
+          <h2>Votre demande est conservée dans cet onglet</h2>
+          <p>Reprenez vos réponses avant l’expiration du brouillon de 30 minutes. Rien n’a été envoyé. Les photos doivent être ajoutées de nouveau après un rechargement.</p>
+          <button type="button" className="button primary" onClick={() => {
+            const current = resumeBooking(getDraftStorage(), service);
+            setResumable(current);
+            if (current) { setRestored(current); setOpen(true); }
+          }}>Reprendre ma demande</button>
+        </section>}
         {/* Hero: photo left; right column: title, indicative range, pictogram panel, CTA, top FAQ. */}
         <section className={styles.hero} aria-labelledby="service-title">
           <div className={styles.heroHeading}>

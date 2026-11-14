@@ -41,7 +41,7 @@
   border-radius: 5% / 16%;
 }
 .headerLogo { width: 104px; border-radius: 0; }
-.footerLogo { width: 164px; }
+.footerLogo { width: 164px; padding: 10px; background: #fff; border-radius: 8px; }
 
 .topbarInner {
   display: grid;

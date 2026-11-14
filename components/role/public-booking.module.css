@@ -500,3 +500,12 @@
   outline: 3px solid var(--ui-focus);
   outline-offset: 2px;
 }
+
+/* A single primary action at each breakpoint; the existing-account link remains in the form. */
+@media (min-width: 761px) { .wizard > .bar { display: none; } }
+@media (max-width: 760px) {
+  .wizard .inlineSubmit { display: none; }
+  .wizard > .bar { min-height: 0; }
+  .wizard > .bar .barText { display: none; }
+  .wizard > .bar .barButton { width: 100%; }
+}
