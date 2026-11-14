@@ -1,19 +1,12 @@
-import { z } from 'zod';
 import { ApiError, authenticatedClient, dbError } from '@/lib/supabase/server';
-const uuid = z.uuid().transform(value => value.toLowerCase());
-const input = z.object({organization_id:uuid,site_id:uuid.nullable()}).strict();
-const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
-const snapshot = input.extend({
-  counts:z.object({open:count,urgent:count}).strict().refine(value => value.urgent <= value.open),
-  captured_at:z.iso.datetime({offset:true}),
-}).strict();
+import { enterpriseOverviewInput as input, enterpriseOverviewSnapshot as snapshot } from '../../../shared/enterprise-overview';
 const headers = {'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer'};
 export async function POST(request:Request) {
   try {
     const url = new URL(request.url);
-    if (request.headers.get('origin') !== url.origin) throw new ApiError(403,'Origine de la requête non autorisée.');
+    if (request.headers.get('origin') !== url.origin && (request.headers.has("origin") || !/^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/i.test(request.headers.get('authorization') ?? ''))) throw new ApiError(403,'Origine de la requête non autorisée.');
     if (url.search || Number(request.headers.get('content-length') ?? 0) > 1024) throw new ApiError(422,'Périmètre invalide.');
-    const {db} = await authenticatedClient();
+    const {db} = await authenticatedClient(request);
     const body = await request.text();
     if (Buffer.byteLength(body,'utf8') > 1024) throw new ApiError(422,'Périmètre invalide.');
     let decoded:unknown;

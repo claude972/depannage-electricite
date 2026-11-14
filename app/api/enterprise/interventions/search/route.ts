@@ -34,8 +34,8 @@ export async function POST(request: Request) {
   try {
     const url = new URL(request.url);
     if (url.search || Number(request.headers.get("content-length") ?? 0) > 4096) throw new ApiError(422, "Requête de recherche invalide.");
-    if (request.headers.get("origin") !== url.origin) throw new ApiError(403, "Origine de la requête non autorisée.");
-    const { db } = await authenticatedClient();
+    if (request.headers.get("origin") !== url.origin && (request.headers.has("origin") || !/^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/i.test(request.headers.get("authorization") ?? ""))) throw new ApiError(403, "Origine de la requête non autorisée.");
+    const { db } = await authenticatedClient(request);
     const parsed = enterpriseInterventionInput.safeParse(await request.json().catch(() => null));
     if (!parsed.success) throw new ApiError(422, "Vérifiez le périmètre et les filtres.");
     const input = parsed.data, exporting = input.action === "export", page = exporting ? 1 : input.page;

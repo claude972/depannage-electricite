@@ -43,9 +43,9 @@ export function Card({ children }: PropsWithChildren) {
   const p=usePalette();
   return <View style={[styles.card,{backgroundColor:p.surface,borderColor:p.border}]}>{children}</View>;
 }
-export function Action({ label, onPress, disabled=false, secondary=false }: {label:string; onPress:()=>void; disabled?:boolean; secondary?:boolean}) {
+export function Action({ label, onPress, disabled=false, secondary=false, selected }: {label:string; onPress:()=>void; disabled?:boolean; secondary?:boolean; selected?:boolean}) {
   const p=usePalette();
-  return <Pressable accessibilityRole="button" accessibilityState={{disabled}} disabled={disabled} onPress={onPress}
+  return <Pressable accessibilityRole="button" accessibilityState={{disabled,selected}} aria-pressed={selected} disabled={disabled} onPress={onPress}
     style={({pressed})=>[styles.action,{backgroundColor:secondary?p.surface:p.primary,borderColor:secondary?p.border:p.primary,opacity:disabled?.48:pressed?.76:1}]}>
     <Text style={[styles.actionText,{color:secondary?p.blue:'#FFFFFF'}]}>{label}</Text>
   </Pressable>;

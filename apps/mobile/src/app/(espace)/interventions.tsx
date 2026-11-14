@@ -30,6 +30,7 @@ export default function Interventions() {
       contentContainerStyle={styles.list}
       ListHeaderComponent={<View style={styles.list}>
         <Copy kind="title">{profile?.role==='artisan'?'Missions':profile?.role==='manager'?'Interventions':'Mes demandes'}</Copy>
+        {profile?.role==='manager'&&<><Copy kind="subtitle">Recherche par organisation</Copy>{state.data?.organizations?.map(org=><Action key={org.id} secondary label={`Rechercher · ${org.name}`} onPress={()=>router.push({pathname:'/organisation/interventions',params:{organization_id:org.id}})}/>)}</>}
         {profile?.role==='client'&&<>
           <Action label="Nouvelle demande" onPress={()=>router.push('/demande')}/>
           <OrderLookup key={profile.id} />
