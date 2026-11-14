@@ -77,6 +77,7 @@ function NotificationList({ token }: { token: string }) {
   }
   return <Screen refreshing={loading && Boolean(page)} onRefresh={() => { if (!lock.current) void read(); }}>
     <Copy kind="title">Notifications</Copy>
+    <Action secondary label="Préférences" onPress={() => router.push("/notification-preferences")} />
     {page && <Copy kind="muted">{page.page.total} notification{page.page.total === 1 ? '' : 's'} dans cette liste · {page.unread_count} non lue{page.unread_count === 1 ? '' : 's'}</Copy>}
     <View style={styles.filters}>
       <View style={styles.filter}><Action label="Toutes" secondary selected={!unread} disabled={pending} onPress={() => changeFilter(false)} /></View>
