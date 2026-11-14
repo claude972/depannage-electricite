@@ -67,7 +67,6 @@ import { bookingPaymentText, fetchBookingStatus, isDeclaredOnSite, type BookingS
 import styles from "./client.module.css";
 import theme from "./client-theme.module.css";
 import { ThemeSurface } from "../app/theme-provider";
-import { ThemeToggle } from "../app/theme-toggle";
 import { CLIENT_STEPS, currentStepIndex, detailHistory, requestAmount, quoteDecisionState, quoteLineCells } from "./client-lists";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { PreferencesPanel } from "../features/notifications/notification-center";
@@ -479,7 +478,7 @@ export function ClientSpace({ session }: { session: Session }) {
             >
               <Icon name="settings" size={20} />
             </button>
-            <ThemeToggle />
+
             <HeaderBell session={session} />
             <button
               type="button"
@@ -509,7 +508,7 @@ export function ClientSpace({ session }: { session: Session }) {
             {VIEW_NAMES[view] || "Espace particulier"}
           </strong>
           <div className={styles.mobileHeaderTools}>
-            <span title="Thème sombre"><ThemeToggle /></span>
+
             <HeaderBell session={session} />
           </div>
         </header>

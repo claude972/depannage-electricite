@@ -82,7 +82,6 @@ import {
 import styles from "./artisan.module.css";
 import theme from "./artisan-theme.module.css";
 import { ThemeSurface } from "../app/theme-provider";
-import { ThemeToggle } from "../app/theme-toggle";
 import { QuoteDraftEditor } from "./artisan-quote-draft";
 import { isDeclaredOnSite } from "../app/booking-status";
 import { DossierHelpLink, SupportCenter } from "./support-tickets";
@@ -598,7 +597,7 @@ export function ArtisanSpace({ session }: { session: Session }) {
                 <strong>Bonjour</strong>
               )}
             </div>
-            <ThemeToggle />
+
             <HeaderBell session={session} />
           </header>
           <main id="main" className={styles.main} tabIndex={-1}>
