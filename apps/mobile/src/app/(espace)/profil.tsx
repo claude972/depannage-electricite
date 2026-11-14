@@ -6,16 +6,14 @@ import { MobileIcon, type Glyph } from '@/components/mobile-chrome';
 import { PublicLink, usePublicPortal } from '@/components/mobile-public-content';
 import { z } from 'zod';
 import { Action, Card, Copy, Field, ReadState, Screen, usePalette } from '@/components/ui';
-import { api, useResource } from '@/lib/api';
+import { ArtisanAvailability } from '@/components/artisan-availability';
+import { api } from '@/lib/api';
 import { useWorkspace } from '@/lib/use-workspace';
 import { useSession } from '@/lib/session';
 
 const roles = { client: 'Compte particulier', artisan: 'Compte électricien', manager: 'Compte entreprise', admin: 'Administration' };
 type Section = 'identity' | 'addresses' | 'security' | 'privacy';
 const updated=z.object({profile:z.object({id:z.uuid()})});
-const artisan=z.object({artisan_profile:z.object({
-  available:z.boolean(), capacity_limit:z.union([z.literal(3),z.literal(4)]).nullable(), capacity_version:z.number().int().nonnegative(),
-}).nullable()});
 export default function Profile() {
   const state = useWorkspace();
   const auth = useSession();
@@ -27,7 +25,6 @@ export default function Profile() {
   }, [auth.loginResume, auth.consumeLoginResume]);
   const token=auth.session?.access_token;
   const profile=state.data?.profile;
-  const dossier=useResource(profile?.role==='artisan'&&token?'/api/artisan':null,artisan,token);
   const [error,setError]=useState<string|null>(null);
   const [busy,setBusy]=useState(false);
   const [section, setSection] = useState<Section | null>(null);
@@ -50,11 +47,6 @@ export default function Profile() {
       setSection(null);
     },state.reload);
   }
-  function updateArtisan(body:object) {
-    if(!token)return;
-    void run(async()=>{await api('/api/artisan',artisan,{token,method:'POST',body});},dossier.reload);
-  }
-  const current=dossier.data?.artisan_profile;
   const initials = profile?.full_name.trim().split(/\s+/).slice(0, 2).map(word => word[0]).join('').toLocaleUpperCase('fr');
   function openSection(next: Section) {
     if (next === 'identity') {
@@ -93,17 +85,7 @@ export default function Profile() {
           onPress={() => router.navigate('/(espace)/interventions')} />
       </View>
     </>}
-    {profile?.role==='artisan'&&<Card>
-      <Copy kind="subtitle">Disponibilité et missions</Copy>
-      <ReadState loading={dossier.loading} error={dossier.error} onRetry={dossier.reload}/>
-      {dossier.data&&current===null&&<Copy kind="muted">Complétez votre candidature sur le portail Web pour gérer votre disponibilité.</Copy>}
-      {current&&<>
-        <Copy>{current.available?'Vous recevez des offres.':'Vous êtes indisponible.'}</Copy>
-        <Action secondary disabled={busy||!profile.artisan_approved} label={current.available?'Me rendre indisponible':'Me rendre disponible'} onPress={()=>updateArtisan({action:'set_availability',available:!current.available})}/>
-        <Copy>Maximum actuel de missions actives : {current.capacity_limit??3}</Copy>
-        {([3,4] as const).map(limit=><Action key={limit} secondary={(current.capacity_limit??3)!==limit} disabled={busy||(current.capacity_limit??3)===limit} label={`Limiter à ${limit} missions`} onPress={()=>updateArtisan({action:'set_capacity_limit',capacity_limit:limit,expected_version:current.capacity_version})}/>)}
-      </>}
-    </Card>}
+    {profile?.role==='artisan'&&<ArtisanAvailability approved={profile.artisan_approved} capacity />}
     <Pressable accessibilityRole="button" accessibilityState={{ disabled: busy }} disabled={busy}
       style={styles.signOut} onPress={() => void run(auth.signOut)}>
       <Text style={[styles.strong, { color: palette.danger }]}>{busy && !section ? 'Action en cours…' : 'Se déconnecter'}</Text>

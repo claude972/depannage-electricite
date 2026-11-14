@@ -13,7 +13,7 @@ import {
 } from '@/lib/published-info';
 import { releaseLabel } from '@/lib/release';
 
-export default function MobileHelp() {
+export default function MobileHelp({ embedded = false }: { embedded?: boolean } = {}) {
   const router = useRouter();
   const { openPortal, portalError } = usePublicPortal();
   const operatorRead = useResource(PUBLIC_PATHS.operatorProfile, operatorPublicationSchema);
@@ -21,7 +21,7 @@ export default function MobileHelp() {
   const operator = publishedState(operatorRead);
   const warranty = publishedState(warrantyRead);
   const profile = operator.phase === 'published' ? operator.value.profile : null;
-  return <Screen footer={<PublicTabs />}>
+  return <Screen top={embedded} footer={embedded ? undefined : <PublicTabs />}>
     <Copy kind="title">Comment pouvons-nous vous aider ?</Copy>
     <Card>
       <Copy kind="subtitle">Une intervention en cours ?</Copy>

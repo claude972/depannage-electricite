@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Keyboard } from 'react-native';
 import { useRouter } from 'expo-router';
 import { orderReference, parseOrderReference } from '../../../../shared/order-reference';
-import { categories, statuses } from '@/lib/contracts';
+import { categories } from '@/lib/contracts';
+import { jobStatus } from '@/lib/job-presentation';
 import { findMyOrders } from '@/lib/session';
 import { Action, Card, Copy, Field } from './ui';
 
@@ -64,7 +65,7 @@ export function OrderLookup() {
     {orders?.length === 0 && <Copy kind="muted">Aucune commande de ce numéro dans votre compte.</Copy>}
     {orders?.map(order => <Card key={order.id}>
       <Copy kind="label">{orderReference(order.id)}</Copy>
-      <Copy>{categories[order.category]} · {order.city} · {statuses[order.status]}</Copy>
+      <Copy>{categories[order.category]} · {order.city} · {jobStatus(order.status, 'client')}</Copy>
       <Action label="Ouvrir la commande" onPress={() => router.push({ pathname: '/dossier/[id]', params: { id: order.id } })} />
     </Card>)}
   </Card>;

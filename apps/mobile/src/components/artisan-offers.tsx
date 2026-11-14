@@ -47,9 +47,14 @@ function Offers({ token }: { token: string }) {
   return <Card>
     <Copy kind="subtitle">Offres disponibles</Copy>
     <ReadState loading={first.loading} error={first.error ?? error} onRetry={() => { setError(null); first.reload(); }} />
-    {first.data && !items.length && <Copy kind="muted">{first.data.eligible ? 'Aucune offre pour le moment.' : 'Votre profil doit être approuvé et disponible pour recevoir des offres.'}</Copy>}
-    {items.map(item => <Action key={item.id} secondary label={`${categories[item.category]} · ${item.city} · ${euros(item.estimate_min_cents)} à ${euros(item.estimate_max_cents)}`}
-      onPress={() => router.push({ pathname: '/offre/[id]', params: { id: item.id } })} />)}
+    {first.data && !items.length && <Copy kind="muted">{first.data.eligible ? 'Aucune offre pour le moment.' : 'Votre profil doit être approuvé et disponible. Utilisez la disponibilité en haut de cet écran, ou consultez votre profil.'}</Copy>}
+    {items.map(item => <Card key={item.id}>
+      <Copy kind="subtitle">{categories[item.category]}</Copy>
+      <Copy>{item.city} · {item.urgency === 'urgent' ? 'Urgent' : 'Planifiée'}</Copy>
+      <Copy kind="muted">Estimation client</Copy>
+      <Copy selectable>{euros(item.estimate_min_cents)} à {euros(item.estimate_max_cents)}</Copy>
+      <Action secondary label="Voir l’offre" onPress={() => router.push({ pathname: '/offre/[id]', params: { id: item.id } })} />
+    </Card>)}
     {next && <Action secondary disabled={busy} label="Afficher plus" onPress={() => void loadMore()} />}
   </Card>;
 }

@@ -1,7 +1,7 @@
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useColorScheme, type TextInputProps } from 'react-native';
+import { ActivityIndicator, RefreshControl, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useColorScheme, type ScrollViewInstance, type TextInputProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSegments } from 'expo-router';
-import type { PropsWithChildren, ReactNode } from 'react';
+import type { PropsWithChildren, ReactNode, Ref } from 'react';
 
 const publicPalette = {
   background: '#FFFFFF', surface: '#FFFFFF', subtle: '#F4F6FA', text: '#111318',
@@ -21,13 +21,13 @@ export function usePalette() {
   const connected = section === '(espace)' || section === 'demande' || section === 'dossier' || section === 'offre';
   return connected && scheme === 'dark' ? darkPalette : publicPalette;
 }
-export function Screen({ children, top=false, footer }: PropsWithChildren<{ top?: boolean; footer?: ReactNode }>) {
+export function Screen({ children, top=false, footer, scrollRef, refreshing=false, onRefresh }: PropsWithChildren<{ top?: boolean; footer?: ReactNode; scrollRef?: Ref<ScrollViewInstance>; refreshing?: boolean; onRefresh?: () => void }>) {
   const palette = usePalette();
   const [section] = useSegments();
   const edges = top ? ['top','left','right'] as const : ['left','right'] as const;
   return <SafeAreaView edges={footer || section === '(espace)' ? edges : [...edges, 'bottom']} style={[styles.flex,{backgroundColor:palette.background}]}>
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} contentContainerStyle={styles.screen}>
+      <ScrollView ref={scrollRef} contentInsetAdjustmentBehavior="automatic" refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} /> : undefined} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} contentContainerStyle={styles.screen}>
         {children}
       </ScrollView>
     </KeyboardAvoidingView>
@@ -77,7 +77,7 @@ export function BookingProgress({ labels, index }: { labels: string[]; index: nu
 const styles = StyleSheet.create({  progress: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
   progressItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   progressNumber: { width: 23, height: 23, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  progressLabel: { fontFamily: 'JakartaBold', fontSize: 11, lineHeight: 16 },
+  progressLabel: { fontFamily: 'JakartaBold', fontSize: 12, lineHeight: 16 },
 
   flex:{flex:1}, screen:{padding:16,gap:16,paddingBottom:30,width:'100%',maxWidth:650,alignSelf:'center'},
   card:{padding:16,gap:12,borderWidth:1,borderRadius:16},

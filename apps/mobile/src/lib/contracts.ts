@@ -27,22 +27,30 @@ export const job = z.object({
   created_at: z.string(),
 });
 export type Job = z.infer<typeof job>;
-const quote = z.object({
+export const quoteSummary = z.object({
+  id, intervention_id: id, status: z.enum(['sent', 'accepted', 'rejected']),
+  total_cents: cents, accepted_total_cents: cents.optional(), created_at: z.string().optional(),
+});
+export type QuoteSummary = z.infer<typeof quoteSummary>;
+const quote = quoteSummary.extend({
   id, intervention_id: id, status: z.enum(['sent', 'accepted', 'rejected']),
   lines: z.array(z.object({label: z.string(), quantity: z.number().int().positive(), unit_price_cents: cents})),
   total_cents: cents, accepted_total_cents: cents.optional(),
 });
 const attachment = z.object({id, name: z.string(), mime_type: z.string()});
 const message = z.object({id, author_id: id, body: z.string(), created_at: z.string(), attachment_id: id.nullish()});
-const payment = z.object({id, total_cents: cents, status: z.enum(['pending','paid','failed'])});
+export const payment = z.object({id, quote_id: id.optional(), total_cents: cents, status: z.enum(['pending','paid','failed']), method: z.enum(['stripe','on_site_declared']).optional(), paid_at: z.string().nullish(), created_at: z.string().optional()});
+export type Payment = z.infer<typeof payment>;
 const list = <T extends z.ZodType>(schema: T) => z.discriminatedUnion('status', [
-  z.object({ status: z.literal('ok'), items: z.array(schema), limited: z.boolean() }),
+  z.object({ status: z.literal('ok'), items: z.array(schema), limited: z.boolean(), incomplete: z.boolean().optional() }),
   z.object({ status: z.literal('error') }),
 ]);
 export const workspace = z.object({
   profile: z.object({id, role: z.enum(['client', 'artisan', 'manager', 'admin']), full_name: z.string(), first_name: z.string().nullish(), last_name: z.string().nullish(), phone: z.string().nullish(), artisan_approved: z.boolean()}),
   interventions: z.array(job),
-  limits: z.object({interventions: z.object({limited: z.boolean()})}).optional(),
+  quotes: z.array(quoteSummary).optional(),
+  payments: z.array(payment).optional(),
+  limits: z.object({interventions: z.object({limited: z.boolean()}), quotes: z.object({limited: z.boolean()}).optional()}).optional(),
 });
 export const detail = z.object({
   intervention: job,

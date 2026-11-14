@@ -77,5 +77,5 @@ const styles = StyleSheet.create({
   tabsArea: { paddingTop: 6, paddingHorizontal: 12 },
   tabs: { flexDirection: 'row', gap: 2, borderWidth: 1, borderRadius: 30, padding: 4, width: '100%', maxWidth: 370, alignSelf: 'center' },
   tab: { flex: 1, minWidth: 0, minHeight: 46, justifyContent: 'center', alignItems: 'center', gap: 3, borderRadius: 24, padding: 2 },
-  tabLabel: { fontFamily: 'JakartaBold', fontSize: 11, textAlign: 'center' },
+  tabLabel: { fontFamily: 'JakartaBold', fontSize: 12, textAlign: 'center' },
 });
