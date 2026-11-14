@@ -53,6 +53,7 @@ function Navigator() {
 export default function Root() {
   const [ready,error] = useFonts({
     JakartaRegular: require('../../assets/fonts/plus-jakarta-sans-400.ttf'),
+    JakartaMedium: require('../../assets/fonts/plus-jakarta-sans-500.ttf'),
     JakartaSemiBold: require('../../assets/fonts/plus-jakarta-sans-600.ttf'),
     JakartaBold: require('../../assets/fonts/plus-jakarta-sans-700.ttf'),
   });

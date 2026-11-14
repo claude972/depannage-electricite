@@ -1,4 +1,4 @@
-import { ActivityIndicator, RefreshControl, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useColorScheme, type ScrollViewInstance, type TextInputProps } from 'react-native';
+import { ActivityIndicator, RefreshControl, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useColorScheme, useWindowDimensions, type ScrollViewInstance, type TextInputProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSegments } from 'expo-router';
 import type { PropsWithChildren, ReactNode, Ref, ComponentRef } from 'react';
@@ -36,8 +36,9 @@ export function Screen({ children, top=false, footer, scrollRef, refreshing=fals
 }
 export function Copy({ children, kind='body', selectable }: PropsWithChildren<{kind?:'body'|'title'|'subtitle'|'muted'|'label'|'error'; selectable?:boolean}>) {
   const p=usePalette();
+  const { width } = useWindowDimensions();
   const color = kind==='muted' ? p.muted : kind==='label' ? p.blue : kind==='error' ? p.danger : p.text;
-  return <Text selectable={selectable} accessibilityRole={kind==='title'||kind==='subtitle'?'header':undefined} accessibilityLiveRegion={kind==='error'?'polite':undefined} style={[styles[kind],{color}]}>{children}</Text>;
+  return <Text selectable={selectable} accessibilityRole={kind==='title'||kind==='subtitle'?'header':undefined} accessibilityLiveRegion={kind==='error'?'polite':undefined} style={[styles[kind],kind==='title'&&width>=1024&&styles.wideTitle,{color}]}>{children}</Text>;
 }
 export function Card({ children }: PropsWithChildren) {
   const p=usePalette();
@@ -77,19 +78,20 @@ export function BookingProgress({ labels, index }: { labels: string[]; index: nu
 const styles = StyleSheet.create({  progress: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
   progressItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   progressNumber: { width: 23, height: 23, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  progressLabel: { fontFamily: 'JakartaBold', fontSize: 12, lineHeight: 16 },
+  progressLabel: { fontFamily: 'JakartaMedium', fontSize: 12, lineHeight: 16 },
 
   flex:{flex:1}, screen:{padding:16,gap:16,paddingBottom:30,width:'100%',maxWidth:650,alignSelf:'center'},
   card:{padding:16,gap:12,borderWidth:1,borderRadius:16},
   action:{minHeight:48,paddingVertical:11,paddingHorizontal:16,borderWidth:1,borderRadius:12,alignItems:'center',justifyContent:'center'},
-  actionText:{fontFamily:'JakartaBold',fontSize:15,textAlign:'center'},
-  title:{fontFamily:'JakartaBold',fontSize:30,lineHeight:37,letterSpacing:-1},
-  subtitle:{fontFamily:'JakartaBold',fontSize:20,lineHeight:27},
+  actionText:{fontFamily:'JakartaMedium',fontSize:15,lineHeight:22,textAlign:'center'},
+  title:{fontFamily:'JakartaMedium',fontSize:23,lineHeight:32,letterSpacing:-.2},
+  wideTitle:{fontSize:28,lineHeight:36,letterSpacing:-.4},
+  subtitle:{fontFamily:'JakartaMedium',fontSize:18,lineHeight:26},
   body:{fontFamily:'JakartaRegular',fontSize:15,lineHeight:23},
   muted:{fontFamily:'JakartaRegular',fontSize:14,lineHeight:22},
-  label:{fontFamily:'JakartaBold',fontSize:13,lineHeight:20,letterSpacing:.3},
+  label:{fontFamily:'JakartaMedium',fontSize:13,lineHeight:20},
   error:{fontFamily:'JakartaSemiBold',fontSize:14,lineHeight:22},
-  input:{minHeight:48,borderWidth:1,borderRadius:13,paddingHorizontal:13,paddingVertical:10,fontSize:16},
+  input:{minHeight:48,borderWidth:1,borderRadius:13,paddingHorizontal:13,paddingVertical:10,fontFamily:'JakartaRegular',fontSize:16},
   multiline:{minHeight:105,textAlignVertical:'top'},
   field:{gap:5},loading:{alignItems:'center',gap:10,padding:16},
 });
