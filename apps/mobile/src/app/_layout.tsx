@@ -31,6 +31,7 @@ function Navigator() {
       </Stack.Protected>
       <Stack.Protected guard={Boolean(session)}>
         <Stack.Screen name="(espace)" options={{headerShown:false}}/>
+        <Stack.Screen name="notifications" options={{title:'Votre espace',headerTitleStyle:{fontFamily:'JakartaMedium',fontSize:16}}}/>
         <Stack.Screen name="organisation/interventions" options={{title:'Interventions entreprise'}}/>
         <Stack.Screen name="organisation/contrats" options={{title:'Contrats'}}/>
         <Stack.Screen name="organisation/approbations" options={{title:'Approbations'}}/>

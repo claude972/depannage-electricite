@@ -18,7 +18,7 @@ export const editorial = { navy: '#16277A', yellow: '#F4D649', cards: '#244FB1',
 export function usePalette() {
   const scheme = useColorScheme();
   const [section] = useSegments();
-  const connected = section === '(espace)' || section === 'demande' || section === 'dossier' || section === 'offre' || section === 'organisation' || section === 'site' || section === 'annuaire' || section === 'contrat' || section === 'approbation';
+  const connected = section === '(espace)' || section === 'notifications' || section === 'demande' || section === 'dossier' || section === 'offre' || section === 'organisation' || section === 'site' || section === 'annuaire' || section === 'contrat' || section === 'approbation';
   return connected && scheme === 'dark' ? darkPalette : publicPalette;
 }
 export function Screen({ children, top=false, footer, scrollRef, refreshing=false, onRefresh }: PropsWithChildren<{ top?: boolean; footer?: ReactNode; scrollRef?: Ref<ScrollViewInstance>; refreshing?: boolean; onRefresh?: () => void }>) {
@@ -47,7 +47,7 @@ export function Card({ children }: PropsWithChildren) {
 export function Action({ label, onPress, disabled=false, secondary=false, selected }: {label:string; onPress:()=>void; disabled?:boolean; secondary?:boolean; selected?:boolean}) {
   const p=usePalette();
   return <Pressable accessibilityRole="button" accessibilityState={{disabled,selected}} aria-pressed={selected} disabled={disabled} onPress={onPress}
-    style={({pressed})=>[styles.action,{backgroundColor:secondary?p.surface:p.primary,borderColor:secondary?p.border:p.primary,opacity:disabled?.48:pressed?.76:1}]}>
+    style={({pressed})=>[styles.action,{backgroundColor:secondary?(selected?p.subtle:p.surface):p.primary,borderColor:selected?p.blue:secondary?p.border:p.primary,opacity:disabled?.48:pressed?.76:1}]}>
     <Text style={[styles.actionText,{color:secondary?p.blue:'#FFFFFF'}]}>{label}</Text>
   </Pressable>;
 }
