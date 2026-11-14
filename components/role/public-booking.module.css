@@ -64,7 +64,7 @@
   align-items: center;
   gap: 6px;
 }
-.steps li > span {
+.steps .stepNumber {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -76,8 +76,8 @@
 .steps li[aria-current] {
   color: var(--ui-text);
 }
-.steps li[aria-current] > span,
-.steps li[data-done] > span {
+.steps li[aria-current] .stepNumber,
+.steps li[data-done] .stepNumber {
   border-color: var(--ui-primary);
   background: var(--ui-primary);
   color: var(--ui-on-primary);
@@ -319,6 +319,21 @@
   }
 }
 @media (max-width: 760px) {
+  .steps {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .steps .stepLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
   .barInner {
     padding: 0 16px;
   }

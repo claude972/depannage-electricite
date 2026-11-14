@@ -332,15 +332,13 @@ export function BookingWizard({
   const [photoError, setPhotoError] = useState("");
   const [geolocation, setGeolocation] = useState<Geolocation | null>(null);
   const title = useRef<HTMLHeadingElement>(null);
-  const first = useRef(true);
   useEffect(() => {
     setGeolocation(typeof navigator !== "undefined" && navigator.geolocation ? navigator.geolocation : null);
   }, []);
   useEffect(() => {
     // Focus the step title (also when the wizard opens): keyboard and screen readers land on it.
-    title.current?.focus({ preventScroll: first.current ? false : true });
-    if (!first.current) title.current?.scrollIntoView({ block: "start", behavior: "auto" });
-    first.current = false;
+    title.current?.focus({ preventScroll: true });
+    title.current?.scrollIntoView({ block: "start", behavior: "auto" });
   }, [state.step]);
 
   const set = (patch: Partial<BookingState>) => setState((s) => ({ ...s, ...patch }));
@@ -394,16 +392,14 @@ export function BookingWizard({
           <ol className={styles.steps} aria-label="Étapes">
             {([1, 2, 3, 4, 5] as BookingStep[]).map((n) => (
               <li key={n} aria-current={n === state.step ? "step" : undefined} data-done={n < state.step ? "true" : undefined}>
-                <span aria-hidden="true">{n}</span>
-                {STEP_TITLES[n]}
+                <span className={styles.stepNumber} aria-hidden="true">{n}</span>
+                <span className={styles.stepLabel}>{STEP_TITLES[n]}</span>
               </li>
             ))}
           </ol>
           <h2 ref={title} tabIndex={-1} className={styles.stepTitle}>
             {STEP_TITLES[state.step]}
           </h2>
-
-          {state.step === 1 && <div className={styles.private}><EnterpriseBookingLink /></div>}
 
           <form id={formId} className={styles.form} onSubmit={submit} noValidate>
             {state.step === 1 && (
@@ -550,6 +546,7 @@ export function BookingWizard({
               )}
             </div>
           </form>
+          {state.step === 1 && <div className={styles.private}><EnterpriseBookingLink /></div>}
         </div>
       </div>
 
