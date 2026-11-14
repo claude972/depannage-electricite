@@ -1,4 +1,5 @@
 "use client";
+import { DemoBanner } from "../app/demo-banner";
 import floatingNav from "./floating-navigation.module.css";
 // Platform Super Admin space (reference M43). The operator of the platform, not the owner of a
 // client organisation. Every figure comes from session.loadAdminOverview() (global counts,
@@ -1278,21 +1279,7 @@ export function AdminSpace({ session }: { session: Session }) {
       </aside>
       {menuOpen && <div className={styles.overlay} onClick={closeMenu} aria-hidden="true" />}
       <div className={styles.main} inert={isNarrow && menuOpen}>
-        {demo && (
-          <div className={styles.demoBanner}>
-            <span>
-              <Icon name="info" size={16} />
-              Démonstration — données fictives, aucun artisan contacté, aucun débit
-            </span>
-            <ConfirmAction
-              label="Réinitialiser la démonstration"
-              message="Les données de démonstration de ce navigateur seront remplacées par le jeu d’exemple initial."
-              confirmLabel="Réinitialiser"
-              busy={session.busy}
-              onConfirm={async () => session.resetDemo()}
-            />
-          </div>
-        )}
+        {demo && <DemoBanner session={session} />}
         <header className={styles.header}>
           <button
             type="button"
@@ -1316,9 +1303,9 @@ export function AdminSpace({ session }: { session: Session }) {
               <Icon name="clock" size={16} />
               {loadedAt ? `Données au ${dateTime(loadedAt.toISOString())}` : reloading ? "Lecture des données…" : "Données non chargées"}
             </span>
-            <button type="button" className="button outline" onClick={() => void load()} disabled={reloading}>
+            <button type="button" className="button outline" aria-label={reloading ? "Actualisation…" : "Actualiser"} onClick={() => void load()} disabled={reloading}>
               <Icon name="refresh" size={16} />
-              {reloading ? "Actualisation…" : "Actualiser"}
+              <span className={styles.refreshLabel}>{reloading ? "Actualisation…" : "Actualiser"}</span>
             </button>
           </div>
         </header>
@@ -1328,9 +1315,6 @@ export function AdminSpace({ session }: { session: Session }) {
             <p className={styles.stale} role="status">
               {staleNote}
             </p>
-          )}
-          {demo && view !== "profile" && (
-            <DemoNote>Les noms, montants et dates affichés sont des exemples de démonstration.</DemoNote>
           )}
           {content}
         </main>

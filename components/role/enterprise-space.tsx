@@ -1,4 +1,5 @@
 "use client";
+import { DemoBanner } from "../app/demo-banner";
 import floatingNav from "./floating-navigation.module.css";
 // Espace entreprise cliente (rôle "manager") : syndics, restauration, bureaux et ERP pilotant
 // plusieurs sites. Références maîtresses : M66 (shell, tableau), M4 (filtres), V5-C08
@@ -625,37 +626,7 @@ export function EnterpriseSpace({ session }: { session: Session }) {
         </div>
       </header>
 
-      {demo && (
-        <div className={styles.demoBanner} role="note" inert={isNarrow && menuOpen}>
-          <span>
-            <Icon name="info" size={16} />
-            Démonstration — données fictives, aucun artisan contacté, aucun débit.
-          </span>
-          <div className={styles.demoActions}>
-            <label>
-              Rôle exploré
-              <select
-                value={session.role}
-                onChange={(e) => session.setDemoRole(e.target.value as Role)}
-              >
-                {(Object.keys(ROLE_NAMES) as Role[]).map((r) => (
-                  <option key={r} value={r}>
-                    {ROLE_NAMES[r]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <ConfirmAction
-              label="Réinitialiser la démonstration"
-              message="Les modifications de démonstration enregistrées dans ce navigateur seront effacées."
-              confirmLabel="Réinitialiser"
-              className={styles.demoReset}
-              busy={session.busy}
-              onConfirm={async () => session.resetDemo()}
-            />
-          </div>
-        </div>
-      )}
+      {demo && <DemoBanner session={session} inert={isNarrow && menuOpen} />}
 
       <div className={styles.body}>
         {menuOpen && (

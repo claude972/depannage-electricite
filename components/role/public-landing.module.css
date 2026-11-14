@@ -300,3 +300,7 @@
   .modes svg { width: 15px; }
   .carouselControls { gap: 3px; }
 }
+
+.searchRow input { min-height: 44px; }
+.searchResults { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--ui-border); border-radius: 12px; background: var(--ui-bg); color: var(--ui-accent); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.searchResults:focus-visible { outline: 3px solid var(--ui-focus); outline-offset: 3px; }

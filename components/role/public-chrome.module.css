@@ -227,3 +227,5 @@
   .editorialActions { margin-inline-start: auto; gap: 20px; font-size: .81rem; }
   .contact { padding-inline: 14px; }
 }
+
+.footer button, .footer a { min-width: 44px; }

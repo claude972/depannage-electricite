@@ -57,7 +57,7 @@
   text-align: left;
   color: #53647b;
   font-size: 14px;
-  font-weight: 550;
+  font-weight: 600;
 }
 .navItem:hover {
   background: #f4f7fb;
@@ -78,7 +78,7 @@
   background: #fff4dd;
   color: #916100;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   text-align: center;
 }
 .roleSwitch {
@@ -312,7 +312,7 @@
 }
 .kpiValue {
   font-size: 28px;
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: -1px;
   line-height: 1.15;
   color: var(--navy);
@@ -422,7 +422,7 @@
   background: #eaf1ff;
   color: var(--blue);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .link {
   display: inline-flex;
@@ -431,7 +431,7 @@
   min-height: 44px;
   color: var(--blue);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .link:hover {
   text-decoration: underline;
@@ -669,7 +669,7 @@ button.row:hover {
 }
 .facts strong {
   font-size: 14px;
-  font-weight: 550;
+  font-weight: 600;
   color: var(--navy);
   overflow-wrap: anywhere;
 }
@@ -1075,7 +1075,7 @@ button.row:hover {
 }
 .quoteToggle {
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--blue);
 }
 .quoteToggle::after {
@@ -1344,7 +1344,7 @@ button.row:hover {
 .subjectLink {
   min-height: 44px;
   text-align: left;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--navy);
   overflow-wrap: anywhere;
 }
@@ -2016,4 +2016,16 @@ button.row:hover {
 }
 .embedded :global([data-artisan-target] .document-list .button) {
   white-space: normal;
+}
+
+/* Shared page hierarchy across all four workspaces. */
+.heading h1 { font-size: 32px; font-weight: 700; line-height: 1.15; letter-spacing: -.8px; }
+@media (max-width: 767px) { .heading h1 { font-size: 28px; letter-spacing: -.65px; } }
+
+@media (max-width: 600px) {
+  .header { padding-inline: 16px; }
+  .tools { flex-wrap: nowrap; gap: 8px; }
+  .tools .chip { flex: 1 1 auto; min-height: 44px; padding: 6px 8px; font-size: 12px; line-height: 1.35; white-space: normal; }
+  .tools :global(.button) { width: 44px; min-width: 44px; min-height: 44px; padding: 0; }
+  .refreshLabel { display: none; }
 }

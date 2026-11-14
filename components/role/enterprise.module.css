@@ -122,7 +122,7 @@
   font-size: 12px;
   line-height: 18px;
   text-align: center;
-  font-weight: 650;
+  font-weight: 600;
 }
 .account {
   display: inline-flex;
@@ -159,7 +159,7 @@
 }
 .accountText strong {
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .accountText strong {
   font-size: 14px;
@@ -219,7 +219,7 @@
   min-height: 44px;
   padding: 6px 10px;
   color: #6b4c05;
-  font-weight: 650;
+  font-weight: 600;
   font-size: 13px;
   text-decoration: underline;
 }
@@ -275,7 +275,7 @@
   border-radius: 8px;
   color: #23364f;
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 400;
   text-align: left;
 }
 .navItem:hover {
@@ -304,7 +304,7 @@
   font-size: 12px;
   line-height: 22px;
   text-align: center;
-  font-weight: 650;
+  font-weight: 600;
 }
 .sidebarBottom {
   margin-top: auto;
@@ -370,7 +370,7 @@
 }
 .main :global(h1) {
   font-size: 32px;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: -0.9px;
 }
 .titleActions {
@@ -408,7 +408,7 @@
 }
 .contextNames strong {
   color: #102a43;
-  font-weight: 650;
+  font-weight: 600;
 }
 .contextControls {
   margin-left: auto;
@@ -559,7 +559,7 @@
   background: #fff;
   color: #172b4d;
   font-size: 14px;
-  font-weight: 450;
+  font-weight: 400;
 }
 .filterSearch {
   flex: 2 1 200px;
@@ -642,7 +642,7 @@
   background: transparent;
   color: #102a43;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 400;
 }
 .table {
   width: 100%;
@@ -701,7 +701,7 @@
   display: block;
   color: #102a43;
   font-size: 15px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .rowOpen:hover strong {
   color: #1457d9;
@@ -788,7 +788,7 @@
   border-radius: 22px;
   color: #102a43;
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 400;
 }
 .pageNumber:hover {
   background: #edf3fd;
@@ -797,7 +797,7 @@
 .pageNumberActive:hover {
   background: #1457d9;
   color: #fff;
-  font-weight: 650;
+  font-weight: 600;
 }
 .pageGap {
   min-width: 24px;
@@ -831,7 +831,7 @@
   font-size: 15px;
 }
 .sectionHint {
-  font-weight: 500;
+  font-weight: 400;
   color: #3f526b;
 }
 .countPill {
@@ -845,7 +845,7 @@
   border-radius: 14px;
   background: #fff;
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
   color: #102a43;
   letter-spacing: 0;
 }
@@ -896,7 +896,7 @@
 }
 .openText {
   color: #1457d9;
-  font-weight: 550;
+  font-weight: 600;
 }
 .budgetLine {
   display: flex;
@@ -917,12 +917,12 @@
 }
 .budgetPercentOver {
   color: #b42318;
-  font-weight: 650;
+  font-weight: 600;
 }
 .thHint {
   display: block;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 400;
   color: #6b7a90;
   letter-spacing: 0;
 }
@@ -938,7 +938,7 @@
 .cellAmount strong {
   display: block;
   color: #102a43;
-  font-weight: 650;
+  font-weight: 600;
   white-space: nowrap;
 }
 .cellAmount small {
@@ -946,11 +946,11 @@
 }
 .alertAmber {
   color: #925c00;
-  font-weight: 550;
+  font-weight: 600;
 }
 .alertRed {
   color: #b42318;
-  font-weight: 550;
+  font-weight: 600;
 }
 /* Qualificatif « parmi les données chargées » : porté par l’en-tête de colonne sur grand
    écran (masqué visuellement ici, toujours lu), affiché dans la cellule sur mobile. */
@@ -969,7 +969,7 @@
   gap: 5px;
   color: #4b5f7a;
   font-size: 13px;
-  font-weight: 550;
+  font-weight: 600;
 }
 .cellActions {
   white-space: nowrap;
@@ -1001,7 +1001,7 @@
   min-height: 44px;
   padding: 0;
   color: #1457d9;
-  font-weight: 550;
+  font-weight: 600;
   white-space: nowrap;
 }
 .refLink:hover {
@@ -1087,7 +1087,7 @@
   display: block;
   color: #102a43;
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .listRow small {
   display: block;
@@ -1112,7 +1112,7 @@
   padding: 0;
   color: #1457d9;
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .textLink:hover {
   text-decoration: underline;
@@ -1335,7 +1335,7 @@
   border-color: #1457d9;
   background: #eaf1ff;
   color: #1457d9;
-  font-weight: 650;
+  font-weight: 600;
 }
 .lines > div {
   display: flex;
@@ -1454,7 +1454,7 @@
   font-weight: 600;
 }
 .quoteFacts > div p {
-  font-weight: 450;
+  font-weight: 400;
   color: #3f526b;
   line-height: 1.6;
 }
@@ -1497,7 +1497,7 @@
   background: #fff;
   color: #102a43;
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .decisionButton:hover {
   background: #f5f8ff;
@@ -1529,7 +1529,7 @@
   text-align: left;
   font-size: 12px;
   color: #526178;
-  font-weight: 650;
+  font-weight: 600;
   padding: 10px 12px;
   border-bottom: 1px solid #dce4ee;
   background: #fafbfd;
@@ -1922,7 +1922,7 @@
     content: attr(data-label);
     flex: 0 0 90px;
     font-size: 12px;
-    font-weight: 650;
+    font-weight: 600;
     color: #526178;
     padding-top: 2px;
   }
@@ -3062,3 +3062,7 @@
 /* Keep account fields readable on wide management screens. */
 .main :global(.profile-form) { max-width: 680px; }
 .memberActions :global(button) { min-width: 44px; }
+
+/* Shared page hierarchy across all four workspaces. */
+.main :global(h1) { font-size: 32px; font-weight: 700; line-height: 1.15; letter-spacing: -.8px; }
+@media (max-width: 767px) { .main :global(h1) { font-size: 28px; letter-spacing: -.65px; } }

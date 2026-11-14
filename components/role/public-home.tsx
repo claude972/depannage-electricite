@@ -204,6 +204,7 @@ export function PublicHome({ gated = false, handlers, supportWhatsAppPhone, show
                 </label>
                 <a href="/#new/scheduled"><Icon name="calendar" size={18} /> Plus tard</a>
               </div>
+              {query.trim() && <button type="submit" className={styles.searchResults}>Voir {cards.length} résultat{cards.length > 1 ? "s" : ""}<Icon name="arrow" size={16} /></button>}
               <div className={styles.searchActions}>
                 <button className={styles.primary} type="submit">Trouver une intervention <Icon name="arrow" size={18} /></button>
                 <span><Icon name="check" size={17} /> Devis avant travaux</span>

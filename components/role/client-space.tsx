@@ -1,4 +1,5 @@
 "use client";
+import { DemoBanner } from "../app/demo-banner";
 // Espace particulier (rôle "client"). Présentation uniquement : chaque mutation passe par
 // `session.*`. Références : M61 (accueil mobile), V8-C07 (détail d’intervention), V8-C06
 // (devis), M7 (suivi). Mobile < 1024 px : navigation basse ; desktop : barre latérale.
@@ -403,7 +404,7 @@ export function ClientSpace({ session }: { session: Session }) {
                 {n.id === "messages" && received > 0 && (
                   <span className={styles.sideCount}>
                     <span aria-hidden="true">{received}</span>
-                    <span className="sr-only">{`${received} messages reçus`}</span>
+                    <span className="sr-only">{`${received} message${received > 1 ? "s" : ""} reçu${received > 1 ? "s" : ""}`}</span>
                   </span>
                 )}
               </button>
@@ -455,9 +456,7 @@ export function ClientSpace({ session }: { session: Session }) {
       <div className={styles.mainArea}>
         <header className={styles.header}>
           <span className={styles.breadcrumb}>
-            Mon espace
-            <Icon name="arrow" size={13} />
-            <strong>{VIEW_NAMES[view] || "Espace particulier"}</strong>
+            Espace particulier
           </span>
           <div className={styles.headerTools}>
             {!demo && (
@@ -506,7 +505,7 @@ export function ClientSpace({ session }: { session: Session }) {
 
         <header className={styles.mobileHeader}>
           <strong className={styles.mobileHeading}>
-            {VIEW_NAMES[view] || "Espace particulier"}
+            Mon espace
           </strong>
           <div className={styles.mobileHeaderTools}>
 
@@ -514,39 +513,7 @@ export function ClientSpace({ session }: { session: Session }) {
           </div>
         </header>
 
-        {demo && (
-          <div className={styles.demoBanner} role="note">
-            <p>
-              <Icon name="info" size={16} />
-              <span>
-                <strong>Démonstration</strong> — données fictives, aucun artisan contacté,
-                aucun débit.
-              </span>
-            </p>
-            <div className={styles.demoTools}>
-              <label>
-                Explorer un autre espace
-                <select
-                  value={session.role}
-                  onChange={(e) => session.setDemoRole(e.target.value as Role)}
-                >
-                  {(Object.keys(ROLE_NAMES) as Role[]).map((r) => (
-                    <option key={r} value={r}>
-                      {ROLE_NAMES[r]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <ConfirmAction
-                label="Réinitialiser"
-                message="Réinitialiser toutes les données de démonstration ? Les modifications locales seront effacées."
-                confirmLabel="Confirmer la réinitialisation"
-                busy={session.busy}
-                onConfirm={async () => session.resetDemo()}
-              />
-            </div>
-          </div>
-        )}
+        {demo && <DemoBanner session={session} />}
 
         <main id="main" className={styles.main}>
           <Alerts
@@ -585,7 +552,7 @@ export function ClientSpace({ session }: { session: Session }) {
               {n.id === "messages" && received > 0 && (
                 <span className={styles.navCount}>
                   <span aria-hidden="true">{received}</span>
-                  <span className="sr-only">{`${received} messages reçus`}</span>
+                  <span className="sr-only">{`${received} message${received > 1 ? "s" : ""} reçu${received > 1 ? "s" : ""}`}</span>
                 </span>
               )}
             </button>
@@ -625,7 +592,7 @@ function RequestList({ session, items }: { session: Session; items: Intervention
             <Badge status={i.status} />
             <span className="request-price">
               {i.urgency === "urgent" && <span className="urgent-text">Urgent</span>}
-              {requestAmount(i, session.data.quotes, session.data.payments, money)}
+              <RequestAmountLabel value={requestAmount(i, session.data.quotes, session.data.payments, money)} />
             </span>
           </span>
           <Icon name="arrow" size={18} />
@@ -636,6 +603,12 @@ function RequestList({ session, items }: { session: Session; items: Intervention
 }
 
 // ---- Mes demandes --------------------------------------------------------------------
+function RequestAmountLabel({ value }: { value: string }) {
+  const separator = value.indexOf(" : ");
+  if (separator < 0) return <span>{value}</span>;
+  return <span className={styles.requestAmount}><small>{value.slice(0, separator)} : </small><strong>{value.slice(separator + 3)}</strong></span>;
+}
+
 type RequestFilter = "active" | "all" | "past";
 /** Exported for tests only (the live server search wiring). */
 export function RequestsView({ session, rows }: { session: Session; rows: Intervention[] }) {

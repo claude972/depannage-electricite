@@ -54,7 +54,7 @@
 .workspaceBlock strong {
   display: block;
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--navy);
 }
 .workspaceBlock small {
@@ -84,7 +84,7 @@
   padding: 9px 12px;
   color: #53647b;
   font-size: 14px;
-  font-weight: 550;
+  font-weight: 600;
 }
 .sideNav button:hover,
 .sidebarBottom button:hover {
@@ -105,7 +105,7 @@
   text-align: center;
   font-size: 12px;
   line-height: 20px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .sidebarBottom {
   margin-top: auto;
@@ -219,7 +219,7 @@
 .userChip strong {
   display: block;
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--navy);
 }
 .userChip small {
@@ -301,12 +301,12 @@
   border-radius: 999px;
   color: #5d6d84;
   font-size: 12px;
-  font-weight: 550;
+  font-weight: 600;
 }
 .bottomNav button[aria-current="page"] {
   background: var(--ui-surface, #f4f6fa);
   color: var(--blue);
-  font-weight: 650;
+  font-weight: 600;
 }
 .navCount {
   position: absolute;
@@ -321,7 +321,7 @@
   font-size: 12px;
   line-height: 18px;
   text-align: center;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 /* ---- Accueil mobile (M61) --------------------------------------------------------- */
@@ -348,7 +348,7 @@
   color: #fff;
   /* M61 : libellé sur une seule ligne dès 360 px (15,5 px), 17 px à partir de ~400 px. */
   font-size: clamp(14px, 4.3vw, 17px);
-  font-weight: 650;
+  font-weight: 600;
   text-align: left;
 }
 .ctaButton:hover {
@@ -603,7 +603,7 @@
 .statusMain strong {
   display: block;
   font-size: 20px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--blue);
   line-height: 1.2;
 }
@@ -654,7 +654,7 @@
   background: #fff;
   color: #6b7a90;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .stepper li.done > span {
   background: var(--blue);
@@ -667,7 +667,7 @@
 }
 .stepper li.current {
   color: var(--blue);
-  font-weight: 650;
+  font-weight: 600;
 }
 .artisanRow {
   display: flex;
@@ -689,7 +689,7 @@
   background: #e7edf6;
   color: var(--navy);
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
   flex-shrink: 0;
 }
 .artisanRow strong {
@@ -803,7 +803,7 @@
 }
 .totals > div.grand {
   font-size: 17px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--navy);
 }
 .totals > div.grand strong {
@@ -1028,7 +1028,7 @@
 .quoteTable th {
   background: #f5f7fb;
   color: var(--navy);
-  font-weight: 650;
+  font-weight: 600;
 }
 .quoteTable th:last-child,
 .quoteTable td:last-child {
@@ -1829,3 +1829,12 @@
   .space :global(.page-title) > div + div { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
   .space :global(.page-title) > div + div > .button { flex: 1; min-height: 48px; font-size: 14px; }
 }
+
+/* Shared page hierarchy across all four workspaces. */
+.requestAmount { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.requestAmount small { font-size: 12px; font-weight: 600; }
+.requestAmount strong { font-size: 14px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.space :global(.request-price) { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 767px) { .requestAmount { align-items: flex-start; } }
+.space :global(.page-title) h1 { font-size: 32px; font-weight: 700; line-height: 1.15; letter-spacing: -.8px; }
+@media (max-width: 767px) { .space :global(.page-title) h1 { font-size: 28px; letter-spacing: -.65px; } }

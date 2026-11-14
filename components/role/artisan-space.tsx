@@ -1,4 +1,5 @@
 "use client";
+import { DemoBanner } from "../app/demo-banner";
 // Artisan space (role "artisan"). Presentational: every mutation goes through `session`.
 // Master references: M35 (shell + dashboard), M67 (offer), M34 (quote), M14 (documents),
 // M65 (application), M36 (profile). Structure is reproduced, example figures are not.
@@ -797,39 +798,7 @@ function Drawer({
     </div>
   );
 }
-function DemoBar({ session }: { session: Session }) {
-  return (
-    <div className={styles.demoBar} role="region" aria-label="Mode démonstration">
-      <span className={styles.demoBarText}>
-        <Icon name="info" size={15} />
-        Démonstration — données fictives, aucun artisan contacté, aucun débit
-      </span>
-      <div className={styles.demoBarTools}>
-        <label className={styles.demoRole}>
-          Rôle exploré
-          <select
-            value={session.role}
-            onChange={(e) => session.setDemoRole(e.target.value as Role)}
-          >
-            {(Object.keys(ROLE_NAMES) as Role[]).map((r) => (
-              <option key={r} value={r}>
-                {ROLE_NAMES[r]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <ConfirmAction
-          label="Réinitialiser"
-          message="Effacer les données de démonstration de ce navigateur et revenir à l’exemple initial ?"
-          confirmLabel="Réinitialiser la démonstration"
-          className="text-button"
-          busy={session.busy}
-          onConfirm={async () => session.resetDemo()}
-        />
-      </div>
-    </div>
-  );
-}
+function DemoBar({ session }: { session: Session }) { return <DemoBanner session={session} />; }
 
 // ---- Overview (M35) ---------------------------------------------------------------------
 function PanelArt() {
@@ -1218,6 +1187,8 @@ function Missions({ session, declinedIds, onDeclined, availability }: { session:
         <Segments label="Filtrer les missions" value={segment} options={options} onChange={setSegment} />
       </div>
       {segment === "available" && (
+        <details className={styles.radiusSettings}>
+        <summary>Zone de recherche{confirmed?.active ? " · filtre actif" : ""}</summary>
         <MissionRadiusPanel
           demo={demo}
           context={session.mutationContext}
@@ -1227,6 +1198,7 @@ function Missions({ session, declinedIds, onDeclined, availability }: { session:
             if (!p.active) setOrder("oldest_first"); // no active radius: nearest is not offered any more
           }}
         />
+        </details>
       )}
       {segment === "available" && (
         <AvailableMissionsPanel
@@ -3026,14 +2998,15 @@ function AvailabilityPanel({ session, dossier, pending, onCommand }: {
 }) {
   const artisan = dossier?.artisan_profile;
   return (
-    <section className="panel" aria-labelledby="artisan-availability">
-      <h2 id="artisan-availability" className={styles.availabilityTitle}>
+    <section className={`panel ${styles.availabilityPanel}`} aria-labelledby="artisan-availability">
+      <h2 id="artisan-availability" className={artisan && !pending ? "sr-only" : styles.availabilityTitle}>
         Disponibilité
       </h2>
       {pending ? (
         <Loader label="Lecture du dossier…" />
       ) : artisan ? (
         <AvailabilitySwitch
+          compact
           available={artisan.available}
           busy={session.busy}
           onToggle={(next) => onCommand({ action: "set_availability", available: next })}
@@ -3053,16 +3026,18 @@ function AvailabilitySwitch({
   available,
   busy,
   onToggle,
+  compact = false,
 }: {
   available: boolean;
   busy: boolean;
   onToggle: (next: boolean) => Promise<boolean>;
+  compact?: boolean;
 }) {
   return (
     <div className={styles.switchRow}>
       <span>
-        Disponible pour de nouvelles missions
-        <small>Indique à l’opérateur et aux clients si vous acceptez de nouvelles demandes.</small>
+        {compact ? "Recevoir de nouvelles missions" : "Disponible pour de nouvelles missions"}
+        {!compact && <small>Indique à l’opérateur et aux clients si vous acceptez de nouvelles demandes.</small>}
       </span>
       <button
         type="button"
