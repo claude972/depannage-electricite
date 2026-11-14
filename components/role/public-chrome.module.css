@@ -186,6 +186,8 @@
 .appNav { display: none; }
 @media (max-width: 767px) {
   .appChrome .homeTopbar { display: none; }
+}
+@media (max-width: 1023px) {
   .appChrome { padding-bottom: calc(134px + env(safe-area-inset-bottom, 0px)); }
   .appNav {
     position: fixed;
@@ -211,11 +213,12 @@
     border: 0;
     background: transparent;
     font: inherit;
-    font-weight: 650;
+    font-weight: 400;
     cursor: pointer;
     border-radius: 999px;
     color: var(--ui-text-muted);
-    font-size: .7rem;
+    font-size: 11px;
+    line-height: 16px;
     text-decoration: none;
   }
   .appNav [aria-current="page"] { background: var(--ui-surface); color: var(--ui-text); }
