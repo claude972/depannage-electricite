@@ -2302,14 +2302,20 @@ export function ArtisanApplicationsList({
   limit,
   busy,
   onDecide,
+  artisanId,
+  approvalBlockedReason,
 }: {
+  artisanId?: string;
+  approvalBlockedReason?: string;
   rows: ArtisanApplicationRow[];
   truncated: boolean;
   limit: number | null;
   busy: boolean;
   onDecide(row: ArtisanApplicationRow, decision: ArtisanDecision): Promise<unknown>;
 }) {
-  if (!rows.length)
+  const visibleRows = artisanId ? rows.filter((row) => row.id === artisanId) : rows;
+  if (artisanId && !visibleRows.length) return <Empty icon="shield" title="Décision indisponible">Cet artisan ne figure pas dans les candidatures chargées. Actualisez la liste avant de décider.</Empty>;
+  if (!visibleRows.length)
     return (
       <Empty icon="shield" title="Aucune candidature à vérifier">
         Les inscriptions artisans apparaîtront ici.
@@ -2326,8 +2332,9 @@ export function ArtisanApplicationsList({
         </p>
       )}
       <div className="document-list">
-        {rows.map((p) => {
+        {visibleRows.map((p) => {
           const view = artisanApplicationView(p);
+          const approvalBlocked = Boolean(approvalBlockedReason && (view.decision === "approve" || view.decision === "reactivate"));
           const decision = view.decision ? DECISIONS[view.decision] : null;
           return (
             <div key={p.id} data-artisan-application={p.id} data-application-status={p.application_status ?? "unknown"}>
@@ -2339,10 +2346,11 @@ export function ArtisanApplicationsList({
                 </p>
                 {view.note && <p className="inline-note">{view.note}</p>}
               </section>
-              {decision && view.decision && (
+              {approvalBlocked && <p className="inline-note" role="status">{approvalBlockedReason}</p>}
+              {decision && view.decision && !approvalBlocked && (
                 <ConfirmAction
                   label={decision.label}
-                  message={decision.message}
+                  message={`${p.full_name} : ${decision.message}`}
                   confirmLabel={decision.confirmLabel}
                   busy={busy}
                   onConfirm={() => onDecide(p, view.decision as ArtisanDecision)}
@@ -2351,7 +2359,7 @@ export function ArtisanApplicationsList({
               {view.secondary && (
                 <ConfirmAction
                   label={DECISIONS[view.secondary].label}
-                  message={DECISIONS[view.secondary].message}
+                  message={`${p.full_name} : ${DECISIONS[view.secondary].message}`}
                   confirmLabel={DECISIONS[view.secondary].confirmLabel}
                   busy={busy}
                   onConfirm={() => onDecide(p, view.secondary as ArtisanDecision)}
@@ -2365,7 +2373,7 @@ export function ArtisanApplicationsList({
   );
 }
 
-export function ArtisanAdministration({ demo }: { demo: boolean }) {
+export function ArtisanAdministration({ demo, artisanId, approvalBlockedReason }: { demo: boolean; artisanId?: string; approvalBlockedReason?: string }) {
   const [rows, setRows] = useState<ArtisanApplicationRow[]>([]);
   const [truncated, setTruncated] = useState(false);
   const [limit, setLimit] = useState<number | null>(null);
@@ -2409,6 +2417,7 @@ export function ArtisanAdministration({ demo }: { demo: boolean }) {
   /** E36: one command id per intention (dossier + action + version read), kept until confirmed. */
   const intents = useRef(new Map<string, string>());
   async function decide(p: ArtisanApplicationRow, decision: ArtisanDecision) {
+    if (busy || loading || (artisanId && p.id !== artisanId) || (approvalBlockedReason && (decision === "approve" || decision === "reactivate"))) return;
     const { approved, action } = DECISIONS[decision];
     setBusy(p.id);
     setError("");
@@ -2451,9 +2460,9 @@ export function ArtisanAdministration({ demo }: { demo: boolean }) {
     }
   }
   return (
-    <section className="panel">
+    <section className="panel" data-artisan-target={artisanId || undefined}>
       <div className="section-heading">
-        <h2>Candidatures artisans</h2>
+        <h2>{artisanId ? "Décision pour cet artisan" : "Candidatures artisans"}</h2>
         <button className="button outline" onClick={() => void load()} disabled={loading}>
           <Icon name="refresh" />
           Actualiser
@@ -2475,7 +2484,7 @@ export function ArtisanAdministration({ demo }: { demo: boolean }) {
           Chargement des candidatures…
         </div>
       ) : error && !rows.length ? null : (
-        <ArtisanApplicationsList rows={rows} truncated={truncated} limit={limit} busy={Boolean(busy)} onDecide={decide} />
+        <ArtisanApplicationsList rows={rows} artisanId={artisanId} approvalBlockedReason={approvalBlockedReason} truncated={truncated} limit={limit} busy={Boolean(busy)} onDecide={decide} />
       )}
     </section>
   );

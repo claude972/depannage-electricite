@@ -32,6 +32,7 @@ const STATUS_META: Record<SupportStatus, { label: string; tone: Tone }> = {
   awaiting_user: { label: "Réponse attendue de votre part", tone: "amber" },
   resolved: { label: "Résolue", tone: "green" },
 };
+const statusMeta = (status: SupportStatus, queue: SupportQueue) => queue === "all" && status === "awaiting_user" ? { ...STATUS_META[status], label: "Réponse attendue de l’utilisateur" } : STATUS_META[status];
 const STATUS_OPTIONS: SupportStatus[] = ["open", "in_progress", "awaiting_user", "resolved"];
 // Same literal rule as the server (letters incl. accents, digits, spaces, hyphens, apostrophes).
 const SEARCH_RE = new RegExp("^[\\p{L}\\p{M}\\p{N} '’-]+$", "u");
@@ -201,8 +202,8 @@ function TicketList({ session, queue }: { session: Session; queue: SupportQueue 
     <>
       <PageTitle
         level={level}
-        title="Assistance"
-        subtitle="Vos demandes à l’équipe de la plateforme et leur historique."
+        title={queue === "all" ? "Demandes d’assistance" : "Assistance"}
+        subtitle={queue === "all" ? "Demandes des utilisateurs et leur historique. Ouvrez une demande pour consulter les actions autorisées." : "Vos demandes à l’équipe de la plateforme et leur historique."}
         action={
           <div className={styles.actions}>
             <button
@@ -252,7 +253,7 @@ function TicketList({ session, queue }: { session: Session; queue: SupportQueue 
                 <option value="">Tous les états</option>
                 {STATUS_OPTIONS.map((s) => (
                   <option key={s} value={s}>
-                    {STATUS_META[s].label}
+                    {statusMeta(s, queue).label}
                   </option>
                 ))}
               </select>
@@ -314,7 +315,7 @@ function TicketList({ session, queue }: { session: Session; queue: SupportQueue 
           </Empty>
         ) : (
           <Empty level={level === 1 ? 2 : 3} icon="help" title="Aucune demande d’assistance" action={newButton}>
-            Décrivez votre question ; l’équipe de la plateforme vous répond ici.
+            {queue === "all" ? "Les demandes des utilisateurs apparaîtront ici." : "Décrivez votre question ; l’équipe de la plateforme vous répond ici."}
           </Empty>
         )
       ) : (
@@ -366,7 +367,7 @@ function TicketList({ session, queue }: { session: Session; queue: SupportQueue 
 }
 
 function TicketRow({ ticket: t, queue, onOpen }: { ticket: SupportTicket; queue: SupportQueue; onOpen: () => void }) {
-  const meta = STATUS_META[t.status];
+  const meta = statusMeta(t.status, queue);
   return (
     <button type="button" className={styles.row} onClick={onOpen}>
       <span className={styles.rowTitle}>{t.subject}</span>
@@ -854,7 +855,7 @@ function TicketDetail({
   }
 
   const { ticket, permissions, page } = detail;
-  const meta = STATUS_META[ticket.status];
+  const meta = statusMeta(ticket.status, queue);
   const linked = ticket.intervention_id
     ? interventions.find((i) => i.id === ticket.intervention_id) || null
     : null;
@@ -950,14 +951,14 @@ function TicketDetail({
           )}
           <Field
             label="Nouvel état"
-            hint={`État actuel : ${STATUS_META[detail.ticket.status].label}. Seuls les passages autorisés depuis cet état sont proposés.`}
+            hint={`État actuel : ${statusMeta(detail.ticket.status, queue).label}. Seuls les passages autorisés depuis cet état sont proposés.`}
             error={statusError}
           >
             <select value={target} onChange={(e) => setTarget(e.target.value as "" | SupportStatus)} disabled={sending}>
               <option value="">Choisir un état</option>
               {statusTargets(detail.ticket.status, permissions.can_set_status).map((s) => (
                 <option key={s} value={s}>
-                  {STATUS_META[s].label}
+                  {statusMeta(s, queue).label}
                 </option>
               ))}
             </select>
@@ -966,7 +967,7 @@ function TicketDetail({
             label="Changer l’état"
             message={
               target
-                ? `Passer la demande de « ${STATUS_META[detail.ticket.status].label} » à « ${STATUS_META[target].label} ». Le changement est inscrit dans l’historique visible par le demandeur.`
+                ? `Passer la demande de « ${statusMeta(detail.ticket.status, queue).label} » à « ${statusMeta(target, queue).label} ». Le changement est inscrit dans l’historique visible par le demandeur.`
                 : ""
             }
             confirmLabel="Confirmer"
@@ -1067,8 +1068,8 @@ function EventItem({
           <span>{dateTime(ev.created_at)}</span>
         </div>
         <p className={styles.eventBody}>
-          État modifié : {ev.from_status ? `« ${STATUS_META[ev.from_status].label} » devient ` : ""}«{" "}
-          {STATUS_META[ev.to_status].label} ».
+          État modifié : {ev.from_status ? `« ${statusMeta(ev.from_status, queue).label} » devient ` : ""}«{" "}
+          {statusMeta(ev.to_status, queue).label} ».
         </p>
       </li>
     );
@@ -1082,7 +1083,7 @@ function EventItem({
         </strong>
         <span>
           {dateTime(ev.created_at)}
-          {reopened ? ` · demande rouverte (« ${STATUS_META[ev.to_status].label} »)` : ""}
+          {reopened ? ` · demande rouverte (« ${statusMeta(ev.to_status, queue).label} »)` : ""}
         </span>
       </div>
       <p className={styles.eventBody}>{message ? message.body : "Message non chargé pour cette version."}</p>

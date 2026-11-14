@@ -1345,7 +1345,9 @@ function ArtisanDossierPanel({
   session,
   userId,
   summary,
+  onDossierRead,
 }: {
+  onDossierRead: (state: { id: string; available: boolean }) => void;
   session: Session;
   userId: string;
   summary: Pick<ArtisanRow, "company_name" | "application_status">;
@@ -1357,13 +1359,14 @@ function ArtisanDossierPanel({
   useEffect(() => {
     let active = true;
     setDossier(undefined);
+    onDossierRead({ id: userId, available: false });
     void sessionRef.current.loadArtisanDossier(userId).then((result) => {
-      if (active) setDossier(result);
+      if (active) { setDossier(result); onDossierRead({ id: userId, available: Boolean(result?.artisan_profile) }); }
     });
     return () => {
       active = false;
     };
-  }, [userId, reloadKey, session.data]);
+  }, [userId, reloadKey, session.data, onDossierRead]);
 
   const profile = dossier?.artisan_profile ?? null;
   const today = todayIso();
@@ -1399,8 +1402,8 @@ function ArtisanDossierPanel({
           <dt>État du dossier</dt>
           <dd>{applicationTag(summary.application_status)}</dd>
         </dl>
-        <Empty icon="document" title="Dossier non constitué">
-          L’artisan n’a pas encore enregistré son dossier (société, SIRET, adresse, zone, compétences). Rien n’est à examiner pour l’instant.
+        <Empty icon="document" title={session.mode === "demo" ? "Dossier non présenté en démonstration" : "Dossier non constitué"}>
+          {session.mode === "demo" ? "Les informations et justificatifs de cet artisan ne sont pas fournis dans cette démonstration. Son approbation reste indisponible depuis cette fiche." : "L’artisan n’a pas encore enregistré son dossier (société, SIRET, adresse, zone, compétences). Rien n’est à examiner pour l’instant."}
         </Empty>
       </>
     );
@@ -1834,6 +1837,8 @@ function ArtisanDetailView({
   onReloadOverview: () => void;
   reloadingOverview: boolean;
 }) {
+  const [dossierRead, setDossierRead] = useState<{ id: string; available: boolean } | null>(null);
+  const approvalBlockedReason = dossierRead?.id === id && dossierRead.available ? undefined : "Approbation et réactivation indisponibles tant que le dossier de cet artisan n’est pas constitué et lisible.";
   const sessionRef = useRef(session);
   sessionRef.current = session;
   const fromOverview = overview?.artisans.find((a) => a.id === id);
@@ -1924,7 +1929,7 @@ function ArtisanDetailView({
             </dl>
             {!fromOverview && <Basis>Fiche lue dans l’annuaire : cet artisan ne figure pas parmi les derniers enregistrements de la vue d’ensemble.</Basis>}
           </Panel>
-          <ArtisanDossierPanel session={session} userId={artisan.id} summary={artisan} />
+          <ArtisanDossierPanel session={session} userId={artisan.id} summary={artisan} onDossierRead={setDossierRead} />
           <Panel title="Règles d’approbation">
             <ul className={styles.rules}>
               <li>L’approbation exige un dossier soumis par l’artisan (société, SIRET, adresse, zone et compétences).</li>
@@ -1967,11 +1972,11 @@ function ArtisanDetailView({
             <div className={styles.highlight}>
               <Icon name="info" size={16} />
               <span>
-                Retrouvez la ligne « {artisan.full_name} » dans la liste ci-dessous pour approuver ou suspendre sa candidature. La liste est celle de l’administration existante ; actualisez ensuite les données.
+                Les décisions ci-dessous concernent uniquement {artisan.full_name}. Vérifiez son dossier avant de confirmer ; actualisez ensuite les données.
               </span>
             </div>
             <div className={styles.embedded}>
-              <ArtisanAdministration demo={demo} />
+              <ArtisanAdministration key={artisan.id} demo={demo} artisanId={artisan.id} approvalBlockedReason={approvalBlockedReason} />
             </div>
           </Panel>
         </aside>

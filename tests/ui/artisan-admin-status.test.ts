@@ -110,3 +110,18 @@ test("réponse illisible ou UNE ligne invalide ⇒ erreur explicite (jamais une 
   assert.match(view, /error && !rows\.length \? null : \(\s*<ArtisanApplicationsList/);
   assert.match(view, /data-artisan-applications-error=""[\s\S]*?Réessayer/);
 });
+
+
+test("fiche artisan : seule la cible est rendue et un dossier absent bloque son approbation", () => {
+  const render = (artisanId: string, approvalBlockedReason?: string) => renderToString(createElement(f.ArtisanApplicationsList as never, { rows: [{ ...row("approved", true), id: "alex", full_name: "Alex Martin" }, { ...row("submitted", false), id: "sam", full_name: "Sam Laurent" }], artisanId, approvalBlockedReason, truncated: false, limit: 100, busy: false, onDecide: async () => {} } as never));
+  const sam = render("sam");
+  assert.match(sam, /Sam Laurent/);
+  assert.doesNotMatch(sam, /Alex Martin|Suspendre/);
+  assert.match(sam, />Approuver</);
+  const blocked = render("sam", "Dossier non présenté");
+  assert.match(blocked, /Dossier non présenté/);
+  assert.doesNotMatch(blocked, />Approuver</);
+  assert.match(blocked, /Demander des corrections/);
+  assert.match(render("missing"), /Décision indisponible/);
+  assert.doesNotMatch(render("missing"), /Alex Martin|Sam Laurent|>Approuver</);
+});

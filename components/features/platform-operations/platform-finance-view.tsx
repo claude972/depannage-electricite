@@ -527,6 +527,7 @@ function Settings({ ctx, onSaved }: { ctx: Ctx; onSaved: () => void }) {
   const data = settings.data;
   const setBps = (v: string) => { setRateConfirm(null); setBpsRaw(v); };
   if (data && !seeded) { setSeeded(true); if (data.commission_bps) setBpsRaw(String(data.commission_bps.value.bps)); if (data.invoice_issuer) { const v = data.invoice_issuer.value; setIssuer({ legal_name: v.legal_name, siret: v.siret, address: v.address, vat_number: v.vat_number ?? "", commission_vat_rate: v.commission_vat_rate === null ? "" : String(v.commission_vat_rate) }); } }
+  if (ctx.demo) return <ReadOnly reason="les paramètres ne sont pas modifiables en démonstration." />;
   if (!ctx.superAdmin) return <ReadOnly reason="les paramètres sont réservés aux super administrateurs." />;
   return (
     <>
