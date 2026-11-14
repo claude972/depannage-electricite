@@ -137,10 +137,10 @@
   flex: 1 1 auto;
   min-width: 0;
   margin-right: 12px;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.25;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: normal;
+  line-height: 1.55;
   overflow-wrap: normal;
 }
 .bellButton {
@@ -301,12 +301,12 @@
   border-radius: 999px;
   color: #5d6d84;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
 }
 .bottomNav button[aria-current="page"] {
   background: var(--ui-surface, #f4f6fa);
   color: var(--blue);
-  font-weight: 600;
+  font-weight: 500;
 }
 .navCount {
   position: absolute;
@@ -1397,7 +1397,7 @@
   border-top: 1px solid var(--ui-border);
 }
 :global(.ui-v2) .mobileHeader {
-  background: var(--ui-surface);
+  background: var(--ui-bg);
 }
 :global(.ui-v2) .bellButton {
   color: var(--ui-text-muted);
@@ -1847,5 +1847,9 @@
 :global(.ui-v2) .profileDetails :global(.field) label,
 :global(.ui-v2) .profileDetails :global(.button),
 :global(.ui-v2) .profileDetails :global(.text-button) {
+  font-weight: 500;
+}
+:global(.ui-v2) .profileDetails :global(.large-avatar),
+:global(.ui-v2) .space :global([data-profile-requests]) :global(.text-button) {
   font-weight: 500;
 }
