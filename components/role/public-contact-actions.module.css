@@ -90,14 +90,19 @@
   }
 }
 
-/* Contacts follow the content, so they never cover the paragraph being read. */
-.actions {
-  position: static;
-  width: fit-content;
+/* Home keeps the original call/WhatsApp pair above the floating capsule. */
+.actions:not(.persistentWhatsapp) {
+  position: fixed;
+  z-index: 29;
+  width: max-content;
   max-width: calc(100% - 32px);
-  margin: 24px auto;
-  flex-wrap: wrap;
-  justify-content: center;
+  margin: 0;
+}
+@media (max-width: 1023px) {
+  .actions:not(.persistentWhatsapp) {
+    inset: auto 0 calc(88px + env(safe-area-inset-bottom, 0px));
+    margin-inline: auto;
+  }
 }
 
 .actions.persistentWhatsapp {
