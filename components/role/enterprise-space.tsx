@@ -5342,7 +5342,7 @@ function MembersView({ c }: { c: Ctx }) {
                   <p>
                     {overview.permissions.automated_invitation_email
                       ? "Envoi automatique par email"
-                      : "Aucun email automatique : transmettez le code vous-même"}
+                      : "Aucun e-mail automatique : transmettez le code vous-même"}
                   </p>
                 </div>
               </div>
@@ -5385,7 +5385,7 @@ function MembersView({ c }: { c: Ctx }) {
               {canManage && (
                 <form onSubmit={invite} className={styles.inviteForm}>
                   <h3>Inviter un membre</h3>
-                  <Field label="Adresse email" error={inviteError}>
+                  <Field label="Adresse e-mail" error={inviteError}>
                     <input
                       type="email"
                       required

@@ -1621,8 +1621,7 @@ export function ProfileForm({
         />
       </Field>
       <p className="form-note">
-        Votre rôle et l’approbation d’une candidature artisan ne peuvent pas
-        être modifiés depuis ce formulaire.
+        Ce formulaire modifie vos coordonnées. Vos droits d’accès restent inchangés.
       </p>
       <button className="button primary" disabled={busy} type="submit">
         {busy ? "Enregistrement…" : "Enregistrer les informations"}
@@ -1833,9 +1832,9 @@ export function AuthForm({
             {mode === "login" ? "Créer un compte" : "Se connecter"}
           </button>
         </p>
-        <p className="form-note">
+        {mode === "signup" && <p className="form-note">
           Aucun paiement n’est demandé à l’inscription.
-        </p>
+        </p>}
       </form>
     </div>
   );

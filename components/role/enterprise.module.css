@@ -3058,3 +3058,7 @@
     min-width: 0;
   }
 }
+
+/* Keep account fields readable on wide management screens. */
+.main :global(.profile-form) { max-width: 680px; }
+.memberActions :global(button) { min-width: 44px; }

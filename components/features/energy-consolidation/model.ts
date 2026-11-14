@@ -273,7 +273,7 @@ export const EXPORT_COPY = {
   busy: "Export en cours…",
   needSelection: "L’export CSV devient disponible une fois une sélection valide consolidée et affichée.",
   scope: "Le fichier reprend exactement la consolidation affichée (mêmes sites, mêmes périodes). Il est privé : téléchargé depuis votre session, jamais via un lien public.",
-  demo: "En démonstration, aucun export CSV n’est produit : connectez-vous pour exporter la consolidation de vos sites.",
+  demo: "La consolidation énergétique n’est pas exportée en démonstration. Connectez-vous pour exporter les consommations de vos sites. Le CSV de démonstration proposé plus haut concerne uniquement les budgets et interventions.",
   done: (name: string) => `Fichier « ${name} » généré pour la consolidation affichée.`,
   offContract: "Réponse inattendue du serveur : aucun fichier n’a été enregistré. Réessayez.",
 } as const;
