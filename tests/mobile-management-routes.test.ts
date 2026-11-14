@@ -4,6 +4,10 @@ import { ApiError,fakeServerHelpers,loadModule } from './documents/harness';
 import { organizationOverview,siteSettings,sitePage,siteEditValues,adminInterventions,directoryPage } from '../apps/mobile/src/lib/management-contracts';
 const id='10000000-0000-4000-8000-000000000001', actor='20000000-0000-4000-8000-000000000001';
 const entries=[
+ ['app/api/quotes/[id]/approval/route.ts','GET',`/api/quotes/${id}/approval`],
+ ['app/api/quotes/[id]/approval/route.ts','POST',`/api/quotes/${id}/approval`],
+ ['app/api/sites/[id]/approval-policy/route.ts','GET',`/api/sites/${id}/approval-policy`],
+ ['app/api/sites/[id]/approval-policy/route.ts','POST',`/api/sites/${id}/approval-policy`],
  ['app/api/enterprise/contracts/route.ts','GET','/api/enterprise/contracts?organization_id='+id],
  ['app/api/enterprise/contracts/[id]/route.ts','GET','/api/enterprise/contracts/'+id+'?organization_id='+id],
  ['app/api/enterprise/approvals/route.ts','GET','/api/enterprise/approvals?organization_id='+id],

@@ -22,7 +22,7 @@ const id = z.uuid();
 export const job = z.object({
   id, category, status, description: z.string().optional(), city: z.string(),
   address: z.string().nullish(), postal_code: z.string().nullish(),
-  client_id: id.nullish(), artisan_id: id.nullish(), urgency: z.enum(['urgent', 'scheduled']),
+  client_id: id.nullish(), artisan_id: id.nullish(), site_id: id.nullish(), urgency: z.enum(['urgent', 'scheduled']),
   estimate_min_cents: cents, estimate_max_cents: cents,
   created_at: z.string(),
 });

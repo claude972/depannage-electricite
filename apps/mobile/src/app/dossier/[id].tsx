@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { openBrowserAsync } from 'expo-web-browser';
 import { z } from 'zod';
 import { Action, BookingProgress, Card, Copy, Field, ReadState, Screen } from '@/components/ui';
+import { NativeApprovalWorkflow } from '@/components/native-approval-workflow';
 import { QuoteEditor } from '@/components/quote-editor';
 import { ReportEditor } from '@/components/report-editor';
 import { AppointmentEditor } from '@/components/appointment-editor';
@@ -143,6 +144,7 @@ export default function Dossier() {
         <Copy kind="subtitle">Devis {quote.status==='accepted'?'accepté':quote.status==='rejected'?'refusé':'proposé'}</Copy>
         {quote.lines.map((line,index)=><Copy key={index}>{line.quantity} × {line.label} · {euros(line.unit_price_cents)} HT</Copy>)}
         <Copy>{quote.status === 'accepted' && quote.accepted_total_cents === undefined ? 'Montant accepté à vérifier — actualisez le dossier.' : `Total TTC ${euros(quote.status === 'accepted' ? quote.accepted_total_cents! : quote.total_cents)}`}</Copy>
+        {job.site_id && quote.status === 'sent' && <NativeApprovalWorkflow quoteId={quote.id}/>}
         {owner&&quote.status==='sent'&&job.status==='quoted'&&<>
           <Action label="Accepter ce devis" disabled={busy} onPress={()=>confirm('Accepter ce devis ?', `Le montant total est de ${euros(quote.total_cents)} TTC.`,()=>action({action:'accept_quote',quote_id:quote.id}))}/>
           <Field label="Motif si vous refusez" value={reason} onChangeText={setReason} maxLength={2000}/>

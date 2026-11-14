@@ -64,7 +64,7 @@ export async function read(
   mode: "policy" | "workflow",
 ) {
   try {
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     const { id, after } = await scope(request, context, mode === "workflow");
     const r = await db.rpc(
       mode === "policy"
@@ -114,7 +114,7 @@ export async function write(
 ) {
   try {
     assertOrigin(request);
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     const { id } = await scope(request, context, false);
     if (mode === "policy") {
       const c = await validated(request, policyCommand);
