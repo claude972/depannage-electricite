@@ -63,19 +63,22 @@ export function ReadState({ loading,error,onRetry }: {loading:boolean;error:stri
   if (error) return <Card><Copy kind="error">{error}</Copy><Action secondary label="Réessayer" onPress={onRetry}/></Card>;
   return null;
 }
-export function BookingProgress({ labels, index }: { labels: string[]; index: number }) {
+export function BookingProgress({ labels, index, columns = false }: { labels: string[]; index: number; columns?: boolean }) {
   const p = usePalette();
-  return <View accessibilityLabel={'Étape ' + (index + 1) + ' sur ' + labels.length + '. ' + labels[index]} style={styles.progress}>
-    {labels.map((label, position) => <View key={label} style={styles.progressItem}>
+  return <View accessibilityLabel={'Étape ' + (index + 1) + ' sur ' + labels.length + '. ' + labels[index]} style={[styles.progress, columns && styles.progressColumns]}>
+    {labels.map((label, position) => <View key={label} style={[styles.progressItem, columns && styles.progressColumn]}>
       <View style={[styles.progressNumber, { backgroundColor: position === index ? p.primary : p.subtle, borderColor: p.border }]}>
         <Text style={[styles.progressLabel, { color: position === index ? '#FFFFFF' : p.muted }]}>{position + 1}</Text>
       </View>
-      <Text style={[styles.progressLabel, { color: position === index ? p.text : p.muted }]}>{label}</Text>
+      <Text style={[styles.progressLabel, columns && styles.progressColumnLabel, { color: position === index ? (columns ? p.blue : p.text) : p.muted }]}>{label}</Text>
     </View>)}
   </View>;
 }
 
 const styles = StyleSheet.create({  progress: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
+  progressColumns: { flexWrap: 'nowrap', alignItems: 'flex-start' },
+  progressColumn: { flex: 1, minWidth: 0, flexDirection: 'column', alignItems: 'flex-start' },
+  progressColumnLabel: { fontSize: 11, lineHeight: 17 },
   progressItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   progressNumber: { width: 23, height: 23, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   progressLabel: { fontFamily: 'JakartaMedium', fontSize: 12, lineHeight: 16 },
