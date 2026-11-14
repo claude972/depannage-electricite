@@ -2019,8 +2019,8 @@ button.row:hover {
 }
 
 /* Shared page hierarchy across all four workspaces. */
-.heading h1 { font-size: 32px; font-weight: 700; line-height: 1.15; letter-spacing: -.8px; }
-@media (max-width: 767px) { .heading h1 { font-size: 28px; letter-spacing: -.65px; } }
+.heading h1 { font-size: 28px; font-weight: 500; line-height: 36px; letter-spacing: -.4px; }
+@media (max-width: 1023px) { .heading h1 { font-size: 23px; line-height: 32px; letter-spacing: -.2px; } }
 
 @media (max-width: 600px) {
   .header { padding-inline: 16px; }
@@ -2031,7 +2031,7 @@ button.row:hover {
 }
 
 /* Consistent section and card typography across connected profiles. */
-:global(.ui-v2) .space h2 { font-size: 18px; font-weight: 700; line-height: 1.35; }
+:global(.ui-v2) .space h2 { font-size: 18px; font-weight: 500; line-height: 26px; }
 :global(.ui-v2) .space h3 { font-size: 16px; font-weight: 600; line-height: 1.4; }
 
 /* Compact dossier cards retain all seven fields without repeating obvious labels. */
