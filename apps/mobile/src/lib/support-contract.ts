@@ -36,3 +36,21 @@ export function supportRetry(intent: z.infer<typeof supportIntent>, actor: strin
     throw new Error('Cette demande appartient à un autre compte ou dossier.');
   return value.command;
 }
+
+export const supportDraft = z.object({
+  subject: z.string().max(160), body: z.string().max(4000),
+  pending: supportIntent.nullable(), confirmedTicketId: z.uuid().nullable(),
+}).strict();
+export function supportDraftKey(actor: string, dossier: string | null) {
+  return `support-v1.${z.uuid().parse(actor)}.${dossier === null ? 'general' : z.uuid().parse(dossier)}`;
+}
+/** Clear editable content only when it still matches the confirmed snapshot. */
+export function confirmSupportDraft(draft: z.infer<typeof supportDraft>, actor: string, dossier: string | null, result: unknown) {
+  const current = supportDraft.parse(draft);
+  if (!current.pending) throw new Error('Aucune demande en attente de confirmation.');
+  const command = supportRetry(current.pending, actor, dossier);
+  const confirmed = supportReceipt(command, actor).parse(result);
+  const unchanged = current.subject.trim() === command.subject && current.body.trim() === command.body;
+  return { subject: unchanged ? '' : current.subject, body: unchanged ? '' : current.body,
+    pending: null, confirmedTicketId: confirmed.ticket.id };
+}

@@ -23,3 +23,16 @@ test('support validates server text limits and null dossier without fabricating 
  assert.equal(supportCommand.safeParse({...command,intervention_id:null}).success,true);
  for(const patch of [{subject:'abc'},{subject:'a'.repeat(161)},{body:'court'},{body:'a'.repeat(4001)},{body:'message avec\u0000nul'},{intervention_id:'demo-002'}])assert.equal(supportCommand.safeParse({...command,...patch}).success,false);
 });
+
+test('confirmed support clears only the submitted draft, preserving later edits',async()=>{
+ const {confirmSupportDraft,supportDraftKey}=await import('../apps/mobile/src/lib/support-contract');
+ const draft={subject:command.subject,body:command.body,pending:{actor_id:actor,command},confirmedTicketId:null};
+ assert.deepEqual(confirmSupportDraft(draft,actor,dossier,response()),{subject:'',body:'',pending:null,confirmedTicketId:other});
+ const edited={...draft,body:'Une précision ajoutée pendant la requête'};
+ assert.equal(confirmSupportDraft(edited,actor,dossier,response()).body,edited.body);
+ assert.throws(()=>confirmSupportDraft(draft,other,dossier,response()));
+ assert.throws(()=>confirmSupportDraft(draft,actor,dossier,{...response(),ticket:{...response().ticket,creator_id:other}}));
+ assert.notEqual(supportDraftKey(actor,dossier),supportDraftKey(other,dossier));
+ assert.notEqual(supportDraftKey(actor,dossier),supportDraftKey(actor,null));
+ assert.throws(()=>supportDraftKey(actor,'../autre'));
+});
