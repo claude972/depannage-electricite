@@ -1,4 +1,5 @@
 "use client";
+import floatingNav from "./floating-navigation.module.css";
 // Platform Super Admin space (reference M43). The operator of the platform, not the owner of a
 // client organisation. Every figure comes from session.loadAdminOverview() (global counts,
 // lists bounded to capabilities.list_limit), from the server-paginated dossier list
@@ -1321,7 +1322,7 @@ export function AdminSpace({ session }: { session: Session }) {
             </button>
           </div>
         </header>
-        <main id="main" className={styles.content}>
+        <main id="main" className={`${styles.content} ${floatingNav.reserve}`}>
           <Alerts error={session.error} notice={session.notice} onClearError={() => session.setError("")} onClearNotice={() => session.setNotice("")} />
           {staleNote && overview && (
             <p className={styles.stale} role="status">
@@ -1335,6 +1336,12 @@ export function AdminSpace({ session }: { session: Session }) {
         </main>
       </div>
     </div>
+      <nav className={floatingNav.nav} aria-label="Navigation rapide administration" inert={isNarrow && menuOpen}>
+        <button type="button" onClick={() => go("admin-interventions")} aria-current={view === "admin-interventions" ? "page" : undefined}><Icon name="list" size={20} />Dossiers</button>
+        <button type="button" onClick={() => go("admin-artisans")} aria-current={view === "admin-artisans" ? "page" : undefined}><Icon name="users" size={20} />Artisans</button>
+        <button type="button" onClick={() => go("platform-finance")} aria-current={view === "platform-finance" ? "page" : undefined}><Icon name="euro" size={20} />Finance</button>
+        <button type="button" onClick={() => setMenuOpen(true)} aria-label="Ouvrir le menu complet"><Icon name="menu" size={20} />Menu</button>
+      </nav>
     </ThemeSurface>
   );
 }

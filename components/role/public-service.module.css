@@ -22,6 +22,12 @@
 .withBar.withCompactBar {
   --booking-bar-h: 72px;
 }
+@media (max-width: 767px) {
+  .withBar {
+    --floating-nav-offset: calc(78px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(var(--booking-bar-h) + 102px + env(safe-area-inset-bottom, 0px));
+  }
+}
 /* Shared width and gutters with the landing and catalogue. */
 .wrap {
   width: 100%;

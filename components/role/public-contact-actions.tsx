@@ -13,10 +13,11 @@ export function usePublishedSupportPhone() {
   return supportContactHref("phone", publishedValue(operator, "public_phone"));
 }
 
-export function PublicContactActions({ phoneHref, whatsappPhone, inline = false, phoneLabel = SUPPORT_CONTACT.phone.label }: {
+export function PublicContactActions({ phoneHref, whatsappPhone, inline = false, whatsappOnly = false, phoneLabel = SUPPORT_CONTACT.phone.label }: {
   phoneHref: string | null;
   whatsappPhone?: string;
   inline?: boolean;
+  whatsappOnly?: boolean;
   phoneLabel?: string;
 }) {
   const whatsappHref = supportContactHref("whatsapp", whatsappPhone);
@@ -38,8 +39,8 @@ export function PublicContactActions({ phoneHref, whatsappPhone, inline = false,
 
   return (
     <>
-      {inline ? phoneAction : <div className={styles.actions} role="group" aria-label="Contacter DomDépannage" data-floating-contact="">
-        {phoneAction}
+      {inline ? phoneAction : <div className={`${styles.actions} ${whatsappOnly ? styles.persistentWhatsapp : ""}`} role="group" aria-label="Contacter DomDépannage" data-floating-contact="">
+        {!whatsappOnly && phoneAction}
         {whatsappHref
           ? <a className={styles.whatsapp} href={whatsappHref} aria-label={SUPPORT_CONTACT.whatsapp.label}>{whatsappIcon}</a>
           : <button type="button" className={styles.whatsapp} aria-label={SUPPORT_CONTACT.whatsapp.label} onClick={() => showHelp("whatsapp")}>{whatsappIcon}</button>}

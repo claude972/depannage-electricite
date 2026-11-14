@@ -141,6 +141,7 @@ export function PublicHome({ gated = false, handlers, supportWhatsAppPhone, show
 
   return (
     <PublicChrome
+      supportWhatsAppPhone={supportWhatsAppPhone}
       current="home"
       handlers={handlers}
       onHome={() => window.scrollTo({ top: 0 })}
@@ -329,7 +330,7 @@ export function PublicHome({ gated = false, handlers, supportWhatsAppPhone, show
           ))}</div>
         </section>
       </div>
-      <PublicContactActions phoneHref={phoneHref} whatsappPhone={supportWhatsAppPhone} />
+      <PublicContactActions phoneHref={phoneHref} whatsappPhone={supportWhatsAppPhone} inline />
     </PublicChrome>
   );
 }

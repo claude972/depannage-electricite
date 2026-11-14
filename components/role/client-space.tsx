@@ -67,6 +67,7 @@ import { bookingPaymentText, fetchBookingStatus, isDeclaredOnSite, type BookingS
 import styles from "./client.module.css";
 import theme from "./client-theme.module.css";
 import { ThemeSurface } from "../app/theme-provider";
+import { PublicContactActions } from "./public-contact-actions";
 import { CLIENT_STEPS, currentStepIndex, detailHistory, requestAmount, quoteDecisionState, quoteLineCells } from "./client-lists";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { PreferencesPanel } from "../features/notifications/notification-center";
@@ -568,6 +569,7 @@ export function ClientSpace({ session }: { session: Session }) {
         </main>
       </div>
 
+      <PublicContactActions phoneHref={null} whatsappOnly />
       <nav className={styles.bottomNav} aria-label="Navigation principale">
         {BOTTOM_NAV.map((n) => {
           const current = view === n.id || n.also.includes(view);

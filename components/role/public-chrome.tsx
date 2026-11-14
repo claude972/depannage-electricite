@@ -1,4 +1,5 @@
 "use client";
+import { PublicContactActions } from "./public-contact-actions";
 // Shared header and footer for the public site and its booking and account pages.
 import { BRAND_NAME } from "@/lib/brand";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
@@ -191,7 +192,8 @@ export function PublicChrome({
   className,
   mainClassName,
   footerNote,
-  appNavigation = false,
+  appNavigation = true,
+  supportWhatsAppPhone,
   children,
 }: {
   current: ChromeView;
@@ -205,6 +207,7 @@ export function PublicChrome({
   mainClassName?: string;
   footerNote?: ReactNode;
   appNavigation?: boolean;
+  supportWhatsAppPhone?: string;
   children: ReactNode;
 }) {
   const act = (action: HomeAction) => actionButton(action, handlers);
@@ -249,12 +252,13 @@ export function PublicChrome({
           {footerNote && <p className={styles.credits}>{footerNote}</p>}
         </div>
       </footer>
+      <PublicContactActions phoneHref={null} whatsappPhone={supportWhatsAppPhone} whatsappOnly />
       {appNavigation && (
         <nav className={styles.appNav} aria-label="Navigation rapide">
-          <button type="button" aria-current="page" onClick={onHome}><Icon name="home" size={20} /> Accueil</button>
-          <button type="button" onClick={() => onSection?.("accueil-services")}><Icon name="list" size={20} /> Services</button>
-          <a href="/suivi"><Icon name="document" size={20} /> Activité</a>
-          <button {...act({ type: "login" })}><Icon name="person" size={20} /> Compte</button>
+          <button type="button" aria-current={current === "home" ? "page" : undefined} onClick={onHome}><Icon name="home" size={20} /> Accueil</button>
+          {onSection ? <button type="button" onClick={() => onSection("accueil-services")}><Icon name="list" size={20} /> Services</button> : <a href="/prestations" aria-current={current === "catalogue" || current === "service" ? "page" : undefined}><Icon name="list" size={20} /> Services</a>}
+          <a href="/suivi" aria-current={current === "suivi" ? "page" : undefined}><Icon name="document" size={20} /> Activité</a>
+          <button {...act({ type: "login" })} aria-current={current === "auth" ? "page" : undefined}><Icon name="person" size={20} /> Compte</button>
         </nav>
       )}
     </ThemeSurface>

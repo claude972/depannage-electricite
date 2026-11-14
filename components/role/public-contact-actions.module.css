@@ -99,3 +99,14 @@
   flex-wrap: wrap;
   justify-content: center;
 }
+
+.actions.persistentWhatsapp {
+  position: fixed;
+  inset: auto 16px calc(88px + var(--booking-bar-h, 0px) + env(safe-area-inset-bottom, 0px)) auto;
+  width: 48px;
+  margin: 0;
+  z-index: 29;
+}
+@media (min-width: 1024px) {
+  .actions.persistentWhatsapp { bottom: 24px; right: 24px; }
+}

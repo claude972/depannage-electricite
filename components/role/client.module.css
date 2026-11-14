@@ -20,7 +20,7 @@
   width: 100%;
   max-width: 1480px;
   margin: 0 auto;
-  padding: 16px 16px 104px;
+  padding: 16px 16px calc(164px + env(safe-area-inset-bottom, 0px));
   flex: 1;
 }
 
@@ -278,13 +278,17 @@
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  width: min(calc(100% - 24px), 370px);
+  margin-inline: auto;
   z-index: 30;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   background: #fff;
-  border-top: 1px solid var(--line);
-  padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: 0 3px 14px #10173522;
+  padding: 5px;
 }
 .bottomNav button {
   position: relative;
@@ -293,13 +297,14 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
-  min-height: 56px;
-  border-radius: 8px;
+  min-height: 48px;
+  border-radius: 999px;
   color: #5d6d84;
   font-size: 12px;
   font-weight: 550;
 }
 .bottomNav button[aria-current="page"] {
+  background: var(--ui-surface, #f4f6fa);
   color: var(--blue);
   font-weight: 650;
 }

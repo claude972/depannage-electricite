@@ -258,13 +258,17 @@
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  width: min(calc(100% - 24px), 370px);
+  margin-inline: auto;
   z-index: 30;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   background: #fff;
-  border-top: 1px solid var(--a-line);
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  border: 1px solid var(--a-line);
+  border-radius: 999px;
+  box-shadow: 0 3px 14px #10173522;
+  padding: 5px;
 }
 .bottomItem {
   display: flex;
@@ -272,19 +276,20 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
-  min-height: 60px;
+  min-height: 48px;
   padding: 8px 2px;
   font-size: 12px;
   font-weight: 550;
   color: #5b6b82;
-  border-top: 2px solid transparent;
+  border: 0;
+  border-radius: 999px;
   /* M35 : libellé sur une ligne, l’onglet garde 60 px. */
   white-space: nowrap;
   letter-spacing: -0.1px;
 }
 .bottomItem[aria-current="page"] {
   color: var(--a-blue);
-  border-top-color: var(--a-blue);
+  background: var(--ui-surface, #f4f6fa);
 }
 /* Déclaré après .bottomNav : à même spécificité, l’ordre masque bien les onglets ≥ 1024 px. */
 @media (min-width: 1024px) {

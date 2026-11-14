@@ -1,4 +1,5 @@
 "use client";
+import floatingNav from "./floating-navigation.module.css";
 // Espace entreprise cliente (rôle "manager") : syndics, restauration, bureaux et ERP pilotant
 // plusieurs sites. Références maîtresses : M66 (shell, tableau), M4 (filtres), V5-C08
 // (approbation), V5-C01 / M50 (fiche de site), M13 / M56 / V5-C05 (tableaux de bord).
@@ -707,7 +708,7 @@ export function EnterpriseSpace({ session }: { session: Session }) {
           </div>
         </aside>
 
-        <main id="main" className={styles.main} inert={isNarrow && menuOpen}>
+        <main id="main" className={`${styles.main} ${floatingNav.reserve}`} inert={isNarrow && menuOpen}>
           <Alerts
             error={session.error}
             notice={session.notice}
@@ -727,6 +728,12 @@ export function EnterpriseSpace({ session }: { session: Session }) {
         </main>
       </div>
     </div>
+      <nav className={floatingNav.nav} aria-label="Navigation rapide entreprise" inert={isNarrow && menuOpen}>
+        <button type="button" onClick={() => go("overview")} aria-current={view === "overview" ? "page" : undefined}><Icon name="grid" size={20} />Accueil</button>
+        <button type="button" onClick={() => go("requests")} aria-current={view === "requests" ? "page" : undefined}><Icon name="wrench" size={20} />Dossiers</button>
+        <button type="button" onClick={() => go("sites")} aria-current={view === "sites" ? "page" : undefined}><Icon name="building" size={20} />Sites</button>
+        <button type="button" onClick={() => setMenuOpen(true)} aria-label="Ouvrir le menu complet"><Icon name="menu" size={20} />Menu</button>
+      </nav>
     </ThemeSurface>
   );
 }
