@@ -194,6 +194,7 @@ export function PublicChrome({
   footerNote,
   appNavigation = true,
   supportWhatsAppPhone,
+  supportPhoneHref = null,
   children,
 }: {
   current: ChromeView;
@@ -208,6 +209,7 @@ export function PublicChrome({
   footerNote?: ReactNode;
   appNavigation?: boolean;
   supportWhatsAppPhone?: string;
+  supportPhoneHref?: string | null;
   children: ReactNode;
 }) {
   const act = (action: HomeAction) => actionButton(action, handlers);
@@ -252,7 +254,7 @@ export function PublicChrome({
           {footerNote && <p className={styles.credits}>{footerNote}</p>}
         </div>
       </footer>
-      <PublicContactActions phoneHref={null} whatsappPhone={supportWhatsAppPhone} whatsappOnly />
+      <PublicContactActions phoneHref={supportPhoneHref} whatsappPhone={supportWhatsAppPhone} whatsappOnly={current !== "home"} />
       {appNavigation && (
         <nav className={styles.appNav} aria-label="Navigation rapide">
           <button type="button" aria-current={current === "home" ? "page" : undefined} onClick={onHome}><Icon name="home" size={20} /> Accueil</button>
