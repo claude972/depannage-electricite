@@ -79,13 +79,13 @@ h1 {
   letter-spacing: -1px;
 }
 h2 {
-  font-size: 19px;
-  font-weight: 650;
+  font-size: 18px;
+  font-weight: 700;
   letter-spacing: -0.35px;
 }
 h3 {
   font-size: 16px;
-  font-weight: 650;
+  font-weight: 600;
 }
 p {
   color: var(--muted);
@@ -104,7 +104,7 @@ svg {
   border-radius: 7px;
   padding: 10px 17px;
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 700;
   line-height: 1.4;
   transition: background 0.12s;
 }
@@ -138,7 +138,7 @@ svg {
   align-items: center;
   color: var(--blue);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 700;
   min-height: 44px;
   padding: 3px 0;
 }
@@ -340,7 +340,7 @@ svg {
   background: var(--navy);
   color: #fff;
   padding: 20px 24px;
-  font-weight: 550;
+  font-weight: 600;
   font-size: 13px;
 }
 .board-mark {
@@ -566,7 +566,7 @@ svg {
 .workspace-selector strong {
   font-size: 12px;
   display: block;
-  font-weight: 650;
+  font-weight: 700;
 }
 .workspace-selector div > span {
   font-size: 10px;
@@ -594,7 +594,7 @@ svg {
   padding: 9px 12px;
   color: #53647b;
   font-size: 12px;
-  font-weight: 550;
+  font-weight: 600;
 }
 .sidebar nav > button.active,
 .sidebar-bottom > button.active {
@@ -698,7 +698,7 @@ svg {
   font-size: 11px;
 }
 .breadcrumb strong {
-  font-weight: 550;
+  font-weight: 600;
   color: var(--navy);
 }
 .header-user {
@@ -738,12 +738,12 @@ svg {
   background: #e7edf6;
   color: var(--navy);
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 700;
 }
 .user-button strong {
   display: block;
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 700;
 }
 .user-button small {
   display: block;
@@ -867,7 +867,7 @@ svg {
 }
 .stats-strip strong {
   font-size: 26px;
-  font-weight: 650;
+  font-weight: 700;
   line-height: 1.2;
   letter-spacing: -1px;
   color: var(--navy);
@@ -906,7 +906,7 @@ svg {
 }
 .attention-title > strong {
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 700;
 }
 .attention-title .badge {
   margin-left: auto;
@@ -1001,7 +1001,7 @@ svg {
 }
 .request-title {
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 700;
   color: var(--navy);
 }
 .request-address {
@@ -1044,7 +1044,7 @@ svg {
   gap: 5px;
   white-space: nowrap;
   font-size: 9px;
-  font-weight: 550;
+  font-weight: 600;
   padding: 4px 7px;
   background: #edf2f8;
   color: #586f8b;
@@ -1111,7 +1111,7 @@ svg {
 }
 .quick-categories span {
   font-size: 9px;
-  font-weight: 550;
+  font-weight: 600;
   color: var(--navy);
 }
 .help-panel {
@@ -1190,7 +1190,7 @@ svg {
 .support-link strong {
   font-size: 10px;
   display: block;
-  font-weight: 550;
+  font-weight: 600;
 }
 .support-link button {
   padding: 2px 0;
@@ -1282,7 +1282,7 @@ svg {
 .tabs > button.active {
   color: var(--blue);
   background: #e7efff;
-  font-weight: 650;
+  font-weight: 700;
 }
 .search-field {
   display: flex;
@@ -1382,7 +1382,7 @@ svg {
   color: #fff;
 }
 .stepper strong {
-  font-weight: 550;
+  font-weight: 600;
 }
 .request-form {
   padding: 30px;
@@ -1636,7 +1636,7 @@ svg {
 }
 .detail-facts strong {
   font-size: 11px;
-  font-weight: 550;
+  font-weight: 600;
   color: var(--navy);
 }
 .urgency-label {
@@ -1705,7 +1705,7 @@ svg {
 }
 .timeline strong {
   font-size: 8px;
-  font-weight: 550;
+  font-weight: 600;
   display: block;
   color: #8090a5;
   line-height: 1.6;
@@ -1739,7 +1739,7 @@ svg {
   margin-bottom: 18px;
 }
 .next-step-panel h2 {
-  font-size: 19px;
+  font-size: 18px;
 }
 .next-step-panel p {
   font-size: 11px;
@@ -1771,7 +1771,7 @@ svg {
   font-size: 12px;
 }
 .quote-lines strong {
-  font-weight: 550;
+  font-weight: 600;
 }
 .quote-lines section > span {
   display: block;
@@ -1798,7 +1798,7 @@ svg {
   color: var(--navy);
 }
 .quote-editor > h2 {
-  font-size: 19px;
+  font-size: 18px;
 }
 .quote-editor > p {
   font-size: 11px;
@@ -2031,7 +2031,7 @@ svg {
 }
 .message-bubble > span {
   font-size: 9px;
-  font-weight: 650;
+  font-weight: 700;
   color: #486791;
 }
 .message-bubble > p {
@@ -2081,7 +2081,7 @@ svg {
   font-size: 18px;
 }
 .profile-intro h2 {
-  font-size: 19px;
+  font-size: 18px;
 }
 .profile-intro p {
   font-size: 11px;
@@ -2113,7 +2113,7 @@ svg {
   list-style: none;
   min-height: 30px;
   color: var(--navy);
-  font-weight: 550;
+  font-weight: 600;
 }
 .faq-panel summary > span {
   color: var(--blue);
@@ -2191,7 +2191,7 @@ svg {
 .auth-switch button {
   color: var(--blue);
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 700;
   padding: 0;
 }
 .auth-form .inline-note {
@@ -3384,7 +3384,7 @@ body {
   font-size: 13px;
 }
 .attention-body h2 {
-  font-size: 19px;
+  font-size: 18px;
 }
 .attention-body p,
 .attention-body section > span {
@@ -4493,7 +4493,7 @@ body {
 }
 .stat strong {
   font-size: 26px;
-  font-weight: 650;
+  font-weight: 700;
   letter-spacing: -0.8px;
   line-height: 1.2;
   color: var(--navy);
@@ -4594,7 +4594,7 @@ body {
 .tabs > button[aria-pressed="true"] {
   color: var(--blue);
   background: #e7efff;
-  font-weight: 650;
+  font-weight: 700;
 }
 .install-panel {
   display: flex;
@@ -4828,7 +4828,7 @@ body {
   border-top: 1px solid var(--ui-border, #d9dfe7);
 }
 [data-booking-confirm] .recap-list dt {
-  font-weight: 650;
+  font-weight: 700;
 }
 [data-booking-confirm] .recap-list dd {
   margin: 0;

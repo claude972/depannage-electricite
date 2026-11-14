@@ -1838,3 +1838,7 @@
 @media (max-width: 767px) { .requestAmount { align-items: flex-start; } }
 .space :global(.page-title) h1 { font-size: 32px; font-weight: 700; line-height: 1.15; letter-spacing: -.8px; }
 @media (max-width: 767px) { .space :global(.page-title) h1 { font-size: 28px; letter-spacing: -.65px; } }
+
+/* Consistent section and card typography across connected profiles. */
+:global(.ui-v2) .space h2 { font-size: 18px; font-weight: 700; line-height: 1.35; }
+:global(.ui-v2) .space h3 { font-size: 16px; font-weight: 600; line-height: 1.4; }

@@ -18,7 +18,7 @@ export function DemoBanner({ session, inert = false }: { session: Session; inert
       <label>
         <span className="sr-only">Rôle exploré</span>
         <select aria-label="Rôle exploré" value={session.role} onChange={(event) => session.setDemoRole(event.target.value as Session["role"])}>
-          {Object.entries(ROLE_NAMES).map(([role, label]) => <option key={role} value={role}>{label}</option>)}
+          {Object.entries(ROLE_NAMES).map(([role, label]) => <option key={role} value={role}>{role === "admin" ? "Super Admin" : label}</option>)}
         </select>
       </label>
     </div>

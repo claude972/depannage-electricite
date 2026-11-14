@@ -3066,3 +3066,7 @@
 /* Shared page hierarchy across all four workspaces. */
 .main :global(h1) { font-size: 32px; font-weight: 700; line-height: 1.15; letter-spacing: -.8px; }
 @media (max-width: 767px) { .main :global(h1) { font-size: 28px; letter-spacing: -.65px; } }
+
+/* Consistent section and card typography across connected profiles. */
+:global(.ui-v2) .main h2 { font-size: 18px; font-weight: 700; line-height: 1.35; }
+:global(.ui-v2) .main h3 { font-size: 16px; font-weight: 600; line-height: 1.4; }

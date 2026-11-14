@@ -2029,3 +2029,7 @@ button.row:hover {
   .tools :global(.button) { width: 44px; min-width: 44px; min-height: 44px; padding: 0; }
   .refreshLabel { display: none; }
 }
+
+/* Consistent section and card typography across connected profiles. */
+:global(.ui-v2) .space h2 { font-size: 18px; font-weight: 700; line-height: 1.35; }
+:global(.ui-v2) .space h3 { font-size: 16px; font-weight: 600; line-height: 1.4; }

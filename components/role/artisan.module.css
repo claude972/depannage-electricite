@@ -2349,3 +2349,7 @@
 .radiusSettings > :global(.panel) { margin: 0; border: 0; border-top: 1px solid var(--ui-border, #d9dee7); border-radius: 0 0 14px 14px; }
 .segmentsWrap :global(.tabs) { width: fit-content; max-width: 100%; }
 @media (min-width: 768px) { .segmentsWrap :global(.tabs) > button { flex: 0 0 auto; padding-inline: 20px; } }
+
+/* Consistent section and card typography across connected profiles. */
+:global(.ui-v2) .space h2 { font-size: 18px; font-weight: 700; line-height: 1.35; }
+:global(.ui-v2) .space h3 { font-size: 16px; font-weight: 600; line-height: 1.4; }

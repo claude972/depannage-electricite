@@ -161,21 +161,21 @@ export function RequestForm({
   const categoryChoices = useRef<HTMLDivElement>(null);
   const phase = addressFirst && step < 3 ? 3 - step : step;
   const labels = addressFirst ? ["Le lieu et le besoin", "Le problème"] : ["Le problème", "Le lieu et le besoin"];
-  // On each step change (not on first render) move focus AND the viewport to the new step title,
+  // Move focus and the viewport to each step; the home address shortcut also focuses on opening.
   // so mobile users never land at the bottom after « Continuer » and screen readers announce it.
   const stepTitle = useRef<HTMLHeadingElement>(null);
   const firstStep = useRef(true);
   useEffect(() => {
     if (firstStep.current) {
       firstStep.current = false;
-      return;
+      if (!addressFirst) return;
     }
     const el = stepTitle.current;
     if (!el) return;
     el.focus({ preventScroll: true });
     const reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     el.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" });
-  }, [step]);
+  }, [step, addressFirst]);
   // Read after mount: the geolocation button never differs between server and client renders.
   const [geolocation, setGeolocation] = useState<Geolocation | null>(null);
   useEffect(() => {

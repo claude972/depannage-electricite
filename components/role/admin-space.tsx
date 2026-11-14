@@ -2235,7 +2235,7 @@ function InterventionsView({
       <Panel title="Dossiers" count={total}>
         <form className={`${styles.filters} ${styles.dossierFilters}`} onSubmit={submitSearch} noValidate>
           <label className={styles.filter} htmlFor="admin-dossier-search">
-            Recherche (description, ville, code postal ou identifiant complet)
+            Rechercher un dossier
             <input
               id="admin-dossier-search"
               type="search"
