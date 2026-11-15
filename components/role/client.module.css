@@ -1936,3 +1936,12 @@
     margin-inline: 0;
   }
 }
+
+/* Request stepper: five equal columns that never exceed the card (320 px phones). */
+.stepper { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.stepper li { min-width: 0; }
+@media (max-width: 359px) {
+  .statusCard { padding-inline: 8px; }
+  .stepper { gap: 0; }
+  .stepper li { font-size: 11px; letter-spacing: -.2px; hyphens: auto; -webkit-hyphens: auto; }
+}
