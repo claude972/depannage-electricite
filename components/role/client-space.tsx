@@ -1763,7 +1763,9 @@ export function QuoteView({
         <div className="alert warning" role="status">
           <Icon name="info" />
           <span>
-            Cette version n’est plus active.{" "}
+            {quote.status === "rejected"
+              ? "Vous avez refusé cette version du devis."
+              : "Cette version n’est plus active."}{" "}
             {currentId && currentId !== quote.id ? (
               <button
                 type="button"
@@ -1774,7 +1776,9 @@ export function QuoteView({
                 Voir la version actuelle
               </button>
             ) : (
-              "Aucune autre version n’est disponible pour ce dossier."
+              quote.status === "rejected"
+                ? "L’artisan peut vous proposer une nouvelle version ; elle apparaîtra dans ce dossier."
+                : "Aucune autre version n’est disponible pour ce dossier."
             )}
           </span>
         </div>

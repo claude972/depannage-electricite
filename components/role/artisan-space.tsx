@@ -1949,6 +1949,18 @@ function QuotePanel({
         {versions.length > 0 && (
           <section className="panel" aria-labelledby="dossier-previous-quotes">
             <h2 id="dossier-previous-quotes">Versions précédentes</h2>
+            {versions[versions.length - 1]?.status === "rejected" && (
+              <div className="alert warning" role="status" data-quote-rejected-hint="">
+                <Icon name="info" />
+                <span>
+                  Le client a refusé {quoteRef(versions[versions.length - 1].id)} ({money(versions[versions.length - 1].total_cents)}).
+                  Son motif est dans la conversation du dossier ; préparez une nouvelle version ci-dessus.{" "}
+                  <button type="button" className="text-button" onClick={() => session.go("messages", i.id)}>
+                    Lire le motif
+                  </button>
+                </span>
+              </div>
+            )}
             {versions.map((q) => (
               <div key={q.id} className={styles.quoteLine}>
                 <div>

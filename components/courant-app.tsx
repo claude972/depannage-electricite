@@ -157,6 +157,26 @@ const DRAFT_KEY = "courant-request-draft";
 const INVITE_KEY = "courant-invitation-code";
 type AuthMode = "login" | "signup" | "reset";
 
+// Explicit result of a dossier action, so the user knows what was recorded (never a generic
+// « modification » after refusing or accepting a quote). Demo wording says nothing was sent.
+const ACTION_NOTICES: Record<string, string> = {
+  accept_mission: "Mission acceptée : le dossier est maintenant le vôtre.",
+  decline_offer: "Offre déclinée.",
+  send_quote: "Devis envoyé au client.",
+  accept_quote: "Devis accepté. Il sert de base au règlement après l’intervention.",
+  reject_quote: "Devis refusé. L’artisan peut vous proposer une nouvelle version.",
+  start: "Intervention démarrée.",
+  complete: "Intervention terminée.",
+  save_appointment: "Rendez-vous enregistré.",
+  save_report: "Compte rendu enregistré.",
+  sign_report: "Compte rendu signé.",
+};
+export function actionNotice(name: string, demo: boolean): string {
+  const text = ACTION_NOTICES[name];
+  if (!text) return demo ? "Modification enregistrée dans la démonstration." : "Modification enregistrée.";
+  return demo ? `${text} (démonstration, rien n’est envoyé)` : text;
+}
+
 export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }: { supportWhatsAppPhone?: string; showSupportPreview?: boolean } = {}) {
   const [mode, setMode] = useState<Mode>("public");
   const [role, setRole] = useState<Role>("client");
@@ -937,7 +957,7 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
     ctx.notice(
       name === "simulate_payment"
         ? "Paiement simulé dans la démonstration. Aucun débit bancaire n’a été effectué."
-        : "Modification enregistrée dans la démonstration.",
+        : actionNotice(name, true),
     );
   }
 
@@ -957,7 +977,7 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
         throw new Error("Le devis affiché est introuvable. Rechargez le dossier.");
       await api(`/api/interventions/${id}/actions`, { action: name, ...extra });
       if (ctx.alive()) await refresh();
-      ctx.notice("Modification enregistrée.");
+      ctx.notice(actionNotice(name, false));
     });
   }
 
@@ -1061,7 +1081,7 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
         ops[id] = entry;
         saveDemoOps(ops);
         ctx.when(setData)(next);
-        ctx.notice("Modification enregistrée dans la démonstration.");
+        ctx.notice(actionNotice(body.action, true));
         return;
       }
       try {
@@ -1073,7 +1093,7 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
         throw e;
       }
       if (ctx.alive()) await refresh();
-      ctx.notice("Modification enregistrée.");
+      ctx.notice(actionNotice(body.action, false));
     });
   }
 
