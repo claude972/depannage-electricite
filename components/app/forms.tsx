@@ -117,6 +117,7 @@ export function RequestForm({
   categoryPreselected = true,
   initialValues,
   sites,
+  siteRequired = false,
   mode,
   busy,
   onBack,
@@ -135,6 +136,9 @@ export function RequestForm({
   categoryPreselected?: boolean;
   initialValues: RequestValues | null;
   sites: Site[];
+  /** Enterprise space: the request must belong to one of the organisation's sites (a site-less
+   *  request would leave the organisation's lists). */
+  siteRequired?: boolean;
   mode: string;
   busy: boolean;
   onBack: () => void;
@@ -343,8 +347,9 @@ export function RequestForm({
           <>
             <h2 ref={stepTitle} tabIndex={-1} style={STEP_TITLE_STYLE}>Où faut-il intervenir ?</h2>
             {sites.length > 0 && (
-              <Field label="Site professionnel (facultatif)">
+              <Field label={siteRequired ? "Site professionnel" : "Site professionnel (facultatif)"}>
                 <select
+                  required={siteRequired}
                   value={values.site_id || ""}
                   onChange={(e) =>
                     setValues({
@@ -353,7 +358,7 @@ export function RequestForm({
                     })
                   }
                 >
-                  <option value="">Adresse personnelle ou autre lieu</option>
+                  <option value="">{siteRequired ? "Choisir un site" : "Adresse personnelle ou autre lieu"}</option>
                   {sites.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
