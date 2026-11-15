@@ -48,6 +48,8 @@ test(`devis refusé puis nouvelle version acceptée, messages explicites (${widt
     await role(page, "client");
     await goHash(page, "#detail/demo-001");
     assert.match(await main(page), /130,20\s€/);
+    const lines = await page.evaluate(() => JSON.parse(localStorage.getItem("courant-demo-v3") || "{}").data.quotes.find((q: { status: string; intervention_id: string }) => q.intervention_id === "demo-001" && q.status === "sent")?.lines);
+    assert.deepEqual(lines.map((l: { label: string }) => l.label), ["Remplacement simplifié"], "unused 0 € template lines are not sent to the client");
     await page.getByRole("button", { name: "Voir le devis" }).first().click();
     await page.waitForTimeout(600);
     await page.getByRole("button", { name: "Accepter le devis" }).first().click();
