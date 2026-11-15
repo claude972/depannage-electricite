@@ -55,7 +55,7 @@ function Editor({actor,token,id,label}:{actor:string;token:string;id:string;labe
     finally{if(alive.current){lock.current=false;setBusy(false);request.current=null;}}
   }
   if(!value)return <Screen><Copy kind="title">Écrire à l’assistance</Copy><ReadState loading={!draft.error} error={draft.error} onRetry={draft.retry}/></Screen>;
-  if(value.confirmedTicketId)return <Screen><Copy kind="title">Demande enregistrée</Copy><Copy>Votre demande d’assistance est liée au dossier {orderReference(id)}.</Copy><Copy kind="muted">Aucun délai de réponse n’est garanti.</Copy><Action label="Retour au dossier" onPress={back}/></Screen>;
+  if(value.confirmedTicketId)return <Screen><Copy kind="title">Demande enregistrée</Copy><Copy>Votre demande d’assistance est liée au dossier {orderReference(id)}.</Copy><Copy kind="muted">Aucun délai de réponse n’est garanti.</Copy><Action label="Suivre ma demande d’assistance" onPress={()=>router.push({pathname:'/dossier/assistance-suivi',params:{ticket_id:value.confirmedTicketId!}})}/><Action secondary label="Retour au dossier" onPress={back}/></Screen>;
   const disabled=busy||Boolean(value.pending);
   return <Screen>
     <Copy kind="title">Écrire à l’assistance</Copy>
