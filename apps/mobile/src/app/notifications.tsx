@@ -93,7 +93,7 @@ function NotificationList({ token }: { token: string }) {
         <Text style={[styles.itemTitle, { color: palette.text }]}>{item.title}{!item.read_at ? ' · Non lue' : ''}</Text>
         <Copy>{item.body}</Copy>
         <Copy kind="muted">{new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(item.created_at))}</Copy>
-        {destination ? <Action secondary label={item.kind === 'message_received' ? 'Voir la conversation' : 'Voir le dossier'} onPress={() => router.push(destination)} />
+        {destination ? <Action secondary label={destination.pathname === '/dossier/assistance-suivi' ? 'Voir la demande d’assistance' : item.kind === 'message_received' ? 'Voir la conversation' : 'Voir le dossier'} onPress={() => router.push(destination)} />
           : <Copy kind="muted">Consultez votre espace Web pour les détails de cette notification.</Copy>}
         <Action secondary label={item.read_at ? 'Marquer comme non lue' : 'Marquer comme lue'} disabled={pending || loading || more} onPress={() => void mark(item)} />
       </Card>;

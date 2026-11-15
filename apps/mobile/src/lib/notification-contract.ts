@@ -18,6 +18,8 @@ const dossierKinds = new Set(['mission_assigned', 'mission_received', 'mission_r
 
 /** Never interpret an arbitrary payload URL as a native route. */
 export function notificationDestination(item: NativeNotification) {
+  if ((item.kind === 'support_replied' || item.kind === 'support_status_changed') && item.support_ticket_id)
+    return { pathname: '/dossier/assistance-suivi' as const, params: { ticket_id: item.support_ticket_id } };
   if (item.support_ticket_id || item.kind.startsWith('support_')) return null;
   if (!item.intervention_id) return null;
   if (item.kind === 'message_received') return { pathname: '/dossier/messages' as const, params: { id: item.intervention_id } };

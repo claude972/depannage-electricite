@@ -11,7 +11,10 @@ test('native notifications only navigate to an explicit supported destination', 
   assert.deepEqual(notificationDestination(item), { pathname: '/dossier/messages', params: { id: intervention } });
   assert.deepEqual(notificationDestination({ ...item, kind: 'quote_received' }), { pathname: '/dossier/[id]', params: { id: intervention } });
   assert.equal(notificationDestination({ ...item, kind: 'unknown', payload: { url: 'https://example.org' } }), null);
-  assert.equal(notificationDestination({ ...item, kind: 'support_replied', support_ticket_id: id }), null);
+  for (const kind of ['support_replied', 'support_status_changed'])
+    assert.deepEqual(notificationDestination({ ...item, kind, support_ticket_id: id }), { pathname: '/dossier/assistance-suivi', params: { ticket_id: id } });
+  assert.equal(notificationDestination({ ...item, kind: 'support_replied', payload: { ticket_id: id, url: 'https://example.org' } }), null);
+  assert.equal(notificationDestination({ ...item, kind: 'support_triage_changed', support_ticket_id: id }), null);
   assert.equal(notificationDestination({ ...item, intervention_id: null }), null);
 });
 test('pagination rejects a response from the previous filter', () => {
