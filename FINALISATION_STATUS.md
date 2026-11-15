@@ -1,6 +1,6 @@
 # DomDépannage — suivi de finalisation (Claude)
 
-Mis à jour : 2026-11-15 ~04:25 AST — Claude Opus 5.5 (Fable non utilisé : quota épuisé ; aucune facturation ni crédit EAS consommé).
+Mis à jour : 2026-11-15 ~05:20 AST — Claude Opus 5.5 (Fable non utilisé : quota épuisé ; aucune facturation ni crédit EAS consommé).
 
 ## Base et version testée
 
@@ -9,7 +9,7 @@ Mis à jour : 2026-11-15 ~04:25 AST — Claude Opus 5.5 (Fable non utilisé : qu
 | Copie Claude | `/Volumes/Stockage/dev/Atelier/claude/depannage-electricite/repo`, clone isolé, push vers l'intégration désactivé |
 | Branche / base | `claude/finalisation-20261114` depuis `b424c8d` (`codex/figma-responsive-20261114`) ; aucun commit plus récent dans l'intégration du mini |
 | Travaux planning Codex non commités (MacBook) | non intégrés, non touchés |
-| **Preview candidate (dernière)** | https://domdepannage-recette-20261112-29c1amn83-brafas-projects.vercel.app — commit `22e5b60`, cible *preview* |
+| **Version candidate** | commit **`e0526c1`** (branche `claude/finalisation-20261114`) — preview https://domdepannage-recette-20261112-lizw2oi45-brafas-projects.vercel.app (cible *preview*) |
 | Previews de la recette réelle | `4jadwewvm` (`15a9775`, parcours complet), `5sivte8w3` (`a382c28`, paiement), `fexnt9wgj` (`68b5646`, B2B) |
 | Alias de recette | `domdepannage-recette-20261112.vercel.app` → `dpl_5HgGE477…` (12/11), **non modifié** |
 | Backend des previews | Supabase `kcpyjzndybfdlnhvscbs` (URL publique lue dans le bundle ; aucune clé lue) |
@@ -17,20 +17,17 @@ Mis à jour : 2026-11-15 ~04:25 AST — Claude Opus 5.5 (Fable non utilisé : qu
 
 Légende : **synthétique** = mode démo (localStorage, aucun serveur) · **réel** = Supabase de recette avec comptes synthétiques · **preview** = déploiement Vercel non aliasé.
 
-## Tableau de suivi
+## Tableau de suivi (version candidate `e0526c1`)
 
 | Parcours | Web/PWA | iOS | Android | Preuve / version | Défaut restant |
 |---|---|---|---|---|---|
-| Accueil public | **vérifié** (preview, 320/390/768/1440, comparé à l'alias) | compilation réussie (Release non signée, Codex) ; non exécuté | vérifié démarrage (APK test, émulateur API 36) | `comparatif-avant-apres-20261115.pdf` ; `android-accueil-emulateur.png` | bandeau « 20 min » visible en preview et dans l'APK (réservé aux builds de recette) |
-| Particulier : connexion, espace, dossier, menu compte, déconnexion | **vérifié réel** (390/1440) | à faire | connexion native non achevée (saisie ADB trop lente sous swap ; aucun défaut constaté) | `real.mjs` : 0 erreur API/page ; `real-dock.mjs` : 71 positions de défilement à 320/390, 0 écart | — (WhatsApp arrimé au menu : corrigé `a03a864`) |
-| Particulier : demande → devis → acceptation → intervention → règlement | **vérifié synthétique** (local + preview) ; réel en lecture (dossier « À régler 108,50 € » d'Astra) | à faire | à faire | test E2E `interactive-journey` 390/1440 | nouvelle demande réelle non rejouée dans cette session |
-| Particulier ↔ entreprise : approbation → acceptation | **vérifié synthétique** (local + preview) ; garde serveur `guard_quote_approval` (SQL) | à faire | à faire | `online-cross-*.png` | non rejoué en réel (aucune approbation en attente sur les comptes) |
-| Entreprise : 12 vues (tableau de bord, interventions, sites, approbations, contrats, rapports, membres, facturation, messages, documents, assistance, profil) | **vérifié réel en lecture** (390/1440) : 0 erreur API, 0 débordement ; tableaux en cartes sur mobile | à faire | à faire | `real-sweep.mjs` | écritures entreprise (création demande/site, décision d'approbation) non rejouées en réel |
-| Lecteur entreprise : droits | **vérifié réel** : aucun contrôle d'écriture, mention « lecture seule », POST `/api/sites` → **403** | à faire | à faire | `real-viewer.mjs` | — |
-| Cloisonnement entre comptes | **vérifié réel** : dossier d'un particulier → propriétaire 200, tiers 404, lecteur 404, aucune donnée ; état d'interface honnête | — | — | `real-isolation.mjs` | — |
-| Artisan : vue d'ensemble, missions, devis, planning, messages, documents, profil | **vérifié réel** (390/768, lecture) | à faire | à faire | `real-art.mjs` : 0 erreur | — |
-| Artisan : planning (écriture) | **vérifié réel** (768) : erreur fin<début, création plage → « Libre », suppression → état vide | à faire | à faire | `real-plan.mjs` ; données restaurées | — |
-| Admin | **vérifié synthétique seulement** (tableau de bord, en-tête mobile corrigé) | à faire | à faire | `admin-hdr.png` | **bloqué en réel** : aucun compte admin de test actif |
+| Accueil public | **vérifié** (320/390/768/1440, comparé à l'alias) | compilé (Release non signée, Codex) ; non exécuté | **vérifié** démarrage (émulateur API 36) | `comparatif-avant-apres-20261115.pdf`, `android-accueil-emulateur.png` | bandeau « 20 min » réservé aux builds de recette |
+| Particulier : demande → offre → devis → refus → v2 → acceptation → intervention → clôture → accusé de réception | **vérifié réel** (`INT-5B12D9`) | à faire (appareil) | **connexion + liste + détail du dossier réel vérifiés** (montants 130,20 €, devis refusé visible) | `recette-reelle/log-s1…s5*.json`, `android-*.png` | paiement : voir ci-dessous |
+| Paiement plateforme | **refus serveur vérifié** (compte Stripe artisan de test non validé) ; message exact corrigé `a382c28` | — | — | `s5-pay-refused-explained-390.png` | transaction Stripe réelle **non testée** : nécessite un artisan de test avec compte Connect validé (mode test) |
+| Entreprise : demande sur site → circuit d'approbation → acceptation → intervention → clôture | **vérifié réel** (`INT-6C3682`) | à faire | à faire | `recette-reelle/log-b*.json` | — |
+| Entreprise : 12 vues ; lecteur (lecture seule, 403) ; cloisonnement (404 tiers/lecteur) | **vérifié réel** | à faire | à faire | `real-sweep`, `real-viewer`, `real-isolation` | — |
+| Artisan : missions, devis, planning (écriture réversible), photos, compte rendu | **vérifié réel** | à faire | à faire | `real-art`, `real-plan`, `s2`, `s4*` | — |
+| Admin | **vérifié synthétique** (44 tests UI dont banc « live » sur API simulée ; tableau de bord, artisans, interventions, devis, clients, avis) | à faire | à faire | `tests/ui/admin*.test.ts` | **réel bloqué** : aucun compte admin de recette autorisé (fixture Astra rétrogradée, non réactivée) |
 
 ## Recette métier réelle (Supabase de recette, comptes synthétiques, dossiers « AUDIT SYNTHETIQUE ») — 15/11
 
@@ -83,14 +80,21 @@ Scripts : `livraison/scripts-recette/` (lib.mjs + s1…s5, b1…b9, cleanup). Pr
 9. Tests UI périmés réalignés (dont `399c5a3`) — aucun test supprimé.
 
 ## Tests réellement passés
-- Typecheck web et mobile : OK. `npm run build` : OK (`399c5a3`).
-- `npm test` : base 2335/2372 → après corrections 2357/2372 en parallèle ; tous les échecs restants rejoués séquentiellement passent (instabilité sous charge CPU).
-- Recette réelle Chromium sur preview (lecture + une écriture réversible planning) : client, artisan, entreprise, lecteur — 0 réponse API ≥ 400, 0 erreur de page ; rejouée sur `5p8q4ca7f` pour client/entreprise.
-- Android : `./gradlew assembleRelease` **BUILD SUCCESSFUL in 49m 56s** (617 tâches). APK `livraison/domdepannage-android-test-04138064-debugsigned.apk`, 61 916 893 octets, SHA-256 `9c4eeea1db8611629accf0bf0052f2dec6d14ef6b1596ea8ae698c95694319d5`, `com.claude972.depannageelectrique.preview` 0.1.0 (15), API = preview `1aav2k9it`. **Certificat Android Debug : test uniquement, non publiable Play.** Installé et lancé sur émulateur Pixel API 36 : accueil rendu, aucun crash.
+- Typecheck web et mobile : OK. `npm run build` : OK.
+- `npm test` complet : 2 357/2 372 en parallèle sur `7da0632` ; échecs rejoués séquentiellement : tous PASS. Après les corrections de la recette réelle, suite élargie 2 503/2 508 (2 échecs hors périmètre : `restore-drill.test.mjs` exige `@electric-sql/pglite` absent ; notifications instable, PASS seul). Nouveaux tests : `quote-refusal-revision`, `checkout-refusals`, `approval-refusals`, `enterprise-request-site`, `whatsapp-dock`.
+- Recette réelle sur la preview candidate `lizw2oi45` : client/artisan/entreprise/lecteur × 390/1440 → connexion, espace, déconnexion, 0 erreur API, 0 erreur de page ; WhatsApp arrimé (69 positions, 0 écart).
+- Android : APK de test (`04138064`, API `1aav2k9it`) — connexion réelle du particulier synthétique, compte, « Activité » (reprise après « Connexion interrompue » OK), détail `INT-5B12D9` cohérent avec le serveur. Rebuild aligné sur la candidate en cours.
 
-## Restant / blocages
-- **iOS** : **compilation résolue** par Codex sur le MacBook (Xcode 26.5 / Swift 6.3.2, source `04138064`, Release iphoneos arm64, `CODE_SIGNING_ALLOWED=NO` : BUILD SUCCEEDED, sans patch ; reçu `ios-build-result.json`, archive `DomDepannage-ios-unsigned-v15.zip`). Application **non signée, non exécutée** : restent signature/provisioning Apple, build de distribution et recette sur iPhone. (Le Mac mini, Xcode 26.3, ne peut pas compiler ; contournements abandonnés.)
-- **Admin réel** : besoin d'un compte admin de test actif — autorisation du propriétaire pour réactiver un compte synthétique `@example.test` avec un périmètre admin limité, ou compte admin de recette fourni. Aucune élévation faite.
-- **Android natif connecté** : à rejouer (saisie manuelle ou machine moins chargée).
-- **Distribution signée** (TestFlight / Play interne) : non réalisée ; accès Apple/Google ou EAS cloud à autoriser.
-- Écritures réelles non rejouées dans cette session : nouvelle demande particulier, offre/devis artisan, décision d'approbation entreprise (couvertes en synthétique et par la recette Astra du 13/11).
+## Distribution (inventaire en lecture seule)
+- **iOS** : Mac mini — 1 identité valide « Apple Distribution » (équipe `24U98C9WKS`) ; le seul profil local concerne une autre application (KNOWROK), inutilisable. Les identifiants DomDépannage (certificat, profil ad hoc, iPhone de test) sont **sur Expo** (`claude972`, `credentialsSource: remote`, `--freeze-credentials`). MacBook : compile mais 0 identité locale. Voie sans crédits cloud : `eas build --local --profile device` sur le MacBook (récupère les identifiants Expo existants) — à exécuter par Codex (contrôle iOS). Aucun certificat créé ni renouvelé.
+- **Android** : keystore du projet existant (même fichier dans 3 copies, empreinte `510ac251…`). APK interne signé avec ce keystore : `livraison/domdepannage-android-interne-04138064-keystore-projet.apk` (SHA-256 `6ad24d74…`), **même certificat que l'APK interne Codex précédent** (`ad0407ea…`) → s'installe en mise à jour. Identifiant `.preview` : **distribution interne uniquement**, aucune soumission Play (exigerait un AAB et l'accès Play Console).
+
+## Incident (corrigé localement, décision requise)
+- Un `vercel deploy` lancé par erreur depuis `apps/mobile` a créé un projet Vercel **« mobile »** (`prj_bMnxe0221GYLhNkw3pGxnZV9PMfE`, URL `mobile-roan-omega.vercel.app`) contenant les sources de `apps/mobile` (184 fichiers, aucun secret : pas de keystore, `credentials.json` ni `.env`, seulement `.env.example`). Liaison locale supprimée, `.gitignore` restauré. **Suppression du projet à confirmer** par le propriétaire (action définitive).
+
+## Restant / blocages exacts
+- **iOS** : compilation résolue (Codex, Xcode 26.5) ; restent build signé ad hoc avec les identifiants Expo existants, installation sur l'iPhone de test inscrit, recette native.
+- **Admin réel** : besoin d'un compte admin de recette autorisé (périmètre limité). Test à exécuter : connexion admin → candidatures (approuver / demander des corrections) → interventions (réaffecter avec motif) → devis & factures → modération d'avis → paramètres ; vérifier les refus pour un non-admin.
+- **Paiement Stripe** : nécessite un artisan de test avec compte Connect validé en mode test ; alors rejouer « Payer » sur `INT-5B12D9` jusqu'à la page Stripe test (sans carte réelle) et le retour.
+- **Android natif** : écart à requalifier sur appareil (barre de navigation invitée observée après connexion, liste « Activité » via la recherche publique) ; émulateur saturé (swap hôte ~7,5 Go) : défilement et actions non poursuivis.
+- **Version unique** : APK Android en reconstruction sur `e0526c1` / preview `lizw2oi45` ; iOS Codex compilé sur `04138064` (même source mobile : aucun changement de code mobile depuis `7da0632`).
