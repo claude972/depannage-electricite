@@ -13,7 +13,7 @@ function Navigator() {
   return <View style={{flex:1,backgroundColor:palette.background}}>
     <View style={{flex:1}}>
     <StatusBar style={palette.background === '#FFFFFF' ? 'dark' : 'light'}/>
-    <Stack key={session?.user.id??'guest'} screenOptions={{headerBackButtonDisplayMode:'minimal',headerTintColor:palette.blue,headerStyle:{backgroundColor:palette.surface},contentStyle:{backgroundColor:palette.background}}}>
+    <Stack key={session?.user.id??'guest'} screenOptions={{headerBackButtonDisplayMode:'minimal',headerTintColor:palette.blue,headerStyle:{backgroundColor:palette.surface},headerTitleStyle:{fontFamily:'JakartaMedium',fontSize:16},contentStyle:{backgroundColor:palette.background}}}>
       <Stack.Screen name="index" options={{headerShown:false}}/>
       <Stack.Screen name="demande-client" options={{title:'Votre demande'}}/>
       <Stack.Screen name="retrouver" options={{headerShown:false}}/>
