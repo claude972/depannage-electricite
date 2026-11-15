@@ -3,7 +3,9 @@ import { BRAND_NAME } from "@/lib/brand";
 import {
   cloneElement,
   isValidElement,
+  useEffect,
   useId,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -174,10 +176,16 @@ export function Alerts({
   onClearError: () => void;
   onClearNotice: () => void;
 }) {
+  // A result announced at the top of the page must not stay out of sight when the action was
+  // triggered further down (e.g. « Accepter le devis » refused): bring it into view, once per message.
+  const errorRef = useRef<HTMLDivElement>(null);
+  const noticeRef = useRef<HTMLDivElement>(null);
+  useEffect(() => revealIfHidden(errorRef.current), [error]);
+  useEffect(() => revealIfHidden(noticeRef.current), [notice]);
   return (
     <>
       {error && (
-        <div className="alert error" role="alert">
+        <div ref={errorRef} className="alert error" role="alert">
           <Icon name="warning" />
           <span>{error}</span>
           <button
@@ -190,7 +198,7 @@ export function Alerts({
         </div>
       )}
       {notice && (
-        <div className="alert success" role="status">
+        <div ref={noticeRef} className="alert success" role="status">
           <Icon name="check" />
           <span>{notice}</span>
           <button
@@ -398,4 +406,12 @@ export function DemoNote({ children }: { children: ReactNode }) {
       {children}
     </p>
   );
+}
+
+function revealIfHidden(el: HTMLElement | null) {
+  if (!el || typeof window === "undefined") return;
+  const box = el.getBoundingClientRect();
+  if (box.top >= 0 && box.bottom <= window.innerHeight) return;
+  const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  el.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
 }

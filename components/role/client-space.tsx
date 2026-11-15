@@ -1078,12 +1078,15 @@ function DetailView({
       <div className={styles.cardHead}>
         <h2>
           <Icon name="person" size={20} />
-          Artisan assigné
+          {i.artisan_id ? "Artisan assigné" : "Artisan"}
         </h2>
-        <button type="button" className="button outline" onClick={() => session.go("messages", i.id)}>
-          <Icon name="message" size={17} />
-          Contacter
-        </button>
+        {/* No conversation partner before attribution: the dossier help link stays available. */}
+        {i.artisan_id && (
+          <button type="button" className="button outline" onClick={() => session.go("messages", i.id)}>
+            <Icon name="message" size={17} />
+            Contacter
+          </button>
+        )}
       </div>
       <section className={styles.card}>
         {ops === undefined && i.artisan_id ? (
