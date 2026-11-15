@@ -21,9 +21,11 @@ function History({id,token,actor}:{id:string;token:string;actor:string}){
   const [after,setAfter]=useState(0),[previous,setPrevious]=useState<number[]>([]);
   const read=useResource(`/api/support/${id}?limit=50&after_version=${after}`,schema,token);
   const data=read.data;
-  function refresh(){setAfter(0);setPrevious([]);read.reload();}
+  const [notice,setNotice]=useState('');
+  function refresh(message=''){setNotice(message);setAfter(0);setPrevious([]);read.reload();}
   return <Screen>
     <Copy kind="title">{data?.ticket.subject??'Suivi de votre demande'}</Copy>
+    {notice&&<Copy>{notice}</Copy>}
     <ReadState loading={read.loading} error={read.error} onRetry={read.reload}/>
     {data&&<>
       <Copy kind="label">{labels[data.ticket.status]}</Copy>

@@ -5,7 +5,7 @@ import { api } from '@/lib/api';
 import { useDeviceDraft } from '@/lib/use-device-draft';
 import { pendingReplyRecorded, supportDetail, supportDetailFor, supportReplyDraft, supportReplyReceipt } from '@/lib/support-contract';
 
-export function SupportReply({id,actor,token,data,onSent}:{id:string;actor:string;token:string;data:z.infer<typeof supportDetail>;onSent:()=>void}) {
+export function SupportReply({id,actor,token,data,onSent}:{id:string;actor:string;token:string;data:z.infer<typeof supportDetail>;onSent:(notice?:string)=>void}) {
   const draft=useDeviceDraft(`support-reply-v1.${actor}.${id}`,supportReplyDraft,{body:'',pending:null});
   const [problem,setProblem]=useState(''),[busy,setBusy]=useState(false);
   const lock=useRef(false),alive=useRef(true),request=useRef<AbortController|null>(null);
@@ -24,11 +24,11 @@ export function SupportReply({id,actor,token,data,onSent}:{id:string;actor:strin
         if(!alive.current)return;
         if(pendingReplyRecorded(fresh,actor,current.pending)){
           await draft.update(value=>({...value,body:value.body.trim()===current.pending!.body?'':value.body,pending:null}));
-          onSent();
+          onSent('Cette réponse avait déjà été enregistrée. Aucun doublon n’a été créé.');
         }else if(fresh.ticket.version>current.pending.version){
           // A different event consumed this version: the pending command cannot have succeeded.
           await draft.update(value=>({...value,pending:null}));
-          setProblem('Le dossier a évolué. Votre texte est conservé ; relisez l’historique avant de confirmer son envoi.');onSent();
+          onSent('Le dossier a évolué. Votre texte est conservé ; relisez l’historique avant de confirmer son envoi.');
         }else{
           setProblem('Aucune réponse confirmée à cette version. Vous pouvez réessayer la même réponse.');
           await post(current.pending,controller);
@@ -44,7 +44,7 @@ export function SupportReply({id,actor,token,data,onSent}:{id:string;actor:strin
   async function post(pending:{body:string;version:number},controller:AbortController){
     await api(`/api/support/${id}`,supportReplyReceipt(id,actor,pending.version,pending.body),{token,method:'POST',signal:controller.signal,body:{action:'reply',expected_version:pending.version,body:pending.body}});
     if(!alive.current||controller.signal.aborted)return;
-    await draft.update(value=>({...value,body:value.body.trim()===pending.body?'':value.body,pending:null}));onSent();
+    await draft.update(value=>({...value,body:value.body.trim()===pending.body?'':value.body,pending:null}));onSent('Votre réponse a été envoyée.');
   }
   if(!draft.value)return <ReadState loading={!draft.error} error={draft.error} onRetry={draft.retry}/>;
   return <Card><Copy kind="subtitle">Répondre</Copy>
