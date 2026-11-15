@@ -880,9 +880,22 @@ export function MessageCenter({
   // disabled and makes no call. Labels come from the server state only.
   const readActive = live && Boolean(context) && Boolean(id) && Boolean(target) && !unavailable;
   const readState = useMessageReadState({ context: context ?? NO_READ_CONTEXT, interventionId: readActive ? id : null, messages: rows, demo: !readActive });
+  const threadsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const list = threadsRef.current;
+    const selected = list?.querySelector<HTMLButtonElement>("button.selected");
+    if (!list || !selected || list.scrollWidth <= list.clientWidth) return;
+    const bounds = list.getBoundingClientRect();
+    const item = selected.getBoundingClientRect();
+    const left = bounds.left + list.clientLeft;
+    const right = left + list.clientWidth;
+    // Move only the horizontal thread strip, never the page or the message history.
+    if (item.left < left) list.scrollLeft += item.left - left;
+    else if (item.right > right) list.scrollLeft += item.right - right;
+  }, [id]);
   return (
     <section className="panel messages-layout">
-      <div className="message-threads">
+      <div className="message-threads" ref={threadsRef}>
         <h2>Interventions</h2>
         {interventions.map((i) => (
           <button
