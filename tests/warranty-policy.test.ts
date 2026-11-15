@@ -43,6 +43,7 @@ function harness(
       "@/lib/supabase/server": {
         ...fakeServerHelpers({ db, authenticated }),
         serverClient: async () => db,
+        publicClient: () => db,
       },
     }) as any),
     calls,

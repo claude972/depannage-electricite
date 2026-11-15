@@ -21,6 +21,7 @@ export class ApiError extends Error {
 export function fakeServerHelpers(options: { authenticated?: boolean; db: unknown }) {
   return {
     ApiError,
+    publicClient: () => options.db,
     authenticatedClient: async () => {
       if (options.authenticated === false) throw new ApiError(401, "Session requise");
       return { user: { id: "10000000-0000-4000-8000-000000000009" }, db: options.db };

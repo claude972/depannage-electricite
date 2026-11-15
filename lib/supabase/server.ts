@@ -29,6 +29,17 @@ export async function serverClient() {
     },
   });
 }
+/** Anonymous client for public reads: never forwards the visitor's session cookies, so an
+ * expired or revoked session cannot turn public information into a 401/403. */
+export function publicClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !key)
+    throw new ApiError(503, "Les informations publiques sont momentanément indisponibles.");
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+}
 export async function authenticatedClient(request?: Request) {
   const authorization = request?.headers.get("authorization");
   if (authorization != null) {

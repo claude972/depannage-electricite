@@ -13,7 +13,8 @@ function harness(path: string, data: unknown, error?: string) {
     return { data, error: error ? { code: error } : null };
   } };
   const handlers = loadModule(path, {
-    "@/lib/supabase/server": { ...fakeServerHelpers({ db }), serverClient: async () => db },
+    "@/lib/supabase/server": { ...fakeServerHelpers({ db }), serverClient: async () => db,
+        publicClient: () => db, publicClient: () => db },
   }) as { GET: (request: Request) => Promise<Response>; POST: (request: Request) => Promise<Response> };
   return { ...handlers, calls };
 }
