@@ -91,6 +91,10 @@ export function assertOrigin(request: Request) {
   if (origin && origin !== new URL(request.url).origin)
     throw new ApiError(403, "Origine de la requête non autorisée.");
 }
+const KNOWN_REFUSALS: Record<string, string> = {
+  "Approval required": "Ce devis doit d’abord être approuvé par votre organisation (règle d’approbation du site). Il pourra ensuite être accepté.",
+  "Advanced approval required for exact quote": "Ce devis doit d’abord être approuvé dans le circuit de votre organisation, pour cette version exacte. Il pourra ensuite être accepté.",
+};
 export function dbError(error: { code?: string; message?: string } | null) {
   if (!error) return;
   const code = error.code;
@@ -102,6 +106,9 @@ export function dbError(error: { code?: string; message?: string } | null) {
   if (code === "42501" || code === "PGRST301")
     throw new ApiError(403, "Vous n’avez pas accès à cette action.");
   if (code === "P0002") throw new ApiError(404, "Ce dossier est introuvable.");
+  // Known business refusals keep their real reason (never « refresh » for a rule that still applies).
+  if (code === "P0001" && error.message && KNOWN_REFUSALS[error.message])
+    throw new ApiError(409, KNOWN_REFUSALS[error.message]);
   if (code === "23505" || code === "P0001")
     throw new ApiError(
       409,
